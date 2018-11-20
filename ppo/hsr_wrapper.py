@@ -62,17 +62,13 @@ class UnsupervisedEnv(hsr.HSREnv):
         s, r, t, i = super().step(actions)
         observation = Observation(observation=s.observation, params=s.goal,
                                   achieved=self.achieved_goal())
-        print('step obs', observation)
-        return vectorize(
-            observation), r, t, i
+        return vectorize(observation), r, t, i
 
     def reset(self):
         o = super().reset()
-        observation = Observation(observation=o.observation, params=o.goal,
-                                  achieved=self.achieved_goal())
-        print('reset obs', observation)
-        return vectorize(
-            observation)
+        print('reset params', o.goal)
+        return vectorize(Observation(observation=o.observation, params=o.goal,
+                                     achieved=self.achieved_goal()))
 
     @staticmethod
     def reward_function(achieved, params, dim):
@@ -154,6 +150,7 @@ class UnsupervisedSubprocVecEnv(SubprocVecEnv):
 
     def set_reward_params(self, params):
         for remote, param in zip(self.remotes, params):
+            print('sent params', param)
             remote.send(('set_reward_params', param))
 
 
@@ -161,4 +158,5 @@ class UnsupervisedDummyVecEnv(DummyVecEnv):
     def set_reward_params(self):
         params = self.sess.run(self.params)
         for env, param in zip(self.envs, params):
+            print('sent params', param)
             unwrap_unsupervised(env).set_reward_params(param)

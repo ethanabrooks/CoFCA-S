@@ -90,7 +90,7 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
         reward_params_shape = (3,)
         env_fns = [lambda: make_env(s + seed) for s in range(num_processes)]
 
-        if sys.platform == 'darwin':
+        if sys.platform == 'darwin' or num_processes == 1:
             envs = UnsupervisedDummyVecEnv(env_fns)
         else:
             envs = UnsupervisedSubprocVecEnv(env_fns)

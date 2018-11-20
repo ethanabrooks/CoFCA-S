@@ -90,13 +90,12 @@ class RolloutStorage(object):
             "".format(num_processes, num_steps, num_processes * num_steps,
                       num_mini_batch))
         mini_batch_size = batch_size // num_mini_batch
+
         sampler = BatchSampler(
             SubsetRandomSampler(range(batch_size)),
             mini_batch_size,
             drop_last=False)
         for indices in sampler:
-
-            import ipdb; ipdb.set_trace()
             obs_batch = self.obs[:-1].view(-1, *self.obs.size()[2:])[indices]
             recurrent_hidden_states_batch = self.recurrent_hidden_states[:-1].view(
                 -1, self.recurrent_hidden_states.size(-1))[indices]
