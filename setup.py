@@ -14,7 +14,7 @@ setup(
     author='Ethan Brooks',
     author_email='ethanabrooks@gmail.com',
     packages=find_packages(),
-    entry_points=dict(console_scripts=['ppo=ppo.main:main']),
+    entry_points=dict(console_scripts=['ppo=ppo.main:cli']),
     install_requires=[
         'baselines==0.1.5',
         'Cython==0.29',

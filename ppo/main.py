@@ -19,9 +19,12 @@ from ppo.utils import get_vec_normalize
 from ppo.visualize import visdom_plot
 
 
-def main(algo, recurrent_policy, num_frames, num_steps, num_processes, seed,
+def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
          cuda_deterministic, cuda, log_dir, vis, port, env_name, gamma,
-         add_timestep, clip_param):
+         add_timestep, save_interval, save_dir, log_interval,
+         eval_interval, use_gae, tau, vis_interval, ppo_args):
+
+    algo = 'ppo'
 
     num_updates = int(num_frames) // num_steps // num_processes
 
@@ -65,16 +68,8 @@ def main(algo, recurrent_policy, num_frames, num_steps, num_processes, seed,
         base_kwargs={'recurrent': recurrent_policy})
     actor_critic.to(device)
 
-    agent = PPO(
-        actor_critic,
-        clip_param,
-        ppo_epoch,
-        num_mini_batch,
-        value_loss_coef,
-        entropy_coef,
-        lr=lr,
-        eps=eps,
-        max_grad_norm=max_grad_norm)
+    agent = PPO(actor_critic=actor_critic,
+                **ppo_args)
 
     rollouts = RolloutStorage(num_steps, num_processes,
                               envs.observation_space.shape, envs.action_space,
@@ -203,7 +198,7 @@ def main(algo, recurrent_policy, num_frames, num_steps, num_processes, seed,
 
 
 def cli():
-    main(**vars(get_args()))
+    main(**get_args())
 
 
 if __name__ == "__main__":

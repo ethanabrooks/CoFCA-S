@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 
-class PPO():
+class PPO:
     def __init__(self,
                  actor_critic,
                  clip_param,
