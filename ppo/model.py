@@ -1,9 +1,10 @@
+# third party
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
-from distributions import Categorical, DiagGaussian
-from utils import init, init_normc_
+# first party
+from ppo.distributions import Categorical, DiagGaussian
+from ppo.utils import init, init_normc_
 
 
 class Flatten(nn.Module):
@@ -74,7 +75,6 @@ class Policy(nn.Module):
 
 
 class NNBase(nn.Module):
-
     def __init__(self, recurrent, recurrent_input_size, hidden_size):
         super(NNBase, self).__init__()
 
@@ -127,7 +127,6 @@ class NNBase(nn.Module):
                             .squeeze()
                             .cpu())
 
-
             # +1 to correct the masks[1:]
             if has_zeros.dim() == 0:
                 # Deal with scalar
@@ -137,7 +136,6 @@ class NNBase(nn.Module):
 
             # add t=0 and t=T to the list
             has_zeros = [0] + has_zeros + [T]
-
 
             hxs = hxs.unsqueeze(0)
             outputs = []
@@ -149,8 +147,7 @@ class NNBase(nn.Module):
 
                 rnn_scores, hxs = self.gru(
                     x[start_idx:end_idx],
-                    hxs * masks[start_idx].view(1, -1, 1)
-                )
+                    hxs * masks[start_idx].view(1, -1, 1))
 
                 outputs.append(rnn_scores)
 
@@ -174,16 +171,10 @@ class CNNBase(NNBase):
             nn.init.calculate_gain('relu'))
 
         self.main = nn.Sequential(
-            init_(nn.Conv2d(num_inputs, 32, 8, stride=4)),
-            nn.ReLU(),
-            init_(nn.Conv2d(32, 64, 4, stride=2)),
-            nn.ReLU(),
-            init_(nn.Conv2d(64, 32, 3, stride=1)),
-            nn.ReLU(),
-            Flatten(),
-            init_(nn.Linear(32 * 7 * 7, hidden_size)),
-            nn.ReLU()
-        )
+            init_(nn.Conv2d(num_inputs, 32, 8, stride=4)), nn.ReLU(),
+            init_(nn.Conv2d(32, 64, 4, stride=2)), nn.ReLU(),
+            init_(nn.Conv2d(64, 32, 3, stride=1)), nn.ReLU(), Flatten(),
+            init_(nn.Linear(32 * 7 * 7, hidden_size)), nn.ReLU())
 
         init_ = lambda m: init(m,
             nn.init.orthogonal_,
@@ -214,18 +205,12 @@ class MLPBase(NNBase):
             lambda x: nn.init.constant_(x, 0))
 
         self.actor = nn.Sequential(
-            init_(nn.Linear(num_inputs, hidden_size)),
-            nn.Tanh(),
-            init_(nn.Linear(hidden_size, hidden_size)),
-            nn.Tanh()
-        )
+            init_(nn.Linear(num_inputs, hidden_size)), nn.Tanh(),
+            init_(nn.Linear(hidden_size, hidden_size)), nn.Tanh())
 
         self.critic = nn.Sequential(
-            init_(nn.Linear(num_inputs, hidden_size)),
-            nn.Tanh(),
-            init_(nn.Linear(hidden_size, hidden_size)),
-            nn.Tanh()
-        )
+            init_(nn.Linear(num_inputs, hidden_size)), nn.Tanh(),
+            init_(nn.Linear(hidden_size, hidden_size)), nn.Tanh())
 
         self.critic_linear = init_(nn.Linear(hidden_size, 1))
 

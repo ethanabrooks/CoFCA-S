@@ -1,7 +1,9 @@
+# third party
 import torch
 import torch.nn as nn
 
-from envs import VecNormalize
+# first party
+from ppo.envs import VecNormalize
 
 
 # Get a render function
