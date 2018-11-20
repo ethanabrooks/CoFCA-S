@@ -25,8 +25,8 @@ from environments.hsr import MoveGripperEnv
 
 def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
          cuda_deterministic, cuda, log_dir, vis, port, env_name, gamma,
-         add_timestep, save_interval, save_dir, log_interval,
-         eval_interval, use_gae, tau, vis_interval, ppo_args, env_args):
+         add_timestep, save_interval, save_dir, log_interval, eval_interval,
+         use_gae, tau, vis_interval, ppo_args, env_args):
 
     algo = 'ppo'
 
@@ -64,8 +64,10 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
         win = None
 
     if env_name == 'move_gripper':
+
         def make_env():
             MoveGripperEnv(**env_args)
+
         envs = VecPyTorch(DummyVecEnv([make_env()] * num_processes))
     else:
         envs = make_vec_envs(env_name, seed, num_processes, gamma, log_dir,
@@ -77,14 +79,14 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
         base_kwargs={'recurrent': recurrent_policy})
     actor_critic.to(device)
 
-    agent = PPO(actor_critic=actor_critic,
-                **ppo_args)
+    agent = PPO(actor_critic=actor_critic, **ppo_args)
 
-    rollouts = RolloutStorage(num_steps=num_steps,
-                              num_processes=num_processes,
-                              obs_shape=envs.observation_space.shape,
-                              action_space=envs.action_space,
-                              recurrent_hidden_state_size=actor_critic.recurrent_hidden_state_size)
+    rollouts = RolloutStorage(
+        num_steps=num_steps,
+        num_processes=num_processes,
+        obs_shape=envs.observation_space.shape,
+        action_space=envs.action_space,
+        recurrent_hidden_state_size=actor_critic.recurrent_hidden_state_size)
 
     obs = envs.reset()
     rollouts.obs[0].copy_(obs)
