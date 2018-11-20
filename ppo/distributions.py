@@ -1,9 +1,8 @@
-import math
-
+# third party
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
+# first party
 from ppo.utils import AddBias, init, init_normc_
 
 """

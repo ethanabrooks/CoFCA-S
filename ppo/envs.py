@@ -1,17 +1,17 @@
+# stdlib
 import os
 
-import gym
-import numpy as np
-import torch
-from gym.spaces.box import Box
-
+# third party
 from baselines import bench
 from baselines.common.atari_wrappers import make_atari, wrap_deepmind
 from baselines.common.vec_env import VecEnvWrapper
-from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
+from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
 from baselines.common.vec_env.vec_normalize import VecNormalize as VecNormalize_
-
+import gym
+from gym.spaces.box import Box
+import numpy as np
+import torch
 
 try:
     import dm_control2gym
@@ -19,12 +19,12 @@ except ImportError:
     pass
 
 try:
-    import roboschool
+    pass
 except ImportError:
     pass
 
 try:
-    import pybullet_envs
+    pass
 except ImportError:
     pass
 
@@ -51,17 +51,20 @@ def make_env(env_id, seed, rank, log_dir, add_timestep, allow_early_resets):
             env = AddTimestep(env)
 
         if log_dir is not None:
-            env = bench.Monitor(env, os.path.join(log_dir, str(rank)),
-                                allow_early_resets=allow_early_resets)
+            env = bench.Monitor(
+                env,
+                os.path.join(log_dir, str(rank)),
+                allow_early_resets=allow_early_resets)
 
         if is_atari:
             if len(env.observation_space.shape) == 3:
                 env = wrap_deepmind(env)
         elif len(env.observation_space.shape) == 3:
-            raise NotImplementedError("CNN models work only for atari,\n"
+            raise NotImplementedError(
+                "CNN models work only for atari,\n"
                 "please use a custom wrapper for a custom pixel input env.\n"
                 "See wrap_deepmind for an example.")
-        
+
         # If the input has shape (W,H,3), wrap for PyTorch convolutions
         obs_shape = env.observation_space.shape
         if len(obs_shape) == 3 and obs_shape[2] in [1, 3]:
@@ -71,10 +74,20 @@ def make_env(env_id, seed, rank, log_dir, add_timestep, allow_early_resets):
 
     return _thunk
 
-def make_vec_envs(env_name, seed, num_processes, gamma, log_dir, add_timestep,
-                  device, allow_early_resets, num_frame_stack=None):
-    envs = [make_env(env_name, seed, i, log_dir, add_timestep, allow_early_resets)
-            for i in range(num_processes)]
+
+def make_vec_envs(env_name,
+                  seed,
+                  num_processes,
+                  gamma,
+                  log_dir,
+                  add_timestep,
+                  device,
+                  allow_early_resets,
+                  num_frame_stack=None):
+    envs = [
+        make_env(env_name, seed, i, log_dir, add_timestep, allow_early_resets)
+        for i in range(num_processes)
+    ]
 
     if len(envs) > 1:
         envs = SubprocVecEnv(envs)
@@ -156,7 +169,6 @@ class VecPyTorch(VecEnvWrapper):
 
 
 class VecNormalize(VecNormalize_):
-
     def __init__(self, *args, **kwargs):
         super(VecNormalize, self).__init__(*args, **kwargs)
         self.training = True
@@ -165,7 +177,9 @@ class VecNormalize(VecNormalize_):
         if self.ob_rms:
             if self.training:
                 self.ob_rms.update(obs)
-            obs = np.clip((obs - self.ob_rms.mean) / np.sqrt(self.ob_rms.var + self.epsilon), -self.clipob, self.clipob)
+            obs = np.clip((obs - self.ob_rms.mean) /
+                          np.sqrt(self.ob_rms.var + self.epsilon),
+                          -self.clipob, self.clipob)
             return obs
         else:
             return obs
@@ -192,7 +206,8 @@ class VecPyTorchFrameStack(VecEnvWrapper):
 
         if device is None:
             device = torch.device('cpu')
-        self.stacked_obs = torch.zeros((venv.num_envs,) + low.shape).to(device)
+        self.stacked_obs = torch.zeros((venv.num_envs, ) +
+                                       low.shape).to(device)
 
         observation_space = gym.spaces.Box(
             low=low, high=high, dtype=venv.observation_space.dtype)
