@@ -39,7 +39,7 @@ class PPO:
     def update(self, rollouts: RolloutStorage):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         advantages = (advantages - advantages.mean()) / (
-                advantages.std() + 1e-5)
+            advantages.std() + 1e-5)
 
         value_loss_epoch = 0
         action_loss_epoch = 0
@@ -79,7 +79,7 @@ class PPO:
                                              -self.clip_param, self.clip_param)
                     value_losses = (values - return_batch).pow(2)
                     value_losses_clipped = (
-                            value_pred_clipped - return_batch).pow(2)
+                        value_pred_clipped - return_batch).pow(2)
                     value_loss = .5 * torch.max(value_losses,
                                                 value_losses_clipped).mean()
                 else:
@@ -95,9 +95,8 @@ class PPO:
                     returns = self.reward_function(rollouts.obs,
                                                    rollouts.reward_params)
 
-                    expected_return_delta = torch.mean(
-                        returns * torch.log(
-                            action_log_probs / old_action_log_probs_batch))
+                    expected_return_delta = torch.mean(returns * torch.log(
+                        action_log_probs / old_action_log_probs_batch))
                     rollouts.reward_params.grad = None
                     expected_return_delta.backward()
 
