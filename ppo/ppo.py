@@ -19,8 +19,9 @@ class PPO:
                  eps=None,
                  max_grad_norm=None,
                  use_clipped_value_loss=True,
-                 reward_function=None):
+                 unsupervised=False):
 
+        self.unsupervised = unsupervised
         self.actor_critic = actor_critic
 
         self.clip_param = clip_param
@@ -59,6 +60,7 @@ class PPO:
                 old_action_log_probs_batch, \
                 adv_targ = sample
 
+                # TODO: need to get derivative with respect to params
                 # Reshape to do in a single forward pass for all steps
                 values, action_log_probs, dist_entropy, \
                 _ = self.actor_critic.evaluate_actions(
@@ -89,14 +91,10 @@ class PPO:
                 (value_loss * self.value_loss_coef + action_loss -
                  dist_entropy * self.entropy_coef).backward()
 
-                if self.reward_function:
-
-                    # TODO: discount
-                    returns = self.reward_function(rollouts.obs,
-                                                   rollouts.reward_params)
-
-                    expected_return_delta = torch.mean(returns * torch.log(
-                        action_log_probs / old_action_log_probs_batch))
+                if self.unsupervised:
+                    expected_return_delta = torch.mean(
+                        rollouts.returns * torch.log(
+                            action_log_probs / old_action_log_probs_batch))
                     rollouts.reward_params.grad = None
                     expected_return_delta.backward()
 

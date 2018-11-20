@@ -116,8 +116,9 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
         base_kwargs={'recurrent': recurrent_policy})
     actor_critic.to(device)
 
-    agent = PPO(
-        actor_critic=actor_critic, reward_function=reward_function, **ppo_args)
+    agent = PPO(actor_critic=actor_critic,
+                unsupervised=unsupervised,
+                **ppo_args)
 
     rollouts = RolloutStorage(
         num_steps=num_steps,
@@ -125,7 +126,10 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
         obs_shape=envs.observation_space.shape,
         action_space=envs.action_space,
         recurrent_hidden_state_size=actor_critic.recurrent_hidden_state_size,
-        reward_param_shape=reward_params_shape)
+        reward_param_shape=reward_params_shape
+    )
+    # TODO: include params in obs
+    # TODO: need to ensure that nsteps is equal to max_steps
 
     obs = envs.reset()
     rollouts.obs[0].copy_(obs)
@@ -161,11 +165,15 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
                 rollouts.obs[-1], rollouts.recurrent_hidden_states[-1],
                 rollouts.masks[-1]).detach()
 
-        rollouts.compute_returns(next_value, use_gae, gamma, tau)
+        if unsupervised:
+            assert next_value == 0
+
+        rollouts.compute_returns(next_value, use_gae, gamma, tau, reward_function)
 
         value_loss, action_loss, dist_entropy = agent.update(rollouts)
 
         if unsupervised:
+
             envs.set_reward_params(rollouts.reward_params)
 
         rollouts.after_update()
