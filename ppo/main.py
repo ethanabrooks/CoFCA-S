@@ -19,8 +19,9 @@ from ppo.utils import get_vec_normalize
 from ppo.visualize import visdom_plot
 
 
-def main(algo, recurrent_policy, num_frames, num_steps, num_processes, seed, cuda_deterministic, cuda, log_dir,
-         vis, port, env_name, gamma, add_timestep, clip_param):
+def main(algo, recurrent_policy, num_frames, num_steps, num_processes, seed,
+         cuda_deterministic, cuda, log_dir, vis, port, env_name, gamma,
+         add_timestep, clip_param):
 
     num_updates = int(num_frames) // num_steps // num_processes
 
@@ -55,9 +56,8 @@ def main(algo, recurrent_policy, num_frames, num_steps, num_processes, seed, cud
         viz = Visdom(port=port)
         win = None
 
-    envs = make_vec_envs(env_name, seed, num_processes,
-                         gamma, log_dir, add_timestep, device,
-                         False)
+    envs = make_vec_envs(env_name, seed, num_processes, gamma, log_dir,
+                         add_timestep, device, False)
 
     actor_critic = Policy(
         envs.observation_space.shape,
@@ -113,8 +113,7 @@ def main(algo, recurrent_policy, num_frames, num_steps, num_processes, seed, cud
                 rollouts.obs[-1], rollouts.recurrent_hidden_states[-1],
                 rollouts.masks[-1]).detach()
 
-        rollouts.compute_returns(next_value, use_gae, gamma,
-                                 tau)
+        rollouts.compute_returns(next_value, use_gae, gamma, tau)
 
         value_loss, action_loss, dist_entropy = agent.update(rollouts)
 
@@ -137,8 +136,7 @@ def main(algo, recurrent_policy, num_frames, num_steps, num_processes, seed, cud
                 getattr(get_vec_normalize(envs), 'ob_rms', None)
             ]
 
-            torch.save(save_model,
-                       os.path.join(save_path, env_name + ".pt"))
+            torch.save(save_model, os.path.join(save_path, env_name + ".pt"))
 
         total_num_steps = (j + 1) * num_processes * num_steps
 
@@ -146,19 +144,18 @@ def main(algo, recurrent_policy, num_frames, num_steps, num_processes, seed, cud
             end = time.time()
             print(
                 "Updates {}, num timesteps {}, FPS {} \n Last {} training episodes: mean/median reward {:.1f}/{:.1f}, min/max reward {:.1f}/{:.1f}\n"
-                    .format(j, total_num_steps,
-                            int(total_num_steps / (end - start)),
-                            len(episode_rewards), np.mean(episode_rewards),
-                            np.median(episode_rewards), np.min(episode_rewards),
-                            np.max(episode_rewards), dist_entropy, value_loss,
-                            action_loss))
+                .format(j, total_num_steps,
+                        int(total_num_steps / (end - start)),
+                        len(episode_rewards), np.mean(episode_rewards),
+                        np.median(episode_rewards), np.min(episode_rewards),
+                        np.max(episode_rewards), dist_entropy, value_loss,
+                        action_loss))
 
         if (eval_interval is not None and len(episode_rewards) > 1
                 and j % eval_interval == 0):
-            eval_envs = make_vec_envs(
-                env_name, seed + num_processes,
-                num_processes, gamma, eval_log_dir,
-                add_timestep, device, True)
+            eval_envs = make_vec_envs(env_name, seed + num_processes,
+                                      num_processes, gamma, eval_log_dir,
+                                      add_timestep, device, True)
 
             vec_norm = get_vec_normalize(eval_envs)
             if vec_norm is not None:
@@ -199,8 +196,8 @@ def main(algo, recurrent_policy, num_frames, num_steps, num_processes, seed, cud
         if vis and j % vis_interval == 0:
             try:
                 # Sometimes monitor doesn't properly flush the outputs
-                win = visdom_plot(viz, win, log_dir, env_name,
-                                  algo, num_frames)
+                win = visdom_plot(viz, win, log_dir, env_name, algo,
+                                  num_frames)
             except IOError:
                 pass
 
