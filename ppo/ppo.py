@@ -4,6 +4,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
+from ppo.storage import RolloutStorage
+
 
 class PPO:
     def __init__(self,
@@ -16,7 +18,8 @@ class PPO:
                  lr=None,
                  eps=None,
                  max_grad_norm=None,
-                 use_clipped_value_loss=True):
+                 use_clipped_value_loss=True,
+                 reward_function=None):
 
         self.actor_critic = actor_critic
 
@@ -31,11 +34,12 @@ class PPO:
         self.use_clipped_value_loss = use_clipped_value_loss
 
         self.optimizer = optim.Adam(actor_critic.parameters(), lr=lr, eps=eps)
+        self.reward_function = None
 
-    def update(self, rollouts):
+    def update(self, rollouts: RolloutStorage):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         advantages = (advantages - advantages.mean()) / (
-            advantages.std() + 1e-5)
+                advantages.std() + 1e-5)
 
         value_loss_epoch = 0
         action_loss_epoch = 0
@@ -51,11 +55,13 @@ class PPO:
 
             for sample in data_generator:
                 obs_batch, recurrent_hidden_states_batch, actions_batch, \
-                   value_preds_batch, return_batch, masks_batch, old_action_log_probs_batch, \
-                        adv_targ = sample
+                value_preds_batch, return_batch, masks_batch, \
+                old_action_log_probs_batch, \
+                adv_targ = sample
 
                 # Reshape to do in a single forward pass for all steps
-                values, action_log_probs, dist_entropy, _ = self.actor_critic.evaluate_actions(
+                values, action_log_probs, dist_entropy, \
+                _ = self.actor_critic.evaluate_actions(
                     obs_batch, recurrent_hidden_states_batch, masks_batch,
                     actions_batch)
 
@@ -67,11 +73,13 @@ class PPO:
                 action_loss = -torch.min(surr1, surr2).mean()
 
                 if self.use_clipped_value_loss:
+
                     value_pred_clipped = value_preds_batch + \
-                        (values - value_preds_batch).clamp(-self.clip_param, self.clip_param)
+                                         (values - value_preds_batch).clamp(
+                                             -self.clip_param, self.clip_param)
                     value_losses = (values - return_batch).pow(2)
                     value_losses_clipped = (
-                        value_pred_clipped - return_batch).pow(2)
+                            value_pred_clipped - return_batch).pow(2)
                     value_loss = .5 * torch.max(value_losses,
                                                 value_losses_clipped).mean()
                 else:
@@ -80,6 +88,19 @@ class PPO:
                 self.optimizer.zero_grad()
                 (value_loss * self.value_loss_coef + action_loss -
                  dist_entropy * self.entropy_coef).backward()
+
+                if self.reward_function:
+
+                    # TODO: discount
+                    returns = self.reward_function(rollouts.obs,
+                                                   rollouts.reward_params)
+
+                    expected_return_delta = torch.mean(
+                        returns * torch.log(
+                            action_log_probs / old_action_log_probs_batch))
+                    rollouts.reward_params.grad = None
+                    expected_return_delta.backward()
+
                 nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
                                          self.max_grad_norm)
                 self.optimizer.step()

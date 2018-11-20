@@ -9,10 +9,18 @@ def _flatten_helper(T, N, _tensor):
 
 class RolloutStorage(object):
     def __init__(self, num_steps, num_processes, obs_shape, action_space,
-                 recurrent_hidden_state_size):
+                 recurrent_hidden_state_size, reward_param_shape=None):
         self.obs = torch.zeros(num_steps + 1, num_processes, *obs_shape)
         self.recurrent_hidden_states = torch.zeros(
             num_steps + 1, num_processes, recurrent_hidden_state_size)
+
+        if reward_param_shape:
+            self.reward_params = torch.zeros(num_steps, num_processes,
+                                             *reward_param_shape,
+                                             requires_grad=True,)
+        else:
+            self.reward_params = None
+
         self.rewards = torch.zeros(num_steps, num_processes, 1)
         self.value_preds = torch.zeros(num_steps + 1, num_processes, 1)
         self.returns = torch.zeros(num_steps + 1, num_processes, 1)
@@ -70,7 +78,7 @@ class RolloutStorage(object):
             self.returns[-1] = next_value
             for step in reversed(range(self.rewards.size(0))):
                 self.returns[step] = self.returns[step + 1] * \
-                    gamma * self.masks[step + 1] + self.rewards[step]
+                                     gamma * self.masks[step + 1] + self.rewards[step]
 
     def feed_forward_generator(self, advantages, num_mini_batch):
         num_steps, num_processes = self.rewards.size()[0:2]
@@ -82,6 +90,7 @@ class RolloutStorage(object):
             "".format(num_processes, num_steps, num_processes * num_steps,
                       num_mini_batch))
         mini_batch_size = batch_size // num_mini_batch
+
         sampler = BatchSampler(
             SubsetRandomSampler(range(batch_size)),
             mini_batch_size,
@@ -100,7 +109,8 @@ class RolloutStorage(object):
             adv_targ = advantages.view(-1, 1)[indices]
 
             yield obs_batch, recurrent_hidden_states_batch, actions_batch, \
-                value_preds_batch, return_batch, masks_batch, old_action_log_probs_batch, adv_targ
+                  value_preds_batch, return_batch, masks_batch, \
+                  old_action_log_probs_batch, adv_targ
 
     def recurrent_generator(self, advantages, num_mini_batch):
         num_processes = self.rewards.size(1)
@@ -155,8 +165,8 @@ class RolloutStorage(object):
             return_batch = _flatten_helper(T, N, return_batch)
             masks_batch = _flatten_helper(T, N, masks_batch)
             old_action_log_probs_batch = _flatten_helper(T, N, \
-                    old_action_log_probs_batch)
+                                                         old_action_log_probs_batch)
             adv_targ = _flatten_helper(T, N, adv_targ)
 
             yield obs_batch, recurrent_hidden_states_batch, actions_batch, \
-                value_preds_batch, return_batch, masks_batch, old_action_log_probs_batch, adv_targ
+                  value_preds_batch, return_batch, masks_batch, old_action_log_probs_batch, adv_targ

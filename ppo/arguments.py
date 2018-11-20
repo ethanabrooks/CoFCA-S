@@ -2,11 +2,11 @@
 import argparse
 
 # third party
-from scripts.hsr import add_env_args
+from scripts.hsr import add_env_args, add_wrapper_args
 from utils.arguments import parse_groups
 
 
-def get_args():
+def build_parser():
     parser = argparse.ArgumentParser(description='RL')
     parser.add_argument(
         '--gamma',
@@ -140,7 +140,16 @@ def get_args():
         type=float,
         default=0.5,
         help='max norm of gradients (default: 0.5)')
+    return parser
 
+
+def get_args():
+    return {**parse_groups(build_parser()),
+            **dict(env_args=None)}
+
+
+def get_hsr_args():
+    parser = build_parser()
     add_env_args(parser.add_argument_group('env_args'))
-
+    add_wrapper_args(parser.add_argument_group('wrapper_args'))
     return parse_groups(parser)

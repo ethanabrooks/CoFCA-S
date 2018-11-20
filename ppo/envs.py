@@ -152,8 +152,15 @@ class VecPyTorch(VecEnvWrapper):
         self.device = device
         # TODO: Fix data types
 
+    @staticmethod
+    def extract_numpy(obs):
+        if not isinstance(obs, (list, tuple)):
+            return obs
+        assert len(obs) == 1
+        return obs[0]
+
     def reset(self):
-        obs = self.venv.reset()
+        obs = self.extract_numpy(self.venv.reset())
         obs = torch.from_numpy(obs).float().to(self.device)
         return obs
 
@@ -163,6 +170,7 @@ class VecPyTorch(VecEnvWrapper):
 
     def step_wait(self):
         obs, reward, done, info = self.venv.step_wait()
+        obs = self.extract_numpy(obs)
         obs = torch.from_numpy(obs).float().to(self.device)
         reward = torch.from_numpy(reward).unsqueeze(dim=1).float()
         return obs, reward, done, info
