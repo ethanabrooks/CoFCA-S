@@ -17,7 +17,7 @@ class RolloutStorage(object):
         if reward_param_shape:
             self.reward_params = torch.zeros(num_steps, num_processes,
                                              *reward_param_shape,
-                                             requires_grad=True,)
+                                             requires_grad=True, )
         else:
             self.reward_params = None
 
@@ -57,20 +57,28 @@ class RolloutStorage(object):
         self.value_preds[self.step].copy_(value_preds)
         self.rewards[self.step].copy_(rewards)
         self.masks[self.step + 1].copy_(masks)
-
         self.step = (self.step + 1) % self.num_steps
+        if self.reward_params:
+            reward_params =
+            self.reward_params[self.step].detach().copy_(reward_params)
 
     def after_update(self):
         self.obs[0].copy_(self.obs[-1])
         self.recurrent_hidden_states[0].copy_(self.recurrent_hidden_states[-1])
         self.masks[0].copy_(self.masks[-1])
 
-    def compute_returns(self, next_value, use_gae, gamma, tau):
+    def compute_returns(self, next_value, use_gae, gamma, tau, reward_function):
+        def reward(step):
+            if reward_function:
+                return reward_function(self.obs[step], self.reward_params[step])
+            else:
+                return self.rewards[step]
+
         if use_gae:
             self.value_preds[-1] = next_value
             gae = 0
             for step in reversed(range(self.rewards.size(0))):
-                delta = self.rewards[step] + gamma * self.value_preds[
+                delta = reward(step) + gamma * self.value_preds[
                     step + 1] * self.masks[step + 1] - self.value_preds[step]
                 gae = delta + gamma * tau * self.masks[step + 1] * gae
                 self.returns[step] = gae + self.value_preds[step]
@@ -78,7 +86,7 @@ class RolloutStorage(object):
             self.returns[-1] = next_value
             for step in reversed(range(self.rewards.size(0))):
                 self.returns[step] = self.returns[step + 1] * \
-                                     gamma * self.masks[step + 1] + self.rewards[step]
+                                     gamma * self.masks[step + 1] + reward(step)
 
     def feed_forward_generator(self, advantages, num_mini_batch):
         num_steps, num_processes = self.rewards.size()[0:2]
@@ -104,8 +112,8 @@ class RolloutStorage(object):
             value_preds_batch = self.value_preds[:-1].view(-1, 1)[indices]
             return_batch = self.returns[:-1].view(-1, 1)[indices]
             masks_batch = self.masks[:-1].view(-1, 1)[indices]
-            old_action_log_probs_batch = self.action_log_probs.view(-1,
-                                                                    1)[indices]
+            old_action_log_probs_batch = self.action_log_probs.view(-1, 1)[indices]
+            # TODO: calculate d logP / dΘ here
             adv_targ = advantages.view(-1, 1)[indices]
 
             yield obs_batch, recurrent_hidden_states_batch, actions_batch, \
@@ -169,4 +177,5 @@ class RolloutStorage(object):
             adv_targ = _flatten_helper(T, N, adv_targ)
 
             yield obs_batch, recurrent_hidden_states_batch, actions_batch, \
-                  value_preds_batch, return_batch, masks_batch, old_action_log_probs_batch, adv_targ
+                  value_preds_batch, return_batch, masks_batch, \
+                  old_action_log_probs_batch, adv_targ
