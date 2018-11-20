@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from envs import VecNormalize
+from ppo.envs import VecNormalize
 
 
 # Get a render function

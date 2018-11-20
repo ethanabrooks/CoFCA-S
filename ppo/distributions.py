@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from utils import AddBias, init, init_normc_
+from ppo.utils import AddBias, init, init_normc_
 
 """
 Modify standard PyTorch distributions so they are compatible with this code.

@@ -4,20 +4,16 @@ import os
 import time
 from collections import deque
 
-import gym
 import numpy as np
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
 
-import algo
-from arguments import get_args
-from envs import make_vec_envs
-from model import Policy
-from storage import RolloutStorage
-from utils import get_vec_normalize
-from visualize import visdom_plot
+from ppo.arguments import get_args
+from ppo.envs import make_vec_envs
+from ppo.model import Policy
+from ppo.ppo import PPO
+from ppo.storage import RolloutStorage
+from ppo.utils import get_vec_normalize
+from ppo.visualize import visdom_plot
 
 args = get_args()
 
@@ -68,19 +64,10 @@ def main():
         base_kwargs={'recurrent': args.recurrent_policy})
     actor_critic.to(device)
 
-    if args.algo == 'a2c':
-        agent = algo.A2C_ACKTR(actor_critic, args.value_loss_coef,
-                               args.entropy_coef, lr=args.lr,
-                               eps=args.eps, alpha=args.alpha,
-                               max_grad_norm=args.max_grad_norm)
-    elif args.algo == 'ppo':
-        agent = algo.PPO(actor_critic, args.clip_param, args.ppo_epoch, args.num_mini_batch,
-                         args.value_loss_coef, args.entropy_coef, lr=args.lr,
-                               eps=args.eps,
-                               max_grad_norm=args.max_grad_norm)
-    elif args.algo == 'acktr':
-        agent = algo.A2C_ACKTR(actor_critic, args.value_loss_coef,
-                               args.entropy_coef, acktr=True)
+    agent = PPO(actor_critic, args.clip_param, args.ppo_epoch, args.num_mini_batch,
+                     args.value_loss_coef, args.entropy_coef, lr=args.lr,
+                           eps=args.eps,
+                           max_grad_norm=args.max_grad_norm)
 
     rollouts = RolloutStorage(args.num_steps, args.num_processes,
                         envs.observation_space.shape, envs.action_space,

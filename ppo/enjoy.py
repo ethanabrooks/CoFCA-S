@@ -4,8 +4,8 @@ import os
 import numpy as np
 import torch
 
-from envs import VecPyTorch, make_vec_envs
-from utils import get_render_func, get_vec_normalize
+from ppo.envs import VecPyTorch, make_vec_envs
+from ppo.utils import get_render_func, get_vec_normalize
 
 
 parser = argparse.ArgumentParser(description='RL')
