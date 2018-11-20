@@ -32,8 +32,8 @@ from environments.hsr import MoveGripperEnv
 
 def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
          cuda_deterministic, cuda, log_dir, vis, port, env_name, gamma,
-         add_timestep, save_interval, save_dir, log_interval,
-         eval_interval, use_gae, tau, vis_interval, ppo_args, env_args):
+         add_timestep, save_interval, save_dir, log_interval, eval_interval,
+         use_gae, tau, vis_interval, ppo_args, env_args):
 
     algo = 'ppo'
 
@@ -74,6 +74,7 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
     reward_function = None
     unsupervised = env_name == 'unsupervised'
     if unsupervised:
+
         def make_env(_seed):
             env = UnsupervisedEnv(**env_args)
             env.seed(_seed)
@@ -84,11 +85,12 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
         sample_env = make_env(0)
 
         def reward_function(x: X, params: X):
-            obs = Observation(*torch.split(x, sample_env.subspace_sizes), dim=1)
-            return sample_env.reward_function(achieved=obs.achieved,
-                                              params=params, dim=1)
+            obs = Observation(
+                *torch.split(x, sample_env.subspace_sizes), dim=1)
+            return sample_env.reward_function(
+                achieved=obs.achieved, params=params, dim=1)
 
-        reward_params_shape = (3,)
+        reward_params_shape = (3, )
         env_fns = [lambda: make_env(s + seed) for s in range(num_processes)]
 
         if sys.platform == 'darwin' or num_processes == 1:
@@ -98,11 +100,12 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
         envs = VecPyTorch(envs, device=device)
 
     elif env_name == 'move_gripper':
+
         def make_env():
             MoveGripperEnv(**env_args)
 
-        envs = VecPyTorch(DummyVecEnv([make_env()] * num_processes),
-                          device=device)
+        envs = VecPyTorch(
+            DummyVecEnv([make_env()] * num_processes), device=device)
     else:
         envs = make_vec_envs(env_name, seed, num_processes, gamma, log_dir,
                              add_timestep, device, False)
@@ -113,9 +116,8 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
         base_kwargs={'recurrent': recurrent_policy})
     actor_critic.to(device)
 
-    agent = PPO(actor_critic=actor_critic,
-                reward_function=reward_function,
-                **ppo_args)
+    agent = PPO(
+        actor_critic=actor_critic, reward_function=reward_function, **ppo_args)
 
     rollouts = RolloutStorage(
         num_steps=num_steps,
@@ -123,8 +125,7 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
         obs_shape=envs.observation_space.shape,
         action_space=envs.action_space,
         recurrent_hidden_state_size=actor_critic.recurrent_hidden_state_size,
-        reward_param_shape=reward_params_shape
-    )
+        reward_param_shape=reward_params_shape)
 
     obs = envs.reset()
     rollouts.obs[0].copy_(obs)
@@ -195,12 +196,12 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
             print(
                 "Updates {}, num timesteps {}, FPS {} \n Last {} training episodes: "
                 "mean/median reward {:.1f}/{:.1f}, min/max reward {:.1f}/{:.1f}\n"
-                    .format(j, total_num_steps,
-                            int(total_num_steps / (end - start)),
-                            len(episode_rewards), np.mean(episode_rewards),
-                            np.median(episode_rewards), np.min(episode_rewards),
-                            np.max(episode_rewards), dist_entropy, value_loss,
-                            action_loss))
+                .format(j, total_num_steps,
+                        int(total_num_steps / (end - start)),
+                        len(episode_rewards), np.mean(episode_rewards),
+                        np.median(episode_rewards), np.min(episode_rewards),
+                        np.max(episode_rewards), dist_entropy, value_loss,
+                        action_loss))
 
         if (eval_interval is not None and len(episode_rewards) > 1
                 and j % eval_interval == 0):
