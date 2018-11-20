@@ -1,20 +1,18 @@
 # stdlib
-import functools
-import sys
-from collections import deque
 import copy
 import glob
 import os
+import sys
 import time
-
+from collections import deque
 # third party
 from typing import Union
 
 import numpy as np
 import torch
-
 # first party
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
+from environments.hsr import MoveGripperEnv
 from scripts.hsr import env_wrapper
 
 from ppo.arguments import get_args, get_hsr_args
@@ -26,8 +24,6 @@ from ppo.ppo import PPO
 from ppo.storage import RolloutStorage
 from ppo.utils import get_vec_normalize
 from ppo.visualize import visdom_plot
-
-from environments.hsr import MoveGripperEnv
 
 
 def main(recurrent_policy, num_frames, num_steps, num_processes, seed,

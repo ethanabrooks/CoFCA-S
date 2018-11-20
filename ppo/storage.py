@@ -20,9 +20,12 @@ class RolloutStorage(object):
             num_steps + 1, num_processes, recurrent_hidden_state_size)
 
         if reward_param_shape:
-            self.reward_params = torch.zeros(num_steps, num_processes,
-                                             *reward_param_shape,
-                                             requires_grad=True, )
+            self.reward_params = torch.zeros(
+                num_steps,
+                num_processes,
+                *reward_param_shape,
+                requires_grad=True,
+            )
         else:
             self.reward_params = None
 
@@ -64,7 +67,6 @@ class RolloutStorage(object):
         self.masks[self.step + 1].copy_(masks)
         self.step = (self.step + 1) % self.num_steps
         if self.reward_params:
-            reward_params =
             self.reward_params[self.step].detach().copy_(reward_params)
 
     def after_update(self):
@@ -72,10 +74,12 @@ class RolloutStorage(object):
         self.recurrent_hidden_states[0].copy_(self.recurrent_hidden_states[-1])
         self.masks[0].copy_(self.masks[-1])
 
-    def compute_returns(self, next_value, use_gae, gamma, tau, reward_function):
+    def compute_returns(self, next_value, use_gae, gamma, tau,
+                        reward_function):
         def reward(step):
             if reward_function:
-                return reward_function(self.obs[step], self.reward_params[step])
+                return reward_function(self.obs[step],
+                                       self.reward_params[step])
             else:
                 return self.rewards[step]
 
@@ -117,7 +121,8 @@ class RolloutStorage(object):
             value_preds_batch = self.value_preds[:-1].view(-1, 1)[indices]
             return_batch = self.returns[:-1].view(-1, 1)[indices]
             masks_batch = self.masks[:-1].view(-1, 1)[indices]
-            old_action_log_probs_batch = self.action_log_probs.view(-1, 1)[indices]
+            old_action_log_probs_batch = self.action_log_probs.view(-1,
+                                                                    1)[indices]
             # TODO: calculate d logP / dΘ here
             adv_targ = advantages.view(-1, 1)[indices]
 

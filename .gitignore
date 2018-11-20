@@ -104,3 +104,4 @@ trained_models/
 .fuse_hidden*
 .idea
 .mypy_cache
+MUJOCO_LOG.TXT
