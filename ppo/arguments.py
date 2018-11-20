@@ -2,6 +2,7 @@
 import argparse
 
 # third party
+from scripts.hsr import add_env_args
 from utils.arguments import parse_groups
 
 
@@ -139,5 +140,7 @@ def get_args():
         type=float,
         default=0.5,
         help='max norm of gradients (default: 0.5)')
+
+    add_env_args(parser.add_argument_group('env_args'))
 
     return parse_groups(parser)

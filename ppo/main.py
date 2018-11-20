@@ -10,19 +10,23 @@ import numpy as np
 import torch
 
 # first party
+from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
+
 from ppo.arguments import get_args
-from ppo.envs import make_vec_envs
+from ppo.envs import make_vec_envs, VecPyTorch
 from ppo.model import Policy
 from ppo.ppo import PPO
 from ppo.storage import RolloutStorage
 from ppo.utils import get_vec_normalize
 from ppo.visualize import visdom_plot
 
+from environments.hsr import MoveGripperEnv
+
 
 def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
          cuda_deterministic, cuda, log_dir, vis, port, env_name, gamma,
          add_timestep, save_interval, save_dir, log_interval,
-         eval_interval, use_gae, tau, vis_interval, ppo_args):
+         eval_interval, use_gae, tau, vis_interval, ppo_args, env_args):
 
     algo = 'ppo'
 
@@ -59,8 +63,13 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
         viz = Visdom(port=port)
         win = None
 
-    envs = make_vec_envs(env_name, seed, num_processes, gamma, log_dir,
-                         add_timestep, device, False)
+    if env_name == 'move_gripper':
+        def make_env():
+            MoveGripperEnv(**env_args)
+        envs = VecPyTorch(DummyVecEnv([make_env()] * num_processes))
+    else:
+        envs = make_vec_envs(env_name, seed, num_processes, gamma, log_dir,
+                             add_timestep, device, False)
 
     actor_critic = Policy(
         envs.observation_space.shape,
@@ -71,9 +80,11 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
     agent = PPO(actor_critic=actor_critic,
                 **ppo_args)
 
-    rollouts = RolloutStorage(num_steps, num_processes,
-                              envs.observation_space.shape, envs.action_space,
-                              actor_critic.recurrent_hidden_state_size)
+    rollouts = RolloutStorage(num_steps=num_steps,
+                              num_processes=num_processes,
+                              obs_shape=envs.observation_space.shape,
+                              action_space=envs.action_space,
+                              recurrent_hidden_state_size=actor_critic.recurrent_hidden_state_size)
 
     obs = envs.reset()
     rollouts.obs[0].copy_(obs)
@@ -84,7 +95,7 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
     start = time.time()
     for j in range(num_updates):
         for step in range(num_steps):
-            # Sample actions
+            # Sample actions.add_argument_group('env_args')
             with torch.no_grad():
                 value, action, action_log_prob, recurrent_hidden_states = actor_critic.act(
                     rollouts.obs[step], rollouts.recurrent_hidden_states[step],
