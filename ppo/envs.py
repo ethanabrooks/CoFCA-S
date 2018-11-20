@@ -153,7 +153,11 @@ class VecPyTorch(VecEnvWrapper):
         # TODO: Fix data types
 
     def reset(self):
+        import ipdb; ipdb.set_trace()
         obs = self.venv.reset()
+        if isinstance(obs, (list, tuple)):
+            assert len(obs) == 1
+            obs = obs[0]
         obs = torch.from_numpy(obs).float().to(self.device)
         return obs
 

@@ -1,4 +1,6 @@
 # stdlib
+import functools
+import sys
 from collections import deque
 import copy
 import glob
@@ -6,14 +8,19 @@ import os
 import time
 
 # third party
+from typing import Union
+
 import numpy as np
 import torch
 
 # first party
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
+from scripts.hsr import env_wrapper
 
-from ppo.arguments import get_args
+from ppo.arguments import get_args, get_hsr_args
 from ppo.envs import make_vec_envs, VecPyTorch
+from ppo.hsr_wrapper import UnsupervisedEnv, UnsupervisedDummyVecEnv, \
+    UnsupervisedSubprocVecEnv, Observation
 from ppo.model import Policy
 from ppo.ppo import PPO
 from ppo.storage import RolloutStorage
@@ -27,7 +34,6 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
          cuda_deterministic, cuda, log_dir, vis, port, env_name, gamma,
          add_timestep, save_interval, save_dir, log_interval,
          eval_interval, use_gae, tau, vis_interval, ppo_args, env_args):
-
     algo = 'ppo'
 
     num_updates = int(num_frames) // num_steps // num_processes
@@ -63,10 +69,39 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
         viz = Visdom(port=port)
         win = None
 
-    if env_name == 'move_gripper':
+    reward_params_shape = None
+    reward_function = None
+    unsupervised = env_name == 'unsupervised'
+    if unsupervised:
+        def make_env(_seed):
+            env = UnsupervisedEnv(**env_args)
+            env.seed(_seed)
+            return env
+
+        X = Union[torch.Tensor, np.array]
+
+        sample_env = make_env(0)
+
+        def reward_function(x: X, params: X):
+            obs = Observation(*torch.split(x, sample_env.subspace_sizes), dim=1)
+            return sample_env.reward_function(achieved=obs.achieved,
+                                              params=params, dim=1)
+
+        reward_params_shape = (3,)
+        env_fns = [lambda: make_env(s + seed) for s in range(num_processes)]
+
+        if sys.platform == 'darwin':
+            envs = UnsupervisedDummyVecEnv(env_fns)
+        else:
+            envs = UnsupervisedSubprocVecEnv(env_fns)
+        envs = VecPyTorch(envs, device=device)
+
+    elif env_name == 'move_gripper':
         def make_env():
             MoveGripperEnv(**env_args)
-        envs = VecPyTorch(DummyVecEnv([make_env()] * num_processes))
+
+        envs = VecPyTorch(DummyVecEnv([make_env()] * num_processes),
+                          device=device)
     else:
         envs = make_vec_envs(env_name, seed, num_processes, gamma, log_dir,
                              add_timestep, device, False)
@@ -78,13 +113,17 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
     actor_critic.to(device)
 
     agent = PPO(actor_critic=actor_critic,
+                reward_function=reward_function,
                 **ppo_args)
 
-    rollouts = RolloutStorage(num_steps=num_steps,
-                              num_processes=num_processes,
-                              obs_shape=envs.observation_space.shape,
-                              action_space=envs.action_space,
-                              recurrent_hidden_state_size=actor_critic.recurrent_hidden_state_size)
+    rollouts = RolloutStorage(
+        num_steps=num_steps,
+        num_processes=num_processes,
+        obs_shape=envs.observation_space.shape,
+        action_space=envs.action_space,
+        recurrent_hidden_state_size=actor_critic.recurrent_hidden_state_size,
+        reward_param_shape=reward_params_shape
+    )
 
     obs = envs.reset()
     rollouts.obs[0].copy_(obs)
@@ -97,11 +136,12 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
         for step in range(num_steps):
             # Sample actions.add_argument_group('env_args')
             with torch.no_grad():
-                value, action, action_log_prob, recurrent_hidden_states = actor_critic.act(
-                    rollouts.obs[step], rollouts.recurrent_hidden_states[step],
-                    rollouts.masks[step])
+                value, action, action_log_prob, recurrent_hidden_states = \
+                    actor_critic.act(
+                        rollouts.obs[step], rollouts.recurrent_hidden_states[step],
+                        rollouts.masks[step])
 
-            # Obser reward and next obs
+            # Observe reward and next obs
             obs, reward, done, infos = envs.step(action)
 
             for info in infos:
@@ -122,6 +162,9 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
         rollouts.compute_returns(next_value, use_gae, gamma, tau)
 
         value_loss, action_loss, dist_entropy = agent.update(rollouts)
+
+        if unsupervised:
+            envs.set_reward_params(rollouts.reward_params)
 
         rollouts.after_update()
 
@@ -149,13 +192,14 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
         if j % log_interval == 0 and len(episode_rewards) > 1:
             end = time.time()
             print(
-                "Updates {}, num timesteps {}, FPS {} \n Last {} training episodes: mean/median reward {:.1f}/{:.1f}, min/max reward {:.1f}/{:.1f}\n"
-                .format(j, total_num_steps,
-                        int(total_num_steps / (end - start)),
-                        len(episode_rewards), np.mean(episode_rewards),
-                        np.median(episode_rewards), np.min(episode_rewards),
-                        np.max(episode_rewards), dist_entropy, value_loss,
-                        action_loss))
+                "Updates {}, num timesteps {}, FPS {} \n Last {} training episodes: "
+                "mean/median reward {:.1f}/{:.1f}, min/max reward {:.1f}/{:.1f}\n"
+                    .format(j, total_num_steps,
+                            int(total_num_steps / (end - start)),
+                            len(episode_rewards), np.mean(episode_rewards),
+                            np.median(episode_rewards), np.min(episode_rewards),
+                            np.max(episode_rewards), dist_entropy, value_loss,
+                            action_loss))
 
         if (eval_interval is not None and len(episode_rewards) > 1
                 and j % eval_interval == 0):
@@ -212,5 +256,9 @@ def cli():
     main(**get_args())
 
 
+def hsr_cli():
+    env_wrapper(main)(**get_hsr_args())
+
+
 if __name__ == "__main__":
-    cli()
+    hsr_cli()
