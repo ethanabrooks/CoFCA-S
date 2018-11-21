@@ -21,11 +21,7 @@ class RolloutStorage(object):
 
         self.reward_structure = reward_structure
         if reward_structure:
-            self.reward_params = torch.zeros(
-                num_processes,
-                reward_structure.subspace_sizes.params,
-                requires_grad=True,
-            )
+            self.reward_params = reward_structure.reward_params
             self.raw_returns = torch.zeros(num_steps + 1, num_processes, 1,
                                            requires_grad=True)
         else:

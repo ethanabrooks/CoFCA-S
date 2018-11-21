@@ -45,12 +45,17 @@ class Observation(namedtuple('Observation', 'observation achieved params')):
 
 
 class RewardStructure:
-    def __init__(self, subspace_sizes, reward_function):
+    def __init__(self, num_processes, subspace_sizes, reward_function):
         self.reward_function = reward_function
         self.function = reward_function
         self.subspace_sizes = Observation(*subspace_sizes)
         starts = _, *ends = np.cumsum([0] + subspace_sizes)
         self.subspace_slices = Observation(*[slice(*s) for s in zip(starts, ends)])
+        self.reward_params = torch.zeros(
+            num_processes,
+            self.subspace_sizes.params,
+            requires_grad=True,
+        )
 
 
 class UnsupervisedEnv(hsr.HSREnv):
@@ -78,16 +83,13 @@ class UnsupervisedEnv(hsr.HSREnv):
 
     def step(self, actions):
         s, r, t, i = super().step(actions)
-        print(s)
         observation = Observation(observation=s.observation, params=s.goal,
                                   achieved=self.achieved_goal())
         return vectorize(observation), r, t, i
 
     def reset(self):
-        o = super().reset()
-        print(o)
-        print('reset params', o.goal)
-        return vectorize(Observation(observation=o.observation, params=o.goal,
+        s = super().reset()
+        return vectorize(Observation(observation=s.observation, params=s.goal,
                                      achieved=self.achieved_goal()))
 
     def compute_terminal(self):
@@ -162,12 +164,10 @@ class UnsupervisedSubprocVecEnv(SubprocVecEnv):
 
     def set_reward_params(self, params):
         for remote, param in zip(self.remotes, params):
-            print('sent params', param)
             remote.send(('set_reward_params', param))
 
 
 class UnsupervisedDummyVecEnv(DummyVecEnv):
     def set_reward_params(self, params):
         for env, param in zip(self.envs, params):
-            print('sent params', param)
             unwrap_unsupervised(env).set_reward_params(param)

@@ -77,8 +77,10 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
             return env
 
         sample_env = make_env(0).env
-        reward_structure = RewardStructure(subspace_sizes=sample_env.subspace_sizes,
+        reward_structure = RewardStructure(num_processes=num_processes,
+                                           subspace_sizes=sample_env.subspace_sizes,
                                            reward_function=sample_env.reward_function)
+        ppo_args.update(reward_params=reward_structure.reward_params)
 
         env_fns = [lambda: make_env(s + seed) for s in range(num_processes)]
 
