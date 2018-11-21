@@ -40,7 +40,7 @@ class PPO:
     def update(self, rollouts: RolloutStorage):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         advantages = (advantages - advantages.mean()) / (
-            advantages.std() + 1e-5)
+                advantages.std() + 1e-5)
 
         value_loss_epoch = 0
         action_loss_epoch = 0
@@ -81,7 +81,7 @@ class PPO:
                                              -self.clip_param, self.clip_param)
                     value_losses = (values - return_batch).pow(2)
                     value_losses_clipped = (
-                        value_pred_clipped - return_batch).pow(2)
+                            value_pred_clipped - return_batch).pow(2)
                     value_loss = .5 * torch.max(value_losses,
                                                 value_losses_clipped).mean()
                 else:
@@ -89,14 +89,20 @@ class PPO:
 
                 self.optimizer.zero_grad()
                 (value_loss * self.value_loss_coef + action_loss -
-                 dist_entropy * self.entropy_coef).backward()
+                 dist_entropy * self.entropy_coef).backward(retain_graph=True)
 
                 if self.unsupervised:
+
                     expected_return_delta = torch.mean(
-                        rollouts.returns * torch.log(
+                        rollouts.raw_returns * torch.log(
                             action_log_probs / old_action_log_probs_batch))
+                    expected_return_delta.backward()
+                    print(rollouts.reward_params.grad)
+                    import ipdb;
+                    ipdb.set_trace()
                     rollouts.reward_params.grad = None
                     expected_return_delta.backward()
+                    print(rollouts.reward_params.grad)
 
                 nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
                                          self.max_grad_norm)

@@ -10,7 +10,6 @@ from tensorflow.python import debug as tf_debug
 
 Shape = Union[int, Sequence[int]]
 
-
 def leaky_relu(x, alpha=0.2):
     return tf.maximum(x, alpha * x)
 

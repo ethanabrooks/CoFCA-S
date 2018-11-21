@@ -2,10 +2,14 @@
 import torch
 from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
 
+from ppo.hsr_wrapper import RewardStructure
+
 
 def _flatten_helper(T, N, _tensor):
     return _tensor.view(T * N, *_tensor.size()[2:])
 
+
+# TODO should the size of the params variable be based on batch_size or num_processes?
 
 class RolloutStorage(object):
     def __init__(self,
@@ -14,24 +18,27 @@ class RolloutStorage(object):
                  obs_shape,
                  action_space,
                  recurrent_hidden_state_size,
-                 reward_param_shape=None):
+                 reward_structure=None):
         self.obs = torch.zeros(num_steps + 1, num_processes, *obs_shape)
         self.recurrent_hidden_states = torch.zeros(
             num_steps + 1, num_processes, recurrent_hidden_state_size)
 
-        if reward_param_shape:
+        unsupervised = reward_structure is not None
+        self.reward_structure = reward_structure
+        if reward_structure:
             self.reward_params = torch.zeros(
-                num_steps,
                 num_processes,
-                *reward_param_shape,
+                reward_structure.subspace_sizes.params,
                 requires_grad=True,
             )
         else:
-            self.reward_params = None
+            self.reward_structure = None
 
         self.rewards = torch.zeros(num_steps, num_processes, 1)
         self.value_preds = torch.zeros(num_steps + 1, num_processes, 1)
         self.returns = torch.zeros(num_steps + 1, num_processes, 1)
+        self.raw_returns = torch.zeros(num_steps + 1, num_processes, 1,
+                                       requires_grad=True)
         self.action_log_probs = torch.zeros(num_steps, num_processes, 1)
         if action_space.__class__.__name__ == 'Discrete':
             action_shape = 1
@@ -51,6 +58,7 @@ class RolloutStorage(object):
         self.rewards = self.rewards.to(device)
         self.value_preds = self.value_preds.to(device)
         self.returns = self.returns.to(device)
+        self.raw_returns = self.raw_returns.to(device)
         self.action_log_probs = self.action_log_probs.to(device)
         self.actions = self.actions.to(device)
         self.masks = self.masks.to(device)
@@ -66,23 +74,38 @@ class RolloutStorage(object):
         self.rewards[self.step].copy_(rewards)
         self.masks[self.step + 1].copy_(masks)
         self.step = (self.step + 1) % self.num_steps
-        if self.reward_params:
-            self.reward_params[self.step].detach().copy_(reward_params)
 
     def after_update(self):
         self.obs[0].copy_(self.obs[-1])
         self.recurrent_hidden_states[0].copy_(self.recurrent_hidden_states[-1])
         self.masks[0].copy_(self.masks[-1])
 
-    def compute_returns(self, next_value, use_gae, gamma, tau,
-                        reward_function):
-        def reward(step):
-            if reward_function:
-                return reward_function(self.obs[step],
-                                       self.reward_params[step])
-            else:
-                return self.rewards[step]
+    def compute_returns(self, next_value, use_gae, gamma, tau):
+        if self.reward_structure:
+            assert isinstance(self.reward_structure, RewardStructure)
+            obs = self.reward_structure.observation(self.obs[:, :, :], dim=2)
+            achieved = obs.achieved
+            params = obs.params[-1]
+            self.reward_params.detach().copy_(params)
 
+        def reward(_step):
+            if self.reward_structure:
+                return self.reward_structure.function(
+                    achieved=achieved[_step], params=self.reward_params, dim=1, )
+            else:
+                return self.rewards[_step]
+
+        # TODO: can we simplify this?
+        raw_returns = self.raw_returns.detach()
+        raw_returns[-1] = torch.tensor([[0]])
+        for step in reversed(range(self.rewards.size(0))):
+            raw_returns[step] = self.raw_returns[step + 1] * \
+                           gamma * self.masks[step + 1] + reward(step)
+
+        raw_returns.sum().backward()
+        print('grad', self.reward_params.grad)
+        import ipdb;
+        ipdb.set_trace()
         if use_gae:
             self.value_preds[-1] = next_value
             gae = 0
@@ -96,6 +119,7 @@ class RolloutStorage(object):
             for step in reversed(range(self.rewards.size(0))):
                 self.returns[step] = self.returns[step + 1] * \
                                      gamma * self.masks[step + 1] + reward(step)
+
 
     def feed_forward_generator(self, advantages, num_mini_batch):
         num_steps, num_processes = self.rewards.size()[0:2]

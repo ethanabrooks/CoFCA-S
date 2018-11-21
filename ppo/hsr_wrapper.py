@@ -2,13 +2,13 @@
 from collections import namedtuple
 from multiprocessing import Pipe, Process
 
-import numpy as np
 # first party
+import torch
 from baselines.common.vec_env import CloudpickleWrapper, VecEnv
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
 from environments import hsr
-from gym.spaces import Box
+
 from utils.utils import concat_spaces, space_shape, vectorize, unwrap_env
 
 
@@ -34,10 +34,22 @@ class MoveGripperEnv(HSREnv, hsr.MoveGripperEnv):
 
 StepData = namedtuple('StepData', 'actions reward_params')
 
+ # TODO: test with multiple envs
+ # TODO: test with small nsteps
 
 class Observation(namedtuple('Observation', 'observation achieved params')):
     def replace(self, *args, **kwargs):
         return self._replace(*args, **kwargs)
+
+
+class RewardStructure:
+    def __init__(self, subspace_sizes, reward_function):
+        self.reward_function = reward_function
+        self.subspace_sizes = Observation(*subspace_sizes)
+        self.function = reward_function
+
+    def observation(self, x, dim) -> Observation:
+        return Observation(*torch.split(x, self.subspace_sizes, dim=dim))
 
 
 class UnsupervisedEnv(hsr.HSREnv):
@@ -49,26 +61,11 @@ class UnsupervisedEnv(hsr.HSREnv):
             params=old_spaces.goal,
             achieved=old_spaces.goal)
 
-        # subspace_sizes used for splitting concatenated tensor observations
         self.subspace_sizes = [space_shape(space)[0] for space in spaces]
-        for n in self.subspace_sizes:
-            assert isinstance(n, int)
 
         # space of observation needs to exclude reward param
         self.observation_space = concat_spaces(spaces, axis=0)
         self.reward_params = self.achieved_goal()
-
-    def step(self, actions):
-        s, r, t, i = super().step(actions)
-        observation = Observation(observation=s.observation, params=s.goal,
-                                  achieved=self.achieved_goal())
-        return vectorize(observation), r, t, i
-
-    def reset(self):
-        o = super().reset()
-        print('reset params', o.goal)
-        return vectorize(Observation(observation=o.observation, params=o.goal,
-                                     achieved=self.achieved_goal()))
 
     @staticmethod
     def reward_function(achieved, params, dim):
@@ -77,6 +74,21 @@ class UnsupervisedEnv(hsr.HSREnv):
     def compute_reward(self):
         return self.reward_function(achieved=self.achieved_goal(),
                                     params=self.reward_params, dim=0)
+
+    def step(self, actions):
+        s, r, t, i = super().step(actions)
+        print(s)
+        observation = Observation(observation=s.observation, params=s.goal,
+                                  achieved=self.achieved_goal())
+        return vectorize(observation), r, t, i
+
+    def reset(self):
+        o = super().reset()
+        print(o)
+        print('reset params', o.goal)
+        return vectorize(Observation(observation=o.observation, params=o.goal,
+                                     achieved=self.achieved_goal()))
+
 
     def compute_terminal(self):
         return False

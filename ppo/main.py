@@ -5,20 +5,19 @@ import os
 import sys
 import time
 from collections import deque
-# third party
-from typing import Union
 
 import numpy as np
 import torch
 # first party
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from environments.hsr import MoveGripperEnv
+from gym.wrappers import TimeLimit
 from scripts.hsr import env_wrapper
 
 from ppo.arguments import get_args, get_hsr_args
 from ppo.envs import make_vec_envs, VecPyTorch
 from ppo.hsr_wrapper import UnsupervisedEnv, UnsupervisedDummyVecEnv, \
-    UnsupervisedSubprocVecEnv, Observation
+    UnsupervisedSubprocVecEnv, RewardStructure
 from ppo.model import Policy
 from ppo.ppo import PPO
 from ppo.storage import RolloutStorage
@@ -26,11 +25,13 @@ from ppo.utils import get_vec_normalize
 from ppo.visualize import visdom_plot
 
 
+# third party
+
+
 def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
          cuda_deterministic, cuda, log_dir, vis, port, env_name, gamma,
          add_timestep, save_interval, save_dir, log_interval, eval_interval,
          use_gae, tau, vis_interval, ppo_args, env_args):
-
     algo = 'ppo'
 
     num_updates = int(num_frames) // num_steps // num_processes
@@ -66,33 +67,26 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
         viz = Visdom(port=port)
         win = None
 
-    reward_params_shape = None
-    reward_function = None
+    reward_structure = None
     unsupervised = env_name == 'unsupervised'
     if unsupervised:
 
         def make_env(_seed):
-            env = UnsupervisedEnv(**env_args)
+            env = TimeLimit(UnsupervisedEnv(**env_args),
+                            max_episode_steps=num_steps)
             env.seed(_seed)
             return env
 
-        X = Union[torch.Tensor, np.array]
+        sample_env = make_env(0).env
+        reward_structure = RewardStructure(subspace_sizes=sample_env.subspace_sizes,
+                                           reward_function=sample_env.reward_function)
 
-        sample_env = make_env(0)
-
-        def reward_function(x: X, params: X):
-            obs = Observation(
-                *torch.split(x, sample_env.subspace_sizes), dim=1)
-            return sample_env.reward_function(
-                achieved=obs.achieved, params=params, dim=1)
-
-        reward_params_shape = (3, )
         env_fns = [lambda: make_env(s + seed) for s in range(num_processes)]
 
-        if sys.platform == 'darwin' or num_processes == 1:
-            envs = UnsupervisedDummyVecEnv(env_fns)
-        else:
-            envs = UnsupervisedSubprocVecEnv(env_fns)
+        # if sys.platform == 'darwin' or num_processes == 1:
+        envs = UnsupervisedDummyVecEnv(env_fns)
+        # else:
+        #     envs = UnsupervisedSubprocVecEnv(env_fns)
         envs = VecPyTorch(envs, device=device)
 
     elif env_name == 'move_gripper':
@@ -112,9 +106,8 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
         base_kwargs={'recurrent': recurrent_policy})
     actor_critic.to(device)
 
-    agent = PPO(actor_critic=actor_critic,
-                unsupervised=unsupervised,
-                **ppo_args)
+    agent = PPO(
+        actor_critic=actor_critic, unsupervised=unsupervised, **ppo_args)
 
     rollouts = RolloutStorage(
         num_steps=num_steps,
@@ -122,8 +115,7 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
         obs_shape=envs.observation_space.shape,
         action_space=envs.action_space,
         recurrent_hidden_state_size=actor_critic.recurrent_hidden_state_size,
-        reward_param_shape=reward_params_shape
-    )
+        reward_structure=reward_structure)
     # TODO: include params in obs
     # TODO: need to ensure that nsteps is equal to max_steps
 
@@ -157,20 +149,19 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
                             action_log_prob, value, reward, masks)
 
         with torch.no_grad():
-            next_value = actor_critic.get_value(
-                rollouts.obs[-1], rollouts.recurrent_hidden_states[-1],
-                rollouts.masks[-1]).detach()
+            if unsupervised:
+                next_value = torch.zeros([1, 1])
+            else:
+                next_value = actor_critic.get_value(
+                    rollouts.obs[-1], rollouts.recurrent_hidden_states[-1],
+                    rollouts.masks[-1]).detach()
 
-        if unsupervised:
-            assert next_value == 0
-
-        rollouts.compute_returns(next_value, use_gae, gamma, tau, reward_function)
+        rollouts.compute_returns(next_value, use_gae, gamma, tau)
 
         value_loss, action_loss, dist_entropy = agent.update(rollouts)
 
         if unsupervised:
-
-            envs.set_reward_params(rollouts.reward_params)
+            envs.set_reward_params(rollouts.reward_structure)
 
         rollouts.after_update()
 
@@ -200,12 +191,12 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
             print(
                 "Updates {}, num timesteps {}, FPS {} \n Last {} training episodes: "
                 "mean/median reward {:.1f}/{:.1f}, min/max reward {:.1f}/{:.1f}\n"
-                .format(j, total_num_steps,
-                        int(total_num_steps / (end - start)),
-                        len(episode_rewards), np.mean(episode_rewards),
-                        np.median(episode_rewards), np.min(episode_rewards),
-                        np.max(episode_rewards), dist_entropy, value_loss,
-                        action_loss))
+                    .format(j, total_num_steps,
+                            int(total_num_steps / (end - start)),
+                            len(episode_rewards), np.mean(episode_rewards),
+                            np.median(episode_rewards), np.min(episode_rewards),
+                            np.max(episode_rewards), dist_entropy, value_loss,
+                            action_loss))
 
         if (eval_interval is not None and len(episode_rewards) > 1
                 and j % eval_interval == 0):

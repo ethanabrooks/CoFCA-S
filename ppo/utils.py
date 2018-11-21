@@ -1,10 +1,10 @@
+from collections import namedtuple
 # third party
 import torch
 import torch.nn as nn
 
 # first party
 from ppo.envs import VecNormalize
-
 
 # Get a render function
 def get_render_func(venv):
