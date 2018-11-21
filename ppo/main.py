@@ -155,7 +155,6 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
         value_loss, action_loss, dist_entropy = agent.update(rollouts)
 
         if unsupervised:
-            print(rollouts.reward_params)
             params = rollouts.reward_params.detach().numpy()
             envs.venv.set_reward_params(params)
 
