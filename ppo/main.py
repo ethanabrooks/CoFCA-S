@@ -25,9 +25,9 @@ from ppo.visualize import visdom_plot
 
 
 def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
-         cuda_deterministic, cuda, log_dir, vis, port, env_name, gamma,
-         add_timestep, save_interval, save_dir, log_interval, eval_interval,
-         use_gae, tau, vis_interval, ppo_args, env_args):
+         cuda_deterministic, cuda, log_dir, env_name, gamma, add_timestep,
+         save_interval, save_dir, log_interval, eval_interval, use_gae, tau,
+         vis_interval, visdom_args, ppo_args, env_args):
     algo = 'ppo'
 
     num_updates = int(num_frames) // num_steps // num_processes
@@ -58,9 +58,10 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
     torch.set_num_threads(1)
     device = torch.device("cuda:0" if cuda else "cpu")
 
+    vis = all(visdom_args.values())
     if vis:
         from visdom import Visdom
-        viz = Visdom(port=port)
+        viz = Visdom(**visdom_args)
         win = None
 
     reward_structure = None

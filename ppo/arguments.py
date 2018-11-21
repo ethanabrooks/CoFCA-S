@@ -78,9 +78,7 @@ def build_parser():
         default='./trained_models/',
         help='directory to save agent logs (default: ./trained_models/)')
     parser.add_argument(
-        '--cuda',
-        action='store_true',
-        help='enables CUDA training')
+        '--cuda', action='store_true', help='enables CUDA training')
     parser.add_argument(
         '--add-timestep',
         action='store_true',
@@ -91,16 +89,19 @@ def build_parser():
         action='store_true',
         default=False,
         help='use a recurrent policy')
-    parser.add_argument(
-        '--vis',
-        action='store_true',
-        default=False,
-        help='enable visdom visualization')
-    parser.add_argument(
+
+    visdom_parser = parser.add_argument_group('visdom_args')
+    visdom_parser.add_argument(
         '--port',
         type=int,
-        default=8097,
-        help='port to run the server on (default: 8097)')
+        default=None,
+        help='port to run the server on',
+    )
+    visdom_parser.add_argument(
+        '--server',
+        default=None,
+        help='hostname (e.g. localhost)',
+    )
 
     ppo_parser = parser.add_argument_group('ppo_args')
     ppo_parser.add_argument(
@@ -144,8 +145,7 @@ def build_parser():
 
 
 def get_args():
-    return {**parse_groups(build_parser()),
-            **dict(env_args=None)}
+    return {**parse_groups(build_parser()), **dict(env_args=None)}
 
 
 def get_hsr_args():
