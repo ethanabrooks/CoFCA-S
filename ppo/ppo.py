@@ -60,7 +60,6 @@ class PPO:
                 old_action_log_probs_batch, \
                 adv_targ = sample
 
-                # TODO: need to get derivative with respect to params
                 # Reshape to do in a single forward pass for all steps
                 values, action_log_probs, dist_entropy, \
                 _ = self.actor_critic.evaluate_actions(

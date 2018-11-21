@@ -2,14 +2,10 @@
 import torch
 from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
 
-from ppo.hsr_wrapper import RewardStructure
-
 
 def _flatten_helper(T, N, _tensor):
     return _tensor.view(T * N, *_tensor.size()[2:])
 
-
-# TODO should the size of the params variable be based on batch_size or num_processes?
 
 class RolloutStorage(object):
     def __init__(self,
@@ -146,7 +142,6 @@ class RolloutStorage(object):
             masks_batch = self.masks[:-1].view(-1, 1)[indices]
             old_action_log_probs_batch = self.action_log_probs.view(-1,
                                                                     1)[indices]
-            # TODO: calculate d logP / dΘ here
             adv_targ = advantages.view(-1, 1)[indices]
 
             yield obs_batch, recurrent_hidden_states_batch, actions_batch, \

@@ -2,7 +2,6 @@
 import copy
 import glob
 import os
-import sys
 import time
 from collections import deque
 
@@ -17,7 +16,7 @@ from scripts.hsr import env_wrapper
 from ppo.arguments import get_args, get_hsr_args
 from ppo.envs import make_vec_envs, VecPyTorch
 from ppo.hsr_wrapper import UnsupervisedEnv, UnsupervisedDummyVecEnv, \
-    UnsupervisedSubprocVecEnv, RewardStructure
+    RewardStructure
 from ppo.model import Policy
 from ppo.ppo import PPO
 from ppo.storage import RolloutStorage
@@ -116,8 +115,6 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
         action_space=envs.action_space,
         recurrent_hidden_state_size=actor_critic.recurrent_hidden_state_size,
         reward_structure=reward_structure)
-    # TODO: include params in obs
-    # TODO: need to ensure that nsteps is equal to max_steps
 
     obs = envs.reset()
     rollouts.obs[0].copy_(obs)
