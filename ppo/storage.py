@@ -95,17 +95,14 @@ class RolloutStorage(object):
             else:
                 return self.rewards[_step]
 
+        # TODO is reward_params being fed into policy?
         # TODO: can we simplify this?
-        raw_returns = self.raw_returns.detach()
-        raw_returns[-1] = torch.tensor([[0]])
+        self.raw_returns = self.raw_returns.detach()
+        self.raw_returns[-1] = torch.tensor([[0]])
         for step in reversed(range(self.rewards.size(0))):
-            raw_returns[step] = self.raw_returns[step + 1] * \
+            self.raw_returns[step] = self.raw_returns[step + 1] * \
                            gamma * self.masks[step + 1] + reward(step)
 
-        raw_returns.sum().backward()
-        print('grad', self.reward_params.grad)
-        import ipdb;
-        ipdb.set_trace()
         if use_gae:
             self.value_preds[-1] = next_value
             gae = 0

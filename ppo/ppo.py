@@ -87,6 +87,7 @@ class PPO:
                 else:
                     value_loss = 0.5 * F.mse_loss(return_batch, values)
 
+
                 self.optimizer.zero_grad()
                 (value_loss * self.value_loss_coef + action_loss -
                  dist_entropy * self.entropy_coef).backward(retain_graph=True)
@@ -96,10 +97,6 @@ class PPO:
                     expected_return_delta = torch.mean(
                         rollouts.raw_returns * torch.log(
                             action_log_probs / old_action_log_probs_batch))
-                    expected_return_delta.backward()
-                    print(rollouts.reward_params.grad)
-                    import ipdb;
-                    ipdb.set_trace()
                     rollouts.reward_params.grad = None
                     expected_return_delta.backward()
                     print(rollouts.reward_params.grad)
