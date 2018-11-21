@@ -4,10 +4,10 @@ import glob
 import os
 import time
 from collections import deque
+import sys
 
 import numpy as np
 import torch
-# first party
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from environments.hsr import MoveGripperEnv
 from gym.wrappers import TimeLimit
@@ -16,15 +16,12 @@ from scripts.hsr import env_wrapper
 from ppo.arguments import get_args, get_hsr_args
 from ppo.envs import make_vec_envs, VecPyTorch
 from ppo.hsr_wrapper import UnsupervisedEnv, UnsupervisedDummyVecEnv, \
-    RewardStructure
+    RewardStructure, UnsupervisedSubprocVecEnv
 from ppo.model import Policy
 from ppo.ppo import PPO
 from ppo.storage import RolloutStorage
 from ppo.utils import get_vec_normalize
 from ppo.visualize import visdom_plot
-
-
-# third party
 
 
 def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
@@ -71,23 +68,24 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
     if unsupervised:
 
         def make_env(_seed):
-            env = TimeLimit(UnsupervisedEnv(**env_args),
-                            max_episode_steps=num_steps)
+            env = TimeLimit(
+                UnsupervisedEnv(**env_args), max_episode_steps=num_steps)
             env.seed(_seed)
             return env
 
         sample_env = make_env(0).env
-        reward_structure = RewardStructure(num_processes=num_processes,
-                                           subspace_sizes=sample_env.subspace_sizes,
-                                           reward_function=sample_env.reward_function)
+        reward_structure = RewardStructure(
+            num_processes=num_processes,
+            subspace_sizes=sample_env.subspace_sizes,
+            reward_function=sample_env.reward_function)
         ppo_args.update(reward_params=reward_structure.reward_params)
 
         env_fns = [lambda: make_env(s + seed) for s in range(num_processes)]
 
-        # if sys.platform == 'darwin' or num_processes == 1:
-        envs = UnsupervisedDummyVecEnv(env_fns)
-        # else:
-        #     envs = UnsupervisedSubprocVecEnv(env_fns)
+        if sys.platform == 'darwin' or num_processes == 1:
+            envs = UnsupervisedSubprocVecEnv(env_fns)
+        else:
+            envs = UnsupervisedDummyVecEnv(env_fns)
         envs = VecPyTorch(envs, device=device)
 
     elif env_name == 'move_gripper':
@@ -188,12 +186,12 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
             print(
                 "Updates {}, num timesteps {}, FPS {} \n Last {} training episodes: "
                 "mean/median reward {:.1f}/{:.1f}, min/max reward {:.1f}/{:.1f}\n"
-                    .format(j, total_num_steps,
-                            int(total_num_steps / (end - start)),
-                            len(episode_rewards), np.mean(episode_rewards),
-                            np.median(episode_rewards), np.min(episode_rewards),
-                            np.max(episode_rewards), dist_entropy, value_loss,
-                            action_loss))
+                .format(j, total_num_steps,
+                        int(total_num_steps / (end - start)),
+                        len(episode_rewards), np.mean(episode_rewards),
+                        np.median(episode_rewards), np.min(episode_rewards),
+                        np.max(episode_rewards), dist_entropy, value_loss,
+                        action_loss))
 
         if (eval_interval is not None and len(episode_rewards) > 1
                 and j % eval_interval == 0):

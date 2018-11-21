@@ -35,9 +35,9 @@ class MoveGripperEnv(HSREnv, hsr.MoveGripperEnv):
 
 StepData = namedtuple('StepData', 'actions reward_params')
 
-
 # TODO: test with multiple envs
 # TODO: test with small nsteps
+
 
 class Observation(namedtuple('Observation', 'observation achieved params')):
     def replace(self, *args, **kwargs):
@@ -51,7 +51,8 @@ class RewardStructure:
         # TODO make sure we are doing this correctly
         self.subspace_sizes = Observation(*subspace_sizes)
         starts = _, *ends = np.cumsum([0] + subspace_sizes)
-        self.subspace_slices = Observation(*[slice(*s) for s in zip(starts, ends)])
+        self.subspace_slices = Observation(
+            *[slice(*s) for s in zip(starts, ends)])
         self.reward_params = torch.zeros(
             num_processes,
             self.subspace_sizes.params,
@@ -76,22 +77,28 @@ class UnsupervisedEnv(hsr.HSREnv):
 
     @staticmethod
     def reward_function(achieved, params, dim):
-        return -((achieved - params) ** 2).sum(dim)
+        return -((achieved - params)**2).sum(dim)
 
     def compute_reward(self):
-        return self.reward_function(achieved=self.achieved_goal(),
-                                    params=self.reward_params, dim=0)
+        return self.reward_function(
+            achieved=self.achieved_goal(), params=self.reward_params, dim=0)
 
     def step(self, actions):
         s, r, t, i = super().step(actions)
-        observation = Observation(observation=s.observation, params=s.goal,
-                                  achieved=self.achieved_goal())
+        observation = Observation(
+            observation=s.observation,
+            params=s.goal,
+            achieved=self.achieved_goal())
+        i = {**i, **dict(episode=dict(r=r))}
         return vectorize(observation), r, t, i
 
     def reset(self):
         s = super().reset()
-        return vectorize(Observation(observation=s.observation, params=s.goal,
-                                     achieved=self.achieved_goal()))
+        return vectorize(
+            Observation(
+                observation=s.observation,
+                params=s.goal,
+                achieved=self.achieved_goal()))
 
     def compute_terminal(self):
         return False
@@ -149,9 +156,12 @@ class UnsupervisedSubprocVecEnv(SubprocVecEnv):
         nenvs = len(env_fns)
         self.remotes, self.work_remotes = zip(*[Pipe() for _ in range(nenvs)])
         self.ps = [
-            Process(target=worker, args=(work_remote, remote, CloudpickleWrapper(env_fn)))
-            for (work_remote, remote, env_fn) in
-            zip(self.work_remotes, self.remotes, env_fns)]
+            Process(
+                target=worker,
+                args=(work_remote, remote, CloudpickleWrapper(env_fn)))
+            for (work_remote, remote,
+                 env_fn) in zip(self.work_remotes, self.remotes, env_fns)
+        ]
         for p in self.ps:
             p.daemon = True  # if the main process crashes, we should not cause things
             # to hang
