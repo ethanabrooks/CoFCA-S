@@ -199,6 +199,7 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
             eval_envs = make_vec_envs(env_name, seed + num_processes,
                                       num_processes, gamma, eval_log_dir,
                                       add_timestep, device, True)
+            # TODO: add eval_env
 
             vec_norm = get_vec_normalize(eval_envs)
             if vec_norm is not None:
