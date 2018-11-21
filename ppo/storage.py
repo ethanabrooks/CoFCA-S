@@ -77,6 +77,7 @@ class RolloutStorage(object):
 
     def compute_returns(self, next_value, use_gae, gamma, tau):
         if self.reward_structure:
+
             # disect obs
             slices = self.reward_structure.subspace_slices
             params = self.obs[-1, :, slices.params]
@@ -91,13 +92,12 @@ class RolloutStorage(object):
                 return self.reward_structure.function(
                     achieved=achieved[_step],
                     params=self.reward_params,
-                    dim=1, )
+                    dim=1, ).view(next_value.shape)
             else:
                 return self.rewards[_step]
 
         # TODO: can we simplify this?
         self.raw_returns = self.raw_returns.detach()
-        self.raw_returns[-1] = torch.tensor([[0]])
         for step in reversed(range(self.rewards.size(0))):
             self.raw_returns[step] = self.raw_returns[step + 1] * \
                                      gamma * self.masks[step + 1] + reward(step)

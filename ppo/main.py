@@ -146,19 +146,18 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
                             action_log_prob, value, reward, masks)
 
         with torch.no_grad():
-            if unsupervised:
-                next_value = torch.zeros([1, 1])
-            else:
-                next_value = actor_critic.get_value(
-                    rollouts.obs[-1], rollouts.recurrent_hidden_states[-1],
-                    rollouts.masks[-1]).detach()
+            next_value = actor_critic.get_value(
+                rollouts.obs[-1], rollouts.recurrent_hidden_states[-1],
+                rollouts.masks[-1]).detach()
 
         rollouts.compute_returns(next_value, use_gae, gamma, tau)
 
         value_loss, action_loss, dist_entropy = agent.update(rollouts)
 
         if unsupervised:
-            envs.set_reward_params(rollouts.reward_structure)
+            print(rollouts.reward_params)
+            params = rollouts.reward_params.detach().numpy()
+            envs.venv.set_reward_params(params)
 
         rollouts.after_update()
 

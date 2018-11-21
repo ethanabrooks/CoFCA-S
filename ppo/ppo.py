@@ -90,14 +90,14 @@ class PPO:
                 (value_loss * self.value_loss_coef + action_loss -
                  dist_entropy * self.entropy_coef).backward(retain_graph=True)
 
-                if self.unsupervised:
+                if self.unsupervised and e == self.ppo_epoch - 1:
                     expected_return_delta = torch.mean(
                         rollouts.raw_returns * torch.log(
                             action_log_probs / old_action_log_probs_batch))
                     rollouts.reward_params.grad = None
-                    expected_return_delta.backward()
-                    print(rollouts.reward_params.grad)
+                    expected_return_delta.backward(retain_graph=True)
                     import ipdb; ipdb.set_trace()
+
 
                 nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
                                          self.max_grad_norm)

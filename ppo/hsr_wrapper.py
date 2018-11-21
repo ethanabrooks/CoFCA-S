@@ -35,8 +35,9 @@ class MoveGripperEnv(HSREnv, hsr.MoveGripperEnv):
 
 StepData = namedtuple('StepData', 'actions reward_params')
 
- # TODO: test with multiple envs
- # TODO: test with small nsteps
+
+# TODO: test with multiple envs
+# TODO: test with small nsteps
 
 class Observation(namedtuple('Observation', 'observation achieved params')):
     def replace(self, *args, **kwargs):
@@ -88,7 +89,6 @@ class UnsupervisedEnv(hsr.HSREnv):
         print('reset params', o.goal)
         return vectorize(Observation(observation=o.observation, params=o.goal,
                                      achieved=self.achieved_goal()))
-
 
     def compute_terminal(self):
         return False
@@ -167,8 +167,7 @@ class UnsupervisedSubprocVecEnv(SubprocVecEnv):
 
 
 class UnsupervisedDummyVecEnv(DummyVecEnv):
-    def set_reward_params(self):
-        params = self.sess.run(self.params)
+    def set_reward_params(self, params):
         for env, param in zip(self.envs, params):
             print('sent params', param)
             unwrap_unsupervised(env).set_reward_params(param)
