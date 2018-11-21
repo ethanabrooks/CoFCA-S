@@ -96,7 +96,6 @@ class PPO:
                             action_log_probs / old_action_log_probs_batch))
                     rollouts.reward_params.grad = None
                     expected_return_delta.backward(retain_graph=True)
-                    import ipdb; ipdb.set_trace()
 
 
                 nn.utils.clip_grad_norm_(self.actor_critic.parameters(),

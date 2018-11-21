@@ -85,13 +85,15 @@ class RolloutStorage(object):
 
             # sync reward_params with obs
             self.reward_params.detach().copy_(params)
-            self.obs[:, :, slices.params] = self.reward_params
+            # self.obs[:, :, slices.params] = self.reward_params  TODO
 
         def reward(_step):
             if self.reward_structure:
+
                 return self.reward_structure.function(
                     achieved=achieved[_step],
-                    params=self.reward_params,
+                    params=torch.zeros_like(next_value),
+                    # params=self.reward_params,  TODO
                     dim=1, ).view(next_value.shape)
             else:
                 return self.rewards[_step]
