@@ -1,4 +1,5 @@
 # third party
+import numpy as np
 from collections import namedtuple
 from multiprocessing import Pipe, Process
 
@@ -45,11 +46,10 @@ class Observation(namedtuple('Observation', 'observation achieved params')):
 class RewardStructure:
     def __init__(self, subspace_sizes, reward_function):
         self.reward_function = reward_function
-        self.subspace_sizes = Observation(*subspace_sizes)
         self.function = reward_function
-
-    def observation(self, x, dim) -> Observation:
-        return Observation(*torch.split(x, self.subspace_sizes, dim=dim))
+        self.subspace_sizes = Observation(*subspace_sizes)
+        starts = _, *ends = np.cumsum([0] + subspace_sizes)
+        self.subspace_slices = Observation(*[slice(*s) for s in zip(starts, ends)])
 
 
 class UnsupervisedEnv(hsr.HSREnv):

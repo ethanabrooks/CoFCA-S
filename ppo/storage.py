@@ -23,7 +23,6 @@ class RolloutStorage(object):
         self.recurrent_hidden_states = torch.zeros(
             num_steps + 1, num_processes, recurrent_hidden_state_size)
 
-        unsupervised = reward_structure is not None
         self.reward_structure = reward_structure
         if reward_structure:
             self.reward_params = torch.zeros(
@@ -31,14 +30,14 @@ class RolloutStorage(object):
                 reward_structure.subspace_sizes.params,
                 requires_grad=True,
             )
+            self.raw_returns = torch.zeros(num_steps + 1, num_processes, 1,
+                                           requires_grad=True)
         else:
-            self.reward_structure = None
+            self.reward_structure = self.reward_params = None
 
         self.rewards = torch.zeros(num_steps, num_processes, 1)
         self.value_preds = torch.zeros(num_steps + 1, num_processes, 1)
         self.returns = torch.zeros(num_steps + 1, num_processes, 1)
-        self.raw_returns = torch.zeros(num_steps + 1, num_processes, 1,
-                                       requires_grad=True)
         self.action_log_probs = torch.zeros(num_steps, num_processes, 1)
         if action_space.__class__.__name__ == 'Discrete':
             action_shape = 1
@@ -82,26 +81,30 @@ class RolloutStorage(object):
 
     def compute_returns(self, next_value, use_gae, gamma, tau):
         if self.reward_structure:
-            assert isinstance(self.reward_structure, RewardStructure)
-            obs = self.reward_structure.observation(self.obs[:, :, :], dim=2)
-            achieved = obs.achieved
-            params = obs.params[-1]
+            # disect obs
+            slices = self.reward_structure.subspace_slices
+            params = self.obs[-1, :, slices.params]
+            achieved = self.obs[:, :, slices.achieved]
+
+            # sync reward_params with obs
             self.reward_params.detach().copy_(params)
+            self.obs[:, :, slices.params] = self.reward_params
 
         def reward(_step):
             if self.reward_structure:
                 return self.reward_structure.function(
-                    achieved=achieved[_step], params=self.reward_params, dim=1, )
+                    achieved=achieved[_step],
+                    params=self.reward_params,
+                    dim=1, )
             else:
                 return self.rewards[_step]
 
-        # TODO is reward_params being fed into policy?
         # TODO: can we simplify this?
         self.raw_returns = self.raw_returns.detach()
         self.raw_returns[-1] = torch.tensor([[0]])
         for step in reversed(range(self.rewards.size(0))):
             self.raw_returns[step] = self.raw_returns[step + 1] * \
-                           gamma * self.masks[step + 1] + reward(step)
+                                     gamma * self.masks[step + 1] + reward(step)
 
         if use_gae:
             self.value_preds[-1] = next_value
@@ -116,7 +119,6 @@ class RolloutStorage(object):
             for step in reversed(range(self.rewards.size(0))):
                 self.returns[step] = self.returns[step + 1] * \
                                      gamma * self.masks[step + 1] + reward(step)
-
 
     def feed_forward_generator(self, advantages, num_mini_batch):
         num_steps, num_processes = self.rewards.size()[0:2]

@@ -7,6 +7,13 @@ print('x', x)
 x.detach()[0] = a[1]
 print('x', x)
 y = torch.tensor(3., requires_grad=True)
+
+a[0] = y ** 3
+(a.sum()).backward()
+print('y.grad', y.grad)
+import ipdb; ipdb.set_trace()
+
+
 z = (0.5 * x ** 2).sum()
 w = 4 * y
 
