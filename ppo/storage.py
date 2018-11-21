@@ -22,10 +22,10 @@ class RolloutStorage(object):
         self.reward_structure = reward_structure
         if reward_structure:
             self.reward_params = reward_structure.reward_params
-            self.raw_returns = torch.zeros(num_steps + 1, num_processes, 1,
-                                           requires_grad=True)
+            self.raw_returns = torch.zeros(
+                num_steps + 1, num_processes, 1, requires_grad=True)
         else:
-            self.reward_structure = self.reward_params = None
+            self.raw_returns = self.reward_params = None
 
         self.rewards = torch.zeros(num_steps, num_processes, 1)
         self.value_preds = torch.zeros(num_steps + 1, num_processes, 1)
@@ -49,10 +49,11 @@ class RolloutStorage(object):
         self.rewards = self.rewards.to(device)
         self.value_preds = self.value_preds.to(device)
         self.returns = self.returns.to(device)
-        self.raw_returns = self.raw_returns.to(device)
         self.action_log_probs = self.action_log_probs.to(device)
         self.actions = self.actions.to(device)
         self.masks = self.masks.to(device)
+        if self.raw_returns is not None:
+            self.raw_returns = self.raw_returns.to(device)
 
     def insert(self, obs, recurrent_hidden_states, actions, action_log_probs,
                value_preds, rewards, masks):
@@ -82,18 +83,18 @@ class RolloutStorage(object):
             self.reward_params.detach().copy_(params)
             self.obs[:, :, slices.params] = self.reward_params
 
-        def reward(_step):
-            return self.reward_structure.function(
-                achieved=achieved[_step],
-                params=self.reward_params,
-                dim=1,
-            ).view(next_value.shape)
+            def reward(_step):
+                return self.reward_structure.function(
+                    achieved=achieved[_step],
+                    params=self.reward_params,
+                    dim=1,
+                ).view(next_value.shape)
 
-        # TODO: can we simplify this?
-        self.raw_returns = self.raw_returns.detach()
-        for step in reversed(range(self.rewards.size(0))):
-            self.raw_returns[step] = self.raw_returns[step + 1] * \
-                                     gamma * self.masks[step + 1] + reward(step)
+            # TODO: can we simplify this?
+            self.raw_returns = self.raw_returns.detach()
+            for step in reversed(range(self.rewards.size(0))):
+                self.raw_returns[step] = self.raw_returns[step + 1] * \
+                                         gamma * self.masks[step + 1] + reward(step)
 
         if use_gae:
             self.value_preds[-1] = next_value
@@ -136,10 +137,13 @@ class RolloutStorage(object):
             old_action_log_probs_batch = self.action_log_probs.view(-1,
                                                                     1)[indices]
             adv_targ = advantages.view(-1, 1)[indices]
+            raw_return_batch = None
+            if self.raw_returns is not None:
+                raw_return_batch = self.raw_returns[:-1].view(-1, 1)[indices]
 
             yield obs_batch, recurrent_hidden_states_batch, actions_batch, \
                   value_preds_batch, return_batch, masks_batch, \
-                  old_action_log_probs_batch, adv_targ
+                  old_action_log_probs_batch, adv_targ, raw_return_batch
 
     def recurrent_generator(self, advantages, num_mini_batch):
         num_processes = self.rewards.size(1)
