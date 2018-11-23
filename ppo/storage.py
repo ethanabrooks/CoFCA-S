@@ -7,9 +7,11 @@ def _flatten_helper(T, N, _tensor):
 
 
 class RolloutStorage(object):
-    def __init__(self, num_steps, num_processes, obs_shape, action_space, recurrent_hidden_state_size):
+    def __init__(self, num_steps, num_processes, obs_shape, action_space,
+                 recurrent_hidden_state_size):
         self.obs = torch.zeros(num_steps + 1, num_processes, *obs_shape)
-        self.recurrent_hidden_states = torch.zeros(num_steps + 1, num_processes, recurrent_hidden_state_size)
+        self.recurrent_hidden_states = torch.zeros(
+            num_steps + 1, num_processes, recurrent_hidden_state_size)
         self.rewards = torch.zeros(num_steps, num_processes, 1)
         self.value_preds = torch.zeros(num_steps + 1, num_processes, 1)
         self.returns = torch.zeros(num_steps + 1, num_processes, 1)
@@ -36,9 +38,11 @@ class RolloutStorage(object):
         self.actions = self.actions.to(device)
         self.masks = self.masks.to(device)
 
-    def insert(self, obs, recurrent_hidden_states, actions, action_log_probs, value_preds, rewards, masks):
+    def insert(self, obs, recurrent_hidden_states, actions, action_log_probs,
+               value_preds, rewards, masks):
         self.obs[self.step + 1].copy_(obs)
-        self.recurrent_hidden_states[self.step + 1].copy_(recurrent_hidden_states)
+        self.recurrent_hidden_states[self.step +
+                                     1].copy_(recurrent_hidden_states)
         self.actions[self.step].copy_(actions)
         self.action_log_probs[self.step].copy_(action_log_probs)
         self.value_preds[self.step].copy_(value_preds)
@@ -57,7 +61,8 @@ class RolloutStorage(object):
             self.value_preds[-1] = next_value
             gae = 0
             for step in reversed(range(self.rewards.size(0))):
-                delta = self.rewards[step] + gamma * self.value_preds[step + 1] * self.masks[step + 1] - self.value_preds[step]
+                delta = self.rewards[step] + gamma * self.value_preds[
+                    step + 1] * self.masks[step + 1] - self.value_preds[step]
                 gae = delta + gamma * tau * self.masks[step + 1] * gae
                 self.returns[step] = gae + self.value_preds[step]
         else:
@@ -66,7 +71,6 @@ class RolloutStorage(object):
                 self.returns[step] = self.returns[step + 1] * \
                     gamma * self.masks[step + 1] + self.rewards[step]
 
-
     def feed_forward_generator(self, advantages, num_mini_batch):
         num_steps, num_processes = self.rewards.size()[0:2]
         batch_size = num_processes * num_steps
@@ -74,18 +78,24 @@ class RolloutStorage(object):
             "PPO requires the number of processes ({}) "
             "* number of steps ({}) = {} "
             "to be greater than or equal to the number of PPO mini batches ({})."
-            "".format(num_processes, num_steps, num_processes * num_steps, num_mini_batch))
+            "".format(num_processes, num_steps, num_processes * num_steps,
+                      num_mini_batch))
         mini_batch_size = batch_size // num_mini_batch
-        sampler = BatchSampler(SubsetRandomSampler(range(batch_size)), mini_batch_size, drop_last=False)
+        sampler = BatchSampler(
+            SubsetRandomSampler(range(batch_size)),
+            mini_batch_size,
+            drop_last=False)
         for indices in sampler:
             obs_batch = self.obs[:-1].view(-1, *self.obs.size()[2:])[indices]
-            recurrent_hidden_states_batch = self.recurrent_hidden_states[:-1].view(-1,
-                self.recurrent_hidden_states.size(-1))[indices]
-            actions_batch = self.actions.view(-1, self.actions.size(-1))[indices]
+            recurrent_hidden_states_batch = self.recurrent_hidden_states[:-1].view(
+                -1, self.recurrent_hidden_states.size(-1))[indices]
+            actions_batch = self.actions.view(-1,
+                                              self.actions.size(-1))[indices]
             value_preds_batch = self.value_preds[:-1].view(-1, 1)[indices]
             return_batch = self.returns[:-1].view(-1, 1)[indices]
             masks_batch = self.masks[:-1].view(-1, 1)[indices]
-            old_action_log_probs_batch = self.action_log_probs.view(-1, 1)[indices]
+            old_action_log_probs_batch = self.action_log_probs.view(-1,
+                                                                    1)[indices]
             adv_targ = advantages.view(-1, 1)[indices]
 
             yield obs_batch, recurrent_hidden_states_batch, actions_batch, \
@@ -112,12 +122,14 @@ class RolloutStorage(object):
             for offset in range(num_envs_per_batch):
                 ind = perm[start_ind + offset]
                 obs_batch.append(self.obs[:-1, ind])
-                recurrent_hidden_states_batch.append(self.recurrent_hidden_states[0:1, ind])
+                recurrent_hidden_states_batch.append(
+                    self.recurrent_hidden_states[0:1, ind])
                 actions_batch.append(self.actions[:, ind])
                 value_preds_batch.append(self.value_preds[:-1, ind])
                 return_batch.append(self.returns[:-1, ind])
                 masks_batch.append(self.masks[:-1, ind])
-                old_action_log_probs_batch.append(self.action_log_probs[:, ind])
+                old_action_log_probs_batch.append(
+                    self.action_log_probs[:, ind])
                 adv_targ.append(advantages[:, ind])
 
             T, N = self.num_steps, num_envs_per_batch
@@ -127,11 +139,13 @@ class RolloutStorage(object):
             value_preds_batch = torch.stack(value_preds_batch, 1)
             return_batch = torch.stack(return_batch, 1)
             masks_batch = torch.stack(masks_batch, 1)
-            old_action_log_probs_batch = torch.stack(old_action_log_probs_batch, 1)
+            old_action_log_probs_batch = torch.stack(
+                old_action_log_probs_batch, 1)
             adv_targ = torch.stack(adv_targ, 1)
 
             # States is just a (N, -1) tensor
-            recurrent_hidden_states_batch = torch.stack(recurrent_hidden_states_batch, 1).view(N, -1)
+            recurrent_hidden_states_batch = torch.stack(
+                recurrent_hidden_states_batch, 1).view(N, -1)
 
             # Flatten the (T, N, ...) tensors to (T * N, ...)
             obs_batch = _flatten_helper(T, N, obs_batch)

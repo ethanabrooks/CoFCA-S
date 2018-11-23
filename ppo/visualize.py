@@ -3,15 +3,15 @@
 # Thanks to the author and OpenAI team!
 
 import glob
-import json
 import os
 
 import matplotlib
-matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-plt.switch_backend('agg')
 import numpy as np
 from scipy.signal import medfilt
+
+matplotlib.use('Agg')
+plt.switch_backend('agg')
 matplotlib.rcParams.update({'font.size': 8})
 
 
@@ -97,11 +97,18 @@ color_defaults = [
     '#e377c2',  # raspberry yogurt pink
     '#7f7f7f',  # middle gray
     '#bcbd22',  # curry yellow-green
-    '#17becf'   # blue-teal
+    '#17becf'  # blue-teal
 ]
 
 
-def visdom_plot(viz, win, folder, game, name, num_steps, bin_size=100, smooth=1):
+def visdom_plot(viz,
+                win,
+                folder,
+                game,
+                name,
+                num_steps,
+                bin_size=100,
+                smooth=1):
     tx, ty = load_data(folder, smooth, bin_size)
     if tx is None or ty is None:
         return win
@@ -135,4 +142,5 @@ def visdom_plot(viz, win, folder, game, name, num_steps, bin_size=100, smooth=1)
 if __name__ == "__main__":
     from visdom import Visdom
     viz = Visdom()
-    visdom_plot(viz, None, '/tmp/gym/', 'BreakOut', 'a2c', bin_size=100, smooth=1)
+    visdom_plot(
+        viz, None, '/tmp/gym/', 'BreakOut', 'a2c', bin_size=100, smooth=1)
