@@ -8,7 +8,6 @@ from collections import deque
 
 import numpy as np
 import torch
-from environments.hsr import MoveGripperEnv
 from gym.wrappers import TimeLimit
 from tensorboardX import SummaryWriter
 
@@ -16,7 +15,7 @@ from ppo.arg_util import env_wrapper
 from ppo.arguments import get_args, get_hsr_args
 from ppo.envs import VecPyTorch, make_vec_envs
 from ppo.hsr_wrapper import RewardStructure, UnsupervisedDummyVecEnv, UnsupervisedEnv, \
-    UnsupervisedSubprocVecEnv
+    UnsupervisedSubprocVecEnv, MoveGripperEnv
 from ppo.model import Policy
 from ppo.ppo import PPO
 from ppo.storage import RolloutStorage
@@ -80,9 +79,9 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed, cuda_dete
             env_fns.append(make_env)
 
         if sys.platform == 'darwin' or num_processes == 1:
-            envs = UnsupervisedSubprocVecEnv(env_fns)
-        else:
             envs = UnsupervisedDummyVecEnv(env_fns)
+        else:
+            envs = UnsupervisedSubprocVecEnv(env_fns)
         return VecPyTorch(envs, device=device)
 
     if unsupervised:

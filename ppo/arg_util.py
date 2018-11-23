@@ -89,10 +89,10 @@ def env_wrapper(func):
                 dofs=use_dof,
                 n_blocks=n_blocks,
                 goal_space=goal_space,
-                xml_filepath=hsr.XML_PATH) as temp_path:
+                xml_filepath=path) as temp_path:
             hsr_args.update(
                 geofence=geofence,
-                xml_filepath=temp_path,
+                xml_file=temp_path,
                 goal_space=goal_space,
             )
 
