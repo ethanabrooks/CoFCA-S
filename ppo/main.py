@@ -22,6 +22,7 @@ from ppo.ppo import PPO
 from ppo.storage import RolloutStorage
 from ppo.utils import get_vec_normalize
 from ppo.visualize import visdom_plot
+from tensorboardX import SummaryWriter
 
 
 def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
@@ -39,6 +40,7 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
         torch.backends.cudnn.benchmark = False
         torch.backends.cudnn.deterministic = True
 
+    writer = SummaryWriter()
     try:
         os.makedirs(log_dir)
     except OSError:
@@ -182,17 +184,22 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
 
         total_num_steps = (j + 1) * num_processes * num_steps
 
+        end = time.time()
+        fps = int(total_num_steps / (end - start))
+        writer.add_scalars(
+            '',
+            dict(
+                rewards=np.mean(episode_rewards),
+                fps=np.mean(episode_rewards),
+            ), j)
         if j % log_interval == 0 and len(episode_rewards) > 1:
-            end = time.time()
             print(
-                "Updates {}, num timesteps {}, FPS {} \n Last {} training episodes: "
+                f"Updates {j}, num timesteps {total_num_steps}, FPS {fps} \n Last {len(episode_rewards)} training episodes: "
                 "mean/median reward {:.1f}/{:.1f}, min/max reward {:.1f}/{:.1f}\n"
-                .format(j, total_num_steps,
-                        int(total_num_steps / (end - start)),
-                        len(episode_rewards), np.mean(episode_rewards),
-                        np.median(episode_rewards), np.min(episode_rewards),
-                        np.max(episode_rewards), dist_entropy, value_loss,
-                        action_loss))
+                .format(
+                    np.mean(episode_rewards), np.median(episode_rewards),
+                    np.min(episode_rewards), np.max(episode_rewards),
+                    dist_entropy, value_loss, action_loss))
 
         if (eval_interval is not None and len(episode_rewards) > 1
                 and j % eval_interval == 0):
