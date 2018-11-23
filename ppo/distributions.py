@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 
 # first party
-from ppo.utils.utils import AddBias, init, init_normc_
+from ppo.util import AddBias, init, init_normc_
 
 """
 Modify standard PyTorch distributions so they are compatible with this code.
