@@ -23,6 +23,7 @@ class HSREnv(hsr.HSREnv):
 
     def step(self, action):
         s, r, t, i = super().step(action)
+        i.update(episode=dict(r=r))
         return vectorize(s), r, t, i
 
     def reset(self):
@@ -89,7 +90,6 @@ class UnsupervisedEnv(hsr.HSREnv):
             observation=s.observation,
             params=s.goal,
             achieved=self.achieved_goal())
-        i = {**i, **dict(episode=dict(r=r))}
         return vectorize(observation), r, t, i
 
     def reset(self):
