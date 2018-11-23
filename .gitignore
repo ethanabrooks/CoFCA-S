@@ -105,3 +105,6 @@ trained_models/
 .idea
 .mypy_cache
 MUJOCO_LOG.TXT
+.runs/
+.runsrc
+runs.db
