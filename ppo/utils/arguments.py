@@ -12,7 +12,8 @@ from gym import spaces
 from gym.spaces import Box
 import numpy as np
 import tensorflow as tf
-from utils.utils import parametric_relu
+
+from ppo.utils.utils import parametric_relu
 
 
 def make_box(*tuples: Tuple[float, float]):

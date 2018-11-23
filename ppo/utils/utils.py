@@ -7,6 +7,9 @@ import gym
 import numpy as np
 import tensorflow as tf
 from tensorflow.python import debug as tf_debug
+from torch import nn as nn, __init__
+
+from ppo.envs import VecNormalize
 
 Shape = Union[int, Sequence[int]]
 
@@ -282,3 +285,48 @@ def parametric_relu(_x):
     pos = tf.nn.relu(_x)
     neg = alphas * (_x - abs(_x)) * 0.5
     return pos + neg
+
+
+def get_vec_normalize(venv):
+    if isinstance(venv, VecNormalize):
+        return venv
+    elif hasattr(venv, 'venv'):
+        return get_vec_normalize(venv.venv)
+
+    return None
+
+
+def init(module, weight_init, bias_init, gain=1):
+    weight_init(module.weight.data, gain=gain)
+    bias_init(module.bias.data)
+    return module
+
+
+def get_render_func(venv):
+    if hasattr(venv, 'envs'):
+        return venv.envs[0].render
+    elif hasattr(venv, 'venv'):
+        return get_render_func(venv.venv)
+    elif hasattr(venv, 'env'):
+        return get_render_func(venv.env)
+
+    return None
+
+
+class AddBias(nn.Module):
+    def __init__(self, bias):
+        super(AddBias, self).__init__()
+        self._bias = nn.Parameter(bias.unsqueeze(1))
+
+    def forward(self, x):
+        if x.dim() == 2:
+            bias = self._bias.t().view(1, -1)
+        else:
+            bias = self._bias.t().view(1, -1, 1, 1)
+
+        return x + bias
+
+
+def init_normc_(weight, gain=1):
+    weight.normal_(0, 1)
+    weight *= gain / torch.sqrt(weight.pow(2).sum(1, keepdim=True))

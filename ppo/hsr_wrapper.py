@@ -10,7 +10,7 @@ from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
 from environments import hsr
 
-from utils.utils import concat_spaces, space_shape, vectorize, unwrap_env
+from ppo.utils.utils import concat_spaces, space_shape, vectorize, unwrap_env
 
 
 class HSREnv(hsr.HSREnv):

@@ -4,7 +4,8 @@ from typing import Iterable
 # third party
 # first party
 import numpy as np
-from utils.array_group import ArrayGroup, Key, X
+
+from ppo.utils.array_group import ArrayGroup, Key
 
 
 def get_index(value):

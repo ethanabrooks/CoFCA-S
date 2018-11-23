@@ -20,7 +20,7 @@ from ppo.hsr_wrapper import UnsupervisedEnv, UnsupervisedDummyVecEnv, \
 from ppo.model import Policy
 from ppo.ppo import PPO
 from ppo.storage import RolloutStorage
-from ppo.utils import get_vec_normalize
+from ppo.utils.utils import get_vec_normalize
 from ppo.visualize import visdom_plot
 from tensorboardX import SummaryWriter
 

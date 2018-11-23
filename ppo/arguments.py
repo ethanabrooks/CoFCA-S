@@ -3,7 +3,8 @@ import argparse
 
 # third party
 from scripts.hsr import add_env_args, add_wrapper_args
-from utils.arguments import parse_groups
+
+from ppo.utils.arguments import parse_groups
 
 
 def build_parser():
