@@ -154,6 +154,6 @@ def get_args():
 
 def get_hsr_args():
     parser = build_parser()
-    add_env_args(parser.add_argument_group('env_args'))
+    add_env_args(parser.add_argument_group('hsr_args'))
     add_wrapper_args(parser.add_argument_group('wrapper_args'))
     return parse_groups(parser)
