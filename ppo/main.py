@@ -1,27 +1,27 @@
 # stdlib
-from collections import deque
 import copy
 import glob
 import os
 import sys
 import time
+from collections import deque
 
-from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
-from gym.wrappers import TimeLimit
 import numpy as np
-from tensorboardX import SummaryWriter
 import torch
-
 from environments.hsr import MoveGripperEnv
+from gym.wrappers import TimeLimit
+from tensorboardX import SummaryWriter
+
+from ppo.arg_util import env_wrapper
 from ppo.arguments import get_args, get_hsr_args
 from ppo.envs import VecPyTorch, make_vec_envs
-from ppo.hsr_wrapper import RewardStructure, UnsupervisedDummyVecEnv, UnsupervisedEnv, UnsupervisedSubprocVecEnv
+from ppo.hsr_wrapper import RewardStructure, UnsupervisedDummyVecEnv, UnsupervisedEnv, \
+    UnsupervisedSubprocVecEnv
 from ppo.model import Policy
 from ppo.ppo import PPO
 from ppo.storage import RolloutStorage
 from ppo.util import get_vec_normalize
 from ppo.visualize import visdom_plot
-from ppo.arg_util import env_wrapper
 
 
 def main(recurrent_policy, num_frames, num_steps, num_processes, seed, cuda_deterministic,

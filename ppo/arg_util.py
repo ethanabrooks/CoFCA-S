@@ -15,7 +15,7 @@ import numpy as np
 import tensorflow as tf
 
 from ppo.util import parametric_relu
-from environment import hsr
+from environments import hsr
 
 
 def make_box(*tuples: Tuple[float, float]):
@@ -79,12 +79,10 @@ def env_wrapper(func):
     @wraps(func)
     def _wrapper(set_xml, use_dof, n_blocks, goal_space, xml_file, geofence,
                  hsr_args: dict, **kwargs):
-        import ipdb
-        ipdb.set_trace()
         if set_xml is None:
             set_xml = []
         site_size = ' '.join([str(geofence)] * 3)
-        path = Path('worldbody', 'body[@name="goal"]', 'site[@name="goal"]', 'size')
+        path = hsr.get_xml_filepath(xml_file)
         set_xml += [XMLSetter(path=f'./{path}', value=site_size)]
         with mutate_xml(
                 changes=set_xml,
@@ -98,7 +96,7 @@ def env_wrapper(func):
                 goal_space=goal_space,
             )
 
-            return func(hsr_args=env_args, **kwargs)
+            return func(hsr_args=hsr_args, **kwargs)
 
     return lambda wrapper_args, **kwargs: _wrapper(**wrapper_args, **kwargs)
 
