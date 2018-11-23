@@ -79,7 +79,7 @@ def build_parser():
         default='./trained_models/',
         help='directory to save agent logs (default: ./trained_models/)')
     parser.add_argument(
-        '--cuda', action='store_true', help='enables CUDA training')
+        '--no-cuda', dest='cuda', action='store_false', help='disables CUDA training',)
     parser.add_argument(
         '--add-timestep',
         action='store_true',
