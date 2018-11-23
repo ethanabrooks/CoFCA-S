@@ -54,6 +54,7 @@ class RolloutStorage(object):
         self.masks = self.masks.to(device)
         if self.raw_returns is not None:
             self.raw_returns = self.raw_returns.to(device)
+            self.reward_params = self.reward_params.to(device)
 
     def insert(self, obs, recurrent_hidden_states, actions, action_log_probs,
                value_preds, rewards, masks):
