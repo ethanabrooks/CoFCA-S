@@ -108,3 +108,4 @@ trained_models/
 .runsrc
 MUJOCO_LOG.TXT
 runs.db
+.idea
