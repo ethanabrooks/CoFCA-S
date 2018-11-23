@@ -40,7 +40,7 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
         torch.backends.cudnn.benchmark = False
         torch.backends.cudnn.deterministic = True
 
-    writer = SummaryWriter()
+    writer = SummaryWriter(log_dir=log_dir)
     try:
         os.makedirs(log_dir)
     except OSError:
