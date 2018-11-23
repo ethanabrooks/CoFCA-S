@@ -183,13 +183,14 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
 
         total_num_steps = (j + 1) * num_processes * num_steps
 
-        end = time.time()
-        fps = int(total_num_steps / (end - start))
-        writer.add_scalars('', dict(
-            rewards=np.mean(episode_rewards),
-            fps=fps,
-        ), j)
         if j % log_interval == 0 and len(episode_rewards) > 1:
+            end = time.time()
+            fps = int(total_num_steps / (end - start))
+            writer.add_scalars(
+                '', dict(
+                    rewards=np.mean(episode_rewards),
+                    fps=fps,
+                ), j)
             print(
                 f"Updates {j}, num timesteps {total_num_steps}, FPS {fps} \n Last {len(episode_rewards)} training episodes: "
                 "mean/median reward {:.1f}/{:.1f}, min/max reward {:.1f}/{:.1f}\n"
