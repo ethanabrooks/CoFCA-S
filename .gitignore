@@ -103,3 +103,8 @@ venv.bak/
 trained_models/
 .fuse_hidden*
 .idea
+.mypy_cache/
+.runs/
+.runsrc
+MUJOCO_LOG.TXT
+runs.db
