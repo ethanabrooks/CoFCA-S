@@ -2,9 +2,8 @@
 import argparse
 
 # third party
-from scripts.hsr import add_env_args, add_wrapper_args
-
 from ppo.arg_util import parse_groups
+from scripts.hsr import add_env_args, add_wrapper_args
 
 
 def build_parser():
@@ -79,7 +78,11 @@ def build_parser():
         default='./trained_models/',
         help='directory to save agent logs (default: ./trained_models/)')
     parser.add_argument(
-        '--no-cuda', dest='cuda', action='store_false', help='disables CUDA training',)
+        '--no-cuda',
+        dest='cuda',
+        action='store_false',
+        help='disables CUDA training',
+    )
     parser.add_argument(
         '--add-timestep',
         action='store_true',

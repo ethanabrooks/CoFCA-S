@@ -1,6 +1,8 @@
 #! /usr/bin/env python
 
+import ipdb
 import torch
+
 a = torch.tensor([1., 2.])
 x = torch.tensor([0., 0.], requires_grad=True)
 print('x', x)
@@ -8,13 +10,12 @@ x.detach()[0] = a[1]
 print('x', x)
 y = torch.tensor(3., requires_grad=True)
 
-a[0] = y ** 3
+a[0] = y**3
 (a.sum()).backward()
 print('y.grad', y.grad)
-import ipdb; ipdb.set_trace()
+ipdb.set_trace()
 
-
-z = (0.5 * x ** 2).sum()
+z = (0.5 * x**2).sum()
 w = 4 * y
 
 z.backward()
@@ -25,5 +26,4 @@ print('y.grad', y.grad)
 w.backward()
 print('y.grad', y.grad)
 w.backward()
-import ipdb
 ipdb.set_trace()

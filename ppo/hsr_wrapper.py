@@ -1,16 +1,16 @@
 # third party
-import numpy as np
 from collections import namedtuple
 from multiprocessing import Pipe, Process
 
 # first party
-import torch
 from baselines.common.vec_env import CloudpickleWrapper, VecEnv
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
-from environments import hsr
+import numpy as np
+import torch
 
-from ppo.util import concat_spaces, space_shape, vectorize, unwrap_env
+from environments import hsr
+from ppo.util import concat_spaces, space_shape, unwrap_env, vectorize
 
 
 class HSREnv(hsr.HSREnv):
