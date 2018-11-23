@@ -108,3 +108,4 @@ MUJOCO_LOG.TXT
 .runsrc
 runs.db
 .runs
+run.json
