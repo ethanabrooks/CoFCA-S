@@ -24,6 +24,7 @@ from ppo.ppo import PPO
 from ppo.storage import RolloutStorage
 from ppo.utils import get_vec_normalize
 from ppo.visualize import visdom_plot
+from tensorboardX import SummaryWriter
 
 
 def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
@@ -50,6 +51,8 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
             os.remove(f)
 
     eval_log_dir = log_dir + "_eval"
+
+    writer = SummaryWriter(log_dir=log_dir)
 
     try:
         os.makedirs(eval_log_dir)
@@ -112,9 +115,8 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
         base_kwargs={'recurrent': recurrent_policy})
     actor_critic.to(device)
 
-    agent = PPO(actor_critic=actor_critic,
-                unsupervised=unsupervised,
-                **ppo_args)
+    agent = PPO(
+        actor_critic=actor_critic, unsupervised=unsupervised, **ppo_args)
 
     rollouts = RolloutStorage(
         num_steps=num_steps,
@@ -122,8 +124,7 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
         obs_shape=envs.observation_space.shape,
         action_space=envs.action_space,
         recurrent_hidden_state_size=actor_critic.recurrent_hidden_state_size,
-        reward_param_shape=reward_params_shape
-    )
+        reward_param_shape=reward_params_shape)
     # TODO: include params in obs
     # TODO: need to ensure that nsteps is equal to max_steps
 
@@ -164,7 +165,8 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
         if unsupervised:
             assert next_value == 0
 
-        rollouts.compute_returns(next_value, use_gae, gamma, tau, reward_function)
+        rollouts.compute_returns(next_value, use_gae, gamma, tau,
+                                 reward_function)
 
         value_loss, action_loss, dist_entropy = agent.update(rollouts)
 
@@ -194,6 +196,7 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
             torch.save(save_model, os.path.join(save_path, env_name + ".pt"))
 
         total_num_steps = (j + 1) * num_processes * num_steps
+        writer.add_scalars('', dict(rewards=np.mean(episode_rewards), ), j)
 
         if j % log_interval == 0 and len(episode_rewards) > 1:
             end = time.time()
