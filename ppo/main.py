@@ -148,6 +148,7 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
             for info in infos:
                 if 'episode' in info.keys():
                     episode_rewards.append(info['episode']['r'])
+                    # TODO: get rid of this
 
             # If done then clean the history of observations.
             masks = torch.FloatTensor(
@@ -254,12 +255,15 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
                 for info in infos:
                     if 'episode' in info.keys():
                         eval_episode_rewards.append(info['episode']['r'])
+                        # TODO: get rid of this
 
             eval_envs.close()
 
             print(" Evaluation using {} episodes: mean reward {:.5f}\n".format(
                 len(eval_episode_rewards), np.mean(eval_episode_rewards)))
+            writer.add_scalar('eval reward', np.mean(eval_episode_rewards), j)
 
+        # TODO: get rid of this
         if vis and j % vis_interval == 0:
             try:
                 # Sometimes monitor doesn't properly flush the outputs
