@@ -56,11 +56,6 @@ def build_parser():
         default=None,
         help='eval interval, one eval per n updates (default: None)')
     parser.add_argument(
-        '--vis-interval',
-        type=int,
-        default=100,
-        help='vis interval, one log per n updates (default: 100)')
-    parser.add_argument(
         '--num-frames',
         type=int,
         default=10e6,
@@ -93,19 +88,6 @@ def build_parser():
         action='store_true',
         default=False,
         help='use a recurrent policy')
-
-    visdom_parser = parser.add_argument_group('visdom_args')
-    visdom_parser.add_argument(
-        '--port',
-        type=int,
-        default=None,
-        help='port to run the server on',
-    )
-    visdom_parser.add_argument(
-        '--server',
-        default=None,
-        help='hostname (e.g. localhost)',
-    )
 
     ppo_parser = parser.add_argument_group('ppo_args')
     ppo_parser.add_argument(
@@ -149,7 +131,7 @@ def build_parser():
 
 
 def get_args():
-    return {**parse_groups(build_parser()), **dict(env_args=None)}
+    return {**parse_groups(build_parser()), **dict(hsr_args={})}
 
 
 def get_hsr_args():
