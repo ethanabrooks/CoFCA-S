@@ -36,8 +36,6 @@ class MoveGripperEnv(HSREnv, hsr.MoveGripperEnv):
 
 StepData = namedtuple('StepData', 'actions reward_params')
 
-# TODO: test with multiple envs
-# TODO: test with small nsteps
 
 
 class Observation(namedtuple('Observation', 'observation achieved params')):
@@ -49,7 +47,6 @@ class RewardStructure:
     def __init__(self, num_processes, subspace_sizes, reward_function):
         self.reward_function = reward_function
         self.function = reward_function
-        # TODO make sure we are doing this correctly
         self.subspace_sizes = Observation(*subspace_sizes)
         starts = _, *ends = np.cumsum([0] + subspace_sizes)
         self.subspace_slices = Observation(
