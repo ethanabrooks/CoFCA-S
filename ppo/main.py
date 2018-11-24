@@ -89,8 +89,6 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
         def make_env():
             return TimeLimit(
                 UnsupervisedEnv(**hsr_args), max_episode_steps=num_steps) 
-            # TODO apply this to move-gripper as well
-            # TODO make sure we are only updating reward-params once
 
         sample_env = make_env(0).env
         reward_structure = RewardStructure(
@@ -104,7 +102,8 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
     elif env_name == 'move_gripper':
 
         def make_env():
-            return MoveGripperEnv(**hsr_args)
+            return TimeLimit(
+                MoveGripperEnv(**hsr_args), max_episode_steps=num_steps) 
 
         envs = make_hsr_envs(make_env)
     else:
