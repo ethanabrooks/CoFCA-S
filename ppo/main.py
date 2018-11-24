@@ -88,9 +88,9 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
 
         def make_env():
             return TimeLimit(
-                UnsupervisedEnv(**hsr_args), max_episode_steps=num_steps) 
+                UnsupervisedEnv(**hsr_args), max_episode_steps=num_steps)
 
-        sample_env = make_env(0).env
+        sample_env = make_env().env
         reward_structure = RewardStructure(
             num_processes=num_processes,
             subspace_sizes=sample_env.subspace_sizes,
@@ -103,7 +103,7 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
 
         def make_env():
             return TimeLimit(
-                MoveGripperEnv(**hsr_args), max_episode_steps=num_steps) 
+                MoveGripperEnv(**hsr_args), max_episode_steps=num_steps)
 
         envs = make_hsr_envs(make_env)
     else:
@@ -209,10 +209,20 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
 
         if (eval_interval is not None and len(episode_rewards) > 1
                 and j % eval_interval == 0):
-            eval_envs = make_vec_envs(env_name, seed + num_processes,
-                                      num_processes, gamma, eval_log_dir,
-                                      add_timestep, device, True)
-            # TODO: add eval_env
+            if unsupervised:
+
+                def make_env():
+                    return TimeLimit(
+                        UnsupervisedEnv(**hsr_args, eval_env=True),
+                        max_episode_steps=num_steps,
+                    )
+
+                eval_envs = make_hsr_envs(make_env)
+            else:
+
+                eval_envs = make_vec_envs(env_name, seed + num_processes,
+                                          num_processes, gamma, eval_log_dir,
+                                          add_timestep, device, True)
 
             vec_norm = get_vec_normalize(eval_envs)
             if vec_norm is not None:

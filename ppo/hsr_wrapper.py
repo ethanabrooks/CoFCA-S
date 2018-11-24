@@ -37,7 +37,6 @@ class MoveGripperEnv(HSREnv, hsr.MoveGripperEnv):
 StepData = namedtuple('StepData', 'actions reward_params')
 
 
-
 class Observation(namedtuple('Observation', 'observation achieved params')):
     def replace(self, *args, **kwargs):
         return self._replace(*args, **kwargs)
@@ -59,7 +58,7 @@ class RewardStructure:
 
 
 class UnsupervisedEnv(hsr.HSREnv):
-    def __init__(self, **kwargs):
+    def __init__(self, eval_env=False, **kwargs):
         super().__init__(**kwargs)
         old_spaces = hsr.Observation(*self.observation_space.spaces)
         spaces = Observation(
@@ -72,6 +71,7 @@ class UnsupervisedEnv(hsr.HSREnv):
         # space of observation needs to exclude reward param
         self.observation_space = concat_spaces(spaces, axis=0)
         self.reward_params = self.achieved_goal()
+        self.eval = eval_env
 
     @staticmethod
     def reward_function(achieved, params, dim):
@@ -104,6 +104,8 @@ class UnsupervisedEnv(hsr.HSREnv):
         return self.gripper_pos()
 
     def new_goal(self):
+        if self.eval:
+            return self.goal_space.sample()
         return self.reward_params
 
     def set_reward_params(self, param):
