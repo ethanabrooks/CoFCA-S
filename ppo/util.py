@@ -10,8 +10,6 @@ from tensorflow.python import debug as tf_debug
 from torch import nn as nn
 import torch
 
-from ppo.envs import VecNormalize
-
 Shape = Union[int, Sequence[int]]
 
 
@@ -286,15 +284,6 @@ def parametric_relu(_x):
     pos = tf.nn.relu(_x)
     neg = alphas * (_x - abs(_x)) * 0.5
     return pos + neg
-
-
-def get_vec_normalize(venv):
-    if isinstance(venv, VecNormalize):
-        return venv
-    elif hasattr(venv, 'venv'):
-        return get_vec_normalize(venv.venv)
-
-    return None
 
 
 def init(module, weight_init, bias_init, gain=1):

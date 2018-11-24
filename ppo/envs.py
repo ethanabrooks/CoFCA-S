@@ -2,6 +2,8 @@
 import os
 
 # third party
+import sys
+
 from baselines import bench
 from baselines.common.atari_wrappers import make_atari, wrap_deepmind
 from baselines.common.vec_env import VecEnvWrapper
@@ -12,6 +14,9 @@ import gym
 from gym.spaces.box import Box
 import numpy as np
 import torch
+from gym.wrappers import TimeLimit
+
+from ppo.hsr_adaptor import UnsupervisedEnv, MoveGripperEnv
 
 try:
     import dm_control2gym
@@ -29,11 +34,17 @@ except ImportError:
     pass
 
 
-def make_env(env_id, seed, rank, log_dir, add_timestep, allow_early_resets):
+
+def make_env(env_id, seed, rank, log_dir, add_timestep, allow_early_resets,
+             num_steps=None, **kwargs):
     def _thunk():
         if env_id.startswith("dm"):
             _, domain, task = env_id.split('.')
             env = dm_control2gym.make(domain_name=domain, task_name=task)
+        elif env_id == 'unsupervised':
+            env = TimeLimit(UnsupervisedEnv(**kwargs), max_episode_steps=num_steps)
+        elif env_id == 'move_gripper':
+            env = TimeLimit(MoveGripperEnv(**kwargs), max_episode_steps=num_steps)
         else:
             env = gym.make(env_id)
 
@@ -83,16 +94,17 @@ def make_vec_envs(env_name,
                   add_timestep,
                   device,
                   allow_early_resets,
-                  num_frame_stack=None):
+                  num_frame_stack=None,
+                  **kwargs):
     envs = [
-        make_env(env_name, seed, i, log_dir, add_timestep, allow_early_resets)
+        make_env(env_name, seed, i, log_dir, add_timestep, allow_early_resets, **kwargs)
         for i in range(num_processes)
     ]
 
-    if len(envs) > 1:
-        envs = SubprocVecEnv(envs)
-    else:
+    if len(envs) == 1 or sys.platform != 'darwin':
         envs = DummyVecEnv(envs)
+    else:
+        envs = SubprocVecEnv(envs)
 
     if len(envs.observation_space.shape) == 1:
         if gamma is None:
@@ -160,7 +172,8 @@ class VecPyTorch(VecEnvWrapper):
         return obs[0]
 
     def reset(self):
-        obs = self.extract_numpy(self.venv.reset())
+        reset = self.venv.reset()
+        obs = self.extract_numpy(reset)
         obs = torch.from_numpy(obs).float().to(self.device)
         return obs
 
@@ -184,6 +197,8 @@ class VecNormalize(VecNormalize_):
     def _obfilt(self, obs):
         if self.ob_rms:
             if self.training:
+
+                import ipdb; ipdb.set_trace()
                 self.ob_rms.update(obs)
             obs = np.clip((obs - self.ob_rms.mean) /
                           np.sqrt(self.ob_rms.var + self.epsilon),
@@ -200,7 +215,8 @@ class VecNormalize(VecNormalize_):
 
 
 # Derived from
-# https://github.com/openai/baselines/blob/master/baselines/common/vec_env/vec_frame_stack.py
+# https://github.com/openai/baselines/blob/master/baselines/common/vec_env
+# /vec_frame_stack.py
 class VecPyTorchFrameStack(VecEnvWrapper):
     def __init__(self, venv, nstack, device=None):
         self.venv = venv
@@ -214,7 +230,7 @@ class VecPyTorchFrameStack(VecEnvWrapper):
 
         if device is None:
             device = torch.device('cpu')
-        self.stacked_obs = torch.zeros((venv.num_envs, ) +
+        self.stacked_obs = torch.zeros((venv.num_envs,) +
                                        low.shape).to(device)
 
         observation_space = gym.spaces.Box(
@@ -239,3 +255,12 @@ class VecPyTorchFrameStack(VecEnvWrapper):
 
     def close(self):
         self.venv.close()
+
+
+def get_vec_normalize(venv):
+    if isinstance(venv, VecNormalize):
+        return venv
+    elif hasattr(venv, 'venv'):
+        return get_vec_normalize(venv.venv)
+
+    return None

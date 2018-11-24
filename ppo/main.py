@@ -13,19 +13,17 @@ from tensorboardX import SummaryWriter
 
 from ppo.arg_util import env_wrapper
 from ppo.arguments import get_args, get_hsr_args
-from ppo.envs import VecPyTorch, make_vec_envs
-from ppo.hsr_wrapper import RewardStructure, UnsupervisedDummyVecEnv, UnsupervisedEnv, \
+from ppo.envs import VecPyTorch, make_vec_envs, get_vec_normalize
+from ppo.hsr_adaptor import RewardStructure, UnsupervisedDummyVecEnv, UnsupervisedEnv, \
     UnsupervisedSubprocVecEnv, MoveGripperEnv
-from ppo.model import Policy
+from ppo.policy import Policy
 from ppo.ppo import PPO
 from ppo.storage import RolloutStorage
-from ppo.util import get_vec_normalize
-from ppo.visualize import visdom_plot
 
 
 def main(recurrent_policy, num_frames, num_steps, num_processes, seed, cuda_deterministic,
          cuda, log_dir, env_name, gamma, add_timestep, save_interval, save_dir,
-         log_interval, eval_interval, use_gae, tau, vis_interval, visdom_args, ppo_args,
+         log_interval, eval_interval, use_gae, tau, ppo_args,
          hsr_args):
     algo = 'ppo'
 
@@ -58,55 +56,19 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed, cuda_dete
     torch.set_num_threads(1)
     device = torch.device("cuda:0" if cuda else "cpu")
 
-    vis = all(visdom_args.values())
-    if vis:
-        from visdom import Visdom
-        viz = Visdom(**visdom_args)
-        win = None
-
     reward_structure = None
     unsupervised = env_name == 'unsupervised'
+    env_args = dict(env_name=env_name,
+                    seed=seed,
+                    num_processes=num_processes,
+                    gamma=gamma,
+                    log_dir=log_dir,
+                    add_timestep=add_timestep,
+                    device=device,
+                    allow_early_resets=False,
+                    **hsr_args)
 
-    def make_hsr_envs(env_fn):
-        env_fns = []
-        for s in range(num_processes):
-
-            def make_env():
-                env = env_fn()
-                env.seed(s + seed)
-                return env
-
-            env_fns.append(make_env)
-
-        if sys.platform == 'darwin' or num_processes == 1:
-            envs = UnsupervisedDummyVecEnv(env_fns)
-        else:
-            envs = UnsupervisedSubprocVecEnv(env_fns)
-        return VecPyTorch(envs, device=device)
-
-    if unsupervised:
-
-        def make_env():
-            return TimeLimit(UnsupervisedEnv(**hsr_args), max_episode_steps=num_steps)
-
-        sample_env = make_env(0).env
-        reward_structure = RewardStructure(
-            num_processes=num_processes,
-            subspace_sizes=sample_env.subspace_sizes,
-            reward_function=sample_env.reward_function)
-        ppo_args.update(reward_params=reward_structure.reward_params)
-
-        envs = make_hsr_envs(make_env)
-
-    elif env_name == 'move_gripper':
-
-        def make_env():
-            return MoveGripperEnv(**hsr_args)
-
-        envs = make_hsr_envs(make_env)
-    else:
-        envs = make_vec_envs(env_name, seed, num_processes, gamma, log_dir, add_timestep,
-                             device, False)
+    envs = make_vec_envs(**env_args)
 
     actor_critic = Policy(
         envs.observation_space.shape,
@@ -191,18 +153,13 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed, cuda_dete
                 rewards=np.mean(episode_rewards),
                 fps=fps,
             ), j)
-            print(
-                f"Updates {j}, num timesteps {total_num_steps}, FPS {fps} \n Last {len(episode_rewards)} training episodes: "
-                "mean/median reward {:.1f}/{:.1f}, min/max reward {:.1f}/{:.1f}\n".format(
-                    np.mean(episode_rewards), np.median(episode_rewards),
-                    np.min(episode_rewards), np.max(episode_rewards), dist_entropy,
-                    value_loss, action_loss))
+            print(f"Updates {j}, num timesteps {total_num_steps}, FPS {fps} \n"
+                  f"Last {len(episode_rewards)} training episodes: ")
 
         if (eval_interval is not None and len(episode_rewards) > 1
                 and j % eval_interval == 0):
-            eval_envs = make_vec_envs(env_name, seed + num_processes, num_processes,
-                                      gamma, eval_log_dir, add_timestep, device, True)
-            # TODO: add eval_env
+            env_args.update(seed=seed + num_processes)
+            eval_envs = make_vec_envs(**env_args)
 
             vec_norm = get_vec_normalize(eval_envs)
             if vec_norm is not None:
@@ -234,13 +191,6 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed, cuda_dete
 
             print(" Evaluation using {} episodes: mean reward {:.5f}\n".format(
                 len(eval_episode_rewards), np.mean(eval_episode_rewards)))
-
-        if vis and j % vis_interval == 0:
-            try:
-                # Sometimes monitor doesn't properly flush the outputs
-                win = visdom_plot(viz, win, log_dir, env_name, algo, num_frames)
-            except IOError:
-                pass
 
 
 def cli():
