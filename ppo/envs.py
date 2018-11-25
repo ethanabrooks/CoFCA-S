@@ -162,7 +162,6 @@ class VecPyTorch(VecEnvWrapper):
         """Return only every `skip`-th frame"""
         super(VecPyTorch, self).__init__(venv)
         self.device = device
-        # TODO: Fix data types
 
     @staticmethod
     def extract_numpy(obs):

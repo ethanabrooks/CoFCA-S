@@ -149,10 +149,11 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed, cuda_dete
         if j % log_interval == 0 and len(episode_rewards) > 1:
             end = time.time()
             fps = int(total_num_steps / (end - start))
-            writer.add_scalars('', dict(
-                rewards=np.mean(episode_rewards),
-                fps=fps,
-            ), j)
+            writer.add_scalar('rewards', np.mean(episode_rewards), j)
+            writer.add_scalar('fps', fps, j)
+            writer.add_scalar('value loss', value_loss, j)
+            writer.add_scalar('action loss', action_loss, j)
+            writer.add_scalar('entropy', dist_entropy, j)
             print(f"Updates {j}, num timesteps {total_num_steps}, FPS {fps} \n"
                   f"Last {len(episode_rewards)} training episodes: ")
 
@@ -191,6 +192,7 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed, cuda_dete
 
             print(" Evaluation using {} episodes: mean reward {:.5f}\n".format(
                 len(eval_episode_rewards), np.mean(eval_episode_rewards)))
+            writer.add_scalar('eval reward', np.mean(eval_episode_rewards), j)
 
 
 def cli():

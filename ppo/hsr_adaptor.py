@@ -23,6 +23,7 @@ class HSREnv(hsr.HSREnv):
 
     def step(self, action):
         s, r, t, i = super().step(action)
+        i.update(episode=dict(r=r))
         return vectorize(s), r, t, i
 
     def reset(self):
@@ -35,9 +36,6 @@ class MoveGripperEnv(HSREnv, hsr.MoveGripperEnv):
 
 StepData = namedtuple('StepData', 'actions reward_params')
 
-# TODO: test with multiple envs
-# TODO: test with small nsteps
-
 
 class Observation(namedtuple('Observation', 'observation achieved params')):
     def replace(self, *args, **kwargs):
@@ -48,7 +46,6 @@ class RewardStructure:
     def __init__(self, num_processes, subspace_sizes, reward_function):
         self.reward_function = reward_function
         self.function = reward_function
-        # TODO make sure we are doing this correctly
         self.subspace_sizes = Observation(*subspace_sizes)
         starts = _, *ends = np.cumsum([0] + subspace_sizes)
         self.subspace_slices = Observation(
@@ -61,7 +58,7 @@ class RewardStructure:
 
 
 class UnsupervisedEnv(hsr.HSREnv):
-    def __init__(self, **kwargs):
+    def __init__(self, eval_env=False, **kwargs):
         super().__init__(**kwargs)
         old_spaces = hsr.Observation(*self.observation_space.spaces)
         spaces = Observation(
@@ -74,6 +71,7 @@ class UnsupervisedEnv(hsr.HSREnv):
         # space of observation needs to exclude reward param
         self.observation_space = concat_spaces(spaces, axis=0)
         self.reward_params = self.achieved_goal()
+        self.eval = eval_env
 
     @staticmethod
     def reward_function(achieved, params, dim):
@@ -89,7 +87,6 @@ class UnsupervisedEnv(hsr.HSREnv):
             observation=s.observation,
             params=s.goal,
             achieved=self.achieved_goal())
-        i = {**i, **dict(episode=dict(r=r))}
         return vectorize(observation), r, t, i
 
     def reset(self):
@@ -107,6 +104,8 @@ class UnsupervisedEnv(hsr.HSREnv):
         return self.gripper_pos()
 
     def new_goal(self):
+        if self.eval:
+            return self.goal_space.sample()
         return self.reward_params
 
     def set_reward_params(self, param):
