@@ -16,7 +16,7 @@ import numpy as np
 import torch
 from gym.wrappers import TimeLimit
 
-from ppo.hsr_adaptor import UnsupervisedEnv, MoveGripperEnv
+from ppo.hsr_adaptor import UnsupervisedEnv, MoveGripperEnv, UnsupervisedDummyVecEnv, UnsupervisedSubprocVecEnv
 
 try:
     import dm_control2gym
@@ -108,12 +108,19 @@ def make_vec_envs(env_name,
                  **kwargs) for i in range(num_processes)
     ]
 
+    unsupervised = env_name == 'unsupervised'
     if len(envs) == 1 or sys.platform != 'darwin':
-        envs = DummyVecEnv(envs)
+        if unsupervised:
+            envs = UnsupervisedDummyVecEnv(envs)
+        else:
+            envs = DummyVecEnv(envs)
     else:
-        envs = SubprocVecEnv(envs)
+        if unsupervised:
+            envs = UnsupervisedSubprocVecEnv(envs)
+        else:
+            envs = SubprocVecEnv(envs)
 
-    if len(envs.observation_space.shape) == 1:
+    if len(envs.observation_space.shape) == 1 and not unsupervised:
         if gamma is None:
             envs = VecNormalize(envs, ret=False)
         else:

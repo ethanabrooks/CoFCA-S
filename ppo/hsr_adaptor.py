@@ -44,7 +44,6 @@ class Observation(namedtuple('Observation', 'observation achieved params')):
 
 class RewardStructure:
     def __init__(self, num_processes, subspace_sizes, reward_function):
-        self.reward_function = reward_function
         self.function = reward_function
         self.subspace_sizes = Observation(*subspace_sizes)
         starts = _, *ends = np.cumsum([0] + subspace_sizes)

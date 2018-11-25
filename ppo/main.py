@@ -21,10 +21,10 @@ from ppo.ppo import PPO
 from ppo.storage import RolloutStorage
 
 
-def main(recurrent_policy, num_frames, num_steps, num_processes, seed, cuda_deterministic,
-         cuda, log_dir, env_name, gamma, add_timestep, save_interval, save_dir,
-         log_interval, eval_interval, use_gae, tau, ppo_args,
-         hsr_args):
+def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
+         cuda_deterministic, cuda, log_dir, env_name, gamma, add_timestep,
+         save_interval, save_dir, log_interval, eval_interval, use_gae, tau,
+         ppo_args, hsr_args):
     algo = 'ppo'
 
     num_updates = int(num_frames) // num_steps // num_processes
@@ -57,17 +57,24 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed, cuda_dete
     device = torch.device("cuda:0" if cuda else "cpu")
 
     reward_structure = None
+    env_args = dict(
+        env_name=env_name,
+        seed=seed,
+        num_processes=num_processes,
+        gamma=gamma,
+        log_dir=log_dir,
+        add_timestep=add_timestep,
+        device=device,
+        allow_early_resets=False,
+        **hsr_args)
     unsupervised = env_name == 'unsupervised'
-    env_args = dict(env_name=env_name,
-                    seed=seed,
-                    num_processes=num_processes,
-                    gamma=gamma,
-                    log_dir=log_dir,
-                    add_timestep=add_timestep,
-                    device=device,
-                    allow_early_resets=False,
-                    **hsr_args)
-
+    if unsupervised:
+        sample_env = UnsupervisedEnv(**hsr_args)
+        reward_structure = RewardStructure(
+            num_processes=num_processes,
+            subspace_sizes=sample_env.subspace_sizes,
+            reward_function=sample_env.reward_function)
+        ppo_args.update(reward_params=reward_structure.reward_params)
     envs = make_vec_envs(**env_args)
 
     actor_critic = Policy(
@@ -76,7 +83,8 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed, cuda_dete
         base_kwargs={'recurrent': recurrent_policy})
     actor_critic.to(device)
 
-    agent = PPO(actor_critic=actor_critic, unsupervised=unsupervised, **ppo_args)
+    agent = PPO(
+        actor_critic=actor_critic, unsupervised=unsupervised, **ppo_args)
 
     rollouts = RolloutStorage(
         num_steps=num_steps,
@@ -109,14 +117,15 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed, cuda_dete
                     episode_rewards.append(info['episode']['r'])
 
             # If done then clean the history of observations.
-            masks = torch.FloatTensor([[0.0] if done_ else [1.0] for done_ in done])
-            rollouts.insert(obs, recurrent_hidden_states, action, action_log_prob, value,
-                            reward, masks)
+            masks = torch.FloatTensor(
+                [[0.0] if done_ else [1.0] for done_ in done])
+            rollouts.insert(obs, recurrent_hidden_states, action,
+                            action_log_prob, value, reward, masks)
 
         with torch.no_grad():
-            next_value = actor_critic.get_value(rollouts.obs[-1],
-                                                rollouts.recurrent_hidden_states[-1],
-                                                rollouts.masks[-1]).detach()
+            next_value = actor_critic.get_value(
+                rollouts.obs[-1], rollouts.recurrent_hidden_states[-1],
+                rollouts.masks[-1]).detach()
 
         rollouts.compute_returns(next_value, use_gae, gamma, tau)
 
@@ -140,7 +149,10 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed, cuda_dete
             if cuda:
                 save_model = copy.deepcopy(actor_critic).cpu()
 
-            save_model = [save_model, getattr(get_vec_normalize(envs), 'ob_rms', None)]
+            save_model = [
+                save_model,
+                getattr(get_vec_normalize(envs), 'ob_rms', None)
+            ]
 
             torch.save(save_model, os.path.join(save_path, env_name + ".pt"))
 
@@ -171,13 +183,18 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed, cuda_dete
 
             obs = eval_envs.reset()
             eval_recurrent_hidden_states = torch.zeros(
-                num_processes, actor_critic.recurrent_hidden_state_size, device=device)
+                num_processes,
+                actor_critic.recurrent_hidden_state_size,
+                device=device)
             eval_masks = torch.zeros(num_processes, 1, device=device)
 
             while len(eval_episode_rewards) < 10:
                 with torch.no_grad():
                     _, action, _, eval_recurrent_hidden_states = actor_critic.act(
-                        obs, eval_recurrent_hidden_states, eval_masks, deterministic=True)
+                        obs,
+                        eval_recurrent_hidden_states,
+                        eval_masks,
+                        deterministic=True)
 
                 # Obser reward and next obs
                 obs, reward, done, infos = eval_envs.step(action)
