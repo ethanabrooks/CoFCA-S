@@ -98,10 +98,9 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
     rollouts.obs[0].copy_(obs)
     rollouts.to(device)
 
-    episode_rewards = deque(maxlen=10)
-
     start = time.time()
     for j in range(num_updates):
+        rewards = np.zeros(num_steps)
         for step in range(num_steps):
             with torch.no_grad():
                 value, action, action_log_prob, recurrent_hidden_states = \
@@ -111,10 +110,7 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
 
             # Observe reward and next obs
             obs, reward, done, infos = envs.step(action)
-
-            for info in infos:
-                if 'episode' in info.keys():
-                    episode_rewards.append(info['episode']['r'])
+            rewards[step] = reward
 
             # If done then clean the history of observations.
             masks = torch.FloatTensor(
@@ -158,28 +154,27 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
 
         total_num_steps = (j + 1) * num_processes * num_steps
 
-        if j % log_interval == 0 and len(episode_rewards) > 1:
+        if j % log_interval == 0:
             end = time.time()
             fps = int(total_num_steps / (end - start))
-            writer.add_scalar('rewards', np.mean(episode_rewards), j)
+            writer.add_scalar('rewards', rewards.mean(), j)
             writer.add_scalar('fps', fps, j)
             writer.add_scalar('value loss', value_loss, j)
             writer.add_scalar('action loss', action_loss, j)
             writer.add_scalar('entropy', dist_entropy, j)
-            print(f"Updates {j}, num timesteps {total_num_steps}, FPS {fps} \n"
-                  f"Last {len(episode_rewards)} training episodes: ")
+            print(f"Updates {j}, num timesteps {total_num_steps}, FPS {fps}, reward "
+                  f"{rewards.mean()}")
 
-        if (eval_interval is not None and len(episode_rewards) > 1
-                and j % eval_interval == 0):
+        if eval_interval is not None and j % eval_interval == 0:
             env_args.update(seed=seed + num_processes)
             eval_envs = make_vec_envs(**env_args)
 
+            # TODO: should this be here?
             vec_norm = get_vec_normalize(eval_envs)
             if vec_norm is not None:
                 vec_norm.eval()
                 vec_norm.ob_rms = get_vec_normalize(envs).ob_rms
 
-            eval_episode_rewards = []
 
             obs = eval_envs.reset()
             eval_recurrent_hidden_states = torch.zeros(
@@ -188,7 +183,8 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
                 device=device)
             eval_masks = torch.zeros(num_processes, 1, device=device)
 
-            while len(eval_episode_rewards) < 10:
+            eval_episode_rewards = np.zeros(10)
+            for step in range(10):
                 with torch.no_grad():
                     _, action, _, eval_recurrent_hidden_states = actor_critic.act(
                         obs,
@@ -201,9 +197,7 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
 
                 eval_masks = torch.FloatTensor(
                     [[0.0] if done_ else [1.0] for done_ in done])
-                for info in infos:
-                    if 'episode' in info.keys():
-                        eval_episode_rewards.append(info['episode']['r'])
+                eval_episode_rewards[step] = float(reward.cpu())
 
             eval_envs.close()
 
