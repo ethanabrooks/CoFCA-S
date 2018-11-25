@@ -34,17 +34,24 @@ except ImportError:
     pass
 
 
-
-def make_env(env_id, seed, rank, log_dir, add_timestep, allow_early_resets,
-             num_steps=None, **kwargs):
+def make_env(env_id,
+             seed,
+             rank,
+             log_dir,
+             add_timestep,
+             allow_early_resets,
+             num_steps=None,
+             **kwargs):
     def _thunk():
         if env_id.startswith("dm"):
             _, domain, task = env_id.split('.')
             env = dm_control2gym.make(domain_name=domain, task_name=task)
         elif env_id == 'unsupervised':
-            env = TimeLimit(UnsupervisedEnv(**kwargs), max_episode_steps=num_steps)
+            env = TimeLimit(
+                UnsupervisedEnv(**kwargs), max_episode_steps=num_steps)
         elif env_id == 'move_gripper':
-            env = TimeLimit(MoveGripperEnv(**kwargs), max_episode_steps=num_steps)
+            env = TimeLimit(
+                MoveGripperEnv(**kwargs), max_episode_steps=num_steps)
         else:
             env = gym.make(env_id)
 
@@ -97,8 +104,8 @@ def make_vec_envs(env_name,
                   num_frame_stack=None,
                   **kwargs):
     envs = [
-        make_env(env_name, seed, i, log_dir, add_timestep, allow_early_resets, **kwargs)
-        for i in range(num_processes)
+        make_env(env_name, seed, i, log_dir, add_timestep, allow_early_resets,
+                 **kwargs) for i in range(num_processes)
     ]
 
     if len(envs) == 1 or sys.platform != 'darwin':
@@ -196,8 +203,6 @@ class VecNormalize(VecNormalize_):
     def _obfilt(self, obs):
         if self.ob_rms:
             if self.training:
-
-                import ipdb; ipdb.set_trace()
                 self.ob_rms.update(obs)
             obs = np.clip((obs - self.ob_rms.mean) /
                           np.sqrt(self.ob_rms.var + self.epsilon),
@@ -229,7 +234,7 @@ class VecPyTorchFrameStack(VecEnvWrapper):
 
         if device is None:
             device = torch.device('cpu')
-        self.stacked_obs = torch.zeros((venv.num_envs,) +
+        self.stacked_obs = torch.zeros((venv.num_envs, ) +
                                        low.shape).to(device)
 
         observation_space = gym.spaces.Box(
