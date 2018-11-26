@@ -133,9 +133,6 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
         if unsupervised:
             params = rollouts.reward_params.cpu().detach().numpy()  # type: np.array
             envs.venv.set_reward_params(params)
-            if log_dir:
-                with Path(log_dir, 'params.npy').open('a') as f:
-                    np.savetxt(f, params.reshape(1, -1))
 
         rollouts.after_update()
 
@@ -171,6 +168,9 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
             print(
                 f"Updates {j}, num timesteps {total_num_steps}, FPS {fps}, reward "
                 f"{rewards.mean()}")
+            if unsupervised:
+                with Path(log_dir, 'params.npy').open('a') as f:
+                    np.savetxt(f, params[0].reshape(1, -1))
 
         if eval_interval is not None and j % eval_interval == 0:
             env_args.update(seed=seed + num_processes + j)
