@@ -77,7 +77,7 @@ class UnsupervisedEnv(hsr.HSREnv):
 
     @staticmethod
     def reward_function(achieved, params, dim):
-        return -((achieved - params)**2).sum(dim)
+        return ((achieved - params)**2).sum(dim) < .05
 
     def compute_reward(self):
         return self.reward_function(
