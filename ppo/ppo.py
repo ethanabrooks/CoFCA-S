@@ -36,7 +36,7 @@ class PPO:
         self.use_clipped_value_loss = use_clipped_value_loss
 
         if reward_structure is not None:
-            self.params_optimizer = reward_structure.optimizer
+            self.reward_optimizer = reward_structure.optimizer
         self.optimizer = optim.Adam(actor_critic.parameters(), lr=lr, eps=eps)
         self.reward_function = None
 
@@ -98,6 +98,7 @@ class PPO:
                         action_log_probs / old_action_log_probs_batch))
                     rollouts.reward_params.grad = None
                     expected_return_delta.backward(retain_graph=True)
+                    self.reward_optimizer.step()
                     # TODO: separate size step for reward
 
                 nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
