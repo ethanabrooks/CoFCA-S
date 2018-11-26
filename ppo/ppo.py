@@ -20,7 +20,7 @@ class PPO:
                  max_grad_norm=None,
                  use_clipped_value_loss=True,
                  unsupervised=False,
-                 reward_params=None):
+                 reward_structure=None):
 
         self.unsupervised = unsupervised
         self.actor_critic = actor_critic
@@ -35,10 +35,9 @@ class PPO:
         self.max_grad_norm = max_grad_norm
         self.use_clipped_value_loss = use_clipped_value_loss
 
-        params = actor_critic.parameters()
-        if reward_params is not None:
-            params = list(params) + [reward_params]
-        self.optimizer = optim.Adam(params, lr=lr, eps=eps)
+        if reward_structure is not None:
+            self.reward_optimizer = reward_structure.optimizer
+        self.optimizer = optim.Adam(actor_critic.parameters(), lr=lr, eps=eps)
         self.reward_function = None
 
     def update(self, rollouts: RolloutStorage):
@@ -99,6 +98,7 @@ class PPO:
                         action_log_probs / old_action_log_probs_batch))
                     rollouts.reward_params.grad = None
                     expected_return_delta.backward(retain_graph=True)
+                    self.reward_optimizer.step()
                     # TODO: separate size step for reward
 
                 nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
