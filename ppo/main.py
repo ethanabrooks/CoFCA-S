@@ -102,7 +102,7 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
 
     start = time.time()
     for j in range(num_updates):
-        rewards = np.zeros(num_steps)
+        rewards = torch.zeros(num_steps)
         for step in range(num_steps):
             with torch.no_grad():
                 value, action, action_log_prob, recurrent_hidden_states = \
@@ -112,7 +112,7 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
 
             # Observe reward and next obs
             obs, reward, done, infos = envs.step(action)
-            rewards[step] = reward
+            rewards[step] = torch.mean(reward)
 
             # If done then clean the history of observations.
             masks = torch.FloatTensor(
@@ -159,13 +159,14 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
         if j % log_interval == 0:
             end = time.time()
             fps = int(total_num_steps / (end - start))
-            writer.add_scalar('rewards', rewards.mean(), j)
+            writer.add_scalar('rewards', float(rewards.mean()), j)
             writer.add_scalar('fps', fps, j)
             writer.add_scalar('value loss', value_loss, j)
             writer.add_scalar('action loss', action_loss, j)
             writer.add_scalar('entropy', dist_entropy, j)
-            print(f"Updates {j}, num timesteps {total_num_steps}, FPS {fps}, reward "
-                  f"{rewards.mean()}")
+            print(
+                f"Updates {j}, num timesteps {total_num_steps}, FPS {fps}, reward "
+                f"{rewards.mean()}")
 
         if eval_interval is not None and j % eval_interval == 0:
             env_args.update(seed=seed + num_processes)
@@ -184,7 +185,7 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
                 device=device)
             eval_masks = torch.zeros(num_processes, 1, device=device)
 
-            eval_episode_rewards = np.zeros(10)
+            eval_episode_rewards = torch.zeros(10)
             for step in range(10):
                 with torch.no_grad():
                     _, action, _, eval_recurrent_hidden_states = actor_critic.act(
@@ -195,16 +196,17 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
 
                 # Obser reward and next obs
                 obs, reward, done, infos = eval_envs.step(action)
+                eval_episode_rewards[step] = torch.mean(reward)
 
                 eval_masks = torch.FloatTensor(
                     [[0.0] if done_ else [1.0] for done_ in done])
-                eval_episode_rewards[step] = float(reward.cpu())
 
             eval_envs.close()
 
+            mean_eval_reward = float(torch.mean(eval_episode_rewards))
             print(" Evaluation using {} episodes: mean reward {:.5f}\n".format(
-                len(eval_episode_rewards), np.mean(eval_episode_rewards)))
-            writer.add_scalar('eval reward', np.mean(eval_episode_rewards), j)
+                len(eval_episode_rewards), mean_eval_reward))
+            writer.add_scalar('eval reward', mean_eval_reward, j)
 
 
 def cli():

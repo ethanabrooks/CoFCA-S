@@ -17,11 +17,11 @@ setup(
     entry_points=dict(
         console_scripts=['ppo=ppo.main:cli', 'hsr=ppo.main:hsr_cli']),
     install_requires=[
-        'baselines==0.1.5',
-        'Cython==0.29',
-        'gym==0.10.9',
-        'matplotlib==3.0.2',
-        'numpy==1.15.4',
-        'opencv-python==3.4.3.18',
-        'torch==0.4.1',
+        'baselines>=0.1.5',
+        'Cython>=0.29',
+        'gym>=0.10.9',
+        'matplotlib>=3.0.2',
+        'numpy>=1.15.4',
+        'opencv-python>=3.4.3.18',
+        'torch>=0.4.1',
     ])
