@@ -173,7 +173,7 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
                 f"{rewards.mean()}")
 
         if eval_interval is not None and j % eval_interval == 0:
-            env_args.update(seed=seed + num_processes)
+            env_args.update(seed=seed + num_processes + j)
             eval_envs = make_vec_envs(**env_args)
 
             # TODO: should this be here?
@@ -189,8 +189,8 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
                 device=device)
             eval_masks = torch.zeros(num_processes, 1, device=device)
 
-            eval_episode_rewards = torch.zeros(10)
-            for step in range(10):
+            eval_episode_rewards = torch.zeros(num_steps)
+            for step in range(num_steps):
                 with torch.no_grad():
                     _, action, _, eval_recurrent_hidden_states = actor_critic.act(
                         obs,
