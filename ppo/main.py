@@ -5,6 +5,7 @@ import os
 import sys
 import time
 from collections import deque
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -130,8 +131,11 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
         value_loss, action_loss, dist_entropy = agent.update(rollouts)
 
         if unsupervised:
-            params = rollouts.reward_params.cpu().detach().numpy()
+            params = rollouts.reward_params.cpu().detach().numpy()  # type: np.array
             envs.venv.set_reward_params(params)
+            if log_dir:
+                with Path(log_dir, 'params.npy').open('a') as f:
+                    np.savetxt(f, params.reshape(1, -1))
 
         rollouts.after_update()
 
