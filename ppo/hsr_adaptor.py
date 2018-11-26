@@ -10,6 +10,8 @@ import numpy as np
 import torch
 
 from environments import hsr
+from torch import optim
+
 from ppo.util import concat_spaces, space_shape, unwrap_env, vectorize
 
 
@@ -43,7 +45,7 @@ class Observation(namedtuple('Observation', 'observation achieved params')):
 
 
 class RewardStructure:
-    def __init__(self, num_processes, subspace_sizes, reward_function):
+    def __init__(self, num_processes, subspace_sizes, reward_function, lr):
         self.function = reward_function
         self.subspace_sizes = Observation(*subspace_sizes)
         starts = _, *ends = np.cumsum([0] + subspace_sizes)
@@ -54,6 +56,7 @@ class RewardStructure:
             self.subspace_sizes.params,
             requires_grad=True,
         )
+        self.optimizer = optim.Adam([self.reward_params], lr=lr)
 
 
 class UnsupervisedEnv(hsr.HSREnv):

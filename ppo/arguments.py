@@ -88,6 +88,8 @@ def build_parser():
         action='store_true',
         default=False,
         help='use a recurrent policy')
+    parser.add_argument(
+        '--reward-lr', type=float, default=7e-4, help='learning rate (default: 7e-4)')
 
     ppo_parser = parser.add_argument_group('ppo_args')
     ppo_parser.add_argument(

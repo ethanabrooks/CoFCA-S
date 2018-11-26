@@ -24,7 +24,7 @@ from ppo.storage import RolloutStorage
 def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
          cuda_deterministic, cuda, log_dir, env_name, gamma, add_timestep,
          save_interval, save_dir, log_interval, eval_interval, use_gae, tau,
-         ppo_args, hsr_args):
+         ppo_args, hsr_args, reward_lr):
     algo = 'ppo'
 
     num_updates = int(num_frames) // num_steps // num_processes
@@ -73,14 +73,16 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
         reward_structure = RewardStructure(
             num_processes=num_processes,
             subspace_sizes=sample_env.subspace_sizes,
-            reward_function=sample_env.reward_function)
-        ppo_args.update(reward_params=reward_structure.reward_params)
+            reward_function=sample_env.reward_function,
+            lr=reward_lr,
+        )
+        ppo_args.update(reward_structure=reward_structure)
     envs = make_vec_envs(**env_args)
 
     actor_critic = Policy(
         envs.observation_space.shape,
         envs.action_space,
-        base_kwargs={'recurrent': recurrent_policy})
+        base_kwargs=dict(recurrent=recurrent_policy))
     actor_critic.to(device)
 
     agent = PPO(
@@ -174,7 +176,6 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
             if vec_norm is not None:
                 vec_norm.eval()
                 vec_norm.ob_rms = get_vec_normalize(envs).ob_rms
-
 
             obs = eval_envs.reset()
             eval_recurrent_hidden_states = torch.zeros(
