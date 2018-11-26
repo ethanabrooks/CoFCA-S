@@ -109,7 +109,7 @@ def make_vec_envs(env_name,
     ]
 
     unsupervised = env_name == 'unsupervised'
-    if len(envs) == 1 or sys.platform != 'darwin':
+    if len(envs) == 1 or sys.platform == 'darwin':
         if unsupervised:
             envs = UnsupervisedDummyVecEnv(envs)
         else:
