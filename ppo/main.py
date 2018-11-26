@@ -174,7 +174,7 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
 
         if eval_interval is not None and j % eval_interval == 0:
             env_args.update(seed=seed + num_processes + j,
-                            record_path=Path(log_dir, 'eval.mp4'))
+                            record_path=Path(log_dir, 'eval'))
             eval_envs = make_vec_envs(**env_args)
 
             # TODO: should this be here?
