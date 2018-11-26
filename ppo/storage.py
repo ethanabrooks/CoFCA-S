@@ -91,7 +91,6 @@ class RolloutStorage(object):
                     dim=1,
                 ).view(next_value.shape)
 
-            # TODO: can we simplify this?
             self.raw_returns = self.raw_returns.detach()
             for step in reversed(range(self.rewards.size(0))):
                 self.raw_returns[step] = self.raw_returns[step + 1] * \

@@ -94,12 +94,12 @@ class PPO:
                  dist_entropy * self.entropy_coef).backward(retain_graph=True)
 
                 if self.unsupervised and e == self.ppo_epoch - 1:
-                    expected_return_delta = torch.mean(raw_returns * torch.log(
-                        action_log_probs / old_action_log_probs_batch))
+                    expected_return_delta = torch.mean(
+                        (raw_returns - value_preds_batch) * torch.log(
+                            action_log_probs / old_action_log_probs_batch))
                     rollouts.reward_params.grad = None
                     expected_return_delta.backward(retain_graph=True)
                     self.reward_optimizer.step()
-                    # TODO: separate size step for reward
 
                 nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
                                          self.max_grad_norm)
