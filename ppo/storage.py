@@ -89,7 +89,7 @@ class RolloutStorage(object):
                     achieved=achieved[_step],
                     params=self.reward_params,
                     dim=1,
-                ).view(next_value.shape).float()
+                ).view(next_value.shape)
 
             # TODO: can we simplify this?
             self.raw_returns = self.raw_returns.detach()

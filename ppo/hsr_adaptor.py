@@ -77,7 +77,10 @@ class UnsupervisedEnv(hsr.HSREnv):
 
     @staticmethod
     def reward_function(achieved, params, dim):
-        return ((achieved - params)**2).sum(dim) < .05
+        reward = ((achieved - params)**2).sum(dim) < .05
+        if isinstance(reward, torch.Tensor):
+            return reward.float()
+        return float(reward)
 
     def compute_reward(self):
         return self.reward_function(
