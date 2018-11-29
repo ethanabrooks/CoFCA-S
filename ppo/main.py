@@ -185,18 +185,18 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
                 hsr_args.update(record_path=Path(log_dir, f'eval{j}'))
                 eval_env = UnsupervisedEnv(**hsr_args)
                 eval_env.seed(seed + j)
-
-                def torchify(array):
-                    return torch.from_numpy(array.reshape(1, -1)).float()
-
+                goal = eval_env.goal_space.sample()
+                print(f'Evaluating at goal {goal}')
+                eval_env.set_goal(goal)
                 obs = eval_env.reset()
                 eval_episode_rewards = torch.zeros(num_steps)
                 for step in range(num_steps):
                     with torch.no_grad():
+                        obs = torch.from_numpy(obs.reshape(1, -1)).float()
                         _, action, _, eval_recurrent_hidden_states = actor_critic.act(
-                            torchify(obs), None, None, deterministic=True)
+                            obs, None, None, deterministic=True)
 
-                    # Obser reward and next obs
+                    # Observe reward and next obs
                     obs, reward, done, infos = eval_env.step(action[0])
                     eval_episode_rewards[step] = reward
                 eval_env._video_recorder.close()
