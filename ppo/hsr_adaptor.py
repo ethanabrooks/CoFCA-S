@@ -77,7 +77,7 @@ class UnsupervisedEnv(hsr.HSREnv):
 
     @staticmethod
     def reward_function(achieved, params, dim):
-        reward = ((achieved - params)**2).sum(dim) < .05
+        reward = ((achieved - params) ** 2).sum(dim) < .05
         if isinstance(reward, torch.Tensor):
             return reward.float()
         return float(reward)
@@ -116,6 +116,16 @@ class UnsupervisedEnv(hsr.HSREnv):
     def set_reward_params(self, param):
         self.reward_params = param
         self.set_goal(param)
+
+    def render(self, labels=None, **kwargs):
+        distance = ((self.achieved_goal() - self.reward_params) ** 2).sum(0)
+        if labels is None:
+            labels = {}
+        labels.update({
+            (0, 0, 0):  self.compute_reward(),
+            (0, 0, -1): distance}
+        )
+        return super().render(labels=labels, **kwargs)
 
 
 def unwrap_unsupervised(env):
