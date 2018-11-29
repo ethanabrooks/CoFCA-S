@@ -182,7 +182,7 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
 
         if eval_interval is not None and j % eval_interval == 0:
             if unsupervised:
-                hsr_args.update(record_path=Path(log_dir, 'eval'))
+                hsr_args.update(record_path=Path(log_dir, f'eval{j}'))
                 eval_env = UnsupervisedEnv(**hsr_args)
                 eval_env.seed(seed + j)
 
@@ -199,6 +199,7 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
                     # Obser reward and next obs
                     obs, reward, done, infos = eval_env.step(action[0])
                     eval_episode_rewards[step] = reward
+                eval_env._video_recorder.close()
 
             else:
                 env_args.update(
