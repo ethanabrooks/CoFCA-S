@@ -49,6 +49,8 @@ class PPO:
         action_loss_epoch = 0
         dist_entropy_epoch = 0
 
+        unsupervised_vals = {}
+
         for e in range(self.ppo_epoch):
             if self.actor_critic.is_recurrent:
                 data_generator = rollouts.recurrent_generator(
@@ -94,12 +96,17 @@ class PPO:
                  dist_entropy * self.entropy_coef).backward(retain_graph=True)
 
                 if self.unsupervised and e == self.ppo_epoch - 1:
-                    expected_return_delta = torch.mean(
-                        (raw_returns - value_preds_batch) * torch.log(
-                            action_log_probs / old_action_log_probs_batch))
+                    G = raw_returns - value_preds_batch
+                    ratio = torch.log(action_log_probs / old_action_log_probs_batch)
+                    expected_return_delta = torch.mean(G * ratio)
                     rollouts.reward_params.grad = None
                     expected_return_delta.backward(retain_graph=True)
                     self.reward_optimizer.step()
+                    unsupervised_vals.update(
+                        estimated_return_delta=expected_return_delta,
+                        G=G,
+                        ratio=ratio
+                    )
 
                 nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
                                          self.max_grad_norm)
@@ -115,4 +122,7 @@ class PPO:
         action_loss_epoch /= num_updates
         dist_entropy_epoch /= num_updates
 
-        return value_loss_epoch, action_loss_epoch, dist_entropy_epoch
+        return dict(value_loss=value_loss_epoch,
+                    action_loss=action_loss_epoch,
+                    entropy=dist_entropy_epoch,
+                    **unsupervised_vals)

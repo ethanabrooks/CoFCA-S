@@ -128,7 +128,7 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
 
         rollouts.compute_returns(next_value, use_gae, gamma, tau)
 
-        value_loss, action_loss, dist_entropy = agent.update(rollouts)
+        train_results = agent.update(rollouts)
 
         if unsupervised:
             params = rollouts.reward_params.cpu().detach().numpy()  # type: np.array
@@ -162,15 +162,22 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
             fps = int(total_num_steps / (end - start))
             writer.add_scalar('rewards', float(rewards.mean()), j)
             writer.add_scalar('fps', fps, j)
-            writer.add_scalar('value loss', value_loss, j)
-            writer.add_scalar('action loss', action_loss, j)
-            writer.add_scalar('entropy', dist_entropy, j)
+            for k, v in train_results.items():
+                try:
+                    v = float(v)
+                except ValueError:
+                    continue
+                writer.add_scalar(k.replace('_', ' '), v, j)
             print(
                 f"Updates {j}, num timesteps {total_num_steps}, FPS {fps}, reward "
                 f"{rewards.mean()}")
             if unsupervised:
                 with Path(log_dir, 'params.npy').open('a') as f:
                     np.savetxt(f, params[0].reshape(1, -1))
+                with Path(log_dir, 'G.npy').open('a') as f:
+                    np.savetxt(f, train_results['G'][0].cpu().numpy())
+                with Path(log_dir, 'ratio.npy').open('a') as f:
+                    np.savetxt(f, train_results['ratio'][0].detach().numpy())
 
         if eval_interval is not None and j % eval_interval == 0:
             env_args.update(seed=seed + num_processes + j,
