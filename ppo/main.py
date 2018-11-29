@@ -180,40 +180,62 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
                     np.savetxt(f, train_results['ratio'][0].detach().numpy())
 
         if eval_interval is not None and j % eval_interval == 0:
-            env_args.update(seed=seed + num_processes + j,
-                            record_path=Path(log_dir, 'eval'))
-            eval_envs = make_vec_envs(**env_args)
+            if unsupervised:
+                eval_env = UnsupervisedEnv(**hsr_args)
+                eval_env.seed(seed + j)
 
-            # TODO: should this be here?
-            vec_norm = get_vec_normalize(eval_envs)
-            if vec_norm is not None:
-                vec_norm.eval()
-                vec_norm.ob_rms = get_vec_normalize(envs).ob_rms
+                def torchify(array):
+                    return torch.from_numpy(array.reshape(1, -1)).float()
 
-            obs = eval_envs.reset()
-            eval_recurrent_hidden_states = torch.zeros(
-                num_processes,
-                actor_critic.recurrent_hidden_state_size,
-                device=device)
-            eval_masks = torch.zeros(num_processes, 1, device=device)
+                obs = eval_env.reset()
+                eval_episode_rewards = torch.zeros(num_steps)
+                for step in range(num_steps):
+                    with torch.no_grad():
+                        _, action, _, eval_recurrent_hidden_states = actor_critic.act(
+                            torchify(obs),
+                            None,
+                            None,
+                            deterministic=True)
 
-            eval_episode_rewards = torch.zeros(num_steps)
-            for step in range(num_steps):
-                with torch.no_grad():
-                    _, action, _, eval_recurrent_hidden_states = actor_critic.act(
-                        obs,
-                        eval_recurrent_hidden_states,
-                        eval_masks,
-                        deterministic=True)
+                    # Obser reward and next obs
+                    obs, reward, done, infos = eval_env.step(action[0])
+                    eval_episode_rewards[step] = reward
 
-                # Obser reward and next obs
-                obs, reward, done, infos = eval_envs.step(action)
-                eval_episode_rewards[step] = torch.mean(reward)
+            else:
+                env_args.update(seed=seed + num_processes + j,
+                                record_path=Path(log_dir, 'eval'))
+                eval_envs = make_vec_envs(**env_args)
 
-                eval_masks = torch.FloatTensor(
-                    [[0.0] if done_ else [1.0] for done_ in done])
+                # TODO: should this be here?
+                vec_norm = get_vec_normalize(eval_envs)
+                if vec_norm is not None:
+                    vec_norm.eval()
+                    vec_norm.ob_rms = get_vec_normalize(envs).ob_rms
 
-            eval_envs.close()
+                obs = eval_envs.reset()
+                eval_recurrent_hidden_states = torch.zeros(
+                    num_processes,
+                    actor_critic.recurrent_hidden_state_size,
+                    device=device)
+                eval_masks = torch.zeros(num_processes, 1, device=device)
+
+                eval_episode_rewards = torch.zeros(num_steps)
+                for step in range(num_steps):
+                    with torch.no_grad():
+                        _, action, _, eval_recurrent_hidden_states = actor_critic.act(
+                            obs,
+                            eval_recurrent_hidden_states,
+                            eval_masks,
+                            deterministic=True)
+
+                    # Obser reward and next obs
+                    obs, reward, done, infos = eval_envs.step(action)
+                    eval_episode_rewards[step] = torch.mean(reward)
+
+                    eval_masks = torch.FloatTensor(
+                        [[0.0] if done_ else [1.0] for done_ in done])
+
+                eval_envs.close()
 
             mean_eval_reward = float(torch.mean(eval_episode_rewards))
             print(" Evaluation using {} episodes: mean reward {:.5f}\n".format(
