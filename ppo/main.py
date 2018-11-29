@@ -131,7 +131,8 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
         train_results = agent.update(rollouts)
 
         if unsupervised:
-            params = rollouts.reward_params.cpu().detach().numpy()  # type: np.array
+            params = rollouts.reward_params.cpu().detach().numpy(
+            )  # type: np.array
             envs.venv.set_reward_params(params)
 
         rollouts.after_update()
@@ -192,18 +193,16 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
                 for step in range(num_steps):
                     with torch.no_grad():
                         _, action, _, eval_recurrent_hidden_states = actor_critic.act(
-                            torchify(obs),
-                            None,
-                            None,
-                            deterministic=True)
+                            torchify(obs), None, None, deterministic=True)
 
                     # Obser reward and next obs
                     obs, reward, done, infos = eval_env.step(action[0])
                     eval_episode_rewards[step] = reward
 
             else:
-                env_args.update(seed=seed + num_processes + j,
-                                record_path=Path(log_dir, 'eval'))
+                env_args.update(
+                    seed=seed + num_processes + j,
+                    record_path=Path(log_dir, 'eval'))
                 eval_envs = make_vec_envs(**env_args)
 
                 # TODO: should this be here?
