@@ -182,6 +182,7 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
 
         if eval_interval is not None and j % eval_interval == 0:
             if unsupervised:
+                hsr_args.update(record_path=Path(log_dir, 'eval'))
                 eval_env = UnsupervisedEnv(**hsr_args)
                 eval_env.seed(seed + j)
 
