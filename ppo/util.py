@@ -7,8 +7,8 @@ import gym
 import numpy as np
 import tensorflow as tf
 from tensorflow.python import debug as tf_debug
-from torch import nn as nn
 import torch
+from torch import nn as nn
 
 Shape = Union[int, Sequence[int]]
 

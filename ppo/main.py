@@ -2,21 +2,17 @@
 import copy
 import glob
 import os
-import sys
-import time
-from collections import deque
 from pathlib import Path
+import time
 
 import numpy as np
-import torch
-from gym.wrappers import TimeLimit
 from tensorboardX import SummaryWriter
+import torch
 
 from ppo.arg_util import env_wrapper
 from ppo.arguments import get_args, get_hsr_args
-from ppo.envs import VecPyTorch, make_vec_envs, get_vec_normalize
-from ppo.hsr_adaptor import RewardStructure, UnsupervisedDummyVecEnv, UnsupervisedEnv, \
-    UnsupervisedSubprocVecEnv, MoveGripperEnv
+from ppo.envs import get_vec_normalize, make_vec_envs
+from ppo.hsr_adaptor import RewardStructure, UnsupervisedEnv
 from ppo.policy import Policy
 from ppo.ppo import PPO
 from ppo.storage import RolloutStorage

@@ -1,21 +1,21 @@
 import argparse
 from collections.__init__ import namedtuple
 from contextlib import contextmanager
+from functools import wraps
 from itertools import filterfalse
 from pathlib import Path
 import re
 import tempfile
 from typing import List, Tuple
 from xml.etree import ElementTree as ET
-from functools import wraps
 
+from environments import hsr
 from gym import spaces
 from gym.spaces import Box
 import numpy as np
 import tensorflow as tf
 
 from ppo.util import parametric_relu
-from environments import hsr
 
 
 def make_box(*tuples: Tuple[float, float]):
@@ -28,8 +28,9 @@ def parse_space(dim: int):
         regex = re.compile('\((-?[\.\d]+),(-?[\.\d]+)\)')
         matches = regex.findall(arg)
         if len(matches) != dim:
-            raise argparse.ArgumentTypeError(f'Arg {arg} must have {dim} substrings '
-                                             f'matching pattern {regex}.')
+            raise argparse.ArgumentTypeError(
+                f'Arg {arg} must have {dim} substrings '
+                f'matching pattern {regex}.')
         return make_box(*matches)
 
     return _parse_space
@@ -39,8 +40,9 @@ def parse_vector(length: int, delim: str):
     def _parse_vector(arg: str):
         vector = tuple(map(float, arg.split(delim)))
         if len(vector) != length:
-            raise argparse.ArgumentError(f'Arg {arg} must include {length} float values'
-                                         f'delimited by "{delim}".')
+            raise argparse.ArgumentError(
+                f'Arg {arg} must include {length} float values'
+                f'delimited by "{delim}".')
         return vector
 
     return _parse_vector
@@ -105,8 +107,8 @@ XMLSetter = namedtuple('XMLSetter', 'path value')
 
 
 @contextmanager
-def mutate_xml(changes: List[XMLSetter], dofs: List[str], goal_space: Box, n_blocks: int,
-               xml_filepath: Path):
+def mutate_xml(changes: List[XMLSetter], dofs: List[str], goal_space: Box,
+               n_blocks: int, xml_filepath: Path):
     def rel_to_abs(path: Path):
         return Path(xml_filepath.parent, path)
 
@@ -128,7 +130,8 @@ def mutate_xml(changes: List[XMLSetter], dofs: List[str], goal_space: Box, n_blo
                 pos = ' '.join(map(str, goal_space.sample()))
                 name = f'block{i}'
 
-                body = ET.SubElement(worldbody, 'body', attrib=dict(name=name, pos=pos))
+                body = ET.SubElement(
+                    worldbody, 'body', attrib=dict(name=name, pos=pos))
                 ET.SubElement(
                     body,
                     'geom',
@@ -142,7 +145,8 @@ def mutate_xml(changes: List[XMLSetter], dofs: List[str], goal_space: Box, n_blo
                         solimp="0.99 0.99 "
                         "0.01",
                         solref='0.01 1'))
-                ET.SubElement(body, 'freejoint', attrib=dict(name=f'block{i}joint'))
+                ET.SubElement(
+                    body, 'freejoint', attrib=dict(name=f'block{i}joint'))
 
         for change in changes:
             parent = re.sub('/[^/]*$', '', change.path)
@@ -177,7 +181,8 @@ def mutate_xml(changes: List[XMLSetter], dofs: List[str], goal_space: Box, n_blo
         return tree
 
     included_files = [
-        rel_to_abs(e.get('file')) for e in ET.parse(xml_filepath).findall('*/include')
+        rel_to_abs(e.get('file'))
+        for e in ET.parse(xml_filepath).findall('*/include')
     ]
 
     temp = {
@@ -205,10 +210,15 @@ def parse_groups(parser: argparse.ArgumentParser):
 
     def parse_group(group):
         # noinspection PyProtectedMember
-        return {a.dest: getattr(args, a.dest, None) for a in group._group_actions}
+        return {
+            a.dest: getattr(args, a.dest, None)
+            for a in group._group_actions
+        }
 
     # noinspection PyUnresolvedReferences,PyProtectedMember
-    groups = [g for g in parser._action_groups if g.title != 'positional arguments']
+    groups = [
+        g for g in parser._action_groups if g.title != 'positional arguments'
+    ]
     optional = filter(is_optional, groups)
     not_optional = filterfalse(is_optional, groups)
 

@@ -97,7 +97,8 @@ class PPO:
 
                 if self.unsupervised and e == self.ppo_epoch - 1:
                     G = raw_returns - value_preds_batch
-                    ratio = torch.log(action_log_probs / old_action_log_probs_batch)
+                    ratio = torch.log(
+                        action_log_probs / old_action_log_probs_batch)
                     expected_return_delta = torch.mean(G * ratio)
                     rollouts.reward_params.grad = None
                     expected_return_delta.backward(retain_graph=True)
@@ -105,8 +106,7 @@ class PPO:
                     unsupervised_vals.update(
                         estimated_return_delta=expected_return_delta,
                         G=G,
-                        ratio=ratio
-                    )
+                        ratio=ratio)
 
                 nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
                                          self.max_grad_norm)
@@ -122,7 +122,8 @@ class PPO:
         action_loss_epoch /= num_updates
         dist_entropy_epoch /= num_updates
 
-        return dict(value_loss=value_loss_epoch,
-                    action_loss=action_loss_epoch,
-                    entropy=dist_entropy_epoch,
-                    **unsupervised_vals)
+        return dict(
+            value_loss=value_loss_epoch,
+            action_loss=action_loss_epoch,
+            entropy=dist_entropy_epoch,
+            **unsupervised_vals)

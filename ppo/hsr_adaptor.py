@@ -6,10 +6,9 @@ from multiprocessing import Pipe, Process
 from baselines.common.vec_env import CloudpickleWrapper, VecEnv
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
+from environments import hsr
 import numpy as np
 import torch
-
-from environments import hsr
 from torch import optim
 
 from ppo.util import concat_spaces, space_shape, unwrap_env, vectorize
@@ -77,7 +76,7 @@ class UnsupervisedEnv(hsr.HSREnv):
 
     @staticmethod
     def reward_function(achieved, params, dim):
-        reward = ((achieved - params) ** 2).sum(dim) < .05
+        reward = ((achieved - params)**2).sum(dim) < .05
         if isinstance(reward, torch.Tensor):
             return reward.float()
         return float(reward)
@@ -118,13 +117,10 @@ class UnsupervisedEnv(hsr.HSREnv):
         self.set_goal(param)
 
     def render(self, labels=None, **kwargs):
-        distance = ((self.achieved_goal() - self.reward_params) ** 2).sum(0)
+        distance = ((self.achieved_goal() - self.reward_params)**2).sum(0)
         if labels is None:
             labels = {}
-        labels.update({
-            (0, 0, 0):  self.compute_reward(),
-            (0, 0, -1): distance}
-        )
+        labels.update({(0, 0, 0): self.compute_reward(), (0, 0, -1): distance})
         return super().render(labels=labels, **kwargs)
 
 

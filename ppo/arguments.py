@@ -1,9 +1,10 @@
 # stdlib
 import argparse
 
+from scripts.hsr import add_env_args, add_wrapper_args
+
 # third party
 from ppo.arg_util import parse_groups
-from scripts.hsr import add_env_args, add_wrapper_args
 
 
 def build_parser():
@@ -89,7 +90,10 @@ def build_parser():
         default=False,
         help='use a recurrent policy')
     parser.add_argument(
-        '--reward-lr', type=float, default=7e-4, help='learning rate (default: 7e-4)')
+        '--reward-lr',
+        type=float,
+        default=7e-4,
+        help='learning rate (default: 7e-4)')
 
     ppo_parser = parser.add_argument_group('ppo_args')
     ppo_parser.add_argument(

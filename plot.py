@@ -1,11 +1,11 @@
 #! /usr/bin/env python
+import argparse
 from pathlib import Path
 from typing import List
 
-import plotly.plotly as py
-import plotly.graph_objs as go
 import numpy as np
-import argparse
+import plotly.graph_objs as go
+import plotly.plotly as py
 
 
 def main(npy_paths: List[Path]):

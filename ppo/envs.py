@@ -1,7 +1,6 @@
 # stdlib
-import os
-
 # third party
+import os
 import sys
 
 from baselines import bench
@@ -12,11 +11,11 @@ from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
 from baselines.common.vec_env.vec_normalize import VecNormalize as VecNormalize_
 import gym
 from gym.spaces.box import Box
+from gym.wrappers import TimeLimit
 import numpy as np
 import torch
-from gym.wrappers import TimeLimit
 
-from ppo.hsr_adaptor import UnsupervisedEnv, MoveGripperEnv, UnsupervisedDummyVecEnv, UnsupervisedSubprocVecEnv
+from ppo.hsr_adaptor import MoveGripperEnv, UnsupervisedDummyVecEnv, UnsupervisedEnv, UnsupervisedSubprocVecEnv
 
 try:
     import dm_control2gym
