@@ -15,6 +15,7 @@ from gym.wrappers import TimeLimit
 import numpy as np
 import torch
 
+from ppo.gridworld import GoalGridworld
 from ppo.hsr_adaptor import MoveGripperEnv, UnsupervisedDummyVecEnv, UnsupervisedEnv, UnsupervisedSubprocVecEnv
 
 try:
@@ -51,6 +52,12 @@ def make_env(env_id,
         elif env_id == 'move_gripper':
             env = TimeLimit(
                 MoveGripperEnv(**kwargs), max_episode_steps=num_steps)
+        elif env_id == 'gridworld':
+            desc = '          '
+            env = TimeLimit(
+                GoalGridworld(desc=[desc], actions=np.array([[0, 1], [0, -1]]), action_strings="▶◀"),
+                max_episode_steps=max(num_steps, len(desc)),
+            )
         else:
             env = gym.make(env_id)
 
