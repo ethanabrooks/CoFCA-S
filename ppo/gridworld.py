@@ -51,7 +51,8 @@ class Gridworld(DiscreteEnv):
             isd=isd.flatten(),
         )
         self.int_observation_space = self.observation_space
-        self.observation_space = Box(low=np.zeros(self.nS), high=np.ones(self.nS))
+        self.observation_space = Box(
+            low=np.zeros(self.nS), high=np.ones(self.nS))
 
     def reset(self):
         return one_hot(super().reset(), self.nS)
@@ -141,12 +142,14 @@ class Gridworld(DiscreteEnv):
 
 
 class GoalGridworld(Gridworld):
-    def __init__(self, desc: Iterable[Iterable[str]], terminal='', goal_letter='*', **kwargs):
+    def __init__(self,
+                 desc: Iterable[Iterable[str]],
+                 terminal='',
+                 goal_letter='*',
+                 **kwargs):
         terminal += goal_letter
-        super().__init__(desc=desc,
-                         terminal=terminal,
-                         rewards={goal_letter: 1},
-                         **kwargs)
+        super().__init__(
+            desc=desc, terminal=terminal, rewards={goal_letter: 1}, **kwargs)
         self.goal_letter = goal_letter
         if not any(goal_letter in row for row in desc):
             self.set_goal(self.int_observation_space.sample())

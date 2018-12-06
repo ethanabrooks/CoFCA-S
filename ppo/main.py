@@ -79,7 +79,7 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
     envs = make_vec_envs(**env_args)
 
     if isinstance(envs.observation_space, Discrete):
-        obs_shape = (envs.observation_space.n,)
+        obs_shape = (envs.observation_space.n, )
 
     else:
         obs_shape = envs.observation_space.shape
@@ -208,8 +208,8 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
                 env_args.update(
                     seed=seed + num_processes + j,
                     record_path=Path(log_dir, 'eval'),
-                    render=True
-                )
+                    render=True)
+
                 eval_envs = make_vec_envs(**env_args)
 
                 # TODO: should this be here?
