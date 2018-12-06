@@ -14,6 +14,9 @@ def build_parser():
         default=0.99,
         help='discount factor for rewards (default: 0.99)')
     parser.add_argument(
+        '--normalize',
+        action='store_true')
+    parser.add_argument(
         '--use-gae',
         action='store_true',
         default=False,
@@ -145,7 +148,7 @@ def build_parser():
 
 def get_args():
     return {**parse_groups(build_parser()),
-            **dict(env_args=None)}
+            **dict(env_args={})}
 
 
 def get_hsr_args():

@@ -28,7 +28,7 @@ from ppo.visualize import visdom_plot
 
 def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
          cuda_deterministic, cuda, log_dir, vis, port, env_name, gamma,
-         add_timestep, save_interval, save_dir, log_interval, eval_interval,
+         normalize, add_timestep, save_interval, save_dir, log_interval, eval_interval,
          use_gae, tau, vis_interval, ppo_args, env_args):
 
     algo = 'ppo'
@@ -68,43 +68,8 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
 
     reward_params_shape = None
     reward_function = None
-    unsupervised = env_name == 'unsupervised'
-    if unsupervised:
-
-        def make_env(_seed):
-            env = UnsupervisedEnv(**env_args)
-            env.seed(_seed)
-            return env
-
-        X = Union[torch.Tensor, np.array]
-
-        sample_env = make_env(0)
-
-        def reward_function(x: X, params: X):
-            obs = Observation(
-                *torch.split(x, sample_env.subspace_sizes), dim=1)
-            return sample_env.reward_function(
-                achieved=obs.achieved, params=params, dim=1)
-
-        reward_params_shape = (3, )
-        env_fns = [lambda: make_env(s + seed) for s in range(num_processes)]
-
-        if sys.platform == 'darwin' or num_processes == 1:
-            envs = UnsupervisedDummyVecEnv(env_fns)
-        else:
-            envs = UnsupervisedSubprocVecEnv(env_fns)
-        envs = VecPyTorch(envs, device=device)
-
-    elif env_name == 'move_gripper':
-
-        def make_env():
-            MoveGripperEnv(**env_args)
-
-        envs = VecPyTorch(
-            DummyVecEnv([make_env()] * num_processes), device=device)
-    else:
-        envs = make_vec_envs(env_name, seed, num_processes, gamma, log_dir,
-                             add_timestep, device, False)
+    envs = make_vec_envs(env_name, seed, num_processes, (gamma if normalize else
+    None), log_dir, add_timestep, device, False)
 
     actor_critic = Policy(
         envs.observation_space.shape,
@@ -113,7 +78,6 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
     actor_critic.to(device)
 
     agent = PPO(actor_critic=actor_critic,
-                unsupervised=unsupervised,
                 **ppo_args)
 
     rollouts = RolloutStorage(
@@ -163,16 +127,9 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
                 rollouts.obs[-1], rollouts.recurrent_hidden_states[-1],
                 rollouts.masks[-1]).detach()
 
-        if unsupervised:
-            assert next_value == 0
-
         rollouts.compute_returns(next_value, use_gae, gamma, tau, reward_function)
 
         value_loss, action_loss, dist_entropy = agent.update(rollouts)
-
-        if unsupervised:
-
-            envs.set_reward_params(rollouts.reward_params)
 
         rollouts.after_update()
 
@@ -204,8 +161,10 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
             episode_rewards = np.concatenate(episode_rewards)
             print(
                 f"Updates {j}, num timesteps {total_num_steps}, FPS {fps} \n "
-                f"Last {len(episode_rewards)} training episodes: "
-                "mean/median reward {:.1f}/{:.1f}, min/max reward {:.1f}/{:.1f}\n"
+                f"Last {len(episode_rewards)} training episodes: " +
+                "mean/median reward {:.1f}/{:.1f}, min/max reward {:.1f}/{"
+                ":.1f}\n".format(np.mean(episode_rewards), np.median(episode_rewards),
+                                 np.min(episode_rewards), np.max(episode_rewards)) +
                 f"entropy {dist_entropy}, "
                 f"value loss {value_loss}, "
                 f"action loss {action_loss}\n")
@@ -214,7 +173,8 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
         if (eval_interval is not None and len(episode_rewards) > 1
                 and j % eval_interval == 0):
             eval_envs = make_vec_envs(env_name, seed + num_processes,
-                                      num_processes, gamma, eval_log_dir,
+                                      num_processes, gamma if normalize else None,
+                                      eval_log_dir,
                                       add_timestep, device, allow_early_resets=True)
 
             vec_norm = get_vec_normalize(eval_envs)

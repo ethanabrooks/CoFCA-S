@@ -63,7 +63,7 @@ class RolloutStorage(object):
         self.actions[self.step].copy_(actions)
         self.action_log_probs[self.step].copy_(action_log_probs)
         self.value_preds[self.step].copy_(value_preds)
-        self.rewards[self.step].copy_(rewards)
+        self.rewards[self.step].copy_(rewards.unsqueeze(dim=1))
         self.masks[self.step + 1].copy_(masks)
         self.step = (self.step + 1) % self.num_steps
         if self.reward_params:

@@ -12,7 +12,7 @@ from gym.envs.toy_text.discrete import DiscreteEnv
 from gym.spaces import Box
 from six import StringIO
 
-from ppo.util import one_hot
+from utils.utils import one_hot
 
 Transition = namedtuple('Transition', 'probability new_state reward terminal')
 
@@ -42,8 +42,12 @@ class Gridworld(DiscreteEnv):
         self._reward_matrix = None
 
         transitions = self.compute_transitions()
-        isd = np.isin(_desc, tuple(start_states))
+        if start_states is None:
+            isd = np.ones(_desc.size)
+        else:
+            isd = np.isin(_desc, tuple(start_states))
         isd = isd / isd.sum()
+
         super().__init__(
             nS=_desc.size,
             nA=len(actions),
@@ -148,6 +152,8 @@ class GoalGridworld(Gridworld):
                  goal_letter='*',
                  **kwargs):
         terminal += goal_letter
+        self.goal = None
+        self.pre_goal_letter = None
         super().__init__(
             desc=desc, terminal=terminal, rewards={goal_letter: 1}, **kwargs)
         self.goal_letter = goal_letter
@@ -156,8 +162,19 @@ class GoalGridworld(Gridworld):
         self.goal_space = self.int_observation_space
 
     def set_goal(self, goal: int):
-        self.desc[self.decode(goal)] = '*'
+        if self.goal is not None:
+            self.desc[self.decode(self.goal)] = self.pre_goal_letter
+        self.goal = goal
+        self.pre_goal_letter = self.desc[self.decode(self.goal)]
+        self.desc[self.decode(goal)] = self.goal_letter
         self.P = self.compute_transitions()
+
+    def reset(self):
+        try:
+            self.set_goal(self.goal_space.sample())
+        except AttributeError:
+            pass
+        return super().reset()
 
 
 if __name__ == '__main__':
