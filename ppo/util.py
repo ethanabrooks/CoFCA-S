@@ -17,9 +17,12 @@ def leaky_relu(x, alpha=0.2):
     return tf.maximum(x, alpha * x)
 
 
-def onehot(idx, num_entries):
-    x = np.zeros(num_entries)
-    x[idx] = 1
+def one_hot(i, num_entries):
+    if isinstance(i, (int, np.integer)):
+        x = np.zeros(num_entries)
+    else:
+        x = np.zeros((len(i), num_entries))
+    x[i] = 1
     return x
 
 

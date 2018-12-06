@@ -9,7 +9,10 @@ import numpy as np
 # third party
 from gym import utils
 from gym.envs.toy_text.discrete import DiscreteEnv
+from gym.spaces import Box
 from six import StringIO
+
+from ppo.util import one_hot
 
 Transition = namedtuple('Transition', 'probability new_state reward terminal')
 
@@ -31,27 +34,14 @@ class Gridworld(DiscreteEnv):
         self.action_strings = np.array(tuple(action_strings))
         self.desc = _desc = np.array(
             [list(r) for r in desc])  # type: np.ndarray
-        nrows, ncols = _desc.shape
+        self.nrows, self.ncols = _desc.shape
+        self.rewards = rewards
+        self.terminal = terminal
+        self.actions = actions
         self._transition_matrix = None
         self._reward_matrix = None
 
-        def transition_tuple(i: int, j: int) -> Tuple[float, int, float, bool]:
-            i = np.clip(i, 0, nrows - 1)  # type: int
-            j = np.clip(j, 0, ncols - 1)  # type: int
-            letter = str(_desc[i, j])
-            return Transition(
-                probability=1.,
-                new_state=self.encode(i, j),
-                reward=rewards.get(letter, 0),
-                terminal=letter in terminal)
-
-        transitions = {
-            self.encode(i, j): {
-                a: [transition_tuple(*np.array([i, j]) + action)]
-                for a, action in enumerate(actions)
-            }
-            for i in range(nrows) for j in range(ncols)
-        }
+        transitions = self.compute_transitions()
         isd = np.isin(_desc, tuple(start_states))
         isd = isd / isd.sum()
         super().__init__(
@@ -60,6 +50,34 @@ class Gridworld(DiscreteEnv):
             P=transitions,
             isd=isd.flatten(),
         )
+        self.int_observation_space = self.observation_space
+        self.observation_space = Box(low=np.zeros(self.nS), high=np.ones(self.nS))
+
+    def reset(self):
+        return one_hot(super().reset(), self.nS)
+
+    def step(self, action):
+        s, r, t, i = super().step(action)
+        return one_hot(s, self.nS), r, t, i
+
+    def compute_transitions(self):
+        def transition_tuple(i: int, j: int) -> Tuple[float, int, float, bool]:
+            i = np.clip(i, 0, self.nrows - 1)  # type: int
+            j = np.clip(j, 0, self.ncols - 1)  # type: int
+            letter = str(self.desc[i, j])
+            return Transition(
+                probability=1.,
+                new_state=self.encode(i, j),
+                reward=self.rewards.get(letter, 0),
+                terminal=letter in self.terminal)
+
+        return {
+            self.encode(i, j): {
+                a: [transition_tuple(*np.array([i, j]) + action)]
+                for a, action in enumerate(self.actions)
+            }
+            for i in range(self.nrows) for j in range(self.ncols)
+        }
 
     def render(self, mode='human'):
         outfile = StringIO() if mode == 'ansi' else sys.stdout
@@ -90,7 +108,7 @@ class Gridworld(DiscreteEnv):
     def decode(self, s: int) -> Tuple[int, int]:
         nrow, ncol = self.desc.shape
         assert 0 <= s < nrow * ncol
-        return s // nrow, s % ncol
+        return s // ncol, s % ncol
 
     def generate_matrices(self):
         self._transition_matrix = np.zeros((self.nS, self.nA, self.nS))
@@ -123,27 +141,20 @@ class Gridworld(DiscreteEnv):
 
 
 class GoalGridworld(Gridworld):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.goal = None
-        self.set_goal(self.observation_space.sample())
-        self.goal_space = self.observation_space
+    def __init__(self, desc: Iterable[Iterable[str]], terminal='', goal_letter='*', **kwargs):
+        terminal += goal_letter
+        super().__init__(desc=desc,
+                         terminal=terminal,
+                         rewards={goal_letter: 1},
+                         **kwargs)
+        self.goal_letter = goal_letter
+        if not any(goal_letter in row for row in desc):
+            self.set_goal(self.int_observation_space.sample())
+        self.goal_space = self.int_observation_space
 
     def set_goal(self, goal: int):
-        self.goal = goal
-        self.P = {
-            s: {
-                a: [
-                    t._replace(
-                        reward=float(t.new_state == goal),
-                        terminal=t.terminal or t.new_state == goal)
-                    for t in transitions
-                ]
-                for a, transitions in Pa.items()
-            }
-            for s, Pa in self.P.items()
-        }
-        self._transition_matrix = None
+        self.desc[self.decode(goal)] = '*'
+        self.P = self.compute_transitions()
 
 
 if __name__ == '__main__':

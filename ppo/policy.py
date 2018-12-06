@@ -3,6 +3,8 @@ import torch
 import torch.nn as nn
 
 # first party
+from gym.spaces import Discrete, Box
+
 from ppo.distributions import Categorical, DiagGaussian
 from ppo.util import init, init_normc_
 
@@ -25,10 +27,10 @@ class Policy(nn.Module):
         else:
             raise NotImplementedError
 
-        if action_space.__class__.__name__ == "Discrete":
+        if isinstance(action_space, Discrete):
             num_outputs = action_space.n
             self.dist = Categorical(self.base.output_size, num_outputs)
-        elif action_space.__class__.__name__ == "Box":
+        elif isinstance(action_space, Box):
             num_outputs = action_space.shape[0]
             self.dist = DiagGaussian(self.base.output_size, num_outputs)
         else:

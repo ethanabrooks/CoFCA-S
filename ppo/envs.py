@@ -55,8 +55,11 @@ def make_env(env_id,
         elif env_id == 'gridworld':
             desc = '          '
             env = TimeLimit(
-                GoalGridworld(desc=[desc], actions=np.array([[0, 1], [0, -1]]), action_strings="▶◀"),
-                max_episode_steps=max(num_steps, len(desc)),
+                GoalGridworld(desc=[desc],
+                              actions=np.array([[0, 1], [0, -1]]),
+                              action_strings="▶◀",
+                              terminal=""),
+                max_episode_steps=max(num_steps or len(desc), len(desc)),
             )
         else:
             env = gym.make(env_id)

@@ -6,6 +6,7 @@ from pathlib import Path
 import time
 
 import numpy as np
+from gym.spaces import Discrete
 from tensorboardX import SummaryWriter
 import torch
 
@@ -16,6 +17,7 @@ from ppo.hsr_adaptor import RewardStructure, UnsupervisedEnv
 from ppo.policy import Policy
 from ppo.ppo import PPO
 from ppo.storage import RolloutStorage
+from ppo.util import one_hot
 
 
 def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
@@ -76,8 +78,13 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
         ppo_args.update(reward_structure=reward_structure)
     envs = make_vec_envs(**env_args)
 
+    if isinstance(envs.observation_space, Discrete):
+        obs_shape = (envs.observation_space.n,)
+
+    else:
+        obs_shape = envs.observation_space.shape
     actor_critic = Policy(
-        envs.observation_space.shape,
+        obs_shape,
         envs.action_space,
         base_kwargs=dict(recurrent=recurrent_policy))
     actor_critic.to(device)
@@ -88,7 +95,7 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
     rollouts = RolloutStorage(
         num_steps=num_steps,
         num_processes=num_processes,
-        obs_shape=envs.observation_space.shape,
+        obs_shape=obs_shape,
         action_space=envs.action_space,
         recurrent_hidden_state_size=actor_critic.recurrent_hidden_state_size,
         reward_structure=reward_structure)
@@ -200,7 +207,9 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
             else:
                 env_args.update(
                     seed=seed + num_processes + j,
-                    record_path=Path(log_dir, 'eval'))
+                    record_path=Path(log_dir, 'eval'),
+                    render=True
+                )
                 eval_envs = make_vec_envs(**env_args)
 
                 # TODO: should this be here?
