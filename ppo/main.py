@@ -2,34 +2,29 @@
 import copy
 import glob
 import os
-import sys
 import time
-from collections import deque
-# third party
-from typing import Union
+from pathlib import Path
 
 import numpy as np
 import torch
 # first party
-from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
-from environments.hsr import MoveGripperEnv
 from scripts.hsr import env_wrapper
 
 from ppo.arguments import get_args, get_hsr_args
-from ppo.envs import make_vec_envs, VecPyTorch
-from ppo.hsr_wrapper import UnsupervisedEnv, UnsupervisedDummyVecEnv, \
-    UnsupervisedSubprocVecEnv, Observation
+from ppo.envs import make_vec_envs
 from ppo.model import Policy
 from ppo.ppo import PPO
 from ppo.storage import RolloutStorage
 from ppo.utils import get_vec_normalize
-from ppo.visualize import visdom_plot
+
+
+# third party
 
 
 def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
-         cuda_deterministic, cuda, log_dir, vis, port, env_name, gamma,
+         cuda_deterministic, cuda, log_dir: Path, env_name, gamma,
          normalize, add_timestep, save_interval, save_dir, log_interval, eval_interval,
-         use_gae, tau, vis_interval, ppo_args, env_args):
+         use_gae, tau, ppo_args, env_args):
 
     algo = 'ppo'
 
@@ -42,32 +37,20 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
         torch.backends.cudnn.benchmark = False
         torch.backends.cudnn.deterministic = True
 
-    try:
-        os.makedirs(log_dir)
-    except OSError:
-        files = glob.glob(os.path.join(log_dir, '*.monitor.csv'))
-        for f in files:
-            os.remove(f)
+    eval_log_dir = None
+    if log_dir:
+        eval_log_dir = log_dir.with_suffix("eval")
 
-    eval_log_dir = log_dir + "_eval"
-
-    try:
-        os.makedirs(eval_log_dir)
-    except OSError:
-        files = glob.glob(os.path.join(eval_log_dir, '*.monitor.csv'))
-        for f in files:
-            os.remove(f)
+        for _dir in [log_dir, eval_log_dir]:
+            try:
+                _dir.mkdir()
+            except OSError:
+                for f in _dir.glob('*.monitor.csv'):
+                    f.unlink()
 
     torch.set_num_threads(1)
     device = torch.device("cuda:0" if cuda else "cpu")
 
-    if vis:
-        from visdom import Visdom
-        viz = Visdom(port=port)
-        win = None
-
-    reward_params_shape = None
-    reward_function = None
     envs = make_vec_envs(env_name, seed, num_processes, (gamma if normalize else
     None), log_dir, add_timestep, device, False)
 
@@ -86,10 +69,7 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
         obs_shape=envs.observation_space.shape,
         action_space=envs.action_space,
         recurrent_hidden_state_size=actor_critic.recurrent_hidden_state_size,
-        reward_param_shape=reward_params_shape
     )
-    # TODO: include params in obs
-    # TODO: need to ensure that nsteps is equal to max_steps
 
     obs = envs.reset()
     rollouts.obs[0].copy_(obs)
@@ -127,18 +107,13 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
                 rollouts.obs[-1], rollouts.recurrent_hidden_states[-1],
                 rollouts.masks[-1]).detach()
 
-        rollouts.compute_returns(next_value, use_gae, gamma, tau, reward_function)
-
+        rollouts.compute_returns(next_value, use_gae, gamma, tau)
         value_loss, action_loss, dist_entropy = agent.update(rollouts)
-
         rollouts.after_update()
 
-        if j % save_interval == 0 and save_dir != "":
-            save_path = os.path.join(save_dir, algo)
-            try:
-                os.makedirs(save_path)
-            except OSError:
-                pass
+        if j % save_interval == 0 and save_dir is not None:
+            save_path = Path(save_dir, algo)
+            save_path.mkdir(exist_ok=True)
 
             # A really ugly way to save a model to CPU
             save_model = actor_critic
@@ -156,31 +131,32 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
 
         if j % log_interval == 0:
             end = time.time()
-
             fps = int(total_num_steps / (end - start))
             episode_rewards = np.concatenate(episode_rewards)
-            print(
-                f"Updates {j}, num timesteps {total_num_steps}, FPS {fps} \n "
-                f"Last {len(episode_rewards)} training episodes: " +
-                "mean/median reward {:.2f}/{:.2f}, min/max reward {:.2f}/{"
-                ":.2f}\n".format(np.mean(episode_rewards), np.median(episode_rewards),
-                                 np.min(episode_rewards), np.max(episode_rewards)) +
-                "entropy {:.2}, ".format(dist_entropy) +
-                "value loss {:.2}, ".format(value_loss) +
-                "action loss {:.2}\n".format(action_loss))
-            episode_rewards = []
+            if episode_rewards.size > 0:
+                print(
+                    f"Updates {j}, num timesteps {total_num_steps}, FPS {fps} \n "
+                    f"Last {len(episode_rewards)} training episodes: " +
+                    "mean/median reward {:.2f}/{:.2f}, min/max reward {:.2f}/{"
+                    ":.2f}\n".format(np.mean(episode_rewards), np.median(episode_rewards),
+                                     np.min(episode_rewards), np.max(episode_rewards)) +
+                    "entropy {:.2}, ".format(dist_entropy) +
+                    "value loss {:.2}, ".format(value_loss) +
+                    "action loss {:.2}\n".format(action_loss))
+                episode_rewards = []
 
-        if (eval_interval is not None and len(episode_rewards) > 1
-                and j % eval_interval == 0):
+        if eval_interval is not None and j % eval_interval == eval_interval - 1:
+
+            import ipdb; ipdb.set_trace()
             eval_envs = make_vec_envs(env_name, seed + num_processes,
                                       num_processes, gamma if normalize else None,
                                       eval_log_dir,
                                       add_timestep, device, allow_early_resets=True)
 
-            vec_norm = get_vec_normalize(eval_envs)
-            if vec_norm is not None:
-                vec_norm.eval()
-                vec_norm.ob_rms = get_vec_normalize(envs).ob_rms
+            # vec_norm = get_vec_normalize(eval_envs)
+            # if vec_norm is not None:
+            #     vec_norm.eval()
+            #     vec_norm.ob_rms = get_vec_normalize(envs).ob_rms
 
             eval_episode_rewards = []
 
@@ -192,6 +168,7 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
             eval_masks = torch.zeros(num_processes, 1, device=device)
 
             while len(eval_episode_rewards) < 10:
+                print('.', end='')
                 with torch.no_grad():
                     _, action, _, eval_recurrent_hidden_states = actor_critic.act(
                         obs,
@@ -212,14 +189,6 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
 
             print(" Evaluation using {} episodes: mean reward {:.5f}\n".format(
                 len(eval_episode_rewards), np.mean(eval_episode_rewards)))
-
-        if vis and j % vis_interval == 0:
-            try:
-                # Sometimes monitor doesn't properly flush the outputs
-                win = visdom_plot(viz, win, log_dir, env_name, algo,
-                                  num_frames)
-            except IOError:
-                pass
 
 
 def cli():

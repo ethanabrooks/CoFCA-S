@@ -59,11 +59,6 @@ def build_parser():
         default=None,
         help='eval interval, one eval per n updates (default: None)')
     parser.add_argument(
-        '--vis-interval',
-        type=int,
-        default=100,
-        help='vis interval, one log per n updates (default: 100)')
-    parser.add_argument(
         '--num-frames',
         type=int,
         default=10e6,
@@ -74,11 +69,11 @@ def build_parser():
         help='environment to train on (default: PongNoFrameskip-v4)')
     parser.add_argument(
         '--log-dir',
-        default='/tmp/gym/',
+        default=None,
         help='directory to save agent logs (default: /tmp/gym)')
     parser.add_argument(
         '--save-dir',
-        default='./trained_models/',
+        default=None,
         help='directory to save agent logs (default: ./trained_models/)')
     parser.add_argument(
         '--cuda',
@@ -94,16 +89,6 @@ def build_parser():
         action='store_true',
         default=False,
         help='use a recurrent policy')
-    parser.add_argument(
-        '--vis',
-        action='store_true',
-        default=False,
-        help='enable visdom visualization')
-    parser.add_argument(
-        '--port',
-        type=int,
-        default=8097,
-        help='port to run the server on (default: 8097)')
 
     ppo_parser = parser.add_argument_group('ppo_args')
     ppo_parser.add_argument(
