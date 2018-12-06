@@ -162,12 +162,12 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
             print(
                 f"Updates {j}, num timesteps {total_num_steps}, FPS {fps} \n "
                 f"Last {len(episode_rewards)} training episodes: " +
-                "mean/median reward {:.1f}/{:.1f}, min/max reward {:.1f}/{"
-                ":.1f}\n".format(np.mean(episode_rewards), np.median(episode_rewards),
+                "mean/median reward {:.2f}/{:.2f}, min/max reward {:.2f}/{"
+                ":.2f}\n".format(np.mean(episode_rewards), np.median(episode_rewards),
                                  np.min(episode_rewards), np.max(episode_rewards)) +
-                f"entropy {dist_entropy}, "
-                f"value loss {value_loss}, "
-                f"action loss {action_loss}\n")
+                "entropy {:.2}, ".format(dist_entropy) +
+                "value loss {:.2}, ".format(value_loss) +
+                "action loss {:.2}\n".format(action_loss))
             episode_rewards = []
 
         if (eval_interval is not None and len(episode_rewards) > 1
