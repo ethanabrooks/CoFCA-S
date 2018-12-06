@@ -131,7 +131,8 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
     rollouts.obs[0].copy_(obs)
     rollouts.to(device)
 
-    episode_rewards = deque(maxlen=10)
+    rewards_counter = np.zeros(num_processes)
+    episode_rewards = []
 
     start = time.time()
     for j in range(num_updates):
@@ -146,9 +147,10 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
             # Observe reward and next obs
             obs, reward, done, infos = envs.step(action)
 
-            for info in infos:
-                if 'episode' in info.keys():
-                    episode_rewards.append(info['episode']['r'])
+            # track rewards
+            rewards_counter += reward
+            episode_rewards.append(rewards_counter[done])
+            rewards_counter[done] = 0
 
             # If done then clean the history of observations.
             masks = torch.FloatTensor(
@@ -195,23 +197,25 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
 
         total_num_steps = (j + 1) * num_processes * num_steps
 
-        if j % log_interval == 0 and len(episode_rewards) > 1:
+        if j % log_interval == 0:
             end = time.time()
+
+            fps = int(total_num_steps / (end - start))
+            episode_rewards = np.concatenate(episode_rewards)
             print(
-                "Updates {}, num timesteps {}, FPS {} \n Last {} training episodes: "
+                f"Updates {j}, num timesteps {total_num_steps}, FPS {fps} \n "
+                f"Last {len(episode_rewards)} training episodes: "
                 "mean/median reward {:.1f}/{:.1f}, min/max reward {:.1f}/{:.1f}\n"
-                .format(j, total_num_steps,
-                        int(total_num_steps / (end - start)),
-                        len(episode_rewards), np.mean(episode_rewards),
-                        np.median(episode_rewards), np.min(episode_rewards),
-                        np.max(episode_rewards), dist_entropy, value_loss,
-                        action_loss))
+                f"entropy {dist_entropy}, "
+                f"value loss {value_loss}, "
+                f"action loss {action_loss}\n")
+            episode_rewards = []
 
         if (eval_interval is not None and len(episode_rewards) > 1
                 and j % eval_interval == 0):
             eval_envs = make_vec_envs(env_name, seed + num_processes,
                                       num_processes, gamma, eval_log_dir,
-                                      add_timestep, device, True)
+                                      add_timestep, device, allow_early_resets=True)
 
             vec_norm = get_vec_normalize(eval_envs)
             if vec_norm is not None:
@@ -235,7 +239,7 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
                         eval_masks,
                         deterministic=True)
 
-                # Obser reward and next obs
+                # Observe reward and next obs
                 obs, reward, done, infos = eval_envs.step(action)
 
                 eval_masks = torch.FloatTensor(
