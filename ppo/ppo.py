@@ -55,12 +55,16 @@ class PPO:
                     advantages, self.num_mini_batch)
 
             for sample in data_generator:
+                # TODO: make this a dict or a namedtuple
+                # TODO: include noise vector in storage
                 obs_batch, recurrent_hidden_states_batch, actions_batch, \
                 value_preds_batch, return_batch, masks_batch, \
                 old_action_log_probs_batch, \
                 adv_targ = sample
 
-                # TODO: need to get derivative with respect to params
+                # TODO: if unsupervised, replace obs_batch with value generated from
+                # noise vector
+
                 # Reshape to do in a single forward pass for all steps
                 values, action_log_probs, dist_entropy, \
                 _ = self.actor_critic.evaluate_actions(
@@ -92,11 +96,8 @@ class PPO:
                  dist_entropy * self.entropy_coef).backward()
 
                 if self.unsupervised:
-                    expected_return_delta = torch.mean(
-                        rollouts.returns * torch.log(
-                            action_log_probs / old_action_log_probs_batch))
-                    rollouts.reward_params.grad = None
-                    expected_return_delta.backward()
+                    # TODO: 2nd order gradient of loss
+                    raise NotImplementedError
 
                 nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
                                          self.max_grad_norm)

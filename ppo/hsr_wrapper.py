@@ -66,9 +66,14 @@ class UnsupervisedEnv(hsr.HSREnv):
 
     def reset(self):
         o = super().reset()
+        # TODO choose goal from stored goals
         print('reset params', o.goal)
         return vectorize(Observation(observation=o.observation, params=o.goal,
                                      achieved=self.achieved_goal()))
+
+    def store_goals(self, goals):
+        # TODO
+        raise NotImplementedError
 
     @staticmethod
     def reward_function(achieved, params, dim):
@@ -117,7 +122,8 @@ def worker(remote, parent_remote, env_fn_wrapper):
             break
         elif cmd == 'get_spaces':
             remote.send((env.observation_space, env.action_space))
-        elif cmd == 'set_reward_params':
+        elif cmd == 'store_goals':
+            # TODO implement
             unwrap_unsupervised(env).set_reward_params(data)
         else:
             raise NotImplementedError
@@ -148,13 +154,20 @@ class UnsupervisedSubprocVecEnv(SubprocVecEnv):
         observation_space, action_space = self.remotes[0].recv()
         VecEnv.__init__(self, len(env_fns), observation_space, action_space)
 
+    def store_goals(self, params):
+        # TODO
+        raise NotImplementedError
+
     def set_reward_params(self, params):
         for remote, param in zip(self.remotes, params):
-            print('sent params', param)
             remote.send(('set_reward_params', param))
 
 
 class UnsupervisedDummyVecEnv(DummyVecEnv):
+    def store_goals(self, params):
+        # TODO
+        raise NotImplementedError
+
     def set_reward_params(self):
         params = self.sess.run(self.params)
         for env, param in zip(self.envs, params):

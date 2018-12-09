@@ -80,6 +80,9 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
 
     start = time.time()
     for j in range(num_updates):
+
+        # TODO: sample N goals for future updates and send to envs.
+
         for step in range(num_steps):
             # Sample actions.add_argument_group('env_args')
             with torch.no_grad():

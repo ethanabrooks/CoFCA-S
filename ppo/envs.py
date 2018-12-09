@@ -55,13 +55,16 @@ def make_env(env_id, seed, rank, log_dir, add_timestep, allow_early_resets,
                     action_strings="◀▶",
                 ),
                 max_episode_steps=len(desc) + 1)
+        elif env_id == 'unsupervised':
+            # TODO
+            raise NotImplementedError
         else:
             env = gym.make(env_id)
 
         is_atari = hasattr(gym.envs, 'atari') and isinstance(
             env.unwrapped, gym.envs.atari.atari_env.AtariEnv)
         if is_atari:
-            env = make_atari(env_id)
+            raise NotImplementedError
 
         env.seed(seed + rank)
 
