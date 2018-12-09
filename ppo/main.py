@@ -9,6 +9,7 @@ import numpy as np
 import torch
 # first party
 from scripts.hsr import env_wrapper
+from tensorboardX import SummaryWriter
 
 from ppo.arguments import get_args, get_hsr_args
 from ppo.envs import make_vec_envs
@@ -38,6 +39,7 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
 
     eval_log_dir = None
     if log_dir:
+        writer = SummaryWriter(log_dir=log_dir)
         eval_log_dir = log_dir.joinpath("eval")
 
         for _dir in [log_dir, eval_log_dir]:
@@ -109,7 +111,7 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
                 rollouts.masks[-1]).detach()
 
         rollouts.compute_returns(next_value, use_gae, gamma, tau)
-        value_loss, action_loss, dist_entropy = agent.update(rollouts)
+        train_results = agent.update(rollouts)
         rollouts.after_update()
 
         if j % save_interval == 0 and save_dir is not None:
@@ -140,11 +142,12 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
                     f"Last {len(episode_rewards)} training episodes: " +
                     "mean/median reward {:.2f}/{:.2f}, min/max reward {:.2f}/{"
                     ":.2f}\n".format(np.mean(episode_rewards), np.median(episode_rewards),
-                                     np.min(episode_rewards), np.max(episode_rewards)) +
-                    "entropy {:.2}, ".format(dist_entropy) +
-                    "value loss {:.2}, ".format(value_loss) +
-                    "action loss {:.2}\n".format(action_loss))
+                                     np.min(episode_rewards), np.max(episode_rewards)))
                 episode_rewards = []
+            writer.add_scalar('return', episode_rewards.mean(), j)
+            for k, v in train_results.items():
+                if log_dir and np.isscalar(v):
+                    writer.add_scalar(k.replace('_', ' '), v, j)
 
         if eval_interval is not None and j % eval_interval == eval_interval - 1:
             eval_envs = make_vec_envs(env_name, seed + num_processes,

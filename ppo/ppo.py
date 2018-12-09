@@ -112,4 +112,7 @@ class PPO:
         action_loss_epoch /= num_updates
         dist_entropy_epoch /= num_updates
 
-        return value_loss_epoch, action_loss_epoch, dist_entropy_epoch
+        return dict(
+            value_loss=value_loss_epoch,
+            action_loss=action_loss_epoch,
+            entropy=dist_entropy_epoch)
