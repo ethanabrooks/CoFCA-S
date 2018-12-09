@@ -24,8 +24,7 @@ from ppo.utils import get_vec_normalize
 def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
          cuda_deterministic, cuda, log_dir: Path, env_name, gamma,
          normalize, add_timestep, save_interval, save_dir, log_interval, eval_interval,
-         use_gae, tau, ppo_args, env_args):
-
+         use_gae, tau, ppo_args, env_args, network_args):
     algo = 'ppo'
 
     num_updates = int(num_frames) // num_steps // num_processes
@@ -39,7 +38,7 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
 
     eval_log_dir = None
     if log_dir:
-        eval_log_dir = log_dir.with_suffix("eval")
+        eval_log_dir = log_dir.joinpath("eval")
 
         for _dir in [log_dir, eval_log_dir]:
             try:
@@ -51,13 +50,15 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
     torch.set_num_threads(1)
     device = torch.device("cuda:0" if cuda else "cpu")
 
-    envs = make_vec_envs(env_name, seed, num_processes, (gamma if normalize else
-    None), log_dir, add_timestep, device, False)
+    _gamma = gamma if normalize else None
+    envs = make_vec_envs(env_name, seed, num_processes, _gamma, log_dir, add_timestep,
+                         device, False, env_args)
 
     actor_critic = Policy(
         envs.observation_space.shape,
         envs.action_space,
-        base_kwargs={'recurrent': recurrent_policy})
+        network_args=network_args
+    )
     actor_critic.to(device)
 
     agent = PPO(actor_critic=actor_critic,
@@ -146,10 +147,8 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
                 episode_rewards = []
 
         if eval_interval is not None and j % eval_interval == eval_interval - 1:
-
-            import ipdb; ipdb.set_trace()
             eval_envs = make_vec_envs(env_name, seed + num_processes,
-                                      num_processes, gamma if normalize else None,
+                                      num_processes, _gamma,
                                       eval_log_dir,
                                       add_timestep, device, allow_early_resets=True)
 
@@ -196,7 +195,8 @@ def cli():
 
 
 def hsr_cli():
-    env_wrapper(main)(**get_hsr_args())
+    args = get_hsr_args()
+    env_wrapper(main)(**args)
 
 
 if __name__ == "__main__":

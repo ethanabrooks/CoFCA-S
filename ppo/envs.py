@@ -2,6 +2,8 @@
 import os
 
 # third party
+import sys
+
 from baselines import bench
 from baselines.common.atari_wrappers import make_atari, wrap_deepmind
 from baselines.common.vec_env import VecEnvWrapper
@@ -15,6 +17,7 @@ import torch
 from gym.wrappers import TimeLimit
 
 from ppo.gridworld import GoalGridworld
+from ppo.hsr_wrapper import HSREnv
 
 try:
     import dm_control2gym
@@ -32,9 +35,14 @@ except ImportError:
     pass
 
 
-def make_env(env_id, seed, rank, log_dir, add_timestep, allow_early_resets):
+def make_env(env_id, seed, rank, log_dir, add_timestep, allow_early_resets, env_args):
     def _thunk():
-        if env_id.startswith("dm"):
+        if env_args:
+            max_steps = env_args.pop('max_steps', None)
+            env = HSREnv(**env_args)
+            if max_steps:
+                env = TimeLimit(env=env, max_episode_steps=max_steps)
+        elif env_id.startswith("dm"):
             _, domain, task = env_id.split('.')
             env = dm_control2gym.make(domain_name=domain, task_name=task)
         elif env_id == 'gridworld':
@@ -93,16 +101,18 @@ def make_vec_envs(env_name,
                   add_timestep,
                   device,
                   allow_early_resets,
+                  env_args,
                   num_frame_stack=None):
+
     envs = [
-        make_env(env_name, seed, i, log_dir, add_timestep, allow_early_resets)
+        make_env(env_name, seed, i, log_dir, add_timestep, allow_early_resets, env_args)
         for i in range(num_processes)
     ]
 
-    if len(envs) > 1:
-        envs = SubprocVecEnv(envs)
-    else:
+    if len(envs) == 1 or sys.platform == 'darwin':
         envs = DummyVecEnv(envs)
+    else:
+        envs = SubprocVecEnv(envs)
 
     if len(envs.observation_space.shape) == 1:
         if gamma is None:

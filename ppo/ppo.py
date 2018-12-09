@@ -12,10 +12,10 @@ class PPO:
                  actor_critic,
                  clip_param,
                  ppo_epoch,
-                 num_mini_batch,
+                 batch_size,
                  value_loss_coef,
                  entropy_coef,
-                 lr=None,
+                 learning_rate=None,
                  eps=None,
                  max_grad_norm=None,
                  use_clipped_value_loss=True,
@@ -26,7 +26,7 @@ class PPO:
 
         self.clip_param = clip_param
         self.ppo_epoch = ppo_epoch
-        self.num_mini_batch = num_mini_batch
+        self.num_mini_batch = batch_size
 
         self.value_loss_coef = value_loss_coef
         self.entropy_coef = entropy_coef
@@ -34,7 +34,7 @@ class PPO:
         self.max_grad_norm = max_grad_norm
         self.use_clipped_value_loss = use_clipped_value_loss
 
-        self.optimizer = optim.Adam(actor_critic.parameters(), lr=lr, eps=eps)
+        self.optimizer = optim.Adam(actor_critic.parameters(), lr=learning_rate, eps=eps)
         self.reward_function = None
 
     def update(self, rollouts: RolloutStorage):

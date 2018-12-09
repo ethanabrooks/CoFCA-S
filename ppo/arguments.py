@@ -2,8 +2,12 @@
 import argparse
 
 # third party
+from pathlib import Path
+
+import torch.nn as nn
+
 from scripts.hsr import add_env_args, add_wrapper_args
-from utils.arguments import parse_groups
+from utils.arguments import parse_groups, parse_activation
 
 
 def build_parser():
@@ -69,11 +73,11 @@ def build_parser():
         help='environment to train on (default: PongNoFrameskip-v4)')
     parser.add_argument(
         '--log-dir',
-        default=None,
+        type=Path,
         help='directory to save agent logs (default: /tmp/gym)')
     parser.add_argument(
         '--save-dir',
-        default=None,
+        type=Path,
         help='directory to save agent logs (default: ./trained_models/)')
     parser.add_argument(
         '--cuda',
@@ -90,6 +94,13 @@ def build_parser():
         default=False,
         help='use a recurrent policy')
 
+    network_parser = parser.add_argument_group('network_args')
+    network_parser.add_argument('--recurrent', action='store_true')
+    network_parser.add_argument('--hidden-size', type=int, default=256)
+    network_parser.add_argument('--num-layers', type=int, default=3)
+    network_parser.add_argument('--activation', type=parse_activation,
+                                default=nn.ReLU())
+
     ppo_parser = parser.add_argument_group('ppo_args')
     ppo_parser.add_argument(
         '--clip-param',
@@ -102,7 +113,7 @@ def build_parser():
         default=4,
         help='number of ppo epochs (default: 4)')
     ppo_parser.add_argument(
-        '--num-mini-batch',
+        '--batch-size',
         type=int,
         default=32,
         help='number of batches for ppo (default: 32)')
@@ -117,7 +128,7 @@ def build_parser():
         default=0.01,
         help='entropy term coefficient (default: 0.01)')
     ppo_parser.add_argument(
-        '--lr', type=float, default=7e-4, help='learning rate (default: 7e-4)')
+        '--learning-rate', type=float, default=7e-4, help='(default: 7e-4)')
     ppo_parser.add_argument(
         '--eps',
         type=float,
@@ -138,6 +149,8 @@ def get_args():
 
 def get_hsr_args():
     parser = build_parser()
-    add_env_args(parser.add_argument_group('env_args'))
+    env_parser = parser.add_argument_group('env_args')
+    env_parser.add_argument('--max-steps', type=int)
+    add_env_args(env_parser)
     add_wrapper_args(parser.add_argument_group('wrapper_args'))
     return parse_groups(parser)

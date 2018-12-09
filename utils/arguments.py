@@ -12,12 +12,18 @@ from gym import spaces
 from gym.spaces import Box
 import numpy as np
 import tensorflow as tf
+import torch.nn as nn
+
 from utils.utils import parametric_relu
 
 
 def make_box(*tuples: Tuple[float, float]):
     low, high = map(np.array, zip(*[(map(float, m)) for m in tuples]))
     return spaces.Box(low=low, high=high, dtype=np.float32)
+
+
+def parse_activation(string):
+    return dict(relu=nn.ReLU())[string]
 
 
 def parse_space(dim: int):
@@ -114,7 +120,7 @@ def mutate_xml(changes: List[XMLSetter], dofs: List[str], goal_space: Box,
                         rgba=rgba[i],
                         condim='6',
                         solimp="0.99 0.99 "
-                        "0.01",
+                               "0.01",
                         solref='0.01 1'))
                 ET.SubElement(
                     body, 'freejoint', attrib=dict(name=f'block{i}joint'))

@@ -46,6 +46,7 @@ env = make_vec_envs(
     None,
     None,
     args.add_timestep,
+    env_args=env_args,
     device='cpu',
     allow_early_resets=False)
 
