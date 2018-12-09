@@ -5,7 +5,7 @@ import os
 import sys
 
 from baselines import bench
-from baselines.common.atari_wrappers import make_atari, wrap_deepmind
+# from baselines.common.atari_wrappers import make_atari, wrap_deepmind
 from baselines.common.vec_env import VecEnvWrapper
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
@@ -35,7 +35,8 @@ except ImportError:
     pass
 
 
-def make_env(env_id, seed, rank, log_dir, add_timestep, allow_early_resets, env_args):
+def make_env(env_id, seed, rank, log_dir, add_timestep, allow_early_resets,
+             env_args):
     def _thunk():
         if env_args:
             max_steps = env_args.pop('max_steps', None)
@@ -47,11 +48,13 @@ def make_env(env_id, seed, rank, log_dir, add_timestep, allow_early_resets, env_
             env = dm_control2gym.make(domain_name=domain, task_name=task)
         elif env_id == 'gridworld':
             desc = '      '
-            env = TimeLimit(GoalGridworld(desc=[desc],
-                                          actions=np.array([[0, -1], [0, 1]]),
-                                          action_strings="◀▶",
-                                          ),
-                            max_episode_steps=len(desc) + 1)
+            env = TimeLimit(
+                GoalGridworld(
+                    desc=[desc],
+                    actions=np.array([[0, -1], [0, 1]]),
+                    action_strings="◀▶",
+                ),
+                max_episode_steps=len(desc) + 1)
         else:
             env = gym.make(env_id)
 
@@ -105,8 +108,8 @@ def make_vec_envs(env_name,
                   num_frame_stack=None):
 
     envs = [
-        make_env(env_name, seed, i, log_dir, add_timestep, allow_early_resets, env_args)
-        for i in range(num_processes)
+        make_env(env_name, seed, i, log_dir, add_timestep, allow_early_resets,
+                 env_args) for i in range(num_processes)
     ]
 
     if len(envs) == 1 or sys.platform == 'darwin':
