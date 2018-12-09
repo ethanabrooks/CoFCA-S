@@ -17,7 +17,7 @@ setup(
     entry_points=dict(console_scripts=[
         'ppo=ppo.main:cli',
         'hsr=ppo.main:hsr_cli',
-        'tb=scripts.tensorboard:main',
+        'tb=tb:main',
     ]),
     install_requires=[
         'baselines==0.1.5',
