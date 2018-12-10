@@ -44,6 +44,7 @@ class UnsupervisedEnv(hsr.HSREnv):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         old_spaces = hsr.Observation(*self.observation_space.spaces)
+        self.goals = []
         spaces = Observation(
             observation=old_spaces.observation,
             params=old_spaces.goal,
@@ -66,35 +67,18 @@ class UnsupervisedEnv(hsr.HSREnv):
 
     def reset(self):
         o = super().reset()
-        # TODO choose goal from stored goals
         print('reset params', o.goal)
         return vectorize(Observation(observation=o.observation, params=o.goal,
                                      achieved=self.achieved_goal()))
 
-    def store_goals(self, goals):
-        # TODO
-        raise NotImplementedError
-
-    @staticmethod
-    def reward_function(achieved, params, dim):
-        return -((achieved - params) ** 2).sum(dim)
-
-    def compute_reward(self):
-        return self.reward_function(achieved=self.achieved_goal(),
-                                    params=self.reward_params, dim=0)
-
-    def compute_terminal(self):
-        return False
+    def store_goal(self, goal):
+        self.goals.append(goal)
 
     def achieved_goal(self):
         return self.gripper_pos()
 
     def new_goal(self):
         return self.reward_params
-
-    def set_reward_params(self, param):
-        self.reward_params = param
-        self.set_goal(param)
 
 
 def unwrap_unsupervised(env):
@@ -122,9 +106,8 @@ def worker(remote, parent_remote, env_fn_wrapper):
             break
         elif cmd == 'get_spaces':
             remote.send((env.observation_space, env.action_space))
-        elif cmd == 'store_goals':
-            # TODO implement
-            unwrap_unsupervised(env).set_reward_params(data)
+        elif cmd == 'store_goal':
+            unwrap_unsupervised(env).store_goal(data)
         else:
             raise NotImplementedError
 
@@ -154,22 +137,13 @@ class UnsupervisedSubprocVecEnv(SubprocVecEnv):
         observation_space, action_space = self.remotes[0].recv()
         VecEnv.__init__(self, len(env_fns), observation_space, action_space)
 
-    def store_goals(self, params):
-        # TODO
-        raise NotImplementedError
-
-    def set_reward_params(self, params):
-        for remote, param in zip(self.remotes, params):
-            remote.send(('set_reward_params', param))
+    def store_goals(self, goals):
+        for remote, goal in zip(self.remotes, goals):
+            remote.send(('store_goal', goal))
 
 
 class UnsupervisedDummyVecEnv(DummyVecEnv):
-    def store_goals(self, params):
-        # TODO
-        raise NotImplementedError
-
-    def set_reward_params(self):
-        params = self.sess.run(self.params)
-        for env, param in zip(self.envs, params):
-            print('sent params', param)
-            unwrap_unsupervised(env).set_reward_params(param)
+    def store_goals(self, goals):
+        for env, goal in zip(self.envs, goals):
+            print('sent params', goal)
+            unwrap_unsupervised(env).set_goal(goal)

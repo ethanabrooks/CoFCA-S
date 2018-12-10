@@ -1,10 +1,16 @@
 # third party
+from collections import namedtuple
+
 import torch
 from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
 
 
 def _flatten_helper(T, N, _tensor):
     return _tensor.view(T * N, *_tensor.size()[2:])
+
+
+Batch = namedtuple('Batch', 'obs recurrent_hidden_states actions value_preds return '
+                            'masks old_action_log_probs adv noise')
 
 
 class RolloutStorage(object):
@@ -105,6 +111,13 @@ class RolloutStorage(object):
                                                                     1)[indices]
             adv_targ = advantages.view(-1, 1)[indices]
 
+            yield Batch(
+                obs=obs_batch,
+                recurrent_hidden_states=recurrent_hidden_states_batch,
+                actions=actions_batch,
+                value_preds=value_preds_batch,
+                
+            )
             yield obs_batch, recurrent_hidden_states_batch, actions_batch, \
                   value_preds_batch, return_batch, masks_batch, \
                   old_action_log_probs_batch, adv_targ

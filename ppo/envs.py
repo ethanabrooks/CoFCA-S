@@ -17,7 +17,8 @@ import torch
 from gym.wrappers import TimeLimit
 
 from ppo.gridworld import GoalGridworld
-from ppo.hsr_wrapper import HSREnv
+from ppo.hsr_wrapper import HSREnv, UnsupervisedEnv, UnsupervisedDummyVecEnv, \
+    UnsupervisedSubprocVecEnv
 
 try:
     import dm_control2gym
@@ -43,6 +44,8 @@ def make_env(env_id, seed, rank, log_dir, add_timestep, allow_early_resets,
             env = HSREnv(**env_args)
             if max_steps:
                 env = TimeLimit(env=env, max_episode_steps=max_steps)
+        elif env_id == 'unsupervised':
+            env = UnsupervisedEnv(**env_args)
         elif env_id.startswith("dm"):
             _, domain, task = env_id.split('.')
             env = dm_control2gym.make(domain_name=domain, task_name=task)
@@ -55,9 +58,6 @@ def make_env(env_id, seed, rank, log_dir, add_timestep, allow_early_resets,
                     action_strings="◀▶",
                 ),
                 max_episode_steps=len(desc) + 1)
-        elif env_id == 'unsupervised':
-            # TODO
-            raise NotImplementedError
         else:
             env = gym.make(env_id)
 
@@ -109,16 +109,21 @@ def make_vec_envs(env_name,
                   allow_early_resets,
                   env_args,
                   num_frame_stack=None):
-
     envs = [
         make_env(env_name, seed, i, log_dir, add_timestep, allow_early_resets,
                  env_args) for i in range(num_processes)
     ]
 
-    if len(envs) == 1 or sys.platform == 'darwin':
-        envs = DummyVecEnv(envs)
+    if env_name == 'unsupervised':
+        if len(envs) == 1 or sys.platform == 'darwin':
+            envs = UnsupervisedDummyVecEnv(envs)
+        else:
+            envs = UnsupervisedSubprocVecEnv(envs)
     else:
-        envs = SubprocVecEnv(envs)
+        if len(envs) == 1 or sys.platform == 'darwin':
+            envs = DummyVecEnv(envs)
+        else:
+            envs = SubprocVecEnv(envs)
 
     if len(envs.observation_space.shape) == 1:
         if gamma is None:
@@ -226,7 +231,8 @@ class VecNormalize(VecNormalize_):
 
 
 # Derived from
-# https://github.com/openai/baselines/blob/master/baselines/common/vec_env/vec_frame_stack.py
+# https://github.com/openai/baselines/blob/master/baselines/common/vec_env
+# /vec_frame_stack.py
 class VecPyTorchFrameStack(VecEnvWrapper):
     def __init__(self, venv, nstack, device=None):
         self.venv = venv
@@ -240,7 +246,7 @@ class VecPyTorchFrameStack(VecEnvWrapper):
 
         if device is None:
             device = torch.device('cpu')
-        self.stacked_obs = torch.zeros((venv.num_envs, ) +
+        self.stacked_obs = torch.zeros((venv.num_envs,) +
                                        low.shape).to(device)
 
         observation_space = gym.spaces.Box(
