@@ -9,7 +9,7 @@ def _flatten_helper(T, N, _tensor):
     return _tensor.view(T * N, *_tensor.size()[2:])
 
 
-Batch = namedtuple('Batch', 'obs recurrent_hidden_states actions value_preds return '
+Batch = namedtuple('Batch', 'obs recurrent_hidden_states actions value_preds _return '
                             'masks old_action_log_probs adv noise')
 
 
@@ -40,6 +40,7 @@ class RolloutStorage(object):
 
         self.num_steps = num_steps
         self.step = 0
+        self.noise = None
 
     def to(self, device):
         self.obs = self.obs.to(device)
@@ -52,16 +53,23 @@ class RolloutStorage(object):
         self.masks = self.masks.to(device)
 
     def insert(self, obs, recurrent_hidden_states, actions, action_log_probs,
-               value_preds, rewards, masks):
+               values, rewards, masks, noise):
         self.obs[self.step + 1].copy_(obs)
         self.recurrent_hidden_states[self.step +
                                      1].copy_(recurrent_hidden_states)
         self.actions[self.step].copy_(actions)
         self.action_log_probs[self.step].copy_(action_log_probs)
-        self.value_preds[self.step].copy_(value_preds)
+        self.value_preds[self.step].copy_(values)
         self.rewards[self.step].copy_(rewards.unsqueeze(dim=1))
         self.masks[self.step + 1].copy_(masks)
         self.step = (self.step + 1) % self.num_steps
+        if noise is not None:
+            num_processes, size_noise = noise.size()
+            if self.noise is None:
+                num_steps, _num_processes = self.rewards.size()[0:2]
+                assert num_processes == _num_processes
+                self.noise = torch.zeros(num_steps, num_processes, size_noise)
+            self.noise[self.step].copy_(noise)
 
     def after_update(self):
         self.obs[0].copy_(self.obs[-1])
@@ -110,17 +118,16 @@ class RolloutStorage(object):
             old_action_log_probs_batch = self.action_log_probs.view(-1,
                                                                     1)[indices]
             adv_targ = advantages.view(-1, 1)[indices]
+            _, _, noise_size = self.noise.size()
+            noise = self.noise.view(-1, noise_size)[indices]
 
-            yield Batch(
-                obs=obs_batch,
-                recurrent_hidden_states=recurrent_hidden_states_batch,
-                actions=actions_batch,
-                value_preds=value_preds_batch,
-                
-            )
-            yield obs_batch, recurrent_hidden_states_batch, actions_batch, \
-                  value_preds_batch, return_batch, masks_batch, \
-                  old_action_log_probs_batch, adv_targ
+            yield Batch(obs=obs_batch,
+                        recurrent_hidden_states=recurrent_hidden_states_batch,
+                        actions=actions_batch,
+                        value_preds=value_preds_batch,
+                        _return=return_batch, masks=masks_batch,
+                        old_action_log_probs=old_action_log_probs_batch,
+                        adv=adv_targ, noise=noise)
 
     def recurrent_generator(self, advantages, num_mini_batch):
         num_processes = self.rewards.size(1)
@@ -139,6 +146,7 @@ class RolloutStorage(object):
             masks_batch = []
             old_action_log_probs_batch = []
             adv_targ = []
+            noise = []
 
             for offset in range(num_envs_per_batch):
                 ind = perm[start_ind + offset]
@@ -152,6 +160,8 @@ class RolloutStorage(object):
                 old_action_log_probs_batch.append(
                     self.action_log_probs[:, ind])
                 adv_targ.append(advantages[:, ind])
+                if self.noise is not None:
+                    noise.append(self.noise[:, ind])
 
             T, N = self.num_steps, num_envs_per_batch
             # These are all tensors of size (T, N, -1)
@@ -178,6 +188,10 @@ class RolloutStorage(object):
                                                          old_action_log_probs_batch)
             adv_targ = _flatten_helper(T, N, adv_targ)
 
-            yield obs_batch, recurrent_hidden_states_batch, actions_batch, \
-                  value_preds_batch, return_batch, masks_batch, \
-                  old_action_log_probs_batch, adv_targ
+            yield Batch(obs=obs_batch,
+                        recurrent_hidden_states=recurrent_hidden_states_batch,
+                        actions=actions_batch,
+                        value_preds=value_preds_batch, _return=return_batch,
+                        masks=masks_batch,
+                        old_action_log_probs=old_action_log_probs_batch, adv=adv_targ,
+                        noise=noise)

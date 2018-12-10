@@ -13,7 +13,7 @@ from tensorboardX import SummaryWriter
 
 from ppo.arguments import get_args, get_hsr_args
 from ppo.envs import make_vec_envs
-from ppo.model import Policy
+from ppo.policy import Policy
 from ppo.ppo import PPO
 from ppo.storage import RolloutStorage
 from ppo.utils import get_vec_normalize
@@ -38,7 +38,7 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
 
     eval_log_dir = None
     if log_dir:
-        writer = SummaryWriter(log_dir=log_dir)
+        writer = SummaryWriter(log_dir=str(log_dir))
         eval_log_dir = log_dir.joinpath("eval")
 
         for _dir in [log_dir, eval_log_dir]:
@@ -51,9 +51,18 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
     torch.set_num_threads(1)
     device = torch.device("cuda:0" if cuda else "cpu")
 
+    unsupervised = env_name == 'unsupervised'
+
     _gamma = gamma if normalize else None
-    envs = make_vec_envs(env_name, seed, num_processes, _gamma, log_dir,
-                         add_timestep, device, False, env_args)
+    envs = make_vec_envs(env_name=env_name,
+                         seed=seed,
+                         num_processes=num_processes,
+                         gamma=_gamma,
+                         log_dir=log_dir,
+                         add_timestep=add_timestep,
+                         device=device,
+                         allow_early_resets=False,
+                         env_args=env_args)
 
     actor_critic = Policy(
         envs.observation_space.shape,
@@ -86,31 +95,43 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
         for step in range(num_steps):
             # Sample actions.add_argument_group('env_args')
             with torch.no_grad():
-                value, action, action_log_prob, recurrent_hidden_states = \
+                values, actions, action_log_probs, recurrent_hidden_states = \
                     actor_critic.act(
-                        rollouts.obs[step], rollouts.recurrent_hidden_states[step],
-                        rollouts.masks[step])
+                        inputs=rollouts.obs[step],
+                        rnn_hxs=rollouts.recurrent_hidden_states[step],
+                        masks=rollouts.masks[step])
 
             # Observe reward and next obs
-            obs, reward, done, infos = envs.step(action)
+            obs, rewards, done, infos = envs.step(actions)
+
+            try:
+                noise = infos['noise']
+            except KeyError:
+                noise = None
 
             # track rewards
-            rewards_counter += reward
+            rewards_counter += rewards
             episode_rewards.append(rewards_counter[done])
             rewards_counter[done] = 0
 
             # If done then clean the history of observations.
             masks = torch.FloatTensor(
                 [[0.0] if done_ else [1.0] for done_ in done])
-            rollouts.insert(obs, recurrent_hidden_states, action,
-                            action_log_prob, value, reward, masks)
+            rollouts.insert(obs=obs, recurrent_hidden_states=recurrent_hidden_states,
+                            actions=actions,
+                            action_log_probs=action_log_probs, values=values,
+                            rewards=rewards, masks=masks, noise=noise)
 
         with torch.no_grad():
             next_value = actor_critic.get_value(
-                rollouts.obs[-1], rollouts.recurrent_hidden_states[-1],
-                rollouts.masks[-1]).detach()
+                inputs=rollouts.obs[-1],
+                rnn_hxs=rollouts.recurrent_hidden_states[-1],
+                masks=rollouts.masks[-1]).detach()
 
-        rollouts.compute_returns(next_value, use_gae, gamma, tau)
+        rollouts.compute_returns(next_value=next_value,
+                                 use_gae=use_gae,
+                                 gamma=gamma,
+                                 tau=tau)
         train_results = agent.update(rollouts)
         rollouts.after_update()
 
@@ -152,13 +173,14 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
 
         if eval_interval is not None and j % eval_interval == eval_interval - 1:
             eval_envs = make_vec_envs(
-                env_name,
-                seed + num_processes,
-                num_processes,
-                _gamma,
-                eval_log_dir,
-                add_timestep,
-                device,
+                env_name=env_name,
+                seed=seed + num_processes,
+                num_processes=num_processes,
+                gamma=_gamma,
+                log_dir=eval_log_dir,
+                add_timestep=add_timestep,
+                device=device,
+                env_args=env_args,
                 allow_early_resets=True)
 
             # vec_norm = get_vec_normalize(eval_envs)
@@ -178,14 +200,14 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
             while len(eval_episode_rewards) < 10:
                 print('.', end='')
                 with torch.no_grad():
-                    _, action, _, eval_recurrent_hidden_states = actor_critic.act(
-                        obs,
-                        eval_recurrent_hidden_states,
-                        eval_masks,
+                    _, actions, _, eval_recurrent_hidden_states = actor_critic.act(
+                        inputs=obs,
+                        rnn_hxs=eval_recurrent_hidden_states,
+                        masks=eval_masks,
                         deterministic=True)
 
                 # Observe reward and next obs
-                obs, reward, done, infos = eval_envs.step(action)
+                obs, rewards, done, infos = eval_envs.step(actions)
 
                 eval_masks = torch.FloatTensor(
                     [[0.0] if done_ else [1.0] for done_ in done])
