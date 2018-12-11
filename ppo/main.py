@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import torch
 # first party
-from environments.hindsight_wrapper import Observation
+from environments.hsr import Observation
 from scripts.hsr import env_wrapper, parse_groups
 from tensorboardX import SummaryWriter
 
@@ -56,7 +56,7 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
     torch.set_num_threads(1)
     device = torch.device("cuda:0" if cuda else "cpu")
 
-    unsupervised = env_name == 'unsupervised'
+    unsupervised = unsupervised_args is not None
 
     _gamma = gamma if normalize else None
     envs = make_vec_envs(env_name=env_name,
@@ -66,8 +66,28 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
                          log_dir=log_dir,
                          add_timestep=add_timestep,
                          device=device,
+                         max_steps=max_steps,
                          allow_early_resets=False,
                          env_args=env_args)
+
+    obs = envs.reset()
+
+    gan = None
+    if unsupervised:
+        sample_env = UnsupervisedEnv(**env_args)
+        gan = GAN(goal_size=3, **{k.replace('gan_', ''): v for k,
+                                                               v in
+                                  unsupervised_args.items()})
+
+        def substitute_goal(_obs, _goals):
+            split = torch.split(_obs, sample_env.subspace_sizes, dim=1)
+            replace = Observation(*split)._replace(goal=_goals)
+            return torch.cat(replace, dim=1)
+
+        goals = gan.sample(num_processes)
+        for i in range(num_processes):
+            envs.unwrapped.set_goal(goals.detach().numpy(), i)
+        obs = substitute_goal(obs, goals)
 
     actor_critic = Policy(
         envs.observation_space.shape,
@@ -75,7 +95,7 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
         network_args=network_args)
     actor_critic.to(device)
 
-    agent = PPO(actor_critic=actor_critic, **ppo_args)
+    agent = PPO(actor_critic=actor_critic, gan=gan, **ppo_args)
 
     rollouts = RolloutStorage(
         num_steps=num_steps,
@@ -84,22 +104,6 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
         action_space=envs.action_space,
         recurrent_hidden_state_size=actor_critic.recurrent_hidden_state_size,
     )
-
-    obs = envs.reset()
-
-    if unsupervised:
-        sample_env = UnsupervisedEnv(**env_args)
-        gan = GAN(goal_size=3, **unsupervised_args)
-
-        def substitute_goal(_obs, _goals):
-            split = torch.split(_obs, sample_env.subspace_sizes, dim=1)
-            replace = Observation(split).replace(desired_goal=_goals)
-            return torch.cat(replace, dim=1)
-
-        goals = gan.sample(num_processes)
-        for i in num_processes:
-            envs.set_goal(goals, i)
-        obs = substitute_goal(obs, goals)
 
     rollouts.obs[0].copy_(obs)
     rollouts.to(device)
@@ -122,15 +126,12 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
             obs, rewards, done, infos = envs.step(actions)
 
             if unsupervised:
-                goals = []
-                for i, (_done, _info) in enumerate(zip(done, infos)):
+                for i, _done in enumerate(done):
                     if _done:
                         goal = gan.sample(1)
-                        envs.set_goal(goal, i)
-                        goals.append(goal)
-                    else:
-                        goals.append(_info['goal'])
-                obs = substitute_goal(obs, torch.cat(goals, dim=1))
+                        envs.unwrapped.set_goal(goal.detach().numpy(), i)
+                        goals[i] = goal
+                obs = substitute_goal(obs, goals)
 
             # track rewards
             rewards_counter += rewards
@@ -188,10 +189,11 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
                     ":.2f}\n".format(
                         np.mean(episode_rewards), np.median(episode_rewards),
                         np.min(episode_rewards), np.max(episode_rewards)))
-            writer.add_scalar('return', np.mean(episode_rewards), j)
-            for k, v in train_results.items():
-                if log_dir and np.isscalar(v):
-                    writer.add_scalar(k.replace('_', ' '), v, j)
+            if log_dir:
+                writer.add_scalar('return', np.mean(episode_rewards), j)
+                for k, v in train_results.items():
+                    if np.isscalar(v):
+                        writer.add_scalar(k.replace('_', ' '), v, j)
             episode_rewards = []
 
         if eval_interval is not None and j % eval_interval == eval_interval - 1:
@@ -256,7 +258,9 @@ def hsr_cli():
 
 def unsupervised_cli():
     parser = get_unsupervised_parser()
-    env_wrapper(main)(**parse_groups(parser))
+    args_dict = parse_groups(parser)
+    args_dict.update(env_name='unsupervised')
+    env_wrapper(main)(**args_dict)
 
 
 if __name__ == "__main__":

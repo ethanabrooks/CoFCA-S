@@ -11,7 +11,7 @@ class GAN:
         self.network = nn.Sequential()
 
         def linear(size):
-            return init(nn.Linear(size, activation),
+            return init(nn.Linear(hidden_size, size),
                         init_normc_,
                         lambda x: nn.init.constant_(x, 0))
 

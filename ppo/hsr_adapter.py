@@ -9,7 +9,7 @@ from baselines.common.vec_env import CloudpickleWrapper, VecEnv
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
 from environments import hsr
-from environments.hindsight_wrapper import Observation
+from environments.hsr import Observation
 
 from utils.utils import concat_spaces, space_shape, vectorize, unwrap_env
 
@@ -41,8 +41,7 @@ class UnsupervisedEnv(hsr.HSREnv):
         self.goals = []
         spaces = Observation(
             observation=old_spaces.observation,
-            desired_goal=old_spaces.goal,
-            achieved_goal=old_spaces.goal)
+            goal=old_spaces.goal)
 
         # subspace_sizes used for splitting concatenated tensor observations
         self._subspace_sizes = Observation(*[space_shape(space)[0] for space in spaces])
@@ -60,27 +59,19 @@ class UnsupervisedEnv(hsr.HSREnv):
     def step(self, actions):
         s, r, t, i = super().step(actions)
         i.update(goal=self.goals[-1])
-        observation = Observation(observation=s.observation, desired_goal=s.goal,
-                                  achieved_goal=self.achieved_goal())
+        observation = Observation(observation=s.observation, goal=s.goal)
         return vectorize(observation), r, t, i
 
     def reset(self):
         o = super().reset()
-        return vectorize(Observation(observation=o.observation, desired_goal=o.goal,
-                                     achieved_goal=self.achieved_goal()))
-
-    def store_goals(self, goals: List(torch.Tensor)):
-        self.goals.extend(goals)
+        return vectorize(Observation(observation=o.observation, goal=o.goal))
 
     def achieved_goal(self):
         return self.gripper_pos()
 
-    def new_goal(self):
-        return self.goals.pop().numpy()
-
 
 def unwrap_unsupervised(env):
-    return unwrap_env(env, lambda e: hasattr(e, 'set_reward_params'))
+    return unwrap_env(env, lambda e: hasattr(e, 'set_goal'))
 
 
 def worker(remote, parent_remote, env_fn_wrapper):
@@ -104,8 +95,8 @@ def worker(remote, parent_remote, env_fn_wrapper):
             break
         elif cmd == 'get_spaces':
             remote.send((env.observation_space, env.action_space))
-        elif cmd == 'store_goals':
-            unwrap_unsupervised(env).store_goals(data)
+        elif cmd == 'set_goal':
+            unwrap_unsupervised(env).set_goal(data)
         else:
             raise NotImplementedError
 
@@ -135,12 +126,10 @@ class UnsupervisedSubprocVecEnv(SubprocVecEnv):
         observation_space, action_space = self.remotes[0].recv()
         VecEnv.__init__(self, len(env_fns), observation_space, action_space)
 
-    def store_goals(self, goals):
-        for remote, _goals in zip(self.remotes, goals):
-            remote.send(('store_goals', _goals))
+    def store_goals(self, goal, i):
+        self.remotes[i].send(('set_goal', goal))
 
 
 class UnsupervisedDummyVecEnv(DummyVecEnv):
-    def store_goals(self, goals):
-        for env, _goals in zip(self.envs, goals):
-            unwrap_unsupervised(env).store_goals(_goals)
+    def set_goal(self, goals, i):
+        unwrap_unsupervised(self.envs[i]).set_goal(goals)
