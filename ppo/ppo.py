@@ -45,7 +45,7 @@ class PPO:
     def update(self, rollouts: RolloutStorage):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         advantages = (advantages - advantages.mean()) / (
-                advantages.std() + 1e-5)
+            advantages.std() + 1e-5)
 
         value_loss_epoch = 0
         action_loss_epoch = 0
@@ -80,23 +80,25 @@ class PPO:
                                              -self.clip_param, self.clip_param)
                     value_losses = (values - sample.ret).pow(2)
                     value_losses_clipped = (
-                            value_pred_clipped - sample.ret).pow(2)
+                        value_pred_clipped - sample.ret).pow(2)
                     value_loss = .5 * torch.max(value_losses,
                                                 value_losses_clipped).mean()
                 else:
                     value_loss = 0.5 * F.mse_loss(sample.ret, values)
 
                 self.optimizer.zero_grad()
-                loss = (value_loss * self.value_loss_coef + action_loss - dist_entropy *
-                        self.entropy_coef)
+                loss = (value_loss * self.value_loss_coef + action_loss -
+                        dist_entropy * self.entropy_coef)
                 if self.unsupervised:
-                    grads = torch.autograd.grad(loss, self.actor_critic.parameters(),
-                                                create_graph=True)
+                    grads = torch.autograd.grad(
+                        loss,
+                        self.actor_critic.parameters(),
+                        create_graph=True)
                     unsupervised_loss = sum([g.mean() for g in grads])
                     unsupervised_loss.backward(retain_graph=True)
                     self.unsupervised_optimizer.step()
 
-                # loss.backward(retain_graph=True)  #TODO!!!!!!!!
+                loss.backward(retain_graph=True)
                 nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
                                          self.max_grad_norm)
                 self.optimizer.step()
