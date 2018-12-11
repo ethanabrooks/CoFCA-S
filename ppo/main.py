@@ -8,15 +8,19 @@ from pathlib import Path
 import numpy as np
 import torch
 # first party
-from scripts.hsr import env_wrapper
+from environments.hindsight_wrapper import Observation
+from scripts.hsr import env_wrapper, parse_groups
 from tensorboardX import SummaryWriter
 
-from ppo.arguments import get_args, get_hsr_args
+from ppo.arguments import get_hsr_parser, get_unsupervised_parser, build_parser
 from ppo.envs import make_vec_envs
+from ppo.gan import GAN
+from ppo.hsr_adapter import UnsupervisedEnv
 from ppo.policy import Policy
 from ppo.ppo import PPO
 from ppo.storage import RolloutStorage
 from ppo.utils import get_vec_normalize
+
 
 # third party
 
@@ -24,7 +28,8 @@ from ppo.utils import get_vec_normalize
 def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
          cuda_deterministic, cuda, log_dir: Path, env_name, gamma, normalize,
          add_timestep, save_interval, save_dir, log_interval, eval_interval,
-         use_gae, tau, ppo_args, env_args, network_args):
+         use_gae, tau, ppo_args, network_args, max_steps=None, env_args=None,
+         unsupervised_args=None):
     algo = 'ppo'
 
     num_updates = int(num_frames) // num_steps // num_processes
@@ -81,6 +86,21 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
     )
 
     obs = envs.reset()
+
+    if unsupervised:
+        sample_env = UnsupervisedEnv(**env_args)
+        gan = GAN(goal_size=3, **unsupervised_args)
+
+        def substitute_goal(_obs, _goals):
+            split = torch.split(_obs, sample_env.subspace_sizes, dim=1)
+            replace = Observation(split).replace(desired_goal=_goals)
+            return torch.cat(replace, dim=1)
+
+        goals = gan.sample(num_processes)
+        for i in num_processes:
+            envs.set_goal(goals, i)
+        obs = substitute_goal(obs, goals)
+
     rollouts.obs[0].copy_(obs)
     rollouts.to(device)
 
@@ -89,9 +109,6 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
 
     start = time.time()
     for j in range(num_updates):
-
-        # TODO: sample N goals for future updates and send to envs.
-
         for step in range(num_steps):
             # Sample actions.add_argument_group('env_args')
             with torch.no_grad():
@@ -104,10 +121,16 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
             # Observe reward and next obs
             obs, rewards, done, infos = envs.step(actions)
 
-            try:
-                noise = infos['noise']
-            except KeyError:
-                noise = None
+            if unsupervised:
+                goals = []
+                for i, (_done, _info) in enumerate(zip(done, infos)):
+                    if _done:
+                        goal = gan.sample(1)
+                        envs.set_goal(goal, i)
+                        goals.append(goal)
+                    else:
+                        goals.append(_info['goal'])
+                obs = substitute_goal(obs, torch.cat(goals, dim=1))
 
             # track rewards
             rewards_counter += rewards
@@ -120,7 +143,7 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
             rollouts.insert(obs=obs, recurrent_hidden_states=recurrent_hidden_states,
                             actions=actions,
                             action_log_probs=action_log_probs, values=values,
-                            rewards=rewards, masks=masks, noise=noise)
+                            rewards=rewards, masks=masks)
 
         with torch.no_grad():
             next_value = actor_critic.get_value(
@@ -180,6 +203,7 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
                 log_dir=eval_log_dir,
                 add_timestep=add_timestep,
                 device=device,
+                max_steps=max_steps,
                 env_args=env_args,
                 allow_early_resets=True)
 
@@ -222,12 +246,17 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
 
 
 def cli():
-    main(**get_args())
+    main(**parse_groups(build_parser()))
 
 
 def hsr_cli():
-    args = get_hsr_args()
-    env_wrapper(main)(**args)
+    parser = get_hsr_parser()
+    env_wrapper(main)(**parse_groups(parser))
+
+
+def unsupervised_cli():
+    parser = get_unsupervised_parser()
+    env_wrapper(main)(**parse_groups(parser))
 
 
 if __name__ == "__main__":

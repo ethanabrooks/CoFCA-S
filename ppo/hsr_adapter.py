@@ -1,14 +1,16 @@
 # third party
-from collections import namedtuple
+from typing import List
+
+import torch
 from multiprocessing import Pipe, Process
 
-import numpy as np
 # first party
 from baselines.common.vec_env import CloudpickleWrapper, VecEnv
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
 from environments import hsr
-from gym.spaces import Box
+from environments.hindsight_wrapper import Observation
+
 from utils.utils import concat_spaces, space_shape, vectorize, unwrap_env
 
 
@@ -32,14 +34,6 @@ class MoveGripperEnv(HSREnv, hsr.MoveGripperEnv):
     pass
 
 
-StepData = namedtuple('StepData', 'actions reward_params')
-
-
-class Observation(namedtuple('Observation', 'observation achieved params')):
-    def replace(self, *args, **kwargs):
-        return self._replace(*args, **kwargs)
-
-
 class UnsupervisedEnv(hsr.HSREnv):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -47,11 +41,11 @@ class UnsupervisedEnv(hsr.HSREnv):
         self.goals = []
         spaces = Observation(
             observation=old_spaces.observation,
-            params=old_spaces.goal,
-            achieved=old_spaces.goal)
+            desired_goal=old_spaces.goal,
+            achieved_goal=old_spaces.goal)
 
         # subspace_sizes used for splitting concatenated tensor observations
-        self.subspace_sizes = [space_shape(space)[0] for space in spaces]
+        self._subspace_sizes = Observation(*[space_shape(space)[0] for space in spaces])
         for n in self.subspace_sizes:
             assert isinstance(n, int)
 
@@ -59,26 +53,30 @@ class UnsupervisedEnv(hsr.HSREnv):
         self.observation_space = concat_spaces(spaces, axis=0)
         self.reward_params = self.achieved_goal()
 
+    @property
+    def subspace_sizes(self):
+        return self._subspace_sizes
+
     def step(self, actions):
         s, r, t, i = super().step(actions)
-        observation = Observation(observation=s.observation, params=s.goal,
-                                  achieved=self.achieved_goal())
+        i.update(goal=self.goals[-1])
+        observation = Observation(observation=s.observation, desired_goal=s.goal,
+                                  achieved_goal=self.achieved_goal())
         return vectorize(observation), r, t, i
 
     def reset(self):
         o = super().reset()
-        print('reset params', o.goal)
-        return vectorize(Observation(observation=o.observation, params=o.goal,
-                                     achieved=self.achieved_goal()))
+        return vectorize(Observation(observation=o.observation, desired_goal=o.goal,
+                                     achieved_goal=self.achieved_goal()))
 
-    def store_goal(self, goal):
-        self.goals.append(goal)
+    def store_goals(self, goals: List(torch.Tensor)):
+        self.goals.extend(goals)
 
     def achieved_goal(self):
         return self.gripper_pos()
 
     def new_goal(self):
-        return self.reward_params
+        return self.goals.pop().numpy()
 
 
 def unwrap_unsupervised(env):
@@ -106,8 +104,8 @@ def worker(remote, parent_remote, env_fn_wrapper):
             break
         elif cmd == 'get_spaces':
             remote.send((env.observation_space, env.action_space))
-        elif cmd == 'store_goal':
-            unwrap_unsupervised(env).store_goal(data)
+        elif cmd == 'store_goals':
+            unwrap_unsupervised(env).store_goals(data)
         else:
             raise NotImplementedError
 
@@ -138,12 +136,11 @@ class UnsupervisedSubprocVecEnv(SubprocVecEnv):
         VecEnv.__init__(self, len(env_fns), observation_space, action_space)
 
     def store_goals(self, goals):
-        for remote, goal in zip(self.remotes, goals):
-            remote.send(('store_goal', goal))
+        for remote, _goals in zip(self.remotes, goals):
+            remote.send(('store_goals', _goals))
 
 
 class UnsupervisedDummyVecEnv(DummyVecEnv):
     def store_goals(self, goals):
-        for env, goal in zip(self.envs, goals):
-            print('sent params', goal)
-            unwrap_unsupervised(env).set_goal(goal)
+        for env, _goals in zip(self.envs, goals):
+            unwrap_unsupervised(env).store_goals(_goals)

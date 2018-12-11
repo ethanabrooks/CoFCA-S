@@ -17,6 +17,7 @@ setup(
     entry_points=dict(console_scripts=[
         'ppo=ppo.main:cli',
         'hsr=ppo.main:hsr_cli',
+        'unsupervised=ppo.main:unsupervised_cli',
         'tb=tb:main',
     ]),
     install_requires=[

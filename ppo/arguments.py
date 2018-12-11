@@ -142,15 +142,21 @@ def build_parser():
     return parser
 
 
-def get_args():
-    return {**parse_groups(build_parser()),
-            **dict(env_args={})}
-
-
-def get_hsr_args():
+def get_hsr_parser():
     parser = build_parser()
     env_parser = parser.add_argument_group('env_args')
     env_parser.add_argument('--max-steps', type=int)
     add_env_args(env_parser)
     add_wrapper_args(parser.add_argument_group('wrapper_args'))
-    return parse_groups(parser)
+    return parser
+
+
+def get_unsupervised_parser():
+    parser = get_hsr_parser()
+    unsupervised_parser = parser.add_argument_group('unsupervised_args')
+    unsupervised_parser.add_argument('--recurrent', action='store_true')
+    unsupervised_parser.add_argument('--hidden-size', type=int, default=256)
+    unsupervised_parser.add_argument('--num-layers', type=int, default=3)
+    unsupervised_parser.add_argument('--activation', type=parse_activation,
+                                     default=nn.ReLU())
+    return parser

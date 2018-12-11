@@ -17,7 +17,7 @@ import torch
 from gym.wrappers import TimeLimit
 
 from ppo.gridworld import GoalGridworld
-from ppo.hsr_wrapper import HSREnv, UnsupervisedEnv, UnsupervisedDummyVecEnv, \
+from ppo.hsr_adapter import HSREnv, UnsupervisedEnv, UnsupervisedDummyVecEnv, \
     UnsupervisedSubprocVecEnv
 
 try:
@@ -37,13 +37,10 @@ except ImportError:
 
 
 def make_env(env_id, seed, rank, log_dir, add_timestep, allow_early_resets,
-             env_args):
+             max_steps, env_args):
     def _thunk():
         if env_args:
-            max_steps = env_args.pop('max_steps', None)
             env = HSREnv(**env_args)
-            if max_steps:
-                env = TimeLimit(env=env, max_episode_steps=max_steps)
         elif env_id == 'unsupervised':
             env = UnsupervisedEnv(**env_args)
         elif env_id.startswith("dm"):
@@ -51,15 +48,15 @@ def make_env(env_id, seed, rank, log_dir, add_timestep, allow_early_resets,
             env = dm_control2gym.make(domain_name=domain, task_name=task)
         elif env_id == 'gridworld':
             desc = '      '
-            env = TimeLimit(
-                GoalGridworld(
-                    desc=[desc],
-                    actions=np.array([[0, -1], [0, 1]]),
-                    action_strings="◀▶",
-                ),
-                max_episode_steps=len(desc) + 1)
+            env = GoalGridworld(
+                desc=[desc],
+                actions=np.array([[0, -1], [0, 1]]),
+                action_strings="◀▶",
+            )
         else:
             env = gym.make(env_id)
+        if max_steps is not None:
+            env = TimeLimit(env, max_episode_steps=max_steps)
 
         is_atari = hasattr(gym.envs, 'atari') and isinstance(
             env.unwrapped, gym.envs.atari.atari_env.AtariEnv)
@@ -107,11 +104,12 @@ def make_vec_envs(env_name,
                   add_timestep,
                   device,
                   allow_early_resets,
+                  max_steps,
                   env_args,
                   num_frame_stack=None):
     envs = [
         make_env(env_name, seed, i, log_dir, add_timestep, allow_early_resets,
-                 env_args) for i in range(num_processes)
+                 max_steps, env_args) for i in range(num_processes)
     ]
 
     if env_name == 'unsupervised':

@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
-from ppo.storage import RolloutStorage
+from ppo.storage import RolloutStorage, Batch
 
 
 class PPO:
@@ -19,9 +19,9 @@ class PPO:
                  eps=None,
                  max_grad_norm=None,
                  use_clipped_value_loss=True,
-                 unsupervised=False):
+                 gan=None):
 
-        self.unsupervised = unsupervised
+        self.unsupervised = bool(gan)
         self.actor_critic = actor_critic
 
         self.clip_param = clip_param
@@ -34,7 +34,12 @@ class PPO:
         self.max_grad_norm = max_grad_norm
         self.use_clipped_value_loss = use_clipped_value_loss
 
-        self.optimizer = optim.Adam(actor_critic.parameters(), lr=learning_rate, eps=eps)
+        self.optimizer = optim.Adam(
+            actor_critic.parameters(), lr=learning_rate, eps=eps)
+
+        if self.unsupervised:
+            self.unsupervised_optimizer = optim.Adam(
+                gan.parameters(), lr=learning_rate, eps=eps)
         self.reward_function = None
 
     def update(self, rollouts: RolloutStorage):
@@ -55,53 +60,46 @@ class PPO:
                     advantages, self.num_mini_batch)
 
             for sample in data_generator:
-                # TODO: make this a dict or a namedtuple
-                # TODO: include noise vector in storage
-                obs_batch, recurrent_hidden_states_batch, actions_batch, \
-                value_preds_batch, return_batch, masks_batch, \
-                old_action_log_probs_batch, \
-                adv_targ = sample
-
-                # TODO: if unsupervised, replace obs_batch with value generated from
-                # noise vector
-
                 # Reshape to do in a single forward pass for all steps
                 values, action_log_probs, dist_entropy, \
                 _ = self.actor_critic.evaluate_actions(
-                    obs_batch, recurrent_hidden_states_batch, masks_batch,
-                    actions_batch)
+                    sample.obs, sample.recurrent_hidden_states, sample.masks,
+                    sample.actions)
 
                 ratio = torch.exp(action_log_probs -
-                                  old_action_log_probs_batch)
-                surr1 = ratio * adv_targ
+                                  sample.old_action_log_probs)
+                surr1 = ratio * sample.adv
                 surr2 = torch.clamp(ratio, 1.0 - self.clip_param,
-                                    1.0 + self.clip_param) * adv_targ
+                                    1.0 + self.clip_param) * sample.adv
                 action_loss = -torch.min(surr1, surr2).mean()
 
                 if self.use_clipped_value_loss:
 
-                    value_pred_clipped = value_preds_batch + \
-                                         (values - value_preds_batch).clamp(
+                    value_pred_clipped = sample.value_preds + \
+                                         (values - sample.value_preds).clamp(
                                              -self.clip_param, self.clip_param)
-                    value_losses = (values - return_batch).pow(2)
+                    value_losses = (values - sample.ret).pow(2)
                     value_losses_clipped = (
-                        value_pred_clipped - return_batch).pow(2)
+                        value_pred_clipped - sample.ret).pow(2)
                     value_loss = .5 * torch.max(value_losses,
                                                 value_losses_clipped).mean()
                 else:
-                    value_loss = 0.5 * F.mse_loss(return_batch, values)
+                    value_loss = 0.5 * F.mse_loss(sample.ret, values)
 
                 self.optimizer.zero_grad()
                 (value_loss * self.value_loss_coef + action_loss -
-                 dist_entropy * self.entropy_coef).backward()
-
-                if self.unsupervised:
-                    # TODO: 2nd order gradient of loss
-                    raise NotImplementedError
+                 dist_entropy * self.entropy_coef).backward(retain_graph=True)
 
                 nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
                                          self.max_grad_norm)
                 self.optimizer.step()
+
+                if self.unsupervised:
+                    unsupervised_loss = sum([
+                        torch.sum(param.grad)
+                        for param in self.actor_critic.parameters()])
+                    unsupervised_loss.backward()
+                    self.unsupervised_optimizer.step()
 
                 value_loss_epoch += value_loss.item()
                 action_loss_epoch += action_loss.item()
