@@ -1,18 +1,16 @@
 # stdlib
 import copy
-import glob
 import os
 import time
 from pathlib import Path
 
 import numpy as np
 import torch
-# first party
-from environments.hsr import Observation
-from scripts.hsr import env_wrapper, parse_groups
 from tensorboardX import SummaryWriter
 
-from ppo.arguments import get_hsr_parser, get_unsupervised_parser, build_parser
+# first party
+from environments.hsr import Observation
+from ppo.arguments import build_parser, get_hsr_parser, get_unsupervised_parser
 from ppo.envs import make_vec_envs
 from ppo.gan import GAN
 from ppo.hsr_adapter import UnsupervisedEnv
@@ -20,15 +18,33 @@ from ppo.policy import Policy
 from ppo.ppo import PPO
 from ppo.storage import RolloutStorage
 from ppo.utils import get_vec_normalize
-
+from scripts.hsr import env_wrapper, parse_groups
 
 # third party
 
 
-def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
-         cuda_deterministic, cuda, log_dir: Path, env_name, gamma, normalize,
-         add_timestep, save_interval, save_dir, log_interval, eval_interval,
-         use_gae, tau, ppo_args, network_args, max_steps=None, env_args=None,
+def main(recurrent_policy,
+         num_frames,
+         num_steps,
+         num_processes,
+         seed,
+         cuda_deterministic,
+         cuda,
+         log_dir: Path,
+         env_name,
+         gamma,
+         normalize,
+         add_timestep,
+         save_interval,
+         save_dir,
+         log_interval,
+         eval_interval,
+         use_gae,
+         tau,
+         ppo_args,
+         network_args,
+         max_steps=None,
+         env_args=None,
          unsupervised_args=None):
     algo = 'ppo'
 
@@ -59,25 +75,27 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
     unsupervised = unsupervised_args is not None
 
     _gamma = gamma if normalize else None
-    envs = make_vec_envs(env_name=env_name,
-                         seed=seed,
-                         num_processes=num_processes,
-                         gamma=_gamma,
-                         log_dir=log_dir,
-                         add_timestep=add_timestep,
-                         device=device,
-                         max_steps=max_steps,
-                         allow_early_resets=False,
-                         env_args=env_args)
+    envs = make_vec_envs(
+        env_name=env_name,
+        seed=seed,
+        num_processes=num_processes,
+        gamma=_gamma,
+        log_dir=log_dir,
+        add_timestep=add_timestep,
+        device=device,
+        max_steps=max_steps,
+        allow_early_resets=False,
+        env_args=env_args)
 
     obs = envs.reset()
 
     gan = None
     if unsupervised:
         sample_env = UnsupervisedEnv(**env_args)
-        gan = GAN(goal_size=3, **{k.replace('gan_', ''): v for k,
-                                                               v in
-                                  unsupervised_args.items()})
+        gan = GAN(
+            goal_size=3,
+            **{k.replace('gan_', ''): v
+               for k, v in unsupervised_args.items()})
 
         def substitute_goal(_obs, _goals):
             split = torch.split(_obs, sample_env.subspace_sizes, dim=1)
@@ -141,10 +159,14 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
             # If done then clean the history of observations.
             masks = torch.FloatTensor(
                 [[0.0] if done_ else [1.0] for done_ in done])
-            rollouts.insert(obs=obs, recurrent_hidden_states=recurrent_hidden_states,
-                            actions=actions,
-                            action_log_probs=action_log_probs, values=values,
-                            rewards=rewards, masks=masks)
+            rollouts.insert(
+                obs=obs,
+                recurrent_hidden_states=recurrent_hidden_states,
+                actions=actions,
+                action_log_probs=action_log_probs,
+                values=values,
+                rewards=rewards,
+                masks=masks)
 
         with torch.no_grad():
             next_value = actor_critic.get_value(
@@ -152,10 +174,8 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
                 rnn_hxs=rollouts.recurrent_hidden_states[-1],
                 masks=rollouts.masks[-1]).detach()
 
-        rollouts.compute_returns(next_value=next_value,
-                                 use_gae=use_gae,
-                                 gamma=gamma,
-                                 tau=tau)
+        rollouts.compute_returns(
+            next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau)
         train_results = agent.update(rollouts)
         rollouts.after_update()
 

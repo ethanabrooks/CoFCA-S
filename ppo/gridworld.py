@@ -3,7 +3,7 @@
 import sys
 import time
 from collections import namedtuple
-from typing import Container, Dict, Iterable, Tuple, Sized, Collection
+from typing import Collection, Container, Dict, Iterable, Tuple
 
 import numpy as np
 # third party

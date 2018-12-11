@@ -10,18 +10,20 @@ def _flatten_helper(T, N, _tensor):
     return _tensor.view(T * N, *_tensor.size()[2:])
 
 
-Batch = namedtuple('Batch', 'obs recurrent_hidden_states actions value_preds ret '
-                            'masks old_action_log_probs adv')
+Batch = namedtuple(
+    'Batch', 'obs recurrent_hidden_states actions value_preds ret '
+    'masks old_action_log_probs adv')
 
 
 class RolloutStorage(object):
-    def __init__(self,
-                 num_steps,
-                 num_processes,
-                 obs_shape,
-                 action_space,
-                 recurrent_hidden_state_size,
-                 ):
+    def __init__(
+            self,
+            num_steps,
+            num_processes,
+            obs_shape,
+            action_space,
+            recurrent_hidden_state_size,
+    ):
         self.obs = torch.zeros(num_steps + 1, num_processes, *obs_shape)
         self.recurrent_hidden_states = torch.zeros(
             num_steps + 1, num_processes, recurrent_hidden_state_size)
@@ -113,13 +115,15 @@ class RolloutStorage(object):
                                                                     1)[indices]
             adv_targ = advantages.view(-1, 1)[indices]
 
-            yield Batch(obs=obs_batch,
-                        recurrent_hidden_states=recurrent_hidden_states_batch,
-                        actions=actions_batch,
-                        value_preds=value_preds_batch,
-                        ret=return_batch, masks=masks_batch,
-                        old_action_log_probs=old_action_log_probs_batch,
-                        adv=adv_targ)
+            yield Batch(
+                obs=obs_batch,
+                recurrent_hidden_states=recurrent_hidden_states_batch,
+                actions=actions_batch,
+                value_preds=value_preds_batch,
+                ret=return_batch,
+                masks=masks_batch,
+                old_action_log_probs=old_action_log_probs_batch,
+                adv=adv_targ)
 
     def recurrent_generator(self, advantages, num_mini_batch) -> \
             Generator[Batch, None, None]:
@@ -174,13 +178,17 @@ class RolloutStorage(object):
             value_preds_batch = _flatten_helper(T, N, value_preds_batch)
             return_batch = _flatten_helper(T, N, return_batch)
             masks_batch = _flatten_helper(T, N, masks_batch)
-            old_action_log_probs_batch = _flatten_helper(T, N, old_action_log_probs_batch)
+            old_action_log_probs_batch = _flatten_helper(
+                T, N, old_action_log_probs_batch)
             adv_targ = _flatten_helper(T, N, adv_targ)
 
-            yield Batch(obs=obs_batch,
-                        recurrent_hidden_states=recurrent_hidden_states_batch,
-                        actions=actions_batch,
-                        value_preds=value_preds_batch, ret=return_batch,
-                        masks=masks_batch,
-                        old_action_log_probs=old_action_log_probs_batch, adv=adv_targ,
-                        )
+            yield Batch(
+                obs=obs_batch,
+                recurrent_hidden_states=recurrent_hidden_states_batch,
+                actions=actions_batch,
+                value_preds=value_preds_batch,
+                ret=return_batch,
+                masks=masks_batch,
+                old_action_log_probs=old_action_log_probs_batch,
+                adv=adv_targ,
+            )

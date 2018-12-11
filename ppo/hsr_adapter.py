@@ -1,17 +1,15 @@
 # third party
-from typing import List
 
-import torch
 from multiprocessing import Pipe, Process
 
 # first party
 from baselines.common.vec_env import CloudpickleWrapper, VecEnv
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
+
 from environments import hsr
 from environments.hsr import Observation
-
-from utils.utils import concat_spaces, space_shape, vectorize, unwrap_env
+from utils.utils import concat_spaces, space_shape, unwrap_env, vectorize
 
 
 class HSREnv(hsr.HSREnv):
@@ -40,11 +38,11 @@ class UnsupervisedEnv(hsr.HSREnv):
         old_spaces = hsr.Observation(*self.observation_space.spaces)
         self.goals = []
         spaces = Observation(
-            observation=old_spaces.observation,
-            goal=old_spaces.goal)
+            observation=old_spaces.observation, goal=old_spaces.goal)
 
         # subspace_sizes used for splitting concatenated tensor observations
-        self._subspace_sizes = Observation(*[space_shape(space)[0] for space in spaces])
+        self._subspace_sizes = Observation(
+            *[space_shape(space)[0] for space in spaces])
         for n in self.subspace_sizes:
             assert isinstance(n, int)
 
@@ -112,9 +110,12 @@ class UnsupervisedSubprocVecEnv(SubprocVecEnv):
         nenvs = len(env_fns)
         self.remotes, self.work_remotes = zip(*[Pipe() for _ in range(nenvs)])
         self.ps = [
-            Process(target=worker, args=(work_remote, remote, CloudpickleWrapper(env_fn)))
-            for (work_remote, remote, env_fn) in
-            zip(self.work_remotes, self.remotes, env_fns)]
+            Process(
+                target=worker,
+                args=(work_remote, remote, CloudpickleWrapper(env_fn)))
+            for (work_remote, remote,
+                 env_fn) in zip(self.work_remotes, self.remotes, env_fns)
+        ]
         for p in self.ps:
             p.daemon = True  # if the main process crashes, we should not cause things
             # to hang

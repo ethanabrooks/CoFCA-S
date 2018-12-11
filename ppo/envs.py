@@ -1,24 +1,24 @@
 # stdlib
 import os
-
 # third party
 import sys
 
+import gym
+import numpy as np
+import torch
 from baselines import bench
 # from baselines.common.atari_wrappers import make_atari, wrap_deepmind
 from baselines.common.vec_env import VecEnvWrapper
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
-from baselines.common.vec_env.vec_normalize import VecNormalize as VecNormalize_
-import gym
+from baselines.common.vec_env.vec_normalize import \
+    VecNormalize as VecNormalize_
 from gym.spaces.box import Box
-import numpy as np
-import torch
 from gym.wrappers import TimeLimit
 
 from ppo.gridworld import GoalGridworld
-from ppo.hsr_adapter import HSREnv, UnsupervisedEnv, UnsupervisedDummyVecEnv, \
-    UnsupervisedSubprocVecEnv
+from ppo.hsr_adapter import (HSREnv, UnsupervisedDummyVecEnv, UnsupervisedEnv,
+                             UnsupervisedSubprocVecEnv)
 
 try:
     import dm_control2gym
@@ -245,7 +245,7 @@ class VecPyTorchFrameStack(VecEnvWrapper):
 
         if device is None:
             device = torch.device('cpu')
-        self.stacked_obs = torch.zeros((venv.num_envs,) +
+        self.stacked_obs = torch.zeros((venv.num_envs, ) +
                                        low.shape).to(device)
 
         observation_space = gym.spaces.Box(

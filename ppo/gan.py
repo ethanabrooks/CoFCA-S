@@ -1,5 +1,4 @@
 import torch
-
 import torch.nn as nn
 
 from ppo.utils import init, init_normc_
@@ -11,17 +10,20 @@ class GAN:
         self.network = nn.Sequential()
 
         def linear(size):
-            return init(nn.Linear(hidden_size, size),
-                        init_normc_,
-                        lambda x: nn.init.constant_(x, 0))
+            return init(
+                nn.Linear(hidden_size, size), init_normc_,
+                lambda x: nn.init.constant_(x, 0))
 
         for i in range(num_layers):
             if i < num_layers - 1:
-                self.network.add_module(name=f'linear{i}', module=linear(hidden_size))
-                self.network.add_module(name=f'activation{i}', module=activation)
+                self.network.add_module(
+                    name=f'linear{i}', module=linear(hidden_size))
+                self.network.add_module(
+                    name=f'activation{i}', module=activation)
             else:
                 # last layer: no activation
-                self.network.add_module(name=f'linear{i}', module=linear(goal_size))
+                self.network.add_module(
+                    name=f'linear{i}', module=linear(goal_size))
 
     def sample(self, num_outputs):
         mean = torch.zeros(num_outputs, self.hidden_size)

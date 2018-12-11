@@ -1,6 +1,6 @@
 # stdlib
-from numbers import Number
 import operator
+from numbers import Number
 from typing import Callable, Iterable, Union
 
 # third party
