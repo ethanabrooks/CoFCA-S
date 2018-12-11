@@ -85,8 +85,8 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
             return torch.cat(replace, dim=1)
 
         goals = gan.sample(num_processes)
-        for i in range(num_processes):
-            envs.unwrapped.set_goal(goals.detach().numpy(), i)
+        for i, goal in enumerate(goals):
+            envs.unwrapped.set_goal(goal.detach().numpy(), i)
         obs = substitute_goal(obs, goals)
 
     actor_critic = Policy(
