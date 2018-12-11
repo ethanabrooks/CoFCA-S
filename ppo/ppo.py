@@ -96,7 +96,7 @@ class PPO:
                     unsupervised_loss.backward(retain_graph=True)
                     self.unsupervised_optimizer.step()
 
-                loss.backward(retain_graph=True)
+                # loss.backward(retain_graph=True)  #TODO!!!!!!!!
                 nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
                                          self.max_grad_norm)
                 self.optimizer.step()
