@@ -92,7 +92,7 @@ class PPO:
                 if self.unsupervised:
                     grads = torch.autograd.grad(loss, self.actor_critic.parameters(),
                                                 create_graph=True)
-                    unsupervised_loss = sum([g.sum() ** 2 for g in grads])
+                    unsupervised_loss = sum([g.mean() for g in grads])
                     unsupervised_loss.backward(retain_graph=True)
                     self.unsupervised_optimizer.step()
 
