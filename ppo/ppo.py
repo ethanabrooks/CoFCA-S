@@ -114,4 +114,5 @@ class PPO:
         return dict(
             value_loss=value_loss_epoch,
             action_loss=action_loss_epoch,
+            unsupervised_loss=unsupervised_loss if self.unsupervised else None,
             entropy=dist_entropy_epoch)
