@@ -1,5 +1,6 @@
 # stdlib
 import copy
+import itertools
 import os
 import time
 from pathlib import Path
@@ -48,7 +49,10 @@ def main(recurrent_policy,
          unsupervised_args=None):
     algo = 'ppo'
 
-    num_updates = int(num_frames) // num_steps // num_processes
+    if num_frames:
+        updates = range(int(num_frames) // num_steps // num_processes)
+    else:
+        updates = itertools.count()
 
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
@@ -130,7 +134,7 @@ def main(recurrent_policy,
     episode_rewards = []
 
     start = time.time()
-    for j in range(num_updates):
+    for j in updates:
         for step in range(num_steps):
             # Sample actions.add_argument_group('env_args')
             with torch.no_grad():

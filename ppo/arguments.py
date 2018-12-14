@@ -62,7 +62,7 @@ def build_parser():
     parser.add_argument(
         '--num-frames',
         type=int,
-        default=10e6,
+        default=None,
         help='number of frames to train (default: 10e6)')
     parser.add_argument(
         '--env-name',
