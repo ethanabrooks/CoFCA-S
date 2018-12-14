@@ -18,7 +18,8 @@ setup(
         'ppo=ppo.main:cli',
         'hsr=ppo.main:hsr_cli',
         'unsupervised=ppo.main:unsupervised_cli',
-        'tb=tb:main',
+        'tb=utils.tb:main',
+        'crawl=utils.crawl_events:main',
     ]),
     install_requires=[
         'baselines==0.1.5',
