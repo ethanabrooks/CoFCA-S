@@ -17,9 +17,7 @@ def build_parser():
         type=float,
         default=0.99,
         help='discount factor for rewards (default: 0.99)')
-    parser.add_argument(
-        '--normalize',
-        action='store_true')
+    parser.add_argument('--normalize', action='store_true')
     parser.add_argument(
         '--use-gae',
         action='store_true',
@@ -65,7 +63,7 @@ def build_parser():
     parser.add_argument(
         '--num-frames',
         type=int,
-        default=10e6,
+        default=None,
         help='number of frames to train (default: 10e6)')
     parser.add_argument(
         '--env-name',
@@ -80,9 +78,7 @@ def build_parser():
         type=Path,
         help='directory to save agent logs (default: ./trained_models/)')
     parser.add_argument(
-        '--cuda',
-        action='store_true',
-        help='enables CUDA training')
+        '--cuda', action='store_true', help='enables CUDA training')
     parser.add_argument(
         '--add-timestep',
         action='store_true',
@@ -98,8 +94,8 @@ def build_parser():
     network_parser.add_argument('--recurrent', action='store_true')
     network_parser.add_argument('--hidden-size', type=int, default=256)
     network_parser.add_argument('--num-layers', type=int, default=3)
-    network_parser.add_argument('--activation', type=parse_activation,
-                                default=nn.ReLU())
+    network_parser.add_argument(
+        '--activation', type=parse_activation, default=nn.ReLU())
 
     ppo_parser = parser.add_argument_group('ppo_args')
     ppo_parser.add_argument(
@@ -154,8 +150,9 @@ def get_hsr_parser():
 def get_unsupervised_parser():
     parser = get_hsr_parser()
     unsupervised_parser = parser.add_argument_group('unsupervised_args')
-    unsupervised_parser.add_argument('--gan-hidden-size', type=int, default=256)
+    unsupervised_parser.add_argument(
+        '--gan-hidden-size', type=int, default=256)
     unsupervised_parser.add_argument('--gan-num-layers', type=int, default=3)
-    unsupervised_parser.add_argument('--gan-activation', type=parse_activation,
-                                     default=nn.ReLU())
+    unsupervised_parser.add_argument(
+        '--gan-activation', type=parse_activation, default=nn.ReLU())
     return parser
