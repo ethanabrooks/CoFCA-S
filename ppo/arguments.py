@@ -71,11 +71,11 @@ def build_parser():
     parser.add_argument(
         '--log-dir',
         type=Path,
-        help='directory to save agent logs (default: /tmp/gym)')
+        help='directory to save agent logs and parameters')
     parser.add_argument(
-        '--save-dir',
+        '--load-path',
         type=Path,
-        help='directory to save agent logs (default: ./trained_models/)')
+        help='directory to load agent parameters from')
     parser.add_argument(
         '--cuda', action='store_true', help='enables CUDA training')
     parser.add_argument(
