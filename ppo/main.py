@@ -37,7 +37,7 @@ def main(recurrent_policy,
          normalize,
          add_timestep,
          save_interval,
-         save_dir,
+         load_path,
          log_interval,
          eval_interval,
          use_gae,
@@ -115,7 +115,16 @@ def main(recurrent_policy,
         envs.observation_space.shape,
         envs.action_space,
         network_args=network_args)
+
+    if load_path:
+        state_dict = torch.load(load_path)
+        if unsupervised:
+            gan.load_state_dict(state_dict['gan'])
+        actor_critic.load_state_dict(state_dict['actor_critic'])
+
     actor_critic.to(device)
+    if unsupervised:
+        gan.to(device)
 
     agent = PPO(actor_critic=actor_critic, gan=gan, **ppo_args)
 
@@ -178,26 +187,21 @@ def main(recurrent_policy,
                 rnn_hxs=rollouts.recurrent_hidden_states[-1],
                 masks=rollouts.masks[-1]).detach()
 
-        rollouts.compute_returns(
-            next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau)
+        rollouts.compute_returns(next_value=next_value,
+                                 use_gae=use_gae,
+                                 gamma=gamma,
+                                 tau=tau)
         train_results = agent.update(rollouts)
         rollouts.after_update()
 
-        if j % save_interval == 0 and save_dir is not None:
-            save_path = Path(save_dir, algo)
-            save_path.mkdir(exist_ok=True)
+        if j % save_interval == 0 and log_dir is not None:
+            models = dict(actor_critic=actor_critic)  # type: Dict[str, nn.Module]
+            if unsupervised:
+                models.update(gan=gan)
+            state_dict = {name: model.state_dict() for name, model in models.items()}
+            save_path = Path(log_dir, 'checkpoint.pt')
+            torch.save(state_dict, save_path)
 
-            # A really ugly way to save a model to CPU
-            save_model = actor_critic
-            if cuda:
-                save_model = copy.deepcopy(actor_critic).cpu()
-
-            save_model = [
-                save_model,
-                getattr(get_vec_normalize(envs), 'ob_rms', None)
-            ]
-
-            torch.save(save_model, os.path.join(save_path, env_name + ".pt"))
 
         total_num_steps = (j + 1) * num_processes * num_steps
 
