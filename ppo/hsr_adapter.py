@@ -6,9 +6,9 @@ from multiprocessing import Pipe, Process
 from baselines.common.vec_env import CloudpickleWrapper, VecEnv
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
-
 from environments import hsr
 from environments.hsr import Observation
+
 from utils.utils import concat_spaces, space_shape, unwrap_env, vectorize
 
 

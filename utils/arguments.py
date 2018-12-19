@@ -1,18 +1,18 @@
 import argparse
-import re
-import tempfile
 from collections.__init__ import namedtuple
 from contextlib import contextmanager
 from itertools import filterfalse
 from pathlib import Path
+import re
+import tempfile
 from typing import List, Tuple
 from xml.etree import ElementTree as ET
 
+from gym import spaces
+from gym.spaces import Box
 import numpy as np
 import tensorflow as tf
 import torch.nn as nn
-from gym import spaces
-from gym.spaces import Box
 
 from utils.utils import parametric_relu
 

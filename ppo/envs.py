@@ -1,24 +1,23 @@
+
 # stdlib
-import os
 # third party
+import os
 import sys
 
-import gym
-import numpy as np
-import torch
-from baselines import bench
 # from baselines.common.atari_wrappers import make_atari, wrap_deepmind
+from baselines import bench
 from baselines.common.vec_env import VecEnvWrapper
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
-from baselines.common.vec_env.vec_normalize import \
-    VecNormalize as VecNormalize_
+from baselines.common.vec_env.vec_normalize import VecNormalize as VecNormalize_
+import gym
 from gym.spaces.box import Box
 from gym.wrappers import TimeLimit
+import numpy as np
+import torch
 
 from ppo.gridworld import GoalGridworld
-from ppo.hsr_adapter import (HSREnv, UnsupervisedDummyVecEnv, UnsupervisedEnv,
-                             UnsupervisedSubprocVecEnv)
+from ppo.hsr_adapter import HSREnv, UnsupervisedDummyVecEnv, UnsupervisedEnv, UnsupervisedSubprocVecEnv
 
 try:
     import dm_control2gym

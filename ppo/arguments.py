@@ -1,11 +1,11 @@
 # stdlib
-import argparse
 # third party
+import argparse
 from pathlib import Path
 
+from scripts.hsr import add_env_args, add_wrapper_args
 import torch.nn as nn
 
-from scripts.hsr import add_env_args, add_wrapper_args
 from utils.arguments import parse_activation
 
 

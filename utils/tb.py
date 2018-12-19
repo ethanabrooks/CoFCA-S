@@ -3,8 +3,8 @@
 # stdlib
 import argparse
 import os
-import subprocess
 from pathlib import Path
+import subprocess
 
 
 def cmd(args, fail_ok=False, cwd=None):

@@ -1,16 +1,15 @@
 # stdlib
-import copy
 import itertools
-import os
-import time
 from pathlib import Path
-
-import numpy as np
-import torch
-from tensorboardX import SummaryWriter
+import time
 
 # first party
 from environments.hsr import Observation
+import numpy as np
+from scripts.hsr import env_wrapper, parse_groups
+from tensorboardX import SummaryWriter
+import torch
+
 from ppo.arguments import build_parser, get_hsr_parser, get_unsupervised_parser
 from ppo.envs import make_vec_envs
 from ppo.gan import GAN
@@ -18,8 +17,6 @@ from ppo.hsr_adapter import UnsupervisedEnv
 from ppo.policy import Policy
 from ppo.ppo import PPO
 from ppo.storage import RolloutStorage
-from ppo.utils import get_vec_normalize
-from scripts.hsr import env_wrapper, parse_groups
 
 # third party
 
@@ -47,8 +44,6 @@ def main(recurrent_policy,
          max_steps=None,
          env_args=None,
          unsupervised_args=None):
-    algo = 'ppo'
-
     if num_frames:
         updates = range(int(num_frames) // num_steps // num_processes)
     else:

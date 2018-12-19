@@ -1,15 +1,15 @@
 #! /usr/bin/env python
 # stdlib
+from collections import namedtuple
 import sys
 import time
-from collections import namedtuple
 from typing import Collection, Container, Dict, Iterable, Tuple
 
-import numpy as np
 # third party
 from gym import utils
 from gym.envs.toy_text.discrete import DiscreteEnv
 from gym.spaces import Box
+import numpy as np
 from six import StringIO
 
 from utils.utils import one_hot
