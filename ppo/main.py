@@ -187,21 +187,22 @@ def main(recurrent_policy,
                 rnn_hxs=rollouts.recurrent_hidden_states[-1],
                 masks=rollouts.masks[-1]).detach()
 
-        rollouts.compute_returns(next_value=next_value,
-                                 use_gae=use_gae,
-                                 gamma=gamma,
-                                 tau=tau)
+        rollouts.compute_returns(
+            next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau)
         train_results = agent.update(rollouts)
         rollouts.after_update()
 
         if j % save_interval == 0 and log_dir is not None:
-            models = dict(actor_critic=actor_critic)  # type: Dict[str, nn.Module]
+            models = dict(
+                actor_critic=actor_critic)  # type: Dict[str, nn.Module]
             if unsupervised:
                 models.update(gan=gan)
-            state_dict = {name: model.state_dict() for name, model in models.items()}
+            state_dict = {
+                name: model.state_dict()
+                for name, model in models.items()
+            }
             save_path = Path(log_dir, 'checkpoint.pt')
             torch.save(state_dict, save_path)
-
 
         total_num_steps = (j + 1) * num_processes * num_steps
 
@@ -218,6 +219,7 @@ def main(recurrent_policy,
                         np.mean(episode_rewards), np.median(episode_rewards),
                         np.min(episode_rewards), np.max(episode_rewards)))
             if log_dir:
+                writer.add_scalar('fps', fps)
                 writer.add_scalar('return', np.mean(episode_rewards), j)
                 for k, v in train_results.items():
                     if np.isscalar(v):
