@@ -214,7 +214,7 @@ def main(recurrent_policy,
                         np.mean(episode_rewards), np.median(episode_rewards),
                         np.min(episode_rewards), np.max(episode_rewards)))
             if log_dir:
-                writer.add_scalar('fps', fps)
+                writer.add_scalar('fps', fps, j)
                 writer.add_scalar('return', np.mean(episode_rewards), j)
                 for k, v in train_results.items():
                     if np.isscalar(v):
