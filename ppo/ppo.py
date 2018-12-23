@@ -51,6 +51,7 @@ class PPO:
         action_loss_epoch = 0
         dist_entropy_epoch = 0
 
+        total_norm = 0
         for e in range(self.ppo_epoch):
             if self.actor_critic.is_recurrent:
                 data_generator = rollouts.recurrent_generator(
@@ -99,6 +100,11 @@ class PPO:
                     self.unsupervised_optimizer.step()
 
                 loss.backward(retain_graph=True)
+                _total_norm = 0
+                for p in self.actor_critic.parameters():
+                    param_norm = p.grad.data.norm(2)
+                    _total_norm += param_norm.item() ** 2
+                total_norm += _total_norm ** (1 / 2)
                 nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
                                          self.max_grad_norm)
                 self.optimizer.step()
@@ -117,4 +123,6 @@ class PPO:
             value_loss=value_loss_epoch,
             action_loss=action_loss_epoch,
             unsupervised_loss=unsupervised_loss if self.unsupervised else None,
-            entropy=dist_entropy_epoch)
+            entropy=dist_entropy_epoch,
+            total_norm=total_norm / self.ppo_epoch
+        )
