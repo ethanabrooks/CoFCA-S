@@ -20,7 +20,6 @@ except ImportError:
     MPI = None
 
 
-
 def make_vec_env(env_id,
                  env_type,
                  num_env,

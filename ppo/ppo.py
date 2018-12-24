@@ -67,12 +67,15 @@ class PPO:
                     sample.obs, sample.recurrent_hidden_states, sample.masks,
                     sample.actions)
 
-                ratio = torch.exp(action_log_probs -
-                                  sample.old_action_log_probs)
-                surr1 = ratio * sample.adv
-                surr2 = torch.clamp(ratio, 1.0 - self.clip_param,
-                                    1.0 + self.clip_param) * sample.adv
-                action_loss = -torch.min(surr1, surr2).mean()
+                def compute_action_loss(J):
+                    ratio = torch.exp(action_log_probs -
+                                      sample.old_action_log_probs)
+                    surr1 = ratio * J
+                    surr2 = torch.clamp(ratio, 1.0 - self.clip_param,
+                                        1.0 + self.clip_param) * J
+                    return -torch.min(surr1, surr2).mean()
+
+                action_loss = compute_action_loss(sample.adv)
 
                 if self.use_clipped_value_loss:
 
@@ -92,7 +95,7 @@ class PPO:
                         dist_entropy * self.entropy_coef)
                 if self.unsupervised:
                     grads = torch.autograd.grad(
-                        loss,
+                        compute_action_loss(sample.ret),
                         self.actor_critic.parameters(),
                         create_graph=True)
                     unsupervised_loss = sum([g.mean() for g in grads])
@@ -125,3 +128,4 @@ class PPO:
             unsupervised_loss=unsupervised_loss if self.unsupervised else None,
             entropy=dist_entropy_epoch,
             total_norm=total_norm / self.ppo_epoch)
+

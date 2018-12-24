@@ -32,8 +32,7 @@ except ImportError:
     pass
 
 
-def make_env(env_id, seed, rank, log_dir, add_timestep, allow_early_resets,
-             max_steps, env_args):
+def make_env(env_id, seed, rank, add_timestep, max_steps, env_args):
     def _thunk():
         if env_args:
             env = HSREnv(**env_args)
@@ -99,8 +98,8 @@ def make_vec_envs(env_name,
                   env_args,
                   num_frame_stack=None):
     envs = [
-        make_env(env_name, seed, i, log_dir, add_timestep, allow_early_resets,
-                 max_steps, env_args) for i in range(num_processes)
+        make_env(env_name, seed, i, add_timestep, max_steps, env_args)
+        for i in range(num_processes)
     ]
 
     if env_name == 'unsupervised':
