@@ -4,7 +4,10 @@ Tests for asynchronous vectorized environments.
 
 import gym
 import numpy as np
+
 import pytest
+
+# local
 from .dummy_vec_env import DummyVecEnv
 from .shmem_vec_env import ShmemVecEnv
 from .subproc_vec_env import SubprocVecEnv
@@ -19,7 +22,7 @@ def assert_envs_equal(env1, env2, num_steps):
     assert env1.num_envs == env2.num_envs
     assert env1.action_space.shape == env2.action_space.shape
     assert env1.action_space.dtype == env2.action_space.dtype
-    joint_shape = (env1.num_envs,) + env1.action_space.shape
+    joint_shape = (env1.num_envs, ) + env1.action_space.shape
 
     try:
         obs1, obs2 = env1.reset(), env2.reset()
@@ -28,8 +31,9 @@ def assert_envs_equal(env1, env2, num_steps):
         assert np.allclose(obs1, obs2)
         np.random.seed(1337)
         for _ in range(num_steps):
-            actions = np.array(np.random.randint(0, 0x100, size=joint_shape),
-                               dtype=env1.action_space.dtype)
+            actions = np.array(
+                np.random.randint(0, 0x100, size=joint_shape),
+                dtype=env1.action_space.dtype)
             for env in [env1, env2]:
                 env.step_async(actions)
             outs1 = env1.step_wait()
@@ -60,6 +64,7 @@ def test_vec_env(klass, dtype):  # pylint: disable=R0914
         Get an environment constructor with a seed.
         """
         return lambda: SimpleEnv(seed, shape, dtype)
+
     fns = [make_fn(i) for i in range(num_envs)]
     env1 = DummyVecEnv(fns)
     env2 = klass(fns)
@@ -75,14 +80,15 @@ class SimpleEnv(gym.Env):
     def __init__(self, seed, shape, dtype):
         np.random.seed(seed)
         self._dtype = dtype
-        self._start_obs = np.array(np.random.randint(0, 0x100, size=shape),
-                                   dtype=dtype)
+        self._start_obs = np.array(
+            np.random.randint(0, 0x100, size=shape), dtype=dtype)
         self._max_steps = seed + 1
         self._cur_obs = None
         self._cur_step = 0
         # this is 0xFF instead of 0x100 because the Box space includes
         # the high end, while randint does not
-        self.action_space = gym.spaces.Box(low=0, high=0xFF, shape=shape, dtype=dtype)
+        self.action_space = gym.spaces.Box(
+            low=0, high=0xFF, shape=shape, dtype=dtype)
         self.observation_space = self.action_space
 
     def step(self, action):

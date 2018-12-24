@@ -1,6 +1,10 @@
+from multiprocessing import Pipe, Process
+
 import numpy as np
-from multiprocessing import Process, Pipe
-from . import VecEnv, CloudpickleWrapper
+
+# local
+from . import CloudpickleWrapper, VecEnv
+
 
 def worker(remote, parent_remote, env_fn_wrapper):
     parent_remote.close()
@@ -36,6 +40,7 @@ class SubprocVecEnv(VecEnv):
     VecEnv that runs multiple environments in parallel in subproceses and communicates with them via pipes.
     Recommended to use when num_envs > 1 and step() can be a bottleneck.
     """
+
     def __init__(self, env_fns, spaces=None):
         """
         Arguments:
@@ -46,8 +51,13 @@ class SubprocVecEnv(VecEnv):
         self.closed = False
         nenvs = len(env_fns)
         self.remotes, self.work_remotes = zip(*[Pipe() for _ in range(nenvs)])
-        self.ps = [Process(target=worker, args=(work_remote, remote, CloudpickleWrapper(env_fn)))
-                   for (work_remote, remote, env_fn) in zip(self.work_remotes, self.remotes, env_fns)]
+        self.ps = [
+            Process(
+                target=worker,
+                args=(work_remote, remote, CloudpickleWrapper(env_fn)))
+            for (work_remote, remote,
+                 env_fn) in zip(self.work_remotes, self.remotes, env_fns)
+        ]
         for p in self.ps:
             p.daemon = True  # if the main process crashes, we should not cause things to hang
             p.start()
@@ -111,4 +121,3 @@ def _flatten_obs(obs):
         return {k: np.stack([o[k] for o in obs]) for k in keys}
     else:
         return np.stack(obs)
-

@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from common.tile_images import tile_images
 
+
 class AlreadySteppingError(Exception):
     """
     Raised when an asynchronous step is running while
@@ -33,9 +34,7 @@ class VecEnv(ABC):
     closed = False
     viewer = None
 
-    metadata = {
-        'render.modes': ['human', 'rgb_array']
-    }
+    metadata = {'render.modes': ['human', 'rgb_array']}
 
     def __init__(self, num_envs, observation_space, action_space):
         self.num_envs = num_envs
@@ -52,7 +51,6 @@ class VecEnv(ABC):
         be cancelled and step_wait() should not be called
         until step_async() is invoked again.
         """
-        pass
 
     @abstractmethod
     def step_async(self, actions):
@@ -64,7 +62,6 @@ class VecEnv(ABC):
         You should not call this if a step_async run is
         already pending.
         """
-        pass
 
     @abstractmethod
     def step_wait(self):
@@ -78,14 +75,12 @@ class VecEnv(ABC):
          - dones: an array of "episode done" booleans
          - infos: a sequence of info objects
         """
-        pass
 
     def close_extras(self):
         """
         Clean up the  extra resources, beyond what's in this base class.
         Only runs when not self.closed.
         """
-        pass
 
     def close(self):
         if self.closed:
@@ -143,10 +138,11 @@ class VecEnvWrapper(VecEnv):
 
     def __init__(self, venv, observation_space=None, action_space=None):
         self.venv = venv
-        VecEnv.__init__(self,
-                        num_envs=venv.num_envs,
-                        observation_space=observation_space or venv.observation_space,
-                        action_space=action_space or venv.action_space)
+        VecEnv.__init__(
+            self,
+            num_envs=venv.num_envs,
+            observation_space=observation_space or venv.observation_space,
+            action_space=action_space or venv.action_space)
 
     def step_async(self, actions):
         self.venv.step_async(actions)
@@ -167,6 +163,7 @@ class VecEnvWrapper(VecEnv):
 
     def get_images(self):
         return self.venv.get_images()
+
 
 class CloudpickleWrapper(object):
     """

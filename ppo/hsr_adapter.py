@@ -6,10 +6,10 @@ from multiprocessing import Pipe, Process
 from environments import hsr
 from environments.hsr import Observation
 
-from utils.utils import concat_spaces, space_shape, unwrap_env, vectorize
-from common.vec_env import VecEnv, CloudpickleWrapper
+from common.vec_env import CloudpickleWrapper, VecEnv
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
+from utils.utils import concat_spaces, space_shape, unwrap_env, vectorize
 
 
 class HSREnv(hsr.HSREnv):

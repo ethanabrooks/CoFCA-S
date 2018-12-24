@@ -1,7 +1,5 @@
-
 # stdlib
 # third party
-import os
 import sys
 
 # from baselines.common.atari_wrappers import make_atari, wrap_deepmind
@@ -11,13 +9,12 @@ from gym.wrappers import TimeLimit
 import numpy as np
 import torch
 
-from ppo.gridworld import GoalGridworld
-from ppo.hsr_adapter import HSREnv, UnsupervisedDummyVecEnv, UnsupervisedEnv, UnsupervisedSubprocVecEnv
-
 from common.vec_env import VecEnvWrapper
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
+from ppo.gridworld import GoalGridworld
+from ppo.hsr_adapter import HSREnv, UnsupervisedDummyVecEnv, UnsupervisedEnv, UnsupervisedSubprocVecEnv
 
 try:
     import dm_control2gym

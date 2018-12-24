@@ -103,8 +103,8 @@ class PPO:
                 _total_norm = 0
                 for p in self.actor_critic.parameters():
                     param_norm = p.grad.data.norm(2)
-                    _total_norm += param_norm.item() ** 2
-                total_norm += _total_norm ** (1 / 2)
+                    _total_norm += param_norm.item()**2
+                total_norm += _total_norm**(1 / 2)
                 nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
                                          self.max_grad_norm)
                 self.optimizer.step()
@@ -124,5 +124,4 @@ class PPO:
             action_loss=action_loss_epoch,
             unsupervised_loss=unsupervised_loss if self.unsupervised else None,
             entropy=dist_entropy_epoch,
-            total_norm=total_norm / self.ppo_epoch
-        )
+            total_norm=total_norm / self.ppo_epoch)

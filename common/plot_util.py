@@ -1,12 +1,15 @@
-import matplotlib.pyplot as plt
-import os.path as osp
+from collections import defaultdict, namedtuple
 import json
 import os
+import os.path as osp
+
+import matplotlib.pyplot as plt
 import numpy as np
-import pandas
-from collections import defaultdict, namedtuple
+
 from baselines.bench import monitor
-from baselines.logger import read_json, read_csv
+from baselines.logger import read_csv, read_json
+import pandas
+
 
 def smooth(y, radius, mode='two_sided', valid_only=False):
     '''
@@ -21,22 +24,33 @@ def smooth(y, radius, mode='two_sided', valid_only=False):
 
     '''
     assert mode in ('two_sided', 'causal')
-    if len(y) < 2*radius+1:
+    if len(y) < 2 * radius + 1:
         return np.ones_like(y) * y.mean()
     elif mode == 'two_sided':
-        convkernel = np.ones(2 * radius+1)
-        out = np.convolve(y, convkernel,mode='same') / np.convolve(np.ones_like(y), convkernel, mode='same')
+        convkernel = np.ones(2 * radius + 1)
+        out = np.convolve(
+            y, convkernel, mode='same') / np.convolve(
+                np.ones_like(y), convkernel, mode='same')
         if valid_only:
             out[:radius] = out[-radius:] = np.nan
     elif mode == 'causal':
         convkernel = np.ones(radius)
-        out = np.convolve(y, convkernel,mode='full') / np.convolve(np.ones_like(y), convkernel, mode='full')
-        out = out[:-radius+1]
+        out = np.convolve(
+            y, convkernel, mode='full') / np.convolve(
+                np.ones_like(y), convkernel, mode='full')
+        out = out[:-radius + 1]
         if valid_only:
             out[:radius] = np.nan
     return out
 
-def one_sided_ema(xolds, yolds, low=None, high=None, n=512, decay_steps=1., low_counts_threshold=1e-8):
+
+def one_sided_ema(xolds,
+                  yolds,
+                  low=None,
+                  high=None,
+                  n=512,
+                  decay_steps=1.,
+                  low_counts_threshold=1e-8):
     '''
     perform one-sided (causal) EMA (exponential moving average)
     smoothing and resampling to an even grid with n points.
@@ -69,20 +83,25 @@ def one_sided_ema(xolds, yolds, low=None, high=None, n=512, decay_steps=1., low_
     low = xolds[0] if low is None else low
     high = xolds[-1] if high is None else high
 
-    assert xolds[0] <= low, 'low = {} < xolds[0] = {} - extrapolation not permitted!'.format(low, xolds[0])
-    assert xolds[-1] >= high, 'high = {} > xolds[-1] = {}  - extrapolation not permitted!'.format(high, xolds[-1])
-    assert len(xolds) == len(yolds), 'length of xolds ({}) and yolds ({}) do not match!'.format(len(xolds), len(yolds))
-
+    assert xolds[
+        0] <= low, 'low = {} < xolds[0] = {} - extrapolation not permitted!'.format(
+            low, xolds[0])
+    assert xolds[
+        -1] >= high, 'high = {} > xolds[-1] = {}  - extrapolation not permitted!'.format(
+            high, xolds[-1])
+    assert len(xolds) == len(
+        yolds), 'length of xolds ({}) and yolds ({}) do not match!'.format(
+            len(xolds), len(yolds))
 
     xolds = xolds.astype('float64')
     yolds = yolds.astype('float64')
 
-    luoi = 0 # last unused old index
+    luoi = 0  # last unused old index
     sum_y = 0.
     count_y = 0.
     xnews = np.linspace(low, high, n)
     decay_period = (high - low) / (n - 1) * decay_steps
-    interstep_decay = np.exp(- 1. / decay_steps)
+    interstep_decay = np.exp(-1. / decay_steps)
     sum_ys = np.zeros_like(xnews)
     count_ys = np.zeros_like(xnews)
     for i in range(n):
@@ -92,7 +111,7 @@ def one_sided_ema(xolds, yolds, low=None, high=None, n=512, decay_steps=1., low_
         while True:
             xold = xolds[luoi]
             if xold <= xnew:
-                decay = np.exp(- (xnew - xold) / decay_period)
+                decay = np.exp(-(xnew - xold) / decay_period)
                 sum_y += decay * yolds[luoi]
                 count_y += decay
                 luoi += 1
@@ -108,7 +127,14 @@ def one_sided_ema(xolds, yolds, low=None, high=None, n=512, decay_steps=1., low_
 
     return xnews, ys, count_ys
 
-def symmetric_ema(xolds, yolds, low=None, high=None, n=512, decay_steps=1., low_counts_threshold=1e-8):
+
+def symmetric_ema(xolds,
+                  yolds,
+                  low=None,
+                  high=None,
+                  n=512,
+                  decay_steps=1.,
+                  low_counts_threshold=1e-8):
     '''
     perform symmetric EMA (exponential moving average)
     smoothing and resampling to an even grid with n points.
@@ -137,8 +163,16 @@ def symmetric_ema(xolds, yolds, low=None, high=None, n=512, decay_steps=1., low_
             count_ys  - array of EMA of y counts at each point of the new x grid
 
     '''
-    xs, ys1, count_ys1 = one_sided_ema(xolds, yolds, low, high, n, decay_steps, low_counts_threshold=0)
-    _,  ys2, count_ys2 = one_sided_ema(-xolds[::-1], yolds[::-1], -high, -low, n, decay_steps, low_counts_threshold=0)
+    xs, ys1, count_ys1 = one_sided_ema(
+        xolds, yolds, low, high, n, decay_steps, low_counts_threshold=0)
+    _, ys2, count_ys2 = one_sided_ema(
+        -xolds[::-1],
+        yolds[::-1],
+        -high,
+        -low,
+        n,
+        decay_steps,
+        low_counts_threshold=0)
     ys2 = ys2[::-1]
     count_ys2 = count_ys2[::-1]
     count_ys = count_ys1 + count_ys2
@@ -146,10 +180,15 @@ def symmetric_ema(xolds, yolds, low=None, high=None, n=512, decay_steps=1., low_
     ys[count_ys < low_counts_threshold] = np.nan
     return xs, ys, count_ys
 
-Result = namedtuple('Result', 'monitor progress dirname metadata')
-Result.__new__.__defaults__ = (None,) * len(Result._fields)
 
-def load_results(root_dir_or_dirs, enable_progress=True, enable_monitor=True, verbose=False):
+Result = namedtuple('Result', 'monitor progress dirname metadata')
+Result.__new__.__defaults__ = (None, ) * len(Result._fields)
+
+
+def load_results(root_dir_or_dirs,
+                 enable_progress=True,
+                 enable_monitor=True,
+                 verbose=False):
     '''
     load summaries of runs from a list of directories (including subdirectories)
     Arguments:
@@ -175,7 +214,7 @@ def load_results(root_dir_or_dirs, enable_progress=True, enable_monitor=True, ve
         rootdirs = [osp.expanduser(d) for d in root_dir_or_dirs]
     allresults = []
     for rootdir in rootdirs:
-        assert osp.exists(rootdir), "%s doesn't exist"%rootdir
+        assert osp.exists(rootdir), "%s doesn't exist" % rootdir
         for dirname, dirs, files in os.walk(rootdir):
             if '-proc' in dirname:
                 files[:] = []
@@ -186,7 +225,7 @@ def load_results(root_dir_or_dirs, enable_progress=True, enable_monitor=True, ve
                 # used to be uncommented, which means do not go deeper than current directory if any of the data files
                 # are found
                 # dirs[:] = []
-                result = {'dirname' : dirname}
+                result = {'dirname': dirname}
                 if "metadata.json" in files:
                     with open(osp.join(dirname, "metadata.json"), "r") as fh:
                         result['metadata'] = json.load(fh)
@@ -194,40 +233,50 @@ def load_results(root_dir_or_dirs, enable_progress=True, enable_monitor=True, ve
                 progcsv = osp.join(dirname, "progress.csv")
                 if enable_progress:
                     if osp.exists(progjson):
-                        result['progress'] = pandas.DataFrame(read_json(progjson))
+                        result['progress'] = pandas.DataFrame(
+                            read_json(progjson))
                     elif osp.exists(progcsv):
                         try:
                             result['progress'] = read_csv(progcsv)
                         except pandas.errors.EmptyDataError:
-                            print('skipping progress file in ', dirname, 'empty data')
+                            print('skipping progress file in ', dirname,
+                                  'empty data')
                     else:
-                        if verbose: print('skipping %s: no progress file'%dirname)
+                        if verbose:
+                            print('skipping %s: no progress file' % dirname)
 
                 if enable_monitor:
                     try:
-                        result['monitor'] = pandas.DataFrame(monitor.load_results(dirname))
+                        result['monitor'] = pandas.DataFrame(
+                            monitor.load_results(dirname))
                     except monitor.LoadMonitorResultsError:
-                        print('skipping %s: no monitor files'%dirname)
+                        print('skipping %s: no monitor files' % dirname)
                     except Exception as e:
-                        print('exception loading monitor file in %s: %s'%(dirname, e))
+                        print('exception loading monitor file in %s: %s' %
+                              (dirname, e))
 
-                if result.get('monitor') is not None or result.get('progress') is not None:
+                if result.get('monitor') is not None or result.get(
+                        'progress') is not None:
                     allresults.append(Result(**result))
                     if verbose:
-                        print('successfully loaded %s'%dirname)
+                        print('successfully loaded %s' % dirname)
 
-    if verbose: print('loaded %i results'%len(allresults))
+    if verbose: print('loaded %i results' % len(allresults))
     return allresults
 
-COLORS = ['blue', 'green', 'red', 'cyan', 'magenta', 'yellow', 'black', 'purple', 'pink',
-        'brown', 'orange', 'teal',  'lightblue', 'lime', 'lavender', 'turquoise',
-        'darkgreen', 'tan', 'salmon', 'gold',  'darkred', 'darkblue']
+
+COLORS = [
+    'blue', 'green', 'red', 'cyan', 'magenta', 'yellow', 'black', 'purple',
+    'pink', 'brown', 'orange', 'teal', 'lightblue', 'lime', 'lavender',
+    'turquoise', 'darkgreen', 'tan', 'salmon', 'gold', 'darkred', 'darkblue'
+]
 
 
 def default_xy_fn(r):
     x = np.cumsum(r.monitor.l)
     y = smooth(r.monitor.r, radius=10)
-    return x,y
+    return x, y
+
 
 def default_split_fn(r):
     import re
@@ -237,18 +286,20 @@ def default_split_fn(r):
     if match:
         return match.group(0)
 
+
 def plot_results(
-    allresults, *,
-    xy_fn=default_xy_fn,
-    split_fn=default_split_fn,
-    group_fn=default_split_fn,
-    average_group=False,
-    shaded_std=True,
-    shaded_err=True,
-    figsize=None,
-    legend_outside=False,
-    resample=0,
-    smooth_step=1.0,
+        allresults,
+        *,
+        xy_fn=default_xy_fn,
+        split_fn=default_split_fn,
+        group_fn=default_split_fn,
+        average_group=False,
+        shaded_std=True,
+        shaded_err=True,
+        figsize=None,
+        legend_outside=False,
+        resample=0,
+        smooth_step=1.0,
 ):
     '''
     Plot multiple Results objects
@@ -292,18 +343,20 @@ def plot_results(
 
     '''
 
-    if split_fn is None: split_fn = lambda _ : ''
-    if group_fn is None: group_fn = lambda _ : ''
-    sk2r = defaultdict(list) # splitkey2results
+    if split_fn is None: split_fn = lambda _: ''
+    if group_fn is None: group_fn = lambda _: ''
+    sk2r = defaultdict(list)  # splitkey2results
     for result in allresults:
         splitkey = split_fn(result)
         sk2r[splitkey].append(result)
     assert len(sk2r) > 0
-    assert isinstance(resample, int), "0: don't resample. <integer>: that many samples"
+    assert isinstance(resample,
+                      int), "0: don't resample. <integer>: that many samples"
     nrows = len(sk2r)
     ncols = 1
     figsize = figsize or (6, 6 * nrows)
-    f, axarr = plt.subplots(nrows, ncols, sharex=False, squeeze=False, figsize=figsize)
+    f, axarr = plt.subplots(
+        nrows, ncols, sharex=False, squeeze=False, figsize=figsize)
 
     groups = list(set(group_fn(result) for result in allresults))
 
@@ -324,11 +377,13 @@ def plot_results(
             if x is None: x = np.arange(len(y))
             x, y = map(np.asarray, (x, y))
             if average_group:
-                gresults[group].append((x,y))
+                gresults[group].append((x, y))
             else:
                 if resample:
-                    x, y, counts = symmetric_ema(x, y, x[0], x[-1], resample, decay_steps=smooth_step)
-                l, = ax.plot(x, y, color=COLORS[groups.index(group) % len(COLORS)])
+                    x, y, counts = symmetric_ema(
+                        x, y, x[0], x[-1], resample, decay_steps=smooth_step)
+                l, = ax.plot(
+                    x, y, color=COLORS[groups.index(group) % len(COLORS)])
                 g2l[group] = l
         if average_group:
             for group in sorted(groups):
@@ -338,15 +393,24 @@ def plot_results(
                 color = COLORS[groups.index(group) % len(COLORS)]
                 origxs = [xy[0] for xy in xys]
                 minxlen = min(map(len, origxs))
+
                 def allequal(qs):
-                    return all((q==qs[0]).all() for q in qs[1:])
+                    return all((q == qs[0]).all() for q in qs[1:])
+
                 if resample:
-                    low  = max(x[0] for x in origxs)
+                    low = max(x[0] for x in origxs)
                     high = min(x[-1] for x in origxs)
                     usex = np.linspace(low, high, resample)
                     ys = []
                     for (x, y) in xys:
-                        ys.append(symmetric_ema(x, y, low, high, resample, decay_steps=smooth_step)[1])
+                        ys.append(
+                            symmetric_ema(
+                                x,
+                                y,
+                                low,
+                                high,
+                                resample,
+                                decay_steps=smooth_step)[1])
                 else:
                     assert allequal([x[:minxlen] for x in origxs]),\
                         'If you want to average unevenly sampled data, set resample=<number of samples you want>'
@@ -358,21 +422,31 @@ def plot_results(
                 l, = axarr[isplit][0].plot(usex, ymean, color=color)
                 g2l[group] = l
                 if shaded_err:
-                    ax.fill_between(usex, ymean - ystderr, ymean + ystderr, color=color, alpha=.4)
+                    ax.fill_between(
+                        usex,
+                        ymean - ystderr,
+                        ymean + ystderr,
+                        color=color,
+                        alpha=.4)
                 if shaded_std:
-                    ax.fill_between(usex, ymean - ystd,    ymean + ystd,    color=color, alpha=.2)
-
+                    ax.fill_between(
+                        usex,
+                        ymean - ystd,
+                        ymean + ystd,
+                        color=color,
+                        alpha=.2)
 
         # https://matplotlib.org/users/legend_guide.html
         plt.tight_layout()
         if any(g2l.keys()):
             ax.legend(
-                g2l.values(),
-                ['%s (%i)'%(g, g2c[g]) for g in g2l] if average_group else g2l.keys(),
+                g2l.values(), ['%s (%i)' % (g, g2c[g])
+                               for g in g2l] if average_group else g2l.keys(),
                 loc=2 if legend_outside else None,
-                bbox_to_anchor=(1,1) if legend_outside else None)
+                bbox_to_anchor=(1, 1) if legend_outside else None)
         ax.set_title(sk)
     return f, axarr
+
 
 def regression_analysis(df):
     xcols = list(df.columns.copy())
@@ -383,6 +457,7 @@ def regression_analysis(df):
     res = mod.fit()
     print(res.summary())
 
+
 def test_smooth():
     norig = 100
     nup = 300
@@ -390,9 +465,12 @@ def test_smooth():
     xs = np.cumsum(np.random.rand(norig) * 10 / norig)
     yclean = np.sin(xs)
     ys = yclean + .1 * np.random.randn(yclean.size)
-    xup, yup, _ = symmetric_ema(xs, ys, xs.min(), xs.max(), nup, decay_steps=nup/ndown)
-    xdown, ydown, _ = symmetric_ema(xs, ys, xs.min(), xs.max(), ndown, decay_steps=ndown/ndown)
-    xsame, ysame, _ = symmetric_ema(xs, ys, xs.min(), xs.max(), norig, decay_steps=norig/ndown)
+    xup, yup, _ = symmetric_ema(
+        xs, ys, xs.min(), xs.max(), nup, decay_steps=nup / ndown)
+    xdown, ydown, _ = symmetric_ema(
+        xs, ys, xs.min(), xs.max(), ndown, decay_steps=ndown / ndown)
+    xsame, ysame, _ = symmetric_ema(
+        xs, ys, xs.min(), xs.max(), norig, decay_steps=norig / ndown)
     plt.plot(xs, ys, label='orig', marker='x')
     plt.plot(xup, yup, label='up', marker='x')
     plt.plot(xdown, ydown, label='down', marker='x')
@@ -400,5 +478,3 @@ def test_smooth():
     plt.plot(xs, yclean, label='clean', marker='x')
     plt.legend()
     plt.show()
-
-

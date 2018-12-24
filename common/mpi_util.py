@@ -1,9 +1,12 @@
 from collections import defaultdict
-from mpi4py import MPI
-import os, numpy as np
+import os
 import platform
 import shutil
 import subprocess
+
+from mpi4py import MPI
+import numpy as np
+
 
 def sync_from_root(sess, variables, comm=None):
     """
@@ -23,14 +26,17 @@ def sync_from_root(sess, variables, comm=None):
             comm.Bcast(returned_var)
             sess.run(tf.assign(var, returned_var))
 
+
 def gpu_count():
     """
     Count the GPUs on this machine.
     """
     if shutil.which('nvidia-smi') is None:
         return 0
-    output = subprocess.check_output(['nvidia-smi', '--query-gpu=gpu_name', '--format=csv'])
+    output = subprocess.check_output(
+        ['nvidia-smi', '--query-gpu=gpu_name', '--format=csv'])
     return max(0, len(output.split(b'\n')) - 2)
+
 
 def setup_mpi_gpus():
     """
@@ -41,6 +47,7 @@ def setup_mpi_gpus():
         return
     local_rank, _ = get_local_rank_size(MPI.COMM_WORLD)
     os.environ['CUDA_VISIBLE_DEVICES'] = str(local_rank % num_gpus)
+
 
 def get_local_rank_size(comm):
     """
@@ -62,6 +69,7 @@ def get_local_rank_size(comm):
     assert local_rank is not None
     return local_rank, node2rankssofar[this_node]
 
+
 def share_file(comm, path):
     """
     Copies the file from rank 0 to all other ranks
@@ -80,21 +88,24 @@ def share_file(comm, path):
                 fh.write(data)
     comm.Barrier()
 
+
 def dict_gather(comm, d, op='mean', assert_all_have_data=True):
     if comm is None: return d
     alldicts = comm.allgather(d)
     size = comm.size
     k2li = defaultdict(list)
     for d in alldicts:
-        for (k,v) in d.items():
+        for (k, v) in d.items():
             k2li[k].append(v)
     result = {}
-    for (k,li) in k2li.items():
+    for (k, li) in k2li.items():
         if assert_all_have_data:
-            assert len(li)==size, "only %i out of %i MPI workers have sent '%s'" % (len(li), size, k)
-        if op=='mean':
+            assert len(
+                li) == size, "only %i out of %i MPI workers have sent '%s'" % (
+                    len(li), size, k)
+        if op == 'mean':
             result[k] = np.mean(li, axis=0)
-        elif op=='sum':
+        elif op == 'sum':
             result[k] = np.sum(li, axis=0)
         else:
             assert 0, op
