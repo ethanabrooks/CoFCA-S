@@ -22,7 +22,6 @@ setup(
         'crawl=utils.crawl_events:main',
     ]),
     install_requires=[
-        'baselines==0.1.5',
         'Cython==0.29',
         'gym==0.10.9',
         'matplotlib==3.0.2',
