@@ -1,4 +1,6 @@
 # third party
+from collections import Counter
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -45,11 +47,9 @@ class PPO:
     def update(self, rollouts: RolloutStorage):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         advantages = (advantages - advantages.mean()) / (
-            advantages.std() + 1e-5)
+                advantages.std() + 1e-5)
 
-        value_loss_epoch = 0
-        action_loss_epoch = 0
-        dist_entropy_epoch = 0
+        update_values = Counter()
 
         total_norm = 0
         for e in range(self.ppo_epoch):
@@ -84,7 +84,7 @@ class PPO:
                                              -self.clip_param, self.clip_param)
                     value_losses = (values - sample.ret).pow(2)
                     value_losses_clipped = (
-                        value_pred_clipped - sample.ret).pow(2)
+                            value_pred_clipped - sample.ret).pow(2)
                     value_loss = .5 * torch.max(value_losses,
                                                 value_losses_clipped).mean()
                 else:
@@ -97,7 +97,7 @@ class PPO:
                 def global_norm(grads):
                     norm = 0
                     for grad in grads:
-                        norm += grad.norm(2)**2
+                        norm += grad.norm(2) ** 2
                     return norm ** .5
 
                 if self.unsupervised:
@@ -107,6 +107,9 @@ class PPO:
                         create_graph=True)
                     unsupervised_loss = global_norm(grads)
                     unsupervised_loss.backward(retain_graph=True)
+
+                    update_values.update(
+                        unsupervised_loss=unsupervised_loss.squeeze().detach().numpy())
                     self.unsupervised_optimizer.step()
 
                 loss.backward(retain_graph=True)
@@ -116,20 +119,10 @@ class PPO:
                                          self.max_grad_norm)
                 self.optimizer.step()
 
-                value_loss_epoch += value_loss.item()
-                action_loss_epoch += action_loss.item()
-                dist_entropy_epoch += dist_entropy.item()
+                update_values.update(value_loss=value_loss.detach().numpy(),
+                                     action_loss=action_loss.detach().numpy(),
+                                     entropy=dist_entropy.detach().numpy(),
+                                     norm=total_norm.detach().numpy())
 
         num_updates = self.ppo_epoch * self.num_mini_batch
-
-        value_loss_epoch /= num_updates
-        action_loss_epoch /= num_updates
-        dist_entropy_epoch /= num_updates
-
-        return dict(
-            value_loss=value_loss_epoch,
-            action_loss=action_loss_epoch,
-            unsupervised_loss=unsupervised_loss if self.unsupervised else None,
-            entropy=dist_entropy_epoch,
-            total_norm=total_norm / self.ppo_epoch)
-
+        return {k: v / num_updates for k, v in update_values.items()}
