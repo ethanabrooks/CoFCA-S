@@ -44,11 +44,6 @@ def main(recurrent_policy,
          max_steps=None,
          env_args=None,
          unsupervised_args=None):
-    if num_frames:
-        updates = range(int(num_frames) // num_steps // num_processes)
-    else:
-        updates = itertools.count()
-
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
 
@@ -111,11 +106,18 @@ def main(recurrent_policy,
         envs.action_space,
         network_args=network_args)
 
+    start = 0
     if load_path:
         state_dict = torch.load(load_path)
         if unsupervised:
             gan.load_state_dict(state_dict['gan'])
         actor_critic.load_state_dict(state_dict['actor_critic'])
+        start = state_dict.get('step', 0)
+
+    if num_frames:
+        updates = range(start, int(num_frames) // num_steps // num_processes)
+    else:
+        updates = itertools.count(start)
 
     actor_critic.to(device)
     if unsupervised:
@@ -198,7 +200,7 @@ def main(recurrent_policy,
                 for name, model in models.items()
             }
             save_path = Path(log_dir, 'checkpoint.pt')
-            torch.save(state_dict, save_path)
+            torch.save(dict(step=j, **state_dict), save_path)
 
         total_num_steps = (j + 1) * num_processes * num_steps
 
