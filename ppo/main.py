@@ -186,7 +186,6 @@ def main(recurrent_policy,
             next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau)
         train_results = agent.update(rollouts)
 
-        import ipdb; ipdb.set_trace()
         rollouts.after_update()
 
         if j % save_interval == 0 and log_dir is not None:

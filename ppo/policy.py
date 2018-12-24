@@ -47,6 +47,7 @@ class Policy(nn.Module):
 
     def act(self, inputs, rnn_hxs, masks, deterministic=False):
         value, actor_features, rnn_hxs = self.base(inputs, rnn_hxs, masks)
+
         dist = self.dist(actor_features)
 
         if deterministic:
@@ -193,7 +194,8 @@ class CNNBase(NNBase):
 class MLPBase(NNBase):
     def __init__(self, num_inputs, hidden_size, num_layers, recurrent,
                  activation):
-        super(MLPBase, self).__init__(recurrent, num_inputs, hidden_size)
+        output_size = hidden_size if num_layers else num_inputs
+        super(MLPBase, self).__init__(recurrent, num_inputs, output_size)
 
         if recurrent:
             num_inputs = hidden_size
@@ -204,8 +206,8 @@ class MLPBase(NNBase):
 
         self.actor = nn.Sequential()
         self.critic = nn.Sequential()
+        in_features = num_inputs
         for i in range(num_layers):
-            in_features = num_inputs if i == 0 else hidden_size
             self.actor.add_module(
                 name=f'fc{i}',
                 module=nn.Sequential(
@@ -218,8 +220,9 @@ class MLPBase(NNBase):
                     init_(nn.Linear(in_features, hidden_size)),
                     activation,
                 ))
+            in_features = hidden_size
 
-        self.critic_linear = init_(nn.Linear(hidden_size, 1))
+        self.critic_linear = init_(nn.Linear(in_features, 1))
 
         self.train()
 

@@ -118,7 +118,6 @@ class PPO:
                 nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
                                          self.max_grad_norm)
                 self.optimizer.step()
-
                 update_values.update(value_loss=value_loss.detach().numpy(),
                                      action_loss=action_loss.detach().numpy(),
                                      entropy=dist_entropy.detach().numpy(),
