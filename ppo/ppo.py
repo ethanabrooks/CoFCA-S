@@ -93,21 +93,25 @@ class PPO:
                 self.optimizer.zero_grad()
                 loss = (value_loss * self.value_loss_coef + action_loss -
                         dist_entropy * self.entropy_coef)
+
+                def global_norm(grads):
+                    norm = 0
+                    for grad in grads:
+                        norm += grad.norm(2)**2
+                    return norm ** .5
+
                 if self.unsupervised:
                     grads = torch.autograd.grad(
                         compute_action_loss(sample.ret),
-                        self.actor_critic.parameters(),
+                        self.actor_critic.base.actor.parameters(),
                         create_graph=True)
-                    unsupervised_loss = sum([g.mean() for g in grads])
+                    unsupervised_loss = global_norm(grads)
                     unsupervised_loss.backward(retain_graph=True)
                     self.unsupervised_optimizer.step()
 
                 loss.backward(retain_graph=True)
-                _total_norm = 0
-                for p in self.actor_critic.parameters():
-                    param_norm = p.grad.data.norm(2)
-                    _total_norm += param_norm.item()**2
-                total_norm += _total_norm**(1 / 2)
+                total_norm += global_norm([p.grad for p in
+                                           self.actor_critic.parameters()])
                 nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
                                          self.max_grad_norm)
                 self.optimizer.step()

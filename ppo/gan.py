@@ -33,3 +33,6 @@ class GAN:
 
     def parameters(self):
         return self.network.parameters()
+
+    def to(self, device):
+        self.network.to(device)
