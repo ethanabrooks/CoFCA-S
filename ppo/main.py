@@ -2,7 +2,6 @@
 import itertools
 from pathlib import Path
 import time
-from pprint import pprint
 import copy
 
 # first party
@@ -140,7 +139,6 @@ def main(recurrent_policy,
             DummyVecEnv([lambda: e for e in state_dict['envs']]), device)
         start = state_dict.get('step', -1) + 1
         print(f'Loaded parameters from {load_path}')
-        pprint(state_dict['actor_critic'])
         _break = True
 
     if num_frames:
@@ -208,9 +206,6 @@ def main(recurrent_policy,
 
         rollouts.compute_returns(
             next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau)
-
-        if _break:
-            pprint(state_dict['actor_critic'])
 
         train_results = agent.update(rollouts, _break=_break)
 
@@ -317,10 +312,8 @@ def main(recurrent_policy,
             )
 
             print(f'Saved parameters to {save_path}')
-            pprint(state_dict)
 
             if j > 0:
-                pprint(state_dict['actor_critic'])
                 import ipdb
                 ipdb.set_trace()
                 _break = True
