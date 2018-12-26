@@ -3,6 +3,7 @@ import itertools
 from pathlib import Path
 import time
 from pprint import pprint
+import copy
 
 # first party
 from environments.hsr import Observation
@@ -213,7 +214,7 @@ def main(recurrent_policy,
                     rollouts=rollouts,
                     obs=obs,
                     step=j,
-                    envs=envs,
+                    envs=copy.deepcopy(envs),
                     **state_dict),
                 save_path,
             )
