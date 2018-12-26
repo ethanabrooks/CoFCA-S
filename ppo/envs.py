@@ -14,7 +14,8 @@ from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
 from ppo.gridworld import GoalGridworld
-from ppo.hsr_adapter import HSREnv, UnsupervisedDummyVecEnv, UnsupervisedEnv, UnsupervisedSubprocVecEnv
+from ppo.hsr_adapter import HSREnv, UnsupervisedDummyVecEnv, UnsupervisedEnv, \
+    UnsupervisedSubprocVecEnv, MoveGripperEnv
 
 try:
     import dm_control2gym
@@ -34,8 +35,10 @@ except ImportError:
 
 def make_env(env_id, seed, rank, add_timestep, max_steps, env_args):
     def _thunk():
-        if env_args:
+        if env_id == 'move-block':
             env = HSREnv(**env_args)
+        elif env_id == 'move-gripper':
+            env = MoveGripperEnv(**env_args)
         elif env_id == 'unsupervised':
             env = UnsupervisedEnv(**env_args)
         elif env_id.startswith("dm"):
