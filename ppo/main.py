@@ -115,6 +115,7 @@ def main(recurrent_policy,
         actor_critic.load_state_dict(state_dict['actor_critic'])
         torch.random.set_rng_state(state_dict['torch_random_state'])
         np.random.set_state(state_dict['numpy_random_state'])
+        obs = state_dict['obs']
         start = state_dict.get('step', 0)
         print(f'Loaded parameters from {load_path}')
 
@@ -208,6 +209,7 @@ def main(recurrent_policy,
                 dict(
                     torch_random_state=torch.random.get_rng_state(),
                     numpy_random_state=np.random.get_state(),
+                    obs=obs,
                     step=j,
                     **state_dict),
                 save_path,
