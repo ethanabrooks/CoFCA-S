@@ -2,6 +2,7 @@
 import itertools
 from pathlib import Path
 import time
+from pprint import pprint
 
 # first party
 from environments.hsr import Observation
@@ -113,6 +114,7 @@ def main(recurrent_policy,
             gan.load_state_dict(state_dict['gan'])
         actor_critic.load_state_dict(state_dict['actor_critic'])
         start = state_dict.get('step', 0)
+        print(f'Loaded parameters from {load_path}')
 
     if num_frames:
         updates = range(start, int(num_frames) // num_steps // num_processes)
@@ -201,6 +203,8 @@ def main(recurrent_policy,
             }
             save_path = Path(log_dir, 'checkpoint.pt')
             torch.save(dict(step=j, **state_dict), save_path)
+            print(f'Saved parameters to {save_path}')
+            pprint(state_dict)
 
         total_num_steps = (j + 1) * num_processes * num_steps
 
