@@ -47,6 +47,7 @@ def main(recurrent_policy,
          max_steps=None,
          env_args=None,
          unsupervised_args=None):
+    write = False
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
 
@@ -136,8 +137,7 @@ def main(recurrent_policy,
             DummyVecEnv([lambda: e for e in state_dict['envs']]), device)
         start = state_dict.get('step', -1) + 1
         print(f'Loaded parameters from {load_path}')
-        import ipdb
-        ipdb.set_trace()
+        write = True
 
     if num_frames:
         updates = range(start, int(num_frames) // num_steps // num_processes)
@@ -166,7 +166,12 @@ def main(recurrent_policy,
 
             # Observe reward and next obs
             obs, rewards, done, infos = envs.step(actions)
-            print(values, actions, obs, rewards, done)
+            if write:
+                s = f'{j}.{step}:{values}, {actions}, {obs}, {rewards}, {done}\n'
+                p = f'/tmp/dumb{"loaded" if load_path else ""}.txt'
+                print(f'writing {s} to {p}')
+                with open(p, 'a') as f:
+                    f.write(s)
 
             if unsupervised:
                 for i, _done in enumerate(done):
@@ -307,8 +312,10 @@ def main(recurrent_policy,
             print(f'Saved parameters to {save_path}')
             pprint(state_dict)
 
-            import ipdb
-            ipdb.set_trace()
+            if j > 0:
+                import ipdb
+                ipdb.set_trace()
+                write = True
 
 
 def cli():
