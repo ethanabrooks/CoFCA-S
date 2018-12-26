@@ -131,6 +131,8 @@ def main(recurrent_policy,
             DummyVecEnv([lambda: e for e in state_dict['envs']]), device)
         start = state_dict.get('step', -1) + 1
         print(f'Loaded parameters from {load_path}')
+        import ipdb
+        ipdb.set_trace()
 
     if num_frames:
         updates = range(start, int(num_frames) // num_steps // num_processes)
@@ -249,6 +251,10 @@ def main(recurrent_policy,
                         writer.add_scalar(
                             k.replace('_', ' '), v, total_num_steps)
             episode_rewards = []
+
+        if j % save_interval == 0 and log_dir is not None:
+            import ipdb
+            ipdb.set_trace()
 
         if eval_interval is not None and j % eval_interval == eval_interval - 1:
             eval_envs = make_vec_envs(
