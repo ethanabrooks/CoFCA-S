@@ -14,7 +14,7 @@ import torch
 
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from ppo.arguments import build_parser, get_hsr_parser, get_unsupervised_parser
-from ppo.envs import make_vec_envs
+from ppo.envs import make_vec_envs, VecPyTorch
 from ppo.gan import GAN
 from ppo.hsr_adapter import UnsupervisedEnv
 from ppo.policy import Policy
@@ -127,7 +127,8 @@ def main(recurrent_policy,
         np.random.set_state(state_dict['numpy_random_state'])
         obs = state_dict['obs']
         rollouts = state_dict['rollouts']
-        envs = VecPyTorch(DummyVecEnv(state_dict['envs']))
+        envs = VecPyTorch(
+            DummyVecEnv([lambda: e for e in state_dict['envs']]), device)
         start = state_dict.get('step', -1) + 1
         print(f'Loaded parameters from {load_path}')
 
