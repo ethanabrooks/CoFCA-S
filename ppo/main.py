@@ -213,6 +213,7 @@ def main(recurrent_policy,
                     rollouts=rollouts,
                     obs=obs,
                     step=j,
+                    envs=envs,
                     **state_dict),
                 save_path,
             )
