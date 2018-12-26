@@ -287,7 +287,9 @@ def main(recurrent_policy,
 
         if j % save_interval == 0 and log_dir is not None:
             models = dict(
+                optimizer=agent.optimizer,
                 actor_critic=actor_critic)  # type: Dict[str, nn.Module]
+
             if unsupervised:
                 models.update(gan=gan)
             state_dict = {
@@ -305,7 +307,6 @@ def main(recurrent_policy,
                     step=j,
                     rewards_counter=rewards_counter,
                     episode_rewards=episode_rewards,
-                    optimizer=agent.optimizer.state_dict(),
                     envs=envs_copy,
                     **state_dict),
                 save_path,
