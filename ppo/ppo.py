@@ -117,9 +117,6 @@ class PPO:
                     [p.grad for p in self.actor_critic.parameters()])
                 nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
                                          self.max_grad_norm)
-                if _break:
-                    import ipdb
-                    ipdb.set_trace()
                 self.optimizer.step()
                 update_values.update(
                     value_loss=value_loss.detach().numpy(),

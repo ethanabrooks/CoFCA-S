@@ -141,8 +141,6 @@ def main(recurrent_policy,
         start = state_dict.get('step', -1) + 1
         print(f'Loaded parameters from {load_path}')
         pprint(state_dict['actor_critic'])
-        import ipdb
-        ipdb.set_trace()
         _break = True
 
     if num_frames:
@@ -213,8 +211,6 @@ def main(recurrent_policy,
 
         if _break:
             pprint(state_dict['actor_critic'])
-            import ipdb
-            ipdb.set_trace()
 
         train_results = agent.update(rollouts, _break=_break)
 
