@@ -125,7 +125,7 @@ def main(recurrent_policy,
         np.random.set_state(state_dict['numpy_random_state'])
         obs = state_dict['obs']
         rollouts = state_dict['rollouts']
-        start = state_dict.get('step', 0)
+        start = state_dict.get('step', -1) + 1
         print(f'Loaded parameters from {load_path}')
 
     if num_frames:
@@ -147,10 +147,6 @@ def main(recurrent_policy,
 
     start = time.time()
     for j in updates:
-        if j > 10:
-            import ipdb
-            ipdb.set_trace()
-
         for step in range(num_steps):
             # Sample actions.add_argument_group('env_args')
             with torch.no_grad():
