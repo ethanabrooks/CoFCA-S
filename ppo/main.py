@@ -135,8 +135,6 @@ def main(recurrent_policy,
         rollouts = state_dict['rollouts']
         rewards_counter = state_dict['rewards_counter']
         episode_rewards = state_dict['episode_rewards']
-        envs = VecPyTorch(
-            DummyVecEnv([lambda: e for e in state_dict['envs']]), device)
         start = state_dict.get('step', -1) + 1
         print(f'Loaded parameters from {load_path}')
         _break = True
@@ -297,7 +295,6 @@ def main(recurrent_policy,
                 for name, model in models.items()
             }
             save_path = Path(log_dir, 'checkpoint.pt')
-            envs_copy = copy.deepcopy(envs.venv.envs)
             torch.save(
                 dict(
                     torch_random_state=torch.random.get_rng_state(),
@@ -307,7 +304,6 @@ def main(recurrent_policy,
                     step=j,
                     rewards_counter=rewards_counter,
                     episode_rewards=episode_rewards,
-                    envs=envs_copy,
                     **state_dict),
                 save_path,
             )
