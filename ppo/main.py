@@ -166,6 +166,7 @@ def main(recurrent_policy,
 
             # Observe reward and next obs
             obs, rewards, done, infos = envs.step(actions)
+            print(values, actions, obs, rewards, done)
 
             if unsupervised:
                 for i, _done in enumerate(done):
