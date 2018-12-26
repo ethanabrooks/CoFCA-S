@@ -14,12 +14,14 @@ setup(
     author='Ethan Brooks',
     author_email='ethanabrooks@gmail.com',
     packages=find_packages(),
+    scripts=['utils/load'],
     entry_points=dict(console_scripts=[
         'ppo=ppo.main:cli',
         'hsr=ppo.main:hsr_cli',
         'unsupervised=ppo.main:unsupervised_cli',
         'tb=utils.tb:main',
         'crawl=utils.crawl_events:main',
+        'load=utils.crawl_events:main',
     ]),
     install_requires=[
         'Cython==0.29',
