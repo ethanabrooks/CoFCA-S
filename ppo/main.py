@@ -12,6 +12,7 @@ from scripts.hsr import env_wrapper, parse_groups
 from tensorboardX import SummaryWriter
 import torch
 
+from common.vec_env.dummy_vec_env import DummyVecEnv
 from ppo.arguments import build_parser, get_hsr_parser, get_unsupervised_parser
 from ppo.envs import make_vec_envs
 from ppo.gan import GAN
@@ -126,6 +127,7 @@ def main(recurrent_policy,
         np.random.set_state(state_dict['numpy_random_state'])
         obs = state_dict['obs']
         rollouts = state_dict['rollouts']
+        envs = VecPyTorch(DummyVecEnv(state_dict['envs']))
         start = state_dict.get('step', -1) + 1
         print(f'Loaded parameters from {load_path}')
 
@@ -207,6 +209,7 @@ def main(recurrent_policy,
                 for name, model in models.items()
             }
             save_path = Path(log_dir, 'checkpoint.pt')
+            envs_copy = copy.deepcopy(envs.venv.envs)
             torch.save(
                 dict(
                     torch_random_state=torch.random.get_rng_state(),
@@ -214,7 +217,7 @@ def main(recurrent_policy,
                     rollouts=rollouts,
                     obs=obs,
                     step=j,
-                    envs=copy.deepcopy(envs),
+                    envs=envs_copy,
                     **state_dict),
                 save_path,
             )
