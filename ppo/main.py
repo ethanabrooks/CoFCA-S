@@ -117,6 +117,9 @@ def main(recurrent_policy,
         recurrent_hidden_state_size=actor_critic.recurrent_hidden_state_size,
     )
 
+    rewards_counter = np.zeros(num_processes)
+    episode_rewards = []
+
     start = 0
     if load_path:
         state_dict = torch.load(load_path)
@@ -127,6 +130,8 @@ def main(recurrent_policy,
         np.random.set_state(state_dict['numpy_random_state'])
         obs = state_dict['obs']
         rollouts = state_dict['rollouts']
+        rewards_counter = state_dict['rewards_counter']
+        episode_rewards = state_dict['episode_rewards']
         envs = VecPyTorch(
             DummyVecEnv([lambda: e for e in state_dict['envs']]), device)
         start = state_dict.get('step', -1) + 1
@@ -147,9 +152,6 @@ def main(recurrent_policy,
 
     rollouts.obs[0].copy_(obs)
     rollouts.to(device)
-
-    rewards_counter = np.zeros(num_processes)
-    episode_rewards = []
 
     start = time.time()
     for j in updates:
@@ -220,6 +222,8 @@ def main(recurrent_policy,
                     rollouts=rollouts,
                     obs=obs,
                     step=j,
+                    rewards_counter=rewards_counter,
+                    episode_rewards=episode_rewards,
                     envs=envs_copy,
                     **state_dict),
                 save_path,
