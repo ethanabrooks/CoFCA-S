@@ -63,11 +63,11 @@ def build_parser():
         '--num-frames',
         type=int,
         default=None,
-        help='number of frames to train (default: 10e6)')
+        help='number of frames to train (default: None)')
     parser.add_argument(
         '--env-name',
-        default='PongNoFrameskip-v4',
-        help='environment to train on (default: PongNoFrameskip-v4)')
+        default='move-block',
+        help='environment to train on (default: move-block)')
     parser.add_argument(
         '--log-dir',
         type=Path,
