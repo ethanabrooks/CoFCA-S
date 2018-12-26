@@ -107,6 +107,14 @@ def main(recurrent_policy,
         envs.action_space,
         network_args=network_args)
 
+    rollouts = RolloutStorage(
+        num_steps=num_steps,
+        num_processes=num_processes,
+        obs_shape=envs.observation_space.shape,
+        action_space=envs.action_space,
+        recurrent_hidden_state_size=actor_critic.recurrent_hidden_state_size,
+    )
+
     start = 0
     if load_path:
         state_dict = torch.load(load_path)
@@ -116,6 +124,7 @@ def main(recurrent_policy,
         torch.random.set_rng_state(state_dict['torch_random_state'])
         np.random.set_state(state_dict['numpy_random_state'])
         obs = state_dict['obs']
+        rollouts = state_dict['rollouts']
         start = state_dict.get('step', 0)
         print(f'Loaded parameters from {load_path}')
 
@@ -130,14 +139,6 @@ def main(recurrent_policy,
 
     agent = PPO(actor_critic=actor_critic, gan=gan, **ppo_args)
 
-    rollouts = RolloutStorage(
-        num_steps=num_steps,
-        num_processes=num_processes,
-        obs_shape=envs.observation_space.shape,
-        action_space=envs.action_space,
-        recurrent_hidden_state_size=actor_critic.recurrent_hidden_state_size,
-    )
-
     rollouts.obs[0].copy_(obs)
     rollouts.to(device)
 
@@ -146,6 +147,10 @@ def main(recurrent_policy,
 
     start = time.time()
     for j in updates:
+        if j > 10:
+            import ipdb
+            ipdb.set_trace()
+
         for step in range(num_steps):
             # Sample actions.add_argument_group('env_args')
             with torch.no_grad():
@@ -209,6 +214,7 @@ def main(recurrent_policy,
                 dict(
                     torch_random_state=torch.random.get_rng_state(),
                     numpy_random_state=np.random.get_state(),
+                    rollouts=rollouts,
                     obs=obs,
                     step=j,
                     **state_dict),
