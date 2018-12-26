@@ -113,6 +113,8 @@ def main(recurrent_policy,
         if unsupervised:
             gan.load_state_dict(state_dict['gan'])
         actor_critic.load_state_dict(state_dict['actor_critic'])
+        torch.random.set_rng_state(state_dict['torch_random_state'])
+        np.random.set_state(state_dict['numpy_random_state'])
         start = state_dict.get('step', 0)
         print(f'Loaded parameters from {load_path}')
 
@@ -202,7 +204,15 @@ def main(recurrent_policy,
                 for name, model in models.items()
             }
             save_path = Path(log_dir, 'checkpoint.pt')
-            torch.save(dict(step=j, **state_dict), save_path)
+            torch.save(
+                dict(
+                    torch_random_state=torch.random.get_rng_state(),
+                    numpy_random_state=np.random.get_state(),
+                    step=j,
+                    **state_dict),
+                save_path,
+            )
+
             print(f'Saved parameters to {save_path}')
             pprint(state_dict)
 
