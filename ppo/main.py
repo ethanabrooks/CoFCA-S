@@ -204,34 +204,6 @@ def main(recurrent_policy,
 
         rollouts.after_update()
 
-        if j % save_interval == 0 and log_dir is not None:
-            models = dict(
-                actor_critic=actor_critic)  # type: Dict[str, nn.Module]
-            if unsupervised:
-                models.update(gan=gan)
-            state_dict = {
-                name: model.state_dict()
-                for name, model in models.items()
-            }
-            save_path = Path(log_dir, 'checkpoint.pt')
-            envs_copy = copy.deepcopy(envs.venv.envs)
-            torch.save(
-                dict(
-                    torch_random_state=torch.random.get_rng_state(),
-                    numpy_random_state=np.random.get_state(),
-                    rollouts=rollouts,
-                    obs=obs,
-                    step=j,
-                    rewards_counter=rewards_counter,
-                    episode_rewards=episode_rewards,
-                    envs=envs_copy,
-                    **state_dict),
-                save_path,
-            )
-
-            print(f'Saved parameters to {save_path}')
-            pprint(state_dict)
-
         total_num_steps = (j + 1) * num_processes * num_steps
 
         if j % log_interval == 0:
@@ -255,10 +227,6 @@ def main(recurrent_policy,
                         writer.add_scalar(
                             k.replace('_', ' '), v, total_num_steps)
             episode_rewards = []
-
-        if j % save_interval == 0 and log_dir is not None:
-            import ipdb
-            ipdb.set_trace()
 
         if eval_interval is not None and j % eval_interval == eval_interval - 1:
             eval_envs = make_vec_envs(
@@ -309,6 +277,37 @@ def main(recurrent_policy,
 
             print(" Evaluation using {} episodes: mean reward {:.5f}\n".format(
                 len(eval_episode_rewards), np.mean(eval_episode_rewards)))
+
+        if j % save_interval == 0 and log_dir is not None:
+            models = dict(
+                actor_critic=actor_critic)  # type: Dict[str, nn.Module]
+            if unsupervised:
+                models.update(gan=gan)
+            state_dict = {
+                name: model.state_dict()
+                for name, model in models.items()
+            }
+            save_path = Path(log_dir, 'checkpoint.pt')
+            envs_copy = copy.deepcopy(envs.venv.envs)
+            torch.save(
+                dict(
+                    torch_random_state=torch.random.get_rng_state(),
+                    numpy_random_state=np.random.get_state(),
+                    rollouts=rollouts,
+                    obs=obs,
+                    step=j,
+                    rewards_counter=rewards_counter,
+                    episode_rewards=episode_rewards,
+                    envs=envs_copy,
+                    **state_dict),
+                save_path,
+            )
+
+            print(f'Saved parameters to {save_path}')
+            pprint(state_dict)
+
+            import ipdb
+            ipdb.set_trace()
 
 
 def cli():
