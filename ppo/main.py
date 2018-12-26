@@ -118,6 +118,8 @@ def main(recurrent_policy,
         recurrent_hidden_state_size=actor_critic.recurrent_hidden_state_size,
     )
 
+    agent = PPO(actor_critic=actor_critic, gan=gan, **ppo_args)
+
     rewards_counter = np.zeros(num_processes)
     episode_rewards = []
 
@@ -127,6 +129,7 @@ def main(recurrent_policy,
         if unsupervised:
             gan.load_state_dict(state_dict['gan'])
         actor_critic.load_state_dict(state_dict['actor_critic'])
+        agent.optimizer.load_state_dict(state_dict['optimizer'])
         torch.random.set_rng_state(state_dict['torch_random_state'])
         np.random.set_state(state_dict['numpy_random_state'])
         obs = state_dict['obs']
@@ -150,8 +153,6 @@ def main(recurrent_policy,
     actor_critic.to(device)
     if unsupervised:
         gan.to(device)
-
-    agent = PPO(actor_critic=actor_critic, gan=gan, **ppo_args)
 
     rollouts.obs[0].copy_(obs)
     rollouts.to(device)
@@ -215,7 +216,7 @@ def main(recurrent_policy,
             import ipdb
             ipdb.set_trace()
 
-        train_results = agent.update(rollouts)
+        train_results = agent.update(rollouts, _break=_break)
 
         rollouts.after_update()
 
@@ -313,6 +314,7 @@ def main(recurrent_policy,
                     step=j,
                     rewards_counter=rewards_counter,
                     episode_rewards=episode_rewards,
+                    optimizer=agent.optimizer.state_dict(),
                     envs=envs_copy,
                     **state_dict),
                 save_path,
