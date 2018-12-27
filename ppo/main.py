@@ -2,7 +2,6 @@
 import itertools
 from pathlib import Path
 import time
-import copy
 
 # first party
 from environments.hsr import Observation
