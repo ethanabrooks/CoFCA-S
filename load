@@ -1,0 +1,7 @@
+#! /usr/bin/env zsh
+
+task=$(echo $2 | sed -r 's/.runs\/log-dir\///g')
+cmd=$(runs lookup command $task --porcelain)
+cmd=$(echo "$cmd $1" |  sed -r 's/--log-dir=(\S*)/--load-path=\1\/checkpoint.pt/g')
+echo $cmd
+eval $cmd
