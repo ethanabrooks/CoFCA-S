@@ -4,8 +4,12 @@ import torch.nn as nn
 from ppo.utils import init, init_normc_
 
 
-class GAN:
+class GAN(nn.Module):
+    def forward(self, *input):
+        return self.network(*input)
+
     def __init__(self, num_layers, hidden_size, activation, goal_size):
+        super().__init__()
         self.hidden_size = hidden_size
         self.network = nn.Sequential()
 
@@ -29,7 +33,7 @@ class GAN:
         mean = torch.zeros(num_outputs, self.hidden_size)
         std = torch.ones(num_outputs, self.hidden_size)
         noise = torch.normal(mean, std)
-        return self.network(noise)
+        return self(noise)
 
     def parameters(self):
         return self.network.parameters()

@@ -36,7 +36,6 @@ class UnsupervisedEnv(hsr.HSREnv):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         old_spaces = hsr.Observation(*self.observation_space.spaces)
-        self.goals = []
         spaces = Observation(
             observation=old_spaces.observation, goal=old_spaces.goal)
 
@@ -56,7 +55,7 @@ class UnsupervisedEnv(hsr.HSREnv):
 
     def step(self, actions):
         s, r, t, i = super().step(actions)
-        i.update(goal=self.goals[-1])
+        i.update(goal=self.goal)
         observation = Observation(observation=s.observation, goal=s.goal)
         return vectorize(observation), r, t, i
 

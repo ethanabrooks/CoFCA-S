@@ -198,7 +198,7 @@ def main(recurrent_policy,
 
         total_num_steps = (j + 1) * num_processes * num_steps
 
-        if save_interval and time.time() - last_save >= save_interval:
+        if log_dir and save_interval and time.time() - last_save >= save_interval:
             modules = dict(
                 optimizer=agent.optimizer,
                 actor_critic=actor_critic)  # type: Dict[str, torch.nn.Module]
