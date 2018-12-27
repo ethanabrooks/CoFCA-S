@@ -8,13 +8,16 @@ from gym.spaces.box import Box
 from gym.wrappers import TimeLimit
 import numpy as np
 import torch
+import torch.nn as nn
 
+from common.running_mean_std import RunningMeanStd
 from common.vec_env import VecEnvWrapper
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
 from ppo.gridworld import GoalGridworld
-from ppo.hsr_adapter import HSREnv, MoveGripperEnv, UnsupervisedDummyVecEnv, UnsupervisedEnv, UnsupervisedSubprocVecEnv
+from ppo.hsr_adapter import HSREnv, MoveGripperEnv, UnsupervisedDummyVecEnv, \
+    UnsupervisedEnv, UnsupervisedSubprocVecEnv
 
 try:
     import dm_control2gym
@@ -201,7 +204,7 @@ class VecPyTorch(VecEnvWrapper):
         return obs, reward, done, info
 
 
-class VecNormalize(VecNormalize_):
+class VecNormalize(VecNormalize_, nn.Module):
     def __init__(self, *args, **kwargs):
         super(VecNormalize, self).__init__(*args, **kwargs)
         self.training = True
@@ -222,6 +225,20 @@ class VecNormalize(VecNormalize_):
 
     def eval(self):
         self.training = False
+
+    def load_state_dict(self, state_dict, strict=True):
+        ret = state_dict['ret']
+        ret_rms = state_dict['ret_rms']
+        assert isinstance(ret, np.ndarray)
+        assert isinstance(ret_rms, (RunningMeanStd, type(None)))
+        self.ret = ret
+        self.ret_rms = ret_rms
+
+    def state_dict(self, destination=None, prefix='', keep_vars=False):
+        return dict(ret=self.ret, ret_rms=self.ret_rms)
+
+    def forward(self, *input):
+        raise NotImplementedError
 
 
 # Derived from

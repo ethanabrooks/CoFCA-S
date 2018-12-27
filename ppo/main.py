@@ -11,7 +11,7 @@ from tensorboardX import SummaryWriter
 import torch
 
 from ppo.arguments import build_parser, get_hsr_parser, get_unsupervised_parser
-from ppo.envs import make_vec_envs
+from ppo.envs import make_vec_envs, VecNormalize
 from ppo.gan import GAN
 from ppo.hsr_adapter import UnsupervisedEnv
 from ppo.policy import Policy
@@ -127,6 +127,8 @@ def main(recurrent_policy,
         actor_critic.load_state_dict(state_dict['actor_critic'])
         agent.optimizer.load_state_dict(state_dict['optimizer'])
         start = state_dict.get('step', -1) + 1
+        if isinstance(envs.venv, VecNormalize):
+            envs.venv.load_state_dict(state_dict['vec_normalize'])
         print(f'Loaded parameters from {load_path}')
 
     if num_frames:
@@ -199,6 +201,9 @@ def main(recurrent_policy,
             modules = dict(
                 optimizer=agent.optimizer,
                 actor_critic=actor_critic)  # type: Dict[str, nn.Module]
+
+            if isinstance(envs.venv, VecNormalize):
+                modules.update(vec_normalize=envs.venv)
 
             if unsupervised:
                 modules.update(gan=gan)
