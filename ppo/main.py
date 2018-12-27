@@ -196,15 +196,15 @@ def main(recurrent_policy,
         total_num_steps = (j + 1) * num_processes * num_steps
 
         if j % save_interval == 0 and log_dir is not None:
-            models = dict(
+            modules = dict(
                 optimizer=agent.optimizer,
                 actor_critic=actor_critic)  # type: Dict[str, nn.Module]
 
             if unsupervised:
-                models.update(gan=gan)
+                modules.update(gan=gan)
             state_dict = {
-                name: model.state_dict()
-                for name, model in models.items()
+                name: module.state_dict()
+                for name, module in modules.items()
             }
             save_path = Path(log_dir, 'checkpoint.pt')
             torch.save(dict(step=j, **state_dict), save_path)
