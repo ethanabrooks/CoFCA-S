@@ -51,6 +51,7 @@ def main(recurrent_policy,
     eval_log_dir = None
     if log_dir:
         writer = SummaryWriter(log_dir=str(log_dir))
+        print(f'Logging to {log_dir}')
         eval_log_dir = log_dir.joinpath("eval")
 
         for _dir in [log_dir, eval_log_dir]:
@@ -128,7 +129,7 @@ def main(recurrent_policy,
         start = state_dict.get('step', -1) + 1
         if isinstance(envs.venv, VecNormalize):
             envs.venv.load_state_dict(state_dict['vec_normalize'])
-        print(f'Loaded parameters from {load_path}')
+        print(f'Loaded parameters from {load_path}.')
 
     if num_frames:
         updates = range(start, int(num_frames) // num_steps // num_processes)
@@ -231,6 +232,7 @@ def main(recurrent_policy,
                         np.mean(episode_rewards), np.median(episode_rewards),
                         np.min(episode_rewards), np.max(episode_rewards)))
             if log_dir:
+                print(f'Writing log data to {log_dir}.')
                 writer.add_scalar('fps', fps, total_num_steps)
                 writer.add_scalar('return', np.mean(episode_rewards),
                                   total_num_steps)
