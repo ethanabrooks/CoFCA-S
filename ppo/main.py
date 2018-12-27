@@ -46,7 +46,6 @@ def main(recurrent_policy,
          max_steps=None,
          env_args=None,
          unsupervised_args=None):
-    _break = False
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
 
@@ -131,7 +130,6 @@ def main(recurrent_policy,
         agent.optimizer.load_state_dict(state_dict['optimizer'])
         start = state_dict.get('step', -1) + 1
         print(f'Loaded parameters from {load_path}')
-        _break = True
 
     if num_frames:
         updates = range(start, int(num_frames) // num_steps // num_processes)
@@ -158,12 +156,6 @@ def main(recurrent_policy,
 
             # Observe reward and next obs
             obs, rewards, done, infos = envs.step(actions)
-            # if write:
-            # s = f'{j}.{step}:{values}, {actions}, {obs}, {rewards}, {done}\n'
-            # p = f'/tmp/dumb{"loaded" if load_path else ""}.txt'
-            # print(f'writing {s} to {p}')
-            # with open(p, 'a') as f:
-            # f.write(s)
 
             if unsupervised:
                 for i, _done in enumerate(done):
@@ -199,11 +191,27 @@ def main(recurrent_policy,
         rollouts.compute_returns(
             next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau)
 
-        train_results = agent.update(rollouts, _break=_break)
+        train_results = agent.update(rollouts)
 
         rollouts.after_update()
 
         total_num_steps = (j + 1) * num_processes * num_steps
+
+        if j % save_interval == 0 and log_dir is not None:
+            models = dict(
+                optimizer=agent.optimizer,
+                actor_critic=actor_critic)  # type: Dict[str, nn.Module]
+
+            if unsupervised:
+                models.update(gan=gan)
+            state_dict = {
+                name: model.state_dict()
+                for name, model in models.items()
+            }
+            save_path = Path(log_dir, 'checkpoint.pt')
+            torch.save(dict(step=j, **state_dict), save_path)
+
+            print(f'Saved parameters to {save_path}')
 
         if j % log_interval == 0:
             end = time.time()
@@ -275,22 +283,6 @@ def main(recurrent_policy,
 
             print(" Evaluation using {} episodes: mean reward {:.5f}\n".format(
                 len(eval_episode_rewards), np.mean(eval_episode_rewards)))
-
-        if j % save_interval == 0 and log_dir is not None:
-            models = dict(
-                optimizer=agent.optimizer,
-                actor_critic=actor_critic)  # type: Dict[str, nn.Module]
-
-            if unsupervised:
-                models.update(gan=gan)
-            state_dict = {
-                name: model.state_dict()
-                for name, model in models.items()
-            }
-            save_path = Path(log_dir, 'checkpoint.pt')
-            torch.save(dict(step=j, **state_dict), save_path)
-
-            print(f'Saved parameters to {save_path}')
 
 
 def cli():

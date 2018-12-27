@@ -44,7 +44,7 @@ class PPO:
                 gan.parameters(), lr=learning_rate, eps=eps)
         self.reward_function = None
 
-    def update(self, rollouts: RolloutStorage, _break):
+    def update(self, rollouts: RolloutStorage):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         advantages = (advantages - advantages.mean()) / (
             advantages.std() + 1e-5)
