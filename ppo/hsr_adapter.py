@@ -126,7 +126,7 @@ class UnsupervisedSubprocVecEnv(SubprocVecEnv):
         observation_space, action_space = self.remotes[0].recv()
         VecEnv.__init__(self, len(env_fns), observation_space, action_space)
 
-    def store_goals(self, goal, i):
+    def set_goal(self, goal, i):
         self.remotes[i].send(('set_goal', goal))
 
 
