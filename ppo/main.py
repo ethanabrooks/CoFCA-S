@@ -18,8 +18,6 @@ from ppo.ppo import PPO
 from ppo.storage import RolloutStorage
 
 
-
-
 def main(recurrent_policy,
          num_frames,
          num_steps,
@@ -198,7 +196,10 @@ def main(recurrent_policy,
 
         total_num_steps = (j + 1) * num_processes * num_steps
 
-        if log_dir and save_interval and time.time() - last_save >= save_interval:
+        if all(
+            [log_dir, save_interval,
+             time.time() - last_save >= save_interval]):
+            last_save = time.time()
             modules = dict(
                 optimizer=agent.optimizer,
                 actor_critic=actor_critic)  # type: Dict[str, torch.nn.Module]
@@ -218,7 +219,7 @@ def main(recurrent_policy,
             print(f'Saved parameters to {save_path}')
 
         if time.time() - last_log >= log_interval:
-            end = time.time()
+            last_log = end = time.time()
             fps = int(total_num_steps / (end - start))
             episode_rewards = np.concatenate(episode_rewards)
             if episode_rewards.size > 0:
