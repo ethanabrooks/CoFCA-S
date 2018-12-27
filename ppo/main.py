@@ -129,11 +129,6 @@ def main(recurrent_policy,
             gan.load_state_dict(state_dict['gan'])
         actor_critic.load_state_dict(state_dict['actor_critic'])
         agent.optimizer.load_state_dict(state_dict['optimizer'])
-        # torch.random.set_rng_state(state_dict['torch_random_state'])
-        # np.random.set_state(state_dict['numpy_random_state'])
-        # rollouts = state_dict['rollouts']
-        # rewards_counter = state_dict['rewards_counter']
-        # episode_rewards = state_dict['episode_rewards']
         start = state_dict.get('step', -1) + 1
         print(f'Loaded parameters from {load_path}')
         _break = True
@@ -295,17 +290,7 @@ def main(recurrent_policy,
                 for name, model in models.items()
             }
             save_path = Path(log_dir, 'checkpoint.pt')
-            torch.save(
-                dict(
-                    torch_random_state=torch.random.get_rng_state(),
-                    numpy_random_state=np.random.get_state(),
-                    rollouts=rollouts,
-                    step=j,
-                    rewards_counter=rewards_counter,
-                    episode_rewards=episode_rewards,
-                    **state_dict),
-                save_path,
-            )
+            torch.save(dict(step=j, **state_dict), save_path)
 
             print(f'Saved parameters to {save_path}')
 
