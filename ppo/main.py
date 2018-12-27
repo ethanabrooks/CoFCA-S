@@ -116,6 +116,9 @@ def main(recurrent_policy,
 
     agent = PPO(actor_critic=actor_critic, gan=gan, **ppo_args)
 
+    rewards_counter = np.zeros(num_processes)
+    episode_rewards = []
+
     start = 0
     if load_path:
         state_dict = torch.load(load_path)
@@ -137,9 +140,6 @@ def main(recurrent_policy,
 
     rollouts.obs[0].copy_(obs)
     rollouts.to(device)
-
-    rewards_counter = np.zeros(num_processes)
-    episode_rewards = []
 
     start = time.time()
     for j in updates:
@@ -188,14 +188,18 @@ def main(recurrent_policy,
 
         rollouts.compute_returns(
             next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau)
+
         train_results = agent.update(rollouts)
 
         rollouts.after_update()
 
+        total_num_steps = (j + 1) * num_processes * num_steps
+
         if j % save_interval == 0 and log_dir is not None:
             modules = dict(
-                actor_critic=actor_critic,
-                optimizer=agent.optimizer)  # type: Dict[str, nn.Module]
+                optimizer=agent.optimizer,
+                actor_critic=actor_critic)  # type: Dict[str, nn.Module]
+
             if unsupervised:
                 modules.update(gan=gan)
             state_dict = {
@@ -206,8 +210,6 @@ def main(recurrent_policy,
             torch.save(dict(step=j, **state_dict), save_path)
 
             print(f'Saved parameters to {save_path}')
-
-        total_num_steps = (j + 1) * num_processes * num_steps
 
         if j % log_interval == 0:
             end = time.time()
@@ -259,7 +261,6 @@ def main(recurrent_policy,
             eval_masks = torch.zeros(num_processes, 1, device=device)
 
             while len(eval_episode_rewards) < 10:
-                print('.', end='')
                 with torch.no_grad():
                     _, actions, _, eval_recurrent_hidden_states = actor_critic.act(
                         inputs=obs,
