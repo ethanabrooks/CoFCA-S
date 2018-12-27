@@ -21,7 +21,6 @@ setup(
         'unsupervised=ppo.main:unsupervised_cli',
         'tb=utils.tb:main',
         'crawl=utils.crawl_events:main',
-        'load=utils.crawl_events:main',
     ]),
     install_requires=[
         'Cython==0.29',

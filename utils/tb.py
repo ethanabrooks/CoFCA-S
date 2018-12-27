@@ -23,16 +23,15 @@ def cmd(args, fail_ok=False, cwd=None):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('port', type=int)
-    parser.add_argument('path')
-    args = parser.parse_args()
+    parser.add_argument('path', type=Path)
+    parser.add_argument('--logdir', type=Path, default=Path('.runs/logdir'))
+    tb(**vars(parser.parse_args()))
 
-    tb(args.port, args.path)
 
-
-def tb(port, path):
+def tb(port: int, path: Path, logdir: Path):
     active_sessions = cmd('tmux ls -F #{session_name}'.split())
     session_name = f'tensorboard{port}'
-    logdir = Path(os.getcwd(), '.runs', 'tensorboard', path)
+    logdir = Path(logdir, path)
     if not logdir.exists():
         raise RuntimeError(f'Path {logdir} does not exist.')
     command = f'tensorboard --logdir={logdir} --port={port}'
