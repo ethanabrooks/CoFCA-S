@@ -129,12 +129,11 @@ def main(recurrent_policy,
             gan.load_state_dict(state_dict['gan'])
         actor_critic.load_state_dict(state_dict['actor_critic'])
         agent.optimizer.load_state_dict(state_dict['optimizer'])
-        torch.random.set_rng_state(state_dict['torch_random_state'])
-        np.random.set_state(state_dict['numpy_random_state'])
-        obs = state_dict['obs']
-        rollouts = state_dict['rollouts']
-        rewards_counter = state_dict['rewards_counter']
-        episode_rewards = state_dict['episode_rewards']
+        # torch.random.set_rng_state(state_dict['torch_random_state'])
+        # np.random.set_state(state_dict['numpy_random_state'])
+        # rollouts = state_dict['rollouts']
+        # rewards_counter = state_dict['rewards_counter']
+        # episode_rewards = state_dict['episode_rewards']
         start = state_dict.get('step', -1) + 1
         print(f'Loaded parameters from {load_path}')
         _break = True
@@ -164,6 +163,7 @@ def main(recurrent_policy,
 
             # Observe reward and next obs
             obs, rewards, done, infos = envs.step(actions)
+            print(rewards)
             # if write:
             # s = f'{j}.{step}:{values}, {actions}, {obs}, {rewards}, {done}\n'
             # p = f'/tmp/dumb{"loaded" if load_path else ""}.txt'
@@ -300,7 +300,6 @@ def main(recurrent_policy,
                     torch_random_state=torch.random.get_rng_state(),
                     numpy_random_state=np.random.get_state(),
                     rollouts=rollouts,
-                    obs=obs,
                     step=j,
                     rewards_counter=rewards_counter,
                     episode_rewards=episode_rewards,
@@ -309,11 +308,6 @@ def main(recurrent_policy,
             )
 
             print(f'Saved parameters to {save_path}')
-
-            if j > 0:
-                import ipdb
-                ipdb.set_trace()
-                _break = True
 
 
 def cli():

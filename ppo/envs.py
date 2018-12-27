@@ -38,7 +38,10 @@ def make_env(env_id, seed, rank, add_timestep, max_steps, env_args):
         if env_id == 'move-block':
             env = HSREnv(**env_args)
         elif env_id == 'move-gripper':
-            env = MoveGripperEnv(**env_args)
+            _env_args = env_args.copy()
+            if rank == 0:
+                _env_args.update(record=True)
+            env = MoveGripperEnv(**_env_args)
         elif env_id == 'unsupervised':
             env = UnsupervisedEnv(**env_args)
         elif env_id.startswith("dm"):
