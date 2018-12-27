@@ -3,16 +3,17 @@
 from multiprocessing import Pipe, Process
 
 # first party
-from environments import hsr
-from environments.hsr import Observation
+import hsr
+from hsr.env import Observation
 
 from common.vec_env import CloudpickleWrapper, VecEnv
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
-from utils.utils import concat_spaces, space_shape, unwrap_env, vectorize
+from utils.gym import concat_spaces, space_shape, unwrap_env
+from utils.numpy import vectorize
 
 
-class HSREnv(hsr.HSREnv):
+class HSREnv(hsr.env.HSREnv):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -28,14 +29,14 @@ class HSREnv(hsr.HSREnv):
         return vectorize(super().reset())
 
 
-class MoveGripperEnv(HSREnv, hsr.MoveGripperEnv):
+class MoveGripperEnv(HSREnv, hsr.env.MoveGripperEnv):
     pass
 
 
-class UnsupervisedEnv(hsr.HSREnv):
+class UnsupervisedEnv(hsr.env.HSREnv):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        old_spaces = hsr.Observation(*self.observation_space.spaces)
+        old_spaces = hsr.env.Observation(*self.observation_space.spaces)
         spaces = Observation(
             observation=old_spaces.observation, goal=old_spaces.goal)
 
