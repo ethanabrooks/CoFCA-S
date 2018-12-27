@@ -47,13 +47,13 @@ def build_parser():
     parser.add_argument(
         '--log-interval',
         type=int,
-        default=10,
-        help='log interval, one log per n updates (default: 10)')
+        default=30,
+        help='log interval, one log per n seconds (default: 30 seconds)')
     parser.add_argument(
         '--save-interval',
         type=int,
-        default=100,
-        help='save interval, one save per n updates (default: 100)')
+        default=600,
+        help='save interval, one save per n seconds (default: 10 minutes)')
     parser.add_argument(
         '--eval-interval',
         type=int,

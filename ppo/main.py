@@ -1,9 +1,8 @@
-# stdlib
 import itertools
 from pathlib import Path
 import time
 
-# first party
+from typing import Dict
 from environments.hsr import Observation
 import numpy as np
 from scripts.hsr import env_wrapper, parse_groups
@@ -18,7 +17,7 @@ from ppo.policy import Policy
 from ppo.ppo import PPO
 from ppo.storage import RolloutStorage
 
-# third party
+
 
 
 def main(recurrent_policy,
@@ -118,6 +117,8 @@ def main(recurrent_policy,
 
     rewards_counter = np.zeros(num_processes)
     episode_rewards = []
+    last_log = time.time()
+    last_save = time.time()
 
     start = 0
     if load_path:
@@ -197,10 +198,10 @@ def main(recurrent_policy,
 
         total_num_steps = (j + 1) * num_processes * num_steps
 
-        if j % save_interval == 0 and log_dir is not None:
+        if save_interval and time.time() - last_save >= save_interval:
             modules = dict(
                 optimizer=agent.optimizer,
-                actor_critic=actor_critic)  # type: Dict[str, nn.Module]
+                actor_critic=actor_critic)  # type: Dict[str, torch.nn.Module]
 
             if isinstance(envs.venv, VecNormalize):
                 modules.update(vec_normalize=envs.venv)
@@ -216,7 +217,7 @@ def main(recurrent_policy,
 
             print(f'Saved parameters to {save_path}')
 
-        if j % log_interval == 0:
+        if time.time() - last_log >= log_interval:
             end = time.time()
             fps = int(total_num_steps / (end - start))
             episode_rewards = np.concatenate(episode_rewards)
