@@ -2,7 +2,6 @@
 import itertools
 from pathlib import Path
 import time
-import copy
 
 # first party
 from environments.hsr import Observation
@@ -11,9 +10,8 @@ from scripts.hsr import env_wrapper, parse_groups
 from tensorboardX import SummaryWriter
 import torch
 
-from common.vec_env.dummy_vec_env import DummyVecEnv
 from ppo.arguments import build_parser, get_hsr_parser, get_unsupervised_parser
-from ppo.envs import make_vec_envs, VecPyTorch
+from ppo.envs import make_vec_envs
 from ppo.gan import GAN
 from ppo.hsr_adapter import UnsupervisedEnv
 from ppo.policy import Policy
