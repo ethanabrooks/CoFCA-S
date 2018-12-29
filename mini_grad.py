@@ -3,7 +3,7 @@ import torch
 
 x = torch.tensor([3.], requires_grad=True)
 y = x**2
-grad, = torch.autograd.grad(y.mean(), x, create_graph=True, retain_graph)
+grad, = torch.autograd.grad(y.mean(), x, create_graph=True)
 grad.mean().backward()
 print(grad)
 print(x.grad)
