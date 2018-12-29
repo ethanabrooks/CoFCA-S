@@ -15,7 +15,6 @@ from common.vec_env import VecEnvWrapper
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
-from ppo.gridworld import GoalGridworld
 from ppo.hsr_adapter import HSREnv, MoveGripperEnv, UnsupervisedDummyVecEnv, \
     UnsupervisedEnv, UnsupervisedSubprocVecEnv
 
@@ -50,13 +49,6 @@ def make_env(env_id, seed, rank, add_timestep, max_steps, env_args):
         elif env_id.startswith("dm"):
             _, domain, task = env_id.split('.')
             env = dm_control2gym.make(domain_name=domain, task_name=task)
-        elif env_id == 'gridworld':
-            desc = '      '
-            env = GoalGridworld(
-                desc=[desc],
-                actions=np.array([[0, -1], [0, 1]]),
-                action_strings="◀▶",
-            )
         else:
             env = gym.make(env_id)
         if max_steps is not None:
