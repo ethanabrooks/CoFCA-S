@@ -39,7 +39,7 @@ class GAN(nn.Module):
         high = torch.from_numpy(self.goal_space.high)
         low = torch.from_numpy(self.goal_space.low)
         squashed = torch.sigmoid(params) * (high - low) + low
-        assert self.goal_space.contains(squashed.squeeze().detach().numpy())
+        # assert self.goal_space.contains(squashed.squeeze().detach().numpy())
         return squashed
 
     def parameters(self):
