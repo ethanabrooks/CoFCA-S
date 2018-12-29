@@ -155,7 +155,9 @@ def build_parser():
 
 def add_env_args(parser):
     parser.add_argument(
-        '--image-dims', type=parse_vector(length=2, delim=','), default='800,800')
+        '--image-dims',
+        type=parse_vector(length=2, delim=','),
+        default='800,800')
     parser.add_argument('--block-space', type=parse_space(dim=4))
     parser.add_argument('--min-lift-height', type=float, default=None)
     parser.add_argument('--no-random-reset', action='store_true')
@@ -172,12 +174,13 @@ def add_env_args(parser):
 
 def add_wrapper_args(parser):
     parser.add_argument('--xml-file', type=Path, default='models/world.xml')
-    parser.add_argument('--set-xml', type=xml_setter, action='append', nargs='*')
+    parser.add_argument(
+        '--set-xml', type=xml_setter, action='append', nargs='*')
     parser.add_argument('--use-dof', type=str, action='append', default=[])
     parser.add_argument('--geofence', type=float, required=True)
     parser.add_argument('--n-blocks', type=int, required=True)
-    parser.add_argument('--goal-space', type=parse_space(dim=3),
-                        required=True)  # TODO
+    parser.add_argument(
+        '--goal-space', type=parse_space(dim=3), required=True)  # TODO
 
 
 def get_hsr_parser():
