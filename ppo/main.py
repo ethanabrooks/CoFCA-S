@@ -18,7 +18,7 @@ from ppo.hsr_adapter import UnsupervisedEnv
 from ppo.policy import Policy
 from ppo.ppo import PPO
 from ppo.storage import RolloutStorage
-from ppo.old_utils import get_vec_normalize
+from ppo.utils import get_vec_normalize
 from scripts.hsr import env_wrapper, parse_groups
 
 # third party

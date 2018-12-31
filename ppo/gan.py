@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from ppo.old_utils import init, init_normc_
+from ppo.utils import init, init_normc_
 
 
 class GAN:
