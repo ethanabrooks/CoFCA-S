@@ -10,7 +10,7 @@ import torch
 from tensorboardX import SummaryWriter
 
 # first party
-from environments.hsr import Observation
+from hsr.env import Observation
 from ppo.arguments import build_parser, get_hsr_parser, get_unsupervised_parser
 from ppo.envs import make_vec_envs
 from ppo.gan import GAN
@@ -19,7 +19,8 @@ from ppo.policy import Policy
 from ppo.ppo import PPO
 from ppo.storage import RolloutStorage
 from ppo.utils import get_vec_normalize
-from scripts.hsr import env_wrapper, parse_groups
+from hsr.util import env_wrapper
+from utils import parse_groups
 
 # third party
 
