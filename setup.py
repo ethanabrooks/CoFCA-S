@@ -20,10 +20,7 @@ setup(
         'unsupervised=ppo.main:unsupervised_cli',
     ]),
     install_requires=[
-        'baselines==0.1.5',
-        'Cython==0.29',
         'gym==0.10.9',
-        'matplotlib==3.0.2',
         'numpy==1.15.4',
         'opencv-python==3.4.3.18',
         'torch==0.4.1',
