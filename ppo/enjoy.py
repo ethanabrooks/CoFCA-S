@@ -7,7 +7,7 @@ import torch
 
 # first party
 from ppo.envs import make_vec_envs
-from ppo.utils import get_render_func, get_vec_normalize
+from ppo.old_utils import get_render_func, get_vec_normalize
 
 parser = argparse.ArgumentParser(description='RL')
 parser.add_argument(
