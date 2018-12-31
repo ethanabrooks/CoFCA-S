@@ -12,7 +12,7 @@ from gym.envs.toy_text.discrete import DiscreteEnv
 from gym.spaces import Box
 from six import StringIO
 
-from old_utils.utils import one_hot
+from utils import onehot
 
 Transition = namedtuple('Transition', 'probability new_state reward terminal')
 
@@ -59,11 +59,11 @@ class Gridworld(DiscreteEnv):
             low=np.zeros(self.nS), high=np.ones(self.nS))
 
     def reset(self):
-        return one_hot(super().reset(), self.nS)
+        return onehot(super().reset(), self.nS)
 
     def step(self, action):
         s, r, t, i = super().step(action)
-        return one_hot(s, self.nS), r, t, i
+        return onehot(s, self.nS), r, t, i
 
     def compute_transitions(self):
         def transition_tuple(i: int, j: int) -> Tuple[float, int, float, bool]:
