@@ -90,7 +90,6 @@ class PPO:
                 else:
                     value_loss = 0.5 * F.mse_loss(sample.ret, values)
 
-                self.optimizer.zero_grad()
                 loss = (value_loss * self.value_loss_coef + action_loss -
                         dist_entropy * self.entropy_coef)
 
@@ -111,6 +110,7 @@ class PPO:
                     update_values.update(unsupervised_loss=unsupervised_loss.
                                          squeeze().detach().numpy())
                     self.unsupervised_optimizer.step()
+                    self.unsupervised_optimizer.zero_grad()
 
                 loss.backward(retain_graph=True)
                 total_norm += global_norm(
@@ -118,6 +118,7 @@ class PPO:
                 nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
                                          self.max_grad_norm)
                 self.optimizer.step()
+                self.optimizer.zero_grad()
                 update_values.update(
                     value_loss=value_loss.detach().numpy(),
                     action_loss=action_loss.detach().numpy(),
