@@ -193,22 +193,34 @@ def main(recurrent_policy,
 
         rollouts.compute_returns(
             next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau)
+
         train_results = agent.update(rollouts)
+
         rollouts.after_update()
 
-        if j % save_interval == 0 and log_dir is not None:
-            models = dict(
-                actor_critic=actor_critic)  # type: Dict[str, nn.Module]
+        total_num_steps = (j + 1) * num_processes * num_steps
+
+        if all(
+            [log_dir, save_interval,
+             time.time() - last_save >= save_interval]):
+            last_save = time.time()
+            modules = dict(
+                optimizer=agent.optimizer,
+                actor_critic=actor_critic)  # type: Dict[str, torch.nn.Module]
+
+            if isinstance(envs.venv, VecNormalize):
+                modules.update(vec_normalize=envs.venv)
+
             if unsupervised:
-                models.update(gan=gan)
+                modules.update(gan=gan)
             state_dict = {
-                name: model.state_dict()
-                for name, model in models.items()
+                name: module.state_dict()
+                for name, module in modules.items()
             }
             save_path = Path(log_dir, 'checkpoint.pt')
-            torch.save(state_dict, save_path)
+            torch.save(dict(step=j, **state_dict), save_path)
 
-        total_num_steps = (j + 1) * num_processes * num_steps
+            print(f'Saved parameters to {save_path}')
 
         if j % log_interval == 0:
             end = time.time()
