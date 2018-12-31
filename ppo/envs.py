@@ -7,13 +7,16 @@ from gym.spaces.box import Box
 from gym.wrappers import TimeLimit
 import numpy as np
 import torch
+import torch.nn as nn
 
+from common.running_mean_std import RunningMeanStd
 from common.vec_env import VecEnvWrapper
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
 from ppo.gridworld import GoalGridworld
-from ppo.hsr_adapter import HSREnv, UnsupervisedDummyVecEnv, UnsupervisedEnv, UnsupervisedSubprocVecEnv
+from ppo.hsr_adapter import HSREnv, MoveGripperEnv, UnsupervisedDummyVecEnv, \
+    UnsupervisedEnv, UnsupervisedSubprocVecEnv
 
 try:
     import dm_control2gym
@@ -31,11 +34,16 @@ except ImportError:
     pass
 
 
-def make_env(env_id, seed, rank, log_dir, add_timestep, allow_early_resets,
-             max_steps, env_args):
+def make_env(env_id, seed, rank, add_timestep, max_steps, env_args):
+    env_args = env_args.copy()
+    if rank != 0:
+        env_args.update(record=False)
+
     def _thunk():
-        if env_args:
+        if env_id == 'move-block':
             env = HSREnv(**env_args)
+        elif env_id == 'move-gripper':
+            env = MoveGripperEnv(**env_args)
         elif env_id == 'unsupervised':
             env = UnsupervisedEnv(**env_args)
         elif env_id.startswith("dm"):
@@ -98,8 +106,8 @@ def make_vec_envs(env_name,
                   env_args,
                   num_frame_stack=None):
     envs = [
-        make_env(env_name, seed, i, log_dir, add_timestep, allow_early_resets,
-                 max_steps, env_args) for i in range(num_processes)
+        make_env(env_name, seed, i, add_timestep, max_steps, env_args)
+        for i in range(num_processes)
     ]
 
     if env_name == 'unsupervised':
@@ -195,7 +203,7 @@ class VecPyTorch(VecEnvWrapper):
         return obs, reward, done, info
 
 
-class VecNormalize(VecNormalize_):
+class VecNormalize(VecNormalize_, nn.Module):
     def __init__(self, *args, **kwargs):
         super(VecNormalize, self).__init__(*args, **kwargs)
         self.training = True
@@ -216,6 +224,20 @@ class VecNormalize(VecNormalize_):
 
     def eval(self):
         self.training = False
+
+    def load_state_dict(self, state_dict, strict=True):
+        ret = state_dict['ret']
+        ret_rms = state_dict['ret_rms']
+        assert isinstance(ret, np.ndarray)
+        assert isinstance(ret_rms, (RunningMeanStd, type(None)))
+        self.ret = ret
+        self.ret_rms = ret_rms
+
+    def state_dict(self, destination=None, prefix='', keep_vars=False):
+        return dict(ret=self.ret, ret_rms=self.ret_rms)
+
+    def forward(self, *input):
+        raise NotImplementedError
 
 
 # Derived from
