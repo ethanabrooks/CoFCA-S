@@ -20,7 +20,7 @@ setup(
         'unsupervised=ppo.main:unsupervised_cli',
     ]),
     install_requires=[
-        'gym==0.10.9',
+        'gym',
         'numpy==1.15.4',
         'opencv-python==3.4.3.18',
         'torch==0.4.1',
