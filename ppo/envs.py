@@ -2,7 +2,6 @@
 # third party
 import sys
 
-# from baselines.common.atari_wrappers import make_atari, wrap_deepmind
 import gym
 from gym.spaces.box import Box
 from gym.wrappers import TimeLimit
