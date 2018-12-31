@@ -1,6 +1,6 @@
 # stdlib
-import argparse
 # third party
+import argparse
 from pathlib import Path
 
 import torch.nn as nn

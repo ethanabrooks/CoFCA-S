@@ -1,16 +1,15 @@
 # stdlib
-import copy
 import itertools
-import os
-import time
 from pathlib import Path
+import time
 
 import numpy as np
-import torch
 from tensorboardX import SummaryWriter
+import torch
 
 # first party
 from hsr.env import Observation
+from hsr.util import env_wrapper
 from ppo.arguments import build_parser, get_hsr_parser, get_unsupervised_parser
 from ppo.envs import make_vec_envs
 from ppo.gan import GAN
@@ -18,8 +17,6 @@ from ppo.hsr_adapter import UnsupervisedEnv
 from ppo.policy import Policy
 from ppo.ppo import PPO
 from ppo.storage import RolloutStorage
-from ppo.utils import get_vec_normalize
-from hsr.util import env_wrapper
 from utils import parse_groups
 
 # third party
@@ -188,21 +185,22 @@ def main(recurrent_policy,
                 rnn_hxs=rollouts.recurrent_hidden_states[-1],
                 masks=rollouts.masks[-1]).detach()
 
-        rollouts.compute_returns(next_value=next_value,
-                                 use_gae=use_gae,
-                                 gamma=gamma,
-                                 tau=tau)
+        rollouts.compute_returns(
+            next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau)
         train_results = agent.update(rollouts)
         rollouts.after_update()
 
         if j % save_interval == 0 and log_dir is not None:
-            models = dict(actor_critic=actor_critic)  # type: Dict[str, nn.Module]
+            models = dict(
+                actor_critic=actor_critic)  # type: Dict[str, nn.Module]
             if unsupervised:
                 models.update(gan=gan)
-            state_dict = {name: model.state_dict() for name, model in models.items()}
+            state_dict = {
+                name: model.state_dict()
+                for name, model in models.items()
+            }
             save_path = Path(log_dir, 'checkpoint.pt')
             torch.save(state_dict, save_path)
-
 
         total_num_steps = (j + 1) * num_processes * num_steps
 

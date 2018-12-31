@@ -1,22 +1,19 @@
 # stdlib
-import os
 # third party
 import sys
 
 import gym
+from gym.spaces.box import Box
+from gym.wrappers import TimeLimit
 import numpy as np
 import torch
+
 from common.vec_env import VecEnvWrapper
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
-from common.vec_env.vec_normalize import \
-    VecNormalize as VecNormalize_
-from gym.spaces.box import Box
-from gym.wrappers import TimeLimit
-
+from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
 from ppo.gridworld import GoalGridworld
-from ppo.hsr_adapter import (HSREnv, UnsupervisedDummyVecEnv, UnsupervisedEnv,
-                             UnsupervisedSubprocVecEnv)
+from ppo.hsr_adapter import HSREnv, UnsupervisedDummyVecEnv, UnsupervisedEnv, UnsupervisedSubprocVecEnv
 
 try:
     import dm_control2gym
