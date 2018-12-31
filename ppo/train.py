@@ -1,11 +1,12 @@
 import itertools
 import time
 from pathlib import Path
+from typing import Dict
 
 import numpy as np
+import torch
 from hsr.env import Observation
 from tensorboardX import SummaryWriter
-import torch
 
 from ppo.envs import make_vec_envs, VecNormalize
 from ppo.gan import GAN
@@ -83,6 +84,7 @@ def train(recurrent_policy,
         sample_env = UnsupervisedEnv(**env_args)
         gan = GAN(
             goal_size=3,
+            goal_space=sample_env.goal_space,
             **{k.replace('gan_', ''): v
                for k, v in unsupervised_args.items()})
 

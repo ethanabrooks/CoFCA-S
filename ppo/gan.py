@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from gym.spaces import Box
 
 from ppo.utils import init, init_normc_
 
@@ -8,8 +9,9 @@ class GAN(nn.Module):
     def forward(self, *input):
         return self.network(*input)
 
-    def __init__(self, num_layers, hidden_size, activation, goal_size):
+    def __init__(self, num_layers, hidden_size, activation, goal_size, goal_space: Box):
         super().__init__()
+        self.goal_space = goal_space
         self.hidden_size = hidden_size
         self.network = nn.Sequential()
 
@@ -33,7 +35,12 @@ class GAN(nn.Module):
         mean = torch.zeros(num_outputs, self.hidden_size)
         std = torch.ones(num_outputs, self.hidden_size)
         noise = torch.normal(mean, std)
-        return self(noise)
+        params = self(noise)
+        high = torch.from_numpy(self.goal_space.high)
+        low = torch.from_numpy(self.goal_space.low)
+        squashed = torch.sigmoid(params) * (high - low) + low
+        # assert self.goal_space.contains(squashed.squeeze().detach().numpy())
+        return squashed
 
     def parameters(self):
         return self.network.parameters()
