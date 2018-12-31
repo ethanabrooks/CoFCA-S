@@ -1,12 +1,13 @@
+# first party
 import argparse
 from pathlib import Path
 
-from hsr.util import env_wrapper, xml_setter
+from hsr.util import env_wrapper, add_env_args, add_wrapper_args
 from torch import nn as nn
-from utils.argparse import parse_vector
+from utils import parse_groups, parse_activation
 
+# third party
 from ppo.train import train
-from utils.argparse import parse_groups, parse_activation, parse_space
 
 
 def cli():
@@ -23,6 +24,10 @@ def unsupervised_cli():
     args_dict = parse_groups(parser)
     args_dict.update(env_name='unsupervised')
     env_wrapper(train)(**args_dict)
+
+
+if __name__ == "__main__":
+    hsr_cli()
 
 
 def build_parser():
@@ -151,36 +156,6 @@ def build_parser():
         default=0.5,
         help='max norm of gradients (default: 0.5)')
     return parser
-
-
-def add_env_args(parser):
-    parser.add_argument(
-        '--image-dims',
-        type=parse_vector(length=2, delim=','),
-        default='800,800')
-    parser.add_argument('--block-space', type=parse_space(dim=4))
-    parser.add_argument('--min-lift-height', type=float, default=None)
-    parser.add_argument('--no-random-reset', action='store_true')
-    parser.add_argument('--obs-type', type=str, default=None)
-    parser.add_argument('--randomize-pose', action='store_true')
-    parser.add_argument('--render', action='store_true')
-    parser.add_argument('--render-freq', type=int, default=None)
-    parser.add_argument('--record', action='store_true')
-    parser.add_argument('--record-separate-episodes', action='store_true')
-    parser.add_argument('--record-freq', type=int, default=None)
-    parser.add_argument('--record-path', type=Path, default=None)
-    parser.add_argument('--steps-per-action', type=int, required=True)
-
-
-def add_wrapper_args(parser):
-    parser.add_argument('--xml-file', type=Path, default='models/world.xml')
-    parser.add_argument(
-        '--set-xml', type=xml_setter, action='append', nargs='*')
-    parser.add_argument('--use-dof', type=str, action='append', default=[])
-    parser.add_argument('--geofence', type=float, required=True)
-    parser.add_argument('--n-blocks', type=int, required=True)
-    parser.add_argument(
-        '--goal-space', type=parse_space(dim=3), required=True)  # TODO
 
 
 def get_hsr_parser():
