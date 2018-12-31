@@ -12,7 +12,7 @@ from gym.envs.toy_text.discrete import DiscreteEnv
 from gym.spaces import Box
 from six import StringIO
 
-from utils.utils import one_hot
+from old_utils.utils import one_hot
 
 Transition = namedtuple('Transition', 'probability new_state reward terminal')
 

@@ -9,7 +9,7 @@ from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
 
 from environments import hsr
 from environments.hsr import Observation
-from utils.utils import concat_spaces, space_shape, unwrap_env, vectorize
+from old_utils.utils import concat_spaces, space_shape, unwrap_env, vectorize
 
 
 class HSREnv(hsr.HSREnv):

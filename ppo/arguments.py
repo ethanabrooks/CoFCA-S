@@ -6,7 +6,7 @@ from pathlib import Path
 import torch.nn as nn
 
 from scripts.hsr import add_env_args, add_wrapper_args
-from utils.arguments import parse_activation
+from old_utils.arguments import parse_activation
 
 
 def build_parser():

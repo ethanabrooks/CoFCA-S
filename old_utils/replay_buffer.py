@@ -5,7 +5,7 @@ from typing import Iterable
 # first party
 import numpy as np
 
-from utils.array_group import ArrayGroup, Key, X
+from old_utils.array_group import ArrayGroup, Key, X
 
 
 def get_index(value):

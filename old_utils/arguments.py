@@ -14,7 +14,7 @@ import torch.nn as nn
 from gym import spaces
 from gym.spaces import Box
 
-from utils.utils import parametric_relu
+from old_utils.utils import parametric_relu
 
 
 def make_box(*tuples: Tuple[float, float]):
