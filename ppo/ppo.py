@@ -101,18 +101,20 @@ class PPO:
 
                 if self.unsupervised:
                     grads = torch.autograd.grad(
-                        compute_action_loss(sample.ret),
-                        self.actor_critic.base.actor.parameters(),
+                        loss,
+                        self.actor_critic.parameters(),
                         create_graph=True)
                     unsupervised_loss = global_norm(grads)
                     unsupervised_loss.backward(retain_graph=True)
-
                     update_values.update(unsupervised_loss=unsupervised_loss.
                                          squeeze().detach().numpy())
+                    for grad, var in zip(grads, self.actor_critic.parameters()):
+                        var.grad.data = grad
                     self.unsupervised_optimizer.step()
                     self.unsupervised_optimizer.zero_grad()
 
-                loss.backward(retain_graph=True)
+                else:
+                    loss.backward()
                 total_norm += global_norm(
                     [p.grad for p in self.actor_critic.parameters()])
                 nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
