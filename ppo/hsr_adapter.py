@@ -55,7 +55,7 @@ class UnsupervisedEnv(env.HSREnv):
 
     def step(self, actions):
         s, r, t, i = super().step(actions)
-        i.update(goal=self.goals[-1])
+        i.update(goal=self.goal)
         observation = Observation(observation=s.observation, goal=s.goal)
         return vectorize(observation), r, t, i
 
@@ -126,7 +126,7 @@ class UnsupervisedSubprocVecEnv(SubprocVecEnv):
         observation_space, action_space = self.remotes[0].recv()
         VecEnv.__init__(self, len(env_fns), observation_space, action_space)
 
-    def store_goals(self, goal, i):
+    def set_goal(self, goal, i):
         self.remotes[i].send(('set_goal', goal))
 
 
