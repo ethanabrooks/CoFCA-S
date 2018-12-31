@@ -44,13 +44,6 @@ def main(recurrent_policy,
          max_steps=None,
          env_args=None,
          unsupervised_args=None):
-    algo = 'ppo'
-
-    if num_frames:
-        updates = range(int(num_frames) // num_steps // num_processes)
-    else:
-        updates = itertools.count()
-
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
 
@@ -61,6 +54,7 @@ def main(recurrent_policy,
     eval_log_dir = None
     if log_dir:
         writer = SummaryWriter(log_dir=str(log_dir))
+        print(f'Logging to {log_dir}')
         eval_log_dir = log_dir.joinpath("eval")
 
         for _dir in [log_dir, eval_log_dir]:
@@ -113,18 +107,6 @@ def main(recurrent_policy,
         envs.action_space,
         network_args=network_args)
 
-    if load_path:
-        state_dict = torch.load(load_path)
-        if unsupervised:
-            gan.load_state_dict(state_dict['gan'])
-        actor_critic.load_state_dict(state_dict['actor_critic'])
-
-    actor_critic.to(device)
-    if unsupervised:
-        gan.to(device)
-
-    agent = PPO(actor_critic=actor_critic, gan=gan, **ppo_args)
-
     rollouts = RolloutStorage(
         num_steps=num_steps,
         num_processes=num_processes,
@@ -133,11 +115,36 @@ def main(recurrent_policy,
         recurrent_hidden_state_size=actor_critic.recurrent_hidden_state_size,
     )
 
-    rollouts.obs[0].copy_(obs)
-    rollouts.to(device)
+    agent = PPO(actor_critic=actor_critic, gan=gan, **ppo_args)
 
     rewards_counter = np.zeros(num_processes)
     episode_rewards = []
+    last_log = time.time()
+    last_save = time.time()
+
+    start = 0
+    if load_path:
+        state_dict = torch.load(load_path)
+        if unsupervised:
+            gan.load_state_dict(state_dict['gan'])
+        actor_critic.load_state_dict(state_dict['actor_critic'])
+        agent.optimizer.load_state_dict(state_dict['optimizer'])
+        start = state_dict.get('step', -1) + 1
+        if isinstance(envs.venv, VecNormalize):
+            envs.venv.load_state_dict(state_dict['vec_normalize'])
+        print(f'Loaded parameters from {load_path}.')
+
+    if num_frames:
+        updates = range(start, int(num_frames) // num_steps // num_processes)
+    else:
+        updates = itertools.count(start)
+
+    actor_critic.to(device)
+    if unsupervised:
+        gan.to(device)
+
+    rollouts.obs[0].copy_(obs)
+    rollouts.to(device)
 
     start = time.time()
     for j in updates:
