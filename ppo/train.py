@@ -93,7 +93,8 @@ def train(recurrent_policy,
             replace = Observation(*split)._replace(goal=_goals)
             return torch.cat(replace, dim=1)
 
-        goals = gan.sample(num_processes)
+        noises = gan.sample_noise(num_processes)
+        goals = gan(noises)
         for i, goal in enumerate(goals):
             envs.unwrapped.set_goal(goal.detach().numpy(), i)
         obs = substitute_goal(obs, goals)
@@ -159,10 +160,11 @@ def train(recurrent_policy,
             if unsupervised:
                 for i, _done in enumerate(done):
                     if _done:
-                        goal = gan.sample(1)
+                        noise = gan.sample_noise(1)
+                        goal = gan(noise)
                         envs.unwrapped.set_goal(goal.detach().numpy(), i)
-                        goals[i] = goal
-                obs = substitute_goal(obs, goals)
+                        noises[i] = noise
+                obs = substitute_goal(obs, gan(noises.detach()))
 
             # track rewards
             rewards_counter += rewards
@@ -237,8 +239,7 @@ def train(recurrent_policy,
                                   total_num_steps)
                 for k, v in train_results.items():
                     if np.isscalar(v):
-                        writer.add_scalar(
-                            k, v, total_num_steps)
+                        writer.add_scalar(k, v, total_num_steps)
             episode_rewards = []
 
         if eval_interval is not None and j % eval_interval == eval_interval - 1:

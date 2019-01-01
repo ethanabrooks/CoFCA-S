@@ -6,10 +6,8 @@ from ppo.utils import init, init_normc_
 
 
 class GAN(nn.Module):
-    def forward(self, *input):
-        return self.network(*input)
-
-    def __init__(self, num_layers, hidden_size, activation, goal_size, goal_space: Box):
+    def __init__(self, num_layers, hidden_size, activation, goal_size,
+                 goal_space: Box):
         super().__init__()
         self.goal_space = goal_space
         self.hidden_size = hidden_size
@@ -30,6 +28,19 @@ class GAN(nn.Module):
                 # last layer: no activation
                 self.network.add_module(
                     name=f'linear{i}', module=linear(goal_size))
+
+    def sample_noise(self, num_outputs):
+        mean = torch.zeros(num_outputs, self.hidden_size)
+        std = torch.ones(num_outputs, self.hidden_size)
+        return torch.normal(mean, std)
+
+    def forward(self, *inputs):
+        params = self.network(*inputs)
+        high = torch.from_numpy(self.goal_space.high)
+        low = torch.from_numpy(self.goal_space.low)
+        squashed = torch.sigmoid(params) * (high - low) + low
+        # assert self.goal_space.contains(squashed.squeeze().detach().numpy())
+        return squashed
 
     def sample(self, num_outputs):
         mean = torch.zeros(num_outputs, self.hidden_size)

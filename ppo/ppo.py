@@ -64,7 +64,7 @@ class PPO:
                 # Reshape to do in a single forward pass for all steps
                 values, action_log_probs, dist_entropy, \
                 _ = self.actor_critic.evaluate_actions(
-                    sample.obs, sample.recurrent_hidden_states, sample.masks,
+                    sample.obs.detach(), sample.recurrent_hidden_states, sample.masks,
                     sample.actions)
 
                 def compute_action_loss(J):
@@ -105,14 +105,14 @@ class PPO:
                         self.actor_critic.parameters(),
                         create_graph=True)
                     unsupervised_loss = global_norm(grads)
-                    unsupervised_loss.backward(retain_graph=True)
+                    unsupervised_loss.backward()
                     update_values.update(unsupervised_loss=unsupervised_loss.
                                          squeeze().detach().numpy())
-                    for grad, var in zip(grads, self.actor_critic.parameters()):
+                    for grad, var in zip(grads,
+                                         self.actor_critic.parameters()):
                         var.grad.data = grad
                     self.unsupervised_optimizer.step()
                     self.unsupervised_optimizer.zero_grad()
-
                 else:
                     loss.backward()
                 total_norm += global_norm(
@@ -125,7 +125,8 @@ class PPO:
                     value_loss=value_loss.detach().numpy(),
                     action_loss=action_loss.detach().numpy(),
                     entropy=dist_entropy.detach().numpy(),
-                    norm=total_norm.detach().numpy())
+                    norm=total_norm.detach().numpy(),
+                )
 
         num_updates = self.ppo_epoch * self.num_mini_batch
         return {k: v / num_updates for k, v in update_values.items()}
