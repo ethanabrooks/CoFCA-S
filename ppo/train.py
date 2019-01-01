@@ -13,7 +13,7 @@ from ppo.gan import GAN
 from ppo.hsr_adapter import UnsupervisedEnv
 from ppo.policy import Policy
 from ppo.ppo import PPO
-from ppo.storage import RolloutStorage
+from ppo.storage import RolloutStorage, UnsupervisedRolloutStorage
 
 
 def train(recurrent_policy,
@@ -79,6 +79,11 @@ def train(recurrent_policy,
 
     obs = envs.reset()
 
+    actor_critic = Policy(
+        envs.observation_space.shape,
+        envs.action_space,
+        network_args=network_args)
+
     gan = None
     if unsupervised:
         sample_env = UnsupervisedEnv(**env_args)
@@ -88,35 +93,40 @@ def train(recurrent_policy,
             **{k.replace('gan_', ''): v
                for k, v in unsupervised_args.items()})
 
-        def substitute_goal(_obs, _goals):
-            split = torch.split(_obs, sample_env.subspace_sizes, dim=1)
-            replace = Observation(*split)._replace(goal=_goals)
-            return torch.cat(replace, dim=1)
-
         noises = gan.sample_noise(num_processes)
         goals = gan(noises)
         for i, goal in enumerate(goals):
             envs.unwrapped.set_goal(goal.detach().numpy(), i)
-        obs = substitute_goal(obs, goals)
 
-    actor_critic = Policy(
-        envs.observation_space.shape,
-        envs.action_space,
-        network_args=network_args)
+        def substitute_goal(_obs, _noise):
+            goals = gan(_noise)
+            split = torch.split(_obs, sample_env.subspace_sizes, dim=1)
+            replace = Observation(*split)._replace(goal=goals)
+            return torch.cat(replace, dim=1)
 
-    rollouts = RolloutStorage(
-        num_steps=num_steps,
-        num_processes=num_processes,
-        obs_shape=envs.observation_space.shape,
-        action_space=envs.action_space,
-        recurrent_hidden_state_size=actor_critic.recurrent_hidden_state_size,
-    )
+        rollouts = UnsupervisedRolloutStorage(
+            num_steps=num_steps,
+            num_processes=num_processes,
+            obs_shape=envs.observation_space.shape,
+            action_space=envs.action_space,
+            recurrent_hidden_state_size=actor_critic.recurrent_hidden_state_size,
+            noise_size=gan.hidden_size,
+            substitute_goal=substitute_goal
+        )
+
+    else:
+        rollouts = RolloutStorage(
+            num_steps=num_steps,
+            num_processes=num_processes,
+            obs_shape=envs.observation_space.shape,
+            action_space=envs.action_space,
+            recurrent_hidden_state_size=actor_critic.recurrent_hidden_state_size,
+        )
 
     agent = PPO(actor_critic=actor_critic, gan=gan, **ppo_args)
 
     rewards_counter = np.zeros(num_processes)
     episode_rewards = []
-    last_log = time.time()
     last_save = time.time()
 
     start = 0
@@ -164,7 +174,6 @@ def train(recurrent_policy,
                         goal = gan(noise)
                         envs.unwrapped.set_goal(goal.detach().numpy(), i)
                         noises[i] = noise
-                obs = substitute_goal(obs, gan(noises.detach()))
 
             # track rewards
             rewards_counter += rewards
@@ -174,14 +183,26 @@ def train(recurrent_policy,
             # If done then clean the history of observations.
             masks = torch.FloatTensor(
                 [[0.0] if done_ else [1.0] for done_ in done])
-            rollouts.insert(
-                obs=obs,
-                recurrent_hidden_states=recurrent_hidden_states,
-                actions=actions,
-                action_log_probs=action_log_probs,
-                values=values,
-                rewards=rewards,
-                masks=masks)
+            if unsupervised:
+                rollouts.insert(
+                    obs=obs,
+                    recurrent_hidden_states=recurrent_hidden_states,
+                    actions=actions,
+                    action_log_probs=action_log_probs,
+                    values=values,
+                    rewards=rewards,
+                    masks=masks,
+                    noise=noises
+                )
+            else:
+                rollouts.insert(
+                    obs=obs,
+                    recurrent_hidden_states=recurrent_hidden_states,
+                    actions=actions,
+                    action_log_probs=action_log_probs,
+                    values=values,
+                    rewards=rewards,
+                    masks=masks)
 
         with torch.no_grad():
             next_value = actor_critic.get_value(
