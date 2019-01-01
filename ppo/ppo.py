@@ -112,15 +112,16 @@ class PPO:
                                          squeeze().detach().numpy())
                     self.unsupervised_optimizer.step()
                     self.unsupervised_optimizer.zero_grad()
+                self.optimizer.zero_grad()
                 value_loss, action_loss, dist_entropy = \
                     components = compute_loss_components(sample.obs.detach())
-                compute_loss(*components).backward()
+                loss = compute_loss(*components)
+                loss.backward()
                 total_norm += global_norm(
                     [p.grad for p in self.actor_critic.parameters()])
                 nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
                                          self.max_grad_norm)
                 self.optimizer.step()
-                self.optimizer.zero_grad()
                 update_values.update(
                     value_loss=value_loss.detach().numpy(),
                     action_loss=action_loss.detach().numpy(),
