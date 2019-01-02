@@ -93,7 +93,7 @@ class PPO:
 
                 def compute_loss(value_loss, action_loss, dist_entropy):
                     return (value_loss * self.value_loss_coef + action_loss -
-                            dist_entropy * self.entropy_coef)
+                            dist_entropy * self.entropy_coef) * sample.importance_weighting
 
                 def global_norm(grads):
                     norm = 0
@@ -110,8 +110,8 @@ class PPO:
                     unsupervised_loss.backward()
                     update_values.update(unsupervised_loss=unsupervised_loss.
                                          squeeze().detach().numpy())
-                    self.unsupervised_optimizer.step()
-                    self.unsupervised_optimizer.zero_grad()
+                    # self.unsupervised_optimizer.step()
+                    # self.unsupervised_optimizer.zero_grad()
                 self.optimizer.zero_grad()
                 value_loss, action_loss, dist_entropy = \
                     components = compute_loss_components(sample.obs.detach())
