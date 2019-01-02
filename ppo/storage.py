@@ -223,7 +223,7 @@ class UnsupervisedRolloutStorage(RolloutStorage):
         importance_weighting = self.importance_weighting[:-1].view(-1, 1)[indices]
         batch = super().make_batch(advantages=advantages, indices=indices)
         return batch._replace(obs=self.substitute_goal(batch.obs, noise),
-                              importance_weighting=1) #importance_weighting)
+                              importance_weighting=importance_weighting)
 
     def recurrent_generator(self, advantages, num_mini_batch):
         raise NotImplementedError
