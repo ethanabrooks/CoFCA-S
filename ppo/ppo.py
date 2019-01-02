@@ -104,14 +104,14 @@ class PPO:
                         compute_loss(*compute_loss_components(sample.obs)),
                         self.actor_critic.parameters(),
                         create_graph=True)
-                #     unsupervised_loss = global_norm(grads)
-                #     unsupervised_loss.backward()
-                #     update_values.update(unsupervised_loss=unsupervised_loss.
-                #                          squeeze().detach().numpy())
-                    # self.unsupervised_optimizer.step()
-                    # self.unsupervised_optimizer.zero_grad()
+                    unsupervised_loss = global_norm(grads)
+                    unsupervised_loss.backward()
+                    update_values.update(unsupervised_loss=unsupervised_loss.
+                                         squeeze().detach().numpy())
+                self.unsupervised_optimizer.step()
+                self.unsupervised_optimizer.zero_grad()
                 self.optimizer.zero_grad()
-                value_loss, action_loss, dist_entropy = \
+                value_loss, action_loss, entropy = \
                     components = compute_loss_components(sample.obs.detach())
                 loss = compute_loss(*components)
                 loss.backward()
@@ -120,12 +120,14 @@ class PPO:
                 nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
                                          self.max_grad_norm)
                 self.optimizer.step()
+                # noinspection PyTypeChecker
                 update_values.update(
-                    value_loss=value_loss.detach().numpy(),
-                    action_loss=action_loss.detach().numpy(),
-                    entropy=dist_entropy.detach().numpy(),
-                    norm=total_norm.detach().numpy(),
+                    value_loss=value_loss,
+                    action_loss=action_loss,
+                    norm=total_norm,
+                    entropy=entropy,
                 )
 
         num_updates = self.ppo_epoch * self.num_mini_batch
-        return {k: v / num_updates for k, v in update_values.items()}
+        return {k: v.mean().detach().numpy() / num_updates
+                for k, v in update_values.items()}
