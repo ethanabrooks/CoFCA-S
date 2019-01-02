@@ -93,7 +93,7 @@ def train(recurrent_policy,
             **{k.replace('gan_', ''): v
                for k, v in unsupervised_args.items()})
 
-        noises = gan.sample_noise(num_processes)
+        noises, goal_probs = gan.sample_noise(num_processes)
         goals = gan(noises)
         for i, goal in enumerate(goals):
             envs.unwrapped.set_goal(goal.detach().numpy(), i)
@@ -170,10 +170,11 @@ def train(recurrent_policy,
             if unsupervised:
                 for i, _done in enumerate(done):
                     if _done:
-                        noise = gan.sample_noise(1)
+                        noise, prob = gan.sample_noise(1)
                         goal = gan(noise)
                         envs.unwrapped.set_goal(goal.detach().numpy(), i)
                         noises[i] = noise
+                        goal_probs[i] = prob
 
             # track rewards
             rewards_counter += rewards
@@ -192,7 +193,8 @@ def train(recurrent_policy,
                     values=values,
                     rewards=rewards,
                     masks=masks,
-                    noise=noises
+                    noise=noises,
+                    importance_weighting=1 / goal_probs
                 )
             else:
                 rollouts.insert(

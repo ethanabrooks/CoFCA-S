@@ -48,7 +48,7 @@ class PPO:
     def update(self, rollouts: RolloutStorage):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         advantages = (advantages - advantages.mean()) / (
-            advantages.std() + 1e-5)
+                advantages.std() + 1e-5)
 
         update_values = Counter()
 
@@ -74,32 +74,30 @@ class PPO:
                     surr1 = ratio * sample.adv
                     surr2 = torch.clamp(ratio, 1.0 - self.clip_param,
                                         1.0 + self.clip_param) * sample.adv
-                    action_loss = -torch.min(surr1, surr2).mean()
+                    action_losses = -torch.min(surr1, surr2)
 
+                    value_losses = (values - sample.ret).pow(2)
                     if self.use_clipped_value_loss:
-
                         value_pred_clipped = sample.value_preds + \
                                              (values - sample.value_preds).clamp(
                                                  -self.clip_param, self.clip_param)
-                        value_losses = (values - sample.ret).pow(2)
                         value_losses_clipped = (
-                            value_pred_clipped - sample.ret).pow(2)
-                        value_loss = .5 * torch.max(value_losses,
-                                                    value_losses_clipped).mean()
-                    else:
-                        value_loss = 0.5 * F.mse_loss(sample.ret, values)
+                                value_pred_clipped - sample.ret).pow(2)
+                        value_losses = .5 * torch.max(value_losses,
+                                                      value_losses_clipped)
 
-                    return value_loss, action_loss, dist_entropy
+                    return value_losses, action_losses, dist_entropy
 
                 def compute_loss(value_loss, action_loss, dist_entropy):
-                    return (value_loss * self.value_loss_coef + action_loss -
-                            dist_entropy * self.entropy_coef)
+                    losses = (value_loss * self.value_loss_coef + action_loss -
+                              dist_entropy * self.entropy_coef)
+                    return torch.mean(losses * sample.importance_weighting)
 
                 def global_norm(grads):
                     norm = 0
                     for grad in grads:
-                        norm += grad.norm(2)**2
-                    return norm**.5
+                        norm += grad.norm(2) ** 2
+                    return norm ** .5
 
                 if self.unsupervised:
                     grads = torch.autograd.grad(
@@ -110,8 +108,8 @@ class PPO:
                     unsupervised_loss.backward()
                     update_values.update(unsupervised_loss=unsupervised_loss.
                                          squeeze().detach().numpy())
-                    self.unsupervised_optimizer.step()
-                    self.unsupervised_optimizer.zero_grad()
+                    # self.unsupervised_optimizer.step()
+                    # self.unsupervised_optimizer.zero_grad()
                 self.optimizer.zero_grad()
                 value_loss, action_loss, dist_entropy = \
                     components = compute_loss_components(sample.obs.detach())

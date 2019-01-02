@@ -32,21 +32,12 @@ class GAN(nn.Module):
     def sample_noise(self, num_outputs):
         mean = torch.zeros(num_outputs, self.hidden_size)
         std = torch.ones(num_outputs, self.hidden_size)
-        return torch.normal(mean, std)
+        dist = torch.distributions.normal.Normal(mean, std)
+        sample = dist.sample()
+        return sample, dist.log_prob(sample).mean(dim=1).exp()
 
     def forward(self, *inputs):
         params = self.network(*inputs)
-        high = torch.from_numpy(self.goal_space.high)
-        low = torch.from_numpy(self.goal_space.low)
-        squashed = torch.sigmoid(params) * (high - low) + low
-        # assert self.goal_space.contains(squashed.squeeze().detach().numpy())
-        return squashed
-
-    def sample(self, num_outputs):
-        mean = torch.zeros(num_outputs, self.hidden_size)
-        std = torch.ones(num_outputs, self.hidden_size)
-        noise = torch.normal(mean, std)
-        params = self(noise)
         high = torch.from_numpy(self.goal_space.high)
         low = torch.from_numpy(self.goal_space.low)
         squashed = torch.sigmoid(params) * (high - low) + low
