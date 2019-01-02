@@ -99,11 +99,11 @@ class PPO:
                         norm += grad.norm(2) ** 2
                     return norm ** .5
 
-                if self.unsupervised:
-                    grads = torch.autograd.grad(
-                        compute_loss(*compute_loss_components(sample.obs)),
-                        self.actor_critic.parameters(),
-                        create_graph=True)
+                # if self.unsupervised:
+                #     grads = torch.autograd.grad(
+                #         compute_loss(*compute_loss_components(sample.obs)),
+                #         self.actor_critic.parameters(),
+                #         create_graph=True)
                 #     unsupervised_loss = global_norm(grads)
                 #     unsupervised_loss.backward()
                 #     update_values.update(unsupervised_loss=unsupervised_loss.

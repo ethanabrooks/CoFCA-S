@@ -99,11 +99,10 @@ def train(recurrent_policy,
             envs.unwrapped.set_goal(goal.detach().numpy(), i)
 
         def substitute_goal(_obs, _noise):
-            return _obs
-            # goals = gan(_noise)
-            # split = torch.split(_obs, sample_env.subspace_sizes, dim=1)
-            # replace = Observation(*split)._replace(goal=goals)
-            # return torch.cat(replace, dim=1)
+            goals = gan(_noise)
+            split = torch.split(_obs, sample_env.subspace_sizes, dim=1)
+            replace = Observation(*split)._replace(goal=goals)
+            return torch.cat(replace, dim=1)
 
         rollouts = UnsupervisedRolloutStorage(
             num_steps=num_steps,
