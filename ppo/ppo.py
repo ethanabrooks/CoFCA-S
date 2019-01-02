@@ -105,10 +105,10 @@ class PPO:
                         self.actor_critic.parameters(),
                         create_graph=True)
                     unsupervised_loss = global_norm(grads)
-                #     unsupervised_loss.backward()
+                    unsupervised_loss.backward()
                     update_values.update(unsupervised_loss=unsupervised_loss)
-                # self.unsupervised_optimizer.step()
-                # self.unsupervised_optimizer.zero_grad()
+                    # self.unsupervised_optimizer.step()
+                    self.unsupervised_optimizer.zero_grad()
                 self.optimizer.zero_grad()
                 value_loss, action_loss, entropy = \
                     components = compute_loss_components(sample.obs.detach())
