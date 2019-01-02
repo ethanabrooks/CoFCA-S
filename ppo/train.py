@@ -98,23 +98,23 @@ def train(recurrent_policy,
         for i, goal in enumerate(goals):
             envs.unwrapped.set_goal(goal.detach().numpy(), i)
 
-        def substitute_goal(_obs, _noise):
-            goals = gan(_noise)
-            split = torch.split(_obs, sample_env.subspace_sizes, dim=1)
-            replace = Observation(*split)._replace(goal=goals)
-            return torch.cat(replace, dim=1)
-
-        rollouts = UnsupervisedRolloutStorage(
-            num_steps=num_steps,
-            num_processes=num_processes,
-            obs_shape=envs.observation_space.shape,
-            action_space=envs.action_space,
-            recurrent_hidden_state_size=actor_critic.recurrent_hidden_state_size,
-            noise_size=gan.hidden_size,
-            substitute_goal=substitute_goal
-        )
-
-    else:
+    #     def substitute_goal(_obs, _noise):
+    #         goals = gan(_noise)
+    #         split = torch.split(_obs, sample_env.subspace_sizes, dim=1)
+    #         replace = Observation(*split)._replace(goal=goals)
+    #         return torch.cat(replace, dim=1)
+    #
+    #     rollouts = UnsupervisedRolloutStorage(
+    #         num_steps=num_steps,
+    #         num_processes=num_processes,
+    #         obs_shape=envs.observation_space.shape,
+    #         action_space=envs.action_space,
+    #         recurrent_hidden_state_size=actor_critic.recurrent_hidden_state_size,
+    #         noise_size=gan.hidden_size,
+    #         substitute_goal=substitute_goal
+    #     )
+    #
+    # else:
         rollouts = RolloutStorage(
             num_steps=num_steps,
             num_processes=num_processes,
@@ -184,20 +184,20 @@ def train(recurrent_policy,
             # If done then clean the history of observations.
             masks = torch.FloatTensor(
                 [[0.0] if done_ else [1.0] for done_ in done])
-            if unsupervised:
-                rollouts.insert(
-                    obs=obs,
-                    recurrent_hidden_states=recurrent_hidden_states,
-                    actions=actions,
-                    action_log_probs=action_log_probs,
-                    values=values,
-                    rewards=rewards,
-                    masks=masks,
-                    noise=noises,
-                    importance_weighting=1 / goal_probs
-                )
-            else:
-                rollouts.insert(
+            # if unsupervised:
+            #     rollouts.insert(
+            #         obs=obs,
+            #         recurrent_hidden_states=recurrent_hidden_states,
+            #         actions=actions,
+            #         action_log_probs=action_log_probs,
+            #         values=values,
+            #         rewards=rewards,
+            #         masks=masks,
+            #         noise=noises,
+            #         importance_weighting=1 / goal_probs
+            #     )
+            # else:
+            rollouts.insert(
                     obs=obs,
                     recurrent_hidden_states=recurrent_hidden_states,
                     actions=actions,
