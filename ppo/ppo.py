@@ -114,12 +114,12 @@ class PPO:
                 value_loss, action_loss, entropy = \
                     components = compute_loss_components(sample.obs.detach())
                 loss = compute_loss(*components)
-                loss.backward()
+                # loss.backward()
                 total_norm += global_norm(
                     [p.grad for p in self.actor_critic.parameters()])
                 nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
                                          self.max_grad_norm)
-                self.optimizer.step()
+                # self.optimizer.step()
                 # noinspection PyTypeChecker
                 update_values.update(
                     value_loss=value_loss,
