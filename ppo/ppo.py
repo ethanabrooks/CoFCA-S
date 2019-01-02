@@ -108,7 +108,7 @@ class PPO:
                     unsupervised_loss.backward()
                     update_values.update(unsupervised_loss=unsupervised_loss.
                                          squeeze().detach().numpy())
-                    # self.unsupervised_optimizer.step()
+                    self.unsupervised_optimizer.step()
                     self.unsupervised_optimizer.zero_grad()
                 self.optimizer.zero_grad()
                 value_loss, action_loss, entropy = \
