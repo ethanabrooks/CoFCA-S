@@ -119,8 +119,8 @@ class PPO:
                     self.gradient_rms.update(norm.numpy(), axis=None)
                     log_prob = self.gan.log_prob(sample.goals)
                     norm_minus_baseline = norm - self.gradient_rms.mean
-                    unsupervised_loss = log_prob * norm_minus_baseline.detach()
-                    unsupervised_loss.mean().backward()
+                    unsupervised_loss = (log_prob * norm_minus_baseline.detach()).mean()
+                    unsupervised_loss.backward()
                     update_values.update(
                         unsupervised_loss=unsupervised_loss,
                         norm_minus_baseline=norm_minus_baseline)
@@ -145,7 +145,5 @@ class PPO:
                 )
 
         num_updates = self.ppo_epoch * self.num_mini_batch
-        return {
-            k: v.detach().numpy() / num_updates
-            for k, v in update_values.items()
-        }
+        return {k: v.detach().numpy() / num_updates
+                for k, v in update_values.items()}
