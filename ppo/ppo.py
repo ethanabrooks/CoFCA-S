@@ -110,17 +110,17 @@ class PPO:
                         norm += grad.norm(2)**2
                     return norm**.5
 
-                # if self.unsupervised:
-                #     grads = torch.autograd.grad(
-                #         compute_loss(*compute_loss_components()),
-                #         self.actor_critic.parameters())
-                #     norm = global_norm(grads).detach()
-                #     self.gradient_rms.update(norm.numpy(), axis=None)
-                #     log_prob = self.gan.log_prob(sample.goals)
-                #     unsupervised_loss = log_prob * (
-                #         norm - self.gradient_rms.mean)
-                #     unsupervised_loss.mean().backward()
-                #     update_values.update(unsupervised_loss=unsupervised_loss)
+                if self.unsupervised:
+                    grads = torch.autograd.grad(
+                        compute_loss(*compute_loss_components()),
+                        self.actor_critic.parameters())
+                    norm = global_norm(grads).detach()
+                    self.gradient_rms.update(norm.numpy(), axis=None)
+                    log_prob = self.gan.log_prob(sample.goals)
+                    unsupervised_loss = log_prob * (
+                        norm - self.gradient_rms.mean)
+                    # unsupervised_loss.mean().backward()
+                    update_values.update(unsupervised_loss=unsupervised_loss)
                 #     # self.unsupervised_optimizer.step()
                 #     self.unsupervised_optimizer.zero_grad()
                 self.optimizer.zero_grad()
