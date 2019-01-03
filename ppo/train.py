@@ -82,6 +82,7 @@ def train(recurrent_policy,
         envs.action_space,
         network_args=network_args)
 
+    gan = None
     if unsupervised:
         sample_env = UnsupervisedEnv(**env_args)
         gan = GAN(
@@ -99,9 +100,9 @@ def train(recurrent_policy,
             num_processes=num_processes,
             obs_shape=envs.observation_space.shape,
             action_space=envs.action_space,
-            recurrent_hidden_state_size=actor_critic.recurrent_hidden_state_size,
-            goal_size=space_to_size(sample_env.goal_space)
-        )
+            recurrent_hidden_state_size=actor_critic.
+            recurrent_hidden_state_size,
+            goal_size=space_to_size(sample_env.goal_space))
 
     else:
         rollouts = RolloutStorage(
@@ -109,7 +110,8 @@ def train(recurrent_policy,
             num_processes=num_processes,
             obs_shape=envs.observation_space.shape,
             action_space=envs.action_space,
-            recurrent_hidden_state_size=actor_critic.recurrent_hidden_state_size,
+            recurrent_hidden_state_size=actor_critic.
+            recurrent_hidden_state_size,
         )
 
     agent = PPO(actor_critic=actor_critic, gan=gan, **ppo_args)
@@ -212,8 +214,8 @@ def train(recurrent_policy,
         total_num_steps = (j + 1) * num_processes * num_steps
 
         if all(
-                [log_dir, save_interval,
-                 time.time() - last_save >= save_interval]):
+            [log_dir, save_interval,
+             time.time() - last_save >= save_interval]):
             last_save = time.time()
             modules = dict(
                 optimizer=agent.optimizer,
