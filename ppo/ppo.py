@@ -63,18 +63,24 @@ class PPO:
 
             for sample in data_generator:
                 # Reshape to do in a single forward pass for all steps
-                def compute_loss_components(obs):
-                    values, action_log_probs, dist_entropy, \
+                def compute_prob_losses(log_probs, old_log_probs, J):
+                    ratio = torch.exp(log_probs - old_log_probs)
+                    surr1 = ratio * J
+                    surr2 = torch.clamp(ratio, 1.0 - self.clip_param,
+                                        1.0 + self.clip_param) * J
+                    return -torch.min(surr1, surr2)
+
+                def compute_loss_components():
+                    values, action_log_prob, dist_entropy, \
                     _ = self.actor_critic.evaluate_actions(
-                        obs, sample.recurrent_hidden_states, sample.masks,
+                        sample.obs, sample.recurrent_hidden_states, sample.masks,
                         sample.actions)
 
-                    ratio = torch.exp(action_log_probs -
-                                      sample.old_action_log_probs)
-                    surr1 = ratio * sample.adv
-                    surr2 = torch.clamp(ratio, 1.0 - self.clip_param,
-                                        1.0 + self.clip_param) * sample.adv
-                    action_losses = -torch.min(surr1, surr2)
+                    action_losses = compute_prob_losses(
+                        log_probs=action_log_prob,
+                        old_log_probs=sample.old_action_log_probs,
+                        J=sample.adv
+                    )
 
                     value_losses = (values - sample.ret).pow(2)
                     if self.use_clipped_value_loss:
@@ -89,9 +95,14 @@ class PPO:
                     return value_losses, action_losses, dist_entropy
 
                 def compute_loss(value_loss, action_loss, dist_entropy):
+                    if sample.old_goal_log_probs is None:
+                        importance_weighting = 1
+                    else:
+                        log_probs = sample.old_goal_log_probs.detach()
+                        importance_weighting = 1 / log_probs.exp()
                     losses = (value_loss * self.value_loss_coef + action_loss -
                               dist_entropy * self.entropy_coef)
-                    return torch.mean(losses * sample.importance_weighting)
+                    return torch.mean(losses * importance_weighting)
 
                 def global_norm(grads):
                     norm = 0
@@ -99,20 +110,22 @@ class PPO:
                         norm += grad.norm(2) ** 2
                     return norm ** .5
 
-                # if self.unsupervised:
-                #     grads = torch.autograd.grad(
-                #         compute_loss(*compute_loss_components(sample.obs)),
-                #         self.actor_critic.parameters(),
-                #         create_graph=True)
-                #     unsupervised_loss = global_norm(grads)
-                #     unsupervised_loss.backward()
-                #     update_values.update(unsupervised_loss=unsupervised_loss.
-                #                          squeeze().detach().numpy())
-                    # self.unsupervised_optimizer.step()
-                    # self.unsupervised_optimizer.zero_grad()
+                if self.unsupervised:
+                    grads = torch.autograd.grad(
+                        compute_loss(*compute_loss_components()),
+                        self.actor_critic.parameters(),
+                        create_graph=True)
+                    unsupervised_loss = compute_prob_losses(
+                        log_probs=self.gan.log_prob(sample.goals),
+                        old_log_probs=sample.old_goal_log_probs,
+                        J=global_norm(grads))
+                    # unsupervised_loss.mean().backward()
+                    update_values.update(unsupervised_loss=unsupervised_loss)
+                    self.unsupervised_optimizer.step()
+                    self.unsupervised_optimizer.zero_grad()
                 self.optimizer.zero_grad()
-                value_loss, action_loss, dist_entropy = \
-                    components = compute_loss_components(sample.obs.detach())
+                value_loss, action_loss, entropy = \
+                    components = compute_loss_components()
                 loss = compute_loss(*components)
                 loss.backward()
                 total_norm += global_norm(
@@ -120,12 +133,14 @@ class PPO:
                 nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
                                          self.max_grad_norm)
                 self.optimizer.step()
+                # noinspection PyTypeChecker
                 update_values.update(
-                    value_loss=value_loss.detach().numpy(),
-                    action_loss=action_loss.detach().numpy(),
-                    entropy=dist_entropy.detach().numpy(),
-                    norm=total_norm.detach().numpy(),
+                    value_loss=value_loss,
+                    action_loss=action_loss,
+                    norm=total_norm,
+                    entropy=entropy,
                 )
 
         num_updates = self.ppo_epoch * self.num_mini_batch
-        return {k: v / num_updates for k, v in update_values.items()}
+        return {k: v.mean().detach().numpy() / num_updates
+                for k, v in update_values.items()}
