@@ -69,51 +69,57 @@ class PPO:
 
             for sample in data_generator:
                 # Reshape to do in a single forward pass for all steps
-                values, action_log_probs, dist_entropy, \
-                _ = self.actor_critic.evaluate_actions(
-                    sample.obs, sample.recurrent_hidden_states, sample.masks,
-                    sample.actions)
+                def compute_loss_components():
+                    values, action_log_probs, dist_entropy, \
+                    _ = self.actor_critic.evaluate_actions(
+                        sample.obs, sample.recurrent_hidden_states, sample.masks,
+                        sample.actions)
 
-                ratio = torch.exp(action_log_probs -
-                                  sample.old_action_log_probs)
-                surr1 = ratio * sample.adv
-                surr2 = torch.clamp(ratio, 1.0 - self.clip_param,
-                                    1.0 + self.clip_param) * sample.adv
-                action_loss = -torch.min(surr1, surr2).mean()
+                    ratio = torch.exp(action_log_probs -
+                                      sample.old_action_log_probs)
+                    surr1 = ratio * sample.adv
+                    surr2 = torch.clamp(ratio, 1.0 - self.clip_param,
+                                        1.0 + self.clip_param) * sample.adv
+                    action_losses = -torch.min(surr1, surr2)
 
-                if self.use_clipped_value_loss:
-
-                    value_pred_clipped = sample.value_preds + \
-                                         (values - sample.value_preds).clamp(
-                                             -self.clip_param, self.clip_param)
                     value_losses = (values - sample.ret).pow(2)
-                    value_losses_clipped = (
-                        value_pred_clipped - sample.ret).pow(2)
-                    value_loss = .5 * torch.max(value_losses,
-                                                value_losses_clipped).mean()
-                else:
-                    value_loss = 0.5 * F.mse_loss(sample.ret, values)
+                    if self.use_clipped_value_loss:
 
-                self.optimizer.zero_grad()
-                loss = (value_loss * self.value_loss_coef + action_loss -
-                        dist_entropy * self.entropy_coef)
+                        value_pred_clipped = sample.value_preds + \
+                                             (values - sample.value_preds).clamp(
+                                                 -self.clip_param, self.clip_param)
+                        value_losses_clipped = (
+                            value_pred_clipped - sample.ret).pow(2)
+                        value_losses = .5 * torch.max(value_losses,
+                                                    value_losses_clipped)
+                    return value_losses, action_losses, dist_entropy
+
+                def compute_loss(value_losses, action_losses, dist_entropy):
+                    return (value_losses.mean() * self.value_loss_coef +
+                            action_losses.mean() -
+                            dist_entropy.mean() * self.entropy_coef)
+
                 if self.unsupervised:
                     grads = torch.autograd.grad(
-                        loss,
+                        compute_loss(*compute_loss_components()),
                         self.actor_critic.parameters(),
                         create_graph=True)
                     unsupervised_loss = sum([g.mean() for g in grads])
                     unsupervised_loss.backward(retain_graph=True)
                     self.unsupervised_optimizer.step()
 
+                self.optimizer.zero_grad()
+                value_losses, action_losses, dist_entropy = components \
+                    = compute_loss_components()
+                loss = compute_loss(*components)
                 loss.backward(retain_graph=True)
                 nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
                                          self.max_grad_norm)
                 self.optimizer.step()
                 # noinspection PyTypeChecker
                 update_values.update(
-                    value_loss=value_loss.mean(),
-                    action_loss=action_loss.mean(),
+                    value_loss=value_losses.mean(),
+                    action_loss=action_losses.mean(),
                     norm=total_norm,
                     entropy=dist_entropy.mean(),
                 )
