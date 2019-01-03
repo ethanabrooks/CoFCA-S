@@ -48,7 +48,7 @@ class PPO:
     def update(self, rollouts: RolloutStorage):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         advantages = (advantages - advantages.mean()) / (
-            advantages.std() + 1e-5)
+                advantages.std() + 1e-5)
 
         update_values = Counter()
 
@@ -82,7 +82,7 @@ class PPO:
                                              (values - sample.value_preds).clamp(
                                                  -self.clip_param, self.clip_param)
                         value_losses_clipped = (
-                            value_pred_clipped - sample.ret).pow(2)
+                                value_pred_clipped - sample.ret).pow(2)
                         value_losses = .5 * torch.max(value_losses,
                                                       value_losses_clipped)
 
@@ -96,8 +96,8 @@ class PPO:
                 def global_norm(grads):
                     norm = 0
                     for grad in grads:
-                        norm += grad.norm(2)**2
-                    return norm**.5
+                        norm += grad.norm(2) ** 2
+                    return norm ** .5
 
                 if self.unsupervised:
                     grads = torch.autograd.grad(
@@ -128,7 +128,5 @@ class PPO:
                 )
 
         num_updates = self.ppo_epoch * self.num_mini_batch
-        return {
-            k: v.mean().detach().numpy() / num_updates
-            for k, v in update_values.items()
-        }
+        return {k: v.mean().detach().numpy() / num_updates
+                for k, v in update_values.items()}

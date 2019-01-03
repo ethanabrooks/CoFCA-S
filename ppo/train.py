@@ -77,8 +77,6 @@ def train(recurrent_policy,
         allow_early_resets=False,
         env_args=env_args)
 
-    obs = envs.reset()
-
     actor_critic = Policy(
         envs.observation_space.shape,
         envs.action_space,
@@ -99,11 +97,12 @@ def train(recurrent_policy,
             envs.unwrapped.set_goal(goal.detach().numpy(), i)
 
         def substitute_goal(_obs, _noise):
-            return _obs
-            # goals = gan(_noise)
-            # split = torch.split(_obs, sample_env.subspace_sizes, dim=1)
-            # replace = Observation(*split)._replace(goal=goals)
-            # return torch.cat(replace, dim=1)
+            goals = gan(_noise)
+            split = torch.split(_obs, sample_env.subspace_sizes, dim=1)
+            observation = Observation(*split)
+            # assert torch.allclose(goals, observation.goal)
+            replace = observation._replace(goal=goals)
+            return torch.cat(replace, dim=1)
 
         rollouts = UnsupervisedRolloutStorage(
             num_steps=num_steps,
@@ -151,6 +150,7 @@ def train(recurrent_policy,
     if unsupervised:
         gan.to(device)
 
+    obs = envs.reset()
     rollouts.obs[0].copy_(obs)
     rollouts.to(device)
 
@@ -223,8 +223,8 @@ def train(recurrent_policy,
         total_num_steps = (j + 1) * num_processes * num_steps
 
         if all(
-            [log_dir, save_interval,
-             time.time() - last_save >= save_interval]):
+                [log_dir, save_interval,
+                 time.time() - last_save >= save_interval]):
             last_save = time.time()
             modules = dict(
                 optimizer=agent.optimizer,
