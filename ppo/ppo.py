@@ -79,8 +79,7 @@ class PPO:
                     action_losses = compute_prob_losses(
                         log_probs=action_log_prob,
                         old_log_probs=sample.old_action_log_probs,
-                        J=sample.adv
-                    )
+                        J=sample.adv)
 
                     value_losses = (values - sample.ret).pow(2)
                     if self.use_clipped_value_loss:
@@ -119,7 +118,7 @@ class PPO:
                         log_probs=self.gan.log_prob(sample.goals),
                         old_log_probs=sample.old_goal_log_probs,
                         J=global_norm(grads))
-                    # unsupervised_loss.mean().backward()
+                    unsupervised_loss.mean().backward()
                     update_values.update(unsupervised_loss=unsupervised_loss)
                     self.unsupervised_optimizer.step()
                     self.unsupervised_optimizer.zero_grad()
