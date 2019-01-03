@@ -1,10 +1,17 @@
 # third party
+from collections import Counter
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
+from common.running_mean_std import RunningMeanStd
 from ppo.storage import RolloutStorage
+
+
+def f(x):
+    x.sum().backward(retain_graph=True)
 
 
 class PPO:
@@ -40,6 +47,8 @@ class PPO:
         if self.unsupervised:
             self.unsupervised_optimizer = optim.Adam(
                 gan.parameters(), lr=learning_rate, eps=eps)
+            self.gradient_rms = RunningMeanStd()
+        self.gan = gan
         self.reward_function = None
 
     def update(self, rollouts: RolloutStorage):
