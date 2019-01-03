@@ -1,19 +1,18 @@
 import itertools
-import time
 from pathlib import Path
-from typing import Dict
+import time
 
 import numpy as np
-import torch
 from tensorboardX import SummaryWriter
-from utils import space_to_size
+import torch
 
-from ppo.envs import make_vec_envs, VecNormalize
+from ppo.envs import VecNormalize, make_vec_envs
 from ppo.gan import GAN
 from ppo.hsr_adapter import UnsupervisedEnv
 from ppo.policy import Policy
 from ppo.ppo import PPO
 from ppo.storage import RolloutStorage, UnsupervisedRolloutStorage
+from utils import space_to_size
 
 
 def train(recurrent_policy,

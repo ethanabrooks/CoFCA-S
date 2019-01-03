@@ -3,7 +3,6 @@ from collections import Counter
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import torch.optim as optim
 
 from common.running_mean_std import RunningMeanStd
@@ -124,8 +123,8 @@ class PPO:
                     = compute_loss_components()
                 loss = compute_loss(*components)
                 loss.backward(retain_graph=True)
-                total_norm += global_norm([p.grad for p in
-                                           self.actor_critic.parameters()])
+                total_norm += global_norm(
+                    [p.grad for p in self.actor_critic.parameters()])
                 nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
                                          self.max_grad_norm)
                 self.optimizer.step()
