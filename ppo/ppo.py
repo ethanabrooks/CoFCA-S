@@ -106,8 +106,7 @@ class PPO:
                         create_graph=True)
                     unsupervised_loss = global_norm(grads)
                     unsupervised_loss.backward()
-                    update_values.update(unsupervised_loss=unsupervised_loss.
-                                         squeeze().detach().numpy())
+                    update_values.update(unsupervised_loss=unsupervised_loss)
                     self.unsupervised_optimizer.step()
                     self.unsupervised_optimizer.zero_grad()
                 self.optimizer.zero_grad()
