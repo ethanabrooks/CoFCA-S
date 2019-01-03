@@ -1,23 +1,19 @@
-# stdlib
 import itertools
 import time
 from pathlib import Path
+from typing import Dict
 
 import numpy as np
 import torch
 from tensorboardX import SummaryWriter
+from utils import space_to_size
 
-# first party
-from hsr.env import Observation
-from ppo.envs import make_vec_envs
+from ppo.envs import make_vec_envs, VecNormalize
 from ppo.gan import GAN
 from ppo.hsr_adapter import UnsupervisedEnv
 from ppo.policy import Policy
 from ppo.ppo import PPO
-from ppo.storage import RolloutStorage
-
-
-# third party
+from ppo.storage import RolloutStorage, UnsupervisedRolloutStorage
 
 
 def train(recurrent_policy,
@@ -252,10 +248,13 @@ def train(recurrent_policy,
                         np.mean(episode_rewards), np.median(episode_rewards),
                         np.min(episode_rewards), np.max(episode_rewards)))
             if log_dir:
-                writer.add_scalar('return', np.mean(episode_rewards), j)
+                print(f'Writing log data to {log_dir}.')
+                writer.add_scalar('fps', fps, total_num_steps)
+                writer.add_scalar('return', np.mean(episode_rewards),
+                                  total_num_steps)
                 for k, v in train_results.items():
                     if np.isscalar(v):
-                        writer.add_scalar(k.replace('_', ' '), v, j)
+                        writer.add_scalar(k, v, total_num_steps)
             episode_rewards = []
 
         if eval_interval is not None and j % eval_interval == eval_interval - 1:
