@@ -1,10 +1,10 @@
+from gym.spaces import Box
 import torch
 import torch.nn as nn
-from gym.spaces import Box
-from utils import space_to_size
 
-from ppo.utils import init, init_normc_
 from ppo.distributions import DiagGaussian
+from ppo.utils import init, init_normc_
+from utils import space_to_size
 
 
 class GAN(nn.Module):
@@ -24,8 +24,7 @@ class GAN(nn.Module):
         for i in range(num_layers):
             self.network.add_module(
                 name=f'linear{i}', module=linear(hidden_size))
-            self.network.add_module(
-                name=f'activation{i}', module=activation)
+            self.network.add_module(name=f'activation{i}', module=activation)
 
     def goal_input(self, num_outputs):
         return torch.ones((num_outputs, self.hidden_size))
