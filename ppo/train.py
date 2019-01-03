@@ -81,6 +81,7 @@ def train(recurrent_policy,
         envs.action_space,
         network_args=network_args)
 
+    gan = None
     if unsupervised:
         sample_env = UnsupervisedEnv(**env_args)
         gan = GAN(

@@ -57,7 +57,7 @@ class PPO:
 
         update_values = Counter()
 
-        total_norm = torch.tensor(0)
+        total_norm = torch.tensor(0, dtype=torch.float32)
         for e in range(self.ppo_epoch):
             if self.actor_critic.is_recurrent:
                 data_generator = rollouts.recurrent_generator(
@@ -124,8 +124,8 @@ class PPO:
                     self.unsupervised_optimizer.step()
                     self.unsupervised_optimizer.zero_grad()
                 self.optimizer.zero_grad()
-                value_loss, action_loss, entropy = \
-                    components = compute_loss_components()
+                value_losses, action_losses, entropy = components \
+                    = compute_loss_components()
                 loss = compute_loss(*components)
                 loss.backward()
                 total_norm += global_norm(
@@ -135,8 +135,8 @@ class PPO:
                 self.optimizer.step()
                 # noinspection PyTypeChecker
                 update_values.update(
-                    value_loss=value_loss,
-                    action_loss=action_loss,
+                    value_loss=value_losses,
+                    action_loss=action_losses,
                     norm=total_norm,
                     entropy=entropy,
                 )
