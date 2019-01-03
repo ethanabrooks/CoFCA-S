@@ -14,8 +14,7 @@ from common.vec_env import VecEnvWrapper
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
-from ppo.hsr_adapter import HSREnv, MoveGripperEnv, UnsupervisedDummyVecEnv, \
-    UnsupervisedEnv, UnsupervisedSubprocVecEnv
+from ppo.hsr_adapter import HSREnv, MoveGripperEnv, UnsupervisedDummyVecEnv, UnsupervisedEnv, UnsupervisedSubprocVecEnv
 
 try:
     import dm_control2gym
@@ -113,7 +112,7 @@ def make_vec_envs(env_name,
         else:
             envs = SubprocVecEnv(envs)
 
-    if len(envs.observation_space.shape) == 1 and not env_args:
+    if len(envs.observation_space.shape) == 1:
         if gamma is None:
             envs = VecNormalize(envs, ret=False)
         else:

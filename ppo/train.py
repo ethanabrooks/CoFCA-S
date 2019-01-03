@@ -1,19 +1,18 @@
 import itertools
-import time
 from pathlib import Path
-from typing import Dict
+import time
 
 import numpy as np
-import torch
 from tensorboardX import SummaryWriter
-from utils import space_to_size
+import torch
 
-from ppo.envs import make_vec_envs, VecNormalize
+from ppo.envs import VecNormalize, make_vec_envs
 from ppo.gan import GAN
 from ppo.hsr_adapter import UnsupervisedEnv
 from ppo.policy import Policy
 from ppo.ppo import PPO
 from ppo.storage import RolloutStorage, UnsupervisedRolloutStorage
+from utils import space_to_size
 
 
 def train(recurrent_policy,
@@ -100,9 +99,9 @@ def train(recurrent_policy,
             num_processes=num_processes,
             obs_shape=envs.observation_space.shape,
             action_space=envs.action_space,
-            recurrent_hidden_state_size=actor_critic.recurrent_hidden_state_size,
-            goal_size=space_to_size(sample_env.goal_space)
-        )
+            recurrent_hidden_state_size=actor_critic.
+            recurrent_hidden_state_size,
+            goal_size=space_to_size(sample_env.goal_space))
 
     else:
         rollouts = RolloutStorage(
@@ -110,7 +109,8 @@ def train(recurrent_policy,
             num_processes=num_processes,
             obs_shape=envs.observation_space.shape,
             action_space=envs.action_space,
-            recurrent_hidden_state_size=actor_critic.recurrent_hidden_state_size,
+            recurrent_hidden_state_size=actor_critic.
+            recurrent_hidden_state_size,
         )
 
     agent = PPO(actor_critic=actor_critic, gan=gan, **ppo_args)
@@ -213,8 +213,8 @@ def train(recurrent_policy,
         total_num_steps = (j + 1) * num_processes * num_steps
 
         if all(
-                [log_dir, save_interval,
-                 time.time() - last_save >= save_interval]):
+            [log_dir, save_interval,
+             time.time() - last_save >= save_interval]):
             last_save = time.time()
             modules = dict(
                 optimizer=agent.optimizer,
