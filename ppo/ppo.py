@@ -48,7 +48,7 @@ class PPO:
     def update(self, rollouts: RolloutStorage):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         advantages = (advantages - advantages.mean()) / (
-                advantages.std() + 1e-5)
+            advantages.std() + 1e-5)
 
         update_values = Counter()
 
@@ -79,8 +79,7 @@ class PPO:
                     action_losses = compute_prob_losses(
                         log_probs=action_log_prob,
                         old_log_probs=sample.old_action_log_probs,
-                        J=sample.adv
-                    )
+                        J=sample.adv)
 
                     value_losses = (values - sample.ret).pow(2)
                     if self.use_clipped_value_loss:
@@ -88,7 +87,7 @@ class PPO:
                                              (values - sample.value_preds).clamp(
                                                  -self.clip_param, self.clip_param)
                         value_losses_clipped = (
-                                value_pred_clipped - sample.ret).pow(2)
+                            value_pred_clipped - sample.ret).pow(2)
                         value_losses = .5 * torch.max(value_losses,
                                                       value_losses_clipped)
 
@@ -107,8 +106,8 @@ class PPO:
                 def global_norm(grads):
                     norm = 0
                     for grad in grads:
-                        norm += grad.norm(2) ** 2
-                    return norm ** .5
+                        norm += grad.norm(2)**2
+                    return norm**.5
 
                 if self.unsupervised:
                     grads = torch.autograd.grad(
@@ -119,7 +118,7 @@ class PPO:
                         log_probs=self.gan.log_prob(sample.goals),
                         old_log_probs=sample.old_goal_log_probs,
                         J=global_norm(grads))
-                    # unsupervised_loss.mean().backward()
+                    unsupervised_loss.mean().backward()
                     update_values.update(unsupervised_loss=unsupervised_loss)
                     self.unsupervised_optimizer.step()
                     self.unsupervised_optimizer.zero_grad()
@@ -142,5 +141,7 @@ class PPO:
                 )
 
         num_updates = self.ppo_epoch * self.num_mini_batch
-        return {k: v.mean().detach().numpy() / num_updates
-                for k, v in update_values.items()}
+        return {
+            k: v.mean().detach().numpy() / num_updates
+            for k, v in update_values.items()
+        }
