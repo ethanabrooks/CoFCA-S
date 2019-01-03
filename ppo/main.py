@@ -1,296 +1,172 @@
-# stdlib
-import copy
-import itertools
-import os
-import time
+import argparse
 from pathlib import Path
 
-import numpy as np
-import torch
-from tensorboardX import SummaryWriter
+from hsr.util import env_wrapper, add_env_args, add_wrapper_args
+from torch import nn as nn
+from utils import parse_groups, parse_activation
 
-# first party
-from hsr.env import Observation
-from ppo.arguments import build_parser, get_hsr_parser, get_unsupervised_parser
-from ppo.envs import make_vec_envs
-from ppo.gan import GAN
-from ppo.hsr_adapter import UnsupervisedEnv
-from ppo.policy import Policy
-from ppo.ppo import PPO
-from ppo.storage import RolloutStorage
-from ppo.utils import get_vec_normalize
-from hsr.util import env_wrapper
-from utils import parse_groups
-
-# third party
-
-
-def main(recurrent_policy,
-         num_frames,
-         num_steps,
-         num_processes,
-         seed,
-         cuda_deterministic,
-         cuda,
-         log_dir: Path,
-         env_name,
-         gamma,
-         normalize,
-         add_timestep,
-         save_interval,
-         load_path,
-         log_interval,
-         eval_interval,
-         use_gae,
-         tau,
-         ppo_args,
-         network_args,
-         max_steps=None,
-         env_args=None,
-         unsupervised_args=None):
-    algo = 'ppo'
-
-    if num_frames:
-        updates = range(int(num_frames) // num_steps // num_processes)
-    else:
-        updates = itertools.count()
-
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-
-    if cuda and torch.cuda.is_available() and cuda_deterministic:
-        torch.backends.cudnn.benchmark = False
-        torch.backends.cudnn.deterministic = True
-
-    eval_log_dir = None
-    if log_dir:
-        writer = SummaryWriter(log_dir=str(log_dir))
-        eval_log_dir = log_dir.joinpath("eval")
-
-        for _dir in [log_dir, eval_log_dir]:
-            try:
-                _dir.mkdir()
-            except OSError:
-                for f in _dir.glob('*.monitor.csv'):
-                    f.unlink()
-
-    torch.set_num_threads(1)
-    device = torch.device("cuda:0" if cuda else "cpu")
-
-    unsupervised = unsupervised_args is not None
-
-    _gamma = gamma if normalize else None
-    envs = make_vec_envs(
-        env_name=env_name,
-        seed=seed,
-        num_processes=num_processes,
-        gamma=_gamma,
-        log_dir=log_dir,
-        add_timestep=add_timestep,
-        device=device,
-        max_steps=max_steps,
-        allow_early_resets=False,
-        env_args=env_args)
-
-    obs = envs.reset()
-
-    gan = None
-    if unsupervised:
-        sample_env = UnsupervisedEnv(**env_args)
-        gan = GAN(
-            goal_size=3,
-            **{k.replace('gan_', ''): v
-               for k, v in unsupervised_args.items()})
-
-        def substitute_goal(_obs, _goals):
-            split = torch.split(_obs, sample_env.subspace_sizes, dim=1)
-            replace = Observation(*split)._replace(goal=_goals)
-            return torch.cat(replace, dim=1)
-
-        goals = gan.sample(num_processes)
-        for i, goal in enumerate(goals):
-            envs.unwrapped.set_goal(goal.detach().numpy(), i)
-        obs = substitute_goal(obs, goals)
-
-    actor_critic = Policy(
-        envs.observation_space.shape,
-        envs.action_space,
-        network_args=network_args)
-
-    if load_path:
-        state_dict = torch.load(load_path)
-        if unsupervised:
-            gan.load_state_dict(state_dict['gan'])
-        actor_critic.load_state_dict(state_dict['actor_critic'])
-
-    actor_critic.to(device)
-    if unsupervised:
-        gan.to(device)
-
-    agent = PPO(actor_critic=actor_critic, gan=gan, **ppo_args)
-
-    rollouts = RolloutStorage(
-        num_steps=num_steps,
-        num_processes=num_processes,
-        obs_shape=envs.observation_space.shape,
-        action_space=envs.action_space,
-        recurrent_hidden_state_size=actor_critic.recurrent_hidden_state_size,
-    )
-
-    rollouts.obs[0].copy_(obs)
-    rollouts.to(device)
-
-    rewards_counter = np.zeros(num_processes)
-    episode_rewards = []
-
-    start = time.time()
-    for j in updates:
-        for step in range(num_steps):
-            # Sample actions.add_argument_group('env_args')
-            with torch.no_grad():
-                values, actions, action_log_probs, recurrent_hidden_states = \
-                    actor_critic.act(
-                        inputs=rollouts.obs[step],
-                        rnn_hxs=rollouts.recurrent_hidden_states[step],
-                        masks=rollouts.masks[step])
-
-            # Observe reward and next obs
-            obs, rewards, done, infos = envs.step(actions)
-
-            if unsupervised:
-                for i, _done in enumerate(done):
-                    if _done:
-                        goal = gan.sample(1)
-                        envs.unwrapped.set_goal(goal.detach().numpy(), i)
-                        goals[i] = goal
-                obs = substitute_goal(obs, goals)
-
-            # track rewards
-            rewards_counter += rewards
-            episode_rewards.append(rewards_counter[done])
-            rewards_counter[done] = 0
-
-            # If done then clean the history of observations.
-            masks = torch.FloatTensor(
-                [[0.0] if done_ else [1.0] for done_ in done])
-            rollouts.insert(
-                obs=obs,
-                recurrent_hidden_states=recurrent_hidden_states,
-                actions=actions,
-                action_log_probs=action_log_probs,
-                values=values,
-                rewards=rewards,
-                masks=masks)
-
-        with torch.no_grad():
-            next_value = actor_critic.get_value(
-                inputs=rollouts.obs[-1],
-                rnn_hxs=rollouts.recurrent_hidden_states[-1],
-                masks=rollouts.masks[-1]).detach()
-
-        rollouts.compute_returns(next_value=next_value,
-                                 use_gae=use_gae,
-                                 gamma=gamma,
-                                 tau=tau)
-        train_results = agent.update(rollouts)
-        rollouts.after_update()
-
-        if j % save_interval == 0 and log_dir is not None:
-            models = dict(actor_critic=actor_critic)  # type: Dict[str, nn.Module]
-            if unsupervised:
-                models.update(gan=gan)
-            state_dict = {name: model.state_dict() for name, model in models.items()}
-            save_path = Path(log_dir, 'checkpoint.pt')
-            torch.save(state_dict, save_path)
-
-
-        total_num_steps = (j + 1) * num_processes * num_steps
-
-        if j % log_interval == 0:
-            end = time.time()
-            fps = int(total_num_steps / (end - start))
-            episode_rewards = np.concatenate(episode_rewards)
-            if episode_rewards.size > 0:
-                print(
-                    f"Updates {j}, num timesteps {total_num_steps}, FPS {fps} \n "
-                    f"Last {len(episode_rewards)} training episodes: " +
-                    "mean/median reward {:.2f}/{:.2f}, min/max reward {:.2f}/{"
-                    ":.2f}\n".format(
-                        np.mean(episode_rewards), np.median(episode_rewards),
-                        np.min(episode_rewards), np.max(episode_rewards)))
-            if log_dir:
-                writer.add_scalar('return', np.mean(episode_rewards), j)
-                for k, v in train_results.items():
-                    if np.isscalar(v):
-                        writer.add_scalar(k.replace('_', ' '), v, j)
-            episode_rewards = []
-
-        if eval_interval is not None and j % eval_interval == eval_interval - 1:
-            eval_envs = make_vec_envs(
-                env_name=env_name,
-                seed=seed + num_processes,
-                num_processes=num_processes,
-                gamma=_gamma,
-                log_dir=eval_log_dir,
-                add_timestep=add_timestep,
-                device=device,
-                max_steps=max_steps,
-                env_args=env_args,
-                allow_early_resets=True)
-
-            # vec_norm = get_vec_normalize(eval_envs)
-            # if vec_norm is not None:
-            #     vec_norm.eval()
-            #     vec_norm.ob_rms = get_vec_normalize(envs).ob_rms
-
-            eval_episode_rewards = []
-
-            obs = eval_envs.reset()
-            eval_recurrent_hidden_states = torch.zeros(
-                num_processes,
-                actor_critic.recurrent_hidden_state_size,
-                device=device)
-            eval_masks = torch.zeros(num_processes, 1, device=device)
-
-            while len(eval_episode_rewards) < 10:
-                print('.', end='')
-                with torch.no_grad():
-                    _, actions, _, eval_recurrent_hidden_states = actor_critic.act(
-                        inputs=obs,
-                        rnn_hxs=eval_recurrent_hidden_states,
-                        masks=eval_masks,
-                        deterministic=True)
-
-                # Observe reward and next obs
-                obs, rewards, done, infos = eval_envs.step(actions)
-
-                eval_masks = torch.FloatTensor(
-                    [[0.0] if done_ else [1.0] for done_ in done])
-                for info in infos:
-                    if 'episode' in info.keys():
-                        eval_episode_rewards.append(info['episode']['r'])
-
-            eval_envs.close()
-
-            print(" Evaluation using {} episodes: mean reward {:.5f}\n".format(
-                len(eval_episode_rewards), np.mean(eval_episode_rewards)))
+from ppo.train import train
 
 
 def cli():
-    main(**parse_groups(build_parser()))
+    train(**parse_groups(build_parser()))
 
 
 def hsr_cli():
     parser = get_hsr_parser()
-    env_wrapper(main)(**parse_groups(parser))
+    env_wrapper(train)(**parse_groups(parser))
 
 
 def unsupervised_cli():
     parser = get_unsupervised_parser()
     args_dict = parse_groups(parser)
     args_dict.update(env_name='unsupervised')
-    env_wrapper(main)(**args_dict)
+    env_wrapper(train)(**args_dict)
 
 
-if __name__ == "__main__":
-    hsr_cli()
+def build_parser():
+    parser = argparse.ArgumentParser(description='RL')
+    parser.add_argument(
+        '--gamma',
+        type=float,
+        default=0.99,
+        help='discount factor for rewards (default: 0.99)')
+    parser.add_argument('--normalize', action='store_true')
+    parser.add_argument(
+        '--use-gae',
+        action='store_true',
+        default=False,
+        help='use generalized advantage estimation')
+    parser.add_argument(
+        '--tau',
+        type=float,
+        default=0.95,
+        help='gae parameter (default: 0.95)')
+    parser.add_argument(
+        '--seed', type=int, default=1, help='random seed (default: 1)')
+    parser.add_argument(
+        '--cuda-deterministic',
+        action='store_true',
+        default=False,
+        help="sets flags for determinism when using CUDA (potentially slow!)")
+    parser.add_argument(
+        '--num-processes',
+        type=int,
+        default=16,
+        help='how many training CPU processes to use (default: 16)')
+    parser.add_argument(
+        '--num-steps',
+        type=int,
+        default=5,
+        help='number of forward steps in A2C (default: 5)')
+    parser.add_argument(
+        '--log-interval',
+        type=int,
+        default=10,
+        help='log interval, one log per n updates (default: 10)')
+    parser.add_argument(
+        '--save-interval',
+        type=int,
+        default=100,
+        help='save interval, one save per n updates (default: 100)')
+    parser.add_argument(
+        '--eval-interval',
+        type=int,
+        default=None,
+        help='eval interval, one eval per n updates (default: None)')
+    parser.add_argument(
+        '--num-frames',
+        type=int,
+        default=None,
+        help='number of frames to train (default: 10e6)')
+    parser.add_argument(
+        '--env-name',
+        default='PongNoFrameskip-v4',
+        help='environment to train on (default: PongNoFrameskip-v4)')
+    parser.add_argument(
+        '--log-dir',
+        type=Path,
+        help='directory to save agent logs and parameters')
+    parser.add_argument(
+        '--load-path',
+        type=Path,
+        help='directory to load agent parameters from')
+    parser.add_argument(
+        '--cuda', action='store_true', help='enables CUDA training')
+    parser.add_argument(
+        '--add-timestep',
+        action='store_true',
+        default=False,
+        help='add timestep to observations')
+    parser.add_argument(
+        '--recurrent-policy',
+        action='store_true',
+        default=False,
+        help='use a recurrent policy')
+
+    network_parser = parser.add_argument_group('network_args')
+    network_parser.add_argument('--recurrent', action='store_true')
+    network_parser.add_argument('--hidden-size', type=int, default=256)
+    network_parser.add_argument('--num-layers', type=int, default=3)
+    network_parser.add_argument(
+        '--activation', type=parse_activation, default=nn.ReLU())
+
+    ppo_parser = parser.add_argument_group('ppo_args')
+    ppo_parser.add_argument(
+        '--clip-param',
+        type=float,
+        default=0.2,
+        help='ppo clip parameter (default: 0.2)')
+    ppo_parser.add_argument(
+        '--ppo-epoch',
+        type=int,
+        default=4,
+        help='number of ppo epochs (default: 4)')
+    ppo_parser.add_argument(
+        '--batch-size',
+        type=int,
+        default=32,
+        help='number of batches for ppo (default: 32)')
+    ppo_parser.add_argument(
+        '--value-loss-coef',
+        type=float,
+        default=0.5,
+        help='value loss coefficient (default: 0.5)')
+    ppo_parser.add_argument(
+        '--entropy-coef',
+        type=float,
+        default=0.01,
+        help='entropy term coefficient (default: 0.01)')
+    ppo_parser.add_argument(
+        '--learning-rate', type=float, default=7e-4, help='(default: 7e-4)')
+    ppo_parser.add_argument(
+        '--eps',
+        type=float,
+        default=1e-5,
+        help='RMSprop optimizer epsilon (default: 1e-5)')
+    ppo_parser.add_argument(
+        '--max-grad-norm',
+        type=float,
+        default=0.5,
+        help='max norm of gradients (default: 0.5)')
+    return parser
+
+
+def get_hsr_parser():
+    parser = build_parser()
+    parser.add_argument('--max-steps', type=int)
+    env_parser = parser.add_argument_group('env_args')
+    add_env_args(env_parser)
+    add_wrapper_args(parser.add_argument_group('wrapper_args'))
+    return parser
+
+
+def get_unsupervised_parser():
+    parser = get_hsr_parser()
+    unsupervised_parser = parser.add_argument_group('unsupervised_args')
+    unsupervised_parser.add_argument(
+        '--gan-hidden-size', type=int, default=256)
+    unsupervised_parser.add_argument('--gan-num-layers', type=int, default=3)
+    unsupervised_parser.add_argument(
+        '--gan-activation', type=parse_activation, default=nn.ReLU())
+    return parser
