@@ -67,9 +67,8 @@ class Policy(nn.Module):
         dist = self.dist(actor_features)
 
         action_log_probs = dist.log_probs(action)
-        dist_entropy = dist.entropy()
-
-        return value, action_log_probs, dist_entropy, rnn_hxs
+        entropy = dist.entropy().view(-1, 1)
+        return value, action_log_probs, entropy, rnn_hxs
 
 
 class NNBase(nn.Module):
