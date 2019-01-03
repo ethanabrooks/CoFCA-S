@@ -1,4 +1,3 @@
-# first party
 import argparse
 from pathlib import Path
 
@@ -6,7 +5,6 @@ from hsr.util import env_wrapper, add_env_args, add_wrapper_args
 from torch import nn as nn
 from utils import parse_groups, parse_activation
 
-# third party
 from ppo.train import train
 
 
