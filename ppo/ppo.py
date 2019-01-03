@@ -54,7 +54,7 @@ class PPO:
     def update(self, rollouts: RolloutStorage):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         advantages = (advantages - advantages.mean()) / (
-                advantages.std() + 1e-5)
+            advantages.std() + 1e-5)
 
         update_values = Counter()
 
@@ -80,18 +80,19 @@ class PPO:
                     surr1 = ratio * sample.adv
                     surr2 = torch.clamp(ratio, 1.0 - self.clip_param,
                                         1.0 + self.clip_param) * sample.adv
+
                     action_losses = -torch.min(surr1, surr2)
 
                     value_losses = (values - sample.ret).pow(2)
                     if self.use_clipped_value_loss:
-
                         value_pred_clipped = sample.value_preds + \
                                              (values - sample.value_preds).clamp(
                                                  -self.clip_param, self.clip_param)
                         value_losses_clipped = (
                             value_pred_clipped - sample.ret).pow(2)
                         value_losses = .5 * torch.max(value_losses,
-                                                    value_losses_clipped)
+                                                      value_losses_clipped)
+
                     return value_losses, action_losses, dist_entropy
 
                 def compute_loss(value_losses, action_losses, dist_entropy):
@@ -99,20 +100,32 @@ class PPO:
                             action_losses.mean() -
                             dist_entropy.mean() * self.entropy_coef)
 
+                def global_norm(grads):
+                    norm = 0
+                    for grad in grads:
+                        norm += grad.norm(2)**2
+                    return norm**.5
+
                 if self.unsupervised:
                     grads = torch.autograd.grad(
                         compute_loss(*compute_loss_components()),
-                        self.actor_critic.parameters(),
-                        create_graph=True)
-                    unsupervised_loss = sum([g.mean() for g in grads])
-                    unsupervised_loss.backward(retain_graph=True)
+                        self.actor_critic.parameters())
+                    norm = global_norm(grads).detach()
+                    self.gradient_rms.update(norm.numpy(), axis=None)
+                    log_prob = self.gan.log_prob(sample.goals)
+                    unsupervised_loss = log_prob * (
+                        norm - self.gradient_rms.mean)
+                    unsupervised_loss.mean().backward()
+                    update_values.update(unsupervised_loss=unsupervised_loss)
                     self.unsupervised_optimizer.step()
-
+                    self.unsupervised_optimizer.zero_grad()
                 self.optimizer.zero_grad()
                 value_losses, action_losses, dist_entropy = components \
                     = compute_loss_components()
                 loss = compute_loss(*components)
                 loss.backward(retain_graph=True)
+                total_norm += global_norm([p.grad for p in
+                                           self.actor_critic.parameters()])
                 nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
                                          self.max_grad_norm)
                 self.optimizer.step()
