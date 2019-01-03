@@ -122,7 +122,7 @@ class PPO:
                 value_losses, action_losses, entropy = components \
                     = compute_loss_components()
                 loss = compute_loss(*components)
-                loss.backward(retain_graph=True)
+                loss.backward()
                 total_norm += global_norm(
                     [p.grad for p in self.actor_critic.parameters()])
                 nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
