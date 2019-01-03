@@ -94,10 +94,15 @@ class PPO:
 
                     return value_losses, action_losses, dist_entropy
 
-                def compute_loss(value_losses, action_losses, dist_entropy):
-                    return (value_losses.mean() * self.value_loss_coef +
-                            action_losses.mean() -
-                            dist_entropy.mean() * self.entropy_coef)
+                def compute_loss(value_loss, action_loss, dist_entropy):
+                    if sample.old_goal_log_probs is None:
+                        importance_weighting = 1
+                    else:
+                        log_probs = sample.old_goal_log_probs.detach()
+                        importance_weighting = 1 / log_probs.exp()
+                    losses = (value_loss * self.value_loss_coef + action_loss -
+                              dist_entropy * self.entropy_coef)
+                    return torch.mean(losses * importance_weighting)
 
                 def global_norm(grads):
                     norm = 0
