@@ -70,12 +70,12 @@ class PPO:
             for sample in data_generator:
                 # Reshape to do in a single forward pass for all steps
                 def compute_loss_components():
-                    values, action_log_prob, dist_entropy, \
+                    values, action_log_probs, dist_entropy, \
                     _ = self.actor_critic.evaluate_actions(
                         sample.obs, sample.recurrent_hidden_states, sample.masks,
                         sample.actions)
 
-                    ratio = torch.exp(action_log_prob - sample.old_action_log_probs)
+                    ratio = torch.exp(action_log_probs - sample.old_action_log_probs)
                     surr1 = ratio * sample.adv
                     surr2 = torch.clamp(ratio, 1.0 - self.clip_param,
                                         1.0 + self.clip_param) * sample.adv
