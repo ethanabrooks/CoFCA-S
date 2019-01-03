@@ -58,7 +58,7 @@ class PPO:
 
         update_values = Counter()
 
-        total_norm = 0
+        total_norm = torch.tensor(0)
         for e in range(self.ppo_epoch):
             if self.actor_critic.is_recurrent:
                 data_generator = rollouts.recurrent_generator(
