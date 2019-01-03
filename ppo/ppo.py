@@ -56,10 +56,9 @@ class PPO:
         advantages = (advantages - advantages.mean()) / (
             advantages.std() + 1e-5)
 
-        value_loss_epoch = 0
-        action_loss_epoch = 0
-        dist_entropy_epoch = 0
+        update_values = Counter()
 
+        total_norm = torch.zeros(())
         for e in range(self.ppo_epoch):
             if self.actor_critic.is_recurrent:
                 data_generator = rollouts.recurrent_generator(
@@ -111,19 +110,14 @@ class PPO:
                 nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
                                          self.max_grad_norm)
                 self.optimizer.step()
-
-                value_loss_epoch += value_loss.item()
-                action_loss_epoch += action_loss.item()
-                dist_entropy_epoch += dist_entropy.item()
+                # noinspection PyTypeChecker
+                update_values.update(value_loss=value_loss,
+                                     action_loss=action_loss,
+                                     entropy=dist_entropy,
+                                     )
 
         num_updates = self.ppo_epoch * self.num_mini_batch
 
-        value_loss_epoch /= num_updates
-        action_loss_epoch /= num_updates
-        dist_entropy_epoch /= num_updates
+        return {k: v.detach().numpy() / num_updates
+                for k, v in update_values.items()}
 
-        return dict(
-            value_loss=value_loss_epoch,
-            action_loss=action_loss_epoch,
-            unsupervised_loss=unsupervised_loss if self.unsupervised else None,
-            entropy=dist_entropy_epoch)
