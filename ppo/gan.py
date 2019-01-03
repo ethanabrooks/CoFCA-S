@@ -37,7 +37,7 @@ class GAN(nn.Module):
         low = torch.from_numpy(self.goal_space.low)
         squashed = torch.sigmoid(goal) * (high - low) + low
         # assert self.goal_space.contains(squashed.squeeze().detach().numpy())
-        return squashed, dist.log_probs(goal)
+        return squashed, dist.log_probs(goal).detach()
 
     def log_prob(self, goal):
         num_inputs = goal.size()[0]
