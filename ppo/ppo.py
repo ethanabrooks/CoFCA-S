@@ -110,19 +110,19 @@ class PPO:
                         norm += grad.norm(2) ** 2
                     return norm ** .5
 
-                if self.unsupervised:
-                    grads = torch.autograd.grad(
-                        compute_loss(*compute_loss_components()),
-                        self.actor_critic.parameters(),
-                        create_graph=True)
-                    unsupervised_loss = compute_prob_losses(
-                        log_probs=self.gan.log_prob(sample.goals),
-                        old_log_probs=sample.old_goal_log_probs,
-                        J=global_norm(grads))
-                    # unsupervised_loss.mean().backward()
-                    update_values.update(unsupervised_loss=unsupervised_loss)
-                    self.unsupervised_optimizer.step()
-                    self.unsupervised_optimizer.zero_grad()
+                # if self.unsupervised:
+                #     grads = torch.autograd.grad(
+                #         compute_loss(*compute_loss_components()),
+                #         self.actor_critic.parameters(),
+                #         create_graph=True)
+                #     unsupervised_loss = compute_prob_losses(
+                #         log_probs=self.gan.log_prob(sample.goals),
+                #         old_log_probs=sample.old_goal_log_probs,
+                #         J=global_norm(grads))
+                #     # unsupervised_loss.mean().backward()
+                #     update_values.update(unsupervised_loss=unsupervised_loss)
+                #     self.unsupervised_optimizer.step()
+                #     self.unsupervised_optimizer.zero_grad()
                 self.optimizer.zero_grad()
                 value_loss, action_loss, entropy = \
                     components = compute_loss_components()
