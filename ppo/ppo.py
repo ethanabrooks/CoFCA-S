@@ -58,7 +58,7 @@ class PPO:
 
         update_values = Counter()
 
-        total_norm = 0
+        total_norm = torch.zeros(())
         for e in range(self.ppo_epoch):
             if self.actor_critic.is_recurrent:
                 data_generator = rollouts.recurrent_generator(
@@ -119,7 +119,7 @@ class PPO:
                     self.gradient_rms.update(norm.numpy(), axis=None)
                     log_prob = self.gan.log_prob(sample.goals)
                     norm_minus_baseline = norm - self.gradient_rms.mean
-                    unsupervised_loss = log_prob * norm_minus_baseline
+                    unsupervised_loss = log_prob * norm_minus_baseline.detach()
                     unsupervised_loss.mean().backward()
                     update_values.update(
                         unsupervised_loss=unsupervised_loss,
@@ -131,21 +131,21 @@ class PPO:
                     components = compute_loss_components()
                 loss = compute_loss(*components)
                 # loss.backward()
-                total_norm += global_norm(
-                    [p.grad for p in self.actor_critic.parameters()])
+                # total_norm += global_norm(
+                #     [p.grad for p in self.actor_critic.parameters()])
                 nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
                                          self.max_grad_norm)
                 # self.optimizer.step()
                 # noinspection PyTypeChecker
                 update_values.update(
-                    value_loss=value_loss,
-                    action_loss=action_loss,
+                    value_loss=value_loss.norm(),
+                    action_loss=action_loss.norm(),
                     norm=total_norm,
-                    entropy=entropy,
+                    entropy=entropy.norm(),
                 )
 
         num_updates = self.ppo_epoch * self.num_mini_batch
         return {
-            k: v.mean().detach().numpy() / num_updates
+            k: v.detach().numpy() / num_updates
             for k, v in update_values.items()
         }
