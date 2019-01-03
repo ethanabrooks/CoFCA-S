@@ -94,16 +94,16 @@ def train(recurrent_policy,
         for i, goal in enumerate(goals):
             envs.unwrapped.set_goal(goal.detach().numpy(), i)
 
-        rollouts = UnsupervisedRolloutStorage(
-            num_steps=num_steps,
-            num_processes=num_processes,
-            obs_shape=envs.observation_space.shape,
-            action_space=envs.action_space,
-            recurrent_hidden_state_size=actor_critic.
-            recurrent_hidden_state_size,
-            goal_size=space_to_size(sample_env.goal_space))
-
-    else:
+    #     rollouts = UnsupervisedRolloutStorage(
+    #         num_steps=num_steps,
+    #         num_processes=num_processes,
+    #         obs_shape=envs.observation_space.shape,
+    #         action_space=envs.action_space,
+    #         recurrent_hidden_state_size=actor_critic.
+    #         recurrent_hidden_state_size,
+    #         goal_size=space_to_size(sample_env.goal_space))
+    #
+    # else:
         rollouts = RolloutStorage(
             num_steps=num_steps,
             num_processes=num_processes,
@@ -122,8 +122,8 @@ def train(recurrent_policy,
     start = 0
     if load_path:
         state_dict = torch.load(load_path)
-        if unsupervised:
-            gan.load_state_dict(state_dict['gan'])
+        # if unsupervised:
+        #     gan.load_state_dict(state_dict['gan'])
         actor_critic.load_state_dict(state_dict['actor_critic'])
         agent.optimizer.load_state_dict(state_dict['optimizer'])
         start = state_dict.get('step', -1) + 1
@@ -137,14 +137,14 @@ def train(recurrent_policy,
         updates = itertools.count(start)
 
     actor_critic.to(device)
-    if unsupervised:
-        gan.to(device)
+    # if unsupervised:
+    #     gan.to(device)
 
     obs = envs.reset()
     rollouts.obs[0].copy_(obs)
-    if unsupervised:
-        rollouts.goals[0].copy_(goals)
-        rollouts.goal_log_probs[0].copy_(goal_log_probs)
+    # if unsupervised:
+    #     rollouts.goals[0].copy_(goals)
+    #     rollouts.goal_log_probs[0].copy_(goal_log_probs)
     rollouts.to(device)
 
     start = time.time()
@@ -178,18 +178,18 @@ def train(recurrent_policy,
             masks = torch.FloatTensor(
                 [[0.0] if done_ else [1.0] for done_ in done])
             if unsupervised:
-                rollouts.insert(
-                    obs=obs,
-                    recurrent_hidden_states=recurrent_hidden_states,
-                    actions=actions,
-                    action_log_probs=action_log_probs,
-                    values=values,
-                    rewards=rewards,
-                    masks=masks,
-                    goal=goals,
-                    goal_log_prob=goal_log_probs,
-                )
-            else:
+            #     rollouts.insert(
+            #         obs=obs,
+            #         recurrent_hidden_states=recurrent_hidden_states,
+            #         actions=actions,
+            #         action_log_probs=action_log_probs,
+            #         values=values,
+            #         rewards=rewards,
+            #         masks=masks,
+            #         goal=goals,
+            #         goal_log_prob=goal_log_probs,
+            #     )
+            # else:
                 rollouts.insert(
                     obs=obs,
                     recurrent_hidden_states=recurrent_hidden_states,
@@ -223,8 +223,8 @@ def train(recurrent_policy,
             if isinstance(envs.venv, VecNormalize):
                 modules.update(vec_normalize=envs.venv)
 
-            if unsupervised:
-                modules.update(gan=gan)
+            # if unsupervised:
+            #     modules.update(gan=gan)
             state_dict = {
                 name: module.state_dict()
                 for name, module in modules.items()
