@@ -12,7 +12,7 @@ def _flatten_helper(T, N, _tensor):
 
 Batch = namedtuple(
     'Batch', 'obs recurrent_hidden_states actions value_preds ret '
-             'masks old_action_log_probs adv noise importance_weighting')
+             'masks old_action_log_probs adv goals old_goal_log_probs')
 
 
 class RolloutStorage(object):
@@ -122,8 +122,8 @@ class RolloutStorage(object):
                       actions=actions_batch, value_preds=value_preds_batch,
                       ret=return_batch, masks=masks_batch,
                       old_action_log_probs=old_action_log_probs_batch, adv=adv_targ,
-                      importance_weighting=1,
-                      noise=None)
+                      goals=None,
+                      old_goal_log_probs=None)
         return batch
 
     def recurrent_generator(self, advantages, num_mini_batch) -> \
@@ -192,38 +192,38 @@ class RolloutStorage(object):
                 masks=masks_batch,
                 old_action_log_probs=old_action_log_probs_batch,
                 adv=adv_targ,
-                noise=None,
-                importance_weighting=1
-            )
+                goals=None,
+                old_goal_log_probs=None)
 
 
 class UnsupervisedRolloutStorage(RolloutStorage):
-    def __init__(self, num_steps, num_processes, noise_size, substitute_goal, **kwargs):
+    def __init__(self, num_steps, num_processes, goal_size, **kwargs):
         super().__init__(num_steps=num_steps, num_processes=num_processes, **kwargs)
-        self.noise = torch.zeros(num_steps + 1, num_processes, noise_size)
-        self.importance_weighting = torch.zeros(num_steps + 1, num_processes)
-        self.substitute_goal = substitute_goal
+        self.goals = torch.zeros(num_steps + 1, num_processes, goal_size)
+        self.goal_log_probs = torch.zeros(num_steps + 1, num_processes, 1)
 
     def to(self, device):
         super().to(device)
-        self.noise.to(device)
-        self.importance_weighting.to(device)
+        self.goals.to(device)
+        self.goal_log_probs.to(device)
 
-    def insert(self, noise, importance_weighting, **kwargs):
+    def insert(self, goal, goal_log_prob, **kwargs):
         super().insert(**kwargs)
-        self.noise[self.step + 1].copy_(noise)
-        self.importance_weighting[self.step + 1].copy_(importance_weighting)
+        self.goals[self.step + 1].copy_(goal)
+        self.goal_log_probs[self.step + 1].copy_(goal_log_prob)
 
     def after_update(self):
-        self.noise[0].copy_(self.noise[-1])
-        self.importance_weighting[0].copy_(self.importance_weighting[-1])
+        super().after_update()
+        self.goals[0].copy_(self.goals[-1])
+        self.goal_log_probs[0].copy_(self.goal_log_probs[-1])
 
     def make_batch(self, advantages, indices):
-        noise = self.noise[:-1].view(-1, *self.noise.size()[2:])[indices]
-        importance_weighting = self.importance_weighting[:-1].view(-1, 1)[indices]
+        goals = self.goals.view(-1, *self.goals.size()[2:])[indices]
+        goal_log_probs = self.goal_log_probs.view(-1, 1)[indices]
         batch = super().make_batch(advantages=advantages, indices=indices)
-        return batch._replace(obs=self.substitute_goal(batch.obs, noise),
-                              importance_weighting=importance_weighting)
+        return batch._replace(
+            goals=goals,
+            old_goal_log_probs=goal_log_probs)
 
     def recurrent_generator(self, advantages, num_mini_batch):
         raise NotImplementedError

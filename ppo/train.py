@@ -5,8 +5,8 @@ from typing import Dict
 
 import numpy as np
 import torch
-from hsr.env import Observation
 from tensorboardX import SummaryWriter
+from utils import space_to_size
 
 from ppo.envs import make_vec_envs, VecNormalize
 from ppo.gan import GAN
@@ -77,14 +77,11 @@ def train(recurrent_policy,
         allow_early_resets=False,
         env_args=env_args)
 
-    obs = envs.reset()
-
     actor_critic = Policy(
         envs.observation_space.shape,
         envs.action_space,
         network_args=network_args)
 
-    gan = None
     if unsupervised:
         sample_env = UnsupervisedEnv(**env_args)
         gan = GAN(
@@ -93,16 +90,9 @@ def train(recurrent_policy,
             **{k.replace('gan_', ''): v
                for k, v in unsupervised_args.items()})
 
-        noises, goal_probs = gan.sample_noise(num_processes)
-        goals = gan(noises)
+        goals, goal_log_probs = gan.sample(num_processes)
         for i, goal in enumerate(goals):
             envs.unwrapped.set_goal(goal.detach().numpy(), i)
-
-        def substitute_goal(_obs, _noise):
-            goals = gan(_noise)
-            split = torch.split(_obs, sample_env.subspace_sizes, dim=1)
-            replace = Observation(*split)._replace(goal=goals)
-            return torch.cat(replace, dim=1)
 
         rollouts = UnsupervisedRolloutStorage(
             num_steps=num_steps,
@@ -110,8 +100,7 @@ def train(recurrent_policy,
             obs_shape=envs.observation_space.shape,
             action_space=envs.action_space,
             recurrent_hidden_state_size=actor_critic.recurrent_hidden_state_size,
-            noise_size=gan.hidden_size,
-            substitute_goal=substitute_goal
+            goal_size=space_to_size(sample_env.goal_space)
         )
 
     else:
@@ -150,7 +139,11 @@ def train(recurrent_policy,
     if unsupervised:
         gan.to(device)
 
+    obs = envs.reset()
     rollouts.obs[0].copy_(obs)
+    if unsupervised:
+        rollouts.goals[0].copy_(goals)
+        rollouts.goal_log_probs[0].copy_(goal_log_probs)
     rollouts.to(device)
 
     start = time.time()
@@ -170,11 +163,10 @@ def train(recurrent_policy,
             if unsupervised:
                 for i, _done in enumerate(done):
                     if _done:
-                        noise, prob = gan.sample_noise(1)
-                        goal = gan(noise)
+                        goal, log_prob = gan.sample(1)
                         envs.unwrapped.set_goal(goal.detach().numpy(), i)
-                        noises[i] = noise
-                        goal_probs[i] = prob
+                        goals[i] = goal
+                        goal_log_probs[i] = log_prob
 
             # track rewards
             rewards_counter += rewards
@@ -193,8 +185,8 @@ def train(recurrent_policy,
                     values=values,
                     rewards=rewards,
                     masks=masks,
-                    noise=noises,
-                    importance_weighting=1 / goal_probs
+                    goal=goals,
+                    goal_log_prob=goal_log_probs,
                 )
             else:
                 rollouts.insert(
@@ -216,14 +208,12 @@ def train(recurrent_policy,
             next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau)
 
         train_results = agent.update(rollouts)
-
         rollouts.after_update()
-
         total_num_steps = (j + 1) * num_processes * num_steps
 
         if all(
-            [log_dir, save_interval,
-             time.time() - last_save >= save_interval]):
+                [log_dir, save_interval,
+                 time.time() - last_save >= save_interval]):
             last_save = time.time()
             modules = dict(
                 optimizer=agent.optimizer,

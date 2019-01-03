@@ -67,6 +67,9 @@ class UnsupervisedEnv(hsr.env.HSREnv):
     def achieved_goal(self):
         return self.gripper_pos()
 
+    def new_goal(self):
+        return self.goal
+
 
 def unwrap_unsupervised(env):
     return unwrap_env(env, lambda e: hasattr(e, 'set_goal'))
@@ -133,4 +136,5 @@ class UnsupervisedSubprocVecEnv(SubprocVecEnv):
 
 class UnsupervisedDummyVecEnv(DummyVecEnv):
     def set_goal(self, goals, i):
-        unwrap_unsupervised(self.envs[i]).set_goal(goals)
+        env = unwrap_unsupervised(self.envs[i])
+        env.set_goal(goals)
