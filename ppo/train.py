@@ -43,13 +43,6 @@ def train(recurrent_policy,
           max_steps=None,
           env_args=None,
           unsupervised_args=None):
-    algo = 'ppo'
-
-    if num_frames:
-        updates = range(int(num_frames) // num_steps // num_processes)
-    else:
-        updates = itertools.count()
-
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
 
@@ -60,6 +53,7 @@ def train(recurrent_policy,
     eval_log_dir = None
     if log_dir:
         writer = SummaryWriter(log_dir=str(log_dir))
+        print(f'Logging to {log_dir}')
         eval_log_dir = log_dir.joinpath("eval")
 
         for _dir in [log_dir, eval_log_dir]:
@@ -87,56 +81,76 @@ def train(recurrent_policy,
         allow_early_resets=False,
         env_args=env_args)
 
-    obs = envs.reset()
+    actor_critic = Policy(
+        envs.observation_space.shape,
+        envs.action_space,
+        network_args=network_args)
 
     gan = None
     if unsupervised:
         sample_env = UnsupervisedEnv(**env_args)
         gan = GAN(
             goal_size=3,
+            goal_space=sample_env.goal_space,
             **{k.replace('gan_', ''): v
                for k, v in unsupervised_args.items()})
 
-        def substitute_goal(_obs, _goals):
-            split = torch.split(_obs, sample_env.subspace_sizes, dim=1)
-            replace = Observation(*split)._replace(goal=_goals)
-            return torch.cat(replace, dim=1)
-
-        goals = gan.sample(num_processes)
+        goals, goal_log_probs = gan.sample(num_processes)
         for i, goal in enumerate(goals):
             envs.unwrapped.set_goal(goal.detach().numpy(), i)
-        obs = substitute_goal(obs, goals)
 
-    actor_critic = Policy(
-        envs.observation_space.shape,
-        envs.action_space,
-        network_args=network_args)
+        rollouts = UnsupervisedRolloutStorage(
+            num_steps=num_steps,
+            num_processes=num_processes,
+            obs_shape=envs.observation_space.shape,
+            action_space=envs.action_space,
+            recurrent_hidden_state_size=actor_critic.
+            recurrent_hidden_state_size,
+            goal_size=space_to_size(sample_env.goal_space))
 
+    else:
+        rollouts = RolloutStorage(
+            num_steps=num_steps,
+            num_processes=num_processes,
+            obs_shape=envs.observation_space.shape,
+            action_space=envs.action_space,
+            recurrent_hidden_state_size=actor_critic.
+            recurrent_hidden_state_size,
+        )
+
+    agent = PPO(actor_critic=actor_critic, gan=gan, **ppo_args)
+
+    rewards_counter = np.zeros(num_processes)
+    episode_rewards = []
+    last_save = time.time()
+
+    start = 0
     if load_path:
         state_dict = torch.load(load_path)
         if unsupervised:
             gan.load_state_dict(state_dict['gan'])
         actor_critic.load_state_dict(state_dict['actor_critic'])
+        agent.optimizer.load_state_dict(state_dict['optimizer'])
+        start = state_dict.get('step', -1) + 1
+        if isinstance(envs.venv, VecNormalize):
+            envs.venv.load_state_dict(state_dict['vec_normalize'])
+        print(f'Loaded parameters from {load_path}.')
+
+    if num_frames:
+        updates = range(start, int(num_frames) // num_steps // num_processes)
+    else:
+        updates = itertools.count(start)
 
     actor_critic.to(device)
     if unsupervised:
         gan.to(device)
 
-    agent = PPO(actor_critic=actor_critic, gan=gan, **ppo_args)
-
-    rollouts = RolloutStorage(
-        num_steps=num_steps,
-        num_processes=num_processes,
-        obs_shape=envs.observation_space.shape,
-        action_space=envs.action_space,
-        recurrent_hidden_state_size=actor_critic.recurrent_hidden_state_size,
-    )
-
+    obs = envs.reset()
     rollouts.obs[0].copy_(obs)
+    if unsupervised:
+        rollouts.goals[0].copy_(goals)
+        rollouts.goal_log_probs[0].copy_(goal_log_probs)
     rollouts.to(device)
-
-    rewards_counter = np.zeros(num_processes)
-    episode_rewards = []
 
     start = time.time()
     for j in updates:
@@ -155,10 +169,10 @@ def train(recurrent_policy,
             if unsupervised:
                 for i, _done in enumerate(done):
                     if _done:
-                        goal = gan.sample(1)
+                        goal, log_prob = gan.sample(1)
                         envs.unwrapped.set_goal(goal.detach().numpy(), i)
                         goals[i] = goal
-                obs = substitute_goal(obs, goals)
+                        goal_log_probs[i] = log_prob
 
             # track rewards
             rewards_counter += rewards
@@ -168,14 +182,27 @@ def train(recurrent_policy,
             # If done then clean the history of observations.
             masks = torch.FloatTensor(
                 [[0.0] if done_ else [1.0] for done_ in done])
-            rollouts.insert(
-                obs=obs,
-                recurrent_hidden_states=recurrent_hidden_states,
-                actions=actions,
-                action_log_probs=action_log_probs,
-                values=values,
-                rewards=rewards,
-                masks=masks)
+            if unsupervised:
+                rollouts.insert(
+                    obs=obs,
+                    recurrent_hidden_states=recurrent_hidden_states,
+                    actions=actions,
+                    action_log_probs=action_log_probs,
+                    values=values,
+                    rewards=rewards,
+                    masks=masks,
+                    goal=goals,
+                    goal_log_prob=goal_log_probs,
+                )
+            else:
+                rollouts.insert(
+                    obs=obs,
+                    recurrent_hidden_states=recurrent_hidden_states,
+                    actions=actions,
+                    action_log_probs=action_log_probs,
+                    values=values,
+                    rewards=rewards,
+                    masks=masks)
 
         with torch.no_grad():
             next_value = actor_critic.get_value(
@@ -183,23 +210,34 @@ def train(recurrent_policy,
                 rnn_hxs=rollouts.recurrent_hidden_states[-1],
                 masks=rollouts.masks[-1]).detach()
 
-        rollouts.compute_returns(next_value=next_value,
-                                 use_gae=use_gae,
-                                 gamma=gamma,
-                                 tau=tau)
+        rollouts.compute_returns(
+            next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau)
+
         train_results = agent.update(rollouts)
         rollouts.after_update()
-
-        if j % save_interval == 0 and log_dir is not None:
-            models = dict(actor_critic=actor_critic)  # type: Dict[str, nn.Module]
-            if unsupervised:
-                models.update(gan=gan)
-            state_dict = {name: model.state_dict() for name, model in models.items()}
-            save_path = Path(log_dir, 'checkpoint.pt')
-            torch.save(state_dict, save_path)
-
-
         total_num_steps = (j + 1) * num_processes * num_steps
+
+        if all(
+            [log_dir, save_interval,
+             time.time() - last_save >= save_interval]):
+            last_save = time.time()
+            modules = dict(
+                optimizer=agent.optimizer,
+                actor_critic=actor_critic)  # type: Dict[str, torch.nn.Module]
+
+            if isinstance(envs.venv, VecNormalize):
+                modules.update(vec_normalize=envs.venv)
+
+            if unsupervised:
+                modules.update(gan=gan)
+            state_dict = {
+                name: module.state_dict()
+                for name, module in modules.items()
+            }
+            save_path = Path(log_dir, 'checkpoint.pt')
+            torch.save(dict(step=j, **state_dict), save_path)
+
+            print(f'Saved parameters to {save_path}')
 
         if j % log_interval == 0:
             end = time.time()
@@ -248,7 +286,6 @@ def train(recurrent_policy,
             eval_masks = torch.zeros(num_processes, 1, device=device)
 
             while len(eval_episode_rewards) < 10:
-                print('.', end='')
                 with torch.no_grad():
                     _, actions, _, eval_recurrent_hidden_states = actor_critic.act(
                         inputs=obs,
@@ -269,4 +306,3 @@ def train(recurrent_policy,
 
             print(" Evaluation using {} episodes: mean reward {:.5f}\n".format(
                 len(eval_episode_rewards), np.mean(eval_episode_rewards)))
-
