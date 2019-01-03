@@ -3,16 +3,17 @@
 from multiprocessing import Pipe, Process
 
 # first party
+import hsr
+from hsr.env import Observation
+
 from common.vec_env import CloudpickleWrapper, VecEnv
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
-
-from hsr import env
-from hsr.env import Observation
-from utils import concat_spaces, space_shape, unwrap_env, vectorize
+from utils.gym import concat_spaces, space_shape, unwrap_env
+from utils.numpy import vectorize
 
 
-class HSREnv(env.HSREnv):
+class HSREnv(hsr.env.HSREnv):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -28,15 +29,14 @@ class HSREnv(env.HSREnv):
         return vectorize(super().reset())
 
 
-class MoveGripperEnv(HSREnv, env.MoveGripperEnv):
+class MoveGripperEnv(HSREnv, hsr.env.MoveGripperEnv):
     pass
 
 
-class UnsupervisedEnv(env.HSREnv):
+class UnsupervisedEnv(hsr.env.HSREnv):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        old_spaces = env.Observation(*self.observation_space.spaces)
-        self.goals = []
+        old_spaces = hsr.env.Observation(*self.observation_space.spaces)
         spaces = Observation(
             observation=old_spaces.observation, goal=old_spaces.goal)
 
@@ -56,7 +56,7 @@ class UnsupervisedEnv(env.HSREnv):
 
     def step(self, actions):
         s, r, t, i = super().step(actions)
-        i.update(goal=self.goals[-1])
+        i.update(goal=self.goal)
         observation = Observation(observation=s.observation, goal=s.goal)
         return vectorize(observation), r, t, i
 
@@ -66,6 +66,9 @@ class UnsupervisedEnv(env.HSREnv):
 
     def achieved_goal(self):
         return self.gripper_pos()
+
+    def new_goal(self):
+        return self.goal
 
 
 def unwrap_unsupervised(env):
@@ -127,10 +130,11 @@ class UnsupervisedSubprocVecEnv(SubprocVecEnv):
         observation_space, action_space = self.remotes[0].recv()
         VecEnv.__init__(self, len(env_fns), observation_space, action_space)
 
-    def store_goals(self, goal, i):
+    def set_goal(self, goal, i):
         self.remotes[i].send(('set_goal', goal))
 
 
 class UnsupervisedDummyVecEnv(DummyVecEnv):
     def set_goal(self, goals, i):
-        unwrap_unsupervised(self.envs[i]).set_goal(goals)
+        env = unwrap_unsupervised(self.envs[i])
+        env.set_goal(goals)
