@@ -8,6 +8,8 @@ import torch.optim as optim
 
 from ppo.storage import RolloutStorage
 
+def f(x):
+    x.sum().backward(retain_graph=True)
 
 class PPO:
     def __init__(self,
