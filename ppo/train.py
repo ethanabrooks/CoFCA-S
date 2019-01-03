@@ -12,7 +12,6 @@ from hsr.env import Observation
 from ppo.envs import make_vec_envs
 from ppo.gan import GAN
 from ppo.hsr_adapter import UnsupervisedEnv
-from ppo.main import hsr_cli
 from ppo.policy import Policy
 from ppo.ppo import PPO
 from ppo.storage import RolloutStorage
