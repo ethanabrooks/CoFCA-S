@@ -54,11 +54,11 @@ class PPO:
     def update(self, rollouts: RolloutStorage):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         advantages = (advantages - advantages.mean()) / (
-            advantages.std() + 1e-5)
+                advantages.std() + 1e-5)
 
         update_values = Counter()
 
-        total_norm = torch.zeros(())
+        total_norm = 0
         for e in range(self.ppo_epoch):
             if self.actor_critic.is_recurrent:
                 data_generator = rollouts.recurrent_generator(
