@@ -130,14 +130,14 @@ class PPO:
                 self.optimizer.step()
                 # noinspection PyTypeChecker
                 update_values.update(
-                    value_loss=value_losses.mean(),
-                    action_loss=action_losses.mean(),
+                    value_loss=value_loss,
+                    action_loss=action_loss,
                     norm=total_norm,
-                    entropy=dist_entropy.mean(),
+                    entropy=entropy,
                 )
 
         num_updates = self.ppo_epoch * self.num_mini_batch
         return {
-            k: v.detach().numpy() / num_updates
+            k: v.mean().detach().numpy() / num_updates
             for k, v in update_values.items()
         }
