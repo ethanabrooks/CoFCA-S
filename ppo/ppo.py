@@ -6,10 +6,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
+from common.running_mean_std import RunningMeanStd
 from ppo.storage import RolloutStorage
+
 
 def f(x):
     x.sum().backward(retain_graph=True)
+
 
 class PPO:
     def __init__(self,
@@ -44,13 +47,14 @@ class PPO:
         if self.unsupervised:
             self.unsupervised_optimizer = optim.Adam(
                 gan.parameters(), lr=learning_rate, eps=eps)
+            self.gradient_rms = RunningMeanStd()
         self.gan = gan
         self.reward_function = None
 
     def update(self, rollouts: RolloutStorage):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         advantages = (advantages - advantages.mean()) / (
-            advantages.std() + 1e-5)
+                advantages.std() + 1e-5)
 
         update_values = Counter()
 
@@ -65,23 +69,18 @@ class PPO:
 
             for sample in data_generator:
                 # Reshape to do in a single forward pass for all steps
-                def compute_prob_losses(log_probs, old_log_probs, J):
-                    ratio = torch.exp(log_probs - old_log_probs)
-                    surr1 = ratio * J
-                    surr2 = torch.clamp(ratio, 1.0 - self.clip_param,
-                                        1.0 + self.clip_param) * J
-                    return -torch.min(surr1, surr2)
-
                 def compute_loss_components():
                     values, action_log_prob, dist_entropy, \
                     _ = self.actor_critic.evaluate_actions(
                         sample.obs, sample.recurrent_hidden_states, sample.masks,
                         sample.actions)
 
-                    action_losses = compute_prob_losses(
-                        log_probs=action_log_prob,
-                        old_log_probs=sample.old_action_log_probs,
-                        J=sample.adv)
+                    ratio = torch.exp(action_log_prob - sample.old_action_log_probs)
+                    surr1 = ratio * sample.adv
+                    surr2 = torch.clamp(ratio, 1.0 - self.clip_param,
+                                        1.0 + self.clip_param) * sample.adv
+
+                    action_losses = -torch.min(surr1, surr2)
 
                     value_losses = (values - sample.ret).pow(2)
                     if self.use_clipped_value_loss:
@@ -89,7 +88,7 @@ class PPO:
                                              (values - sample.value_preds).clamp(
                                                  -self.clip_param, self.clip_param)
                         value_losses_clipped = (
-                            value_pred_clipped - sample.ret).pow(2)
+                                value_pred_clipped - sample.ret).pow(2)
                         value_losses = .5 * torch.max(value_losses,
                                                       value_losses_clipped)
 
@@ -108,18 +107,17 @@ class PPO:
                 def global_norm(grads):
                     norm = 0
                     for grad in grads:
-                        norm += grad.norm(2)**2
-                    return norm**.5
+                        norm += grad.norm(2) ** 2
+                    return norm ** .5
 
                 if self.unsupervised:
                     grads = torch.autograd.grad(
                         compute_loss(*compute_loss_components()),
-                        self.actor_critic.parameters(),
-                        create_graph=True)
-                    unsupervised_loss = compute_prob_losses(
-                        log_probs=self.gan.log_prob(sample.goals),
-                        old_log_probs=sample.old_goal_log_probs,
-                        J=global_norm(grads))
+                        self.actor_critic.parameters())
+                    norm = global_norm(grads).detach()
+                    self.gradient_rms.update(norm.numpy(), axis=None)
+                    log_prob = self.gan.log_prob(sample.goals)
+                    unsupervised_loss = log_prob * (norm - self.gradient_rms.mean)
                     unsupervised_loss.mean().backward()
                     update_values.update(unsupervised_loss=unsupervised_loss)
                     self.unsupervised_optimizer.step()
