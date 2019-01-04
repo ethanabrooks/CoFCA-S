@@ -4,7 +4,7 @@ import torch.nn as nn
 
 # first party
 from ppo.distributions import Categorical, DiagGaussian
-from ppo.utils import init, init_normc_
+from ppo.utils import init, init_normc_, mlp
 
 
 class Flatten(nn.Module):
@@ -203,16 +203,13 @@ class MLPBase(NNBase):
                                init_normc_,
                                lambda x: nn.init.constant_(x, 0))
 
-        self.actor = nn.Sequential()
+        self.actor = mlp(num_inputs=num_inputs,
+                         hidden_size=hidden_size,
+                         num_layers=num_layers,
+                         activation=activation)
         self.critic = nn.Sequential()
         in_features = num_inputs
         for i in range(num_layers):
-            self.actor.add_module(
-                name=f'fc{i}',
-                module=nn.Sequential(
-                    init_(nn.Linear(in_features, hidden_size)),
-                    activation,
-                ))
             self.critic.add_module(
                 name=f'fc{i}',
                 module=nn.Sequential(
