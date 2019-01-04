@@ -133,7 +133,7 @@ class PPO:
                 nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
                                          self.max_grad_norm)
                 self.optimizer.zero_grad()
-                # self.optimizer.step()
+                self.optimizer.step()
                 # noinspection PyTypeChecker
                 update_values.update(
                     value_loss=value_losses,
