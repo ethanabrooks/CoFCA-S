@@ -98,8 +98,8 @@ class PPO:
                     if sample.importance_weighting is None:
                         importance_weighting = 1
                     else:
-                        log_probs = sample.importance_weighting.detach()
-                        importance_weighting = 1 / log_probs.exp()
+                        importance_weighting = sample.importance_weighting.detach(
+                        )
                     losses = (value_loss * self.value_loss_coef + action_loss -
                               dist_entropy * self.entropy_coef)
                     return torch.mean(losses * importance_weighting)
