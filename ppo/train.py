@@ -89,7 +89,7 @@ def train(recurrent_policy,
             **{k.replace('gan_', ''): v
                for k, v in unsupervised_args.items()})
 
-        goals, goal_log_probs = gan.sample(num_processes)
+        goals, importance_weightings = gan.sample(num_processes)
         for i, goal in enumerate(goals):
             envs.unwrapped.set_goal(goal.detach().numpy(), i)
 
@@ -143,7 +143,7 @@ def train(recurrent_policy,
     rollouts.obs[0].copy_(obs)
     if unsupervised:
         rollouts.goals[0].copy_(goals)
-        rollouts.goal_log_probs[0].copy_(goal_log_probs)
+        rollouts.importance_weighting[0].copy_(importance_weightings)
     rollouts.to(device)
 
     start = time.time()
@@ -163,10 +163,10 @@ def train(recurrent_policy,
             if unsupervised:
                 for i, _done in enumerate(done):
                     if _done:
-                        goal, log_prob = gan.sample(1)
+                        goal, importance_weighting = gan.sample(1)
                         envs.unwrapped.set_goal(goal.detach().numpy(), i)
                         goals[i] = goal
-                        goal_log_probs[i] = log_prob
+                        importance_weightings[i] = importance_weighting
 
             # track rewards
             rewards_counter += rewards
@@ -186,7 +186,7 @@ def train(recurrent_policy,
                     rewards=rewards,
                     masks=masks,
                     goal=goals,
-                    goal_log_prob=goal_log_probs,
+                    importance_weighting=importance_weightings,
                 )
             else:
                 rollouts.insert(
