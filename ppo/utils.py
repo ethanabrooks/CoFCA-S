@@ -27,7 +27,7 @@ def get_vec_normalize(venv):
     return None
 
 
-def mlp(num_inputs, num_outputs, hidden_size, num_layers, activation, name='fc'):
+def mlp(num_inputs, hidden_size, num_layers, activation, name='fc', num_outputs=None):
     init_ = lambda m: init(m, weight_init=init_normc_,
                            bias_init=lambda x: nn.init.constant_(x, 0))
     network = nn.Sequential()
@@ -39,8 +39,9 @@ def mlp(num_inputs, num_outputs, hidden_size, num_layers, activation, name='fc')
                                activation,
                            ))
         in_features = hidden_size
-    network.add_module(name=f'{name}-out',
-                       module=init_(nn.Linear(in_features, num_outputs)) )
+    if num_outputs:
+        network.add_module(name=f'{name}-out',
+                           module=init_(nn.Linear(in_features, num_outputs)))
     return network
 
 

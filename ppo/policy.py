@@ -199,7 +199,6 @@ class MLPBase(NNBase):
             num_inputs = hidden_size
 
         self.actor = mlp(num_inputs=num_inputs,
-                         num_outputs=hidden_size,
                          hidden_size=hidden_size,
                          num_layers=num_layers,
                          activation=activation,
@@ -207,7 +206,7 @@ class MLPBase(NNBase):
         self.critic = mlp(num_inputs=num_inputs,
                           num_outputs=1,
                           hidden_size=hidden_size,
-                          num_layers=num_layers + 1,
+                          num_layers=num_layers,
                           activation=activation,
                           name='critic')
         self.train()
