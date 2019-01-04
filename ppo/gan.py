@@ -41,18 +41,18 @@ class GAN(nn.Module):
 
     def sample(self, num_outputs):
         dist = self.dist(num_outputs)
-        sample = dist.sample()
+        samples = dist.sample()
         high = torch.tensor(self.goal_space.high)
         low = torch.tensor(self.goal_space.low)
-        squashed = sample * (high - low) + low
+        goals = samples * (high - low) + low
         mean_log_prob = dist.log_prob(dist.mean).mean(dim=0)
         if self.regularizer is None:
             self.regularizer = mean_log_prob
         else:
             self.regularizer += .01 * (mean_log_prob - self.regularizer)
-        importance_weighting = (self.regularizer - dist.log_prob(sample)).sum(
+        importance_weighting = (self.regularizer - dist.log_prob(samples)).sum(
             dim=-1).exp()
-        return squashed, importance_weighting.view(-1, 1)
+        return samples, goals, importance_weighting.view(-1, 1)
 
     def parameters(self):
         return self.network.parameters()
