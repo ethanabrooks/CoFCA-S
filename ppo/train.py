@@ -1,19 +1,18 @@
 import itertools
-import time
 from pathlib import Path
-from typing import Dict
+import time
 
 import numpy as np
-import torch
 from tensorboardX import SummaryWriter
-from utils import space_to_size
+import torch
 
-from ppo.envs import make_vec_envs, VecNormalize
+from ppo.envs import VecNormalize, make_vec_envs
 from ppo.gan import GAN
 from ppo.hsr_adapter import UnsupervisedEnv
 from ppo.policy import Policy
 from ppo.ppo import PPO
 from ppo.storage import RolloutStorage, UnsupervisedRolloutStorage
+from utils import space_to_size
 
 
 def train(recurrent_policy,
@@ -86,12 +85,11 @@ def train(recurrent_policy,
     if unsupervised:
         sample_env = UnsupervisedEnv(**env_args)
         gan = GAN(
-            goal_size=3,
             goal_space=sample_env.goal_space,
             **{k.replace('gan_', ''): v
                for k, v in unsupervised_args.items()})
 
-        goals, goal_log_probs = gan.sample(num_processes)
+        goals, importance_weightings = gan.sample(num_processes)
         for i, goal in enumerate(goals):
             envs.unwrapped.set_goal(goal.detach().numpy(), i)
 
@@ -145,7 +143,7 @@ def train(recurrent_policy,
     rollouts.obs[0].copy_(obs)
     if unsupervised:
         rollouts.goals[0].copy_(goals)
-        rollouts.goal_log_probs[0].copy_(goal_log_probs)
+        rollouts.importance_weighting[0].copy_(importance_weightings)
     rollouts.to(device)
 
     start = time.time()
@@ -165,10 +163,10 @@ def train(recurrent_policy,
             if unsupervised:
                 for i, _done in enumerate(done):
                     if _done:
-                        goal, log_prob = gan.sample(1)
+                        goal, importance_weighting = gan.sample(1)
                         envs.unwrapped.set_goal(goal.detach().numpy(), i)
                         goals[i] = goal
-                        goal_log_probs[i] = log_prob
+                        importance_weightings[i] = importance_weighting
 
             # track rewards
             rewards_counter += rewards
@@ -188,7 +186,7 @@ def train(recurrent_policy,
                     rewards=rewards,
                     masks=masks,
                     goal=goals,
-                    goal_log_prob=goal_log_probs,
+                    importance_weighting=importance_weightings,
                 )
             else:
                 rollouts.insert(
@@ -269,11 +267,6 @@ def train(recurrent_policy,
                 max_steps=max_steps,
                 env_args=env_args,
                 allow_early_resets=True)
-
-            # vec_norm = get_vec_normalize(eval_envs)
-            # if vec_norm is not None:
-            #     vec_norm.eval()
-            #     vec_norm.ob_rms = get_vec_normalize(envs).ob_rms
 
             eval_episode_rewards = []
 
