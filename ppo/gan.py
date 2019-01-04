@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from gym.spaces import Box
 
 from ppo.utils import mlp
 from utils import space_to_size
