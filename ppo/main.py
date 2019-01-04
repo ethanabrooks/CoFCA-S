@@ -1,13 +1,11 @@
-# first party
 import argparse
 from pathlib import Path
 
-from hsr.util import env_wrapper, add_env_args, add_wrapper_args
 from torch import nn as nn
-from utils import parse_groups, parse_activation
 
-# third party
+from hsr.util import add_env_args, add_wrapper_args, env_wrapper
 from ppo.train import train
+from utils import parse_activation, parse_groups
 
 
 def cli():

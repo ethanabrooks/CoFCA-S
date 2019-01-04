@@ -3,7 +3,6 @@ from collections import Counter
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import torch.optim as optim
 
 from common.running_mean_std import RunningMeanStd
@@ -58,7 +57,7 @@ class PPO:
 
         update_values = Counter()
 
-        total_norm = torch.zeros(())
+        total_norm = torch.tensor(0, dtype=torch.float32)
         for e in range(self.ppo_epoch):
             if self.actor_critic.is_recurrent:
                 data_generator = rollouts.recurrent_generator(
@@ -70,12 +69,12 @@ class PPO:
             for sample in data_generator:
                 # Reshape to do in a single forward pass for all steps
                 def compute_loss_components():
-                    values, action_log_prob, dist_entropy, \
+                    values, action_log_probs, dist_entropy, \
                     _ = self.actor_critic.evaluate_actions(
                         sample.obs, sample.recurrent_hidden_states, sample.masks,
                         sample.actions)
 
-                    ratio = torch.exp(action_log_prob -
+                    ratio = torch.exp(action_log_probs -
                                       sample.old_action_log_probs)
                     surr1 = ratio * sample.adv
                     surr2 = torch.clamp(ratio, 1.0 - self.clip_param,
@@ -96,11 +95,11 @@ class PPO:
                     return value_losses, action_losses, dist_entropy
 
                 def compute_loss(value_loss, action_loss, dist_entropy):
-                    if sample.old_goal_log_probs is None:
+                    if sample.importance_weighting is None:
                         importance_weighting = 1
                     else:
-                        log_probs = sample.old_goal_log_probs.detach()
-                        importance_weighting = 1 / log_probs.exp()
+                        importance_weighting = sample.importance_weighting.detach(
+                        )
                     losses = (value_loss * self.value_loss_coef + action_loss -
                               dist_entropy * self.entropy_coef)
                     return torch.mean(losses * importance_weighting)
@@ -118,17 +117,15 @@ class PPO:
                     norm = global_norm(grads).detach()
                     self.gradient_rms.update(norm.numpy(), axis=None)
                     log_prob = self.gan.log_prob(sample.goals)
-                    norm_minus_baseline = norm - self.gradient_rms.mean
-                    unsupervised_loss = (log_prob * norm_minus_baseline.detach()).mean()
-                    unsupervised_loss.backward()
-                    update_values.update(
-                        unsupervised_loss=unsupervised_loss,
-                        norm_minus_baseline=norm_minus_baseline)
-                    self.unsupervised_optimizer.step()
+                    unsupervised_loss = log_prob * (
+                        norm - self.gradient_rms.mean)
+                    unsupervised_loss.mean().backward()
+                    update_values.update(unsupervised_loss=unsupervised_loss)
+                #     # self.unsupervised_optimizer.step()
                     self.unsupervised_optimizer.zero_grad()
                 self.optimizer.zero_grad()
-                value_loss, action_loss, entropy = \
-                    components = compute_loss_components()
+                value_losses, action_losses, entropy = components \
+                    = compute_loss_components()
                 loss = compute_loss(*components)
                 loss.backward()
                 total_norm += global_norm(
@@ -139,8 +136,8 @@ class PPO:
                 # self.optimizer.step()
                 # noinspection PyTypeChecker
                 update_values.update(
-                    value_loss=value_loss.norm(),
-                    action_loss=action_loss.norm(),
+                    value_loss=value_losses,
+                    action_loss=action_losses,
                     norm=total_norm,
                     entropy=entropy.norm(),
                 )
