@@ -12,7 +12,7 @@ def _flatten_helper(T, N, _tensor):
 
 Batch = namedtuple(
     'Batch', 'obs recurrent_hidden_states actions value_preds ret '
-    'masks old_action_log_probs adv goals old_goal_log_probs')
+    'masks old_action_log_probs adv goals importance_weighting')
 
 
 class RolloutStorage(object):
@@ -125,7 +125,7 @@ class RolloutStorage(object):
             old_action_log_probs=old_action_log_probs_batch,
             adv=adv_targ,
             goals=None,
-            old_goal_log_probs=None)
+            importance_weighting=None)
         return batch
 
     def recurrent_generator(self, advantages, num_mini_batch) -> \
@@ -195,7 +195,7 @@ class RolloutStorage(object):
                 old_action_log_probs=old_action_log_probs_batch,
                 adv=adv_targ,
                 goals=None,
-                old_goal_log_probs=None)
+                importance_weighting=None)
 
 
 class UnsupervisedRolloutStorage(RolloutStorage):
@@ -203,28 +203,30 @@ class UnsupervisedRolloutStorage(RolloutStorage):
         super().__init__(
             num_steps=num_steps, num_processes=num_processes, **kwargs)
         self.goals = torch.zeros(num_steps + 1, num_processes, goal_size)
-        self.goal_log_probs = torch.zeros(num_steps + 1, num_processes, 1)
+        self.importance_weighting = torch.zeros(num_steps + 1, num_processes,
+                                                1)
 
     def to(self, device):
         super().to(device)
         self.goals.to(device)
-        self.goal_log_probs.to(device)
+        self.importance_weighting.to(device)
 
-    def insert(self, goal, goal_log_prob, **kwargs):
+    def insert(self, goal, importance_weighting, **kwargs):
         super().insert(**kwargs)
         self.goals[self.step + 1].copy_(goal)
-        self.goal_log_probs[self.step + 1].copy_(goal_log_prob)
+        self.importance_weighting[self.step + 1].copy_(importance_weighting)
 
     def after_update(self):
         super().after_update()
         self.goals[0].copy_(self.goals[-1])
-        self.goal_log_probs[0].copy_(self.goal_log_probs[-1])
+        self.importance_weighting[0].copy_(self.importance_weighting[-1])
 
     def make_batch(self, advantages, indices):
         goals = self.goals.view(-1, *self.goals.size()[2:])[indices]
-        goal_log_probs = self.goal_log_probs.view(-1, 1)[indices]
+        importance_weighting = self.importance_weighting.view(-1, 1)[indices]
         batch = super().make_batch(advantages=advantages, indices=indices)
-        return batch._replace(goals=goals, old_goal_log_probs=goal_log_probs)
+        return batch._replace(
+            goals=goals, importance_weighting=importance_weighting)
 
     def recurrent_generator(self, advantages, num_mini_batch):
         raise NotImplementedError
