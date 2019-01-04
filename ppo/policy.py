@@ -4,7 +4,7 @@ import torch.nn as nn
 
 # first party
 from ppo.distributions import Categorical, DiagGaussian
-from ppo.utils import init, init_normc_, mlp
+from ppo.utils import init, mlp
 
 
 class Flatten(nn.Module):
@@ -198,17 +198,19 @@ class MLPBase(NNBase):
         if recurrent:
             num_inputs = hidden_size
 
-        self.actor = mlp(num_inputs=num_inputs,
-                         hidden_size=hidden_size,
-                         num_layers=num_layers,
-                         activation=activation,
-                         name='actor')
-        self.critic = mlp(num_inputs=num_inputs,
-                          num_outputs=1,
-                          hidden_size=hidden_size,
-                          num_layers=num_layers,
-                          activation=activation,
-                          name='critic')
+        self.actor = mlp(
+            num_inputs=num_inputs,
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            activation=activation,
+            name='actor')
+        self.critic = mlp(
+            num_inputs=num_inputs,
+            num_outputs=1,
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            activation=activation,
+            name='critic')
         self.train()
 
     def forward(self, inputs, rnn_hxs, masks):

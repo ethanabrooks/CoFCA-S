@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
-from gym.spaces import Box
+
+from ppo.utils import mlp
 from utils import space_to_size
 
 from ppo.utils import mlp
@@ -12,11 +13,12 @@ class GAN(nn.Module):
         self.goal_space = goal_space
         goal_size = space_to_size(goal_space)
         self.hidden_size = hidden_size
-        self.network = nn.Sequential(mlp(num_inputs=hidden_size,
-                                         hidden_size=hidden_size,
-                                         num_outputs=2 * goal_size,
-                                         name='gan', **kwargs),
-                                     torch.nn.Softplus())
+        self.network = nn.Sequential(
+            mlp(num_inputs=hidden_size,
+                hidden_size=hidden_size,
+                num_outputs=2 * goal_size,
+                name='gan',
+                **kwargs), torch.nn.Softplus())
         self.regularizer = None
 
     def goal_input(self, num_outputs):
@@ -45,8 +47,8 @@ class GAN(nn.Module):
             self.regularizer = mean_log_prob
         else:
             self.regularizer += .01 * (mean_log_prob - self.regularizer)
-        importance_weighting = (self.regularizer - dist.log_prob(sample)
-                                ).sum(dim=-1).exp()
+        importance_weighting = (self.regularizer - dist.log_prob(sample)).sum(
+            dim=-1).exp()
         return squashed, importance_weighting.view(-1, 1)
 
     def parameters(self):
