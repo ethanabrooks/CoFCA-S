@@ -169,6 +169,11 @@ def get_unsupervised_parser():
     parser = get_hsr_parser()
     unsupervised_parser = parser.add_argument_group('unsupervised_args')
     unsupervised_parser.add_argument(
+        '--gan-learning-rate',
+        type=float,
+        default=7e-4,
+        help='(default: 7e-4)')
+    unsupervised_parser.add_argument(
         '--gan-hidden-size', type=int, default=256)
     unsupervised_parser.add_argument('--gan-num-layers', type=int, default=3)
     unsupervised_parser.add_argument(

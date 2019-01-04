@@ -45,7 +45,7 @@ class PPO:
 
         if self.unsupervised:
             self.unsupervised_optimizer = optim.Adam(
-                gan.parameters(), lr=learning_rate, eps=eps)
+                gan.parameters(), lr=gan.learning_rate, eps=eps)
             self.gradient_rms = RunningMeanStd()
         self.gan = gan
         self.reward_function = None
@@ -121,7 +121,7 @@ class PPO:
                         norm - self.gradient_rms.mean)
                     unsupervised_loss.mean().backward()
                     update_values.update(unsupervised_loss=unsupervised_loss)
-                #     # self.unsupervised_optimizer.step()
+                    #     # self.unsupervised_optimizer.step()
                     self.unsupervised_optimizer.zero_grad()
                 self.optimizer.zero_grad()
                 value_losses, action_losses, entropy = components \

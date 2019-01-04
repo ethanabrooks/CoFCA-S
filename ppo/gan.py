@@ -9,8 +9,10 @@ from ppo.utils import mlp
 
 
 class GAN(nn.Module):
-    def __init__(self, goal_space: Box, hidden_size, **kwargs):
+    def __init__(self, goal_space: Box, hidden_size, learning_rate: float,
+                 **kwargs):
         super().__init__()
+        self.learning_rate = learning_rate
         self.goal_space = goal_space
         goal_size = space_to_size(goal_space)
         self.hidden_size = hidden_size
