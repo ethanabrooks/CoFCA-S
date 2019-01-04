@@ -164,7 +164,6 @@ def train(recurrent_policy,
                 for i, _done in enumerate(done):
                     if _done:
                         sample, goal, importance_weighting = gan.sample(1)
-                        print(sample)
                         envs.unwrapped.set_goal(goal.detach().numpy(), i)
                         samples[i] = sample
                         importance_weightings[i] = importance_weighting
