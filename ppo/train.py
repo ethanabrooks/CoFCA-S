@@ -85,7 +85,6 @@ def train(recurrent_policy,
     if unsupervised:
         sample_env = UnsupervisedEnv(**env_args)
         gan = GAN(
-            goal_size=3,
             goal_space=sample_env.goal_space,
             **{k.replace('gan_', ''): v
                for k, v in unsupervised_args.items()})
