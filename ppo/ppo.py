@@ -120,9 +120,12 @@ class PPO:
                         self.actor_critic.parameters())
                     norm = global_norm(grads).detach()
                     self.gradient_rms.update(norm.numpy(), axis=None)
-                    log_prob = self.gan.log_prob(sample.samples)
+                    dist = self.gan.dist(sample.samples.size()[0])
+                    log_prob = dist.log_prob(sample.samples)
+
                     unsupervised_loss = -log_prob * (
-                        norm - self.gradient_rms.mean)
+                            norm - self.gradient_rms.mean) - (
+                            dist.entropy() * self.gan.entropy_coef)
                     unsupervised_loss.mean().backward()
                     gan_norm = global_norm(
                         [p.grad for p in self.gan.parameters()])

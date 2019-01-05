@@ -178,4 +178,9 @@ def get_unsupervised_parser():
     unsupervised_parser.add_argument('--gan-num-layers', type=int, default=3)
     unsupervised_parser.add_argument(
         '--gan-activation', type=parse_activation, default=nn.ReLU())
+    unsupervised_parser.add_argument(
+        '--gan-entropy-coef',
+        type=float,
+        default=0.01,
+        help='entropy term coefficient (default: 0.01)')
     return parser
