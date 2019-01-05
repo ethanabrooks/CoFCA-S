@@ -100,6 +100,7 @@ class PPO:
                     else:
                         importance_weighting = sample.importance_weighting.detach(
                         )
+                        importance_weighting[torch.isnan(importance_weighting)] = 0
                     losses = (value_loss * self.value_loss_coef + action_loss -
                               dist_entropy * self.entropy_coef)
                     return torch.mean(losses * importance_weighting)
