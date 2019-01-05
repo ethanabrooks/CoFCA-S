@@ -133,7 +133,8 @@ class PPO:
                         ipdb.set_trace()
                         norm = global_norm(grads).detach()
                     self.gradient_rms.update(norm.numpy(), axis=None)
-                    log_prob = self.gan.log_prob(sample.samples)
+                    dist = self.gan.dist(sample.samples.size()[0])
+                    log_prob = dist.log_prob(sample.samples)
                     print('log_prob max', log_prob.max())
                     print('log_prob min', log_prob.min())
                     if torch.isnan(log_prob).any():
@@ -142,7 +143,8 @@ class PPO:
                         log_prob = self.gan.log_prob(sample.samples)
 
                     unsupervised_loss = -log_prob * (
-                        norm - self.gradient_rms.mean)
+                            norm - self.gradient_rms.mean) - (
+                            dist.entropy() * self.gan.entropy_coef)
                     print('unsupervised_loss max', unsupervised_loss.max())
                     print('unsupervised_loss min', unsupervised_loss.min())
                     if torch.isnan(unsupervised_loss).any():
