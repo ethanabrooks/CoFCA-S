@@ -116,79 +116,22 @@ class PPO:
                     grads = torch.autograd.grad(
                         compute_loss(*compute_loss_components()),
                         self.actor_critic.parameters())
-                    print('grad max', [g.max() for g in grads])
-                    print('grad min', [g.min() for g in grads])
-                    for g in grads:
-                        if torch.isnan(g).any():
-                            import ipdb
-                            ipdb.set_trace()
-                            grads = torch.autograd.grad(
-                                compute_loss(*compute_loss_components()),
-                                self.actor_critic.parameters())
                     norm = global_norm(grads).detach()
-                    print('norm max', norm.max())
-                    print('norm min', norm.min())
-                    if torch.isnan(norm).any():
-                        import ipdb
-                        ipdb.set_trace()
-                        norm = global_norm(grads).detach()
                     self.gradient_rms.update(norm.numpy(), axis=None)
                     dist = self.gan.dist(sample.samples.size()[0])
                     log_prob = dist.log_prob(sample.samples)
-                    print('log_prob max', log_prob.max())
-                    print('log_prob min', log_prob.min())
-                    if torch.isnan(log_prob).any():
-                        import ipdb
-                        ipdb.set_trace()
-                        log_prob = self.gan.log_prob(sample.samples)
 
                     unsupervised_loss = -log_prob * (
                             norm - self.gradient_rms.mean) - (
                             dist.entropy() * self.gan.entropy_coef)
-                    print('unsupervised_loss max', unsupervised_loss.max())
-                    print('unsupervised_loss min', unsupervised_loss.min())
-                    if torch.isnan(unsupervised_loss).any():
-                        import ipdb
-                        ipdb.set_trace()
-                        unsupervised_loss = -log_prob * (
-                            norm - self.gradient_rms.mean)
                     unsupervised_loss.mean().backward()
-                    print('gan grad max',
-                          [p.grad.max() for p in self.gan.parameters()])
-                    print('gan grad min',
-                          [p.grad.min() for p in self.gan.parameters()])
-                    print('gan param max',
-                          [p.max() for p in self.gan.parameters()])
-                    print('gan param min',
-                          [p.min() for p in self.gan.parameters()])
-                    for p in self.gan.parameters():
-                        if torch.isnan(p).any():
-                            import ipdb
-                            ipdb.set_trace()
-                        if torch.isnan(p.grad).any():
-                            import ipdb
-                            ipdb.set_trace()
                     gan_norm = global_norm(
                         [p.grad for p in self.gan.parameters()])
-                    if torch.isnan(gan_norm).any():
-                        import ipdb
-                        ipdb.set_trace()
-                        gan_norm = global_norm(
-                            [p.grad for p in self.gan.parameters()])
                     update_values.update(
                         unsupervised_loss=unsupervised_loss,
                         goal_log_prob=log_prob,
                         gan_norm=gan_norm)
-                    if any(
-                        [torch.isnan(p).any() for p in self.gan.parameters()]):
-                        import ipdb
-                        ipdb.set_trace()
-
                     self.unsupervised_optimizer.step()
-                    if any(
-                        [torch.isnan(p).any() for p in self.gan.parameters()]):
-                        import ipdb
-                        ipdb.set_trace()
                     self.unsupervised_optimizer.zero_grad()
                 self.optimizer.zero_grad()
                 value_losses, action_losses, entropy = components \

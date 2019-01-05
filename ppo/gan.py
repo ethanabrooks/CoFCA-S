@@ -54,10 +54,6 @@ class GAN(nn.Module):
             self.regularizer += .01 * (mean_log_prob - self.regularizer)
         importance_weighting = (self.regularizer - dist.log_prob(samples)).sum(
             dim=-1).exp()
-        if torch.isinf(importance_weighting).any() or torch.isnan(
-                importance_weighting).any():
-            import ipdb
-            ipdb.set_trace()
         return samples, goals, importance_weighting.view(-1, 1)
 
     def parameters(self):
