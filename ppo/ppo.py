@@ -117,10 +117,10 @@ class PPO:
                     norm = global_norm(grads).detach()
                     self.gradient_rms.update(norm.numpy(), axis=None)
                     log_prob = self.gan.log_prob(sample.samples)
-                    unsupervised_loss = log_prob * (
+                    unsupervised_loss = -log_prob * (
                         norm - self.gradient_rms.mean)
                     unsupervised_loss.mean().backward()
-                    gan_norm = [p.grad for p in self.gan.parameters()]
+                    gan_norm = global_norm([p.grad for p in self.gan.parameters()])
                     update_values.update(unsupervised_loss=unsupervised_loss,
                                          goal_log_prob=log_prob,
                                          gan_norm=gan_norm)
