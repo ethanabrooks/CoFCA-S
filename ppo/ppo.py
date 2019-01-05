@@ -122,7 +122,7 @@ class PPO:
                     log_prob = dist.log_prob(sample.samples)
 
                     unsupervised_loss = -log_prob * (
-                            norm - self.gradient_rms.mean) - (
+                        norm - self.gradient_rms.mean) - (
                             dist.entropy() * self.gan.entropy_coef)
                     unsupervised_loss.mean().backward()
                     gan_norm = global_norm(
@@ -142,7 +142,7 @@ class PPO:
                     [p.grad for p in self.actor_critic.parameters()])
                 nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
                                          self.max_grad_norm)
-                self.optimizer.step()
+                # self.optimizer.step()
                 # noinspection PyTypeChecker
                 update_values.update(
                     value_loss=value_losses,
