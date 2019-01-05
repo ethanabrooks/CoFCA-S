@@ -114,19 +114,42 @@ class PPO:
                     grads = torch.autograd.grad(
                         compute_loss(*compute_loss_components()),
                         self.actor_critic.parameters())
+                    print('grad max', [g.max() for g in grads])
+                    print('grad min', [g.min() for g in grads])
                     norm = global_norm(grads).detach()
+                    print('norm max', norm.max())
+                    print('norm min', norm.min())
                     self.gradient_rms.update(norm.numpy(), axis=None)
                     log_prob = self.gan.log_prob(sample.samples)
+                    print('log_prob max', log_prob.max())
+                    print('log_prob min', log_prob.min())
                     unsupervised_loss = -log_prob * (
                         norm - self.gradient_rms.mean)
+                    print('unsupervised_loss max', unsupervised_loss.max())
+                    print('unsupervised_loss min', unsupervised_loss.min())
                     unsupervised_loss.mean().backward()
+                    print('gan grad max', [p.grad.max() for p in
+                        self.gan.parameters()] )
+                    print('gan grad min', [p.grad.min() for p in
+                        self.gan.parameters()] )
+                    print('gan param max', [p.max() for p in
+                        self.gan.parameters()] )
+                    print('gan param min', [p.min() for p in
+                        self.gan.parameters()] )
                     gan_norm = global_norm(
                         [p.grad for p in self.gan.parameters()])
                     update_values.update(
                         unsupervised_loss=unsupervised_loss,
                         goal_log_prob=log_prob,
                         gan_norm=gan_norm)
+                    if any([torch.isnan(p).any() for p in self.gan.parameters()]):
+                        import ipdb; ipdb.set_trace()
+                        compute_loss(*compute_loss_components())
+
                     self.unsupervised_optimizer.step()
+                    if any([torch.isnan(p).any() for p in self.gan.parameters()]):
+                        import ipdb; ipdb.set_trace()
+                        compute_loss(*compute_loss_components()),
                     self.unsupervised_optimizer.zero_grad()
                 self.optimizer.zero_grad()
                 value_losses, action_losses, entropy = components \
