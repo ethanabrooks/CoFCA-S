@@ -126,6 +126,8 @@ class PPO:
                         unsupervised_loss=unsupervised_loss,
                         goal_log_prob=log_prob,
                         gan_norm=gan_norm)
+                    nn.utils.clip_grad_norm_(self.gan.parameters(),
+                                             self.max_grad_norm)
                     self.unsupervised_optimizer.step()
                     self.unsupervised_optimizer.zero_grad()
                 self.optimizer.zero_grad()
