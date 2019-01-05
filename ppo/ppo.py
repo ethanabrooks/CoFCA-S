@@ -102,6 +102,8 @@ class PPO:
                         )
                         importance_weighting[torch.isnan(
                             importance_weighting)] = 0
+                        update_values.update(
+                            importance_weighting=importance_weighting)
                     losses = (value_loss * self.value_loss_coef + action_loss -
                               dist_entropy * self.entropy_coef)
                     return torch.mean(losses * importance_weighting)
@@ -131,6 +133,8 @@ class PPO:
                         unsupervised_loss=unsupervised_loss,
                         goal_log_prob=log_prob,
                         gan_norm=gan_norm)
+                    nn.utils.clip_grad_norm_(self.gan.parameters(),
+                                             self.max_grad_norm)
                     self.unsupervised_optimizer.step()
                     self.unsupervised_optimizer.zero_grad()
                 self.optimizer.zero_grad()
