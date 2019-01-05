@@ -120,7 +120,10 @@ class PPO:
                     unsupervised_loss = log_prob * (
                         norm - self.gradient_rms.mean)
                     unsupervised_loss.mean().backward()
-                    update_values.update(unsupervised_loss=unsupervised_loss)
+                    gan_norm = [p.grad for p in self.gan.parameters()]
+                    update_values.update(unsupervised_loss=unsupervised_loss,
+                                         goal_log_prob=log_prob,
+                                         gan_norm=gan_norm)
                     self.unsupervised_optimizer.step()
                     self.unsupervised_optimizer.zero_grad()
                 self.optimizer.zero_grad()
