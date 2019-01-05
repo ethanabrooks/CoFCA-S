@@ -102,6 +102,8 @@ class PPO:
                         )
                         importance_weighting[torch.isnan(
                             importance_weighting)] = 0
+                        update_values.update(
+                            importance_weighting=importance_weighting)
                     losses = (value_loss * self.value_loss_coef + action_loss -
                               dist_entropy * self.entropy_coef)
                     return torch.mean(losses * importance_weighting)
