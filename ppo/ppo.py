@@ -124,8 +124,8 @@ class PPO:
                     log_prob = dist.log_prob(sample.samples)
 
                     pseudo_reward = torch.norm(sample.samples - .5)
-                    unsupervised_loss = -log_prob * pseudo_reward - (
-                            dist.entropy() * self.gan.entropy_coef)
+                    unsupervised_loss = log_prob * pseudo_reward + (
+                        dist.entropy() * self.gan.entropy_coef)
                     unsupervised_loss.mean().backward()
                     gan_norm = global_norm(
                         [p.grad for p in self.gan.parameters()])
