@@ -121,9 +121,11 @@ class PPO:
                     norm = global_norm(grads).detach()
                     self.gradient_rms.update(norm.numpy(), axis=None)
                     dist = self.gan.dist(sample.samples.size()[0])
-                    log_prob = dist.log_prob(sample.samples)
+                    log_prob = dist.log_prob(sample.samples).sum(
+                        -1, keepdim=True)
 
-                    pseudo_reward = torch.norm(sample.samples, dim=-1)
+                    pseudo_reward = torch.norm(
+                        sample.samples, dim=-1, keepdim=True)
                     unsupervised_loss = -log_prob * pseudo_reward
                     unsupervised_loss.mean().backward()
                     gan_norm = global_norm(

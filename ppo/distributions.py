@@ -4,7 +4,6 @@ import torch.nn as nn
 
 # first party
 from ppo.utils import AddBias, init, init_normc_
-
 """
 Modify standard PyTorch distributions so they are compatible with this code.
 """
@@ -68,4 +67,3 @@ class DiagGaussian(nn.Module):
 
         action_logstd = self.logstd(zeros)
         return FixedNormal(action_mean, action_logstd.exp())
-

@@ -34,8 +34,6 @@ class GAN(nn.Module):
 
     def dist(self, num_inputs):
         network_out = self.network(self.goal_input(num_inputs))
-        network_out = network_out.view(1, num_inputs, -1).expand(
-            self.repeat_sample, -1, -1)
         params = torch.chunk(network_out, 2, dim=-1)
         return torch.distributions.Normal(*params)
 
@@ -45,7 +43,7 @@ class GAN(nn.Module):
 
     def sample(self, num_outputs):
         dist = self.dist(num_outputs)
-        samples = dist.sample().mean(dim=0)
+        samples = dist.sample()
         high = torch.tensor(self.goal_space.high)
         low = torch.tensor(self.goal_space.low)
         goals = samples * (high - low) + low
@@ -54,8 +52,8 @@ class GAN(nn.Module):
             self.regularizer = mean_log_prob
         else:
             self.regularizer += .01 * (mean_log_prob - self.regularizer)
-        importance_weighting = (
-            self.regularizer - dist.log_prob(samples)[0]).sum(dim=-1).exp()
+        importance_weighting = (self.regularizer - dist.log_prob(samples)).sum(
+            dim=-1).exp()
         return samples, goals, importance_weighting.view(-1, 1)
 
     def parameters(self):
