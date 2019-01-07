@@ -123,9 +123,10 @@ class PPO:
                     dist = self.gan.dist(sample.samples.size()[0])
                     log_prob = dist.log_prob(sample.samples)
 
-                    unsupervised_loss = log_prob * (
-                        norm - self.gradient_rms.mean) + (
-                            dist.entropy() * self.gan.entropy_coef)
+                    unsupervised_loss = dist.mean
+                    # unsupervised_loss = log_prob * (
+                    # norm - self.gradient_rms.mean) + (
+                    # dist.entropy() * self.gan.entropy_coef)
                     unsupervised_loss.mean().backward()
                     gan_norm = global_norm(
                         [p.grad for p in self.gan.parameters()])
