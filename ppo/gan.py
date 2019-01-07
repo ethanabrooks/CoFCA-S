@@ -10,8 +10,7 @@ from ppo.utils import mlp
 
 class GAN(nn.Module):
     def __init__(self, goal_space: Box, hidden_size, learning_rate: float,
-                 entropy_coef: float,
-                 **kwargs):
+                 entropy_coef: float, **kwargs):
         super().__init__()
         self.learning_rate = learning_rate
         self.entropy_coef = entropy_coef
@@ -38,7 +37,7 @@ class GAN(nn.Module):
         network_out = network_out.view(1, num_inputs, -1).expand(
             self.repeat_sample, -1, -1)
         params = torch.chunk(network_out, 2, dim=-1)
-        return torch.distributions.Beta(*params)
+        return torch.distributions.Normal(*params)
 
     def log_prob(self, goal):
         num_inputs = goal.size()[0]
