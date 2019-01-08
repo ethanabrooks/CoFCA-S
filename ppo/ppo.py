@@ -113,28 +113,28 @@ class PPO:
                 def global_norm(grads):
                     norm = 0
                     for grad in grads:
-                        norm += grad.norm(2)**2
-                    return norm**.5
+                        norm += grad.norm(2) ** 2
+                    return norm ** .5
 
                 if self.unsupervised:
                     dist = self.gan.dist(sample.goals.size()[0])
                     log_prob = dist.log_prob(sample.goals).sum(-1)
-                    # norms = torch.zeros_like(log_prob)
-                    # unique = torch.unique(sample.goals, dim=0)
-                    # indices = torch.arange(len(sample.goals))
-                    # for goal in unique:
-                    #     idxs = indices[(sample.goals == goal).all(dim=-1)]
-                    #     batch = Batch(*[x[idxs, ...] for x in sample])
-                    #     grads = torch.autograd.grad(
-                    #         compute_loss(*compute_loss_components(batch)),
-                    #         self.actor_critic.parameters())
-                    #     norm = global_norm(grads)
-                    #     norms[idxs] = norm
-                    # self.gradient_rms.update(norms.mean().numpy(), axis=None)
-                    unsupervised_loss = -log_prob * torch.norm(
-                        sample.goals, dim=-1)
-                    # unsupervised_loss = -log_prob * norms - (
-                    #         self.gan.entropy_coef * dist.entropy())
+                    norms = torch.zeros_like(log_prob)
+                    unique = torch.unique(sample.goals, dim=0)
+                    indices = torch.arange(len(sample.goals))
+                    for goal in unique:
+                        idxs = indices[(sample.goals == goal).all(dim=-1)]
+                        batch = Batch(*[x[idxs, ...] for x in sample])
+                        grads = torch.autograd.grad(
+                            compute_loss(*compute_loss_components(batch)),
+                            self.actor_critic.parameters())
+                        norm = global_norm(grads)
+                        norms[idxs] = norm
+                    self.gradient_rms.update(norms.mean().numpy(), axis=None)
+                    # unsupervised_loss = -log_prob * torch.norm(
+                    #     sample.goals, dim=-1)
+                    unsupervised_loss = -(log_prob * norms +
+                                          self.gan.entropy_coef * dist.entropy())
                     unsupervised_loss.mean().backward()
                     gan_norm = global_norm(
                         [p.grad for p in self.gan.parameters()])
