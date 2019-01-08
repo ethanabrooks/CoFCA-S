@@ -1,3 +1,5 @@
+import argparse
+
 import torch
 from tensorboardX import SummaryWriter
 import itertools
@@ -9,7 +11,9 @@ softplus = torch.nn.Softplus()
 inputs = torch.ones(1, N_INPUTS)
 optimizer = torch.optim.SGD(network.parameters(), lr=.01)
 log_dir = sys.argv[1]
-writer = SummaryWriter(log_dir=f'/tmp/dist/{log_dir}')
+parser = argparse.ArgumentParser()
+parser.add_argument('--logdir', required=True)
+writer = SummaryWriter(log_dir=parser.parse_args().logdir)
 
 for i in itertools.count():
     a, b = torch.chunk(network(inputs), 2, dim=-1)
