@@ -35,7 +35,7 @@ class GAN(nn.Module):
     def dist(self, num_inputs):
         network_out = self.network(self.goal_input(num_inputs))
         params = torch.chunk(network_out, 2, dim=-1)
-        return torch.distributions.Beta(*params)
+        return torch.distributions.Normal(*params)
 
     def log_prob(self, goal):
         num_inputs = goal.size()[0]
