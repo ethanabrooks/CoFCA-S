@@ -118,8 +118,7 @@ class PPO:
 
                 if self.unsupervised:
                     dist = self.gan.dist(sample.goals.size()[0])
-                    log_prob = dist.log_prob(sample.goals).sum(
-                        -1, keepdim=True)
+                    log_prob = dist.log_prob(sample.goals).sum(-1)
                     # norms = torch.zeros_like(log_prob)
                     # unique = torch.unique(sample.goals, dim=0)
                     # indices = torch.arange(len(sample.goals))
@@ -132,7 +131,8 @@ class PPO:
                     #     norm = global_norm(grads)
                     #     norms[idxs] = norm
                     # self.gradient_rms.update(norms.mean().numpy(), axis=None)
-                    unsupervised_loss = torch.norm(dist.mean - .5, dim=-1)
+                    unsupervised_loss = log_prob * -torch.norm(
+                        sample.goals, dim=-1)
                     # unsupervised_loss = -log_prob * norms - (
                     #         self.gan.entropy_coef * dist.entropy())
                     unsupervised_loss.mean().backward()
