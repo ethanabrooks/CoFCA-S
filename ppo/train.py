@@ -142,7 +142,7 @@ def train(recurrent_policy,
     obs = envs.reset()
     rollouts.obs[0].copy_(obs)
     if unsupervised:
-        rollouts.samples[0].copy_(samples)
+        rollouts.goals[0].copy_(samples)
         rollouts.importance_weighting[0].copy_(importance_weightings)
     rollouts.to(device)
 
@@ -169,7 +169,7 @@ def train(recurrent_policy,
                         importance_weightings[i] = importance_weighting
 
             # track rewards
-            rewards_counter += rewards
+            rewards_counter += rewards.numpy()
             episode_rewards.append(rewards_counter[done])
             rewards_counter[done] = 0
 
@@ -185,7 +185,7 @@ def train(recurrent_policy,
                     values=values,
                     rewards=rewards,
                     masks=masks,
-                    sample=samples,
+                    goal=samples,
                     importance_weighting=importance_weightings,
                 )
             else:

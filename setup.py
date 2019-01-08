@@ -24,5 +24,5 @@ setup(
         'gym',
         'numpy==1.15.4',
         'opencv-python==3.4.3.18',
-        'torch==0.4.1',
+        'torch==1.0.0',
     ])
