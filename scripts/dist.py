@@ -9,7 +9,7 @@ N_INPUTS = 5
 network = torch.nn.Linear(N_INPUTS, 2)
 softplus = torch.nn.Softplus()
 inputs = torch.ones(1, N_INPUTS)
-optimizer = torch.optim.SGD(network.parameters(), lr=.01)
+optimizer = torch.optim.SGD(network.parameters(), lr=.0001)
 log_dir = sys.argv[1]
 parser = argparse.ArgumentParser()
 parser.add_argument('--logdir', required=True)
