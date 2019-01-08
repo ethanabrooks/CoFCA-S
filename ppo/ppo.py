@@ -78,23 +78,23 @@ class PPO:
                 surr2 = torch.clamp(ratio, 1.0 - self.clip_param,
                                     1.0 + self.clip_param) * batch.adv
 
-                action_losses = -torch.min(surr1, surr2)
+                _action_losses = -torch.min(surr1, surr2)
 
-                value_losses = (values - batch.ret).pow(2)
+                _value_losses = (values - batch.ret).pow(2)
                 if self.use_clipped_value_loss:
                     value_pred_clipped = batch.value_preds + \
                                          (values - batch.value_preds).clamp(
                                              -self.clip_param, self.clip_param)
                     value_losses_clipped = (
                         value_pred_clipped - batch.ret).pow(2)
-                    value_losses = .5 * torch.max(value_losses,
+                    _value_losses = .5 * torch.max(_value_losses,
                                                   value_losses_clipped)
 
-                importance_weighting = batch.importance_weighting
-                if importance_weighting is None:
-                    importance_weighting = torch.tensor(1, dtype=torch.float32)
-                return (value_losses, action_losses, dist_entropy,
-                        importance_weighting)
+                _importance_weighting = batch.importance_weighting
+                if _importance_weighting is None:
+                    _importance_weighting = torch.tensor(1, dtype=torch.float32)
+                return (_value_losses, _action_losses, dist_entropy,
+                        _importance_weighting)
 
             for sample in data_generator:
                 # Reshape to do in a single forward pass for all steps
