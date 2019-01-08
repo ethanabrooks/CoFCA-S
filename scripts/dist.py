@@ -20,7 +20,7 @@ writer = SummaryWriter(log_dir=args.logdir)
 
 for i in itertools.count():
     a, b = torch.chunk(network(inputs), 2, dim=-1)
-    dist = torch.distributions.Normal(a, softplus(b))
+    dist = torch.distributions.Beta(softplus(a), softplus(b))
     sample = dist.sample()
     j = torch.norm(sample, dim=-1)
     log_prob = dist.log_prob(sample)
