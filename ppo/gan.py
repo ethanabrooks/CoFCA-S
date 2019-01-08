@@ -56,8 +56,8 @@ class GAN(nn.Module):
             dim=-1).exp()
         return samples, goals, importance_weighting.view(-1, 1)
 
-    def parameters(self):
-        return self.network.parameters()
+    def parameters(self, **kwargs):
+        return self.network.parameters(**kwargs)
 
     def to(self, device):
         self.network.to(device)

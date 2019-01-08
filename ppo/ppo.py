@@ -99,16 +99,16 @@ class PPO:
             for sample in data_generator:
                 # Reshape to do in a single forward pass for all steps
                 def compute_loss(value_loss, action_loss, dist_entropy,
-                                 importance_weighting):
-                    if importance_weighting is None:
-                        importance_weighting = 1
+                                 _importance_weighting):
+                    if _importance_weighting is None:
+                        _importance_weighting = 1
                     else:
-                        importance_weighting = importance_weighting.detach()
-                        importance_weighting[torch.isnan(
-                            importance_weighting)] = 0
+                        _importance_weighting = _importance_weighting.detach()
+                        _importance_weighting[torch.isnan(
+                            _importance_weighting)] = 0
                     losses = (value_loss * self.value_loss_coef + action_loss -
                               dist_entropy * self.entropy_coef)
-                    return torch.mean(losses * importance_weighting)
+                    return torch.mean(losses * _importance_weighting)
 
                 def global_norm(grads):
                     norm = 0
@@ -131,7 +131,7 @@ class PPO:
                     #     norm = global_norm(grads)
                     #     norms[idxs] = norm
                     # self.gradient_rms.update(norms.mean().numpy(), axis=None)
-                    unsupervised_loss = log_prob * -torch.norm(
+                    unsupervised_loss = -log_prob * torch.norm(
                         sample.goals, dim=-1)
                     # unsupervised_loss = -log_prob * norms - (
                     #         self.gan.entropy_coef * dist.entropy())
