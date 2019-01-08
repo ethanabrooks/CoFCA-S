@@ -91,7 +91,8 @@ class PPO:
                                                   value_losses_clipped)
 
                 return (value_losses, action_losses, dist_entropy,
-                        batch.importance_weighting)
+                        batch.importance_weighting
+                        or torch.tensor(1, dtype=torch.float32))
 
             for sample in data_generator:
                 # Reshape to do in a single forward pass for all steps
