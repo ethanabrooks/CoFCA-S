@@ -53,7 +53,7 @@ class PPO:
     def update(self, rollouts: RolloutStorage):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         advantages = (advantages - advantages.mean()) / (
-                advantages.std() + 1e-5)
+            advantages.std() + 1e-5)
 
         update_values = Counter()
 
@@ -86,13 +86,14 @@ class PPO:
                                          (values - batch.value_preds).clamp(
                                              -self.clip_param, self.clip_param)
                     value_losses_clipped = (
-                            value_pred_clipped - batch.ret).pow(2)
+                        value_pred_clipped - batch.ret).pow(2)
                     _value_losses = .5 * torch.max(_value_losses,
                                                    value_losses_clipped)
 
                 _importance_weighting = batch.importance_weighting
                 if _importance_weighting is None:
-                    _importance_weighting = torch.tensor(1, dtype=torch.float32)
+                    _importance_weighting = torch.tensor(
+                        1, dtype=torch.float32)
                 return (_value_losses, _action_losses, dist_entropy,
                         _importance_weighting)
 
@@ -113,8 +114,8 @@ class PPO:
                 def global_norm(grads):
                     norm = 0
                     for grad in grads:
-                        norm += grad.norm(2) ** 2
-                    return norm ** .5
+                        norm += grad.norm(2)**2
+                    return norm**.5
 
                 if self.unsupervised:
                     dist = self.gan.dist(sample.goals.size()[0])
@@ -133,8 +134,9 @@ class PPO:
                     self.gradient_rms.update(norms.mean().numpy(), axis=None)
                     # unsupervised_loss = -log_prob * torch.norm(
                     #     sample.goals, dim=-1)
-                    unsupervised_loss = -(log_prob * norms +
-                                          self.gan.entropy_coef * dist.entropy())
+                    gan_entropy = dist.entropy().sum(dim=-1)
+                    unsupervised_loss = -(
+                        log_prob * norms + self.gan.entropy_coef * gan_entropy)
                     unsupervised_loss.mean().backward()
                     gan_norm = global_norm(
                         [p.grad for p in self.gan.parameters()])
