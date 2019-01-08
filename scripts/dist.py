@@ -5,15 +5,18 @@ from tensorboardX import SummaryWriter
 import itertools
 import sys
 
+parser = argparse.ArgumentParser()
+parser.add_argument('--logdir', required=True)
+parser.add_argument('-lr', type=float, required=True)
+args = parser.parse_args()
+
 N_INPUTS = 5
 network = torch.nn.Linear(N_INPUTS, 2)
 softplus = torch.nn.Softplus()
 inputs = torch.ones(1, N_INPUTS)
-optimizer = torch.optim.SGD(network.parameters(), lr=.0001)
+optimizer = torch.optim.SGD(network.parameters(), lr=args.lr)
 log_dir = sys.argv[1]
-parser = argparse.ArgumentParser()
-parser.add_argument('--logdir', required=True)
-writer = SummaryWriter(log_dir=parser.parse_args().logdir)
+writer = SummaryWriter(log_dir=args.logdir)
 
 for i in itertools.count():
     a, b = torch.chunk(network(inputs), 2, dim=-1)
