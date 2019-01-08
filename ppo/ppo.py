@@ -32,7 +32,7 @@ class PPO:
 
         self.clip_param = clip_param
         self.ppo_epoch = ppo_epoch
-        self.num_mini_batch = batch_size
+        self.batch_size = batch_size
 
         self.value_loss_coef = value_loss_coef
         self.entropy_coef = entropy_coef
@@ -53,7 +53,7 @@ class PPO:
     def update(self, rollouts: RolloutStorage):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         advantages = (advantages - advantages.mean()) / (
-            advantages.std() + 1e-5)
+                advantages.std() + 1e-5)
 
         update_values = Counter()
 
@@ -61,10 +61,10 @@ class PPO:
         for e in range(self.ppo_epoch):
             if self.actor_critic.is_recurrent:
                 data_generator = rollouts.recurrent_generator(
-                    advantages, self.num_mini_batch)
+                    advantages, self.batch_size)
             else:
                 data_generator = rollouts.feed_forward_generator(
-                    advantages, self.num_mini_batch)
+                    advantages, self.batch_size)
 
             def compute_loss_components(batch):
                 values, action_log_probs, dist_entropy, \
@@ -86,9 +86,9 @@ class PPO:
                                          (values - batch.value_preds).clamp(
                                              -self.clip_param, self.clip_param)
                     value_losses_clipped = (
-                        value_pred_clipped - batch.ret).pow(2)
+                            value_pred_clipped - batch.ret).pow(2)
                     _value_losses = .5 * torch.max(_value_losses,
-                                                  value_losses_clipped)
+                                                   value_losses_clipped)
 
                 _importance_weighting = batch.importance_weighting
                 if _importance_weighting is None:
@@ -167,7 +167,7 @@ class PPO:
                     importance_weighting=importance_weighting,
                 )
 
-        num_updates = self.ppo_epoch * self.num_mini_batch
+        num_updates = self.ppo_epoch * self.batch_size
         return {
             k: v.mean().detach().numpy() / num_updates
             for k, v in update_values.items()
