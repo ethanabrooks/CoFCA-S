@@ -86,23 +86,26 @@ class RolloutStorage(object):
                 self.returns[step] = self.returns[step + 1] * \
                                      gamma * self.masks[step + 1] + self.rewards[step]
 
-    def feed_forward_generator(self, advantages, num_mini_batch) -> \
+    def feed_forward_generator(self, advantages, batch_size) -> \
             Generator[Batch, None, None]:
         num_steps, num_processes = self.rewards.size()[0:2]
-        batch_size = num_processes * num_steps
-        assert batch_size >= num_mini_batch, (
+        total_batch_size = num_processes * num_steps
+        assert total_batch_size >= batch_size, (
             "PPO requires the number of processes ({}) "
             "* number of steps ({}) = {} "
             "to be greater than or equal to the number of PPO mini batches ({})."
             "".format(num_processes, num_steps, num_processes * num_steps,
-                      num_mini_batch))
-        mini_batch_size = batch_size // num_mini_batch
+                      batch_size))
+        mini_batch_size = total_batch_size // batch_size
 
+        random_sampler = SubsetRandomSampler(range(total_batch_size))
         sampler = BatchSampler(
-            SubsetRandomSampler(range(batch_size)),
-            mini_batch_size,
+            sampler=random_sampler,
+            batch_size=mini_batch_size,
             drop_last=False)
+        assert len(sampler) == batch_size
         for indices in sampler:
+            assert len(indices) == mini_batch_size
             yield self.make_batch(advantages, indices)
 
     def make_batch(self, advantages, indices):
