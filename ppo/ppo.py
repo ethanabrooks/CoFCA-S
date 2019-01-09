@@ -32,7 +32,7 @@ class PPO:
 
         self.clip_param = clip_param
         self.ppo_epoch = ppo_epoch
-        self.num_mini_batch = batch_size
+        self.batch_size = batch_size
 
         self.value_loss_coef = value_loss_coef
         self.entropy_coef = entropy_coef
@@ -61,10 +61,10 @@ class PPO:
         for e in range(self.ppo_epoch):
             if self.actor_critic.is_recurrent:
                 data_generator = rollouts.recurrent_generator(
-                    advantages, self.num_mini_batch)
+                    advantages, self.batch_size)
             else:
                 data_generator = rollouts.feed_forward_generator(
-                    advantages, self.num_mini_batch)
+                    advantages, self.batch_size)
 
             for sample in data_generator:
                 # Reshape to do in a single forward pass for all steps
@@ -153,7 +153,7 @@ class PPO:
                     entropy=entropy,
                 )
 
-        num_updates = self.ppo_epoch * self.num_mini_batch
+        num_updates = self.ppo_epoch * self.batch_size
         return {
             k: v.mean().detach().numpy() / num_updates
             for k, v in update_values.items()
