@@ -169,7 +169,7 @@ def train(recurrent_policy,
                         importance_weightings[i] = importance_weighting
 
             # track rewards
-            rewards_counter += rewards
+            rewards_counter += rewards.numpy()
             episode_rewards.append(rewards_counter[done])
             rewards_counter[done] = 0
 
