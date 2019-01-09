@@ -91,7 +91,7 @@ def train(recurrent_policy,
 
         samples, goals, importance_weightings = gan.sample(num_processes)
         for i, goal in enumerate(goals):
-            goal = sample_env.goal_space.sample()
+            goal = goal.detach().numpy()
             envs.unwrapped.set_goal(goal, i)
 
         rollouts = UnsupervisedRolloutStorage(
@@ -165,7 +165,7 @@ def train(recurrent_policy,
                 for i, _done in enumerate(done):
                     if _done:
                         sample, goal, importance_weighting = gan.sample(1)
-                        goal = sample_env.goal_space.sample()
+                        goal = goal.detach().numpy()
                         envs.unwrapped.set_goal(goal, i)
                         samples[i] = sample
                         importance_weightings[i] = importance_weighting
