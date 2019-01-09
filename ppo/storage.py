@@ -214,10 +214,10 @@ class UnsupervisedRolloutStorage(RolloutStorage):
         self.goals.to(device)
         self.importance_weighting.to(device)
 
-    def insert(self, sample, importance_weighting, **kwargs):
-        super().insert(**kwargs)
-        self.goals[self.step + 1].copy_(sample)
+    def insert(self, goal, importance_weighting, **kwargs):
+        self.goals[self.step + 1].copy_(goal)
         self.importance_weighting[self.step + 1].copy_(importance_weighting)
+        super().insert(**kwargs)
 
     def after_update(self):
         super().after_update()
@@ -228,8 +228,7 @@ class UnsupervisedRolloutStorage(RolloutStorage):
         goals = self.goals.view(-1, *self.goals.size()[2:])[indices]
         importance_weighting = self.importance_weighting.view(-1, 1)[indices]
         batch = super().make_batch(advantages=advantages, indices=indices)
-        return batch._replace(
-            goals=goals, importance_weighting=importance_weighting)
+        return batch._replace(goals=goals, importance_weighting=importance_weighting)
 
     def recurrent_generator(self, advantages, num_mini_batch):
         raise NotImplementedError

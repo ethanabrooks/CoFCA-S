@@ -185,7 +185,7 @@ def train(recurrent_policy,
                     values=values,
                     rewards=rewards,
                     masks=masks,
-                    sample=samples,
+                    goal=samples,
                     importance_weighting=importance_weightings,
                 )
             else:
