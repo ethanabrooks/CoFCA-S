@@ -21,6 +21,7 @@ class GAN(nn.Module):
             mlp(num_inputs=hidden_size,
                 hidden_size=hidden_size,
                 num_outputs=2 * goal_size,
+                gain=.1,
                 name='gan',
                 **kwargs))
         self.softplus = torch.nn.Softplus()
