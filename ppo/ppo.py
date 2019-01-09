@@ -120,7 +120,7 @@ class PPO:
                         self.actor_critic.parameters())
                     norm = global_norm(grads).detach()
                     self.gradient_rms.update(norm.numpy(), axis=None)
-                    log_prob = self.gan.log_prob(sample.samples)
+                    log_prob = self.gan.log_prob(sample.goals)
                     log_prob[torch.isnan(log_prob)] = 0
                     unsupervised_loss = -log_prob * (
                         norm - self.gradient_rms.mean)

@@ -142,7 +142,7 @@ def train(recurrent_policy,
     obs = envs.reset()
     rollouts.obs[0].copy_(obs)
     if unsupervised:
-        rollouts.samples[0].copy_(samples)
+        rollouts.goals[0].copy_(samples)
         rollouts.importance_weighting[0].copy_(importance_weightings)
     rollouts.to(device)
 
