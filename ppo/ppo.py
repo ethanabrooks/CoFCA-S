@@ -149,6 +149,7 @@ class PPO:
                                              self.max_grad_norm)
                     self.unsupervised_optimizer.step()
                     self.unsupervised_optimizer.zero_grad()
+                self.optimizer.zero_grad()
                 value_losses, action_losses, entropy, importance_weighting \
                     = components = compute_loss_components(sample)
                 loss = compute_loss(*components)
@@ -159,7 +160,6 @@ class PPO:
                                          self.max_grad_norm)
                 self.optimizer.step()
                 # noinspection PyTypeChecker
-                self.optimizer.zero_grad()
                 update_values.update(
                     value_loss=value_losses,
                     action_loss=action_losses,
