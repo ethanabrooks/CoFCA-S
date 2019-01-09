@@ -33,9 +33,9 @@ class GAN(nn.Module):
         raise NotImplementedError
 
     def dist(self, num_inputs):
-        network_out = self.network(self.goal_input(num_inputs))
+        network_out = self.softplus(self.network(self.goal_input(num_inputs)))
         a, b = torch.chunk(network_out, 2, dim=-1)
-        return torch.distributions.Normal(a, self.softplus(b))
+        return torch.distributions.Beta(a, b)
 
     def log_prob(self, goal):
         num_inputs = goal.size()[0]
