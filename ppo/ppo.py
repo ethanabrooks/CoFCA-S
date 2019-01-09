@@ -137,17 +137,17 @@ class PPO:
                     unsupervised_loss = -(
                         log_prob * norms + self.gan.entropy_coef * gan_entropy)
                     unsupervised_loss.mean().backward()
-                    #     gan_norm = global_norm(
-                    #         [p.grad for p in self.gan.parameters()])
-                    #     update_values.update(
-                    #         unsupervised_loss=unsupervised_loss,
-                    #         goal_log_prob=log_prob,
-                    #         dist_mean=dist.mean,
-                    #         dist_std=dist.stddev,
-                    #         gan_norm=gan_norm)
-                    #     nn.utils.clip_grad_norm_(self.gan.parameters(),
-                    #                              self.max_grad_norm)
-                    #     self.unsupervised_optimizer.step()
+                    gan_norm = global_norm(
+                        [p.grad for p in self.gan.parameters()])
+                    update_values.update(
+                        unsupervised_loss=unsupervised_loss,
+                        goal_log_prob=log_prob,
+                        dist_mean=dist.mean,
+                        dist_std=dist.stddev,
+                        gan_norm=gan_norm)
+                    nn.utils.clip_grad_norm_(self.gan.parameters(),
+                                             self.max_grad_norm)
+                    self.unsupervised_optimizer.step()
                     self.unsupervised_optimizer.zero_grad()
                 value_losses, action_losses, entropy, importance_weighting \
                     = components = compute_loss_components(sample)
