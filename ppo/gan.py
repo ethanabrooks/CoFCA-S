@@ -17,13 +17,13 @@ class GAN(nn.Module):
         self.goal_space = goal_space
         goal_size = space_to_size(goal_space)
         self.hidden_size = hidden_size
-        self.repeat_sample = 5
         self.network = nn.Sequential(
             mlp(num_inputs=hidden_size,
                 hidden_size=hidden_size,
                 num_outputs=2 * goal_size,
                 name='gan',
-                **kwargs), torch.nn.Softplus())
+                **kwargs))
+        self.softplus = torch.nn.Softplus()
         self.regularizer = None
 
     def goal_input(self, num_outputs):
@@ -34,8 +34,8 @@ class GAN(nn.Module):
 
     def dist(self, num_inputs):
         network_out = self.network(self.goal_input(num_inputs))
-        params = torch.chunk(network_out, 2, dim=-1)
-        return torch.distributions.Beta(*params)
+        a, b = torch.chunk(network_out, 2, dim=-1)
+        return torch.distributions.Normal(a, self.softplus(b))
 
     def log_prob(self, goal):
         num_inputs = goal.size()[0]
