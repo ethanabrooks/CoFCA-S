@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.optim as optim
 
 from common.running_mean_std import RunningMeanStd
-from ppo.storage import RolloutStorage, Batch
+from ppo.storage import Batch, RolloutStorage
 
 
 def f(x):
