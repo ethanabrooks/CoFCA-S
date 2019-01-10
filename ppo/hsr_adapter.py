@@ -6,7 +6,6 @@ from multiprocessing import Pipe, Process
 from common.vec_env import CloudpickleWrapper, VecEnv
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
-
 from hsr import env
 from hsr.env import Observation
 from utils import concat_spaces, space_shape, unwrap_env, vectorize
