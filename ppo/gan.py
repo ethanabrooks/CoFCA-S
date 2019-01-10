@@ -6,10 +6,13 @@ from utils import space_to_size
 from ppo.utils import init, init_normc_, mlp
 
 
-class GAN:
+class GAN(nn.Module):
+    def forward(self, *input):
+        self.network(*input)
+
     def __init__(self, learning_rate: float, entropy_coef:
-    float, goal_space: Box,
-                 **kwargs):
+    float, goal_space: Box, **kwargs):
+        super().__init__()
         self.entropy_coef = entropy_coef
         self.learning_rate = learning_rate
         self.goal_space = goal_space
@@ -39,8 +42,8 @@ class GAN:
         importance_weighting = self.regularizer / torch.max(prob, eps)
         return goal, importance_weighting.view(-1, 1)
 
-    def parameters(self):
-        return self.network.parameters()
+    def parameters(self, **kwargs):
+        return self.network.parameters(**kwargs)
 
     def to(self, device):
         self.network.to(device)
