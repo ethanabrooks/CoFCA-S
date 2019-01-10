@@ -27,6 +27,33 @@ def get_vec_normalize(venv):
     return None
 
 
+def mlp(num_inputs,
+        hidden_size,
+        num_layers,
+        activation,
+        name='fc',
+        gain=1,
+        num_outputs=None):
+    init_ = lambda m: init(m, weight_init=init_normc_,
+                           bias_init=lambda x: nn.init.constant_(x, 0),
+                           gain=gain)
+    network = nn.Sequential()
+    in_features = num_inputs
+    for i in range(num_layers):
+        network.add_module(
+            name=f'{name}{i}',
+            module=nn.Sequential(
+                init_(nn.Linear(in_features, hidden_size)),
+                activation,
+            ))
+        in_features = hidden_size
+    if num_outputs:
+        network.add_module(
+            name=f'{name}-out',
+            module=init_(nn.Linear(in_features, num_outputs)))
+    return network
+
+
 # Necessary for my KFAC implementation.
 class AddBias(nn.Module):
     def __init__(self, bias):

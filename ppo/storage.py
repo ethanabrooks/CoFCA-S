@@ -12,7 +12,7 @@ def _flatten_helper(T, N, _tensor):
 
 Batch = namedtuple(
     'Batch', 'obs recurrent_hidden_states actions value_preds ret '
-    'masks old_action_log_probs adv')
+    'masks old_action_log_probs adv noise importance_weighting')
 
 
 class RolloutStorage(object):
@@ -86,44 +86,50 @@ class RolloutStorage(object):
                 self.returns[step] = self.returns[step + 1] * \
                                      gamma * self.masks[step + 1] + self.rewards[step]
 
-    def feed_forward_generator(self, advantages, num_mini_batch) -> \
+    def feed_forward_generator(self, advantages, batch_size) -> \
             Generator[Batch, None, None]:
         num_steps, num_processes = self.rewards.size()[0:2]
-        batch_size = num_processes * num_steps
-        assert batch_size >= num_mini_batch, (
+        total_batch_size = num_processes * num_steps
+        assert total_batch_size >= batch_size, (
             "PPO requires the number of processes ({}) "
             "* number of steps ({}) = {} "
             "to be greater than or equal to the number of PPO mini batches ({})."
             "".format(num_processes, num_steps, num_processes * num_steps,
-                      num_mini_batch))
-        mini_batch_size = batch_size // num_mini_batch
+                      batch_size))
+        mini_batch_size = total_batch_size // batch_size
 
+        random_sampler = SubsetRandomSampler(range(total_batch_size))
         sampler = BatchSampler(
-            SubsetRandomSampler(range(batch_size)),
-            mini_batch_size,
+            sampler=random_sampler,
+            batch_size=mini_batch_size,
             drop_last=False)
+        assert len(sampler) == batch_size
         for indices in sampler:
-            obs_batch = self.obs[:-1].view(-1, *self.obs.size()[2:])[indices]
-            recurrent_hidden_states_batch = self.recurrent_hidden_states[:-1].view(
-                -1, self.recurrent_hidden_states.size(-1))[indices]
-            actions_batch = self.actions.view(-1,
-                                              self.actions.size(-1))[indices]
-            value_preds_batch = self.value_preds[:-1].view(-1, 1)[indices]
-            return_batch = self.returns[:-1].view(-1, 1)[indices]
-            masks_batch = self.masks[:-1].view(-1, 1)[indices]
-            old_action_log_probs_batch = self.action_log_probs.view(-1,
-                                                                    1)[indices]
-            adv_targ = advantages.view(-1, 1)[indices]
+            assert len(indices) == mini_batch_size
+            yield self.make_batch(advantages, indices)
 
-            yield Batch(
-                obs=obs_batch,
-                recurrent_hidden_states=recurrent_hidden_states_batch,
-                actions=actions_batch,
-                value_preds=value_preds_batch,
-                ret=return_batch,
-                masks=masks_batch,
-                old_action_log_probs=old_action_log_probs_batch,
-                adv=adv_targ)
+    def make_batch(self, advantages, indices):
+        obs_batch = self.obs[:-1].view(-1, *self.obs.size()[2:])[indices]
+        recurrent_hidden_states_batch = self.recurrent_hidden_states[:-1].view(
+            -1, self.recurrent_hidden_states.size(-1))[indices]
+        actions_batch = self.actions.view(-1, self.actions.size(-1))[indices]
+        value_preds_batch = self.value_preds[:-1].view(-1, 1)[indices]
+        return_batch = self.returns[:-1].view(-1, 1)[indices]
+        masks_batch = self.masks[:-1].view(-1, 1)[indices]
+        old_action_log_probs_batch = self.action_log_probs.view(-1, 1)[indices]
+        adv_targ = advantages.view(-1, 1)[indices]
+        batch = Batch(
+            obs=obs_batch,
+            recurrent_hidden_states=recurrent_hidden_states_batch,
+            actions=actions_batch,
+            value_preds=value_preds_batch,
+            ret=return_batch,
+            masks=masks_batch,
+            old_action_log_probs=old_action_log_probs_batch,
+            adv=adv_targ,
+            noise=None,
+            importance_weighting=None)
+        return batch
 
     def recurrent_generator(self, advantages, num_mini_batch) -> \
             Generator[Batch, None, None]:
@@ -191,4 +197,39 @@ class RolloutStorage(object):
                 masks=masks_batch,
                 old_action_log_probs=old_action_log_probs_batch,
                 adv=adv_targ,
-            )
+                noise=None,
+                importance_weighting=None)
+
+
+class UnsupervisedRolloutStorage(RolloutStorage):
+    def __init__(self, num_steps, num_processes, noise_size, **kwargs):
+        super().__init__(
+            num_steps=num_steps, num_processes=num_processes, **kwargs)
+        self.noise = torch.zeros(num_steps + 1, num_processes, noise_size)
+        self.importance_weighting = torch.zeros(num_steps + 1, num_processes,
+                                                1)
+
+    def to(self, device):
+        super().to(device)
+        self.noise.to(device)
+        self.importance_weighting.to(device)
+
+    def insert(self, noise, importance_weighting, **kwargs):
+        self.noise[self.step + 1].copy_(noise)
+        self.importance_weighting[self.step + 1].copy_(importance_weighting)
+        super().insert(**kwargs)
+
+    def after_update(self):
+        super().after_update()
+        self.noise[0].copy_(self.noise[-1])
+        self.importance_weighting[0].copy_(self.importance_weighting[-1])
+
+    def make_batch(self, advantages, indices):
+        noise = self.noise.view(-1, *self.noise.size()[2:])[indices]
+        importance_weighting = self.importance_weighting.view(-1, 1)[indices]
+        batch = super().make_batch(advantages=advantages, indices=indices)
+        return batch._replace(
+            noise=noise, importance_weighting=importance_weighting)
+
+    def recurrent_generator(self, advantages, num_mini_batch):
+        raise NotImplementedError

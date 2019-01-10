@@ -4,7 +4,7 @@ import torch.nn as nn
 
 # first party
 from ppo.distributions import Categorical, DiagGaussian
-from ppo.utils import init, init_normc_
+from ppo.utils import init, mlp
 
 
 class Flatten(nn.Module):
@@ -47,6 +47,7 @@ class Policy(nn.Module):
 
     def act(self, inputs, rnn_hxs, masks, deterministic=False):
         value, actor_features, rnn_hxs = self.base(inputs, rnn_hxs, masks)
+
         dist = self.dist(actor_features)
 
         if deterministic:
@@ -55,8 +56,6 @@ class Policy(nn.Module):
             action = dist.sample()
 
         action_log_probs = dist.log_probs(action)
-        dist_entropy = dist.entropy().mean()
-
         return value, action, action_log_probs, rnn_hxs
 
     def get_value(self, inputs, rnn_hxs, masks):
@@ -68,9 +67,8 @@ class Policy(nn.Module):
         dist = self.dist(actor_features)
 
         action_log_probs = dist.log_probs(action)
-        dist_entropy = dist.entropy().mean()
-
-        return value, action_log_probs, dist_entropy, rnn_hxs
+        entropy = dist.entropy().view(-1, 1)
+        return value, action_log_probs, entropy, rnn_hxs
 
 
 class NNBase(nn.Module):
@@ -200,29 +198,19 @@ class MLPBase(NNBase):
         if recurrent:
             num_inputs = hidden_size
 
-        init_ = lambda m: init(m,
-                               init_normc_,
-                               lambda x: nn.init.constant_(x, 0))
-
-        self.actor = nn.Sequential()
-        self.critic = nn.Sequential()
-        for i in range(num_layers):
-            in_features = num_inputs if i == 0 else hidden_size
-            self.actor.add_module(
-                name=f'fc{i}',
-                module=nn.Sequential(
-                    init_(nn.Linear(in_features, hidden_size)),
-                    activation,
-                ))
-            self.critic.add_module(
-                name=f'fc{i}',
-                module=nn.Sequential(
-                    init_(nn.Linear(in_features, hidden_size)),
-                    activation,
-                ))
-
-        self.critic_linear = init_(nn.Linear(hidden_size, 1))
-
+        self.actor = mlp(
+            num_inputs=num_inputs,
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            activation=activation,
+            name='actor')
+        self.critic = mlp(
+            num_inputs=num_inputs,
+            num_outputs=1,
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            activation=activation,
+            name='critic')
         self.train()
 
     def forward(self, inputs, rnn_hxs, masks):
@@ -231,7 +219,7 @@ class MLPBase(NNBase):
         if self.is_recurrent:
             x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)
 
-        hidden_critic = self.critic(x)
+        value = self.critic(x)
         hidden_actor = self.actor(x)
 
-        return self.critic_linear(hidden_critic), hidden_actor, rnn_hxs
+        return value, hidden_actor, rnn_hxs

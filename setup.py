@@ -14,6 +14,7 @@ setup(
     author='Ethan Brooks',
     author_email='ethanabrooks@gmail.com',
     packages=find_packages(),
+    scripts=['load'],
     entry_points=dict(console_scripts=[
         'ppo=ppo.main:cli',
         'hsr=ppo.main:hsr_cli',
@@ -23,5 +24,5 @@ setup(
         'gym',
         'numpy==1.15.4',
         'opencv-python==3.4.3.18',
-        'torch==0.4.1',
+        'torch==1.0.0',
     ])
