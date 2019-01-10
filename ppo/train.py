@@ -3,6 +3,7 @@ from pathlib import Path
 import time
 
 import numpy as np
+from hsr.env import Observation
 from tensorboardX import SummaryWriter
 import torch
 
@@ -13,7 +14,6 @@ from ppo.policy import Policy
 from ppo.ppo import PPO
 from ppo.storage import RolloutStorage, UnsupervisedRolloutStorage
 from utils import space_to_size
-
 
 def train(recurrent_policy,
           num_frames,
@@ -89,7 +89,13 @@ def train(recurrent_policy,
             **{k.replace('gan_', ''): v
                for k, v in unsupervised_args.items()})
 
-        samples, goals, importance_weightings = gan.sample(num_processes)
+        def substitute_goal(_obs, _goals):
+            split = torch.split(_obs, sample_env.subspace_sizes, dim=1)
+            observation = Observation(*split)
+            replace = observation._replace(goal=_goals)
+            return torch.cat(replace, dim=1)
+
+        goals, importance_weightings = gan.sample(num_processes)
         for i, goal in enumerate(goals):
             goal = goal.detach().numpy()
             envs.unwrapped.set_goal(goal, i)
@@ -100,8 +106,7 @@ def train(recurrent_policy,
             obs_shape=envs.observation_space.shape,
             action_space=envs.action_space,
             recurrent_hidden_state_size=actor_critic.
-            recurrent_hidden_state_size,
-            noise_size=gan.hidden_size,
+                recurrent_hidden_state_size,
         )
 
     else:
@@ -111,7 +116,7 @@ def train(recurrent_policy,
             obs_shape=envs.observation_space.shape,
             action_space=envs.action_space,
             recurrent_hidden_state_size=actor_critic.
-            recurrent_hidden_state_size,
+                recurrent_hidden_state_size,
         )
 
     agent = PPO(actor_critic=actor_critic, gan=gan, **ppo_args)
@@ -142,10 +147,10 @@ def train(recurrent_policy,
         gan.to(device)
 
     obs = envs.reset()
-    rollouts.obs[0].copy_(obs)
     if unsupervised:
-        rollouts.noise[0].copy_(samples)
+        obs = substitute_goal(obs, goals)
         rollouts.importance_weighting[0].copy_(importance_weightings)
+    rollouts.obs[0].copy_(obs)
     rollouts.to(device)
 
     start = time.time()
@@ -163,12 +168,12 @@ def train(recurrent_policy,
             obs, rewards, done, infos = envs.step(actions)
 
             if unsupervised:
+                obs = substitute_goal(obs, goals.detach().requires_grad_())
                 for i, _done in enumerate(done):
                     if _done:
-                        sample, goal, importance_weighting = gan.sample(1)
-                        goal = goal.detach().numpy()
-                        envs.unwrapped.set_goal(goal, i)
-                        samples[i] = sample
+                        goal, importance_weighting = gan.sample(1)
+                        envs.unwrapped.set_goal(goal.detach().numpy(), i)
+                        goals[i] = goal
                         importance_weightings[i] = importance_weighting
 
             # track rewards
@@ -188,7 +193,6 @@ def train(recurrent_policy,
                     values=values,
                     rewards=rewards,
                     masks=masks,
-                    noise=samples,
                     importance_weighting=importance_weightings,
                 )
             else:
@@ -215,8 +219,8 @@ def train(recurrent_policy,
         total_num_steps = (j + 1) * num_processes * num_steps
 
         if all(
-            [log_dir, save_interval,
-             time.time() - last_save >= save_interval]):
+                [log_dir, save_interval,
+                 time.time() - last_save >= save_interval]):
             last_save = time.time()
             modules = dict(
                 optimizer=agent.optimizer,

@@ -6,6 +6,10 @@ import torch.nn as nn
 from ppo.envs import VecNormalize
 
 
+def f(x):
+    x.sum().backward(retain_graph=True)
+
+
 # Get a render function
 def get_render_func(venv):
     if hasattr(venv, 'envs'):

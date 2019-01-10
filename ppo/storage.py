@@ -12,7 +12,7 @@ def _flatten_helper(T, N, _tensor):
 
 Batch = namedtuple(
     'Batch', 'obs recurrent_hidden_states actions value_preds ret '
-    'masks old_action_log_probs adv noise importance_weighting')
+    'masks old_action_log_probs adv importance_weighting')
 
 
 class RolloutStorage(object):
@@ -127,7 +127,6 @@ class RolloutStorage(object):
             masks=masks_batch,
             old_action_log_probs=old_action_log_probs_batch,
             adv=adv_targ,
-            noise=None,
             importance_weighting=None)
         return batch
 
@@ -197,39 +196,33 @@ class RolloutStorage(object):
                 masks=masks_batch,
                 old_action_log_probs=old_action_log_probs_batch,
                 adv=adv_targ,
-                noise=None,
                 importance_weighting=None)
 
 
 class UnsupervisedRolloutStorage(RolloutStorage):
-    def __init__(self, num_steps, num_processes, noise_size, **kwargs):
+    def __init__(self, num_steps, num_processes, **kwargs):
         super().__init__(
             num_steps=num_steps, num_processes=num_processes, **kwargs)
-        self.noise = torch.zeros(num_steps + 1, num_processes, noise_size)
         self.importance_weighting = torch.zeros(num_steps + 1, num_processes,
                                                 1)
 
     def to(self, device):
         super().to(device)
-        self.noise.to(device)
         self.importance_weighting.to(device)
 
-    def insert(self, noise, importance_weighting, **kwargs):
-        self.noise[self.step + 1].copy_(noise)
+    def insert(self, importance_weighting, **kwargs):
         self.importance_weighting[self.step + 1].copy_(importance_weighting)
         super().insert(**kwargs)
 
     def after_update(self):
         super().after_update()
-        self.noise[0].copy_(self.noise[-1])
         self.importance_weighting[0].copy_(self.importance_weighting[-1])
 
     def make_batch(self, advantages, indices):
-        noise = self.noise.view(-1, *self.noise.size()[2:])[indices]
         importance_weighting = self.importance_weighting.view(-1, 1)[indices]
         batch = super().make_batch(advantages=advantages, indices=indices)
         return batch._replace(
-            noise=noise, importance_weighting=importance_weighting)
+            importance_weighting=importance_weighting)
 
     def recurrent_generator(self, advantages, num_mini_batch):
         raise NotImplementedError

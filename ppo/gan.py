@@ -36,7 +36,7 @@ class GAN:
         else:
             self.regularizer += .01 * (log_prob.mean() - self.regularizer)
         importance_weighting = self.regularizer / log_prob
-        return noise, goal, importance_weighting.view(-1, 1)
+        return goal, importance_weighting.view(-1, 1)
 
     def parameters(self):
         return self.network.parameters()
