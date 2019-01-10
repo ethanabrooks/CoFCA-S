@@ -121,7 +121,8 @@ class PPO:
                         create_graph=True,
                     )
                     unsupervised_loss = -global_norm(grads)
-                    unsupervised_loss.mean().backward()
+                    retain_graph = e < self.ppo_epoch - 1
+                    unsupervised_loss.mean().backward(retain_graph=retain_graph)
                     gan_norm = global_norm(
                         [p.grad for p in self.gan.parameters()])
                     update_values.update(
