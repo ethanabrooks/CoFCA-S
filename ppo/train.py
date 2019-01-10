@@ -92,6 +92,11 @@ def train(recurrent_policy,
         def substitute_goal(_obs, _goals):
             split = torch.split(_obs, sample_env.subspace_sizes, dim=1)
             observation = Observation(*split)
+            if not torch.allclose(_goals, observation.goal):
+                print('discrepancy between observation goal:')
+                print(observation.goal)
+                print('and goal from GAN:')
+                print(_goals)
             replace = observation._replace(goal=_goals)
             return torch.cat(replace, dim=1)
 

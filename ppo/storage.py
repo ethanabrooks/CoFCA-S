@@ -217,6 +217,7 @@ class UnsupervisedRolloutStorage(RolloutStorage):
     def after_update(self):
         super().after_update()
         self.importance_weighting[0].copy_(self.importance_weighting[-1])
+        self.obs = self.obs.detach()
 
     def make_batch(self, advantages, indices):
         importance_weighting = self.importance_weighting.view(-1, 1)[indices]
