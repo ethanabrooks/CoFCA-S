@@ -33,9 +33,10 @@ except ImportError:
 
 
 def make_env(env_id, seed, rank, add_timestep, max_steps, env_args):
-    env_args = env_args.copy()
-    if rank != 0:
-        env_args.update(record=False)
+    if env_args:
+        env_args = env_args.copy()
+        if rank != 0:
+            env_args.update(record=False)
 
     def _thunk():
         if env_id == 'move-block':
