@@ -131,10 +131,11 @@ class PPO:
                                              self.max_grad_norm)
                     self.unsupervised_optimizer.step()
                 self.optimizer.zero_grad()
+                sample = sample._replace(obs=sample.obs.detach())
                 value_losses, action_losses, entropy, importance_weighting \
                     = components = compute_loss_components(sample)
                 loss = compute_loss(*components)
-                # loss.backward()
+                loss.backward()
                 total_norm += global_norm(
                     [p.grad for p in self.actor_critic.parameters()])
                 nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
