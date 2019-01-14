@@ -125,14 +125,13 @@ class PPO:
                     for goal in unique:
                         idxs = indices[(sample.goals == goal).all(dim=-1)]
                         batch = Batch(*[x[idxs, ...] for x in sample])
+                        batch = batch._replace(obs=batch.obs.detach().requires_grad_())
                         grads = torch.autograd.grad(
                             compute_loss(*compute_loss_components(batch)),
                             self.actor_critic.parameters())
                         norm = global_norm(grads)
                         norms[idxs] = norm
                     self.gradient_rms.update(norms.mean().numpy(), axis=None)
-                    #     # unsupervised_loss = -log_prob * torch.norm(
-                    #     #     sample.goals, dim=-1)
                     gan_entropy = dist.entropy().sum(dim=-1)
                     unsupervised_loss = -(
                         log_prob * norms + self.gan.entropy_coef * gan_entropy)
