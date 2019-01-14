@@ -6,6 +6,10 @@ import torch.nn as nn
 from ppo.envs import VecNormalize
 
 
+def f(x):
+    x.sum().backward(retain_graph=True)
+
+
 # Get a render function
 def get_render_func(venv):
     if hasattr(venv, 'envs'):
@@ -32,10 +36,11 @@ def mlp(num_inputs,
         num_layers,
         activation,
         name='fc',
+        gain=1,
         num_outputs=None):
     init_ = lambda m: init(m, weight_init=init_normc_,
                            bias_init=lambda x: nn.init.constant_(x, 0),
-                           gain=.1)
+                           gain=gain)
     network = nn.Sequential()
     in_features = num_inputs
     for i in range(num_layers):
