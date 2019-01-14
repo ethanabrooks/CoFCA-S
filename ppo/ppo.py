@@ -125,7 +125,7 @@ class PPO:
                     for goal in unique:
                         idxs = indices[(sample.goals == goal).all(dim=-1)]
                         batch = Batch(*[x[idxs, ...] for x in sample])
-                        batch = batch._replace(obs=batch.obs.detach().requires_grad_())
+                        # batch = batch._replace(obs=batch.obs.detach().requires_grad_())
                         grads = torch.autograd.grad(
                             compute_loss(*compute_loss_components(batch)),
                             self.actor_critic.parameters())
