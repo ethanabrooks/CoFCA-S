@@ -5,7 +5,6 @@ from utils import space_to_size
 
 from ppo.utils import init, init_normc_, mlp
 
-from ppo.utils import mlp
 
 class GAN(nn.Module):
     def forward(self, *input):

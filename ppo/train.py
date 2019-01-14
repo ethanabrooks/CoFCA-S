@@ -156,9 +156,6 @@ def train(recurrent_policy,
         obs = substitute_goal(obs, goals)
         rollouts.importance_weighting[0].copy_(importance_weightings)
     rollouts.obs[0].copy_(obs)
-    if unsupervised:
-        rollouts.goals[0].copy_(samples)
-        rollouts.importance_weighting[0].copy_(importance_weightings)
     rollouts.to(device)
 
     start = time.time()
