@@ -3,7 +3,7 @@ import torch.nn as nn
 from gym.spaces import Box
 from utils import space_to_size
 
-from ppo.utils import init, init_normc_, mlp
+from ppo.util import init, init_normc_, mlp
 
 
 class GAN(nn.Module):
