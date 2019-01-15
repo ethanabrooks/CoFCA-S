@@ -183,4 +183,4 @@ def unsupervised_cli():
 
 
 if __name__ == "__main__":
-    hsr_cli()
+    unsupervised_cli()
