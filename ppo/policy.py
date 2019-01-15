@@ -4,7 +4,7 @@ import torch.nn as nn
 
 # first party
 from ppo.distributions import Categorical, DiagGaussian
-from ppo.utils import init, mlp
+from ppo.util import init, mlp
 
 
 class Flatten(nn.Module):
