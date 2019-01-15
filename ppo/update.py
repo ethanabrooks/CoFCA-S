@@ -98,7 +98,7 @@ class PPO:
         if self.unsupervised:
             self.unsupervised_optimizer.zero_grad()
             batch = next(rollouts.feed_forward_generator(
-                advantages, 1))
+                advantages, self.batch_size))
             batch = batch._replace(importance_weighting=None)
             loss = self.compute_loss(*self.compute_loss_components(batch))
             grads = torch.autograd.grad(
