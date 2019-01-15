@@ -11,7 +11,7 @@ from ppo.envs import VecNormalize, make_vec_envs
 from ppo.gan import GAN
 from ppo.hsr_adapter import UnsupervisedEnv
 from ppo.policy import Policy
-from ppo.ppo import PPO
+from ppo.update import PPO
 from ppo.storage import RolloutStorage, UnsupervisedRolloutStorage
 from utils import space_to_size
 
