@@ -104,10 +104,11 @@ class PPO:
             return norm ** .5
 
         if self.unsupervised:
-            sample = next(rollouts.feed_forward_generator(
-                advantages, self.batch_size))
             self.unsupervised_optimizer.zero_grad()
-            loss = compute_loss(*compute_loss_components(sample))
+            batch = next(rollouts.feed_forward_generator(
+                advantages, self.batch_size))
+            batch = batch._replace(importance_weighting=None)
+            loss = compute_loss(*compute_loss_components(batch))
             grads = torch.autograd.grad(
                 outputs=loss,
                 inputs=self.actor_critic.parameters(),
