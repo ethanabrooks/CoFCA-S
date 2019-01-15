@@ -13,5 +13,4 @@
 * Use reward mean instead of value function for unsupervised loss
 
 # other
-* why does gan learning rate not matter?
 * record unscaled version of norm for comparison

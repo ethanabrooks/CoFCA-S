@@ -95,8 +95,6 @@ class PPO:
                 advantages.std() + 1e-5)
         update_values = Counter()
 
-        total_norm = torch.tensor(0, dtype=torch.float32)
-
         if self.unsupervised:
             self.unsupervised_optimizer.zero_grad()
             batch = next(rollouts.feed_forward_generator(
@@ -108,11 +106,13 @@ class PPO:
                 inputs=self.actor_critic.parameters(),
                 create_graph=True,
             )
-            unsupervised_loss = -global_norm(grads)
+            norm = global_norm(grads)
+            unsupervised_loss = -norm
             unsupervised_loss.mean().backward()
             gan_norm = global_norm(
                 [p.grad for p in self.gan.parameters()])
             update_values.update(
+                unweighted_norm=norm,
                 unsupervised_loss=unsupervised_loss,
                 gan_norm=gan_norm)
             nn.utils.clip_grad_norm_(self.gan.parameters(),
@@ -135,7 +135,7 @@ class PPO:
                     = components = self.compute_loss_components(sample)
                 loss = self.compute_loss(*components)
                 loss.backward()
-                total_norm += global_norm(
+                norm = global_norm(
                     [p.grad for p in self.actor_critic.parameters()])
                 nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
                                          self.max_grad_norm)
@@ -144,10 +144,12 @@ class PPO:
                 update_values.update(
                     value_loss=value_losses,
                     action_loss=action_losses,
-                    norm=total_norm,
+                    norm=norm,
                     entropy=entropy,
                     importance_weighting=importance_weighting,
                 )
+                if not self.unsupervised:
+                    update_values.update(unweighted_norm=norm)
 
         num_updates = self.ppo_epoch * self.batch_size
         return {
