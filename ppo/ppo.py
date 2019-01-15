@@ -115,12 +115,11 @@ class PPO:
             )
             unsupervised_loss = -global_norm(grads)
             unsupervised_loss.mean().backward()
-            # gan_norm = global_norm(
-                # [p.grad for p in self.gan.parameters()])
+            gan_norm = global_norm(
+                [p.grad for p in self.gan.parameters()])
             update_values.update(
                 unsupervised_loss=unsupervised_loss,
-                )
-                # gan_norm=gan_norm)
+                gan_norm=gan_norm)
             nn.utils.clip_grad_norm_(self.gan.parameters(),
                                      self.max_grad_norm)
             self.unsupervised_optimizer.step()
