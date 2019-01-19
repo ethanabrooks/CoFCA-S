@@ -28,9 +28,8 @@ class PPO:
                  eps=None,
                  max_grad_norm=None,
                  use_clipped_value_loss=True,
-                 gan=None):
+                 ):
 
-        self.unsupervised = bool(gan)
         self.actor_critic = actor_critic
 
         self.clip_param = clip_param
@@ -46,11 +45,6 @@ class PPO:
         self.optimizer = optim.Adam(
             actor_critic.parameters(), lr=learning_rate, eps=eps)
 
-        if self.unsupervised:
-            self.unsupervised_optimizer = optim.Adam(
-                gan.parameters(), lr=gan.learning_rate, eps=eps)
-            self.gradient_rms = RunningMeanStd()
-        self.gan = gan
         self.reward_function = None
 
     def compute_loss_components(self, batch):
@@ -95,30 +89,6 @@ class PPO:
                 advantages.std() + 1e-5)
         update_values = Counter()
 
-        if self.unsupervised:
-            self.unsupervised_optimizer.zero_grad()
-            batch = next(rollouts.feed_forward_generator(
-                advantages, 1))
-            batch = batch._replace(importance_weighting=None)
-            loss = self.compute_loss(*self.compute_loss_components(batch))
-            grads = torch.autograd.grad(
-                outputs=loss,
-                inputs=self.actor_critic.parameters(),
-                create_graph=True,
-            )
-            norm = global_norm(grads)
-            unsupervised_loss = -norm
-            unsupervised_loss.mean().backward()
-            gan_norm = global_norm(
-                [p.grad for p in self.gan.parameters()])
-            update_values.update(
-                unweighted_norm=norm,
-                unsupervised_loss=unsupervised_loss,
-                gan_norm=gan_norm)
-            nn.utils.clip_grad_norm_(self.gan.parameters(),
-                                     self.max_grad_norm)
-            self.unsupervised_optimizer.step()
-
         for e in range(self.ppo_epoch):
             if self.actor_critic.is_recurrent:
                 data_generator = rollouts.recurrent_generator(
@@ -148,8 +118,6 @@ class PPO:
                     entropy=entropy,
                     importance_weighting=importance_weighting,
                 )
-                if not self.unsupervised:
-                    update_values.update(unweighted_norm=norm)
 
         num_updates = self.ppo_epoch * self.batch_size
         return {

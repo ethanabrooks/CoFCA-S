@@ -37,7 +37,7 @@ def train(recurrent_policy,
           network_args,
           max_steps=None,
           env_args=None,
-          unsupervised_args=None):
+          ):
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
 
@@ -61,8 +61,6 @@ def train(recurrent_policy,
     torch.set_num_threads(1)
     device = torch.device("cuda:0" if cuda else "cpu")
 
-    unsupervised = unsupervised_args is not None
-
     _gamma = gamma if normalize else None
     envs = make_vec_envs(
         env_name=env_name,
@@ -81,50 +79,16 @@ def train(recurrent_policy,
         envs.action_space,
         network_args=network_args)
 
-    gan = None
-    if unsupervised:
-        sample_env = UnsupervisedEnv(**env_args)
-        gan = GAN(
-            goal_space=sample_env.goal_space,
-            **{k.replace('gan_', ''): v
-               for k, v in unsupervised_args.items()})
+    rollouts = RolloutStorage(
+        num_steps=num_steps,
+        num_processes=num_processes,
+        obs_shape=envs.observation_space.shape,
+        action_space=envs.action_space,
+        recurrent_hidden_state_size=actor_critic.
+            recurrent_hidden_state_size,
+    )
 
-        def substitute_goal(_obs, _goals):
-            split = torch.split(_obs, sample_env.subspace_sizes, dim=1)
-            observation = Observation(*split)
-            if not torch.allclose(_goals, observation.goal):
-                print('discrepancy between observation goal:')
-                print(observation.goal)
-                print('and goal from GAN:')
-                print(_goals)
-            replace = observation._replace(goal=_goals)
-            return torch.cat(replace, dim=1)
-
-        goals, importance_weightings = gan.sample(num_processes)
-        for i, goal in enumerate(goals):
-            goal = goal.detach().numpy()
-            envs.unwrapped.set_goal(goal, i)
-
-        rollouts = UnsupervisedRolloutStorage(
-            num_steps=num_steps,
-            num_processes=num_processes,
-            obs_shape=envs.observation_space.shape,
-            action_space=envs.action_space,
-            recurrent_hidden_state_size=actor_critic.
-                recurrent_hidden_state_size,
-        )
-
-    else:
-        rollouts = RolloutStorage(
-            num_steps=num_steps,
-            num_processes=num_processes,
-            obs_shape=envs.observation_space.shape,
-            action_space=envs.action_space,
-            recurrent_hidden_state_size=actor_critic.
-                recurrent_hidden_state_size,
-        )
-
-    agent = PPO(actor_critic=actor_critic, gan=gan, **ppo_args)
+    agent = PPO(actor_critic=actor_critic, **ppo_args)
 
     rewards_counter = np.zeros(num_processes)
     episode_rewards = []
@@ -133,8 +97,6 @@ def train(recurrent_policy,
     start = 0
     if load_path:
         state_dict = torch.load(load_path)
-        if unsupervised:
-            gan.load_state_dict(state_dict['gan'])
         actor_critic.load_state_dict(state_dict['actor_critic'])
         agent.optimizer.load_state_dict(state_dict['optimizer'])
         start = state_dict.get('step', -1) + 1
@@ -148,13 +110,8 @@ def train(recurrent_policy,
         updates = itertools.count(start)
 
     actor_critic.to(device)
-    if unsupervised:
-        gan.to(device)
 
     obs = envs.reset()
-    if unsupervised:
-        obs = substitute_goal(obs, goals)
-        rollouts.importance_weighting[0].copy_(importance_weightings)
     rollouts.obs[0].copy_(obs)
     rollouts.to(device)
 
@@ -172,15 +129,6 @@ def train(recurrent_policy,
             # Observe reward and next obs
             obs, rewards, done, infos = envs.step(actions)
 
-            if unsupervised:
-                obs = substitute_goal(obs, goals.detach().requires_grad_())
-                for i, _done in enumerate(done):
-                    if _done:
-                        goal, importance_weighting = gan.sample(1)
-                        envs.unwrapped.set_goal(goal.detach().numpy(), i)
-                        goals[i] = goal
-                        importance_weightings[i] = importance_weighting
-
             # track rewards
             rewards_counter += rewards.numpy()
             episode_rewards.append(rewards_counter[done])
@@ -189,19 +137,7 @@ def train(recurrent_policy,
             # If done then clean the history of observations.
             masks = torch.FloatTensor(
                 [[0.0] if done_ else [1.0] for done_ in done])
-            if unsupervised:
-                rollouts.insert(
-                    obs=obs,
-                    recurrent_hidden_states=recurrent_hidden_states,
-                    actions=actions,
-                    action_log_probs=action_log_probs,
-                    values=values,
-                    rewards=rewards,
-                    masks=masks,
-                    importance_weighting=importance_weightings,
-                )
-            else:
-                rollouts.insert(
+            rollouts.insert(
                     obs=obs,
                     recurrent_hidden_states=recurrent_hidden_states,
                     actions=actions,
@@ -234,8 +170,6 @@ def train(recurrent_policy,
             if isinstance(envs.venv, VecNormalize):
                 modules.update(vec_normalize=envs.venv)
 
-            if unsupervised:
-                modules.update(gan=gan)
             state_dict = {
                 name: module.state_dict()
                 for name, module in modules.items()
