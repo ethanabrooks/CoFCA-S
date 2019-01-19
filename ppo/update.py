@@ -53,9 +53,9 @@ class PPO:
             batch.obs, batch.recurrent_hidden_states, batch.masks,
             batch.actions)
 
-        mu = torch.min(batch.adv) + 1
+        mu = torch.max(batch.adv) + 1
         action_probs = torch.exp(action_log_probs)
-        ratio = torch.exp(batch.old_action_log_probs - torch.log(batch.adv + mu))
+        ratio = torch.exp(batch.old_action_log_probs - torch.log(-batch.adv + mu))
         action_losses = .5 * (action_probs - mu * ratio)**2
 
         value_losses = (values - batch.ret).pow(2)
