@@ -35,6 +35,7 @@ def train(recurrent_policy,
           tau,
           ppo_args,
           network_args,
+          min_reward,
           max_steps=None,
           env_args=None,
           ):
@@ -143,7 +144,7 @@ def train(recurrent_policy,
                     actions=actions,
                     action_log_probs=action_log_probs,
                     values=values,
-                    rewards=rewards,
+                    rewards=rewards + min_reward,
                     masks=masks)
 
         with torch.no_grad():

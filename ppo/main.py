@@ -17,6 +17,11 @@ def build_parser():
         help='discount factor for rewards (default: 0.99)')
     parser.add_argument('--normalize', action='store_true')
     parser.add_argument(
+        '--min-reward',
+        required=True,
+        type=float,
+        help='use generalized advantage estimation')
+    parser.add_argument(
         '--use-gae',
         action='store_true',
         default=False,

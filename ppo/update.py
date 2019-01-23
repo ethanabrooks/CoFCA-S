@@ -54,9 +54,9 @@ class PPO:
             batch.actions)
 
         probs = action_log_probs.exp()
+        ratio = batch.ret / torch.max(batch.value_preds, torch.tensor(1e-3))
         target_probs = torch.exp(action_log_probs +
-                                 batch.ret.log() -
-                                 batch.value_preds.log())
+                                 torch.log(ratio))
         action_losses = .5 * (probs - target_probs)**2
 
         value_losses = (values - batch.ret).pow(2)
