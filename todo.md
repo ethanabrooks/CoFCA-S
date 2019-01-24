@@ -1,5 +1,4 @@
 # `goal_space`-restricted goals
-* assess cause of norm difference (including experiments where chosen goal is replaced with randomly-sampled goal)
 * Double check whether small initialization bug is affecting things.
 * try a non-retain_graph version
 * try updating gan on batch_size=1
@@ -11,6 +10,3 @@
 
 # unrestricted goals
 * Use reward mean instead of value function for unsupervised loss
-
-# other
-* record unscaled version of norm for comparison
