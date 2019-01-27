@@ -1,6 +1,7 @@
 from multiprocessing import Pipe, Process
 
 import numpy as np
+import time
 
 # local
 from . import CloudpickleWrapper, VecEnv
@@ -72,8 +73,10 @@ class SubprocVecEnv(VecEnv):
 
     def step_async(self, actions):
         self._assert_not_closed()
-        for remote, action in zip(self.remotes, actions):
+        for i, (remote, action) in enumerate(zip(self.remotes, actions)):
+            tick = time.time()
             remote.send(('step', action))
+            print(i, time.time() - tick)
         self.waiting = True
 
     def step_wait(self):
