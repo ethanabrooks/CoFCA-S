@@ -17,23 +17,25 @@ class GAN(nn.Module):
         self.goal_space = goal_space
         goal_size = space_to_size(goal_space)
         self.hidden_size = hidden_size
+        input_size = goal_size + 1
         self.network = nn.Sequential(
-            mlp(num_inputs=hidden_size,
+            mlp(num_inputs=input_size,
                 hidden_size=hidden_size,
                 num_outputs=2 * goal_size,
                 name='gan',
                 **kwargs))
         self.softplus = torch.nn.Softplus()
         self.regularizer = None
+        self.input = torch.rand(input_size)
 
-    def goal_input(self, num_outputs):
-        return torch.ones((num_outputs, self.hidden_size))
+    def set_input(self, goal, norm):
+        self.input = torch.cat((goal, norm.expand(1)))
 
     def forward(self, *inputs):
         raise NotImplementedError
 
     def dist(self, num_inputs):
-        network_out = self.softplus(self.network(self.goal_input(num_inputs)))
+        network_out = self.softplus(self.network(self.input.repeat(num_inputs, 1)))
         a, b = torch.chunk(network_out, 2, dim=-1)
         return torch.distributions.Beta(a, b)
 
