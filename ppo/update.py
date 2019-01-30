@@ -121,8 +121,10 @@ class PPO:
                     idxs = indices[(sample.goals == goal).all(dim=-1)]
                     dist = self.gan.dist(len(idxs))
                     batch = Batch(*[x[idxs, ...] for x in sample])
+                    *loss_components, _ = self.compute_loss_components(batch)
                     grads = torch.autograd.grad(
-                        self.compute_loss(*self.compute_loss_components(batch)),
+                        self.compute_loss(*loss_components,
+                                          importance_weighting=None),
                         self.actor_critic.parameters())
                     global_sum = sum(grad.sum() for grad in grads)
                     prob = dist.log_prob(goal).sum(-1).exp()

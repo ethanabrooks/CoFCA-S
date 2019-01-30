@@ -39,22 +39,14 @@ class GAN(nn.Module):
         a, b = torch.chunk(network_out, 2, dim=-1)
         return torch.distributions.Beta(a, b)
 
-    def log_prob(self, goal):
-        num_inputs = goal.size()[0]
-        return self.dist(num_inputs).log_prob(goal)
-
     def sample(self, num_outputs):
         dist = self.dist(num_outputs)
         samples = dist.sample()
         high = torch.tensor(self.goal_space.high)
         low = torch.tensor(self.goal_space.low)
         goals = samples * (high - low) + low
-        log_prob = dist.log_prob(samples).sum(dim=-1).exp()
-        if self.regularizer is None:
-            self.regularizer = log_prob.mean()
-        else:
-            self.regularizer += .01 * (log_prob.mean() - self.regularizer)
-        importance_weighting = self.regularizer / log_prob
+        prob = dist.log_prob(samples).sum(-1).exp()
+        importance_weighting = 1 / prob
         return samples, goals, importance_weighting.view(-1, 1)
 
     def parameters(self, **kwargs):
