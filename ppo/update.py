@@ -116,10 +116,12 @@ class PPO:
                 unique = torch.unique(sample.goals, dim=0)
                 probs = torch.zeros(len(sample.goals))
                 sums = torch.zeros(len(sample.goals))
+                entropies = torch.tensor(0.)
                 indices = torch.arange(len(sample.goals))
                 for goal in unique:
                     idxs = indices[(sample.goals == goal).all(dim=-1)]
                     dist = self.gan.dist(len(idxs))
+                    entropies += dist.entropy().mean()
                     batch = Batch(*[x[idxs, ...] for x in sample])
                     *loss_components, _ = self.compute_loss_components(batch)
                     grads = torch.autograd.grad(
@@ -136,7 +138,8 @@ class PPO:
                     self.mean_sq_grad.update(global_sum.numpy() ** 2, axis=None)
 
                 alpha = self.mean_weighted_gradient.mean / self.mean_sq_grad.mean
-                unsupervised_loss = .5 * (probs - alpha * sums) ** 2
+                unsupervised_loss = .5 * (probs - alpha * sums) ** 2 \
+                                    + self.entropy_coef * entropies
                 unsupervised_loss.mean().backward()
                 # gan_norm = global_norm(
                 #     [p.grad for p in self.gan.parameters()])
