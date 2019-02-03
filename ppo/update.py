@@ -75,12 +75,9 @@ class PPO:
             value_losses = .5 * torch.max(value_losses,
                                           value_losses_clipped)
 
-        importance_weighting = batch.importance_weighting
-        if importance_weighting is None:
-            importance_weighting = torch.tensor(
-                1, dtype=torch.float32)
         return (value_losses, action_losses, dist_entropy,
-                importance_weighting)
+                batch.importance_weighting
+                or torch.tensor(1, dtype=torch.float32))
 
     def compute_loss(self, value_loss, action_loss, dist_entropy,
                      importance_weighting):
@@ -163,7 +160,6 @@ class PPO:
                         norm += grad.norm(2) ** 2
                     return norm ** .5
 
-                self.optimizer.zero_grad()
                 value_losses, action_losses, entropy, importance_weighting \
                     = components = self.compute_loss_components(sample)
                 loss = self.compute_loss(*components)
@@ -174,6 +170,7 @@ class PPO:
                                          self.max_grad_norm)
                 self.optimizer.step()
                 # noinspection PyTypeChecker
+                self.optimizer.zero_grad()
                 update_values.update(
                     value_loss=value_losses,
                     action_loss=action_losses,
