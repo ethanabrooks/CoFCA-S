@@ -75,9 +75,7 @@ class PPO:
             value_losses = .5 * torch.max(value_losses,
                                           value_losses_clipped)
 
-        return (value_losses, action_losses, dist_entropy,
-                batch.importance_weighting
-                or torch.tensor(1, dtype=torch.float32))
+        return value_losses, action_losses, dist_entropy
 
     def compute_loss(self, value_loss, action_loss, dist_entropy,
                      importance_weighting):
@@ -119,7 +117,7 @@ class PPO:
                     dist = self.gan.dist(len(idxs))
                     entropies += dist.entropy().mean()
                     batch = Batch(*[x[idxs, ...] for x in sample])
-                    *loss_components, _ = self.compute_loss_components(batch)
+                    loss_components = self.compute_loss_components(batch)
                     grads = torch.autograd.grad(
                         self.compute_loss(*loss_components,
                                           importance_weighting=None),
@@ -135,7 +133,7 @@ class PPO:
 
                 alpha = self.mean_weighted_gradient.mean / self.mean_sq_grad.mean
                 unsupervised_loss = .5 * (probs - alpha * sums) ** 2 \
-                                    + self.entropy_coef * entropies
+                                    - self.entropy_coef * entropies
                 unsupervised_loss.mean().backward()
                 # gan_norm = global_norm(
                 #     [p.grad for p in self.gan.parameters()])
@@ -143,8 +141,8 @@ class PPO:
                     unsupervised_loss=unsupervised_loss,
                     goal_log_prob=probs.mean(),
                     dist_mean=dist.mean.mean(),
-                    dist_std=dist.stddev.mean(),)
-                    # gan_norm=gan_norm)
+                    dist_std=dist.stddev.mean(), )
+                # gan_norm=gan_norm)
                 nn.utils.clip_grad_norm_(self.gan.parameters(),
                                          self.max_grad_norm)
                 self.unsupervised_optimizer.step()
@@ -160,9 +158,9 @@ class PPO:
                         norm += grad.norm(2) ** 2
                     return norm ** .5
 
-                value_losses, action_losses, entropy, importance_weighting \
-                    = components = self.compute_loss_components(sample)
-                loss = self.compute_loss(*components)
+                value_losses, action_losses, entropy\
+                        = components = self.compute_loss_components(sample)
+                loss = self.compute_loss(*components, importance_weighting=None)
                 loss.backward()
                 total_norm += global_norm(
                     [p.grad for p in self.actor_critic.parameters()])
