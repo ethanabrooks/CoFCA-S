@@ -107,7 +107,6 @@ class PPO:
                     advantages, self.batch_size)
 
             if self.unsupervised:
-                self.unsupervised_optimizer.zero_grad()
                 sample = next(rollouts.feed_forward_generator(
                     advantages, self.batch_size))
                 unique = torch.unique(sample.goals, dim=0)
@@ -149,6 +148,7 @@ class PPO:
                 nn.utils.clip_grad_norm_(self.gan.parameters(),
                                          self.max_grad_norm)
                 self.unsupervised_optimizer.step()
+                self.unsupervised_optimizer.zero_grad()
                 self.gan.set_input(goal, global_sum)
 
             for sample in data_generator:
