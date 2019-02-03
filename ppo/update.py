@@ -51,18 +51,6 @@ class PPO:
         self.gan = gan
         self.reward_function = None
 
-    def compute_loss(self, value_loss, action_loss, dist_entropy,
-                     importance_weighting):
-        if importance_weighting is None:
-            importance_weighting = 1
-        else:
-            importance_weighting = importance_weighting.detach()
-            importance_weighting[torch.isnan(
-                importance_weighting)] = 0
-        losses = (value_loss * self.value_loss_coef + action_loss -
-                  dist_entropy * self.entropy_coef)
-        return torch.mean(losses * importance_weighting)
-
     def compute_loss_components(self, batch):
         values, action_log_probs, dist_entropy, \
         _ = self.actor_critic.evaluate_actions(
@@ -91,6 +79,17 @@ class PPO:
                 batch.importance_weighting
                 or torch.tensor(1, dtype=torch.float32))
 
+    def compute_loss(self, value_loss, action_loss, dist_entropy,
+                     importance_weighting):
+        if importance_weighting is None:
+            importance_weighting = 1
+        else:
+            importance_weighting = importance_weighting.detach()
+            importance_weighting[torch.isnan(
+                importance_weighting)] = 0
+        losses = (value_loss * self.value_loss_coef + action_loss -
+                  dist_entropy * self.entropy_coef)
+        return torch.mean(losses * importance_weighting)
 
     def update(self, rollouts: RolloutStorage):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
