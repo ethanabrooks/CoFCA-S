@@ -79,15 +79,14 @@ class PPO:
 
     def compute_loss(self, value_loss, action_loss, dist_entropy,
                      importance_weighting):
-        if importance_weighting is None:
-            importance_weighting = 1
-        else:
+        losses = (value_loss * self.value_loss_coef + action_loss -
+                  dist_entropy * self.entropy_coef)
+        if importance_weighting is not None:
             importance_weighting = importance_weighting.detach()
             importance_weighting[torch.isnan(
                 importance_weighting)] = 0
-        losses = (value_loss * self.value_loss_coef + action_loss -
-                  dist_entropy * self.entropy_coef)
-        return torch.mean(losses * importance_weighting)
+            losses *= importance_weighting
+        return torch.mean(losses)
 
     def update(self, rollouts: RolloutStorage):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
@@ -158,9 +157,11 @@ class PPO:
                         norm += grad.norm(2) ** 2
                     return norm ** .5
 
-                value_losses, action_losses, entropy\
-                        = components = self.compute_loss_components(sample)
-                loss = self.compute_loss(*components, importance_weighting=None)
+                value_losses, action_losses, entropy \
+                    = components = self.compute_loss_components(sample)
+                loss = self.compute_loss(
+                    *components,
+                    importance_weighting=sample.importance_weighting)
                 loss.backward()
                 total_norm += global_norm(
                     [p.grad for p in self.actor_critic.parameters()])
@@ -174,8 +175,11 @@ class PPO:
                     action_loss=action_losses,
                     norm=total_norm,
                     entropy=entropy,
-                    importance_weighting=importance_weighting,
                 )
+                if sample.importance_weighting is not None:
+                    update_values.update(
+                        importance_weighting=sample.importance_weighting
+                    )
 
         num_updates = self.ppo_epoch * self.batch_size
         return {
