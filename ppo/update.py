@@ -134,7 +134,7 @@ class PPO:
 
                 alpha = self.mean_weighted_gradient.mean / self.mean_sq_grad.mean
                 unsupervised_loss = .5 * (probs - alpha * sums) ** 2 \
-                                    + self.entropy_coef * entropies
+                                    - self.entropy_coef * entropies
                 unsupervised_loss.mean().backward()
                 # gan_norm = global_norm(
                 #     [p.grad for p in self.gan.parameters()])
