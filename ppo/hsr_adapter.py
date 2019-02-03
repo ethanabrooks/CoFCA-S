@@ -134,6 +134,6 @@ class UnsupervisedSubprocVecEnv(SubprocVecEnv):
 
 
 class UnsupervisedDummyVecEnv(DummyVecEnv):
-    def set_goal(self, goals, i):
+    def set_goal(self, goal, i):
         env = unwrap_unsupervised(self.envs[i])
-        env.set_goal(goals)
+        env.set_goal(goal)

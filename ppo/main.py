@@ -8,26 +8,6 @@ from ppo.train import train
 from utils import parse_activation, parse_groups
 
 
-def cli():
-    train(**parse_groups(build_parser()))
-
-
-def hsr_cli():
-    parser = get_hsr_parser()
-    env_wrapper(train)(**parse_groups(parser))
-
-
-def unsupervised_cli():
-    parser = get_unsupervised_parser()
-    args_dict = parse_groups(parser)
-    args_dict.update(env_name='unsupervised')
-    env_wrapper(train)(**args_dict)
-
-
-if __name__ == "__main__":
-    hsr_cli()
-
-
 def build_parser():
     parser = argparse.ArgumentParser(description='RL')
     parser.add_argument(
@@ -184,3 +164,23 @@ def get_unsupervised_parser():
         default=0.01,
         help='entropy term coefficient (default: 0.01)')
     return parser
+
+
+def cli():
+    train(**parse_groups(build_parser()))
+
+
+def hsr_cli():
+    parser = get_hsr_parser()
+    env_wrapper(train)(**parse_groups(parser))
+
+
+def unsupervised_cli():
+    parser = get_unsupervised_parser()
+    args_dict = parse_groups(parser)
+    args_dict.update(env_name='unsupervised')
+    env_wrapper(train)(**args_dict)
+
+
+if __name__ == "__main__":
+    unsupervised_cli()
