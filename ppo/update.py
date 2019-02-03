@@ -46,7 +46,8 @@ class PPO:
         if self.unsupervised:
             self.unsupervised_optimizer = optim.Adam(
                 gan.parameters(), lr=gan.learning_rate, eps=eps)
-            self.gradient_rms = RunningMeanStd()
+            self.mean_weighted_gradient = RunningMeanStd()
+            self.mean_sq_grad = RunningMeanStd()
         self.gan = gan
         self.reward_function = None
 
