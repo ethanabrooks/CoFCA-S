@@ -1,0 +1,188 @@
+# third party
+
+from multiprocessing import Pipe, Process
+
+# first party
+import numpy as np
+from gym.spaces import Discrete, Box
+
+from common.vec_env import CloudpickleWrapper, VecEnv
+from common.vec_env.dummy_vec_env import DummyVecEnv
+from common.vec_env.subproc_vec_env import SubprocVecEnv
+import hsr
+from hsr.env import Observation
+from utils.gym import concat_spaces, space_shape, unwrap_env, space_to_size
+from utils.numpy import vectorize, onehot
+import gridworld
+
+
+class HSREnv(hsr.env.HSREnv):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+        # Sadly, ppo code really likes boxes, so had to concatenate things
+        self.observation_space = concat_spaces(
+            self.observation_space.spaces, axis=0)
+
+    def step(self, action):
+        s, r, t, i = super().step(action)
+        return vectorize(s), r, t, i
+
+    def reset(self):
+        return vectorize(super().reset())
+
+
+class MoveGripperEnv(HSREnv, hsr.env.MoveGripperEnv):
+    pass
+
+
+class UnsupervisedHSREnv(hsr.env.HSREnv):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        old_spaces = hsr.env.Observation(*self.observation_space.spaces)
+        spaces = Observation(
+            observation=old_spaces.observation, goal=old_spaces.goal)
+
+        # subspace_sizes used for splitting concatenated tensor observations
+        self._subspace_sizes = Observation(
+            *[space_shape(space)[0] for space in spaces])
+        for n in self.subspace_sizes:
+            assert isinstance(n, int)
+
+        # space of observation needs to exclude reward param
+        self.observation_space = concat_spaces(spaces, axis=0)
+        self.reward_params = self.achieved_goal()
+
+    @property
+    def subspace_sizes(self):
+        return self._subspace_sizes
+
+    def step(self, actions):
+        s, r, t, i = super().step(actions)
+        i.update(goal=self.goal)
+        observation = Observation(observation=s.observation, goal=s.goal)
+        return vectorize(observation), r, t, i
+
+    def reset(self):
+        o = super().reset()
+        return vectorize(Observation(observation=o.observation, goal=o.goal))
+
+    def new_goal(self):
+        return self.goal
+
+
+class UnsupervisedMoveGripperEnv(UnsupervisedHSREnv, hsr.env.MoveGripperEnv):
+    pass
+
+
+class GridWorld(gridworld.GridWorld):
+    def __init__(self, *args, goal_letter='*', **kwargs):
+        self.goal = None
+        self.goal_letter = goal_letter
+        super().__init__(*args, **kwargs)
+        blocked = np.isin(self.desc.flatten(), self.blocked)
+        self.goal_states, = np.where(np.logical_not(blocked))
+        self.goal_space = Discrete(len(self.goal_states))
+        self.observation_size = self.observation_space.n
+        self.goal_size = self.goal_space.n
+        observation_size = self.observation_space.n + self.goal_space.n
+        self.observation_space = Box(low=np.zeros(observation_size),
+                                     high=np.ones(observation_size),
+                                     )
+
+    def obs_vector(self, obs):
+        return vectorize([onehot(obs, self.observation_size), self.goal])
+
+    def step(self, actions):
+        s, r, t, i = super().step(actions)
+        i.update(goal=self.goal)
+        return self.obs_vector(s), r, t, i
+
+    def reset(self):
+        try:
+            self.set_goal(self.new_goal())
+            o = super().reset()
+            return self.obs_vector(o)
+        except AttributeError:
+            return
+
+    def new_goal(self):
+        return self.goal_space.sample()
+
+    def set_goal(self, goal):
+        self.goal = onehot(self.goal_states[goal], self.goal_size)
+        self.assign(**{self.goal_letter: [goal]})
+
+
+class UnsupervisedGridWorld(GridWorld):
+    def new_goal(self):
+        return self.goal.argmax()
+
+
+def unwrap_unsupervised(env):
+    return unwrap_env(env, lambda e: hasattr(e, 'set_goal'))
+
+
+def worker(remote, parent_remote, env_fn_wrapper):
+    parent_remote.close()
+    env = env_fn_wrapper.x()
+    while True:
+        cmd, data = remote.recv()
+        if cmd == 'step':
+            ob, reward, done, info = env.step(data)
+            if done:
+                ob = env.reset()
+            remote.send((ob, reward, done, info))
+        elif cmd == 'reset':
+            ob = env.reset()
+            remote.send(ob)
+        elif cmd == 'reset_task':
+            ob = env.reset_task()
+            remote.send(ob)
+        elif cmd == 'close':
+            remote.close()
+            break
+        elif cmd == 'get_spaces':
+            remote.send((env.observation_space, env.action_space))
+        elif cmd == 'set_goal':
+            unwrap_unsupervised(env).set_goal(data)
+        else:
+            raise NotImplementedError
+
+
+class UnsupervisedSubprocVecEnv(SubprocVecEnv):
+    # noinspection PyMissingConstructor
+    def __init__(self, env_fns, spaces=None):
+        """
+        envs: list of gym environments to run in subprocesses
+        """
+        self.waiting = False
+        self.closed = False
+        nenvs = len(env_fns)
+        self.remotes, self.work_remotes = zip(*[Pipe() for _ in range(nenvs)])
+        self.ps = [
+            Process(
+                target=worker,
+                args=(work_remote, remote, CloudpickleWrapper(env_fn)))
+            for (work_remote, remote,
+                 env_fn) in zip(self.work_remotes, self.remotes, env_fns)
+        ]
+        for p in self.ps:
+            p.daemon = True  # if the main process crashes, we should not cause things
+            # to hang
+            p.start()
+        for remote in self.work_remotes:
+            remote.close()
+
+        self.remotes[0].send(('get_spaces', None))
+        observation_space, action_space = self.remotes[0].recv()
+        VecEnv.__init__(self, len(env_fns), observation_space, action_space)
+
+    def set_goal(self, goal, i):
+        self.remotes[i].send(('set_goal', goal))
+
+
+class UnsupervisedDummyVecEnv(DummyVecEnv):
+    def set_goal(self, goal, i):
+        env = unwrap_unsupervised(self.envs[i])
+        env.set_goal(goal)
