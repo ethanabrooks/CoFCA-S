@@ -46,8 +46,6 @@ class PPO:
         if self.unsupervised:
             self.unsupervised_optimizer = optim.Adam(
                 gan.parameters(), lr=gan.learning_rate, eps=eps)
-            self.mean_weighted_gradient = RunningMeanStd()
-            self.mean_sq_grad = RunningMeanStd()
         self.gan = gan
         self.reward_function = None
 
@@ -121,18 +119,15 @@ class PPO:
                         self.compute_loss(*loss_components,
                                           importance_weighting=None),
                         self.actor_critic.parameters())
-                    global_sum = sum(grad.sum() for grad in grads)
-                    prob = dist.log_prob(goal).sum(-1).exp()
-                    sums[idxs] = global_sum
-                    probs[idxs] = prob
-                    weighted_gradient = (prob.detach() * global_sum)
-                    self.mean_weighted_gradient.update(weighted_gradient.numpy(),
-                                                       axis=None)
-                    self.mean_sq_grad.update(global_sum.numpy() ** 2, axis=None)
+                    sums[idxs] = sum(grad.sum() for grad in grads)
+                    probs[idxs] = dist.log_prob(goal).sum().exp()
 
-                alpha = self.mean_weighted_gradient.mean / self.mean_sq_grad.mean
-                unsupervised_loss = .5 * (probs - alpha * sums) ** 2 \
-                                    - self.entropy_coef * entropies
+                weighted_gradients = torch.dot(sums, probs)
+                sq_gradients = torch.dot(sums, sums)
+                prediction_loss = torch.sum((probs - weighted_gradients /
+                                             sq_gradients * sums) ** 2)
+                entropy_loss = -self.entropy_coef * entropies
+                unsupervised_loss = prediction_loss + entropy_loss
                 unsupervised_loss.mean().backward()
                 # gan_norm = global_norm(
                 #     [p.grad for p in self.gan.parameters()])
@@ -146,7 +141,7 @@ class PPO:
                                          self.max_grad_norm)
                 self.unsupervised_optimizer.step()
                 self.unsupervised_optimizer.zero_grad()
-                self.gan.set_input(goal, global_sum)
+                self.gan.set_input(goal, sum(grad.sum() for grad in grads))
 
             for sample in data_generator:
                 # Reshape to do in a single forward pass for all steps

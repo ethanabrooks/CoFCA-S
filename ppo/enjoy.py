@@ -44,11 +44,9 @@ env = make_vec_envs(
     args.seed + 1000,
     1,
     None,
-    None,
     args.add_timestep,
     env_args=env_args,
-    device='cpu',
-    allow_early_resets=False)
+    device='cpu')
 
 # Get a render function
 render_func = get_render_func(env)
