@@ -23,7 +23,7 @@ setup(
     ]),
     install_requires=[
         'gym',
-        'numpy==1.15.4',
+        'numpy',
         'opencv-python==3.4.3.18',
         'torch==1.0.0',
         'tensorboardX==1.6',
