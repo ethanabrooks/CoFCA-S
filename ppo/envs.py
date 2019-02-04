@@ -42,38 +42,13 @@ def make_hsr_env(seed, rank, **kwargs):
     return env
 
 
-def make_env(env_id, seed, rank, add_timestep, max_steps, env_args, unsupervised=False):
-    if env_args:
-        env_args = env_args.copy()
-        if rank != 0:
-            env_args.update(record=False)
-
-    def thunk():
-        # if unsupervised:
-        #     if env_id == 'move-block':
-        #         env = UnsupervisedHSREnv(**env_args)
-        #     elif env_id == 'move-gripper':
-        #         env = UnsupervisedMoveGripperEnv(**env_args)
-        #     elif 'GridWorld' in env_id:
-        #         kwargs = gridworld.get_args(env_id)
-        #         max_steps = kwargs.pop('max_episode_steps', None)
-        #         env = UnsupervisedGridWorld(**kwargs)
-        # else:
-        #     if env_id == 'move-block':
-        #         env = HSREnv(**env_args)
-        #     elif env_id == 'move-gripper':
-        #         env = MoveGripperEnv(**env_args)
-        #     elif 'GridWorld' in env_id:
-        #         kwargs = gridworld.get_args(env_id)
-        #         max_steps = kwargs.pop('max_episode_steps', None)
-        #         env = gridworld.GridWorld(**kwargs)
+def make_gym_env_fn(env_id, add_timestep):
+    def thunk(seed, rank):
         if env_id.startswith("dm"):
             _, domain, task = env_id.split('.')
             env = dm_control2gym.make(domain_name=domain, task_name=task)
         else:
             env = gym.make(env_id)
-        # if max_steps is not None:
-        #     env = TimeLimit(env, max_episode_steps=max_steps)
 
         is_atari = hasattr(gym.envs, 'atari') and isinstance(
             env.unwrapped, gym.envs.atari.atari_env.AtariEnv)

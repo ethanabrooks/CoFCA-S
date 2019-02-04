@@ -13,7 +13,7 @@ import hsr
 from hsr.env import Observation
 from utils.gym import concat_spaces, space_shape, unwrap_env, space_to_size
 from utils.numpy import vectorize, onehot
-from gridworld import GridWorld
+import gridworld
 
 
 class HSREnv(hsr.env.HSREnv):
@@ -75,10 +75,10 @@ class UnsupervisedMoveGripperEnv(UnsupervisedHSREnv, hsr.env.MoveGripperEnv):
     pass
 
 
-class UnsupervisedGridWorld(GridWorld):
+class GridWorld(gridworld.GridWorld):
     def __init__(self, *args, goal_letter='*', **kwargs):
-        self.goal_letter = goal_letter
         self.goal = None
+        self.goal_letter = goal_letter
         super().__init__(*args, **kwargs)
         blocked = np.isin(self.desc.flatten(), self.blocked)
         self.goal_states, = np.where(np.logical_not(blocked))
@@ -90,24 +90,33 @@ class UnsupervisedGridWorld(GridWorld):
                                      high=np.ones(observation_size),
                                      )
 
+    def obs_vector(self, obs):
+        return vectorize([onehot(obs, self.observation_size), self.goal])
+
     def step(self, actions):
         s, r, t, i = super().step(actions)
         i.update(goal=self.goal)
         return self.obs_vector(s), r, t, i
 
-    def obs_vector(self, obs):
-        return vectorize([onehot(obs, self.observation_size), self.goal])
-
     def reset(self):
-        o = super().reset()
         try:
+            self.set_goal(self.new_goal())
+            o = super().reset()
             return self.obs_vector(o)
         except AttributeError:
             return
 
+    def new_goal(self):
+        return self.goal_space.sample()
+
     def set_goal(self, goal):
         self.goal = onehot(self.goal_states[goal], self.goal_size)
         self.assign(**{self.goal_letter: [goal]})
+
+
+class UnsupervisedGridWorld(GridWorld):
+    def new_goal(self):
+        return self.goal
 
 
 def unwrap_unsupervised(env):

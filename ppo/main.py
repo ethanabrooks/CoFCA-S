@@ -9,7 +9,8 @@ from torch import nn as nn
 from utils import parse_activation, parse_groups
 
 from ppo.env_adapter import HSREnv, MoveGripperEnv, UnsupervisedMoveGripperEnv, \
-    UnsupervisedHSREnv, UnsupervisedGridWorld
+    UnsupervisedHSREnv, UnsupervisedGridWorld, GridWorld
+from ppo.envs import make_gym_env_fn
 from ppo.train import train
 
 
@@ -157,12 +158,6 @@ def add_unsupervised_args(parser):
         help='entropy term coefficient (default: 0.01)')
 
 
-def cli():
-    parser = build_parser()
-    add_env_args(parser)
-    train(**parse_groups(parser))
-
-
 def add_env_args(parser):
     env_parser = parser.add_argument_group('env_args')
     env_parser.add_argument('--render', action='store_true')
@@ -177,6 +172,25 @@ def make_env_fn(env_fn, max_episode_steps=None):
         return lambda: env
 
     return thunk
+
+
+def cli():
+    parser = build_parser()
+    add_env_args(parser)
+
+    def make_gridworld_env_fn(max_episode_steps, **env_args):
+        return make_env_fn(lambda: GridWorld(**env_args),
+                           max_episode_steps=max_episode_steps)
+
+    def _train(env_id, **kwargs):
+        if 'GridWorld' in env_id:
+            make_env = make_gridworld_env_fn(**gridworld.get_args(env_id))
+        else:
+            make_env = make_gym_env_fn(env_id, False)
+
+        train(make_env=make_env, **kwargs)
+
+    _train(**parse_groups(parser))
 
 
 def hsr_cli():
@@ -235,4 +249,4 @@ def unsupervised_hsr_cli():
 
 
 if __name__ == "__main__":
-    unsupervised_cli()
+    cli()
