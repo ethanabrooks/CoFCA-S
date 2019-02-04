@@ -1,11 +1,16 @@
 import argparse
 from pathlib import Path
 
+import gridworld
+import gym
+import hsr.util
+from gym.wrappers import TimeLimit
 from torch import nn as nn
-
-from hsr.util import add_env_args, add_wrapper_args, env_wrapper
-from ppo.train import train
 from utils import parse_activation, parse_groups
+
+from ppo.env_adapter import HSREnv, MoveGripperEnv, UnsupervisedMoveGripperEnv, \
+    UnsupervisedHSREnv, UnsupervisedGridWorld
+from ppo.train import train
 
 
 def build_parser():
@@ -64,7 +69,7 @@ def build_parser():
         default=None,
         help='number of frames to train (default: None)')
     parser.add_argument(
-        '--env-name',
+        '--env-id',
         default='move-block',
         help='environment to train on (default: move-block)')
     parser.add_argument(
@@ -77,16 +82,6 @@ def build_parser():
         help='directory to load agent parameters from')
     parser.add_argument(
         '--cuda', action='store_true', help='enables CUDA training')
-    parser.add_argument(
-        '--add-timestep',
-        action='store_true',
-        default=False,
-        help='add timestep to observations')
-    parser.add_argument(
-        '--recurrent-policy',
-        action='store_true',
-        default=False,
-        help='use a recurrent policy')
 
     network_parser = parser.add_argument_group('network_args')
     network_parser.add_argument('--recurrent', action='store_true')
@@ -136,17 +131,14 @@ def build_parser():
     return parser
 
 
-def get_hsr_parser():
-    parser = build_parser()
+def add_hsr_args(parser):
     parser.add_argument('--max-steps', type=int)
-    env_parser = parser.add_argument_group('env_args')
-    add_env_args(env_parser)
-    add_wrapper_args(parser.add_argument_group('wrapper_args'))
-    return parser
+    env_parser = parser.add_argument_group('hsr_args')
+    hsr.util.add_env_args(env_parser)
+    hsr.util.add_wrapper_args(parser.add_argument_group('wrapper_args'))
 
 
-def get_unsupervised_parser():
-    parser = get_hsr_parser()
+def add_unsupervised_args(parser):
     unsupervised_parser = parser.add_argument_group('unsupervised_args')
     unsupervised_parser.add_argument(
         '--gan-learning-rate',
@@ -163,23 +155,83 @@ def get_unsupervised_parser():
         type=float,
         default=0.01,
         help='entropy term coefficient (default: 0.01)')
-    return parser
 
 
 def cli():
-    train(**parse_groups(build_parser()))
+    parser = build_parser()
+    add_env_args(parser)
+    train(**parse_groups(parser))
+
+
+def add_env_args(parser):
+    env_parser = parser.add_argument_group('env_args')
+    env_parser.add_argument('--render', action='store_true')
+
+
+def make_env_fn(env_fn, max_episode_steps=None):
+    def thunk(seed, rank):
+        env = env_fn()
+        env.seed(seed + rank)
+        if max_episode_steps:
+            env = TimeLimit(env, max_episode_steps=max_episode_steps)
+        return lambda: env
+
+    return thunk
 
 
 def hsr_cli():
-    parser = get_hsr_parser()
-    env_wrapper(train)(**parse_groups(parser))
+    parser = build_parser()
+    add_hsr_args(parser)
+
+    def make_env(env_id, env_args):
+        if env_id == 'move-gripper':
+            return MoveGripperEnv(**env_args)
+        else:
+            return HSREnv(**env_args)
+
+    def _train(env_id, env_args, max_episode_steps=None, **kwargs):
+        env_fn = make_env_fn(lambda: make_env(env_id, **env_args),
+                             max_episode_steps=max_episode_steps)
+        hsr.util.env_wrapper(train)(make_env=env_fn, **kwargs)
+
+    _train(**parse_groups(parser))
 
 
 def unsupervised_cli():
-    parser = get_unsupervised_parser()
-    args_dict = parse_groups(parser)
-    args_dict.update(env_name='unsupervised')
-    env_wrapper(train)(**args_dict)
+    parser = build_parser()
+    add_unsupervised_args(parser)
+    add_env_args(parser)
+
+    def _make_env_fn(max_episode_steps=None, **env_args):
+        return make_env_fn(lambda: UnsupervisedGridWorld(**env_args),
+                           max_episode_steps=max_episode_steps)
+
+    def _train(env_id, **kwargs):
+        train(make_env=_make_env_fn(**gridworld.get_args(env_id)), **kwargs)
+
+    _train(**parse_groups(parser))
+
+
+def unsupervised_hsr_cli():
+    parser = build_parser()
+    add_unsupervised_args(parser)
+    add_hsr_args(parser)
+    groups = parse_groups(parser)
+
+    def make_env(env_id, **env_args):
+        def thunk(seed, rank):
+            if env_id == 'move-gripper':
+                env = UnsupervisedMoveGripperEnv(**env_args)
+            else:
+                env = UnsupervisedHSREnv(**env_args)
+            env.seed(seed + rank)
+            return env
+
+        return thunk
+
+    hsr.util.env_wrapper(train)(
+        make_env=make_env(groups.pop('env_args')
+                          ** groups))
 
 
 if __name__ == "__main__":

@@ -3,13 +3,17 @@
 from multiprocessing import Pipe, Process
 
 # first party
+import numpy as np
+from gym.spaces import Discrete, Box
+
 from common.vec_env import CloudpickleWrapper, VecEnv
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 import hsr
 from hsr.env import Observation
-from utils.gym import concat_spaces, space_shape, unwrap_env
-from utils.numpy import vectorize
+from utils.gym import concat_spaces, space_shape, unwrap_env, space_to_size
+from utils.numpy import vectorize, onehot
+from gridworld import GridWorld
 
 
 class HSREnv(hsr.env.HSREnv):
@@ -32,7 +36,7 @@ class MoveGripperEnv(HSREnv, hsr.env.MoveGripperEnv):
     pass
 
 
-class UnsupervisedEnv(hsr.env.HSREnv):
+class UnsupervisedHSREnv(hsr.env.HSREnv):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         old_spaces = hsr.env.Observation(*self.observation_space.spaces)
@@ -63,11 +67,47 @@ class UnsupervisedEnv(hsr.env.HSREnv):
         o = super().reset()
         return vectorize(Observation(observation=o.observation, goal=o.goal))
 
-    def achieved_goal(self):
-        return self.gripper_pos()
-
     def new_goal(self):
         return self.goal
+
+
+class UnsupervisedMoveGripperEnv(UnsupervisedHSREnv, hsr.env.MoveGripperEnv):
+    pass
+
+
+class UnsupervisedGridWorld(GridWorld):
+    def __init__(self, *args, goal_letter='*', **kwargs):
+        self.goal_letter = goal_letter
+        self.goal = None
+        super().__init__(*args, **kwargs)
+        blocked = np.isin(self.desc.flatten(), self.blocked)
+        self.goal_states, = np.where(np.logical_not(blocked))
+        self.goal_space = Discrete(len(self.goal_states))
+        self.observation_size = self.observation_space.n
+        self.goal_size = self.goal_space.n
+        observation_size = self.observation_space.n + self.goal_space.n
+        self.observation_space = Box(low=np.zeros(observation_size),
+                                     high=np.ones(observation_size),
+                                     )
+
+    def step(self, actions):
+        s, r, t, i = super().step(actions)
+        i.update(goal=self.goal)
+        return self.obs_vector(s), r, t, i
+
+    def obs_vector(self, obs):
+        return vectorize([onehot(obs, self.observation_size), self.goal])
+
+    def reset(self):
+        o = super().reset()
+        try:
+            return self.obs_vector(o)
+        except AttributeError:
+            return
+
+    def set_goal(self, goal):
+        self.goal = onehot(self.goal_states[goal], self.goal_size)
+        self.assign(**{self.goal_letter: [goal]})
 
 
 def unwrap_unsupervised(env):

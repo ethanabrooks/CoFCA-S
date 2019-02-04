@@ -14,7 +14,11 @@ from common.vec_env import VecEnvWrapper
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
-from ppo.hsr_adapter import HSREnv, MoveGripperEnv, UnsupervisedDummyVecEnv, UnsupervisedEnv, UnsupervisedSubprocVecEnv
+from ppo.env_adapter import HSREnv, MoveGripperEnv, UnsupervisedDummyVecEnv, \
+    UnsupervisedHSREnv, UnsupervisedSubprocVecEnv, UnsupervisedGridWorld, \
+    UnsupervisedMoveGripperEnv
+import gridworld
+from gym.envs import register
 
 try:
     import dm_control2gym
@@ -32,26 +36,44 @@ except ImportError:
     pass
 
 
-def make_env(env_id, seed, rank, add_timestep, max_steps, env_args):
+def make_hsr_env(seed, rank, **kwargs):
+    env = HSREnv(**kwargs)
+    env.seed(seed + rank)
+    return env
+
+
+def make_env(env_id, seed, rank, add_timestep, max_steps, env_args, unsupervised=False):
     if env_args:
         env_args = env_args.copy()
         if rank != 0:
             env_args.update(record=False)
 
-    def _thunk():
-        if env_id == 'move-block':
-            env = HSREnv(**env_args)
-        elif env_id == 'move-gripper':
-            env = MoveGripperEnv(**env_args)
-        elif env_id == 'unsupervised':
-            env = UnsupervisedEnv(**env_args)
-        elif env_id.startswith("dm"):
+    def thunk():
+        # if unsupervised:
+        #     if env_id == 'move-block':
+        #         env = UnsupervisedHSREnv(**env_args)
+        #     elif env_id == 'move-gripper':
+        #         env = UnsupervisedMoveGripperEnv(**env_args)
+        #     elif 'GridWorld' in env_id:
+        #         kwargs = gridworld.get_args(env_id)
+        #         max_steps = kwargs.pop('max_episode_steps', None)
+        #         env = UnsupervisedGridWorld(**kwargs)
+        # else:
+        #     if env_id == 'move-block':
+        #         env = HSREnv(**env_args)
+        #     elif env_id == 'move-gripper':
+        #         env = MoveGripperEnv(**env_args)
+        #     elif 'GridWorld' in env_id:
+        #         kwargs = gridworld.get_args(env_id)
+        #         max_steps = kwargs.pop('max_episode_steps', None)
+        #         env = gridworld.GridWorld(**kwargs)
+        if env_id.startswith("dm"):
             _, domain, task = env_id.split('.')
             env = dm_control2gym.make(domain_name=domain, task_name=task)
         else:
             env = gym.make(env_id)
-        if max_steps is not None:
-            env = TimeLimit(env, max_episode_steps=max_steps)
+        # if max_steps is not None:
+        #     env = TimeLimit(env, max_episode_steps=max_steps)
 
         is_atari = hasattr(gym.envs, 'atari') and isinstance(
             env.unwrapped, gym.envs.atari.atari_env.AtariEnv)
@@ -83,26 +105,19 @@ def make_env(env_id, seed, rank, add_timestep, max_steps, env_args):
 
         return env
 
-    return _thunk
+    return thunk
 
 
-def make_vec_envs(env_name,
+def make_vec_envs(make_env,
                   seed,
                   num_processes,
                   gamma,
-                  log_dir,
-                  add_timestep,
                   device,
-                  allow_early_resets,
-                  max_steps,
-                  env_args,
+                  unsupervised=False,
                   num_frame_stack=None):
-    envs = [
-        make_env(env_name, seed, i, add_timestep, max_steps, env_args)
-        for i in range(num_processes)
-    ]
+    envs = [make_env(seed, i) for i in range(num_processes)]
 
-    if env_name == 'unsupervised':
+    if unsupervised:
         if len(envs) == 1 or sys.platform == 'darwin':
             envs = UnsupervisedDummyVecEnv(envs)
         else:
@@ -248,7 +263,7 @@ class VecPyTorchFrameStack(VecEnvWrapper):
 
         if device is None:
             device = torch.device('cpu')
-        self.stacked_obs = torch.zeros((venv.num_envs, ) +
+        self.stacked_obs = torch.zeros((venv.num_envs,) +
                                        low.shape).to(device)
 
         observation_space = gym.spaces.Box(

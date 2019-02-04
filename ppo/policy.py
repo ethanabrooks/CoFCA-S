@@ -13,14 +13,17 @@ class Flatten(nn.Module):
 
 
 class Policy(nn.Module):
-    def __init__(self, obs_shape, action_space, network_args=None):
+    def __init__(self, obs_space, action_space, network_args=None):
         super(Policy, self).__init__()
+        obs_shape = obs_space.shape
         if network_args is None:
             network_args = {}
         if len(obs_shape) == 3:
             self.base = CNNBase(obs_shape[0], **network_args)
         elif len(obs_shape) == 1:
             self.base = MLPBase(obs_shape[0], **network_args)
+        elif len(obs_shape) == 0:
+            self.base = MLPBase(obs_space.n, **network_args)
         else:
             raise NotImplementedError
 
