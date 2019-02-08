@@ -1,1 +1,0 @@
-mkvirtualenv -p $(which python3.6) ppo && pip install numpy cython ipython ipdb && pip install -e ../rl-utils && pip install -e ../hsr-env && pip install -e . && pip install ../lab-notebook && pip install ../mujoco
