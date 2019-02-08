@@ -1,11 +1,11 @@
 import itertools
-from pathlib import Path
 import time
+from pathlib import Path
 
-from gym.spaces import Discrete
 import numpy as np
-from tensorboardX import SummaryWriter
 import torch
+from gym.spaces import Discrete
+from tensorboardX import SummaryWriter
 
 from ppo.env_adapter import UnsupervisedHSREnv
 from ppo.envs import VecNormalize, make_vec_envs
@@ -61,10 +61,12 @@ def train(num_frames,
     unsupervised = unsupervised_args is not None
 
     _gamma = gamma if normalize else None
+    if render:
+        num_processes = 1
     envs = make_vec_envs(
         make_env=make_env,
         seed=seed,
-        num_processes=1 if render else num_processes,
+        num_processes=num_processes,
         gamma=_gamma,
         device=device,
         unsupervised=unsupervised)
@@ -152,6 +154,10 @@ def train(num_frames,
                         inputs=rollouts.obs[step],
                         rnn_hxs=rollouts.recurrent_hidden_states[step],
                         masks=rollouts.masks[step])
+
+            if render:
+                envs.render()
+                time.sleep(.5)
 
             # Observe reward and next obs
             obs, rewards, done, infos = envs.step(actions)
