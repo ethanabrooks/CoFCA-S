@@ -22,8 +22,7 @@ class HSREnv(hsr.env.HSREnv):
         super().__init__(**kwargs)
 
         # Sadly, ppo code really likes boxes, so had to concatenate things
-        self.observation_space = concat_spaces(
-            self.observation_space.spaces, axis=0)
+        self.observation_space = concat_spaces(self.observation_space.spaces)
 
     def step(self, action):
         s, r, t, i = super().step(action)
@@ -51,7 +50,9 @@ class UnsupervisedHSREnv(hsr.env.HSREnv):
             assert isinstance(n, int)
 
         # space of observation needs to exclude reward param
-        self.observation_space = concat_spaces(spaces, axis=0)
+        import ipdb
+        ipdb.set_trace()
+        self.observation_space = concat_spaces(spaces)
         self.reward_params = self.achieved_goal()
 
     @property
@@ -97,17 +98,27 @@ class GridWorld(gridworld_env.gridworld.GridWorld):
         return self.obs_vector(o)
 
 
-class RandomGridWorld(gridworld_env.random_gridworld.RandomGridWorld,
-                      GridWorld):
+class RandomGridWorld(gridworld_env.random_gridworld.RandomGridWorld):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.observation_space = concat_spaces(
-            [self.observation_space] * len(self.random), axis=-1)
-        self.observation_size = space_to_size(self.observation_space)
+        self.observation_sizes = [
+            space_to_size(space) for space in self.observation_space.spaces
+        ]
+        self.observation_space = Box(
+            low=np.zeros(sum(self.observation_sizes)),
+            high=np.zeros(sum(self.observation_sizes)))
 
-    def obs_vector(self, obs, *randoms):
+    def obs_vector(self, obs):
         return vectorize(
-            [onehot(x, self.observation_size) for x in [obs, *randoms]])
+            [onehot(x, size) for x, size in zip(obs, self.observation_sizes)])
+
+    def step(self, actions):
+        s, r, t, i = super().step(actions)
+        return self.obs_vector(s), r, t, i
+
+    def reset(self):
+        o = super().reset()
+        return self.obs_vector(o)
 
 
 class UnsupervisedGridWorld(GridWorld):
@@ -127,7 +138,7 @@ class UnsupervisedGridWorld(GridWorld):
             low=np.zeros_like(self.goal_states),
             high=np.ones_like(self.goal_states))
         self.observation_space = concat_spaces(
-            [self.observation_space, self.goal_space], axis=-1)
+            [self.observation_space, self.goal_space])
         self.observation_size = space_to_size(self.observation_space)
 
     def set_goal(self, goal_index):
