@@ -88,6 +88,8 @@ def build_parser():
         help='directory to load agent parameters from')
     parser.add_argument(
         '--cuda', action='store_true', help='enables CUDA training')
+    parser.add_argument(
+        '--render', action='store_true')
 
     network_parser = parser.add_argument_group('network_args')
     network_parser.add_argument('--recurrent', action='store_true')
@@ -163,15 +165,10 @@ def add_unsupervised_args(parser):
         help='entropy term coefficient (default: 0.01)')
 
 
-def add_env_args(parser):
-    env_parser = parser.add_argument_group('env_args')
-    env_parser.add_argument('--render', action='store_true')
-
 
 def cli():
     parser = build_parser()
     parser.add_argument('--max-episode-steps', type=int)
-    add_env_args(parser)
 
     def make_gridworld_env_fn(class_, max_episode_steps, **env_args):
         return functools.partial(
@@ -230,7 +227,6 @@ def hsr_cli():
 def unsupervised_cli():
     parser = build_parser()
     add_unsupervised_args(parser)
-    add_env_args(parser)
 
     def make_env_fn(max_episode_steps=None, **env_args):
         return functools.partial(
