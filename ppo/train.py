@@ -2,17 +2,17 @@ import itertools
 from pathlib import Path
 import time
 
-import numpy as np
 from gym.spaces import Discrete
+import numpy as np
 from tensorboardX import SummaryWriter
 import torch
 
+from ppo.env_adapter import UnsupervisedHSREnv
 from ppo.envs import VecNormalize, make_vec_envs
 from ppo.gan import GAN
-from ppo.env_adapter import UnsupervisedHSREnv
 from ppo.policy import Policy
-from ppo.update import PPO
 from ppo.storage import RolloutStorage, UnsupervisedRolloutStorage
+from ppo.update import PPO
 from utils import space_to_size
 
 
@@ -67,13 +67,10 @@ def train(num_frames,
         num_processes=num_processes,
         gamma=_gamma,
         device=device,
-        unsupervised=unsupervised
-    )
+        unsupervised=unsupervised)
 
     actor_critic = Policy(
-        envs.observation_space,
-        envs.action_space,
-        network_args=network_args)
+        envs.observation_space, envs.action_space, network_args=network_args)
 
     gan = None
     if unsupervised:
@@ -262,8 +259,7 @@ def train(num_frames,
                 num_processes=num_processes,
                 gamma=_gamma,
                 device=device,
-                unsupervised=unsupervised
-            )
+                unsupervised=unsupervised)
 
             eval_episode_rewards = []
 

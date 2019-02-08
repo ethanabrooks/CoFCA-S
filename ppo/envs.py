@@ -4,22 +4,22 @@ import functools
 import sys
 
 import gym
+from gym.spaces.box import Box
+from gym.wrappers import TimeLimit
 import numpy as np
 import torch
 import torch.nn as nn
-from gym.spaces.box import Box
-from gym.wrappers import TimeLimit
 
 from common.running_mean_std import RunningMeanStd
 from common.vec_env import VecEnvWrapper
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
-from ppo.env_adapter import UnsupervisedDummyVecEnv, \
-    UnsupervisedSubprocVecEnv
+from ppo.env_adapter import UnsupervisedDummyVecEnv, UnsupervisedSubprocVecEnv
 
 
-def wrap_env(env_thunk, seed, rank, add_timestep=False, max_episode_steps=None):
+def wrap_env(env_thunk, seed, rank, add_timestep=False,
+             max_episode_steps=None):
     env = env_thunk()
     is_atari = hasattr(gym.envs, 'atari') and isinstance(
         env.unwrapped, gym.envs.atari.atari_env.AtariEnv)
@@ -62,7 +62,10 @@ def make_vec_envs(make_env,
                   device,
                   unsupervised=False,
                   num_frame_stack=None):
-    envs = [functools.partial(make_env, seed=seed, rank=i) for i in range(num_processes)]
+    envs = [
+        functools.partial(make_env, seed=seed, rank=i)
+        for i in range(num_processes)
+    ]
 
     if unsupervised:
         if len(envs) == 1 or sys.platform == 'darwin':
@@ -75,11 +78,12 @@ def make_vec_envs(make_env,
         else:
             envs = SubprocVecEnv(envs)
 
-    if len(envs.observation_space.shape) == 1:
-        if gamma is None:
-            envs = VecNormalize(envs, ret=False)
-        else:
-            envs = VecNormalize(envs, gamma=gamma)
+    # TODO
+    # if len(envs.observation_space.shape) == 1:
+    # if gamma is None:
+    # envs = VecNormalize(envs, ret=False)
+    # else:
+    # envs = VecNormalize(envs, gamma=gamma)
 
     envs = VecPyTorch(envs, device)
 
@@ -210,7 +214,7 @@ class VecPyTorchFrameStack(VecEnvWrapper):
 
         if device is None:
             device = torch.device('cpu')
-        self.stacked_obs = torch.zeros((venv.num_envs,) +
+        self.stacked_obs = torch.zeros((venv.num_envs, ) +
                                        low.shape).to(device)
 
         observation_space = gym.spaces.Box(

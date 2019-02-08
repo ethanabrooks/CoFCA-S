@@ -2,18 +2,19 @@
 
 from multiprocessing import Pipe, Process
 
-# first party
+from gym.spaces import Box, Discrete
 import numpy as np
-from gym.spaces import Discrete, Box
 
+# first party
 from common.vec_env import CloudpickleWrapper, VecEnv
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
+import gridworld_env
+import gridworld_env.gridworld as gridworld
 import hsr
 from hsr.env import Observation
-from utils.gym import concat_spaces, space_shape, unwrap_env, space_to_size
-from utils.numpy import vectorize, onehot
-import gridworld
+from utils.gym import concat_spaces, space_shape, space_to_size, unwrap_env
+from utils.numpy import onehot, vectorize
 
 
 class HSREnv(hsr.env.HSREnv):
@@ -75,48 +76,66 @@ class UnsupervisedMoveGripperEnv(UnsupervisedHSREnv, hsr.env.MoveGripperEnv):
     pass
 
 
-class GridWorld(gridworld.GridWorld):
-    def __init__(self, *args, goal_letter='*', **kwargs):
-        self.goal = None
-        self.goal_letter = goal_letter
+class GridWorld(gridworld_env.gridworld.GridWorld):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        blocked = np.isin(self.desc.flatten(), self.blocked)
-        self.goal_states, = np.where(np.logical_not(blocked))
-        self.goal_space = Discrete(len(self.goal_states))
-        self.observation_size = self.observation_space.n
-        self.goal_size = self.goal_space.n
-        observation_size = self.observation_space.n + self.goal_space.n
-        self.observation_space = Box(low=np.zeros(observation_size),
-                                     high=np.ones(observation_size),
-                                     )
+        self.observation_space = Box(
+            low=np.zeros(self.observation_space.n),
+            high=np.ones(self.observation_space.n),
+        )
+        self.observation_size = space_to_size(self.observation_space)
 
     def obs_vector(self, obs):
-        return vectorize([onehot(obs, self.observation_size), self.goal])
+        return onehot(obs, self.observation_size)
 
     def step(self, actions):
         s, r, t, i = super().step(actions)
-        i.update(goal=self.goal)
         return self.obs_vector(s), r, t, i
 
     def reset(self):
-        try:
-            self.set_goal(self.new_goal())
-            o = super().reset()
-            return self.obs_vector(o)
-        except AttributeError:
-            return
+        o = super().reset()
+        return self.obs_vector(o)
 
-    def new_goal(self):
-        return self.goal_space.sample()
 
-    def set_goal(self, goal):
-        self.goal = onehot(self.goal_states[goal], self.goal_size)
-        self.assign(**{self.goal_letter: [goal]})
+class RandomGridWorld(gridworld_env.random_gridworld.RandomGridWorld,
+                      GridWorld):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.observation_space = concat_spaces(
+            [self.observation_space] * len(self.random), axis=-1)
+        self.observation_size = space_to_size(self.observation_space)
+
+    def obs_vector(self, obs, *randoms):
+        return vectorize(
+            [onehot(x, self.observation_size) for x in [obs, *randoms]])
 
 
 class UnsupervisedGridWorld(GridWorld):
-    def new_goal(self):
-        return self.goal.argmax()
+    def __init__(self, *args, goal_letter='*', **kwargs):
+        # self.goal = None
+        self.goal_letter = goal_letter
+        # self.goal_states = None
+        super().__init__(*args, **kwargs)
+        self.goal_states = np.ravel_multi_index(
+            np.where(
+                np.logical_not(
+                    np.logical_or(
+                        np.isin(self.desc, self.blocked),
+                        np.isin(self.desc, self.start)))),
+            dims=self.desc.shape)
+        self.goal_space = Box(
+            low=np.zeros_like(self.goal_states),
+            high=np.ones_like(self.goal_states))
+        self.observation_space = concat_spaces(
+            [self.observation_space, self.goal_space], axis=-1)
+        self.observation_size = space_to_size(self.observation_space)
+
+    def set_goal(self, goal_index):
+        goal_state = self.goal_states[goal_index]
+        self.assign(**{self.goal_letter: [goal_state]})
+        import ipdb
+        ipdb.set_trace()
+        assert self.desc[self.decode(goal_state)] == self.goal_letter
 
 
 def unwrap_unsupervised(env):
