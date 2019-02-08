@@ -27,5 +27,4 @@ setup(
         'opencv-python==3.4.3.18',
         'torch==1.0.0',
         'tensorboardX==1.6',
-        'joblib==0.13.1'
     ])
