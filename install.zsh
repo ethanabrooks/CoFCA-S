@@ -10,3 +10,4 @@ for repo in $repos; do
   git --git-dir="$dir/.git" pull
   pip install -e "$dir"
 done
+pip install -e .
