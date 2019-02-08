@@ -222,7 +222,7 @@ def hsr_cli():
             wrap_env,
             env_thunk=env_thunk(env_id, **env_args),
             max_episode_steps=max_episode_steps)
-        train(make_env=make_env, env_args=env_args, **kwargs)
+        train(make_env=make_env, **kwargs)
 
     hsr.util.env_wrapper(_train)(**parse_groups(parser))
 

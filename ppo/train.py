@@ -34,7 +34,7 @@ def train(num_frames,
           tau,
           ppo_args,
           network_args,
-          env_args=None,
+          render,
           unsupervised_args=None):
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
@@ -64,7 +64,7 @@ def train(num_frames,
     envs = make_vec_envs(
         make_env=make_env,
         seed=seed,
-        num_processes=num_processes,
+        num_processes=1 if render else num_processes,
         gamma=_gamma,
         device=device,
         unsupervised=unsupervised)
