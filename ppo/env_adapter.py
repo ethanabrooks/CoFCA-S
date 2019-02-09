@@ -2,14 +2,19 @@
 
 from multiprocessing import Pipe, Process
 
+from gym.spaces import Box, Discrete
+import numpy as np
+
 # first party
 from common.vec_env import CloudpickleWrapper, VecEnv
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
+import gridworld_env
+import gridworld_env.gridworld as gridworld
 import hsr
 from hsr.env import Observation
-from utils.gym import concat_spaces, space_shape, unwrap_env
-from utils.numpy import vectorize
+from utils.gym import concat_spaces, space_shape, space_to_size, unwrap_env
+from utils.numpy import onehot, vectorize
 
 
 class HSREnv(hsr.env.HSREnv):
@@ -17,8 +22,7 @@ class HSREnv(hsr.env.HSREnv):
         super().__init__(**kwargs)
 
         # Sadly, ppo code really likes boxes, so had to concatenate things
-        self.observation_space = concat_spaces(
-            self.observation_space.spaces, axis=0)
+        self.observation_space = concat_spaces(self.observation_space.spaces)
 
     def step(self, action):
         s, r, t, i = super().step(action)
@@ -32,7 +36,7 @@ class MoveGripperEnv(HSREnv, hsr.env.MoveGripperEnv):
     pass
 
 
-class UnsupervisedEnv(hsr.env.HSREnv):
+class UnsupervisedHSREnv(hsr.env.HSREnv):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         old_spaces = hsr.env.Observation(*self.observation_space.spaces)
@@ -46,7 +50,9 @@ class UnsupervisedEnv(hsr.env.HSREnv):
             assert isinstance(n, int)
 
         # space of observation needs to exclude reward param
-        self.observation_space = concat_spaces(spaces, axis=0)
+        import ipdb
+        ipdb.set_trace()
+        self.observation_space = concat_spaces(spaces)
         self.reward_params = self.achieved_goal()
 
     @property
@@ -63,11 +69,84 @@ class UnsupervisedEnv(hsr.env.HSREnv):
         o = super().reset()
         return vectorize(Observation(observation=o.observation, goal=o.goal))
 
-    def achieved_goal(self):
-        return self.gripper_pos()
-
     def new_goal(self):
         return self.goal
+
+
+class UnsupervisedMoveGripperEnv(UnsupervisedHSREnv, hsr.env.MoveGripperEnv):
+    pass
+
+
+class GridWorld(gridworld_env.gridworld.GridWorld):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.observation_space = Box(
+            low=np.zeros(self.observation_space.n),
+            high=np.ones(self.observation_space.n),
+        )
+        self.observation_size = space_to_size(self.observation_space)
+
+    def obs_vector(self, obs):
+        return onehot(obs, self.observation_size)
+
+    def step(self, actions):
+        s, r, t, i = super().step(actions)
+        return self.obs_vector(s), r, t, i
+
+    def reset(self):
+        o = super().reset()
+        return self.obs_vector(o)
+
+
+class RandomGridWorld(gridworld_env.random_gridworld.RandomGridWorld):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.observation_sizes = [
+            space_to_size(space) for space in self.observation_space.spaces
+        ]
+        self.observation_space = Box(
+            low=np.zeros(sum(self.observation_sizes)),
+            high=np.zeros(sum(self.observation_sizes)))
+
+    def obs_vector(self, obs):
+        return vectorize(
+            [onehot(x, size) for x, size in zip(obs, self.observation_sizes)])
+
+    def step(self, actions):
+        s, r, t, i = super().step(actions)
+        return self.obs_vector(s), r, t, i
+
+    def reset(self):
+        o = super().reset()
+        return self.obs_vector(o)
+
+
+class UnsupervisedGridWorld(GridWorld):
+    def __init__(self, *args, goal_letter='*', **kwargs):
+        # self.goal = None
+        self.goal_letter = goal_letter
+        # self.goal_states = None
+        super().__init__(*args, **kwargs)
+        self.goal_states = np.ravel_multi_index(
+            np.where(
+                np.logical_not(
+                    np.logical_or(
+                        np.isin(self.desc, self.blocked),
+                        np.isin(self.desc, self.start)))),
+            dims=self.desc.shape)
+        self.goal_space = Box(
+            low=np.zeros_like(self.goal_states),
+            high=np.ones_like(self.goal_states))
+        self.observation_space = concat_spaces(
+            [self.observation_space, self.goal_space])
+        self.observation_size = space_to_size(self.observation_space)
+
+    def set_goal(self, goal_index):
+        goal_state = self.goal_states[goal_index]
+        self.assign(**{self.goal_letter: [goal_state]})
+        import ipdb
+        ipdb.set_trace()
+        assert self.desc[self.decode(goal_state)] == self.goal_letter
 
 
 def unwrap_unsupervised(env):

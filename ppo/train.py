@@ -1,32 +1,31 @@
 import itertools
-from pathlib import Path
 import time
+from pathlib import Path
 
 import numpy as np
-from tensorboardX import SummaryWriter
 import torch
+from gym.spaces import Discrete
+from tensorboardX import SummaryWriter
 
+from ppo.env_adapter import UnsupervisedHSREnv
 from ppo.envs import VecNormalize, make_vec_envs
 from ppo.gan import GAN
-from ppo.hsr_adapter import UnsupervisedEnv
 from ppo.policy import Policy
-from ppo.ppo import PPO
 from ppo.storage import RolloutStorage, UnsupervisedRolloutStorage
+from ppo.update import PPO
 from utils import space_to_size
 
 
-def train(recurrent_policy,
-          num_frames,
+def train(num_frames,
           num_steps,
           num_processes,
           seed,
           cuda_deterministic,
           cuda,
           log_dir: Path,
-          env_name,
+          make_env,
           gamma,
           normalize,
-          add_timestep,
           save_interval,
           load_path,
           log_interval,
@@ -35,8 +34,7 @@ def train(recurrent_policy,
           tau,
           ppo_args,
           network_args,
-          max_steps=None,
-          env_args=None,
+          render,
           unsupervised_args=None):
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
@@ -45,7 +43,6 @@ def train(recurrent_policy,
         torch.backends.cudnn.benchmark = False
         torch.backends.cudnn.deterministic = True
 
-    eval_log_dir = None
     if log_dir:
         writer = SummaryWriter(log_dir=str(log_dir))
         print(f'Logging to {log_dir}')
@@ -64,26 +61,22 @@ def train(recurrent_policy,
     unsupervised = unsupervised_args is not None
 
     _gamma = gamma if normalize else None
+    if render:
+        num_processes = 1
     envs = make_vec_envs(
-        env_name=env_name,
+        make_env=make_env,
         seed=seed,
         num_processes=num_processes,
         gamma=_gamma,
-        log_dir=log_dir,
-        add_timestep=add_timestep,
         device=device,
-        max_steps=max_steps,
-        allow_early_resets=False,
-        env_args=env_args)
+        unsupervised=unsupervised)
 
     actor_critic = Policy(
-        envs.observation_space.shape,
-        envs.action_space,
-        network_args=network_args)
+        envs.observation_space, envs.action_space, network_args=network_args)
 
     gan = None
     if unsupervised:
-        sample_env = UnsupervisedEnv(**env_args)
+        sample_env = make_env(seed=seed, rank=0).unwrapped
         gan = GAN(
             goal_space=sample_env.goal_space,
             **{k.replace('gan_', ''): v
@@ -94,6 +87,10 @@ def train(recurrent_policy,
             goal = goal.detach().numpy()
             envs.unwrapped.set_goal(goal, i)
 
+        if isinstance(sample_env.goal_space, Discrete):
+            goal_size = 1
+        else:
+            goal_size = space_to_size(sample_env.goal_space)
         rollouts = UnsupervisedRolloutStorage(
             num_steps=num_steps,
             num_processes=num_processes,
@@ -101,7 +98,7 @@ def train(recurrent_policy,
             action_space=envs.action_space,
             recurrent_hidden_state_size=actor_critic.
             recurrent_hidden_state_size,
-            goal_size=space_to_size(sample_env.goal_space))
+            goal_size=goal_size)
 
     else:
         rollouts = RolloutStorage(
@@ -157,6 +154,10 @@ def train(recurrent_policy,
                         inputs=rollouts.obs[step],
                         rnn_hxs=rollouts.recurrent_hidden_states[step],
                         masks=rollouts.masks[step])
+
+            if render:
+                envs.render()
+                time.sleep(.5)
 
             # Observe reward and next obs
             obs, rewards, done, infos = envs.step(actions)
@@ -253,22 +254,18 @@ def train(recurrent_policy,
                 writer.add_scalar('return', np.mean(episode_rewards),
                                   total_num_steps)
                 for k, v in train_results.items():
-                    if np.isscalar(v):
+                    if v.dim() == 0:
                         writer.add_scalar(k, v, total_num_steps)
             episode_rewards = []
 
         if eval_interval is not None and j % eval_interval == eval_interval - 1:
             eval_envs = make_vec_envs(
-                env_name=env_name,
                 seed=seed + num_processes,
+                make_env=make_env,
                 num_processes=num_processes,
                 gamma=_gamma,
-                log_dir=eval_log_dir,
-                add_timestep=add_timestep,
                 device=device,
-                max_steps=max_steps,
-                env_args=env_args,
-                allow_early_resets=True)
+                unsupervised=unsupervised)
 
             eval_episode_rewards = []
 
