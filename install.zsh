@@ -7,7 +7,7 @@ for repo in $repos; do
   if [ ! -d $dir ]; then
     git clone "git@github.com:lobachevzky/$repo" "../$repo"
   fi 
-  git --git-dir="$dir/.git" pull
+  git -C "$dir/.git" pull
   pip install -e "$dir"
 done
 pip install -e .
