@@ -177,6 +177,6 @@ class PPO:
 
         num_updates = self.ppo_epoch * self.batch_size
         return {
-            k: v.mean().detach().numpy() / num_updates
+            k: torch.mean(v) / num_updates
             for k, v in update_values.items()
         }

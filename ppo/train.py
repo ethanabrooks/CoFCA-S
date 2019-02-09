@@ -254,7 +254,7 @@ def train(num_frames,
                 writer.add_scalar('return', np.mean(episode_rewards),
                                   total_num_steps)
                 for k, v in train_results.items():
-                    if np.isscalar(v):
+                    if v.dim() == 0:
                         writer.add_scalar(k, v, total_num_steps)
             episode_rewards = []
 
