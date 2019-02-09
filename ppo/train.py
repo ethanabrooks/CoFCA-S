@@ -7,7 +7,6 @@ import torch
 from gym.spaces import Discrete
 from tensorboardX import SummaryWriter
 
-from ppo.env_adapter import UnsupervisedHSREnv
 from ppo.envs import VecNormalize, make_vec_envs
 from ppo.gan import GAN
 from ppo.policy import Policy

@@ -1,10 +1,10 @@
-from collections import deque
 import os
+from collections import deque
 
 import cv2
 import gym
-from gym import spaces
 import numpy as np
+from gym import spaces
 
 os.environ.setdefault('PATH', '')
 cv2.ocl.setUseOpenCL(False)

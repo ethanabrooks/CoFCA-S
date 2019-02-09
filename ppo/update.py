@@ -7,7 +7,6 @@ import torch.nn as nn
 import torch.optim as optim
 
 # first party
-from common.running_mean_std import RunningMeanStd
 from ppo.storage import Batch, RolloutStorage
 
 

@@ -7,7 +7,8 @@ from torch import nn as nn
 
 import gridworld_env
 import hsr.util
-from ppo.env_adapter import (GridWorld, HSREnv, MoveGripperEnv, RandomGridWorld, UnsupervisedGridWorld,
+from ppo.env_adapter import (GridWorld, HSREnv, MoveGripperEnv,
+                             RandomGridWorld, UnsupervisedGridWorld,
                              UnsupervisedHSREnv, UnsupervisedMoveGripperEnv)
 from ppo.envs import wrap_env
 from ppo.train import train
@@ -88,8 +89,7 @@ def build_parser():
         help='directory to load agent parameters from')
     parser.add_argument(
         '--cuda', action='store_true', help='enables CUDA training')
-    parser.add_argument(
-        '--render', action='store_true')
+    parser.add_argument('--render', action='store_true')
 
     network_parser = parser.add_argument_group('network_args')
     network_parser.add_argument('--recurrent', action='store_true')
@@ -163,7 +163,6 @@ def add_unsupervised_args(parser):
         type=float,
         default=0.01,
         help='entropy term coefficient (default: 0.01)')
-
 
 
 def cli():

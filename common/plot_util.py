@@ -1,14 +1,14 @@
-from collections import defaultdict, namedtuple
 import json
 import os
 import os.path as osp
+from collections import defaultdict, namedtuple
+
+import numpy as np
+import pandas
 
 import matplotlib.pyplot as plt
-import numpy as np
-
 from baselines.bench import monitor
 from baselines.logger import read_csv, read_json
-import pandas
 
 
 def smooth(y, radius, mode='two_sided', valid_only=False):
