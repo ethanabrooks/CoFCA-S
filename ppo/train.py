@@ -140,7 +140,7 @@ def train(num_frames,
     obs = envs.reset()
     rollouts.obs[0].copy_(obs)
     if unsupervised:
-        rollouts.goals[0].copy_(samples)
+        rollouts.goals[0].copy_(samples.view(-1, 1))
         rollouts.importance_weighting[0].copy_(importance_weightings)
     rollouts.to(device)
 

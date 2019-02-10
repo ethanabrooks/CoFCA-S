@@ -53,7 +53,7 @@ class GAN(nn.Module):
         samples = torch.tensor([self.goal_space.sample()
                                 for _ in range(num_outputs)])  #
         # dist.sample()
-        prob = torch.tensor(1, dtype=torch.float32)  # dist.log_prob(samples).sum(
+        prob = torch.ones(num_outputs)  # dist.log_prob(samples).sum(
         # -1).exp()
         importance_weighting = (1 / prob).view(-1, 1).squeeze(-1)
         if isinstance(self.goal_space, Box):
