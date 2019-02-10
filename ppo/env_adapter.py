@@ -122,31 +122,27 @@ class RandomGridWorld(gridworld_env.random_gridworld.RandomGridWorld):
 
 
 class UnsupervisedGridWorld(GridWorld):
-    def __init__(self, *args, goal_letter='*', **kwargs):
-        # self.goal = None
+    def __init__(self, *args, random=None, goal_letter='*', **kwargs):
+        self.goal = None
         self.goal_letter = goal_letter
-        # self.goal_states = None
         super().__init__(*args, **kwargs)
         self.goal_states = np.ravel_multi_index(
-            np.where(
-                np.logical_not(
-                    np.logical_or(
-                        np.isin(self.desc, self.blocked),
-                        np.isin(self.desc, self.start)))),
+            np.where(np.logical_not(np.isin(self.desc, self.blocked))),
             dims=self.desc.shape)
-        self.goal_space = Box(
-            low=np.zeros_like(self.goal_states),
-            high=np.ones_like(self.goal_states))
-        self.observation_space = concat_spaces(
-            [self.observation_space, self.goal_space])
         self.observation_size = space_to_size(self.observation_space)
+        self.goal_space = Discrete(self.goal_states.size)
+        self.observation_space = Box(
+            low=np.zeros(self.observation_size * 2),
+            high=np.ones(self.observation_size * 2), )
 
     def set_goal(self, goal_index):
         goal_state = self.goal_states[goal_index]
         self.assign(**{self.goal_letter: [goal_state]})
-        import ipdb
-        ipdb.set_trace()
+        self.goal = onehot(goal_state, self.observation_size)
         assert self.desc[self.decode(goal_state)] == self.goal_letter
+
+    def obs_vector(self, obs):
+        return vectorize([onehot(obs, self.observation_size), self.goal])
 
 
 def unwrap_unsupervised(env):

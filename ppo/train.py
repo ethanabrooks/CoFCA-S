@@ -60,16 +60,16 @@ def train(num_frames,
 
     unsupervised = unsupervised_args is not None
 
-    _gamma = gamma if normalize else None
     if render:
         num_processes = 1
     envs = make_vec_envs(
         make_env=make_env,
         seed=seed,
         num_processes=num_processes,
-        gamma=_gamma,
+        gamma=gamma,
         device=device,
-        unsupervised=unsupervised)
+        unsupervised=unsupervised,
+        normalize=normalize)
 
     actor_critic = Policy(
         envs.observation_space, envs.action_space, network_args=network_args)
@@ -97,7 +97,7 @@ def train(num_frames,
             obs_shape=envs.observation_space.shape,
             action_space=envs.action_space,
             recurrent_hidden_state_size=actor_critic.
-            recurrent_hidden_state_size,
+                recurrent_hidden_state_size,
             goal_size=goal_size)
 
     else:
@@ -107,7 +107,7 @@ def train(num_frames,
             obs_shape=envs.observation_space.shape,
             action_space=envs.action_space,
             recurrent_hidden_state_size=actor_critic.
-            recurrent_hidden_state_size,
+                recurrent_hidden_state_size,
         )
 
     agent = PPO(actor_critic=actor_critic, gan=gan, **ppo_args)
@@ -159,8 +159,14 @@ def train(num_frames,
                 envs.render()
                 time.sleep(.5)
 
+            print('UPDATE')
+            print('obs', obs)
+            print('actions', actions)
+
             # Observe reward and next obs
             obs, rewards, done, infos = envs.step(actions)
+            print('rewards', rewards)
+            print('done', done)
 
             if unsupervised:
                 for i, _done in enumerate(done):
@@ -215,8 +221,8 @@ def train(num_frames,
         total_num_steps = (j + 1) * num_processes * num_steps
 
         if all(
-            [log_dir, save_interval,
-             time.time() - last_save >= save_interval]):
+                [log_dir, save_interval,
+                 time.time() - last_save >= save_interval]):
             last_save = time.time()
             modules = dict(
                 optimizer=agent.optimizer,

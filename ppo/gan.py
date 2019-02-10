@@ -49,9 +49,12 @@ class GAN(nn.Module):
             return torch.distributions.Categorical(logits=network_out)
 
     def sample(self, num_outputs):
-        dist = self.dist(num_outputs)
-        samples = dist.sample()
-        prob = dist.log_prob(samples).sum(-1).exp()
+        # dist = self.dist(num_outputs)
+        samples = torch.tensor([self.goal_space.sample()
+                                for _ in range(num_outputs)])  #
+        # dist.sample()
+        prob = torch.tensor(1, dtype=torch.float32)  # dist.log_prob(samples).sum(
+        # -1).exp()
         importance_weighting = (1 / prob).view(-1, 1).squeeze(-1)
         if isinstance(self.goal_space, Box):
             high = torch.tensor(self.goal_space.high)

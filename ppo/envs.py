@@ -60,6 +60,7 @@ def make_vec_envs(make_env,
                   num_processes,
                   gamma,
                   device,
+                  normalize,
                   unsupervised=False,
                   num_frame_stack=None):
     envs = [
@@ -78,7 +79,7 @@ def make_vec_envs(make_env,
         else:
             envs = SubprocVecEnv(envs)
 
-    if len(envs.observation_space.shape) == 1:
+    if len(envs.observation_space.shape) == 1 and normalize:
         if gamma is None:
             envs = VecNormalize(envs, ret=False)
         else:
