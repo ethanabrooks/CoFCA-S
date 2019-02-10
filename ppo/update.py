@@ -99,12 +99,6 @@ class PPO:
                 data_generator = rollouts.feed_forward_generator(
                     advantages, self.batch_size)
 
-
-            for o, a, r in (zip(rollouts.obs, rollouts.actions, rollouts.rewards)):
-                print('obs', o)
-                print('action', a)
-                print('reward', r)
-            import ipdb; ipdb.set_trace()
             if self.unsupervised:
                 sample = next(
                     rollouts.feed_forward_generator(advantages,

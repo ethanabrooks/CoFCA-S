@@ -159,14 +159,8 @@ def train(num_frames,
                 envs.render()
                 time.sleep(.5)
 
-            print('UPDATE')
-            print('obs', obs)
-            print('actions', actions)
-
             # Observe reward and next obs
             obs, rewards, done, infos = envs.step(actions)
-            print('rewards', rewards)
-            print('done', done)
 
             if unsupervised:
                 for i, _done in enumerate(done):
