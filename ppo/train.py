@@ -60,13 +60,14 @@ def train(num_frames,
 
     unsupervised = unsupervised_args is not None
 
+    _gamma = gamma if normalize else None
     if render:
         num_processes = 1
     envs = make_vec_envs(
         make_env=make_env,
         seed=seed,
         num_processes=num_processes,
-        gamma=gamma,
+        gamma=_gamma,
         device=device,
         unsupervised=unsupervised,
         normalize=normalize)
@@ -263,7 +264,7 @@ def train(num_frames,
                 seed=seed + num_processes,
                 make_env=make_env,
                 num_processes=num_processes,
-                gamma=gamma,
+                gamma=_gamma,
                 device=device,
                 unsupervised=unsupervised)
 
