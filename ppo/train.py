@@ -1,11 +1,11 @@
 import itertools
-import time
 from pathlib import Path
+import time
 
-import numpy as np
-import torch
 from gym.spaces import Discrete
+import numpy as np
 from tensorboardX import SummaryWriter
+import torch
 
 from ppo.env_adapter import UnsupervisedHSREnv
 from ppo.envs import VecNormalize, make_vec_envs
@@ -97,7 +97,7 @@ def train(num_frames,
             obs_shape=envs.observation_space.shape,
             action_space=envs.action_space,
             recurrent_hidden_state_size=actor_critic.
-                recurrent_hidden_state_size,
+            recurrent_hidden_state_size,
             goal_size=goal_size)
 
     else:
@@ -107,7 +107,7 @@ def train(num_frames,
             obs_shape=envs.observation_space.shape,
             action_space=envs.action_space,
             recurrent_hidden_state_size=actor_critic.
-                recurrent_hidden_state_size,
+            recurrent_hidden_state_size,
         )
 
     agent = PPO(actor_critic=actor_critic, gan=gan, **ppo_args)
@@ -215,8 +215,8 @@ def train(num_frames,
         total_num_steps = (j + 1) * num_processes * num_steps
 
         if all(
-                [log_dir, save_interval,
-                 time.time() - last_save >= save_interval]):
+            [log_dir, save_interval,
+             time.time() - last_save >= save_interval]):
             last_save = time.time()
             modules = dict(
                 optimizer=agent.optimizer,

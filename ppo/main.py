@@ -7,8 +7,7 @@ from torch import nn as nn
 
 import gridworld_env
 import hsr.util
-from ppo.env_adapter import (GridWorld, HSREnv, MoveGripperEnv, RandomGridWorld,
-                             UnsupervisedGridWorld,
+from ppo.env_adapter import (GridWorld, HSREnv, MoveGripperEnv, RandomGridWorld, UnsupervisedGridWorld,
                              UnsupervisedHSREnv, UnsupervisedMoveGripperEnv)
 from ppo.envs import wrap_env
 from ppo.train import train
@@ -27,7 +26,8 @@ def build_parser():
         type=float,
         default=0.99,
         help='discount factor for rewards (default: 0.99)')
-    parser.add_argument('--no-normalize', dest='normalize', action='store_false')
+    parser.add_argument(
+        '--no-normalize', dest='normalize', action='store_false')
     parser.add_argument(
         '--use-gae',
         action='store_true',
@@ -89,8 +89,7 @@ def build_parser():
         help='directory to load agent parameters from')
     parser.add_argument(
         '--cuda', action='store_true', help='enables CUDA training')
-    parser.add_argument(
-        '--render', action='store_true')
+    parser.add_argument('--render', action='store_true')
 
     network_parser = parser.add_argument_group('network_args')
     network_parser.add_argument('--recurrent', action='store_true')
@@ -186,7 +185,7 @@ def cli():
             args = gridworld_env.get_args(env_id)
             if max_episode_steps is not None:
                 args['max_episode_steps'] = max_episode_steps
-            make_env = make_gridworld_env_fn(env_id, **kwargs, **args)
+            make_env = make_gridworld_env_fn(env_id, **args)
 
         else:
 
@@ -220,8 +219,7 @@ def unsupervised_cli():
         args = gridworld_env.get_args(env_id)
         if max_episode_steps is not None or 'max_episode_steps' not in args:
             args['max_episode_steps'] = max_episode_steps
-        train(make_env=make_env_fn(**args),
-              **kwargs)
+        train(make_env=make_env_fn(**args), **kwargs)
 
     _train(**parse_groups(parser))
 

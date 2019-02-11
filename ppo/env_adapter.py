@@ -133,7 +133,8 @@ class UnsupervisedGridWorld(GridWorld):
         self.goal_space = Discrete(self.goal_states.size)
         self.observation_space = Box(
             low=np.zeros(self.observation_size * 2),
-            high=np.ones(self.observation_size * 2), )
+            high=np.ones(self.observation_size * 2),
+        )
 
     def set_goal(self, goal_index):
         goal_state = self.goal_states[goal_index]
