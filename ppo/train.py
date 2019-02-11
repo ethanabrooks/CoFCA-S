@@ -69,7 +69,8 @@ def train(num_frames,
         num_processes=num_processes,
         gamma=_gamma,
         device=device,
-        unsupervised=unsupervised)
+        unsupervised=unsupervised,
+        normalize=normalize)
 
     actor_critic = Policy(
         envs.observation_space, envs.action_space, network_args=network_args)
