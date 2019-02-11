@@ -263,7 +263,7 @@ def train(num_frames,
                 seed=seed + num_processes,
                 make_env=make_env,
                 num_processes=num_processes,
-                gamma=_gamma,
+                gamma=gamma,
                 device=device,
                 unsupervised=unsupervised)
 
