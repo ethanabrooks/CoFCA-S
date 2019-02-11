@@ -1,9 +1,9 @@
 from __future__ import print_function
 
-from contextlib import contextmanager
 import shlex
 import subprocess
 import time
+from contextlib import contextmanager
 
 import numpy as np
 

@@ -6,11 +6,12 @@
 import glob
 import os
 
+import numpy as np
+from scipy.signal import medfilt
+
 # third party
 import matplotlib
 import matplotlib.pyplot as plt
-import numpy as np
-from scipy.signal import medfilt
 
 matplotlib.use('Agg')
 plt.switch_backend('agg')

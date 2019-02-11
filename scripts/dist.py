@@ -2,8 +2,8 @@ import argparse
 import itertools
 import sys
 
-from tensorboardX import SummaryWriter
 import torch
+from tensorboardX import SummaryWriter
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--logdir', required=True)
