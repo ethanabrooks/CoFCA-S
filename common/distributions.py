@@ -2,8 +2,8 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.python.ops import math_ops
 
-import common.tf_util as U
 from baselines.a2c.utils import fc
+import common.tf_util as U
 
 
 class Pd(object):

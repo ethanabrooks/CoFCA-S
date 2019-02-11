@@ -1,5 +1,5 @@
-import numpy as np
 from gym import spaces
+import numpy as np
 
 # local
 from . import VecEnvWrapper

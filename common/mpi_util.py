@@ -1,12 +1,11 @@
+from collections import defaultdict
 import os
 import platform
 import shutil
 import subprocess
-from collections import defaultdict
-
-import numpy as np
 
 from mpi4py import MPI
+import numpy as np
 
 
 def sync_from_root(sess, variables, comm=None):

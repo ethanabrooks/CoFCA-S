@@ -1,10 +1,9 @@
-from gym.spaces import Box
 import torch
 import torch.nn as nn
 from gym.spaces import Box, Discrete
+from utils import space_to_size
 
 from ppo.util import mlp
-from utils import space_to_size
 
 
 class GAN(nn.Module):
@@ -42,8 +41,7 @@ class GAN(nn.Module):
         raise NotImplementedError
 
     def dist(self, num_inputs):
-        network_out = self.softplus(
-            self.network(self.input.repeat(num_inputs, 1)))
+        network_out = self.softplus(self.network(self.input.repeat(num_inputs, 1)))
         if isinstance(self.goal_space, Box):
             a, b = torch.chunk(network_out, 2, dim=-1)
             return torch.distributions.Beta(a, b)

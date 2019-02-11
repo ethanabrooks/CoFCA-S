@@ -1,9 +1,9 @@
 import argparse
-import itertools
-import sys
 
 import torch
 from tensorboardX import SummaryWriter
+import itertools
+import sys
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--logdir', required=True)
@@ -33,3 +33,5 @@ for i in itertools.count():
     loss.backward()
     optimizer.step()
     optimizer.zero_grad()
+
+
