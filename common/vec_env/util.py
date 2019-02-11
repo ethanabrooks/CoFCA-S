@@ -6,6 +6,7 @@ from collections import OrderedDict
 
 import gym
 import numpy as np
+from utils import space_shape
 
 
 def copy_obs_dict(obs):
@@ -43,10 +44,10 @@ def obs_space_info(obs_space):
     keys = []
     shapes = {}
     dtypes = {}
-    for key, box in subspaces.items():
+    for key, space in subspaces.items():
         keys.append(key)
-        shapes[key] = box.shape
-        dtypes[key] = box.dtype
+        shapes[key] = space_shape(space)
+        dtypes[key] = space.dtype
     return keys, shapes, dtypes
 
 

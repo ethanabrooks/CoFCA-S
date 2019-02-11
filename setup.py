@@ -17,12 +17,14 @@ setup(
     scripts=['load'],
     entry_points=dict(console_scripts=[
         'ppo=ppo.main:cli',
-        'hsr=ppo.main:hsr_cli',
         'unsupervised=ppo.main:unsupervised_cli',
+        'hsr=ppo.main:hsr_cli',
+        'unsupervised-hsr=ppo.main:unsupervised_hsr_cli',
     ]),
     install_requires=[
         'gym',
-        'numpy==1.15.4',
+        'numpy',
         'opencv-python==3.4.3.18',
         'torch==1.0.0',
+        'tensorboardX==1.6',
     ])

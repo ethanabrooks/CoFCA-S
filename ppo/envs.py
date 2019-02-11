@@ -1,108 +1,74 @@
 # stdlib
 # third party
+import functools
 import sys
 
 import gym
-from gym.spaces.box import Box
-from gym.wrappers import TimeLimit
 import numpy as np
 import torch
 import torch.nn as nn
+from gym.spaces.box import Box
+from gym.wrappers import TimeLimit
 
 from common.running_mean_std import RunningMeanStd
 from common.vec_env import VecEnvWrapper
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
-from ppo.hsr_adapter import HSREnv, MoveGripperEnv, UnsupervisedDummyVecEnv, UnsupervisedEnv, UnsupervisedSubprocVecEnv
-
-try:
-    import dm_control2gym
-except ImportError:
-    pass
-
-try:
-    pass
-except ImportError:
-    pass
-
-try:
-    pass
-except ImportError:
-    pass
+from ppo.env_adapter import UnsupervisedDummyVecEnv, UnsupervisedSubprocVecEnv
 
 
-def make_env(env_id, seed, rank, add_timestep, max_steps, env_args):
-    if env_args:
-        env_args = env_args.copy()
-        if rank != 0:
-            env_args.update(record=False)
+def wrap_env(env_thunk, seed, rank, add_timestep=False,
+             max_episode_steps=None):
+    env = env_thunk()
+    is_atari = hasattr(gym.envs, 'atari') and isinstance(
+        env.unwrapped, gym.envs.atari.atari_env.AtariEnv)
+    if is_atari:
+        raise NotImplementedError
 
-    def _thunk():
-        if env_id == 'move-block':
-            env = HSREnv(**env_args)
-        elif env_id == 'move-gripper':
-            env = MoveGripperEnv(**env_args)
-        elif env_id == 'unsupervised':
-            env = UnsupervisedEnv(**env_args)
-        elif env_id.startswith("dm"):
-            _, domain, task = env_id.split('.')
-            env = dm_control2gym.make(domain_name=domain, task_name=task)
-        else:
-            env = gym.make(env_id)
-        if max_steps is not None:
-            env = TimeLimit(env, max_episode_steps=max_steps)
+    env.seed(seed + rank)
 
-        is_atari = hasattr(gym.envs, 'atari') and isinstance(
-            env.unwrapped, gym.envs.atari.atari_env.AtariEnv)
-        if is_atari:
+    obs_shape = env.observation_space.shape
+
+    if add_timestep and len(
+            obs_shape) == 1 and str(env).find('TimeLimit') > -1:
+        env = AddTimestep(env)
+
+    if is_atari:
+        if len(env.observation_space.shape) == 3:
             raise NotImplementedError
+            # env = wrap_deepmind(env)
+    elif len(env.observation_space.shape) == 3:
+        raise NotImplementedError(
+            "CNN models work only for atari,\n"
+            "please use a custom wrapper for a custom pixel input env.\n"
+            "See wrap_deepmind for an example.")
 
-        env.seed(seed + rank)
+    # If the input has shape (W,H,3), wrap for PyTorch convolutions
+    obs_shape = env.observation_space.shape
+    if len(obs_shape) == 3 and obs_shape[2] in [1, 3]:
+        env = TransposeImage(env)
 
-        obs_shape = env.observation_space.shape
-
-        if add_timestep and len(
-                obs_shape) == 1 and str(env).find('TimeLimit') > -1:
-            env = AddTimestep(env)
-
-        if is_atari:
-            if len(env.observation_space.shape) == 3:
-                raise NotImplementedError
-                # env = wrap_deepmind(env)
-        elif len(env.observation_space.shape) == 3:
-            raise NotImplementedError(
-                "CNN models work only for atari,\n"
-                "please use a custom wrapper for a custom pixel input env.\n"
-                "See wrap_deepmind for an example.")
-
-        # If the input has shape (W,H,3), wrap for PyTorch convolutions
-        obs_shape = env.observation_space.shape
-        if len(obs_shape) == 3 and obs_shape[2] in [1, 3]:
-            env = TransposeImage(env)
-
-        return env
-
-    return _thunk
+    if max_episode_steps:
+        assert not isinstance(env, TimeLimit)
+        env = TimeLimit(env, max_episode_steps=max_episode_steps)
+    return env
 
 
-def make_vec_envs(env_name,
+def make_vec_envs(make_env,
                   seed,
                   num_processes,
                   gamma,
-                  log_dir,
-                  add_timestep,
                   device,
-                  allow_early_resets,
-                  max_steps,
-                  env_args,
+                  normalize,
+                  unsupervised=False,
                   num_frame_stack=None):
     envs = [
-        make_env(env_name, seed, i, add_timestep, max_steps, env_args)
+        functools.partial(make_env, seed=seed, rank=i)
         for i in range(num_processes)
     ]
 
-    if env_name == 'unsupervised':
+    if unsupervised:
         if len(envs) == 1 or sys.platform == 'darwin':
             envs = UnsupervisedDummyVecEnv(envs)
         else:
@@ -113,7 +79,7 @@ def make_vec_envs(env_name,
         else:
             envs = SubprocVecEnv(envs)
 
-    if len(envs.observation_space.shape) == 1:
+    if len(envs.observation_space.shape) == 1 and normalize:
         if gamma is None:
             envs = VecNormalize(envs, ret=False)
         else:
@@ -125,7 +91,6 @@ def make_vec_envs(env_name,
         envs = VecPyTorchFrameStack(envs, num_frame_stack, device)
     elif len(envs.observation_space.shape) == 3:
         envs = VecPyTorchFrameStack(envs, 4, device)
-
     return envs
 
 

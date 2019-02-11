@@ -206,8 +206,7 @@ class UnsupervisedRolloutStorage(RolloutStorage):
         super().__init__(
             num_steps=num_steps, num_processes=num_processes, **kwargs)
         self.goals = torch.zeros(num_steps + 1, num_processes, goal_size)
-        self.importance_weighting = torch.zeros(num_steps + 1, num_processes,
-                                                1)
+        self.importance_weighting = torch.zeros(num_steps + 1, num_processes)
 
     def to(self, device):
         super().to(device)
@@ -215,7 +214,7 @@ class UnsupervisedRolloutStorage(RolloutStorage):
         self.importance_weighting.to(device)
 
     def insert(self, goal, importance_weighting, **kwargs):
-        self.goals[self.step + 1].copy_(goal)
+        self.goals[self.step + 1].copy_(goal.view(-1, 1))
         self.importance_weighting[self.step + 1].copy_(importance_weighting)
         super().insert(**kwargs)
 
