@@ -50,12 +50,13 @@ class PPO:
         self.max_grad_norm = max_grad_norm
         self.use_clipped_value_loss = use_clipped_value_loss
 
-        self.optimizer = optim.Adam(
-            actor_critic.parameters(), lr=learning_rate, eps=eps)
-
         if self.unsupervised:
             self.unsupervised_optimizer = optim.Adam(
                 gan.parameters(), lr=gan.learning_rate, eps=eps)
+
+        self.optimizer = optim.Adam(
+            actor_critic.parameters(), lr=learning_rate, eps=eps)
+
         self.gan = gan
         self.reward_function = None
 
