@@ -1,6 +1,6 @@
 # stdlib
-import itertools
 from collections import Counter
+import itertools
 
 # third party
 import torch
@@ -19,8 +19,8 @@ def f(x):
 def global_norm(grads):
     norm = 0
     for grad in grads:
-        norm += grad.norm(2) ** 2
-    return norm ** .5
+        norm += grad.norm(2)**2
+    return norm**.5
 
 
 class PPO:
@@ -96,7 +96,7 @@ class PPO:
     def update(self, rollouts: RolloutStorage):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         advantages = (advantages - advantages.mean()) / (
-                advantages.std() + 1e-5)
+            advantages.std() + 1e-5)
         update_values = Counter()
         unsupervised_values = Counter()
 
@@ -110,9 +110,10 @@ class PPO:
                     advantages, self.batch_size)
 
             if self.unsupervised:
-                generator = rollouts.feed_forward_generator(advantages,
-                                                            self.batch_size)
-                for sample in itertools.islice(generator, 0, self.gan.num_samples):
+                generator = rollouts.feed_forward_generator(
+                    advantages, self.batch_size)
+                for sample in itertools.islice(generator, 0,
+                                               self.gan.num_samples):
                     unique = torch.unique(sample.goals, dim=0)
                     probs = torch.zeros(len(sample.goals))
                     sums = torch.zeros(len(sample.goals))
@@ -134,10 +135,10 @@ class PPO:
                     weighted_gradients = torch.dot(sums, probs)
                     sq_gradients = torch.dot(sums, sums)
                     prediction_loss = torch.sum(
-                        (probs - weighted_gradients / sq_gradients * sums) ** 2)
+                        (probs - weighted_gradients / sq_gradients * sums)**2)
                     entropy_loss = -self.entropy_coef * entropies
                     one_hot = torch.zeros_like(dist.probs)
-                    one_hot[0, 0] = 1
+                    one_hot[0, -1] = 1
                     diff = (dist.probs - one_hot)**2
                     # unsupervised_loss = prediction_loss + entropy_loss
                     unsupervised_loss = diff.sum()
@@ -180,8 +181,7 @@ class PPO:
                     action_loss=action_losses,
                     norm=total_norm,
                     entropy=entropy,
-                    n=1
-                )
+                    n=1)
                 if sample.importance_weighting is not None:
                     update_values.update(
                         importance_weighting=sample.importance_weighting)
