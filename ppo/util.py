@@ -53,6 +53,18 @@ def mlp(num_inputs,
     return network
 
 
+class NoInput(nn.Module):
+    def __init__(self, size):
+        super().__init__()
+        tensor = torch.Tensor(1, size)
+        init_normc_(tensor)
+        self.weight = nn.Parameter(tensor)
+
+    def forward(self, inputs):
+        size, *_ = inputs.size()
+        return self.weight.repeat(size, 1)
+
+
 # Necessary for my KFAC implementation.
 class AddBias(nn.Module):
     def __init__(self, bias):

@@ -3,7 +3,7 @@ import torch.nn as nn
 from gym.spaces import Box, Discrete
 from utils import space_to_size
 
-from ppo.util import mlp, init_normc_
+from ppo.util import mlp, init_normc_, NoInput
 
 
 class GAN(nn.Module):
@@ -21,9 +21,9 @@ class GAN(nn.Module):
             num_outputs = 2 * goal_size
         else:
             num_outputs = goal_size
+        self.takes_input = bool(hidden_size)
         if not hidden_size:
-            self.network = torch.empty(num_outputs, requires_grad=True)
-            init_normc_(self.network)
+            self.network = NoInput(num_outputs)
         else:
             self.network = nn.Sequential(
                 mlp(num_inputs=input_size,
@@ -46,8 +46,7 @@ class GAN(nn.Module):
         raise NotImplementedError
 
     def dist(self, num_inputs):
-        network_out = self.softplus(
-            self.network(self.input.repeat(num_inputs, 1)))
+        network_out = self.softplus(self.network(self.input.repeat(num_inputs, 1)))
         if isinstance(self.goal_space, Box):
             a, b = torch.chunk(network_out, 2, dim=-1)
             return torch.distributions.Beta(a, b)
