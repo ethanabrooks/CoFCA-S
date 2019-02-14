@@ -3,7 +3,7 @@ import torch.nn as nn
 from gym.spaces import Box, Discrete
 from utils import space_to_size
 
-from ppo.util import mlp
+from ppo.util import mlp, init_normc_
 
 
 class GAN(nn.Module):
@@ -20,12 +20,16 @@ class GAN(nn.Module):
             num_outputs = 2 * goal_size
         else:
             num_outputs = goal_size
-        self.network = nn.Sequential(
-            mlp(num_inputs=input_size,
-                hidden_size=hidden_size,
-                num_outputs=num_outputs,
-                name='gan',
-                **kwargs))
+        if hidden_size is None:
+            self.network = torch.empty(num_outputs, requires_grad=True)
+            init_normc_(self.network)
+        else:
+            self.network = nn.Sequential(
+                mlp(num_inputs=input_size,
+                    hidden_size=hidden_size,
+                    num_outputs=num_outputs,
+                    name='gan',
+                    **kwargs))
         self.softplus = torch.nn.Softplus()
         self.regularizer = None
         self.input = torch.rand(input_size)
