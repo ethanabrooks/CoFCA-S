@@ -53,6 +53,34 @@ def mlp(num_inputs,
     return network
 
 
+class Categorical(torch.distributions.Categorical):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        n, d = self.probs.size()
+        self.range = torch.arange(0., float(d)).repeat(n, 1)
+
+    @property
+    def mean(self):
+        return torch.sum(self.range * self.probs, dim=-1)
+
+    @property
+    def variance(self):
+        return torch.sum(self.probs * ((self.range - self.mean.unsqueeze(-1)) ** 2),
+                         dim=-1)
+
+
+class NoInput(nn.Module):
+    def __init__(self, size):
+        super().__init__()
+        tensor = torch.Tensor(1, size)
+        init_normc_(tensor)
+        self.weight = nn.Parameter(tensor)
+
+    def forward(self, inputs):
+        size, *_ = inputs.size()
+        return self.weight.repeat(size, 1)
+
+
 # Necessary for my KFAC implementation.
 class AddBias(nn.Module):
     def __init__(self, bias):

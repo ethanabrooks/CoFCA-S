@@ -1,4 +1,5 @@
 # stdlib
+import itertools
 from collections import Counter
 
 # third party
@@ -13,6 +14,13 @@ from ppo.storage import Batch, RolloutStorage
 
 def f(x):
     x.sum().backward(retain_graph=True)
+
+
+def global_norm(grads):
+    norm = 0
+    for grad in grads:
+        norm += grad.norm(2) ** 2
+    return norm ** .5
 
 
 class PPO:
@@ -42,12 +50,13 @@ class PPO:
         self.max_grad_norm = max_grad_norm
         self.use_clipped_value_loss = use_clipped_value_loss
 
-        self.optimizer = optim.Adam(
-            actor_critic.parameters(), lr=learning_rate, eps=eps)
-
         if self.unsupervised:
             self.unsupervised_optimizer = optim.Adam(
                 gan.parameters(), lr=gan.learning_rate, eps=eps)
+
+        self.optimizer = optim.Adam(
+            actor_critic.parameters(), lr=learning_rate, eps=eps)
+
         self.gan = gan
         self.reward_function = None
 
@@ -87,8 +96,9 @@ class PPO:
     def update(self, rollouts: RolloutStorage):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         advantages = (advantages - advantages.mean()) / (
-            advantages.std() + 1e-5)
+                advantages.std() + 1e-5)
         update_values = Counter()
+        unsupervised_values = Counter()
 
         total_norm = torch.tensor(0, dtype=torch.float32)
         for e in range(self.ppo_epoch):
@@ -100,57 +110,53 @@ class PPO:
                     advantages, self.batch_size)
 
             if self.unsupervised:
-                sample = next(
-                    rollouts.feed_forward_generator(advantages,
-                                                    self.batch_size))
-                unique = torch.unique(sample.goals, dim=0)
-                probs = torch.zeros(len(sample.goals))
-                sums = torch.zeros(len(sample.goals))
-                entropies = torch.tensor(0.)
-                indices = torch.arange(len(sample.goals))
-                for goal in unique:
-                    idxs = indices[(sample.goals == goal).all(dim=-1)]
-                    dist = self.gan.dist(len(idxs))
-                    entropies += dist.entropy().mean()
-                    batch = Batch(*[x[idxs, ...] for x in sample])
-                    loss_components = self.compute_loss_components(batch)
-                    grads = torch.autograd.grad(
-                        self.compute_loss(
-                            *loss_components, importance_weighting=None),
-                        self.actor_critic.parameters())
-                    sums[idxs] = sum(grad.sum() for grad in grads)
-                    probs[idxs] = dist.log_prob(goal).sum().exp()
+                generator = rollouts.feed_forward_generator(advantages,
+                                                            self.batch_size)
+                for sample in itertools.islice(generator, 0, self.gan.num_samples):
+                    unique = torch.unique(sample.goals, dim=0)
+                    probs = torch.zeros(len(sample.goals))
+                    sums = torch.zeros(len(sample.goals))
+                    entropies = torch.tensor(0.)
+                    indices = torch.arange(len(sample.goals))
+                    for goal in unique:
+                        idxs = indices[(sample.goals == goal).all(dim=-1)]
+                        dist = self.gan.dist(len(idxs))
+                        entropies += dist.entropy().mean()
+                        batch = Batch(*[x[idxs, ...] for x in sample])
+                        loss_components = self.compute_loss_components(batch)
+                        grads = torch.autograd.grad(
+                            self.compute_loss(
+                                *loss_components, importance_weighting=None),
+                            self.actor_critic.parameters())
+                        sums[idxs] = sum(grad.sum() for grad in grads)
+                        probs[idxs] = dist.log_prob(goal).sum().exp()
 
-                weighted_gradients = torch.dot(sums, probs)
-                sq_gradients = torch.dot(sums, sums)
-                prediction_loss = torch.sum(
-                    (probs - weighted_gradients / sq_gradients * sums)**2)
-                entropy_loss = -self.entropy_coef * entropies
-                unsupervised_loss = prediction_loss + entropy_loss
-                unsupervised_loss.mean().backward()
-                # gan_norm = global_norm(
-                #     [p.grad for p in self.gan.parameters()])
-                update_values.update(
-                    unsupervised_loss=unsupervised_loss,
-                    goal_log_prob=probs.mean(),
-                    dist_mean=dist.mean.mean(),
-                    dist_std=dist.stddev.mean(),
-                )
-                # gan_norm=gan_norm)
-                nn.utils.clip_grad_norm_(self.gan.parameters(),
-                                         self.max_grad_norm)
-                self.unsupervised_optimizer.step()
-                self.unsupervised_optimizer.zero_grad()
+                    weighted_gradients = torch.dot(sums, probs)
+                    sq_gradients = torch.dot(sums, sums)
+                    prediction_loss = torch.sum(
+                        (probs - weighted_gradients / sq_gradients * sums) ** 2)
+                    entropy_loss = -self.entropy_coef * entropies
+                    unsupervised_loss = prediction_loss + entropy_loss
+                    unsupervised_loss.mean().backward()
+                    # gan_norm = global_norm(
+                    #     [p.grad for p in self.gan.parameters()])
+                    unsupervised_values.update(
+                        unsupervised_loss=unsupervised_loss,
+                        unweighted_norm=sums,
+                        goal_log_prob=probs,
+                        dist_mean=dist.mean.mean(),
+                        dist_std=dist.stddev.mean(),
+                        n=1,
+                    )
+                    # gan_norm=gan_norm)
+                    nn.utils.clip_grad_norm_(self.gan.parameters(),
+                                             self.max_grad_norm)
+                    self.unsupervised_optimizer.step()
+                    self.unsupervised_optimizer.zero_grad()
                 self.gan.set_input(goal, sum(grad.sum() for grad in grads))
 
             for sample in data_generator:
                 # Reshape to do in a single forward pass for all steps
-
-                def global_norm(grads):
-                    norm = 0
-                    for grad in grads:
-                        norm += grad.norm(2)**2
-                    return norm**.5
 
                 value_losses, action_losses, entropy \
                     = components = self.compute_loss_components(sample)
@@ -170,13 +176,20 @@ class PPO:
                     action_loss=action_losses,
                     norm=total_norm,
                     entropy=entropy,
+                    n=1
                 )
                 if sample.importance_weighting is not None:
                     update_values.update(
                         importance_weighting=sample.importance_weighting)
 
-        num_updates = self.ppo_epoch * self.batch_size
-        return {
-            k: torch.mean(v) / num_updates
+        n = update_values.pop('n')
+        update_values = {
+            k: torch.mean(v) / n
             for k, v in update_values.items()
         }
+        if self.unsupervised:
+            n = unsupervised_values.pop('n')
+            for k, v in unsupervised_values.items():
+                update_values[k] = torch.mean(v) / n
+
+        return update_values

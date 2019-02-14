@@ -3,13 +3,14 @@ import torch.nn as nn
 from gym.spaces import Box, Discrete
 from utils import space_to_size
 
-from ppo.util import mlp, init_normc_
+from ppo.util import mlp, init_normc_, NoInput, Categorical
 
 
 class GAN(nn.Module):
     def __init__(self, goal_space: Box, hidden_size, learning_rate: float,
-                 entropy_coef: float, **kwargs):
+                 entropy_coef: float, num_samples: int, **kwargs):
         super().__init__()
+        self.num_samples = num_samples
         self.learning_rate = learning_rate
         self.entropy_coef = entropy_coef
         self.goal_space = goal_space
@@ -20,9 +21,10 @@ class GAN(nn.Module):
             num_outputs = 2 * goal_size
         else:
             num_outputs = goal_size
+        self.takes_input = bool(hidden_size)
         if not hidden_size:
-            self.network = torch.empty(num_outputs, requires_grad=True)
-            init_normc_(self.network)
+            self.network = NoInput(num_outputs)
+            self.learning_rate_regularizer = 1 / num_outputs
         else:
             self.network = nn.Sequential(
                 mlp(num_inputs=input_size,
@@ -30,6 +32,7 @@ class GAN(nn.Module):
                     num_outputs=num_outputs,
                     name='gan',
                     **kwargs))
+            self.learning_rate_regularizer = 1 / num_outputs
         self.softplus = torch.nn.Softplus()
         self.regularizer = None
         self.input = torch.rand(input_size)
@@ -45,27 +48,24 @@ class GAN(nn.Module):
         raise NotImplementedError
 
     def dist(self, num_inputs):
-        network_out = self.softplus(
-            self.network(self.input.repeat(num_inputs, 1)))
+        network_out = self.softplus(self.network(self.input.repeat(num_inputs, 1)))
         if isinstance(self.goal_space, Box):
             a, b = torch.chunk(network_out, 2, dim=-1)
             return torch.distributions.Beta(a, b)
         else:
-            return torch.distributions.Categorical(logits=network_out)
+            return Categorical(logits=network_out)
 
     def sample(self, num_outputs):
-        # dist = self.dist(num_outputs)
-        samples = torch.tensor(
-            [self.goal_space.sample() for _ in range(num_outputs)])  #
-        # dist.sample()
-        prob = torch.ones(num_outputs)  # dist.log_prob(samples).sum(
-        # -1).exp()
-        importance_weighting = (1 / prob).view(-1, 1).squeeze(-1)
+        dist = self.dist(num_outputs)
+        samples = dist.sample()
         if isinstance(self.goal_space, Box):
             high = torch.tensor(self.goal_space.high)
             low = torch.tensor(self.goal_space.low)
             goals = samples * (high - low) + low
+            raise NotImplementedError
         else:
+            prob = dist.log_prob(samples.squeeze(-1)).exp()
+            importance_weighting = (self.learning_rate_regularizer / prob)
             goals = samples
         return samples, goals, importance_weighting
 

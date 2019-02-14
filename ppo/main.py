@@ -27,7 +27,7 @@ def build_parser():
         default=0.99,
         help='discount factor for rewards (default: 0.99)')
     parser.add_argument(
-        '--no-normalize', dest='normalize', action='store_false')
+        '--normalize', action='store_true')
     parser.add_argument(
         '--use-gae',
         action='store_true',
@@ -153,8 +153,10 @@ def add_unsupervised_args(parser):
         default=7e-4,
         help='(default: 7e-4)')
     unsupervised_parser.add_argument(
-        '--gan-hidden-size', type=int, default=256)
-    unsupervised_parser.add_argument('--gan-num-layers', type=int, default=3)
+        '--gan-num-samples', type=int)
+    unsupervised_parser.add_argument(
+        '--gan-hidden-size', type=int)
+    unsupervised_parser.add_argument('--gan-num-layers', type=int)
     unsupervised_parser.add_argument(
         '--gan-activation', type=parse_activation, default=nn.ReLU())
     unsupervised_parser.add_argument(
