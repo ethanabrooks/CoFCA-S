@@ -89,7 +89,6 @@ def build_parser():
         help='directory to load agent parameters from')
     parser.add_argument(
         '--cuda', action='store_true', help='enables CUDA training')
-    parser.add_argument('--render', action='store_true')
 
     network_parser = parser.add_argument_group('network_args')
     network_parser.add_argument('--recurrent', action='store_true')
@@ -209,6 +208,7 @@ def unsupervised_cli():
     parser = build_parser()
     add_unsupervised_args(parser)
     parser.add_argument('--max-episode-steps', type=int)
+    parser.add_argument('--render', action='store_true')
 
     def make_env_fn(max_episode_steps, **env_args):
         return functools.partial(
