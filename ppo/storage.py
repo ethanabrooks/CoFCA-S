@@ -230,5 +230,13 @@ class UnsupervisedRolloutStorage(RolloutStorage):
         return batch._replace(
             goals=goals, importance_weighting=importance_weighting)
 
+    def starting_states_generator(self, advantages):
+        def collect_indices():
+            for step in range(self.num_steps):
+                if self.masks[(step -1) % self.num_steps]:
+                    yield step
+
+        yield self.make_batch(advantages, list(collect_indices()))
+
     def recurrent_generator(self, advantages, num_mini_batch):
         raise NotImplementedError
