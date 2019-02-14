@@ -98,6 +98,7 @@ class PPO:
         advantages = (advantages - advantages.mean()) / (
                 advantages.std() + 1e-5)
         update_values = Counter()
+        unsupervised_values = Counter()
 
         total_norm = torch.tensor(0, dtype=torch.float32)
         for e in range(self.ppo_epoch):
@@ -139,12 +140,13 @@ class PPO:
                     unsupervised_loss.mean().backward()
                     # gan_norm = global_norm(
                     #     [p.grad for p in self.gan.parameters()])
-                    update_values.update(
+                    unsupervised_values.update(
                         unsupervised_loss=unsupervised_loss,
                         unweighted_norm=sums,
-                        goal_log_prob=probs.mean(),
+                        goal_log_prob=probs,
                         dist_mean=dist.mean.mean(),
                         dist_std=dist.stddev.mean(),
+                        n=1,
                     )
                     # gan_norm=gan_norm)
                     nn.utils.clip_grad_norm_(self.gan.parameters(),
@@ -174,13 +176,20 @@ class PPO:
                     action_loss=action_losses,
                     norm=total_norm,
                     entropy=entropy,
+                    n=1
                 )
                 if sample.importance_weighting is not None:
                     update_values.update(
                         importance_weighting=sample.importance_weighting)
 
-        num_updates = self.ppo_epoch * self.batch_size
-        return {
-            k: torch.mean(v) / num_updates
+        n = update_values.pop('n')
+        update_values = {
+            k: torch.mean(v) / n
             for k, v in update_values.items()
         }
+        if self.unsupervised:
+            n = unsupervised_values.pop('n')
+            for k, v in unsupervised_values.items():
+                update_values[k] = torch.mean(v) / n
+
+        return update_values
