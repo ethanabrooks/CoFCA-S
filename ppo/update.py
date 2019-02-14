@@ -128,7 +128,7 @@ class PPO:
                             self.compute_loss(
                                 *loss_components, importance_weighting=None),
                             self.actor_critic.parameters())
-                        sums[idxs] = sum(grad.sum() for grad in grads)
+                        sums[idxs] = sum(torch.abs(grad).sum() for grad in grads)
                         probs[idxs] = dist.log_prob(goal).sum().exp()
 
                     weighted_gradients = torch.dot(sums, probs)
