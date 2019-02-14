@@ -24,7 +24,6 @@ class GAN(nn.Module):
         self.takes_input = bool(hidden_size)
         if not hidden_size:
             self.network = NoInput(num_outputs)
-            self.learning_rate_regularizer = 1 / num_outputs
         else:
             self.network = nn.Sequential(
                 mlp(num_inputs=input_size,
@@ -32,7 +31,7 @@ class GAN(nn.Module):
                     num_outputs=num_outputs,
                     name='gan',
                     **kwargs))
-            self.learning_rate_regularizer = 1 / num_outputs
+        self.learning_rate_regularizer = 1 / num_outputs
         self.softplus = torch.nn.Softplus()
         self.regularizer = None
         self.input = torch.rand(input_size)
@@ -43,6 +42,7 @@ class GAN(nn.Module):
             goal_vector[goal.int().squeeze()] = 1
             goal = goal_vector
         self.input = torch.cat((goal, norm.expand(1)))
+        self.input = torch.ones_like(self.input)
 
     def forward(self, *inputs):
         raise NotImplementedError
