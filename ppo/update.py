@@ -128,7 +128,7 @@ class PPO:
                             self.compute_loss(
                                 *loss_components, importance_weighting=None),
                             self.actor_critic.parameters())
-                        sums[idxs] = sum(torch.abs(grad).sum() for grad in grads)
+                        sums[idxs] = batch.adv.mean()
                         probs[idxs] = dist.log_prob(goal).sum().exp()
 
                     weighted_gradients = torch.dot(sums, probs)
@@ -168,7 +168,7 @@ class PPO:
                     [p.grad for p in self.actor_critic.parameters()])
                 nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
                                          self.max_grad_norm)
-                self.optimizer.step()
+                # self.optimizer.step()
                 # noinspection PyTypeChecker
                 self.optimizer.zero_grad()
                 update_values.update(
