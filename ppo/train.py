@@ -258,8 +258,8 @@ def train(num_frames,
                     if v.dim() == 0:
                         writer.add_scalar(k, v, total_num_steps)
                 if unsupervised:
-                    gan_probs = gan.dist(1).probs.squeeze()
-                    writer.add_histogram('gan probs', gan_probs, total_num_steps)
+                    gan_samples = gan.dist(100).sample()
+                    writer.add_histogram('gan probs', gan_samples, total_num_steps)
             episode_rewards = []
 
         if eval_interval is not None and j % eval_interval == eval_interval - 1:

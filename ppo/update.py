@@ -137,10 +137,10 @@ class PPO:
                         (probs - weighted_gradients / sq_gradients * sums) ** 2)
                     entropy_loss = -self.entropy_coef * entropies
                     one_hot = torch.zeros_like(dist.probs)
-                    one_hot[0, 0] = 1
+                    one_hot[0, -1] = 1
                     diff = (dist.probs - one_hot)**2
                     # unsupervised_loss = prediction_loss + entropy_loss
-                    unsupervised_loss = diff.sum()
+                    unsupervised_loss = diff.mean()
                     unsupervised_loss.mean().backward()
                     # gan_norm = global_norm(
                     #     [p.grad for p in self.gan.parameters()])
