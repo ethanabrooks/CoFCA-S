@@ -27,7 +27,7 @@ def build_parser():
         default=0.99,
         help='discount factor for rewards (default: 0.99)')
     parser.add_argument(
-        '--no-normalize', dest='normalize', action='store_false')
+        '--normalize', action='store_true')
     parser.add_argument(
         '--use-gae',
         action='store_true',
