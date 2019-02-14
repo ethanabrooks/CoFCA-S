@@ -3,7 +3,7 @@ import torch.nn as nn
 from gym.spaces import Box, Discrete
 from utils import space_to_size
 
-from ppo.util import mlp, init_normc_, NoInput
+from ppo.util import mlp, init_normc_, NoInput, Categorical
 
 
 class GAN(nn.Module):
@@ -51,18 +51,19 @@ class GAN(nn.Module):
             a, b = torch.chunk(network_out, 2, dim=-1)
             return torch.distributions.Beta(a, b)
         else:
-            return torch.distributions.Categorical(logits=network_out)
+            return Categorical(logits=network_out)
 
     def sample(self, num_outputs):
         dist = self.dist(num_outputs)
         samples = dist.sample()
-        prob = dist.log_prob(samples).sum(-1).exp()
-        importance_weighting = (1 / prob).view(-1, 1).squeeze(-1)
         if isinstance(self.goal_space, Box):
             high = torch.tensor(self.goal_space.high)
             low = torch.tensor(self.goal_space.low)
             goals = samples * (high - low) + low
+            raise NotImplementedError
         else:
+            prob = dist.log_prob(samples.squeeze(-1)).exp()
+            importance_weighting = (1 / prob)
             goals = samples
         return samples, goals, importance_weighting
 

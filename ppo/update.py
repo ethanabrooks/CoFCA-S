@@ -16,6 +16,13 @@ def f(x):
     x.sum().backward(retain_graph=True)
 
 
+def global_norm(grads):
+    norm = 0
+    for grad in grads:
+        norm += grad.norm(2) ** 2
+    return norm ** .5
+
+
 class PPO:
     def __init__(self,
                  actor_critic,
@@ -88,7 +95,7 @@ class PPO:
     def update(self, rollouts: RolloutStorage):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         advantages = (advantages - advantages.mean()) / (
-            advantages.std() + 1e-5)
+                advantages.std() + 1e-5)
         update_values = Counter()
 
         total_norm = torch.tensor(0, dtype=torch.float32)
@@ -102,7 +109,7 @@ class PPO:
 
             if self.unsupervised:
                 generator = rollouts.feed_forward_generator(advantages,
-                                                self.batch_size)
+                                                            self.batch_size)
                 for sample in itertools.islice(generator, 0, self.gan.num_samples):
                     unique = torch.unique(sample.goals, dim=0)
                     probs = torch.zeros(len(sample.goals))
@@ -125,7 +132,7 @@ class PPO:
                     weighted_gradients = torch.dot(sums, probs)
                     sq_gradients = torch.dot(sums, sums)
                     prediction_loss = torch.sum(
-                        (probs - weighted_gradients / sq_gradients * sums)**2)
+                        (probs - weighted_gradients / sq_gradients * sums) ** 2)
                     entropy_loss = -self.entropy_coef * entropies
                     unsupervised_loss = prediction_loss + entropy_loss
                     unsupervised_loss.mean().backward()
@@ -133,6 +140,7 @@ class PPO:
                     #     [p.grad for p in self.gan.parameters()])
                     update_values.update(
                         unsupervised_loss=unsupervised_loss,
+                        unweighted_norm=sums,
                         goal_log_prob=probs.mean(),
                         dist_mean=dist.mean.mean(),
                         dist_std=dist.stddev.mean(),
@@ -146,12 +154,6 @@ class PPO:
 
             for sample in data_generator:
                 # Reshape to do in a single forward pass for all steps
-
-                def global_norm(grads):
-                    norm = 0
-                    for grad in grads:
-                        norm += grad.norm(2)**2
-                    return norm**.5
 
                 value_losses, action_losses, entropy \
                     = components = self.compute_loss_components(sample)

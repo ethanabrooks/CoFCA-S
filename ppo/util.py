@@ -53,6 +53,22 @@ def mlp(num_inputs,
     return network
 
 
+class Categorical(torch.distributions.Categorical):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        n, d = self.probs.size()
+        self.range = torch.arange(0., float(d)).repeat(n, 1)
+
+    @property
+    def mean(self):
+        return torch.sum(self.range * self.probs, dim=-1)
+
+    @property
+    def variance(self):
+        return torch.sum(self.probs * ((self.range - self.mean.unsqueeze(-1)) ** 2),
+                         dim=-1)
+
+
 class NoInput(nn.Module):
     def __init__(self, size):
         super().__init__()
