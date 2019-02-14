@@ -1,4 +1,5 @@
 # stdlib
+import itertools
 from collections import Counter
 
 # third party
@@ -100,47 +101,47 @@ class PPO:
                     advantages, self.batch_size)
 
             if self.unsupervised:
-                sample = next(
-                    rollouts.feed_forward_generator(advantages,
-                                                    self.batch_size))
-                unique = torch.unique(sample.goals, dim=0)
-                probs = torch.zeros(len(sample.goals))
-                sums = torch.zeros(len(sample.goals))
-                entropies = torch.tensor(0.)
-                indices = torch.arange(len(sample.goals))
-                for goal in unique:
-                    idxs = indices[(sample.goals == goal).all(dim=-1)]
-                    dist = self.gan.dist(len(idxs))
-                    entropies += dist.entropy().mean()
-                    batch = Batch(*[x[idxs, ...] for x in sample])
-                    loss_components = self.compute_loss_components(batch)
-                    grads = torch.autograd.grad(
-                        self.compute_loss(
-                            *loss_components, importance_weighting=None),
-                        self.actor_critic.parameters())
-                    sums[idxs] = sum(grad.sum() for grad in grads)
-                    probs[idxs] = dist.log_prob(goal).sum().exp()
+                generator = rollouts.feed_forward_generator(advantages,
+                                                self.batch_size)
+                for sample in itertools.islice(generator, 0, self.gan.num_samples):
+                    unique = torch.unique(sample.goals, dim=0)
+                    probs = torch.zeros(len(sample.goals))
+                    sums = torch.zeros(len(sample.goals))
+                    entropies = torch.tensor(0.)
+                    indices = torch.arange(len(sample.goals))
+                    for goal in unique:
+                        idxs = indices[(sample.goals == goal).all(dim=-1)]
+                        dist = self.gan.dist(len(idxs))
+                        entropies += dist.entropy().mean()
+                        batch = Batch(*[x[idxs, ...] for x in sample])
+                        loss_components = self.compute_loss_components(batch)
+                        grads = torch.autograd.grad(
+                            self.compute_loss(
+                                *loss_components, importance_weighting=None),
+                            self.actor_critic.parameters())
+                        sums[idxs] = sum(grad.sum() for grad in grads)
+                        probs[idxs] = dist.log_prob(goal).sum().exp()
 
-                weighted_gradients = torch.dot(sums, probs)
-                sq_gradients = torch.dot(sums, sums)
-                prediction_loss = torch.sum(
-                    (probs - weighted_gradients / sq_gradients * sums)**2)
-                entropy_loss = -self.entropy_coef * entropies
-                unsupervised_loss = prediction_loss + entropy_loss
-                unsupervised_loss.mean().backward()
-                # gan_norm = global_norm(
-                #     [p.grad for p in self.gan.parameters()])
-                update_values.update(
-                    unsupervised_loss=unsupervised_loss,
-                    goal_log_prob=probs.mean(),
-                    dist_mean=dist.mean.mean(),
-                    dist_std=dist.stddev.mean(),
-                )
-                # gan_norm=gan_norm)
-                nn.utils.clip_grad_norm_(self.gan.parameters(),
-                                         self.max_grad_norm)
-                self.unsupervised_optimizer.step()
-                self.unsupervised_optimizer.zero_grad()
+                    weighted_gradients = torch.dot(sums, probs)
+                    sq_gradients = torch.dot(sums, sums)
+                    prediction_loss = torch.sum(
+                        (probs - weighted_gradients / sq_gradients * sums)**2)
+                    entropy_loss = -self.entropy_coef * entropies
+                    unsupervised_loss = prediction_loss + entropy_loss
+                    unsupervised_loss.mean().backward()
+                    # gan_norm = global_norm(
+                    #     [p.grad for p in self.gan.parameters()])
+                    update_values.update(
+                        unsupervised_loss=unsupervised_loss,
+                        goal_log_prob=probs.mean(),
+                        dist_mean=dist.mean.mean(),
+                        dist_std=dist.stddev.mean(),
+                    )
+                    # gan_norm=gan_norm)
+                    nn.utils.clip_grad_norm_(self.gan.parameters(),
+                                             self.max_grad_norm)
+                    self.unsupervised_optimizer.step()
+                    self.unsupervised_optimizer.zero_grad()
                 self.gan.set_input(goal, sum(grad.sum() for grad in grads))
 
             for sample in data_generator:

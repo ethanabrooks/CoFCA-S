@@ -154,8 +154,10 @@ def add_unsupervised_args(parser):
         default=7e-4,
         help='(default: 7e-4)')
     unsupervised_parser.add_argument(
-        '--gan-hidden-size', type=int, default=256)
-    unsupervised_parser.add_argument('--gan-num-layers', type=int, default=3)
+        '--gan-num-samples', type=int)
+    unsupervised_parser.add_argument(
+        '--gan-hidden-size', type=int)
+    unsupervised_parser.add_argument('--gan-num-layers', type=int)
     unsupervised_parser.add_argument(
         '--gan-activation', type=parse_activation, default=nn.ReLU())
     unsupervised_parser.add_argument(

@@ -8,8 +8,9 @@ from ppo.util import mlp, init_normc_
 
 class GAN(nn.Module):
     def __init__(self, goal_space: Box, hidden_size, learning_rate: float,
-                 entropy_coef: float, **kwargs):
+                 entropy_coef: float, num_samples: int, **kwargs):
         super().__init__()
+        self.num_samples = num_samples
         self.learning_rate = learning_rate
         self.entropy_coef = entropy_coef
         self.goal_space = goal_space
