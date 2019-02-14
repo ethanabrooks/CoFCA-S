@@ -89,6 +89,8 @@ def build_parser():
         help='directory to load agent parameters from')
     parser.add_argument(
         '--cuda', action='store_true', help='enables CUDA training')
+    parser.add_argument('--render', action='store_true')
+
     network_parser = parser.add_argument_group('network_args')
     network_parser.add_argument('--recurrent', action='store_true')
     network_parser.add_argument('--hidden-size', type=int, default=256)
@@ -168,22 +170,23 @@ def cli():
     parser.add_argument('--max-episode-steps', type=int)
     parser.add_argument('--render', action='store_true')
 
-    def make_gridworld_env_fn(class_, max_episode_steps, **env_args):
+    def make_gridworld_env_fn(env_id, max_episode_steps, **env_args):
+        args = gridworld_env.get_args(env_id)
+        if 'random' in args:
+            class_ = RandomGridWorld
+        else:
+            class_ = GridWorld
         return functools.partial(
             wrap_env,
             env_thunk=lambda: class_(**env_args),
             max_episode_steps=max_episode_steps)
 
-    def _train(max_episode_steps, env_id, **kwargs):
+    def _train(env_id, max_episode_steps, **kwargs):
         if 'GridWorld' in env_id:
             args = gridworld_env.get_args(env_id)
-            if 'random' in args:
-                class_ = RandomGridWorld
-            else:
-                class_ = GridWorld
-            if max_episode_steps:
+            if max_episode_steps is not None:
                 args['max_episode_steps'] = max_episode_steps
-            make_env = make_gridworld_env_fn(**args, class_=class_)
+            make_env = make_gridworld_env_fn(env_id, **args)
 
         else:
 
@@ -198,6 +201,26 @@ def cli():
             make_env = functools.partial(wrap_env, env_thunk=thunk)
 
         train(make_env=make_env, **kwargs)
+
+    _train(**parse_groups(parser))
+
+
+def unsupervised_cli():
+    parser = build_parser()
+    add_unsupervised_args(parser)
+    parser.add_argument('--max-episode-steps', type=int)
+
+    def make_env_fn(max_episode_steps, **env_args):
+        return functools.partial(
+            wrap_env,
+            env_thunk=lambda: UnsupervisedGridWorld(**env_args),
+            max_episode_steps=max_episode_steps)
+
+    def _train(env_id, max_episode_steps, **kwargs):
+        args = gridworld_env.get_args(env_id)
+        if max_episode_steps is not None or 'max_episode_steps' not in args:
+            args['max_episode_steps'] = max_episode_steps
+        train(make_env=make_env_fn(**args), **kwargs)
 
     _train(**parse_groups(parser))
 
@@ -220,23 +243,6 @@ def hsr_cli():
         train(make_env=make_env, render=False, **kwargs)
 
     hsr.util.env_wrapper(_train)(**parse_groups(parser))
-
-
-def unsupervised_cli():
-    parser = build_parser()
-    parser.add_argument('--render', action='store_true')
-    add_unsupervised_args(parser)
-
-    def make_env_fn(max_episode_steps=None, **env_args):
-        return functools.partial(
-            wrap_env,
-            env_thunk=lambda: UnsupervisedGridWorld(**env_args),
-            max_episode_steps=max_episode_steps)
-
-    def _train(env_id, **kwargs):
-        train(make_env=make_env_fn(**gridworld_env.get_args(env_id)), **kwargs)
-
-    _train(**parse_groups(parser))
 
 
 def unsupervised_hsr_cli():
@@ -262,4 +268,4 @@ def unsupervised_hsr_cli():
 
 
 if __name__ == "__main__":
-    cli()
+    unsupervised_cli()

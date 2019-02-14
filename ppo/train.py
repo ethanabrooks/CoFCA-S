@@ -1,11 +1,11 @@
 import itertools
-import time
 from pathlib import Path
+import time
 
-import numpy as np
-import torch
 from gym.spaces import Discrete
+import numpy as np
 from tensorboardX import SummaryWriter
+import torch
 
 from ppo.env_adapter import UnsupervisedHSREnv
 from ppo.envs import VecNormalize, make_vec_envs
@@ -141,7 +141,7 @@ def train(num_frames,
     obs = envs.reset()
     rollouts.obs[0].copy_(obs)
     if unsupervised:
-        rollouts.goals[0].copy_(samples)
+        rollouts.goals[0].copy_(samples.view(-1, 1))
         rollouts.importance_weighting[0].copy_(importance_weightings)
     rollouts.to(device)
 

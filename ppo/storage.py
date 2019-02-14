@@ -214,7 +214,7 @@ class UnsupervisedRolloutStorage(RolloutStorage):
         self.importance_weighting.to(device)
 
     def insert(self, goal, importance_weighting, **kwargs):
-        self.goals[self.step + 1].copy_(goal)
+        self.goals[self.step + 1].copy_(goal.view(-1, 1))
         self.importance_weighting[self.step + 1].copy_(importance_weighting)
         super().insert(**kwargs)
 
