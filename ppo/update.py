@@ -139,6 +139,7 @@ class PPO:
                     entropy_loss = -self.entropy_coef * entropies
                     one_hot = torch.zeros_like(dist.probs)
                     one_hot[0, -1] = 1
+                    print(dist.probs)
                     diff = (dist.probs - one_hot)**2
                     # unsupervised_loss = prediction_loss + entropy_loss
                     unsupervised_loss = diff.sum()
