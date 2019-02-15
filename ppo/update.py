@@ -125,16 +125,14 @@ class PPO:
 
                 goals, logits = rollouts.get_goal_batch(advantages)
                 dist = self.gan.dist(1)
-                diff = (dist.logits.squeeze(0)[goals.long()] - logits) ** 2
+                diff = (dist.logits.squeeze(0)[goals.long()] - logits)**2
 
                 # goals_loss = prediction_loss + entropy_loss
                 goal_loss = diff.mean()
                 goal_loss.mean().backward()
                 # gan_norm = global_norm(
                 #     [p.grad for p in self.gan.parameters()])
-                goal_values.update(
-                    goal_loss=goal_loss,
-                    n=1)
+                goal_values.update(goal_loss=goal_loss, n=1)
                 # gan_norm=gan_norm)
                 nn.utils.clip_grad_norm_(self.gan.parameters(),
                                          self.max_grad_norm)
@@ -155,7 +153,7 @@ class PPO:
                     [p.grad for p in self.actor_critic.parameters()])
                 nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
                                          self.max_grad_norm)
-                # self.optimizer.step()
+                self.optimizer.step()
                 # noinspection PyTypeChecker
                 self.optimizer.zero_grad()
                 update_values.update(
