@@ -1,17 +1,17 @@
 import itertools
-from pathlib import Path
 import time
+from pathlib import Path
 
-from gym.spaces import Discrete
 import numpy as np
-from tensorboardX import SummaryWriter
 import torch
+from gym.spaces import Discrete
+from tensorboardX import SummaryWriter
 
 from ppo.env_adapter import GoalsHSREnv
 from ppo.envs import VecNormalize, make_vec_envs
 from ppo.goal_generator import GoalGenerator
 from ppo.policy import Policy
-from ppo.storage import RolloutStorage, GoalsRolloutStorage
+from ppo.storage import GoalsRolloutStorage, RolloutStorage
 from ppo.update import PPO
 from utils import space_to_size
 
@@ -259,7 +259,8 @@ def train(num_frames,
                         writer.add_scalar(k, v, total_num_steps)
                 if train_goals:
                     gan_samples = gan.dist(1000).sample()
-                    writer.add_histogram('gan probs', gan_samples, total_num_steps)
+                    writer.add_histogram('gan probs', gan_samples,
+                                         total_num_steps)
             episode_rewards = []
 
         if eval_interval is not None and j % eval_interval == eval_interval - 1:
@@ -269,7 +270,8 @@ def train(num_frames,
                 num_processes=num_processes,
                 gamma=_gamma,
                 device=device,
-                train_goals=train_goals)
+                train_goals=train_goals,
+                normalize=normalize)
 
             eval_episode_rewards = []
 
