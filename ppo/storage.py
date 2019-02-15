@@ -201,12 +201,12 @@ class RolloutStorage(object):
                 importance_weighting=None)
 
 
-UnsupervisedBatch = namedtuple(
-    'UnsupervisedBatch', 'obs recurrent_hidden_states actions value_preds ret '
+GoalsBatch = namedtuple(
+    'GoalsBatch', 'obs recurrent_hidden_states actions value_preds ret '
                          'masks old_action_log_probs adv goals importance_weighting')
 
 
-class UnsupervisedRolloutStorage(RolloutStorage):
+class GoalsRolloutStorage(RolloutStorage):
     def __init__(self, num_steps, num_processes, goal_size, **kwargs):
         super().__init__(
             num_steps=num_steps, num_processes=num_processes, **kwargs)
@@ -235,7 +235,7 @@ class UnsupervisedRolloutStorage(RolloutStorage):
         return batch._replace(
             goals=goals, importance_weighting=importance_weighting)
 
-    def unsupervised_states_generator(self, advantages):
+    def goal_samples_generator(self, advantages):
         unique = torch.unique(self.goals)
         for goal in unique:
             yield goal, advantages[self.goals[:-1] == goal].mean()

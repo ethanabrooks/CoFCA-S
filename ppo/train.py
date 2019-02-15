@@ -7,11 +7,11 @@ import numpy as np
 from tensorboardX import SummaryWriter
 import torch
 
-from ppo.env_adapter import UnsupervisedHSREnv
+from ppo.env_adapter import GoalsHSREnv
 from ppo.envs import VecNormalize, make_vec_envs
-from ppo.gan import GAN
+from ppo.goal_generator import GoalGenerator
 from ppo.policy import Policy
-from ppo.storage import RolloutStorage, UnsupervisedRolloutStorage
+from ppo.storage import RolloutStorage, GoalsRolloutStorage
 from ppo.update import PPO
 from utils import space_to_size
 
@@ -35,7 +35,7 @@ def train(num_frames,
           ppo_args,
           network_args,
           render,
-          unsupervised_args=None):
+          goals_args=None):
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
 
@@ -58,7 +58,7 @@ def train(num_frames,
     torch.set_num_threads(1)
     device = torch.device("cuda:0" if cuda else "cpu")
 
-    unsupervised = unsupervised_args is not None
+    train_goals = goals_args is not None
 
     _gamma = gamma if normalize else None
     if render:
@@ -69,19 +69,19 @@ def train(num_frames,
         num_processes=num_processes,
         gamma=_gamma,
         device=device,
-        unsupervised=unsupervised,
+        train_goals=train_goals,
         normalize=normalize)
 
     actor_critic = Policy(
         envs.observation_space, envs.action_space, network_args=network_args)
 
     gan = None
-    if unsupervised:
+    if train_goals:
         sample_env = make_env(seed=seed, rank=0).unwrapped
-        gan = GAN(
+        gan = GoalGenerator(
             goal_space=sample_env.goal_space,
             **{k.replace('gan_', ''): v
-               for k, v in unsupervised_args.items()})
+               for k, v in goals_args.items()})
 
         samples, goals, importance_weightings = gan.sample(num_processes)
         for i, goal in enumerate(goals):
@@ -92,7 +92,7 @@ def train(num_frames,
             goal_size = 1
         else:
             goal_size = space_to_size(sample_env.goal_space)
-        rollouts = UnsupervisedRolloutStorage(
+        rollouts = GoalsRolloutStorage(
             num_steps=num_steps,
             num_processes=num_processes,
             obs_shape=envs.observation_space.shape,
@@ -111,7 +111,7 @@ def train(num_frames,
             recurrent_hidden_state_size,
         )
 
-    agent = PPO(actor_critic=actor_critic, gan=gan, **ppo_args)
+    agent = PPO(actor_critic=actor_critic, goal_generator=gan, **ppo_args)
 
     rewards_counter = np.zeros(num_processes)
     episode_rewards = []
@@ -120,7 +120,7 @@ def train(num_frames,
     start = 0
     if load_path:
         state_dict = torch.load(load_path)
-        if unsupervised:
+        if train_goals:
             gan.load_state_dict(state_dict['gan'])
         actor_critic.load_state_dict(state_dict['actor_critic'])
         agent.optimizer.load_state_dict(state_dict['optimizer'])
@@ -135,12 +135,12 @@ def train(num_frames,
         updates = itertools.count(start)
 
     actor_critic.to(device)
-    if unsupervised:
+    if train_goals:
         gan.to(device)
 
     obs = envs.reset()
     rollouts.obs[0].copy_(obs)
-    if unsupervised:
+    if train_goals:
         rollouts.goals[0].copy_(samples.view(-1, 1))
         rollouts.importance_weighting[0].copy_(importance_weightings)
     rollouts.to(device)
@@ -163,7 +163,7 @@ def train(num_frames,
             # Observe reward and next obs
             obs, rewards, done, infos = envs.step(actions)
 
-            if unsupervised:
+            if train_goals:
                 for i, _done in enumerate(done):
                     if _done:
                         sample, goal, importance_weighting = gan.sample(1)
@@ -180,7 +180,7 @@ def train(num_frames,
             # If done then clean the history of observations.
             masks = torch.FloatTensor(
                 [[0.0] if done_ else [1.0] for done_ in done])
-            if unsupervised:
+            if train_goals:
                 rollouts.insert(
                     obs=obs,
                     recurrent_hidden_states=recurrent_hidden_states,
@@ -226,7 +226,7 @@ def train(num_frames,
             if isinstance(envs.venv, VecNormalize):
                 modules.update(vec_normalize=envs.venv)
 
-            if unsupervised:
+            if train_goals:
                 modules.update(gan=gan)
             state_dict = {
                 name: module.state_dict()
@@ -257,7 +257,7 @@ def train(num_frames,
                 for k, v in train_results.items():
                     if v.dim() == 0:
                         writer.add_scalar(k, v, total_num_steps)
-                if unsupervised:
+                if train_goals:
                     gan_samples = gan.dist(100).sample()
                     writer.add_histogram('gan probs', gan_samples, total_num_steps)
             episode_rewards = []
@@ -269,7 +269,7 @@ def train(num_frames,
                 num_processes=num_processes,
                 gamma=_gamma,
                 device=device,
-                unsupervised=unsupervised)
+                train_goals=train_goals)
 
             eval_episode_rewards = []
 

@@ -6,7 +6,7 @@ from utils import space_to_size
 from ppo.util import mlp, init_normc_, NoInput, Categorical
 
 
-class GAN(nn.Module):
+class GoalGenerator(nn.Module):
     def __init__(self, goal_space: Box, hidden_size, learning_rate: float,
                  entropy_coef: float, num_samples: int, **kwargs):
         super().__init__()
@@ -29,7 +29,7 @@ class GAN(nn.Module):
                 mlp(num_inputs=input_size,
                     hidden_size=hidden_size,
                     num_outputs=num_outputs,
-                    name='gan',
+                    name='goal_network',
                     **kwargs))
         self.learning_rate_regularizer = 1 / num_outputs
         self.softplus = torch.nn.Softplus()

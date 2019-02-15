@@ -15,7 +15,7 @@ from common.vec_env import VecEnvWrapper
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
-from ppo.env_adapter import UnsupervisedDummyVecEnv, UnsupervisedSubprocVecEnv
+from ppo.env_adapter import GoalsDummyVecEnv, GoalsSubprocVecEnv
 
 
 def wrap_env(env_thunk, seed, rank, add_timestep=False,
@@ -61,18 +61,18 @@ def make_vec_envs(make_env,
                   gamma,
                   device,
                   normalize,
-                  unsupervised=False,
+                  train_goals=False,
                   num_frame_stack=None):
     envs = [
         functools.partial(make_env, seed=seed, rank=i)
         for i in range(num_processes)
     ]
 
-    if unsupervised:
+    if train_goals:
         if len(envs) == 1 or sys.platform == 'darwin':
-            envs = UnsupervisedDummyVecEnv(envs)
+            envs = GoalsDummyVecEnv(envs)
         else:
-            envs = UnsupervisedSubprocVecEnv(envs)
+            envs = GoalsSubprocVecEnv(envs)
     else:
         if len(envs) == 1 or sys.platform == 'darwin':
             envs = DummyVecEnv(envs)

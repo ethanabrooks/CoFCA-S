@@ -36,7 +36,7 @@ class MoveGripperEnv(HSREnv, hsr.env.MoveGripperEnv):
     pass
 
 
-class UnsupervisedHSREnv(hsr.env.HSREnv):
+class GoalsHSREnv(hsr.env.HSREnv):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         old_spaces = hsr.env.Observation(*self.observation_space.spaces)
@@ -73,7 +73,7 @@ class UnsupervisedHSREnv(hsr.env.HSREnv):
         return self.goal
 
 
-class UnsupervisedMoveGripperEnv(UnsupervisedHSREnv, hsr.env.MoveGripperEnv):
+class GoalsMoveGripperEnv(GoalsHSREnv, hsr.env.MoveGripperEnv):
     pass
 
 
@@ -121,7 +121,7 @@ class RandomGridWorld(gridworld_env.random_gridworld.RandomGridWorld):
         return self.obs_vector(o)
 
 
-class UnsupervisedGridWorld(GridWorld):
+class GoalsGridWorld(GridWorld):
     def __init__(self, *args, random=None, goal_letter='*', **kwargs):
         self.goal = None
         self.goal_letter = goal_letter
@@ -146,7 +146,7 @@ class UnsupervisedGridWorld(GridWorld):
         return vectorize([onehot(obs, self.observation_size), self.goal])
 
 
-def unwrap_unsupervised(env):
+def unwrap_goals(env):
     return unwrap_env(env, lambda e: hasattr(e, 'set_goal'))
 
 
@@ -172,12 +172,12 @@ def worker(remote, parent_remote, env_fn_wrapper):
         elif cmd == 'get_spaces':
             remote.send((env.observation_space, env.action_space))
         elif cmd == 'set_goal':
-            unwrap_unsupervised(env).set_goal(data)
+            unwrap_goals(env).set_goal(data)
         else:
             raise NotImplementedError
 
 
-class UnsupervisedSubprocVecEnv(SubprocVecEnv):
+class GoalsSubprocVecEnv(SubprocVecEnv):
     # noinspection PyMissingConstructor
     def __init__(self, env_fns, spaces=None):
         """
@@ -209,7 +209,7 @@ class UnsupervisedSubprocVecEnv(SubprocVecEnv):
         self.remotes[i].send(('set_goal', goal))
 
 
-class UnsupervisedDummyVecEnv(DummyVecEnv):
+class GoalsDummyVecEnv(DummyVecEnv):
     def set_goal(self, goal, i):
-        env = unwrap_unsupervised(self.envs[i])
+        env = unwrap_goals(self.envs[i])
         env.set_goal(goal)

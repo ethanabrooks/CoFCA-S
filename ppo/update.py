@@ -9,7 +9,7 @@ import torch.optim as optim
 
 # first party
 from common.running_mean_std import RunningMeanStd
-from ppo.storage import Batch, RolloutStorage, UnsupervisedRolloutStorage
+from ppo.storage import Batch, RolloutStorage, GoalsRolloutStorage
 
 
 def f(x):
@@ -35,9 +35,9 @@ class PPO:
                  eps=None,
                  max_grad_norm=None,
                  use_clipped_value_loss=True,
-                 gan=None):
+                 goal_generator=None):
 
-        self.unsupervised = bool(gan)
+        self.train_goals = bool(goal_generator)
         self.actor_critic = actor_critic
 
         self.clip_param = clip_param
@@ -50,14 +50,14 @@ class PPO:
         self.max_grad_norm = max_grad_norm
         self.use_clipped_value_loss = use_clipped_value_loss
 
-        if self.unsupervised:
-            self.unsupervised_optimizer = optim.Adam(
-                gan.parameters(), lr=gan.learning_rate, eps=eps)
+        if self.train_goals:
+            self.goal_optimizer = optim.Adam(
+                goal_generator.parameters(), lr=goal_generator.learning_rate, eps=eps)
 
         self.optimizer = optim.Adam(
             actor_critic.parameters(), lr=learning_rate, eps=eps)
 
-        self.gan = gan
+        self.gan = goal_generator
         self.reward_function = None
 
     def compute_loss_components(self, batch):
@@ -98,7 +98,7 @@ class PPO:
         advantages = (advantages - advantages.mean()) / (
                 advantages.std() + 1e-5)
         update_values = Counter()
-        unsupervised_values = Counter()
+        goal_values = Counter()
 
         total_norm = torch.tensor(0, dtype=torch.float32)
         for e in range(self.ppo_epoch):
@@ -109,30 +109,30 @@ class PPO:
                 data_generator = rollouts.feed_forward_generator(
                     advantages, self.batch_size)
 
-            if self.unsupervised:
-                assert isinstance(rollouts, UnsupervisedRolloutStorage)
+            if self.train_goals:
+                assert isinstance(rollouts, GoalsRolloutStorage)
                 dist = self.gan.dist(1)
-                for goal, adv in rollouts.unsupervised_states_generator(advantages):
+                for goal, adv in rollouts.goal_samples_generator(advantages):
                     one_hot = torch.zeros_like(dist.probs)
                     one_hot[0, -1] = 10
                     mean = torch.mean(one_hot * dist.probs, -1)
                     torch_mean = torch.mean(one_hot * one_hot, -1)
                     hot = mean / torch_mean * one_hot
                     diff = (dist.probs - hot) ** 2
-                    # unsupervised_loss = prediction_loss + entropy_loss
-                    unsupervised_loss = diff.mean()
-                    unsupervised_loss.mean().backward()
+                    # goals_loss = prediction_loss + entropy_loss
+                    goal_loss = diff.mean()
+                    goal_loss.mean().backward()
                     # gan_norm = global_norm(
                     #     [p.grad for p in self.gan.parameters()])
-                    unsupervised_values.update(
-                        unsupervised_loss=unsupervised_loss,
+                    goal_values.update(
+                        goal_loss=goal_loss,
                         n=1,
                     )
                     # gan_norm=gan_norm)
                     nn.utils.clip_grad_norm_(self.gan.parameters(),
                                              self.max_grad_norm)
-                    self.unsupervised_optimizer.step()
-                    self.unsupervised_optimizer.zero_grad()
+                    self.goal_optimizer.step()
+                    self.goal_optimizer.zero_grad()
                 # self.gan.set_input(goal, sum(grad.sum() for grad in grads))
 
             for sample in data_generator:
@@ -167,9 +167,9 @@ class PPO:
             k: torch.mean(v) / n
             for k, v in update_values.items()
         }
-        if self.unsupervised:
-            n = unsupervised_values.pop('n')
-            for k, v in unsupervised_values.items():
+        if self.train_goals:
+            n = goal_values.pop('n')
+            for k, v in goal_values.items():
                 update_values[k] = torch.mean(v) / n
 
         return update_values
