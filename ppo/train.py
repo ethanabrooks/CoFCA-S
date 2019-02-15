@@ -296,6 +296,9 @@ def train(num_frames,
                 for info in infos:
                     if 'episode' in info.keys():
                         eval_episode_rewards.append(info['episode']['r'])
+            if log_dir:
+                writer.add_scalar('eval return', np.mean(eval_episode_rewards),
+                                  total_num_steps)
 
             eval_envs.close()
 
