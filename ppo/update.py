@@ -128,8 +128,6 @@ class PPO:
                 probs = dist.log_prob(goals).exp()
 
                 target = 1 / (self.gan.goal_size * logits.mean()) * logits
-                true_target = 2 * logits / (self.gan.goal_size *
-                                            (self.gan.goal_size - 1))
 
                 diff = (probs - target)**2
                 # goals_loss = prediction_loss + entropy_loss
@@ -137,11 +135,7 @@ class PPO:
                 goal_loss.mean().backward()
                 # gan_norm = global_norm(
                 #     [p.grad for p in self.gan.parameters()])
-                kernel_density_mse = torch.mean((target - true_target)**2)
-                goal_values.update(
-                    goal_loss=goal_loss,
-                    kernel_density_mse=kernel_density_mse,
-                    n=1)
+                goal_values.update(goal_loss=goal_loss, n=1)
                 # gan_norm=gan_norm)
                 nn.utils.clip_grad_norm_(self.gan.parameters(),
                                          self.max_grad_norm)
