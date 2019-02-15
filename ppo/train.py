@@ -70,14 +70,16 @@ def train(num_frames,
         gamma=_gamma,
         device=device,
         train_goals=train_goals,
-        normalize=normalize)
+        normalize=normalize,
+        eval=False
+    )
 
     actor_critic = Policy(
         envs.observation_space, envs.action_space, network_args=network_args)
 
     gan = None
     if train_goals:
-        sample_env = make_env(seed=seed, rank=0).unwrapped
+        sample_env = make_env(seed=seed, rank=0, eval=False).unwrapped
         gan = GoalGenerator(
             goal_space=sample_env.goal_space,
             **{k.replace('gan_', ''): v
@@ -271,7 +273,9 @@ def train(num_frames,
                 gamma=_gamma,
                 device=device,
                 train_goals=train_goals,
-                normalize=normalize)
+                normalize=normalize,
+                eval=True,
+            )
 
             eval_episode_rewards = []
 
@@ -306,3 +310,4 @@ def train(num_frames,
 
             print(" Evaluation using {} episodes: mean reward {:.5f}\n".format(
                 len(eval_episode_rewards), np.mean(eval_episode_rewards)))
+

@@ -122,7 +122,8 @@ class RandomGridWorld(gridworld_env.random_gridworld.RandomGridWorld):
 
 
 class GoalsGridWorld(GridWorld):
-    def __init__(self, *args, random=None, goal_letter='*', **kwargs):
+    def __init__(self, *args, eval, random=None, goal_letter='*', **kwargs):
+        self.eval = eval
         self.goal = None
         self.goal_letter = goal_letter
         super().__init__(*args, **kwargs)
@@ -135,6 +136,12 @@ class GoalsGridWorld(GridWorld):
             low=np.zeros(self.observation_size * 2),
             high=np.ones(self.observation_size * 2),
         )
+
+    def reset(self):
+        if self.eval:
+            choice = self.np_random.choice(self.goal_states, ())
+            self.set_goal(choice)
+        return super().reset()
 
     def set_goal(self, goal_index):
         goal_state = self.goal_states[goal_index]
