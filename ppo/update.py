@@ -184,6 +184,7 @@ class PPO:
                 action_loss=action_losses,
                 norm=total_norm,
                 entropy=entropy,
+                goal_trained=goal_to_train,
                 n=1)
             if importance_weighting is not None:
                 update_values.update(importance_weighting=importance_weighting)
