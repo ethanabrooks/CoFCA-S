@@ -154,7 +154,10 @@ class PPO:
                 goal_loss.mean().backward()
                 # gan_norm = global_norm(
                 #     [p.grad for p in self.gan.parameters()])
-                goal_values.update(goal_loss=goal_loss, n=1)
+                kernel_density_mse = torch.mean((target - true_target) ** 2)
+                goal_values.update(goal_loss=goal_loss,
+                                   kernel_density_mse=kernel_density_mse,
+                                   n=1)
                 # gan_norm=gan_norm)
                 nn.utils.clip_grad_norm_(self.gan.parameters(),
                                          self.max_grad_norm)

@@ -258,7 +258,7 @@ def train(num_frames,
                     if v.dim() == 0:
                         writer.add_scalar(k, v, total_num_steps)
                 if train_goals:
-                    gan_samples = gan.dist(100).sample()
+                    gan_samples = gan.dist(1000).sample()
                     writer.add_histogram('gan probs', gan_samples, total_num_steps)
             episode_rewards = []
 
