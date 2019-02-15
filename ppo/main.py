@@ -7,8 +7,8 @@ from torch import nn as nn
 
 import gridworld_env
 import hsr.util
-from ppo.env_adapter import (GridWorld, HSREnv, MoveGripperEnv, RandomGridWorld, GoalsGridWorld,
-                             GoalsHSREnv, GoalsMoveGripperEnv)
+from ppo.env_adapter import (GoalsGridWorld, GoalsHSREnv, GoalsMoveGripperEnv, GridWorld, HSREnv, MoveGripperEnv,
+                             RandomGridWorld)
 from ppo.envs import wrap_env
 from ppo.train import train
 from utils import parse_activation, parse_groups
@@ -26,8 +26,7 @@ def build_parser():
         type=float,
         default=0.99,
         help='discount factor for rewards (default: 0.99)')
-    parser.add_argument(
-        '--normalize', action='store_true')
+    parser.add_argument('--normalize', action='store_true')
     parser.add_argument(
         '--use-gae',
         action='store_true',
@@ -152,10 +151,8 @@ def add_goals_args(parser):
         type=float,
         default=7e-4,
         help='(default: 7e-4)')
-    goals_parser.add_argument(
-        '--gan-num-samples', type=int)
-    goals_parser.add_argument(
-        '--gan-hidden-size', type=int)
+    goals_parser.add_argument('--gan-num-samples', type=int)
+    goals_parser.add_argument('--gan-hidden-size', type=int)
     goals_parser.add_argument('--gan-num-layers', type=int)
     goals_parser.add_argument(
         '--gan-activation', type=parse_activation, default=nn.ReLU())
@@ -171,7 +168,7 @@ def cli():
     parser.add_argument('--max-episode-steps', type=int)
     parser.add_argument('--render', action='store_true')
 
-    def make_gridworld_env_fn(env_id, max_episode_steps, eval, **env_args):
+    def make_gridworld_env_fn(env_id, max_episode_steps, **env_args):
         args = gridworld_env.get_args(env_id)
         if 'random' in args:
             class_ = RandomGridWorld
