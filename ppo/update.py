@@ -1,4 +1,5 @@
 # stdlib
+import math
 from collections import Counter
 import itertools
 
@@ -19,8 +20,16 @@ def f(x):
 def global_norm(grads):
     norm = 0
     for grad in grads:
-        norm += grad.norm(2)**2
-    return norm**.5
+        norm += grad.norm(2) ** 2
+    return norm ** .5
+
+
+def epanechnikov_kernel(x):
+    return 3 / 4 * (1 - x ** 2)
+
+
+def gaussian_kernel(x):
+    return (2 * math.pi) ** -.5 * torch.exp(-.5 * x ** 2)
 
 
 class PPO:
@@ -98,7 +107,7 @@ class PPO:
     def update(self, rollouts: RolloutStorage):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         advantages = (advantages - advantages.mean()) / (
-            advantages.std() + 1e-5)
+                advantages.std() + 1e-5)
         update_values = Counter()
         goal_values = Counter()
 
@@ -117,15 +126,29 @@ class PPO:
                 goals, mean_reward = rollouts.get_goal_batch(advantages)
                 dist = self.gan.dist(1)
                 probs = dist.log_prob(goals).view(1, -1)
+                mean_reward = goals
+
+                n = goals.numel()
+                h = self.gan.goal_size
+                x = (mean_reward.view(1, -1) - mean_reward.view(-1, 1)) / h
+                target = epanechnikov_kernel(x).sum(dim=-1) / (n * h)
+                true_target = 2 * mean_reward / (
+                            self.gan.goal_size * (self.gan.goal_size - 1))
+
+                # def get_mse(h, kernel):
+                #     target = kernel(x).sum(dim=-1) / (n * h)
+                #     true_target = 2 * mean_reward / (
+                #             self.gan.goal_size * (self.gan.goal_size - 1))
+                #     return torch.sum((target - true_target) ** 2)
+                # dkl = torch.mm(true_target, torch.log(true_target / target))
 
                 # mean_reward = torch.zeros_like(dist.probs)
                 # one_hot = torch.zeros_like(dist.probs)
                 # one_hot[0, -1] = 10
-                mean_reward = goals.view(1, -1)
                 # alpha = torch.mm(mean_reward, probs.t()) / torch.mm(
                 #     mean_reward, mean_reward.t())
-                alpha = 1/ mean_reward.sum()
-                diff = (probs - alpha * mean_reward) ** 2
+                # alpha = 1 / mean_reward.mean()
+                diff = (probs - true_target) ** 2
                 # goals_loss = prediction_loss + entropy_loss
                 goal_loss = diff.mean()
                 goal_loss.mean().backward()
