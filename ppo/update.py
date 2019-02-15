@@ -129,8 +129,8 @@ class PPO:
 
                 batches = rollouts.make_batch(advantages, torch.arange(
                     rollouts.num_steps))
-                _, action_losses, _ = self.compute_loss_components(batches,
-                                                                   compute_value_loss=False)
+                _, action_losses, _ = self.compute_loss_components(
+                    batches, compute_value_loss=False)
                 unique = torch.unique(batches.goals)
                 grads = torch.zeros(unique.size()[0])
                 for i, goal in enumerate(unique):
@@ -142,15 +142,14 @@ class PPO:
                         importance_weighting=None
                     )
                     grad = torch.autograd.grad(loss, self.actor_critic.parameters(),
-                                               retain_graph=True,
-                                               allow_unused=True)
+                                               retain_graph=True, allow_unused=True)
                     grads[i] = sum(g.abs().sum() for g in grad if g is not None)
 
                 dist = self.gan.dist(1)
                 diff = (dist.logits.squeeze(0)[unique.long()] - grads) ** 2
 
                 # goals_loss = prediction_loss + entropy_loss
-                goal_loss = diff.mean()
+                goal_loss = diff.mean() #+ self.gan.entropy_coef * dist.entropy()
                 goal_loss.mean().backward()
                 # gan_norm = global_norm(
                 #     [p.grad for p in self.gan.parameters()])
