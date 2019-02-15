@@ -148,7 +148,7 @@ class PPO:
                 # alpha = torch.mm(mean_reward, probs.t()) / torch.mm(
                 #     mean_reward, mean_reward.t())
                 # alpha = 1 / mean_reward.mean()
-                diff = (probs - true_target) ** 2
+                diff = (probs - target) ** 2
                 # goals_loss = prediction_loss + entropy_loss
                 goal_loss = diff.mean()
                 goal_loss.mean().backward()
