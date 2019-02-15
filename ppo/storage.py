@@ -1,5 +1,5 @@
 # third party
-from collections import namedtuple, defaultdict
+from collections import defaultdict, namedtuple
 from typing import Generator
 
 import torch
@@ -12,7 +12,7 @@ def _flatten_helper(T, N, _tensor):
 
 Batch = namedtuple(
     'Batch', 'obs recurrent_hidden_states actions value_preds ret '
-             'masks old_action_log_probs adv goals importance_weighting')
+    'masks old_action_log_probs adv goals importance_weighting')
 
 
 class RolloutStorage(object):
@@ -203,7 +203,7 @@ class RolloutStorage(object):
 
 GoalsBatch = namedtuple(
     'GoalsBatch', 'obs recurrent_hidden_states actions value_preds ret '
-                         'masks old_action_log_probs adv goals importance_weighting')
+    'masks old_action_log_probs adv goals importance_weighting')
 
 
 class GoalsRolloutStorage(RolloutStorage):
@@ -236,10 +236,11 @@ class GoalsRolloutStorage(RolloutStorage):
             goals=goals, importance_weighting=importance_weighting)
 
     def get_goal_batch(self, advantages):
-        unique_goals = torch.unique(self.goals)
+        goals = self.goals[:-1]
+        unique_goals = torch.unique(goals)
         goal_rewards = torch.empty(unique_goals.size()[0])
         for i, goal in enumerate(unique_goals):
-            goal_rewards[i] = self.rewards[self.goals[:-1] == goal].mean()
+            goal_rewards[i] = self.rewards[goals == goal].mean()
         return unique_goals, goal_rewards
 
     def recurrent_generator(self, advantages, num_mini_batch):

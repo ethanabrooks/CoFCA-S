@@ -133,6 +133,7 @@ class PPO:
                 # goals_loss = prediction_loss + entropy_loss
                 goal_loss = diff.mean()
                 goal_loss.mean().backward()
+
                 # gan_norm = global_norm(
                 #     [p.grad for p in self.gan.parameters()])
                 goal_values.update(goal_loss=goal_loss, n=1)
