@@ -2,7 +2,7 @@
 
 pip install --upgrade pip numpy cython ipython ipdb yapf isort pylint
 repos=(mujoco rl-utils hsr-env gridworld-env lab-notebook)
-here=$pwd
+here=$(pwd)
 for repo in $repos; do
   dir="../$repo"
   if [ ! -d $dir ]; then
@@ -11,5 +11,4 @@ for repo in $repos; do
   cd $dir && git pull
   pip install -e .
 done
-cd $here
 pip install -e $here
