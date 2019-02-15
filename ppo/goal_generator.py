@@ -1,9 +1,9 @@
+from gym.spaces import Box, Discrete
 import torch
 import torch.nn as nn
-from gym.spaces import Box, Discrete
-from utils import space_to_size
 
-from ppo.util import mlp, init_normc_, NoInput, Categorical
+from ppo.util import Categorical, NoInput, init_normc_, mlp
+from utils import space_to_size
 
 
 class GoalGenerator(nn.Module):
@@ -48,7 +48,8 @@ class GoalGenerator(nn.Module):
         raise NotImplementedError
 
     def dist(self, num_inputs):
-        network_out = self.softplus(self.network(self.input.repeat(num_inputs, 1)))
+        network_out = self.softplus(
+            self.network(self.input.repeat(num_inputs, 1)))
         if isinstance(self.goal_space, Box):
             a, b = torch.chunk(network_out, 2, dim=-1)
             return torch.distributions.Beta(a, b)

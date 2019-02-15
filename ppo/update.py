@@ -124,8 +124,8 @@ class PPO:
                 mean_reward = goals.view(1, -1)
                 # alpha = torch.mm(mean_reward, probs.t()) / torch.mm(
                 #     mean_reward, mean_reward.t())
-                alpha = 1/ mean_reward.sum()
-                diff = (probs - alpha * mean_reward) ** 2
+                alpha = 2 / (self.gan.goal_size**2 + self.gan.goal_size)
+                diff = (probs - alpha * mean_reward)**2
                 # goals_loss = prediction_loss + entropy_loss
                 goal_loss = diff.mean()
                 goal_loss.mean().backward()
