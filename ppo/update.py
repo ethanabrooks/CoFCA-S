@@ -192,7 +192,7 @@ class PPO:
             k: torch.mean(v) / n
             for k, v in update_values.items()
         }
-        if self.train_goals:
+        if self.train_goals and 'n' in goal_values:
             n = goal_values.pop('n')
             for k, v in goal_values.items():
                 update_values[k] = torch.mean(v) / n
