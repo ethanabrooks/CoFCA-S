@@ -113,28 +113,29 @@ class PPO:
 
             if self.train_goals:
                 assert isinstance(rollouts, GoalsRolloutStorage)
-                for goal, adv in rollouts.goal_samples_generator(advantages):
-                    dist = self.gan.dist(1)
-                    one_hot = torch.zeros_like(dist.probs)
-                    one_hot[0, -1] = 10
-                    mean = torch.mean(one_hot * dist.probs, -1)
-                    torch_mean = torch.mean(one_hot * one_hot, -1)
-                    hot = mean / torch_mean * one_hot
-                    diff = (dist.probs - hot)**2
-                    # goals_loss = prediction_loss + entropy_loss
-                    goal_loss = diff.mean()
-                    goal_loss.mean().backward()
-                    # gan_norm = global_norm(
-                    #     [p.grad for p in self.gan.parameters()])
-                    goal_values.update(
-                        goal_loss=goal_loss,
-                        n=1,
-                    )
-                    # gan_norm=gan_norm)
-                    nn.utils.clip_grad_norm_(self.gan.parameters(),
-                                             self.max_grad_norm)
-                    self.goal_optimizer.step()
-                    self.goal_optimizer.zero_grad()
+
+                goals, mean_reward = rollouts.get_goal_batch(advantages)
+                dist = self.gan.dist(1)
+                probs = dist.log_prob(goals).view(1, -1)
+
+                # mean_reward = torch.zeros_like(dist.probs)
+                # one_hot = torch.zeros_like(dist.probs)
+                # one_hot[0, -1] = 10
+                mean_reward = goals.view(1, -1)
+                alpha = torch.mm(mean_reward, probs.t()) / torch.mm(
+                    mean_reward, mean_reward.t())
+                diff = (probs - alpha * mean_reward) ** 2
+                # goals_loss = prediction_loss + entropy_loss
+                goal_loss = diff.mean()
+                goal_loss.mean().backward()
+                # gan_norm = global_norm(
+                #     [p.grad for p in self.gan.parameters()])
+                goal_values.update(goal_loss=goal_loss, n=1)
+                # gan_norm=gan_norm)
+                nn.utils.clip_grad_norm_(self.gan.parameters(),
+                                         self.max_grad_norm)
+                self.goal_optimizer.step()
+                self.goal_optimizer.zero_grad()
                 # self.gan.set_input(goal, sum(grad.sum() for grad in grads))
 
             for sample in data_generator:

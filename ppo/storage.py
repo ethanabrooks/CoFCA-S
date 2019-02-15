@@ -235,10 +235,12 @@ class GoalsRolloutStorage(RolloutStorage):
         return batch._replace(
             goals=goals, importance_weighting=importance_weighting)
 
-    def goal_samples_generator(self, advantages):
-        unique = torch.unique(self.goals)
-        for goal in unique:
-            yield goal, advantages[self.goals[:-1] == goal].mean()
+    def get_goal_batch(self, advantages):
+        unique_goals = torch.unique(self.goals)
+        goal_rewards = torch.empty(unique_goals.size()[0])
+        for i, goal in enumerate(unique_goals):
+            goal_rewards[i] = self.rewards[self.goals[:-1] == goal].mean()
+        return unique_goals, goal_rewards
 
     def recurrent_generator(self, advantages, num_mini_batch):
         raise NotImplementedError
