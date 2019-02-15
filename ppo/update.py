@@ -4,12 +4,11 @@ import itertools
 import math
 
 # third party
+# first party
 import torch
+from torch.distributions import Categorical
 import torch.nn as nn
 import torch.optim as optim
-
-# first party
-from torch.distributions import Categorical
 
 from common.running_mean_std import RunningMeanStd
 from ppo.storage import Batch, GoalsRolloutStorage, RolloutStorage
@@ -22,16 +21,16 @@ def f(x):
 def global_norm(grads):
     norm = 0
     for grad in grads:
-        norm += grad.norm(2) ** 2
-    return norm ** .5
+        norm += grad.norm(2)**2
+    return norm**.5
 
 
 def epanechnikov_kernel(x):
-    return 3 / 4 * (1 - x ** 2)
+    return 3 / 4 * (1 - x**2)
 
 
 def gaussian_kernel(x):
-    return (2 * math.pi) ** -.5 * torch.exp(-.5 * x ** 2)
+    return (2 * math.pi)**-.5 * torch.exp(-.5 * x**2)
 
 
 class PPO:
@@ -94,7 +93,8 @@ class PPO:
                                      (values - batch.value_preds).clamp(
                                          -self.clip_param, self.clip_param)
                 value_losses_clipped = (value_pred_clipped - batch.ret).pow(2)
-                value_losses = .5 * torch.max(value_losses, value_losses_clipped)
+                value_losses = .5 * torch.max(value_losses,
+                                              value_losses_clipped)
 
         return value_losses, action_losses, dist_entropy
 
@@ -113,11 +113,12 @@ class PPO:
     def update(self, rollouts: RolloutStorage, baseline):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         advantages = (advantages - advantages.mean()) / (
-                advantages.std() + 1e-5)
+            advantages.std() + 1e-5)
         update_values = Counter()
         goal_values = Counter()
 
         total_norm = torch.tensor(0, dtype=torch.float32)
+        goals_trained = []
         for e in range(self.ppo_epoch):
             if self.actor_critic.is_recurrent:
                 data_generator = rollouts.recurrent_generator(
@@ -130,8 +131,8 @@ class PPO:
 
             num_steps, num_processes = rollouts.rewards.size()[0:2]
             total_batch_size = num_steps * num_processes
-            batches = rollouts.make_batch(advantages, torch.arange(
-                total_batch_size))
+            batches = rollouts.make_batch(advantages,
+                                          torch.arange(total_batch_size))
             _, action_losses, _ = self.compute_loss_components(
                 batches, compute_value_loss=False)
             unique = torch.unique(batches.goals)
@@ -142,19 +143,23 @@ class PPO:
                     action_loss=action_loss,
                     dist_entropy=0,
                     value_loss=None,
-                    importance_weighting=None
-                )
-                grad = torch.autograd.grad(loss, self.actor_critic.parameters(),
-                                           retain_graph=True, allow_unused=True)
+                    importance_weighting=None)
+                grad = torch.autograd.grad(
+                    loss,
+                    self.actor_critic.parameters(),
+                    retain_graph=True,
+                    allow_unused=True)
                 grads[i] = sum(g.abs().sum() for g in grad if g is not None)
 
             if baseline:
-                logits = grads
-            else:
                 logits = torch.ones_like(grads)
+            else:
+                logits = grads
+            print(logits)
 
             dist = Categorical(logits=logits)
             goal_to_train = dist.sample().float()
+            goals_trained.append(goal_to_train)
             importance_weighting = dist.log_prob(goal_to_train).exp()
 
             uses_goal = batches.goals.squeeze() == goal_to_train
@@ -165,8 +170,7 @@ class PPO:
             value_losses, action_losses, entropy \
                 = components = self.compute_loss_components(sample)
             loss = self.compute_loss(
-                *components,
-                importance_weighting=importance_weighting)
+                *components, importance_weighting=importance_weighting)
             loss.backward()
             total_norm += global_norm(
                 [p.grad for p in self.actor_critic.parameters()])
@@ -182,8 +186,7 @@ class PPO:
                 entropy=entropy,
                 n=1)
             if importance_weighting is not None:
-                update_values.update(
-                    importance_weighting=importance_weighting)
+                update_values.update(importance_weighting=importance_weighting)
 
         n = update_values.pop('n')
         update_values = {
@@ -195,4 +198,4 @@ class PPO:
             for k, v in goal_values.items():
                 update_values[k] = torch.mean(v) / n
 
-        return update_values
+        return update_values, goals_trained

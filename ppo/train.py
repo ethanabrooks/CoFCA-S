@@ -217,7 +217,7 @@ def train(num_frames,
         rollouts.compute_returns(
             next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau)
 
-        train_results = agent.update(rollouts, baseline)
+        train_results, goals_trained = agent.update(rollouts, baseline)
         rollouts.after_update()
         total_num_steps = (j + 1) * num_processes * num_steps
 
@@ -264,8 +264,7 @@ def train(num_frames,
                     if v.dim() == 0:
                         writer.add_scalar(k, v, total_num_steps)
                 if train_goals:
-                    gan_samples = gan.dist(1000).sample()  # TODO
-                    writer.add_histogram('gan probs', gan_samples,
+                    writer.add_histogram('gan probs', np.array(goals_trained),
                                          total_num_steps)
             episode_rewards = []
 
