@@ -35,6 +35,7 @@ def train(num_frames,
           ppo_args,
           network_args,
           render,
+          baseline,
           goals_args=None):
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
@@ -79,15 +80,18 @@ def train(num_frames,
     gan = None
     if train_goals:
         sample_env = make_env(seed=seed, rank=0, eval=False).unwrapped
+        assert sample_env.goal_space.n == num_processes
         gan = GoalGenerator(
             goal_space=sample_env.goal_space,
             **{k.replace('gan_', ''): v
                for k, v in goals_args.items()})
 
-        samples, goals, importance_weightings = gan.sample(num_processes)
+        # samples, goals, importance_weightings = gan.sample(num_processes)
+        samples = goals = torch.arange(num_processes)
+        importance_weightings = torch.zeros_like(goals)
         for i, goal in enumerate(goals):
             goal = goal.detach().numpy()
-            envs.unwrapped.set_goal(goal, i)
+            # envs.unwrapped.set_goal(goal, i)
 
         if isinstance(sample_env.goal_space, Discrete):
             goal_size = 1
@@ -143,7 +147,7 @@ def train(num_frames,
     rollouts.obs[0].copy_(obs)
     if train_goals:
         rollouts.goals[0].copy_(samples.view(-1, 1))
-        rollouts.importance_weighting[0].copy_(importance_weightings)
+        # rollouts.importance_weighting[0].copy_(importance_weightings)
     rollouts.to(device)
 
     start = time.time()
@@ -167,11 +171,12 @@ def train(num_frames,
             if train_goals:
                 for i, _done in enumerate(done):
                     if _done:
-                        sample, goal, importance_weighting = gan.sample(1)
-                        goal = goal.detach().numpy()
-                        envs.unwrapped.set_goal(goal, i)
+                        # sample, goal, importance_weighting = gan.sample(1)
+                        sample = goal = i
+                        # goal = goal.detach().numpy()
+                        # envs.unwrapped.set_goal(goal, i)
                         samples[i] = sample
-                        importance_weightings[i] = importance_weighting
+                        # importance_weightings[i] = importance_weighting
 
             # track rewards
             rewards_counter += rewards.numpy()
@@ -212,7 +217,7 @@ def train(num_frames,
         rollouts.compute_returns(
             next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau)
 
-        train_results = agent.update(rollouts)
+        train_results = agent.update(rollouts, baseline)
         rollouts.after_update()
         total_num_steps = (j + 1) * num_processes * num_steps
 
@@ -259,7 +264,7 @@ def train(num_frames,
                     if v.dim() == 0:
                         writer.add_scalar(k, v, total_num_steps)
                 if train_goals:
-                    gan_samples = gan.dist(1000).sample()
+                    gan_samples = gan.dist(1000).sample()  # TODO
                     writer.add_histogram('gan probs', gan_samples,
                                          total_num_steps)
             episode_rewards = []

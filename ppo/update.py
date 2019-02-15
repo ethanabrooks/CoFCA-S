@@ -9,6 +9,8 @@ import torch.nn as nn
 import torch.optim as optim
 
 # first party
+from torch.distributions import Categorical
+
 from common.running_mean_std import RunningMeanStd
 from ppo.storage import Batch, GoalsRolloutStorage, RolloutStorage
 
@@ -108,7 +110,7 @@ class PPO:
             losses *= importance_weighting
         return torch.mean(losses)
 
-    def update(self, rollouts: RolloutStorage):
+    def update(self, rollouts: RolloutStorage, baseline):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         advantages = (advantages - advantages.mean()) / (
                 advantages.std() + 1e-5)
@@ -124,68 +126,64 @@ class PPO:
                 data_generator = rollouts.feed_forward_generator(
                     advantages, self.batch_size)
 
-            if self.train_goals:
-                assert isinstance(rollouts, GoalsRolloutStorage)
+            assert isinstance(rollouts, GoalsRolloutStorage)
 
-                batches = rollouts.make_batch(advantages, torch.arange(
-                    rollouts.num_steps))
-                _, action_losses, _ = self.compute_loss_components(
-                    batches, compute_value_loss=False)
-                unique = torch.unique(batches.goals)
-                grads = torch.zeros(unique.size()[0])
-                for i, goal in enumerate(unique):
-                    action_loss = action_losses[batches.goals == goal]
-                    loss = self.compute_loss(
-                        action_loss=action_loss,
-                        dist_entropy=0,
-                        value_loss=None,
-                        importance_weighting=None
-                    )
-                    grad = torch.autograd.grad(loss, self.actor_critic.parameters(),
-                                               retain_graph=True, allow_unused=True)
-                    grads[i] = sum(g.abs().sum() for g in grad if g is not None)
-
-                dist = self.gan.dist(1)
-                diff = (dist.logits.squeeze(0)[unique.long()] - grads) ** 2
-
-                # goals_loss = prediction_loss + entropy_loss
-                goal_loss = diff.mean() #+ self.gan.entropy_coef * dist.entropy()
-                goal_loss.mean().backward()
-                # gan_norm = global_norm(
-                #     [p.grad for p in self.gan.parameters()])
-                goal_values.update(goal_loss=goal_loss, n=1)
-                # gan_norm=gan_norm)
-                nn.utils.clip_grad_norm_(self.gan.parameters(),
-                                         self.max_grad_norm)
-                self.goal_optimizer.step()
-                self.goal_optimizer.zero_grad()
-                # self.gan.set_input(goal, sum(grad.sum() for grad in grads))
-
-            for sample in data_generator:
-                # Reshape to do in a single forward pass for all steps
-
-                value_losses, action_losses, entropy \
-                    = components = self.compute_loss_components(sample)
+            num_steps, num_processes = rollouts.rewards.size()[0:2]
+            total_batch_size = num_steps * num_processes
+            batches = rollouts.make_batch(advantages, torch.arange(
+                total_batch_size))
+            _, action_losses, _ = self.compute_loss_components(
+                batches, compute_value_loss=False)
+            unique = torch.unique(batches.goals)
+            grads = torch.zeros(unique.size()[0])
+            for i, goal in enumerate(unique):
+                action_loss = action_losses[batches.goals == goal]
                 loss = self.compute_loss(
-                    *components,
-                    importance_weighting=sample.importance_weighting)
-                loss.backward()
-                total_norm += global_norm(
-                    [p.grad for p in self.actor_critic.parameters()])
-                nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
-                                         self.max_grad_norm)
-                # self.optimizer.step()
-                # noinspection PyTypeChecker
-                self.optimizer.zero_grad()
+                    action_loss=action_loss,
+                    dist_entropy=0,
+                    value_loss=None,
+                    importance_weighting=None
+                )
+                grad = torch.autograd.grad(loss, self.actor_critic.parameters(),
+                                           retain_graph=True, allow_unused=True)
+                grads[i] = sum(g.abs().sum() for g in grad if g is not None)
+
+            if baseline:
+                logits = grads
+            else:
+                logits = torch.ones_like(grads)
+
+            dist = Categorical(logits=logits)
+            goal_to_train = dist.sample().float()
+            importance_weighting = dist.log_prob(goal_to_train).exp()
+
+            uses_goal = batches.goals.squeeze() == goal_to_train
+            indices = torch.arange(total_batch_size)[uses_goal]
+            sample = rollouts.make_batch(advantages, indices)
+            # Reshape to do in a single forward pass for all steps
+
+            value_losses, action_losses, entropy \
+                = components = self.compute_loss_components(sample)
+            loss = self.compute_loss(
+                *components,
+                importance_weighting=importance_weighting)
+            loss.backward()
+            total_norm += global_norm(
+                [p.grad for p in self.actor_critic.parameters()])
+            nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
+                                     self.max_grad_norm)
+            # self.optimizer.step()
+            # noinspection PyTypeChecker
+            self.optimizer.zero_grad()
+            update_values.update(
+                value_loss=value_losses,
+                action_loss=action_losses,
+                norm=total_norm,
+                entropy=entropy,
+                n=1)
+            if importance_weighting is not None:
                 update_values.update(
-                    value_loss=value_losses,
-                    action_loss=action_losses,
-                    norm=total_norm,
-                    entropy=entropy,
-                    n=1)
-                if sample.importance_weighting is not None:
-                    update_values.update(
-                        importance_weighting=sample.importance_weighting)
+                    importance_weighting=importance_weighting)
 
         n = update_values.pop('n')
         update_values = {
