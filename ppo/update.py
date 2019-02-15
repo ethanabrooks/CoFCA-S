@@ -1,6 +1,6 @@
 # stdlib
-import itertools
 from collections import Counter
+import itertools
 
 # third party
 import torch
@@ -9,7 +9,7 @@ import torch.optim as optim
 
 # first party
 from common.running_mean_std import RunningMeanStd
-from ppo.storage import Batch, RolloutStorage, GoalsRolloutStorage
+from ppo.storage import Batch, GoalsRolloutStorage, RolloutStorage
 
 
 def f(x):
@@ -19,8 +19,8 @@ def f(x):
 def global_norm(grads):
     norm = 0
     for grad in grads:
-        norm += grad.norm(2) ** 2
-    return norm ** .5
+        norm += grad.norm(2)**2
+    return norm**.5
 
 
 class PPO:
@@ -52,7 +52,9 @@ class PPO:
 
         if self.train_goals:
             self.goal_optimizer = optim.Adam(
-                goal_generator.parameters(), lr=goal_generator.learning_rate, eps=eps)
+                goal_generator.parameters(),
+                lr=goal_generator.learning_rate,
+                eps=eps)
 
         self.optimizer = optim.Adam(
             actor_critic.parameters(), lr=learning_rate, eps=eps)
@@ -96,7 +98,7 @@ class PPO:
     def update(self, rollouts: RolloutStorage):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         advantages = (advantages - advantages.mean()) / (
-                advantages.std() + 1e-5)
+            advantages.std() + 1e-5)
         update_values = Counter()
         goal_values = Counter()
 
@@ -111,14 +113,14 @@ class PPO:
 
             if self.train_goals:
                 assert isinstance(rollouts, GoalsRolloutStorage)
-                dist = self.gan.dist(1)
                 for goal, adv in rollouts.goal_samples_generator(advantages):
+                    dist = self.gan.dist(1)
                     one_hot = torch.zeros_like(dist.probs)
                     one_hot[0, -1] = 10
                     mean = torch.mean(one_hot * dist.probs, -1)
                     torch_mean = torch.mean(one_hot * one_hot, -1)
                     hot = mean / torch_mean * one_hot
-                    diff = (dist.probs - hot) ** 2
+                    diff = (dist.probs - hot)**2
                     # goals_loss = prediction_loss + entropy_loss
                     goal_loss = diff.mean()
                     goal_loss.mean().backward()
@@ -156,8 +158,7 @@ class PPO:
                     action_loss=action_losses,
                     norm=total_norm,
                     entropy=entropy,
-                    n=1
-                )
+                    n=1)
                 if sample.importance_weighting is not None:
                     update_values.update(
                         importance_weighting=sample.importance_weighting)
