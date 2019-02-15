@@ -54,7 +54,7 @@ class GoalGenerator(nn.Module):
             a, b = torch.chunk(network_out, 2, dim=-1)
             return torch.distributions.Beta(a, b)
         else:
-            return Categorical(logits=network_out)
+            return Categorical(logits=network_out + 1)
 
     def sample(self, num_outputs):
         dist = self.dist(num_outputs)
