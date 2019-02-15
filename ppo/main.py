@@ -171,7 +171,7 @@ def cli():
     parser.add_argument('--max-episode-steps', type=int)
     parser.add_argument('--render', action='store_true')
 
-    def make_gridworld_env_fn(env_id, max_episode_steps, **env_args):
+    def make_gridworld_env_fn(env_id, max_episode_steps, eval, **env_args):
         args = gridworld_env.get_args(env_id)
         if 'random' in args:
             class_ = RandomGridWorld
@@ -179,7 +179,7 @@ def cli():
             class_ = GridWorld
         return functools.partial(
             wrap_env,
-            env_thunk=lambda: class_(**env_args),
+            env_thunk=lambda eval: class_(**env_args),
             max_episode_steps=max_episode_steps)
 
     def _train(env_id, max_episode_steps, **kwargs):
@@ -191,7 +191,7 @@ def cli():
 
         else:
 
-            def thunk():
+            def thunk(eval):
                 if env_id.startswith("dm"):
                     _, domain, task = env_id.split('.')
                     return dm_control2gym.make(
@@ -215,7 +215,7 @@ def goals_cli():
     def make_env_fn(max_episode_steps, **env_args):
         return functools.partial(
             wrap_env,
-            env_thunk=lambda: GoalsGridWorld(**env_args),
+            env_thunk=lambda eval: GoalsGridWorld(eval=eval, **env_args),
             max_episode_steps=max_episode_steps)
 
     def _train(env_id, max_episode_steps, **kwargs):
@@ -233,9 +233,9 @@ def hsr_cli():
 
     def env_thunk(env_id, **kwargs):
         if env_id == 'move-gripper':
-            return lambda: MoveGripperEnv(**kwargs)
+            return lambda eval: MoveGripperEnv(**kwargs)
         else:
-            return lambda: HSREnv(**kwargs)
+            return lambda eval: HSREnv(**kwargs)
 
     def _train(env_id, env_args, max_episode_steps=None, **kwargs):
         make_env = functools.partial(
@@ -252,7 +252,7 @@ def goals_hsr_cli():
     add_goals_args(parser)
     add_hsr_args(parser)
 
-    def env_thunk(env_id, **env_args):
+    def env_thunk(env_id, eval, **env_args):
         if env_id == 'move-gripper':
             return lambda: GoalsMoveGripperEnv(**env_args)
         else:

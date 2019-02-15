@@ -18,9 +18,9 @@ from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
 from ppo.env_adapter import GoalsDummyVecEnv, GoalsSubprocVecEnv
 
 
-def wrap_env(env_thunk, seed, rank, add_timestep=False,
+def wrap_env(env_thunk, seed, rank, eval, add_timestep=False,
              max_episode_steps=None):
-    env = env_thunk()
+    env = env_thunk(eval)
     is_atari = hasattr(gym.envs, 'atari') and isinstance(
         env.unwrapped, gym.envs.atari.atari_env.AtariEnv)
     if is_atari:
@@ -61,10 +61,11 @@ def make_vec_envs(make_env,
                   gamma,
                   device,
                   normalize,
+                  eval,
                   train_goals=False,
                   num_frame_stack=None):
     envs = [
-        functools.partial(make_env, seed=seed, rank=i)
+        functools.partial(make_env, eval=eval, seed=seed, rank=i)
         for i in range(num_processes)
     ]
 

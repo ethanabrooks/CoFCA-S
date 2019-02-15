@@ -1,11 +1,11 @@
 import itertools
-import time
 from pathlib import Path
+import time
 
-import numpy as np
-import torch
 from gym.spaces import Discrete
+import numpy as np
 from tensorboardX import SummaryWriter
+import torch
 
 from ppo.env_adapter import GoalsHSREnv
 from ppo.envs import VecNormalize, make_vec_envs
@@ -70,14 +70,15 @@ def train(num_frames,
         gamma=_gamma,
         device=device,
         train_goals=train_goals,
-        normalize=normalize)
+        normalize=normalize,
+        eval=False)
 
     actor_critic = Policy(
         envs.observation_space, envs.action_space, network_args=network_args)
 
     gan = None
     if train_goals:
-        sample_env = make_env(seed=seed, rank=0).unwrapped
+        sample_env = make_env(seed=seed, rank=0, eval=False).unwrapped
         gan = GoalGenerator(
             goal_space=sample_env.goal_space,
             **{k.replace('gan_', ''): v
@@ -271,9 +272,12 @@ def train(num_frames,
                 gamma=_gamma,
                 device=device,
                 train_goals=train_goals,
-                normalize=normalize)
+                normalize=normalize,
+                eval=True,
+            )
 
             eval_episode_rewards = []
+            eval_rewards_counter = np.zeros(num_processes)
 
             obs = eval_envs.reset()
             eval_recurrent_hidden_states = torch.zeros(
@@ -282,7 +286,7 @@ def train(num_frames,
                 device=device)
             eval_masks = torch.zeros(num_processes, 1, device=device)
 
-            while len(eval_episode_rewards) < 10:
+            while len(eval_episode_rewards) < num_processes:
                 with torch.no_grad():
                     _, actions, _, eval_recurrent_hidden_states = actor_critic.act(
                         inputs=obs,
@@ -292,12 +296,15 @@ def train(num_frames,
 
                 # Observe reward and next obs
                 obs, rewards, done, infos = eval_envs.step(actions)
+                eval_rewards_counter += rewards.numpy()
+                if done.any():
+                    eval_episode_rewards.append(eval_rewards_counter[done])
+                    eval_rewards_counter[done] = 0
 
                 eval_masks = torch.FloatTensor(
                     [[0.0] if done_ else [1.0] for done_ in done])
-                for info in infos:
-                    if 'episode' in info.keys():
-                        eval_episode_rewards.append(info['episode']['r'])
+
+            eval_episode_rewards = np.concatenate(eval_episode_rewards)
             if log_dir:
                 writer.add_scalar('eval return', np.mean(eval_episode_rewards),
                                   total_num_steps)
