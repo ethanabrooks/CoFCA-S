@@ -123,16 +123,13 @@ class PPO:
             if self.train_goals:
                 assert isinstance(rollouts, GoalsRolloutStorage)
 
-                goals, mean_reward = rollouts.get_goal_batch(advantages)
+                goals, logits = rollouts.get_goal_batch(advantages)
                 dist = self.gan.dist(1)
                 probs = dist.log_prob(goals).exp()
-                mean_reward = goals
+                logits = goals
 
-                n = goals.numel()
-                h = self.gan.goal_size
-                x = (mean_reward.view(1, -1) - mean_reward.view(-1, 1)) / h
-                target = epanechnikov_kernel(x).sum(dim=-1) / (n * h)
-                true_target = 2 * mean_reward / (
+                target = 1 / (self.gan.goal_size * logits.mean()) * logits
+                true_target = 2 * logits / (
                             self.gan.goal_size * (self.gan.goal_size - 1))
 
                 # def get_mse(h, kernel):
