@@ -9,7 +9,7 @@ import torch.optim as optim
 
 # first party
 from common.running_mean_std import RunningMeanStd
-from ppo.storage import Batch, RolloutStorage
+from ppo.storage import Batch, RolloutStorage, UnsupervisedRolloutStorage
 
 
 def f(x):
@@ -110,35 +110,15 @@ class PPO:
                     advantages, self.batch_size)
 
             if self.unsupervised:
-                generator = rollouts.feed_forward_generator(advantages,
-                                                            self.batch_size)
-                for sample in itertools.islice(generator, 0, self.gan.num_samples):
-                    unique = torch.unique(sample.goals, dim=0)
-                    probs = torch.zeros(len(sample.goals))
-                    sums = torch.zeros(len(sample.goals))
-                    entropies = torch.tensor(0.)
-                    indices = torch.arange(len(sample.goals))
-                    for goal in unique:
-                        idxs = indices[(sample.goals == goal).all(dim=-1)]
-                        dist = self.gan.dist(len(idxs))
-                        entropies += dist.entropy().mean()
-                        batch = Batch(*[x[idxs, ...] for x in sample])
-                        loss_components = self.compute_loss_components(batch)
-                        grads = torch.autograd.grad(
-                            self.compute_loss(
-                                *loss_components, importance_weighting=None),
-                            self.actor_critic.parameters())
-                        sums[idxs] = batch.adv.mean()
-                        probs[idxs] = dist.log_prob(goal).sum().exp()
-
-                    weighted_gradients = torch.dot(sums, probs)
-                    sq_gradients = torch.dot(sums, sums)
-                    prediction_loss = torch.sum(
-                        (probs - weighted_gradients / sq_gradients * sums) ** 2)
-                    entropy_loss = -self.entropy_coef * entropies
+                assert isinstance(rollouts, UnsupervisedRolloutStorage)
+                dist = self.gan.dist(1)
+                for goal, adv in rollouts.unsupervised_states_generator(advantages):
                     one_hot = torch.zeros_like(dist.probs)
-                    one_hot[0, -1] = 1
-                    diff = (dist.probs - one_hot)**2
+                    one_hot[0, -1] = 10
+                    mean = torch.mean(one_hot * dist.probs, -1)
+                    torch_mean = torch.mean(one_hot * one_hot, -1)
+                    hot = mean / torch_mean * one_hot
+                    diff = (dist.probs - hot) ** 2
                     # unsupervised_loss = prediction_loss + entropy_loss
                     unsupervised_loss = diff.mean()
                     unsupervised_loss.mean().backward()
@@ -146,10 +126,6 @@ class PPO:
                     #     [p.grad for p in self.gan.parameters()])
                     unsupervised_values.update(
                         unsupervised_loss=unsupervised_loss,
-                        unweighted_norm=sums,
-                        goal_log_prob=probs,
-                        dist_mean=dist.mean.mean(),
-                        dist_std=dist.stddev.mean(),
                         n=1,
                     )
                     # gan_norm=gan_norm)
@@ -157,7 +133,7 @@ class PPO:
                                              self.max_grad_norm)
                     self.unsupervised_optimizer.step()
                     self.unsupervised_optimizer.zero_grad()
-                self.gan.set_input(goal, sum(grad.sum() for grad in grads))
+                # self.gan.set_input(goal, sum(grad.sum() for grad in grads))
 
             for sample in data_generator:
                 # Reshape to do in a single forward pass for all steps

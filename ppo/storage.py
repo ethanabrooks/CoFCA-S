@@ -1,5 +1,5 @@
 # third party
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 from typing import Generator
 
 import torch
@@ -12,7 +12,7 @@ def _flatten_helper(T, N, _tensor):
 
 Batch = namedtuple(
     'Batch', 'obs recurrent_hidden_states actions value_preds ret '
-    'masks old_action_log_probs adv goals importance_weighting')
+             'masks old_action_log_probs adv goals importance_weighting')
 
 
 class RolloutStorage(object):
@@ -201,6 +201,11 @@ class RolloutStorage(object):
                 importance_weighting=None)
 
 
+UnsupervisedBatch = namedtuple(
+    'UnsupervisedBatch', 'obs recurrent_hidden_states actions value_preds ret '
+                         'masks old_action_log_probs adv goals importance_weighting')
+
+
 class UnsupervisedRolloutStorage(RolloutStorage):
     def __init__(self, num_steps, num_processes, goal_size, **kwargs):
         super().__init__(
@@ -230,13 +235,10 @@ class UnsupervisedRolloutStorage(RolloutStorage):
         return batch._replace(
             goals=goals, importance_weighting=importance_weighting)
 
-    def starting_states_generator(self, advantages):
-        def collect_indices():
-            for step in range(self.num_steps):
-                if self.masks[(step -1) % self.num_steps]:
-                    yield step
-
-        yield self.make_batch(advantages, list(collect_indices()))
+    def unsupervised_states_generator(self, advantages):
+        unique = torch.unique(self.goals)
+        for goal in unique:
+            yield goal, advantages[self.goals[:-1] == goal].mean()
 
     def recurrent_generator(self, advantages, num_mini_batch):
         raise NotImplementedError
