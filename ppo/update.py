@@ -125,25 +125,6 @@ class PPO:
 
                 goals, logits = rollouts.get_goal_batch(advantages)
                 dist = self.gan.dist(1)
-                probs = dist.log_prob(goals).exp()
-
-                target = 1 / (self.gan.goal_size * logits.mean()) * logits
-
-                # def get_mse(h, kernel):
-                #     target = kernel(x).sum(dim=-1) / (n * h)
-                #     true_target = 2 * mean_reward / (
-                #             self.gan.goal_size * (self.gan.goal_size - 1))
-                #     return torch.sum((target - true_target) ** 2)
-                # dkl = torch.mm(true_target, torch.log(true_target / target))
-
-                # mean_reward = torch.zeros_like(dist.probs)
-                # one_hot = torch.zeros_like(dist.probs)
-                # one_hot[0, -1] = 10
-                # alpha = torch.mm(mean_reward, probs.t()) / torch.mm(
-                #     mean_reward, mean_reward.t())
-                # alpha = 1 / mean_reward.mean()
-
-                # diff = (probs - target) ** 2
                 diff = (dist.logits.squeeze(0)[goals.long()] - logits) ** 2
 
                 # goals_loss = prediction_loss + entropy_loss

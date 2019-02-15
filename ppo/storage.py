@@ -240,8 +240,7 @@ class GoalsRolloutStorage(RolloutStorage):
         unique_goals = torch.unique(goals)
         goal_rewards = torch.empty(unique_goals.size()[0])
         for i, goal in enumerate(unique_goals):
-            r = self.rewards[goals == goal].mean()
-            goal_rewards[i] = r
+            goal_rewards[i] = advantages[goals == goal].mean()
         return unique_goals, goal_rewards
 
     def recurrent_generator(self, advantages, num_mini_batch):
