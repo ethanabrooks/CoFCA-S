@@ -48,9 +48,9 @@ class GoalGenerator(nn.Module):
         raise NotImplementedError
 
     def dist(self, num_inputs):
-        network_out = self.softplus(
-            self.network(self.input.repeat(num_inputs, 1)))
+        network_out = self.network(self.input.repeat(num_inputs, 1))
         if isinstance(self.goal_space, Box):
+            network_out = self.softplus(network_out)
             a, b = torch.chunk(network_out, 2, dim=-1)
             return torch.distributions.Beta(a, b)
         else:
