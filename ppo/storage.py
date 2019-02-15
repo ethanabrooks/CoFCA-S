@@ -1,5 +1,5 @@
 # third party
-from collections import namedtuple
+from collections import defaultdict, namedtuple
 from typing import Generator
 
 import torch
@@ -201,7 +201,12 @@ class RolloutStorage(object):
                 importance_weighting=None)
 
 
-class UnsupervisedRolloutStorage(RolloutStorage):
+GoalsBatch = namedtuple(
+    'GoalsBatch', 'obs recurrent_hidden_states actions value_preds ret '
+    'masks old_action_log_probs adv goals importance_weighting')
+
+
+class GoalsRolloutStorage(RolloutStorage):
     def __init__(self, num_steps, num_processes, goal_size, **kwargs):
         super().__init__(
             num_steps=num_steps, num_processes=num_processes, **kwargs)
@@ -229,6 +234,15 @@ class UnsupervisedRolloutStorage(RolloutStorage):
         batch = super().make_batch(advantages=advantages, indices=indices)
         return batch._replace(
             goals=goals, importance_weighting=importance_weighting)
+
+    def get_goal_batch(self, advantages):
+        goals = self.goals[:-1]
+        unique_goals = torch.unique(goals)
+        goal_rewards = torch.empty(unique_goals.size()[0])
+        for i, goal in enumerate(unique_goals):
+            ratio = (advantages / self.action_log_probs.exp())
+            goal_rewards[i] = ratio[goals == goal].mean()
+        return unique_goals, goal_rewards
 
     def recurrent_generator(self, advantages, num_mini_batch):
         raise NotImplementedError

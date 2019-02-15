@@ -1,12 +1,12 @@
+from gym.spaces import Box, Discrete
 import torch
 import torch.nn as nn
-from gym.spaces import Box, Discrete
+
+from ppo.util import Categorical, NoInput, init_normc_, mlp
 from utils import space_to_size
 
-from ppo.util import mlp, init_normc_, NoInput, Categorical
 
-
-class GAN(nn.Module):
+class GoalGenerator(nn.Module):
     def __init__(self, goal_space: Box, hidden_size, learning_rate: float,
                  entropy_coef: float, num_samples: int, **kwargs):
         super().__init__()
@@ -24,15 +24,14 @@ class GAN(nn.Module):
         self.takes_input = bool(hidden_size)
         if not hidden_size:
             self.network = NoInput(num_outputs)
-            self.learning_rate_regularizer = 1 / num_outputs
         else:
             self.network = nn.Sequential(
                 mlp(num_inputs=input_size,
                     hidden_size=hidden_size,
                     num_outputs=num_outputs,
-                    name='gan',
+                    name='goal_network',
                     **kwargs))
-            self.learning_rate_regularizer = 1 / num_outputs
+        self.learning_rate_regularizer = 1 / num_outputs
         self.softplus = torch.nn.Softplus()
         self.regularizer = None
         self.input = torch.rand(input_size)
@@ -43,13 +42,15 @@ class GAN(nn.Module):
             goal_vector[goal.int().squeeze()] = 1
             goal = goal_vector
         self.input = torch.cat((goal, norm.expand(1)))
+        self.input = torch.ones_like(self.input)
 
     def forward(self, *inputs):
         raise NotImplementedError
 
     def dist(self, num_inputs):
-        network_out = self.softplus(self.network(self.input.repeat(num_inputs, 1)))
+        network_out = self.network(self.input.repeat(num_inputs, 1))
         if isinstance(self.goal_space, Box):
+            network_out = self.softplus(network_out)
             a, b = torch.chunk(network_out, 2, dim=-1)
             return torch.distributions.Beta(a, b)
         else:

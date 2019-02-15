@@ -17,9 +17,9 @@ setup(
     scripts=['load'],
     entry_points=dict(console_scripts=[
         'ppo=ppo.main:cli',
-        'unsupervised=ppo.main:unsupervised_cli',
+        'goals=ppo.main:goals_cli',
         'hsr=ppo.main:hsr_cli',
-        'unsupervised-hsr=ppo.main:unsupervised_hsr_cli',
+        'goals-hsr=ppo.main:goals_hsr_cli',
     ]),
     install_requires=[
         'gym',
