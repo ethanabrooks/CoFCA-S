@@ -20,16 +20,16 @@ def f(x):
 def global_norm(grads):
     norm = 0
     for grad in grads:
-        norm += grad.norm(2)**2
-    return norm**.5
+        norm += grad.norm(2) ** 2
+    return norm ** .5
 
 
 def epanechnikov_kernel(x):
-    return 3 / 4 * (1 - x**2)
+    return 3 / 4 * (1 - x ** 2)
 
 
 def gaussian_kernel(x):
-    return (2 * math.pi)**-.5 * torch.exp(-.5 * x**2)
+    return (2 * math.pi) ** -.5 * torch.exp(-.5 * x ** 2)
 
 
 class PPO:
@@ -71,7 +71,7 @@ class PPO:
         self.gan = goal_generator
         self.reward_function = None
 
-    def compute_loss_components(self, batch):
+    def compute_loss_components(self, batch, compute_value_loss=True):
         values, action_log_probs, dist_entropy, \
         _ = self.actor_critic.evaluate_actions(
             batch.obs, batch.recurrent_hidden_states, batch.masks,
@@ -84,20 +84,24 @@ class PPO:
 
         action_losses = -torch.min(surr1, surr2)
 
-        value_losses = (values - batch.ret).pow(2)
-        if self.use_clipped_value_loss:
-            value_pred_clipped = batch.value_preds + \
-                                 (values - batch.value_preds).clamp(
-                                     -self.clip_param, self.clip_param)
-            value_losses_clipped = (value_pred_clipped - batch.ret).pow(2)
-            value_losses = .5 * torch.max(value_losses, value_losses_clipped)
+        value_losses = None
+        if compute_value_loss:
+            value_losses = (values - batch.ret).pow(2)
+            if self.use_clipped_value_loss:
+                value_pred_clipped = batch.value_preds + \
+                                     (values - batch.value_preds).clamp(
+                                         -self.clip_param, self.clip_param)
+                value_losses_clipped = (value_pred_clipped - batch.ret).pow(2)
+                value_losses = .5 * torch.max(value_losses, value_losses_clipped)
 
         return value_losses, action_losses, dist_entropy
 
     def compute_loss(self, value_loss, action_loss, dist_entropy,
                      importance_weighting):
-        losses = (value_loss * self.value_loss_coef + action_loss -
-                  dist_entropy * self.entropy_coef)
+        losses = (action_loss - dist_entropy * self.entropy_coef)
+        if value_loss is not None:
+            losses += value_loss * self.value_loss_coef
+
         if importance_weighting is not None:
             importance_weighting = importance_weighting.detach()
             importance_weighting[torch.isnan(importance_weighting)] = 0
@@ -107,7 +111,7 @@ class PPO:
     def update(self, rollouts: RolloutStorage):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         advantages = (advantages - advantages.mean()) / (
-            advantages.std() + 1e-5)
+                advantages.std() + 1e-5)
         update_values = Counter()
         goal_values = Counter()
 
@@ -123,9 +127,27 @@ class PPO:
             if self.train_goals:
                 assert isinstance(rollouts, GoalsRolloutStorage)
 
-                goals, logits = rollouts.get_goal_batch(advantages)
+                batches = rollouts.make_batch(advantages, torch.arange(
+                    rollouts.num_steps))
+                _, action_losses, _ = self.compute_loss_components(batches,
+                                                                   compute_value_loss=False)
+                unique = torch.unique(batches.goals)
+                grads = torch.zeros(unique.size()[0])
+                for i, goal in enumerate(unique):
+                    action_loss = action_losses[batches.goals == goal]
+                    loss = self.compute_loss(
+                        action_loss=action_loss,
+                        dist_entropy=0,
+                        value_loss=None,
+                        importance_weighting=None
+                    )
+                    grad = torch.autograd.grad(loss, self.actor_critic.parameters(),
+                                               retain_graph=True,
+                                               allow_unused=True)
+                    grads[i] = sum(g.abs().sum() for g in grad if g is not None)
+
                 dist = self.gan.dist(1)
-                diff = (dist.logits.squeeze(0)[goals.long()] - logits)**2
+                diff = (dist.logits.squeeze(0)[unique.long()] - grads) ** 2
 
                 # goals_loss = prediction_loss + entropy_loss
                 goal_loss = diff.mean()
