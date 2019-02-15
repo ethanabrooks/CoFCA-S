@@ -264,7 +264,7 @@ def train(num_frames,
                                          total_num_steps)
             episode_rewards = []
 
-        if eval_interval is not None and j % eval_interval == eval_interval - 1:
+        if eval_interval is not None and j % eval_interval == 0:
             eval_envs = make_vec_envs(
                 seed=seed + num_processes,
                 make_env=make_env,
