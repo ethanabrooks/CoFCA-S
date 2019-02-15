@@ -124,25 +124,30 @@ class PPO:
                 assert isinstance(rollouts, GoalsRolloutStorage)
 
                 goals, logits = rollouts.get_goal_batch(advantages)
-                dist = self.gan.dist(1)
-                probs = dist.log_prob(goals).exp()
+                if torch.any(logits != 0):
+                    dist = self.gan.dist(1)
+                    probs = dist.log_prob(goals).exp()
 
-                target = 1 / (self.gan.goal_size * logits.mean()) * logits
+                    target = 1 / (self.gan.goal_size * logits.mean()) * logits
 
-                diff = (probs - target)**2
-                # goals_loss = prediction_loss + entropy_loss
-                goal_loss = diff.mean()
-                goal_loss.mean().backward()
+                    diff = (probs - target)**2
+                    # goals_loss = prediction_loss + entropy_loss
+                    goal_loss = diff.mean()
+                    goal_loss.mean().backward()
+                    if torch.any(
+                            torch.isnan(next(self.gan.parameters()).grad)):
+                        import ipdb
+                        ipdb.set_trace()
 
-                # gan_norm = global_norm(
-                #     [p.grad for p in self.gan.parameters()])
-                goal_values.update(goal_loss=goal_loss, n=1)
-                # gan_norm=gan_norm)
-                nn.utils.clip_grad_norm_(self.gan.parameters(),
-                                         self.max_grad_norm)
-                self.goal_optimizer.step()
-                self.goal_optimizer.zero_grad()
-                # self.gan.set_input(goal, sum(grad.sum() for grad in grads))
+                    # gan_norm = global_norm(
+                    #     [p.grad for p in self.gan.parameters()])
+                    goal_values.update(goal_loss=goal_loss, n=1)
+                    # gan_norm=gan_norm)
+                    nn.utils.clip_grad_norm_(self.gan.parameters(),
+                                             self.max_grad_norm)
+                    self.goal_optimizer.step()
+                    self.goal_optimizer.zero_grad()
+                    # self.gan.set_input(goal, sum(grad.sum() for grad in grads))
 
             for sample in data_generator:
                 # Reshape to do in a single forward pass for all steps
@@ -175,7 +180,7 @@ class PPO:
             k: torch.mean(v) / n
             for k, v in update_values.items()
         }
-        if self.train_goals:
+        if self.train_goals and 'n' in goal_values:
             n = goal_values.pop('n')
             for k, v in goal_values.items():
                 update_values[k] = torch.mean(v) / n
