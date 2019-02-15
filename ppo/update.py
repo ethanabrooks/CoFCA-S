@@ -125,7 +125,7 @@ class PPO:
 
                 goals, mean_reward = rollouts.get_goal_batch(advantages)
                 dist = self.gan.dist(1)
-                probs = dist.log_prob(goals).view(1, -1)
+                probs = dist.log_prob(goals).exp()
                 mean_reward = goals
 
                 n = goals.numel()
