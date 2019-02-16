@@ -154,7 +154,7 @@ class PPO:
             if baseline:
                 logits = torch.ones_like(grads)
             else:
-                logits = grads / 5
+                logits = grads / 10
 
             dist = Categorical(logits=logits)
             goal_to_train = dist.sample().float()
