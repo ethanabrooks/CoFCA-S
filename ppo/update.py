@@ -159,8 +159,7 @@ class PPO:
             dist = Categorical(logits=logits)
             goal_to_train = dist.sample().float()
             goals_trained.append(goal_to_train)
-            importance_weighting = 1 / (
-                unique.numel() * dist.log_prob(goal_to_train).exp())
+            importance_weighting = 1 / (dist.log_prob(goal_to_train).exp())
 
             uses_goal = batches.goals.squeeze() == goal_to_train
             indices = torch.arange(total_batch_size)[uses_goal]
