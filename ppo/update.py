@@ -133,7 +133,7 @@ class PPO:
             total_batch_size = num_steps * num_processes
             batches = rollouts.make_batch(advantages,
                                           torch.arange(total_batch_size))
-            _, action_losses, _ = self.compute_loss_components(
+            _, action_losses, dist_entropy = self.compute_loss_components(
                 batches, compute_value_loss=False)
             unique = torch.unique(batches.goals)
             grads = torch.zeros(unique.size()[0])
@@ -141,7 +141,7 @@ class PPO:
                 action_loss = action_losses[batches.goals == goal]
                 loss = self.compute_loss(
                     action_loss=action_loss,
-                    dist_entropy=0,
+                    dist_entropy=dist_entropy,
                     value_loss=None,
                     importance_weighting=None)
                 grad = torch.autograd.grad(
@@ -153,14 +153,14 @@ class PPO:
 
             if baseline:
                 logits = torch.ones_like(grads)
-                importance_weighting = 1
             else:
                 logits = grads
-                importance_weighting = 1 / (dist.log_prob(goal_to_train).exp())
 
             dist = Categorical(logits=logits)
             goal_to_train = dist.sample().float()
             goals_trained.append(goal_to_train)
+            importance_weighting = 1 / (
+                unique.numel() * dist.log_prob(goal_to_train).exp())
 
             uses_goal = batches.goals.squeeze() == goal_to_train
             indices = torch.arange(total_batch_size)[uses_goal]
