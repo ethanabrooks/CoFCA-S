@@ -149,7 +149,7 @@ class PPO:
                     self.actor_critic.parameters(),
                     retain_graph=True,
                     allow_unused=True)
-                grads[i] = global_norm([g for g in grad if g is not None])
+                grads[i] = sum(g.abs().sum() for g in grad if g is not None)
 
             if baseline:
                 logits = torch.ones_like(grads)
