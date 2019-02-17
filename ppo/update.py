@@ -77,12 +77,13 @@ class PPO:
             batch.obs, batch.recurrent_hidden_states, batch.masks,
             batch.actions)
 
-        ratio = torch.exp(action_log_probs - batch.old_action_log_probs)
-        surr1 = ratio * batch.adv
-        surr2 = torch.clamp(ratio, 1.0 - self.clip_param,
-                            1.0 + self.clip_param) * batch.adv
+        c = 1.0390310561411427 + 0.6671400291315487 / (
+                1.1109717916172284 * batch.adv.mean()) ** 1.2891896379050594
+        log_prob_target_policy = batch.old_action_log_probs \
+                                 + batch.adv * torch.log(c) \
+                                 - torch.log(torch.mean(c ** batch.adv))
 
-        action_losses = -torch.min(surr1, surr2)
+        action_losses = action_log_probs * (action_log_probs - log_prob_target_policy)
 
         value_losses = None
         if compute_value_loss:
@@ -149,7 +150,7 @@ class PPO:
                 diff = (dist.logits.squeeze(0)[unique.long()] - grads) ** 2
 
                 # goals_loss = prediction_loss + entropy_loss
-                goal_loss = diff.mean() #+ self.gan.entropy_coef * dist.entropy()
+                goal_loss = diff.mean()  # + self.gan.entropy_coef * dist.entropy()
                 goal_loss.mean().backward()
                 # gan_norm = global_norm(
                 #     [p.grad for p in self.gan.parameters()])
