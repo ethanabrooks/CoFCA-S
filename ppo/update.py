@@ -73,7 +73,7 @@ class PPO:
         self.gan = goal_generator
         self.reward_function = None
 
-    def compute_loss_components(self, batch, compute_value_loss=True):
+    def compute_loss_components(self, batch):
         values, action_log_probs, dist_entropy, \
         _ = self.actor_critic.evaluate_actions(
             batch.obs, batch.recurrent_hidden_states, batch.masks,
