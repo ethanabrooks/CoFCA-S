@@ -79,9 +79,6 @@ class PPO:
             batch.obs, batch.recurrent_hidden_states, batch.masks,
             batch.actions)
 
-        # c = 1.0390310561411427 + 0.6671400291315487 / (
-        #         1.1109717916172284 * batch.adv.mean()) ** 1.2891896379050594
-
         def log_prob_target_policy(alpha):
             x = batch.adv * torch.log(alpha)
             return batch.old_action_log_probs + x - x.max()
@@ -91,14 +88,13 @@ class PPO:
 
         def binary_search(alpha, diff, i):
             kl = KL(alpha).mean()
-            # print(alpha, kl.numpy(), (kl - .2).numpy())
             if i == 0 or torch.abs(kl - self.delta) < .01:
-                return alpha
+                return alpha, kl
             if diff * (kl - self.delta) > 0:  # wrong direction
                 diff /= -2
             return binary_search(alpha + diff, diff, i - 1)
 
-        alpha = binary_search(torch.tensor(1.), torch.tensor(1.), 100)
+        alpha, kl = binary_search(torch.tensor(1.), torch.tensor(1.), 100)
 
         target = log_prob_target_policy(alpha)
         action_losses = (target - batch.old_action_log_probs).exp() * (
@@ -119,7 +115,7 @@ class PPO:
             value_losses_clipped = (value_pred_clipped - batch.ret).pow(2)
             value_losses = .5 * torch.max(value_losses, value_losses_clipped)
 
-        return value_losses, action_losses, dist_entropy
+        return value_losses, action_losses, dist_entropy, kl
 
     def compute_loss(self, value_loss, action_loss, dist_entropy,
                      importance_weighting):
@@ -154,7 +150,7 @@ class PPO:
 
                 batches = rollouts.make_batch(advantages, torch.arange(
                     rollouts.num_steps))
-                _, action_losses, _ = self.compute_loss_components(
+                _, action_losses, _, _ = self.compute_loss_components(
                     batches, compute_value_loss=False)
                 unique = torch.unique(batches.goals)
                 grads = torch.zeros(unique.size()[0])
@@ -189,8 +185,8 @@ class PPO:
             for sample in data_generator:
                 # Reshape to do in a single forward pass for all steps
 
-                value_losses, action_losses, entropy \
-                    = components = self.compute_loss_components(sample)
+                value_losses, action_losses, entropy, kl \
+                    = *components, _ = self.compute_loss_components(sample)
                 loss = self.compute_loss(
                     *components,
                     importance_weighting=sample.importance_weighting)
@@ -203,6 +199,7 @@ class PPO:
                 # noinspection PyTypeChecker
                 self.optimizer.zero_grad()
                 update_values.update(
+                    kl=kl,
                     value_loss=value_losses,
                     action_loss=action_losses,
                     norm=total_norm,
