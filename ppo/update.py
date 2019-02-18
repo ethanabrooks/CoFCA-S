@@ -97,15 +97,9 @@ class PPO:
         alpha, kl = binary_search(torch.tensor(1.), torch.tensor(1.), 100)
 
         target = log_prob_target_policy(alpha)
-        action_losses = (target - batch.old_action_log_probs).exp() * (
-                                target - action_log_probs)
+        action_losses = (action_log_probs - batch.old_action_log_probs).exp() * (
+                                action_log_probs - target)
 
-        # ratio = torch.exp(action_log_probs - batch.old_action_log_probs)
-        # surr1 = ratio * batch.adv
-        # surr2 = torch.clamp(ratio, 1.0 - self.clip_param,
-        #                     1.0 + self.clip_param) * batch.adv
-        #
-        # action_losses = -torch.min(surr1, surr2)
 
         value_losses = (values - batch.ret).pow(2)
         if self.use_clipped_value_loss:
@@ -144,43 +138,6 @@ class PPO:
             else:
                 data_generator = rollouts.feed_forward_generator(
                     advantages, self.batch_size)
-
-            if self.train_goals:
-                assert isinstance(rollouts, GoalsRolloutStorage)
-
-                batches = rollouts.make_batch(advantages, torch.arange(
-                    rollouts.num_steps))
-                _, action_losses, _, _ = self.compute_loss_components(
-                    batches, compute_value_loss=False)
-                unique = torch.unique(batches.goals)
-                grads = torch.zeros(unique.size()[0])
-                for i, goal in enumerate(unique):
-                    action_loss = action_losses[batches.goals == goal]
-                    loss = self.compute_loss(
-                        action_loss=action_loss,
-                        dist_entropy=0,
-                        value_loss=None,
-                        importance_weighting=None
-                    )
-                    grad = torch.autograd.grad(loss, self.actor_critic.parameters(),
-                                               retain_graph=True, allow_unused=True)
-                    grads[i] = sum(g.abs().sum() for g in grad if g is not None)
-
-                dist = self.gan.dist(1)
-                diff = (dist.logits.squeeze(0)[unique.long()] - grads) ** 2
-
-                # goals_loss = prediction_loss + entropy_loss
-                goal_loss = diff.mean()  # + self.gan.entropy_coef * dist.entropy()
-                goal_loss.mean().backward()
-                # gan_norm = global_norm(
-                #     [p.grad for p in self.gan.parameters()])
-                goal_values.update(goal_loss=goal_loss, n=1)
-                # gan_norm=gan_norm)
-                nn.utils.clip_grad_norm_(self.gan.parameters(),
-                                         self.max_grad_norm)
-                self.goal_optimizer.step()
-                self.goal_optimizer.zero_grad()
-                # self.gan.set_input(goal, sum(grad.sum() for grad in grads))
 
             for sample in data_generator:
                 # Reshape to do in a single forward pass for all steps
