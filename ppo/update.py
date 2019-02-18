@@ -101,7 +101,7 @@ class PPO:
 
                 def KL(alpha):
                     return batch.old_action_log_probs - log_prob_target_policy(
-                        alpha) - torch.log(torch.mean(alpha**batch.adv))
+                        alpha)
                     # return (1 + alpha**(-batch.ret)) * batch.ret * torch.log(alpha)
 
                 def binary_search(alpha, diff, i):
@@ -142,6 +142,7 @@ class PPO:
                 self.optimizer.zero_grad()
                 update_values.update(
                     kl=kl,
+                    alpha=alpha,
                     value_loss=value_losses,
                     action_loss=action_losses,
                     norm=total_norm,
