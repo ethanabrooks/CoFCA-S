@@ -267,4 +267,4 @@ def goals_hsr_cli():
 
 
 if __name__ == "__main__":
-    goals_cli()
+    cli()

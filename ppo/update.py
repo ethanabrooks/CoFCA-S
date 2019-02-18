@@ -40,6 +40,7 @@ class PPO:
                  batch_size,
                  value_loss_coef,
                  entropy_coef,
+                 delta,
                  learning_rate=None,
                  eps=None,
                  max_grad_norm=None,
@@ -77,23 +78,45 @@ class PPO:
             batch.obs, batch.recurrent_hidden_states, batch.masks,
             batch.actions)
 
-        c = 1.0390310561411427 + 0.6671400291315487 / (
-                1.1109717916172284 * batch.adv.mean()) ** 1.2891896379050594
-        log_prob_target_policy = batch.old_action_log_probs \
-                                 + batch.adv * torch.log(c) \
-                                 - torch.log(torch.mean(c ** batch.adv))
+        # c = 1.0390310561411427 + 0.6671400291315487 / (
+        #         1.1109717916172284 * batch.adv.mean()) ** 1.2891896379050594
 
-        action_losses = action_log_probs * (action_log_probs - log_prob_target_policy)
+        def log_prob_target_policy(alpha):
+            x = batch.adv * torch.log(alpha)
+            return batch.old_action_log_probs + x - x.max()
 
-        value_losses = None
-        if compute_value_loss:
-            value_losses = (values - batch.ret).pow(2)
-            if self.use_clipped_value_loss:
-                value_pred_clipped = batch.value_preds + \
-                                     (values - batch.value_preds).clamp(
-                                         -self.clip_param, self.clip_param)
-                value_losses_clipped = (value_pred_clipped - batch.ret).pow(2)
-                value_losses = .5 * torch.max(value_losses, value_losses_clipped)
+        def KL(c):
+            return batch.old_action_log_probs - log_prob_target_policy(c)
+
+        def binary_search(alpha, diff, i):
+            kl = KL(alpha).mean()
+            # print(alpha, kl.numpy(), (kl - .2).numpy())
+            if i == 0 or torch.abs(kl - delta) < .01:
+                return alpha
+            if diff * (kl - delta) > 0:  # wrong direction
+                diff /= -2
+            return binary_search(alpha + diff, diff, i - 1)
+
+        alpha = binary_search(torch.tensor(1.), torch.tensor(1.), 100)
+
+        target = log_prob_target_policy(alpha)
+        action_losses = (target - batch.old_action_log_probs).exp() * (
+                                target - action_log_probs)
+
+        # ratio = torch.exp(action_log_probs - batch.old_action_log_probs)
+        # surr1 = ratio * batch.adv
+        # surr2 = torch.clamp(ratio, 1.0 - self.clip_param,
+        #                     1.0 + self.clip_param) * batch.adv
+        #
+        # action_losses = -torch.min(surr1, surr2)
+
+        value_losses = (values - batch.ret).pow(2)
+        if self.use_clipped_value_loss:
+            value_pred_clipped = batch.value_preds + \
+                                 (values - batch.value_preds).clamp(
+                                     -self.clip_param, self.clip_param)
+            value_losses_clipped = (value_pred_clipped - batch.ret).pow(2)
+            value_losses = .5 * torch.max(value_losses, value_losses_clipped)
 
         return value_losses, action_losses, dist_entropy
 
@@ -175,7 +198,7 @@ class PPO:
                     [p.grad for p in self.actor_critic.parameters()])
                 nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
                                          self.max_grad_norm)
-                # self.optimizer.step()
+                self.optimizer.step()
                 # noinspection PyTypeChecker
                 self.optimizer.zero_grad()
                 update_values.update(
