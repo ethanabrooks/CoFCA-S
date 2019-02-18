@@ -1,6 +1,6 @@
 # stdlib
-from collections import Counter
 import math
+from collections import Counter
 
 # third party
 import torch
@@ -101,7 +101,7 @@ class PPO:
 
                 def KL(alpha):
                     return batch.old_action_log_probs - log_prob_target_policy(
-                        alpha)
+                        alpha) - torch.log(torch.mean(alpha**batch.adv))
                     # return (1 + alpha**(-batch.ret)) * batch.ret * torch.log(alpha)
 
                 def binary_search(alpha, diff, i):
