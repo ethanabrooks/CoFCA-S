@@ -1,6 +1,6 @@
 # stdlib
-from collections import Counter
 import math
+from collections import Counter
 
 # third party
 import torch
@@ -135,9 +135,15 @@ class PPO:
                     target = log_prob_target_policy(alpha)
                     action_losses = (target - batch.old_action_log_probs
                                      ).exp() * (target - action_log_probs)
+
+                    _, action_log_probs, _, \
+                    _ = self.actor_critic.evaluate_actions(
+                        batch.obs, batch.recurrent_hidden_states, batch.masks,
+                        batch.actions)
+
                     update_values.update(
                         kl=KL(alpha),
-                        kl2=KL2(alpha),
+                        kl2=batch.old_action_log_probs - action_log_probs,
                         alpha=alpha,
                     )
 
