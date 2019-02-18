@@ -20,16 +20,16 @@ def f(x):
 def global_norm(grads):
     norm = 0
     for grad in grads:
-        norm += grad.norm(2)**2
-    return norm**.5
+        norm += grad.norm(2) ** 2
+    return norm ** .5
 
 
 def epanechnikov_kernel(x):
-    return 3 / 4 * (1 - x**2)
+    return 3 / 4 * (1 - x ** 2)
 
 
 def gaussian_kernel(x):
-    return (2 * math.pi)**-.5 * torch.exp(-.5 * x**2)
+    return (2 * math.pi) ** -.5 * torch.exp(-.5 * x ** 2)
 
 
 class PPO:
@@ -73,60 +73,10 @@ class PPO:
         self.gan = goal_generator
         self.reward_function = None
 
-    def compute_loss_components(self, batch):
-        values, action_log_probs, dist_entropy, \
-        _ = self.actor_critic.evaluate_actions(
-            batch.obs, batch.recurrent_hidden_states, batch.masks,
-            batch.actions)
-
-        def log_prob_target_policy(alpha):
-            x = batch.ret * torch.log(alpha)
-            return batch.old_action_log_probs + x
-
-        def KL(alpha):
-            return batch.old_action_log_probs - log_prob_target_policy(alpha)
-            # return (1 + alpha**(-batch.ret)) * batch.ret * torch.log(alpha)
-
-        def binary_search(alpha, diff, i):
-            kl = KL(alpha).mean()
-            if i == 0 or torch.abs(kl - self.delta) < .01:
-                return alpha, kl
-            if diff * (kl - self.delta) > 0:  # wrong direction
-                diff /= -2
-            return binary_search(alpha + diff, diff, i - 1)
-
-        alpha, kl = binary_search(torch.tensor(1.), torch.tensor(1.), 100)
-
-        target = log_prob_target_policy(alpha)
-        action_losses = (target - batch.old_action_log_probs).exp() * (
-            target - action_log_probs)
-
-        value_losses = (values - batch.ret).pow(2)
-        if self.use_clipped_value_loss:
-            value_pred_clipped = batch.value_preds + \
-                                 (values - batch.value_preds).clamp(
-                                     -self.clip_param, self.clip_param)
-            value_losses_clipped = (value_pred_clipped - batch.ret).pow(2)
-            value_losses = .5 * torch.max(value_losses, value_losses_clipped)
-
-        return value_losses, action_losses, dist_entropy, kl
-
-    def compute_loss(self, value_loss, action_loss, dist_entropy,
-                     importance_weighting):
-        losses = (action_loss - dist_entropy * self.entropy_coef)
-        if value_loss is not None:
-            losses += value_loss * self.value_loss_coef
-
-        if importance_weighting is not None:
-            importance_weighting = importance_weighting.detach()
-            importance_weighting[torch.isnan(importance_weighting)] = 0
-            losses *= importance_weighting
-        return torch.mean(losses)
-
     def update(self, rollouts: RolloutStorage):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         advantages = (advantages - advantages.mean()) / (
-            advantages.std() + 1e-5)
+                advantages.std() + 1e-5)
         update_values = Counter()
         goal_values = Counter()
 
@@ -139,14 +89,48 @@ class PPO:
                 data_generator = rollouts.feed_forward_generator(
                     advantages, self.batch_size)
 
-            for sample in data_generator:
+            for batch in data_generator:
                 # Reshape to do in a single forward pass for all steps
 
-                value_losses, action_losses, entropy, kl \
-                    = *components, _ = self.compute_loss_components(sample)
-                loss = self.compute_loss(
-                    *components,
-                    importance_weighting=sample.importance_weighting)
+                values, action_log_probs, dist_entropy, \
+                _ = self.actor_critic.evaluate_actions(
+                    batch.obs, batch.recurrent_hidden_states, batch.masks,
+                    batch.actions)
+
+                def log_prob_target_policy(alpha):
+                    x = batch.adv * torch.log(alpha)
+                    return batch.old_action_log_probs + x
+
+                def KL(alpha):
+                    return batch.old_action_log_probs - log_prob_target_policy(alpha)
+                    # return (1 + alpha**(-batch.ret)) * batch.ret * torch.log(alpha)
+
+                def binary_search(alpha, diff, i):
+                    kl = KL(alpha).mean()
+                    if i == 0 or torch.abs(kl - self.delta) < .01:
+                        return alpha, kl
+                    if diff * (kl - self.delta) < 0:  # wrong direction
+                        diff /= -2
+                    return binary_search(alpha + diff, diff, i - 1)
+
+                alpha, kl = binary_search(torch.tensor(1.), torch.tensor(1.), 100)
+
+                target = log_prob_target_policy(alpha)
+                action_losses = (target - batch.old_action_log_probs).exp() * (
+                        target - action_log_probs)
+
+                value_losses = (values - batch.ret).pow(2)
+                if self.use_clipped_value_loss:
+                    value_pred_clipped = batch.value_preds + \
+                                         (values - batch.value_preds).clamp(
+                                             -self.clip_param, self.clip_param)
+                value_losses_clipped = (value_pred_clipped - batch.ret).pow(2)
+                value_losses = .5 * torch.max(value_losses, value_losses_clipped)
+
+                loss = torch.mean(action_losses - dist_entropy * self.entropy_coef
+                                  + value_losses * self.value_loss_coef
+                                  )
+
                 loss.backward()
                 total_norm += global_norm(
                     [p.grad for p in self.actor_critic.parameters()])
@@ -160,11 +144,11 @@ class PPO:
                     value_loss=value_losses,
                     action_loss=action_losses,
                     norm=total_norm,
-                    entropy=entropy,
+                    entropy=dist_entropy,
                     n=1)
-                if sample.importance_weighting is not None:
+                if batch.importance_weighting is not None:
                     update_values.update(
-                        importance_weighting=sample.importance_weighting)
+                        importance_weighting=batch.importance_weighting)
 
         n = update_values.pop('n')
         update_values = {
