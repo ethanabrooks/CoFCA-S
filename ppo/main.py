@@ -139,6 +139,9 @@ def build_parser():
         type=float,
         default=0.1,
         help='max norm of gradients (default: 0.5)')
+    ppo_parser.add_argument(
+        '--baseline',
+        action='store_true',)
     return parser
 
 
