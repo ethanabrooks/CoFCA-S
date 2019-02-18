@@ -49,6 +49,7 @@ class PPO:
 
         self.train_goals = bool(goal_generator)
         self.actor_critic = actor_critic
+        self.delta = delta
 
         self.clip_param = clip_param
         self.ppo_epoch = ppo_epoch
@@ -91,9 +92,9 @@ class PPO:
         def binary_search(alpha, diff, i):
             kl = KL(alpha).mean()
             # print(alpha, kl.numpy(), (kl - .2).numpy())
-            if i == 0 or torch.abs(kl - delta) < .01:
+            if i == 0 or torch.abs(kl - self.delta) < .01:
                 return alpha
-            if diff * (kl - delta) > 0:  # wrong direction
+            if diff * (kl - self.delta) > 0:  # wrong direction
                 diff /= -2
             return binary_search(alpha + diff, diff, i - 1)
 
