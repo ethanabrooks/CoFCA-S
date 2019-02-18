@@ -7,7 +7,8 @@ from torch import nn as nn
 
 import gridworld_env
 import hsr.util
-from ppo.env_adapter import (GoalsGridWorld, GoalsHSREnv, GoalsMoveGripperEnv, GridWorld, HSREnv, MoveGripperEnv,
+from ppo.env_adapter import (GoalsGridWorld, GoalsHSREnv, GoalsMoveGripperEnv,
+                             GridWorld, HSREnv, MoveGripperEnv,
                              RandomGridWorld)
 from ppo.envs import wrap_env
 from ppo.train import train
@@ -173,7 +174,7 @@ def cli():
     parser.add_argument('--max-episode-steps', type=int)
     parser.add_argument('--render', action='store_true')
 
-    def make_gridworld_env_fn(env_id, max_episode_steps, eval, **env_args):
+    def make_gridworld_env_fn(env_id, max_episode_steps, **env_args):
         args = gridworld_env.get_args(env_id)
         if 'random' in args:
             class_ = RandomGridWorld
