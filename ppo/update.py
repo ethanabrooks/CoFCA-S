@@ -111,6 +111,10 @@ class PPO:
                         return batch.old_action_log_probs + x
 
                     def KL(alpha):
+                        return batch.old_action_log_probs - log_prob_target_policy(
+                            alpha)
+
+                    def KL2(alpha):
                         # return batch.old_action_log_probs - log_prob_target_policy(
                         #     alpha)
                         return (1 + alpha**
@@ -126,8 +130,7 @@ class PPO:
 
                     # alpha, kl = binary_search(
                     # torch.tensor(1.), torch.tensor(1.), 100)
-                    alpha = self.delta
-                    kl = KL(alpha)
+                    alpha = torch.tensor(self.delta)
 
                     target = log_prob_target_policy(alpha)
                     action_losses = (target - batch.old_action_log_probs
@@ -155,7 +158,8 @@ class PPO:
                 # noinspection PyTypeChecker
                 self.optimizer.zero_grad()
                 update_values.update(
-                    kl=kl,
+                    kl=KL(alpha),
+                    kl2=KL2(alpha),
                     alpha=alpha,
                     value_loss=value_losses,
                     action_loss=action_losses,
