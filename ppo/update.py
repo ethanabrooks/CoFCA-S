@@ -81,14 +81,14 @@ class PPO:
 
         def log_prob_target_policy(alpha):
             x = batch.adv * torch.log(alpha)
-            return batch.old_action_log_probs + x - x.max()
+            return batch.old_action_log_probs + x
 
         def KL(c):
             return batch.old_action_log_probs - log_prob_target_policy(c)
 
         def binary_search(alpha, diff, i):
             kl = KL(alpha).mean()
-            if i == 0 or torch.abs(kl - self.delta) < .01:
+            if i == 0 or torch.abs(kl - self.delta) < .05:
                 return alpha, kl
             if diff * (kl - self.delta) > 0:  # wrong direction
                 diff /= -2
@@ -97,9 +97,8 @@ class PPO:
         alpha, kl = binary_search(torch.tensor(1.), torch.tensor(1.), 100)
 
         target = log_prob_target_policy(alpha)
-        action_losses = (action_log_probs - batch.old_action_log_probs).exp() * (
-                                action_log_probs - target)
-
+        action_losses = (target - batch.old_action_log_probs).exp() * (
+                target - action_log_probs)
 
         value_losses = (values - batch.ret).pow(2)
         if self.use_clipped_value_loss:
