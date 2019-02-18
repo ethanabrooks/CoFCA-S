@@ -84,7 +84,8 @@ class PPO:
             return batch.old_action_log_probs + x
 
         def KL(alpha):
-            return (1 + alpha ** (-batch.ret)) * batch.ret * torch.log(alpha)
+            return batch.old_action_log_probs - log_prob_target_policy(alpha)
+            # return (1 + alpha**(-batch.ret)) * batch.ret * torch.log(alpha)
 
         def binary_search(alpha, diff, i):
             kl = KL(alpha).mean()
