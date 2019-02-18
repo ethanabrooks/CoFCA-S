@@ -1,7 +1,6 @@
 # stdlib
-import itertools
-import math
 from collections import Counter
+import math
 
 # third party
 import torch
@@ -9,8 +8,7 @@ import torch.nn as nn
 import torch.optim as optim
 
 # first party
-from common.running_mean_std import RunningMeanStd
-from ppo.storage import Batch, GoalsRolloutStorage, RolloutStorage
+from ppo.storage import RolloutStorage
 
 
 def f(x):
@@ -20,16 +18,16 @@ def f(x):
 def global_norm(grads):
     norm = 0
     for grad in grads:
-        norm += grad.norm(2) ** 2
-    return norm ** .5
+        norm += grad.norm(2)**2
+    return norm**.5
 
 
 def epanechnikov_kernel(x):
-    return 3 / 4 * (1 - x ** 2)
+    return 3 / 4 * (1 - x**2)
 
 
 def gaussian_kernel(x):
-    return (2 * math.pi) ** -.5 * torch.exp(-.5 * x ** 2)
+    return (2 * math.pi)**-.5 * torch.exp(-.5 * x**2)
 
 
 class PPO:
@@ -76,7 +74,7 @@ class PPO:
     def update(self, rollouts: RolloutStorage):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         advantages = (advantages - advantages.mean()) / (
-                advantages.std() + 1e-5)
+            advantages.std() + 1e-5)
         update_values = Counter()
         goal_values = Counter()
 
@@ -102,7 +100,8 @@ class PPO:
                     return batch.old_action_log_probs + x
 
                 def KL(alpha):
-                    return batch.old_action_log_probs - log_prob_target_policy(alpha)
+                    return batch.old_action_log_probs - log_prob_target_policy(
+                        alpha)
                     # return (1 + alpha**(-batch.ret)) * batch.ret * torch.log(alpha)
 
                 def binary_search(alpha, diff, i):
@@ -113,11 +112,12 @@ class PPO:
                         diff /= -2
                     return binary_search(alpha + diff, diff, i - 1)
 
-                alpha, kl = binary_search(torch.tensor(1.), torch.tensor(1.), 100)
+                alpha, kl = binary_search(
+                    torch.tensor(1.), torch.tensor(1.), 100)
 
                 target = log_prob_target_policy(alpha)
                 action_losses = (target - batch.old_action_log_probs).exp() * (
-                        target - action_log_probs)
+                    target - action_log_probs)
 
                 value_losses = (values - batch.ret).pow(2)
                 if self.use_clipped_value_loss:
@@ -125,11 +125,12 @@ class PPO:
                                          (values - batch.value_preds).clamp(
                                              -self.clip_param, self.clip_param)
                 value_losses_clipped = (value_pred_clipped - batch.ret).pow(2)
-                value_losses = .5 * torch.max(value_losses, value_losses_clipped)
+                value_losses = .5 * torch.max(value_losses,
+                                              value_losses_clipped)
 
-                loss = torch.mean(action_losses - dist_entropy * self.entropy_coef
-                                  + value_losses * self.value_loss_coef
-                                  )
+                loss = torch.mean(action_losses -
+                                  dist_entropy * self.entropy_coef +
+                                  value_losses * self.value_loss_coef)
 
                 loss.backward()
                 total_norm += global_norm(

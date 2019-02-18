@@ -1,6 +1,7 @@
-from mpi4py import MPI
 import numpy as np
 import tensorflow as tf
+
+from mpi4py import MPI
 
 
 class MpiAdamOptimizer(tf.train.AdamOptimizer):

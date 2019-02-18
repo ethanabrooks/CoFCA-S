@@ -4,8 +4,9 @@ import platform
 import shutil
 import subprocess
 
-from mpi4py import MPI
 import numpy as np
+
+from mpi4py import MPI
 
 
 def sync_from_root(sess, variables, comm=None):

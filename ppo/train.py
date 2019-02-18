@@ -7,7 +7,6 @@ import numpy as np
 from tensorboardX import SummaryWriter
 import torch
 
-from ppo.env_adapter import GoalsHSREnv
 from ppo.envs import VecNormalize, make_vec_envs
 from ppo.goal_generator import GoalGenerator
 from ppo.policy import Policy

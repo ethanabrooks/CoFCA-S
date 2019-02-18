@@ -40,13 +40,12 @@ def make_vec_env(env_id,
         return lambda: make_env(
             env_id=env_id,
             env_type=env_type,
-            subrank = rank,
+            subrank=rank,
             seed=seed,
             reward_scale=reward_scale,
             gamestate=gamestate,
             flatten_dict_observations=flatten_dict_observations,
-            wrapper_kwargs=wrapper_kwargs
-        )
+            wrapper_kwargs=wrapper_kwargs)
 
     set_global_seeds(seed)
     if num_env > 1:

@@ -2,7 +2,7 @@ from gym.spaces import Box, Discrete
 import torch
 import torch.nn as nn
 
-from ppo.util import Categorical, NoInput, init_normc_, mlp
+from ppo.util import Categorical, NoInput, mlp
 from utils import space_to_size
 
 
