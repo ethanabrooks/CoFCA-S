@@ -88,7 +88,7 @@ class PPO:
 
         def binary_search(alpha, diff, i):
             kl = KL(alpha).mean()
-            if i == 0 or torch.abs(kl - self.delta) < .05:
+            if i == 0 or torch.abs(kl - self.delta) < .02:
                 return alpha, kl
             if diff * (kl - self.delta) > 0:  # wrong direction
                 diff /= -2
