@@ -120,19 +120,14 @@ class PPO:
                         return (1 + alpha**
                                 (-batch.adv)) * batch.adv * torch.log(alpha)
 
-                    def binary_search(alpha, diff, i):
-                        kl = KL(alpha).mean()
-                        if i == 0 or torch.abs(kl - self.delta) < .01:
-                            return alpha, kl
-                        if diff * (kl - self.delta) < 0:  # wrong direction
-                            diff /= -2
-                        return binary_search(alpha + diff, diff, i - 1)
-
                     # alpha, kl = binary_search(
                     # torch.tensor(1.), torch.tensor(1.), 100)
-                    alpha = torch.tensor(self.delta)
+                    alpha = torch.tensor(100.)
+                    kl = batch.old_action_log_probs - action_log_probs
 
                     target = log_prob_target_policy(alpha)
+                    target[kl > self.delta] = batch.old_action_log_probs[kl > self.delta]
+
                     action_losses = (target - batch.old_action_log_probs
                                      ).exp() * (target - action_log_probs)
 
@@ -142,8 +137,7 @@ class PPO:
                         batch.actions)
 
                     update_values.update(
-                        kl=KL(alpha),
-                        kl2=batch.old_action_log_probs - action_log_probs,
+                        kl=batch.old_action_log_probs - action_log_probs,
                         alpha=alpha,
                     )
 
