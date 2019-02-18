@@ -1,6 +1,6 @@
 # stdlib
-import math
 from collections import Counter
+import math
 
 # third party
 import torch
@@ -135,6 +135,11 @@ class PPO:
                     target = log_prob_target_policy(alpha)
                     action_losses = (target - batch.old_action_log_probs
                                      ).exp() * (target - action_log_probs)
+                    update_values.update(
+                        kl=KL(alpha),
+                        kl2=KL2(alpha),
+                        alpha=alpha,
+                    )
 
                 value_losses = (values - batch.ret).pow(2)
                 if self.use_clipped_value_loss:
@@ -158,9 +163,6 @@ class PPO:
                 # noinspection PyTypeChecker
                 self.optimizer.zero_grad()
                 update_values.update(
-                    kl=KL(alpha),
-                    kl2=KL2(alpha),
-                    alpha=alpha,
                     value_loss=value_losses,
                     action_loss=action_losses,
                     norm=total_norm,
