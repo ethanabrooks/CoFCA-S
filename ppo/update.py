@@ -123,14 +123,17 @@ class PPO:
                     # alpha, kl = binary_search(
                     # torch.tensor(1.), torch.tensor(1.), 100)
                     alpha = torch.tensor(self.delta)
-                    kl = batch.old_action_log_probs - action_log_probs
+                    kl = torch.exp(
+                        action_log_probs - batch.old_action_log_probs) * (
+                            action_log_probs - batch.old_action_log_probs)
 
                     target = log_prob_target_policy(alpha)
-                    infeasible = kl.exp() > self.clip_param
+                    infeasible = kl.exp() > 1. + self.clip_param
                     target[infeasible] = batch.old_action_log_probs[infeasible]
 
-                    action_losses = (target - batch.old_action_log_probs
-                                     ).exp() * (target - action_log_probs)
+                    action_losses = torch.exp(target -
+                                              batch.old_action_log_probs) * (
+                                                  target - action_log_probs)
 
                     _, action_log_probs, _, \
                     _ = self.actor_critic.evaluate_actions(
@@ -140,7 +143,7 @@ class PPO:
                     update_values.update(
                         kl=batch.old_action_log_probs - action_log_probs,
                         alpha=alpha,
-                        clip_param=infeasible.mean(),
+                        clip_frac=infeasible.float().mean(),
                     )
 
                 value_losses = (values - batch.ret).pow(2)
