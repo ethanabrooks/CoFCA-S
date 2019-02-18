@@ -145,13 +145,15 @@ def build_parser():
         help='max norm of gradients (default: 0.5)')
     ppo_parser.add_argument(
         '--baseline',
-        action='store_true',)
+        action='store_true',
+    )
     return parser
 
 
 def add_hsr_args(parser):
     parser.add_argument('--max-episode-steps', type=int)
     env_parser = parser.add_argument_group('env_args')
+    import hsr.util
     hsr.util.add_env_args(env_parser)
     hsr.util.add_wrapper_args(parser.add_argument_group('wrapper_args'))
 

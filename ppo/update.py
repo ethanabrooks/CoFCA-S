@@ -98,35 +98,53 @@ class PPO:
                     batch.actions)
 
                 if self.baseline:
-                    ratio = torch.exp(
-                        action_log_probs - batch.old_action_log_probs)
+                    ratio = torch.exp(action_log_probs -
+                                      batch.old_action_log_probs)
                     surr1 = ratio * batch.adv
-                    surr2 = torch.clamp(ratio, 1.0 - self.clip_param, 1.0 + self.clip_param) * batch.adv
+                    surr2 = torch.clamp(ratio, 1.0 - self.clip_param,
+                                        1.0 + self.clip_param) * batch.adv
                     action_losses = -torch.min(surr1, surr2)
                 else:
+
                     def log_prob_target_policy(alpha):
                         x = batch.adv * torch.log(alpha)
                         return batch.old_action_log_probs + x
 
                     def KL(alpha):
+                        return batch.old_action_log_probs - log_prob_target_policy(
+                            alpha)
+
+                    def KL2(alpha):
                         # return batch.old_action_log_probs - log_prob_target_policy(
                         #     alpha)
-                        return (1 + alpha**(-batch.adv)) * batch.adv * torch.log(alpha)
+                        return (1 + alpha**
+                                (-batch.adv)) * batch.adv * torch.log(alpha)
 
-                    def binary_search(alpha, diff, i):
-                        kl = KL(alpha).mean()
-                        if i == 0 or torch.abs(kl - self.delta) < .01:
-                            return alpha, kl
-                        if diff * (kl - self.delta) < 0:  # wrong direction
-                            diff /= -2
-                        return binary_search(alpha + diff, diff, i - 1)
-
-                    alpha, kl = binary_search(
-                        torch.tensor(1.), torch.tensor(1.), 100)
+                    # alpha, kl = binary_search(
+                    # torch.tensor(1.), torch.tensor(1.), 100)
+                    alpha = torch.tensor(self.delta)
+                    kl = torch.exp(
+                        action_log_probs - batch.old_action_log_probs) * (
+                            action_log_probs - batch.old_action_log_probs)
 
                     target = log_prob_target_policy(alpha)
-                    action_losses = (target - batch.old_action_log_probs).exp() * (
-                        target - action_log_probs)
+                    infeasible = kl.exp() > 1. + self.clip_param
+                    target[infeasible] = batch.old_action_log_probs[infeasible]
+
+                    action_losses = torch.exp(target -
+                                              batch.old_action_log_probs) * (
+                                                  target - action_log_probs)
+
+                    _, action_log_probs, _, \
+                    _ = self.actor_critic.evaluate_actions(
+                        batch.obs, batch.recurrent_hidden_states, batch.masks,
+                        batch.actions)
+
+                    update_values.update(
+                        kl=batch.old_action_log_probs - action_log_probs,
+                        alpha=alpha,
+                        clip_frac=infeasible.float().mean(),
+                    )
 
                 value_losses = (values - batch.ret).pow(2)
                 if self.use_clipped_value_loss:
@@ -150,8 +168,6 @@ class PPO:
                 # noinspection PyTypeChecker
                 self.optimizer.zero_grad()
                 update_values.update(
-                    kl=kl,
-                    alpha=alpha,
                     value_loss=value_losses,
                     action_loss=action_losses,
                     norm=total_norm,
