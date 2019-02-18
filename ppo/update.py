@@ -98,12 +98,14 @@ class PPO:
                     batch.actions)
 
                 if self.baseline:
-                    ratio = torch.exp(
-                        action_log_probs - batch.old_action_log_probs)
+                    ratio = torch.exp(action_log_probs -
+                                      batch.old_action_log_probs)
                     surr1 = ratio * batch.adv
-                    surr2 = torch.clamp(ratio, 1.0 - self.clip_param, 1.0 + self.clip_param) * batch.adv
+                    surr2 = torch.clamp(ratio, 1.0 - self.clip_param,
+                                        1.0 + self.clip_param) * batch.adv
                     action_losses = -torch.min(surr1, surr2)
                 else:
+
                     def log_prob_target_policy(alpha):
                         x = batch.adv * torch.log(alpha)
                         return batch.old_action_log_probs + x
@@ -111,7 +113,8 @@ class PPO:
                     def KL(alpha):
                         # return batch.old_action_log_probs - log_prob_target_policy(
                         #     alpha)
-                        return (1 + alpha**(-batch.adv)) * batch.adv * torch.log(alpha)
+                        return (1 + alpha**
+                                (-batch.adv)) * batch.adv * torch.log(alpha)
 
                     def binary_search(alpha, diff, i):
                         kl = KL(alpha).mean()
@@ -121,12 +124,14 @@ class PPO:
                             diff /= -2
                         return binary_search(alpha + diff, diff, i - 1)
 
-                    alpha, kl = binary_search(
-                        torch.tensor(1.), torch.tensor(1.), 100)
+                    # alpha, kl = binary_search(
+                    # torch.tensor(1.), torch.tensor(1.), 100)
+                    alpha = self.delta
+                    kl = KL(alpha)
 
                     target = log_prob_target_policy(alpha)
-                    action_losses = (target - batch.old_action_log_probs).exp() * (
-                        target - action_log_probs)
+                    action_losses = (target - batch.old_action_log_probs
+                                     ).exp() * (target - action_log_probs)
 
                 value_losses = (values - batch.ret).pow(2)
                 if self.use_clipped_value_loss:
