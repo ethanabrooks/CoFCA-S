@@ -6,8 +6,7 @@ import gym
 from torch import nn as nn
 
 import gridworld_env
-import hsr.util
-from ppo.env_adapter import (GoalsGridWorld, GoalsHSREnv, GoalsMoveGripperEnv, GridWorld, HSREnv, MoveGripperEnv,
+from ppo.env_adapter import (GoalsGridWorld, GridWorld,
                              RandomGridWorld)
 from ppo.envs import wrap_env
 from ppo.train import train
@@ -15,6 +14,11 @@ from utils import parse_activation, parse_groups
 
 try:
     import dm_control2gym
+except ImportError:
+    pass
+try:
+    import hsr.util
+    from ppo.hsr_env_adapter import HSREnv, GoalsHSREnv, MoveGripperEnv, GoalsMoveGripperEnv
 except ImportError:
     pass
 
