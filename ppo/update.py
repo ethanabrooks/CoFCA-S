@@ -1,7 +1,7 @@
 # stdlib
-from collections import Counter
 import itertools
 import math
+from collections import Counter
 
 # third party
 import torch
@@ -20,16 +20,16 @@ def f(x):
 def global_norm(grads):
     norm = 0
     for grad in grads:
-        norm += grad.norm(2) ** 2
-    return norm ** .5
+        norm += grad.norm(2)**2
+    return norm**.5
 
 
 def epanechnikov_kernel(x):
-    return 3 / 4 * (1 - x ** 2)
+    return 3 / 4 * (1 - x**2)
 
 
 def gaussian_kernel(x):
-    return (2 * math.pi) ** -.5 * torch.exp(-.5 * x ** 2)
+    return (2 * math.pi)**-.5 * torch.exp(-.5 * x**2)
 
 
 class PPO:
@@ -88,7 +88,7 @@ class PPO:
 
         def binary_search(alpha, diff, i):
             kl = KL(alpha).mean()
-            if i == 0 or torch.abs(kl - self.delta) < .02:
+            if i == 0 or torch.abs(kl - self.delta) < .01:
                 return alpha, kl
             if diff * (kl - self.delta) > 0:  # wrong direction
                 diff /= -2
@@ -98,7 +98,7 @@ class PPO:
 
         target = log_prob_target_policy(alpha)
         action_losses = (target - batch.old_action_log_probs).exp() * (
-                target - action_log_probs)
+            target - action_log_probs)
 
         value_losses = (values - batch.ret).pow(2)
         if self.use_clipped_value_loss:
@@ -125,7 +125,7 @@ class PPO:
     def update(self, rollouts: RolloutStorage):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         advantages = (advantages - advantages.mean()) / (
-                advantages.std() + 1e-5)
+            advantages.std() + 1e-5)
         update_values = Counter()
         goal_values = Counter()
 
