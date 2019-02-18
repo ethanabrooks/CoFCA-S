@@ -140,6 +140,7 @@ class PPO:
                     update_values.update(
                         kl=batch.old_action_log_probs - action_log_probs,
                         alpha=alpha,
+                        clip_param=infeasible.mean(),
                     )
 
                 value_losses = (values - batch.ret).pow(2)
