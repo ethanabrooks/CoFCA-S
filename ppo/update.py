@@ -163,7 +163,7 @@ class PPO:
                 unique.numel() * dist.log_prob(goal_to_train).exp())
 
             uses_goal = batches.goals.squeeze() == goal_to_train
-            indices = torch.arange(total_batch_size)
+            indices = torch.arange(total_batch_size)[uses_goal]
             sample = rollouts.make_batch(advantages, indices)
             # Reshape to do in a single forward pass for all steps
 
