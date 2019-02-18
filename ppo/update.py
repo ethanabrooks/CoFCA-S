@@ -122,11 +122,12 @@ class PPO:
 
                     # alpha, kl = binary_search(
                     # torch.tensor(1.), torch.tensor(1.), 100)
-                    alpha = torch.tensor(100.)
+                    alpha = torch.tensor(self.delta)
                     kl = batch.old_action_log_probs - action_log_probs
 
                     target = log_prob_target_policy(alpha)
-                    target[kl > self.delta] = batch.old_action_log_probs[kl > self.delta]
+                    infeasible = kl.exp() > self.clip_param
+                    target[infeasible] = batch.old_action_log_probs[infeasible]
 
                     action_losses = (target - batch.old_action_log_probs
                                      ).exp() * (target - action_log_probs)
