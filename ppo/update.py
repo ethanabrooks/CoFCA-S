@@ -73,7 +73,10 @@ class PPO:
         self.gan = goal_generator
         self.reward_function = None
 
-    def compute_loss_components(self, batch, use_baseline=False, compute_value_loss=True):
+    def compute_loss_components(self,
+                                batch,
+                                use_baseline=False,
+                                compute_value_loss=True):
         values, action_log_probs, dist_entropy, \
         _ = self.actor_critic.evaluate_actions(
             batch.obs, batch.recurrent_hidden_states, batch.masks,
@@ -84,7 +87,8 @@ class PPO:
         # surr2 = torch.clamp(ratio, 1.0 - self.clip_param,
         #                     1.0 + self.clip_param) * batch.adv
 
-        action_losses = -(batch.adv if use_baseline else batch.ret) * action_log_probs
+        action_losses = -(batch.adv
+                          if use_baseline else batch.ret) * action_log_probs
 
         value_losses = None
         if compute_value_loss:
@@ -164,7 +168,9 @@ class PPO:
                 unique.numel() * dist.log_prob(goal_to_train).exp())
 
             # uses_goal = batches.goals.squeeze() == goal_to_train
-            uses_goal = torch.from_numpy(np.isin(batches.goals.numpy(), [0, 1, 2, 8, 9, 10]).astype(np.uint8)).squeeze()
+            uses_goal = torch.from_numpy(
+                np.isin(batches.goals.numpy(),
+                        [0, 1, 2, 8, 9, 10]).astype(np.uint8)).squeeze()
             indices = torch.arange(total_batch_size)[uses_goal]
             sample = rollouts.make_batch(advantages, indices)
             # Reshape to do in a single forward pass for all steps
@@ -182,6 +188,7 @@ class PPO:
             # noinspection PyTypeChecker
             self.optimizer.zero_grad()
             update_values.update(
+                grad_sum=grads,
                 value_loss=value_losses,
                 action_loss=action_losses,
                 norm=total_norm,
