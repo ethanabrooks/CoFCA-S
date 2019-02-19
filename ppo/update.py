@@ -5,6 +5,7 @@ import math
 
 # third party
 # first party
+import numpy as np
 import torch
 from torch.distributions import Categorical
 import torch.nn as nn
@@ -164,8 +165,9 @@ class PPO:
             importance_weighting = 1 / (
                 unique.numel() * dist.log_prob(goal_to_train).exp())
 
-            uses_goal = batches.goals.squeeze() == goal_to_train
-            indices = torch.arange(total_batch_size)
+            # uses_goal = batches.goals.squeeze() == goal_to_train
+            uses_goal = torch.from_numpy(np.isin(batches.goals.numpy(), [0, 1, 2, 8, 9, 10]).astype(np.uint8)).squeeze()
+            indices = torch.arange(total_batch_size)[uses_goal]
             sample = rollouts.make_batch(advantages, indices)
             # Reshape to do in a single forward pass for all steps
 
