@@ -156,6 +156,8 @@ class PPO:
             else:
                 logits = grads
 
+            logits = torch.zeros_like(grads)
+            logits[[0, 1, 2, 8, 9, 10]] = 1
             dist = Categorical(logits=logits)
             goal_to_train = dist.sample().float()
             goals_trained.append(goal_to_train)
