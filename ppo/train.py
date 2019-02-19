@@ -294,7 +294,7 @@ def train(num_frames,
 
                 plot(1, rewards)
                 plot(2, gradient)
-                # plt.subplots_adjust(0, 0, 1, 1)
+                plt.subplots_adjust(0, 0, 1, 1)
 
                 writer.add_figure('goals', fig, total_num_steps)
                 # writer.close()
