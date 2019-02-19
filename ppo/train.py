@@ -1,11 +1,11 @@
 import itertools
-import time
 from pathlib import Path
+import time
 
-import numpy as np
-import torch
 from gym.spaces import Discrete
+import numpy as np
 from tensorboardX import SummaryWriter
+import torch
 
 from ppo.env_adapter import GoalsHSREnv
 from ppo.envs import VecNormalize, make_vec_envs
@@ -106,7 +106,7 @@ def train(num_frames,
             obs_shape=envs.observation_space.shape,
             action_space=envs.action_space,
             recurrent_hidden_state_size=actor_critic.
-            recurrent_hidden_state_size,
+                recurrent_hidden_state_size,
             goal_size=goal_size)
 
     else:
@@ -116,7 +116,7 @@ def train(num_frames,
             obs_shape=envs.observation_space.shape,
             action_space=envs.action_space,
             recurrent_hidden_state_size=actor_critic.
-            recurrent_hidden_state_size,
+                recurrent_hidden_state_size,
         )
 
     agent = PPO(actor_critic=actor_critic, goal_generator=gan, **ppo_args)
@@ -233,8 +233,8 @@ def train(num_frames,
         total_num_steps = (j + 1) * num_processes * num_steps
 
         if all(
-            [log_dir, save_interval,
-             time.time() - last_save >= save_interval]):
+                [log_dir, save_interval,
+                 time.time() - last_save >= save_interval]):
             last_save = time.time()
             modules = dict(
                 optimizer=agent.optimizer,
@@ -279,11 +279,17 @@ def train(num_frames,
                                          total_num_steps)
 
                 x, y, rewards, gradient = zip(*goals_data)
-                plt.subplot(2, 1, 1)
-                plt.scatter(x, y, color=cm.hot(rewards))
-                plt.subplot(2, 1, 2)
-                plt.scatter(x, y, color=cm.hot(gradient))
 
+                def plot(subplot, c):
+                    plt.subplot(2, 1, subplot)
+                    x_noise = (np.random.rand(len(x)) - .5) / 10
+                    y_noise = (np.random.rand(len(y)) - .5) / 10
+                    sc = plt.scatter(
+                        x + x_noise, y + y_noise, c=c, cmap=cm.hot, alpha=.1)
+                    plt.colorbar(sc)
+
+                plot(1, rewards)
+                plot(2, gradient)
                 writer.add_figure('goals', plt.figure(), total_num_steps)
             episode_rewards = []
 
