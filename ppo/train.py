@@ -304,7 +304,7 @@ def train(num_frames,
                 plt.axis('scaled')
 
                 writer.add_figure('goals', fig, total_num_steps)
-                writer.close()
+                # writer.close()
             episode_rewards = []
 
         if eval_interval is not None and j % eval_interval == 0:
