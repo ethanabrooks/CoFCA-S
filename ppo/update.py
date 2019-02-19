@@ -1,15 +1,15 @@
 # stdlib
-from collections import Counter
 import itertools
 import math
+from collections import Counter
 
 # third party
 # first party
 import numpy as np
 import torch
-from torch.distributions import Categorical
 import torch.nn as nn
 import torch.optim as optim
+from torch.distributions import Categorical
 
 from common.running_mean_std import RunningMeanStd
 from ppo.storage import Batch, GoalsRolloutStorage, RolloutStorage
