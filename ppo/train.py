@@ -45,6 +45,7 @@ def train(num_frames,
         torch.backends.cudnn.deterministic = True
 
     if log_dir:
+        import matplotlib.pyplot as plt
         writer = SummaryWriter(log_dir=str(log_dir))
         print(f'Logging to {log_dir}')
         eval_log_dir = log_dir.joinpath("eval")
@@ -78,8 +79,9 @@ def train(num_frames,
         envs.observation_space, envs.action_space, network_args=network_args)
 
     gan = None
+    sample_env = make_env(seed=seed, rank=0, eval=False).unwrapped
+    all_goals_trained = []
     if train_goals:
-        sample_env = make_env(seed=seed, rank=0, eval=False).unwrapped
         assert sample_env.goal_space.n == num_processes
         gan = GoalGenerator(
             goal_space=sample_env.goal_space,
@@ -218,6 +220,13 @@ def train(num_frames,
             next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau)
 
         train_results, goals_trained = agent.update(rollouts, baseline)
+        goals_trained = np.concatenate(
+            [x.numpy() for x in goals_trained]).astype(int)
+        reward_so_far = np.mean(np.concatenate(episode_rewards))
+        l = [(x, y, reward_so_far)
+             for x, y in zip(*sample_env.decode(goals_trained))]
+        all_goals_trained.extend(l)
+
         rollouts.after_update()
         total_num_steps = (j + 1) * num_processes * num_steps
 
@@ -266,6 +275,10 @@ def train(num_frames,
                 if train_goals:
                     writer.add_histogram('gan probs', np.array(goals_trained),
                                          total_num_steps)
+
+                x, y, color = zip(*all_goals_trained)
+                plt.scatter(x, y, c=color)
+                writer.add_figure('goals', plt.figure(), total_num_steps)
             episode_rewards = []
 
         if eval_interval is not None and j % eval_interval == 0:
