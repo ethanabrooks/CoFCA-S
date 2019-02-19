@@ -35,7 +35,7 @@ def train(num_frames,
           ppo_args,
           network_args,
           render,
-          baseline,
+          sampling_strategy,
           goals_args=None):
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
@@ -220,7 +220,7 @@ def train(num_frames,
         rollouts.compute_returns(
             next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau)
 
-        train_results, goals_trained = agent.update(rollouts, baseline)
+        train_results, goals_trained = agent.update(rollouts, sampling_strategy)
         goals_trained = np.concatenate(
             [x.numpy() for x in goals_trained]).astype(int)
         reward_so_far = np.mean(np.concatenate(episode_rewards))

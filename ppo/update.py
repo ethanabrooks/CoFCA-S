@@ -115,7 +115,7 @@ class PPO:
             losses *= importance_weighting
         return torch.mean(losses)
 
-    def update(self, rollouts: RolloutStorage, baseline):
+    def update(self, rollouts: RolloutStorage, sampling_strategy):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         advantages = (advantages - advantages.mean()) / (
             advantages.std() + 1e-5)
@@ -156,12 +156,15 @@ class PPO:
                     allow_unused=True)
                 grads[i] = sum(g.abs().sum() for g in grad if g is not None)
 
-            if baseline:
+            if sampling_strategy == 'baseline':
                 logits = torch.ones_like(grads)
-            else:
-                # logits = grads
+            elif sampling_strategy == '0/1logits':
                 logits = torch.zeros_like(grads)
                 logits[grads > 0] = 1
+            elif sampling_strategy == 'experiment':
+                logits = grads
+            else:
+                raise RuntimeError
 
             dist = Categorical(logits=logits)
             goal_to_train = dist.sample().float()
