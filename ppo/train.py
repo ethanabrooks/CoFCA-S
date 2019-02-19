@@ -106,7 +106,7 @@ def train(num_frames,
             obs_shape=envs.observation_space.shape,
             action_space=envs.action_space,
             recurrent_hidden_state_size=actor_critic.
-                recurrent_hidden_state_size,
+            recurrent_hidden_state_size,
             goal_size=goal_size)
 
     else:
@@ -116,7 +116,7 @@ def train(num_frames,
             obs_shape=envs.observation_space.shape,
             action_space=envs.action_space,
             recurrent_hidden_state_size=actor_critic.
-                recurrent_hidden_state_size,
+            recurrent_hidden_state_size,
         )
 
     agent = PPO(actor_critic=actor_critic, goal_generator=gan, **ppo_args)
@@ -220,7 +220,8 @@ def train(num_frames,
         rollouts.compute_returns(
             next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau)
 
-        train_results, goals_trained = agent.update(rollouts, sampling_strategy)
+        train_results, goals_trained = agent.update(rollouts,
+                                                    sampling_strategy)
         goals_trained = np.concatenate(
             [x.numpy() for x in goals_trained]).astype(int)
         reward_so_far = np.mean(np.concatenate(episode_rewards))
@@ -233,8 +234,8 @@ def train(num_frames,
         total_num_steps = (j + 1) * num_processes * num_steps
 
         if all(
-                [log_dir, save_interval,
-                 time.time() - last_save >= save_interval]):
+            [log_dir, save_interval,
+             time.time() - last_save >= save_interval]):
             last_save = time.time()
             modules = dict(
                 optimizer=agent.optimizer,
@@ -288,9 +289,22 @@ def train(num_frames,
                         x + x_noise, y + y_noise, c=c, cmap=cm.hot, alpha=.1)
                     plt.colorbar(sc)
 
-                plot(1, rewards)
-                plot(2, gradient)
-                writer.add_figure('goals', plt.figure(), total_num_steps)
+                # plot(1, rewards)
+                # plot(2, gradient)
+                plt.switch_backend('agg')
+
+                fig = plt.figure()
+
+                c1 = plt.Circle((0.2, 0.5), 0.2, color='r')
+                c2 = plt.Circle((0.8, 0.5), 0.2, color='r')
+
+                ax = plt.gca()
+                ax.add_patch(c1)
+                ax.add_patch(c2)
+                plt.axis('scaled')
+
+                writer.add_figure('goals', fig, total_num_steps)
+                writer.close()
             episode_rewards = []
 
         if eval_interval is not None and j % eval_interval == 0:
