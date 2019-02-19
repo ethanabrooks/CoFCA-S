@@ -124,6 +124,8 @@ class PPO:
 
         total_norm = torch.tensor(0, dtype=torch.float32)
         goals_trained = []
+        rets = []
+        grad_sums = []
         for e in range(self.ppo_epoch):
             if self.actor_critic.is_recurrent:
                 data_generator = rollouts.recurrent_generator(
@@ -173,6 +175,10 @@ class PPO:
                 unique.numel() * dist.log_prob(goal_to_train).exp())
 
             uses_goal = batches.goals.squeeze() == goal_to_train
+            ret = batches.ret[uses_goal].mean()
+            grad = grads[unique == goal_to_train]
+            rets.append(ret)
+            grad_sums.append(grad)
             # uses_goal = torch.from_numpy(
             # np.isin(batches.goals.numpy(),
             # [0, 1, 2, 8, 9, 10]).astype(np.uint8)).squeeze()
@@ -213,4 +219,4 @@ class PPO:
             for k, v in goal_values.items():
                 update_values[k] = torch.mean(v) / n
 
-        return update_values, goals_trained
+        return update_values, goals_trained, rets, grad_sums

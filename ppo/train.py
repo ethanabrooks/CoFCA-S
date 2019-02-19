@@ -106,7 +106,7 @@ def train(num_frames,
             obs_shape=envs.observation_space.shape,
             action_space=envs.action_space,
             recurrent_hidden_state_size=actor_critic.
-            recurrent_hidden_state_size,
+                recurrent_hidden_state_size,
             goal_size=goal_size)
 
     else:
@@ -116,7 +116,7 @@ def train(num_frames,
             obs_shape=envs.observation_space.shape,
             action_space=envs.action_space,
             recurrent_hidden_state_size=actor_critic.
-            recurrent_hidden_state_size,
+                recurrent_hidden_state_size,
         )
 
     agent = PPO(actor_critic=actor_critic, goal_generator=gan, **ppo_args)
@@ -220,22 +220,21 @@ def train(num_frames,
         rollouts.compute_returns(
             next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau)
 
-        train_results, goals_trained = agent.update(rollouts,
-                                                    sampling_strategy)
+        train_results, goals_trained, returns, gradient_sums = agent.update(rollouts,
+                                                                            sampling_strategy)
         goals_trained = np.concatenate(
             [x.numpy() for x in goals_trained]).astype(int)
-        reward_so_far = np.mean(np.concatenate(episode_rewards))
-        gradient = train_results['grad_sum'].numpy()
-        l = [(x, y, reward_so_far, gradient)
-             for x, y in zip(*sample_env.decode(goals_trained))]
+        l = [(x, y, r, g)
+             for x, y, r, g in
+             zip(*sample_env.decode(goals_trained), returns, gradient_sums)]
         goals_data.extend(l)
 
         rollouts.after_update()
         total_num_steps = (j + 1) * num_processes * num_steps
 
         if all(
-            [log_dir, save_interval,
-             time.time() - last_save >= save_interval]):
+                [log_dir, save_interval,
+                 time.time() - last_save >= save_interval]):
             last_save = time.time()
             modules = dict(
                 optimizer=agent.optimizer,
@@ -285,15 +284,14 @@ def train(num_frames,
 
                 def plot(c, text):
                     fig = plt.figure()
-                    x_noise = (np.random.rand(len(x)) - .5) / 10
-                    y_noise = (np.random.rand(len(y)) - .5) / 10
+                    x_noise = (np.random.rand(len(x)) - .5) * .9
+                    y_noise = (np.random.rand(len(y)) - .5) * .9
                     sc = plt.scatter(
                         x + x_noise, y + y_noise, c=c, cmap=cm.hot, alpha=.1)
                     plt.colorbar(sc)
                     plt.subplots_adjust(0, 0, 1, 1)
                     writer.add_figure(text, fig, total_num_steps)
                     plt.close(fig)
-
 
                 plot(rewards, 'rewards')
                 plot(gradient, 'gradient')
