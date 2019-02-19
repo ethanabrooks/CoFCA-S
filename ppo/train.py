@@ -283,21 +283,21 @@ def train(num_frames,
 
                 plt.switch_backend('agg')
                 fig = plt.figure()
-                ax = plt.gca()
 
-                def plot(c):
+                def plot(subplot, c):
+                    plt.subplot(2, 1, subplot)
                     x_noise = (np.random.rand(len(x)) - .5) / 10
                     y_noise = (np.random.rand(len(y)) - .5) / 10
                     sc = plt.scatter(
                         x + x_noise, y + y_noise, c=c, cmap=cm.hot, alpha=.1)
                     plt.colorbar(sc)
-                    ax.add_patch(sc)
 
-                plot(gradient)
-                plot(rewards)
+                plot(1, rewards)
+                plot(2, gradient)
+                # plt.subplots_adjust(0, 0, 1, 1)
 
                 writer.add_figure('goals', fig, total_num_steps)
-
+                # writer.close()
             episode_rewards = []
 
         if eval_interval is not None and j % eval_interval == 0:
