@@ -281,30 +281,23 @@ def train(num_frames,
 
                 x, y, rewards, gradient = zip(*goals_data)
 
-                def plot(subplot, c):
-                    plt.subplot(2, 1, subplot)
+                plt.switch_backend('agg')
+                fig = plt.figure()
+                ax = plt.gca()
+
+                def plot(c):
                     x_noise = (np.random.rand(len(x)) - .5) / 10
                     y_noise = (np.random.rand(len(y)) - .5) / 10
                     sc = plt.scatter(
                         x + x_noise, y + y_noise, c=c, cmap=cm.hot, alpha=.1)
                     plt.colorbar(sc)
+                    ax.add_patch(sc)
 
-                # plot(1, rewards)
-                # plot(2, gradient)
-                plt.switch_backend('agg')
-
-                fig = plt.figure()
-
-                c1 = plt.Circle((0.2, 0.5), 0.2, color='r')
-                c2 = plt.Circle((0.8, 0.5), 0.2, color='r')
-
-                ax = plt.gca()
-                ax.add_patch(c1)
-                ax.add_patch(c2)
-                plt.axis('scaled')
+                plot(gradient)
+                plot(rewards)
 
                 writer.add_figure('goals', fig, total_num_steps)
-                # writer.close()
+
             episode_rewards = []
 
         if eval_interval is not None and j % eval_interval == 0:
