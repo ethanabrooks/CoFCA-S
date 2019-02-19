@@ -80,7 +80,7 @@ def train(num_frames,
 
     gan = None
     sample_env = make_env(seed=seed, rank=0, eval=False).unwrapped
-    all_goals_trained = []
+    goals_data = []
     if train_goals:
         assert sample_env.goal_space.n == num_processes
         gan = GoalGenerator(
@@ -223,9 +223,9 @@ def train(num_frames,
         goals_trained = np.concatenate(
             [x.numpy() for x in goals_trained]).astype(int)
         reward_so_far = np.mean(np.concatenate(episode_rewards))
-        l = [(x, y, reward_so_far)
+        l = [(x, y, reward_so_far, train_results['grad_sum'])
              for x, y in zip(*sample_env.decode(goals_trained))]
-        all_goals_trained.extend(l)
+        goals_data.extend(l)
 
         rollouts.after_update()
         total_num_steps = (j + 1) * num_processes * num_steps
@@ -276,8 +276,12 @@ def train(num_frames,
                     writer.add_histogram('gan probs', np.array(goals_trained),
                                          total_num_steps)
 
-                x, y, color = zip(*all_goals_trained)
-                plt.scatter(x, y, c=color)
+                x, y, rewards, gradient = zip(*goals_data)
+                plt.subplot(2, 1, 1)
+                plt.scatter(x, y, color=rewards)
+                plt.subplot(2, 1, 2)
+                plt.scatter(x, y, color=gradient)
+
                 writer.add_figure('goals', plt.figure(), total_num_steps)
             episode_rewards = []
 
