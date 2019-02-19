@@ -1,11 +1,11 @@
 import itertools
-from pathlib import Path
 import time
+from pathlib import Path
 
-from gym.spaces import Discrete
 import numpy as np
-from tensorboardX import SummaryWriter
 import torch
+from gym.spaces import Discrete
+from tensorboardX import SummaryWriter
 
 from ppo.env_adapter import GoalsHSREnv
 from ppo.envs import VecNormalize, make_vec_envs
@@ -46,6 +46,7 @@ def train(num_frames,
 
     if log_dir:
         import matplotlib.pyplot as plt
+        import matplotlib.cm as cm
         writer = SummaryWriter(log_dir=str(log_dir))
         print(f'Logging to {log_dir}')
         eval_log_dir = log_dir.joinpath("eval")
@@ -223,7 +224,8 @@ def train(num_frames,
         goals_trained = np.concatenate(
             [x.numpy() for x in goals_trained]).astype(int)
         reward_so_far = np.mean(np.concatenate(episode_rewards))
-        l = [(x, y, reward_so_far, train_results['grad_sum'])
+        gradient = train_results['grad_sum'].numpy()
+        l = [(x, y, reward_so_far, gradient)
              for x, y in zip(*sample_env.decode(goals_trained))]
         goals_data.extend(l)
 
@@ -278,9 +280,9 @@ def train(num_frames,
 
                 x, y, rewards, gradient = zip(*goals_data)
                 plt.subplot(2, 1, 1)
-                plt.scatter(x, y, color=rewards)
+                plt.scatter(x, y, color=cm.hot(rewards))
                 plt.subplot(2, 1, 2)
-                plt.scatter(x, y, color=gradient)
+                plt.scatter(x, y, color=cm.hot(gradient))
 
                 writer.add_figure('goals', plt.figure(), total_num_steps)
             episode_rewards = []
