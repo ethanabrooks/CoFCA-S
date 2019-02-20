@@ -7,7 +7,7 @@ from torch import nn as nn
 
 import gridworld_env
 import hsr.util
-from ppo.env_adapter import (GoalsGridWorld, GoalsHSREnv, GoalsMoveGripperEnv, GridWorld, HSREnv, MoveGripperEnv,
+from ppo.env_adapter import (TasksGridWorld, TasksHSREnv, TasksMoveGripperEnv, GridWorld, HSREnv, MoveGripperEnv,
                              RandomGridWorld)
 from ppo.envs import wrap_env
 from ppo.train import train
@@ -157,19 +157,19 @@ def add_hsr_args(parser):
     hsr.util.add_wrapper_args(parser.add_argument_group('wrapper_args'))
 
 
-def add_goals_args(parser):
-    goals_parser = parser.add_argument_group('goals_args')
-    goals_parser.add_argument(
+def add_tasks_args(parser):
+    tasks_parser = parser.add_argument_group('tasks_args')
+    tasks_parser.add_argument(
         '--gan-learning-rate',
         type=float,
         default=7e-4,
         help='(default: 7e-4)')
-    goals_parser.add_argument('--gan-num-samples', type=int)
-    goals_parser.add_argument('--gan-hidden-size', type=int)
-    goals_parser.add_argument('--gan-num-layers', type=int)
-    goals_parser.add_argument(
+    tasks_parser.add_argument('--gan-num-samples', type=int)
+    tasks_parser.add_argument('--gan-hidden-size', type=int)
+    tasks_parser.add_argument('--gan-num-layers', type=int)
+    tasks_parser.add_argument(
         '--gan-activation', type=parse_activation, default=nn.ReLU())
-    goals_parser.add_argument(
+    tasks_parser.add_argument(
         '--gan-entropy-coef',
         type=float,
         default=0.01,
@@ -216,16 +216,16 @@ def cli():
     _train(**parse_groups(parser))
 
 
-def goals_cli():
+def tasks_cli():
     parser = build_parser()
-    add_goals_args(parser)
+    add_tasks_args(parser)
     parser.add_argument('--max-episode-steps', type=int)
     parser.add_argument('--render', action='store_true')
 
     def make_env_fn(max_episode_steps, **env_args):
         return functools.partial(
             wrap_env,
-            env_thunk=lambda eval: GoalsGridWorld(eval=eval, **env_args),
+            env_thunk=lambda eval: TasksGridWorld(eval=eval, **env_args),
             max_episode_steps=max_episode_steps)
 
     def _train(env_id, max_episode_steps, **kwargs):
@@ -257,16 +257,16 @@ def hsr_cli():
     hsr.util.env_wrapper(_train)(**parse_groups(parser))
 
 
-def goals_hsr_cli():
+def tasks_hsr_cli():
     parser = build_parser()
-    add_goals_args(parser)
+    add_tasks_args(parser)
     add_hsr_args(parser)
 
     def env_thunk(env_id, eval, **env_args):
         if env_id == 'move-gripper':
-            return lambda: GoalsMoveGripperEnv(**env_args)
+            return lambda: TasksMoveGripperEnv(**env_args)
         else:
-            return lambda: GoalsHSREnv(**env_args)
+            return lambda: TasksHSREnv(**env_args)
 
     def _train(env_args, env_id, max_episode_steps, **kwargs):
         train(
@@ -280,4 +280,4 @@ def goals_hsr_cli():
 
 
 if __name__ == "__main__":
-    goals_cli()
+    tasks_cli()

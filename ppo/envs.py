@@ -15,7 +15,7 @@ from common.vec_env import VecEnvWrapper
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
-from ppo.env_adapter import GoalsDummyVecEnv, GoalsSubprocVecEnv
+from ppo.env_adapter import TasksDummyVecEnv, TasksSubprocVecEnv
 
 
 def wrap_env(env_thunk,
@@ -31,7 +31,7 @@ def wrap_env(env_thunk,
         raise NotImplementedError
 
     env.seed(seed + rank)
-    env.set_goal(rank)
+    env.set_task(rank)
 
     obs_shape = env.observation_space.shape
 
@@ -68,7 +68,7 @@ def make_vec_envs(make_env,
                   normalize,
                   eval,
                   synchronous=False,
-                  train_goals=False,
+                  train_tasks=False,
                   num_frame_stack=None):
     envs = [
         functools.partial(make_env, eval=eval, seed=seed, rank=i)
@@ -76,11 +76,11 @@ def make_vec_envs(make_env,
     ]
 
     synchronous = synchronous or len(envs) == 1 or sys.platform == 'darwin'
-    if train_goals:
+    if train_tasks:
         if synchronous:
-            envs = GoalsDummyVecEnv(envs)
+            envs = TasksDummyVecEnv(envs)
         else:
-            envs = GoalsSubprocVecEnv(envs)
+            envs = TasksSubprocVecEnv(envs)
     else:
         if synchronous:
             envs = DummyVecEnv(envs)
@@ -103,7 +103,7 @@ def make_vec_envs(make_env,
 
 
 # Can be used to test recurrent policies for Reacher-v2
-class MaskGoal(gym.ObservationWrapper):
+class MaskTask(gym.ObservationWrapper):
     def observation(self, observation):
         if self.env._elapsed_steps > 0:
             observation[-2:0] = 0

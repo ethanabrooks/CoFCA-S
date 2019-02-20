@@ -12,7 +12,7 @@ def _flatten_helper(T, N, _tensor):
 
 Batch = namedtuple(
     'Batch', 'obs recurrent_hidden_states actions value_preds ret '
-    'masks old_action_log_probs adv goals importance_weighting')
+    'masks old_action_log_probs adv tasks importance_weighting')
 
 
 class RolloutStorage(object):
@@ -127,7 +127,7 @@ class RolloutStorage(object):
             masks=masks_batch,
             old_action_log_probs=old_action_log_probs_batch,
             adv=adv_targ,
-            goals=None,
+            tasks=None,
             importance_weighting=None)
         return batch
 
@@ -197,52 +197,52 @@ class RolloutStorage(object):
                 masks=masks_batch,
                 old_action_log_probs=old_action_log_probs_batch,
                 adv=adv_targ,
-                goals=None,
+                tasks=None,
                 importance_weighting=None)
 
 
-GoalsBatch = namedtuple(
-    'GoalsBatch', 'obs recurrent_hidden_states actions value_preds ret '
-    'masks old_action_log_probs adv goals importance_weighting')
+TasksBatch = namedtuple(
+    'TasksBatch', 'obs recurrent_hidden_states actions value_preds ret '
+    'masks old_action_log_probs adv tasks importance_weighting')
 
 
-class GoalsRolloutStorage(RolloutStorage):
-    def __init__(self, num_steps, num_processes, goal_size, **kwargs):
+class TasksRolloutStorage(RolloutStorage):
+    def __init__(self, num_steps, num_processes, task_size, **kwargs):
         super().__init__(
             num_steps=num_steps, num_processes=num_processes, **kwargs)
-        self.goals = torch.zeros(num_steps + 1, num_processes, goal_size)
+        self.tasks = torch.zeros(num_steps + 1, num_processes, task_size)
         self.importance_weighting = torch.zeros(num_steps + 1, num_processes)
 
     def to(self, device):
         super().to(device)
-        self.goals.to(device)
+        self.tasks.to(device)
         self.importance_weighting.to(device)
 
-    def insert(self, goal, importance_weighting, **kwargs):
-        self.goals[self.step + 1].copy_(goal.view(-1, 1))
+    def insert(self, task, importance_weighting, **kwargs):
+        self.tasks[self.step + 1].copy_(task.view(-1, 1))
         self.importance_weighting[self.step + 1].copy_(importance_weighting)
         super().insert(**kwargs)
 
     def after_update(self):
         super().after_update()
-        self.goals[0].copy_(self.goals[-1])
+        self.tasks[0].copy_(self.tasks[-1])
         self.importance_weighting[0].copy_(self.importance_weighting[-1])
 
     def make_batch(self, advantages, indices):
-        goals = self.goals.view(-1, *self.goals.size()[2:])[indices]
+        tasks = self.tasks.view(-1, *self.tasks.size()[2:])[indices]
         importance_weighting = self.importance_weighting.view(-1, 1)[indices]
         batch = super().make_batch(advantages=advantages, indices=indices)
         return batch._replace(
-            goals=goals, importance_weighting=importance_weighting)
+            tasks=tasks, importance_weighting=importance_weighting)
 
-    def get_goal_batch(self, advantages):
-        goals = self.goals[:-1]
-        unique_goals = torch.unique(goals)
-        goal_rewards = torch.empty(unique_goals.size()[0])
-        for i, goal in enumerate(unique_goals):
+    def get_task_batch(self, advantages):
+        tasks = self.tasks[:-1]
+        unique_tasks = torch.unique(tasks)
+        task_rewards = torch.empty(unique_tasks.size()[0])
+        for i, task in enumerate(unique_tasks):
             ratio = (advantages / self.action_log_probs.exp())
-            goal_rewards[i] = ratio[goals == goal].mean()
-        return unique_goals, goal_rewards
+            task_rewards[i] = ratio[tasks == task].mean()
+        return unique_tasks, task_rewards
 
     def recurrent_generator(self, advantages, num_mini_batch):
         raise NotImplementedError
