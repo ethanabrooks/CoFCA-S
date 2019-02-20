@@ -1,11 +1,11 @@
 import itertools
-from pathlib import Path
 import time
+from pathlib import Path
 
-from gym.spaces import Discrete
 import numpy as np
-from tensorboardX import SummaryWriter
 import torch
+from gym.spaces import Discrete
+from tensorboardX import SummaryWriter
 
 from ppo.env_adapter import GoalsHSREnv
 from ppo.envs import VecNormalize, make_vec_envs
@@ -35,7 +35,6 @@ def train(num_frames,
           ppo_args,
           network_args,
           render,
-          sampling_strategy,
           synchronous,
           goals_args=None):
     torch.manual_seed(seed)
@@ -213,7 +212,7 @@ def train(num_frames,
             next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau)
 
         train_results, goals_trained, returns, gradient_sums = agent.update(
-            rollouts, sampling_strategy)
+            rollouts)
         goals_trained = sample_env.goal_states[torch.cat(
             goals_trained).int().numpy()]
         l = [(x, y, r, g) for x, y, r, g in zip(

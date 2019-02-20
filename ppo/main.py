@@ -88,6 +88,7 @@ def build_parser():
         help='directory to load agent parameters from')
     parser.add_argument(
         '--cuda', action='store_true', help='enables CUDA training')
+    parser.add_argument('--synchronous', action='store_true')
 
     network_parser = parser.add_argument_group('network_args')
     network_parser.add_argument('--recurrent', action='store_true')
@@ -134,11 +135,13 @@ def build_parser():
         type=float,
         default=0.5,
         help='max norm of gradients (default: 0.5)')
-    parser.add_argument(
+    ppo_parser.add_argument(
+        '--temperature',
+        type=float,)
+    ppo_parser.add_argument(
         '--sampling-strategy',
         choices=('baseline', '0/1logits', 'experiment', 'max'),
         default='experiment')
-    parser.add_argument('--synchronous', action='store_true')
     return parser
 
 
