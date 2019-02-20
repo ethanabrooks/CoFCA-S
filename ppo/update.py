@@ -161,22 +161,23 @@ class PPO:
             if sampling_strategy == 'baseline':
                 logits = torch.ones_like(grads)
             elif sampling_strategy == '0/1logits':
-                logits = torch.zeros_like(grads)
-                logits[grads > 0] = 1
+                logits = torch.ones_like(grads) * -1e7
+                logits[grads > 0] = 1e7
             elif sampling_strategy == 'experiment':
                 logits = grads
             elif sampling_strategy == 'max':
-                logits = torch.zeros_like(grads)
-                logits[grads.argmax()] = 1
+                logits = torch.ones_like(grads) * -1e7
+                logits[grads.argmax()] = 1e7
             else:
                 raise RuntimeError
 
             dist = Categorical(logits=logits)
-            goal_to_train = dist.sample().float()
+            goal_index = dist.sample().long()
+            goal_to_train = unique[goal_index]
             goals_trained.append(goal_to_train)
 
             importance_weighting = 1 / (
-                unique.numel() * dist.log_prob(goal_to_train).exp())
+                unique.numel() * dist.log_prob(goal_index).exp())
 
             uses_goal = batches.goals.squeeze() == goal_to_train
             ret = batches.ret[uses_goal].mean()
@@ -188,6 +189,7 @@ class PPO:
             # [0, 1, 2, 8, 9, 10]).astype(np.uint8)).squeeze()
             indices = torch.arange(total_batch_size)[uses_goal]
             sample = rollouts.make_batch(advantages, indices)
+
             # Reshape to do in a single forward pass for all steps
 
             value_losses, action_losses, entropy \
