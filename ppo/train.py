@@ -173,16 +173,6 @@ def train(num_frames,
             # Observe reward and next obs
             obs, rewards, done, infos = envs.step(actions)
 
-            # if train_goals:
-            # for i, _done in enumerate(done):
-            # if _done:
-            # sample, goal, importance_weighting = gan.sample(1)
-            # sample = goal = sample_env.goal_index_to_goal_state(i)
-            # goal = goal.detach().numpy()
-            # envs.unwrapped.set_goal(goal, i)
-            # samples[i] = sample
-            # importance_weightings[i] = importance_weighting
-
             # track rewards
             rewards_counter += rewards.numpy()
             episode_rewards.append(rewards_counter[done])

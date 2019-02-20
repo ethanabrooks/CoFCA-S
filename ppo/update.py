@@ -165,6 +165,9 @@ class PPO:
                 logits[grads > 0] = 1
             elif sampling_strategy == 'experiment':
                 logits = grads
+            elif sampling_strategy == 'max':
+                logits = torch.zeros_like(grads)
+                logits[grads.argmax()] = 1
             else:
                 raise RuntimeError
 
