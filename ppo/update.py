@@ -85,13 +85,12 @@ class PPO:
             batch.obs, batch.recurrent_hidden_states, batch.masks,
             batch.actions)
 
-        # ratio = torch.exp(action_log_probs - batch.old_action_log_probs)
-        # surr1 = ratio * batch.adv
-        # surr2 = torch.clamp(ratio, 1.0 - self.clip_param,
-        #                     1.0 + self.clip_param) * batch.adv
+        ratio = torch.exp(action_log_probs - batch.old_action_log_probs)
+        surr1 = ratio * batch.adv
+        surr2 = torch.clamp(ratio, 1.0 - self.clip_param,
+                            1.0 + self.clip_param) * batch.adv
 
-        action_losses = -(batch.adv
-                          if self.use_value else batch.ret) * action_log_probs
+        action_losses = -torch.min(surr1, surr2)
 
         value_losses = None
         if compute_value_loss:
