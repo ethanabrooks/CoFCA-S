@@ -280,7 +280,7 @@ def train(num_frames,
                     sc = plt.scatter(
                         x + x_noise, y + y_noise, c=c, cmap=cm.hot, alpha=.1)
                     plt.colorbar(sc)
-                    plt.subplots_adjust(0, 0, 1, 1)
+                    plt.subplots_adjust(.1, .1, .9, .9)
                     writer.add_figure(text, fig, total_num_steps)
                     plt.close(fig)
 
