@@ -261,6 +261,8 @@ def train(num_frames,
                 writer.add_scalar('fps', fps, total_num_steps)
                 writer.add_scalar('return', np.mean(episode_rewards),
                                   total_num_steps)
+                writer.add_scalar('num goals', len(goals_data),
+                                  total_num_steps)
                 for k, v in train_results.items():
                     if v.dim() == 0:
                         writer.add_scalar(k, v, total_num_steps)
