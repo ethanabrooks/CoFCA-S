@@ -56,8 +56,11 @@ def mlp(num_inputs,
 class Categorical(torch.distributions.Categorical):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        n, d = self.probs.size()
-        self.range = torch.arange(0., float(d)).repeat(n, 1)
+        d = self.probs.numel()
+        self.range = torch.arange(0., float(d))
+        if len(self.probs.size()) == 2:
+            n, _ = self.probs.size()
+            self.range = self.range.repeat(n, 1)
 
     @property
     def mean(self):
@@ -65,8 +68,8 @@ class Categorical(torch.distributions.Categorical):
 
     @property
     def variance(self):
-        return torch.sum(self.probs * ((self.range - self.mean.unsqueeze(-1)) ** 2),
-                         dim=-1)
+        return torch.sum(
+            self.probs * ((self.range - self.mean.unsqueeze(-1))**2), dim=-1)
 
 
 class NoInput(nn.Module):
