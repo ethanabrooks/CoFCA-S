@@ -92,7 +92,7 @@ def train(num_frames,
                for k, v in goals_args.items()})
 
         # samples, goals, importance_weightings = gan.sample(num_processes)
-        samples = goals = torch.arange(num_processes)
+        samples = goals = torch.arange(sample_env.goal_space.n)
         importance_weightings = torch.zeros_like(goals)
         for i, goal in enumerate(goals):
             goal = goal.detach().numpy()
@@ -108,7 +108,7 @@ def train(num_frames,
             obs_shape=envs.observation_space.shape,
             action_space=envs.action_space,
             recurrent_hidden_state_size=actor_critic.
-                recurrent_hidden_state_size,
+            recurrent_hidden_state_size,
             goal_size=goal_size)
 
     else:
@@ -118,7 +118,7 @@ def train(num_frames,
             obs_shape=envs.observation_space.shape,
             action_space=envs.action_space,
             recurrent_hidden_state_size=actor_critic.
-                recurrent_hidden_state_size,
+            recurrent_hidden_state_size,
         )
 
     agent = PPO(actor_critic=actor_critic, goal_generator=gan, **ppo_args)
@@ -173,15 +173,15 @@ def train(num_frames,
             # Observe reward and next obs
             obs, rewards, done, infos = envs.step(actions)
 
-            if train_goals:
-                for i, _done in enumerate(done):
-                    if _done:
-                        # sample, goal, importance_weighting = gan.sample(1)
-                        sample = goal = i
-                        # goal = goal.detach().numpy()
-                        # envs.unwrapped.set_goal(goal, i)
-                        samples[i] = sample
-                        # importance_weightings[i] = importance_weighting
+            # if train_goals:
+            # for i, _done in enumerate(done):
+            # if _done:
+            # sample, goal, importance_weighting = gan.sample(1)
+            # sample = goal = sample_env.goal_index_to_goal_state(i)
+            # goal = goal.detach().numpy()
+            # envs.unwrapped.set_goal(goal, i)
+            # samples[i] = sample
+            # importance_weightings[i] = importance_weighting
 
             # track rewards
             rewards_counter += rewards.numpy()
@@ -222,21 +222,20 @@ def train(num_frames,
         rollouts.compute_returns(
             next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau)
 
-        train_results, goals_trained, returns, gradient_sums = agent.update(rollouts,
-                                                                            sampling_strategy)
-        goals_trained = np.concatenate(
-            [x.numpy() for x in goals_trained]).astype(int)
-        l = [(x, y, r, g)
-             for x, y, r, g in
-             zip(*sample_env.decode(goals_trained), returns, gradient_sums)]
+        train_results, goals_trained, returns, gradient_sums = agent.update(
+            rollouts, sampling_strategy)
+        goals_trained = sample_env.goal_states[torch.cat(
+            goals_trained).int().numpy()]
+        l = [(x, y, r, g) for x, y, r, g in zip(
+            *sample_env.decode(goals_trained), returns, gradient_sums)]
         goals_data.extend(l)
 
         rollouts.after_update()
         total_num_steps = (j + 1) * num_processes * num_steps
 
         if all(
-                [log_dir, save_interval,
-                 time.time() - last_save >= save_interval]):
+            [log_dir, save_interval,
+             time.time() - last_save >= save_interval]):
             last_save = time.time()
             modules = dict(
                 optimizer=agent.optimizer,

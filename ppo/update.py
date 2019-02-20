@@ -1,15 +1,15 @@
 # stdlib
+from collections import Counter
 import itertools
 import math
-from collections import Counter
 
 # third party
 # first party
 import numpy as np
 import torch
+from torch.distributions import Categorical
 import torch.nn as nn
 import torch.optim as optim
-from torch.distributions import Categorical
 
 from common.running_mean_std import RunningMeanStd
 from ppo.storage import Batch, GoalsRolloutStorage, RolloutStorage
@@ -171,6 +171,7 @@ class PPO:
             dist = Categorical(logits=logits)
             goal_to_train = dist.sample().float()
             goals_trained.append(goal_to_train)
+
             importance_weighting = 1 / (
                 unique.numel() * dist.log_prob(goal_to_train).exp())
 

@@ -4,11 +4,11 @@ import functools
 import sys
 
 import gym
+from gym.spaces.box import Box
+from gym.wrappers import TimeLimit
 import numpy as np
 import torch
 import torch.nn as nn
-from gym.spaces.box import Box
-from gym.wrappers import TimeLimit
 
 from common.running_mean_std import RunningMeanStd
 from common.vec_env import VecEnvWrapper
@@ -18,7 +18,11 @@ from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
 from ppo.env_adapter import GoalsDummyVecEnv, GoalsSubprocVecEnv
 
 
-def wrap_env(env_thunk, seed, rank, eval, add_timestep=False,
+def wrap_env(env_thunk,
+             seed,
+             rank,
+             eval,
+             add_timestep=False,
              max_episode_steps=None):
     env = env_thunk(eval)
     is_atari = hasattr(gym.envs, 'atari') and isinstance(

@@ -134,9 +134,10 @@ def build_parser():
         type=float,
         default=0.5,
         help='max norm of gradients (default: 0.5)')
-    parser.add_argument('--sampling-strategy',
-                        choices=('baseline', '0/1logits', 'experiment'),
-                        default='experiment')
+    parser.add_argument(
+        '--sampling-strategy',
+        choices=('baseline', '0/1logits', 'experiment'),
+        default='experiment')
     parser.add_argument('--synchronous', action='store_true')
     return parser
 

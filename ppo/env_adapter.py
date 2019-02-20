@@ -139,14 +139,14 @@ class GoalsGridWorld(GridWorld):
 
     def reset(self):
         if self.eval:
-            choice = self.np_random.choice(self.goal_states, ())
+            choice = self.goal_space.sample()
             self.set_goal(choice)
         return super().reset()
 
     def set_goal(self, goal_index):
         goal_state = self.goal_states[goal_index]
         self.assign(**{self.goal_letter: [goal_state]})
-        self.goal = onehot(goal_state, self.observation_size)
+        self.goal = onehot(goal_index, self.observation_size)
         assert self.desc[self.decode(goal_state)] == self.goal_letter
 
     def obs_vector(self, obs):
