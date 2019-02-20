@@ -126,7 +126,7 @@ def make_robotics_env(env_id, seed, rank=0):
     """
     set_global_seeds(seed)
     env = gym.make(env_id)
-    env = FlattenDictWrapper(env, ['observation', 'desired_goal'])
+    env = FlattenDictWrapper(env, ['observation', 'desired_task'])
     env = Monitor(
         env,
         logger.get_dir() and os.path.join(logger.get_dir(), str(rank)),

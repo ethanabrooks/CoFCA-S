@@ -11,7 +11,7 @@ import torch.nn as nn
 import torch.optim as optim
 
 from common.running_mean_std import RunningMeanStd
-from ppo.storage import Batch, GoalsRolloutStorage, RolloutStorage
+from ppo.storage import Batch, TasksRolloutStorage, RolloutStorage
 from ppo.util import Categorical
 
 
@@ -49,12 +49,12 @@ class PPO:
                  eps=None,
                  max_grad_norm=None,
                  use_clipped_value_loss=True,
-                 goal_generator=None):
+                 task_generator=None):
 
         self.use_value = use_value
         self.sampling_strategy = sampling_strategy
         self.temperature = temperature
-        self.train_goals = bool(goal_generator)
+        self.train_tasks = bool(task_generator)
         self.actor_critic = actor_critic
 
         self.clip_param = clip_param
@@ -67,16 +67,16 @@ class PPO:
         self.max_grad_norm = max_grad_norm
         self.use_clipped_value_loss = use_clipped_value_loss
 
-        if self.train_goals:
-            self.goal_optimizer = optim.Adam(
-                goal_generator.parameters(),
-                lr=goal_generator.learning_rate,
+        if self.train_tasks:
+            self.task_optimizer = optim.Adam(
+                task_generator.parameters(),
+                lr=task_generator.learning_rate,
                 eps=eps)
 
         self.optimizer = optim.Adam(
             actor_critic.parameters(), lr=learning_rate, eps=eps)
 
-        self.gan = goal_generator
+        self.gan = task_generator
         self.reward_function = None
 
     def compute_loss_components(self, batch, compute_value_loss=True):
@@ -122,10 +122,10 @@ class PPO:
         advantages = (advantages - advantages.mean()) / (
             advantages.std() + 1e-5)
         update_values = Counter()
-        goal_values = Counter()
+        task_values = Counter()
 
         total_norm = torch.tensor(0, dtype=torch.float32)
-        goals_trained = []
+        tasks_trained = []
         rets = []
         grad_sums = []
         for e in range(self.ppo_epoch):
@@ -136,7 +136,7 @@ class PPO:
                 data_generator = rollouts.feed_forward_generator(
                     advantages, self.batch_size)
 
-            assert isinstance(rollouts, GoalsRolloutStorage)
+            assert isinstance(rollouts, TasksRolloutStorage)
 
             num_steps, num_processes = rollouts.rewards.size()[0:2]
             total_batch_size = num_steps * num_processes
@@ -144,10 +144,10 @@ class PPO:
                                           torch.arange(total_batch_size))
             _, action_losses, _ = self.compute_loss_components(
                 batches, compute_value_loss=False)
-            unique = torch.unique(batches.goals)
+            unique = torch.unique(batches.tasks)
             grads = torch.zeros(unique.size()[0])
-            for i, goal in enumerate(unique):
-                action_loss = action_losses[batches.goals == goal]
+            for i, task in enumerate(unique):
+                action_loss = action_losses[batches.tasks == task]
                 loss = self.compute_loss(
                     action_loss=action_loss,
                     dist_entropy=0,
@@ -174,22 +174,22 @@ class PPO:
                 raise RuntimeError
 
             dist = Categorical(logits=logits)
-            goal_index = dist.sample().long()
-            goal_to_train = unique[goal_index]
-            goals_trained.append(goal_to_train)
+            task_index = dist.sample().long()
+            task_to_train = unique[task_index]
+            tasks_trained.append(task_to_train)
 
             importance_weighting = 1 / (
-                unique.numel() * dist.log_prob(goal_index).exp())
+                unique.numel() * dist.log_prob(task_index).exp())
 
-            uses_goal = batches.goals.squeeze() == goal_to_train
-            ret = batches.ret[uses_goal].mean()
-            grad = grads[unique == goal_to_train]
+            uses_task = batches.tasks.squeeze() == task_to_train
+            ret = batches.ret[uses_task].mean()
+            grad = grads[unique == task_to_train]
             rets.append(ret)
             grad_sums.append(grad)
-            # uses_goal = torch.from_numpy(
-            # np.isin(batches.goals.numpy(),
+            # uses_task = torch.from_numpy(
+            # np.isin(batches.tasks.numpy(),
             # [0, 1, 2, 8, 9, 10]).astype(np.uint8)).squeeze()
-            indices = torch.arange(total_batch_size)[uses_goal]
+            indices = torch.arange(total_batch_size)[uses_task]
             sample = rollouts.make_batch(advantages, indices)
 
             # Reshape to do in a single forward pass for all steps
@@ -214,7 +214,7 @@ class PPO:
                 action_loss=action_losses,
                 norm=total_norm,
                 entropy=entropy,
-                goal_trained=goal_to_train,
+                task_trained=task_to_train,
                 n=1)
             if importance_weighting is not None:
                 update_values.update(importance_weighting=importance_weighting)
@@ -224,9 +224,9 @@ class PPO:
             k: torch.mean(v) / n
             for k, v in update_values.items()
         }
-        if self.train_goals and 'n' in goal_values:
-            n = goal_values.pop('n')
-            for k, v in goal_values.items():
+        if self.train_tasks and 'n' in task_values:
+            n = task_values.pop('n')
+            for k, v in task_values.items():
                 update_values[k] = torch.mean(v) / n
 
-        return update_values, goals_trained, rets, grad_sums
+        return update_values, tasks_trained, rets, grad_sums
