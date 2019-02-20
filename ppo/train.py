@@ -286,7 +286,11 @@ def train(num_frames,
                     plt.close(fig)
 
                 plot(rewards, 'rewards')
-                plot(gradient, 'gradient')
+                plot(gradient, 'gradients')
+
+                x, y, rewards, gradient = zip(*goals_data[-400:])
+                plot(rewards, 'last 400 rewards')
+                plot(gradient, 'last 400 gradients')
             episode_rewards = []
 
         if eval_interval is not None and j % eval_interval == 0:
