@@ -63,6 +63,7 @@ def make_vec_envs(make_env,
                   device,
                   normalize,
                   eval,
+                  synchronous=False,
                   train_goals=False,
                   num_frame_stack=None):
     envs = [
@@ -70,13 +71,14 @@ def make_vec_envs(make_env,
         for i in range(num_processes)
     ]
 
+    synchronous = synchronous or len(envs) == 1 or sys.platform == 'darwin'
     if train_goals:
-        if len(envs) == 1 or sys.platform == 'darwin':
+        if synchronous:
             envs = GoalsDummyVecEnv(envs)
         else:
             envs = GoalsSubprocVecEnv(envs)
     else:
-        if len(envs) == 1 or sys.platform == 'darwin':
+        if synchronous:
             envs = DummyVecEnv(envs)
         else:
             envs = SubprocVecEnv(envs)

@@ -137,6 +137,7 @@ def build_parser():
     parser.add_argument('--sampling-strategy',
                         choices=('baseline', '0/1logits', 'experiment'),
                         default='experiment')
+    parser.add_argument('--synchronous', action='store_true')
     return parser
 
 

@@ -36,6 +36,7 @@ def train(num_frames,
           network_args,
           render,
           sampling_strategy,
+          synchronous,
           goals_args=None):
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
@@ -74,6 +75,7 @@ def train(num_frames,
         device=device,
         train_goals=train_goals,
         normalize=normalize,
+        synchronous=synchronous,
         eval=False)
 
     actor_critic = Policy(
