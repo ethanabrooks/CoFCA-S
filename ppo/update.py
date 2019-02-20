@@ -210,10 +210,8 @@ class PPO:
             self.optimizer.zero_grad()
             update_values.update(
                 dist_mean=dist.mean,
-                dist_str=dist.stddev,
-                grad_sum=grads,
-                dist_mean=dist.mean,
                 dist_std=dist.stddev,
+                grad_sum=grads,
                 value_loss=value_losses,
                 action_loss=action_losses,
                 norm=total_norm,
