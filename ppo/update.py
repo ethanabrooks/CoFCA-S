@@ -1,15 +1,15 @@
 # stdlib
-from collections import Counter
 import itertools
 import math
+from collections import Counter
 
 # third party
 # first party
 import numpy as np
 import torch
-from torch.distributions import Categorical
 import torch.nn as nn
 import torch.optim as optim
+from torch.distributions import Categorical
 
 from common.running_mean_std import RunningMeanStd
 from ppo.storage import Batch, GoalsRolloutStorage, RolloutStorage
@@ -167,7 +167,7 @@ class PPO:
                 logits = torch.ones_like(grads) * -self.temperature
                 logits[grads > 0] = self.temperature
             elif self.sampling_strategy == 'experiment':
-                logits = grads * 10**self.temperature
+                logits = grads * self.temperature
             elif self.sampling_strategy == 'max':
                 logits = torch.ones_like(grads) * -self.temperature
                 logits[grads.argmax()] = self.temperature
