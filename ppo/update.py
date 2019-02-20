@@ -44,12 +44,14 @@ class PPO:
                  entropy_coef,
                  temperature,
                  sampling_strategy,
+                 use_value,
                  learning_rate=None,
                  eps=None,
                  max_grad_norm=None,
                  use_clipped_value_loss=True,
                  goal_generator=None):
 
+        self.use_value = use_value
         self.sampling_strategy = sampling_strategy
         self.temperature = temperature
         self.train_goals = bool(goal_generator)
@@ -77,10 +79,7 @@ class PPO:
         self.gan = goal_generator
         self.reward_function = None
 
-    def compute_loss_components(self,
-                                batch,
-                                use_baseline=False,
-                                compute_value_loss=True):
+    def compute_loss_components(self, batch, compute_value_loss=True):
         values, action_log_probs, dist_entropy, \
         _ = self.actor_critic.evaluate_actions(
             batch.obs, batch.recurrent_hidden_states, batch.masks,
@@ -92,7 +91,7 @@ class PPO:
         #                     1.0 + self.clip_param) * batch.adv
 
         action_losses = -(batch.adv
-                          if use_baseline else batch.ret) * action_log_probs
+                          if self.use_value else batch.ret) * action_log_probs
 
         value_losses = None
         if compute_value_loss:

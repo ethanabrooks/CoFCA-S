@@ -137,7 +137,12 @@ def build_parser():
         help='max norm of gradients (default: 0.5)')
     ppo_parser.add_argument(
         '--temperature',
-        type=float,)
+        type=float,
+    )
+    ppo_parser.add_argument(
+        '--use-value',
+        action='store_true',
+    )
     ppo_parser.add_argument(
         '--sampling-strategy',
         choices=('baseline', '0/1logits', 'experiment', 'max'),
