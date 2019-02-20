@@ -265,9 +265,9 @@ def train(num_frames,
                 for k, v in train_results.items():
                     if v.dim() == 0:
                         writer.add_scalar(k, v, total_num_steps)
-                if train_goals:
-                    writer.add_histogram('gan probs', np.array(goals_trained),
-                                         total_num_steps)
+                # if train_goals:
+                #     writer.add_histogram('gan probs', np.array(goals_trained),
+                #                          total_num_steps)
 
                 x, y, rewards, gradient = zip(*goals_data)
 
