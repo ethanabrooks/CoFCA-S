@@ -1,24 +1,23 @@
 import itertools
-import time
 from pathlib import Path
+import time
 
-import numpy as np
-import torch
 from gym.spaces import Discrete
+import numpy as np
 from tensorboardX import SummaryWriter
+import torch
 
 from ppo.env_adapter import TasksHSREnv
 from ppo.envs import VecNormalize, make_vec_envs
-from ppo.task_generator import TaskGenerator
 from ppo.policy import Policy
-from ppo.storage import TasksRolloutStorage, RolloutStorage
+from ppo.storage import RolloutStorage, TasksRolloutStorage
+from ppo.task_generator import TaskGenerator
 from ppo.update import PPO
 from utils import space_to_size
 
 
 def train(num_frames,
           num_steps,
-          num_processes,
           seed,
           cuda_deterministic,
           cuda,
@@ -62,10 +61,10 @@ def train(num_frames,
     device = torch.device("cuda:0" if cuda else "cpu")
 
     train_tasks = tasks_args is not None
+    sample_env = make_env(seed=seed, rank=0, eval=False).unwrapped
 
+    num_processes = sample_env.task_space.n
     _gamma = gamma if normalize else None
-    if render:
-        num_processes = 1
     envs = make_vec_envs(
         make_env=make_env,
         seed=seed,
@@ -81,7 +80,6 @@ def train(num_frames,
         envs.observation_space, envs.action_space, network_args=network_args)
 
     gan = None
-    sample_env = make_env(seed=seed, rank=0, eval=False).unwrapped
     tasks_data = []
     if train_tasks:
         assert sample_env.task_space.n == num_processes
@@ -213,8 +211,8 @@ def train(num_frames,
 
         train_results, tasks_trained, returns, gradient_sums = agent.update(
             rollouts)
-        tasks_trained = sample_env.task_states[torch.cat(
-            tasks_trained).int().numpy()]
+        tasks_trained = sample_env.task_states[torch.cat(tasks_trained).int().
+                                               numpy()]
         l = [(x, y, r, g) for x, y, r, g in zip(
             *sample_env.decode(tasks_trained), returns, gradient_sums)]
         tasks_data.extend(l)
