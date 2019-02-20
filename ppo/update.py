@@ -42,12 +42,16 @@ class PPO:
                  batch_size,
                  value_loss_coef,
                  entropy_coef,
+                 temperature,
+                 sampling_strategy,
                  learning_rate=None,
                  eps=None,
                  max_grad_norm=None,
                  use_clipped_value_loss=True,
                  goal_generator=None):
 
+        self.sampling_strategy = sampling_strategy
+        self.temperature = temperature
         self.train_goals = bool(goal_generator)
         self.actor_critic = actor_critic
 
@@ -115,7 +119,7 @@ class PPO:
             losses *= importance_weighting
         return torch.mean(losses)
 
-    def update(self, rollouts: RolloutStorage, sampling_strategy):
+    def update(self, rollouts: RolloutStorage):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         advantages = (advantages - advantages.mean()) / (
             advantages.std() + 1e-5)
@@ -158,16 +162,16 @@ class PPO:
                     allow_unused=True)
                 grads[i] = sum(g.abs().sum() for g in grad if g is not None)
 
-            if sampling_strategy == 'baseline':
+            if self.sampling_strategy == 'baseline':
                 logits = torch.ones_like(grads)
-            elif sampling_strategy == '0/1logits':
-                logits = torch.ones_like(grads) * -1e7
-                logits[grads > 0] = 1e7
-            elif sampling_strategy == 'experiment':
-                logits = grads
-            elif sampling_strategy == 'max':
-                logits = torch.ones_like(grads) * -1e7
-                logits[grads.argmax()] = 1e7
+            elif self.sampling_strategy == '0/1logits':
+                logits = torch.ones_like(grads) * -self.temperature
+                logits[grads > 0] = self.temperature
+            elif self.sampling_strategy == 'experiment':
+                logits = grads * self.temperature
+            elif self.sampling_strategy == 'max':
+                logits = torch.ones_like(grads) * -self.temperature
+                logits[grads.argmax()] = self.temperature
             else:
                 raise RuntimeError
 
