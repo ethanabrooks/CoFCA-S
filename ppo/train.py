@@ -68,10 +68,7 @@ def train(num_frames,
 
     if log_dir:
         plt.switch_backend('agg')
-        axes = plt.axes()
         xlim, ylim = sample_env.desc.shape
-        axes.set_xlim(-.5, xlim + .5)
-        axes.set_ylim(-.5, ylim + .5)
 
     _gamma = gamma if normalize else None
     envs = make_vec_envs(
@@ -287,6 +284,9 @@ def train(num_frames,
                     sc = plt.scatter(
                         x + x_noise, y + y_noise, c=c, cmap=cm.hot, alpha=.1)
                     plt.colorbar(sc)
+                    axes = plt.axes()
+                    axes.set_xlim(-.5, xlim - .5)
+                    axes.set_ylim(-.5, ylim - .5)
                     plt.subplots_adjust(.15, .15, .95, .95)
                     writer.add_figure(text, fig, total_num_steps)
                     plt.close(fig)
