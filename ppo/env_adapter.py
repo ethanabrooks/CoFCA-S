@@ -99,7 +99,7 @@ class GridWorld(gridworld_env.gridworld.GridWorld):
 
 
 class RandomGridWorld(gridworld_env.random_gridworld.RandomGridWorld):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, random=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.observation_sizes = [
             space_to_size(space) for space in self.observation_space.spaces
