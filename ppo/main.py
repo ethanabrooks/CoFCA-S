@@ -7,8 +7,8 @@ from torch import nn as nn
 
 import gridworld_env
 import hsr.util
-from ppo.env_adapter import (TasksGridWorld, TasksHSREnv, TasksMoveGripperEnv, GridWorld, HSREnv, MoveGripperEnv,
-                             RandomGridWorld)
+from ppo.env_adapter import (GridWorld, HSREnv, MoveGripperEnv, RandomGridWorld, TasksGridWorld, TasksHSREnv,
+                             TasksMoveGripperEnv)
 from ppo.envs import wrap_env
 from ppo.train import train
 from utils import parse_activation, parse_groups
@@ -44,11 +44,6 @@ def build_parser():
         action='store_true',
         default=False,
         help="sets flags for determinism when using CUDA (potentially slow!)")
-    parser.add_argument(
-        '--num-processes',
-        type=int,
-        default=16,
-        help='how many training CPU processes to use (default: 16)')
     parser.add_argument(
         '--num-steps',
         type=int,
