@@ -212,8 +212,8 @@ def train(num_frames,
 
         train_results, tasks_trained, returns, gradient_sums = agent.update(
             rollouts)
-        tasks_trained = sample_env.task_states[torch.cat(tasks_trained).int().
-                                               numpy()]
+        tasks_trained = sample_env.task_states[torch.cat(
+            tasks_trained).int().numpy()]
         l = [(x, y, r, g) for x, y, r, g in zip(
             *sample_env.decode(tasks_trained), returns, gradient_sums)]
         tasks_data.extend(l)
@@ -279,6 +279,9 @@ def train(num_frames,
                     y_noise = (np.random.rand(len(y)) - .5) * .9
                     sc = plt.scatter(
                         x + x_noise, y + y_noise, c=c, cmap=cm.hot, alpha=.1)
+                    ylim, xlim = sample_env.desc.shape
+                    plt.axes().set_xlim(0, xlim)
+                    plt.axes().set_ylim(0, ylim)
                     plt.colorbar(sc)
                     plt.subplots_adjust(.15, .15, .95, .95)
                     writer.add_figure(text, fig, total_num_steps)
