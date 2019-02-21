@@ -135,6 +135,10 @@ def build_parser():
         type=float,
     )
     ppo_parser.add_argument(
+        '--grad-fraction',
+        type=float,
+    )
+    ppo_parser.add_argument(
         '--use-value',
         action='store_true',
     )

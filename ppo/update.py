@@ -43,6 +43,7 @@ class PPO:
                  value_loss_coef,
                  entropy_coef,
                  temperature,
+                 grad_fraction,
                  sampling_strategy,
                  use_value,
                  learning_rate=None,
@@ -51,6 +52,7 @@ class PPO:
                  use_clipped_value_loss=True,
                  task_generator=None):
 
+        self.grad_fraction = grad_fraction
         self.use_value = use_value
         self.sampling_strategy = sampling_strategy
         self.temperature = temperature
@@ -165,7 +167,8 @@ class PPO:
             elif self.sampling_strategy == '0/1logits':
                 logits = torch.ones_like(grads) * -self.temperature
                 sorted_grads, _ = torch.sort(grads)
-                mid_grad = sorted_grads[grads.numel() // 4]
+                mid_grad = sorted_grads[int(
+                    grads.numel() * self.grad_fraction)]
                 logits[grads > mid_grad] = self.temperature
             elif self.sampling_strategy == 'experiment':
                 logits = grads * self.temperature
