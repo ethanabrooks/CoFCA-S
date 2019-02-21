@@ -81,6 +81,7 @@ def train(num_frames,
 
     gan = None
     tasks_data = []
+    last_index = 0
     if train_tasks:
         assert sample_env.task_space.n == num_processes
         gan = TaskGenerator(
@@ -286,9 +287,10 @@ def train(num_frames,
                 plot(rewards, 'rewards')
                 plot(gradient, 'gradients')
 
-                x, y, rewards, gradient = zip(*tasks_data[-400:])
-                plot(rewards, 'last 400 rewards')
-                plot(gradient, 'last 400 gradients')
+                x, y, rewards, gradient = zip(*tasks_data[last_index:])
+                last_index = len(tasks_data)
+                plot(rewards, 'new rewards')
+                plot(gradient, 'new gradients')
             episode_rewards = []
 
         if eval_interval is not None and j % eval_interval == 0:

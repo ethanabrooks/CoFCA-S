@@ -122,7 +122,7 @@ class RandomGridWorld(gridworld_env.random_gridworld.RandomGridWorld):
 
 
 class TasksGridWorld(GridWorld):
-    def __init__(self, *args, eval, random=None, task_letter='*', **kwargs):
+    def __init__(self, *args, eval, task_letter='*', **kwargs):
         self.eval = eval
         self.task = None
         self.task_letter = task_letter
