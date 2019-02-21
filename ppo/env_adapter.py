@@ -78,7 +78,7 @@ class TasksMoveGripperEnv(TasksHSREnv, hsr.env.MoveGripperEnv):
 
 
 class GridWorld(gridworld_env.gridworld.GridWorld):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, random=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.observation_space = Box(
             low=np.zeros(self.observation_space.n),
