@@ -65,13 +65,13 @@ def train(num_frames,
     sample_env = make_env(seed=seed, rank=0, eval=False).unwrapped
 
     num_processes = sample_env.task_space.n
-    
+
     if log_dir:
         plt.switch_backend('agg')
         axes = plt.axes()
         xlim, ylim = sample_env.desc.shape
-        axes.set_xlim(0, xlim)
-        axes.set_ylim(0, ylim)
+        axes.set_xlim(-.5, xlim + .5)
+        axes.set_ylim(-.5, ylim + .5)
 
     _gamma = gamma if normalize else None
     envs = make_vec_envs(
