@@ -45,6 +45,7 @@ def train(num_frames,
 
     if log_dir:
         import matplotlib.pyplot as plt
+
         import matplotlib.cm as cm
         writer = SummaryWriter(log_dir=str(log_dir))
         print(f'Logging to {log_dir}')
@@ -64,6 +65,14 @@ def train(num_frames,
     sample_env = make_env(seed=seed, rank=0, eval=False).unwrapped
 
     num_processes = sample_env.task_space.n
+    
+    if log_dir:
+        plt.switch_backend('agg')
+        axes = plt.axes()
+        xlim, ylim = sample_env.desc.shape
+        axes.set_xlim(0, xlim)
+        axes.set_ylim(0, ylim)
+
     _gamma = gamma if normalize else None
     envs = make_vec_envs(
         make_env=make_env,
@@ -271,18 +280,12 @@ def train(num_frames,
 
                 x, y, rewards, gradient = zip(*tasks_data)
 
-                plt.switch_backend('agg')
-
                 def plot(c, text):
                     fig = plt.figure()
                     x_noise = (np.random.rand(len(x)) - .5) * .9
                     y_noise = (np.random.rand(len(y)) - .5) * .9
                     sc = plt.scatter(
                         x + x_noise, y + y_noise, c=c, cmap=cm.hot, alpha=.1)
-                    xlim, ylim = sample_env.desc.shape
-                    axes = plt.axes()
-                    axes.set_xlim(0, xlim)
-                    axes.set_ylim(0, ylim)
                     plt.colorbar(sc)
                     plt.subplots_adjust(.15, .15, .95, .95)
                     writer.add_figure(text, fig, total_num_steps)
