@@ -165,7 +165,7 @@ class PPO:
             elif self.sampling_strategy == '0/1logits':
                 logits = torch.ones_like(grads) * -self.temperature
                 sorted_grads, _ = torch.sort(grads)
-                mid_grad = sorted_grads[grads.numel() // 2]
+                mid_grad = sorted_grads[grads.numel() // 4]
                 logits[grads > mid_grad] = self.temperature
             elif self.sampling_strategy == 'experiment':
                 logits = grads * self.temperature
