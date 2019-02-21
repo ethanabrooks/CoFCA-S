@@ -135,7 +135,7 @@ def build_parser():
         type=float,
     )
     ppo_parser.add_argument(
-        '--use-value',
+        '--global-norm',
         action='store_true',
     )
     ppo_parser.add_argument(

@@ -22,7 +22,8 @@ def f(x):
 def global_norm(grads):
     norm = 0
     for grad in grads:
-        norm += grad.norm(2)**2
+        if grad is not None:
+            norm += grad.norm(2)**2
     return norm**.5
 
 
@@ -44,14 +45,14 @@ class PPO:
                  entropy_coef,
                  temperature,
                  sampling_strategy,
-                 use_value,
+                 global_norm,
                  learning_rate=None,
                  eps=None,
                  max_grad_norm=None,
                  use_clipped_value_loss=True,
                  task_generator=None):
 
-        self.use_value = use_value
+        self.global_norm = global_norm
         self.sampling_strategy = sampling_strategy
         self.temperature = temperature
         self.train_tasks = bool(task_generator)
@@ -127,7 +128,7 @@ class PPO:
         total_norm = torch.tensor(0, dtype=torch.float32)
         tasks_trained = []
         rets = []
-        grad_sums = []
+        grad_measures = []
         for e in range(self.ppo_epoch):
             if self.actor_critic.is_recurrent:
                 data_generator = rollouts.recurrent_generator(
@@ -158,7 +159,12 @@ class PPO:
                     self.actor_critic.parameters(),
                     retain_graph=True,
                     allow_unused=True)
-                grads[i] = sum(g.abs().sum() for g in grad if g is not None)
+                if self.global_norm:
+                    grads[i] = global_norm(
+                        [p.grad for p in self.actor_critic.parameters()])
+                else:
+                    grads[i] = sum(
+                        g.abs().sum() for g in grad if g is not None)
 
             if self.sampling_strategy == 'baseline':
                 logits = torch.ones_like(grads)
@@ -187,7 +193,7 @@ class PPO:
             ret = batches.ret[uses_task].mean()
             grad = grads[unique == task_to_train]
             rets.append(ret)
-            grad_sums.append(grad)
+            grad_measures.append(grad)
             # uses_task = torch.from_numpy(
             # np.isin(batches.tasks.numpy(),
             # [0, 1, 2, 8, 9, 10]).astype(np.uint8)).squeeze()
@@ -211,7 +217,7 @@ class PPO:
             update_values.update(
                 dist_mean=dist.mean,
                 dist_std=dist.stddev,
-                grad_sum=grads,
+                grad_measure=grads,
                 value_loss=value_losses,
                 action_loss=action_losses,
                 norm=total_norm,
@@ -231,4 +237,4 @@ class PPO:
             for k, v in task_values.items():
                 update_values[k] = torch.mean(v) / n
 
-        return update_values, tasks_trained, rets, grad_sums
+        return update_values, tasks_trained, rets, grad_measures
