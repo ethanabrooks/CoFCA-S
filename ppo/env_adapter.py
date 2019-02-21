@@ -2,16 +2,16 @@
 
 from multiprocessing import Pipe, Process
 
-from gym.spaces import Box, Discrete
 import numpy as np
+from gym.spaces import Box, Discrete
 
+import gridworld_env
+import gridworld_env.gridworld as gridworld
+import hsr
 # first party
 from common.vec_env import CloudpickleWrapper, VecEnv
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
-import gridworld_env
-import gridworld_env.gridworld as gridworld
-import hsr
 from hsr.env import Observation
 from utils.gym import concat_spaces, space_shape, space_to_size, unwrap_env
 from utils.numpy import onehot, vectorize
@@ -99,7 +99,7 @@ class GridWorld(gridworld_env.gridworld.GridWorld):
 
 
 class RandomGridWorld(gridworld_env.random_gridworld.RandomGridWorld):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, random=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.observation_sizes = [
             space_to_size(space) for space in self.observation_space.spaces
