@@ -128,10 +128,12 @@ class TasksGridWorld(GridWorld):
         self.task_letter = task_letter
         super().__init__(*args, **kwargs)
         self.task_states = np.ravel_multi_index(
-            np.where(np.logical_not(np.logical_or(
-                np.isin(self.desc, self.blocked),
-                np.isin(self.desc, self.terminal),
-            ))),
+            np.where(
+                np.logical_not(
+                    np.logical_or(
+                        np.isin(self.desc, self.blocked),
+                        np.isin(self.desc, self.terminal),
+                    ))),
             dims=self.desc.shape)
         self.observation_size = space_to_size(self.observation_space)
         self.task_space = Discrete(self.task_states.size)
