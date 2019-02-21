@@ -143,16 +143,17 @@ class PPO:
             total_batch_size = num_steps * num_processes
             batches = rollouts.make_batch(advantages,
                                           torch.arange(total_batch_size))
-            _, action_losses, _ = self.compute_loss_components(
-                batches, compute_value_loss=False)
+            value_losses, action_losses, _ = self.compute_loss_components(
+                batches)
             unique = torch.unique(batches.tasks)
             grads = torch.zeros(unique.size()[0])
             for i, task in enumerate(unique):
                 action_loss = action_losses[batches.tasks == task]
+                value_loss = value_losses[batches.tasks == task]
                 loss = self.compute_loss(
                     action_loss=action_loss,
                     dist_entropy=0,
-                    value_loss=None,
+                    value_loss=value_loss,
                     importance_weighting=None)
                 grad = torch.autograd.grad(
                     loss,
