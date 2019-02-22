@@ -1,11 +1,11 @@
 import itertools
-from pathlib import Path
 import time
+from pathlib import Path
 
-from gym.spaces import Discrete
 import numpy as np
-from tensorboardX import SummaryWriter
 import torch
+from gym.spaces import Discrete
+from tensorboardX import SummaryWriter
 
 from ppo.env_adapter import TasksHSREnv
 from ppo.envs import VecNormalize, make_vec_envs
