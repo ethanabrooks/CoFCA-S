@@ -7,7 +7,8 @@ from torch import nn as nn
 
 import gridworld_env
 import hsr.util
-from ppo.env_adapter import (GridWorld, HSREnv, MoveGripperEnv, RandomGridWorld, TasksGridWorld, TasksHSREnv,
+from ppo.env_adapter import (GridWorld, HSREnv, MoveGripperEnv, RandomGridWorld,
+                             TasksGridWorld, TasksHSREnv,
                              TasksMoveGripperEnv)
 from ppo.envs import wrap_env
 from ppo.train import train
@@ -21,12 +22,13 @@ except ImportError:
 
 def build_parser():
     parser = argparse.ArgumentParser(description='RL')
+    parser.add_argument('--no-task-in-obs', action='store_true')
+    parser.add_argument('--normalize', action='store_true')
     parser.add_argument(
         '--gamma',
         type=float,
         default=0.99,
         help='discount factor for rewards (default: 0.99)')
-    parser.add_argument('--normalize', action='store_true')
     parser.add_argument(
         '--use-gae',
         action='store_true',
@@ -176,7 +178,8 @@ def cli():
     parser.add_argument('--max-episode-steps', type=int)
     parser.add_argument('--render', action='store_true')
 
-    def make_gridworld_env_fn(env_id, max_episode_steps, eval, **env_args):
+    def make_gridworld_env_fn(env_id, max_episode_steps, eval,
+                              **env_args):
         args = gridworld_env.get_args(env_id)
         if 'random' in args:
             class_ = RandomGridWorld
@@ -187,11 +190,12 @@ def cli():
             env_thunk=lambda eval: class_(**env_args),
             max_episode_steps=max_episode_steps)
 
-    def _train(env_id, max_episode_steps, **kwargs):
+    def _train(env_id, max_episode_steps, no_task_in_obs, **kwargs):
         if 'GridWorld' in env_id:
             args = gridworld_env.get_args(env_id)
             if max_episode_steps is not None:
                 args['max_episode_steps'] = max_episode_steps
+            args.update(no_task_in_obs=no_task_in_obs)
             make_env = make_gridworld_env_fn(env_id, **args)
 
         else:
@@ -223,8 +227,9 @@ def tasks_cli():
             env_thunk=lambda eval: TasksGridWorld(eval=eval, **env_args),
             max_episode_steps=max_episode_steps)
 
-    def _train(env_id, max_episode_steps, **kwargs):
+    def _train(env_id, max_episode_steps, no_task_in_obs, **kwargs):
         args = gridworld_env.get_args(env_id)
+        args.update(no_task_in_obs=no_task_in_obs)
         if max_episode_steps is not None or 'max_episode_steps' not in args:
             args['max_episode_steps'] = max_episode_steps
         train(make_env=make_env_fn(**args), **kwargs)

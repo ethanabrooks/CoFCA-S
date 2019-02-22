@@ -122,7 +122,8 @@ class RandomGridWorld(gridworld_env.random_gridworld.RandomGridWorld):
 
 
 class TasksGridWorld(GridWorld):
-    def __init__(self, *args, eval, task_letter='*', **kwargs):
+    def __init__(self, no_task_in_obs, *args, eval, task_letter='*', **kwargs):
+        self.include_task_in_obs = not no_task_in_obs
         self.eval = eval
         self.task = None
         self.task_letter = task_letter
@@ -137,9 +138,12 @@ class TasksGridWorld(GridWorld):
             dims=self.desc.shape)
         self.observation_size = space_to_size(self.observation_space)
         self.task_space = Discrete(self.task_states.size)
+        size = self.observation_size
+        if self.include_task_in_obs:
+            size *= 2
         self.observation_space = Box(
-            low=np.zeros(self.observation_size * 2),
-            high=np.ones(self.observation_size * 2),
+            low=np.zeros(size),
+            high=np.ones(size),
         )
 
     def reset(self):
@@ -155,7 +159,10 @@ class TasksGridWorld(GridWorld):
         assert self.desc[self.decode(task_state)] == self.task_letter
 
     def obs_vector(self, obs):
-        return vectorize([onehot(obs, self.observation_size), self.task])
+        components = [onehot(obs, self.observation_size)]
+        if self.include_task_in_obs:
+            components.append(self.task)
+        return vectorize(components)
 
 
 def unwrap_tasks(env):
