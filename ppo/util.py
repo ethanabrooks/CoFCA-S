@@ -5,6 +5,21 @@ import torch.nn as nn
 # first party
 from ppo.envs import VecNormalize
 
+ACTIVATIONS = dict(
+    relu=nn.ReLU,
+    leaky=nn.LeakyReLU,
+    elu=nn.ELU,
+    selu=nn.SELU,
+    prelu=nn.PReLU,
+    sigmoid=nn.Sigmoid,
+    tanh=nn.Tanh,
+    none=None,
+)
+
+
+def parse_activation(arg: str):
+    return ACTIVATIONS[arg]()
+
 
 # Get a render function
 def get_render_func(venv):

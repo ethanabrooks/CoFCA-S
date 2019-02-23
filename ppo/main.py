@@ -12,7 +12,9 @@ from ppo.env_adapter import (GridWorld, HSREnv, MoveGripperEnv, RandomGridWorld,
                              TasksMoveGripperEnv)
 from ppo.envs import wrap_env
 from ppo.train import train
-from utils import parse_activation, parse_groups
+from utils import parse_groups
+
+from ppo.util import parse_activation
 
 try:
     import dm_control2gym
