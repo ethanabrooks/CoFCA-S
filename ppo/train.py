@@ -128,7 +128,9 @@ def train(num_frames,
     agent = PPO(actor_critic=actor_critic, task_generator=gan, **ppo_args)
 
     rewards_counter = np.zeros(num_processes)
+    time_step_counter = np.zeros(num_processes)
     episode_rewards = []
+    time_steps = []
     last_save = time.time()
 
     start = 0
@@ -179,8 +181,11 @@ def train(num_frames,
 
             # track rewards
             rewards_counter += rewards.numpy()
+            time_step_counter += 1
             episode_rewards.append(rewards_counter[done])
+            time_steps.append(time_step_counter[done])
             rewards_counter[done] = 0
+            time_step_counter[done] = 0
 
             # If done then clean the history of observations.
             masks = torch.FloatTensor(
@@ -253,6 +258,7 @@ def train(num_frames,
             end = time.time()
             fps = int(total_num_steps / (end - start))
             episode_rewards = np.concatenate(episode_rewards)
+            time_steps = np.concatenate(time_steps)
             if episode_rewards.size > 0:
                 print(
                     f"Updates {j}, num timesteps {total_num_steps}, FPS {fps} \n "
@@ -265,6 +271,8 @@ def train(num_frames,
                 print(f'Writing log data to {log_dir}.')
                 writer.add_scalar('fps', fps, total_num_steps)
                 writer.add_scalar('return', np.mean(episode_rewards),
+                                  total_num_steps)
+                writer.add_scalar('time steps', np.mean(time_steps),
                                   total_num_steps)
                 writer.add_scalar('num tasks', len(tasks_data),
                                   total_num_steps)
@@ -299,6 +307,7 @@ def train(num_frames,
                 plot(rewards, 'new rewards')
                 plot(gradient, 'new gradients')
             episode_rewards = []
+            time_steps = []
 
         if eval_interval is not None and j % eval_interval == 0:
             eval_envs = make_vec_envs(
