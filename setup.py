@@ -17,9 +17,9 @@ setup(
     scripts=['load'],
     entry_points=dict(console_scripts=[
         'ppo=ppo.main:cli',
-        'goals=ppo.main:goals_cli',
+        'tasks=ppo.main:tasks_cli',
         'hsr=ppo.main:hsr_cli',
-        'goals-hsr=ppo.main:goals_hsr_cli',
+        'tasks-hsr=ppo.main:tasks_hsr_cli',
     ]),
     install_requires=[
         'gym',

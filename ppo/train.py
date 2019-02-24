@@ -1,24 +1,23 @@
 import itertools
-from pathlib import Path
 import time
+from pathlib import Path
 
-from gym.spaces import Discrete
 import numpy as np
-from tensorboardX import SummaryWriter
 import torch
+from gym.spaces import Discrete
+from tensorboardX import SummaryWriter
 
-from ppo.env_adapter import GoalsHSREnv
+from ppo.env_adapter import TasksHSREnv
 from ppo.envs import VecNormalize, make_vec_envs
-from ppo.goal_generator import GoalGenerator
 from ppo.policy import Policy
-from ppo.storage import GoalsRolloutStorage, RolloutStorage
+from ppo.storage import RolloutStorage, TasksRolloutStorage
+from ppo.task_generator import TaskGenerator
 from ppo.update import PPO
 from utils import space_to_size
 
 
 def train(num_frames,
           num_steps,
-          num_processes,
           seed,
           cuda_deterministic,
           cuda,
@@ -35,7 +34,8 @@ def train(num_frames,
           ppo_args,
           network_args,
           render,
-          goals_args=None):
+          synchronous,
+          tasks_args=None):
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
 
@@ -44,6 +44,9 @@ def train(num_frames,
         torch.backends.cudnn.deterministic = True
 
     if log_dir:
+        import matplotlib.pyplot as plt
+
+        import matplotlib.cm as cm
         writer = SummaryWriter(log_dir=str(log_dir))
         print(f'Logging to {log_dir}')
         eval_log_dir = log_dir.joinpath("eval")
@@ -58,49 +61,59 @@ def train(num_frames,
     torch.set_num_threads(1)
     device = torch.device("cuda:0" if cuda else "cpu")
 
-    train_goals = goals_args is not None
+    train_tasks = tasks_args is not None
+    sample_env = make_env(seed=seed, rank=0, eval=False).unwrapped
+
+    num_processes = sample_env.task_space.n
+
+    if log_dir:
+        plt.switch_backend('agg')
+        xlim, ylim = sample_env.desc.shape
 
     _gamma = gamma if normalize else None
-    if render:
-        num_processes = 1
     envs = make_vec_envs(
         make_env=make_env,
         seed=seed,
         num_processes=num_processes,
         gamma=_gamma,
         device=device,
-        train_goals=train_goals,
+        train_tasks=train_tasks,
         normalize=normalize,
+        synchronous=synchronous,
         eval=False)
 
     actor_critic = Policy(
         envs.observation_space, envs.action_space, network_args=network_args)
 
     gan = None
-    if train_goals:
-        sample_env = make_env(seed=seed, rank=0, eval=False).unwrapped
-        gan = GoalGenerator(
-            goal_space=sample_env.goal_space,
+    tasks_data = []
+    last_index = 0
+    if train_tasks:
+        assert sample_env.task_space.n == num_processes
+        gan = TaskGenerator(
+            task_space=sample_env.task_space,
             **{k.replace('gan_', ''): v
-               for k, v in goals_args.items()})
+               for k, v in tasks_args.items()})
 
-        samples, goals, importance_weightings = gan.sample(num_processes)
-        for i, goal in enumerate(goals):
-            goal = goal.detach().numpy()
-            envs.unwrapped.set_goal(goal, i)
+        # samples, tasks, importance_weightings = gan.sample(num_processes)
+        samples = tasks = torch.arange(sample_env.task_space.n)
+        importance_weightings = torch.zeros_like(tasks)
+        for i, task in enumerate(tasks):
+            task = task.detach().numpy()
+            # envs.unwrapped.set_task(task, i)
 
-        if isinstance(sample_env.goal_space, Discrete):
-            goal_size = 1
+        if isinstance(sample_env.task_space, Discrete):
+            task_size = 1
         else:
-            goal_size = space_to_size(sample_env.goal_space)
-        rollouts = GoalsRolloutStorage(
+            task_size = space_to_size(sample_env.task_space)
+        rollouts = TasksRolloutStorage(
             num_steps=num_steps,
             num_processes=num_processes,
             obs_shape=envs.observation_space.shape,
             action_space=envs.action_space,
             recurrent_hidden_state_size=actor_critic.
             recurrent_hidden_state_size,
-            goal_size=goal_size)
+            task_size=task_size)
 
     else:
         rollouts = RolloutStorage(
@@ -112,16 +125,18 @@ def train(num_frames,
             recurrent_hidden_state_size,
         )
 
-    agent = PPO(actor_critic=actor_critic, goal_generator=gan, **ppo_args)
+    agent = PPO(actor_critic=actor_critic, task_generator=gan, **ppo_args)
 
     rewards_counter = np.zeros(num_processes)
+    time_step_counter = np.zeros(num_processes)
     episode_rewards = []
+    time_steps = []
     last_save = time.time()
 
     start = 0
     if load_path:
         state_dict = torch.load(load_path)
-        if train_goals:
+        if train_tasks:
             gan.load_state_dict(state_dict['gan'])
         actor_critic.load_state_dict(state_dict['actor_critic'])
         agent.optimizer.load_state_dict(state_dict['optimizer'])
@@ -136,14 +151,14 @@ def train(num_frames,
         updates = itertools.count(start)
 
     actor_critic.to(device)
-    if train_goals:
+    if train_tasks:
         gan.to(device)
 
     obs = envs.reset()
     rollouts.obs[0].copy_(obs)
-    if train_goals:
-        rollouts.goals[0].copy_(samples.view(-1, 1))
-        rollouts.importance_weighting[0].copy_(importance_weightings)
+    if train_tasks:
+        rollouts.tasks[0].copy_(samples.view(-1, 1))
+        # rollouts.importance_weighting[0].copy_(importance_weightings)
     rollouts.to(device)
 
     start = time.time()
@@ -164,24 +179,18 @@ def train(num_frames,
             # Observe reward and next obs
             obs, rewards, done, infos = envs.step(actions)
 
-            if train_goals:
-                for i, _done in enumerate(done):
-                    if _done:
-                        sample, goal, importance_weighting = gan.sample(1)
-                        goal = goal.detach().numpy()
-                        envs.unwrapped.set_goal(goal, i)
-                        samples[i] = sample
-                        importance_weightings[i] = importance_weighting
-
             # track rewards
             rewards_counter += rewards.numpy()
+            time_step_counter += 1
             episode_rewards.append(rewards_counter[done])
+            time_steps.append(time_step_counter[done])
             rewards_counter[done] = 0
+            time_step_counter[done] = 0
 
             # If done then clean the history of observations.
             masks = torch.FloatTensor(
                 [[0.0] if done_ else [1.0] for done_ in done])
-            if train_goals:
+            if train_tasks:
                 rollouts.insert(
                     obs=obs,
                     recurrent_hidden_states=recurrent_hidden_states,
@@ -190,7 +199,7 @@ def train(num_frames,
                     values=values,
                     rewards=rewards,
                     masks=masks,
-                    goal=samples,
+                    task=samples,
                     importance_weighting=importance_weightings,
                 )
             else:
@@ -212,7 +221,14 @@ def train(num_frames,
         rollouts.compute_returns(
             next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau)
 
-        train_results = agent.update(rollouts)
+        train_results, tasks_trained, returns, gradient_sums = agent.update(
+            rollouts)
+        tasks_trained = sample_env.task_states[torch.cat(
+            tasks_trained).int().numpy()]
+        l = [(x, y, r, g) for x, y, r, g in zip(
+            *sample_env.decode(tasks_trained), returns, gradient_sums)]
+        tasks_data.extend(l)
+
         rollouts.after_update()
         total_num_steps = (j + 1) * num_processes * num_steps
 
@@ -227,7 +243,7 @@ def train(num_frames,
             if isinstance(envs.venv, VecNormalize):
                 modules.update(vec_normalize=envs.venv)
 
-            if train_goals:
+            if train_tasks:
                 modules.update(gan=gan)
             state_dict = {
                 name: module.state_dict()
@@ -242,6 +258,7 @@ def train(num_frames,
             end = time.time()
             fps = int(total_num_steps / (end - start))
             episode_rewards = np.concatenate(episode_rewards)
+            time_steps = np.concatenate(time_steps)
             if episode_rewards.size > 0:
                 print(
                     f"Updates {j}, num timesteps {total_num_steps}, FPS {fps} \n "
@@ -255,14 +272,42 @@ def train(num_frames,
                 writer.add_scalar('fps', fps, total_num_steps)
                 writer.add_scalar('return', np.mean(episode_rewards),
                                   total_num_steps)
+                writer.add_scalar('time steps', np.mean(time_steps),
+                                  total_num_steps)
+                writer.add_scalar('num tasks', len(tasks_data),
+                                  total_num_steps)
                 for k, v in train_results.items():
                     if v.dim() == 0:
                         writer.add_scalar(k, v, total_num_steps)
-                if train_goals:
-                    gan_samples = gan.dist(1000).sample()
-                    writer.add_histogram('gan probs', gan_samples,
-                                         total_num_steps)
+                # if train_tasks:
+                #     writer.add_histogram('gan probs', np.array(tasks_trained),
+                #                          total_num_steps)
+
+                x, y, rewards, gradient = zip(*tasks_data)
+
+                def plot(c, text):
+                    fig = plt.figure()
+                    x_noise = (np.random.rand(len(x)) - .5) * .9
+                    y_noise = (np.random.rand(len(y)) - .5) * .9
+                    sc = plt.scatter(
+                        x + x_noise, y + y_noise, c=c, cmap=cm.hot, alpha=.1)
+                    plt.colorbar(sc)
+                    axes = plt.axes()
+                    axes.set_xlim(-.5, xlim - .5)
+                    axes.set_ylim(-.5, ylim - .5)
+                    plt.subplots_adjust(.15, .15, .95, .95)
+                    writer.add_figure(text, fig, total_num_steps)
+                    plt.close(fig)
+
+                plot(rewards, 'rewards')
+                plot(gradient, 'gradients')
+
+                x, y, rewards, gradient = zip(*tasks_data[last_index:])
+                last_index = len(tasks_data)
+                plot(rewards, 'new rewards')
+                plot(gradient, 'new gradients')
             episode_rewards = []
+            time_steps = []
 
         if eval_interval is not None and j % eval_interval == 0:
             eval_envs = make_vec_envs(
@@ -271,7 +316,7 @@ def train(num_frames,
                 num_processes=num_processes,
                 gamma=_gamma,
                 device=device,
-                train_goals=train_goals,
+                train_tasks=train_tasks,
                 normalize=normalize,
                 eval=True,
             )

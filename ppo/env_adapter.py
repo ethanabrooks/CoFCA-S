@@ -2,16 +2,16 @@
 
 from multiprocessing import Pipe, Process
 
-from gym.spaces import Box, Discrete
 import numpy as np
+from gym.spaces import Box, Discrete
 
+import gridworld_env
+import gridworld_env.gridworld as gridworld
+import hsr
 # first party
 from common.vec_env import CloudpickleWrapper, VecEnv
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
-import gridworld_env
-import gridworld_env.gridworld as gridworld
-import hsr
 from hsr.env import Observation
 from utils.gym import concat_spaces, space_shape, space_to_size, unwrap_env
 from utils.numpy import onehot, vectorize
@@ -36,12 +36,12 @@ class MoveGripperEnv(HSREnv, hsr.env.MoveGripperEnv):
     pass
 
 
-class GoalsHSREnv(hsr.env.HSREnv):
+class TasksHSREnv(hsr.env.HSREnv):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         old_spaces = hsr.env.Observation(*self.observation_space.spaces)
         spaces = Observation(
-            observation=old_spaces.observation, goal=old_spaces.goal)
+            observation=old_spaces.observation, task=old_spaces.task)
 
         # subspace_sizes used for splitting concatenated tensor observations
         self._subspace_sizes = Observation(
@@ -53,7 +53,7 @@ class GoalsHSREnv(hsr.env.HSREnv):
         import ipdb
         ipdb.set_trace()
         self.observation_space = concat_spaces(spaces)
-        self.reward_params = self.achieved_goal()
+        self.reward_params = self.achieved_task()
 
     @property
     def subspace_sizes(self):
@@ -61,24 +61,24 @@ class GoalsHSREnv(hsr.env.HSREnv):
 
     def step(self, actions):
         s, r, t, i = super().step(actions)
-        i.update(goal=self.goal)
-        observation = Observation(observation=s.observation, goal=s.goal)
+        i.update(task=self.task)
+        observation = Observation(observation=s.observation, task=s.task)
         return vectorize(observation), r, t, i
 
     def reset(self):
         o = super().reset()
-        return vectorize(Observation(observation=o.observation, goal=o.goal))
+        return vectorize(Observation(observation=o.observation, task=o.task))
 
-    def new_goal(self):
-        return self.goal
+    def new_task(self):
+        return self.task
 
 
-class GoalsMoveGripperEnv(GoalsHSREnv, hsr.env.MoveGripperEnv):
+class TasksMoveGripperEnv(TasksHSREnv, hsr.env.MoveGripperEnv):
     pass
 
 
 class GridWorld(gridworld_env.gridworld.GridWorld):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, random=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.observation_space = Box(
             low=np.zeros(self.observation_space.n),
@@ -99,7 +99,7 @@ class GridWorld(gridworld_env.gridworld.GridWorld):
 
 
 class RandomGridWorld(gridworld_env.random_gridworld.RandomGridWorld):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, random=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.observation_sizes = [
             space_to_size(space) for space in self.observation_space.spaces
@@ -121,40 +121,52 @@ class RandomGridWorld(gridworld_env.random_gridworld.RandomGridWorld):
         return self.obs_vector(o)
 
 
-class GoalsGridWorld(GridWorld):
-    def __init__(self, *args, eval, random=None, goal_letter='*', **kwargs):
+class TasksGridWorld(GridWorld):
+    def __init__(self, no_task_in_obs, *args, eval, task_letter='*', **kwargs):
+        self.include_task_in_obs = not no_task_in_obs
         self.eval = eval
-        self.goal = None
-        self.goal_letter = goal_letter
+        self.task = None
+        self.task_letter = task_letter
         super().__init__(*args, **kwargs)
-        self.goal_states = np.ravel_multi_index(
-            np.where(np.logical_not(np.isin(self.desc, self.blocked))),
+        self.task_states = np.ravel_multi_index(
+            np.where(
+                np.logical_not(
+                    np.logical_or(
+                        np.isin(self.desc, self.blocked),
+                        np.isin(self.desc, self.terminal),
+                    ))),
             dims=self.desc.shape)
         self.observation_size = space_to_size(self.observation_space)
-        self.goal_space = Discrete(self.goal_states.size)
+        self.task_space = Discrete(self.task_states.size)
+        size = self.observation_size
+        if self.include_task_in_obs:
+            size *= 2
         self.observation_space = Box(
-            low=np.zeros(self.observation_size * 2),
-            high=np.ones(self.observation_size * 2),
+            low=np.zeros(size),
+            high=np.ones(size),
         )
 
     def reset(self):
         if self.eval:
-            choice = self.np_random.choice(self.goal_states, ())
-            self.set_goal(choice)
+            choice = self.task_space.sample()
+            self.set_task(choice)
         return super().reset()
 
-    def set_goal(self, goal_index):
-        goal_state = self.goal_states[goal_index]
-        self.assign(**{self.goal_letter: [goal_state]})
-        self.goal = onehot(goal_state, self.observation_size)
-        assert self.desc[self.decode(goal_state)] == self.goal_letter
+    def set_task(self, task_index):
+        task_state = self.task_states[task_index]
+        self.assign(**{self.task_letter: [task_state]})
+        self.task = onehot(task_index, self.observation_size)
+        assert self.desc[self.decode(task_state)] == self.task_letter
 
     def obs_vector(self, obs):
-        return vectorize([onehot(obs, self.observation_size), self.goal])
+        components = [onehot(obs, self.observation_size)]
+        if self.include_task_in_obs:
+            components.append(self.task)
+        return vectorize(components)
 
 
-def unwrap_goals(env):
-    return unwrap_env(env, lambda e: hasattr(e, 'set_goal'))
+def unwrap_tasks(env):
+    return unwrap_env(env, lambda e: hasattr(e, 'set_task'))
 
 
 def worker(remote, parent_remote, env_fn_wrapper):
@@ -178,13 +190,13 @@ def worker(remote, parent_remote, env_fn_wrapper):
             break
         elif cmd == 'get_spaces':
             remote.send((env.observation_space, env.action_space))
-        elif cmd == 'set_goal':
-            unwrap_goals(env).set_goal(data)
+        elif cmd == 'set_task':
+            unwrap_tasks(env).set_task(data)
         else:
             raise NotImplementedError
 
 
-class GoalsSubprocVecEnv(SubprocVecEnv):
+class TasksSubprocVecEnv(SubprocVecEnv):
     # noinspection PyMissingConstructor
     def __init__(self, env_fns, spaces=None):
         """
@@ -212,11 +224,11 @@ class GoalsSubprocVecEnv(SubprocVecEnv):
         observation_space, action_space = self.remotes[0].recv()
         VecEnv.__init__(self, len(env_fns), observation_space, action_space)
 
-    def set_goal(self, goal, i):
-        self.remotes[i].send(('set_goal', goal))
+    def set_task(self, task, i):
+        self.remotes[i].send(('set_task', task))
 
 
-class GoalsDummyVecEnv(DummyVecEnv):
-    def set_goal(self, goal, i):
-        env = unwrap_goals(self.envs[i])
-        env.set_goal(goal)
+class TasksDummyVecEnv(DummyVecEnv):
+    def set_task(self, task, i):
+        env = unwrap_tasks(self.envs[i])
+        env.set_task(task)

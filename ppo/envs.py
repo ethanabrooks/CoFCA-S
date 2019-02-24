@@ -4,21 +4,25 @@ import functools
 import sys
 
 import gym
+from gym.spaces.box import Box
+from gym.wrappers import TimeLimit
 import numpy as np
 import torch
 import torch.nn as nn
-from gym.spaces.box import Box
-from gym.wrappers import TimeLimit
 
 from common.running_mean_std import RunningMeanStd
 from common.vec_env import VecEnvWrapper
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
-from ppo.env_adapter import GoalsDummyVecEnv, GoalsSubprocVecEnv
+from ppo.env_adapter import TasksDummyVecEnv, TasksSubprocVecEnv
 
 
-def wrap_env(env_thunk, seed, rank, eval, add_timestep=False,
+def wrap_env(env_thunk,
+             seed,
+             rank,
+             eval,
+             add_timestep=False,
              max_episode_steps=None):
     env = env_thunk(eval)
     is_atari = hasattr(gym.envs, 'atari') and isinstance(
@@ -27,6 +31,7 @@ def wrap_env(env_thunk, seed, rank, eval, add_timestep=False,
         raise NotImplementedError
 
     env.seed(seed + rank)
+    env.set_task(rank)
 
     obs_shape = env.observation_space.shape
 
@@ -62,20 +67,22 @@ def make_vec_envs(make_env,
                   device,
                   normalize,
                   eval,
-                  train_goals=False,
+                  synchronous=False,
+                  train_tasks=False,
                   num_frame_stack=None):
     envs = [
         functools.partial(make_env, eval=eval, seed=seed, rank=i)
         for i in range(num_processes)
     ]
 
-    if train_goals:
-        if len(envs) == 1 or sys.platform == 'darwin':
-            envs = GoalsDummyVecEnv(envs)
+    synchronous = synchronous or len(envs) == 1 or sys.platform == 'darwin'
+    if train_tasks:
+        if synchronous:
+            envs = TasksDummyVecEnv(envs)
         else:
-            envs = GoalsSubprocVecEnv(envs)
+            envs = TasksSubprocVecEnv(envs)
     else:
-        if len(envs) == 1 or sys.platform == 'darwin':
+        if synchronous:
             envs = DummyVecEnv(envs)
         else:
             envs = SubprocVecEnv(envs)
@@ -96,7 +103,7 @@ def make_vec_envs(make_env,
 
 
 # Can be used to test recurrent policies for Reacher-v2
-class MaskGoal(gym.ObservationWrapper):
+class MaskTask(gym.ObservationWrapper):
     def observation(self, observation):
         if self.env._elapsed_steps > 0:
             observation[-2:0] = 0
