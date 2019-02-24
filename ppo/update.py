@@ -1,10 +1,12 @@
 # stdlib
-from collections import Counter
+from collections import Counter, namedtuple
 import itertools
 import math
 
 # third party
 # first party
+from enum import Enum
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -23,16 +25,20 @@ def global_norm(grads):
     norm = 0
     for grad in grads:
         if grad is not None:
-            norm += grad.norm(2)**2
-    return norm**.5
+            norm += grad.norm(2) ** 2
+    return norm ** .5
 
 
 def epanechnikov_kernel(x):
-    return 3 / 4 * (1 - x**2)
+    return 3 / 4 * (1 - x ** 2)
 
 
 def gaussian_kernel(x):
-    return (2 * math.pi)**-.5 * torch.exp(-.5 * x**2)
+    return (2 * math.pi) ** -.5 * torch.exp(-.5 * x ** 2)
+
+
+SamplingStrategy = Enum('SamplingStrategy', 'baseline binary_logits gradients max '
+                                            'learned')
 
 
 class PPO:
@@ -121,7 +127,7 @@ class PPO:
     def update(self, rollouts: RolloutStorage):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         advantages = (advantages - advantages.mean()) / (
-            advantages.std() + 1e-5)
+                advantages.std() + 1e-5)
         update_values = Counter()
         task_values = Counter()
 
@@ -159,23 +165,22 @@ class PPO:
                     grads[i] = sum(
                         g.abs().sum() for g in grad if g is not None)
 
-            if self.sampling_strategy == 'baseline':
+            if self.sampling_strategy == SamplingStrategy.baseline.name:
                 logits = torch.ones_like(grads)
-            elif self.sampling_strategy == '0/1logits':
+            elif self.sampling_strategy == SamplingStrategy.binary_logits.name:
                 logits = torch.ones_like(grads) * -self.temperature
                 sorted_grads, _ = torch.sort(grads)
                 mid_grad = sorted_grads[grads.numel() // 4]
                 logits[grads > mid_grad] = self.temperature
-            elif self.sampling_strategy == 'gradients':
+            elif self.sampling_strategy == SamplingStrategy.gradients.name:
                 logits = grads * self.temperature
-            elif self.sampling_strategy == 'max':
+            elif self.sampling_strategy == SamplingStrategy.max.name:
                 logits = torch.ones_like(grads) * -self.temperature
                 logits[grads.argmax()] = self.temperature
-            elif self.sampling_strategy == 'learned':
-                logits = self.task_generator.logits
-                task_losses = (logits - grads) ** 2
-                task_loss = torch.mean(task_losses)
-                mean_abs_task_error= torch.mean(torch.abs(logits - grads))
+            elif self.sampling_strategy == SamplingStrategy.learned.name:
+                logits = self.task_generator.parameter
+                task_loss = torch.mean((logits - grads) ** 2)
+                mean_abs_task_error = torch.mean(torch.abs(logits - grads))
                 task_loss.backward()
                 self.task_optimizer.step()
                 update_values.update(task_loss=task_loss,
@@ -189,7 +194,7 @@ class PPO:
             tasks_trained.append(task_to_train)
 
             importance_weighting = 1 / (
-                unique.numel() * dist.log_prob(task_index).exp())
+                    unique.numel() * dist.log_prob(task_index).exp())
 
             uses_task = batches.tasks.squeeze() == task_to_train
             ret = batches.ret[uses_task].mean()
