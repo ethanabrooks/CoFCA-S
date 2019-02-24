@@ -35,6 +35,7 @@ class TaskGenerator(nn.Module):
         self.softplus = torch.nn.Softplus()
         self.regularizer = None
         self.input = torch.rand(input_size)
+        self.parameter = self.network.parameter
 
     def set_input(self, task, norm):
         if isinstance(self.task_space, Discrete):

@@ -1,10 +1,12 @@
 # stdlib
-from collections import Counter
+from collections import Counter, namedtuple
 import itertools
 import math
 
 # third party
 # first party
+from enum import Enum
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -23,16 +25,20 @@ def global_norm(grads):
     norm = 0
     for grad in grads:
         if grad is not None:
-            norm += grad.norm(2)**2
-    return norm**.5
+            norm += grad.norm(2) ** 2
+    return norm ** .5
 
 
 def epanechnikov_kernel(x):
-    return 3 / 4 * (1 - x**2)
+    return 3 / 4 * (1 - x ** 2)
 
 
 def gaussian_kernel(x):
-    return (2 * math.pi)**-.5 * torch.exp(-.5 * x**2)
+    return (2 * math.pi) ** -.5 * torch.exp(-.5 * x ** 2)
+
+
+SamplingStrategy = Enum('SamplingStrategy', 'baseline binary_logits gradients max '
+                                            'learned')
 
 
 class PPO:
@@ -73,11 +79,11 @@ class PPO:
                 task_generator.parameters(),
                 lr=task_generator.learning_rate,
                 eps=eps)
+            self.task_generator = task_generator
 
         self.optimizer = optim.Adam(
             actor_critic.parameters(), lr=learning_rate, eps=eps)
 
-        self.gan = task_generator
         self.reward_function = None
 
     def compute_loss_components(self, batch, compute_value_loss=True):
@@ -121,7 +127,7 @@ class PPO:
     def update(self, rollouts: RolloutStorage):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         advantages = (advantages - advantages.mean()) / (
-            advantages.std() + 1e-5)
+                advantages.std() + 1e-5)
         update_values = Counter()
         task_values = Counter()
 
@@ -130,13 +136,6 @@ class PPO:
         rets = []
         grad_measures = []
         for e in range(self.ppo_epoch):
-            if self.actor_critic.is_recurrent:
-                data_generator = rollouts.recurrent_generator(
-                    advantages, self.batch_size)
-            else:
-                data_generator = rollouts.feed_forward_generator(
-                    advantages, self.batch_size)
-
             assert isinstance(rollouts, TasksRolloutStorage)
 
             num_steps, num_processes = rollouts.rewards.size()[0:2]
@@ -166,18 +165,24 @@ class PPO:
                     grads[i] = sum(
                         g.abs().sum() for g in grad if g is not None)
 
-            if self.sampling_strategy == 'baseline':
+            if self.sampling_strategy == SamplingStrategy.baseline.name:
                 logits = torch.ones_like(grads)
-            elif self.sampling_strategy == '0/1logits':
+            elif self.sampling_strategy == SamplingStrategy.binary_logits.name:
                 logits = torch.ones_like(grads) * -self.temperature
                 sorted_grads, _ = torch.sort(grads)
                 mid_grad = sorted_grads[grads.numel() // 4]
                 logits[grads > mid_grad] = self.temperature
-            elif self.sampling_strategy == 'experiment':
+            elif self.sampling_strategy == SamplingStrategy.gradients.name:
                 logits = grads * self.temperature
-            elif self.sampling_strategy == 'max':
+            elif self.sampling_strategy == SamplingStrategy.max.name:
                 logits = torch.ones_like(grads) * -self.temperature
                 logits[grads.argmax()] = self.temperature
+            elif self.sampling_strategy == SamplingStrategy.learned.name:
+                logits = self.task_generator.parameter
+                task_loss = torch.mean((logits - grads) ** 2)
+                task_loss.backward()
+                self.task_optimizer.step()
+                update_values.update(task_loss=task_loss)
             else:
                 raise RuntimeError
 
@@ -187,7 +192,7 @@ class PPO:
             tasks_trained.append(task_to_train)
 
             importance_weighting = 1 / (
-                unique.numel() * dist.log_prob(task_index).exp())
+                    unique.numel() * dist.log_prob(task_index).exp())
 
             uses_task = batches.tasks.squeeze() == task_to_train
             ret = batches.ret[uses_task].mean()
