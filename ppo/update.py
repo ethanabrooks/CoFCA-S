@@ -173,10 +173,13 @@ class PPO:
                 logits[grads.argmax()] = self.temperature
             elif self.sampling_strategy == 'learned':
                 logits = self.task_generator.logits
-                task_loss = torch.mean((logits - grads) ** 2)
+                task_losses = (logits - grads) ** 2
+                task_loss = torch.mean(task_losses)
+                mean_abs_task_error= torch.mean(torch.abs(logits - grads))
                 task_loss.backward()
                 self.task_optimizer.step()
-                update_values.update(task_loss=task_loss)
+                update_values.update(task_loss=task_loss,
+                                     mean_abs_task_error=mean_abs_task_error)
             else:
                 raise RuntimeError
 
