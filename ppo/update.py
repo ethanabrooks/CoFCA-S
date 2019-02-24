@@ -73,11 +73,11 @@ class PPO:
                 task_generator.parameters(),
                 lr=task_generator.learning_rate,
                 eps=eps)
+            self.task_generator = task_generator
 
         self.optimizer = optim.Adam(
             actor_critic.parameters(), lr=learning_rate, eps=eps)
 
-        self.gan = task_generator
         self.reward_function = None
 
     def compute_loss_components(self, batch, compute_value_loss=True):
@@ -130,13 +130,6 @@ class PPO:
         rets = []
         grad_measures = []
         for e in range(self.ppo_epoch):
-            if self.actor_critic.is_recurrent:
-                data_generator = rollouts.recurrent_generator(
-                    advantages, self.batch_size)
-            else:
-                data_generator = rollouts.feed_forward_generator(
-                    advantages, self.batch_size)
-
             assert isinstance(rollouts, TasksRolloutStorage)
 
             num_steps, num_processes = rollouts.rewards.size()[0:2]
@@ -173,11 +166,17 @@ class PPO:
                 sorted_grads, _ = torch.sort(grads)
                 mid_grad = sorted_grads[grads.numel() // 4]
                 logits[grads > mid_grad] = self.temperature
-            elif self.sampling_strategy == 'experiment':
+            elif self.sampling_strategy == 'gradients':
                 logits = grads * self.temperature
             elif self.sampling_strategy == 'max':
                 logits = torch.ones_like(grads) * -self.temperature
                 logits[grads.argmax()] = self.temperature
+            elif self.sampling_strategy == 'learned':
+                logits = self.task_generator.logits
+                task_loss = torch.mean((logits - grads) ** 2)
+                task_loss.backward()
+                self.task_optimizer.step()
+                update_values.update(task_loss=task_loss)
             else:
                 raise RuntimeError
 
