@@ -50,8 +50,6 @@ class TasksHSREnv(hsr.env.HSREnv):
             assert isinstance(n, int)
 
         # space of observation needs to exclude reward param
-        import ipdb
-        ipdb.set_trace()
         self.observation_space = concat_spaces(spaces)
         self.reward_params = self.achieved_task()
 

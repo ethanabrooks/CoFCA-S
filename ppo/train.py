@@ -221,13 +221,12 @@ def train(num_frames,
         rollouts.compute_returns(
             next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau)
 
-        train_results, tasks_trained, returns, gradient_sums = agent.update(
+        train_results, tasks_trained, task_returns, gradient_sums = agent.update(
             rollouts)
-        tasks_trained = sample_env.task_states[torch.cat(
+        tasks_trained = sample_env.task_states[torch.tensor(
             tasks_trained).int().numpy()]
-        l = [(x, y, r, g) for x, y, r, g in zip(
-            *sample_env.decode(tasks_trained), returns, gradient_sums)]
-        tasks_data.extend(l)
+        tasks_data.extend([(x, y, r, g) for x, y, r, g in zip(
+            *sample_env.decode(tasks_trained), task_returns, gradient_sums)])
 
         rollouts.after_update()
         total_num_steps = (j + 1) * num_processes * num_steps

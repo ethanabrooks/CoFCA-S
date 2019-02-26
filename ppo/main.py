@@ -140,6 +140,11 @@ def build_parser():
         type=float,
     )
     ppo_parser.add_argument(
+        '--num-processes',
+        type=int,
+        default=1
+    )
+    ppo_parser.add_argument(
         '--global-norm',
         action='store_true',
     )
