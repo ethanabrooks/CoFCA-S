@@ -356,7 +356,5 @@ def train(num_frames,
                 writer.add_scalar('eval time steps', np.mean(eval_time_steps),
                                   total_num_steps)
 
-            eval_envs.close()
-
             print(" Evaluation using {} episodes: mean reward {:.5f}\n".format(
                 num_tasks, np.mean(eval_rewards)))
