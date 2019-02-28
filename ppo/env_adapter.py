@@ -150,12 +150,15 @@ class TasksGridWorld(GridWorld):
             high=np.ones(size),
         )
 
+    def set_task(self, task_index):
+        self.task_index = task_index
+        task_state = self.task_states[self.task_index]
+        self.task_vector = onehot(task_state, self.observation_size)
+        self.assign(**{self.task_letter: [task_state]})
+
     def reset(self):
         if not self.evaluation:
-            self.task_index = np.random.choice(self.num_tasks, p=self.task_dist)
-            task_state = self.task_states[self.task_index]
-            self.task_vector = onehot(task_state, self.observation_size)
-            self.assign(**{self.task_letter: [task_state]})
+            self.set_task(np.random.choice(self.num_tasks, p=self.task_dist))
         return super().reset()
 
     def set_task_dist(self, dist):
