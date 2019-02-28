@@ -124,6 +124,10 @@ def train(num_frames,
             task_size=task_size)
 
     else:
+        for i in range(num_tasks):
+            task = sample_env.task_space.sample()
+            envs.unwrapped.set_task(task, i)
+
         rollouts = RolloutStorage(
             num_steps=num_steps,
             num_processes=num_processes,
@@ -190,8 +194,12 @@ def train(num_frames,
             obs, rewards, dones, infos = envs.step(actions)
             for i, (done) in enumerate(dones):
                 if done:
-                    tasks[i], importance_weightings[i] = gan.sample(1)
+                    if train_tasks:
+                        tasks[i], importance_weightings[i] = gan.sample(1)
+                    else:
+                        tasks[i] = sample_env.task_space.sample()
                     envs.unwrapped.set_task(task, i)
+
 
             # track rewards
             rewards_counter += rewards.numpy()
