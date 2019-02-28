@@ -21,17 +21,19 @@ from ppo.env_adapter import TasksDummyVecEnv, TasksSubprocVecEnv
 def wrap_env(env_thunk,
              seed,
              rank,
-             eval,
+             evaluation,
              add_timestep=False,
              max_episode_steps=None):
-    env = env_thunk(eval)
+    env = env_thunk()
     is_atari = hasattr(gym.envs, 'atari') and isinstance(
         env.unwrapped, gym.envs.atari.atari_env.AtariEnv)
     if is_atari:
         raise NotImplementedError
 
     env.seed(seed + rank)
-    env.set_task(rank)
+    if evaluation:
+        env.unwrapped.evaluation = True
+        env.unwrapped.set_task(rank)
 
     obs_shape = env.observation_space.shape
 
@@ -71,7 +73,7 @@ def make_vec_envs(make_env,
                   train_tasks=False,
                   num_frame_stack=None):
     envs = [
-        functools.partial(make_env, eval=eval, seed=seed, rank=i)
+        functools.partial(make_env, evaluation=eval, seed=seed, rank=i)
         for i in range(num_processes)
     ]
 

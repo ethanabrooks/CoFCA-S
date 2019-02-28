@@ -1,17 +1,17 @@
 # third party
-
+import time
 from multiprocessing import Pipe, Process
 
-import numpy as np
 from gym.spaces import Box, Discrete
+import numpy as np
 
-import gridworld_env
-import gridworld_env.gridworld as gridworld
-import hsr
 # first party
 from common.vec_env import CloudpickleWrapper, VecEnv
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
+import gridworld_env
+import gridworld_env.gridworld as gridworld
+import hsr
 from hsr.env import Observation
 from utils.gym import concat_spaces, space_shape, space_to_size, unwrap_env
 from utils.numpy import onehot, vectorize
@@ -120,11 +120,8 @@ class RandomGridWorld(gridworld_env.random_gridworld.RandomGridWorld):
 
 
 class TasksGridWorld(GridWorld):
-    def __init__(self, no_task_in_obs, *args, eval, task_letter='*', **kwargs):
+    def __init__(self, no_task_in_obs, task_letter='*', *args, **kwargs):
         self.include_task_in_obs = not no_task_in_obs
-        self.eval = eval
-        self.task = None
-        self.task_letter = task_letter
         super().__init__(*args, **kwargs)
         self.task_states = np.ravel_multi_index(
             np.where(
@@ -135,7 +132,16 @@ class TasksGridWorld(GridWorld):
                     ))),
             dims=self.desc.shape)
         self.observation_size = space_to_size(self.observation_space)
+        self.evaluation = False
+
+        # task stuff
+        self.task_index = None
+        self.task_vector = None
         self.task_space = Discrete(self.task_states.size)
+        self.task_letter = task_letter
+        self.num_tasks = len(self.task_states)
+        self.task_dist = np.ones_like(self.task_states) / self.num_tasks
+
         size = self.observation_size
         if self.include_task_in_obs:
             size *= 2
@@ -144,27 +150,31 @@ class TasksGridWorld(GridWorld):
             high=np.ones(size),
         )
 
-    def reset(self):
-        if self.eval:
-            choice = self.task_space.sample()
-            self.set_task(choice)
-        return super().reset()
-
     def set_task(self, task_index):
-        task_state = self.task_states[task_index]
+        self.task_index = task_index
+        task_state = self.task_states[self.task_index]
+        self.task_vector = onehot(task_state, self.observation_size)
         self.assign(**{self.task_letter: [task_state]})
-        self.task = onehot(task_index, self.observation_size)
-        assert self.desc[self.decode(task_state)] == self.task_letter
+
+    def reset(self):
+        # if not self.evaluation:
+        #     self.set_task(np.random.choice(self.num_tasks, p=self.task_dist))
+        return super().reset()
 
     def obs_vector(self, obs):
         components = [onehot(obs, self.observation_size)]
         if self.include_task_in_obs:
-            components.append(self.task)
+            components.append(self.task_vector)
         return vectorize(components)
 
 
+class TrainTasksGridWorld(TasksGridWorld):
+    def set_task_dist(self, dist):
+        self.task_dist = dist
+
+
 def unwrap_tasks(env):
-    return unwrap_env(env, lambda e: hasattr(e, 'set_task'))
+    return unwrap_env(env, lambda e: hasattr(e, 'set_task_dist'))
 
 
 def worker(remote, parent_remote, env_fn_wrapper):
@@ -188,8 +198,10 @@ def worker(remote, parent_remote, env_fn_wrapper):
             break
         elif cmd == 'get_spaces':
             remote.send((env.observation_space, env.action_space))
-        elif cmd == 'set_task':
-            unwrap_tasks(env).set_task(data)
+        elif cmd == 'set_task_dist':
+            unwrap_tasks(env).set_task_dist(data)
+        elif cmd == 'get_task':
+            remote.send(unwrap_tasks(env).task_index)
         else:
             raise NotImplementedError
 
@@ -222,11 +234,24 @@ class TasksSubprocVecEnv(SubprocVecEnv):
         observation_space, action_space = self.remotes[0].recv()
         VecEnv.__init__(self, len(env_fns), observation_space, action_space)
 
-    def set_task(self, task, i):
-        self.remotes[i].send(('set_task', task))
+    def set_task_dist(self, dist):
+        for remote in self.remotes:
+            remote.send(('set_task_dist', dist))
+
+    def get_tasks(self):
+        self._assert_not_closed()
+        for remote in self.remotes:
+            remote.send(('get_task', None))
+        self.waiting = True
+        tasks = [remote.recv() for remote in self.remotes]
+        self.waiting = False
+        return tasks
 
 
 class TasksDummyVecEnv(DummyVecEnv):
-    def set_task(self, task, i):
-        env = unwrap_tasks(self.envs[i])
-        env.set_task(task)
+    def set_task_dist(self, dist):
+        for env in self.envs:
+            unwrap_tasks(env).set_task_dist(dist)
+
+    def get_tasks(self):
+        return [unwrap_tasks(env).task_index for env in self.envs]

@@ -1,11 +1,11 @@
 import itertools
-import time
 from pathlib import Path
+import time
 
-import numpy as np
-import torch
 from gym.spaces import Discrete
+import numpy as np
 from tensorboardX import SummaryWriter
+import torch
 
 from ppo.env_adapter import TasksHSREnv
 from ppo.envs import VecNormalize, make_vec_envs
@@ -33,7 +33,6 @@ def train(num_frames,
           tau,
           ppo_args,
           network_args,
-          render,
           synchronous,
           tasks_args=None):
     torch.manual_seed(seed)
@@ -62,8 +61,7 @@ def train(num_frames,
     device = torch.device("cuda:0" if cuda else "cpu")
 
     train_tasks = tasks_args is not None
-    sample_env = make_env(seed=seed, rank=0, eval=False).unwrapped
-
+    sample_env = make_env(seed=seed, rank=0, evaluation=False).unwrapped
     num_processes = sample_env.task_space.n
 
     if log_dir:
@@ -171,10 +169,6 @@ def train(num_frames,
                         inputs=rollouts.obs[step],
                         rnn_hxs=rollouts.recurrent_hidden_states[step],
                         masks=rollouts.masks[step])
-
-            if render:
-                envs.render()
-                time.sleep(.5)
 
             # Observe reward and next obs
             obs, rewards, done, infos = envs.step(actions)

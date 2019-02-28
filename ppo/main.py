@@ -8,14 +8,13 @@ from torch import nn as nn
 import gridworld_env
 import hsr.util
 from ppo.env_adapter import (GridWorld, HSREnv, MoveGripperEnv, RandomGridWorld,
-                             TasksGridWorld, TasksHSREnv,
-                             TasksMoveGripperEnv)
+                             TrainTasksGridWorld, TasksHSREnv,
+                             TasksMoveGripperEnv, TasksGridWorld)
 from ppo.envs import wrap_env
 from ppo.train import train
-from utils import parse_groups
-
 from ppo.update import SamplingStrategy
 from ppo.util import parse_activation
+from utils import parse_groups
 
 try:
     import dm_control2gym
@@ -184,18 +183,11 @@ def add_tasks_args(parser):
 def cli():
     parser = build_parser()
     parser.add_argument('--max-episode-steps', type=int)
-    parser.add_argument('--render', action='store_true')
 
-    def make_gridworld_env_fn(env_id, max_episode_steps, eval,
-                              **env_args):
-        args = gridworld_env.get_args(env_id)
-        if 'random' in args:
-            class_ = RandomGridWorld
-        else:
-            class_ = GridWorld
+    def make_env_fn(max_episode_steps, **env_args):
         return functools.partial(
             wrap_env,
-            env_thunk=lambda eval: class_(**env_args),
+            env_thunk=lambda: TasksGridWorld(**env_args),
             max_episode_steps=max_episode_steps)
 
     def _train(env_id, max_episode_steps, no_task_in_obs, **kwargs):
@@ -204,11 +196,11 @@ def cli():
             if max_episode_steps is not None:
                 args['max_episode_steps'] = max_episode_steps
             args.update(no_task_in_obs=no_task_in_obs)
-            make_env = make_gridworld_env_fn(env_id, **args)
+            make_env = make_env_fn(**args)
 
         else:
 
-            def thunk(eval):
+            def thunk():
                 if env_id.startswith("dm"):
                     _, domain, task = env_id.split('.')
                     return dm_control2gym.make(
@@ -227,12 +219,11 @@ def tasks_cli():
     parser = build_parser()
     add_tasks_args(parser)
     parser.add_argument('--max-episode-steps', type=int)
-    parser.add_argument('--render', action='store_true')
 
     def make_env_fn(max_episode_steps, **env_args):
         return functools.partial(
             wrap_env,
-            env_thunk=lambda eval: TasksGridWorld(eval=eval, **env_args),
+            env_thunk=lambda: TrainTasksGridWorld(**env_args),
             max_episode_steps=max_episode_steps)
 
     def _train(env_id, max_episode_steps, no_task_in_obs, **kwargs):
@@ -251,16 +242,16 @@ def hsr_cli():
 
     def env_thunk(env_id, **kwargs):
         if env_id == 'move-gripper':
-            return lambda eval: MoveGripperEnv(**kwargs)
+            return lambda: MoveGripperEnv(**kwargs)
         else:
-            return lambda eval: HSREnv(**kwargs)
+            return lambda: HSREnv(**kwargs)
 
     def _train(env_id, env_args, max_episode_steps=None, **kwargs):
         make_env = functools.partial(
             wrap_env,
             env_thunk=env_thunk(env_id, **env_args),
             max_episode_steps=max_episode_steps)
-        train(make_env=make_env, render=False, **kwargs)
+        train(make_env=make_env, **kwargs)
 
     hsr.util.env_wrapper(_train)(**parse_groups(parser))
 
@@ -270,7 +261,7 @@ def tasks_hsr_cli():
     add_tasks_args(parser)
     add_hsr_args(parser)
 
-    def env_thunk(env_id, eval, **env_args):
+    def env_thunk(env_id, **env_args):
         if env_id == 'move-gripper':
             return lambda: TasksMoveGripperEnv(**env_args)
         else:
@@ -284,7 +275,7 @@ def tasks_hsr_cli():
                 max_episode_steps=max_episode_steps),
             **kwargs)
 
-    hsr.util.env_wrapper(_train)(**parse_groups(parser), render=False)
+    hsr.util.env_wrapper(_train)(**parse_groups(parser))
 
 
 if __name__ == "__main__":
