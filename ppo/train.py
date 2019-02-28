@@ -101,14 +101,15 @@ def train(num_frames,
     last_index = 0
     if train_tasks:
         gan = TaskGenerator(
-            task_space=sample_env.task_space,
+            task_size=sample_env.task_space.n,
             **{k.replace('gan_', ''): v
                for k, v in tasks_args.items()})
 
         tasks, importance_weightings = gan.sample(num_processes)
         for i, task in enumerate(tasks):
-            task = task.detach().numpy()
             envs.unwrapped.set_task(task, i)
+        for env, task in zip(envs.venv.envs, tasks):
+            assert env.unwrapped.task.argmax() == task
 
         if isinstance(sample_env.task_space, Discrete):
             task_size = 1
@@ -168,11 +169,6 @@ def train(num_frames,
 
     obs = envs.reset()
     rollouts.obs[0].copy_(obs)
-    if train_tasks:
-        rollouts.tasks[0].copy_(tasks.view(rollouts.tasks[0].size()))
-        rollouts.importance_weighting[0].copy_(
-            importance_weightings.view(
-                rollouts.importance_weighting[0].size()))
     rollouts.to(device)
 
     start = time.time()
@@ -192,14 +188,6 @@ def train(num_frames,
 
             # Observe reward and next obs
             obs, rewards, dones, infos = envs.step(actions)
-            for i, (done) in enumerate(dones):
-                if done:
-                    if train_tasks:
-                        tasks[i], importance_weightings[i] = gan.sample(1)
-                    else:
-                        tasks[i] = sample_env.task_space.sample()
-                    envs.unwrapped.set_task(task, i)
-
 
             # track rewards
             rewards_counter += rewards.numpy()
@@ -233,6 +221,16 @@ def train(num_frames,
                     values=values,
                     rewards=rewards,
                     masks=masks)
+
+            for i, (done) in enumerate(dones):
+                if done:
+                    if train_tasks:
+                        tasks[i], importance_weightings[i] = gan.sample(1)
+                    else:
+                        tasks[i] = sample_env.task_space.sample()
+                    envs.unwrapped.set_task(tasks[i], i)
+            for env, task in zip(envs.venv.envs, tasks):
+                assert env.unwrapped.task.argmax() == task
 
         with torch.no_grad():
             next_value = actor_critic.get_value(
