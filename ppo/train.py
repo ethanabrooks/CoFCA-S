@@ -348,7 +348,7 @@ def train(num_frames,
                 not_done = eval_done == 0
                 eval_rewards[not_done] += rewards.numpy()[not_done]
                 eval_time_steps[not_done] += 1
-                not_done[dones] = 0
+                eval_done[dones] = 1
 
                 eval_masks = torch.FloatTensor(
                     [[0.0] if done_ else [1.0] for done_ in dones])
