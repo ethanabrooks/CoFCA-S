@@ -1,32 +1,18 @@
-from gym.spaces import Box, Discrete
-import torch.nn as nn
-
-from ppo.util import Categorical, NoInput, init_normc_, mlp
-from utils import space_to_size
+from ppo.util import NoInput
+import torch
 
 
-class TaskGenerator(nn.Module):
+class TaskGenerator(NoInput):
     def __init__(self, task_size, learning_rate: float, entropy_coef: float,
                  **kwargs):
-        super().__init__()
+        super().__init__(task_size)
         self.learning_rate = learning_rate
         self.entropy_coef = entropy_coef
         self.task_size = task_size
-        self.network = NoInput(task_size)
+        self.softmax = torch.nn.Softmax(dim=-1)
 
-    def forward(self, *inputs):
-        raise NotImplementedError
+    def probs(self):
+        return self.softmax(self.weight).view(self.task_size)
 
-    def sample(self, num_outputs):
-        dist = Categorical(
-            logits=self.network.parameter.repeat(num_outputs, 1))
-        tasks = dist.sample().view(num_outputs)
-        prob = dist.log_prob(tasks).exp()
-        importance_weighting = 1 / (self.task_size * prob)
-        return tasks, importance_weighting
-
-    def parameters(self, **kwargs):
-        return self.network.parameters(**kwargs)
-
-    def to(self, device):
-        self.network.to(device)
+    def importance_weight(self, task_index):
+        return 1 / (self.task_size * self.probs()[task_index]).detach()

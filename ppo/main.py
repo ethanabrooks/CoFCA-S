@@ -178,7 +178,6 @@ def add_tasks_args(parser):
 def cli():
     parser = build_parser()
     parser.add_argument('--max-episode-steps', type=int)
-    parser.add_argument('--render', action='store_true')
 
     def make_gridworld_env_fn(env_id, max_episode_steps, **env_args):
         args = gridworld_env.get_args(env_id)
@@ -220,7 +219,6 @@ def tasks_cli():
     parser = build_parser()
     add_tasks_args(parser)
     parser.add_argument('--max-episode-steps', type=int)
-    parser.add_argument('--render', action='store_true')
 
     def make_env_fn(max_episode_steps, **env_args):
         return functools.partial(
@@ -253,7 +251,7 @@ def hsr_cli():
             wrap_env,
             env_thunk=env_thunk(env_id, **env_args),
             max_episode_steps=max_episode_steps)
-        train(make_env=make_env, render=False, **kwargs)
+        train(make_env=make_env, **kwargs)
 
     hsr.util.env_wrapper(_train)(**parse_groups(parser))
 
@@ -277,7 +275,7 @@ def tasks_hsr_cli():
                 max_episode_steps=max_episode_steps),
             **kwargs)
 
-    hsr.util.env_wrapper(_train)(**parse_groups(parser), render=False)
+    hsr.util.env_wrapper(_train)(**parse_groups(parser))
 
 
 if __name__ == "__main__":

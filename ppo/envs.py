@@ -21,7 +21,7 @@ from ppo.env_adapter import TasksDummyVecEnv, TasksSubprocVecEnv
 def wrap_env(env_thunk,
              seed,
              rank,
-             eval,
+             evaluation,
              add_timestep=False,
              max_episode_steps=None):
     env = env_thunk()
@@ -31,8 +31,7 @@ def wrap_env(env_thunk,
         raise NotImplementedError
 
     env.seed(seed + rank)
-    if eval:
-        env.set_task(rank)
+    env.unwrapped.evaluation = evaluation
 
     obs_shape = env.observation_space.shape
 
@@ -72,7 +71,7 @@ def make_vec_envs(make_env,
                   train_tasks=False,
                   num_frame_stack=None):
     envs = [
-        functools.partial(make_env, eval=eval, seed=seed, rank=i)
+        functools.partial(make_env, evaluation=eval, seed=seed, rank=i)
         for i in range(num_processes)
     ]
 

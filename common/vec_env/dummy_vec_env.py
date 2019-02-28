@@ -1,3 +1,5 @@
+import time
+
 import numpy as np
 from gym import spaces
 
@@ -60,6 +62,7 @@ class DummyVecEnv(VecEnv):
 
             obs, self.buf_rews[e], self.buf_dones[e], self.buf_infos[
                 e] = self.envs[e].step(action)
+
             if self.buf_dones[e]:
                 obs = self.envs[e].reset()
             self._save_obs(e, obs)
