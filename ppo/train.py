@@ -64,6 +64,7 @@ def train(num_frames,
 
     train_tasks = tasks_args is not None
     sample_env = make_env(seed=seed, rank=0, eval=False).unwrapped
+    num_tasks = sample_env.task_space.n
 
     if log_dir:
         plt.switch_backend('agg')
@@ -80,6 +81,17 @@ def train(num_frames,
         normalize=normalize,
         synchronous=synchronous,
         eval=False)
+    if eval_interval:
+        eval_envs = make_vec_envs(
+            seed=seed + num_processes,
+            make_env=make_env,
+            num_processes=num_tasks,
+            gamma=_gamma,
+            device=device,
+            train_tasks=train_tasks,
+            normalize=normalize,
+            eval=True,
+        )
 
     actor_critic = Policy(
         envs.observation_space, envs.action_space, network_args=network_args)
@@ -225,10 +237,7 @@ def train(num_frames,
 
         train_results, tasks_trained, task_returns, gradient_sums = agent.update(
             rollouts)
-        import ipdb
-        ipdb.set_trace()
-        tasks_trained = sample_env.task_states[torch.tensor(
-            tasks_trained).int().numpy()]
+        tasks_trained = sample_env.task_states[tasks_trained.int().numpy()]
         tasks_data.extend([(x, y, r, g) for x, y, r, g in zip(
             *sample_env.decode(tasks_trained), task_returns, gradient_sums)])
 
@@ -313,28 +322,18 @@ def train(num_frames,
             time_steps = []
 
         if eval_interval is not None and j % eval_interval == 0:
-            eval_envs = make_vec_envs(
-                seed=seed + num_processes,
-                make_env=make_env,
-                num_processes=num_processes,
-                gamma=_gamma,
-                device=device,
-                train_tasks=train_tasks,
-                normalize=normalize,
-                eval=True,
-            )
-
-            eval_episode_rewards = []
-            eval_rewards_counter = np.zeros(num_processes)
+            eval_rewards = np.zeros(num_tasks)
+            eval_time_steps = np.zeros(num_tasks)
+            not_done = np.ones(num_tasks, dtype=int)
 
             obs = eval_envs.reset()
             eval_recurrent_hidden_states = torch.zeros(
-                num_processes,
+                num_tasks,
                 actor_critic.recurrent_hidden_state_size,
                 device=device)
-            eval_masks = torch.zeros(num_processes, 1, device=device)
+            eval_masks = torch.zeros(num_tasks, 1, device=device)
 
-            while len(eval_episode_rewards) < num_processes:
+            while np.any(not_done):
                 with torch.no_grad():
                     _, actions, _, eval_recurrent_hidden_states = actor_critic.act(
                         inputs=obs,
@@ -344,20 +343,20 @@ def train(num_frames,
 
                 # Observe reward and next obs
                 obs, rewards, dones, infos = eval_envs.step(actions)
-                eval_rewards_counter += rewards.numpy()
-                if dones.any():
-                    eval_episode_rewards.append(eval_rewards_counter[dones])
-                    eval_rewards_counter[dones] = 0
+                eval_rewards[not_done] += rewards.numpy()[not_done]
+                eval_time_steps[not_done] += 1
+                not_done[dones] = 0
 
                 eval_masks = torch.FloatTensor(
                     [[0.0] if done_ else [1.0] for done_ in dones])
 
-            eval_episode_rewards = np.concatenate(eval_episode_rewards)
             if log_dir:
-                writer.add_scalar('eval return', np.mean(eval_episode_rewards),
+                writer.add_scalar('eval return', np.mean(eval_rewards),
+                                  total_num_steps)
+                writer.add_scalar('eval time steps', np.mean(eval_time_steps),
                                   total_num_steps)
 
             eval_envs.close()
 
             print(" Evaluation using {} episodes: mean reward {:.5f}\n".format(
-                len(eval_episode_rewards), np.mean(eval_episode_rewards)))
+                num_tasks, np.mean(eval_rewards)))

@@ -24,13 +24,15 @@ def wrap_env(env_thunk,
              eval,
              add_timestep=False,
              max_episode_steps=None):
-    env = env_thunk(eval)
+    env = env_thunk()
     is_atari = hasattr(gym.envs, 'atari') and isinstance(
         env.unwrapped, gym.envs.atari.atari_env.AtariEnv)
     if is_atari:
         raise NotImplementedError
 
     env.seed(seed + rank)
+    if eval:
+        env.set_task(rank)
 
     obs_shape = env.observation_space.shape
 

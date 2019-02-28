@@ -2,16 +2,16 @@
 
 from multiprocessing import Pipe, Process
 
-import numpy as np
 from gym.spaces import Box, Discrete
+import numpy as np
 
-import gridworld_env
-import gridworld_env.gridworld as gridworld
-import hsr
 # first party
 from common.vec_env import CloudpickleWrapper, VecEnv
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
+import gridworld_env
+import gridworld_env.gridworld as gridworld
+import hsr
 from hsr.env import Observation
 from utils.gym import concat_spaces, space_shape, space_to_size, unwrap_env
 from utils.numpy import onehot, vectorize
@@ -120,9 +120,8 @@ class RandomGridWorld(gridworld_env.random_gridworld.RandomGridWorld):
 
 
 class TasksGridWorld(GridWorld):
-    def __init__(self, no_task_in_obs, *args, eval, task_letter='*', **kwargs):
+    def __init__(self, no_task_in_obs, *args, task_letter='*', **kwargs):
         self.include_task_in_obs = not no_task_in_obs
-        self.eval = eval
         self.task = None
         self.task_letter = task_letter
         super().__init__(*args, **kwargs)
@@ -143,12 +142,6 @@ class TasksGridWorld(GridWorld):
             low=np.zeros(size),
             high=np.ones(size),
         )
-
-    def reset(self):
-        if self.eval:
-            choice = self.task_space.sample()
-            self.set_task(choice)
-        return super().reset()
 
     def set_task(self, task_index):
         task_state = self.task_states[task_index]
