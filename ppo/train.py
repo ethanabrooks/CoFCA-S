@@ -332,7 +332,7 @@ def train(num_frames,
         if eval_interval is not None and j % eval_interval == 0:
             eval_rewards = np.zeros(num_tasks)
             eval_time_steps = np.zeros(num_tasks)
-            not_done = np.ones(num_tasks, dtype=int)
+            eval_done = np.zeros(num_tasks)
 
             obs = eval_envs.reset()
             eval_recurrent_hidden_states = torch.zeros(
@@ -341,7 +341,7 @@ def train(num_frames,
                 device=device)
             eval_masks = torch.zeros(num_tasks, 1, device=device)
 
-            while np.any(not_done):
+            while not np.all(eval_done):
                 with torch.no_grad():
                     _, actions, _, eval_recurrent_hidden_states = actor_critic.act(
                         inputs=obs,
@@ -351,6 +351,7 @@ def train(num_frames,
 
                 # Observe reward and next obs
                 obs, rewards, dones, infos = eval_envs.step(actions)
+                not_done = eval_done == 0
                 eval_rewards[not_done] += rewards.numpy()[not_done]
                 eval_time_steps[not_done] += 1
                 not_done[dones] = 0
