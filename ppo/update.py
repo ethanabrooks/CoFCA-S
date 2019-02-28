@@ -265,4 +265,4 @@ class PPO:
             for k, v in task_values.items():
                 update_values[k] = torch.mean(v) / n
 
-        return update_values, tasks_trained, task_returns, task_grads
+        return update_values, torch.tensor(tasks_trained), task_returns, task_grads

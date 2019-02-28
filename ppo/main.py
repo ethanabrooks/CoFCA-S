@@ -97,6 +97,7 @@ def build_parser():
         '--activation', type=parse_activation, default=nn.ReLU())
 
     ppo_parser = parser.add_argument_group('ppo_args')
+    ppo_parser.add_argument('--num-processes', type=int, default=1)
     ppo_parser.add_argument(
         '--clip-param',
         type=float,
@@ -137,11 +138,6 @@ def build_parser():
     ppo_parser.add_argument(
         '--temperature',
         type=float,
-    )
-    ppo_parser.add_argument(
-        '--num-processes',
-        type=int,
-        default=1
     )
     ppo_parser.add_argument(
         '--global-norm',

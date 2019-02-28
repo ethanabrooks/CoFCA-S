@@ -157,8 +157,8 @@ class TasksGridWorld(GridWorld):
         self.assign(**{self.task_letter: [task_state]})
 
     def reset(self):
-        # if not self.evaluation:
-        #     self.set_task(np.random.choice(self.num_tasks, p=self.task_dist))
+        if not self.evaluation:
+            self.set_task(np.random.choice(self.num_tasks, p=self.task_dist))
         return super().reset()
 
     def obs_vector(self, obs):

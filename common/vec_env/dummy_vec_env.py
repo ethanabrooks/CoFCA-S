@@ -1,3 +1,5 @@
+import time
+
 import numpy as np
 from gym import spaces
 

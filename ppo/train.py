@@ -33,6 +33,7 @@ def train(num_frames,
           tau,
           ppo_args,
           network_args,
+          # num_processes,
           synchronous,
           tasks_args=None):
     torch.manual_seed(seed)
@@ -62,7 +63,8 @@ def train(num_frames,
 
     train_tasks = tasks_args is not None
     sample_env = make_env(seed=seed, rank=0, evaluation=False).unwrapped
-    num_processes = sample_env.task_space.n
+    num_tasks = sample_env.task_space.n
+    num_processes = num_tasks
 
     if log_dir:
         plt.switch_backend('agg')
@@ -79,6 +81,17 @@ def train(num_frames,
         normalize=normalize,
         synchronous=synchronous,
         eval=False)
+    if eval_interval:
+        eval_envs = make_vec_envs(
+            seed=seed + num_processes,
+            make_env=make_env,
+            num_processes=num_tasks,
+            gamma=_gamma,
+            device=device,
+            train_tasks=train_tasks,
+            normalize=normalize,
+            eval=True,
+        )
 
     actor_critic = Policy(
         envs.observation_space, envs.action_space, network_args=network_args)
@@ -87,18 +100,13 @@ def train(num_frames,
     tasks_data = []
     last_index = 0
     if train_tasks:
-        assert sample_env.task_space.n == num_processes
         gan = TaskGenerator(
-            task_space=sample_env.task_space,
+            task_size=sample_env.task_space.n,
             **{k.replace('gan_', ''): v
                for k, v in tasks_args.items()})
 
-        # samples, tasks, importance_weightings = gan.sample(num_processes)
-        samples = tasks = torch.arange(sample_env.task_space.n)
-        importance_weightings = torch.zeros_like(tasks)
-        for i, task in enumerate(tasks):
-            task = task.detach().numpy()
-            # envs.unwrapped.set_task(task, i)
+        for i in range(num_processes):
+            envs.unwrapped.set_task_dist(gan.probs().detach().numpy())
 
         if isinstance(sample_env.task_space, Discrete):
             task_size = 1
@@ -110,7 +118,7 @@ def train(num_frames,
             obs_shape=envs.observation_space.shape,
             action_space=envs.action_space,
             recurrent_hidden_state_size=actor_critic.
-            recurrent_hidden_state_size,
+                recurrent_hidden_state_size,
             task_size=task_size)
 
     else:
@@ -120,7 +128,7 @@ def train(num_frames,
             obs_shape=envs.observation_space.shape,
             action_space=envs.action_space,
             recurrent_hidden_state_size=actor_critic.
-            recurrent_hidden_state_size,
+                recurrent_hidden_state_size,
         )
 
     agent = PPO(actor_critic=actor_critic, task_generator=gan, **ppo_args)
@@ -154,10 +162,13 @@ def train(num_frames,
 
     obs = envs.reset()
     rollouts.obs[0].copy_(obs)
-    if train_tasks:
-        rollouts.tasks[0].copy_(samples.view(-1, 1))
-        # rollouts.importance_weighting[0].copy_(importance_weightings)
     rollouts.to(device)
+    if train_tasks:
+        tasks = torch.tensor(envs.unwrapped.get_tasks())
+        importance_weights = gan.importance_weight(tasks)
+        rollouts.tasks[0].copy_(tasks.view(rollouts.tasks[0].size()))
+        rollouts.importance_weighting[0].copy_(
+            importance_weights.view(rollouts.importance_weighting[0].size()))
 
     start = time.time()
     for j in updates:
@@ -171,20 +182,22 @@ def train(num_frames,
                         masks=rollouts.masks[step])
 
             # Observe reward and next obs
-            obs, rewards, done, infos = envs.step(actions)
+            obs, rewards, dones, infos = envs.step(actions)
 
             # track rewards
             rewards_counter += rewards.numpy()
             time_step_counter += 1
-            episode_rewards.append(rewards_counter[done])
-            time_steps.append(time_step_counter[done])
-            rewards_counter[done] = 0
-            time_step_counter[done] = 0
+            episode_rewards.append(rewards_counter[dones])
+            time_steps.append(time_step_counter[dones])
+            rewards_counter[dones] = 0
+            time_step_counter[dones] = 0
 
             # If done then clean the history of observations.
             masks = torch.FloatTensor(
-                [[0.0] if done_ else [1.0] for done_ in done])
+                [[0.0] if done_ else [1.0] for done_ in dones])
             if train_tasks:
+                tasks = torch.tensor(envs.unwrapped.get_tasks())
+                importance_weights = gan.importance_weight(tasks)
                 rollouts.insert(
                     obs=obs,
                     recurrent_hidden_states=recurrent_hidden_states,
@@ -193,8 +206,8 @@ def train(num_frames,
                     values=values,
                     rewards=rewards,
                     masks=masks,
-                    task=samples,
-                    importance_weighting=importance_weightings,
+                    task=tasks,
+                    importance_weighting=importance_weights,
                 )
             else:
                 rollouts.insert(
@@ -215,19 +228,22 @@ def train(num_frames,
         rollouts.compute_returns(
             next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau)
 
-        train_results, tasks_trained, task_returns, gradient_sums = agent.update(
-            rollouts)
-        tasks_trained = sample_env.task_states[torch.tensor(
-            tasks_trained).int().numpy()]
-        tasks_data.extend([(x, y, r, g) for x, y, r, g in zip(
-            *sample_env.decode(tasks_trained), task_returns, gradient_sums)])
+        train_results, *task_stuff = agent.update(rollouts)
+        if train_tasks:
+            tasks_trained, task_returns, gradient_sums = task_stuff
+            tasks_trained = sample_env.task_states[tasks_trained.int().numpy()]
+            tasks_data.extend([(x, y, r, g) for x, y, r, g in zip(
+                *sample_env.decode(tasks_trained), task_returns, gradient_sums)])
+
+            for i in range(num_processes):
+                envs.unwrapped.set_task_dist(gan.probs().detach().numpy())
 
         rollouts.after_update()
         total_num_steps = (j + 1) * num_processes * num_steps
 
         if all(
-            [log_dir, save_interval,
-             time.time() - last_save >= save_interval]):
+                [log_dir, save_interval,
+                 time.time() - last_save >= save_interval]):
             last_save = time.time()
             modules = dict(
                 optimizer=agent.optimizer,
@@ -272,9 +288,6 @@ def train(num_frames,
                 for k, v in train_results.items():
                     if v.dim() == 0:
                         writer.add_scalar(k, v, total_num_steps)
-                # if train_tasks:
-                #     writer.add_histogram('gan probs', np.array(tasks_trained),
-                #                          total_num_steps)
 
                 x, y, rewards, gradient = zip(*tasks_data)
 
@@ -303,28 +316,18 @@ def train(num_frames,
             time_steps = []
 
         if eval_interval is not None and j % eval_interval == 0:
-            eval_envs = make_vec_envs(
-                seed=seed + num_processes,
-                make_env=make_env,
-                num_processes=num_processes,
-                gamma=_gamma,
-                device=device,
-                train_tasks=train_tasks,
-                normalize=normalize,
-                eval=True,
-            )
-
-            eval_episode_rewards = []
-            eval_rewards_counter = np.zeros(num_processes)
+            eval_rewards = np.zeros(num_tasks)
+            eval_time_steps = np.zeros(num_tasks)
+            eval_done = np.zeros(num_tasks)
 
             obs = eval_envs.reset()
             eval_recurrent_hidden_states = torch.zeros(
-                num_processes,
+                num_tasks,
                 actor_critic.recurrent_hidden_state_size,
                 device=device)
-            eval_masks = torch.zeros(num_processes, 1, device=device)
+            eval_masks = torch.zeros(num_tasks, 1, device=device)
 
-            while len(eval_episode_rewards) < num_processes:
+            while not np.all(eval_done):
                 with torch.no_grad():
                     _, actions, _, eval_recurrent_hidden_states = actor_critic.act(
                         inputs=obs,
@@ -333,21 +336,20 @@ def train(num_frames,
                         deterministic=True)
 
                 # Observe reward and next obs
-                obs, rewards, done, infos = eval_envs.step(actions)
-                eval_rewards_counter += rewards.numpy()
-                if done.any():
-                    eval_episode_rewards.append(eval_rewards_counter[done])
-                    eval_rewards_counter[done] = 0
+                obs, rewards, dones, infos = eval_envs.step(actions)
+                not_done = eval_done == 0
+                eval_rewards[not_done] += rewards.numpy()[not_done]
+                eval_time_steps[not_done] += 1
+                eval_done[dones] = 1
 
                 eval_masks = torch.FloatTensor(
-                    [[0.0] if done_ else [1.0] for done_ in done])
+                    [[0.0] if done_ else [1.0] for done_ in dones])
 
-            eval_episode_rewards = np.concatenate(eval_episode_rewards)
             if log_dir:
-                writer.add_scalar('eval return', np.mean(eval_episode_rewards),
+                writer.add_scalar('eval return', np.mean(eval_rewards),
+                                  total_num_steps)
+                writer.add_scalar('eval time steps', np.mean(eval_time_steps),
                                   total_num_steps)
 
-            eval_envs.close()
-
             print(" Evaluation using {} episodes: mean reward {:.5f}\n".format(
-                len(eval_episode_rewards), np.mean(eval_episode_rewards)))
+                num_tasks, np.mean(eval_rewards)))
