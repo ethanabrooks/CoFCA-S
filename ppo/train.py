@@ -108,8 +108,6 @@ def train(num_frames,
         tasks, importance_weightings = gan.sample(num_processes)
         for i, task in enumerate(tasks):
             envs.unwrapped.set_task(task, i)
-        for env, task in zip(envs.venv.envs, tasks):
-            assert env.unwrapped.task.argmax() == task
 
         if isinstance(sample_env.task_space, Discrete):
             task_size = 1
@@ -229,8 +227,6 @@ def train(num_frames,
                     else:
                         tasks[i] = sample_env.task_space.sample()
                     envs.unwrapped.set_task(tasks[i], i)
-            for env, task in zip(envs.venv.envs, tasks):
-                assert env.unwrapped.task.argmax() == task
 
         with torch.no_grad():
             next_value = actor_critic.get_value(
