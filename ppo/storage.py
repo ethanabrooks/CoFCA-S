@@ -219,8 +219,10 @@ class TasksRolloutStorage(RolloutStorage):
         self.importance_weighting.to(device)
 
     def insert(self, task, importance_weighting, **kwargs):
-        self.tasks[self.step + 1].copy_(task.view(-1, 1))
-        self.importance_weighting[self.step + 1].copy_(importance_weighting)
+        step = self.step + 1
+        self.tasks[step].copy_(task.view(self.tasks[step].size()))
+        self.importance_weighting[step].copy_(
+            importance_weighting.view(self.importance_weighting[step].size()))
         super().insert(**kwargs)
 
     def after_update(self):
@@ -234,15 +236,6 @@ class TasksRolloutStorage(RolloutStorage):
         batch = super().make_batch(advantages=advantages, indices=indices)
         return batch._replace(
             tasks=tasks, importance_weighting=importance_weighting)
-
-    def get_task_batch(self, advantages):
-        tasks = self.tasks[:-1]
-        unique_tasks = torch.unique(tasks)
-        task_rewards = torch.empty(unique_tasks.size()[0])
-        for i, task in enumerate(unique_tasks):
-            ratio = (advantages / self.action_log_probs.exp())
-            task_rewards[i] = ratio[tasks == task].mean()
-        return unique_tasks, task_rewards
 
     def recurrent_generator(self, advantages, num_mini_batch):
         raise NotImplementedError

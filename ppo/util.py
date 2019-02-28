@@ -48,9 +48,11 @@ def mlp(num_inputs,
         activation,
         name='fc',
         num_outputs=None):
-    init_ = lambda m: init(m, weight_init=init_normc_,
-                           bias_init=lambda x: nn.init.constant_(x, 0),
-                           gain=.1)
+    init_ = lambda m: init(
+        m,
+        weight_init=init_normc_,
+        bias_init=lambda x: nn.init.constant_(x, 0),
+        gain=.1)
     network = nn.Sequential()
     in_features = num_inputs
     for i in range(num_layers):

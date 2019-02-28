@@ -25,20 +25,21 @@ def global_norm(grads):
     norm = 0
     for grad in grads:
         if grad is not None:
-            norm += grad.norm(2) ** 2
-    return norm ** .5
+            norm += grad.norm(2)**2
+    return norm**.5
 
 
 def epanechnikov_kernel(x):
-    return 3 / 4 * (1 - x ** 2)
+    return 3 / 4 * (1 - x**2)
 
 
 def gaussian_kernel(x):
-    return (2 * math.pi) ** -.5 * torch.exp(-.5 * x ** 2)
+    return (2 * math.pi)**-.5 * torch.exp(-.5 * x**2)
 
 
-SamplingStrategy = Enum('SamplingStrategy', 'baseline binary_logits gradients max '
-                                            'learned learn_sampled')
+SamplingStrategy = Enum(
+    'SamplingStrategy', 'baseline binary_logits gradients max '
+    'learned learn_sampled')
 
 
 class PPO:
