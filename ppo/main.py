@@ -7,8 +7,9 @@ from torch import nn as nn
 
 import gridworld_env
 import hsr.util
-from ppo.env_adapter import (GridWorld, HSREnv, MoveGripperEnv, RandomGridWorld, TasksGridWorld, TasksHSREnv,
-                             TasksMoveGripperEnv)
+from ppo.env_adapter import (GridWorld, HSREnv, MoveGripperEnv, RandomGridWorld,
+                             TrainTasksGridWorld, TasksHSREnv,
+                             TasksMoveGripperEnv, TasksGridWorld)
 from ppo.envs import wrap_env
 from ppo.train import train
 from ppo.update import SamplingStrategy
@@ -179,15 +180,10 @@ def cli():
     parser = build_parser()
     parser.add_argument('--max-episode-steps', type=int)
 
-    def make_gridworld_env_fn(env_id, max_episode_steps, **env_args):
-        args = gridworld_env.get_args(env_id)
-        if 'random' in args:
-            class_ = RandomGridWorld
-        else:
-            class_ = GridWorld
+    def make_env_fn(max_episode_steps, **env_args):
         return functools.partial(
             wrap_env,
-            env_thunk=lambda: class_(**env_args),
+            env_thunk=lambda: TasksGridWorld(**env_args),
             max_episode_steps=max_episode_steps)
 
     def _train(env_id, max_episode_steps, no_task_in_obs, **kwargs):
@@ -196,7 +192,7 @@ def cli():
             if max_episode_steps is not None:
                 args['max_episode_steps'] = max_episode_steps
             args.update(no_task_in_obs=no_task_in_obs)
-            make_env = make_gridworld_env_fn(env_id, **args)
+            make_env = make_env_fn(**args)
 
         else:
 
@@ -223,7 +219,7 @@ def tasks_cli():
     def make_env_fn(max_episode_steps, **env_args):
         return functools.partial(
             wrap_env,
-            env_thunk=lambda: TasksGridWorld(**env_args),
+            env_thunk=lambda: TrainTasksGridWorld(**env_args),
             max_episode_steps=max_episode_steps)
 
     def _train(env_id, max_episode_steps, no_task_in_obs, **kwargs):

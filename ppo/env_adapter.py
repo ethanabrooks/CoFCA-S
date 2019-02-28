@@ -120,7 +120,7 @@ class RandomGridWorld(gridworld_env.random_gridworld.RandomGridWorld):
 
 
 class TasksGridWorld(GridWorld):
-    def __init__(self, no_task_in_obs, *args, task_letter='*', **kwargs):
+    def __init__(self, no_task_in_obs, task_letter='*', *args, **kwargs):
         self.include_task_in_obs = not no_task_in_obs
         super().__init__(*args, **kwargs)
         self.task_states = np.ravel_multi_index(
@@ -135,10 +135,10 @@ class TasksGridWorld(GridWorld):
         self.evaluation = False
 
         # task stuff
-        self.task_vector = None
         self.task_index = None
-        self.task_letter = task_letter
+        self.task_vector = None
         self.task_space = Discrete(self.task_states.size)
+        self.task_letter = task_letter
         self.num_tasks = len(self.task_states)
         self.task_dist = np.ones_like(self.task_states) / self.num_tasks
 
@@ -161,14 +161,16 @@ class TasksGridWorld(GridWorld):
             self.set_task(np.random.choice(self.num_tasks, p=self.task_dist))
         return super().reset()
 
-    def set_task_dist(self, dist):
-        self.task_dist = dist
-
     def obs_vector(self, obs):
         components = [onehot(obs, self.observation_size)]
         if self.include_task_in_obs:
             components.append(self.task_vector)
         return vectorize(components)
+
+
+class TrainTasksGridWorld(TasksGridWorld):
+    def set_task_dist(self, dist):
+        self.task_dist = dist
 
 
 def unwrap_tasks(env):

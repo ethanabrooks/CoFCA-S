@@ -227,13 +227,14 @@ def train(num_frames,
         rollouts.compute_returns(
             next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau)
 
-        train_results, tasks_trained, task_returns, gradient_sums = agent.update(
+        train_results, task_stuff = agent.update(
             rollouts)
-        tasks_trained = sample_env.task_states[tasks_trained.int().numpy()]
-        tasks_data.extend([(x, y, r, g) for x, y, r, g in zip(
-            *sample_env.decode(tasks_trained), task_returns, gradient_sums)])
-
         if train_tasks:
+            tasks_trained, task_returns, gradient_sums = task_stuff
+            tasks_trained = sample_env.task_states[tasks_trained.int().numpy()]
+            tasks_data.extend([(x, y, r, g) for x, y, r, g in zip(
+                *sample_env.decode(tasks_trained), task_returns, gradient_sums)])
+
             for i in range(num_processes):
                 envs.unwrapped.set_task_dist(gan.probs().detach().numpy())
 

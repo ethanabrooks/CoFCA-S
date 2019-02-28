@@ -131,17 +131,16 @@ class PPO:
         update_values = Counter()
         task_values = Counter()
 
-        assert isinstance(rollouts, TasksRolloutStorage)
-
         num_steps, num_processes = rollouts.rewards.size()[0:2]
         total_batch_size = num_steps * num_processes
         batches = rollouts.make_batch(advantages,
                                       torch.arange(total_batch_size))
 
         total_norm = torch.tensor(0, dtype=torch.float32)
-        tasks_trained = torch.unique(batches.tasks)
-        task_grads = torch.zeros(tasks_trained.size()[0])
-        task_returns = torch.zeros(tasks_trained.size()[0])
+        if self.train_tasks:
+            tasks_trained = torch.unique(batches.tasks)
+            task_grads = torch.zeros(tasks_trained.size()[0])
+            task_returns = torch.zeros(tasks_trained.size()[0])
 
         for e in range(self.ppo_epoch):
             if self.train_tasks:
@@ -174,7 +173,10 @@ class PPO:
                 task_loss.backward()
                 self.task_optimizer.step()
                 # TODO: task_optimizer.zero?
-                update_values.update(task_loss=task_loss)
+                update_values.update(task_loss=task_loss,
+                                     grad_measure=task_grads,
+                                     importance_weighting=batches.importance_weighting.mean()
+                                     )
 
             # Compute loss
             value_losses, action_losses, entropy \
@@ -192,13 +194,11 @@ class PPO:
             self.optimizer.zero_grad()
 
             update_values.update(
-                grad_measure=task_grads,
                 value_loss=torch.mean(value_losses),
                 action_loss=torch.mean(action_losses),
                 norm=total_norm,
                 entropy=torch.mean(entropy),
-                n=1,
-                importance_weighting=batches.importance_weighting.mean())
+                n=1,)
 
         n = update_values.pop('n')
         update_values = {
@@ -210,4 +210,7 @@ class PPO:
             for k, v in task_values.items():
                 update_values[k] = torch.mean(v) / n
 
-        return update_values, tasks_trained, task_returns, task_grads
+        if self.train_tasks:
+            return update_values, (tasks_trained, task_returns, task_grads)
+        else:
+            return update_values, None
