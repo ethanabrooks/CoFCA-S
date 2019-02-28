@@ -1,11 +1,11 @@
 import itertools
-import time
 from pathlib import Path
+import time
 
-import numpy as np
-import torch
 from gym.spaces import Discrete
+import numpy as np
 from tensorboardX import SummaryWriter
+import torch
 
 from ppo.env_adapter import TasksHSREnv
 from ppo.envs import VecNormalize, make_vec_envs
@@ -33,6 +33,7 @@ def train(num_frames,
           tau,
           ppo_args,
           network_args,
+          num_processes,
           render,
           synchronous,
           tasks_args=None):
@@ -64,8 +65,6 @@ def train(num_frames,
     train_tasks = tasks_args is not None
     sample_env = make_env(seed=seed, rank=0, eval=False).unwrapped
 
-    num_processes = sample_env.task_space.n
-
     if log_dir:
         plt.switch_backend('agg')
         xlim, ylim = sample_env.desc.shape
@@ -89,18 +88,15 @@ def train(num_frames,
     tasks_data = []
     last_index = 0
     if train_tasks:
-        assert sample_env.task_space.n == num_processes
         gan = TaskGenerator(
             task_space=sample_env.task_space,
             **{k.replace('gan_', ''): v
                for k, v in tasks_args.items()})
 
-        # samples, tasks, importance_weightings = gan.sample(num_processes)
-        samples = tasks = torch.arange(sample_env.task_space.n)
-        importance_weightings = torch.zeros_like(tasks)
+        tasks, importance_weightings = gan.sample(num_processes)
         for i, task in enumerate(tasks):
             task = task.detach().numpy()
-            # envs.unwrapped.set_task(task, i)
+            envs.unwrapped.set_task(task, i)
 
         if isinstance(sample_env.task_space, Discrete):
             task_size = 1
@@ -157,8 +153,10 @@ def train(num_frames,
     obs = envs.reset()
     rollouts.obs[0].copy_(obs)
     if train_tasks:
-        rollouts.tasks[0].copy_(samples.view(-1, 1))
-        # rollouts.importance_weighting[0].copy_(importance_weightings)
+        rollouts.tasks[0].copy_(tasks.view(rollouts.tasks[0].size()))
+        rollouts.importance_weighting[0].copy_(
+            importance_weightings.view(
+                rollouts.importance_weighting[0].size()))
     rollouts.to(device)
 
     start = time.time()
@@ -177,19 +175,23 @@ def train(num_frames,
                 time.sleep(.5)
 
             # Observe reward and next obs
-            obs, rewards, done, infos = envs.step(actions)
+            obs, rewards, dones, infos = envs.step(actions)
+            for i, (done) in enumerate(dones):
+                if done:
+                    tasks[i], importance_weightings[i] = gan.sample(1)
+                    envs.unwrapped.set_task(task, i)
 
             # track rewards
             rewards_counter += rewards.numpy()
             time_step_counter += 1
-            episode_rewards.append(rewards_counter[done])
-            time_steps.append(time_step_counter[done])
-            rewards_counter[done] = 0
-            time_step_counter[done] = 0
+            episode_rewards.append(rewards_counter[dones])
+            time_steps.append(time_step_counter[dones])
+            rewards_counter[dones] = 0
+            time_step_counter[dones] = 0
 
             # If done then clean the history of observations.
             masks = torch.FloatTensor(
-                [[0.0] if done_ else [1.0] for done_ in done])
+                [[0.0] if done_ else [1.0] for done_ in dones])
             if train_tasks:
                 rollouts.insert(
                     obs=obs,
@@ -199,7 +201,7 @@ def train(num_frames,
                     values=values,
                     rewards=rewards,
                     masks=masks,
-                    task=samples,
+                    task=tasks,
                     importance_weighting=importance_weightings,
                 )
             else:
@@ -223,6 +225,8 @@ def train(num_frames,
 
         train_results, tasks_trained, task_returns, gradient_sums = agent.update(
             rollouts)
+        import ipdb
+        ipdb.set_trace()
         tasks_trained = sample_env.task_states[torch.tensor(
             tasks_trained).int().numpy()]
         tasks_data.extend([(x, y, r, g) for x, y, r, g in zip(
@@ -339,14 +343,14 @@ def train(num_frames,
                         deterministic=True)
 
                 # Observe reward and next obs
-                obs, rewards, done, infos = eval_envs.step(actions)
+                obs, rewards, dones, infos = eval_envs.step(actions)
                 eval_rewards_counter += rewards.numpy()
-                if done.any():
-                    eval_episode_rewards.append(eval_rewards_counter[done])
-                    eval_rewards_counter[done] = 0
+                if dones.any():
+                    eval_episode_rewards.append(eval_rewards_counter[dones])
+                    eval_rewards_counter[dones] = 0
 
                 eval_masks = torch.FloatTensor(
-                    [[0.0] if done_ else [1.0] for done_ in done])
+                    [[0.0] if done_ else [1.0] for done_ in dones])
 
             eval_episode_rewards = np.concatenate(eval_episode_rewards)
             if log_dir:

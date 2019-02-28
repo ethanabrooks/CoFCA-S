@@ -219,8 +219,10 @@ class TasksRolloutStorage(RolloutStorage):
         self.importance_weighting.to(device)
 
     def insert(self, task, importance_weighting, **kwargs):
-        self.tasks[self.step + 1].copy_(task.view(-1, 1))
-        self.importance_weighting[self.step + 1].copy_(importance_weighting)
+        step = self.step + 1
+        self.tasks[step].copy_(task.view(self.tasks[step].size()))
+        self.importance_weighting[step].copy_(
+            importance_weighting.view(self.importance_weighting[step].size()))
         super().insert(**kwargs)
 
     def after_update(self):

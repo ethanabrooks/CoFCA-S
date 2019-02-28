@@ -31,7 +31,6 @@ def wrap_env(env_thunk,
         raise NotImplementedError
 
     env.seed(seed + rank)
-    env.set_task(rank)
 
     obs_shape = env.observation_space.shape
 

@@ -89,6 +89,11 @@ def build_parser():
     parser.add_argument(
         '--cuda', action='store_true', help='enables CUDA training')
     parser.add_argument('--synchronous', action='store_true')
+    parser.add_argument(
+        '--num-processes',
+        type=int,
+        default=1
+    )
 
     network_parser = parser.add_argument_group('network_args')
     network_parser.add_argument('--recurrent', action='store_true')
@@ -138,11 +143,6 @@ def build_parser():
     ppo_parser.add_argument(
         '--temperature',
         type=float,
-    )
-    ppo_parser.add_argument(
-        '--num-processes',
-        type=int,
-        default=1
     )
     ppo_parser.add_argument(
         '--global-norm',
