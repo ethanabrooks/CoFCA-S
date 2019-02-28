@@ -14,6 +14,7 @@ from ppo.envs import wrap_env
 from ppo.train import train
 from utils import parse_groups
 
+from ppo.update import SamplingStrategy
 from ppo.util import parse_activation
 
 try:
@@ -139,12 +140,17 @@ def build_parser():
         type=float,
     )
     ppo_parser.add_argument(
+        '--num-processes',
+        type=int,
+        default=1
+    )
+    ppo_parser.add_argument(
         '--global-norm',
         action='store_true',
     )
     ppo_parser.add_argument(
         '--sampling-strategy',
-        choices=('baseline', '0/1logits', 'experiment', 'max'),
+        choices=[s.name for s in SamplingStrategy],
         default='experiment')
     return parser
 

@@ -93,6 +93,7 @@ class NoInput(nn.Module):
         tensor = torch.Tensor(1, size)
         init_normc_(tensor)
         self.weight = nn.Parameter(tensor)
+        self.parameter = self.weight.view(size)
 
     def forward(self, inputs):
         size, *_ = inputs.size()

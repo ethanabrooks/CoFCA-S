@@ -112,3 +112,4 @@ runs.db
 cartpole.json
 baseline.json
 plot.png
+*.json
