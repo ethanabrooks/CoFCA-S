@@ -239,7 +239,7 @@ class TasksSubprocVecEnv(SubprocVecEnv):
     def get_tasks(self):
         self._assert_not_closed()
         for remote in self.remotes:
-            remote.send('get_task')
+            remote.send(('get_task', None))
         self.waiting = True
         tasks = [remote.recv() for remote in self.remotes]
         self.waiting = False
