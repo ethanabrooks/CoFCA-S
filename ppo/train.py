@@ -237,7 +237,7 @@ def train(
         rollouts.compute_returns(
             next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau)
 
-        train_results, *task_stuff = agent.update(rollouts)
+        train_results, task_stuff = agent.update(rollouts)
         if train_tasks:
             tasks_trained, task_returns, gradient_sums = task_stuff
             tasks_trained = sample_env.task_states[tasks_trained.int().numpy()]
@@ -300,29 +300,30 @@ def train(
                     if v.dim() == 0:
                         writer.add_scalar(k, v, total_num_steps)
 
-                x, y, rewards, gradient = zip(*tasks_data)
+                if train_tasks:
+                    x, y, rewards, gradient = zip(*tasks_data)
 
-                def plot(c, text):
-                    fig = plt.figure()
-                    x_noise = (np.random.rand(len(x)) - .5) * .9
-                    y_noise = (np.random.rand(len(y)) - .5) * .9
-                    sc = plt.scatter(
-                        x + x_noise, y + y_noise, c=c, cmap=cm.hot, alpha=.1)
-                    plt.colorbar(sc)
-                    axes = plt.axes()
-                    axes.set_xlim(-.5, xlim - .5)
-                    axes.set_ylim(-.5, ylim - .5)
-                    plt.subplots_adjust(.15, .15, .95, .95)
-                    writer.add_figure(text, fig, total_num_steps)
-                    plt.close(fig)
+                    def plot(c, text):
+                        fig = plt.figure()
+                        x_noise = (np.random.rand(len(x)) - .5) * .9
+                        y_noise = (np.random.rand(len(y)) - .5) * .9
+                        sc = plt.scatter(
+                            x + x_noise, y + y_noise, c=c, cmap=cm.hot, alpha=.1)
+                        plt.colorbar(sc)
+                        axes = plt.axes()
+                        axes.set_xlim(-.5, xlim - .5)
+                        axes.set_ylim(-.5, ylim - .5)
+                        plt.subplots_adjust(.15, .15, .95, .95)
+                        writer.add_figure(text, fig, total_num_steps)
+                        plt.close(fig)
 
-                plot(rewards, 'rewards')
-                plot(gradient, 'gradients')
+                    plot(rewards, 'rewards')
+                    plot(gradient, 'gradients')
 
-                x, y, rewards, gradient = zip(*tasks_data[last_index:])
-                last_index = len(tasks_data)
-                plot(rewards, 'new rewards')
-                plot(gradient, 'new gradients')
+                    x, y, rewards, gradient = zip(*tasks_data[last_index:])
+                    last_index = len(tasks_data)
+                    plot(rewards, 'new rewards')
+                    plot(gradient, 'new gradients')
             episode_rewards = []
             time_steps = []
 
