@@ -38,8 +38,7 @@ def gaussian_kernel(x):
 
 
 SamplingStrategy = Enum(
-    'SamplingStrategy', 'baseline binary_logits gradients max '
-    'learned learn_sampled')
+    'SamplingStrategy', 'baseline binary_logits gradients max learned learn_sampled')
 
 
 class PPO:
@@ -183,16 +182,19 @@ class PPO:
             elif self.sampling_strategy == SamplingStrategy.max.name:
                 logits = torch.ones_like(grads) * -self.temperature
                 logits[grads.argmax()] = self.temperature
-            elif self.sampling_strategy in [SamplingStrategy.learned.name,
-                                            SamplingStrategy.learn_sampled.name]:
+            elif self.sampling_strategy == SamplingStrategy.learned.name:
                 logits = self.task_generator.parameter
-            else:
+            elif self.sampling_strategy != SamplingStrategy.learn_sampled.name:
                 raise RuntimeError
 
             # sample tasks
-            dist = Categorical(logits=logits.repeat(self.num_processes, 1))
-            task_indices = dist.sample().view(-1).long()
-            tasks_to_train = unique[task_indices]
+            if self.sampling_strategy == SamplingStrategy.learn_sampled.name:
+                tasks_to_train = unique
+                task_indices = torch.arange(unique.numel())
+            else:
+                dist = Categorical(logits=logits.repeat(self.num_processes, 1))
+                task_indices = dist.sample().view(-1).long()
+                tasks_to_train = unique[task_indices]
 
             def update_task_params(logits_to_update, targets):
                 task_loss = torch.mean((logits_to_update - targets) ** 2)
@@ -205,7 +207,8 @@ class PPO:
             if self.sampling_strategy == SamplingStrategy.learned.name:
                 update_task_params(logits, grads)
             elif self.sampling_strategy == SamplingStrategy.learn_sampled.name:
-                update_task_params(logits[task_indices], grads[task_indices])
+                logits = self.task_generator.parameter
+                update_task_params(logits, grads)
 
             # update task data
             tasks_trained.extend(tasks_to_train)
@@ -222,8 +225,11 @@ class PPO:
                 = components = self.compute_loss_components(sample)
             task_to_train_index = torch.argmax(sample.tasks == tasks_to_train, dim=-1,
                                                keepdim=True)
-            probs = dist.log_prob(task_indices).exp()[task_to_train_index]
-            importance_weighting = 1 / (unique.numel() * probs)
+            if self.sampling_strategy == SamplingStrategy.learn_sampled.name:
+                importance_weighting = batches.importance_weighting
+            else:
+                probs = dist.log_prob(task_indices).exp()[task_to_train_index]
+                importance_weighting = 1 / (unique.numel() * probs)
             loss = self.compute_loss(
                 *components, importance_weighting=importance_weighting)
 

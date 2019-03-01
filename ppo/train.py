@@ -7,13 +7,14 @@ import numpy as np
 from tensorboardX import SummaryWriter
 import torch
 
+from ppo.distributions import Categorical
 from ppo.env_adapter import TasksHSREnv
 from ppo.envs import VecNormalize, make_vec_envs
 from ppo.policy import Policy
 from ppo.storage import RolloutStorage, TasksRolloutStorage
 from ppo.task_generator import TaskGenerator
 from ppo.update import PPO
-from utils import space_to_size
+from utils import space_to_size, onehot
 
 
 def train(num_frames,
@@ -105,8 +106,8 @@ def train(num_frames,
             **{k.replace('gan_', ''): v
                for k, v in tasks_args.items()})
 
-        for i in range(num_processes):
-            envs.unwrapped.set_task_dist(gan.probs().detach().numpy())
+        # for i in range(num_processes):
+        #     envs.unwrapped.set_task_dist(gan.probs().detach().numpy())
 
         if isinstance(sample_env.task_space, Discrete):
             task_size = 1
@@ -172,6 +173,13 @@ def train(num_frames,
 
     start = time.time()
     for j in updates:
+
+        if train_tasks:
+            tasks = np.random.choice(num_tasks, size=num_processes, replace=False,
+                                     p=gan.probs().detach().numpy())
+            for i, task in enumerate(tasks):
+                envs.unwrapped.set_task_dist(i, onehot(task, num_tasks))
+
         for step in range(num_steps):
             # Sample actions.add_argument_group('env_args')
             with torch.no_grad():
@@ -235,8 +243,8 @@ def train(num_frames,
             tasks_data.extend([(x, y, r, g) for x, y, r, g in zip(
                 *sample_env.decode(tasks_trained), task_returns, gradient_sums)])
 
-            for i in range(num_processes):
-                envs.unwrapped.set_task_dist(gan.probs().detach().numpy())
+            # for i in range(num_processes):
+            #     envs.unwrapped.set_task_dist(gan.probs().detach().numpy())
 
         rollouts.after_update()
         total_num_steps = (j + 1) * num_processes * num_steps

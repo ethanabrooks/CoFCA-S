@@ -234,9 +234,8 @@ class TasksSubprocVecEnv(SubprocVecEnv):
         observation_space, action_space = self.remotes[0].recv()
         VecEnv.__init__(self, len(env_fns), observation_space, action_space)
 
-    def set_task_dist(self, dist):
-        for remote in self.remotes:
-            remote.send(('set_task_dist', dist))
+    def set_task_dist(self, i, dist):
+        self.remotes[i].send(('set_task_dist', dist))
 
     def get_tasks(self):
         self._assert_not_closed()
@@ -249,9 +248,8 @@ class TasksSubprocVecEnv(SubprocVecEnv):
 
 
 class TasksDummyVecEnv(DummyVecEnv):
-    def set_task_dist(self, dist):
-        for env in self.envs:
-            unwrap_tasks(env).set_task_dist(dist)
+    def set_task_dist(self, i, dist):
+        unwrap_tasks(self.envs[i]).set_task_dist(dist)
 
     def get_tasks(self):
         return [unwrap_tasks(env).task_index for env in self.envs]
