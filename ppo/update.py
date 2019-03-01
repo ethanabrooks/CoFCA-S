@@ -191,8 +191,8 @@ class PPO:
                 # tasks_to_train = unique
                 # task_indices = torch.arange(unique.numel())
                 dist = Categorical(logits=logits.repeat(self.num_processes, 1))
-                task_indices = dist.sample().view(-1)
-                tasks_to_train = task_indices.float()
+                task_indices = dist.sample().view(-1).long()
+                tasks_to_train = unique[task_indices]
             else:
                 dist = Categorical(logits=logits.repeat(self.num_processes, 1))
                 task_indices = dist.sample().view(-1).long()
