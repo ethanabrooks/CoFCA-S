@@ -189,8 +189,11 @@ class PPO:
 
             # sample tasks
             if self.sampling_strategy == SamplingStrategy.learn_sampled.name:
-                tasks_to_train = unique
-                task_indices = torch.arange(unique.numel())
+                # tasks_to_train = unique
+                # task_indices = torch.arange(unique.numel())
+                dist = Categorical(logits=logits.repeat(self.num_processes, 1))
+                task_indices = dist.sample().view(-1).long()
+                tasks_to_train = unique[task_indices]
             else:
                 dist = Categorical(logits=logits.repeat(self.num_processes, 1))
                 task_indices = dist.sample().view(-1).long()
@@ -209,7 +212,7 @@ class PPO:
                 update_task_params(logits, grads)
             elif self.sampling_strategy == SamplingStrategy.learn_sampled.name:
                 logits = self.task_generator.parameter
-                update_task_params(logits, grads)
+                update_task_params(logits[task_indices], grads[task_indices])
 
             # update task data
             tasks_trained.extend(tasks_to_train)
