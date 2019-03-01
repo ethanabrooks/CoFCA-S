@@ -184,7 +184,9 @@ class PPO:
                 logits[grads.argmax()] = self.temperature
             elif self.sampling_strategy == SamplingStrategy.learned.name:
                 logits = self.task_generator.parameter
-            elif self.sampling_strategy != SamplingStrategy.learn_sampled.name:
+            elif self.sampling_strategy == SamplingStrategy.learn_sampled.name:
+                logits = self.task_generator.parameter
+            else:
                 raise RuntimeError
 
             # sample tasks
@@ -229,11 +231,11 @@ class PPO:
                 = components = self.compute_loss_components(sample)
             task_to_train_index = torch.argmax(
                 sample.tasks == tasks_to_train, dim=-1, keepdim=True)
-            if self.sampling_strategy == SamplingStrategy.learn_sampled.name:
-                importance_weighting = batches.importance_weighting
-            else:
-                probs = dist.log_prob(task_indices).exp()[task_to_train_index]
-                importance_weighting = 1 / (unique.numel() * probs)
+            # if self.sampling_strategy == SamplingStrategy.learn_sampled.name:
+            # importance_weighting = sample.importance_weighting
+            # else:
+            probs = dist.log_prob(task_indices).exp()[task_to_train_index]
+            importance_weighting = 1 / (unique.numel() * probs)
             loss = self.compute_loss(
                 *components, importance_weighting=importance_weighting)
 
