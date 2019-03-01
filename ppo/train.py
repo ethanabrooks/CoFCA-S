@@ -322,8 +322,6 @@ def train(
 
                     x, y, rewards, gradient = zip(*tasks_data[last_index:])
                     last_index = len(tasks_data)
-                    plot(rewards, 'new rewards')
-                    plot(gradient, 'new gradients')
             episode_rewards = []
             time_steps = []
 
