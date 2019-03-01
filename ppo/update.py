@@ -1,11 +1,10 @@
 # stdlib
-from collections import Counter, namedtuple
-import itertools
-import math
-
 # third party
 # first party
+from collections import Counter, namedtuple
 from enum import Enum
+import itertools
+import math
 
 import numpy as np
 import torch
@@ -38,7 +37,8 @@ def gaussian_kernel(x):
 
 
 SamplingStrategy = Enum(
-    'SamplingStrategy', 'baseline binary_logits gradients max learned learn_sampled')
+    'SamplingStrategy',
+    'baseline binary_logits gradients max learned learn_sampled')
 
 
 class PPO:
@@ -129,7 +129,7 @@ class PPO:
     def update(self, rollouts: RolloutStorage):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         advantages = (advantages - advantages.mean()) / (
-                advantages.std() + 1e-5)
+            advantages.std() + 1e-5)
         update_values = Counter()
         task_values = Counter()
 
@@ -197,12 +197,13 @@ class PPO:
                 tasks_to_train = unique[task_indices]
 
             def update_task_params(logits_to_update, targets):
-                task_loss = torch.mean((logits_to_update - targets) ** 2)
+                task_loss = torch.mean((logits_to_update - targets)**2)
                 task_loss.backward()
                 self.task_optimizer.step()
                 mean_abs_task_error = torch.mean(torch.abs(logits - grads))
-                update_values.update(task_loss=task_loss,
-                                     mean_abs_task_error=mean_abs_task_error)
+                update_values.update(
+                    task_loss=task_loss,
+                    mean_abs_task_error=mean_abs_task_error)
 
             if self.sampling_strategy == SamplingStrategy.learned.name:
                 update_task_params(logits, grads)
@@ -223,8 +224,8 @@ class PPO:
             # Compute loss
             value_losses, action_losses, entropy \
                 = components = self.compute_loss_components(sample)
-            task_to_train_index = torch.argmax(sample.tasks == tasks_to_train, dim=-1,
-                                               keepdim=True)
+            task_to_train_index = torch.argmax(
+                sample.tasks == tasks_to_train, dim=-1, keepdim=True)
             if self.sampling_strategy == SamplingStrategy.learn_sampled.name:
                 importance_weighting = batches.importance_weighting
             else:
@@ -260,7 +261,8 @@ class PPO:
             # task_trained=tasks_to_train,
             # n=1)
             if importance_weighting is not None:
-                update_values.update(importance_weighting=importance_weighting.mean())
+                update_values.update(
+                    importance_weighting=importance_weighting.mean())
 
         n = update_values.pop('n')
         update_values = {
@@ -272,4 +274,5 @@ class PPO:
             for k, v in task_values.items():
                 update_values[k] = torch.mean(v) / n
 
-        return update_values, torch.tensor(tasks_trained), task_returns, task_grads
+        return update_values, torch.tensor(
+            tasks_trained), task_returns, task_grads
