@@ -33,7 +33,7 @@ def train(
         tau,
         ppo_args,
         network_args,
-        # num_processes,
+        num_processes,
         synchronous,
         tasks_args=None):
     torch.manual_seed(seed)
@@ -64,7 +64,6 @@ def train(
     train_tasks = tasks_args is not None
     sample_env = make_env(seed=seed, rank=0, evaluation=False).unwrapped
     num_tasks = sample_env.task_space.n
-    num_processes = num_tasks
 
     if log_dir:
         plt.switch_backend('agg')
