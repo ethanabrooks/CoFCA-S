@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 
 from ppo.util import NoInput
@@ -12,9 +13,23 @@ class TaskGenerator(NoInput):
         self.task_size = task_size
         self.softmax = torch.nn.Softmax(dim=-1)
         self.temperature = 10
+        self.counter = np.ones(task_size)
+        self.t = 1
+
+    def sample(self, num_samples):
+        choices = np.random.choice(
+                self.task_size,
+                size=num_samples,
+                replace=False,
+                p=self.probs().detach().numpy())
+        self.t += 1
+        self.counter[choices] += 1
+        return choices
 
     def probs(self):
-        return self.softmax(self.temperature * self.weight).view(
+        exploration_bonus = torch.tensor(np.sqrt(np.log(self.t) / self.counter),
+                                         dtype=torch.float)
+        return self.softmax(self.temperature * (self.weight + exploration_bonus)).view(
             self.task_size)
 
     def importance_weight(self, task_index):
