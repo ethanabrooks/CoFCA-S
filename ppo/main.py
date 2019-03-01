@@ -7,9 +7,8 @@ from torch import nn as nn
 
 import gridworld_env
 import hsr.util
-from ppo.env_adapter import (GridWorld, HSREnv, MoveGripperEnv, RandomGridWorld,
-                             TrainTasksGridWorld, TasksHSREnv,
-                             TasksMoveGripperEnv, TasksGridWorld)
+from ppo.env_adapter import (GridWorld, HSREnv, MoveGripperEnv, RandomGridWorld, TasksGridWorld, TasksHSREnv,
+                             TasksMoveGripperEnv, TrainTasksGridWorld)
 from ppo.envs import wrap_env
 from ppo.train import train
 from ppo.update import SamplingStrategy
@@ -98,6 +97,7 @@ def build_parser():
         '--activation', type=parse_activation, default=nn.ReLU())
 
     ppo_parser = parser.add_argument_group('ppo_args')
+    ppo_parser.add_argument('--num-processes', type=int, default=1)
     ppo_parser.add_argument(
         '--clip-param',
         type=float,

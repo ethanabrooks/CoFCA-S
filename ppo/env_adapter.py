@@ -1,5 +1,4 @@
 # third party
-import time
 from multiprocessing import Pipe, Process
 
 from gym.spaces import Box, Discrete
@@ -10,7 +9,6 @@ from common.vec_env import CloudpickleWrapper, VecEnv
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 import gridworld_env
-import gridworld_env.gridworld as gridworld
 import hsr
 from hsr.env import Observation
 from utils.gym import concat_spaces, space_shape, space_to_size, unwrap_env
@@ -234,9 +232,8 @@ class TasksSubprocVecEnv(SubprocVecEnv):
         observation_space, action_space = self.remotes[0].recv()
         VecEnv.__init__(self, len(env_fns), observation_space, action_space)
 
-    def set_task_dist(self, dist):
-        for remote in self.remotes:
-            remote.send(('set_task_dist', dist))
+    def set_task_dist(self, i, dist):
+        self.remotes[i].send(('set_task_dist', dist))
 
     def get_tasks(self):
         self._assert_not_closed()
@@ -249,9 +246,8 @@ class TasksSubprocVecEnv(SubprocVecEnv):
 
 
 class TasksDummyVecEnv(DummyVecEnv):
-    def set_task_dist(self, dist):
-        for env in self.envs:
-            unwrap_tasks(env).set_task_dist(dist)
+    def set_task_dist(self, i, dist):
+        unwrap_tasks(self.envs[i]).set_task_dist(dist)
 
     def get_tasks(self):
         return [unwrap_tasks(env).task_index for env in self.envs]
