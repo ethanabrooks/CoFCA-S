@@ -1,5 +1,6 @@
-from ppo.util import NoInput
 import torch
+
+from ppo.util import NoInput
 
 
 class TaskGenerator(NoInput):
@@ -13,7 +14,8 @@ class TaskGenerator(NoInput):
         self.temperature = 10
 
     def probs(self):
-        return self.softmax(self.temperature * self.weight).view(self.task_size)
+        return self.softmax(self.temperature * self.weight).view(
+            self.task_size)
 
     def importance_weight(self, task_index):
         return 1 / (self.task_size * self.probs()[task_index]).detach()

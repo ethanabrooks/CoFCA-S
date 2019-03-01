@@ -7,36 +7,35 @@ import numpy as np
 from tensorboardX import SummaryWriter
 import torch
 
-from ppo.distributions import Categorical
-from ppo.env_adapter import TasksHSREnv
 from ppo.envs import VecNormalize, make_vec_envs
 from ppo.policy import Policy
 from ppo.storage import RolloutStorage, TasksRolloutStorage
 from ppo.task_generator import TaskGenerator
 from ppo.update import PPO
-from utils import space_to_size, onehot
+from utils import onehot, space_to_size
 
 
-def train(num_frames,
-          num_steps,
-          seed,
-          cuda_deterministic,
-          cuda,
-          log_dir: Path,
-          make_env,
-          gamma,
-          normalize,
-          save_interval,
-          load_path,
-          log_interval,
-          eval_interval,
-          use_gae,
-          tau,
-          ppo_args,
-          network_args,
-          # num_processes,
-          synchronous,
-          tasks_args=None):
+def train(
+        num_frames,
+        num_steps,
+        seed,
+        cuda_deterministic,
+        cuda,
+        log_dir: Path,
+        make_env,
+        gamma,
+        normalize,
+        save_interval,
+        load_path,
+        log_interval,
+        eval_interval,
+        use_gae,
+        tau,
+        ppo_args,
+        network_args,
+        # num_processes,
+        synchronous,
+        tasks_args=None):
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
 
@@ -119,7 +118,7 @@ def train(num_frames,
             obs_shape=envs.observation_space.shape,
             action_space=envs.action_space,
             recurrent_hidden_state_size=actor_critic.
-                recurrent_hidden_state_size,
+            recurrent_hidden_state_size,
             task_size=task_size)
 
     else:
@@ -129,7 +128,7 @@ def train(num_frames,
             obs_shape=envs.observation_space.shape,
             action_space=envs.action_space,
             recurrent_hidden_state_size=actor_critic.
-                recurrent_hidden_state_size,
+            recurrent_hidden_state_size,
         )
 
     agent = PPO(actor_critic=actor_critic, task_generator=gan, **ppo_args)
@@ -175,8 +174,11 @@ def train(num_frames,
     for j in updates:
 
         if train_tasks:
-            tasks = np.random.choice(num_tasks, size=num_processes, replace=False,
-                                     p=gan.probs().detach().numpy())
+            tasks = np.random.choice(
+                num_tasks,
+                size=num_processes,
+                replace=False,
+                p=gan.probs().detach().numpy())
             for i, task in enumerate(tasks):
                 envs.unwrapped.set_task_dist(i, onehot(task, num_tasks))
 
@@ -240,8 +242,10 @@ def train(num_frames,
         if train_tasks:
             tasks_trained, task_returns, gradient_sums = task_stuff
             tasks_trained = sample_env.task_states[tasks_trained.int().numpy()]
-            tasks_data.extend([(x, y, r, g) for x, y, r, g in zip(
-                *sample_env.decode(tasks_trained), task_returns, gradient_sums)])
+            tasks_data.extend(
+                [(x, y, r, g)
+                 for x, y, r, g in zip(*sample_env.decode(tasks_trained),
+                                       task_returns, gradient_sums)])
 
             # for i in range(num_processes):
             #     envs.unwrapped.set_task_dist(gan.probs().detach().numpy())
@@ -250,8 +254,8 @@ def train(num_frames,
         total_num_steps = (j + 1) * num_processes * num_steps
 
         if all(
-                [log_dir, save_interval,
-                 time.time() - last_save >= save_interval]):
+            [log_dir, save_interval,
+             time.time() - last_save >= save_interval]):
             last_save = time.time()
             modules = dict(
                 optimizer=agent.optimizer,

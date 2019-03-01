@@ -3,11 +3,10 @@ import json
 import os
 import os.path as osp
 
-import matplotlib.pyplot as plt
-import numpy as np
-
 from baselines.bench import monitor
 from baselines.logger import read_csv, read_json
+import matplotlib.pyplot as plt
+import numpy as np
 import pandas
 
 
