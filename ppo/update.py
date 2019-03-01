@@ -135,9 +135,9 @@ class PPO:
 
         total_norm = torch.tensor(0, dtype=torch.float32)
         if self.train_tasks:
-            tasks_trained = torch.unique(batches.tasks)
-            task_grads = torch.zeros(tasks_trained.size()[0])
-            task_returns = torch.zeros(tasks_trained.size()[0])
+            tasks_trained = []
+            task_grads = []
+            task_returns = []
 
         for e in range(self.ppo_epoch):
             num_steps, num_processes = rollouts.rewards.size()[0:2]
@@ -169,6 +169,9 @@ class PPO:
                     else:
                         grads[i] = sum(
                             g.abs().sum() for g in grad if g is not None)
+                tasks_trained.append(unique)
+                task_grads.append(grads)
+                task_returns.append(returns)
 
                 def update_task_params(logits_to_update, targets):
                     task_loss = torch.mean((logits_to_update - targets) ** 2)
@@ -228,7 +231,7 @@ class PPO:
                 update_values[k] = torch.mean(v) / n
 
         if self.train_tasks:
-            return update_values, (torch.tensor(
-                tasks_trained), task_returns, task_grads)
+            return update_values, (torch.cat(
+                tasks_trained), torch.cat(task_returns), torch.cat(task_grads))
         else:
             return update_values, None
