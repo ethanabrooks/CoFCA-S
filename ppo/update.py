@@ -21,16 +21,16 @@ def global_norm(grads):
     norm = 0
     for grad in grads:
         if grad is not None:
-            norm += grad.norm(2) ** 2
-    return norm ** .5
+            norm += grad.norm(2)**2
+    return norm**.5
 
 
 def epanechnikov_kernel(x):
-    return 3 / 4 * (1 - x ** 2)
+    return 3 / 4 * (1 - x**2)
 
 
 def gaussian_kernel(x):
-    return (2 * math.pi) ** -.5 * torch.exp(-.5 * x ** 2)
+    return (2 * math.pi)**-.5 * torch.exp(-.5 * x**2)
 
 
 SamplingStrategy = Enum(
@@ -180,9 +180,9 @@ class PPO:
                 logits = torch.ones_like(grads) * -self.temperature
                 logits[grads.argmax()] = self.temperature
             elif self.sampling_strategy == SamplingStrategy.learned.name:
-                logits = self.task_generator.parameter
+                logits = self.task_generator.parameter * self.temperature
             elif self.sampling_strategy == SamplingStrategy.learn_sampled.name:
-                logits = self.task_generator.parameter
+                logits = self.task_generator.parameter * self.temperature
             else:
                 raise RuntimeError
 
@@ -268,7 +268,8 @@ class PPO:
                 update_values[k] = torch.mean(v) / n
 
         if self.train_tasks:
-            return update_values, (torch.tensor(
-                tasks_trained), torch.tensor(task_returns), torch.tensor(task_grads))
+            return update_values, (torch.tensor(tasks_trained),
+                                   torch.tensor(task_returns),
+                                   torch.tensor(task_grads))
         else:
             return update_values, None
