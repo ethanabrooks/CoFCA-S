@@ -90,10 +90,10 @@ class Categorical(torch.distributions.Categorical):
 
 
 class NoInput(nn.Module):
-    def __init__(self, size):
+    def __init__(self, size, gain=1):
         super().__init__()
         tensor = torch.Tensor(1, size)
-        init_normc_(tensor)
+        init_normc_(tensor, gain=gain)
         self.weight = nn.Parameter(tensor)
         self.parameter = self.weight.view(size)
 
