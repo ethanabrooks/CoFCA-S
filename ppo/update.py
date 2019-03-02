@@ -126,7 +126,7 @@ class PPO:
     def update(self, rollouts: RolloutStorage):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         advantages = (advantages - advantages.mean()) / (
-            advantages.std() + 1e-5)
+                advantages.std() + 1e-5)
         update_values = Counter()
         task_values = Counter()
 
@@ -198,8 +198,21 @@ class PPO:
                 task_indices = dist.sample().view(-1).long()
                 tasks_to_train = unique[task_indices]
 
+            # make sample
+            uses_task = (batches.tasks == tasks_to_train).any(-1)
+            train_indices = torch.arange(total_batch_size)[uses_task]
+            sample = rollouts.make_batch(advantages, train_indices)
+
+            task_to_train_index = torch.argmax(
+                sample.tasks == tasks_to_train, dim=-1, keepdim=True)
+            # if self.sampling_strategy == SamplingStrategy.learn_sampled.name:
+            # importance_weighting = sample.importance_weighting
+            # else:
+            probs = dist.log_prob(task_indices).exp()[task_to_train_index]
+            importance_weighting = 1 / (unique.numel() * probs)
+
             def update_task_params(logits_to_update, targets):
-                task_loss = torch.mean((logits_to_update - targets)**2)
+                task_loss = torch.mean((logits_to_update - targets) ** 2)
                 task_loss.backward()
                 self.task_optimizer.step()
                 mean_abs_task_error = torch.mean(torch.abs(logits - grads))
@@ -213,26 +226,15 @@ class PPO:
                 logits = self.task_generator.parameter
                 update_task_params(logits[task_indices], grads[task_indices])
 
+
             # update task data
             tasks_trained.extend(tasks_to_train)
             task_returns.extend(returns[task_indices])
             task_grads.extend(grads[task_indices])
 
-            # make sample
-            uses_task = (batches.tasks == tasks_to_train).any(-1)
-            train_indices = torch.arange(total_batch_size)[uses_task]
-            sample = rollouts.make_batch(advantages, train_indices)
-
             # Compute loss
             value_losses, action_losses, entropy \
                 = components = self.compute_loss_components(sample)
-            task_to_train_index = torch.argmax(
-                sample.tasks == tasks_to_train, dim=-1, keepdim=True)
-            # if self.sampling_strategy == SamplingStrategy.learn_sampled.name:
-            # importance_weighting = sample.importance_weighting
-            # else:
-            probs = dist.log_prob(task_indices).exp()[task_to_train_index]
-            importance_weighting = 1 / (unique.numel() * probs)
             loss = self.compute_loss(
                 *components, importance_weighting=importance_weighting)
 
@@ -245,13 +247,13 @@ class PPO:
             self.optimizer.step()
             self.optimizer.zero_grad()
 
-            update_values.update(grad_measure=grads)
-            update_values.update(value_loss=torch.mean(value_losses))
-            update_values.update(action_loss=torch.mean(action_losses))
-            update_values.update(norm=total_norm)
-            update_values.update(entropy=torch.mean(entropy))
-            update_values.update(task_trained=tasks_to_train)
-            update_values.update(n=1)
+            update_values.update(grad_measure=grads
+                                 , value_loss=torch.mean(value_losses)
+                                 , action_loss=torch.mean(action_losses)
+                                 , norm=total_norm
+                                 , entropy=torch.mean(entropy)
+                                 , task_trained=tasks_to_train
+                                 , n=1)
 
             if importance_weighting is not None:
                 update_values.update(
