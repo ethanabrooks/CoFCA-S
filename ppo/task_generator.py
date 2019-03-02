@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 
-from ppo.util import NoInput, Categorical
+from ppo.util import Categorical, NoInput
 
 
 class TaskGenerator(NoInput):
@@ -19,18 +19,19 @@ class TaskGenerator(NoInput):
     def sample(self, num_samples):
         self.time_since_selected += 1
         choices = np.random.choice(
-                self.task_size,
-                size=num_samples,
-                replace=False,
-                p=self.probs().detach().numpy())
+            self.task_size,
+            size=num_samples,
+            replace=False,
+            p=self.probs().detach().numpy())
         self.time_since_selected[choices] = 1
         self.counter[choices] += 1
         return choices
 
     def probs(self):
-        exploration_bonus = torch.tensor(np.sqrt(np.log(self.time_since_selected) /
-                                                 self.counter), dtype=torch.float)
-        return Categorical(self.temperature * self.weight).probs
+        exploration_bonus = torch.tensor(
+            np.sqrt(np.log(self.time_since_selected) / self.counter),
+            dtype=torch.float)
+        return Categorical(self.temperature * self.weight).probs.view(-1)
 
     def importance_weight(self, task_index):
         return 1 / (self.task_size * self.probs()[task_index]).detach()

@@ -268,7 +268,8 @@ class PPO:
                 update_values[k] = torch.mean(v) / n
 
         if self.train_tasks:
-            return update_values, (torch.tensor(
-                tasks_trained), torch.tensor(task_returns), torch.tensor(task_grads))
+            return update_values, (torch.tensor(tasks_trained),
+                                   torch.tensor(task_returns),
+                                   torch.tensor(task_grads))
         else:
             return update_values, None
