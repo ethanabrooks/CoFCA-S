@@ -1,9 +1,9 @@
 # stdlib
 # third party
 # first party
-import math
 from collections import Counter
 from enum import Enum
+import math
 
 import torch
 import torch.nn as nn
@@ -21,16 +21,16 @@ def global_norm(grads):
     norm = 0
     for grad in grads:
         if grad is not None:
-            norm += grad.norm(2)**2
-    return norm**.5
+            norm += grad.norm(2) ** 2
+    return norm ** .5
 
 
 def epanechnikov_kernel(x):
-    return 3 / 4 * (1 - x**2)
+    return 3 / 4 * (1 - x ** 2)
 
 
 def gaussian_kernel(x):
-    return (2 * math.pi)**-.5 * torch.exp(-.5 * x**2)
+    return (2 * math.pi) ** -.5 * torch.exp(-.5 * x ** 2)
 
 
 SamplingStrategy = Enum(
@@ -252,16 +252,7 @@ class PPO:
             update_values.update(entropy=torch.mean(entropy))
             update_values.update(task_trained=tasks_to_train)
             update_values.update(n=1)
-            # update_values.update(
-            # dist_mean=dist.mean,
-            # dist_std=dist.stddev,
-            # grad_measure=grads,
-            # value_loss=value_losses,
-            # action_loss=action_losses,
-            # norm=total_norm,
-            # entropy=entropy,
-            # task_trained=tasks_to_train,
-            # n=1)
+
             if importance_weighting is not None:
                 update_values.update(
                     importance_weighting=importance_weighting.mean())
@@ -276,5 +267,8 @@ class PPO:
             for k, v in task_values.items():
                 update_values[k] = torch.mean(v) / n
 
-        return update_values, torch.tensor(
-            tasks_trained), task_returns, task_grads
+        if self.train_tasks:
+            return update_values, (torch.tensor(
+                tasks_trained), torch.tensor(task_returns), torch.tensor(task_grads))
+        else:
+            return update_values, None
