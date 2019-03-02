@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 
-from ppo.util import NoInput
+from ppo.util import NoInput, Categorical
 
 
 class TaskGenerator(NoInput):
@@ -30,8 +30,7 @@ class TaskGenerator(NoInput):
     def probs(self):
         exploration_bonus = torch.tensor(np.sqrt(np.log(self.time_since_selected) /
                                                  self.counter), dtype=torch.float)
-        return self.softmax(self.temperature * self.weight).view(
-            self.task_size)
+        return Categorical(self.temperature * self.weight).probs
 
     def importance_weight(self, task_index):
         return 1 / (self.task_size * self.probs()[task_index]).detach()

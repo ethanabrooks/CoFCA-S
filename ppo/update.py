@@ -180,9 +180,9 @@ class PPO:
                 logits = torch.ones_like(grads) * -self.temperature
                 logits[grads.argmax()] = self.temperature
             elif self.sampling_strategy == SamplingStrategy.learned.name:
-                logits = self.task_generator.parameter
+                logits = self.task_generator.parameter * self.temperature
             elif self.sampling_strategy == SamplingStrategy.learn_sampled.name:
-                logits = self.task_generator.parameter
+                logits = self.task_generator.parameter * self.temperature
             else:
                 raise RuntimeError
 
