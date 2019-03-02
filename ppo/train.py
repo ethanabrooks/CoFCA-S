@@ -118,7 +118,7 @@ def train(
             obs_shape=envs.observation_space.shape,
             action_space=envs.action_space,
             recurrent_hidden_state_size=actor_critic.
-                recurrent_hidden_state_size,
+            recurrent_hidden_state_size,
             task_size=task_size)
 
     else:
@@ -128,7 +128,7 @@ def train(
             obs_shape=envs.observation_space.shape,
             action_space=envs.action_space,
             recurrent_hidden_state_size=actor_critic.
-                recurrent_hidden_state_size,
+            recurrent_hidden_state_size,
         )
 
     agent = PPO(actor_critic=actor_critic, task_generator=gan, **ppo_args)
