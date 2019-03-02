@@ -118,7 +118,7 @@ def train(
             obs_shape=envs.observation_space.shape,
             action_space=envs.action_space,
             recurrent_hidden_state_size=actor_critic.
-            recurrent_hidden_state_size,
+                recurrent_hidden_state_size,
             task_size=task_size)
 
     else:
@@ -128,7 +128,7 @@ def train(
             obs_shape=envs.observation_space.shape,
             action_space=envs.action_space,
             recurrent_hidden_state_size=actor_critic.
-            recurrent_hidden_state_size,
+                recurrent_hidden_state_size,
         )
 
     agent = PPO(actor_critic=actor_critic, task_generator=gan, **ppo_args)
@@ -254,8 +254,8 @@ def train(
         total_num_steps = (j + 1) * num_processes * num_steps
 
         if all(
-            [log_dir, save_interval,
-             time.time() - last_save >= save_interval]):
+                [log_dir, save_interval,
+                 time.time() - last_save >= save_interval]):
             last_save = time.time()
             modules = dict(
                 optimizer=agent.optimizer,
@@ -301,29 +301,36 @@ def train(
                     if v.dim() == 0:
                         writer.add_scalar(k, v, total_num_steps)
 
-                x, y, rewards, gradient = zip(*tasks_data)
+                if train_tasks:
+                    x, y, rewards, gradient = zip(*tasks_data)
 
-                def plot(c, text):
+                    def plot(c, text, x=x, y=y):
+                        fig = plt.figure()
+                        x_noise = (np.random.rand(len(x)) - .5) * .9
+                        y_noise = (np.random.rand(len(y)) - .5) * .9
+                        sc = plt.scatter(
+                            x + x_noise, y + y_noise, c=c, cmap=cm.hot, alpha=.1)
+                        plt.colorbar(sc)
+                        axes = plt.axes()
+                        axes.set_xlim(-.5, xlim - .5)
+                        axes.set_ylim(-.5, ylim - .5)
+                        plt.subplots_adjust(.15, .15, .95, .95)
+                        writer.add_figure(text, fig, total_num_steps)
+                        plt.close(fig)
+
                     fig = plt.figure()
-                    x_noise = (np.random.rand(len(x)) - .5) * .9
-                    y_noise = (np.random.rand(len(y)) - .5) * .9
-                    sc = plt.scatter(
-                        x + x_noise, y + y_noise, c=c, cmap=cm.hot, alpha=.1)
-                    plt.colorbar(sc)
-                    axes = plt.axes()
-                    axes.set_xlim(-.5, xlim - .5)
-                    axes.set_ylim(-.5, ylim - .5)
-                    plt.subplots_adjust(.15, .15, .95, .95)
-                    writer.add_figure(text, fig, total_num_steps)
-                    plt.close(fig)
+                    probs = np.zeros(sample_env.desc.shape)
+                    probs[sample_env.decode(sample_env.task_states)] = gan.probs().detach()
+                    im = plt.imshow(probs, origin='lower')
+                    plt.colorbar(im)
+                    writer.add_figure('probs', fig, total_num_steps)
+                    plt.close()
 
-                plot(rewards, 'rewards')
-                plot(gradient, 'gradients')
+                    plot(rewards, 'rewards')
+                    plot(gradient, 'gradients')
 
-                x, y, rewards, gradient = zip(*tasks_data[last_index:])
-                last_index = len(tasks_data)
-                plot(rewards, 'new rewards')
-                plot(gradient, 'new gradients')
+                    x, y, rewards, gradient = zip(*tasks_data[last_index:])
+                    last_index = len(tasks_data)
             episode_rewards = []
             time_steps = []
 
