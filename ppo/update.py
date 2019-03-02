@@ -182,7 +182,8 @@ class PPO:
             elif self.sampling_strategy == SamplingStrategy.learned.name:
                 logits = self.task_generator.parameter * self.temperature
             elif self.sampling_strategy == SamplingStrategy.learn_sampled.name:
-                logits = self.task_generator.parameter * self.temperature
+                logits = (self.task_generator.parameter +
+                          self.task_generator.exploration_bonus()) * self.temperature
             else:
                 raise RuntimeError
 
