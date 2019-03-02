@@ -31,7 +31,8 @@ class TaskGenerator(NoInput):
         exploration_bonus = torch.tensor(
             np.sqrt(np.log(self.time_since_selected) / self.counter),
             dtype=torch.float)
-        return Categorical(self.temperature * self.weight).probs.view(-1)
+        return Categorical(
+            logits=self.temperature * self.weight).probs.view(-1)
 
     def importance_weight(self, task_index):
         return 1 / (self.task_size * self.probs()[task_index]).detach()
