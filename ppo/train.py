@@ -174,11 +174,7 @@ def train(
     for j in updates:
 
         if train_tasks:
-            tasks = np.random.choice(
-                num_tasks,
-                size=num_processes,
-                replace=False,
-                p=gan.probs().detach().numpy())
+            tasks = gan.sample(num_processes)
             for i, task in enumerate(tasks):
                 envs.unwrapped.set_task_dist(i, onehot(task, num_tasks))
 
