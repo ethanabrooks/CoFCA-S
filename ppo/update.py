@@ -1,18 +1,15 @@
 # stdlib
 # third party
 # first party
-from collections import Counter, namedtuple
-from enum import Enum
-import itertools
 import math
+from collections import Counter
+from enum import Enum
 
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from common.running_mean_std import RunningMeanStd
-from ppo.storage import Batch, RolloutStorage, TasksRolloutStorage
+from ppo.storage import RolloutStorage, TasksRolloutStorage
 from ppo.util import Categorical
 
 
