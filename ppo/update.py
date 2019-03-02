@@ -199,8 +199,21 @@ class PPO:
                 task_indices = dist.sample().view(-1).long()
                 tasks_to_train = unique[task_indices]
 
+            # make sample
+            uses_task = (batches.tasks == tasks_to_train).any(-1)
+            train_indices = torch.arange(total_batch_size)[uses_task]
+            sample = rollouts.make_batch(advantages, train_indices)
+
+            task_to_train_index = torch.argmax(
+                sample.tasks == tasks_to_train, dim=-1, keepdim=True)
+            # if self.sampling_strategy == SamplingStrategy.learn_sampled.name:
+            # importance_weighting = sample.importance_weighting
+            # else:
+            probs = dist.log_prob(task_indices).exp()[task_to_train_index]
+            importance_weighting = 1 / (unique.numel() * probs)
+
             def update_task_params(logits_to_update, targets):
-                task_loss = torch.mean((logits_to_update - targets)**2)
+                task_loss = torch.mean((logits_to_update - targets) ** 2)
                 task_loss.backward()
                 self.task_optimizer.step()
                 mean_abs_task_error = torch.mean(torch.abs(logits - grads))
@@ -214,26 +227,15 @@ class PPO:
                 logits = self.task_generator.parameter
                 update_task_params(logits[task_indices], grads[task_indices])
 
+
             # update task data
             tasks_trained.extend(tasks_to_train)
             task_returns.extend(returns[task_indices])
             task_grads.extend(grads[task_indices])
 
-            # make sample
-            uses_task = (batches.tasks == tasks_to_train).any(-1)
-            train_indices = torch.arange(total_batch_size)[uses_task]
-            sample = rollouts.make_batch(advantages, train_indices)
-
             # Compute loss
             value_losses, action_losses, entropy \
                 = components = self.compute_loss_components(sample)
-            task_to_train_index = torch.argmax(
-                sample.tasks == tasks_to_train, dim=-1, keepdim=True)
-            # if self.sampling_strategy == SamplingStrategy.learn_sampled.name:
-            # importance_weighting = sample.importance_weighting
-            # else:
-            probs = dist.log_prob(task_indices).exp()[task_to_train_index]
-            importance_weighting = 1 / (unique.numel() * probs)
             loss = self.compute_loss(
                 *components, importance_weighting=importance_weighting)
 
