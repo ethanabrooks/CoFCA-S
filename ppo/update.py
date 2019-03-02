@@ -1,14 +1,13 @@
 # stdlib
 # third party
 # first party
+import math
 from collections import Counter
 from enum import Enum
-import math
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
-
 from ppo.storage import RolloutStorage, TasksRolloutStorage
 from ppo.util import Categorical
 
@@ -21,16 +20,16 @@ def global_norm(grads):
     norm = 0
     for grad in grads:
         if grad is not None:
-            norm += grad.norm(2) ** 2
-    return norm ** .5
+            norm += grad.norm(2)**2
+    return norm**.5
 
 
 def epanechnikov_kernel(x):
-    return 3 / 4 * (1 - x ** 2)
+    return 3 / 4 * (1 - x**2)
 
 
 def gaussian_kernel(x):
-    return (2 * math.pi) ** -.5 * torch.exp(-.5 * x ** 2)
+    return (2 * math.pi)**-.5 * torch.exp(-.5 * x**2)
 
 
 SamplingStrategy = Enum(
@@ -126,7 +125,7 @@ class PPO:
     def update(self, rollouts: RolloutStorage):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         advantages = (advantages - advantages.mean()) / (
-                advantages.std() + 1e-5)
+            advantages.std() + 1e-5)
         update_values = Counter()
         task_values = Counter()
 
@@ -182,8 +181,9 @@ class PPO:
             elif self.sampling_strategy == SamplingStrategy.learned.name:
                 logits = self.task_generator.parameter * self.temperature
             elif self.sampling_strategy == SamplingStrategy.learn_sampled.name:
-                logits = (self.task_generator.parameter +
-                          self.task_generator.exploration_bonus()) * self.temperature
+                logits = (
+                    self.task_generator.parameter +
+                    self.task_generator.exploration_bonus()) * self.temperature
             else:
                 raise RuntimeError
 
@@ -193,9 +193,8 @@ class PPO:
                 # task_indices = torch.arange(unique.numel())
                 dist = Categorical(logits=logits.repeat(self.num_processes, 1))
                 tasks_to_train = dist.sample().view(-1)
-                task_indices = (unique.long() == tasks_to_train).view(-1).nonzero(
-
-                ).view(-1)
+                task_indices = (unique.long() == tasks_to_train
+                                ).view(-1).nonzero().view(-1)
             else:
                 dist = Categorical(logits=logits.repeat(self.num_processes, 1))
                 task_indices = dist.sample().view(-1).long()
@@ -210,13 +209,14 @@ class PPO:
                 sample.tasks.long() == tasks_to_train, dim=-1, keepdim=True)
             if self.sampling_strategy == SamplingStrategy.learn_sampled.name:
                 # importance_weighting = sample.importance_weighting
-                probs = dist.log_prob(tasks_to_train).exp()[task_to_train_index]
+                probs = dist.log_prob(tasks_to_train).exp()[
+                    task_to_train_index]
             else:
                 probs = dist.log_prob(task_indices).exp()[task_to_train_index]
             importance_weighting = 1 / (unique.numel() * probs)
 
             def update_task_params(logits_to_update, targets):
-                task_loss = torch.mean((logits_to_update - targets) ** 2)
+                task_loss = torch.mean((logits_to_update - targets)**2)
                 task_loss.backward()
                 self.task_optimizer.step()
                 mean_abs_task_error = torch.mean(torch.abs(logits - grads))
@@ -250,13 +250,14 @@ class PPO:
             self.optimizer.step()
             self.optimizer.zero_grad()
 
-            update_values.update(grad_measure=grads
-                                 , value_loss=torch.mean(value_losses)
-                                 , action_loss=torch.mean(action_losses)
-                                 , norm=total_norm
-                                 , entropy=torch.mean(entropy)
-                                 , task_trained=tasks_to_train.float()
-                                 , n=1)
+            update_values.update(
+                grad_measure=grads,
+                value_loss=torch.mean(value_losses),
+                action_loss=torch.mean(action_losses),
+                norm=total_norm,
+                entropy=torch.mean(entropy),
+                task_trained=tasks_to_train.float(),
+                n=1)
 
             if importance_weighting is not None:
                 update_values.update(
