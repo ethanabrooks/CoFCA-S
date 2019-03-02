@@ -14,20 +14,21 @@ class TaskGenerator(NoInput):
         self.softmax = torch.nn.Softmax(dim=-1)
         self.temperature = 10
         self.counter = np.ones(task_size)
-        self.t = 1
+        self.time_since_selected = np.ones(task_size)
 
     def sample(self, num_samples):
+        self.time_since_selected += 1
         choices = np.random.choice(
                 self.task_size,
                 size=num_samples,
                 replace=False,
                 p=self.probs().detach().numpy())
-        self.t += 1
+        self.time_since_selected[choices] = 1
         self.counter[choices] += 1
         return choices
 
     def probs(self):
-        exploration_bonus = torch.tensor(np.sqrt(np.log(self.t) / self.counter),
+        exploration_bonus = torch.tensor(np.sqrt(np.log(self.time_since_selected) / self.counter),
                                          dtype=torch.float)
         return self.softmax(self.temperature * (self.weight + exploration_bonus)).view(
             self.task_size)
