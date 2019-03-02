@@ -1,7 +1,8 @@
 import time
 
-from baselines.bench.monitor import ResultsWriter
 import numpy as np
+
+from baselines.bench.monitor import ResultsWriter
 
 # local
 from . import VecEnvWrapper

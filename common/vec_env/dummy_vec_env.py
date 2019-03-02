@@ -1,5 +1,7 @@
-from gym import spaces
+import time
+
 import numpy as np
+from gym import spaces
 
 # local
 from . import VecEnv

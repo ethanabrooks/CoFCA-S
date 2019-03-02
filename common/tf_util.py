@@ -21,8 +21,8 @@ def switch(condition, then_expression, else_expression):
     """
     x_shape = copy.copy(then_expression.get_shape())
     x = tf.cond(
-        tf.cast(condition,
-                'bool'), lambda: then_expression, lambda: else_expression)
+        tf.cast(condition, 'bool'), lambda: then_expression,
+        lambda: else_expression)
     x.set_shape(x_shape)
     return x
 
@@ -210,8 +210,7 @@ def function(inputs, outputs, updates=None, givens=None):
         return _Function(inputs, outputs, updates, givens=givens)
     elif isinstance(outputs, (dict, collections.OrderedDict)):
         f = _Function(inputs, outputs.values(), updates, givens=givens)
-        return lambda *args, **kwargs: type(outputs)(zip(
-            outputs.keys(), f(*args, **kwargs)))
+        return lambda *args, **kwargs: type(outputs)(zip(outputs.keys(), f(*args, **kwargs)))
     else:
         f = _Function(inputs, [outputs], updates, givens=givens)
         return lambda *args, **kwargs: f(*args, **kwargs)[0]

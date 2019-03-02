@@ -1,5 +1,5 @@
 # third party
-from collections import namedtuple
+from collections import defaultdict, namedtuple
 from typing import Generator
 
 import torch

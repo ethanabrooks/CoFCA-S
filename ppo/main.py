@@ -7,8 +7,9 @@ from torch import nn as nn
 
 import gridworld_env
 import hsr.util
-from ppo.env_adapter import (GridWorld, HSREnv, MoveGripperEnv, RandomGridWorld, TasksGridWorld, TasksHSREnv,
-                             TasksMoveGripperEnv, TrainTasksGridWorld)
+from ppo.env_adapter import (GridWorld, HSREnv, MoveGripperEnv, RandomGridWorld,
+                             TrainTasksGridWorld, TasksHSREnv,
+                             TasksMoveGripperEnv, TasksGridWorld)
 from ppo.envs import wrap_env
 from ppo.train import train
 from ppo.update import SamplingStrategy

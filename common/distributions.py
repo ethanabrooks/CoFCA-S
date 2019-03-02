@@ -1,8 +1,8 @@
-from baselines.a2c.utils import fc
 import numpy as np
 import tensorflow as tf
 from tensorflow.python.ops import math_ops
 
+from baselines.a2c.utils import fc
 import common.tf_util as U
 
 

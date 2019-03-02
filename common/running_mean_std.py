@@ -35,6 +35,7 @@ def update_mean_var_count_from_moments(mean, var, count, batch_mean, batch_var,
     return new_mean, new_var, new_count
 
 
+
 def test_runningmeanstd():
     for (x1, x2, x3) in [
         (np.random.randn(3), np.random.randn(4), np.random.randn(5)),

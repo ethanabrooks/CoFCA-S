@@ -4,11 +4,11 @@ Helpers for scripts like run_atari.py.
 
 import os
 
-from baselines import logger
-from baselines.bench import Monitor
 import gym
 from gym.wrappers import FlattenDictWrapper
 
+from baselines import logger
+from baselines.bench import Monitor
 from common import retro_wrappers, set_global_seeds
 from common.atari_wrappers import make_atari, wrap_deepmind
 from common.vec_env.dummy_vec_env import DummyVecEnv
@@ -40,12 +40,13 @@ def make_vec_env(env_id,
         return lambda: make_env(
             env_id=env_id,
             env_type=env_type,
-            subrank=rank,
+            subrank = rank,
             seed=seed,
             reward_scale=reward_scale,
             gamestate=gamestate,
             flatten_dict_observations=flatten_dict_observations,
-            wrapper_kwargs=wrapper_kwargs)
+            wrapper_kwargs=wrapper_kwargs
+        )
 
     set_global_seeds(seed)
     if num_env > 1:

@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-
 from common.tile_images import tile_images
 
 

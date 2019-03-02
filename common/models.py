@@ -1,9 +1,9 @@
-from baselines.a2c import utils
-from baselines.a2c.utils import batch_to_seq, conv, conv_to_fc, fc, seq_to_batch
 import numpy as np
 import tensorflow as tf
 import tensorflow.contrib.layers as layers
 
+from baselines.a2c import utils
+from baselines.a2c.utils import batch_to_seq, conv, conv_to_fc, fc, seq_to_batch
 from common.mpi_running_mean_std import RunningMeanStd
 
 mapping = {}
