@@ -14,8 +14,9 @@ class TaskGenerator(NoInput):
         self.temperature = 10
 
     def probs(self):
-        return self.softmax(self.temperature * self.weight).view(
-            self.task_size)
+        eps = torch.ones(self.weight.size()) * 1e-6
+        return self.softmax(torch.max(
+            eps, self.temperature * self.weight)).view(self.task_size)
 
     def importance_weight(self, task_index):
         return 1 / (self.task_size * self.probs()[task_index]).detach()
