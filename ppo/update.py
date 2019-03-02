@@ -1,9 +1,9 @@
 # stdlib
 # third party
 # first party
+import math
 from collections import Counter
 from enum import Enum
-import math
 
 import torch
 import torch.nn as nn
