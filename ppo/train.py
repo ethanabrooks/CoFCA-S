@@ -313,11 +313,12 @@ def train(
                         writer.add_figure(text, fig, total_num_steps)
                         plt.close(fig)
 
+                    fig = plt.figure()
                     probs = np.zeros(sample_env.desc.shape)
                     probs[sample_env.decode(sample_env.task_states)] = gan.probs().detach()
-                    im = plt.imshow(probs)
+                    im = plt.imshow(probs, origin='lower')
                     plt.colorbar(im)
-                    writer.add_figure('probs', plt.figure(), total_num_steps)
+                    writer.add_figure('probs', fig, total_num_steps)
                     plt.close()
 
                     plot(rewards, 'rewards')

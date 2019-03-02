@@ -28,8 +28,8 @@ class TaskGenerator(NoInput):
         return choices
 
     def probs(self):
-        exploration_bonus = torch.tensor(np.sqrt(np.log(self.time_since_selected) / self.counter),
-                                         dtype=torch.float)
+        exploration_bonus = torch.tensor(np.sqrt(np.log(self.time_since_selected) /
+                                                 self.counter), dtype=torch.float)
         return self.softmax(self.temperature * (self.weight + exploration_bonus)).view(
             self.task_size)
 
