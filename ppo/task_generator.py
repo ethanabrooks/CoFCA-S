@@ -21,7 +21,7 @@ class TaskGenerator(NoInput):
         choices = np.random.choice(
             self.task_size,
             size=num_samples,
-            replace=False,
+            replace=True,
             p=self.probs().detach().numpy())
         self.time_since_selected[choices] = 1
         self.counter[choices] += 1

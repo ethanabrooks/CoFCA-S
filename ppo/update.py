@@ -188,12 +188,12 @@ class PPO:
 
             # sample tasks
             if self.sampling_strategy == SamplingStrategy.learn_sampled.name:
-                # tasks_to_train = unique
-                # task_indices = torch.arange(unique.numel())
-                dist = Categorical(logits=logits.repeat(num_processes, 1))
-                tasks_to_train = dist.sample().view(-1).float()
-                task_indices = (
-                    unique == tasks_to_train).view(-1).nonzero().view(-1)
+                tasks_to_train = unique
+                task_indices = torch.arange(unique.numel())
+                # dist = Categorical(logits=logits.repeat(num_processes, 1))
+                # tasks_to_train = dist.sample().view(-1).float()
+                # task_indices = (
+                #     unique == tasks_to_train).view(-1).nonzero().view(-1)
             else:
                 dist = Categorical(logits=logits.repeat(num_processes, 1))
                 task_indices = dist.sample().view(-1).long()
@@ -227,8 +227,13 @@ class PPO:
                 update_task_params(logits, grads)
             elif self.sampling_strategy == SamplingStrategy.learn_sampled.name:
                 logits = self.task_generator.parameter
-                update_task_params(logits[tasks_to_train.long()],
-                                   grads[task_indices])
+                _grads = torch.ones_like(grads) * 1e-7
+                for i in [0, 1, 2, 7, 8, 9]:
+                    _grads[unique == i] = 1e7
+                update_task_params(logits[tasks_to_train],
+                                   _grads[task_indices])
+                # update_task_params(logits[tasks_to_train.long()],
+                #                    grads[task_indices])
 
             # update task data
             tasks_trained.extend(tasks_to_train)
