@@ -21,16 +21,18 @@ class TaskGenerator(NoInput):
         choices = np.random.choice(
             self.task_size,
             size=num_samples,
-            replace=False,
+            replace=True,
             p=self.probs().detach().numpy())
         self.time_since_selected[choices] = 1
         self.counter[choices] += 1
         return choices
 
-    def probs(self):
-        exploration_bonus = torch.tensor(
+    def exploration_bonus(self):
+        return torch.tensor(
             np.sqrt(np.log(self.time_since_selected) / self.counter),
             dtype=torch.float)
+
+    def probs(self):
         return Categorical(
             logits=self.temperature * self.weight).probs.view(-1)
 
