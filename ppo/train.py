@@ -63,7 +63,6 @@ def train(num_frames,
     train_tasks = tasks_args is not None
     sample_env = make_env(seed=seed, rank=0, evaluation=False).unwrapped
     num_tasks = sample_env.task_space.n
-    num_processes = num_tasks
 
     if log_dir:
         plt.switch_backend('agg')
@@ -173,8 +172,8 @@ def train(num_frames,
     for j in updates:
 
         if train_tasks:
-            # tasks = gan.sample(num_processes)
-            tasks = np.arange(num_processes)
+            tasks = gan.sample(num_processes)
+            # tasks = np.arange(num_processes)
             for i, task in enumerate(tasks):
                 envs.unwrapped.set_task_dist(i, onehot(task, num_tasks))
 
@@ -204,9 +203,6 @@ def train(num_frames,
             if train_tasks:
                 tasks = torch.tensor(envs.unwrapped.get_tasks())
                 importance_weights = gan.importance_weight(tasks)
-                print('logits', gan.weight)
-                print('probs', gan.probs())
-                print('importance', importance_weights)
                 rollouts.insert(
                     obs=obs,
                     recurrent_hidden_states=recurrent_hidden_states,
