@@ -21,16 +21,16 @@ def global_norm(grads):
     norm = 0
     for grad in grads:
         if grad is not None:
-            norm += grad.norm(2) ** 2
-    return norm ** .5
+            norm += grad.norm(2)**2
+    return norm**.5
 
 
 def epanechnikov_kernel(x):
-    return 3 / 4 * (1 - x ** 2)
+    return 3 / 4 * (1 - x**2)
 
 
 def gaussian_kernel(x):
-    return (2 * math.pi) ** -.5 * torch.exp(-.5 * x ** 2)
+    return (2 * math.pi)**-.5 * torch.exp(-.5 * x**2)
 
 
 SamplingStrategy = Enum(
@@ -122,7 +122,7 @@ class PPO:
     def update(self, rollouts: RolloutStorage):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         advantages = (advantages - advantages.mean()) / (
-                advantages.std() + 1e-5)
+            advantages.std() + 1e-5)
         update_values = Counter()
         task_values = Counter()
 
@@ -211,7 +211,7 @@ class PPO:
                 importance_weighting = 1 / (unique.numel() * probs)
 
             def update_task_params(logits_to_update, targets):
-                task_loss = torch.mean((logits_to_update - targets) ** 2)
+                task_loss = torch.mean((logits_to_update - targets)**2)
                 task_loss.backward()
                 self.task_optimizer.step()
                 update_values.update(task_loss=task_loss, )

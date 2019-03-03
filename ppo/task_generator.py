@@ -8,7 +8,7 @@ class TaskGenerator(NoInput):
     def __init__(self, task_size, learning_rate: float, entropy_coef: float,
                  temperature: float,
                  **kwargs):
-        super().__init__(task_size, gain=10)
+        super().__init__(task_size)
         self.learning_rate = learning_rate
         self.entropy_coef = entropy_coef
         self.task_size = task_size
@@ -22,7 +22,7 @@ class TaskGenerator(NoInput):
         choices = np.random.choice(
             self.task_size,
             size=num_samples,
-            replace=True,
+            replace=False,
             p=self.probs().detach().numpy())
         self.time_since_selected[choices] = 1
         self.counter[choices] += 1
