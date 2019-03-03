@@ -158,9 +158,16 @@ def train(num_frames,
     if train_tasks:
         gan.to(device)
 
+    if train_tasks:
+        tasks = gan.sample(num_processes)
+        # tasks = np.arange(num_processes)
+        for i, task in enumerate(tasks):
+            envs.unwrapped.set_task_dist(i, onehot(task, num_tasks))
+
     obs = envs.reset()
     rollouts.obs[0].copy_(obs)
     rollouts.to(device)
+
     if train_tasks:
         tasks = torch.tensor(envs.unwrapped.get_tasks())
         importance_weights = gan.importance_weight(tasks)
@@ -170,12 +177,6 @@ def train(num_frames,
 
     start = time.time()
     for j in updates:
-
-        if train_tasks:
-            tasks = gan.sample(num_processes)
-            # tasks = np.arange(num_processes)
-            for i, task in enumerate(tasks):
-                envs.unwrapped.set_task_dist(i, onehot(task, num_tasks))
 
         for step in range(num_steps):
             # Sample actions.add_argument_group('env_args')
@@ -235,6 +236,11 @@ def train(num_frames,
 
         train_results, task_stuff = agent.update(rollouts)
         if train_tasks:
+            tasks = gan.sample(num_processes)
+            # tasks = np.arange(num_processes)
+            for i, task in enumerate(tasks):
+                envs.unwrapped.set_task_dist(i, onehot(task, num_tasks))
+
             tasks_trained, task_returns, gradient_sums = task_stuff
             tasks_trained = sample_env.task_states[tasks_trained.int().numpy()]
             tasks_data.extend(
