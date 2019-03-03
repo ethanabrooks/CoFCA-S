@@ -1,13 +1,14 @@
 # stdlib
 # third party
 # first party
-import math
 from collections import Counter
 from enum import Enum
+import math
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
+
 from ppo.storage import RolloutStorage, TasksRolloutStorage
 from ppo.util import Categorical
 
@@ -192,25 +193,25 @@ class PPO:
                 # tasks_to_train = unique
                 # task_indices = torch.arange(unique.numel())
                 dist = Categorical(logits=logits.repeat(self.num_processes, 1))
-                tasks_to_train = dist.sample().view(-1)
-                task_indices = (unique.long() == tasks_to_train
-                                ).view(-1).nonzero().view(-1)
+                tasks_to_train = dist.sample().view(-1).float()
+                task_indices = (
+                    unique == tasks_to_train).view(-1).nonzero().view(-1)
             else:
                 dist = Categorical(logits=logits.repeat(self.num_processes, 1))
                 task_indices = dist.sample().view(-1).long()
                 tasks_to_train = unique[task_indices]
 
             # make sample
-            uses_task = (batches.tasks.long() == tasks_to_train).any(-1)
+            uses_task = (batches.tasks == tasks_to_train).any(-1)
             train_indices = torch.arange(total_batch_size)[uses_task]
             sample = rollouts.make_batch(advantages, train_indices)
 
             task_to_train_index = torch.argmax(
-                sample.tasks.long() == tasks_to_train, dim=-1, keepdim=True)
+                sample.tasks == tasks_to_train, dim=-1, keepdim=True)
             if self.sampling_strategy == SamplingStrategy.learn_sampled.name:
                 # importance_weighting = sample.importance_weighting
-                probs = dist.log_prob(tasks_to_train).exp()[
-                    task_to_train_index]
+                probs = dist.log_prob(
+                    tasks_to_train).exp()[task_to_train_index]
             else:
                 probs = dist.log_prob(task_indices).exp()[task_to_train_index]
             importance_weighting = 1 / (unique.numel() * probs)
@@ -228,7 +229,8 @@ class PPO:
                 update_task_params(logits, grads)
             elif self.sampling_strategy == SamplingStrategy.learn_sampled.name:
                 logits = self.task_generator.parameter
-                update_task_params(logits[tasks_to_train], grads[task_indices])
+                update_task_params(logits[tasks_to_train.long()],
+                                   grads[task_indices])
 
             # update task data
             tasks_trained.extend(tasks_to_train)
