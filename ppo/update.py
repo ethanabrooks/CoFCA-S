@@ -1,9 +1,9 @@
 # stdlib
 # third party
 # first party
-import math
 from collections import Counter
 from enum import Enum
+import math
 
 import torch
 import torch.nn as nn
@@ -214,10 +214,7 @@ class PPO:
                 task_loss = torch.mean((logits_to_update - targets)**2)
                 task_loss.backward()
                 self.task_optimizer.step()
-                mean_abs_task_error = torch.mean(torch.abs(logits - grads))
-                update_values.update(
-                    task_loss=task_loss,
-                    mean_abs_task_error=mean_abs_task_error)
+                update_values.update(task_loss=task_loss, )
 
             if self.sampling_strategy == SamplingStrategy.learned.name:
                 update_task_params(logits, grads)
@@ -225,7 +222,7 @@ class PPO:
                 task_grads.extend(grads[task_indices])
             elif self.sampling_strategy == SamplingStrategy.learn_sampled.name:
                 logits = self.task_generator.parameter
-                update_task_params(logits, grads)
+                update_task_params(logits[unique.long()], grads)
                 task_returns.extend(returns)
                 task_grads.extend(grads)
 
