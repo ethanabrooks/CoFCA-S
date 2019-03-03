@@ -6,13 +6,14 @@ from ppo.util import Categorical, NoInput
 
 class TaskGenerator(NoInput):
     def __init__(self, task_size, learning_rate: float, entropy_coef: float,
+                 temperature: float,
                  **kwargs):
         super().__init__(task_size)
         self.learning_rate = learning_rate
         self.entropy_coef = entropy_coef
         self.task_size = task_size
         self.softmax = torch.nn.Softmax(dim=-1)
-        self.temperature = 10
+        self.temperature = temperature
         self.counter = np.ones(task_size)
         self.time_since_selected = np.ones(task_size)
 

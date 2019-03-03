@@ -135,10 +135,6 @@ def build_parser():
         default=0.5,
         help='max norm of gradients (default: 0.5)')
     ppo_parser.add_argument(
-        '--temperature',
-        type=float,
-    )
-    ppo_parser.add_argument(
         '--global-norm',
         action='store_true',
     )
@@ -158,6 +154,10 @@ def add_hsr_args(parser):
 
 def add_tasks_args(parser):
     tasks_parser = parser.add_argument_group('tasks_args')
+    tasks_parser.add_argument(
+        '--temperature',
+        type=float,
+    )
     tasks_parser.add_argument(
         '--gan-learning-rate',
         type=float,

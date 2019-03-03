@@ -46,7 +46,6 @@ class PPO:
                  batch_size,
                  value_loss_coef,
                  entropy_coef,
-                 temperature,
                  sampling_strategy,
                  global_norm,
                  learning_rate=None,
@@ -57,7 +56,6 @@ class PPO:
 
         self.global_norm = global_norm
         self.sampling_strategy = sampling_strategy
-        self.temperature = temperature
         self.train_tasks = bool(task_generator)
         self.actor_critic = actor_critic
 
@@ -168,21 +166,21 @@ class PPO:
             if self.sampling_strategy == SamplingStrategy.baseline.name:
                 logits = torch.ones_like(grads)
             elif self.sampling_strategy == SamplingStrategy.binary_logits.name:
-                logits = torch.ones_like(grads) * -self.temperature
+                logits = torch.ones_like(
+                    grads) * -self.task_generator.temperature
                 sorted_grads, _ = torch.sort(grads)
                 mid_grad = sorted_grads[grads.numel() // 4]
-                logits[grads > mid_grad] = self.temperature
+                logits[grads > mid_grad] = self.task_generator.temperature
             elif self.sampling_strategy == SamplingStrategy.gradients.name:
-                logits = grads * self.temperature
+                logits = grads * self.task_generator.temperature
             elif self.sampling_strategy == SamplingStrategy.max.name:
-                logits = torch.ones_like(grads) * -self.temperature
-                logits[grads.argmax()] = self.temperature
+                logits = torch.ones_like(
+                    grads) * -self.task_generator.temperature
+                logits[grads.argmax()] = self.task_generator.temperature
             elif self.sampling_strategy == SamplingStrategy.learned.name:
-                logits = self.task_generator.parameter * self.temperature
+                logits = self.task_generator.parameter * self.task_generator.temperature
             elif self.sampling_strategy == SamplingStrategy.learn_sampled.name:
-                logits = (
-                    self.task_generator.parameter +
-                    self.task_generator.exploration_bonus()) * self.temperature
+                logits = self.task_generator.parameter * self.task_generator.temperature
             else:
                 raise RuntimeError
 
