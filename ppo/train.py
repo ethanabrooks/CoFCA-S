@@ -15,27 +15,26 @@ from ppo.update import PPO
 from utils import onehot, space_to_size
 
 
-def train(
-        num_frames,
-        num_steps,
-        seed,
-        cuda_deterministic,
-        cuda,
-        log_dir: Path,
-        make_env,
-        gamma,
-        normalize,
-        save_interval,
-        load_path,
-        log_interval,
-        eval_interval,
-        use_gae,
-        tau,
-        ppo_args,
-        network_args,
-        num_processes,
-        synchronous,
-        tasks_args=None):
+def train(num_frames,
+          num_steps,
+          seed,
+          cuda_deterministic,
+          cuda,
+          log_dir: Path,
+          make_env,
+          gamma,
+          normalize,
+          save_interval,
+          load_path,
+          log_interval,
+          eval_interval,
+          use_gae,
+          tau,
+          ppo_args,
+          network_args,
+          num_processes,
+          synchronous,
+          tasks_args=None):
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
 
@@ -117,7 +116,7 @@ def train(
             obs_shape=envs.observation_space.shape,
             action_space=envs.action_space,
             recurrent_hidden_state_size=actor_critic.
-                recurrent_hidden_state_size,
+            recurrent_hidden_state_size,
             task_size=task_size)
 
     else:
@@ -127,7 +126,7 @@ def train(
             obs_shape=envs.observation_space.shape,
             action_space=envs.action_space,
             recurrent_hidden_state_size=actor_critic.
-                recurrent_hidden_state_size,
+            recurrent_hidden_state_size,
         )
 
     agent = PPO(actor_critic=actor_critic, task_generator=gan, **ppo_args)
@@ -159,9 +158,16 @@ def train(
     if train_tasks:
         gan.to(device)
 
+    if train_tasks:
+        tasks = gan.sample(num_processes)
+        # tasks = np.arange(num_processes)
+        for i, task in enumerate(tasks):
+            envs.unwrapped.set_task_dist(i, onehot(task, num_tasks))
+
     obs = envs.reset()
     rollouts.obs[0].copy_(obs)
     rollouts.to(device)
+
     if train_tasks:
         tasks = torch.tensor(envs.unwrapped.get_tasks())
         importance_weights = gan.importance_weight(tasks)
@@ -171,11 +177,6 @@ def train(
 
     start = time.time()
     for j in updates:
-
-        if train_tasks:
-            tasks = gan.sample(num_processes)
-            for i, task in enumerate(tasks):
-                envs.unwrapped.set_task_dist(i, onehot(task, num_tasks))
 
         for step in range(num_steps):
             # Sample actions.add_argument_group('env_args')
@@ -235,6 +236,11 @@ def train(
 
         train_results, task_stuff = agent.update(rollouts)
         if train_tasks:
+            tasks = gan.sample(num_processes)
+            # tasks = np.arange(num_processes)
+            for i, task in enumerate(tasks):
+                envs.unwrapped.set_task_dist(i, onehot(task, num_tasks))
+
             tasks_trained, task_returns, gradient_sums = task_stuff
             tasks_trained = sample_env.task_states[tasks_trained.int().numpy()]
             tasks_data.extend(
@@ -249,8 +255,8 @@ def train(
         total_num_steps = (j + 1) * num_processes * num_steps
 
         if all(
-                [log_dir, save_interval,
-                 time.time() - last_save >= save_interval]):
+            [log_dir, save_interval,
+             time.time() - last_save >= save_interval]):
             last_save = time.time()
             modules = dict(
                 optimizer=agent.optimizer,
@@ -304,7 +310,11 @@ def train(
                         x_noise = (np.random.rand(len(x)) - .5) * .9
                         y_noise = (np.random.rand(len(y)) - .5) * .9
                         sc = plt.scatter(
-                            x + x_noise, y + y_noise, c=c, cmap=cm.hot, alpha=.1)
+                            x + x_noise,
+                            y + y_noise,
+                            c=c,
+                            cmap=cm.hot,
+                            alpha=.1)
                         plt.colorbar(sc)
                         axes = plt.axes()
                         axes.set_xlim(-.5, xlim - .5)
@@ -315,7 +325,8 @@ def train(
 
                     fig = plt.figure()
                     probs = np.zeros(sample_env.desc.shape)
-                    probs[sample_env.decode(sample_env.task_states)] = gan.probs().detach()
+                    probs[sample_env.decode(
+                        sample_env.task_states)] = gan.probs().detach()
                     im = plt.imshow(probs, origin='lower')
                     plt.colorbar(im)
                     writer.add_figure('probs', fig, total_num_steps)
