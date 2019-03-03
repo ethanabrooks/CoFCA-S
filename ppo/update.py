@@ -142,35 +142,57 @@ class PPO:
 
         # tasks_to_train = unique
         # task_indices = torch.arange(unique.numel())
-        if self.sampling_strategy == SamplingStrategy.learn_sampled.name:
-            dist = Categorical(logits=self.task_generator.weight.repeat(1, 1))
+        learn_sampled = self.sampling_strategy == SamplingStrategy.learn_sampled.name
+        if learn_sampled:
+            dist = self.task_generator.sample(1)
             tasks_to_train = dist.sample().view(-1).float()
             task_indices = (
-                    unique == tasks_to_train).view(-1).nonzero().view(-1)
+                unique == tasks_to_train).view(-1).nonzero().view(-1)
 
         for e in range(self.ppo_epoch):
             assert isinstance(rollouts, TasksRolloutStorage)
             _, action_losses, _ = self.compute_loss_components(
                 batches, compute_value_loss=False)
-            grads = torch.zeros(unique.size()[0])
-            for i, task in enumerate(unique):
-                action_loss = action_losses[batches.tasks == task]
-                loss = self.compute_loss(
-                    action_loss=action_loss,
-                    dist_entropy=0,
-                    value_loss=None,
-                    importance_weighting=None)
-                grad = torch.autograd.grad(
-                    loss,
-                    self.actor_critic.parameters(),
-                    retain_graph=True,
-                    allow_unused=True)
-                if self.global_norm:
-                    grads[i] = global_norm(
-                        [p.grad for p in self.actor_critic.parameters()])
-                else:
-                    grads[i] = sum(
-                        g.abs().sum() for g in grad if g is not None)
+            if learn_sampled:
+                grads = torch.zeros(tasks_to_train.size()[0])
+                for i, task in enumerate(tasks_to_train):
+                    action_loss = action_losses[batches.tasks == task]
+                    loss = self.compute_loss(
+                        action_loss=action_loss,
+                        dist_entropy=0,
+                        value_loss=None,
+                        importance_weighting=None)
+                    grad = torch.autograd.grad(
+                        loss,
+                        self.actor_critic.parameters(),
+                        retain_graph=True,
+                        allow_unused=True)
+                    if self.global_norm:
+                        grads[i] = global_norm(
+                            [p.grad for p in self.actor_critic.parameters()])
+                    else:
+                        grads[i] = sum(
+                            g.abs().sum() for g in grad if g is not None)
+            else:
+                grads = torch.zeros(unique.size()[0])
+                for i, task in enumerate(unique):
+                    action_loss = action_losses[batches.tasks == task]
+                    loss = self.compute_loss(
+                        action_loss=action_loss,
+                        dist_entropy=0,
+                        value_loss=None,
+                        importance_weighting=None)
+                    grad = torch.autograd.grad(
+                        loss,
+                        self.actor_critic.parameters(),
+                        retain_graph=True,
+                        allow_unused=True)
+                    if self.global_norm:
+                        grads[i] = global_norm(
+                            [p.grad for p in self.actor_critic.parameters()])
+                    else:
+                        grads[i] = sum(
+                            g.abs().sum() for g in grad if g is not None)
 
             if self.sampling_strategy == SamplingStrategy.baseline.name:
                 logits = torch.ones_like(grads)
@@ -188,13 +210,11 @@ class PPO:
                 logits[grads.argmax()] = self.task_generator.temperature
             elif self.sampling_strategy == SamplingStrategy.learned.name:
                 logits = self.task_generator.parameter * self.task_generator.temperature
-            elif self.sampling_strategy == SamplingStrategy.learn_sampled.name:
-                pass
-            else:
+            elif not learn_sampled:
                 raise RuntimeError
 
             # sample tasks
-            if self.sampling_strategy != SamplingStrategy.learn_sampled.name:
+            if not learn_sampled:
                 dist = Categorical(logits=logits.repeat(1, 1))
                 task_indices = dist.sample().view(-1).long()
                 tasks_to_train = unique[task_indices]
@@ -206,7 +226,7 @@ class PPO:
 
             task_to_train_index = torch.argmax(
                 sample.tasks == tasks_to_train, dim=-1, keepdim=True)
-            if self.sampling_strategy == SamplingStrategy.learn_sampled.name:
+            if learn_sampled:
                 importance_weighting = sample.importance_weighting
             else:
                 probs = dist.log_prob(task_indices).exp()[task_to_train_index]
@@ -223,15 +243,17 @@ class PPO:
 
             if self.sampling_strategy == SamplingStrategy.learned.name:
                 update_task_params(logits, grads)
-            elif self.sampling_strategy == SamplingStrategy.learn_sampled.name:
+            elif learn_sampled:
                 logits = self.task_generator.parameter
-                update_task_params(logits[tasks_to_train.long()],
-                                   grads[task_indices])
+                update_task_params(logits[tasks_to_train.long()], grads)
 
             # update task data
-            tasks_trained.extend(tasks_to_train)
-            task_returns.extend(returns[task_indices])
-            task_grads.extend(grads[task_indices])
+            if learn_sampled:
+                task_grads.extend(grads)
+            else:
+                tasks_trained.extend(tasks_to_train)
+                task_returns.extend(returns[task_indices])
+                task_grads.extend(grads[task_indices])
 
             # Compute loss
             value_losses, action_losses, entropy \
@@ -272,8 +294,12 @@ class PPO:
                 update_values[k] = torch.mean(v) / n
 
         if self.train_tasks:
-            return update_values, (torch.tensor(tasks_trained),
-                                   torch.tensor(task_returns),
-                                   torch.tensor(task_grads))
+            if learn_sampled:
+                return update_values, (tasks_to_train, returns,
+                                       torch.tensor(task_grads))
+            else:
+                return update_values, (torch.tensor(tasks_trained),
+                                       torch.tensor(task_returns),
+                                       torch.tensor(task_grads))
         else:
             return update_values, None
