@@ -1,17 +1,17 @@
 import itertools
-import time
 from pathlib import Path
+import time
 
-import numpy as np
 from gym.spaces import Discrete
-
+import numpy as np
+from tensorboardX import SummaryWriter
 import torch
+
 from ppo.envs import VecNormalize, make_vec_envs
 from ppo.policy import Policy
 from ppo.storage import RolloutStorage, TasksRolloutStorage
 from ppo.task_generator import TaskGenerator
 from ppo.update import PPO
-from tensorboardX import SummaryWriter
 from utils import onehot, space_to_size
 
 
@@ -63,7 +63,10 @@ def train(num_frames,
     train_tasks = tasks_args is not None
     sample_env = make_env(seed=seed, rank=0, evaluation=False).unwrapped
     num_tasks = sample_env.task_space.n
-    num_processes = num_tasks
+    if train_tasks:
+        num_processes = 1
+    else:
+        num_processes = num_tasks
 
     if log_dir:
         plt.switch_backend('agg')
@@ -104,8 +107,11 @@ def train(num_frames,
             **{k.replace('gan_', ''): v
                for k, v in tasks_args.items()})
 
-        # for i in range(num_processes):
-        #     envs.unwrapped.set_task_dist(gan.probs().detach().numpy())
+        tasks_to_train = torch.tensor(gan.sample(1), dtype=torch.float)
+        envs.unwrapped.set_task_dist(0, onehot(int(tasks_to_train), num_tasks))
+        for i in range(1, num_processes):
+            envs.unwrapped.set_task_dist(
+                i, onehot(int(tasks_to_train) + 1 % num_tasks, num_tasks))
 
         if isinstance(sample_env.task_space, Discrete):
             task_size = 1
@@ -172,12 +178,6 @@ def train(num_frames,
     start = time.time()
     for j in updates:
 
-        if train_tasks:
-            # tasks = gan.sample(num_processes)
-            tasks = np.arange(num_processes)
-            for i, task in enumerate(tasks):
-                envs.unwrapped.set_task_dist(i, onehot(task, num_tasks))
-
         for step in range(num_steps):
             # Sample actions.add_argument_group('env_args')
             with torch.no_grad():
@@ -234,9 +234,6 @@ def train(num_frames,
         rollouts.compute_returns(
             next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau)
 
-        tasks_to_train = None
-        if agent.sampling_strategy == 'learn_sampled':
-            tasks_to_train = torch.tensor(gan.sample(1), dtype=torch.float)
         train_results, task_stuff = agent.update(
             rollouts, tasks_to_train=tasks_to_train)
         if train_tasks:
@@ -247,8 +244,13 @@ def train(num_frames,
                  for x, y, r, g in zip(*sample_env.decode(tasks_trained),
                                        task_returns, gradient_sums)])
 
-            # for i in range(num_processes):
-            #     envs.unwrapped.set_task_dist(gan.probs().detach().numpy())
+        if train_tasks:
+            tasks_to_train = torch.tensor(gan.sample(1), dtype=torch.float)
+            envs.unwrapped.set_task_dist(
+                0, onehot(int(tasks_to_train), num_tasks))
+            for i in range(1, num_processes):
+                envs.unwrapped.set_task_dist(
+                    i, onehot(int(tasks_to_train) + 1 % num_tasks, num_tasks))
 
         rollouts.after_update()
         total_num_steps = (j + 1) * num_processes * num_steps
