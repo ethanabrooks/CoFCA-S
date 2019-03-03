@@ -49,14 +49,12 @@ class PPO:
                  temperature,
                  sampling_strategy,
                  global_norm,
-                 num_processes,
                  learning_rate=None,
                  eps=None,
                  max_grad_norm=None,
                  use_clipped_value_loss=True,
                  task_generator=None):
 
-        self.num_processes = torch.tensor(num_processes, dtype=torch.long)
         self.global_norm = global_norm
         self.sampling_strategy = sampling_strategy
         self.temperature = temperature
@@ -192,12 +190,12 @@ class PPO:
             if self.sampling_strategy == SamplingStrategy.learn_sampled.name:
                 # tasks_to_train = unique
                 # task_indices = torch.arange(unique.numel())
-                dist = Categorical(logits=logits.repeat(self.num_processes, 1))
+                dist = Categorical(logits=logits.repeat(num_processes, 1))
                 tasks_to_train = dist.sample().view(-1).float()
                 task_indices = (
                     unique == tasks_to_train).view(-1).nonzero().view(-1)
             else:
-                dist = Categorical(logits=logits.repeat(self.num_processes, 1))
+                dist = Categorical(logits=logits.repeat(num_processes, 1))
                 task_indices = dist.sample().view(-1).long()
                 tasks_to_train = unique[task_indices]
 
