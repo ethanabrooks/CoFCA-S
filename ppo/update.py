@@ -131,21 +131,30 @@ class PPO:
         task_returns = []
         task_grads = []
 
+        num_steps, num_processes = rollouts.rewards.size()[0:2]
+        total_batch_size = num_steps * num_processes
+        batches = rollouts.make_batch(advantages,
+                                      torch.arange(total_batch_size))
+        unique = torch.unique(batches.tasks)
+        returns = torch.zeros(unique.size()[0])
+        for i, task in enumerate(unique):
+            returns[i] = torch.mean(batches.ret[batches.tasks == task])
+
+        # tasks_to_train = unique
+        # task_indices = torch.arange(unique.numel())
+        if self.sampling_strategy == SamplingStrategy.learn_sampled.name:
+            dist = Categorical(logits=self.task_generator.weight.repeat(1, 1))
+            tasks_to_train = dist.sample().view(-1).float()
+            task_indices = (
+                    unique == tasks_to_train).view(-1).nonzero().view(-1)
+
         for e in range(self.ppo_epoch):
             assert isinstance(rollouts, TasksRolloutStorage)
-
-            num_steps, num_processes = rollouts.rewards.size()[0:2]
-            total_batch_size = num_steps * num_processes
-            batches = rollouts.make_batch(advantages,
-                                          torch.arange(total_batch_size))
             _, action_losses, _ = self.compute_loss_components(
                 batches, compute_value_loss=False)
-            unique = torch.unique(batches.tasks)
             grads = torch.zeros(unique.size()[0])
-            returns = torch.zeros(unique.size()[0])
             for i, task in enumerate(unique):
                 action_loss = action_losses[batches.tasks == task]
-                returns[i] = torch.mean(batches.ret[batches.tasks == task])
                 loss = self.compute_loss(
                     action_loss=action_loss,
                     dist_entropy=0,
@@ -180,19 +189,12 @@ class PPO:
             elif self.sampling_strategy == SamplingStrategy.learned.name:
                 logits = self.task_generator.parameter * self.task_generator.temperature
             elif self.sampling_strategy == SamplingStrategy.learn_sampled.name:
-                logits = self.task_generator.parameter * self.task_generator.temperature
+                pass
             else:
                 raise RuntimeError
 
             # sample tasks
-            if self.sampling_strategy == SamplingStrategy.learn_sampled.name:
-                # tasks_to_train = unique
-                # task_indices = torch.arange(unique.numel())
-                dist = Categorical(logits=logits.repeat(1, 1))
-                tasks_to_train = dist.sample().view(-1).float()
-                task_indices = (
-                    unique == tasks_to_train).view(-1).nonzero().view(-1)
-            else:
+            if self.sampling_strategy != SamplingStrategy.learn_sampled.name:
                 dist = Categorical(logits=logits.repeat(1, 1))
                 task_indices = dist.sample().view(-1).long()
                 tasks_to_train = unique[task_indices]
