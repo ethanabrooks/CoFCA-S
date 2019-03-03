@@ -33,7 +33,7 @@ def train(
         tau,
         ppo_args,
         network_args,
-        # num_processes,
+        num_processes,
         synchronous,
         tasks_args=None):
     torch.manual_seed(seed)
