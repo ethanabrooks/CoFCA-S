@@ -1,17 +1,17 @@
 import itertools
-from pathlib import Path
 import time
+from pathlib import Path
 
-from gym.spaces import Discrete
 import numpy as np
-from tensorboardX import SummaryWriter
-import torch
+from gym.spaces import Discrete
 
+import torch
 from ppo.envs import VecNormalize, make_vec_envs
 from ppo.policy import Policy
 from ppo.storage import RolloutStorage, TasksRolloutStorage
 from ppo.task_generator import TaskGenerator
 from ppo.update import PPO
+from tensorboardX import SummaryWriter
 from utils import onehot, space_to_size
 
 
@@ -234,7 +234,11 @@ def train(num_frames,
         rollouts.compute_returns(
             next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau)
 
-        train_results, task_stuff = agent.update(rollouts)
+        tasks_to_train = None
+        if agent.sampling_strategy == 'learn_sampled':
+            tasks_to_train = torch.tensor(gan.sample(1), dtype=torch.float)
+        train_results, task_stuff = agent.update(
+            rollouts, tasks_to_train=tasks_to_train)
         if train_tasks:
             tasks_trained, task_returns, gradient_sums = task_stuff
             tasks_trained = sample_env.task_states[tasks_trained.int().numpy()]

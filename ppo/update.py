@@ -1,14 +1,13 @@
 # stdlib
 # third party
 # first party
+import math
 from collections import Counter
 from enum import Enum
-import math
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
-
 from ppo.storage import RolloutStorage, TasksRolloutStorage
 from ppo.util import Categorical
 
@@ -119,7 +118,7 @@ class PPO:
             losses *= importance_weighting
         return torch.mean(losses)
 
-    def update(self, rollouts: RolloutStorage):
+    def update(self, rollouts: RolloutStorage, tasks_to_train=None):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         advantages = (advantages - advantages.mean()) / (
             advantages.std() + 1e-5)
@@ -144,7 +143,7 @@ class PPO:
         # task_indices = torch.arange(unique.numel())
         learn_sampled = self.sampling_strategy == SamplingStrategy.learn_sampled.name
         if learn_sampled:
-            tasks_to_train = self.task_generator.sample(1)
+            assert tasks_to_train is not None
             task_indices = (
                 unique == tasks_to_train).view(-1).nonzero().view(-1)
 
