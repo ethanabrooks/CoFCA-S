@@ -1,14 +1,13 @@
 # stdlib
 # third party
 # first party
+import math
 from collections import Counter
 from enum import Enum
-import math
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
-
 from ppo.storage import RolloutStorage, TasksRolloutStorage
 from ppo.util import Categorical
 
@@ -210,8 +209,8 @@ class PPO:
                 sample.tasks.long() == tasks_to_train, dim=-1, keepdim=True)
             if self.sampling_strategy == SamplingStrategy.learn_sampled.name:
                 # importance_weighting = sample.importance_weighting
-                probs = dist.log_prob(
-                    tasks_to_train).exp()[task_to_train_index]
+                probs = dist.log_prob(tasks_to_train).exp()[
+                    task_to_train_index]
             else:
                 probs = dist.log_prob(task_indices).exp()[task_to_train_index]
             importance_weighting = 1 / (unique.numel() * probs)
