@@ -234,7 +234,10 @@ def train(num_frames,
         rollouts.compute_returns(
             next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau)
 
-        train_results, task_stuff = agent.update(rollouts)
+        tasks_to_train = None
+        if agent.sampling_strategy == 'learn_sampled':
+            tasks_to_train = gan.sample(1)
+        train_results, task_stuff = agent.update(rollouts, tasks_to_train=tasks_to_train)
         if train_tasks:
             tasks_trained, task_returns, gradient_sums = task_stuff
             tasks_trained = sample_env.task_states[tasks_trained.int().numpy()]
