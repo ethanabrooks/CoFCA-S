@@ -144,7 +144,7 @@ class PPO:
         # task_indices = torch.arange(unique.numel())
         learn_sampled = self.sampling_strategy == SamplingStrategy.learn_sampled.name
         if learn_sampled:
-            dist = self.task_generator.sample(1)
+            dist = Categorical(logits=self.task_generator.weight.repeat(1, 1))
             tasks_to_train = dist.sample().view(-1).float()
             task_indices = (
                 unique == tasks_to_train).view(-1).nonzero().view(-1)
