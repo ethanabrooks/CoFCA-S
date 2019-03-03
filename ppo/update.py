@@ -205,12 +205,10 @@ class PPO:
             task_to_train_index = torch.argmax(
                 sample.tasks == tasks_to_train, dim=-1, keepdim=True)
             if self.sampling_strategy == SamplingStrategy.learn_sampled.name:
-                # importance_weighting = sample.importance_weighting
-                probs = dist.log_prob(
-                    tasks_to_train).exp()[task_to_train_index]
+                importance_weighting = sample.importance_weighting
             else:
                 probs = dist.log_prob(task_indices).exp()[task_to_train_index]
-            importance_weighting = 1 / (unique.numel() * probs)
+                importance_weighting = 1 / (unique.numel() * probs)
 
             def update_task_params(logits_to_update, targets):
                 task_loss = torch.mean((logits_to_update - targets)**2)

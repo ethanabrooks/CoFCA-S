@@ -204,9 +204,9 @@ def train(num_frames,
             if train_tasks:
                 tasks = torch.tensor(envs.unwrapped.get_tasks())
                 importance_weights = gan.importance_weight(tasks)
-                # print('logits', gan.weight)
-                # print('probs', gan.probs())
-                # print('importance', importance_weights)
+                print('logits', gan.weight)
+                print('probs', gan.probs())
+                print('importance', importance_weights)
                 rollouts.insert(
                     obs=obs,
                     recurrent_hidden_states=recurrent_hidden_states,
