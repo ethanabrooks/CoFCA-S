@@ -8,7 +8,6 @@ from enum import Enum
 import torch
 import torch.nn as nn
 import torch.optim as optim
-
 from ppo.storage import RolloutStorage, TasksRolloutStorage
 from ppo.util import Categorical
 
