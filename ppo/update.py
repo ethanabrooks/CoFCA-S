@@ -121,8 +121,8 @@ class PPO:
 
     def update(self, rollouts: RolloutStorage, tasks_to_train, num_tasks):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
-        advantages = (advantages - advantages.mean()) / (
-            advantages.std() + 1e-5)
+        advantages = (advantages - advantages[:, :1].mean()) / (
+            advantages[:, :1].std() + 1e-5)
         update_values = Counter()
         task_values = Counter()
 
@@ -136,10 +136,9 @@ class PPO:
         batches = rollouts.make_batch(advantages,
                                       torch.arange(total_batch_size))
         if self.sampling_strategy == SamplingStrategy.learn_sampled.name:
-            sample = rollouts.make_batch(
-                advantages,
-                torch.arange(total_batch_size)[batches.tasks.view(-1) ==
-                                               tasks_to_train])
+            idx = torch.arange(total_batch_size)[batches.tasks.view(-1) ==
+                                                 tasks_to_train]
+            batches = sample = rollouts.make_batch(advantages, idx)
         returns = torch.zeros(tasks_to_train.size()[0])
         for i, task in enumerate(tasks_to_train):
             returns[i] = torch.mean(batches.ret[batches.tasks == task])
