@@ -21,16 +21,16 @@ def global_norm(grads):
     norm = 0
     for grad in grads:
         if grad is not None:
-            norm += grad.norm(2)**2
-    return norm**.5
+            norm += grad.norm(2) ** 2
+    return norm ** .5
 
 
 def epanechnikov_kernel(x):
-    return 3 / 4 * (1 - x**2)
+    return 3 / 4 * (1 - x ** 2)
 
 
 def gaussian_kernel(x):
-    return (2 * math.pi)**-.5 * torch.exp(-.5 * x**2)
+    return (2 * math.pi) ** -.5 * torch.exp(-.5 * x ** 2)
 
 
 SamplingStrategy = Enum(
@@ -122,7 +122,7 @@ class PPO:
     def update(self, rollouts: RolloutStorage):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         advantages = (advantages - advantages.mean()) / (
-            advantages.std() + 1e-5)
+                advantages.std() + 1e-5)
         update_values = Counter()
         task_values = Counter()
 
@@ -143,13 +143,20 @@ class PPO:
         # tasks_to_train = unique
         # task_indices = torch.arange(unique.numel())
         if self.sampling_strategy == SamplingStrategy.learn_sampled.name:
-            dist = Categorical(logits=self.task_generator.weight.repeat(self.ppo_epoch, 1))
+            dist = Categorical(
+                logits=self.task_generator.weight.repeat(self.ppo_epoch, 1))
+            tasks_to_train = dist.sample().float()
+            task_indices = (unique == tasks_to_train).nonzero()[:, 1]
+            tasks_to_train = tasks_to_train.view(-1)
+        elif self.sampling_strategy == SamplingStrategy.baseline.name:
+            logits = torch.ones_like(self.task_generator.weight).repeat(
+                self.ppo_epoch, 1)
+            dist = Categorical(logits=logits)
             tasks_to_train = dist.sample().float()
             task_indices = (unique == tasks_to_train).nonzero()[:, 1]
             tasks_to_train = tasks_to_train.view(-1)
 
         for e in range(self.ppo_epoch):
-            assert isinstance(rollouts, TasksRolloutStorage)
             _, action_losses, _ = self.compute_loss_components(
                 batches, compute_value_loss=False)
             grads = torch.zeros(unique.size()[0])
@@ -172,9 +179,7 @@ class PPO:
                     grads[i] = sum(
                         g.abs().sum() for g in grad if g is not None)
 
-            if self.sampling_strategy == SamplingStrategy.baseline.name:
-                logits = torch.ones_like(grads)
-            elif self.sampling_strategy == SamplingStrategy.binary_logits.name:
+            if self.sampling_strategy == SamplingStrategy.binary_logits.name:
                 logits = torch.ones_like(
                     grads) * -self.task_generator.temperature
                 sorted_grads, _ = torch.sort(grads)
@@ -188,13 +193,15 @@ class PPO:
                 logits[grads.argmax()] = self.task_generator.temperature
             elif self.sampling_strategy == SamplingStrategy.learned.name:
                 logits = self.task_generator.parameter * self.task_generator.temperature
-            elif self.sampling_strategy == SamplingStrategy.learn_sampled.name:
-                pass
-            else:
+            elif self.sampling_strategy not in [
+                SamplingStrategy.learn_sampled.name,
+                SamplingStrategy.baseline.name]:
                 raise RuntimeError
 
             # sample tasks
-            if self.sampling_strategy != SamplingStrategy.learn_sampled.name:
+            if self.sampling_strategy not in [
+                SamplingStrategy.learn_sampled.name,
+                SamplingStrategy.baseline.name]:
                 dist = Categorical(logits=logits.repeat(1, 1))
                 task_indices = dist.sample().view(-1).long()
                 tasks_to_train = unique[task_indices]
@@ -213,7 +220,7 @@ class PPO:
                 importance_weighting = 1 / (unique.numel() * probs)
 
             def update_task_params(logits_to_update, targets):
-                task_loss = torch.mean((logits_to_update - targets)**2)
+                task_loss = torch.mean((logits_to_update - targets) ** 2)
                 task_loss.backward()
                 self.task_optimizer.step()
                 mean_abs_task_error = torch.mean(torch.abs(logits - grads))
