@@ -135,7 +135,11 @@ class PPO:
         total_batch_size = num_steps * num_processes
         batches = rollouts.make_batch(advantages,
                                       torch.arange(total_batch_size))
-        unique = torch.arange(num_tasks, dtype=torch.float)
+        if self.sampling_strategy == SamplingStrategy.learn_sampled.name:
+            sample = rollouts.make_batch(
+                advantages,
+                torch.arange(total_batch_size)[batches.tasks.view(-1) ==
+                                               tasks_to_train])
         returns = torch.zeros(tasks_to_train.size()[0])
         for i, task in enumerate(tasks_to_train):
             returns[i] = torch.mean(batches.ret[batches.tasks == task])
@@ -145,6 +149,7 @@ class PPO:
         if self.sampling_strategy == SamplingStrategy.learn_sampled.name:
             task_indices = tasks_to_train.long()
         elif self.sampling_strategy == SamplingStrategy.baseline.name:
+            unique = torch.arange(num_tasks, dtype=torch.float)
             logits = torch.ones_like(self.task_generator.weight).repeat(
                 self.ppo_epoch, 1)
             dist = Categorical(logits=logits)
@@ -204,10 +209,10 @@ class PPO:
                 task_indices = dist.sample().view(-1).long()
                 tasks_to_train = unique[task_indices]
 
-            # make sample
-            uses_task = (batches.tasks == tasks_to_train).any(-1)
-            train_indices = torch.arange(total_batch_size)[uses_task]
-            sample = rollouts.make_batch(advantages, train_indices)
+                # make sample
+                uses_task = (batches.tasks == tasks_to_train).any(-1)
+                train_indices = torch.arange(total_batch_size)[uses_task]
+                sample = rollouts.make_batch(advantages, train_indices)
 
             if self.sampling_strategy == SamplingStrategy.learn_sampled.name:
                 importance_weighting = sample.importance_weighting
