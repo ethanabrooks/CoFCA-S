@@ -8,6 +8,7 @@ from enum import Enum
 import torch
 import torch.nn as nn
 import torch.optim as optim
+
 from ppo.storage import RolloutStorage, TasksRolloutStorage
 from ppo.util import Categorical
 
@@ -143,9 +144,8 @@ class PPO:
         # task_indices = torch.arange(unique.numel())
         if self.sampling_strategy == SamplingStrategy.learn_sampled.name:
             tasks_to_train = torch.tensor(
-                self.task_generator.sample(1), dtype=torch.float).view(1, 1)
-            task_indices = (unique == tasks_to_train).nonzero()[:, 1]
-            tasks_to_train = tasks_to_train.view(-1)
+                self.task_generator.sample(1), dtype=torch.float)
+            task_indices = tasks_to_train.long()
         elif self.sampling_strategy == SamplingStrategy.baseline.name:
             logits = torch.ones_like(self.task_generator.weight).repeat(
                 self.ppo_epoch, 1)
