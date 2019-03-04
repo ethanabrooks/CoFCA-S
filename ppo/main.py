@@ -190,6 +190,7 @@ def cli():
             args = gridworld_env.get_args(env_id)
             if max_episode_steps is not None:
                 args['max_episode_steps'] = max_episode_steps
+            max_episode_steps = args['max_episode_steps']
             args.update(no_task_in_obs=no_task_in_obs)
             make_env = make_env_fn(**args)
 
@@ -205,7 +206,7 @@ def cli():
 
             make_env = functools.partial(wrap_env, env_thunk=thunk)
 
-        train(make_env=make_env, **kwargs)
+        train(make_env=make_env, max_episode_steps=max_episode_steps, **kwargs)
 
     _train(**parse_groups(parser))
 
@@ -226,7 +227,11 @@ def tasks_cli():
         args.update(no_task_in_obs=no_task_in_obs)
         if max_episode_steps is not None or 'max_episode_steps' not in args:
             args['max_episode_steps'] = max_episode_steps
-        train(make_env=make_env_fn(**args), **kwargs)
+        max_episode_steps = args['max_episode_steps']
+        train(
+            make_env=make_env_fn(**args),
+            **kwargs,
+            max_episode_steps=max_episode_steps)
 
     _train(**parse_groups(parser))
 

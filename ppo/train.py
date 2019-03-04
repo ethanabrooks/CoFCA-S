@@ -33,6 +33,7 @@ def train(num_frames,
           ppo_args,
           network_args,
           num_processes,
+          max_episode_steps,
           synchronous,
           tasks_args=None):
     torch.manual_seed(seed)
@@ -352,7 +353,7 @@ def train(num_frames,
                 device=device)
             eval_masks = torch.zeros(num_tasks, 1, device=device)
 
-            for step in range(num_steps):
+            for step in range(max_episode_steps):
                 with torch.no_grad():
                     _, actions, _, eval_recurrent_hidden_states = actor_critic.act(
                         inputs=obs,
