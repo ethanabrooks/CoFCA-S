@@ -6,6 +6,7 @@ from gym.spaces import Discrete
 import numpy as np
 from tensorboardX import SummaryWriter
 import torch
+from torch.distributions import Categorical
 
 from ppo.envs import VecNormalize, make_vec_envs
 from ppo.policy import Policy
@@ -161,7 +162,11 @@ def train(num_frames,
         gan.to(device)
 
     if train_tasks:
-        tasks_to_train = torch.tensor(gan.sample(1), dtype=torch.float)
+        if agent.sampling_strategy == 'learn_sampled':
+            tasks_to_train = torch.tensor(gan.sample(1), dtype=torch.float)
+        else:
+            tasks_to_train = Categorical(
+                logits=torch.ones(num_tasks)).sample().float()
         task = int(tasks_to_train)
         envs.unwrapped.set_task_dist(0, onehot(task, num_tasks))
         for i in range(num_processes):
@@ -172,7 +177,10 @@ def train(num_frames,
     rollouts.to(device)
     if train_tasks:
         tasks = torch.tensor(envs.unwrapped.get_tasks())
-        importance_weights = gan.importance_weight(tasks)
+        if agent.sampling_strategy == 'learn_sampled':
+            importance_weights = gan.importance_weight(tasks)
+        else:
+            importance_weights = torch.ones_like(tasks)
         rollouts.tasks[0].copy_(tasks.view(rollouts.tasks[0].size()))
         rollouts.importance_weighting[0].copy_(
             importance_weights.view(rollouts.importance_weighting[0].size()))
@@ -204,7 +212,10 @@ def train(num_frames,
                 [[0.0] if done_ else [1.0] for done_ in dones])
             if train_tasks:
                 tasks = torch.tensor(envs.unwrapped.get_tasks())
-                importance_weights = gan.importance_weight(tasks)
+                if agent.sampling_strategy == 'learn_sampled':
+                    importance_weights = gan.importance_weight(tasks)
+                else:
+                    importance_weights = torch.ones_like(tasks)
                 for tens in [
                         obs, recurrent_hidden_states, actions,
                         action_log_probs, values, rewards, masks, tasks,
@@ -253,7 +264,12 @@ def train(num_frames,
                 [(x, y, r, g)
                  for x, y, r, g in zip(*sample_env.decode(tasks_trained),
                                        task_returns, gradient_sums)])
-            tasks_to_train = torch.tensor(gan.sample(1), dtype=torch.float)
+
+            if agent.sampling_strategy == 'learn_sampled':
+                tasks_to_train = torch.tensor(gan.sample(1), dtype=torch.float)
+            else:
+                tasks_to_train = Categorical(
+                    logits=torch.ones(num_tasks)).sample().float()
             task = int(tasks_to_train)
             envs.unwrapped.set_task_dist(0, onehot(task, num_tasks))
             for i in range(i, num_processes):
