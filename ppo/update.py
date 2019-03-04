@@ -118,7 +118,7 @@ class PPO:
             losses *= importance_weighting
         return torch.mean(losses)
 
-    def update(self, rollouts: RolloutStorage):
+    def update(self, rollouts: RolloutStorage, num_tasks):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         advantages = (advantages - advantages.mean()) / (
             advantages.std() + 1e-5)
@@ -134,7 +134,7 @@ class PPO:
         total_batch_size = num_steps * num_processes
         batches = rollouts.make_batch(advantages,
                                       torch.arange(total_batch_size))
-        unique = torch.unique(batches.tasks)
+        unique = torch.arange(num_tasks, dtype=torch.float)
         returns = torch.zeros(unique.size()[0])
         for i, task in enumerate(unique):
             returns[i] = torch.mean(batches.ret[batches.tasks == task])
