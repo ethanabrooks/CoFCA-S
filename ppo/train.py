@@ -164,7 +164,7 @@ def train(num_frames,
         tasks_to_train = torch.tensor(gan.sample(1), dtype=torch.float)
         task = int(tasks_to_train)
         envs.unwrapped.set_task_dist(0, onehot(task, num_tasks))
-        for i in range(num_tasks):
+        for i in range(num_processes):
             envs.unwrapped.set_task_dist(
                 i, onehot((task + i) % num_tasks, num_tasks))
     obs = envs.reset()
@@ -247,12 +247,12 @@ def train(num_frames,
             tasks_to_train = torch.tensor(gan.sample(1), dtype=torch.float)
             task = int(tasks_to_train)
             envs.unwrapped.set_task_dist(0, onehot(task, num_tasks))
-            for i in range(i, num_tasks):
+            for i in range(i, num_processes):
                 envs.unwrapped.set_task_dist(
                     i, onehot((task + i) % num_tasks, num_tasks))
 
         rollouts.after_update()
-        total_num_steps = (j + 1) * num_processes * num_steps
+        total_num_steps = (j + 1) * num_tasks * num_steps
 
         if all(
             [log_dir, save_interval,
