@@ -162,10 +162,10 @@ def train(num_frames,
     if train_tasks:
         tasks_to_train = torch.tensor(gan.sample(1), dtype=torch.float)
         task = int(tasks_to_train)
-        envs.unwrapped.set_task_dist(0, onehot(0, num_tasks))
+        envs.unwrapped.set_task_dist(0, onehot(task, num_tasks))
         for i in range(num_tasks):
             envs.unwrapped.set_task_dist(
-                i, onehot((0 + i) % num_tasks, num_tasks))
+                i, onehot((task + i) % num_tasks, num_tasks))
     obs = envs.reset()
     rollouts.obs[0].copy_(obs)
     rollouts.to(device)
@@ -245,10 +245,10 @@ def train(num_frames,
                                        task_returns, gradient_sums)])
             tasks_to_train = torch.tensor(gan.sample(1), dtype=torch.float)
             task = int(tasks_to_train)
-            envs.unwrapped.set_task_dist(0, onehot(0, num_tasks))
+            envs.unwrapped.set_task_dist(0, onehot(task, num_tasks))
             for i in range(i, num_tasks):
                 envs.unwrapped.set_task_dist(
-                    i, onehot((0 + i) % num_tasks, num_tasks))
+                    i, onehot((task + i) % num_tasks, num_tasks))
 
         rollouts.after_update()
         total_num_steps = (j + 1) * num_processes * num_steps
