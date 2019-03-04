@@ -1,17 +1,17 @@
 import itertools
-from pathlib import Path
 import time
+from pathlib import Path
 
-from gym.spaces import Discrete
 import numpy as np
-from tensorboardX import SummaryWriter
-import torch
+from gym.spaces import Discrete
 
+import torch
 from ppo.envs import VecNormalize, make_vec_envs
 from ppo.policy import Policy
 from ppo.storage import RolloutStorage, TasksRolloutStorage
 from ppo.task_generator import TaskGenerator
 from ppo.update import PPO
+from tensorboardX import SummaryWriter
 from utils import onehot, space_to_size
 
 
