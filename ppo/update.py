@@ -119,7 +119,7 @@ class PPO:
             losses *= importance_weighting
         return torch.mean(losses)
 
-    def update(self, rollouts: RolloutStorage, num_tasks):
+    def update(self, rollouts: RolloutStorage, tasks_to_train, num_tasks):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         advantages = (advantages - advantages.mean()) / (
             advantages.std() + 1e-5)
@@ -143,8 +143,6 @@ class PPO:
         # tasks_to_train = unique
         # task_indices = torch.arange(unique.numel())
         if self.sampling_strategy == SamplingStrategy.learn_sampled.name:
-            tasks_to_train = torch.tensor(
-                self.task_generator.sample(1), dtype=torch.float)
             task_indices = tasks_to_train.long()
         elif self.sampling_strategy == SamplingStrategy.baseline.name:
             logits = torch.ones_like(self.task_generator.weight).repeat(

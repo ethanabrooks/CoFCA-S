@@ -234,7 +234,9 @@ def train(num_frames,
         rollouts.compute_returns(
             next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau)
 
-        train_results, task_stuff = agent.update(rollouts, num_tasks)
+        tasks_to_train = torch.tensor(gan.sample(1), dtype=torch.float)
+        train_results, task_stuff = agent.update(rollouts, tasks_to_train,
+                num_tasks)
         if train_tasks:
             tasks_trained, task_returns, gradient_sums = task_stuff
             tasks_trained = sample_env.task_states[tasks_trained.int().numpy()]
