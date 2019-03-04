@@ -1,9 +1,9 @@
 # stdlib
 # third party
 # first party
-import math
 from collections import Counter
 from enum import Enum
+import math
 
 import torch
 import torch.nn as nn
@@ -136,8 +136,8 @@ class PPO:
         batches = rollouts.make_batch(advantages,
                                       torch.arange(total_batch_size))
         unique = torch.arange(num_tasks, dtype=torch.float)
-        returns = torch.zeros(unique.size()[0])
-        for i, task in enumerate(unique):
+        returns = torch.zeros(tasks_to_train.size()[0])
+        for i, task in enumerate(tasks_to_train):
             returns[i] = torch.mean(batches.ret[batches.tasks == task])
 
         # tasks_to_train = unique
@@ -155,8 +155,8 @@ class PPO:
         for e in range(self.ppo_epoch):
             _, action_losses, _ = self.compute_loss_components(
                 batches, compute_value_loss=False)
-            grads = torch.zeros(unique.size()[0])
-            for i, task in enumerate(unique):
+            grads = torch.zeros(tasks_to_train.size()[0])
+            for i, task in enumerate(tasks_to_train):
                 action_loss = action_losses[batches.tasks == task]
                 loss = self.compute_loss(
                     action_loss=action_loss,
@@ -209,11 +209,11 @@ class PPO:
             train_indices = torch.arange(total_batch_size)[uses_task]
             sample = rollouts.make_batch(advantages, train_indices)
 
-            task_to_train_index = torch.argmax(
-                sample.tasks == tasks_to_train, dim=-1, keepdim=True)
             if self.sampling_strategy == SamplingStrategy.learn_sampled.name:
                 importance_weighting = sample.importance_weighting
             else:
+                task_to_train_index = torch.argmax(
+                    sample.tasks == tasks_to_train, dim=-1, keepdim=True)
                 probs = dist.log_prob(task_indices).exp()[task_to_train_index]
                 importance_weighting = 1 / (unique.numel() * probs)
 
@@ -230,13 +230,12 @@ class PPO:
                 update_task_params(logits, grads)
             elif self.sampling_strategy == SamplingStrategy.learn_sampled.name:
                 logits = self.task_generator.parameter
-                update_task_params(logits[tasks_to_train.long()],
-                                   grads[task_indices])
+                update_task_params(logits[tasks_to_train.long()], grads)
 
             # update task data
             tasks_trained.extend(tasks_to_train)
-            task_returns.extend(returns[task_indices])
-            task_grads.extend(grads[task_indices])
+            task_returns.extend(returns)
+            task_grads.extend(grads)
 
             # Compute loss
             value_losses, action_losses, entropy \

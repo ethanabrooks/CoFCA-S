@@ -1,11 +1,11 @@
 import itertools
-import time
 from pathlib import Path
+import time
 
-import numpy as np
-import torch
 from gym.spaces import Discrete
+import numpy as np
 from tensorboardX import SummaryWriter
+import torch
 
 from ppo.envs import VecNormalize, make_vec_envs
 from ppo.policy import Policy
