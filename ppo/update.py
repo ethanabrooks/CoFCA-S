@@ -121,8 +121,8 @@ class PPO:
 
     def update(self, rollouts: RolloutStorage, tasks_to_train, num_tasks):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
-        advantages = (advantages - advantages[:, :1].mean()) / (
-            advantages[:, :1].std() + 1e-5)
+        # advantages = (advantages - advantages[:, :1].mean()) / (
+        # advantages[:, :1].std() + 1e-5)
         update_values = Counter()
         task_values = Counter()
 
