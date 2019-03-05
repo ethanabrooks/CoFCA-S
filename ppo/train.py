@@ -222,9 +222,9 @@ def train(num_frames,
                         importance_weights
                 ]:
                     try:
-                        tens[1:, :] = 1e10
+                        tens[1:, :] = 0
                     except IndexError:
-                        tens[1:] = 1e10
+                        tens[1:] = 0
                 rollouts.insert(
                     obs=obs,
                     recurrent_hidden_states=recurrent_hidden_states,
