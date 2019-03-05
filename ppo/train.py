@@ -65,7 +65,6 @@ def train(num_frames,
     train_tasks = tasks_args is not None
     sample_env = make_env(seed=seed, rank=0, evaluation=False).unwrapped
     num_tasks = sample_env.task_space.n
-    num_processes = num_tasks
 
     if log_dir:
         plt.switch_backend('agg')
@@ -163,15 +162,13 @@ def train(num_frames,
 
     if train_tasks:
         if agent.sampling_strategy == 'learn_sampled':
-            tasks_to_train = torch.tensor(gan.sample(1), dtype=torch.float)
+            tasks_to_train = torch.tensor(
+                gan.sample(num_processes), dtype=torch.float)
         else:
             tasks_to_train = Categorical(
-                logits=torch.ones(num_tasks)).sample().float()
-        task = int(tasks_to_train)
-        envs.unwrapped.set_task_dist(0, onehot(task, num_tasks))
-        for i in range(num_processes):
-            envs.unwrapped.set_task_dist(
-                i, onehot((task + i) % num_tasks, num_tasks))
+                logits=torch.ones(num_processes, num_tasks)).sample().float()
+        for i, task in enumerate(tasks_to_train):
+            envs.unwrapped.set_task_dist(i, onehot(int(task), num_tasks))
     obs = envs.reset()
     rollouts.obs[0].copy_(obs)
     rollouts.to(device)
@@ -257,15 +254,14 @@ def train(num_frames,
                                        task_returns, gradient_sums)])
 
             if agent.sampling_strategy == 'learn_sampled':
-                tasks_to_train = torch.tensor(gan.sample(1), dtype=torch.float)
+                tasks_to_train = torch.tensor(
+                    gan.sample(num_processes), dtype=torch.float)
             else:
                 tasks_to_train = Categorical(
-                    logits=torch.ones(num_tasks)).sample().float()
-            task = int(tasks_to_train)
-            envs.unwrapped.set_task_dist(0, onehot(task, num_tasks))
-            for i in range(i, num_processes):
-                envs.unwrapped.set_task_dist(
-                    i, onehot((task + i) % num_tasks, num_tasks))
+                    logits=torch.ones(num_processes,
+                                      num_tasks)).sample().float()
+            for i, task in enumerate(tasks_to_train):
+                envs.unwrapped.set_task_dist(i, onehot(int(task), num_tasks))
 
         rollouts.after_update()
         total_num_steps = (j + 1) * num_tasks * num_steps

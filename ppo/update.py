@@ -1,9 +1,9 @@
 # stdlib
 # third party
 # first party
+import math
 from collections import Counter
 from enum import Enum
-import math
 
 import torch
 import torch.nn as nn
@@ -133,11 +133,8 @@ class PPO:
 
         num_steps, num_processes = rollouts.rewards.size()[0:2]
         total_batch_size = num_steps * num_processes
-        batches = rollouts.make_batch(advantages,
-                                      torch.arange(total_batch_size))
-        idx = torch.arange(total_batch_size)[batches.tasks.view(-1) ==
-                                             tasks_to_train]
-        batches = sample = rollouts.make_batch(advantages, idx)
+        batches = sample = rollouts.make_batch(advantages,
+                                               torch.arange(total_batch_size))
         returns = torch.zeros(tasks_to_train.size()[0])
         for i, task in enumerate(tasks_to_train):
             returns[i] = torch.mean(batches.ret[batches.tasks == task])
