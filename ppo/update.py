@@ -1,9 +1,9 @@
 # stdlib
 # third party
 # first party
+import math
 from collections import Counter
 from enum import Enum
-import math
 
 import torch
 import torch.nn as nn
@@ -125,8 +125,8 @@ class PPO:
 
     def update(self, rollouts: RolloutStorage):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
-        advantages = (advantages - advantages.mean()) / (
-            advantages.std() + 1e-5)
+        # advantages = (advantages - advantages.mean()) / (
+        # advantages.std() + 1e-5)
         update_values = Counter()
         task_values = Counter()
 
