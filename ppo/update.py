@@ -142,9 +142,6 @@ class PPO:
         for i, task in enumerate(tasks_to_train):
             returns[i] = torch.mean(batches.ret[batches.tasks == task])
 
-        # tasks_to_train = unique
-        # task_indices = torch.arange(unique.numel())
-        task_indices = tasks_to_train.long()
         for e in range(self.ppo_epoch):
             _, action_losses, _ = self.compute_loss_components(
                 batches, compute_value_loss=False)

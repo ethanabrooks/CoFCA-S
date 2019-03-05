@@ -1,11 +1,11 @@
 import itertools
-from pathlib import Path
 import time
+from pathlib import Path
 
-from gym.spaces import Discrete
 import numpy as np
-from tensorboardX import SummaryWriter
 import torch
+from gym.spaces import Discrete
+from tensorboardX import SummaryWriter
 from torch.distributions import Categorical
 
 from ppo.envs import VecNormalize, make_vec_envs
@@ -216,15 +216,6 @@ def train(num_frames,
                     importance_weights = gan.importance_weight(tasks)
                 else:
                     importance_weights = torch.ones_like(tasks)
-                for tens in [
-                        obs, recurrent_hidden_states, actions,
-                        action_log_probs, values, rewards, masks, tasks,
-                        importance_weights
-                ]:
-                    try:
-                        tens[1:, :] = 0
-                    except IndexError:
-                        tens[1:] = 0
                 rollouts.insert(
                     obs=obs,
                     recurrent_hidden_states=recurrent_hidden_states,
