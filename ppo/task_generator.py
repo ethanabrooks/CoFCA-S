@@ -6,8 +6,9 @@ from ppo.util import Categorical, NoInput
 
 class TaskGenerator(NoInput):
     def __init__(self, task_size, learning_rate: float, entropy_coef: float,
-                 temperature: float, **kwargs):
+                 temperature: float, exploration_scale, **kwargs):
         super().__init__(task_size)
+        self.exploration_scale = exploration_scale
         self.learning_rate = learning_rate
         self.entropy_coef = entropy_coef
         self.task_size = task_size
@@ -33,8 +34,9 @@ class TaskGenerator(NoInput):
             dtype=torch.float)
 
     def probs(self):
+        logits = self.weight + self.exploration_bonus() * self.exploration_scale
         return Categorical(
-            logits=self.temperature * self.weight).probs.view(-1)
+            logits=self.temperature * logits).probs.view(-1)
 
     def importance_weight(self, task_index):
         return 1 / (self.task_size * self.probs()[task_index]).detach()

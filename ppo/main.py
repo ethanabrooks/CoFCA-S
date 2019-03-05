@@ -159,6 +159,10 @@ def add_tasks_args(parser):
         type=float,
     )
     tasks_parser.add_argument(
+        '--exploration-scale',
+        type=float,
+        default=0)
+    tasks_parser.add_argument(
         '--gan-learning-rate',
         type=float,
         default=7e-4,
