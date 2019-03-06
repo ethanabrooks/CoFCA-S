@@ -119,7 +119,7 @@ class PPO:
             losses *= importance_weighting
         return torch.mean(losses)
 
-    def update(self, rollouts: RolloutStorage, tasks_to_train, num_tasks):
+    def update(self, rollouts: RolloutStorage, num_tasks):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         # advantages = (advantages - advantages[:, :1].mean()) / (
         # advantages[:, :1].std() + 1e-5)
@@ -135,6 +135,7 @@ class PPO:
         total_batch_size = num_steps * num_processes
         batches = sample = rollouts.make_batch(advantages,
                                                torch.arange(total_batch_size))
+        tasks_to_train = torch.unique(batches.tasks)
         returns = torch.zeros(tasks_to_train.size()[0])
         for i, task in enumerate(tasks_to_train):
             returns[i] = torch.mean(batches.ret[batches.tasks == task])
@@ -169,10 +170,7 @@ class PPO:
                 task_loss = torch.mean((logits_to_update - targets)**2)
                 task_loss.backward()
                 self.task_optimizer.step()
-                mean_abs_task_error = torch.mean(torch.abs(logits - grads))
-                update_values.update(
-                    task_loss=task_loss,
-                    mean_abs_task_error=mean_abs_task_error)
+                update_values.update(task_loss=task_loss, )
 
             logits = self.task_generator.parameter
             update_task_params(logits[tasks_to_train.long()], grads)

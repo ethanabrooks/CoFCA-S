@@ -168,7 +168,7 @@ def train(num_frames,
             tasks_to_train = Categorical(
                 logits=torch.ones(num_processes, num_tasks)).sample().float()
         for i, task in enumerate(tasks_to_train):
-            envs.unwrapped.set_task_dist(i, onehot(int(task), num_tasks))
+            envs.unwrapped.set_task_dist(i, gan.probs().detach().numpy())
     obs = envs.reset()
     rollouts.obs[0].copy_(obs)
     rollouts.to(device)
@@ -243,8 +243,7 @@ def train(num_frames,
         rollouts.compute_returns(
             next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau)
 
-        train_results, task_stuff = agent.update(rollouts, tasks_to_train,
-                                                 num_tasks)
+        train_results, task_stuff = agent.update(rollouts, num_tasks)
         if train_tasks:
             tasks_trained, task_returns, gradient_sums = task_stuff
             tasks_trained = sample_env.task_states[tasks_trained.int().numpy()]
@@ -261,7 +260,7 @@ def train(num_frames,
                     logits=torch.ones(num_processes,
                                       num_tasks)).sample().float()
             for i, task in enumerate(tasks_to_train):
-                envs.unwrapped.set_task_dist(i, onehot(int(task), num_tasks))
+                envs.unwrapped.set_task_dist(i, gan.probs().detach().numpy())
 
         rollouts.after_update()
         total_num_steps = (j + 1) * num_tasks * num_steps
