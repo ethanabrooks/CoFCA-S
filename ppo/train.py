@@ -162,13 +162,11 @@ def train(num_frames,
 
     if train_tasks:
         if agent.sampling_strategy == 'learn_sampled':
-            tasks_to_train = torch.tensor(
-                gan.sample(num_processes), dtype=torch.float)
+            dist = gan.probs().detach()
         else:
-            tasks_to_train = Categorical(
-                logits=torch.ones(num_processes, num_tasks)).sample().float()
-        for i, task in enumerate(tasks_to_train):
-            envs.unwrapped.set_task_dist(i, gan.probs().detach().numpy())
+            dist = np.ones(num_tasks) / num_tasks
+        for i in range(num_processes):
+            envs.unwrapped.set_task_dist(i, dist)
     obs = envs.reset()
     rollouts.obs[0].copy_(obs)
     rollouts.to(device)
@@ -253,14 +251,11 @@ def train(num_frames,
                                        task_returns, gradient_sums)])
 
             if agent.sampling_strategy == 'learn_sampled':
-                tasks_to_train = torch.tensor(
-                    gan.sample(num_processes), dtype=torch.float)
+                dist = gan.probs().detach()
             else:
-                tasks_to_train = Categorical(
-                    logits=torch.ones(num_processes,
-                                      num_tasks)).sample().float()
-            for i, task in enumerate(tasks_to_train):
-                envs.unwrapped.set_task_dist(i, gan.probs().detach().numpy())
+                dist = np.ones(num_tasks) / num_tasks
+            for i in range(num_processes):
+                envs.unwrapped.set_task_dist(i, dist)
 
         rollouts.after_update()
         total_num_steps = (j + 1) * num_tasks * num_steps
