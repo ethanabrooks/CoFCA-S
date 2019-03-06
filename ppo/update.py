@@ -120,6 +120,7 @@ class PPO:
         return torch.mean(losses)
 
     def update(self, rollouts: RolloutStorage, tasks_to_train, num_tasks):
+        tasks_to_train = tasks_to_train.float()
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         # advantages = (advantages - advantages[:, :1].mean()) / (
         # advantages[:, :1].std() + 1e-5)

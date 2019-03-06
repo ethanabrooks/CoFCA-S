@@ -139,6 +139,8 @@ class TasksGridWorld(GridWorld):
         self.task_letter = task_letter
         self.num_tasks = len(self.task_states)
         self.task_dist = np.ones_like(self.task_states) / self.num_tasks
+        self.importance = None
+        self.next_importance = None
 
         size = self.observation_size
         if self.include_task_in_obs:
@@ -157,6 +159,7 @@ class TasksGridWorld(GridWorld):
     def reset(self):
         if not self.evaluation:
             self.set_task(np.random.choice(self.num_tasks, p=self.task_dist))
+            self.importance = self.next_importance
         return super().reset()
 
     def obs_vector(self, obs):
@@ -167,8 +170,12 @@ class TasksGridWorld(GridWorld):
 
 
 class TrainTasksGridWorld(TasksGridWorld):
-    def set_task_dist(self, dist):
+    def set_task_dist(self, dist, importance):
         self.task_dist = dist
+        self.next_importance = importance
+
+    def get_task(self):
+        return self.task_index, self.importance
 
 
 def unwrap_tasks(env):
@@ -199,7 +206,7 @@ def worker(remote, parent_remote, env_fn_wrapper):
         elif cmd == 'set_task_dist':
             unwrap_tasks(env).set_task_dist(data)
         elif cmd == 'get_task':
-            remote.send(unwrap_tasks(env).task_index)
+            remote.send(unwrap_tasks(env).get_task())
         else:
             raise NotImplementedError
 
@@ -240,14 +247,14 @@ class TasksSubprocVecEnv(SubprocVecEnv):
         for remote in self.remotes:
             remote.send(('get_task', None))
         self.waiting = True
-        tasks = [remote.recv() for remote in self.remotes]
+        tasks_weights = zip(*[remote.recv() for remote in self.remotes])
         self.waiting = False
-        return tasks
+        return tasks_weights
 
 
 class TasksDummyVecEnv(DummyVecEnv):
-    def set_task_dist(self, i, dist):
-        unwrap_tasks(self.envs[i]).set_task_dist(dist)
+    def set_task_dist(self, i, dist, importance):
+        unwrap_tasks(self.envs[i]).set_task_dist(dist, importance)
 
     def get_tasks(self):
-        return [unwrap_tasks(env).task_index for env in self.envs]
+        return zip(*[unwrap_tasks(env).get_task() for env in self.envs])

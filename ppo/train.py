@@ -162,22 +162,18 @@ def train(num_frames,
 
     if train_tasks:
         if agent.sampling_strategy == 'learn_sampled':
-            tasks_to_train = torch.tensor(
-                gan.sample(num_processes), dtype=torch.float)
+            tasks_to_train, importance_weights = gan.sample(num_processes)
         else:
             tasks_to_train = Categorical(
                 logits=torch.ones(num_processes, num_tasks)).sample().float()
-        for i, task in enumerate(tasks_to_train):
-            envs.unwrapped.set_task_dist(i, onehot(int(task), num_tasks))
+            importance_weights = torch.ones_like(tasks_to_train) / len(tasks_to_train)
+        for i, (task, importance) in enumerate(zip(tasks_to_train, importance_weights)):
+            envs.unwrapped.set_task_dist(i, onehot(int(task), num_tasks), importance)
     obs = envs.reset()
     rollouts.obs[0].copy_(obs)
     rollouts.to(device)
     if train_tasks:
-        tasks = torch.tensor(envs.unwrapped.get_tasks())
-        if agent.sampling_strategy == 'learn_sampled':
-            importance_weights = gan.importance_weight(tasks)
-        else:
-            importance_weights = torch.ones_like(tasks)
+        tasks, importance_weights = map(torch.tensor, envs.unwrapped.get_tasks())
         rollouts.tasks[0].copy_(tasks.view(rollouts.tasks[0].size()))
         rollouts.importance_weighting[0].copy_(
             importance_weights.view(rollouts.importance_weighting[0].size()))
@@ -208,11 +204,7 @@ def train(num_frames,
             masks = torch.FloatTensor(
                 [[0.0] if done_ else [1.0] for done_ in dones])
             if train_tasks:
-                tasks = torch.tensor(envs.unwrapped.get_tasks())
-                if agent.sampling_strategy == 'learn_sampled':
-                    importance_weights = gan.importance_weight(tasks)
-                else:
-                    importance_weights = torch.ones_like(tasks)
+                tasks, importance_weights = map(torch.tensor, envs.unwrapped.get_tasks())
                 rollouts.insert(
                     obs=obs,
                     recurrent_hidden_states=recurrent_hidden_states,
@@ -243,7 +235,7 @@ def train(num_frames,
         rollouts.compute_returns(
             next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau)
 
-        train_results, task_stuff = agent.update(rollouts, tasks_to_train,
+        train_results, task_stuff = agent.update(rollouts, tasks,
                                                  num_tasks)
         if train_tasks:
             tasks_trained, task_returns, gradient_sums = task_stuff
@@ -254,14 +246,16 @@ def train(num_frames,
                                        task_returns, gradient_sums)])
 
             if agent.sampling_strategy == 'learn_sampled':
-                tasks_to_train = torch.tensor(
+                tasks_to_train, importance_weights = torch.tensor(
                     gan.sample(num_processes), dtype=torch.float)
             else:
                 tasks_to_train = Categorical(
                     logits=torch.ones(num_processes,
                                       num_tasks)).sample().float()
-            for i, task in enumerate(tasks_to_train):
-                envs.unwrapped.set_task_dist(i, onehot(int(task), num_tasks))
+                importance_weights = torch.ones(num_processes) / num_processes
+            for i, (task, importance) in enumerate(zip(tasks_to_train,
+                                                       importance_weights)):
+                envs.unwrapped.set_task_dist(i, onehot(int(task), num_tasks), importance)
 
         rollouts.after_update()
         total_num_steps = (j + 1) * num_tasks * num_steps

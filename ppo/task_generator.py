@@ -19,14 +19,16 @@ class TaskGenerator(NoInput):
 
     def sample(self, num_samples):
         self.time_since_selected += 1
+        probs = self.probs().detach().numpy()
         choices = np.random.choice(
             self.task_size,
             size=num_samples,
             replace=False,
-            p=self.probs().detach().numpy())
+            p=probs)
+        importance_weight = 1 / (self.task_size * probs[choices])
         self.time_since_selected[choices] = 1
         self.counter[choices] += 1
-        return choices
+        return choices, importance_weight
 
     def exploration_bonus(self):
         return torch.tensor(
@@ -37,6 +39,6 @@ class TaskGenerator(NoInput):
         logits = self.weight + self.exploration_bonus() * self.exploration_scale
         return Categorical(
             logits=self.temperature * logits).probs.view(-1)
-
-    def importance_weight(self, task_index):
-        return 1 / (self.task_size * self.probs()[task_index]).detach()
+    #
+    # def importance_weight(self, task_index):
+    #     return 1 / (self.task_size * self.probs()[task_index]).detach()
