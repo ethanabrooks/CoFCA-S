@@ -1,11 +1,11 @@
 import itertools
-import time
 from pathlib import Path
+import time
 
-import numpy as np
-import torch
 from gym.spaces import Discrete
+import numpy as np
 from tensorboardX import SummaryWriter
+import torch
 from torch.distributions import Categorical
 
 from ppo.envs import VecNormalize, make_vec_envs
@@ -335,14 +335,15 @@ def train(num_frames,
                         writer.add_figure(text, fig, total_num_steps)
                         plt.close(fig)
 
-                    fig = plt.figure()
-                    probs = np.zeros(sample_env.desc.shape)
-                    probs[sample_env.decode(
-                        sample_env.task_states)] = gan.probs().detach()
-                    im = plt.imshow(probs, origin='lower')
-                    plt.colorbar(im)
-                    writer.add_figure('probs', fig, total_num_steps)
-                    plt.close()
+                    if agent.sampling_strategy == 'learn_sampled':
+                        fig = plt.figure()
+                        probs = np.zeros(sample_env.desc.shape)
+                        probs[sample_env.decode(
+                            sample_env.task_states)] = gan.probs().detach()
+                        im = plt.imshow(probs, origin='lower')
+                        plt.colorbar(im)
+                        writer.add_figure('probs', fig, total_num_steps)
+                        plt.close()
 
                     plot(rewards, 'rewards')
                     plot(gradient, 'gradients')
