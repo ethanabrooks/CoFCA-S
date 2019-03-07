@@ -210,7 +210,8 @@ class TasksRolloutStorage(RolloutStorage):
     def __init__(self, num_steps, num_processes, task_size, **kwargs):
         super().__init__(
             num_steps=num_steps, num_processes=num_processes, **kwargs)
-        self.tasks = torch.zeros(num_steps + 1, num_processes, task_size)
+        self.tasks = torch.zeros(
+            num_steps + 1, num_processes, task_size, dtype=torch.long)
         self.importance_weighting = torch.zeros(num_steps + 1, num_processes)
 
     def to(self, device):

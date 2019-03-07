@@ -142,11 +142,9 @@ class PPO:
         _, action_losses, _ = self.compute_loss_components(
             batches, compute_value_loss=False)
         unique = torch.unique(batches.tasks)
-        grads = torch.zeros(unique.size()[0])
-        returns = torch.zeros(unique.size()[0])
-
         if self.sampling_strategy == SamplingStrategy.baseline.name:
-            logits = torch.ones_like(grads)
+            logits = torch.ones_like(unique, dtype=torch.float)
+            # TODO: note that this will be off if batch does not contain all tasks
         elif self.sampling_strategy == SamplingStrategy.learned.name:
             logits = self.task_generator.parameter
         elif self.sampling_strategy == SamplingStrategy.learn_sampled.name:
@@ -155,21 +153,16 @@ class PPO:
             raise RuntimeError
 
         # sample tasks
-        if self.sampling_strategy == SamplingStrategy.learn_sampled.name:
-            # tasks_to_train = unique
-            # task_indices = torch.arange(unique.numel())
-            dist = Categorical(logits=logits.repeat(self.num_processes, 1))
-            task_indices = dist.sample().view(-1).long()
-            tasks_to_train = unique[task_indices]
-        else:
-            dist = Categorical(logits=logits.repeat(self.num_processes, 1))
-            task_indices = dist.sample().view(-1).long()
-            tasks_to_train = unique[task_indices]
+        dist = Categorical(logits=logits.repeat(self.num_processes, 1))
+        tasks_to_train = dist.sample().view(-1)
+
+        grads = torch.zeros(tasks_to_train.size()[0])
+        returns = torch.zeros(tasks_to_train.size()[0])
 
         for e in range(self.ppo_epoch):
             assert isinstance(rollouts, TasksRolloutStorage)
 
-            for i, task in enumerate(unique):
+            for i, task in enumerate(tasks_to_train):
                 action_loss = action_losses[batches.tasks == task]
                 returns[i] = torch.mean(batches.ret[batches.tasks == task])
                 loss = self.compute_loss(
@@ -198,16 +191,14 @@ class PPO:
                     task_loss=task_loss,
                     mean_abs_task_error=mean_abs_task_error)
 
-            if self.sampling_strategy == SamplingStrategy.learned.name:
-                update_task_params(logits, grads)
-            elif self.sampling_strategy == SamplingStrategy.learn_sampled.name:
+            if self.sampling_strategy == SamplingStrategy.learn_sampled.name:
                 logits = self.task_generator.parameter
-                update_task_params(logits[task_indices], grads[task_indices])
+                update_task_params(logits[tasks_to_train.long()], grads)
 
             # update task data
             tasks_trained.extend(tasks_to_train)
-            task_returns.extend(returns[task_indices])
-            task_grads.extend(grads[task_indices])
+            task_returns.extend(returns)
+            task_grads.extend(grads)
 
             # make sample
             uses_task = (batches.tasks == tasks_to_train).any(-1)
@@ -217,12 +208,10 @@ class PPO:
             # Compute loss
             value_losses, action_losses, entropy \
                 = components = self.compute_loss_components(sample)
-            task_to_train_index = torch.argmax(
-                sample.tasks == tasks_to_train, dim=-1, keepdim=True)
             # if self.sampling_strategy == SamplingStrategy.learn_sampled.name:
             # importance_weighting = sample.importance_weighting
             # else:
-            probs = dist.log_prob(task_indices).exp()[task_to_train_index]
+            probs = dist.log_prob(tasks_to_train).exp()
             importance_weighting = 1 / (unique.numel() * probs)
             loss = self.compute_loss(
                 *components, importance_weighting=importance_weighting)
@@ -241,7 +230,6 @@ class PPO:
             update_values.update(action_loss=torch.mean(action_losses))
             update_values.update(norm=total_norm)
             update_values.update(entropy=torch.mean(entropy))
-            update_values.update(task_trained=tasks_to_train)
             update_values.update(n=1)
             # update_values.update(
             # dist_mean=dist.mean,
