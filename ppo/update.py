@@ -155,6 +155,8 @@ class PPO:
         # sample tasks
         dist = Categorical(logits=logits.repeat(self.num_processes, 1))
         tasks_to_train = dist.sample().view(-1)
+        probs = dist.log_prob(tasks_to_train).exp()
+        importance_weighting = 1 / (unique.numel() * probs)
 
         grads = torch.zeros(tasks_to_train.size()[0])
         returns = torch.zeros(tasks_to_train.size()[0])
@@ -211,8 +213,6 @@ class PPO:
             # if self.sampling_strategy == SamplingStrategy.learn_sampled.name:
             # importance_weighting = sample.importance_weighting
             # else:
-            probs = dist.log_prob(tasks_to_train).exp()
-            importance_weighting = 1 / (unique.numel() * probs)
             loss = self.compute_loss(
                 *components, importance_weighting=importance_weighting)
 
