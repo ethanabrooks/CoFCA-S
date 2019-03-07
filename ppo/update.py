@@ -123,7 +123,8 @@ class PPO:
             losses *= importance_weighting
         return torch.mean(losses)
 
-    def update(self, rollouts: RolloutStorage, num_tasks):
+    def update(self, rollouts: RolloutStorage, num_tasks, tasks_to_train,
+               importance_weighting):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         # advantages = (advantages - advantages.mean()) / (
         # advantages.std() + 1e-5)
@@ -135,28 +136,13 @@ class PPO:
         task_returns = []
         task_grads = []
 
+        # compute_losses
         num_steps, num_processes = rollouts.rewards.size()[0:2]
         total_batch_size = num_steps * num_processes
         batches = rollouts.make_batch(advantages,
                                       torch.arange(total_batch_size))
         _, action_losses, _ = self.compute_loss_components(
             batches, compute_value_loss=False)
-        unique = torch.arange(num_tasks)
-        if self.sampling_strategy == SamplingStrategy.baseline.name:
-            logits = torch.ones_like(unique, dtype=torch.float)
-            # TODO: note that this will be off if batch does not contain all tasks
-        elif self.sampling_strategy == SamplingStrategy.learned.name:
-            logits = self.task_generator.parameter
-        elif self.sampling_strategy == SamplingStrategy.learn_sampled.name:
-            logits = self.task_generator.parameter
-        else:
-            raise RuntimeError
-
-        # sample tasks
-        dist = Categorical(logits=logits.repeat(self.num_processes, 1))
-        tasks_to_train = dist.sample().view(-1)
-        probs = dist.log_prob(tasks_to_train).exp()
-        importance_weighting = 1 / (unique.numel() * probs)
 
         grads = torch.zeros(tasks_to_train.size()[0])
         returns = torch.zeros(tasks_to_train.size()[0])
