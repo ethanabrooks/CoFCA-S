@@ -31,9 +31,7 @@ class TaskGenerator(NoInput):
         return choices, importance_weight
 
     def exploration_bonus(self):
-        return torch.tensor(
-            np.sqrt(np.log(self.time_since_selected) / self.counter),
-            dtype=torch.float)
+        return torch.ones(self.task_size) * torch.mean(self.weight)
 
     def probs(self):
         logits = self.weight + self.exploration_bonus() * self.exploration_scale
