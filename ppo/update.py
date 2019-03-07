@@ -141,7 +141,7 @@ class PPO:
                                       torch.arange(total_batch_size))
         _, action_losses, _ = self.compute_loss_components(
             batches, compute_value_loss=False)
-        unique = torch.unique(batches.tasks)
+        unique = torch.unique(batches.tasks, sorted=True)
         grads = torch.zeros(unique.size()[0])
         returns = torch.zeros(unique.size()[0])
 
