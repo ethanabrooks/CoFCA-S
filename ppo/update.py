@@ -123,7 +123,7 @@ class PPO:
             losses *= importance_weighting
         return torch.mean(losses)
 
-    def update(self, rollouts: RolloutStorage):
+    def update(self, rollouts: RolloutStorage, num_tasks):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         # advantages = (advantages - advantages.mean()) / (
         # advantages.std() + 1e-5)
@@ -141,7 +141,7 @@ class PPO:
                                       torch.arange(total_batch_size))
         _, action_losses, _ = self.compute_loss_components(
             batches, compute_value_loss=False)
-        unique = torch.unique(batches.tasks, sorted=True)
+        unique = torch.arange(num_tasks)
         grads = torch.zeros(unique.size()[0])
         returns = torch.zeros(unique.size()[0])
 
@@ -241,7 +241,6 @@ class PPO:
             update_values.update(action_loss=torch.mean(action_losses))
             update_values.update(norm=total_norm)
             update_values.update(entropy=torch.mean(entropy))
-            update_values.update(task_trained=tasks_to_train)
             update_values.update(n=1)
             # update_values.update(
             # dist_mean=dist.mean,
