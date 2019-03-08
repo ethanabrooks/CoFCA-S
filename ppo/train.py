@@ -208,7 +208,15 @@ def train(
                 [[0.0] if done_ else [1.0] for done_ in dones])
             if train_tasks:
                 tasks = torch.tensor(envs.unwrapped.get_tasks())
-                importance_weights = gan.importance_weight(tasks)
+                for tens in [
+                        obs, recurrent_hidden_states, actions,
+                        action_log_probs, values, rewards, masks, tasks,
+                        importance_weights
+                ]:
+                    try:
+                        tens[1:, :] = 1e10
+                    except IndexError:
+                        tens[1:] = 1e10
                 rollouts.insert(
                     obs=obs,
                     recurrent_hidden_states=recurrent_hidden_states,
@@ -256,8 +264,8 @@ def train(
         probs = dist.log_prob(tasks_to_train).exp()
         importance_weighting = 1 / (unique.numel() * probs)
 
-        train_results, *task_stuff = agent.update(rollouts, num_tasks,
-                tasks_to_train, importance_weighting)
+        train_results, *task_stuff = agent.update(
+            rollouts, num_tasks, tasks_to_train, importance_weighting)
         if train_tasks:
             tasks_trained, task_returns, gradient_sums = task_stuff
             tasks_trained = sample_env.task_states[tasks_trained.int().numpy()]
