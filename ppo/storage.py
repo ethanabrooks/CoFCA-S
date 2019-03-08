@@ -12,7 +12,7 @@ def _flatten_helper(T, N, _tensor):
 
 Batch = namedtuple(
     'Batch', 'obs recurrent_hidden_states actions value_preds ret '
-    'masks old_action_log_probs adv tasks importance_weighting')
+    'masks old_action_log_probs adv tasks importance_weighting process')
 
 
 class RolloutStorage(object):
@@ -118,6 +118,9 @@ class RolloutStorage(object):
         masks_batch = self.masks[:-1].view(-1, 1)[indices]
         old_action_log_probs_batch = self.action_log_probs.view(-1, 1)[indices]
         adv_targ = advantages.view(-1, 1)[indices]
+        num_steps, num_processes = self.rewards.size()[0:2]
+        process = torch.arange(num_processes).repeat(num_steps,
+                                                     1).view(-1, 1)[indices]
         batch = Batch(
             obs=obs_batch,
             recurrent_hidden_states=recurrent_hidden_states_batch,
@@ -127,6 +130,7 @@ class RolloutStorage(object):
             masks=masks_batch,
             old_action_log_probs=old_action_log_probs_batch,
             adv=adv_targ,
+            process=process,
             tasks=None,
             importance_weighting=None)
         return batch
