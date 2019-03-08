@@ -1,9 +1,9 @@
 # stdlib
 # third party
 # first party
-import math
 from collections import Counter
 from enum import Enum
+import math
 
 import torch
 import torch.nn as nn
@@ -141,6 +141,7 @@ class PPO:
         total_batch_size = num_steps * num_processes
         batches = rollouts.make_batch(advantages,
                                       torch.arange(total_batch_size))
+        tasks_to_train = torch.unique(batches.tasks[batches.process == 0])
         grads = torch.zeros(tasks_to_train.size()[0])
         returns = torch.zeros(tasks_to_train.size()[0])
 
@@ -148,8 +149,8 @@ class PPO:
             assert isinstance(rollouts, TasksRolloutStorage)
 
             for i, task in enumerate(tasks_to_train):
-                uses_task = (batches.tasks == task).any(-1)
-                train_indices = torch.arange(total_batch_size)[uses_task]
+                process0 = (batches.process == 0).any(-1)
+                train_indices = torch.arange(total_batch_size)[process0]
                 batch = rollouts.make_batch(advantages, train_indices)
                 _, action_loss, _ = self.compute_loss_components(
                     batch, compute_value_loss=False)
@@ -176,10 +177,7 @@ class PPO:
                 task_loss = torch.mean((logits_to_update - targets)**2)
                 task_loss.backward()
                 self.task_optimizer.step()
-                mean_abs_task_error = torch.mean(torch.abs(logits - grads))
-                update_values.update(
-                    task_loss=task_loss,
-                    mean_abs_task_error=mean_abs_task_error)
+                update_values.update(task_loss=task_loss, )
 
             if self.sampling_strategy == SamplingStrategy.learn_sampled.name:
                 logits = self.task_generator.parameter
@@ -191,8 +189,8 @@ class PPO:
             task_grads.extend(grads)
 
             # make sample
-            uses_task = (batches.tasks == tasks_to_train).any(-1)
-            train_indices = torch.arange(total_batch_size)[uses_task]
+            process0 = (batches.process == 0).any(-1)
+            train_indices = torch.arange(total_batch_size)[process0]
             sample = rollouts.make_batch(advantages, train_indices)
 
             # Compute loss
