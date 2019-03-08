@@ -11,7 +11,8 @@ from ppo.envs import VecNormalize, make_vec_envs
 from ppo.policy import Policy
 from ppo.storage import RolloutStorage, TasksRolloutStorage
 from ppo.task_generator import TaskGenerator
-from ppo.update import PPO
+from ppo.update import PPO, SamplingStrategy
+from ppo.util import Categorical
 from utils import onehot, space_to_size
 
 
@@ -238,7 +239,25 @@ def train(
         rollouts.compute_returns(
             next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau)
 
-        train_results, *task_stuff = agent.update(rollouts, num_tasks)
+        unique = torch.arange(num_tasks)
+        if agent.sampling_strategy == SamplingStrategy.baseline.name:
+            logits = torch.ones_like(unique, dtype=torch.float)
+            # TODO: note that this will be off if batch does not contain all tasks
+        elif agent.sampling_strategy == SamplingStrategy.learned.name:
+            logits = agent.task_generator.parameter
+        elif agent.sampling_strategy == SamplingStrategy.learn_sampled.name:
+            logits = agent.task_generator.parameter
+        else:
+            raise RuntimeError
+
+        # sample tasks
+        dist = Categorical(logits=logits.repeat(agent.num_processes, 1))
+        tasks_to_train = dist.sample().view(-1)
+        probs = dist.log_prob(tasks_to_train).exp()
+        importance_weighting = 1 / (unique.numel() * probs)
+
+        train_results, *task_stuff = agent.update(rollouts, num_tasks,
+                tasks_to_train, importance_weighting)
         if train_tasks:
             tasks_trained, task_returns, gradient_sums = task_stuff
             tasks_trained = sample_env.task_states[tasks_trained.int().numpy()]
