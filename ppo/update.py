@@ -1,9 +1,9 @@
 # stdlib
 # third party
 # first party
+import math
 from collections import Counter
 from enum import Enum
-import math
 
 import torch
 import torch.nn as nn
@@ -141,9 +141,6 @@ class PPO:
         total_batch_size = num_steps * num_processes
         batches = rollouts.make_batch(advantages,
                                       torch.arange(total_batch_size))
-        _, action_losses, _ = self.compute_loss_components(
-            batches, compute_value_loss=False)
-
         grads = torch.zeros(tasks_to_train.size()[0])
         returns = torch.zeros(tasks_to_train.size()[0])
 
@@ -151,8 +148,13 @@ class PPO:
             assert isinstance(rollouts, TasksRolloutStorage)
 
             for i, task in enumerate(tasks_to_train):
-                action_loss = action_losses[batches.tasks == task]
-                returns[i] = torch.mean(batches.ret[batches.tasks == task])
+                uses_task = (batches.tasks == task).any(-1)
+                train_indices = torch.arange(total_batch_size)[uses_task]
+                batch = rollouts.make_batch(advantages, train_indices)
+                _, action_loss, _ = self.compute_loss_components(
+                    batch, compute_value_loss=False)
+
+                returns[i] = torch.mean(batch.ret)
                 loss = self.compute_loss(
                     action_loss=action_loss,
                     dist_entropy=0,
