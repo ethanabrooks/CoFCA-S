@@ -1,11 +1,11 @@
 import itertools
-import time
 from pathlib import Path
+import time
 
-import numpy as np
-import torch
 from gym.spaces import Discrete
+import numpy as np
 from tensorboardX import SummaryWriter
+import torch
 
 from ppo.envs import VecNormalize, make_vec_envs
 from ppo.policy import Policy
@@ -175,11 +175,25 @@ def train(
     for j in updates:
 
         if train_tasks:
-            tasks = np.random.choice(
-                num_tasks,
-                size=num_processes,
-                replace=False,
-                p=gan.probs().detach().numpy())
+
+            unique = torch.arange(num_tasks)
+            if agent.sampling_strategy == SamplingStrategy.baseline.name:
+                logits = torch.ones_like(unique, dtype=torch.float)
+                # TODO: note that this will be off if batch does not contain all tasks
+            elif agent.sampling_strategy == SamplingStrategy.learned.name:
+                logits = agent.task_generator.parameter
+            elif agent.sampling_strategy == SamplingStrategy.learn_sampled.name:
+                logits = agent.task_generator.parameter
+            else:
+                raise RuntimeError
+
+            # sample tasks
+            dist = Categorical(logits=logits.repeat(agent.num_processes, 1))
+            tasks_to_train = dist.sample().view(-1)
+            probs = dist.log_prob(tasks_to_train).exp()
+            importance_weighting = 1 / (unique.numel() * probs)
+
+            tasks = np.arange(num_processes)
             for i, task in enumerate(tasks):
                 envs.unwrapped.set_task_dist(i, onehot(task, num_tasks))
 
@@ -208,15 +222,17 @@ def train(
                 [[0.0] if done_ else [1.0] for done_ in dones])
             if train_tasks:
                 tasks = torch.tensor(envs.unwrapped.get_tasks())
-                for tens in [
-                        obs, recurrent_hidden_states, actions,
-                        action_log_probs, values, rewards, masks, tasks,
-                        importance_weights
-                ]:
-                    try:
-                        tens[1:, :] = 1e10
-                    except IndexError:
-                        tens[1:] = 1e10
+                _task_to_train = int(tasks_to_train)
+                # for tens in [
+                # obs, recurrent_hidden_states, action_log_probs, values,
+                # rewards, masks, tasks, importance_weights
+                # ]:
+                # try:
+                # tens[:_task_to_train, :] = -1e10
+                # tens[_task_to_train + 1:, :] = -1e10
+                # except IndexError:
+                # tens[:_task_to_train] = -1e10
+                # tens[_task_to_train + 1:] = -1e10
                 rollouts.insert(
                     obs=obs,
                     recurrent_hidden_states=recurrent_hidden_states,
@@ -246,23 +262,6 @@ def train(
 
         rollouts.compute_returns(
             next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau)
-
-        unique = torch.arange(num_tasks)
-        if agent.sampling_strategy == SamplingStrategy.baseline.name:
-            logits = torch.ones_like(unique, dtype=torch.float)
-            # TODO: note that this will be off if batch does not contain all tasks
-        elif agent.sampling_strategy == SamplingStrategy.learned.name:
-            logits = agent.task_generator.parameter
-        elif agent.sampling_strategy == SamplingStrategy.learn_sampled.name:
-            logits = agent.task_generator.parameter
-        else:
-            raise RuntimeError
-
-        # sample tasks
-        dist = Categorical(logits=logits.repeat(agent.num_processes, 1))
-        tasks_to_train = dist.sample().view(-1)
-        probs = dist.log_prob(tasks_to_train).exp()
-        importance_weighting = 1 / (unique.numel() * probs)
 
         train_results, *task_stuff = agent.update(
             rollouts, num_tasks, tasks_to_train, importance_weighting)
