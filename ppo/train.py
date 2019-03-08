@@ -188,12 +188,12 @@ def train(
                 raise RuntimeError
 
             # sample tasks
-            dist = Categorical(logits=logits.repeat(agent.num_processes, 1))
-            tasks_to_train = dist.sample().view(-1)
-            probs = dist.log_prob(tasks_to_train).exp()
-            importance_weighting = 1 / (unique.numel() * probs)
+            dist = Categorical(logits=logits)
+            task_to_train = dist.sample()
+            prob = dist.log_prob(task_to_train).exp()
+            importance_weighting = 1 / (unique.numel() * prob)
 
-            tasks = np.arange(num_processes)
+            tasks = (int(task_to_train) + np.arange(num_processes)) % num_tasks
             for i, task in enumerate(tasks):
                 envs.unwrapped.set_task_dist(i, onehot(task, num_tasks))
 
@@ -222,7 +222,7 @@ def train(
                 [[0.0] if done_ else [1.0] for done_ in dones])
             if train_tasks:
                 tasks = torch.tensor(envs.unwrapped.get_tasks())
-                _task_to_train = int(tasks_to_train)
+                _task_to_train = int(task_to_train)
                 # for tens in [
                 # obs, recurrent_hidden_states, action_log_probs, values,
                 # rewards, masks, tasks, importance_weights
@@ -264,7 +264,7 @@ def train(
             next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau)
 
         train_results, *task_stuff = agent.update(
-            rollouts, num_tasks, tasks_to_train, importance_weighting)
+            rollouts, num_tasks, task_to_train, importance_weighting)
         if train_tasks:
             tasks_trained, task_returns, gradient_sums = task_stuff
             tasks_trained = sample_env.task_states[tasks_trained.int().numpy()]
