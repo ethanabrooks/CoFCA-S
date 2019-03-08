@@ -183,7 +183,7 @@ def train(
             elif agent.sampling_strategy == SamplingStrategy.learned.name:
                 logits = agent.task_generator.parameter
             elif agent.sampling_strategy == SamplingStrategy.learn_sampled.name:
-                logits = agent.task_generator.logits
+                logits = gan.logits * gan.temperature
             else:
                 raise RuntimeError
 
