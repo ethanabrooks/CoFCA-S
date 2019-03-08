@@ -49,6 +49,7 @@ class PPO:
                  temperature,
                  sampling_strategy,
                  global_norm,
+                 exploration_bonus,
                  num_processes,
                  learning_rate=None,
                  eps=None,
@@ -58,6 +59,7 @@ class PPO:
 
         self.num_processes = torch.tensor(num_processes, dtype=torch.long)
         self.global_norm = global_norm
+        self.exploration_bonus = exploration_bonus
         self.sampling_strategy = sampling_strategy
         self.temperature = temperature
         self.train_tasks = bool(task_generator)
@@ -180,8 +182,10 @@ class PPO:
                 update_values.update(task_loss=task_loss, )
 
             if self.sampling_strategy == SamplingStrategy.learn_sampled.name:
-                logits = self.task_generator.parameter
-                update_task_params(logits[tasks_to_train.long()], grads)
+                logits = self.task_generator.logits
+                logits += self.exploration_bonus
+                logits[tasks_to_train.long()] = grads
+                # update_task_params(logits[tasks_to_train.long()], grads)
 
             # update task data
             tasks_trained.extend(tasks_to_train)

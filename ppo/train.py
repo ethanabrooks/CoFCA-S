@@ -1,11 +1,11 @@
 import itertools
-from pathlib import Path
 import time
+from pathlib import Path
 
-from gym.spaces import Discrete
 import numpy as np
-from tensorboardX import SummaryWriter
 import torch
+from gym.spaces import Discrete
+from tensorboardX import SummaryWriter
 
 from ppo.envs import VecNormalize, make_vec_envs
 from ppo.policy import Policy
@@ -183,7 +183,7 @@ def train(
             elif agent.sampling_strategy == SamplingStrategy.learned.name:
                 logits = agent.task_generator.parameter
             elif agent.sampling_strategy == SamplingStrategy.learn_sampled.name:
-                logits = agent.task_generator.parameter
+                logits = agent.task_generator.logits
             else:
                 raise RuntimeError
 

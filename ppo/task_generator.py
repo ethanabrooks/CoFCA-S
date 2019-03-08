@@ -1,6 +1,6 @@
 import torch
 
-from ppo.util import NoInput
+from ppo.util import NoInput, init_normc_
 
 
 class TaskGenerator(NoInput):
@@ -12,9 +12,12 @@ class TaskGenerator(NoInput):
         self.task_size = task_size
         self.softmax = torch.nn.Softmax(dim=-1)
         self.temperature = 10
+        self.logits = torch.Tensor(1, task_size)
+        init_normc_(self.logits)
+        self.logits = self.logits.view(-1)
 
     def probs(self):
-        return self.softmax(self.temperature * self.weight).view(
+        return self.softmax(self.temperature * self.logits).view(
             self.task_size)
 
     def importance_weight(self, task_index):
