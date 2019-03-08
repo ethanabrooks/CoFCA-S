@@ -140,6 +140,10 @@ def build_parser():
         type=float,
     )
     ppo_parser.add_argument(
+        '--exploration-bonus',
+        type=float,
+    )
+    ppo_parser.add_argument(
         '--global-norm',
         action='store_true',
     )
