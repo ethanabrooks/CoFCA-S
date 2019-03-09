@@ -1,11 +1,11 @@
 import itertools
-import time
 from pathlib import Path
+import time
 
-import numpy as np
-import torch
 from gym.spaces import Discrete
+import numpy as np
 from tensorboardX import SummaryWriter
+import torch
 
 from ppo.envs import VecNormalize, make_vec_envs
 from ppo.policy import Policy
@@ -65,7 +65,7 @@ def train(
     train_tasks = tasks_args is not None
     sample_env = make_env(seed=seed, rank=0, evaluation=False).unwrapped
     num_tasks = sample_env.task_space.n
-    num_processes = num_tasks
+    num_processes = 1
 
     if log_dir:
         plt.switch_backend('agg')
