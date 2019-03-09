@@ -46,7 +46,6 @@ class PPO:
                  batch_size,
                  value_loss_coef,
                  entropy_coef,
-                 temperature,
                  sampling_strategy,
                  global_norm,
                  exploration_bonus,
@@ -61,7 +60,6 @@ class PPO:
         self.global_norm = global_norm
         self.exploration_bonus = exploration_bonus
         self.sampling_strategy = sampling_strategy
-        self.temperature = temperature
         self.train_tasks = bool(task_generator)
         self.actor_critic = actor_critic
 
