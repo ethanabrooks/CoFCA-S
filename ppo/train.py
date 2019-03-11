@@ -90,6 +90,7 @@ def train(
             device=device,
             train_tasks=train_tasks,
             normalize=normalize,
+            synchronous=synchronous,
             eval=True,
         )
 
