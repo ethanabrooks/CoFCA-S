@@ -49,14 +49,12 @@ class PPO:
                  sampling_strategy,
                  global_norm,
                  exploration_bonus,
-                 num_processes,
                  learning_rate=None,
                  eps=None,
                  max_grad_norm=None,
                  use_clipped_value_loss=True,
                  task_generator=None):
 
-        self.num_processes = torch.tensor(num_processes, dtype=torch.long)
         self.global_norm = global_norm
         self.exploration_bonus = exploration_bonus
         self.sampling_strategy = sampling_strategy
