@@ -105,9 +105,6 @@ def train(
             **{k.replace('gan_', ''): v
                for k, v in tasks_args.items()})
 
-        # for i in range(num_processes):
-        #     envs.unwrapped.set_task_dist(gan.probs().detach().numpy())
-
         if isinstance(sample_env.task_space, Discrete):
             task_size = 1
         else:
@@ -178,9 +175,6 @@ def train(
             unique = torch.arange(num_tasks)
             if agent.sampling_strategy == SamplingStrategy.baseline.name:
                 logits = torch.ones_like(unique, dtype=torch.float)
-                # TODO: note that this will be off if batch does not contain all tasks
-            elif agent.sampling_strategy == SamplingStrategy.learned.name:
-                logits = agent.task_generator.parameter
             elif agent.sampling_strategy == SamplingStrategy.learn_sampled.name:
                 logits = gan.logits * gan.temperature
             else:
@@ -221,17 +215,6 @@ def train(
                 [[0.0] if done_ else [1.0] for done_ in dones])
             if train_tasks:
                 tasks = torch.tensor(envs.unwrapped.get_tasks())
-                _task_to_train = int(task_to_train)
-                # for tens in [
-                # obs, recurrent_hidden_states, action_log_probs, values,
-                # rewards, masks, tasks, importance_weights
-                # ]:
-                # try:
-                # tens[:_task_to_train, :] = -1e10
-                # tens[_task_to_train + 1:, :] = -1e10
-                # except IndexError:
-                # tens[:_task_to_train] = -1e10
-                # tens[_task_to_train + 1:] = -1e10
                 rollouts.insert(
                     obs=obs,
                     recurrent_hidden_states=recurrent_hidden_states,
@@ -270,9 +253,6 @@ def train(
                 [(x, y, r, g)
                  for x, y, r, g in zip(*sample_env.decode(tasks_trained),
                                        task_returns, gradient_sums)])
-
-            # for i in range(num_processes):
-            #     envs.unwrapped.set_task_dist(gan.probs().detach().numpy())
 
         rollouts.after_update()
         total_num_steps = (j + 1) * num_processes * num_steps
