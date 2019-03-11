@@ -116,6 +116,7 @@ class PPO:
         return torch.mean(losses)
 
     def update(self, rollouts: RolloutStorage, importance_weighting):
+        global batch
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         # advantages = (advantages - advantages.mean()) / (
         # advantages.std() + 1e-5)
@@ -123,9 +124,6 @@ class PPO:
         task_values = Counter()
 
         total_norm = torch.tensor(0, dtype=torch.float32)
-        tasks_trained = []
-        task_returns = []
-        task_grads = []
 
         # compute_losses
         num_steps, num_processes = rollouts.rewards.size()[0:2]
@@ -133,8 +131,8 @@ class PPO:
         batches = rollouts.make_batch(advantages,
                                       torch.arange(total_batch_size))
         tasks_to_train = torch.unique(batches.tasks[batches.process == 0])
-        grads = torch.zeros(tasks_to_train.size()[0])
-        returns = torch.zeros(tasks_to_train.size()[0])
+        grads_per_step = torch.zeros(total_batch_size)
+        grads_per_task = torch.zeros_like(tasks_to_train, dtype=torch.float)
 
         for e in range(self.ppo_epoch):
             assert isinstance(rollouts, TasksRolloutStorage)
@@ -146,7 +144,6 @@ class PPO:
                 _, action_loss, _ = self.compute_loss_components(
                     batch, compute_value_loss=False)
 
-                returns[i] = torch.mean(batch.ret)
                 loss = self.compute_loss(
                     action_loss=action_loss,
                     dist_entropy=0,
@@ -157,18 +154,13 @@ class PPO:
                     self.actor_critic.parameters(),
                     retain_graph=True,
                     allow_unused=True)
-                grads[i] = sum(
+                grads_per_task[i] = grads_per_step[uses_task] = sum(
                     g.abs().sum() for g in grad if g is not None)
 
             if self.sampling_strategy == SamplingStrategy.learn_sampled.name:
                 logits = self.task_generator.logits
                 logits += self.exploration_bonus
-                logits[tasks_to_train.long()] = grads
-
-            # update task data
-            tasks_trained.extend(tasks_to_train)
-            task_returns.extend(returns)
-            task_grads.extend(grads)
+                logits[tasks_to_train] = grads_per_task
 
             # make sample
             uses_task = (batches.process == 0).any(-1)
@@ -190,7 +182,7 @@ class PPO:
             self.optimizer.step()
             self.optimizer.zero_grad()
 
-            update_values.update(grad_measure=grads,
+            update_values.update(grad_measure=grads_per_step,
                                  value_loss=torch.mean(value_losses),
                                  action_loss=torch.mean(action_losses),
                                  norm=total_norm,
@@ -211,5 +203,4 @@ class PPO:
         if self.train_tasks and 'n' in task_values:
             accumulate_values(task_values)
 
-        return return_values, torch.tensor(
-            tasks_trained), task_returns, task_grads
+        return return_values, batch.tasks, batch.ret, grads_per_step
