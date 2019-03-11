@@ -262,8 +262,7 @@ def train(
         rollouts.compute_returns(
             next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau)
 
-        train_results, *task_stuff = agent.update(
-            rollouts, num_tasks, task_to_train, importance_weighting)
+        train_results, *task_stuff = agent.update(rollouts, importance_weighting)
         if train_tasks:
             tasks_trained, task_returns, gradient_sums = task_stuff
             tasks_trained = sample_env.task_states[tasks_trained.int().numpy()]

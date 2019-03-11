@@ -21,16 +21,16 @@ def global_norm(grads):
     norm = 0
     for grad in grads:
         if grad is not None:
-            norm += grad.norm(2)**2
-    return norm**.5
+            norm += grad.norm(2) ** 2
+    return norm ** .5
 
 
 def epanechnikov_kernel(x):
-    return 3 / 4 * (1 - x**2)
+    return 3 / 4 * (1 - x ** 2)
 
 
 def gaussian_kernel(x):
-    return (2 * math.pi)**-.5 * torch.exp(-.5 * x**2)
+    return (2 * math.pi) ** -.5 * torch.exp(-.5 * x ** 2)
 
 
 SamplingStrategy = Enum(
@@ -47,7 +47,6 @@ class PPO:
                  value_loss_coef,
                  entropy_coef,
                  sampling_strategy,
-                 global_norm,
                  exploration_bonus,
                  learning_rate=None,
                  eps=None,
@@ -55,7 +54,6 @@ class PPO:
                  use_clipped_value_loss=True,
                  task_generator=None):
 
-        self.global_norm = global_norm
         self.exploration_bonus = exploration_bonus
         self.sampling_strategy = sampling_strategy
         self.train_tasks = bool(task_generator)
@@ -72,10 +70,6 @@ class PPO:
         self.use_clipped_value_loss = use_clipped_value_loss
 
         if self.train_tasks:
-            self.task_optimizer = optim.Adam(
-                task_generator.parameters(),
-                lr=task_generator.learning_rate,
-                eps=eps)
             self.task_generator = task_generator
 
         self.optimizer = optim.Adam(
@@ -121,8 +115,7 @@ class PPO:
             losses *= importance_weighting
         return torch.mean(losses)
 
-    def update(self, rollouts: RolloutStorage, num_tasks, tasks_to_train,
-               importance_weighting):
+    def update(self, rollouts: RolloutStorage, importance_weighting):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         # advantages = (advantages - advantages.mean()) / (
         # advantages.std() + 1e-5)
@@ -164,24 +157,13 @@ class PPO:
                     self.actor_critic.parameters(),
                     retain_graph=True,
                     allow_unused=True)
-                if self.global_norm:
-                    grads[i] = global_norm(
-                        [p.grad for p in self.actor_critic.parameters()])
-                else:
-                    grads[i] = sum(
-                        g.abs().sum() for g in grad if g is not None)
-
-            def update_task_params(logits_to_update, targets):
-                task_loss = torch.mean((logits_to_update - targets)**2)
-                task_loss.backward()
-                self.task_optimizer.step()
-                update_values.update(task_loss=task_loss, )
+                grads[i] = sum(
+                    g.abs().sum() for g in grad if g is not None)
 
             if self.sampling_strategy == SamplingStrategy.learn_sampled.name:
                 logits = self.task_generator.logits
                 logits += self.exploration_bonus
                 logits[tasks_to_train.long()] = grads
-                # update_task_params(logits[tasks_to_train.long()], grads)
 
             # update task data
             tasks_trained.extend(tasks_to_train)
@@ -196,9 +178,6 @@ class PPO:
             # Compute loss
             value_losses, action_losses, entropy \
                 = components = self.compute_loss_components(sample)
-            # if self.sampling_strategy == SamplingStrategy.learn_sampled.name:
-            # importance_weighting = sample.importance_weighting
-            # else:
             loss = self.compute_loss(
                 *components, importance_weighting=importance_weighting)
 
@@ -211,35 +190,26 @@ class PPO:
             self.optimizer.step()
             self.optimizer.zero_grad()
 
-            update_values.update(grad_measure=grads)
-            update_values.update(value_loss=torch.mean(value_losses))
-            update_values.update(action_loss=torch.mean(action_losses))
-            update_values.update(norm=total_norm)
-            update_values.update(entropy=torch.mean(entropy))
-            update_values.update(n=1)
-            # update_values.update(
-            # dist_mean=dist.mean,
-            # dist_std=dist.stddev,
-            # grad_measure=grads,
-            # value_loss=value_losses,
-            # action_loss=action_losses,
-            # norm=total_norm,
-            # entropy=entropy,
-            # task_trained=tasks_to_train,
-            # n=1)
+            update_values.update(grad_measure=grads,
+                                 value_loss=torch.mean(value_losses),
+                                 action_loss=torch.mean(action_losses),
+                                 norm=total_norm,
+                                 entropy=torch.mean(entropy),
+                                 n=1)
             if importance_weighting is not None:
                 update_values.update(
                     importance_weighting=importance_weighting.mean())
 
-        n = update_values.pop('n')
-        update_values = {
-            k: torch.mean(v) / n
-            for k, v in update_values.items()
-        }
-        if self.train_tasks and 'n' in task_values:
-            n = task_values.pop('n')
-            for k, v in task_values.items():
-                update_values[k] = torch.mean(v) / n
+        return_values = {}
 
-        return update_values, torch.tensor(
+        def accumulate_values(counter):
+            n = counter.pop('n')
+            for k, v in counter.items():
+                return_values[k] = torch.mean(v) / n
+
+        accumulate_values(update_values)
+        if self.train_tasks and 'n' in task_values:
+            accumulate_values(task_values)
+
+        return return_values, torch.tensor(
             tasks_trained), task_returns, task_grads

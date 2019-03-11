@@ -139,10 +139,6 @@ def build_parser():
         type=float,
     )
     ppo_parser.add_argument(
-        '--global-norm',
-        action='store_true',
-    )
-    ppo_parser.add_argument(
         '--sampling-strategy',
         choices=[s.name for s in SamplingStrategy],
         default='experiment')
