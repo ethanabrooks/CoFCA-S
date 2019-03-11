@@ -1,11 +1,11 @@
 import itertools
-from pathlib import Path
 import time
+from pathlib import Path
 
-from gym.spaces import Discrete
 import numpy as np
-from tensorboardX import SummaryWriter
 import torch
+from gym.spaces import Discrete
+from tensorboardX import SummaryWriter
 
 from ppo.envs import VecNormalize, make_vec_envs
 from ppo.policy import Policy
@@ -16,27 +16,26 @@ from ppo.util import Categorical
 from utils import onehot, space_to_size
 
 
-def train(
-        num_frames,
-        num_steps,
-        seed,
-        cuda_deterministic,
-        cuda,
-        log_dir: Path,
-        make_env,
-        gamma,
-        normalize,
-        save_interval,
-        load_path,
-        log_interval,
-        eval_interval,
-        use_gae,
-        tau,
-        ppo_args,
-        network_args,
-        num_processes,
-        synchronous,
-        tasks_args=None):
+def train(num_frames,
+          num_steps,
+          seed,
+          cuda_deterministic,
+          cuda,
+          log_dir: Path,
+          make_env,
+          gamma,
+          normalize,
+          save_interval,
+          load_path,
+          log_interval,
+          eval_interval,
+          use_gae,
+          tau,
+          ppo_args,
+          network_args,
+          num_processes,
+          synchronous,
+          tasks_args=None):
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
 
@@ -90,6 +89,7 @@ def train(
             device=device,
             train_tasks=train_tasks,
             normalize=normalize,
+            synchronous=synchronous,
             eval=True,
         )
 
@@ -245,7 +245,8 @@ def train(
         rollouts.compute_returns(
             next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau)
 
-        train_results, *task_stuff = agent.update(rollouts, importance_weighting)
+        train_results, *task_stuff = agent.update(rollouts,
+                                                  importance_weighting)
         if train_tasks:
             tasks_trained, task_returns, gradient_sums = task_stuff
             tasks_trained = sample_env.task_states[tasks_trained.int().numpy()]
@@ -313,8 +314,8 @@ def train(
                         x_noise = (np.random.rand(len(x)) - .5) * .9
                         y_noise = (np.random.rand(len(y)) - .5) * .9
                         sc = plt.scatter(
-                            x + x_noise,
-                            y + y_noise,
+                            np.concatenate(x) + x_noise,
+                            np.concatenate(y) + y_noise,
                             c=c,
                             cmap=cm.hot,
                             alpha=.1)
