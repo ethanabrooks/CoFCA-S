@@ -188,7 +188,7 @@ def train(
 
             tasks = (int(task_to_train) + np.arange(num_processes)) % num_tasks
             for i, task in enumerate(tasks):
-                envs.unwrapped.set_task_dist(i, onehot(task, num_tasks))
+                envs.unwrapped.set_task_dist(i, dist.probs.detach().numpy())
 
         for step in range(num_steps):
             # Sample actions.add_argument_group('env_args')
