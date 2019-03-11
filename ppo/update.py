@@ -140,8 +140,8 @@ class PPO:
             assert isinstance(rollouts, TasksRolloutStorage)
 
             for i, task in enumerate(tasks_to_train):
-                process0 = (batches.process == 0).any(-1)
-                train_indices = torch.arange(total_batch_size)[process0]
+                uses_task = (batches.tasks == task).any(-1)
+                train_indices = torch.arange(total_batch_size)[uses_task]
                 batch = rollouts.make_batch(advantages, train_indices)
                 _, action_loss, _ = self.compute_loss_components(
                     batch, compute_value_loss=False)
@@ -171,8 +171,8 @@ class PPO:
             task_grads.extend(grads)
 
             # make sample
-            process0 = (batches.process == 0).any(-1)
-            train_indices = torch.arange(total_batch_size)[process0]
+            uses_task = (batches.process == 0).any(-1)
+            train_indices = torch.arange(total_batch_size)[uses_task]
             sample = rollouts.make_batch(advantages, train_indices)
 
             # Compute loss
