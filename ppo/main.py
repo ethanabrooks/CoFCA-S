@@ -7,7 +7,8 @@ from torch import nn as nn
 
 import gridworld_env
 import hsr.util
-from ppo.env_adapter import (GridWorld, HSREnv, MoveGripperEnv, RandomGridWorld, TasksGridWorld, TasksHSREnv,
+from ppo.env_adapter import (GridWorld, HSREnv, MoveGripperEnv,
+                             RandomGridWorld, TasksGridWorld, TasksHSREnv,
                              TasksMoveGripperEnv, TrainTasksGridWorld)
 from ppo.envs import wrap_env
 from ppo.train import train
@@ -60,7 +61,7 @@ def build_parser():
     parser.add_argument(
         '--save-interval',
         type=int,
-        default=600,
+        default=None,
         help='save interval, one save per n seconds (default: 10 minutes)')
     parser.add_argument(
         '--eval-interval',
