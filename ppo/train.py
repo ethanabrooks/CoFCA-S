@@ -3,16 +3,16 @@ import time
 from pathlib import Path
 
 import numpy as np
-from gym.spaces import Discrete
-
 import torch
+from gym.spaces import Discrete
+from tensorboardX import SummaryWriter
+
 from ppo.envs import VecNormalize, make_vec_envs
 from ppo.policy import Policy
 from ppo.storage import RolloutStorage, TasksRolloutStorage
-from ppo.task_generator import SamplingStrategy, TaskGenerator
+from ppo.task_generator import TaskGenerator, SamplingStrategy
 from ppo.update import PPO
 from ppo.util import Categorical
-from tensorboardX import SummaryWriter
 from utils import onehot, space_to_size
 
 
@@ -98,14 +98,11 @@ def train(num_frames,
     actor_critic = Policy(
         envs.observation_space, envs.action_space, network_args=network_args)
 
-    gan = None
+    task_generator = None
     tasks_data = []
     last_index = 0
     if train_tasks:
-        gan = TaskGenerator(
-            task_size=sample_env.task_space.n,
-            **{k.replace('gan_', ''): v
-               for k, v in tasks_args.items()})
+        task_generator = TaskGenerator(task_size=sample_env.task_space.n, **tasks_args)
 
         if isinstance(sample_env.task_space, Discrete):
             task_size = 1
@@ -130,7 +127,7 @@ def train(num_frames,
             recurrent_hidden_state_size,
         )
 
-    agent = PPO(actor_critic=actor_critic, task_generator=gan, **ppo_args)
+    agent = PPO(actor_critic=actor_critic, task_generator=task_generator, **ppo_args)
 
     rewards_counter = np.zeros(num_processes)
     time_step_counter = np.zeros(num_processes)
@@ -143,7 +140,7 @@ def train(num_frames,
     if load_path:
         state_dict = torch.load(load_path)
         if train_tasks:
-            gan.load_state_dict(state_dict['gan'])
+            task_generator.load_state_dict(state_dict['task_generator'])
         actor_critic.load_state_dict(state_dict['actor_critic'])
         agent.optimizer.load_state_dict(state_dict['optimizer'])
         start = state_dict.get('step', -1) + 1
@@ -158,14 +155,14 @@ def train(num_frames,
 
     actor_critic.to(device)
     if train_tasks:
-        gan.to(device)
+        task_generator.to(device)
 
     obs = envs.reset()
     rollouts.obs[0].copy_(obs)
     rollouts.to(device)
     if train_tasks:
         tasks = torch.tensor(envs.unwrapped.get_tasks())
-        importance_weights = gan.importance_weight(tasks)
+        importance_weights = task_generator.importance_weight(tasks)
         rollouts.tasks[0].copy_(tasks.view(rollouts.tasks[0].size()))
         rollouts.importance_weighting[0].copy_(
             importance_weights.view(rollouts.importance_weighting[0].size()))
@@ -176,10 +173,10 @@ def train(num_frames,
         if train_tasks:
 
             unique = torch.arange(num_tasks)
-            if gan.sampling_strategy == SamplingStrategy.baseline.name:
+            if task_generator.sampling_strategy == SamplingStrategy.baseline.name:
                 logits = torch.ones_like(unique, dtype=torch.float)
-            elif gan.sampling_strategy == SamplingStrategy.adaptive.name:
-                logits = gan.logits * gan.temperature
+            elif task_generator.sampling_strategy == SamplingStrategy.adaptive.name:
+                logits = task_generator.logits * task_generator.temperature
             else:
                 raise RuntimeError
 
@@ -272,7 +269,7 @@ def train(num_frames,
                 modules.update(vec_normalize=envs.venv)
 
             if train_tasks:
-                modules.update(gan=gan)
+                modules.update(gan=task_generator)
             state_dict = {
                 name: module.state_dict()
                 for name, module in modules.items()
@@ -332,7 +329,7 @@ def train(num_frames,
                     fig = plt.figure()
                     probs = np.zeros(sample_env.desc.shape)
                     probs[sample_env.decode(
-                        sample_env.task_states)] = gan.probs()
+                        sample_env.task_states)] = task_generator.probs()
                     im = plt.imshow(probs, origin='lower', cmap=cm.cool)
                     plt.colorbar(im)
                     writer.add_figure('probs', fig, total_num_steps)
