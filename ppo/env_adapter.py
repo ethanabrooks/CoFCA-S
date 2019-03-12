@@ -139,6 +139,7 @@ class TasksGridWorld(GridWorld):
         self.task_letter = task_letter
         self.num_tasks = len(self.task_states)
         self.task_dist = np.ones_like(self.task_states) / self.num_tasks
+        self.task_prob = 1 / self.num_tasks
 
         size = self.observation_size
         if self.include_task_in_obs:
@@ -148,6 +149,9 @@ class TasksGridWorld(GridWorld):
             high=np.ones(size),
         )
 
+    def get_task_and_prob(self):
+        return self.task_index, self.task_prob
+
     def set_task(self, task_index):
         self.task_index = task_index
         task_state = self.task_states[self.task_index]
@@ -156,7 +160,9 @@ class TasksGridWorld(GridWorld):
 
     def reset(self):
         if not self.evaluation:
-            self.set_task(np.random.choice(self.num_tasks, p=self.task_dist))
+            task_index = np.random.choice(self.num_tasks, p=self.task_dist)
+            self.set_task(task_index)
+            self.task_prob = self.task_dist[task_index]
         return super().reset()
 
     def obs_vector(self, obs):
@@ -198,8 +204,8 @@ def worker(remote, parent_remote, env_fn_wrapper):
             remote.send((env.observation_space, env.action_space))
         elif cmd == 'set_task_dist':
             unwrap_tasks(env).set_task_dist(data)
-        elif cmd == 'get_task':
-            remote.send(unwrap_tasks(env).task_index)
+        elif cmd == 'get_task_and_prob':
+            remote.send(unwrap_tasks(env).get_task_and_prob())
         else:
             raise NotImplementedError
 
@@ -235,19 +241,19 @@ class TasksSubprocVecEnv(SubprocVecEnv):
     def set_task_dist(self, i, dist):
         self.remotes[i].send(('set_task_dist', dist))
 
-    def get_tasks(self):
+    def get_tasks_and_probs(self):
         self._assert_not_closed()
         for remote in self.remotes:
-            remote.send(('get_task', None))
+            remote.send(('get_task_and_prob', None))
         self.waiting = True
-        tasks = [remote.recv() for remote in self.remotes]
+        tasks, probs = zip(*[remote.recv() for remote in self.remotes])
         self.waiting = False
-        return tasks
+        return tasks, probs
 
 
 class TasksDummyVecEnv(DummyVecEnv):
     def set_task_dist(self, i, dist):
         unwrap_tasks(self.envs[i]).set_task_dist(dist)
 
-    def get_tasks(self):
-        return [unwrap_tasks(env).task_index for env in self.envs]
+    def get_tasks_and_probs(self):
+        return zip(*[unwrap_tasks(env).get_task_and_prob() for env in self.envs])

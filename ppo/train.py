@@ -161,7 +161,7 @@ def train(num_frames,
     rollouts.obs[0].copy_(obs)
     rollouts.to(device)
     if train_tasks:
-        tasks = torch.tensor(envs.unwrapped.get_tasks())
+        tasks, probs = map(torch.tensor, envs.unwrapped.get_tasks_and_probs())
         importance_weights = task_generator.importance_weight(tasks)
         rollouts.tasks[0].copy_(tasks.view(rollouts.tasks[0].size()))
         rollouts.importance_weighting[0].copy_(
@@ -197,8 +197,8 @@ def train(num_frames,
             masks = torch.FloatTensor(
                 [[0.0] if done_ else [1.0] for done_ in dones])
             if train_tasks:
-                tasks = torch.tensor(envs.unwrapped.get_tasks())
-                importance_weights = task_generator.importance_weight(tasks)
+                tasks, probs = map(torch.tensor, envs.unwrapped.get_tasks_and_probs())
+                importance_weights = 1 / (num_tasks * probs)
                 rollouts.insert(
                     obs=obs,
                     recurrent_hidden_states=recurrent_hidden_states,
