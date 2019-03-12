@@ -316,7 +316,7 @@ def train(num_frames,
                             np.concatenate(x) + x_noise,
                             np.concatenate(y) + y_noise,
                             c=c,
-                            cmap=cm.hot,
+                            cmap=cm.cool,
                             alpha=.1)
                         plt.colorbar(sc)
                         axes = plt.axes()
@@ -330,7 +330,7 @@ def train(num_frames,
                     probs = np.zeros(sample_env.desc.shape)
                     probs[sample_env.decode(
                         sample_env.task_states)] = gan.probs().detach()
-                    im = plt.imshow(probs, origin='lower')
+                    im = plt.imshow(probs, origin='lower', cmap=cm.cool)
                     plt.colorbar(im)
                     writer.add_figure('probs', fig, total_num_steps)
                     plt.close()
