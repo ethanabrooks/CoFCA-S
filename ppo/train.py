@@ -258,9 +258,8 @@ def train(num_frames,
         rollouts.after_update()
         total_num_steps = (j + 1) * num_processes * num_steps
 
-        if all(
-            [log_dir, save_interval,
-             time.time() - last_save >= save_interval]):
+        if log_dir and save_interval and \
+                time.time() - last_save >= save_interval:
             last_save = time.time()
             modules = dict(
                 optimizer=agent.optimizer,
