@@ -74,6 +74,14 @@ def build_parser():
         default=None,
         help='number of frames to train (default: None)')
     parser.add_argument(
+        '--solved',
+        type=float,
+        default=None,)
+    parser.add_argument(
+        '--num-solved',
+        type=int,
+        default=100,)
+    parser.add_argument(
         '--env-id',
         default='move-block',
         help='environment to train on (default: move-block)')

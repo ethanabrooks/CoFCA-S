@@ -35,6 +35,8 @@ def train(num_frames,
           network_args,
           num_processes,
           synchronous,
+          solved,
+          num_solved,
           tasks_args=None):
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
@@ -135,6 +137,7 @@ def train(num_frames,
     episode_rewards = []
     time_steps = []
     last_save = time.time()
+    solved_count = 0
 
     start = 0
     if load_path:
@@ -344,7 +347,7 @@ def train(num_frames,
             time_steps = []
 
         if eval_interval is not None and j % eval_interval == 0:
-            eval_episode_rewards = []
+            eval_episode_returns = []
             eval_time_steps = []
             eval_rewards_counter = np.zeros(num_tasks)
             eval_time_step_counter = np.zeros(num_tasks)
@@ -370,7 +373,7 @@ def train(num_frames,
                 # track rewards
                 eval_rewards_counter += rewards.numpy()
                 eval_time_step_counter += 1
-                eval_episode_rewards.append(eval_rewards_counter[dones])
+                eval_episode_returns.append(eval_rewards_counter[dones])
                 eval_time_steps.append(eval_time_step_counter[dones])
                 eval_rewards_counter[dones] = 0
                 eval_time_step_counter[dones] = 0
@@ -378,13 +381,23 @@ def train(num_frames,
                 eval_masks = torch.FloatTensor(
                     [[0.0] if done_ else [1.0] for done_ in dones])
 
+            mean_returns = np.mean(np.concatenate(eval_episode_returns))
             if log_dir:
                 writer.add_scalar(
-                    'eval return', np.mean(
-                        np.concatenate(eval_episode_rewards)), total_num_steps)
+                    'eval return', mean_returns, total_num_steps)
                 writer.add_scalar('eval time steps',
                                   np.mean(np.concatenate(eval_time_steps)),
                                   total_num_steps)
 
-            print(" Evaluation using {} episodes: mean reward {:.5f}\n".format(
-                num_tasks, np.mean(eval_rewards_counter)))
+            print(" Evaluation using {} episodes: mean return {:.5f}\n".format(
+                num_tasks, mean_returns))
+
+            if solved is not None:
+                if mean_returns >= solved:
+                    solved_count += 1
+                else:
+                    solved_count = 0
+
+            if solved_count == num_solved:
+                print('Environment solved.')
+                return
