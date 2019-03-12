@@ -1,9 +1,8 @@
 # stdlib
 # third party
 # first party
-from collections import Counter
-from enum import Enum
 import math
+from collections import Counter
 
 import torch
 import torch.nn as nn
@@ -11,7 +10,6 @@ import torch.optim as optim
 
 from ppo.storage import RolloutStorage, TasksRolloutStorage
 from ppo.task_generator import SamplingStrategy
-from ppo.util import Categorical
 
 
 def f(x):
@@ -22,16 +20,16 @@ def global_norm(grads):
     norm = 0
     for grad in grads:
         if grad is not None:
-            norm += grad.norm(2) ** 2
-    return norm ** .5
+            norm += grad.norm(2)**2
+    return norm**.5
 
 
 def epanechnikov_kernel(x):
-    return 3 / 4 * (1 - x ** 2)
+    return 3 / 4 * (1 - x**2)
 
 
 def gaussian_kernel(x):
-    return (2 * math.pi) ** -.5 * torch.exp(-.5 * x ** 2)
+    return (2 * math.pi)**-.5 * torch.exp(-.5 * x**2)
 
 
 class PPO:
@@ -164,7 +162,7 @@ class PPO:
             value_losses, action_losses, entropy \
                 = components = self.compute_loss_components(sample)
             loss = self.compute_loss(
-                *components, importance_weighting=importance_weighting)
+                *components, importance_weighting=sample.importance_weighting)
 
             # update
             loss.backward()
@@ -175,15 +173,16 @@ class PPO:
             self.optimizer.step()
             self.optimizer.zero_grad()
 
-            update_values.update(grad_measure=grads_per_step,
-                                 value_loss=torch.mean(value_losses),
-                                 action_loss=torch.mean(action_losses),
-                                 norm=total_norm,
-                                 entropy=torch.mean(entropy),
-                                 n=1)
-            if importance_weighting is not None:
+            update_values.update(
+                grad_measure=grads_per_step,
+                value_loss=torch.mean(value_losses),
+                action_loss=torch.mean(action_losses),
+                norm=total_norm,
+                entropy=torch.mean(entropy),
+                n=1)
+            if sample.importance_weighting is not None:
                 update_values.update(
-                    importance_weighting=importance_weighting.mean())
+                    importance_weighting=sample.importance_weighting.mean())
 
         return_values = {}
 

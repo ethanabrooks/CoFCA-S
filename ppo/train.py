@@ -171,27 +171,10 @@ def train(num_frames,
     for j in updates:
 
         if train_tasks:
-
-            unique = torch.arange(num_tasks)
-            if task_generator.sampling_strategy == SamplingStrategy.baseline.name:
-                logits = torch.ones_like(unique, dtype=torch.float)
-            elif task_generator.sampling_strategy == SamplingStrategy.adaptive.name:
-                logits = task_generator.logits * task_generator.temperature
-            else:
-                raise RuntimeError
-
-            # sample tasks
-            dist = Categorical(logits=logits)
-            task_to_train = dist.sample()
-            prob = dist.log_prob(task_to_train).exp()
-            importance_weighting = 1 / (unique.numel() * prob)
-
-            tasks = (int(task_to_train) + np.arange(num_processes)) % num_tasks
-            for i, task in enumerate(tasks):
-                envs.unwrapped.set_task_dist(i, dist.probs.detach().numpy())
+            for i in range(num_processes):
+                envs.unwrapped.set_task_dist(i, task_generator.probs())
 
         for step in range(num_steps):
-            # Sample actions.add_argument_group('env_args')
             with torch.no_grad():
                 values, actions, action_log_probs, recurrent_hidden_states = \
                     actor_critic.act(
@@ -215,6 +198,7 @@ def train(num_frames,
                 [[0.0] if done_ else [1.0] for done_ in dones])
             if train_tasks:
                 tasks = torch.tensor(envs.unwrapped.get_tasks())
+                importance_weights = task_generator.importance_weight(tasks)
                 rollouts.insert(
                     obs=obs,
                     recurrent_hidden_states=recurrent_hidden_states,
@@ -246,7 +230,7 @@ def train(num_frames,
             next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau)
 
         train_results, *task_stuff = agent.update(rollouts,
-                                                  importance_weighting)
+                                                  importance_weights)
         if train_tasks:
             tasks_trained, task_returns, gradient_sums = task_stuff
             tasks_trained = sample_env.task_states[tasks_trained.int().numpy()]
