@@ -12,7 +12,7 @@ from ppo.env_adapter import (GridWorld, HSREnv, MoveGripperEnv,
                              TasksMoveGripperEnv, TrainTasksGridWorld)
 from ppo.envs import wrap_env
 from ppo.train import train
-from ppo.update import SamplingStrategy
+from ppo.task_generator import SamplingStrategy
 from ppo.util import parse_activation
 from utils import parse_groups
 
@@ -143,14 +143,6 @@ def build_parser():
         type=float,
         default=0.5,
         help='max norm of gradients (default: 0.5)')
-    ppo_parser.add_argument(
-        '--exploration-bonus',
-        type=float,
-    )
-    ppo_parser.add_argument(
-        '--sampling-strategy',
-        choices=[s.name for s in SamplingStrategy],
-        default='experiment')
     return parser
 
 
@@ -168,20 +160,13 @@ def add_tasks_args(parser):
         type=float,
     )
     tasks_parser.add_argument(
-        '--gan-learning-rate',
+        '--exploration-bonus',
         type=float,
-        default=7e-4,
-        help='(default: 7e-4)')
-    tasks_parser.add_argument('--gan-num-samples', type=int)
-    tasks_parser.add_argument('--gan-hidden-size', type=int)
-    tasks_parser.add_argument('--gan-num-layers', type=int)
+    )
     tasks_parser.add_argument(
-        '--gan-activation', type=parse_activation, default=nn.ReLU())
-    tasks_parser.add_argument(
-        '--gan-entropy-coef',
-        type=float,
-        default=0.01,
-        help='entropy term coefficient (default: 0.01)')
+        '--sampling-strategy',
+        choices=[s.name for s in SamplingStrategy],
+        default='experiment')
 
 
 def cli():

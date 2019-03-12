@@ -10,6 +10,7 @@ import torch.nn as nn
 import torch.optim as optim
 
 from ppo.storage import RolloutStorage, TasksRolloutStorage
+from ppo.task_generator import SamplingStrategy
 from ppo.util import Categorical
 
 
@@ -33,11 +34,6 @@ def gaussian_kernel(x):
     return (2 * math.pi) ** -.5 * torch.exp(-.5 * x ** 2)
 
 
-SamplingStrategy = Enum(
-    'SamplingStrategy',
-    'baseline binary_logits gradients max learned learn_sampled')
-
-
 class PPO:
     def __init__(self,
                  actor_critic,
@@ -46,16 +42,12 @@ class PPO:
                  batch_size,
                  value_loss_coef,
                  entropy_coef,
-                 sampling_strategy,
-                 exploration_bonus,
                  learning_rate=None,
                  eps=None,
                  max_grad_norm=None,
                  use_clipped_value_loss=True,
                  task_generator=None):
 
-        self.exploration_bonus = exploration_bonus
-        self.sampling_strategy = sampling_strategy
         self.train_tasks = bool(task_generator)
         self.actor_critic = actor_critic
 
@@ -71,6 +63,7 @@ class PPO:
 
         if self.train_tasks:
             self.task_generator = task_generator
+            self.sampling_strategy = self.task_generator.sampling_strategy
 
         self.optimizer = optim.Adam(
             actor_critic.parameters(), lr=learning_rate, eps=eps)
@@ -157,9 +150,9 @@ class PPO:
                 grads_per_task[i] = grads_per_step[uses_task] = sum(
                     g.abs().sum() for g in grad if g is not None)
 
-            if self.sampling_strategy == SamplingStrategy.learn_sampled.name:
+            if self.sampling_strategy == SamplingStrategy.adaptive.name:
                 logits = self.task_generator.logits
-                logits += self.exploration_bonus
+                logits += self.task_generator.exploration_bonus
                 logits[tasks_to_train] = grads_per_task
 
             # make sample

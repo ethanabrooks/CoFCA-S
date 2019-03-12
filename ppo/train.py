@@ -3,16 +3,16 @@ import time
 from pathlib import Path
 
 import numpy as np
-import torch
 from gym.spaces import Discrete
-from tensorboardX import SummaryWriter
 
+import torch
 from ppo.envs import VecNormalize, make_vec_envs
 from ppo.policy import Policy
 from ppo.storage import RolloutStorage, TasksRolloutStorage
-from ppo.task_generator import TaskGenerator
-from ppo.update import PPO, SamplingStrategy
+from ppo.task_generator import SamplingStrategy, TaskGenerator
+from ppo.update import PPO
 from ppo.util import Categorical
+from tensorboardX import SummaryWriter
 from utils import onehot, space_to_size
 
 
@@ -176,9 +176,9 @@ def train(num_frames,
         if train_tasks:
 
             unique = torch.arange(num_tasks)
-            if agent.sampling_strategy == SamplingStrategy.baseline.name:
+            if gan.sampling_strategy == SamplingStrategy.baseline.name:
                 logits = torch.ones_like(unique, dtype=torch.float)
-            elif agent.sampling_strategy == SamplingStrategy.learn_sampled.name:
+            elif gan.sampling_strategy == SamplingStrategy.adaptive.name:
                 logits = gan.logits * gan.temperature
             else:
                 raise RuntimeError
@@ -332,7 +332,7 @@ def train(num_frames,
                     fig = plt.figure()
                     probs = np.zeros(sample_env.desc.shape)
                     probs[sample_env.decode(
-                        sample_env.task_states)] = gan.probs().detach()
+                        sample_env.task_states)] = gan.probs()
                     im = plt.imshow(probs, origin='lower', cmap=cm.cool)
                     plt.colorbar(im)
                     writer.add_figure('probs', fig, total_num_steps)
@@ -383,8 +383,7 @@ def train(num_frames,
 
             mean_returns = np.mean(np.concatenate(eval_episode_returns))
             if log_dir:
-                writer.add_scalar(
-                    'eval return', mean_returns, total_num_steps)
+                writer.add_scalar('eval return', mean_returns, total_num_steps)
                 writer.add_scalar('eval time steps',
                                   np.mean(np.concatenate(eval_time_steps)),
                                   total_num_steps)
