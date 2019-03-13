@@ -153,16 +153,11 @@ class PPO:
                 logits += self.task_generator.exploration_bonus
                 logits[tasks_to_train] = grads_per_task
 
-            # make sample
-            uses_task = (batches.process == 0).any(-1)
-            train_indices = torch.arange(total_batch_size)[uses_task]
-            sample = rollouts.make_batch(advantages, train_indices)
-
             # Compute loss
             value_losses, action_losses, entropy \
-                = components = self.compute_loss_components(sample)
+                = components = self.compute_loss_components(batches)
             loss = self.compute_loss(
-                *components, importance_weighting=sample.importance_weighting)
+                *components, importance_weighting=batches.importance_weighting)
 
             # update
             loss.backward()
@@ -180,9 +175,9 @@ class PPO:
                 norm=total_norm,
                 entropy=torch.mean(entropy),
                 n=1)
-            if sample.importance_weighting is not None:
+            if batches.importance_weighting is not None:
                 update_values.update(
-                    importance_weighting=sample.importance_weighting.mean())
+                    importance_weighting=batches.importance_weighting.mean())
 
         return_values = {}
 
@@ -195,8 +190,5 @@ class PPO:
         if self.train_tasks and 'n' in task_values:
             accumulate_values(task_values)
 
-        try:
-            tasks = batch.tasks
-        except AttributeError:
-            tasks = None
-        return return_values, tasks
+        if self.train_tasks:
+            return return_values, batch.tasks,
