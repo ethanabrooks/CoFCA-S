@@ -229,8 +229,7 @@ def train(num_frames,
         rollouts.compute_returns(
             next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau)
 
-        train_results, tasks_trained = agent.update(rollouts,
-                                                  importance_weights)
+        train_results, tasks_trained = agent.update(rollouts)
         if train_tasks:
             task_counts[tasks_trained] += 1
 
