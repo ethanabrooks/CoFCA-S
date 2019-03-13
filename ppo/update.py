@@ -195,4 +195,8 @@ class PPO:
         if self.train_tasks and 'n' in task_values:
             accumulate_values(task_values)
 
-        return return_values, batch.tasks, batch.ret, grads_per_step
+        try:
+            tasks = batch.tasks
+        except AttributeError:
+            tasks = None
+        return return_values, tasks

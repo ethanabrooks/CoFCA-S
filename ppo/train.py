@@ -99,7 +99,7 @@ def train(num_frames,
         envs.observation_space, envs.action_space, network_args=network_args)
 
     task_generator = None
-    tasks_data = []
+    task_counts = np.zeros(num_tasks)
     last_index = 0
     if train_tasks:
         task_generator = TaskGenerator(task_size=sample_env.task_space.n, **tasks_args)
@@ -229,15 +229,10 @@ def train(num_frames,
         rollouts.compute_returns(
             next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau)
 
-        train_results, *task_stuff = agent.update(rollouts,
+        train_results, tasks_trained = agent.update(rollouts,
                                                   importance_weights)
         if train_tasks:
-            tasks_trained, task_returns, gradient_sums = task_stuff
-            tasks_trained = sample_env.task_states[tasks_trained.int().numpy()]
-            tasks_data.extend(
-                [(x, y, r, g)
-                 for x, y, r, g in zip(*sample_env.decode(tasks_trained),
-                                       task_returns, gradient_sums)])
+            task_counts[tasks_trained] += 1
 
         rollouts.after_update()
         total_num_steps = (j + 1) * num_processes * num_steps
@@ -283,47 +278,20 @@ def train(num_frames,
                                   total_num_steps)
                 writer.add_scalar('time steps', np.mean(time_steps),
                                   total_num_steps)
-                writer.add_scalar('num tasks', len(tasks_data),
-                                  total_num_steps)
                 for k, v in train_results.items():
                     if v.dim() == 0:
                         writer.add_scalar(k, v, total_num_steps)
 
                 if train_tasks:
-                    x, y, rewards, gradient = zip(*tasks_data)
-
-                    def plot(c, text, x=x, y=y):
-                        fig = plt.figure()
-                        x_noise = (np.random.rand(len(x)) - .5) * .9
-                        y_noise = (np.random.rand(len(y)) - .5) * .9
-                        sc = plt.scatter(
-                            np.concatenate(x) + x_noise,
-                            np.concatenate(y) + y_noise,
-                            c=c,
-                            cmap=cm.cool,
-                            alpha=.1)
-                        plt.colorbar(sc)
-                        axes = plt.axes()
-                        axes.set_xlim(-.5, xlim - .5)
-                        axes.set_ylim(-.5, ylim - .5)
-                        plt.subplots_adjust(.15, .15, .95, .95)
-                        writer.add_figure(text, fig, total_num_steps)
-                        plt.close(fig)
-
                     fig = plt.figure()
-                    probs = np.zeros(sample_env.desc.shape)
-                    probs[sample_env.decode(
-                        sample_env.task_states)] = task_generator.probs()
-                    im = plt.imshow(probs, origin='lower', cmap=cm.cool)
+                    desc = np.zeros(sample_env.desc.shape)
+                    desc[sample_env.decode(
+                        sample_env.task_states)] = task_counts
+                    im = plt.imshow(desc, origin='lower', cmap=cm.cool)
                     plt.colorbar(im)
-                    writer.add_figure('probs', fig, total_num_steps)
+                    writer.add_figure('task selection', fig, total_num_steps)
                     plt.close()
 
-                    plot(rewards, 'rewards')
-                    plot(gradient, 'gradients')
-
-                    x, y, rewards, gradient = zip(*tasks_data[last_index:])
-                    last_index = len(tasks_data)
             episode_rewards = []
             time_steps = []
 
