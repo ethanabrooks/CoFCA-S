@@ -6,14 +6,13 @@ import numpy as np
 import torch
 from gym.spaces import Discrete
 from tensorboardX import SummaryWriter
+from utils import space_to_size
 
 from ppo.envs import VecNormalize, make_vec_envs
 from ppo.policy import Policy
 from ppo.storage import RolloutStorage, TasksRolloutStorage
-from ppo.task_generator import TaskGenerator, SamplingStrategy
+from ppo.task_generator import TaskGenerator
 from ppo.update import PPO
-from ppo.util import Categorical
-from utils import onehot, space_to_size
 
 
 def train(num_frames,
@@ -100,6 +99,7 @@ def train(num_frames,
 
     task_generator = None
     task_counts = np.zeros(num_tasks)
+    last_gradient = np.zeros(num_tasks)
     last_index = 0
     if train_tasks:
         task_generator = TaskGenerator(task_size=sample_env.task_space.n, **tasks_args)
@@ -229,9 +229,11 @@ def train(num_frames,
         rollouts.compute_returns(
             next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau)
 
-        train_results, tasks_trained = agent.update(rollouts)
+        train_results, *task_stuff = agent.update(rollouts)
         if train_tasks:
+            tasks_trained, grads_per_task = task_stuff
             task_counts[tasks_trained] += 1
+            last_gradient[tasks_trained] = grads_per_task
 
         rollouts.after_update()
         total_num_steps = (j + 1) * num_processes * num_steps
@@ -282,14 +284,18 @@ def train(num_frames,
                         writer.add_scalar(k, v, total_num_steps)
 
                 if train_tasks:
-                    fig = plt.figure()
-                    desc = np.zeros(sample_env.desc.shape)
-                    desc[sample_env.decode(
-                        sample_env.task_states)] = task_counts
-                    im = plt.imshow(desc, origin='lower', cmap=cm.cool)
-                    plt.colorbar(im)
-                    writer.add_figure('task selection', fig, total_num_steps)
-                    plt.close()
+                    def plot(heatmap_values, name):
+                        fig = plt.figure()
+                        desc = np.zeros(sample_env.desc.shape)
+                        desc[sample_env.decode(
+                            sample_env.task_states)] = heatmap_values
+                        im = plt.imshow(desc, origin='lower')
+                        plt.colorbar(im)
+                        writer.add_figure(name, fig, total_num_steps)
+                        plt.close()
+
+                    plot(task_counts, 'task selection')
+                    plot(last_gradient, 'last gradient')
 
             episode_rewards = []
             time_steps = []

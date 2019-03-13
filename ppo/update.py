@@ -191,4 +191,6 @@ class PPO:
             accumulate_values(task_values)
 
         if self.train_tasks:
-            return return_values, batch.tasks,
+            return return_values, tasks_to_train, grads_per_task
+        else:
+            return return_values, None
