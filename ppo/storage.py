@@ -220,8 +220,8 @@ class TasksRolloutStorage(RolloutStorage):
 
     def to(self, device):
         super().to(device)
-        self.tasks.to(device)
-        self.importance_weighting.to(device)
+        self.tasks = self.tasks.to(device)
+        self.importance_weighting = self.importance_weighting.to(device)
 
     def insert(self, task, importance_weighting, **kwargs):
         step = self.step + 1
