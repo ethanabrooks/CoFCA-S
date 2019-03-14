@@ -20,16 +20,16 @@ def global_norm(grads):
     norm = 0
     for grad in grads:
         if grad is not None:
-            norm += grad.norm(2) ** 2
-    return norm ** .5
+            norm += grad.norm(2)**2
+    return norm**.5
 
 
 def epanechnikov_kernel(x):
-    return 3 / 4 * (1 - x ** 2)
+    return 3 / 4 * (1 - x**2)
 
 
 def gaussian_kernel(x):
-    return (2 * math.pi) ** -.5 * torch.exp(-.5 * x ** 2)
+    return (2 * math.pi)**-.5 * torch.exp(-.5 * x**2)
 
 
 class PPO:
@@ -113,11 +113,6 @@ class PPO:
         # advantages.std() + 1e-5)
         update_values = Counter()
         task_values = Counter()
-
-        num_steps, num_processes = rollouts.rewards.size()[0:2]
-        total_batch_size = num_steps * num_processes
-        batches = rollouts.make_batch(advantages,
-                                      torch.arange(total_batch_size))
 
         total_norm = torch.tensor(0, dtype=torch.float32)
 
