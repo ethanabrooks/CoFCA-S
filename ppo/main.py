@@ -7,12 +7,11 @@ from torch import nn as nn
 
 import gridworld_env
 import hsr.util
-from ppo.env_adapter import (GridWorld, HSREnv, MoveGripperEnv,
-                             RandomGridWorld, TasksGridWorld, TasksHSREnv,
+from ppo.env_adapter import (GridWorld, HSREnv, MoveGripperEnv, RandomGridWorld, TasksGridWorld, TasksHSREnv,
                              TasksMoveGripperEnv, TrainTasksGridWorld)
 from ppo.envs import wrap_env
-from ppo.train import train
 from ppo.task_generator import SamplingStrategy
+from ppo.train import train
 from ppo.util import parse_activation
 from utils import parse_groups
 
@@ -76,11 +75,13 @@ def build_parser():
     parser.add_argument(
         '--solved',
         type=float,
-        default=None,)
+        default=None,
+    )
     parser.add_argument(
         '--num-solved',
         type=int,
-        default=100,)
+        default=100,
+    )
     parser.add_argument(
         '--env-id',
         default='move-block',
@@ -268,4 +269,4 @@ def tasks_hsr_cli():
 
 
 if __name__ == "__main__":
-    tasks_cli()
+    cli()

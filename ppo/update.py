@@ -1,8 +1,8 @@
 # stdlib
 # third party
 # first party
-import math
 from collections import Counter
+import math
 
 import torch
 import torch.nn as nn
@@ -121,37 +121,40 @@ class PPO:
         total_batch_size = num_steps * num_processes
         batches = rollouts.make_batch(advantages,
                                       torch.arange(total_batch_size))
-        tasks_to_train = torch.unique(batches.tasks[batches.process == 0])
-        grads_per_step = torch.zeros(total_batch_size)
-        grads_per_task = torch.zeros_like(tasks_to_train, dtype=torch.float)
+        if self.train_tasks:
+            tasks_to_train = torch.unique(batches.tasks[batches.process == 0])
+            grads_per_step = torch.zeros(total_batch_size)
+            grads_per_task = torch.zeros_like(
+                tasks_to_train, dtype=torch.float)
 
         for e in range(self.ppo_epoch):
-            assert isinstance(rollouts, TasksRolloutStorage)
+            if self.train_tasks:
+                for i, task in enumerate(tasks_to_train):
+                    uses_task = (batches.tasks == task).any(-1)
+                    train_indices = torch.arange(total_batch_size)[uses_task]
+                    batch = rollouts.make_batch(advantages, train_indices)
+                    _, action_loss, _ = self.compute_loss_components(
+                        batch, compute_value_loss=False)
 
-            for i, task in enumerate(tasks_to_train):
-                uses_task = (batches.tasks == task).any(-1)
-                train_indices = torch.arange(total_batch_size)[uses_task]
-                batch = rollouts.make_batch(advantages, train_indices)
-                _, action_loss, _ = self.compute_loss_components(
-                    batch, compute_value_loss=False)
+                    loss = self.compute_loss(
+                        action_loss=action_loss,
+                        dist_entropy=0,
+                        value_loss=None,
+                        importance_weighting=None)
+                    grad = torch.autograd.grad(
+                        loss,
+                        self.actor_critic.parameters(),
+                        retain_graph=True,
+                        allow_unused=True)
+                    grads_per_task[i] = grads_per_step[uses_task] = sum(
+                        g.abs().sum() for g in grad if g is not None)
 
-                loss = self.compute_loss(
-                    action_loss=action_loss,
-                    dist_entropy=0,
-                    value_loss=None,
-                    importance_weighting=None)
-                grad = torch.autograd.grad(
-                    loss,
-                    self.actor_critic.parameters(),
-                    retain_graph=True,
-                    allow_unused=True)
-                grads_per_task[i] = grads_per_step[uses_task] = sum(
-                    g.abs().sum() for g in grad if g is not None)
+                if self.sampling_strategy == SamplingStrategy.adaptive.name:
+                    logits = self.task_generator.logits
+                    logits += self.task_generator.exploration_bonus
+                    logits[tasks_to_train] = grads_per_task
 
-            if self.sampling_strategy == SamplingStrategy.adaptive.name:
-                logits = self.task_generator.logits
-                logits += self.task_generator.exploration_bonus
-                logits[tasks_to_train] = grads_per_task
+                task_values.update(grad_measure=grads_per_step, n=1)
 
             # Compute loss
             value_losses, action_losses, entropy \
@@ -169,7 +172,6 @@ class PPO:
             self.optimizer.zero_grad()
 
             update_values.update(
-                grad_measure=grads_per_step,
                 value_loss=torch.mean(value_losses),
                 action_loss=torch.mean(action_losses),
                 norm=total_norm,
