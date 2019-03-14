@@ -1,18 +1,32 @@
+import csv
 import itertools
+import subprocess
 import time
+from io import StringIO
 from pathlib import Path
 
 import numpy as np
-from gym.spaces import Discrete
-
 import torch
+from gym.spaces import Discrete
+from tensorboardX import SummaryWriter
+
 from ppo.envs import VecNormalize, make_vec_envs
 from ppo.policy import Policy
 from ppo.storage import RolloutStorage, TasksRolloutStorage
 from ppo.task_generator import TaskGenerator
 from ppo.update import PPO
-from tensorboardX import SummaryWriter
 from utils import space_to_size
+
+
+def get_freer_gpu():
+    nvidia_smi = subprocess.check_output(
+        'nvidia-smi --format=csv --query-gpu=memory.free'.split(),
+        universal_newlines=True)
+    free_memory = [
+        float(x[0].split()[0])
+        for i, x in enumerate(csv.reader(StringIO(nvidia_smi))) if i > 0
+    ]
+    return np.argmax(free_memory)
 
 
 def train(num_frames,
@@ -59,7 +73,7 @@ def train(num_frames,
                     f.unlink()
 
     torch.set_num_threads(1)
-    device = torch.device("cuda:0" if cuda else "cpu")
+    device = torch.device(f"cuda:{get_freer_gpu()}" if cuda else "cpu")
 
     train_tasks = tasks_args is not None
     sample_env = make_env(seed=seed, rank=0, evaluation=False).unwrapped
@@ -235,7 +249,7 @@ def train(num_frames,
 
         train_results, *task_stuff = agent.update(rollouts)
         if train_tasks:
-            tasks_trained, grads_per_task = task_stuff
+            tasks_trained, grads_per_task = [x.to('cpu') for x in task_stuff]
             task_counts[tasks_trained] += 1
             last_gradient[tasks_trained] = grads_per_task
 
