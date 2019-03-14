@@ -2,15 +2,14 @@
 # third party
 # first party
 from collections import Counter
-from enum import Enum
 import math
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from ppo.storage import RolloutStorage, TasksRolloutStorage
-from ppo.util import Categorical
+from ppo.storage import RolloutStorage
+from ppo.task_generator import SamplingStrategy
 
 
 def f(x):
@@ -33,11 +32,6 @@ def gaussian_kernel(x):
     return (2 * math.pi) ** -.5 * torch.exp(-.5 * x ** 2)
 
 
-SamplingStrategy = Enum(
-    'SamplingStrategy',
-    'baseline binary_logits gradients max learned learn_sampled')
-
-
 class PPO:
     def __init__(self,
                  actor_critic,
@@ -46,18 +40,12 @@ class PPO:
                  batch_size,
                  value_loss_coef,
                  entropy_coef,
-                 temperature,
-                 sampling_strategy,
-                 global_norm,
                  learning_rate=None,
                  eps=None,
                  max_grad_norm=None,
                  use_clipped_value_loss=True,
                  task_generator=None):
 
-        self.global_norm = global_norm
-        self.sampling_strategy = sampling_strategy
-        self.temperature = temperature
         self.train_tasks = bool(task_generator)
         self.actor_critic = actor_critic
 
@@ -72,11 +60,8 @@ class PPO:
         self.use_clipped_value_loss = use_clipped_value_loss
 
         if self.train_tasks:
-            self.task_optimizer = optim.Adam(
-                task_generator.parameters(),
-                lr=task_generator.learning_rate,
-                eps=eps)
             self.task_generator = task_generator
+            self.sampling_strategy = self.task_generator.sampling_strategy
 
         self.optimizer = optim.Adam(
             actor_critic.parameters(), lr=learning_rate, eps=eps)
@@ -122,9 +107,10 @@ class PPO:
         return torch.mean(losses)
 
     def update(self, rollouts: RolloutStorage):
+        global batch
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
-        advantages = (advantages - advantages.mean()) / (
-                advantages.std() + 1e-5)
+        # advantages = (advantages - advantages.mean()) / (
+        # advantages.std() + 1e-5)
         update_values = Counter()
         task_values = Counter()
 
@@ -134,25 +120,27 @@ class PPO:
                                       torch.arange(total_batch_size))
 
         total_norm = torch.tensor(0, dtype=torch.float32)
+
+        # compute_losses
+        num_steps, num_processes = rollouts.rewards.size()[0:2]
+        total_batch_size = num_steps * num_processes
+        batches = rollouts.make_batch(advantages,
+                                      torch.arange(total_batch_size))
         if self.train_tasks:
-            tasks_trained = []
-            task_grads = []
-            task_returns = []
+            tasks_to_train = torch.unique(batches.tasks[batches.process == 0])
+            grads_per_step = torch.zeros(total_batch_size)
+            grads_per_task = torch.zeros_like(
+                tasks_to_train, dtype=torch.float)
 
         for e in range(self.ppo_epoch):
-            num_steps, num_processes = rollouts.rewards.size()[0:2]
-            total_batch_size = num_steps * num_processes
             if self.train_tasks:
-                batches = rollouts.make_batch(advantages,
-                                              torch.arange(total_batch_size))
-                _, action_losses, _ = self.compute_loss_components(
-                    batches, compute_value_loss=False)
-                unique = torch.unique(batches.tasks)
-                grads = torch.zeros(unique.size()[0])
-                returns = torch.zeros(unique.size()[0])
-                for i, task in enumerate(unique):
-                    action_loss = action_losses[batches.tasks == task]
-                    returns[i] = torch.mean(batches.ret[batches.tasks == task])
+                for i, task in enumerate(tasks_to_train):
+                    uses_task = (batches.tasks == task).any(-1)
+                    train_indices = torch.arange(total_batch_size)[uses_task]
+                    batch = rollouts.make_batch(advantages, train_indices)
+                    _, action_loss, _ = self.compute_loss_components(
+                        batch, compute_value_loss=False)
+
                     loss = self.compute_loss(
                         action_loss=action_loss,
                         dist_entropy=0,
@@ -163,32 +151,19 @@ class PPO:
                         self.actor_critic.parameters(),
                         retain_graph=True,
                         allow_unused=True)
-                    if self.global_norm:
-                        grads[i] = global_norm(
-                            [p.grad for p in self.actor_critic.parameters()])
-                    else:
-                        grads[i] = sum(
-                            g.abs().sum() for g in grad if g is not None)
-                tasks_trained.append(unique)
-                task_grads.append(grads)
-                task_returns.append(returns)
+                    grads_per_task[i] = grads_per_step[uses_task] = sum(
+                        g.abs().sum() for g in grad if g is not None)
 
-                def update_task_params(logits_to_update, targets):
-                    task_loss = torch.mean((logits_to_update - targets) ** 2)
-                    task_loss.backward()
-                    self.task_optimizer.step()
-                    update_values.update(
-                        task_loss=task_loss,
-                        grad_measure=grads)
+                if self.sampling_strategy == SamplingStrategy.adaptive.name:
+                    logits = self.task_generator.logits
+                    logits += self.task_generator.exploration_bonus
+                    logits[tasks_to_train] = grads_per_task
 
-                # sample tasks
-                logits = self.task_generator.parameter
-                update_task_params(logits[unique.long()], grads)
+                task_values.update(grad_measure=grads_per_step, n=1)
 
             # Compute loss
             value_losses, action_losses, entropy \
                 = components = self.compute_loss_components(batches)
-            # if self.sampling_strategy == SamplingStrategy.learn_sampled.name:
             loss = self.compute_loss(
                 *components, importance_weighting=batches.importance_weighting)
 
@@ -201,37 +176,28 @@ class PPO:
             self.optimizer.step()
             self.optimizer.zero_grad()
 
-            update_values.update(value_loss=torch.mean(value_losses))
-            update_values.update(action_loss=torch.mean(action_losses))
-            update_values.update(norm=total_norm)
-            update_values.update(entropy=torch.mean(entropy))
-            update_values.update(n=1)
-            # update_values.update(
-            # dist_mean=dist.mean,
-            # dist_std=dist.stddev,
-            # grad_measure=grads,
-            # value_loss=value_losses,
-            # action_loss=action_losses,
-            # norm=total_norm,
-            # entropy=entropy,
-            # task_trained=tasks_to_train,
-            # n=1)
+            update_values.update(
+                value_loss=torch.mean(value_losses),
+                action_loss=torch.mean(action_losses),
+                norm=total_norm,
+                entropy=torch.mean(entropy),
+                n=1)
             if batches.importance_weighting is not None:
                 update_values.update(
                     importance_weighting=batches.importance_weighting.mean())
 
-        n = update_values.pop('n')
-        update_values = {
-            k: torch.mean(v) / n
-            for k, v in update_values.items()
-        }
+        return_values = {}
+
+        def accumulate_values(counter):
+            n = counter.pop('n')
+            for k, v in counter.items():
+                return_values[k] = torch.mean(v) / n
+
+        accumulate_values(update_values)
         if self.train_tasks and 'n' in task_values:
-            n = task_values.pop('n')
-            for k, v in task_values.items():
-                update_values[k] = torch.mean(v) / n
+            accumulate_values(task_values)
 
         if self.train_tasks:
-            return update_values, (torch.cat(
-                tasks_trained), torch.cat(task_returns), torch.cat(task_grads))
+            return return_values, tasks_to_train, grads_per_task
         else:
-            return update_values, None
+            return return_values, None

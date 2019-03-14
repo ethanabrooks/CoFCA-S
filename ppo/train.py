@@ -12,30 +12,31 @@ from ppo.policy import Policy
 from ppo.storage import RolloutStorage, TasksRolloutStorage
 from ppo.task_generator import TaskGenerator
 from ppo.update import PPO
-from utils import onehot, space_to_size
+from utils import space_to_size
 
 
-def train(
-        num_frames,
-        num_steps,
-        seed,
-        cuda_deterministic,
-        cuda,
-        log_dir: Path,
-        make_env,
-        gamma,
-        normalize,
-        save_interval,
-        load_path,
-        log_interval,
-        eval_interval,
-        use_gae,
-        tau,
-        ppo_args,
-        network_args,
-        num_processes,
-        synchronous,
-        tasks_args=None):
+def train(num_frames,
+          num_steps,
+          seed,
+          cuda_deterministic,
+          cuda,
+          log_dir: Path,
+          make_env,
+          gamma,
+          normalize,
+          save_interval,
+          load_path,
+          log_interval,
+          eval_interval,
+          use_gae,
+          tau,
+          ppo_args,
+          network_args,
+          num_processes,
+          synchronous,
+          solved,
+          num_solved,
+          tasks_args=None):
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
 
@@ -46,7 +47,6 @@ def train(
     if log_dir:
         import matplotlib.pyplot as plt
 
-        import matplotlib.cm as cm
         writer = SummaryWriter(log_dir=str(log_dir))
         print(f'Logging to {log_dir}')
         eval_log_dir = log_dir.joinpath("eval")
@@ -67,7 +67,6 @@ def train(
 
     if log_dir:
         plt.switch_backend('agg')
-        xlim, ylim = sample_env.desc.shape
 
     _gamma = gamma if normalize else None
     envs = make_vec_envs(
@@ -89,23 +88,19 @@ def train(
             device=device,
             train_tasks=train_tasks,
             normalize=normalize,
+            synchronous=synchronous,
             eval=True,
         )
 
     actor_critic = Policy(
         envs.observation_space, envs.action_space, network_args=network_args)
 
-    gan = None
-    tasks_data = []
-    last_index = 0
+    task_generator = None
+    task_counts = np.zeros(num_tasks)
+    last_gradient = np.zeros(num_tasks)
     if train_tasks:
-        gan = TaskGenerator(
-            task_size=sample_env.task_space.n,
-            **{k.replace('gan_', ''): v
-               for k, v in tasks_args.items()})
-
-        # for i in range(num_processes):
-        #     envs.unwrapped.set_task_dist(gan.probs().detach().numpy())
+        task_generator = TaskGenerator(
+            task_size=sample_env.task_space.n, **tasks_args)
 
         if isinstance(sample_env.task_space, Discrete):
             task_size = 1
@@ -130,19 +125,21 @@ def train(
                 recurrent_hidden_state_size,
         )
 
-    agent = PPO(actor_critic=actor_critic, task_generator=gan, **ppo_args)
+    agent = PPO(
+        actor_critic=actor_critic, task_generator=task_generator, **ppo_args)
 
     rewards_counter = np.zeros(num_processes)
     time_step_counter = np.zeros(num_processes)
     episode_rewards = []
     time_steps = []
     last_save = time.time()
+    solved_count = 0
 
     start = 0
     if load_path:
         state_dict = torch.load(load_path)
         if train_tasks:
-            gan.load_state_dict(state_dict['gan'])
+            task_generator.load_state_dict(state_dict['task_generator'])
         actor_critic.load_state_dict(state_dict['actor_critic'])
         agent.optimizer.load_state_dict(state_dict['optimizer'])
         start = state_dict.get('step', -1) + 1
@@ -157,14 +154,14 @@ def train(
 
     actor_critic.to(device)
     if train_tasks:
-        gan.to(device)
+        task_generator.to(device)
 
     obs = envs.reset()
     rollouts.obs[0].copy_(obs)
     rollouts.to(device)
     if train_tasks:
-        tasks = torch.tensor(envs.unwrapped.get_tasks())
-        importance_weights = gan.importance_weight(tasks)
+        tasks, probs = map(torch.tensor, envs.unwrapped.get_tasks_and_probs())
+        importance_weights = task_generator.importance_weight(tasks)
         rollouts.tasks[0].copy_(tasks.view(rollouts.tasks[0].size()))
         rollouts.importance_weighting[0].copy_(
             importance_weights.view(rollouts.importance_weighting[0].size()))
@@ -173,12 +170,10 @@ def train(
     for j in updates:
 
         if train_tasks:
-            tasks = gan.sample(num_processes)
-            for i, task in enumerate(tasks):
-                envs.unwrapped.set_task_dist(i, onehot(task, num_tasks))
+            for i in range(num_processes):
+                envs.unwrapped.set_task_dist(i, task_generator.probs())
 
         for step in range(num_steps):
-            # Sample actions.add_argument_group('env_args')
             with torch.no_grad():
                 values, actions, action_log_probs, recurrent_hidden_states = \
                     actor_critic.act(
@@ -201,8 +196,9 @@ def train(
             masks = torch.FloatTensor(
                 [[0.0] if done_ else [1.0] for done_ in dones])
             if train_tasks:
-                tasks = torch.tensor(envs.unwrapped.get_tasks())
-                importance_weights = gan.importance_weight(tasks)
+                tasks, probs = map(torch.tensor,
+                                   envs.unwrapped.get_tasks_and_probs())
+                importance_weights = 1 / (num_tasks * probs)
                 rollouts.insert(
                     obs=obs,
                     recurrent_hidden_states=recurrent_hidden_states,
@@ -235,22 +231,15 @@ def train(
 
         train_results, task_stuff = agent.update(rollouts)
         if train_tasks:
-            tasks_trained, task_returns, gradient_sums = task_stuff
-            tasks_trained = sample_env.task_states[tasks_trained.int().numpy()]
-            tasks_data.extend(
-                [(x, y, r, g)
-                 for x, y, r, g in zip(*sample_env.decode(tasks_trained),
-                                       task_returns, gradient_sums)])
-
-            # for i in range(num_processes):
-            #     envs.unwrapped.set_task_dist(gan.probs().detach().numpy())
+            tasks_trained, grads_per_task = task_stuff
+            task_counts[tasks_trained] += 1
+            last_gradient[tasks_trained] = grads_per_task
 
         rollouts.after_update()
         total_num_steps = (j + 1) * num_processes * num_steps
 
-        if all(
-                [log_dir, save_interval,
-                 time.time() - last_save >= save_interval]):
+        if log_dir and save_interval and \
+                time.time() - last_save >= save_interval:
             last_save = time.time()
             modules = dict(
                 optimizer=agent.optimizer,
@@ -260,7 +249,7 @@ def train(
                 modules.update(vec_normalize=envs.venv)
 
             if train_tasks:
-                modules.update(gan=gan)
+                modules.update(gan=task_generator)
             state_dict = {
                 name: module.state_dict()
                 for name, module in modules.items()
@@ -290,49 +279,33 @@ def train(
                                   total_num_steps)
                 writer.add_scalar('time steps', np.mean(time_steps),
                                   total_num_steps)
-                writer.add_scalar('num tasks', len(tasks_data),
-                                  total_num_steps)
                 for k, v in train_results.items():
                     if v.dim() == 0:
                         writer.add_scalar(k, v, total_num_steps)
 
                 if train_tasks:
-                    x, y, rewards, gradient = zip(*tasks_data)
 
-                    def plot(c, text, x=x, y=y):
+                    def plot(heatmap_values, name):
                         fig = plt.figure()
-                        x_noise = (np.random.rand(len(x)) - .5) * .9
-                        y_noise = (np.random.rand(len(y)) - .5) * .9
-                        sc = plt.scatter(
-                            x + x_noise, y + y_noise, c=c, cmap=cm.hot, alpha=.1)
-                        plt.colorbar(sc)
-                        axes = plt.axes()
-                        axes.set_xlim(-.5, xlim - .5)
-                        axes.set_ylim(-.5, ylim - .5)
-                        plt.subplots_adjust(.15, .15, .95, .95)
-                        writer.add_figure(text, fig, total_num_steps)
-                        plt.close(fig)
+                        desc = np.zeros(sample_env.desc.shape)
+                        desc[sample_env.decode(
+                            sample_env.task_states)] = heatmap_values
+                        im = plt.imshow(desc, origin='lower')
+                        plt.colorbar(im)
+                        writer.add_figure(name, fig, total_num_steps)
+                        plt.close()
 
-                    fig = plt.figure()
-                    probs = np.zeros(sample_env.desc.shape)
-                    probs[sample_env.decode(sample_env.task_states)] = gan.probs().detach()
-                    im = plt.imshow(probs, origin='lower')
-                    plt.colorbar(im)
-                    writer.add_figure('probs', fig, total_num_steps)
-                    plt.close()
+                    plot(task_counts, 'task selection')
+                    plot(last_gradient, 'last gradient')
 
-                    plot(rewards, 'rewards')
-                    plot(gradient, 'gradients')
-
-                    x, y, rewards, gradient = zip(*tasks_data[last_index:])
-                    last_index = len(tasks_data)
             episode_rewards = []
             time_steps = []
 
         if eval_interval is not None and j % eval_interval == 0:
-            eval_rewards = np.zeros(num_tasks)
-            eval_time_steps = np.zeros(num_tasks)
-            eval_done = np.zeros(num_tasks)
+            eval_episode_returns = []
+            eval_time_steps = []
+            eval_rewards_counter = np.zeros(num_tasks)
+            eval_time_step_counter = np.zeros(num_tasks)
 
             obs = eval_envs.reset()
             eval_recurrent_hidden_states = torch.zeros(
@@ -341,7 +314,7 @@ def train(
                 device=device)
             eval_masks = torch.zeros(num_tasks, 1, device=device)
 
-            while not np.all(eval_done):
+            for step in range(num_steps):
                 with torch.no_grad():
                     _, actions, _, eval_recurrent_hidden_states = actor_critic.act(
                         inputs=obs,
@@ -351,19 +324,34 @@ def train(
 
                 # Observe reward and next obs
                 obs, rewards, dones, infos = eval_envs.step(actions)
-                not_done = eval_done == 0
-                eval_rewards[not_done] += rewards.numpy()[not_done]
-                eval_time_steps[not_done] += 1
-                eval_done[dones] = 1
+
+                # track rewards
+                eval_rewards_counter += rewards.numpy()
+                eval_time_step_counter += 1
+                eval_episode_returns.append(eval_rewards_counter[dones])
+                eval_time_steps.append(eval_time_step_counter[dones])
+                eval_rewards_counter[dones] = 0
+                eval_time_step_counter[dones] = 0
 
                 eval_masks = torch.FloatTensor(
                     [[0.0] if done_ else [1.0] for done_ in dones])
 
+            mean_returns = np.mean(np.concatenate(eval_episode_returns))
             if log_dir:
-                writer.add_scalar('eval return', np.mean(eval_rewards),
-                                  total_num_steps)
-                writer.add_scalar('eval time steps', np.mean(eval_time_steps),
+                writer.add_scalar('eval return', mean_returns, total_num_steps)
+                writer.add_scalar('eval time steps',
+                                  np.mean(np.concatenate(eval_time_steps)),
                                   total_num_steps)
 
-            print(" Evaluation using {} episodes: mean reward {:.5f}\n".format(
-                num_tasks, np.mean(eval_rewards)))
+            print(" Evaluation using {} episodes: mean return {:.5f}\n".format(
+                num_tasks, mean_returns))
+
+            if solved is not None:
+                if mean_returns >= solved:
+                    solved_count += 1
+                else:
+                    solved_count = 0
+
+            if solved_count == num_solved:
+                print('Environment solved.')
+                return

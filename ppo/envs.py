@@ -31,9 +31,8 @@ def wrap_env(env_thunk,
         raise NotImplementedError
 
     env.seed(seed + rank)
-    if evaluation:
-        env.unwrapped.evaluation = True
-        env.unwrapped.set_task(rank)
+    env.unwrapped.evaluation = evaluation
+    env.unwrapped.set_task(rank)  # TODO
 
     obs_shape = env.observation_space.shape
 

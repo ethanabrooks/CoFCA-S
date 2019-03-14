@@ -1,37 +1,41 @@
-import numpy as np
+from enum import Enum
+
 import torch
 
-from ppo.util import NoInput
+from ppo.util import Categorical, NoInput, init_normc_
+
+SamplingStrategy = Enum('SamplingStrategy', 'baseline adaptive')
 
 
 class TaskGenerator(NoInput):
-    def __init__(self, task_size, learning_rate: float, entropy_coef: float,
-                 **kwargs):
-        super().__init__(task_size, gain=10)
-        self.learning_rate = learning_rate
-        self.entropy_coef = entropy_coef
+    def __init__(self, task_size, temperature: float, exploration_bonus: float,
+                 sampling_strategy):
+        super().__init__(task_size)
+        self.exploration_bonus = exploration_bonus
+        self.sampling_strategy = sampling_strategy
         self.task_size = task_size
-        self.softmax = torch.nn.Softmax(dim=-1)
-        self.temperature = 10
-        self.counter = np.ones(task_size)
-        self.time_since_selected = np.ones(task_size)
+        self.temperature = temperature
+        if sampling_strategy == SamplingStrategy.adaptive.name:
+            self.logits = torch.Tensor(1, task_size)
+            init_normc_(self.logits)
+            self.logits = self.logits.view(-1)
+        else:
+            self.logits = torch.ones(task_size)
 
-    def sample(self, num_samples):
-        self.time_since_selected += 1
-        choices = np.random.choice(
-                self.task_size,
-                size=num_samples,
-                replace=False,
-                p=self.probs().detach().numpy())
-        self.time_since_selected[choices] = 1
-        self.counter[choices] += 1
-        return choices
+    def dist(self):
+        return Categorical(logits=self.temperature * self.logits)
+
+    def sample(self):
+        return self.dist().sample()
 
     def probs(self):
-        exploration_bonus = torch.tensor(np.sqrt(np.log(self.time_since_selected) /
-                                                 self.counter), dtype=torch.float)
-        return self.softmax(self.temperature * (self.weight + exploration_bonus)).view(
-            self.task_size)
+        return self.dist().probs.view(-1).detach().numpy()
 
-    def importance_weight(self, task_index):
-        return 1 / (self.task_size * self.probs()[task_index]).detach()
+    def importance_weight(self, tasks):
+        probs = self.dist().log_prob(tasks).exp()
+        return 1 / (self.task_size * probs).detach()
+
+    def update(self, tasks, grads):
+        if self.sampling_strategy == SamplingStrategy.adaptive.name:
+            self.logits += self.exploration_bonus
+            self.logits[tasks] = grads

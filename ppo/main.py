@@ -10,8 +10,8 @@ import hsr.util
 from ppo.env_adapter import (GridWorld, HSREnv, MoveGripperEnv, RandomGridWorld, TasksGridWorld, TasksHSREnv,
                              TasksMoveGripperEnv, TrainTasksGridWorld)
 from ppo.envs import wrap_env
+from ppo.task_generator import SamplingStrategy
 from ppo.train import train
-from ppo.update import SamplingStrategy
 from ppo.util import parse_activation
 from utils import parse_groups
 
@@ -60,7 +60,7 @@ def build_parser():
     parser.add_argument(
         '--save-interval',
         type=int,
-        default=600,
+        default=None,
         help='save interval, one save per n seconds (default: 10 minutes)')
     parser.add_argument(
         '--eval-interval',
@@ -72,6 +72,16 @@ def build_parser():
         type=int,
         default=None,
         help='number of frames to train (default: None)')
+    parser.add_argument(
+        '--solved',
+        type=float,
+        default=None,
+    )
+    parser.add_argument(
+        '--num-solved',
+        type=int,
+        default=100,
+    )
     parser.add_argument(
         '--env-id',
         default='move-block',
@@ -134,18 +144,6 @@ def build_parser():
         type=float,
         default=0.5,
         help='max norm of gradients (default: 0.5)')
-    ppo_parser.add_argument(
-        '--temperature',
-        type=float,
-    )
-    ppo_parser.add_argument(
-        '--global-norm',
-        action='store_true',
-    )
-    ppo_parser.add_argument(
-        '--sampling-strategy',
-        choices=[s.name for s in SamplingStrategy],
-        default='experiment')
     return parser
 
 
@@ -159,20 +157,17 @@ def add_hsr_args(parser):
 def add_tasks_args(parser):
     tasks_parser = parser.add_argument_group('tasks_args')
     tasks_parser.add_argument(
-        '--gan-learning-rate',
+        '--temperature',
         type=float,
-        default=7e-4,
-        help='(default: 7e-4)')
-    tasks_parser.add_argument('--gan-num-samples', type=int)
-    tasks_parser.add_argument('--gan-hidden-size', type=int)
-    tasks_parser.add_argument('--gan-num-layers', type=int)
+    )
     tasks_parser.add_argument(
-        '--gan-activation', type=parse_activation, default=nn.ReLU())
-    tasks_parser.add_argument(
-        '--gan-entropy-coef',
+        '--exploration-bonus',
         type=float,
-        default=0.01,
-        help='entropy term coefficient (default: 0.01)')
+    )
+    tasks_parser.add_argument(
+        '--sampling-strategy',
+        choices=[s.name for s in SamplingStrategy],
+        default='experiment')
 
 
 def cli():
@@ -274,4 +269,4 @@ def tasks_hsr_cli():
 
 
 if __name__ == "__main__":
-    tasks_cli()
+    cli()
