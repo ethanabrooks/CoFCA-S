@@ -3,16 +3,17 @@ import functools
 from pathlib import Path
 
 import gym
-from torch import nn as nn
 
 import gridworld_env
 import hsr.util
-from ppo.env_adapter import (GridWorld, HSREnv, MoveGripperEnv, RandomGridWorld, TasksGridWorld, TasksHSREnv,
+from ppo.env_adapter import (GridWorld, HSREnv, MoveGripperEnv,
+                             RandomGridWorld, TasksGridWorld, TasksHSREnv,
                              TasksMoveGripperEnv, TrainTasksGridWorld)
 from ppo.envs import wrap_env
 from ppo.task_generator import SamplingStrategy
 from ppo.train import train
 from ppo.util import parse_activation
+from torch import nn as nn
 from utils import parse_groups
 
 try:
@@ -207,6 +208,7 @@ def tasks_cli():
     parser = build_parser()
     add_tasks_args(parser)
     parser.add_argument('--max-episode-steps', type=int)
+    parser.add_argument('--task-in-obs', action='store_true')
 
     def make_env_fn(max_episode_steps, **env_args):
         return functools.partial(
@@ -267,4 +269,4 @@ def tasks_hsr_cli():
 
 
 if __name__ == "__main__":
-    cli()
+    tasks_cli()

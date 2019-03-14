@@ -1,15 +1,15 @@
 # third party
 from multiprocessing import Pipe, Process
 
-from gym.spaces import Box, Discrete
 import numpy as np
+from gym.spaces import Box, Discrete
 
+import gridworld_env
+import hsr
 # first party
 from common.vec_env import CloudpickleWrapper, VecEnv
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
-import gridworld_env
-import hsr
 from hsr.env import Observation
 from utils.gym import concat_spaces, space_shape, space_to_size, unwrap_env
 from utils.numpy import onehot, vectorize
@@ -17,6 +17,7 @@ from utils.numpy import onehot, vectorize
 
 class HSREnv(hsr.env.HSREnv):
     def __init__(self, **kwargs):
+        self.unwrapped = self
         super().__init__(**kwargs)
 
         # Sadly, ppo code really likes boxes, so had to concatenate things

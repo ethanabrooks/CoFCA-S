@@ -1,17 +1,17 @@
 import itertools
-from pathlib import Path
 import time
+from pathlib import Path
 
-from gym.spaces import Discrete
 import numpy as np
-from tensorboardX import SummaryWriter
-import torch
+from gym.spaces import Discrete
 
+import torch
 from ppo.envs import VecNormalize, make_vec_envs
 from ppo.policy import Policy
 from ppo.storage import RolloutStorage, TasksRolloutStorage
 from ppo.task_generator import TaskGenerator
 from ppo.update import PPO
+from tensorboardX import SummaryWriter
 from utils import space_to_size
 
 
@@ -63,7 +63,12 @@ def train(num_frames,
 
     train_tasks = tasks_args is not None
     sample_env = make_env(seed=seed, rank=0, evaluation=False).unwrapped
-    num_tasks = sample_env.task_space.n
+
+    if train_tasks:
+        num_tasks = sample_env.task_space.n
+
+        def get_importance_weight(probs):
+            return 1 / (num_tasks * probs)
 
     if log_dir:
         plt.switch_backend('agg')
@@ -83,7 +88,7 @@ def train(num_frames,
         eval_envs = make_vec_envs(
             seed=seed + num_processes,
             make_env=make_env,
-            num_processes=num_tasks,
+            num_processes=num_tasks if train_tasks else num_processes,
             gamma=_gamma,
             device=device,
             train_tasks=train_tasks,
@@ -96,9 +101,9 @@ def train(num_frames,
         envs.observation_space, envs.action_space, network_args=network_args)
 
     task_generator = None
-    task_counts = np.zeros(num_tasks)
-    last_gradient = np.zeros(num_tasks)
     if train_tasks:
+        task_counts = np.zeros(num_tasks)
+        last_gradient = np.zeros(num_tasks)
         task_generator = TaskGenerator(
             task_size=sample_env.task_space.n, **tasks_args)
 
@@ -161,7 +166,7 @@ def train(num_frames,
     rollouts.to(device)
     if train_tasks:
         tasks, probs = map(torch.tensor, envs.unwrapped.get_tasks_and_probs())
-        importance_weights = task_generator.importance_weight(tasks)
+        importance_weights = get_importance_weight(probs)
         rollouts.tasks[0].copy_(tasks.view(rollouts.tasks[0].size()))
         rollouts.importance_weighting[0].copy_(
             importance_weights.view(rollouts.importance_weighting[0].size()))
@@ -198,7 +203,6 @@ def train(num_frames,
             if train_tasks:
                 tasks, probs = map(torch.tensor,
                                    envs.unwrapped.get_tasks_and_probs())
-                importance_weights = 1 / (num_tasks * probs)
                 rollouts.insert(
                     obs=obs,
                     recurrent_hidden_states=recurrent_hidden_states,
@@ -208,7 +212,7 @@ def train(num_frames,
                     rewards=rewards,
                     masks=masks,
                     task=tasks,
-                    importance_weighting=importance_weights,
+                    importance_weighting=get_importance_weight(probs),
                 )
             else:
                 rollouts.insert(

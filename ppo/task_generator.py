@@ -1,7 +1,6 @@
 from enum import Enum
 
 import torch
-
 from ppo.util import Categorical, NoInput, init_normc_
 
 SamplingStrategy = Enum('SamplingStrategy', 'baseline adaptive')
