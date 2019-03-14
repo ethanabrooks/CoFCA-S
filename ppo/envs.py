@@ -32,7 +32,6 @@ def wrap_env(env_thunk,
 
     env.seed(seed + rank)
     env.unwrapped.evaluation = evaluation
-    env.unwrapped.set_task(rank)  # TODO
 
     obs_shape = env.observation_space.shape
 
