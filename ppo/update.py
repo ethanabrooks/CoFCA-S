@@ -1,12 +1,13 @@
 # stdlib
 # third party
 # first party
-import math
 from collections import Counter
+import math
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
+
 from ppo.storage import RolloutStorage
 from ppo.task_generator import SamplingStrategy
 
