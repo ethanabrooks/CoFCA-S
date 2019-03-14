@@ -118,8 +118,8 @@ class RandomGridWorld(gridworld_env.random_gridworld.RandomGridWorld):
 
 
 class TasksGridWorld(GridWorld):
-    def __init__(self, no_task_in_obs, task_letter='*', *args, **kwargs):
-        self.include_task_in_obs = not no_task_in_obs
+    def __init__(self, task_in_obs=False, task_letter='*', *args, **kwargs):
+        self.include_task_in_obs = task_in_obs
         super().__init__(*args, **kwargs)
         self.task_states = np.ravel_multi_index(
             np.where(

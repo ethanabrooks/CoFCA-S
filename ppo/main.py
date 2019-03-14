@@ -23,7 +23,6 @@ except ImportError:
 
 def build_parser():
     parser = argparse.ArgumentParser(description='RL')
-    parser.add_argument('--no-task-in-obs', action='store_true')
     parser.add_argument('--normalize', action='store_true')
     parser.add_argument(
         '--gamma',
@@ -180,12 +179,11 @@ def cli():
             env_thunk=lambda: TasksGridWorld(**env_args),
             max_episode_steps=max_episode_steps)
 
-    def _train(env_id, max_episode_steps, no_task_in_obs, **kwargs):
+    def _train(env_id, max_episode_steps, **kwargs):
         if 'GridWorld' in env_id:
             args = gridworld_env.get_args(env_id)
             if max_episode_steps is not None:
                 args['max_episode_steps'] = max_episode_steps
-            args.update(no_task_in_obs=no_task_in_obs)
             make_env = make_env_fn(**args)
 
         else:
@@ -216,9 +214,9 @@ def tasks_cli():
             env_thunk=lambda: TrainTasksGridWorld(**env_args),
             max_episode_steps=max_episode_steps)
 
-    def _train(env_id, max_episode_steps, no_task_in_obs, **kwargs):
+    def _train(env_id, max_episode_steps, task_in_obs, **kwargs):
         args = gridworld_env.get_args(env_id)
-        args.update(no_task_in_obs=no_task_in_obs)
+        args.update(task_in_obs=task_in_obs)
         if max_episode_steps is not None or 'max_episode_steps' not in args:
             args['max_episode_steps'] = max_episode_steps
         train(make_env=make_env_fn(**args), **kwargs)
