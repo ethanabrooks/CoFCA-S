@@ -1,15 +1,15 @@
 # third party
 from multiprocessing import Pipe, Process
 
-from gym.spaces import Box, Discrete
 import numpy as np
+from gym.spaces import Box, Discrete
 
+import gridworld_env
+import hsr
 # first party
 from common.vec_env import CloudpickleWrapper, VecEnv
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
-import gridworld_env
-import hsr
 from hsr.env import Observation
 from utils.gym import concat_spaces, space_shape, space_to_size, unwrap_env
 from utils.numpy import onehot, vectorize
@@ -160,7 +160,7 @@ class TasksGridWorld(GridWorld):
 
     def reset(self):
         if not self.evaluation:
-            task_index = np.random.choice(self.num_tasks, p=self.task_dist)
+            task_index = self.np_random.choice(self.num_tasks, p=self.task_dist)
             self.set_task(task_index)
             self.task_prob = self.task_dist[task_index]
         return super().reset()
