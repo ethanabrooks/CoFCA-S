@@ -107,10 +107,10 @@ class PPO:
         return torch.mean(losses)
 
     def update(self, rollouts: RolloutStorage):
-        global batch
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
-        # advantages = (advantages - advantages.mean()) / (
-        # advantages.std() + 1e-5)
+        if advantages.numel() > 1:
+            advantages = (advantages - advantages.mean()) / (
+                advantages.std() + 1e-5)
         update_values = Counter()
         task_values = Counter()
 
