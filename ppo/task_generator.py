@@ -2,16 +2,14 @@ from enum import Enum
 
 import torch
 
-from ppo.util import NoInput, init_normc_, Categorical
+from ppo.util import Categorical, NoInput, init_normc_
 
-SamplingStrategy = Enum(
-    'SamplingStrategy',
-    'baseline adaptive')
+SamplingStrategy = Enum('SamplingStrategy', 'baseline adaptive')
 
 
 class TaskGenerator(NoInput):
-    def __init__(self, task_size,
-                 temperature: float, exploration_bonus: float, sampling_strategy):
+    def __init__(self, task_size, temperature: float, exploration_bonus: float,
+                 sampling_strategy):
         super().__init__(task_size)
         self.exploration_bonus = exploration_bonus
         self.sampling_strategy = sampling_strategy

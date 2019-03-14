@@ -1,18 +1,18 @@
 import itertools
-import time
 from pathlib import Path
+import time
 
-import numpy as np
-import torch
 from gym.spaces import Discrete
+import numpy as np
 from tensorboardX import SummaryWriter
-from utils import space_to_size
+import torch
 
 from ppo.envs import VecNormalize, make_vec_envs
 from ppo.policy import Policy
 from ppo.storage import RolloutStorage, TasksRolloutStorage
 from ppo.task_generator import TaskGenerator
 from ppo.update import PPO
+from utils import space_to_size
 
 
 def train(num_frames,
@@ -47,7 +47,6 @@ def train(num_frames,
     if log_dir:
         import matplotlib.pyplot as plt
 
-        import matplotlib.cm as cm
         writer = SummaryWriter(log_dir=str(log_dir))
         print(f'Logging to {log_dir}')
         eval_log_dir = log_dir.joinpath("eval")
@@ -68,7 +67,6 @@ def train(num_frames,
 
     if log_dir:
         plt.switch_backend('agg')
-        xlim, ylim = sample_env.desc.shape
 
     _gamma = gamma if normalize else None
     envs = make_vec_envs(
@@ -100,9 +98,9 @@ def train(num_frames,
     task_generator = None
     task_counts = np.zeros(num_tasks)
     last_gradient = np.zeros(num_tasks)
-    last_index = 0
     if train_tasks:
-        task_generator = TaskGenerator(task_size=sample_env.task_space.n, **tasks_args)
+        task_generator = TaskGenerator(
+            task_size=sample_env.task_space.n, **tasks_args)
 
         if isinstance(sample_env.task_space, Discrete):
             task_size = 1
@@ -127,7 +125,8 @@ def train(num_frames,
             recurrent_hidden_state_size,
         )
 
-    agent = PPO(actor_critic=actor_critic, task_generator=task_generator, **ppo_args)
+    agent = PPO(
+        actor_critic=actor_critic, task_generator=task_generator, **ppo_args)
 
     rewards_counter = np.zeros(num_processes)
     time_step_counter = np.zeros(num_processes)
@@ -197,7 +196,8 @@ def train(num_frames,
             masks = torch.FloatTensor(
                 [[0.0] if done_ else [1.0] for done_ in dones])
             if train_tasks:
-                tasks, probs = map(torch.tensor, envs.unwrapped.get_tasks_and_probs())
+                tasks, probs = map(torch.tensor,
+                                   envs.unwrapped.get_tasks_and_probs())
                 importance_weights = 1 / (num_tasks * probs)
                 rollouts.insert(
                     obs=obs,
@@ -284,6 +284,7 @@ def train(num_frames,
                         writer.add_scalar(k, v, total_num_steps)
 
                 if train_tasks:
+
                     def plot(heatmap_values, name):
                         fig = plt.figure()
                         desc = np.zeros(sample_env.desc.shape)

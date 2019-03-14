@@ -256,4 +256,5 @@ class TasksDummyVecEnv(DummyVecEnv):
         unwrap_tasks(self.envs[i]).set_task_dist(dist)
 
     def get_tasks_and_probs(self):
-        return zip(*[unwrap_tasks(env).get_task_and_prob() for env in self.envs])
+        return zip(
+            *[unwrap_tasks(env).get_task_and_prob() for env in self.envs])
