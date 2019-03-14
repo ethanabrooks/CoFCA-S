@@ -166,7 +166,7 @@ def train(num_frames,
     rollouts.to(device)
     if train_tasks:
         tasks, probs = map(torch.tensor, envs.unwrapped.get_tasks_and_probs())
-        importance_weights = task_generator.importance_weight(tasks)
+        importance_weights = get_importance_weight(probs)
         rollouts.tasks[0].copy_(tasks.view(rollouts.tasks[0].size()))
         rollouts.importance_weighting[0].copy_(
             importance_weights.view(rollouts.importance_weighting[0].size()))
@@ -203,7 +203,6 @@ def train(num_frames,
             if train_tasks:
                 tasks, probs = map(torch.tensor,
                                    envs.unwrapped.get_tasks_and_probs())
-                importance_weights = 1 / (num_tasks * probs)
                 rollouts.insert(
                     obs=obs,
                     recurrent_hidden_states=recurrent_hidden_states,
@@ -213,7 +212,7 @@ def train(num_frames,
                     rewards=rewards,
                     masks=masks,
                     task=tasks,
-                    importance_weighting=importance_weights,
+                    importance_weighting=get_importance_weight(probs),
                 )
             else:
                 rollouts.insert(
