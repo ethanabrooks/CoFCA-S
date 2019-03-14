@@ -268,4 +268,4 @@ def tasks_hsr_cli():
 
 
 if __name__ == "__main__":
-    cli()
+    tasks_cli()

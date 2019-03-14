@@ -161,7 +161,8 @@ class TasksGridWorld(GridWorld):
 
     def reset(self):
         if not self.evaluation:
-            task_index = self.np_random.choice(self.num_tasks, p=self.task_dist)
+            task_index = self.np_random.choice(
+                self.num_tasks, p=self.task_dist)
             self.set_task(task_index)
             self.task_prob = self.task_dist[task_index]
         return super().reset()
