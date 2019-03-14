@@ -1,4 +1,5 @@
 import itertools
+import os
 import time
 from pathlib import Path
 
@@ -13,6 +14,24 @@ from ppo.task_generator import TaskGenerator
 from ppo.update import PPO
 from tensorboardX import SummaryWriter
 from utils import space_to_size
+
+import subprocess
+
+process = subprocess.Popen(['ls', '-a'], stdout=subprocess.PIPE)
+out, err = process.communicate()
+print(out)
+
+
+def get_freer_gpu():
+    nvidia_smi = subprocess.Popen('nvidia-smi -q -d Memory'.split(),
+                                  stdout=subprocess.PIPE)
+    grep_gpu = subprocess.Popen('grep -A4 GPU'.split(), stdin=nvidia_smi.stdout,
+                                stdout=subprocess.PIPE)
+    grep_free = subprocess.check_output('grep Free'.split(), stdin=grep_gpu.stdout)
+    ps.wait()
+    os.system('nvidia-smi -q -d Memory |grep -A4 GPU|grep Free >tmp')
+    memory_available = [int(x.split()[2]) for x in open('tmp', 'r').readlines()]
+    return np.argmax(memory_available)
 
 
 def train(num_frames,
@@ -117,7 +136,7 @@ def train(num_frames,
             obs_shape=envs.observation_space.shape,
             action_space=envs.action_space,
             recurrent_hidden_state_size=actor_critic.
-            recurrent_hidden_state_size,
+                recurrent_hidden_state_size,
             task_size=task_size)
 
     else:
@@ -127,7 +146,7 @@ def train(num_frames,
             obs_shape=envs.observation_space.shape,
             action_space=envs.action_space,
             recurrent_hidden_state_size=actor_critic.
-            recurrent_hidden_state_size,
+                recurrent_hidden_state_size,
         )
 
     agent = PPO(
@@ -288,7 +307,6 @@ def train(num_frames,
                         writer.add_scalar(k, v, total_num_steps)
 
                 if train_tasks:
-
                     def plot(heatmap_values, name):
                         fig = plt.figure()
                         desc = np.zeros(sample_env.desc.shape)
