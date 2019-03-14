@@ -17,6 +17,7 @@ from utils.numpy import onehot, vectorize
 
 class HSREnv(hsr.env.HSREnv):
     def __init__(self, **kwargs):
+        self.unwrapped = self
         super().__init__(**kwargs)
 
         # Sadly, ppo code really likes boxes, so had to concatenate things
