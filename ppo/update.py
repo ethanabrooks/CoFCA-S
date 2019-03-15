@@ -121,36 +121,39 @@ class PPO:
         total_batch_size = num_steps * num_processes
         batches = rollouts.make_batch(advantages,
                                       torch.arange(total_batch_size))
-
         for e in range(self.ppo_epoch):
+            data_generator = rollouts.feed_forward_generator(
+                advantages, self.batch_size)
 
-            # Compute loss
-            value_losses, action_losses, entropy \
-                = components = self.compute_loss_components(batches)
-            loss = self.compute_loss(
-                *components, importance_weighting=batches.importance_weighting)
+            for sample in data_generator:
+                # Compute loss
+                value_losses, action_losses, entropy \
+                    = components = self.compute_loss_components(sample)
+                loss = self.compute_loss(
+                    *components, importance_weighting=sample.importance_weighting)
 
-            # update
-            loss.backward()
-            total_norm += global_norm(
-                [p.grad for p in self.actor_critic.parameters()])
-            nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
-                                     self.max_grad_norm)
-            self.optimizer.step()
-            self.optimizer.zero_grad()
+                # update
+                loss.backward()
+                total_norm += global_norm(
+                    [p.grad for p in self.actor_critic.parameters()])
+                nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
+                                         self.max_grad_norm)
+                self.optimizer.step()
+                self.optimizer.zero_grad()
 
-            update_values.update(
-                value_loss=torch.mean(value_losses),
-                action_loss=torch.mean(action_losses),
-                norm=total_norm,
-                entropy=torch.mean(entropy),
-                n=1)
-            if batches.importance_weighting is not None:
                 update_values.update(
-                    importance_weighting=batches.importance_weighting.mean())
+                    value_loss=torch.mean(value_losses),
+                    action_loss=torch.mean(action_losses),
+                    norm=total_norm,
+                    entropy=torch.mean(entropy),
+                    n=1)
+                if sample.importance_weighting is not None:
+                    update_values.update(
+                        importance_weighting=sample.importance_weighting.mean())
 
         if self.train_tasks:
             tasks_to_train = torch.unique(batches.tasks[batches.process == 0])
+            # TODO take out
             grads_per_step = torch.zeros(total_batch_size)
             grads_per_task = torch.zeros_like(
                 tasks_to_train, dtype=torch.float)
@@ -176,6 +179,7 @@ class PPO:
                     g.abs().sum() for g in grad if g is not None)
 
             if self.sampling_strategy == SamplingStrategy.adaptive.name:
+                # TODO use task_generator function
                 logits = self.task_generator.logits
                 logits += self.task_generator.exploration_bonus
                 logits[tasks_to_train] = grads_per_task
