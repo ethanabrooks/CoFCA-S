@@ -82,9 +82,6 @@ def train(num_frames,
     if train_tasks:
         num_tasks = sample_env.task_space.n
 
-        def get_importance_weight(probs):
-            return 1 / (num_tasks * probs)
-
     if log_dir:
         plt.switch_backend('agg')
 
@@ -181,7 +178,7 @@ def train(num_frames,
     rollouts.to(device)
     if train_tasks:
         tasks, probs = map(torch.tensor, envs.unwrapped.get_tasks_and_probs())
-        importance_weights = get_importance_weight(probs)
+        importance_weights = task_generator.importance_weight(probs)
         rollouts.tasks[0].copy_(tasks.view(rollouts.tasks[0].size()))
         rollouts.importance_weighting[0].copy_(
             importance_weights.view(rollouts.importance_weighting[0].size()))
@@ -227,7 +224,7 @@ def train(num_frames,
                     rewards=rewards,
                     masks=masks,
                     task=tasks,
-                    importance_weighting=get_importance_weight(probs),
+                    importance_weighting=task_generator.importance_weight(probs),
                 )
             else:
                 rollouts.insert(

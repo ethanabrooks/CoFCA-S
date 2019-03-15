@@ -152,8 +152,7 @@ class PPO:
                         importance_weighting=sample.importance_weighting.mean())
 
         if self.train_tasks:
-            tasks_to_train = torch.unique(batches.tasks[batches.process == 0])
-            # TODO take out
+            tasks_to_train = torch.unique(batches.tasks)
             grads_per_step = torch.zeros(total_batch_size)
             grads_per_task = torch.zeros_like(
                 tasks_to_train, dtype=torch.float)
@@ -178,12 +177,7 @@ class PPO:
                 grads_per_task[i] = grads_per_step[uses_task] = sum(
                     g.abs().sum() for g in grad if g is not None)
 
-            if self.sampling_strategy == SamplingStrategy.adaptive.name:
-                # TODO use task_generator function
-                logits = self.task_generator.logits
-                logits += self.task_generator.exploration_bonus
-                logits[tasks_to_train] = grads_per_task
-
+            self.task_generator.update(tasks_to_train, grads_per_task)
             task_values.update(grad_measure=grads_per_step, n=1)
 
         return_values = {}

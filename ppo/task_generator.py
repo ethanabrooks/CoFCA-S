@@ -29,11 +29,10 @@ class TaskGenerator(NoInput):
         return self.dist().sample()
 
     def probs(self):
-        return self.dist().probs.view(-1).detach().numpy()
+        return self.dist().probs.detach().numpy()
 
-    def importance_weight(self, tasks):
-        probs = self.dist().log_prob(tasks).exp()
-        return 1 / (self.task_size * probs).detach()
+    def importance_weight(self, probs):
+        return 1 / (self.task_size * probs)
 
     def update(self, tasks, grads):
         if self.sampling_strategy == SamplingStrategy.adaptive.name:
