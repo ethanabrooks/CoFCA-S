@@ -115,7 +115,7 @@ def train(num_frames,
     task_generator = None
     if train_tasks:
         task_counts = np.zeros(num_tasks)
-        last_gradient = np.zeros(num_tasks)
+        last_gradient = torch.zeros(num_tasks).to(device)
         task_generator = TaskGenerator(
             task_size=sample_env.task_space.n, **tasks_args)
 
@@ -215,6 +215,7 @@ def train(num_frames,
             if train_tasks:
                 tasks, probs = map(torch.tensor,
                                    envs.unwrapped.get_tasks_and_probs())
+                task_counts[tasks] += dones
                 rollouts.insert(
                     obs=obs,
                     recurrent_hidden_states=recurrent_hidden_states,
@@ -247,8 +248,7 @@ def train(num_frames,
 
         train_results, *task_stuff = agent.update(rollouts)
         if train_tasks:
-            tasks_trained, grads_per_task = [x.to('cpu') for x in task_stuff]
-            task_counts[tasks_trained] += 1
+            tasks_trained, grads_per_task = task_stuff
             last_gradient[tasks_trained] = grads_per_task
 
         rollouts.after_update()
@@ -312,7 +312,7 @@ def train(num_frames,
                         plt.close()
 
                     plot(task_counts, 'task selection')
-                    plot(last_gradient, 'last gradient')
+                    plot(last_gradient.to('cpu').numpy(), 'last gradient')
 
             episode_rewards = []
             time_steps = []
