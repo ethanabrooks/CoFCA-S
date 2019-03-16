@@ -1,5 +1,9 @@
 # stdlib
-import os
+
+import gym
+from gym.spaces.box import Box
+import numpy as np
+import torch
 
 # third party
 from common.atari_wrappers import make_atari, wrap_deepmind
@@ -7,10 +11,6 @@ from common.vec_env import VecEnvWrapper
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
-import gym
-from gym.spaces.box import Box
-import numpy as np
-import torch
 
 try:
     import dm_control2gym

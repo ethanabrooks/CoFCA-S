@@ -1,33 +1,28 @@
 # stdlib
+# third party
 import copy
 import glob
 import os
-import time
-from collections import deque
-
-# third party
 from pathlib import Path
-
-import numpy as np
-import torch
+import time
 
 # first party
+import numpy as np
 from tensorboardX import SummaryWriter
+import torch
 
 from ppo.arguments import get_args
-from ppo.envs import make_vec_envs, VecNormalize
+from ppo.envs import VecNormalize, make_vec_envs
 from ppo.model import Policy
-from ppo.update import PPO
 from ppo.storage import RolloutStorage
+from ppo.update import PPO
 from ppo.util import get_vec_normalize
-from ppo.visualize import visdom_plot
 
 
 def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
          cuda_deterministic, cuda, log_dir: Path, env_name, gamma,
-         add_timestep, save_interval, save_dir, log_interval,
-         eval_interval, use_gae, tau, ppo_args, solved, num_solved):
-
+         add_timestep, save_interval, save_dir, log_interval, eval_interval,
+         use_gae, tau, ppo_args, solved, num_solved):
     global solved_rewards
     algo = 'ppo'
 
@@ -73,8 +68,7 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
         base_kwargs={'recurrent': recurrent_policy})
     actor_critic.to(device)
 
-    agent = PPO(actor_critic=actor_critic,
-                **ppo_args)
+    agent = PPO(actor_critic=actor_critic, **ppo_args)
 
     rollouts = RolloutStorage(num_steps, num_processes,
                               envs.observation_space.shape, envs.action_space,
@@ -96,7 +90,8 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
         for step in range(num_steps):
             # Sample actions
             with torch.no_grad():
-                value, action, action_log_prob, recurrent_hidden_states = actor_critic.act(
+                value, action, action_log_prob, recurrent_hidden_states = \
+                    actor_critic.act(
                     rollouts.obs[step], rollouts.recurrent_hidden_states[step],
                     rollouts.masks[step])
 
@@ -247,8 +242,6 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
             if solved_count > num_solved:
                 print('Environment solved.')
                 return
-
-
 
 
 def cli():

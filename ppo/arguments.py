@@ -1,7 +1,6 @@
 # stdlib
-import argparse
-
 # third party
+import argparse
 from pathlib import Path
 
 from utils.argparse import parse_groups
@@ -38,7 +37,8 @@ def get_args():
     )
     parser.add_argument(
         '--solved',
-        type=float,)
+        type=float,
+    )
     parser.add_argument(
         '--num-processes',
         type=int,
@@ -83,9 +83,7 @@ def get_args():
         default='./trained_models/',
         help='directory to save agent logs (default: ./trained_models/)')
     parser.add_argument(
-        '--cuda',
-        action='store_true',
-        help='enables CUDA training')
+        '--cuda', action='store_true', help='enables CUDA training')
     parser.add_argument(
         '--add-timestep',
         action='store_true',
