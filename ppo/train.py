@@ -9,7 +9,6 @@ import numpy as np
 import torch
 from gym.spaces import Discrete
 from tensorboardX import SummaryWriter
-from utils import space_to_size
 
 from ppo.envs import VecNormalize, make_vec_envs
 from ppo.policy import Policy
@@ -75,6 +74,7 @@ def train(num_frames,
 
     torch.set_num_threads(1)
     device = torch.device(f"cuda:{get_freer_gpu()}" if cuda else "cpu")
+    print('Using device:', device)
 
     train_tasks = tasks_args is not None
     sample_env = make_env(seed=seed, rank=0, evaluation=False).unwrapped
@@ -225,7 +225,8 @@ def train(num_frames,
                     rewards=rewards,
                     masks=masks,
                     task=tasks,
-                    importance_weighting=task_generator.importance_weight(probs),
+                    importance_weighting=task_generator.importance_weight(
+                        probs),
                 )
             else:
                 rollouts.insert(
