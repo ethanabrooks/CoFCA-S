@@ -2,12 +2,11 @@
 import os
 
 # third party
-from baselines import bench
-from baselines.common.atari_wrappers import make_atari, wrap_deepmind
-from baselines.common.vec_env import VecEnvWrapper
-from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
-from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
-from baselines.common.vec_env.vec_normalize import VecNormalize as VecNormalize_
+from common.atari_wrappers import make_atari, wrap_deepmind
+from common.vec_env import VecEnvWrapper
+from common.vec_env.dummy_vec_env import DummyVecEnv
+from common.vec_env.subproc_vec_env import SubprocVecEnv
+from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
 import gym
 from gym.spaces.box import Box
 import numpy as np
@@ -50,12 +49,6 @@ def make_env(env_id, seed, rank, log_dir, add_timestep, allow_early_resets):
                 obs_shape) == 1 and str(env).find('TimeLimit') > -1:
             env = AddTimestep(env)
 
-        if log_dir is not None:
-            env = bench.Monitor(
-                env,
-                os.path.join(log_dir, str(rank)),
-                allow_early_resets=allow_early_resets)
-
         if is_atari:
             if len(env.observation_space.shape) == 3:
                 env = wrap_deepmind(env)
@@ -94,11 +87,11 @@ def make_vec_envs(env_name,
     else:
         envs = DummyVecEnv(envs)
 
-    if len(envs.observation_space.shape) == 1:
-        if gamma is None:
-            envs = VecNormalize(envs, ret=False)
-        else:
-            envs = VecNormalize(envs, gamma=gamma)
+    # if len(envs.observation_space.shape) == 1:
+    #     if gamma is None:
+    #         envs = VecNormalize(envs, ret=False)
+    #     else:
+    #         envs = VecNormalize(envs, gamma=gamma)
 
     envs = VecPyTorch(envs, device)
 

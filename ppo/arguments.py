@@ -2,7 +2,9 @@
 import argparse
 
 # third party
-from utils.arguments import parse_groups
+from pathlib import Path
+
+from utils.argparse import parse_groups
 
 
 def get_args():
@@ -55,11 +57,6 @@ def get_args():
         default=None,
         help='eval interval, one eval per n updates (default: None)')
     parser.add_argument(
-        '--vis-interval',
-        type=int,
-        default=100,
-        help='vis interval, one log per n updates (default: 100)')
-    parser.add_argument(
         '--num-frames',
         type=int,
         default=10e6,
@@ -70,6 +67,7 @@ def get_args():
         help='environment to train on (default: PongNoFrameskip-v4)')
     parser.add_argument(
         '--log-dir',
+        type=Path,
         default='/tmp/gym/',
         help='directory to save agent logs (default: /tmp/gym)')
     parser.add_argument(
@@ -90,16 +88,6 @@ def get_args():
         action='store_true',
         default=False,
         help='use a recurrent policy')
-    parser.add_argument(
-        '--vis',
-        action='store_true',
-        default=False,
-        help='enable visdom visualization')
-    parser.add_argument(
-        '--port',
-        type=int,
-        default=8097,
-        help='port to run the server on (default: 8097)')
 
     ppo_parser = parser.add_argument_group('ppo_args')
     ppo_parser.add_argument(

@@ -1,28 +1,32 @@
 # stdlib
-from collections import deque
 import copy
 import glob
 import os
 import time
+from collections import deque
 
 # third party
+from pathlib import Path
+
 import numpy as np
 import torch
 
 # first party
+from tensorboardX import SummaryWriter
+
 from ppo.arguments import get_args
-from ppo.envs import make_vec_envs
+from ppo.envs import make_vec_envs, VecNormalize
 from ppo.model import Policy
-from ppo.ppo import PPO
+from ppo.update import PPO
 from ppo.storage import RolloutStorage
-from ppo.utils import get_vec_normalize
+from ppo.util import get_vec_normalize
 from ppo.visualize import visdom_plot
 
 
 def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
-         cuda_deterministic, cuda, log_dir, vis, port, env_name, gamma,
+         cuda_deterministic, cuda, log_dir: Path, env_name, gamma,
          add_timestep, save_interval, save_dir, log_interval,
-         eval_interval, use_gae, tau, vis_interval, ppo_args):
+         eval_interval, use_gae, tau, ppo_args):
 
     algo = 'ppo'
 
@@ -35,14 +39,19 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
         torch.backends.cudnn.benchmark = False
         torch.backends.cudnn.deterministic = True
 
-    try:
-        os.makedirs(log_dir)
-    except OSError:
-        files = glob.glob(os.path.join(log_dir, '*.monitor.csv'))
-        for f in files:
-            os.remove(f)
+    if log_dir:
+        writer = SummaryWriter(log_dir=str(log_dir))
+        print(f'Logging to {log_dir}')
+        eval_log_dir = log_dir.joinpath("eval")
 
-    eval_log_dir = log_dir + "_eval"
+        for _dir in [log_dir, eval_log_dir]:
+            try:
+                _dir.mkdir()
+            except OSError:
+                for f in _dir.glob('*.monitor.csv'):
+                    f.unlink()
+
+    eval_log_dir = Path(log_dir, "eval")
 
     try:
         os.makedirs(eval_log_dir)
@@ -53,11 +62,6 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
 
     torch.set_num_threads(1)
     device = torch.device("cuda:0" if cuda else "cpu")
-
-    if vis:
-        from visdom import Visdom
-        viz = Visdom(port=port)
-        win = None
 
     envs = make_vec_envs(env_name, seed, num_processes, gamma, log_dir,
                          add_timestep, device, False)
@@ -79,7 +83,12 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
     rollouts.obs[0].copy_(obs)
     rollouts.to(device)
 
-    episode_rewards = deque(maxlen=10)
+    rewards_counter = np.zeros(num_processes)
+    time_step_counter = np.zeros(num_processes)
+    episode_rewards = []
+    time_steps = []
+    last_save = time.time()
+    solved_count = 0
 
     start = time.time()
     for j in range(num_updates):
@@ -92,6 +101,14 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
 
             # Obser reward and next obs
             obs, reward, done, infos = envs.step(action)
+
+            # track rewards
+            rewards_counter += reward.numpy().flatten()
+            time_step_counter += 1
+            episode_rewards.append(rewards_counter[done])
+            time_steps.append(time_step_counter[done])
+            rewards_counter[done] = 0
+            time_step_counter[done] = 0
 
             for info in infos:
                 if 'episode' in info.keys():
@@ -135,16 +152,51 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
 
         total_num_steps = (j + 1) * num_processes * num_steps
 
-        if j % log_interval == 0 and len(episode_rewards) > 1:
+        if j % log_interval == 0:
             end = time.time()
-            print(
-                "Updates {}, num timesteps {}, FPS {} \n Last {} training episodes: mean/median reward {:.1f}/{:.1f}, min/max reward {:.1f}/{:.1f}\n"
-                .format(j, total_num_steps,
-                        int(total_num_steps / (end - start)),
-                        len(episode_rewards), np.mean(episode_rewards),
-                        np.median(episode_rewards), np.min(episode_rewards),
-                        np.max(episode_rewards), dist_entropy, value_loss,
-                        action_loss))
+            fps = int(total_num_steps / (end - start))
+            episode_rewards = np.concatenate(episode_rewards)
+            time_steps = np.concatenate(time_steps)
+            if episode_rewards.size > 0:
+                print(
+                    f"Updates {j}, num timesteps {total_num_steps}, FPS {fps} \n "
+                    f"Last {len(episode_rewards)} training episodes: " +
+                    "mean/median reward {:.2f}/{:.2f}, min/max reward {:.2f}/{"
+                    ":.2f}\n".format(
+                        np.mean(episode_rewards), np.median(episode_rewards),
+                        np.min(episode_rewards), np.max(episode_rewards)))
+            if log_dir:
+                print(f'Writing log data to {log_dir}.')
+                writer.add_scalar('fps', fps, total_num_steps)
+                writer.add_scalar('return', np.mean(episode_rewards),
+                                  total_num_steps)
+                writer.add_scalar('time steps', np.mean(time_steps),
+                                  total_num_steps)
+                # for k, v in train_results.items():
+                #     if v.dim() == 0:
+                #         writer.add_scalar(k, v, total_num_steps)
+
+            episode_rewards = []
+            time_steps = []
+
+        if log_dir and save_interval and \
+                time.time() - last_save >= save_interval:
+            last_save = time.time()
+            modules = dict(
+                optimizer=agent.optimizer,
+                actor_critic=actor_critic)  # type: Dict[str, torch.nn.Module]
+
+            if isinstance(envs.venv, VecNormalize):
+                modules.update(vec_normalize=envs.venv)
+
+            state_dict = {
+                name: module.state_dict()
+                for name, module in modules.items()
+            }
+            save_path = Path(log_dir, 'checkpoint.pt')
+            torch.save(dict(step=j, **state_dict), save_path)
+
+            print(f'Saved parameters to {save_path}')
 
         if (eval_interval is not None and len(episode_rewards) > 1
                 and j % eval_interval == 0):
@@ -188,13 +240,7 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
             print(" Evaluation using {} episodes: mean reward {:.5f}\n".format(
                 len(eval_episode_rewards), np.mean(eval_episode_rewards)))
 
-        if vis and j % vis_interval == 0:
-            try:
-                # Sometimes monitor doesn't properly flush the outputs
-                win = visdom_plot(viz, win, log_dir, env_name, algo,
-                                  num_frames)
-            except IOError:
-                pass
+
 
 
 def cli():
