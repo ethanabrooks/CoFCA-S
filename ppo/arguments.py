@@ -2,8 +2,10 @@
 # third party
 import argparse
 from pathlib import Path
+import torch
 
-from utils.argparse import parse_groups
+from utils.argparse import parse_groups, parse_activation
+
 
 
 def get_args():
@@ -133,5 +135,12 @@ def get_args():
         type=float,
         default=0.5,
         help='max norm of gradients (default: 0.5)')
+
+    network_parser = parser.add_argument_group('network_args')
+    network_parser.add_argument('--recurrent', action='store_true')
+    network_parser.add_argument('--hidden-size', type=int, default=256)
+    network_parser.add_argument('--num-layers', type=int, default=3)
+    network_parser.add_argument(
+        '--activation', type=parse_activation, default=torch.nn.ReLU())
 
     return parse_groups(parser)

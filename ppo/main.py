@@ -22,7 +22,7 @@ from ppo.util import get_vec_normalize
 def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
          cuda_deterministic, cuda, log_dir: Path, env_name, gamma,
          add_timestep, save_interval, save_dir, log_interval, eval_interval,
-         use_gae, tau, ppo_args, solved, num_solved):
+         use_gae, tau, ppo_args, solved, num_solved, network_args):
     global solved_rewards
     algo = 'ppo'
 
@@ -65,7 +65,7 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
     actor_critic = Policy(
         envs.observation_space.shape,
         envs.action_space,
-        base_kwargs={'recurrent': recurrent_policy})
+        network_args)
     actor_critic.to(device)
 
     agent = PPO(actor_critic=actor_critic, **ppo_args)
