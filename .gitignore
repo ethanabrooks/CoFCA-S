@@ -103,3 +103,7 @@ venv.bak/
 trained_models/
 .fuse_hidden*
 .idea
+.runsrc
+MUJOCO_LOG.TXT
+plot.png
+runs.db
