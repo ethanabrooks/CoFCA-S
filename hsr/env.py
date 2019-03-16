@@ -7,6 +7,8 @@ import numpy as np
 # third party
 from gym import Space
 from gym.spaces import Box
+from gym.utils import closer
+from gym.wrappers.monitoring.video_recorder import VideoRecorder
 
 from hsr.mujoco_env import MujocoEnv
 
@@ -45,14 +47,24 @@ class HSREnv(MujocoEnv):
         self.reward_range = -np.inf, np.inf
         self.spec = None
 
-        self._record = record or record_freq
-        self._render = render or render_freq
-        self.render_freq = render_freq or 20
+        self.video_recorder = None
+        self._record = any([record, record_path, record_freq])
+        self._render = any([render, render_freq])
         self.record_freq = record_freq or 20
+        self.render_freq = render_freq or 20
+        record_path = record_path or '/tmp/training-video'
         self.steps_per_action = steps_per_action
         self._block_name = 'block'
         self._finger_names = ['hand_l_distal_link',
                               'hand_r_distal_link']
+
+        if self._record:
+            self.video_recorder = VideoRecorder(
+                env=self,
+                base_path=record_path,
+                enabled=True,
+            )
+
         super().__init__(str(xml_file), frame_skip=self.record_freq)
         self.initial_state = self.sim.get_state()
 
@@ -106,7 +118,7 @@ class HSREnv(MujocoEnv):
             if self._render and i % self.render_freq == 0:
                 self.render()
             if self._record and i % self.record_freq == 0:
-                self.record()
+                self.video_recorder.capture_frame()
             self.sim.step()
         self._time_steps += 1
         done = success = all([self.in_range(*s) for s in self.goals])
@@ -153,17 +165,22 @@ class HSREnv(MujocoEnv):
         ]
         return (finger1 + finger2) / 2.
 
-    # def reset_recorder(self, record_path: Path):
-    #     record_path.mkdir(parents=True, exist_ok=True)
-    #     print(f'Recording video to {record_path}.mp4')
-    #     video_recorder = VideoRecorder(
-    #         env=self,
-    #         base_path=str(record_path),
-    #         metadata={'episode': self._episode},
-    #         enabled=True,
-    #     )
-    #     closer.Closer().register(video_recorder)
-    #     return video_recorder
+    def close(self):
+        """Flush all monitor data to disk and close any open rending windows."""
+        super().close()
+        if self.video_recorder is not None:
+            self.video_recorder.close()
+
+    def reset_recorder(self, record_path: Path):
+        record_path.mkdir(parents=True, exist_ok=True)
+        print(f'Recording video to {record_path}.mp4')
+        video_recorder = VideoRecorder(
+            env=self,
+            base_path=str(record_path),
+            enabled=True,
+        )
+        closer.Closer().register(video_recorder)
+        return video_recorder
 
     def __enter__(self):
         return self
