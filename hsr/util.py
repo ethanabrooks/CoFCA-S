@@ -13,14 +13,13 @@ from hsr.env import get_xml_filepath
 from utils import parse_vector, parse_space
 import functools
 
+
 def add_env_args(parser):
     parser.add_argument(
         '--image-dims', type=parse_vector(length=2, delim=','), default='800,800')
     parser.add_argument('--block-space', type=parse_space(dim=4))
     parser.add_argument('--min-lift-height', type=float, default=None)
-    parser.add_argument('--no-random-reset', action='store_true')
     parser.add_argument('--obs-type', type=str, default=None)
-    parser.add_argument('--randomize-pose', action='store_true')
     parser.add_argument('--render', action='store_true')
     parser.add_argument('--render-freq', type=int, default=None)
     parser.add_argument('--record', action='store_true')
@@ -158,7 +157,7 @@ def mutate_xml(changes: List[XMLSetter], dofs: List[str], goal_space: Box, n_blo
     ]
 
     temp = {
-        path: tempfile.NamedTemporaryFile()
+        path: tempfile.NamedTemporaryFile(suffix='.xml')
         for path in (included_files + [xml_filepath])
     }
     try:

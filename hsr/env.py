@@ -29,6 +29,7 @@ class HSREnv(MujocoEnv):
                  record: bool = False,
                  record_freq: int = None,
                  render_freq: int = None,
+                 record_path: Path = None,
                  ):
         self.starts = starts
         self.goals_specs = goals
