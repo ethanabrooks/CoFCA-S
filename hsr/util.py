@@ -158,7 +158,7 @@ def mutate_xml(changes: List[XMLSetter], dofs: List[str], goal_space: Box, n_blo
     ]
 
     temp = {
-        path: tempfile.NamedTemporaryFile()
+        path: tempfile.NamedTemporaryFile(suffix='.xml')
         for path in (included_files + [xml_filepath])
     }
     try:
