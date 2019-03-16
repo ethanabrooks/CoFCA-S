@@ -26,8 +26,9 @@ from ppo.visualize import visdom_plot
 def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
          cuda_deterministic, cuda, log_dir: Path, env_name, gamma,
          add_timestep, save_interval, save_dir, log_interval,
-         eval_interval, use_gae, tau, ppo_args):
+         eval_interval, use_gae, tau, ppo_args, solved, num_solved):
 
+    global solved_rewards
     algo = 'ppo'
 
     num_updates = int(num_frames) // num_steps // num_processes
@@ -155,7 +156,7 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
         if j % log_interval == 0:
             end = time.time()
             fps = int(total_num_steps / (end - start))
-            episode_rewards = np.concatenate(episode_rewards)
+            solved_rewards = episode_rewards = np.concatenate(episode_rewards)
             time_steps = np.concatenate(time_steps)
             if episode_rewards.size > 0:
                 print(
@@ -209,7 +210,7 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
                 vec_norm.eval()
                 vec_norm.ob_rms = get_vec_normalize(envs).ob_rms
 
-            eval_episode_rewards = []
+            solved_rewards = eval_episode_rewards = []
 
             obs = eval_envs.reset()
             eval_recurrent_hidden_states = torch.zeros(
@@ -239,6 +240,13 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
 
             print(" Evaluation using {} episodes: mean reward {:.5f}\n".format(
                 len(eval_episode_rewards), np.mean(eval_episode_rewards)))
+
+        if solved is not None:
+            solved_count += np.sum(solved_rewards >= solved)
+
+            if solved_count > num_solved:
+                print('Environment solved.')
+                return
 
 
 

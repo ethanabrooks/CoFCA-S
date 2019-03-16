@@ -32,6 +32,14 @@ def get_args():
         default=False,
         help="sets flags for determinism when using CUDA (potentially slow!)")
     parser.add_argument(
+        '--num-solved',
+        type=int,
+        default=100,
+    )
+    parser.add_argument(
+        '--solved',
+        type=float,)
+    parser.add_argument(
         '--num-processes',
         type=int,
         default=16,
