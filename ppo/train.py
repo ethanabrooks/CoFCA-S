@@ -1,15 +1,14 @@
 import csv
+from io import StringIO
 import itertools
+from pathlib import Path
 import subprocess
 import time
-from io import StringIO
-from pathlib import Path
 
-import numpy as np
-import torch
 from gym.spaces import Discrete
+import numpy as np
 from tensorboardX import SummaryWriter
-from utils import space_to_size
+import torch
 
 from ppo.envs import VecNormalize, make_vec_envs
 from ppo.policy import Policy
@@ -165,7 +164,8 @@ def train(num_frames,
         print(f'Loaded parameters from {load_path}.')
 
     if num_frames:
-        updates = range(start, int(num_frames) // num_steps // num_processes)
+        end = start + int(num_frames) // num_steps // num_processes
+        updates = range(start, end)
     else:
         updates = itertools.count(start)
 
@@ -225,7 +225,8 @@ def train(num_frames,
                     rewards=rewards,
                     masks=masks,
                     task=tasks,
-                    importance_weighting=task_generator.importance_weight(probs),
+                    importance_weighting=task_generator.importance_weight(
+                        probs),
                 )
             else:
                 rollouts.insert(
