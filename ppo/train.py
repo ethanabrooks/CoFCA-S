@@ -74,6 +74,7 @@ def train(num_frames,
 
     torch.set_num_threads(1)
     device = torch.device(f"cuda:{get_freer_gpu()}" if cuda else "cpu")
+    print('Using device:', device)
 
     train_tasks = tasks_args is not None
     sample_env = make_env(seed=seed, rank=0, evaluation=False).unwrapped
