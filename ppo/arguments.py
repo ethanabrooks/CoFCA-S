@@ -2,10 +2,10 @@
 # third party
 import argparse
 from pathlib import Path
+
 import torch
 
-from utils.argparse import parse_groups, parse_activation
-
+from utils.argparse import parse_activation, parse_groups
 
 
 def get_args():
