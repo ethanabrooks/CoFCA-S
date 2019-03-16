@@ -13,7 +13,7 @@ import torch
 
 from ppo.arguments import get_args
 from ppo.envs import VecNormalize, make_vec_envs
-from ppo.model import Policy
+from ppo.policy import Policy
 from ppo.storage import RolloutStorage
 from ppo.update import PPO
 from ppo.util import get_vec_normalize

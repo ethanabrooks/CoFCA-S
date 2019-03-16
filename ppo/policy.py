@@ -4,7 +4,7 @@ import torch.nn as nn
 
 # first party
 from ppo.distributions import Categorical, DiagGaussian
-from ppo.util import init, init_normc_
+from ppo.util import init, mlp
 
 
 class Flatten(nn.Module):
@@ -191,25 +191,26 @@ class CNNBase(NNBase):
 
 
 class MLPBase(NNBase):
-    def __init__(self, num_inputs, recurrent=False, hidden_size=64):
+    def __init__(self, num_inputs, hidden_size, num_layers, recurrent,
+                 activation):
         super(MLPBase, self).__init__(recurrent, num_inputs, hidden_size)
 
         if recurrent:
             num_inputs = hidden_size
 
-        init_ = lambda m: init(m, init_normc_, lambda x: nn.init.constant_(
-            x, 0))
-
-        self.actor = nn.Sequential(
-            init_(nn.Linear(num_inputs, hidden_size)), nn.Tanh(),
-            init_(nn.Linear(hidden_size, hidden_size)), nn.Tanh())
-
-        self.critic = nn.Sequential(
-            init_(nn.Linear(num_inputs, hidden_size)), nn.Tanh(),
-            init_(nn.Linear(hidden_size, hidden_size)), nn.Tanh())
-
-        self.critic_linear = init_(nn.Linear(hidden_size, 1))
-
+        self.actor = mlp(
+            num_inputs=num_inputs,
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            activation=activation,
+            name='actor')
+        self.critic = mlp(
+            num_inputs=num_inputs,
+            num_outputs=1,
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            activation=activation,
+            name='critic')
         self.train()
 
     def forward(self, inputs, rnn_hxs, masks):
