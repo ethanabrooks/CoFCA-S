@@ -20,16 +20,20 @@ def global_norm(grads):
     norm = 0
     for grad in grads:
         if grad is not None:
-            norm += grad.norm(2)**2
-    return norm**.5
+            norm += grad.norm(2) ** 2
+    return norm ** .5
+
+
+def l2_norm(list_of_tensors):
+    return sum([torch.sum(x ** 2) for x in list_of_tensors if x is not None])
 
 
 def epanechnikov_kernel(x):
-    return 3 / 4 * (1 - x**2)
+    return 3 / 4 * (1 - x ** 2)
 
 
 def gaussian_kernel(x):
-    return (2 * math.pi)**-.5 * torch.exp(-.5 * x**2)
+    return (2 * math.pi) ** -.5 * torch.exp(-.5 * x ** 2)
 
 
 class PPO:
@@ -110,7 +114,7 @@ class PPO:
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         if advantages.numel() > 1:
             advantages = (advantages - advantages.mean()) / (
-                advantages.std() + 1e-5)
+                    advantages.std() + 1e-5)
         update_values = Counter()
         task_values = Counter()
 
@@ -121,6 +125,29 @@ class PPO:
         total_batch_size = num_steps * num_processes
         batches = rollouts.make_batch(advantages,
                                       torch.arange(total_batch_size))
+
+        if self.train_tasks:
+            tasks_to_train = torch.unique(batches.tasks)
+
+            if self.sampling_strategy == 'l2g':
+                pre_update_l2 = l2_norm(self.actor_critic.parameters())
+            if self.sampling_strategy == 'pg':
+                pre_update_loss = torch.zeros_like(tasks_to_train, dtype=torch.float)
+                for i, task in enumerate(tasks_to_train):
+                    uses_task = (batches.tasks == task).any(-1)
+                    train_indices = torch.arange(total_batch_size)[uses_task]
+                    batch = rollouts.make_batch(advantages, train_indices)
+                    _, action_loss, _ = self.compute_loss_components(
+                        batch, compute_value_loss=False)
+
+                    loss = self.compute_loss(
+                        action_loss=action_loss,
+                        dist_entropy=0,
+                        value_loss=None,
+                        importance_weighting=None)
+
+                    pre_update_loss[i] = loss
+
         for e in range(self.ppo_epoch):
             data_generator = rollouts.feed_forward_generator(
                 advantages, self.batch_size)
@@ -152,10 +179,14 @@ class PPO:
                         importance_weighting=sample.importance_weighting.mean())
 
         if self.train_tasks:
-            tasks_to_train = torch.unique(batches.tasks)
             grads_per_step = torch.zeros(total_batch_size)
             grads_per_task = torch.zeros_like(
                 tasks_to_train, dtype=torch.float)
+            post_update_loss = torch.zeros_like(
+                tasks_to_train, dtype=torch.float)
+            grad_l2 = torch.zeros_like(
+                tasks_to_train, dtype=torch.float)
+            grads_list = []
 
             for i, task in enumerate(tasks_to_train):
                 uses_task = (batches.tasks == task).any(-1)
@@ -174,10 +205,34 @@ class PPO:
                     self.actor_critic.parameters(),
                     retain_graph=True,
                     allow_unused=True)
+                if self.sampling_strategy == 'gl2g':
+                    grads_list.append(grad)
+                if self.sampling_strategy == 'gpg':
+                    grad_l2[i] = l2_norm(grad)
+                post_update_loss[i] = loss
                 grads_per_task[i] = grads_per_step[uses_task] = sum(
                     g.abs().sum() for g in grad if g is not None)
 
-            self.task_generator.update(tasks_to_train, grads_per_task)
+            if self.task_generator.sampling_strategy == 'abs_grads':
+                self.task_generator.update(tasks_to_train, grads_per_task)
+            elif self.task_generator.sampling_strategy == 'pg':
+                self.task_generator.update(tasks_to_train,
+                                           post_update_loss - pre_update_loss)
+            elif self.task_generator.sampling_strategy == 'gpg':
+                self.task_generator.update(tasks_to_train, grad_l2)
+            elif self.task_generator.sampling_strategy == 'l2g':
+                post_update_l2 = l2_norm(self.actor_critic.parameters())
+                self.task_generator.update(tasks_to_train, post_update_l2 - pre_update_l2)
+            elif self.task_generator.sampling_strategy == 'gl2g':
+                dot_product = []
+                parameters = self.actor_critic.parameters()
+                grads_list = zip(*grads_list)
+                for p, g in zip(parameters, grads_list):
+                    if all(x is not None for x in g):
+                        dot_product.append(torch.sum(p * sum(g) / len(g)))
+
+                self.task_generator.update(tasks_to_train, sum(dot_product))
+
             task_values.update(grad_measure=grads_per_step, n=1)
 
         return_values = {}

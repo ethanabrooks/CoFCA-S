@@ -4,7 +4,7 @@ import torch
 
 from ppo.util import Categorical, NoInput, init_normc_
 
-SamplingStrategy = Enum('SamplingStrategy', 'baseline adaptive')
+SamplingStrategy = Enum('SamplingStrategy', 'baseline pg gpg l2g gl2g abs_grads')
 
 
 class TaskGenerator(NoInput):
@@ -15,7 +15,7 @@ class TaskGenerator(NoInput):
         self.sampling_strategy = sampling_strategy
         self.task_size = task_size
         self.temperature = temperature
-        if sampling_strategy == SamplingStrategy.adaptive.name:
+        if sampling_strategy == SamplingStrategy.abs_grads.name:
             self.logits = torch.Tensor(1, task_size)
             init_normc_(self.logits)
             self.logits = self.logits.view(-1)
@@ -35,6 +35,6 @@ class TaskGenerator(NoInput):
         return 1 / (self.task_size * probs)
 
     def update(self, tasks, grads):
-        if self.sampling_strategy == SamplingStrategy.adaptive.name:
+        if self.sampling_strategy != 'baseline':
             self.logits += self.exploration_bonus
             self.logits[tasks] = grads
