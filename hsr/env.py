@@ -20,6 +20,9 @@ def get_xml_filepath(xml_filename=Path('models/world.xml')):
     return Path(Path(__file__).parent, xml_filename).absolute()
 
 
+GoalSpec = namedtuple('GoalSpec', 'a b distance')
+
+
 class HSREnv:
     def __init__(self,
                  xml_file: Path,
