@@ -14,6 +14,7 @@ import numpy as np
 
 
 # first party
+from hsr.mujoco_env import MujocoEnv
 
 
 def get_xml_filepath(xml_filename=Path('models/world.xml')):
@@ -23,7 +24,7 @@ def get_xml_filepath(xml_filename=Path('models/world.xml')):
 GoalSpec = namedtuple('GoalSpec', 'a b distance')
 
 
-class HSREnv:
+class HSREnv(MujocoEnv):
     def __init__(self,
                  xml_file: Path,
                  steps_per_action: int,
@@ -183,7 +184,7 @@ class HSREnv:
         else:
             return 0
 
-    def _get_obs(self):
+    def _get_observation(self):
         if self._obs_type == 'openai':
 
             # positions
@@ -271,7 +272,7 @@ class HSREnv:
                     self._video_recorder.capture_frame()
 
         info = {'log count': {'success': reward > 0 and self._time_steps > 1}}
-        return self._get_obs(), reward, done, info
+        return self._get_observation(), reward, done, info
 
     def _sync_grippers(self, qpos):
         qpos[self.sim.get_jnt_qposadr('hand_r_proximal_joint')] = qpos[
@@ -325,7 +326,7 @@ class HSREnv:
             record_path = Path(self._record_path, str(self._episode))
             self._video_recorder = self.reset_recorder(record_path)
 
-        return self._get_obs()
+        return self._get_observation()
 
     def new_goal(self):
         if self._min_lift_height:
