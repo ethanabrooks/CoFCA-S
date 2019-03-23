@@ -1,5 +1,7 @@
 # third party
+import pickle
 from multiprocessing import Pipe, Process
+from pathlib import Path
 
 from gym.spaces import Box, Discrete
 import numpy as np
@@ -67,6 +69,29 @@ class TasksHSREnv(hsr.env.HSREnv):
 
     def new_task(self):
         return self.task
+
+
+class SaveStatesHSREnv(HSREnv):
+    def __init__(self, save_path: Path, **kwargs):
+        super().__init__(**kwargs)
+        self.save_path = save_path
+        self.f = None
+
+    def reset(self):
+        o = super().reset()
+        pickle.dump(self.sim.get_state(), self.f)
+        return o
+
+    def step(self, action):
+        s, r, t, i = super().step(action)
+        pickle.dump(self.sim.get_state(), self.f)
+        return s, r, t, i
+
+    def __enter__(self):
+        self.f = self.save_path.open()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.f.close()
 
 
 class TasksMoveGripperEnv(TasksHSREnv, hsr.env.MoveGripperEnv):
