@@ -88,11 +88,11 @@ class HSREnv(MujocoEnv):
             object_rel_pos = object_pos - grip_pos
             object_velp -= grip_velp
             gripper_state = np.array([
-                self.sim.get_joint_qpos(f'hand_{x}_proximal_joint')
+                self.model.get_joint_qpos_addr(f'hand_{x}_proximal_joint')
                 for x in 'lr'
             ])
             qvels = np.array([
-                self.sim.get_joint_qvel(f'hand_{x}_proximal_joint')
+                self.model.get_joint_qpos_addr(f'hand_{x}_proximal_joint')
                 for x in 'lr'
             ])
             gripper_vel = dt * .5 * qvels

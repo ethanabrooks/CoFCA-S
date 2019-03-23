@@ -77,10 +77,11 @@ def train(num_frames,
     print('Using device:', device)
 
     train_tasks = tasks_args is not None
-    sample_env = make_env(seed=seed, rank=0, evaluation=False).unwrapped
+    sample_env = make_env(seed=seed, rank=0, evaluation=False)
 
     if train_tasks:
-        num_tasks = sample_env.task_space.n
+        task_space = sample_env.unwrapped.task_space
+        num_tasks = task_space.n
 
     if log_dir:
         plt.switch_backend('agg')
@@ -116,13 +117,12 @@ def train(num_frames,
     if train_tasks:
         task_counts = np.zeros(num_tasks)
         last_gradient = torch.zeros(num_tasks).to(device)
-        task_generator = TaskGenerator(
-            task_size=sample_env.task_space.n, **tasks_args)
+        task_generator = TaskGenerator(task_size=num_tasks, **tasks_args)
 
-        if isinstance(sample_env.task_space, Discrete):
+        if isinstance(task_space, Discrete):
             task_size = 1
         else:
-            task_size = space_to_size(sample_env.task_space)
+            task_size = space_to_size(task_space)
         rollouts = TasksRolloutStorage(
             num_steps=num_steps,
             num_processes=num_processes,
@@ -305,9 +305,10 @@ def train(num_frames,
 
                     def plot(heatmap_values, name):
                         fig = plt.figure()
-                        desc = np.zeros(sample_env.desc.shape)
-                        desc[sample_env.decode(
-                            sample_env.task_states)] = heatmap_values
+                        unwrapped = sample_env.unwrapped
+                        desc = np.zeros(unwrapped.desc.shape)
+                        desc[unwrapped.decode(
+                            unwrapped.task_states)] = heatmap_values
                         im = plt.imshow(desc, origin='lower')
                         plt.colorbar(im)
                         writer.add_figure(name, fig, total_num_steps)
@@ -332,7 +333,7 @@ def train(num_frames,
                 device=device)
             eval_masks = torch.zeros(num_tasks, 1, device=device)
 
-            for step in range(num_steps):
+            for step in range(sample_env._max_episode_steps):
                 with torch.no_grad():
                     _, actions, _, eval_recurrent_hidden_states = actor_critic.act(
                         inputs=obs,
