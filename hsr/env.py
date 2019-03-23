@@ -113,6 +113,20 @@ class HSREnv(MujocoEnv):
         return obs
 
     def step(self, action):
+        action = np.clip(action, self.action_space.low, self.action_space.high)
+
+        mirrored = 'hand_l_proximal_motor'
+        mirroring = 'hand_r_proximal_motor'
+
+        # insert mirrored values at the appropriate indexes
+        mirrored_index, mirroring_index = [
+            self.model.actuator_name2id(n)
+            for n in [mirrored, mirroring]
+        ]
+        # necessary because np.insert can't append multiple values to end:
+        mirroring_index = np.minimum(mirroring_index, self.action_space.shape)
+        action[mirroring_index] = action[mirrored_index]
+
         self.sim.data.ctrl[:] = action
         for i in range(self.steps_per_action):
             if self._render and i % self.render_freq == 0:
