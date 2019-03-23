@@ -65,7 +65,6 @@ class HSREnv(MujocoEnv):
                 enabled=True,
             )
 
-        self._base_joints = None
         super().__init__(str(xml_file), frame_skip=self.record_freq)
         self.initial_state = self.sim.get_state()
 
@@ -110,12 +109,7 @@ class HSREnv(MujocoEnv):
                 gripper_vel,
             ])
         else:
-            if self._base_joints is None:
-                self._base_joints = set(self.model.joint_names) & {'slide_x', 'slide_y'}
-            base_qvels = [
-                self.sim.data.get_joint_qvel(j) for j in self._base_joints
-            ]
-            obs = np.concatenate([self.sim.data.qpos, base_qvels])
+            obs = np.concatenate([self.sim.data.qpos, self.sim.data.qvel])
         return obs
 
     def step(self, action):
