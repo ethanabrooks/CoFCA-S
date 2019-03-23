@@ -1,0 +1,11 @@
+#!/usr/bin/env zsh
+setopt verbose
+set -e
+
+cmd=$(runs lookup command $1)
+echo $cmd
+cmd=$(echo $cmd \
+  | sed 's/num-processes="[0-9]*"/num-processees="1"/' \
+  | sed 's/log-dir=\("\{0,1\}\)\([^ "]*\)\("\{0,1\}\)/load-path=\1\2\/checkpoint.pt\3/'
+)
+exec "$cmd --record"
