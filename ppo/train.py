@@ -5,12 +5,15 @@ from pathlib import Path
 import subprocess
 import time
 
+import matplotlib
+from mpl_toolkits.mplot3d import Axes3D
 from gym.spaces import Discrete
 import numpy as np
+from matplotlib import cm
 from tensorboardX import SummaryWriter
 import torch
 
-from ppo.env_adapter import GridWorld, HSREnv
+from ppo.env_adapter import GridWorld, HSREnv, AutoCurriculumHSREnv
 from ppo.envs import VecNormalize, make_vec_envs
 from ppo.policy import Policy
 from ppo.storage import RolloutStorage, TasksRolloutStorage
@@ -79,6 +82,8 @@ def train(num_frames,
 
     train_tasks = tasks_args is not None
     sample_env = make_env(seed=seed, rank=0, evaluation=False)
+    if isinstance(sample_env.unwrapped, AutoCurriculumHSREnv):
+        xpos = sample_env.unwrapped.get_start_xpos()
 
     if train_tasks:
         task_space = sample_env.unwrapped.task_space
@@ -134,7 +139,7 @@ def train(num_frames,
         eval_envs = make_vec_envs(
             seed=seed + num_processes,
             make_env=make_env,
-            num_processes=sample_env.num_eval,
+            num_processes=sample_env.unwrapped.num_eval,
             gamma=_gamma,
             device=device,
             train_tasks=train_tasks,
@@ -310,10 +315,23 @@ def train(num_frames,
                             desc = np.zeros(unwrapped.desc.shape)
                             desc[unwrapped.decode(
                                 unwrapped.task_states)] = heatmap_values
+                            im = plt.imshow(desc, origin='lower')
+                            plt.colorbar(im)
+                        elif isinstance(unwrapped, AutoCurriculumHSREnv):
+                            ax = fig.add_subplot(111, projection='3d')
+                            gripper_pos, block_pos = zip(*xpos)
+                            norm = matplotlib.colors.Normalize(
+                                vmin=np.min(heatmap_values),
+                                vmax=np.max(
+                                    heatmap_values))
+                            colormap = cm.ScalarMappable(norm=norm, cmap=cm.winter)
+                            c = colormap.to_rgba(heatmap_values)
+                            x, y, z = zip(*gripper_pos)
+                            ax.scatter(x, y, z, c=c)
+                            x, y, z = zip(*block_pos)
+                            ax.scatter(x, y, z, c=c, marker='s')
                         else:
-                            desc = heatmap_values
-                        im = plt.imshow(desc, origin='lower')
-                        plt.colorbar(im)
+                            return
                         writer.add_figure(name, fig, total_num_steps)
                         plt.close()
 

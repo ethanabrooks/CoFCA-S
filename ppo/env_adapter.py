@@ -97,6 +97,15 @@ class AutoCurriculumHSREnv(HSREnv):
     def set_task_dist(self, dist):
         self.task_dist = dist
 
+    def get_start_xpos(self):
+        xpos = []
+        for state in self.start_states:
+            self.sim.set_state(state)
+            self.sim.forward()
+            xpos.append((self.gripper_pos(), self.block_pos()))
+        self.reset()
+        return xpos
+
 
 class GridWorld(gridworld_env.gridworld.GridWorld):
     def __init__(self, random=None, *args, **kwargs):

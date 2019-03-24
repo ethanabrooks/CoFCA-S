@@ -165,7 +165,7 @@ class HSREnv(MujocoEnv):
 
     def gripper_pos(self):
         finger1, finger2 = [
-            self.sim.get_body_xpos(name) for name in self._finger_names
+            self.sim.data.get_body_xpos(name) for name in self._finger_names
         ]
         return (finger1 + finger2) / 2.
 
