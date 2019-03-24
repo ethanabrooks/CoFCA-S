@@ -308,6 +308,7 @@ def train(num_frames,
                         writer.add_scalar(k, v, total_num_steps)
 
                 if train_tasks:
+
                     def plot(heatmap_values, name):
                         fig = plt.figure()
                         unwrapped = sample_env.unwrapped

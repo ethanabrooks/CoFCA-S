@@ -1,30 +1,28 @@
 # third party
-import pickle
 from multiprocessing import Pipe, Process
 from pathlib import Path
+import pickle
 from typing import List
 
+# first party
 from gym import Space
 from gym.spaces import Box, Discrete
-import numpy as np
-
-# first party
 from mujoco_py import MjSimState
+import numpy as np
 
 from common.vec_env import CloudpickleWrapper, VecEnv
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 import gridworld_env
 import hsr
-from hsr.env import Observation, GoalSpec
+from hsr.env import GoalSpec, Observation
 from utils.gym import concat_spaces, space_shape, space_to_size, unwrap_env
 from utils.numpy import onehot, vectorize
 
 
 class HSREnv(hsr.env.HSREnv):
-    def __init__(self, block_space, goal_space, geofence, min_lift_height, image_dims,
-                 record_separate_episodes,
-                 **kwargs):
+    def __init__(self, block_space, goal_space, geofence, min_lift_height,
+                 image_dims, record_separate_episodes, **kwargs):
         self.evaluation = False
         self.num_eval = 1
         default = np.zeros(7)  # x y z q1 q2 q3 q4
