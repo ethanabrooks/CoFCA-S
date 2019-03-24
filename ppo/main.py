@@ -1,5 +1,6 @@
 import argparse
 import functools
+import pickle
 from pathlib import Path
 
 import gridworld_env
@@ -8,8 +9,8 @@ from torch import nn as nn
 from utils import parse_groups
 
 import hsr.util
-from ppo.env_adapter import (HSREnv, MoveGripperEnv, TasksGridWorld, TasksHSREnv,
-                             TasksMoveGripperEnv, TrainTasksGridWorld, SaveStateHSREnv)
+from ppo.env_adapter import (HSREnv, TasksGridWorld,
+                             TrainTasksGridWorld, SaveStateHSREnv, AutoCurriculumHSREnv)
 from ppo.envs import wrap_env
 from ppo.task_generator import SamplingStrategy
 from ppo.train import train
@@ -231,10 +232,7 @@ def hsr_cli():
     add_hsr_args(parser)
 
     def env_thunk(env_id, **kwargs):
-        if env_id == 'move-gripper':
-            return lambda: MoveGripperEnv(**kwargs)
-        else:
-            return lambda: HSREnv(**kwargs)
+        return lambda: HSREnv(**kwargs)
 
     def _train(env_id, env_args, max_episode_steps=None, **kwargs):
         make_env = functools.partial(
@@ -264,16 +262,19 @@ def save_state_cli():
     hsr.util.env_wrapper(_train)(**parse_groups(parser))
 
 
+def unpickle(path: str):
+    with Path(path).open('rb') as f:
+        return pickle.load(f)
+
+
 def tasks_hsr_cli():
     parser = build_parser()
     add_tasks_args(parser)
-    add_hsr_args(parser)
+    env_parser = add_hsr_args(parser)
+    env_parser.add_argument('--start-states', type=unpickle, required=True)
 
     def env_thunk(env_id, **env_args):
-        if env_id == 'move-gripper':
-            return lambda: TasksMoveGripperEnv(**env_args)
-        else:
-            return lambda: TasksHSREnv(**env_args)
+        return lambda: AutoCurriculumHSREnv(**env_args)
 
     def _train(env_args, env_id, max_episode_steps, **kwargs):
         train(
@@ -287,4 +288,4 @@ def tasks_hsr_cli():
 
 
 if __name__ == "__main__":
-    tasks_cli()
+    tasks_hsr_cli()

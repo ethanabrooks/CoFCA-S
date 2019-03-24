@@ -84,8 +84,7 @@ class MujocoEnv(gym.Env, ABC):
 
     def reset(self):
         self.sim.reset()
-        ob = self.reset_model()
-        return ob
+        return self.reset_model()
 
     def set_state(self, qpos, qvel):
         assert qpos.shape == (self.model.nq,) and qvel.shape == (self.model.nv,)

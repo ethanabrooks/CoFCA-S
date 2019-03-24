@@ -131,13 +131,11 @@ class HSREnv(MujocoEnv):
         pos2 = b if isinstance(b, np.ndarray) else self.sim.data.get_body_xpos(b)
         return distance_between(pos1, pos2) < distance
 
-    def reset_model(self):
-        pass
+    def new_state(self):
+        return self.sim.get_state()
 
-    def reset(self):
+    def reset_model(self):
         self._time_steps = 0
-        self.sim.reset()
-        state = self.sim.get_state()
 
         def sample_from_spaces(a, b, distance):
             if isinstance(a, Space):
@@ -151,10 +149,13 @@ class HSREnv(MujocoEnv):
             [x for s in self.goals for x in [s.a, s.b]
              if isinstance(x, np.ndarray)])
 
+        state = self.new_state()
+
         for joint, space in self.starts.items():
             assert isinstance(space, Space)
             start, end = self.model.get_joint_qpos_addr(joint)
             state.qpos[start: end] = space.sample()
+
         self.sim.set_state(state)
         self.sim.forward()
         return self._get_observation()

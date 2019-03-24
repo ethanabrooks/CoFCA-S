@@ -2,11 +2,15 @@
 import pickle
 from multiprocessing import Pipe, Process
 from pathlib import Path
+from typing import List
 
+from gym import Space
 from gym.spaces import Box, Discrete
 import numpy as np
 
 # first party
+from mujoco_py import MjSimState
+
 from common.vec_env import CloudpickleWrapper, VecEnv
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
@@ -21,6 +25,8 @@ class HSREnv(hsr.env.HSREnv):
     def __init__(self, block_space, goal_space, geofence, min_lift_height, image_dims,
                  record_separate_episodes,
                  **kwargs):
+        self.evaluation = False
+        self.num_eval = 1
         default = np.zeros(7)  # x y z q1 q2 q3 q4
         default[2] = .418
         low = default.copy()
@@ -66,48 +72,30 @@ class SaveStateHSREnv(HSREnv):
         return s
 
 
-class MoveGripperEnv(HSREnv):
-    def __init__(self, **kwargs):
-        raise NotImplementedError
-
-
-class TasksHSREnv(hsr.env.HSREnv):
-    def __init__(self, **kwargs):
+class AutoCurriculumHSREnv(HSREnv):
+    def __init__(self, start_states: List[MjSimState], **kwargs):
+        self.start_states = start_states
+        self.num_tasks = len(start_states)
+        self.task_space = Discrete(len(start_states))
+        self.task_dist = np.ones(len(start_states)) / len(start_states)
+        self.task_prob = None
+        self.task_index = None
+        self._time_steps = 0
         super().__init__(**kwargs)
-        old_spaces = hsr.env.Observation(*self.observation_space.spaces)
-        spaces = Observation(
-            observation=old_spaces.observation, task=old_spaces.task)
 
-        # subspace_sizes used for splitting concatenated tensor observations
-        self._subspace_sizes = Observation(
-            *[space_shape(space)[0] for space in spaces])
-        for n in self.subspace_sizes:
-            assert isinstance(n, int)
+    def new_state(self):
+        if self.evaluation:
+            return super().new_state()
+        self.task_index = self.np_random.choice(
+            len(self.start_states), p=self.task_dist)
+        self.task_prob = self.task_dist[self.task_index]
+        return self.start_states[self.task_index]
 
-        # space of observation needs to exclude reward param
-        self.observation_space = concat_spaces(spaces)
-        self.reward_params = self.achieved_task()
+    def get_task_and_prob(self):
+        return self.task_index, self.task_prob
 
-    @property
-    def subspace_sizes(self):
-        return self._subspace_sizes
-
-    def step(self, actions):
-        s, r, t, i = super().step(actions)
-        i.update(task=self.task)
-        observation = Observation(observation=s.observation, task=s.task)
-        return vectorize(observation), r, t, i
-
-    def reset(self):
-        o = super().reset()
-        return vectorize(Observation(observation=o.observation, task=o.task))
-
-    def new_task(self):
-        return self.task
-
-
-class TasksMoveGripperEnv(TasksHSREnv):
-    pass
+    def set_task_dist(self, dist):
+        self.task_dist = dist
 
 
 class GridWorld(gridworld_env.gridworld.GridWorld):

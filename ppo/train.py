@@ -10,6 +10,7 @@ import numpy as np
 from tensorboardX import SummaryWriter
 import torch
 
+from ppo.env_adapter import GridWorld, HSREnv
 from ppo.envs import VecNormalize, make_vec_envs
 from ppo.policy import Policy
 from ppo.storage import RolloutStorage, TasksRolloutStorage
@@ -97,19 +98,6 @@ def train(num_frames,
         normalize=normalize,
         synchronous=synchronous,
         eval=False)
-    if eval_interval:
-        eval_envs = make_vec_envs(
-            seed=seed + num_processes,
-            make_env=make_env,
-            num_processes=num_tasks if train_tasks else num_processes,
-            gamma=_gamma,
-            device=device,
-            train_tasks=train_tasks,
-            normalize=normalize,
-            synchronous=synchronous,
-            eval=True,
-        )
-
     actor_critic = Policy(
         envs.observation_space, envs.action_space, network_args=network_args)
 
@@ -129,7 +117,7 @@ def train(num_frames,
             obs_shape=envs.observation_space.shape,
             action_space=envs.action_space,
             recurrent_hidden_state_size=actor_critic.
-            recurrent_hidden_state_size,
+                recurrent_hidden_state_size,
             task_size=task_size)
 
     else:
@@ -139,7 +127,20 @@ def train(num_frames,
             obs_shape=envs.observation_space.shape,
             action_space=envs.action_space,
             recurrent_hidden_state_size=actor_critic.
-            recurrent_hidden_state_size,
+                recurrent_hidden_state_size,
+        )
+
+    if eval_interval:
+        eval_envs = make_vec_envs(
+            seed=seed + num_processes,
+            make_env=make_env,
+            num_processes=sample_env.num_eval,
+            gamma=_gamma,
+            device=device,
+            train_tasks=train_tasks,
+            normalize=normalize,
+            synchronous=synchronous,
+            eval=True,
         )
 
     agent = PPO(
@@ -302,13 +303,15 @@ def train(num_frames,
                         writer.add_scalar(k, v, total_num_steps)
 
                 if train_tasks:
-
                     def plot(heatmap_values, name):
                         fig = plt.figure()
                         unwrapped = sample_env.unwrapped
-                        desc = np.zeros(unwrapped.desc.shape)
-                        desc[unwrapped.decode(
-                            unwrapped.task_states)] = heatmap_values
+                        if isinstance(unwrapped, GridWorld):
+                            desc = np.zeros(unwrapped.desc.shape)
+                            desc[unwrapped.decode(
+                                unwrapped.task_states)] = heatmap_values
+                        else:
+                            desc = heatmap_values
                         im = plt.imshow(desc, origin='lower')
                         plt.colorbar(im)
                         writer.add_figure(name, fig, total_num_steps)
