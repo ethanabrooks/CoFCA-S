@@ -312,7 +312,7 @@ def train(num_frames,
                             desc[unwrapped.decode(
                                 unwrapped.task_states)] = heatmap_values
                         else:
-                            desc = heatmap_values
+                            desc = heatmap_values.reshape(1, -1)
                         im = plt.imshow(desc, origin='lower')
                         plt.colorbar(im)
                         writer.add_figure(name, fig, total_num_steps)
