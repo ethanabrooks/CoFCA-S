@@ -117,7 +117,7 @@ def train(num_frames,
             obs_shape=envs.observation_space.shape,
             action_space=envs.action_space,
             recurrent_hidden_state_size=actor_critic.
-                recurrent_hidden_state_size,
+            recurrent_hidden_state_size,
             task_size=task_size)
 
     else:
@@ -127,14 +127,14 @@ def train(num_frames,
             obs_shape=envs.observation_space.shape,
             action_space=envs.action_space,
             recurrent_hidden_state_size=actor_critic.
-                recurrent_hidden_state_size,
+            recurrent_hidden_state_size,
         )
 
     if eval_interval:
         eval_envs = make_vec_envs(
             seed=seed + num_processes,
             make_env=make_env,
-            num_processes=sample_env.num_eval,
+            num_processes=sample_env.unwrapped.num_eval,
             gamma=_gamma,
             device=device,
             train_tasks=train_tasks,
@@ -303,6 +303,7 @@ def train(num_frames,
                         writer.add_scalar(k, v, total_num_steps)
 
                 if train_tasks:
+
                     def plot(heatmap_values, name):
                         fig = plt.figure()
                         unwrapped = sample_env.unwrapped
