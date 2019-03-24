@@ -9,7 +9,7 @@ from utils import parse_groups
 
 import hsr.util
 from ppo.env_adapter import (HSREnv, MoveGripperEnv, TasksGridWorld, TasksHSREnv,
-                             TasksMoveGripperEnv, TrainTasksGridWorld)
+                             TasksMoveGripperEnv, TrainTasksGridWorld, SaveStateHSREnv)
 from ppo.envs import wrap_env
 from ppo.task_generator import SamplingStrategy
 from ppo.train import train
@@ -151,6 +151,7 @@ def add_hsr_args(parser):
     env_parser = parser.add_argument_group('env_args')
     hsr.util.add_env_args(env_parser)
     hsr.util.add_wrapper_args(parser.add_argument_group('wrapper_args'))
+    return env_parser
 
 
 def add_tasks_args(parser):
@@ -234,6 +235,24 @@ def hsr_cli():
             return lambda: MoveGripperEnv(**kwargs)
         else:
             return lambda: HSREnv(**kwargs)
+
+    def _train(env_id, env_args, max_episode_steps=None, **kwargs):
+        make_env = functools.partial(
+            wrap_env,
+            env_thunk=env_thunk(env_id, **env_args),
+            max_episode_steps=max_episode_steps)
+        train(make_env=make_env, **kwargs)
+
+    hsr.util.env_wrapper(_train)(**parse_groups(parser))
+
+
+def save_state_cli():
+    parser = build_parser()
+    env_parser = add_hsr_args(parser)
+    env_parser.add_argument('--save-path', type=Path, required=True)
+
+    def env_thunk(env_id, **env_args):
+        return lambda: SaveStateHSREnv(**env_args)
 
     def _train(env_id, env_args, max_episode_steps=None, **kwargs):
         make_env = functools.partial(

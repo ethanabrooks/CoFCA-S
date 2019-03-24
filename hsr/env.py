@@ -131,6 +131,9 @@ class HSREnv(MujocoEnv):
         pos2 = b if isinstance(b, np.ndarray) else self.sim.data.get_body_xpos(b)
         return distance_between(pos1, pos2) < distance
 
+    def reset_model(self):
+        pass
+
     def reset(self):
         self._time_steps = 0
         self.sim.reset()

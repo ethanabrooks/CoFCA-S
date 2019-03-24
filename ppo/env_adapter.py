@@ -39,9 +39,35 @@ class HSREnv(hsr.env.HSREnv):
             **kwargs)
 
 
+class SaveStateHSREnv(HSREnv):
+    def __init__(self, save_path: Path, **kwargs):
+        super().__init__(**kwargs)
+        self.save_path = save_path
+        self.saved_state = []
+        self.reset_once = False
+
+    def close(self):
+        with self.save_path.open('wb') as f:
+            pickle.dump(self.saved_state, f)
+        super().close()
+
+    def step(self, action):
+        s, r, t, i = super().step(action)
+        self.saved_state.append(self.sim.get_state())
+        return s, r, t, i
+
+    def reset(self):
+        if self.reset_once:
+            self.close()
+            exit()
+        s = super().reset()
+        self.reset_once = True
+        self.saved_state.append(self.sim.get_state())
+        return s
+
+
 class MoveGripperEnv(HSREnv):
-    def __init__(self, block_space, goal_space, geofence, min_lift_height, image_dims,
-                 **kwargs):
+    def __init__(self, **kwargs):
         raise NotImplementedError
 
 

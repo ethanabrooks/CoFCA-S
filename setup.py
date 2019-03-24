@@ -20,6 +20,7 @@ setup(
         'tasks=ppo.main:tasks_cli',
         'hsr=ppo.main:hsr_cli',
         'tasks-hsr=ppo.main:tasks_hsr_cli',
+        'save-state=ppo.main:save_state_cli',
     ]),
     install_requires=[
         'gym',
