@@ -1,7 +1,9 @@
-#! /usr/bin/env zsh
+#!/usr/bin/env zsh
+set -e
 
-task=$(echo $2 | sed -r 's/.runs\/log-dir\///g')
-cmd=$(runs lookup command $task --porcelain)
-cmd=$(echo "$cmd $1" |  sed -r 's/--log-dir=(\S*)/--load-path=\1\/checkpoint.pt/g')
-echo $cmd
-eval $cmd
+cmd=$(runs lookup command $1 --porcelain)
+cmd=$(echo $cmd \
+  | sed 's/num-processes="[0-9]*"/num-processes="1"/' \
+  | sed 's/log-dir=\("\{0,1\}\)\([^ "]*\)\("\{0,1\}\)/load-path=\1\2\/checkpoint.pt\3/')
+echo "$cmd $2"
+eval "$cmd $2"

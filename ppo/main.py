@@ -2,18 +2,18 @@ import argparse
 import functools
 from pathlib import Path
 
+import gridworld_env
 import gym
 from torch import nn as nn
+from utils import parse_groups
 
-import gridworld_env
 import hsr.util
-from ppo.env_adapter import (GridWorld, HSREnv, MoveGripperEnv, RandomGridWorld, TasksGridWorld, TasksHSREnv,
+from ppo.env_adapter import (HSREnv, MoveGripperEnv, TasksGridWorld, TasksHSREnv,
                              TasksMoveGripperEnv, TrainTasksGridWorld)
 from ppo.envs import wrap_env
 from ppo.task_generator import SamplingStrategy
 from ppo.train import train
 from ppo.util import parse_activation
-from utils import parse_groups
 
 try:
     import dm_control2gym

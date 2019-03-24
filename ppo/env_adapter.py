@@ -12,28 +12,37 @@ from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 import gridworld_env
 import hsr
-from hsr.env import Observation
+from hsr.env import Observation, GoalSpec
 from utils.gym import concat_spaces, space_shape, space_to_size, unwrap_env
 from utils.numpy import onehot, vectorize
 
 
 class HSREnv(hsr.env.HSREnv):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, block_space, goal_space, geofence, min_lift_height, image_dims,
+                 record_separate_episodes,
+                 **kwargs):
+        default = np.zeros(7)  # x y z q1 q2 q3 q4
+        default[2] = .418
+        low = default.copy()
+        high = default.copy()
+        low[[0, 1, 3, 6]] = block_space.low
+        high[[0, 1, 3, 6]] = block_space.high
+        if min_lift_height:
+            goal = np.zeros(3)
+            goal[2] += .418 + min_lift_height
+        else:
+            goal = goal_space
 
-        # Sadly, ppo code really likes boxes, so had to concatenate things
-        self.observation_space = concat_spaces(self.observation_space.spaces)
-
-    def step(self, action):
-        s, r, t, i = super().step(action)
-        return vectorize(s), r, t, i
-
-    def reset(self):
-        return vectorize(super().reset())
+        super().__init__(
+            starts=dict(blockjoint=Box(low=low, high=high)),
+            goals=[GoalSpec(a='block', b=goal, distance=geofence)],
+            **kwargs)
 
 
-class MoveGripperEnv(HSREnv, hsr.env.MoveGripperEnv):
-    pass
+class MoveGripperEnv(HSREnv):
+    def __init__(self, block_space, goal_space, geofence, min_lift_height, image_dims,
+                 **kwargs):
+        raise NotImplementedError
 
 
 class TasksHSREnv(hsr.env.HSREnv):
@@ -71,30 +80,7 @@ class TasksHSREnv(hsr.env.HSREnv):
         return self.task
 
 
-class SaveStatesHSREnv(HSREnv):
-    def __init__(self, save_path: Path, **kwargs):
-        super().__init__(**kwargs)
-        self.save_path = save_path
-        self.f = None
-
-    def reset(self):
-        o = super().reset()
-        pickle.dump(self.sim.get_state(), self.f)
-        return o
-
-    def step(self, action):
-        s, r, t, i = super().step(action)
-        pickle.dump(self.sim.get_state(), self.f)
-        return s, r, t, i
-
-    def __enter__(self):
-        self.f = self.save_path.open()
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.f.close()
-
-
-class TasksMoveGripperEnv(TasksHSREnv, hsr.env.MoveGripperEnv):
+class TasksMoveGripperEnv(TasksHSREnv):
     pass
 
 
