@@ -327,7 +327,7 @@ def train(num_frames,
                             im = plt.imshow(desc, origin='lower')
                             plt.colorbar(im)
                         elif isinstance(unwrapped, AutoCurriculumHSREnv):
-                            fig.bar(np.arange(len(heatmap_values)), heatmap_values)
+                            plt.bar(np.arange(len(heatmap_values)), heatmap_values)
                         else:
                             return
                         writer.add_figure(name, fig, total_num_steps)
