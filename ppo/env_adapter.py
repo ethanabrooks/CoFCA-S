@@ -1,20 +1,20 @@
 # third party
+import pickle
 from multiprocessing import Pipe, Process
 from pathlib import Path
-import pickle
 from typing import List
 
+import numpy as np
 # first party
 from gym import Space
 from gym.spaces import Box, Discrete
 from mujoco_py import MjSimState
-import numpy as np
 
+import gridworld_env
+import hsr
 from common.vec_env import CloudpickleWrapper, VecEnv
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
-import gridworld_env
-import hsr
 from hsr.env import GoalSpec, Observation
 from utils.gym import concat_spaces, space_shape, space_to_size, unwrap_env
 from utils.numpy import onehot, vectorize
@@ -57,7 +57,8 @@ class SaveStateHSREnv(HSREnv):
 
     def step(self, action):
         s, r, t, i = super().step(action)
-        self.saved_state.append(self.sim.get_state())
+        self.saved_state.append((self.sim.get_state(),
+                                 self.render('rgb_array')))
         return s, r, t, i
 
     def reset(self):
@@ -66,7 +67,8 @@ class SaveStateHSREnv(HSREnv):
             exit()
         s = super().reset()
         self.reset_once = True
-        self.saved_state.append(self.sim.get_state())
+        self.saved_state.append((self.sim.get_state(),
+                                 self.render('rgb_array')))
         return s
 
 

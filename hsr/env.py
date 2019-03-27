@@ -1,7 +1,7 @@
 # stdlib
 from collections import namedtuple
 from pathlib import Path
-from typing import List, Dict
+from typing import Dict, List
 
 import numpy as np
 # third party
@@ -21,18 +21,19 @@ GoalSpec = namedtuple('GoalSpec', 'a b distance')
 
 
 class HSREnv(MujocoEnv):
-    def __init__(self,
-                 xml_file: Path,
-                 goals: List[GoalSpec],
-                 starts: Dict[str, Box],
-                 steps_per_action: int = 300,
-                 obs_type: str = None,
-                 render: bool = False,
-                 record: bool = False,
-                 record_freq: int = None,
-                 render_freq: int = None,
-                 record_path: Path = None,
-                 ):
+    def __init__(
+            self,
+            xml_file: Path,
+            goals: List[GoalSpec],
+            starts: Dict[str, Box],
+            steps_per_action: int = 300,
+            obs_type: str = None,
+            render: bool = False,
+            record: bool = False,
+            record_freq: int = None,
+            render_freq: int = None,
+            record_path: Path = None,
+    ):
         self.starts = starts
         self.goals_specs = goals
         self.goals = None
@@ -55,8 +56,7 @@ class HSREnv(MujocoEnv):
         record_path = record_path or '/tmp/training-video'
         self.steps_per_action = steps_per_action
         self._block_name = 'block'
-        self._finger_names = ['hand_l_distal_link',
-                              'hand_r_distal_link']
+        self._finger_names = ['hand_l_distal_link', 'hand_r_distal_link']
 
         if self._record:
             self.video_recorder = VideoRecorder(
@@ -127,8 +127,10 @@ class HSREnv(MujocoEnv):
         return self._get_observation(), reward, done, info
 
     def in_range(self, a, b, distance):
-        pos1 = a if isinstance(a, np.ndarray) else self.sim.data.get_body_xpos(a)
-        pos2 = b if isinstance(b, np.ndarray) else self.sim.data.get_body_xpos(b)
+        pos1 = a if isinstance(a,
+                               np.ndarray) else self.sim.data.get_body_xpos(a)
+        pos2 = b if isinstance(b,
+                               np.ndarray) else self.sim.data.get_body_xpos(b)
         return distance_between(pos1, pos2) < distance
 
     def new_state(self):
@@ -145,16 +147,17 @@ class HSREnv(MujocoEnv):
             return GoalSpec(a, b, distance)
 
         self.goals = [sample_from_spaces(*s) for s in self.goals_specs]
-        self.sim.data.mocap_pos[:] = np.concatenate(
-            [x for s in self.goals for x in [s.a, s.b]
-             if isinstance(x, np.ndarray)])
+        self.sim.data.mocap_pos[:] = np.concatenate([
+            x for s in self.goals for x in [s.a, s.b]
+            if isinstance(x, np.ndarray)
+        ])
 
         state = self.new_state()
 
         for joint, space in self.starts.items():
             assert isinstance(space, Space)
             start, end = self.model.get_joint_qpos_addr(joint)
-            state.qpos[start: end] = space.sample()
+            state.qpos[start:end] = space.sample()
 
         self.sim.set_state(state)
         self.sim.forward()
