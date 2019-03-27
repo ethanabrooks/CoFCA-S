@@ -62,6 +62,8 @@ def train(num_frames,
         torch.backends.cudnn.benchmark = False
         torch.backends.cudnn.deterministic = True
 
+    sample_env = make_env(seed=seed, rank=0, evaluation=False)
+
     if log_dir:
         import matplotlib.pyplot as plt
 
@@ -76,14 +78,19 @@ def train(num_frames,
                 for f in _dir.glob('*.monitor.csv'):
                     f.unlink()
 
+        if isinstance(sample_env.unwrapped, AutoCurriculumHSREnv):
+            for i, image in enumerate(sample_env.unwrapped.start_images):
+                fig = plt.figure()
+                plt.imshow(image)
+                name = f'start state {i}'
+                writer.add_figure(name, fig, 0)
+                plt.close()
+
     torch.set_num_threads(1)
     device = torch.device(f"cuda:{get_freer_gpu()}" if cuda else "cpu")
     print('Using device:', device)
 
     train_tasks = tasks_args is not None
-    sample_env = make_env(seed=seed, rank=0, evaluation=False)
-    if isinstance(sample_env.unwrapped, AutoCurriculumHSREnv):
-        xpos = sample_env.unwrapped.get_start_xpos()
 
     if train_tasks:
         task_space = sample_env.unwrapped.task_space
@@ -309,16 +316,8 @@ def train(num_frames,
                         writer.add_scalar(k, v, total_num_steps)
 
                 if train_tasks:
-                    unwrapped = sample_env.unwrapped
-                    if isinstance(unwrapped, AutoCurriculumHSREnv):
-                        for i, image in enumerate(unwrapped.start_images):
-                            fig = plt.figure()
-                            plt.imshow(image)
-                            name = f'start state {i}'
-                            writer.add_figure(name, fig, total_num_steps)
-                            plt.close()
-
                     def plot(heatmap_values, name):
+                        unwrapped = sample_env.unwrapped
                         fig = plt.figure()
                         if isinstance(unwrapped, GridWorld):
                             desc = np.zeros(unwrapped.desc.shape)
