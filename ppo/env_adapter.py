@@ -73,7 +73,10 @@ class SaveStateHSREnv(HSREnv):
 
 
 class AutoCurriculumHSREnv(HSREnv):
-    def __init__(self, start_states: List[MjSimState], **kwargs):
+    def __init__(self, start_states: List[MjSimState],
+                 start_images: List[np.ndarray],
+                 **kwargs):
+        self.start_images = start_images
         self.start_states = start_states
         self.num_tasks = len(start_states)
         self.task_space = Discrete(len(start_states))

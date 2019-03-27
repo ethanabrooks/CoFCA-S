@@ -273,8 +273,8 @@ def tasks_hsr_cli():
     env_parser = add_hsr_args(parser)
     env_parser.add_argument('--start-states', type=unpickle, required=True)
 
-    def env_thunk(env_id, **env_args):
-        return lambda: AutoCurriculumHSREnv(**env_args)
+    def env_thunk(env_id, start_states, **env_args):
+        return lambda: AutoCurriculumHSREnv(*start_states, **env_args)
 
     def _train(env_args, env_id, max_episode_steps, **kwargs):
         train(

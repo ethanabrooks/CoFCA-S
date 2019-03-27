@@ -309,10 +309,17 @@ def train(num_frames,
                         writer.add_scalar(k, v, total_num_steps)
 
                 if train_tasks:
+                    unwrapped = sample_env.unwrapped
+                    if isinstance(unwrapped, AutoCurriculumHSREnv):
+                        for i, image in enumerate(unwrapped.start_images):
+                            fig = plt.figure()
+                            plt.imshow(image)
+                            name = f'start state {i}'
+                            writer.add_figure(name, fig, total_num_steps)
+                            plt.close()
 
                     def plot(heatmap_values, name):
                         fig = plt.figure()
-                        unwrapped = sample_env.unwrapped
                         if isinstance(unwrapped, GridWorld):
                             desc = np.zeros(unwrapped.desc.shape)
                             desc[unwrapped.decode(
@@ -320,18 +327,7 @@ def train(num_frames,
                             im = plt.imshow(desc, origin='lower')
                             plt.colorbar(im)
                         elif isinstance(unwrapped, AutoCurriculumHSREnv):
-                            ax = fig.add_subplot(111, projection='3d')
-                            gripper_pos, block_pos = zip(*xpos)
-                            norm = matplotlib.colors.Normalize(
-                                vmin=np.min(heatmap_values),
-                                vmax=np.max(
-                                    heatmap_values))
-                            colormap = cm.ScalarMappable(norm=norm, cmap=cm.winter)
-                            c = colormap.to_rgba(heatmap_values)
-                            x, y, z = zip(*gripper_pos)
-                            ax.scatter(x, y, z, c=c)
-                            x, y, z = zip(*block_pos)
-                            ax.scatter(x, y, z, c=c, marker='s')
+                            fig.bar(np.arange(len(heatmap_values)), heatmap_values)
                         else:
                             return
                         writer.add_figure(name, fig, total_num_steps)
