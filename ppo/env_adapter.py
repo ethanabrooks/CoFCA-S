@@ -52,7 +52,7 @@ class SaveStateHSREnv(HSREnv):
 
     def close(self):
         with self.save_path.open('wb') as f:
-            pickle.dump(self.saved_state, f)
+            pickle.dump(list(zip(*self.saved_state)), f)
         super().close()
 
     def step(self, action):
