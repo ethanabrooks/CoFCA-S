@@ -5,15 +5,15 @@ from pathlib import Path
 import subprocess
 import time
 
-import matplotlib
-from mpl_toolkits.mplot3d import Axes3D
 from gym.spaces import Discrete
-import numpy as np
+import matplotlib
 from matplotlib import cm
+from mpl_toolkits.mplot3d import Axes3D
+import numpy as np
 from tensorboardX import SummaryWriter
 import torch
 
-from ppo.env_adapter import GridWorld, HSREnv, AutoCurriculumHSREnv
+from ppo.env_adapter import AutoCurriculumHSREnv, GridWorld, HSREnv
 from ppo.envs import VecNormalize, make_vec_envs
 from ppo.policy import Policy
 from ppo.storage import RolloutStorage, TasksRolloutStorage
@@ -129,7 +129,7 @@ def train(num_frames,
             obs_shape=envs.observation_space.shape,
             action_space=envs.action_space,
             recurrent_hidden_state_size=actor_critic.
-                recurrent_hidden_state_size,
+            recurrent_hidden_state_size,
             task_size=task_size)
 
     else:
@@ -139,7 +139,7 @@ def train(num_frames,
             obs_shape=envs.observation_space.shape,
             action_space=envs.action_space,
             recurrent_hidden_state_size=actor_critic.
-                recurrent_hidden_state_size,
+            recurrent_hidden_state_size,
         )
 
     if eval_interval:
@@ -316,6 +316,7 @@ def train(num_frames,
                         writer.add_scalar(k, v, total_num_steps)
 
                 if train_tasks:
+
                     def plot(heatmap_values, name):
                         unwrapped = sample_env.unwrapped
                         fig = plt.figure()
@@ -326,7 +327,8 @@ def train(num_frames,
                             im = plt.imshow(desc, origin='lower')
                             plt.colorbar(im)
                         elif isinstance(unwrapped, AutoCurriculumHSREnv):
-                            plt.bar(np.arange(len(heatmap_values)), heatmap_values)
+                            plt.bar(
+                                np.arange(len(heatmap_values)), heatmap_values)
                         else:
                             return
                         writer.add_figure(name, fig, total_num_steps)

@@ -3,12 +3,12 @@ from collections import namedtuple
 from pathlib import Path
 from typing import Dict, List
 
-import numpy as np
 # third party
 from gym import Space
 from gym.spaces import Box
 from gym.utils import closer
 from gym.wrappers.monitoring.video_recorder import VideoRecorder
+import numpy as np
 
 from hsr.mujoco_env import MujocoEnv
 
@@ -134,7 +134,13 @@ class HSREnv(MujocoEnv):
         return distance_between(pos1, pos2) < distance
 
     def new_state(self):
-        return self.sim.get_state()
+        state = self.sim.get_state()
+        for joint, space in self.starts.items():
+            assert isinstance(space, Space)
+            start, end = self.model.get_joint_qpos_addr(joint)
+            state.qpos[start:end] = space.sample()
+
+        return state
 
     def reset_model(self):
         self._time_steps = 0
@@ -153,12 +159,6 @@ class HSREnv(MujocoEnv):
         ])
 
         state = self.new_state()
-
-        for joint, space in self.starts.items():
-            assert isinstance(space, Space)
-            start, end = self.model.get_joint_qpos_addr(joint)
-            state.qpos[start:end] = space.sample()
-
         self.sim.set_state(state)
         self.sim.forward()
         return self._get_observation()
