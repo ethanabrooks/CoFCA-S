@@ -143,11 +143,10 @@ def train(num_frames,
         )
 
     if eval_interval:
-        num_eval = sample_env.unwrapped.num_eval
         eval_envs = make_vec_envs(
             seed=seed + num_processes,
             make_env=make_env,
-            num_processes=num_eval,
+            num_processes=num_tasks,
             gamma=_gamma,
             device=device,
             train_tasks=train_tasks,
@@ -343,15 +342,15 @@ def train(num_frames,
         if eval_interval is not None and j % eval_interval == 0:
             eval_episode_returns = []
             eval_time_steps = []
-            eval_rewards_counter = np.zeros(num_eval)
-            eval_time_step_counter = np.zeros(num_eval)
+            eval_rewards_counter = np.zeros(num_tasks)
+            eval_time_step_counter = np.zeros(num_tasks)
 
             obs = eval_envs.reset()
             eval_recurrent_hidden_states = torch.zeros(
-                num_eval,
+                num_tasks,
                 actor_critic.recurrent_hidden_state_size,
                 device=device)
-            eval_masks = torch.zeros(num_eval, 1, device=device)
+            eval_masks = torch.zeros(num_tasks, 1, device=device)
 
             for step in range(sample_env._max_episode_steps):
                 with torch.no_grad():
@@ -383,7 +382,7 @@ def train(num_frames,
                                   total_num_steps)
 
             print(" Evaluation using {} episodes: mean return {:.5f}\n".format(
-                num_eval, mean_returns))
+                num_tasks, mean_returns))
 
             if solved is not None:
                 if mean_returns >= solved:

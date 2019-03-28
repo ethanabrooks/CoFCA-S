@@ -32,7 +32,7 @@ def wrap_env(env_thunk,
 
     env.seed(seed + rank)
     try:
-        env.set_task(rank)
+        env.task_index = rank
     except AttributeError:
         pass
     env.unwrapped.evaluation = evaluation

@@ -87,7 +87,7 @@ class AutoCurriculumHSREnv(HSREnv):
 
     def new_state(self):
         if self.evaluation:
-            return super().new_state()
+            return self.start_states[self.task_index]
         self.task_index = self.np_random.choice(
             len(self.start_states), p=self.task_dist)
         self.task_prob = self.task_dist[self.task_index]
