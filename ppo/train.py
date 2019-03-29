@@ -19,7 +19,7 @@ from ppo.policy import Policy
 from ppo.storage import RolloutStorage, TasksRolloutStorage
 from ppo.task_generator import TaskGenerator
 from ppo.update import PPO
-from utils import space_to_size
+from utils import ReplayBuffer, space_to_size
 
 
 def get_freer_gpu():
@@ -115,6 +115,7 @@ def train(num_frames,
 
     task_generator = None
     if train_tasks:
+        task_history = ReplayBuffer(maxlen=int(1e6))
         task_counts = np.zeros(num_tasks)
         last_gradient = torch.zeros(num_tasks).to(device)
         task_generator = TaskGenerator(
@@ -231,6 +232,8 @@ def train(num_frames,
                 tasks, probs = map(torch.tensor,
                                    envs.unwrapped.get_tasks_and_probs())
                 task_counts[tasks] += dones
+                for i in tasks.numpy()[dones]:
+                    task_history.append(i)
                 rollouts.insert(
                     obs=obs,
                     recurrent_hidden_states=recurrent_hidden_states,
@@ -334,7 +337,9 @@ def train(num_frames,
                         writer.add_figure(name, fig, total_num_steps)
                         plt.close()
 
-                    plot(task_counts, 'task selection')
+                    _, count_history = np.unique(task_history.buffer.values, return_counts=True)
+                    plot(count_history, 'recent task history')
+                    plot(task_counts, 'full task history')
                     plot(last_gradient.to('cpu').numpy(), 'last gradient')
 
             episode_rewards = []

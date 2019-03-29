@@ -1,7 +1,7 @@
 #!/usr/bin/env zsh
 set -e
 
-repos=(mujoco rl-utils hsr-env gridworld-env lab-notebook ppo)
+repos=(rl-utils hsr-env gridworld-env lab-notebook ppo)
 for repo in $repos; do
   dir="../$repo"
   if [ ! -d $dir ]; then
