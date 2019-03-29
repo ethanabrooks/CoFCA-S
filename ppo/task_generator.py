@@ -4,7 +4,8 @@ import torch
 
 from ppo.util import Categorical, NoInput, init_normc_
 
-SamplingStrategy = Enum('SamplingStrategy', 'baseline pg gpg l2g gl2g abs_grads')
+SamplingStrategy = Enum('SamplingStrategy',
+                        'baseline pg gpg l2g gl2g abs_grads')
 
 
 class TaskGenerator(NoInput):

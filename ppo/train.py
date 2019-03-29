@@ -117,7 +117,8 @@ def train(num_frames,
     if train_tasks:
         task_counts = np.zeros(num_tasks)
         last_gradient = torch.zeros(num_tasks).to(device)
-        task_generator = TaskGenerator(task_size=num_tasks, **tasks_args)
+        task_generator = TaskGenerator(
+            task_size=num_tasks, **tasks_args).to(device)
 
         if isinstance(task_space, Discrete):
             task_size = 1
@@ -374,8 +375,7 @@ def train(num_frames,
             mean_returns = np.mean(eval_rewards)
             if log_dir:
                 writer.add_scalar('eval return', mean_returns, total_num_steps)
-                writer.add_scalar('eval time steps',
-                                  np.mean(eval_time_steps),
+                writer.add_scalar('eval time steps', np.mean(eval_time_steps),
                                   total_num_steps)
 
             print(" Evaluation using {} episodes: mean return {:.5f}\n".format(
