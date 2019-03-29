@@ -340,10 +340,9 @@ def train(num_frames,
             time_steps = []
 
         if eval_interval is not None and j % eval_interval == 0:
-            eval_episode_returns = []
-            eval_time_steps = []
-            eval_rewards_counter = np.zeros(num_tasks)
-            eval_time_step_counter = np.zeros(num_tasks)
+            eval_rewards = np.zeros(num_tasks)
+            eval_time_steps = np.zeros(num_tasks)
+            eval_dones = np.zeros(num_tasks)
 
             obs = eval_envs.reset()
             eval_recurrent_hidden_states = torch.zeros(
@@ -352,7 +351,7 @@ def train(num_frames,
                 device=device)
             eval_masks = torch.zeros(num_tasks, 1, device=device)
 
-            for step in range(sample_env._max_episode_steps):
+            while not np.all(eval_dones):
                 with torch.no_grad():
                     _, actions, _, eval_recurrent_hidden_states = actor_critic.act(
                         inputs=obs,
@@ -364,21 +363,19 @@ def train(num_frames,
                 obs, rewards, dones, infos = eval_envs.step(actions)
 
                 # track rewards
-                eval_rewards_counter += rewards.numpy()
-                eval_time_step_counter += 1
-                eval_episode_returns.append(eval_rewards_counter[dones])
-                eval_time_steps.append(eval_time_step_counter[dones])
-                eval_rewards_counter[dones] = 0
-                eval_time_step_counter[dones] = 0
+                eval_dones[dones] = True
+                not_done = eval_dones == 0
+                eval_rewards[not_done] += rewards.numpy()[not_done]
+                eval_time_steps[not_done] += 1
 
                 eval_masks = torch.FloatTensor(
                     [[0.0] if done_ else [1.0] for done_ in dones])
 
-            mean_returns = np.mean(np.concatenate(eval_episode_returns))
+            mean_returns = np.mean(eval_rewards)
             if log_dir:
                 writer.add_scalar('eval return', mean_returns, total_num_steps)
                 writer.add_scalar('eval time steps',
-                                  np.mean(np.concatenate(eval_time_steps)),
+                                  np.mean(eval_time_steps),
                                   total_num_steps)
 
             print(" Evaluation using {} episodes: mean return {:.5f}\n".format(
