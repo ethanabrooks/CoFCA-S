@@ -3,6 +3,8 @@ import torch
 import torch.nn as nn
 
 # first party
+from gym.spaces import Box, Discrete
+
 from ppo.distributions import Categorical, DiagGaussian
 from ppo.util import init, mlp
 
@@ -27,14 +29,15 @@ class Policy(nn.Module):
         else:
             raise NotImplementedError
 
-        if action_space.__class__.__name__ == "Discrete":
+        if isinstance(action_space, Discrete):
             num_outputs = action_space.n
             self.dist = Categorical(self.base.output_size, num_outputs)
-        elif action_space.__class__.__name__ == "Box":
+        elif isinstance(action_space, Box):
             num_outputs = action_space.shape[0]
             self.dist = DiagGaussian(self.base.output_size, num_outputs)
         else:
             raise NotImplementedError
+        self.continuous = isinstance(action_space, Box)
 
     @property
     def is_recurrent(self):
@@ -71,6 +74,8 @@ class Policy(nn.Module):
 
         action_log_probs = dist.log_probs(action)
         entropy = dist.entropy().view(-1, 1)
+        if self.continuous:
+            entropy = torch.tanh(entropy)
         return value, action_log_probs, entropy, rnn_hxs
 
 

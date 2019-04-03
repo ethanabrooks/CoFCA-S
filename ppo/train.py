@@ -265,7 +265,7 @@ def train(num_frames,
         rollouts.compute_returns(
             next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau)
 
-        train_results, *task_stuff = agent.update(rollouts)
+        train_results, *task_stuff = agent.update(rollouts, gamma)
         if train_tasks:
             tasks_trained, grads_per_task = task_stuff
             last_gradient[tasks_trained] = grads_per_task

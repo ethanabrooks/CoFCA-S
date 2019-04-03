@@ -1,15 +1,14 @@
 # stdlib
 # third party
 # first party
-from collections import Counter
 import math
+from collections import Counter
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
 
 from ppo.storage import RolloutStorage
-from ppo.task_generator import SamplingStrategy
 
 
 def f(x):
@@ -110,7 +109,7 @@ class PPO:
             losses *= importance_weighting
         return torch.mean(losses)
 
-    def update(self, rollouts: RolloutStorage):
+    def update(self, rollouts: RolloutStorage, gamma: float):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         if advantages.numel() > 1:
             advantages = (advantages - advantages.mean()) / (
@@ -156,8 +155,12 @@ class PPO:
                 # Compute loss
                 value_losses, action_losses, entropy \
                     = components = self.compute_loss_components(sample)
+                if self.train_tasks:
+                    exp = self.task_generator.task_size - sample.tasks.float() - 1
+                    entropy * gamma ** exp
                 loss = self.compute_loss(
-                    *components, importance_weighting=sample.importance_weighting)
+                    value_losses, action_losses, entropy,
+                    importance_weighting=sample.importance_weighting)
 
                 # update
                 loss.backward()
