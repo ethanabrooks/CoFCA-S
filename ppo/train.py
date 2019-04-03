@@ -171,7 +171,10 @@ def train(num_frames,
     if load_path:
         state_dict = torch.load(load_path)
         if train_tasks:
-            task_generator.load_state_dict(state_dict['task_generator'])
+            try:
+                task_generator.load_state_dict(state_dict['task_generator'])
+            except KeyError:
+                pass
         actor_critic.load_state_dict(state_dict['actor_critic'])
         agent.optimizer.load_state_dict(state_dict['optimizer'])
         start = state_dict.get('step', -1) + 1
@@ -337,7 +340,8 @@ def train(num_frames,
                         writer.add_figure(name, fig, total_num_steps)
                         plt.close()
 
-                    _, count_history = np.unique(task_history.buffer.values, return_counts=True)
+                    _, count_history = np.unique(
+                        task_history.buffer.values, return_counts=True)
                     plot(count_history, 'recent task history')
                     plot(task_counts, 'full task history')
                     plot(last_gradient.to('cpu').numpy(), 'last gradient')
