@@ -1,9 +1,8 @@
 # third party
-import torch
-import torch.nn as nn
-
 # first party
 from gym.spaces import Box, Discrete
+import torch
+import torch.nn as nn
 
 from ppo.distributions import Categorical, DiagGaussian
 from ppo.util import init, mlp
@@ -75,7 +74,7 @@ class Policy(nn.Module):
         action_log_probs = dist.log_probs(action)
         entropy = dist.entropy().view(-1, 1)
         if self.continuous:
-            entropy = torch.tanh(entropy)
+            entropy = 20. * torch.tanh(entropy / 20.)
         return value, action_log_probs, entropy, rnn_hxs
 
 
