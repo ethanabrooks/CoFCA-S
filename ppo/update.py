@@ -163,16 +163,10 @@ class PPO:
                 # Compute loss
                 value_losses, action_losses, entropy \
                     = components = self.compute_loss_components(sample)
-                entropy_bonus = entropy * self.entropy_coef
-                if self.train_tasks:
-                    exp = self.task_generator.task_size - sample.tasks.float(
-                    ) - 1
-                    entropy_bonus = entropy_bonus * torch.abs(sample.value_preds -
-                                                              gamma ** exp)
                 loss = self.compute_loss(
                     value_losses,
                     action_losses,
-                    entropy_bonus,
+                    dist_entropy=0,
                     importance_weighting=sample.importance_weighting)
 
                 # update
@@ -188,7 +182,6 @@ class PPO:
                     value_loss=torch.mean(value_losses),
                     action_loss=torch.mean(action_losses),
                     norm=total_norm,
-                    entropy_bonus=torch.mean(entropy_bonus),
                     entropy=torch.mean(entropy),
                     n=1)
                 if sample.importance_weighting is not None:
