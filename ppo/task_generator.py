@@ -38,4 +38,4 @@ class TaskGenerator(NoInput):
     def update(self, tasks, grads):
         if self.sampling_strategy != 'baseline':
             self.logits += self.exploration_bonus
-            self.logits[tasks] = grads
+            self.logits[tasks] = grads.cpu()
