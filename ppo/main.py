@@ -95,7 +95,7 @@ def build_parser():
         type=Path,
         help='directory to load agent parameters from')
     parser.add_argument(
-        '--cuda', action='store_true', help='enables CUDA training')
+        '--no-cuda', dest='cuda', action='store_false', help='disable CUDA training')
     parser.add_argument('--synchronous', action='store_true')
     parser.add_argument('--num-processes', type=int, default=1)
 
