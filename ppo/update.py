@@ -71,7 +71,7 @@ class PPO:
 
         self.reward_function = None
 
-    def compute_loss_components(self, batch, compute_value_loss=True):
+    def compute_loss_components(self, batch, compute_value_loss=True, gamma=1.):
         values, action_log_probs, dist_entropy, \
         _ = self.actor_critic.evaluate_actions(
             batch.obs, batch.recurrent_hidden_states, batch.masks,
@@ -86,7 +86,14 @@ class PPO:
 
         value_losses = None
         if compute_value_loss:
-            value_losses = (values - batch.ret).pow(2)
+            entropy_bonus = self.entropy_coef * dist_entropy
+            if self.train_tasks:
+                remaining_time_steps = self.task_generator.task_size - batch.tasks.float(
+                ) - 1
+                true_value = gamma ** remaining_time_steps
+                disparity = torch.abs(batch.value_preds - true_value)
+                entropy_bonus = entropy_bonus * disparity
+            value_losses = (batch.ret + entropy_bonus - values).pow(2)
             if self.use_clipped_value_loss:
                 value_pred_clipped = batch.value_preds + \
                                      (values - batch.value_preds).clamp(
@@ -99,7 +106,8 @@ class PPO:
 
     def compute_loss(self, value_loss, action_loss, dist_entropy,
                      importance_weighting):
-        losses = (action_loss - dist_entropy * self.entropy_coef)
+        # losses = (action_loss - dist_entropy * self.entropy_coef)
+        losses = action_loss
         if value_loss is not None:
             losses += value_loss * self.value_loss_coef
 
@@ -155,7 +163,7 @@ class PPO:
             for sample in data_generator:
                 # Compute loss
                 value_losses, action_losses, entropy \
-                    = components = self.compute_loss_components(sample)
+                    = components = self.compute_loss_components(sample, gamma=gamma)
                 if self.train_tasks:
                     exp = self.task_generator.task_size - sample.tasks.float(
                     ) - 1
