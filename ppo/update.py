@@ -19,20 +19,20 @@ def global_norm(grads):
     norm = 0
     for grad in grads:
         if grad is not None:
-            norm += grad.norm(2) ** 2
-    return norm ** .5
+            norm += grad.norm(2)**2
+    return norm**.5
 
 
 def l2_norm(list_of_tensors):
-    return sum([torch.sum(x ** 2) for x in list_of_tensors if x is not None])
+    return sum([torch.sum(x**2) for x in list_of_tensors if x is not None])
 
 
 def epanechnikov_kernel(x):
-    return 3 / 4 * (1 - x ** 2)
+    return 3 / 4 * (1 - x**2)
 
 
 def gaussian_kernel(x):
-    return (2 * math.pi) ** -.5 * torch.exp(-.5 * x ** 2)
+    return (2 * math.pi)**-.5 * torch.exp(-.5 * x**2)
 
 
 class PPO:
@@ -113,7 +113,7 @@ class PPO:
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         if advantages.numel() > 1:
             advantages = (advantages - advantages.mean()) / (
-                    advantages.std() + 1e-5)
+                advantages.std() + 1e-5)
         update_values = Counter()
         task_values = Counter()
 
@@ -131,7 +131,8 @@ class PPO:
             if self.sampling_strategy == 'l2g':
                 pre_update_l2 = l2_norm(self.actor_critic.parameters())
             if self.sampling_strategy == 'pg':
-                pre_update_loss = torch.zeros_like(tasks_to_train, dtype=torch.float)
+                pre_update_loss = torch.zeros_like(
+                    tasks_to_train, dtype=torch.float)
                 for i, task in enumerate(tasks_to_train):
                     uses_task = (batches.tasks == task).any(-1)
                     train_indices = torch.arange(total_batch_size)[uses_task]
@@ -156,10 +157,14 @@ class PPO:
                 value_losses, action_losses, entropy \
                     = components = self.compute_loss_components(sample)
                 if self.train_tasks:
-                    exp = self.task_generator.task_size - sample.tasks.float() - 1
-                    entropy *= torch.abs(sample.value_preds - gamma ** exp)
+                    exp = self.task_generator.task_size - sample.tasks.float(
+                    ) - 1
+                    entropy = entropy * torch.abs(sample.value_preds -
+                                                  gamma**exp)
                 loss = self.compute_loss(
-                    value_losses, action_losses, entropy,
+                    value_losses,
+                    action_losses,
+                    entropy,
                     importance_weighting=sample.importance_weighting)
 
                 # update
@@ -178,8 +183,8 @@ class PPO:
                     entropy=torch.mean(entropy),
                     n=1)
                 if sample.importance_weighting is not None:
-                    update_values.update(
-                        importance_weighting=sample.importance_weighting.mean())
+                    update_values.update(importance_weighting=sample.
+                                         importance_weighting.mean())
 
         if self.train_tasks:
             grads_per_step = torch.zeros(total_batch_size)
@@ -187,8 +192,7 @@ class PPO:
                 tasks_to_train, dtype=torch.float)
             post_update_loss = torch.zeros_like(
                 tasks_to_train, dtype=torch.float)
-            grad_l2 = torch.zeros_like(
-                tasks_to_train, dtype=torch.float)
+            grad_l2 = torch.zeros_like(tasks_to_train, dtype=torch.float)
             grads_list = []
 
             for i, task in enumerate(tasks_to_train):
@@ -225,7 +229,8 @@ class PPO:
                 self.task_generator.update(tasks_to_train, grad_l2)
             elif self.task_generator.sampling_strategy == 'l2g':
                 post_update_l2 = l2_norm(self.actor_critic.parameters())
-                self.task_generator.update(tasks_to_train, post_update_l2 - pre_update_l2)
+                self.task_generator.update(tasks_to_train,
+                                           post_update_l2 - pre_update_l2)
             elif self.task_generator.sampling_strategy == 'gl2g':
                 dot_product = []
                 parameters = self.actor_critic.parameters()
