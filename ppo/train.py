@@ -1,17 +1,17 @@
 import csv
-from io import StringIO
 import itertools
-from pathlib import Path
 import subprocess
 import time
+from io import StringIO
+from pathlib import Path
 
-from gym.spaces import Discrete
 import matplotlib
+import numpy as np
+import torch
+from gym.spaces import Discrete
 from matplotlib import cm
 from mpl_toolkits.mplot3d import Axes3D
-import numpy as np
 from tensorboardX import SummaryWriter
-import torch
 
 from ppo.env_adapter import AutoCurriculumHSREnv, GridWorld, HSREnv
 from ppo.envs import VecNormalize, make_vec_envs
@@ -373,10 +373,10 @@ def train(num_frames,
                 obs, rewards, dones, infos = eval_envs.step(actions)
 
                 # track rewards
-                eval_dones[dones] = True
                 not_done = eval_dones == 0
                 eval_rewards[not_done] += rewards.numpy()[not_done]
                 eval_time_steps[not_done] += 1
+                eval_dones[dones] = True
 
                 eval_masks = torch.FloatTensor(
                     [[0.0] if done_ else [1.0] for done_ in dones])
