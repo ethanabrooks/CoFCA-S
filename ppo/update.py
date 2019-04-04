@@ -157,7 +157,7 @@ class PPO:
                     = components = self.compute_loss_components(sample)
                 if self.train_tasks:
                     exp = self.task_generator.task_size - sample.tasks.float() - 1
-                    entropy * gamma ** exp
+                    entropy *= torch.abs(sample.value_preds - gamma ** exp)
                 loss = self.compute_loss(
                     value_losses, action_losses, entropy,
                     importance_weighting=sample.importance_weighting)
