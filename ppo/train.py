@@ -58,7 +58,8 @@ def train(num_frames,
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
 
-    if cuda and torch.cuda.is_available() and cuda_deterministic:
+    cuda &= torch.cuda.is_available()
+    if cuda and cuda_deterministic:
         torch.backends.cudnn.benchmark = False
         torch.backends.cudnn.deterministic = True
 
