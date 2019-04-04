@@ -19,20 +19,20 @@ def global_norm(grads):
     norm = 0
     for grad in grads:
         if grad is not None:
-            norm += grad.norm(2) ** 2
-    return norm ** .5
+            norm += grad.norm(2)**2
+    return norm**.5
 
 
 def l2_norm(list_of_tensors):
-    return sum([torch.sum(x ** 2) for x in list_of_tensors if x is not None])
+    return sum([torch.sum(x**2) for x in list_of_tensors if x is not None])
 
 
 def epanechnikov_kernel(x):
-    return 3 / 4 * (1 - x ** 2)
+    return 3 / 4 * (1 - x**2)
 
 
 def gaussian_kernel(x):
-    return (2 * math.pi) ** -.5 * torch.exp(-.5 * x ** 2)
+    return (2 * math.pi)**-.5 * torch.exp(-.5 * x**2)
 
 
 class PPO:
@@ -113,7 +113,7 @@ class PPO:
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         if advantages.numel() > 1:
             advantages = (advantages - advantages.mean()) / (
-                    advantages.std() + 1e-5)
+                advantages.std() + 1e-5)
         update_values = Counter()
         task_values = Counter()
 
@@ -160,8 +160,8 @@ class PPO:
                 if self.train_tasks:
                     exp = self.task_generator.task_size - sample.tasks.float(
                     ) - 1
-                    entropy_bonus = entropy_bonus * torch.abs(sample.value_preds -
-                                                              gamma ** exp)
+                    # entropy_bonus = entropy_bonus * torch.abs(
+                    # sample.value_preds - gamma**exp)
                 loss = self.compute_loss(
                     value_losses,
                     action_losses,
