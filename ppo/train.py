@@ -1,17 +1,18 @@
 import csv
+from io import StringIO
 import itertools
+from pathlib import Path
 import subprocess
 import time
-from io import StringIO
-from pathlib import Path
 
-import matplotlib
-import numpy as np
-import torch
 from gym.spaces import Discrete
+import matplotlib
 from matplotlib import cm
 from mpl_toolkits.mplot3d import Axes3D
+import numpy as np
 from tensorboardX import SummaryWriter
+import torch
+from utils import ReplayBuffer, space_to_size
 
 from ppo.env_adapter import AutoCurriculumHSREnv, GridWorld, HSREnv
 from ppo.envs import VecNormalize, make_vec_envs
@@ -19,7 +20,6 @@ from ppo.policy import Policy
 from ppo.storage import RolloutStorage, TasksRolloutStorage
 from ppo.task_generator import TaskGenerator
 from ppo.update import PPO
-from utils import ReplayBuffer, space_to_size
 
 
 def get_freer_gpu():

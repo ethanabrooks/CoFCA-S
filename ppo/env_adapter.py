@@ -9,6 +9,8 @@ from gym import Space
 from gym.spaces import Box, Discrete
 from mujoco_py import MjSimState
 import numpy as np
+from utils.gym import concat_spaces, space_shape, space_to_size, unwrap_env
+from utils.numpy import onehot, vectorize
 
 from common.vec_env import CloudpickleWrapper, VecEnv
 from common.vec_env.dummy_vec_env import DummyVecEnv
@@ -16,8 +18,6 @@ from common.vec_env.subproc_vec_env import SubprocVecEnv
 import gridworld_env
 import hsr
 from hsr.env import GoalSpec, Observation
-from utils.gym import concat_spaces, space_shape, space_to_size, unwrap_env
-from utils.numpy import onehot, vectorize
 
 
 class HSREnv(hsr.env.HSREnv):
