@@ -58,7 +58,8 @@ def train(num_frames,
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
 
-    if cuda and torch.cuda.is_available() and cuda_deterministic:
+    cuda &= torch.cuda.is_available()
+    if cuda and cuda_deterministic:
         torch.backends.cudnn.benchmark = False
         torch.backends.cudnn.deterministic = True
 
@@ -268,7 +269,7 @@ def train(num_frames,
         rollouts.compute_returns(
             next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau)
 
-        train_results, *task_stuff = agent.update(rollouts)
+        train_results, *task_stuff = agent.update(rollouts, gamma)
         if train_tasks:
             tasks_trained, grads_per_task = task_stuff
             last_gradient[tasks_trained] = grads_per_task
@@ -341,7 +342,7 @@ def train(num_frames,
                         plt.close()
 
                     _, count_history = np.unique(
-                        task_history.buffer.values, return_counts=True)
+                        task_history.array(), return_counts=True)
                     plot(count_history, 'recent task history')
                     plot(task_counts, 'full task history')
                     plot(last_gradient.to('cpu').numpy(), 'last gradient')

@@ -9,7 +9,6 @@ import torch.nn as nn
 import torch.optim as optim
 
 from ppo.storage import RolloutStorage
-from ppo.task_generator import SamplingStrategy
 
 
 def f(x):
@@ -100,7 +99,7 @@ class PPO:
 
     def compute_loss(self, value_loss, action_loss, dist_entropy,
                      importance_weighting):
-        losses = (action_loss - dist_entropy * self.entropy_coef)
+        losses = (action_loss - dist_entropy)
         if value_loss is not None:
             losses += value_loss * self.value_loss_coef
 
@@ -110,7 +109,7 @@ class PPO:
             losses *= importance_weighting
         return torch.mean(losses)
 
-    def update(self, rollouts: RolloutStorage):
+    def update(self, rollouts: RolloutStorage, gamma: float):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         if advantages.numel() > 1:
             advantages = (advantages - advantages.mean()) / (
@@ -157,8 +156,16 @@ class PPO:
                 # Compute loss
                 value_losses, action_losses, entropy \
                     = components = self.compute_loss_components(sample)
+                entropy_bonus = entropy * self.entropy_coef
+                if self.train_tasks:
+                    exp = self.task_generator.task_size - sample.tasks.float(
+                    ) - 1
+                    # entropy_bonus = entropy_bonus * torch.abs(
+                    # sample.value_preds - gamma**exp)
                 loss = self.compute_loss(
-                    *components,
+                    value_losses,
+                    action_losses,
+                    entropy_bonus,
                     importance_weighting=sample.importance_weighting)
 
                 # update
@@ -174,6 +181,7 @@ class PPO:
                     value_loss=torch.mean(value_losses),
                     action_loss=torch.mean(action_losses),
                     norm=total_norm,
+                    entropy_bonus=torch.mean(entropy_bonus),
                     entropy=torch.mean(entropy),
                     n=1)
                 if sample.importance_weighting is not None:
