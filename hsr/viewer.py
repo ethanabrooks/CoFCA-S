@@ -1,5 +1,6 @@
-import mujoco_py
 import glfw
+import mujoco_py
+
 
 class ControlViewer(mujoco_py.MjViewer):
     def __init__(self, **kwargs):
@@ -28,5 +29,3 @@ class ControlViewer(mujoco_py.MjViewer):
             self.active_joint = 8
         elif key == glfw.KEY_9:
             self.active_joint = 9
-
-

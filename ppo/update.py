@@ -1,8 +1,8 @@
 # stdlib
 # third party
 # first party
-import math
 from collections import Counter
+import math
 
 import torch
 import torch.nn as nn

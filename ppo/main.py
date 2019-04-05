@@ -1,16 +1,15 @@
 import argparse
 import functools
-import pickle
 from pathlib import Path
+import pickle
 
-import gridworld_env
 import gym
 from torch import nn as nn
 from utils import parse_groups
 
+import gridworld_env
 import hsr.util
-from ppo.env_adapter import (HSREnv, TasksGridWorld,
-                             TrainTasksGridWorld, SaveStateHSREnv, AutoCurriculumHSREnv)
+from ppo.env_adapter import AutoCurriculumHSREnv, HSREnv, SaveStateHSREnv, TasksGridWorld, TrainTasksGridWorld
 from ppo.envs import wrap_env
 from ppo.task_generator import SamplingStrategy
 from ppo.train import train
@@ -95,7 +94,10 @@ def build_parser():
         type=Path,
         help='directory to load agent parameters from')
     parser.add_argument(
-        '--no-cuda', dest='cuda', action='store_false', help='disable CUDA training')
+        '--no-cuda',
+        dest='cuda',
+        action='store_false',
+        help='disable CUDA training')
     parser.add_argument('--synchronous', action='store_true')
     parser.add_argument('--num-processes', type=int, default=1)
 
