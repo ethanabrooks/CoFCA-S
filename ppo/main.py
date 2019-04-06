@@ -102,6 +102,7 @@ def build_parser():
     parser.add_argument('--num-processes', type=int, default=1)
 
     network_parser = parser.add_argument_group('network_args')
+    network_parser.add_argument('--entropy-grade', type=float)
     network_parser.add_argument('--recurrent', action='store_true')
     network_parser.add_argument('--hidden-size', type=int, default=256)
     network_parser.add_argument('--num-layers', type=int, default=3)

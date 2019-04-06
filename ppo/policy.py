@@ -14,9 +14,10 @@ class Flatten(nn.Module):
 
 
 class Policy(nn.Module):
-    def __init__(self, obs_space, action_space, network_args=None):
+    def __init__(self, obs_space, action_space, entropy_grade, network_args=None):
         super(Policy, self).__init__()
         obs_shape = obs_space.shape
+        self.entropy_grade = entropy_grade
         if network_args is None:
             network_args = {}
         if len(obs_shape) == 3:
@@ -74,7 +75,7 @@ class Policy(nn.Module):
         action_log_probs = dist.log_probs(action)
         entropy = dist.entropy().view(-1, 1)
         if self.continuous:
-            entropy = 20. * torch.tanh(entropy / 20.)
+            entropy = self.entropy_grade * torch.tanh(entropy / self.entropy_grade)
         return value, action_log_probs, entropy, rnn_hxs
 
 
