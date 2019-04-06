@@ -116,7 +116,7 @@ def train(num_frames,
 
     task_generator = None
     if train_tasks:
-        task_history = ReplayBuffer(maxlen=int(1e6))
+        last1e5tasks = ReplayBuffer(maxlen=int(1e5))
         task_counts = np.zeros(num_tasks)
         last_gradient = torch.zeros(num_tasks).to(device)
         task_generator = TaskGenerator(
@@ -237,7 +237,7 @@ def train(num_frames,
                                    envs.unwrapped.get_tasks_and_probs())
                 task_counts[tasks] += dones
                 for i in tasks.numpy()[dones]:
-                    task_history.append(i)
+                    last1e5tasks.append(i)
                 rollouts.insert(
                     obs=obs,
                     recurrent_hidden_states=recurrent_hidden_states,
@@ -342,9 +342,9 @@ def train(num_frames,
                         plt.close()
 
                     _, count_history = np.unique(
-                        task_history.array(), return_counts=True)
-                    plot(count_history, 'recent task history')
-                    plot(task_counts, 'full task history')
+                        last1e5tasks.array(), return_counts=True)
+                    plot(count_history, 'last 1e5 tasks')
+                    plot(task_counts, 'all tasks')
                     plot(last_gradient.to('cpu').numpy(), 'last gradient')
 
             episode_rewards = []
