@@ -127,11 +127,16 @@ class HSREnv(MujocoEnv):
         return self._get_observation(), reward, done, info
 
     def in_range(self, a, b, distance):
-        pos1 = a if isinstance(a,
-                               np.ndarray) else self.sim.data.get_body_xpos(a)
-        pos2 = b if isinstance(b,
-                               np.ndarray) else self.sim.data.get_body_xpos(b)
-        return distance_between(pos1, pos2) < distance
+        def parse(x):
+            if callable(x):
+                return x()
+            if isinstance(x, np.ndarray):
+                return x
+            if isinstance(x, str):
+                return self.sim.data.get_body_xpos(x)
+            raise RuntimeError(f"{x} must be function, np.ndarray, or string")
+
+        return distance_between(parse(a), parse(b)) < distance
 
     def new_state(self):
         state = self.sim.get_state()

@@ -26,22 +26,25 @@ class HSREnv(hsr.env.HSREnv):
         self.evaluation = False
         self.num_eval = 1
         goal = goal_space
-        if block_space is not None:
+        if block_space is None:
+            starts = dict()
+            goal = GoalSpec(a=lambda: self.gripper_pos(), b=goal, distance=geofence)
+        else:
             default = np.zeros(7)  # x y z q1 q2 q3 q4
             default[2] = .418
             low = default.copy()
             high = default.copy()
             low[[0, 1, 3, 6]] = block_space.low
             high[[0, 1, 3, 6]] = block_space.high
-            starts =dict(block0joint=Box(low=low, high=high))
+            starts = dict(block0joint=Box(low=low, high=high))
             if min_lift_height:
                 goal = np.zeros(3)
                 goal[2] += .418 + min_lift_height
-            goals = [GoalSpec(a='block0', b=goal, distance=geofence)]
+            goal = GoalSpec(a='block0', b=goal, distance=geofence)
 
         super().__init__(
             starts=starts,
-            goals=goals,
+            goals=[goal],
             **kwargs)
 
 
