@@ -25,21 +25,23 @@ class HSREnv(hsr.env.HSREnv):
                  image_dims, record_separate_episodes, **kwargs):
         self.evaluation = False
         self.num_eval = 1
-        default = np.zeros(7)  # x y z q1 q2 q3 q4
-        default[2] = .418
-        low = default.copy()
-        high = default.copy()
-        low[[0, 1, 3, 6]] = block_space.low
-        high[[0, 1, 3, 6]] = block_space.high
-        if min_lift_height:
-            goal = np.zeros(3)
-            goal[2] += .418 + min_lift_height
-        else:
-            goal = goal_space
+        goal = goal_space
+        if block_space is not None:
+            default = np.zeros(7)  # x y z q1 q2 q3 q4
+            default[2] = .418
+            low = default.copy()
+            high = default.copy()
+            low[[0, 1, 3, 6]] = block_space.low
+            high[[0, 1, 3, 6]] = block_space.high
+            starts =dict(block0joint=Box(low=low, high=high))
+            if min_lift_height:
+                goal = np.zeros(3)
+                goal[2] += .418 + min_lift_height
+            goals = [GoalSpec(a='block0', b=goal, distance=geofence)]
 
         super().__init__(
-            starts=dict(blockjoint=Box(low=low, high=high)),
-            goals=[GoalSpec(a='block', b=goal, distance=geofence)],
+            starts=starts,
+            goals=goals,
             **kwargs)
 
 

@@ -55,7 +55,7 @@ class HSREnv(MujocoEnv):
         self.render_freq = render_freq or 20
         record_path = record_path or '/tmp/training-video'
         self.steps_per_action = steps_per_action
-        self._block_name = 'block'
+        self._block_name = 'block0'
         self._finger_names = ['hand_l_distal_link', 'hand_r_distal_link']
 
         if self._record:

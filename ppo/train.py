@@ -90,6 +90,7 @@ def train(num_frames,
 
     train_tasks = tasks_args is not None
 
+    num_tasks = None
     if train_tasks:
         task_space = sample_env.unwrapped.task_space
         num_tasks = task_space.n
@@ -146,7 +147,7 @@ def train(num_frames,
         eval_envs = make_vec_envs(
             seed=seed + num_processes,
             make_env=make_env,
-            num_processes=num_tasks,
+            num_processes=num_tasks if train_tasks else num_processes,
             gamma=_gamma,
             device=device,
             train_tasks=train_tasks,

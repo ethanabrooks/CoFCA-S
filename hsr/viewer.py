@@ -1,5 +1,7 @@
-import glfw
 import mujoco_py
+import glfw
+
+from hsr import HSREnv
 
 
 class ControlViewer(mujoco_py.MjViewer):
@@ -29,3 +31,22 @@ class ControlViewer(mujoco_py.MjViewer):
             self.active_joint = 8
         elif key == glfw.KEY_9:
             self.active_joint = 9
+
+
+class ControlHSREnv(HSREnv):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def viewer_setup(self):
+        self.viewer = ControlViewer(self.sim)
+
+
+def main(env_args):
+    env = ControlHSREnv(**env_args)
+    done = True
+
+    while True:
+        if done:
+            env.reset()
+
+
