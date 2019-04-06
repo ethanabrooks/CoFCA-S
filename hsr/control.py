@@ -1,5 +1,7 @@
 import mujoco_py
 import glfw
+from utils import space_to_size
+import numpy as np
 
 from hsr import HSREnv
 
@@ -7,7 +9,8 @@ from hsr import HSREnv
 class ControlViewer(mujoco_py.MjViewer):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.active_joint = None
+        self.active_joint = 0
+        self.delta = None
 
     def key_callback(self, window, key, scancode, action, mods):
         super().key_callback(window, key, scancode, action, mods)
@@ -31,6 +34,12 @@ class ControlViewer(mujoco_py.MjViewer):
             self.active_joint = 8
         elif key == glfw.KEY_9:
             self.active_joint = 9
+        elif key == glfw.KEY_LEFT_CONTROL:
+            x, y = glfw.get_cursor_pos(window)
+            self.delta = self._last_mouse_x - x, self._last_mouse_y - y
+
+    def reset_delta(self):
+        self.delta = None
 
 
 class ControlHSREnv(HSREnv):
@@ -38,7 +47,15 @@ class ControlHSREnv(HSREnv):
         super().__init__(**kwargs)
 
     def viewer_setup(self):
-        self.viewer = ControlViewer(self.sim)
+        self.viewer = ControlViewer()
+
+    def control_agent(self):
+        self.render()
+        if self.viewer.delta is not None:
+            action = np.zeros(space_to_size(self.action_space))
+            action[self.viewer.active_joint] = 1
+            self.step(action)
+        self.viewer.reset_delta()
 
 
 def main(env_args):
@@ -48,5 +65,4 @@ def main(env_args):
     while True:
         if done:
             env.reset()
-
-
+        env.control_agent()
