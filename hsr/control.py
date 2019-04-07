@@ -1,14 +1,16 @@
 import mujoco_py
 import glfw
-from utils import space_to_size
+from utils import space_to_size, argparse, parse_groups
 import numpy as np
 
-from hsr import HSREnv
+import hsr
+from ppo.env_adapter import HSREnv
+from ppo.main import add_hsr_args
 
 
 class ControlViewer(mujoco_py.MjViewer):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, sim):
+        super().__init__(sim)
         self.active_joint = 0
         self.delta = None
 
@@ -47,7 +49,7 @@ class ControlHSREnv(HSREnv):
         super().__init__(**kwargs)
 
     def viewer_setup(self):
-        self.viewer = ControlViewer()
+        self.viewer = ControlViewer(self.sim)
 
     def control_agent(self):
         self.render()
@@ -58,7 +60,7 @@ class ControlHSREnv(HSREnv):
         self.viewer.reset_delta()
 
 
-def main(env_args):
+def main(max_episode_steps, env_args):
     env = ControlHSREnv(**env_args)
     done = True
 
@@ -66,3 +68,8 @@ def main(env_args):
         if done:
             env.reset()
         env.control_agent()
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    add_hsr_args(parser)
+    hsr.util.env_wrapper(main)(**parse_groups(parser))
