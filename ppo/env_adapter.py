@@ -96,7 +96,10 @@ class AutoCurriculumHSREnv(HSREnv):
         self.task_index = self.np_random.choice(
             len(self.start_states), p=self.task_dist)
         self.task_prob = self.task_dist[self.task_index]
-        return self.start_states[self.task_index]
+        state = self.start_states[self.task_index]
+        # if self.sim.model.get_joint_qpos_addr('block0joint') == (7, 14):
+        #     return state._replace(qpos=np.concatenate([state.qpos[7:], state.qpos[:7]]))
+        return state
 
     def get_task_and_prob(self):
         return self.task_index, self.task_prob
