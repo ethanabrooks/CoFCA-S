@@ -1,15 +1,14 @@
 import csv
+from io import StringIO
 import itertools
+from pathlib import Path
 import subprocess
 import time
-from io import StringIO
-from pathlib import Path
 
-import numpy as np
-import torch
 from gym.spaces import Discrete
+import numpy as np
 from tensorboardX import SummaryWriter
-from utils import ReplayBuffer, space_to_size
+import torch
 
 from ppo.env_adapter import AutoCurriculumHSREnv, GridWorld
 from ppo.envs import VecNormalize, make_vec_envs
@@ -17,6 +16,7 @@ from ppo.policy import Policy
 from ppo.storage import RolloutStorage, TasksRolloutStorage
 from ppo.task_generator import TaskGenerator
 from ppo.update import PPO
+from utils import ReplayBuffer, space_to_size
 
 
 def get_freer_gpu():
@@ -109,8 +109,8 @@ def train(num_frames,
         normalize=normalize,
         synchronous=synchronous,
         eval=False)
-    actor_critic = Policy(
-        envs.observation_space, envs.action_space, network_args=network_args)
+    actor_critic = Policy(envs.observation_space, envs.action_space,
+                          **network_args)
 
     task_generator = None
     if train_tasks:

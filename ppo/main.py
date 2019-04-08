@@ -5,7 +5,6 @@ import pickle
 
 import gym
 from torch import nn as nn
-from utils import parse_groups
 
 import gridworld_env
 import hsr.util
@@ -14,6 +13,7 @@ from ppo.envs import wrap_env
 from ppo.task_generator import SamplingStrategy
 from ppo.train import train
 from ppo.util import parse_activation
+from utils import parse_groups
 
 try:
     import dm_control2gym
