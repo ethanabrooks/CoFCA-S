@@ -114,14 +114,17 @@ class HSREnv(MujocoEnv):
 
     def step(self, action):
         self.sim.data.ctrl[:] = action
-        for i in range(self.steps_per_action):
-            if self._render and i % self.render_freq == 0:
-                self.render()
-            if self._record and i % self.record_freq == 0:
-                self.video_recorder.capture_frame()
+        done = success = all([self.in_range(*s) for s in self.goals])
+        steps = self.steps_per_action
+        for i in range(steps):
+            frames = 10 if done else 1
+            for _ in range(frames):
+                if self._render and i % self.render_freq == 0:
+                    self.render()
+                if self._record and i % self.record_freq == 0:
+                    self.video_recorder.capture_frame()
             self.sim.step()
         self._time_steps += 1
-        done = success = all([self.in_range(*s) for s in self.goals])
         reward = float(success)
         info = {'log count': {'success': success and self._time_steps > 0}}
         return self._get_observation(), reward, done, info
