@@ -100,9 +100,7 @@ class AutoCurriculumHSREnv(HSREnv):
         if self.evaluation:
             return o
         o, r, t, i = self.step(self.action_space.sample(), steps=100)
-        if not t:
-            return o
-        return self.reset()  # stepped into terminal state. try again
+        return o
 
     def get_task_and_prob(self):
         return self.task_index, self.task_prob
