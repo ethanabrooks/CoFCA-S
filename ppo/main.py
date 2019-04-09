@@ -5,6 +5,7 @@ import pickle
 
 import gym
 from torch import nn as nn
+from utils import hierarchical_parse_args
 
 import gridworld_env
 import hsr.util
@@ -13,7 +14,6 @@ from ppo.envs import wrap_env
 from ppo.task_generator import SamplingStrategy
 from ppo.train import train
 from ppo.util import parse_activation
-from utils import parse_groups
 
 try:
     import dm_control2gym
@@ -205,7 +205,7 @@ def cli():
 
         train(make_env=make_env, **kwargs)
 
-    _train(**parse_groups(parser))
+    _train(**hierarchical_parse_args(parser))
 
 
 def tasks_cli():
@@ -227,7 +227,7 @@ def tasks_cli():
             args['max_episode_steps'] = max_episode_steps
         train(make_env=make_env_fn(**args), **kwargs)
 
-    _train(**parse_groups(parser))
+    _train(**hierarchical_parse_args(parser))
 
 
 def hsr_cli():
@@ -244,7 +244,7 @@ def hsr_cli():
             max_episode_steps=max_episode_steps)
         train(make_env=make_env, **kwargs)
 
-    hsr.util.env_wrapper(_train)(**parse_groups(parser))
+    hsr.util.env_wrapper(_train)(**hierarchical_parse_args(parser))
 
 
 def save_state_cli():
@@ -262,7 +262,7 @@ def save_state_cli():
             max_episode_steps=max_episode_steps)
         train(make_env=make_env, **kwargs)
 
-    hsr.util.env_wrapper(_train)(**parse_groups(parser))
+    hsr.util.env_wrapper(_train)(**hierarchical_parse_args(parser))
 
 
 def unpickle(path: str):
@@ -287,7 +287,7 @@ def tasks_hsr_cli():
                 max_episode_steps=max_episode_steps),
             **kwargs)
 
-    hsr.util.env_wrapper(_train)(**parse_groups(parser))
+    hsr.util.env_wrapper(_train)(**hierarchical_parse_args(parser))
 
 
 if __name__ == "__main__":

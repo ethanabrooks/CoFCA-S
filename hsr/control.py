@@ -1,7 +1,7 @@
-import mujoco_py
 import glfw
-from utils import space_to_size, argparse, parse_groups
+import mujoco_py
 import numpy as np
+from utils import argparse, parse_groups, space_to_size
 
 import hsr
 from ppo.env_adapter import HSREnv
@@ -68,6 +68,7 @@ def main(max_episode_steps, env_args):
         if done:
             env.reset()
         env.control_agent()
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

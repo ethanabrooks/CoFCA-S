@@ -5,11 +5,10 @@ import pickle
 from typing import List
 
 # first party
-from gym import Space
 from gym.spaces import Box, Discrete
 from mujoco_py import MjSimState
 import numpy as np
-from utils.gym import concat_spaces, space_shape, space_to_size, unwrap_env
+from utils.gym import space_to_size, unwrap_env
 from utils.numpy import onehot, vectorize
 
 from common.vec_env import CloudpickleWrapper, VecEnv
@@ -17,7 +16,7 @@ from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 import gridworld_env
 import hsr
-from hsr.env import GoalSpec, Observation
+from hsr.env import GoalSpec
 
 
 class HSREnv(hsr.env.HSREnv):
@@ -28,7 +27,8 @@ class HSREnv(hsr.env.HSREnv):
         goal = goal_space
         if block_space is None:
             starts = dict()
-            goal = GoalSpec(a=lambda: self.gripper_pos(), b=goal, distance=geofence)
+            goal = GoalSpec(
+                a=lambda: self.gripper_pos(), b=goal, distance=geofence)
         else:
             default = np.zeros(7)  # x y z q1 q2 q3 q4
             default[2] = .418
@@ -42,10 +42,7 @@ class HSREnv(hsr.env.HSREnv):
                 goal[2] += .418 + min_lift_height
             goal = GoalSpec(a='block0', b=goal, distance=geofence)
 
-        super().__init__(
-            starts=starts,
-            goals=[goal],
-            **kwargs)
+        super().__init__(starts=starts, goals=[goal], **kwargs)
 
 
 class SaveStateHSREnv(HSREnv):
