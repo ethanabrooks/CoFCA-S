@@ -99,7 +99,7 @@ class AutoCurriculumHSREnv(HSREnv):
         o = super().reset()
         if self.evaluation:
             return o
-        o, r, t, i = self.step(self.action_space.sample())
+        o, r, t, i = self.step(self.action_space.sample(), steps=100)
         if not t:
             return o
         return self.reset()  # stepped into terminal state. try again

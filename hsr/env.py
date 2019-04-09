@@ -112,10 +112,10 @@ class HSREnv(MujocoEnv):
             obs = np.concatenate([self.sim.data.qpos, self.sim.data.qvel])
         return obs
 
-    def step(self, action):
+    def step(self, action, steps=None):
         self.sim.data.ctrl[:] = action
         done = success = all([self.in_range(*s) for s in self.goals])
-        steps = self.steps_per_action
+        steps = steps or self.steps_per_action
         for i in range(steps):
             frames = 10 if done else 1
             for _ in range(frames):
