@@ -95,6 +95,15 @@ class AutoCurriculumHSREnv(HSREnv):
         self.task_prob = self.task_dist[self.task_index]
         return self.start_states[self.task_index]
 
+    def reset(self):
+        o = super().reset()
+        if self.evaluation:
+            return o
+        o, r, t, i = self.step(self.action_space.sample())
+        if not t:
+            return o
+        return self.reset()  # stepped into terminal state. try again
+
     def get_task_and_prob(self):
         return self.task_index, self.task_prob
 
