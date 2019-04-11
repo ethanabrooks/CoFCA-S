@@ -339,8 +339,11 @@ def train(num_frames,
                         writer.add_figure(name, fig, total_num_steps)
                         plt.close()
 
-                    _, count_history = np.unique(
-                        last1e5tasks.array(), return_counts=True)
+                    unique_values, unique_counts = np.unique(
+                        last1e5tasks.array().astype(int), return_counts=True)
+
+                    count_history = np.zeros(num_tasks)
+                    count_history[unique_values] = unique_counts
                     plot(count_history, 'last 1e5 tasks')
                     plot(task_counts, 'all tasks')
                     plot(last_gradient.to('cpu').numpy(), 'last gradient')
