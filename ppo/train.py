@@ -115,7 +115,6 @@ def train(num_frames,
     task_generator = None
     if train_tasks:
         last1e4tasks = ReplayBuffer(maxlen=int(1e4))
-        tasks_list = []
         task_counts = np.zeros(num_tasks)
         last_gradient = torch.zeros(num_tasks).to(device)
         task_generator = TaskGenerator(
