@@ -1,22 +1,22 @@
 # third party
+import pickle
 from multiprocessing import Pipe, Process
 from pathlib import Path
-import pickle
 from typing import List
 
+import numpy as np
 # first party
 from gym.spaces import Box, Discrete
-from mujoco_py import MjSimState
-import numpy as np
-from utils.gym import space_to_size, unwrap_env
-from utils.numpy import onehot, vectorize
 
+import gridworld_env
+import hsr
 from common.vec_env import CloudpickleWrapper, VecEnv
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
-import gridworld_env
-import hsr
 from hsr.env import GoalSpec
+from mujoco_py import MjSimState
+from utils.gym import space_to_size, unwrap_env
+from utils.numpy import onehot, vectorize
 
 
 class HSREnv(hsr.env.HSREnv):
@@ -89,18 +89,18 @@ class AutoCurriculumHSREnv(HSREnv):
 
     def new_state(self):
         if self.evaluation:
+            print('task', self.task_index)
             return self.start_states[self.task_index]
         self.task_index = self.np_random.choice(
             len(self.start_states), p=self.task_dist)
         self.task_prob = self.task_dist[self.task_index]
         return self.start_states[self.task_index]
 
-    def reset(self):
-        o = super().reset()
-        return vectorize(Observation(observation=o.observation, task=o.task))
-
     def get_task_and_prob(self):
         return self.task_index, self.task_prob
+
+    def set_task(self, task_index):
+        self.task_index = task_index
 
     def set_task_dist(self, dist):
         self.task_dist = dist
