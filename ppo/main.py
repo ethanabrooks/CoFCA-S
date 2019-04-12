@@ -1,14 +1,15 @@
 import argparse
 import functools
-from pathlib import Path
 import pickle
+from pathlib import Path
 
 import gym
 from torch import nn as nn
 
 import gridworld_env
 import hsr.util
-from ppo.env_adapter import AutoCurriculumHSREnv, HSREnv, SaveStateHSREnv, TasksGridWorld, TrainTasksGridWorld
+from ppo.env_adapter import (AutoCurriculumHSREnv, HSREnv, SaveStateHSREnv,
+                             TasksGridWorld, TrainTasksGridWorld)
 from ppo.envs import wrap_env
 from ppo.task_generator import SamplingStrategy
 from ppo.train import train
@@ -28,8 +29,7 @@ def build_parser():
     parser.add_argument('--gamma', type=float, default=0.99, help=' ')
     parser.add_argument(
         '--use-gae', action='store_true', default=False, help=' ')
-    parser.add_argument(
-        '--deterministic-eval', action='store_true', help=' ')
+    parser.add_argument('--deterministic-eval', action='store_true', help=' ')
     parser.add_argument('--tau', type=float, default=0.95, help=' ')
     parser.add_argument('--seed', type=int, default=1, help=' ')
     parser.add_argument(
@@ -62,7 +62,7 @@ def build_parser():
     parser.add_argument('--num-processes', type=int, default=1)
 
     network_parser = parser.add_argument_group('network_args')
-    network_parser.add_argument('--entropy-grade', type=float)
+    network_parser.add_argument('--entropy-grade', type=float, default=10)
     network_parser.add_argument('--recurrent', action='store_true')
     network_parser.add_argument('--hidden-size', type=int, default=256)
     network_parser.add_argument('--num-layers', type=int, default=3)
