@@ -1,18 +1,18 @@
 # third party
-import pickle
 from multiprocessing import Pipe, Process
 from pathlib import Path
+import pickle
 from typing import List
 
-import numpy as np
 # first party
 from gym.spaces import Box, Discrete
+import numpy as np
 
-import gridworld_env
-import hsr
 from common.vec_env import CloudpickleWrapper, VecEnv
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
+import gridworld_env
+import hsr
 from hsr.env import GoalSpec
 from mujoco_py import MjSimState
 from utils.gym import space_to_size, unwrap_env
@@ -89,7 +89,6 @@ class AutoCurriculumHSREnv(HSREnv):
 
     def new_state(self):
         if self.evaluation:
-            print('task', self.task_index)
             return self.start_states[self.task_index]
         self.task_index = self.np_random.choice(
             len(self.start_states), p=self.task_dist)

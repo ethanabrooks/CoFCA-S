@@ -1,14 +1,14 @@
 import csv
+from io import StringIO
 import itertools
+from pathlib import Path
 import subprocess
 import time
-from io import StringIO
-from pathlib import Path
 
-import numpy as np
-import torch
 from gym.spaces import Discrete
+import numpy as np
 from tensorboardX import SummaryWriter
+import torch
 
 from ppo.env_adapter import AutoCurriculumHSREnv, GridWorld
 from ppo.envs import VecNormalize, make_vec_envs
@@ -114,7 +114,8 @@ def train(num_frames,
 
     task_generator = None
     if train_tasks:
-        last1e5tasks = ReplayBuffer(maxlen=int(1e5))
+        last1e4tasks = ReplayBuffer(maxlen=int(1e4))
+        tasks_list = []
         task_counts = np.zeros(num_tasks)
         last_gradient = torch.zeros(num_tasks).to(device)
         task_generator = TaskGenerator(
@@ -233,9 +234,9 @@ def train(num_frames,
             if train_tasks:
                 tasks, probs = map(torch.tensor,
                                    envs.unwrapped.get_tasks_and_probs())
-                task_counts[tasks] += dones
                 for i in tasks.numpy()[dones]:
-                    last1e5tasks.append(i)
+                    last1e4tasks.append(i)
+                    task_counts[i] += 1
                 rollouts.insert(
                     obs=obs,
                     recurrent_hidden_states=recurrent_hidden_states,
@@ -340,11 +341,11 @@ def train(num_frames,
                         plt.close()
 
                     unique_values, unique_counts = np.unique(
-                        last1e5tasks.array().astype(int), return_counts=True)
+                        last1e4tasks.array().astype(int), return_counts=True)
 
                     count_history = np.zeros(num_tasks)
                     count_history[unique_values] = unique_counts
-                    plot(count_history, 'last 1e5 tasks')
+                    plot(count_history, 'last 1e4 tasks')
                     plot(task_counts, 'all tasks')
                     plot(last_gradient.to('cpu').numpy(), 'last gradient')
 
