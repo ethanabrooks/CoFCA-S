@@ -371,7 +371,7 @@ def train(num_frames,
                         inputs=obs,
                         rnn_hxs=eval_recurrent_hidden_states,
                         masks=eval_masks,
-                        deterministic=True)
+                        deterministic=False)
 
                 # Observe reward and next obs
                 obs, rewards, dones, infos = eval_envs.step(actions)
