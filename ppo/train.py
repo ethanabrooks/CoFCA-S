@@ -208,7 +208,7 @@ def train(num_frames,
 
         if train_tasks:
             for i in range(num_processes):
-                if successes > 30:
+                if successes > 10:
                     task -= 1
                     successes = 0
                 task_dist = onehot(task, num_tasks)
