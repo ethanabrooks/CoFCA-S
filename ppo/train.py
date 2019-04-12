@@ -1,14 +1,14 @@
 import csv
-from io import StringIO
 import itertools
-from pathlib import Path
 import subprocess
 import time
+from io import StringIO
+from pathlib import Path
 
-from gym.spaces import Discrete
 import numpy as np
-from tensorboardX import SummaryWriter
 import torch
+from gym.spaces import Discrete
+from tensorboardX import SummaryWriter
 
 from ppo.env_adapter import AutoCurriculumHSREnv, GridWorld
 from ppo.envs import VecNormalize, make_vec_envs
@@ -353,16 +353,17 @@ def train(num_frames,
             time_steps = []
 
         if eval_interval is not None and j % eval_interval == 0:
-            eval_rewards = np.zeros(num_tasks)
-            eval_time_steps = np.zeros(num_tasks)
-            eval_dones = np.zeros(num_tasks)
+            num_eval = num_tasks if train_tasks else num_processes
+            eval_rewards = np.zeros(num_eval)
+            eval_time_steps = np.zeros(num_eval)
+            eval_dones = np.zeros(num_eval)
 
             obs = eval_envs.reset()
             eval_recurrent_hidden_states = torch.zeros(
-                num_tasks,
+                num_eval,
                 actor_critic.recurrent_hidden_state_size,
                 device=device)
-            eval_masks = torch.zeros(num_tasks, 1, device=device)
+            eval_masks = torch.zeros(num_eval, 1, device=device)
 
             while not np.all(eval_dones):
                 with torch.no_grad():
