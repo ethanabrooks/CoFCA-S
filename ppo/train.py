@@ -16,7 +16,7 @@ from ppo.policy import Policy
 from ppo.storage import RolloutStorage, TasksRolloutStorage
 from ppo.task_generator import TaskGenerator
 from ppo.update import PPO
-from utils import ReplayBuffer, space_to_size
+from utils import ReplayBuffer, space_to_size, onehot
 
 
 def get_freer_gpu():
@@ -115,7 +115,6 @@ def train(num_frames,
     task_generator = None
     if train_tasks:
         last1e4tasks = ReplayBuffer(maxlen=int(1e4))
-        tasks_list = []
         task_counts = np.zeros(num_tasks)
         last_gradient = torch.zeros(num_tasks).to(device)
         task_generator = TaskGenerator(
@@ -203,11 +202,18 @@ def train(num_frames,
             importance_weights.view(rollouts.importance_weighting[0].size()))
 
     start = time.time()
+    successes = 0
+    task = num_tasks - 1
     for j in updates:
 
         if train_tasks:
             for i in range(num_processes):
-                envs.unwrapped.set_task_dist(i, task_generator.probs())
+                if successes > 30:
+                    task -= 1
+                    successes = 0
+                task_dist = onehot(task, num_tasks)
+                envs.unwrapped.set_task_dist(i, task_dist)
+                # envs.unwrapped.set_task_dist(i, task_generator.probs())
 
         for step in range(num_steps):
             with torch.no_grad():
@@ -234,6 +240,13 @@ def train(num_frames,
             if train_tasks:
                 tasks, probs = map(torch.tensor,
                                    envs.unwrapped.get_tasks_and_probs())
+
+                for i, done in enumerate(dones):
+                    if done:
+                        if rewards[i] == 1:
+                            successes += 1
+                        else:
+                            successes = 0
                 for i in tasks.numpy()[dones]:
                     last1e4tasks.append(i)
                     task_counts[i] += 1
