@@ -31,6 +31,7 @@ def get_freer_gpu():
 
 
 def train(num_frames,
+          deterministic_eval,
           num_steps,
           seed,
           cuda_deterministic,
@@ -371,7 +372,7 @@ def train(num_frames,
                         inputs=obs,
                         rnn_hxs=eval_recurrent_hidden_states,
                         masks=eval_masks,
-                        deterministic=True)
+                        deterministic=deterministic_eval)
 
                 # Observe reward and next obs
                 obs, rewards, dones, infos = eval_envs.step(actions)

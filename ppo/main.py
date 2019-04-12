@@ -28,6 +28,8 @@ def build_parser():
     parser.add_argument('--gamma', type=float, default=0.99, help=' ')
     parser.add_argument(
         '--use-gae', action='store_true', default=False, help=' ')
+    parser.add_argument(
+        '--deterministic-eval', action='store_true', help=' ')
     parser.add_argument('--tau', type=float, default=0.95, help=' ')
     parser.add_argument('--seed', type=int, default=1, help=' ')
     parser.add_argument(
