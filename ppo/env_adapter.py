@@ -97,10 +97,7 @@ class AutoCurriculumHSREnv(HSREnv):
 
     def reset(self):
         o = super().reset()
-        if self.evaluation:
-            return o
-        o, r, t, i = self.step(self.action_space.sample(), steps=100)
-        return o
+        return vectorize(Observation(observation=o.observation, task=o.task))
 
     def get_task_and_prob(self):
         return self.task_index, self.task_prob
