@@ -241,12 +241,6 @@ def train(num_frames,
                 tasks, probs = map(torch.tensor,
                                    envs.unwrapped.get_tasks_and_probs())
 
-                for i, done in enumerate(dones):
-                    if done:
-                        if rewards[i] == 1:
-                            successes += 1
-                        else:
-                            successes = 0
                 for i in tasks.numpy()[dones]:
                     last1e4tasks.append(i)
                     task_counts[i] += 1
@@ -388,6 +382,12 @@ def train(num_frames,
 
                 # Observe reward and next obs
                 obs, rewards, dones, infos = eval_envs.step(actions)
+
+                if dones[task]:
+                    if rewards[task] == 1:
+                        successes += 1
+                    else:
+                        successes = 0
 
                 # track rewards
                 not_done = eval_dones == 0
