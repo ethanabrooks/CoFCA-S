@@ -51,6 +51,7 @@ def train(num_frames,
           synchronous,
           solved,
           num_solved,
+          task_history,
           tasks_args=None):
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
@@ -114,7 +115,7 @@ def train(num_frames,
 
     task_generator = None
     if train_tasks:
-        last1e4tasks = ReplayBuffer(maxlen=int(1e4))
+        last_n_tasks = ReplayBuffer(maxlen=task_history)
         task_counts = np.zeros(num_tasks)
         last_gradient = torch.zeros(num_tasks).to(device)
         task_generator = TaskGenerator(
@@ -234,7 +235,7 @@ def train(num_frames,
                 tasks, probs = map(torch.tensor,
                                    envs.unwrapped.get_tasks_and_probs())
                 for i in tasks.numpy()[dones]:
-                    last1e4tasks.append(i)
+                    last_n_tasks.append(i)
                     task_counts[i] += 1
                 rollouts.insert(
                     obs=obs,
@@ -340,7 +341,7 @@ def train(num_frames,
                         plt.close()
 
                     unique_values, unique_counts = np.unique(
-                        last1e4tasks.array().astype(int), return_counts=True)
+                        last_n_tasks.array().astype(int), return_counts=True)
 
                     count_history = np.zeros(num_tasks)
                     count_history[unique_values] = unique_counts
