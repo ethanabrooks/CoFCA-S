@@ -16,7 +16,7 @@ from ppo.policy import Policy
 from ppo.storage import RolloutStorage, TasksRolloutStorage
 from ppo.task_generator import TaskGenerator
 from ppo.update import PPO
-from utils import ReplayBuffer, space_to_size, onehot
+from utils import ReplayBuffer, onehot, space_to_size
 
 
 def get_freer_gpu():
@@ -378,7 +378,7 @@ def train(num_frames,
                         inputs=obs,
                         rnn_hxs=eval_recurrent_hidden_states,
                         masks=eval_masks,
-                        deterministic=True)
+                        deterministic=False)
 
                 # Observe reward and next obs
                 obs, rewards, dones, infos = eval_envs.step(actions)
