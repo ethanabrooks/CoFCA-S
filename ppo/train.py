@@ -122,12 +122,14 @@ def train(num_frames,
 
         sampling_strategy = tasks_args['sampling_strategy']
         if sampling_strategy == 'reward-based':
-            task_generator = RewardBasedTaskGenerator(**tasks_args)
+            task_generator = RewardBasedTaskGenerator(
+                task_size=num_tasks, **tasks_args)
         elif sampling_strategy == 'goal-gan':
             task_generator = GoalGAN(**tasks_args, **gan_args)
         else:
             task_generator = TaskGenerator(
-                task_size=num_tasks, **tasks_args).to(device)
+                task_size=num_tasks, **tasks_args)
+        task_generator = task_generator.to(device)
 
         if isinstance(task_space, Discrete):
             task_size = 1

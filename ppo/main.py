@@ -105,11 +105,13 @@ def add_tasks_args(parser):
     )
     tasks_parser.add_argument(
         '--sampling-strategy',
-        choices=[s.name for s in SamplingStrategy],
+        choices=[s.name for s in SamplingStrategy] + ['reward-based'],
         default='experiment')
     gan_parser = parser.add_argument_group('gan_args')
     gan_parser.add_argument('--size-noise', type=int, default=4)
-    gan_parser.add_argument('--reward-lower-bound', type=float, default=.25)
+    gan_parser.add_argument('--reward-lower-bound', type=float, default=.1)
+    gan_parser.add_argument('--reward-upper-bound', type=float, default=.9)
+    gan_parser.add_argument('--gan-epoch', type=float, default=.9)
 
 
 def cli():
