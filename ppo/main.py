@@ -105,7 +105,8 @@ def add_tasks_args(parser):
     )
     tasks_parser.add_argument(
         '--sampling-strategy',
-        choices=[s.name for s in SamplingStrategy] + ['reward-based'],
+        choices=[s.name for s in SamplingStrategy] +
+                ['reward-variance', 'reward-range'],
         default='experiment')
     gan_parser = parser.add_argument_group('gan_args')
     gan_parser.add_argument('--size-noise', type=int, default=4)

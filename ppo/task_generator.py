@@ -54,7 +54,13 @@ class RewardBasedTaskGenerator(TaskGenerator):
         self.histories = [ReplayBuffer(self.buffer_size) for _ in range(task_size)]
 
     def logits(self):
-        logits = [h.array().var if h.full else 1. for h in self.histories]
+        def scalarize(rewards):
+            if self.sampling_strategy == 'reward-variance':
+                return rewards.var
+            if self.sampling_strategy == 'reward-range':
+                return .1 < rewards.mean < .9
+
+        logits = [scalarize(h.array()) if h.full else 1. for h in self.histories]
         return torch.tensor(logits)
 
     def update(self, tasks, rewards, step=None):

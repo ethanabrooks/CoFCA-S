@@ -121,7 +121,7 @@ def train(num_frames,
         last_gradient = torch.zeros(num_tasks).to(device)
 
         sampling_strategy = tasks_args['sampling_strategy']
-        if sampling_strategy == 'reward-based':
+        if sampling_strategy in ['reward-variance', 'reward-range']:
             task_generator = RewardBasedTaskGenerator(
                 task_size=num_tasks, **tasks_args)
         elif sampling_strategy == 'goal-gan':
