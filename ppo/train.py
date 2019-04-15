@@ -14,7 +14,7 @@ from ppo.env_adapter import AutoCurriculumHSREnv, GridWorld
 from ppo.envs import VecNormalize, make_vec_envs
 from ppo.policy import Policy
 from ppo.storage import RolloutStorage, TasksRolloutStorage
-from ppo.task_generator import TaskGenerator
+from ppo.task_generator import TaskGenerator, GoalGAN, RewardBasedTaskGenerator
 from ppo.update import PPO
 from utils import ReplayBuffer, space_to_size
 
@@ -53,7 +53,7 @@ def train(num_frames,
           solved,
           num_solved,
           task_history,
-          tasks_args=None):
+          tasks_args=None, gan_args=None):
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
 
@@ -119,8 +119,15 @@ def train(num_frames,
         last_n_tasks = ReplayBuffer(maxlen=task_history)
         task_counts = np.zeros(num_tasks)
         last_gradient = torch.zeros(num_tasks).to(device)
-        task_generator = TaskGenerator(
-            task_size=num_tasks, **tasks_args).to(device)
+
+        sampling_strategy = tasks_args['sampling_strategy']
+        if sampling_strategy == 'reward-based':
+            task_generator = RewardBasedTaskGenerator(**tasks_args)
+        elif sampling_strategy == 'goal-gan':
+            task_generator = GoalGAN(**tasks_args, **gan_args)
+        else:
+            task_generator = TaskGenerator(
+                task_size=num_tasks, **tasks_args).to(device)
 
         if isinstance(task_space, Discrete):
             task_size = 1
