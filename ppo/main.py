@@ -42,6 +42,7 @@ def build_parser():
     parser.add_argument('--save-interval', type=int, default=None, help=' ')
     parser.add_argument('--eval-interval', type=int, default=None, help=' ')
     parser.add_argument('--num-frames', type=int, default=None, help=' ')
+    parser.add_argument('--buffer-size', type=int, default=100, help=' ')
     parser.add_argument('--task-history', type=int, default=1000, help=' ')
     parser.add_argument(
         '--solved',
