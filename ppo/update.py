@@ -192,6 +192,8 @@ class PPO:
             grads_per_step = torch.zeros(total_batch_size)
             grads_per_task = torch.zeros_like(
                 tasks_to_train, dtype=torch.float)
+            rets_per_task = torch.zeros_like(
+                tasks_to_train, dtype=torch.float)
             post_update_loss = torch.zeros_like(
                 tasks_to_train, dtype=torch.float)
             grad_l2 = torch.zeros_like(tasks_to_train, dtype=torch.float)
@@ -201,39 +203,42 @@ class PPO:
                 uses_task = (batches.tasks == task).any(-1)
                 train_indices = torch.arange(total_batch_size)[uses_task]
                 batch = rollouts.make_batch(advantages, train_indices)
-                _, action_loss, _ = self.compute_loss_components(
-                    batch, compute_value_loss=False)
+                if 'reward-' in self.sampling_strategy:
+                    rets_per_task[i] = batch.ret
+                else:
+                    _, action_loss, _ = self.compute_loss_components(
+                        batch, compute_value_loss=False)
 
-                loss = self.compute_loss(
-                    action_loss=action_loss,
-                    dist_entropy=0,
-                    value_loss=None,
-                    importance_weighting=None)
-                grad = torch.autograd.grad(
-                    loss,
-                    self.actor_critic.parameters(),
-                    retain_graph=True,
-                    allow_unused=True)
-                if self.sampling_strategy == 'gl2g':
-                    grads_list.append(grad)
-                if self.sampling_strategy == 'gpg':
-                    grad_l2[i] = l2_norm(grad)
-                post_update_loss[i] = loss
-                grads_per_task[i] = grads_per_step[uses_task] = sum(
-                    g.abs().sum() for g in grad if g is not None)
+                    loss = self.compute_loss(
+                        action_loss=action_loss,
+                        dist_entropy=0,
+                        value_loss=None,
+                        importance_weighting=None)
+                    grad = torch.autograd.grad(
+                        loss,
+                        self.actor_critic.parameters(),
+                        retain_graph=True,
+                        allow_unused=True)
+                    if self.sampling_strategy == 'gl2g':
+                        grads_list.append(grad)
+                    if self.sampling_strategy == 'gpg':
+                        grad_l2[i] = l2_norm(grad)
+                    post_update_loss[i] = loss
+                    grads_per_task[i] = grads_per_step[uses_task] = sum(
+                        g.abs().sum() for g in grad if g is not None)
 
-            if self.task_generator.sampling_strategy == 'abs_grads':
+            if self.sampling_strategy == 'abs_grads':
                 self.task_generator.update(tasks_to_train, grads_per_task)
-            elif self.task_generator.sampling_strategy == 'pg':
+            elif self.sampling_strategy == 'pg':
                 self.task_generator.update(tasks_to_train,
                                            post_update_loss - pre_update_loss)
-            elif self.task_generator.sampling_strategy == 'gpg':
+            elif self.sampling_strategy == 'gpg':
                 self.task_generator.update(tasks_to_train, grad_l2)
-            elif self.task_generator.sampling_strategy == 'l2g':
+            elif self.sampling_strategy == 'l2g':
                 post_update_l2 = l2_norm(self.actor_critic.parameters())
                 self.task_generator.update(tasks_to_train,
                                            post_update_l2 - pre_update_l2)
-            elif self.task_generator.sampling_strategy == 'gl2g':
+            elif self.sampling_strategy == 'gl2g':
                 dot_product = []
                 parameters = self.actor_critic.parameters()
                 grads_list = zip(*grads_list)
@@ -242,6 +247,11 @@ class PPO:
                         dot_product.append(torch.sum(p * sum(g) / len(g)))
 
                 self.task_generator.update(tasks_to_train, sum(dot_product))
+            elif 'reward-' in self.sampling_strategy:
+                self.task_generator.update(tasks_to_train.numpy(),
+                                           rets_per_task.numpy())
+            else:
+                raise RuntimeError
 
             task_values.update(grad_measure=grads_per_step, n=1)
 
