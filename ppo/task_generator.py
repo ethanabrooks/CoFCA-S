@@ -48,28 +48,38 @@ class TaskGenerator(NoInput):
 
 
 class RewardBasedTaskGenerator(TaskGenerator):
-    def __init__(self, task_size, buffer_size, **kwargs):
+    def __init__(self, task_size, task_buffer_size, min_reward, max_reward,
+                 **kwargs):
         super().__init__(task_size=task_size, **kwargs)
-        self.buffer_size = buffer_size
+        self.min_reward = min_reward
+        self.max_reward = max_reward
+        self.buffer_size = task_buffer_size
         self.histories = [
             ReplayBuffer(self.buffer_size) for _ in range(task_size)
         ]
 
-    def logits(self):
-        def scalarize(rewards):
-            if self.sampling_strategy == 'reward-variance':
-                var = rewards.var()
-                if np.isnan(var):
-                    return 100.
-                return var
-            if self.sampling_strategy == 'reward-range':
-                return float(.1 < rewards.mean() < .9)
-
-        return torch.tensor([scalarize(h.array()) for h in self.histories])
+    def dist(self):
+        not_full = list(not h.full for h in self.histories)
+        if any(not_full):
+            not_full = torch.tensor(not_full)
+            probs = not_full.float() / not_full.sum()
+            return Categorical(probs=probs)
+        if self.sampling_strategy == 'reward-variance':
+            logits = [h.array().var() for h in self.histories]
+            return Categorical(logits=self.temperature * torch.tensor(logits))
+        if self.sampling_strategy == 'reward-range':
+            rewards = torch.tensor([h.array().mean() for h in self.histories])
+            in_range = (.1 < rewards) & (rewards < .9)
+            if not torch.any(in_range):
+                return Categorical(logits=torch.ones(self.task_size))
+            in_range = in_range.float()
+            return Categorical(probs=in_range / in_range.sum())
 
     def update(self, tasks, rewards, step=None):
         for task, reward in zip(tasks, rewards):
-            self.histories[task].append(reward)
+            normalized = (reward - self.min_reward) / (
+                self.max_reward - self.min_reward)
+            self.histories[task].append(normalized)
 
 
 class GoalGAN(RewardBasedTaskGenerator):
@@ -101,7 +111,7 @@ class GoalGAN(RewardBasedTaskGenerator):
     def update(self, tasks, rewards, step=None):
         super().update(tasks, rewards)
         self.time_step += 1
-        task_vectors = onehot(tasks, self.num_tasks)
+        task_vectors = onehot(tasks, self.task_size)
         task_vectors = torch.tensor(task_vectors)
         y = (rewards > self.reward_lower_bound) & (rewards <
                                                    self.reward_upper_bound)

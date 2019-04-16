@@ -41,7 +41,6 @@ def build_parser():
     parser.add_argument('--save-interval', type=int, default=None, help=' ')
     parser.add_argument('--eval-interval', type=int, default=None, help=' ')
     parser.add_argument('--num-frames', type=int, default=None, help=' ')
-    parser.add_argument('--buffer-size', type=int, default=100, help=' ')
     parser.add_argument('--task-history', type=int, default=1000, help=' ')
     parser.add_argument(
         '--solved',
@@ -154,6 +153,9 @@ def tasks_cli():
     add_tasks_args(parser)
     parser.add_argument('--max-episode-steps', type=int)
     parser.add_argument('--task-in-obs', action='store_true')
+    parser.add_argument('--task-buffer-size', type=int, default=10, help=' ')
+    parser.add_argument('--min-reward', type=float, default=None, help=' ')
+    parser.add_argument('--max-reward', type=float, default=None, help=' ')
 
     def make_env_fn(max_episode_steps, **env_args):
         return functools.partial(

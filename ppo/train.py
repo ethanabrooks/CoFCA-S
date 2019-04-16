@@ -55,7 +55,9 @@ def train(num_frames,
           task_history,
           tasks_args=None,
           gan_args=None,
-          buffer_size=None):
+          min_reward=None,
+          max_reward=None,
+          task_buffer_size=None):
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
 
@@ -125,7 +127,11 @@ def train(num_frames,
         sampling_strategy = tasks_args['sampling_strategy']
         if sampling_strategy in ['reward-variance', 'reward-range']:
             task_generator = RewardBasedTaskGenerator(
-                buffer_size=buffer_size, task_size=num_tasks, **tasks_args)
+                task_buffer_size=task_buffer_size,
+                min_reward=min_reward,
+                max_reward=max_reward,
+                task_size=num_tasks,
+                **tasks_args)
         elif sampling_strategy == 'goal-gan':
             task_generator = GoalGAN(**tasks_args, **gan_args)
         else:
