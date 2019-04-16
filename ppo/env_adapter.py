@@ -175,12 +175,7 @@ class TasksGridWorld(GridWorld):
         self.include_task_in_obs = task_in_obs
         super().__init__(*args, **kwargs)
         self.task_states = np.ravel_multi_index(
-            np.where(
-                np.logical_not(
-                    np.logical_or(
-                        np.isin(self.desc, self.blocked),
-                        np.isin(self.desc, self.terminal),
-                    ))),
+            np.where(np.isin(self.desc, self.start)),
             dims=self.desc.shape)
         self.observation_size = space_to_size(self.observation_space)
         self.evaluation = False

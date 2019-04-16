@@ -1,8 +1,8 @@
 # stdlib
 # third party
 # first party
-from collections import Counter
 import math
+from collections import Counter
 
 import torch
 import torch.nn as nn
@@ -192,8 +192,7 @@ class PPO:
             grads_per_step = torch.zeros(total_batch_size)
             grads_per_task = torch.zeros_like(
                 tasks_to_train, dtype=torch.float)
-            rets_per_task = torch.zeros_like(
-                tasks_to_train, dtype=torch.float)
+            rets_per_task = torch.zeros_like(tasks_to_train, dtype=torch.float)
             post_update_loss = torch.zeros_like(
                 tasks_to_train, dtype=torch.float)
             grad_l2 = torch.zeros_like(tasks_to_train, dtype=torch.float)
@@ -250,7 +249,7 @@ class PPO:
             elif 'reward-' in self.sampling_strategy:
                 self.task_generator.update(tasks_to_train.numpy(),
                                            rets_per_task.numpy())
-            else:
+            elif self.sampling_strategy != 'baseline':
                 raise RuntimeError
 
             task_values.update(grad_measure=grads_per_step, n=1)
