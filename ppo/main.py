@@ -1,15 +1,14 @@
 import argparse
 import functools
-import pickle
 from pathlib import Path
+import pickle
 
 import gym
 from torch import nn as nn
 
 import gridworld_env
 import hsr.util
-from ppo.env_adapter import (AutoCurriculumHSREnv, HSREnv, SaveStateHSREnv,
-                             TasksGridWorld, TrainTasksGridWorld)
+from ppo.env_adapter import AutoCurriculumHSREnv, HSREnv, SaveStateHSREnv, TasksGridWorld, TrainTasksGridWorld
 from ppo.envs import wrap_env
 from ppo.task_generator import SamplingStrategy
 from ppo.train import train
@@ -107,7 +106,7 @@ def add_tasks_args(parser):
     tasks_parser.add_argument(
         '--sampling-strategy',
         choices=[s.name for s in SamplingStrategy] +
-                ['reward-variance', 'reward-range'],
+        ['reward-variance', 'reward-range'],
         default='experiment')
     gan_parser = parser.add_argument_group('gan_args')
     gan_parser.add_argument('--size-noise', type=int, default=4)
@@ -217,6 +216,12 @@ def tasks_hsr_cli():
     add_tasks_args(parser)
     env_parser = add_hsr_args(parser)
     env_parser.add_argument('--start-states', type=unpickle, required=True)
+    env_parser.add_argument(
+        '--random-initial-steps',
+        type=int,
+        default=0,
+        help='Environment steps on randomly sampled action at start of episode'
+    )
 
     def env_thunk(env_id, start_states, **env_args):
         return lambda: AutoCurriculumHSREnv(*start_states, **env_args)

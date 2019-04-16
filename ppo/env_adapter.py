@@ -76,7 +76,9 @@ class SaveStateHSREnv(HSREnv):
 
 class AutoCurriculumHSREnv(HSREnv):
     def __init__(self, start_states: List[MjSimState],
-                 start_images: List[np.ndarray], **kwargs):
+                 start_images: List[np.ndarray], random_initial_steps: int,
+                 **kwargs):
+        self.random_initial_steps = random_initial_steps
         self.start_images = start_images
         self.start_states = start_states
         self.num_tasks = len(start_states)
@@ -94,6 +96,16 @@ class AutoCurriculumHSREnv(HSREnv):
             len(self.start_states), p=self.task_dist)
         self.task_prob = self.task_dist[self.task_index]
         return self.start_states[self.task_index]
+
+    def reset(self):
+        o = super().reset()
+        if self.evaluation:
+            return o
+        o, r, t, i = self.step(
+            self.action_space.sample(), steps=self.random_initial_steps)
+        if not t:
+            return o
+        return self.reset()  # stepped into terminal state. try again
 
     def get_task_and_prob(self):
         return self.task_index, self.task_prob
