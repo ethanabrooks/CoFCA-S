@@ -1,14 +1,15 @@
 import argparse
 import functools
-from pathlib import Path
 import pickle
+from pathlib import Path
 
 import gym
 from torch import nn as nn
 
 import gridworld_env
 import hsr.util
-from ppo.env_adapter import AutoCurriculumHSREnv, HSREnv, SaveStateHSREnv, TasksGridWorld, TrainTasksGridWorld
+from ppo.env_adapter import (AutoCurriculumHSREnv, HSREnv, SaveStateHSREnv,
+                             TasksGridWorld, TrainTasksGridWorld)
 from ppo.envs import wrap_env
 from ppo.task_generator import SamplingStrategy
 from ppo.train import train
@@ -109,8 +110,6 @@ def add_tasks_args(parser):
         default='experiment')
     gan_parser = parser.add_argument_group('gan_args')
     gan_parser.add_argument('--size-noise', type=int, default=4)
-    gan_parser.add_argument('--reward-lower-bound', type=float, default=.1)
-    gan_parser.add_argument('--reward-upper-bound', type=float, default=.9)
     gan_parser.add_argument('--gan-epoch', type=float, default=.9)
 
 
@@ -151,11 +150,20 @@ def cli():
 def tasks_cli():
     parser = build_parser()
     add_tasks_args(parser)
+    reward_based_task_parser = parser.add_argument_group(
+        'reward_based_task_args')
     parser.add_argument('--max-episode-steps', type=int)
     parser.add_argument('--task-in-obs', action='store_true')
-    parser.add_argument('--task-buffer-size', type=int, default=10, help=' ')
-    parser.add_argument('--min-reward', type=float, default=None, help=' ')
-    parser.add_argument('--max-reward', type=float, default=None, help=' ')
+    reward_based_task_parser.add_argument(
+        '--task-buffer-size', type=int, default=10, help=' ')
+    reward_based_task_parser.add_argument(
+        '--min-reward', type=float, default=None, help=' ')
+    reward_based_task_parser.add_argument(
+        '--max-reward', type=float, default=None, help=' ')
+    reward_based_task_parser.add_argument(
+        '--reward-lower-bound', type=float, default=None, help=' ')
+    reward_based_task_parser.add_argument(
+        '--reward-upper-bound', type=float, default=None, help=' ')
 
     def make_env_fn(max_episode_steps, **env_args):
         return functools.partial(

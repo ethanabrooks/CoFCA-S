@@ -49,8 +49,10 @@ class TaskGenerator(NoInput):
 
 class RewardBasedTaskGenerator(TaskGenerator):
     def __init__(self, task_size, task_buffer_size, min_reward, max_reward,
-                 **kwargs):
+                 reward_lower_bound, reward_upper_bound, **kwargs):
         super().__init__(task_size=task_size, **kwargs)
+        self.reward_lower_bound = reward_lower_bound
+        self.reward_upper_bound = reward_upper_bound
         self.min_reward = min_reward
         self.max_reward = max_reward
         self.buffer_size = task_buffer_size
@@ -69,7 +71,8 @@ class RewardBasedTaskGenerator(TaskGenerator):
             return Categorical(logits=self.temperature * torch.tensor(logits))
         if self.sampling_strategy == 'reward-range':
             rewards = torch.tensor([h.array().mean() for h in self.histories])
-            in_range = (.1 < rewards) & (rewards < .9)
+            in_range = (self.reward_lower_bound <
+                        rewards) & (rewards < self.reward_upper_bound)
             if not torch.any(in_range):
                 return Categorical(logits=torch.ones(self.task_size))
             in_range = in_range.float()

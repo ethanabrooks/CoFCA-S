@@ -30,34 +30,34 @@ def get_freer_gpu():
     return np.argmax(free_memory)
 
 
-def train(num_frames,
-          deterministic_eval,
-          num_steps,
-          seed,
-          cuda_deterministic,
-          cuda,
-          log_dir: Path,
-          make_env,
-          gamma,
-          normalize,
-          save_interval,
-          load_path,
-          log_interval,
-          eval_interval,
-          use_gae,
-          tau,
-          ppo_args,
-          network_args,
-          num_processes,
-          synchronous,
-          solved,
-          num_solved,
-          task_history,
-          tasks_args=None,
-          gan_args=None,
-          min_reward=None,
-          max_reward=None,
-          task_buffer_size=None):
+def train(
+        num_frames,
+        deterministic_eval,
+        num_steps,
+        seed,
+        cuda_deterministic,
+        cuda,
+        log_dir: Path,
+        make_env,
+        gamma,
+        normalize,
+        save_interval,
+        load_path,
+        log_interval,
+        eval_interval,
+        use_gae,
+        tau,
+        ppo_args,
+        network_args,
+        num_processes,
+        synchronous,
+        solved,
+        num_solved,
+        task_history,
+        tasks_args=None,
+        reward_based_task_args=None,
+        gan_args=None,
+):
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
 
@@ -127,11 +127,7 @@ def train(num_frames,
         sampling_strategy = tasks_args['sampling_strategy']
         if sampling_strategy in ['reward-variance', 'reward-range']:
             task_generator = RewardBasedTaskGenerator(
-                task_buffer_size=task_buffer_size,
-                min_reward=min_reward,
-                max_reward=max_reward,
-                task_size=num_tasks,
-                **tasks_args)
+                task_size=num_tasks, **reward_based_task_args, **tasks_args)
         elif sampling_strategy == 'goal-gan':
             task_generator = GoalGAN(**tasks_args, **gan_args)
         else:
