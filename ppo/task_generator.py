@@ -2,10 +2,10 @@ from enum import Enum
 
 import numpy as np
 import torch
+from utils import ReplayBuffer, onehot
 
 from common.running_mean_std import RunningMeanStd
 from ppo.util import Categorical, NoInput, init_normc_, mlp
-from utils import ReplayBuffer, onehot
 
 SamplingStrategy = Enum('SamplingStrategy',
                         'baseline pg gpg l2g gl2g abs_grads')

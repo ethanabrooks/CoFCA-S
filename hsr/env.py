@@ -3,12 +3,12 @@ from collections import namedtuple
 from pathlib import Path
 from typing import Dict, List
 
-import numpy as np
 # third party
 from gym import Space
 from gym.spaces import Box
 from gym.utils import closer
 from gym.wrappers.monitoring.video_recorder import VideoRecorder
+import numpy as np
 
 from hsr.mujoco_env import MujocoEnv
 

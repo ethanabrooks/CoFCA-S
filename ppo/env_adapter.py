@@ -6,7 +6,10 @@ from typing import List
 
 # first party
 from gym.spaces import Box, Discrete
+from mujoco_py import MjSimState
 import numpy as np
+from utils.gym import space_to_size, unwrap_env
+from utils.numpy import onehot, vectorize
 
 from common.vec_env import CloudpickleWrapper, VecEnv
 from common.vec_env.dummy_vec_env import DummyVecEnv
@@ -14,9 +17,6 @@ from common.vec_env.subproc_vec_env import SubprocVecEnv
 import gridworld_env
 import hsr
 from hsr.env import GoalSpec
-from mujoco_py import MjSimState
-from utils.gym import space_to_size, unwrap_env
-from utils.numpy import onehot, vectorize
 
 
 class HSREnv(hsr.env.HSREnv):
@@ -175,8 +175,7 @@ class TasksGridWorld(GridWorld):
         self.include_task_in_obs = task_in_obs
         super().__init__(*args, **kwargs)
         self.task_states = np.ravel_multi_index(
-            np.where(np.isin(self.desc, self.start)),
-            dims=self.desc.shape)
+            np.where(np.isin(self.desc, self.start)), dims=self.desc.shape)
         self.observation_size = space_to_size(self.observation_space)
         self.evaluation = False
 

@@ -1,20 +1,19 @@
 import argparse
 import functools
-import pickle
 from pathlib import Path
+import pickle
 
 import gym
 from torch import nn as nn
+from utils import hierarchical_parse_args
 
 import gridworld_env
 import hsr.util
-from ppo.env_adapter import (AutoCurriculumHSREnv, HSREnv, SaveStateHSREnv,
-                             TasksGridWorld, TrainTasksGridWorld)
+from ppo.env_adapter import AutoCurriculumHSREnv, HSREnv, SaveStateHSREnv, TasksGridWorld, TrainTasksGridWorld
 from ppo.envs import wrap_env
 from ppo.task_generator import SamplingStrategy
 from ppo.train import train
 from ppo.util import parse_activation
-from utils import hierarchical_parse_args
 
 try:
     import dm_control2gym
