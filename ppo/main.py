@@ -170,9 +170,8 @@ def tasks_cli():
             env_thunk=lambda: TrainTasksGridWorld(**env_args),
             max_episode_steps=max_episode_steps)
 
-    def _train(env_id, max_episode_steps, task_in_obs, **kwargs):
+    def _train(env_id, max_episode_steps, **kwargs):
         args = gridworld_env.get_args(env_id)
-        args.update(task_in_obs=task_in_obs)
         if max_episode_steps is not None or 'max_episode_steps' not in args:
             args['max_episode_steps'] = max_episode_steps
         train(make_env=make_env_fn(**args), **kwargs)

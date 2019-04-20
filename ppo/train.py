@@ -161,7 +161,7 @@ def train(
         eval_envs = make_vec_envs(
             seed=seed + num_processes,
             make_env=make_env,
-            num_processes=num_tasks if train_tasks else num_processes,
+            num_processes=sample_env.num_eval if train_tasks else num_processes,
             gamma=_gamma,
             device=device,
             train_tasks=train_tasks,
