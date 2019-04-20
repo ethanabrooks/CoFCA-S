@@ -105,7 +105,7 @@ def add_tasks_args(parser):
     tasks_parser.add_argument(
         '--sampling-strategy',
         choices=[s.name for s in SamplingStrategy] +
-        ['reward-variance', 'reward-range'],
+                ['reward-variance', 'reward-range'],
         default='experiment')
     gan_parser = parser.add_argument_group('gan_args')
     gan_parser.add_argument('--size-noise', type=int, default=4)
@@ -148,6 +148,7 @@ def cli():
 
 def tasks_cli():
     parser = build_parser()
+    parser.add_argument('--render', action='store_true')
     add_tasks_args(parser)
     reward_based_task_parser = parser.add_argument_group(
         'reward_based_task_args')
@@ -169,10 +170,10 @@ def tasks_cli():
             env_thunk=lambda: TrainTasksGridWorld(**env_args),
             max_episode_steps=max_episode_steps)
 
-    def _train(env_id, max_episode_steps, **kwargs):
+    def _train(env_id, max_episode_steps, render, **kwargs):
         args = gridworld_env.get_args(env_id)
-        if max_episode_steps is not None or 'max_episode_steps' not in args:
-            args['max_episode_steps'] = max_episode_steps
+        args.update(max_episode_steps=max_episode_steps or args['max_episode_steps'],
+                    render=render)
         train(make_env=make_env_fn(**args), **kwargs)
 
     _train(**hierarchical_parse_args(parser))

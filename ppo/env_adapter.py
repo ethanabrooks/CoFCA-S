@@ -1,4 +1,5 @@
 # third party
+import time
 from multiprocessing import Pipe, Process
 from pathlib import Path
 import pickle
@@ -171,10 +172,11 @@ class RandomGridWorld(gridworld_env.random_gridworld.RandomGridWorld):
 
 
 class TasksGridWorld(GridWorld):
-    def __init__(self, env_id: str, task_letter='*', *args, **kwargs):
+    def __init__(self, env_id: str, render: bool = False, task_letter='*', *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self._render = render
         self.task_states = np.ravel_multi_index(
-            np.where(np.isin(self.desc, self.start)), dims=self.desc.shape)
+            np.where(self.desc == ' '), dims=self.desc.shape)
         self.observation_size = space_to_size(self.observation_space)
         self.evaluation = False
 
@@ -198,7 +200,7 @@ class TasksGridWorld(GridWorld):
         elif env_id in ['Shortcut']:
             self.num_eval = 1
             self.include_task_in_obs = False
-            assert self.desc[self.decode(self.task_states[0])] == 'e'
+            assert self.decode(self.task_states[0]) == (0, 1)
         else:
             raise RuntimeError('Invalid ID:', env_id)
 
@@ -226,6 +228,16 @@ class TasksGridWorld(GridWorld):
             self.set_task(task_index)
             self.task_prob = self.task_dist[task_index]
         return super().reset()
+
+    def step(self, actions):
+        if self._render:
+            self.render()
+            time.sleep(.2)
+        s, r, t, i = super().step(actions)
+        if t and self._render:
+            self.render()
+            time.sleep(2)
+        return s, r, t, i
 
     def obs_vector(self, obs):
         components = [onehot(obs, self.observation_size)]
