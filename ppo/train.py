@@ -158,10 +158,11 @@ def train(
         )
 
     if eval_interval:
+        num_eval = sample_env.unwrapped.num_eval if train_tasks else num_processes
         eval_envs = make_vec_envs(
             seed=seed + num_processes,
             make_env=make_env,
-            num_processes=sample_env.num_eval if train_tasks else num_processes,
+            num_processes=num_eval,
             gamma=_gamma,
             device=device,
             train_tasks=train_tasks,
@@ -366,7 +367,6 @@ def train(
             time_steps = []
 
         if eval_interval is not None and j % eval_interval == 0:
-            num_eval = num_tasks if train_tasks else num_processes
             eval_rewards = np.zeros(num_eval)
             eval_time_steps = np.zeros(num_eval)
             eval_dones = np.zeros(num_eval)

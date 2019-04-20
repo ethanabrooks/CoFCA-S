@@ -171,7 +171,7 @@ class RandomGridWorld(gridworld_env.random_gridworld.RandomGridWorld):
 
 
 class TasksGridWorld(GridWorld):
-    def __init__(self, env_id, task_letter='*', *args, **kwargs):
+    def __init__(self, env_id: str, task_letter='*', *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.task_states = np.ravel_multi_index(
             np.where(np.isin(self.desc, self.start)), dims=self.desc.shape)
@@ -187,17 +187,20 @@ class TasksGridWorld(GridWorld):
         self.task_dist = np.ones_like(self.task_states) / self.num_tasks
         self.task_prob = 1 / self.num_tasks
 
-        if env_id in ['8x8WallWorld']:
+        env_id = env_id.rstrip('GridWorld-v0')
+
+        if env_id in ['8x8Wall']:
             self.num_eval = self.num_tasks
             self.include_task_in_obs = True
-        elif env_id in ['5x13LavaWorld']:
+        elif env_id in ['5x13Lava']:
             self.num_eval = self.num_tasks
             self.include_task_in_obs = False
-        elif env_id in ['ShortcutWorld']:
+        elif env_id in ['Shortcut']:
             self.num_eval = 1
             self.include_task_in_obs = False
-            import ipdb; ipdb.set_trace()
-            self.task_states[x], self.task_states[y] = self.task_states[y], self.task_states[x]
+            assert self.desc[self.decode(self.task_states[0])] == 'e'
+        else:
+            raise RuntimeError('Invalid ID:', env_id)
 
         size = self.observation_size
         if self.include_task_in_obs:

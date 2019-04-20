@@ -152,7 +152,6 @@ def tasks_cli():
     reward_based_task_parser = parser.add_argument_group(
         'reward_based_task_args')
     parser.add_argument('--max-episode-steps', type=int)
-    parser.add_argument('--task-in-obs', action='store_true')
     reward_based_task_parser.add_argument(
         '--task-buffer-size', type=int, default=10, help=' ')
     reward_based_task_parser.add_argument(
