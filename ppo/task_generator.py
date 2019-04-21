@@ -8,7 +8,7 @@ from ppo.util import Categorical, NoInput, init_normc_, mlp
 from utils import ReplayBuffer, onehot
 
 SamplingStrategy = Enum('SamplingStrategy',
-                        'baseline pg gpg l2g gl2g abs_grads')
+                        'uniform pg gpg l2g gl2g abs_grads')
 
 
 class TaskGenerator(NoInput):
@@ -19,6 +19,8 @@ class TaskGenerator(NoInput):
         self.sampling_strategy = sampling_strategy
         self.task_size = task_size
         self.temperature = temperature
+        if self.sampling_strategy == 'uniform':
+            self.temperature = 1
         if sampling_strategy == SamplingStrategy.abs_grads.name:
             self._logits = torch.Tensor(1, task_size)
             init_normc_(self._logits)
@@ -42,7 +44,7 @@ class TaskGenerator(NoInput):
         return 1 / (self.task_size * probs)
 
     def update(self, tasks, grads, step=None):
-        if self.sampling_strategy != 'baseline':
+        if self.sampling_strategy != 'uniform':
             self._logits += self.exploration_bonus
             self._logits[tasks] = grads.cpu()
 

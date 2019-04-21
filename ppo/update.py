@@ -1,8 +1,8 @@
 # stdlib
 # third party
 # first party
-from collections import Counter
 import math
+from collections import Counter
 
 import torch
 import torch.nn as nn
@@ -249,7 +249,7 @@ class PPO:
             elif 'reward-' in self.sampling_strategy:
                 self.task_generator.update(tasks_to_train.numpy(),
                                            rets_per_task.numpy())
-            elif self.sampling_strategy != 'baseline':
+            elif self.sampling_strategy != 'uniform':
                 raise RuntimeError
 
             task_values.update(grad_measure=grads_per_step, n=1)
