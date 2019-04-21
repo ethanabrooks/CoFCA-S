@@ -1,23 +1,23 @@
 # third party
+import pickle
 import time
 from multiprocessing import Pipe, Process
 from pathlib import Path
-import pickle
 from typing import List
 
+import numpy as np
 # first party
 from gym.spaces import Box, Discrete
-from mujoco_py import MjSimState
-import numpy as np
-from utils.gym import space_to_size, unwrap_env
-from utils.numpy import onehot, vectorize
 
+import gridworld_env
+import hsr
 from common.vec_env import CloudpickleWrapper, VecEnv
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
-import gridworld_env
-import hsr
 from hsr.env import GoalSpec
+from mujoco_py import MjSimState
+from utils.gym import space_to_size, unwrap_env
+from utils.numpy import onehot, vectorize
 
 
 class HSREnv(hsr.env.HSREnv):
@@ -172,7 +172,12 @@ class RandomGridWorld(gridworld_env.random_gridworld.RandomGridWorld):
 
 
 class TasksGridWorld(GridWorld):
-    def __init__(self, env_id: str, render: bool = False, task_letter='*', *args, **kwargs):
+    def __init__(self,
+                 env_id: str,
+                 render: bool = False,
+                 task_letter='*',
+                 *args,
+                 **kwargs):
         super().__init__(*args, **kwargs)
         self._render = render
         self.task_states = np.ravel_multi_index(
@@ -197,6 +202,10 @@ class TasksGridWorld(GridWorld):
         elif env_id in ['5x13Lava']:
             self.num_eval = self.num_tasks
             self.include_task_in_obs = False
+        elif env_id in ['Cliff']:
+            self.num_eval = 1
+            self.include_task_in_obs = False
+            assert self.decode(self.task_states[0]) == (0, 1)
         elif env_id in ['Shortcut']:
             self.num_eval = 1
             self.include_task_in_obs = False
