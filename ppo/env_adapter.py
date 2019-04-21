@@ -1,19 +1,19 @@
 # third party
-import pickle
-import time
 from multiprocessing import Pipe, Process
 from pathlib import Path
+import pickle
+import time
 from typing import List
 
-import numpy as np
 # first party
 from gym.spaces import Box, Discrete
+import numpy as np
 
-import gridworld_env
-import hsr
 from common.vec_env import CloudpickleWrapper, VecEnv
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
+import gridworld_env
+import hsr
 from hsr.env import GoalSpec
 from mujoco_py import MjSimState
 from utils.gym import space_to_size, unwrap_env
@@ -194,7 +194,7 @@ class TasksGridWorld(GridWorld):
         self.task_dist = np.ones_like(self.task_states) / self.num_tasks
         self.task_prob = 1 / self.num_tasks
 
-        env_id = env_id.rstrip('GridWorld-v0')
+        env_id = env_id[:-len('GridWorld-v0')]
 
         if env_id in ['8x8Wall']:
             self.num_eval = self.num_tasks
