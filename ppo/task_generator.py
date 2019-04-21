@@ -2,10 +2,10 @@ from enum import Enum
 
 import numpy as np
 import torch
-from utils import ReplayBuffer, onehot
 
 from common.running_mean_std import RunningMeanStd
 from ppo.util import Categorical, NoInput, init_normc_, mlp
+from utils import ReplayBuffer, onehot
 
 SamplingStrategy = Enum('SamplingStrategy',
                         'baseline pg gpg l2g gl2g abs_grads')
@@ -48,13 +48,11 @@ class TaskGenerator(NoInput):
 
 
 class RewardBasedTaskGenerator(TaskGenerator):
-    def __init__(self, task_size, task_buffer_size, min_reward, max_reward,
-                 reward_lower_bound, reward_upper_bound, **kwargs):
+    def __init__(self, task_size, task_buffer_size, reward_lower_bound,
+                 reward_upper_bound, **kwargs):
         super().__init__(task_size=task_size, **kwargs)
         self.reward_lower_bound = reward_lower_bound
         self.reward_upper_bound = reward_upper_bound
-        self.min_reward = min_reward
-        self.max_reward = max_reward
         self.buffer_size = task_buffer_size
         self.histories = [
             ReplayBuffer(self.buffer_size) for _ in range(task_size)
@@ -80,9 +78,7 @@ class RewardBasedTaskGenerator(TaskGenerator):
 
     def update(self, tasks, rewards, step=None):
         for task, reward in zip(tasks, rewards):
-            normalized = (reward - self.min_reward) / (
-                self.max_reward - self.min_reward)
-            self.histories[task].append(normalized)
+            self.histories[task].append(reward)
 
 
 class GoalGAN(RewardBasedTaskGenerator):
