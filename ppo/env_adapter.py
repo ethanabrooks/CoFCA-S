@@ -202,11 +202,7 @@ class TasksGridWorld(GridWorld):
         elif env_id in ['5x13Lava']:
             self.num_eval = self.num_tasks
             self.include_task_in_obs = False
-        elif env_id in ['Cliff']:
-            self.num_eval = 1
-            self.include_task_in_obs = False
-            assert self.decode(self.task_states[0]) == (0, 1)
-        elif env_id in ['Shortcut']:
+        elif env_id in ['Cliff', 'Shortcut', 'TwoPaths']:
             self.num_eval = 1
             self.include_task_in_obs = False
             assert self.decode(self.task_states[0]) == (0, 1)
