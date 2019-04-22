@@ -52,7 +52,9 @@ class TaskGenerator(NoInput):
 class RewardBasedTaskGenerator(TaskGenerator):
     def __init__(self, task_size, task_buffer_size, reward_bounds, **kwargs):
         super().__init__(task_size=task_size, **kwargs)
-        self.reward_lower_bound, self.reward_upper_bound = reward_bounds
+        self.reward_lower_bound, self.reward_upper_bound = None, None
+        if self.sampling_strategy == 'reward-range':
+            self.reward_lower_bound, self.reward_upper_bound = reward_bounds
         self.buffer_size = task_buffer_size
         self.histories = [
             ReplayBuffer(self.buffer_size) for _ in range(task_size)
