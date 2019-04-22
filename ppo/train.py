@@ -9,7 +9,6 @@ from gym.spaces import Discrete
 import numpy as np
 from tensorboardX import SummaryWriter
 import torch
-from utils import ReplayBuffer, space_to_size
 
 from ppo.env_adapter import AutoCurriculumHSREnv, GridWorld
 from ppo.envs import VecNormalize, make_vec_envs
@@ -17,6 +16,7 @@ from ppo.policy import Policy
 from ppo.storage import RolloutStorage, TasksRolloutStorage
 from ppo.task_generator import GoalGAN, RewardBasedTaskGenerator, TaskGenerator
 from ppo.update import PPO
+from utils import ReplayBuffer, space_to_size
 
 
 def get_freer_gpu():
@@ -352,6 +352,9 @@ def train(
                         else:
                             return
                         writer.add_figure(name, fig, total_num_steps)
+                        plt.savefig(
+                            str(Path(logdir,
+                                     str(total_num_steps) + '.png')))
                         plt.close()
 
                     unique_values, unique_counts = np.unique(
