@@ -5,7 +5,7 @@ import pickle
 
 import gym
 from torch import nn as nn
-from utils import hierarchical_parse_args
+from utils import hierarchical_parse_args, parse_vector
 
 import gridworld_env
 import hsr.util
@@ -160,9 +160,7 @@ def tasks_cli():
     reward_based_task_parser.add_argument(
         '--max-reward', type=float, default=None, help=' ')
     reward_based_task_parser.add_argument(
-        '--reward-lower-bound', type=float, default=None, help=' ')
-    reward_based_task_parser.add_argument(
-        '--reward-upper-bound', type=float, default=None, help=' ')
+        '--reward-bounds', type=parse_vector(2, ','), default=None, help=' ')
 
     def make_env_fn(max_episode_steps, **env_args):
         return functools.partial(

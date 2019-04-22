@@ -49,10 +49,9 @@ class TaskGenerator(NoInput):
 
 class RewardBasedTaskGenerator(TaskGenerator):
     def __init__(self, task_size, task_buffer_size, min_reward, max_reward,
-                 reward_lower_bound, reward_upper_bound, **kwargs):
+                 reward_bounds, **kwargs):
         super().__init__(task_size=task_size, **kwargs)
-        self.reward_lower_bound = reward_lower_bound
-        self.reward_upper_bound = reward_upper_bound
+        self.reward_lower_bound, self.reward_upper_bound = reward_bounds
         self.min_reward = min_reward
         self.max_reward = max_reward
         self.buffer_size = task_buffer_size
