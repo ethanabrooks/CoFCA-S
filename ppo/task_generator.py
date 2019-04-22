@@ -2,13 +2,13 @@ from enum import Enum
 
 import numpy as np
 import torch
-from utils import ReplayBuffer, onehot
 
 from common.running_mean_std import RunningMeanStd
 from ppo.util import Categorical, NoInput, init_normc_, mlp
+from utils import ReplayBuffer, onehot
 
 SamplingStrategy = Enum('SamplingStrategy',
-                        'baseline pg gpg l2g gl2g abs_grads')
+                        'uniform pg gpg l2g gl2g abs_grads')
 
 
 class TaskGenerator(NoInput):
@@ -19,6 +19,8 @@ class TaskGenerator(NoInput):
         self.sampling_strategy = sampling_strategy
         self.task_size = task_size
         self.temperature = temperature
+        if self.sampling_strategy == 'uniform':
+            self.temperature = 1
         if sampling_strategy == SamplingStrategy.abs_grads.name:
             self._logits = torch.Tensor(1, task_size)
             init_normc_(self._logits)
@@ -42,18 +44,15 @@ class TaskGenerator(NoInput):
         return 1 / (self.task_size * probs)
 
     def update(self, tasks, grads, step=None):
-        if self.sampling_strategy != 'baseline':
+        if self.sampling_strategy != 'uniform':
             self._logits += self.exploration_bonus
             self._logits[tasks] = grads.cpu()
 
 
 class RewardBasedTaskGenerator(TaskGenerator):
-    def __init__(self, task_size, task_buffer_size, min_reward, max_reward,
-                 reward_bounds, **kwargs):
+    def __init__(self, task_size, task_buffer_size, reward_bounds, **kwargs):
         super().__init__(task_size=task_size, **kwargs)
         self.reward_lower_bound, self.reward_upper_bound = reward_bounds
-        self.min_reward = min_reward
-        self.max_reward = max_reward
         self.buffer_size = task_buffer_size
         self.histories = [
             ReplayBuffer(self.buffer_size) for _ in range(task_size)
@@ -79,9 +78,7 @@ class RewardBasedTaskGenerator(TaskGenerator):
 
     def update(self, tasks, rewards, step=None):
         for task, reward in zip(tasks, rewards):
-            normalized = (reward - self.min_reward) / (
-                self.max_reward - self.min_reward)
-            self.histories[task].append(normalized)
+            self.histories[task].append(reward)
 
 
 class GoalGAN(RewardBasedTaskGenerator):

@@ -156,10 +156,6 @@ def tasks_cli():
     reward_based_task_parser.add_argument(
         '--task-buffer-size', type=int, default=10, help=' ')
     reward_based_task_parser.add_argument(
-        '--min-reward', type=float, default=None, help=' ')
-    reward_based_task_parser.add_argument(
-        '--max-reward', type=float, default=None, help=' ')
-    reward_based_task_parser.add_argument(
         '--reward-bounds', type=parse_vector(2, ','), default=None, help=' ')
 
     def make_env_fn(max_episode_steps, **env_args):
