@@ -196,7 +196,7 @@ class TasksGridWorld(GridWorld):
 
         env_id = env_id[:-len('GridWorld-v0')]
 
-        if env_id in ['8x8Wall']:
+        if env_id in ['8x8Wall', '16x16Wall']:
             self.num_eval = self.num_tasks
             self.include_task_in_obs = True
         elif env_id in ['5x13Lava']:
