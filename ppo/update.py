@@ -19,20 +19,20 @@ def global_norm(grads):
     norm = 0
     for grad in grads:
         if grad is not None:
-            norm += grad.norm(2)**2
-    return norm**.5
+            norm += grad.norm(2) ** 2
+    return norm ** .5
 
 
 def l2_norm(list_of_tensors):
-    return sum([torch.sum(x**2) for x in list_of_tensors if x is not None])
+    return sum([torch.sum(x ** 2) for x in list_of_tensors if x is not None])
 
 
 def epanechnikov_kernel(x):
-    return 3 / 4 * (1 - x**2)
+    return 3 / 4 * (1 - x ** 2)
 
 
 def gaussian_kernel(x):
-    return (2 * math.pi)**-.5 * torch.exp(-.5 * x**2)
+    return (2 * math.pi) ** -.5 * torch.exp(-.5 * x ** 2)
 
 
 class PPO:
@@ -113,7 +113,7 @@ class PPO:
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         if advantages.numel() > 1:
             advantages = (advantages - advantages.mean()) / (
-                advantages.std() + 1e-5)
+                    advantages.std() + 1e-5)
         update_values = Counter()
         task_values = Counter()
 
@@ -157,11 +157,11 @@ class PPO:
                 value_losses, action_losses, entropy \
                     = components = self.compute_loss_components(sample)
                 entropy_bonus = entropy * self.entropy_coef
-                if self.train_tasks:
-                    exp = self.task_generator.task_size - sample.tasks.float(
-                    ) - 1
-                    # entropy_bonus = entropy_bonus * torch.abs(
-                    # sample.value_preds - gamma**exp)
+                # if self.train_tasks:
+                # exp = self.task_generator.task_size - sample.tasks.float(
+                # ) - 1
+                # entropy_bonus = entropy_bonus * torch.abs(
+                # sample.value_preds - gamma**exp)
                 loss = self.compute_loss(
                     value_losses,
                     action_losses,
@@ -189,13 +189,13 @@ class PPO:
                                          importance_weighting.mean())
 
         if self.train_tasks:
-            grads_per_step = torch.zeros(total_batch_size)
-            grads_per_task = torch.zeros_like(
-                tasks_to_train, dtype=torch.float)
-            rets_per_task = torch.zeros_like(tasks_to_train, dtype=torch.float)
-            post_update_loss = torch.zeros_like(
-                tasks_to_train, dtype=torch.float)
-            grad_l2 = torch.zeros_like(tasks_to_train, dtype=torch.float)
+            grads_per_task = {}
+            rets_per_task = {}
+            entropy_per_task = {}
+            value_per_task = {}
+            value_loss_per_task = {}
+            post_update_loss = {}
+            grad_l2 = {}
             grads_list = []
 
             for i, task in enumerate(tasks_to_train):
@@ -203,10 +203,13 @@ class PPO:
                 train_indices = torch.arange(total_batch_size)[uses_task]
                 batch = rollouts.make_batch(advantages, train_indices)
                 if 'reward-' in self.sampling_strategy:
-                    rets_per_task[i] = batch.ret
+                    rets_per_task[task] = batch.ret
                 else:
-                    _, action_loss, _ = self.compute_loss_components(
+                    val_loss, action_loss, entropy = self.compute_loss_components(
                         batch, compute_value_loss=False)
+                    entropy_per_task[task] = entropy.mean()
+                    value_per_task[task] = batch.value_preds.mean()
+                    value_loss_per_task[task] = val_loss.mean()
 
                     loss = self.compute_loss(
                         action_loss=action_loss,
@@ -222,8 +225,8 @@ class PPO:
                         grads_list.append(grad)
                     if self.sampling_strategy == 'gpg':
                         grad_l2[i] = l2_norm(grad)
-                    post_update_loss[i] = loss
-                    grads_per_task[i] = grads_per_step[uses_task] = sum(
+                    post_update_loss[task] = loss
+                    grads_per_task[task] = sum(
                         g.abs().sum() for g in grad if g is not None)
 
             if self.sampling_strategy == 'abs_grads':
@@ -252,7 +255,13 @@ class PPO:
             elif self.sampling_strategy != 'uniform':
                 raise RuntimeError
 
-            task_values.update(grad_measure=grads_per_step, n=1)
+            task_values.update(n=1,
+                               **{f'task {t} ret': r for t, r in rets_per_task.items()},
+                               **{f'task {t} grad': g for t, g in grads_per_task.items()},
+                               **{f'task {t} entropy': e for t, e in entropy_per_task.items()},
+                               **{f'task {t} value': e for t, v in value_per_task.items()},
+                               **{f'task {t} value_loss': e for t, vl in value_loss_per_task.items()},
+                               )
 
         return_values = {}
 
@@ -269,3 +278,54 @@ class PPO:
             return return_values, tasks_to_train, grads_per_task
         else:
             return return_values, None
+
+    def optim_step_size(self):
+        sizes = []
+        for group in self.optimizer.param_groups:
+            for p in group['params']:
+                if p.grad is None:
+                    continue
+                grad = p.grad.data
+                if grad.is_sparse:
+                    raise RuntimeError('Adam does not support sparse gradients, please consider SparseAdam instead')
+                amsgrad = group['amsgrad']
+
+                state = self.optimizer.state[p]
+
+                # State initialization
+                if len(state) == 0:
+                    state['step'] = 0
+                    # Exponential moving average of gradient values
+                    state['exp_avg'] = torch.zeros_like(p.data)
+                    # Exponential moving average of squared gradient values
+                    state['exp_avg_sq'] = torch.zeros_like(p.data)
+                    if amsgrad:
+                        # Maintains max of all exp. moving avg. of sq. grad. values
+                        state['max_exp_avg_sq'] = torch.zeros_like(p.data)
+
+                exp_avg, exp_avg_sq = state['exp_avg'], state['exp_avg_sq']
+                if amsgrad:
+                    max_exp_avg_sq = state['max_exp_avg_sq']
+                beta1, beta2 = group['betas']
+
+                state['step'] += 1
+
+                if group['weight_decay'] != 0:
+                    grad.add_(group['weight_decay'], p.data)
+
+                # Decay the first and second moment running average coefficient
+                exp_avg.mul_(beta1).add_(1 - beta1, grad)
+                exp_avg_sq.mul_(beta2).addcmul_(1 - beta2, grad, grad)
+                if amsgrad:
+                    # Maintains the maximum of all 2nd moment running avg. till now
+                    torch.max(max_exp_avg_sq, exp_avg_sq, out=max_exp_avg_sq)
+                    # Use the max. for normalizing running avg. of gradient
+                    denom = max_exp_avg_sq.sqrt().add_(group['eps'])
+                else:
+                    denom = exp_avg_sq.sqrt().add_(group['eps'])
+
+                bias_correction1 = 1 - beta1 ** state['step']
+                bias_correction2 = 1 - beta2 ** state['step']
+                step_size = group['lr'] * math.sqrt(bias_correction2) / bias_correction1
+                sizes.append(step_size)
+        return torch.mean(sizes)
