@@ -9,7 +9,6 @@ from gym.spaces import Discrete
 import numpy as np
 from tensorboardX import SummaryWriter
 import torch
-from utils import ReplayBuffer, space_to_size
 
 from ppo.env_adapter import AutoCurriculumHSREnv, GridWorld
 from ppo.envs import VecNormalize, make_vec_envs
@@ -17,6 +16,7 @@ from ppo.policy import Policy
 from ppo.storage import RolloutStorage, TasksRolloutStorage
 from ppo.task_generator import GoalGAN, RewardBasedTaskGenerator, TaskGenerator
 from ppo.update import PPO
+from utils import ReplayBuffer, space_to_size
 
 
 def get_freer_gpu():
@@ -285,7 +285,8 @@ def train(
         train_results, *task_stuff = agent.update(rollouts, gamma)
         if train_tasks:
             tasks_trained, grads_per_task = task_stuff
-            last_gradient[tasks_trained] = grads_per_task
+            for k, v in grads_per_task.items():
+                last_gradient[k] = v
 
         rollouts.after_update()
         total_num_steps = (j + 1) * num_processes * num_steps
@@ -332,8 +333,7 @@ def train(
                 writer.add_scalar('time steps', np.mean(time_steps),
                                   total_num_steps)
                 for k, v in train_results.items():
-                    if v.dim() == 0:
-                        writer.add_scalar(k, v, total_num_steps)
+                    writer.add_scalar(k, v, total_num_steps)
 
                 if train_tasks:
 

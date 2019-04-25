@@ -1,8 +1,8 @@
 # stdlib
 # third party
 # first party
-import math
 from collections import Counter
+import math
 
 import torch
 import torch.nn as nn
@@ -19,20 +19,20 @@ def global_norm(grads):
     norm = 0
     for grad in grads:
         if grad is not None:
-            norm += grad.norm(2) ** 2
-    return norm ** .5
+            norm += grad.norm(2)**2
+    return norm**.5
 
 
 def l2_norm(list_of_tensors):
-    return sum([torch.sum(x ** 2) for x in list_of_tensors if x is not None])
+    return sum([torch.sum(x**2) for x in list_of_tensors if x is not None])
 
 
 def epanechnikov_kernel(x):
-    return 3 / 4 * (1 - x ** 2)
+    return 3 / 4 * (1 - x**2)
 
 
 def gaussian_kernel(x):
-    return (2 * math.pi) ** -.5 * torch.exp(-.5 * x ** 2)
+    return (2 * math.pi)**-.5 * torch.exp(-.5 * x**2)
 
 
 class PPO:
@@ -113,7 +113,7 @@ class PPO:
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         if advantages.numel() > 1:
             advantages = (advantages - advantages.mean()) / (
-                    advantages.std() + 1e-5)
+                advantages.std() + 1e-5)
         update_values = Counter()
         task_values = Counter()
 
@@ -203,13 +203,13 @@ class PPO:
                 train_indices = torch.arange(total_batch_size)[uses_task]
                 batch = rollouts.make_batch(advantages, train_indices)
                 if 'reward-' in self.sampling_strategy:
-                    rets_per_task[task] = batch.ret
+                    rets_per_task[task] = batch.ret.item()
                 else:
                     val_loss, action_loss, entropy = self.compute_loss_components(
-                        batch, compute_value_loss=False)
-                    entropy_per_task[task] = entropy.mean()
-                    value_per_task[task] = batch.value_preds.mean()
-                    value_loss_per_task[task] = val_loss.mean()
+                        batch, compute_value_loss=True)
+                    entropy_per_task[task] = entropy.mean().item()
+                    value_per_task[task] = batch.value_preds.mean().item()
+                    value_loss_per_task[task] = val_loss.mean().item()
 
                     loss = self.compute_loss(
                         action_loss=action_loss,
@@ -227,7 +227,7 @@ class PPO:
                         grad_l2[i] = l2_norm(grad)
                     post_update_loss[task] = loss
                     grads_per_task[task] = sum(
-                        g.abs().sum() for g in grad if g is not None)
+                        g.abs().sum() for g in grad if g is not None).item()
 
             if self.sampling_strategy == 'abs_grads':
                 self.task_generator.update(tasks_to_train, grads_per_task)
@@ -255,24 +255,34 @@ class PPO:
             elif self.sampling_strategy != 'uniform':
                 raise RuntimeError
 
-            task_values.update(n=1,
-                               **{f'task {t} ret': r for t, r in rets_per_task.items()},
-                               **{f'task {t} grad': g for t, g in grads_per_task.items()},
-                               **{f'task {t} entropy': e for t, e in entropy_per_task.items()},
-                               **{f'task {t} value': e for t, v in value_per_task.items()},
-                               **{f'task {t} value_loss': e for t, vl in value_loss_per_task.items()},
-                               )
+            task_values.update(
+                n=1,
+                **{f'task {t} ret': r
+                   for t, r in rets_per_task.items()},
+                **{f'task {t} grad': g
+                   for t, g in grads_per_task.items()},
+                **{
+                    f'task {t} entropy': e
+                    for t, e in entropy_per_task.items()
+                },
+                **{f'task {t} value': v
+                   for t, v in value_per_task.items()},
+                **{
+                    f'task {t} value_loss': vl
+                    for t, vl in value_loss_per_task.items()
+                },
+            )
 
-        return_values = {}
+        n = update_values.pop('n')
+        return_values = {
+            k: torch.mean(v) / n
+            for k, v in update_values.items()
+        }
 
-        def accumulate_values(counter):
-            n = counter.pop('n')
-            for k, v in counter.items():
-                return_values[k] = torch.mean(v) / n
-
-        accumulate_values(update_values)
-        if self.train_tasks and 'n' in task_values:
-            accumulate_values(task_values)
+        if self.train_tasks:
+            n = task_values.pop('n')
+            for k, v in task_values.items():
+                return_values[k] = v / n
 
         if self.train_tasks:
             return return_values, tasks_to_train, grads_per_task
@@ -287,7 +297,9 @@ class PPO:
                     continue
                 grad = p.grad.data
                 if grad.is_sparse:
-                    raise RuntimeError('Adam does not support sparse gradients, please consider SparseAdam instead')
+                    raise RuntimeError(
+                        'Adam does not support sparse gradients, please consider SparseAdam instead'
+                    )
                 amsgrad = group['amsgrad']
 
                 state = self.optimizer.state[p]
@@ -324,8 +336,9 @@ class PPO:
                 else:
                     denom = exp_avg_sq.sqrt().add_(group['eps'])
 
-                bias_correction1 = 1 - beta1 ** state['step']
-                bias_correction2 = 1 - beta2 ** state['step']
-                step_size = group['lr'] * math.sqrt(bias_correction2) / bias_correction1
+                bias_correction1 = 1 - beta1**state['step']
+                bias_correction2 = 1 - beta2**state['step']
+                step_size = group['lr'] * math.sqrt(
+                    bias_correction2) / bias_correction1
                 sizes.append(step_size)
         return torch.mean(sizes)
