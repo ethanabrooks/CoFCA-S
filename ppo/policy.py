@@ -48,11 +48,11 @@ class Policy(nn.Module):
         """Size of rnn_hx."""
         return self.base.recurrent_hidden_state_size
 
-    def forward(self, inputs, rnn_hxs, masks):
-        raise NotImplementedError
+    def forward(self, inputs, rnn_hxs, masks, tasks=None):
+        return self.base(inputs, rnn_hxs, masks)
 
-    def act(self, inputs, rnn_hxs, masks, deterministic=False):
-        value, actor_features, rnn_hxs = self.base(inputs, rnn_hxs, masks)
+    def act(self, inputs, rnn_hxs, masks, deterministic=False, tasks=None):
+        value, actor_features, rnn_hxs = self(inputs, rnn_hxs, masks, tasks=tasks)
 
         dist = self.dist(actor_features)
 
@@ -64,12 +64,12 @@ class Policy(nn.Module):
         action_log_probs = dist.log_probs(action)
         return value, action, action_log_probs, rnn_hxs
 
-    def get_value(self, inputs, rnn_hxs, masks):
-        value, _, _ = self.base(inputs, rnn_hxs, masks)
+    def get_value(self, inputs, rnn_hxs, masks, tasks=None):
+        value, _, _ = self(inputs, rnn_hxs, masks, tasks=tasks)
         return value
 
-    def evaluate_actions(self, inputs, rnn_hxs, masks, action):
-        value, actor_features, rnn_hxs = self.base(inputs, rnn_hxs, masks)
+    def evaluate_actions(self, inputs, rnn_hxs, masks, action, tasks=None):
+        value, actor_features, rnn_hxs = self(inputs, rnn_hxs, masks, tasks=tasks)
         dist = self.dist(actor_features)
 
         action_log_probs = dist.log_probs(action)
@@ -78,6 +78,17 @@ class Policy(nn.Module):
             entropy = self.entropy_grade * torch.tanh(
                 entropy / self.entropy_grade)
         return value, action_log_probs, entropy, rnn_hxs
+
+
+class MultiNetworkPolicy(Policy):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.policies = [Policy(**kwargs) for _ in range(2)]
+
+    def forward(self, tasks=None, **kwargs):
+        mask = tasks < 3
+        out = [p.forward(**kwargs) for p in self.policies]
+        return out[0] * mask + out[1] * (1 - mask)
 
 
 class NNBase(nn.Module):
