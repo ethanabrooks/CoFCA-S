@@ -46,7 +46,8 @@ class TaskGenerator(NoInput):
     def update(self, tasks, grads, step=None):
         if self.sampling_strategy != 'uniform':
             self._logits += self.exploration_bonus
-            self._logits[tasks] = grads.cpu()
+            for k, v in grads.items():
+                self._logits[k] = v
 
 
 class RewardBasedTaskGenerator(TaskGenerator):
