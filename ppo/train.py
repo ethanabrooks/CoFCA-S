@@ -16,7 +16,7 @@ from ppo.policy import Policy
 from ppo.storage import RolloutStorage, TasksRolloutStorage
 from ppo.task_generator import GoalGAN, RewardBasedTaskGenerator, TaskGenerator
 from ppo.update import PPO
-from utils import ReplayBuffer, space_to_size
+from rl_utils import ReplayBuffer, space_to_size
 
 
 def get_freer_gpu():

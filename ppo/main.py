@@ -5,7 +5,7 @@ import pickle
 
 import gym
 from torch import nn as nn
-from utils import hierarchical_parse_args, parse_vector
+from rl_utils import hierarchical_parse_args, parse_vector
 
 import gridworld_env
 import hsr.util

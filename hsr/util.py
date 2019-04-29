@@ -9,7 +9,7 @@ from typing import List
 import xml.etree.ElementTree as ET
 
 from gym.spaces import Box
-from utils import parse_space, parse_vector
+from rl_utils import parse_space, parse_vector
 
 from hsr.env import get_xml_filepath
 

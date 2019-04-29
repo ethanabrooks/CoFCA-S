@@ -16,8 +16,8 @@ import gridworld_env
 import hsr
 from hsr.env import GoalSpec
 from mujoco_py import MjSimState
-from utils.gym import space_to_size, unwrap_env
-from utils.numpy import onehot, vectorize
+from rl_utils.gym import space_to_size, unwrap_env
+from rl_utils.numpy import onehot, vectorize
 
 
 class HSREnv(hsr.env.HSREnv):

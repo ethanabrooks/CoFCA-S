@@ -1,7 +1,7 @@
 import glfw
 import mujoco_py
 import numpy as np
-from utils import argparse, space_to_size, hierarchical_parse_args
+from rl_utils import argparse, space_to_size, hierarchical_parse_args
 
 import hsr
 from ppo.env_adapter import HSREnv
