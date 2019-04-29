@@ -33,8 +33,7 @@ def add_env_args(parser):
 
 def add_wrapper_args(parser):
     parser.add_argument('--xml-file', type=Path, default='models/world.xml')
-    parser.add_argument(
-        '--set-xml', type=xml_setter, action='append', nargs='*')
+    parser.add_argument('--set-xml', type=xml_setter, action='append')
     parser.add_argument('--use-dof', type=str, action='append', default=[])
     parser.add_argument('--geofence', type=float, required=True)
     parser.add_argument('--n-blocks', type=int, default=0)
@@ -43,12 +42,13 @@ def add_wrapper_args(parser):
 
 
 def xml_setter(arg: str):
-    setters = [XMLSetter(*v.split(',')) for v in arg]
-    mirroring = [XMLSetter(p.replace('_l_', '_r_'), v)
-                 for p, v in setters if '_l_' in p] \
-                + [XMLSetter(p.replace('_r_', '_l_'), v)
-                   for p, v in setters if '_r_' in p]
-    return [s._replace(path=s.path) for s in setters + mirroring]
+    return XMLSetter(*arg.split(','))
+    # setters = [XMLSetter(*v.split(',')) for v in arg]
+    # mirroring = [XMLSetter(p.replace('_l_', '_r_'), v)
+    #              for p, v in setters if '_l_' in p] \
+    #             + [XMLSetter(p.replace('_r_', '_l_'), v)
+    #                for p, v in setters if '_r_' in p]
+    # return [s._replace(path=s.path) for s in setters + mirroring]
 
 
 def env_wrapper(func):
