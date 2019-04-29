@@ -38,6 +38,8 @@ class HSREnv(MujocoEnv):
         self.goals_specs = goals
         self.goals = None
         self._time_steps = 0
+        with xml_file.open() as f:
+            print(f.read())
         if not xml_file.is_absolute():
             xml_file = get_xml_filepath(xml_file)
 
