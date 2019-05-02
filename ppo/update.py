@@ -230,16 +230,14 @@ class PPO:
                         g.abs().sum() for g in grad if g is not None).item()
 
             if self.sampling_strategy == 'abs_grads':
-                self.task_generator.update(tasks_to_train, grads_per_task)
+                self.task_generator.update(grads_per_task)
             elif self.sampling_strategy == 'pg':
-                self.task_generator.update(tasks_to_train,
-                                           post_update_loss - pre_update_loss)
+                self.task_generator.update(post_update_loss - pre_update_loss)
             elif self.sampling_strategy == 'gpg':
-                self.task_generator.update(tasks_to_train, grad_l2)
+                self.task_generator.update(grad_l2)
             elif self.sampling_strategy == 'l2g':
                 post_update_l2 = l2_norm(self.actor_critic.parameters())
-                self.task_generator.update(tasks_to_train,
-                                           post_update_l2 - pre_update_l2)
+                self.task_generator.update(post_update_l2 - pre_update_l2)
             elif self.sampling_strategy == 'gl2g':
                 dot_product = []
                 parameters = self.actor_critic.parameters()
@@ -250,8 +248,7 @@ class PPO:
 
                 self.task_generator.update(tasks_to_train, sum(dot_product))
             elif 'reward-' in self.sampling_strategy:
-                self.task_generator.update(tasks_to_train.numpy(),
-                                           rets_per_task.numpy())
+                self.task_generator.update(rets_per_task)
             elif self.sampling_strategy != 'uniform':
                 raise RuntimeError
 

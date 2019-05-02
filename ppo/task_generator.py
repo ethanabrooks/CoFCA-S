@@ -43,7 +43,7 @@ class TaskGenerator(NoInput):
     def importance_weight(self, probs):
         return 1 / (self.task_size * probs)
 
-    def update(self, tasks, grads, step=None):
+    def update(self, grads, step=None):
         if self.sampling_strategy != 'uniform':
             self._logits += self.exploration_bonus
             for k, v in grads.items():
@@ -79,8 +79,8 @@ class RewardBasedTaskGenerator(TaskGenerator):
             in_range = in_range.float()
             return Categorical(probs=in_range / in_range.sum())
 
-    def update(self, tasks, rewards, step=None):
-        for task, reward in zip(tasks, rewards):
+    def update(self, rewards, step=None):
+        for task, reward in rewards.items():
             self.histories[task].append(reward)
 
 
@@ -110,7 +110,7 @@ class GoalGAN(RewardBasedTaskGenerator):
         self.noise = self.noise_dist.sample()
         return self.G(self.noise).argmax()
 
-    def update(self, tasks, rewards, step=None):
+    def update(self, rewards, step=None):
         super().update(tasks, rewards)
         self.time_step += 1
         task_vectors = onehot(tasks, self.task_size)
