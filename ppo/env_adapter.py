@@ -199,6 +199,9 @@ class TasksGridWorld(GridWorld):
         if env_id in ['8x8Wall', '16x16Wall']:
             self.num_eval = self.num_tasks
             self.include_task_in_obs = True
+        elif env_id in ['12x3Wall']:
+            self.num_eval = 9
+            self.include_task_in_obs = True
         elif env_id in ['5x13Lava']:
             self.num_eval = self.num_tasks
             self.include_task_in_obs = False
