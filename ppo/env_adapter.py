@@ -89,6 +89,7 @@ class AutoCurriculumHSREnv(HSREnv):
         self.task_index = None
         self._time_steps = 0
         super().__init__(**kwargs)
+        self.num_eval = self.num_tasks
 
     def new_state(self):
         if self.evaluation:
