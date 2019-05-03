@@ -3,12 +3,12 @@ from collections import namedtuple
 from pathlib import Path
 from typing import Dict, List
 
-import numpy as np
 # third party
 from gym import Space
 from gym.spaces import Box
 from gym.utils import closer
 from gym.wrappers.monitoring.video_recorder import VideoRecorder
+import numpy as np
 
 from hsr.mujoco_env import MujocoEnv
 
@@ -127,7 +127,7 @@ class HSREnv(MujocoEnv):
                 self.video_recorder.capture_frame()
             self.sim.step()
         if done and self._record:
-            for _ in range(10):
+            for _ in range(50):
                 self.video_recorder.capture_frame()
         self._time_steps += 1
         reward = float(success)
