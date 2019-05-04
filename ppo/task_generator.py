@@ -82,5 +82,3 @@ class RewardBasedTaskGenerator(TaskGenerator):
     def update(self, rewards, step=None):
         for task, reward in rewards.items():
             self.histories[task].append(reward)
-
-

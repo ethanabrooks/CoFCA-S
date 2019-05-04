@@ -1,22 +1,22 @@
 import csv
-from io import StringIO
 import itertools
-from pathlib import Path
 import subprocess
 import time
+from io import StringIO
+from pathlib import Path
 
-from gym.spaces import Discrete
 import numpy as np
-from tensorboardX import SummaryWriter
 import torch
+from gym.spaces import Discrete
+from rl_utils import ReplayBuffer, space_to_size
+from tensorboardX import SummaryWriter
 
 from ppo.env_adapter import AutoCurriculumHSREnv, GridWorld
 from ppo.envs import VecNormalize, make_vec_envs
 from ppo.policy import Policy
 from ppo.storage import RolloutStorage, TasksRolloutStorage
-from ppo.task_generator import GoalGAN, RewardBasedTaskGenerator, TaskGenerator
+from ppo.task_generator import RewardBasedTaskGenerator, TaskGenerator
 from ppo.update import PPO
-from rl_utils import ReplayBuffer, space_to_size
 
 
 def get_freer_gpu():
@@ -56,7 +56,6 @@ def train(
         task_history,
         tasks_args=None,
         reward_based_task_args=None,
-        gan_args=None,
 ):
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
@@ -128,8 +127,6 @@ def train(
         if sampling_strategy in ['reward-variance', 'reward-range']:
             task_generator = RewardBasedTaskGenerator(
                 task_size=num_tasks, **reward_based_task_args, **tasks_args)
-        elif sampling_strategy == 'goal-gan':
-            task_generator = GoalGAN(**tasks_args, **gan_args)
         else:
             task_generator = TaskGenerator(task_size=num_tasks, **tasks_args)
         task_generator = task_generator.to(device)

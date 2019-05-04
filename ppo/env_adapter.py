@@ -1,19 +1,19 @@
 # third party
-from multiprocessing import Pipe, Process
-from pathlib import Path
 import pickle
 import time
+from multiprocessing import Pipe, Process
+from pathlib import Path
 from typing import List
 
+import numpy as np
 # first party
 from gym.spaces import Box, Discrete
-import numpy as np
 
+import gridworld_env
+import hsr
 from common.vec_env import CloudpickleWrapper, VecEnv
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
-import gridworld_env
-import hsr
 from hsr.env import GoalSpec
 from mujoco_py import MjSimState
 from rl_utils.gym import space_to_size, unwrap_env
@@ -89,6 +89,7 @@ class AutoCurriculumHSREnv(HSREnv):
         self.task_index = None
         self._time_steps = 0
         super().__init__(**kwargs)
+        self.num_eval = self.num_tasks
 
     def new_state(self):
         if self.evaluation:
