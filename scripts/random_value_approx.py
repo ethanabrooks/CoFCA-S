@@ -17,6 +17,7 @@ def get_distribution(arg):
         exponential=np.random.exponential,
         chi_square=np.random.chisquare,
         pareto=np.random.pareto,
+        lognormal=np.random.lognormal,
     )[arg]
 
 
@@ -85,7 +86,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--distribution', type=get_distribution)
     parser.add_argument('--stats', nargs='*', type=float)
-    parser.add_argument('--num-values', type=int, default=10)
+    parser.add_argument('--num-values', type=int, default=20)
     parser.add_argument('--num-steps', type=int, default=50)
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--exploration-bonus', type=float, default=.0)
