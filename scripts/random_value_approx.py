@@ -34,7 +34,7 @@ def get_estimates(values, num_steps, num_seeds, exploration_bonus, noise_scale):
         values += noise_scale * np.random.normal(1, 1, values.size)
 
 
-def main(distribution, stats, num_values, num_steps, seed,
+def main(distribution, stats, num_values, num_steps, seed, num_samples,
          exploration_bonus, num_seeds, noise_scale, noise_mean, noise_std):
     if seed is not None:
         np.random.seed(seed)
@@ -45,12 +45,13 @@ def main(distribution, stats, num_values, num_steps, seed,
 
         def sample(logits, adaptive):
             probs = logits / logits.sum()
-            index = np.random.choice(values.size, p=probs)
-            choice = values[index]
+            indices = np.random.choice(values.size, size=num_samples, p=probs)
+            choice = values[indices]
             if adaptive:
+                logits[indices] = np.abs(choice)
                 logits += exploration_bonus
-                logits[index] = np.abs(choice)
-            return choice / (values.size * probs[index])
+            weight = 1 / (values.size * probs[indices])
+            return np.mean(choice * weight)
 
         for i in range(num_steps):
             for logits in logits_list:
@@ -71,12 +72,13 @@ if __name__ == '__main__':
     parser.add_argument('--distribution', type=get_distribution)
     parser.add_argument('--stats', nargs='*', type=float)
     parser.add_argument('--num-values', type=int, required=True)
-    parser.add_argument('--num-steps', type=int, default=1000)
+    parser.add_argument('--num-steps', type=int, default=100)
     parser.add_argument('--seed', type=int)
     parser.add_argument('--exploration-bonus', type=float, required=True)
     parser.add_argument('--num-seeds', type=int, default=10)
     parser.add_argument('--noise-scale', type=float, default=1)
     parser.add_argument('--noise-std', type=float, default=1)
     parser.add_argument('--noise-mean', type=float, default=1)
+    parser.add_argument('--num-samples', type=float, default=20)
     # parser.add_argument('--values', nargs='*', type=float)
     main(**vars(parser.parse_args()))
