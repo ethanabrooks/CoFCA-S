@@ -170,6 +170,30 @@ class GridWorld(gridworld_env.gridworld.GridWorld):
         return self.obs_vector(o)
 
 
+class RMaxGridWorld(GridWorld):
+    def __init__(self, visits_until_known, env_id, **kwargs):
+        super().__init__(env_id=env_id, **kwargs)
+        env_id = env_id[:-len('GridWorld-v0')]
+        if env_id in ['8x8Wall', '12x3Wall', '16x16Wall']:
+            self.rmax = 1
+        elif env_id in ['5x13Lava']:
+            self.rmax = 100
+        else:
+            raise RuntimeError('Invalid ID:', env_id)
+
+        self.visits_until_known = visits_until_known
+        self.visit_count = np.zeros((self.observation_size, self.action_space.n))
+
+    def step(self, actions):
+        self.visit_count[self.s, actions] += 1
+        visit_count = self.visit_count[self.s, actions]
+        s, r, t, i = super().step(actions)
+        if visit_count < self.visits_until_known:
+            r = self.rmax
+            t = True
+        return s, r, t, i
+
+
 class RandomGridWorld(gridworld_env.random_gridworld.RandomGridWorld):
     def __init__(self, random=None, *args, **kwargs):
         super().__init__(*args, **kwargs)

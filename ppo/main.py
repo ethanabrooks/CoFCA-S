@@ -9,8 +9,8 @@ from rl_utils import hierarchical_parse_args, parse_vector
 
 import gridworld_env
 import hsr.util
-from ppo.env_adapter import AutoCurriculumHSREnv, HSREnv, SaveStateHSREnv, TasksGridWorld, TrainTasksGridWorld, \
-    GridWorld
+from ppo.env_adapter import AutoCurriculumHSREnv, HSREnv, SaveStateHSREnv, TrainTasksGridWorld, \
+    GridWorld, RMaxGridWorld
 from ppo.envs import wrap_env
 from ppo.task_generator import SamplingStrategy
 from ppo.train import train
@@ -114,18 +114,25 @@ def cli():
     parser = build_parser()
     parser.add_argument('--render', action='store_true')
     parser.add_argument('--max-episode-steps', type=int)
+    parser.add_argument('--visits-until-known', type=int)
 
-    def make_env_fn(max_episode_steps, **env_args):
+    def make_env_fn(max_episode_steps, visits_until_known, **env_args):
+        def env_thunk():
+            if visits_until_known:
+                return RMaxGridWorld(**env_args, visits_until_known=visits_until_known)
+            return GridWorld(**env_args)
+
         return functools.partial(
             wrap_env,
-            env_thunk=lambda: GridWorld(**env_args),
+            env_thunk=env_thunk,
             max_episode_steps=max_episode_steps)
 
-    def _train(env_id, max_episode_steps, render, **kwargs):
+    def _train(env_id, max_episode_steps, render, visits_until_known, **kwargs):
         if 'GridWorld' in env_id:
             args = gridworld_env.get_args(env_id)
             args.update(max_episode_steps=max_episode_steps or args['max_episode_steps'],
-                        render=render)
+                        render=render,
+                        visits_until_known=visits_until_known)
             make_env = make_env_fn(**args)
         else:
 
