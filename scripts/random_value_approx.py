@@ -97,10 +97,8 @@ if __name__ == '__main__':
     parser.add_argument('--estimate-plot-name', default='estimates')
     parser.add_argument('--distribution-plot-name', default='distribution')
 
-
     if len(sys.argv) == 2:
         with open(sys.argv.pop(1)) as f:
             parser.set_defaults(**json.load(f))
-
 
     main(**vars(parser.parse_args()))
