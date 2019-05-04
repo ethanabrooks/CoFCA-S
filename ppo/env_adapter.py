@@ -129,8 +129,23 @@ class AutoCurriculumHSREnv(HSREnv):
 
 
 class GridWorld(gridworld_env.gridworld.GridWorld):
-    def __init__(self, random=None, *args, **kwargs):
+    def __init__(self, env_id,
+                 render: bool = False,
+                 *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+        env_id = env_id[:-len('GridWorld-v0')]
+        if env_id in ['8x8Wall', '12x3Wall', '16x16Wall']:
+            self.include_task_in_obs = True
+        elif env_id in ['Cliff', 'Shortcut', 'TwoPaths']:
+            self.include_task_in_obs = False
+        elif env_id in ['5x13Lava']:
+            self.include_task_in_obs = False
+            self.assign(**{"*": [40]})
+        else:
+            raise RuntimeError('Invalid ID:', env_id)
+
+        self._render = render
         self.observation_space = Box(
             low=np.zeros(self.observation_space.n),
             high=np.ones(self.observation_space.n),
@@ -141,7 +156,13 @@ class GridWorld(gridworld_env.gridworld.GridWorld):
         return onehot(obs, self.observation_size)
 
     def step(self, actions):
+        if self._render:
+            self.render()
+            time.sleep(.2)
         s, r, t, i = super().step(actions)
+        if t and self._render:
+            self.render()
+            time.sleep(2)
         return self.obs_vector(s), r, t, i
 
     def reset(self):
@@ -175,12 +196,10 @@ class RandomGridWorld(gridworld_env.random_gridworld.RandomGridWorld):
 class TasksGridWorld(GridWorld):
     def __init__(self,
                  env_id: str,
-                 render: bool = False,
                  task_letter='*',
                  *args,
                  **kwargs):
-        super().__init__(*args, **kwargs)
-        self._render = render
+        super().__init__(*args, env_id=env_id, **kwargs)
         self.task_states = np.ravel_multi_index(
             np.where(self.desc == ' '), dims=self.desc.shape)
         self.observation_size = space_to_size(self.observation_space)
@@ -197,18 +216,12 @@ class TasksGridWorld(GridWorld):
 
         env_id = env_id[:-len('GridWorld-v0')]
 
-        if env_id in ['8x8Wall', '16x16Wall']:
+        if env_id in ['8x8Wall', '16x16Wall', '5x13Lava']:
             self.num_eval = self.num_tasks
-            self.include_task_in_obs = True
         elif env_id in ['12x3Wall']:
             self.num_eval = 9
-            self.include_task_in_obs = True
-        elif env_id in ['5x13Lava']:
-            self.num_eval = self.num_tasks
-            self.include_task_in_obs = False
         elif env_id in ['Cliff', 'Shortcut', 'TwoPaths']:
             self.num_eval = 1
-            self.include_task_in_obs = False
             assert self.decode(self.task_states[0]) == (0, 1)
         else:
             raise RuntimeError('Invalid ID:', env_id)
@@ -237,16 +250,6 @@ class TasksGridWorld(GridWorld):
             self.set_task(task_index)
             self.task_prob = self.task_dist[task_index]
         return super().reset()
-
-    def step(self, actions):
-        if self._render:
-            self.render()
-            time.sleep(.2)
-        s, r, t, i = super().step(actions)
-        if t and self._render:
-            self.render()
-            time.sleep(2)
-        return s, r, t, i
 
     def obs_vector(self, obs):
         components = [onehot(obs, self.observation_size)]

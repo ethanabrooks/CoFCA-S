@@ -9,7 +9,8 @@ from rl_utils import hierarchical_parse_args, parse_vector
 
 import gridworld_env
 import hsr.util
-from ppo.env_adapter import AutoCurriculumHSREnv, HSREnv, SaveStateHSREnv, TasksGridWorld, TrainTasksGridWorld
+from ppo.env_adapter import AutoCurriculumHSREnv, HSREnv, SaveStateHSREnv, TasksGridWorld, TrainTasksGridWorld, \
+    GridWorld
 from ppo.envs import wrap_env
 from ppo.task_generator import SamplingStrategy
 from ppo.train import train
@@ -111,21 +112,21 @@ def add_tasks_args(parser):
 
 def cli():
     parser = build_parser()
+    parser.add_argument('--render', action='store_true')
     parser.add_argument('--max-episode-steps', type=int)
 
     def make_env_fn(max_episode_steps, **env_args):
         return functools.partial(
             wrap_env,
-            env_thunk=lambda: TasksGridWorld(**env_args),
+            env_thunk=lambda: GridWorld(**env_args),
             max_episode_steps=max_episode_steps)
 
-    def _train(env_id, max_episode_steps, **kwargs):
+    def _train(env_id, max_episode_steps, render, **kwargs):
         if 'GridWorld' in env_id:
             args = gridworld_env.get_args(env_id)
-            if max_episode_steps is not None:
-                args['max_episode_steps'] = max_episode_steps
+            args.update(max_episode_steps=max_episode_steps or args['max_episode_steps'],
+                        render=render)
             make_env = make_env_fn(**args)
-
         else:
 
             def thunk():
