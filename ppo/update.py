@@ -9,6 +9,7 @@ import torch.nn as nn
 import torch.optim as optim
 
 from ppo.storage import RolloutStorage
+from ppo.util import frank_wolfe_solver
 
 
 def f(x):
@@ -19,20 +20,20 @@ def global_norm(grads):
     norm = 0
     for grad in grads:
         if grad is not None:
-            norm += grad.norm(2)**2
-    return norm**.5
+            norm += grad.norm(2) ** 2
+    return norm ** .5
 
 
 def l2_norm(list_of_tensors):
-    return sum([torch.sum(x**2) for x in list_of_tensors if x is not None])
+    return sum([torch.sum(x ** 2) for x in list_of_tensors if x is not None])
 
 
 def epanechnikov_kernel(x):
-    return 3 / 4 * (1 - x**2)
+    return 3 / 4 * (1 - x ** 2)
 
 
 def gaussian_kernel(x):
-    return (2 * math.pi)**-.5 * torch.exp(-.5 * x**2)
+    return (2 * math.pi) ** -.5 * torch.exp(-.5 * x ** 2)
 
 
 class PPO:
@@ -113,8 +114,9 @@ class PPO:
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         if advantages.numel() > 1:
             advantages = (advantages - advantages.mean()) / (
-                advantages.std() + 1e-5)
+                    advantages.std() + 1e-5)
         update_values = Counter()
+        update_values.update(n=0)
         task_values = Counter()
 
         total_norm = torch.tensor(0, dtype=torch.float32)
@@ -148,6 +150,118 @@ class PPO:
 
                     pre_update_loss[i] = loss
 
+        if self.train_tasks:
+            grad_vectors = None
+            grads_per_task = {}
+            grad_sum_per_task = {}
+            rets_per_task = {}
+            entropy_per_task = {}
+            value_per_task = {}
+            value_loss_per_task = {}
+            post_update_loss = {}
+            grad_l2 = {}
+            grads_list = []
+
+            for i, task in enumerate(tasks_to_train):
+                uses_task = (batches.tasks == task).any(-1)
+                train_indices = torch.arange(total_batch_size)[uses_task]
+                batch = rollouts.make_batch(advantages, train_indices)
+                if 'reward-' in self.sampling_strategy:
+                    rets_per_task[task] = batch.ret.item()
+                else:
+                    components = self.compute_loss_components(
+                        batch, compute_value_loss=True)
+
+                    val_loss, action_loss, entropy = components
+                    entropy_per_task[task] = entropy.mean().item()
+                    value_per_task[task] = batch.value_preds.mean().item()
+                    value_loss_per_task[task] = val_loss.mean().item()
+
+                    if self.sampling_strategy == 'mtl':
+                        loss = self.compute_loss(*components, importance_weighting=None)
+                    else:
+                        loss = self.compute_loss(
+                            action_loss=action_loss,
+                            dist_entropy=0,
+                            value_loss=None,
+                            importance_weighting=None)
+                    grad = torch.autograd.grad(
+                        loss,
+                        self.actor_critic.parameters(),
+                        retain_graph=True,
+                        allow_unused=True)
+
+                    if self.sampling_strategy == 'gl2g':
+                        grads_list.append(grad)
+                    if self.sampling_strategy == 'gpg':
+                        grad_l2[i] = l2_norm(grad)
+                    if self.sampling_strategy == 'pg':
+                        post_update_loss[task] = loss
+                    if self.sampling_strategy == 'mtl':
+                        grad_vector = torch.cat([g.view(-1) for g in grad if g is not None])
+                        if grad_vectors is None:
+                            grad_vectors = torch.zeros(tasks_to_train.numel(),
+                                                       grad_vector.numel())
+                        grad_vectors[task] = grad_vector
+                    if self.sampling_strategy == 'abs_grads':
+                        grad_sum_per_task[task] = sum(
+                            g.abs().sum() for g in grad if g is not None).item()
+
+            if self.sampling_strategy == 'abs_grads':
+                self.task_generator.update(grad_sum_per_task)
+            elif self.sampling_strategy == 'pg':
+                self.task_generator.update(post_update_loss - pre_update_loss)
+            elif self.sampling_strategy == 'gpg':
+                self.task_generator.update(grad_l2)
+            elif self.sampling_strategy == 'l2g':
+                post_update_l2 = l2_norm(self.actor_critic.parameters())
+                self.task_generator.update(post_update_l2 - pre_update_l2)
+            elif self.sampling_strategy == 'gl2g':
+                dot_product = []
+                parameters = self.actor_critic.parameters()
+                grads_list = zip(*grads_list)
+                for p, g in zip(parameters, grads_list):
+                    if all(x is not None for x in g):
+                        dot_product.append(torch.sum(p * sum(g) / len(g)))
+
+                self.task_generator.update(tasks_to_train, sum(dot_product))
+            elif 'reward-' in self.sampling_strategy:
+                self.task_generator.update(rets_per_task)
+            elif self.sampling_strategy == 'mtl':
+                assert self.ppo_epoch == 0
+                alphas = frank_wolfe_solver(grad_vectors, tasks_to_train.numel())
+                grad_vector = alphas @ grad_vectors
+
+                sections = [p.numel() for p in self.actor_critic.parameters()]
+                gradients = torch.split(grad_vector, sections)
+
+                for param, grad in zip(self.actor_critic.parameters(), gradients):
+                    assert param.numel() == grad.numel()
+                    param.grad = grad.view(param.shape)
+
+                self.optimizer.step()
+
+            elif self.sampling_strategy != 'uniform':
+                raise RuntimeError
+
+            task_values.update(
+                n=1,
+                **{f'task {t} ret': r
+                   for t, r in rets_per_task.items()},
+                **{f'task {t} grad': g
+                   for t, g in grad_sum_per_task.items()},
+                **{
+                    f'task {t} entropy': e
+                    for t, e in entropy_per_task.items()
+                },
+                **{f'task {t} value': v
+                   for t, v in value_per_task.items()},
+                **{
+                    f'task {t} value_loss': vl
+                    for t, vl in value_loss_per_task.items()
+                },
+            )
+
         for e in range(self.ppo_epoch):
             data_generator = rollouts.feed_forward_generator(
                 advantages, self.batch_size)
@@ -157,15 +271,8 @@ class PPO:
                 value_losses, action_losses, entropy \
                     = components = self.compute_loss_components(sample)
                 entropy_bonus = entropy * self.entropy_coef
-                # if self.train_tasks:
-                # exp = self.task_generator.task_size - sample.tasks.float(
-                # ) - 1
-                # entropy_bonus = entropy_bonus * torch.abs(
-                # sample.value_preds - gamma**exp)
                 loss = self.compute_loss(
-                    value_losses,
-                    action_losses,
-                    entropy_bonus,
+                    *components,
                     importance_weighting=sample.importance_weighting)
 
                 # update
@@ -188,88 +295,6 @@ class PPO:
                     update_values.update(importance_weighting=sample.
                                          importance_weighting.mean())
 
-        if self.train_tasks:
-            grads_per_task = {}
-            rets_per_task = {}
-            entropy_per_task = {}
-            value_per_task = {}
-            value_loss_per_task = {}
-            post_update_loss = {}
-            grad_l2 = {}
-            grads_list = []
-
-            for i, task in enumerate(tasks_to_train):
-                uses_task = (batches.tasks == task).any(-1)
-                train_indices = torch.arange(total_batch_size)[uses_task]
-                batch = rollouts.make_batch(advantages, train_indices)
-                if 'reward-' in self.sampling_strategy:
-                    rets_per_task[task] = batch.ret.item()
-                else:
-                    val_loss, action_loss, entropy = self.compute_loss_components(
-                        batch, compute_value_loss=True)
-                    entropy_per_task[task] = entropy.mean().item()
-                    value_per_task[task] = batch.value_preds.mean().item()
-                    value_loss_per_task[task] = val_loss.mean().item()
-
-                    loss = self.compute_loss(
-                        action_loss=action_loss,
-                        dist_entropy=0,
-                        value_loss=None,
-                        importance_weighting=None)
-                    grad = torch.autograd.grad(
-                        loss,
-                        self.actor_critic.parameters(),
-                        retain_graph=True,
-                        allow_unused=True)
-                    if self.sampling_strategy == 'gl2g':
-                        grads_list.append(grad)
-                    if self.sampling_strategy == 'gpg':
-                        grad_l2[i] = l2_norm(grad)
-                    post_update_loss[task] = loss
-                    grads_per_task[task] = sum(
-                        g.abs().sum() for g in grad if g is not None).item()
-
-            if self.sampling_strategy == 'abs_grads':
-                self.task_generator.update(grads_per_task)
-            elif self.sampling_strategy == 'pg':
-                self.task_generator.update(post_update_loss - pre_update_loss)
-            elif self.sampling_strategy == 'gpg':
-                self.task_generator.update(grad_l2)
-            elif self.sampling_strategy == 'l2g':
-                post_update_l2 = l2_norm(self.actor_critic.parameters())
-                self.task_generator.update(post_update_l2 - pre_update_l2)
-            elif self.sampling_strategy == 'gl2g':
-                dot_product = []
-                parameters = self.actor_critic.parameters()
-                grads_list = zip(*grads_list)
-                for p, g in zip(parameters, grads_list):
-                    if all(x is not None for x in g):
-                        dot_product.append(torch.sum(p * sum(g) / len(g)))
-
-                self.task_generator.update(tasks_to_train, sum(dot_product))
-            elif 'reward-' in self.sampling_strategy:
-                self.task_generator.update(rets_per_task)
-            elif self.sampling_strategy != 'uniform':
-                raise RuntimeError
-
-            task_values.update(
-                n=1,
-                **{f'task {t} ret': r
-                   for t, r in rets_per_task.items()},
-                **{f'task {t} grad': g
-                   for t, g in grads_per_task.items()},
-                **{
-                    f'task {t} entropy': e
-                    for t, e in entropy_per_task.items()
-                },
-                **{f'task {t} value': v
-                   for t, v in value_per_task.items()},
-                **{
-                    f'task {t} value_loss': vl
-                    for t, vl in value_loss_per_task.items()
-                },
-            )
-
         n = update_values.pop('n')
         return_values = {
             k: torch.mean(v) / n
@@ -282,7 +307,7 @@ class PPO:
                 return_values[k] = v / n
 
         if self.train_tasks:
-            return return_values, tasks_to_train, grads_per_task
+            return return_values, tasks_to_train, grad_sum_per_task
         else:
             return return_values, None
 
@@ -333,8 +358,8 @@ class PPO:
                 else:
                     denom = exp_avg_sq.sqrt().add_(group['eps'])
 
-                bias_correction1 = 1 - beta1**state['step']
-                bias_correction2 = 1 - beta2**state['step']
+                bias_correction1 = 1 - beta1 ** state['step']
+                bias_correction2 = 1 - beta2 ** state['step']
                 step_size = group['lr'] * math.sqrt(
                     bias_correction2) / bias_correction1
                 sizes.append(step_size)

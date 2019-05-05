@@ -10,7 +10,7 @@ from rl_utils import hierarchical_parse_args, parse_vector
 import gridworld_env
 import hsr.util
 from ppo.env_adapter import AutoCurriculumHSREnv, HSREnv, SaveStateHSREnv, TrainTasksGridWorld, \
-    GridWorld, RMaxGridWorld
+    GridWorld, RMaxGridWorld, MTLGridWorld
 from ppo.envs import wrap_env
 from ppo.task_generator import SamplingStrategy
 from ppo.train import train
@@ -163,17 +163,21 @@ def tasks_cli():
     reward_based_task_parser.add_argument(
         '--reward-bounds', type=parse_vector(2, ','), default=None, help=' ')
 
-    def make_env_fn(max_episode_steps, **env_args):
-        return functools.partial(
-            wrap_env,
-            env_thunk=lambda: TrainTasksGridWorld(**env_args),
-            max_episode_steps=max_episode_steps)
+    def make_env_fn(max_episode_steps, tasks_args, **env_args):
+        def env_thunk():
+            if tasks_args['sampling_strategy'] == 'mtl':
+                return MTLGridWorld(**env_args)
+            return TrainTasksGridWorld(**env_args)
 
-    def _train(env_id, max_episode_steps, render, **kwargs):
+        return functools.partial(wrap_env, env_thunk=env_thunk,
+                                 max_episode_steps=max_episode_steps)
+
+    def _train(env_id, max_episode_steps, render, tasks_args, **kwargs):
         args = gridworld_env.get_args(env_id)
         args.update(max_episode_steps=max_episode_steps or args['max_episode_steps'],
-                    render=render)
-        train(make_env=make_env_fn(**args), **kwargs)
+                    render=render,
+                    tasks_args=tasks_args)
+        train(make_env=make_env_fn(**args), tasks_args=tasks_args, **kwargs)
 
     _train(**hierarchical_parse_args(parser))
 

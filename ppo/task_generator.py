@@ -8,7 +8,7 @@ from ppo.util import Categorical, NoInput, init_normc_, mlp
 from rl_utils import ReplayBuffer, onehot
 
 SamplingStrategy = Enum('SamplingStrategy',
-                        'uniform pg gpg l2g gl2g abs_grads')
+                        'uniform pg gpg l2g gl2g abs_grads mtl')
 
 
 class TaskGenerator(NoInput):

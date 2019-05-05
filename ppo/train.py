@@ -99,6 +99,8 @@ def train(
     if train_tasks:
         task_space = sample_env.unwrapped.task_space
         num_tasks = task_space.n
+        if tasks_args['sampling_strategy'] == 'mtl':
+            assert num_tasks == num_processes
 
     if log_dir:
         plt.switch_backend('agg')
@@ -219,7 +221,7 @@ def train(
     start = time.time()
     for j in updates:
 
-        if train_tasks:
+        if train_tasks and not tasks_args['sampling_strategy'] == 'mtl':
             for i in range(num_processes):
                 envs.unwrapped.set_task_dist(i, task_generator.probs())
 
