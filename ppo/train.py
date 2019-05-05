@@ -156,7 +156,10 @@ def train(
         )
 
     if eval_interval:
-        num_eval = sample_env.unwrapped.num_eval if train_tasks else num_processes
+        try:
+            num_eval = sample_env.unwrapped.num_eval
+        except AttributeError:
+            num_eval = num_processes
         eval_envs = make_vec_envs(
             seed=seed + num_processes,
             make_env=make_env,
@@ -370,6 +373,8 @@ def train(
             eval_dones = np.zeros(num_eval)
 
             obs = eval_envs.reset()
+            tasks, _ = eval_envs.unwrapped.get_tasks_and_probs()
+            print('tasks', tasks)
             eval_recurrent_hidden_states = torch.zeros(
                 num_eval,
                 actor_critic.recurrent_hidden_state_size,

@@ -134,6 +134,8 @@ class GridWorld(gridworld_env.gridworld.GridWorld):
                  *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+        self.evaluation = False
+
         env_id = env_id[:-len('GridWorld-v0')]
         if env_id in ['8x8Wall', '12x3Wall', '16x16Wall']:
             self.include_task_in_obs = True
@@ -151,6 +153,10 @@ class GridWorld(gridworld_env.gridworld.GridWorld):
             high=np.ones(self.observation_space.n),
         )
         self.observation_size = space_to_size(self.observation_space)
+
+    def eval_mode(self, rank=None):
+        self.evaluation = True
+        self._render = rank == 0
 
     def obs_vector(self, obs):
         return onehot(obs, self.observation_size)
@@ -170,55 +176,6 @@ class GridWorld(gridworld_env.gridworld.GridWorld):
         return self.obs_vector(o)
 
 
-class RMaxGridWorld(GridWorld):
-    def __init__(self, visits_until_known, env_id, **kwargs):
-        super().__init__(env_id=env_id, **kwargs)
-        self.evaluation = False
-        env_id = env_id[:-len('GridWorld-v0')]
-        if env_id in ['8x8Wall', '12x3Wall', '16x16Wall']:
-            self.rmax = 1
-        elif env_id in ['5x13Lava']:
-            self.rmax = 100
-        else:
-            raise RuntimeError('Invalid ID:', env_id)
-
-        self.visits_until_known = visits_until_known
-        self.visit_count = np.zeros((self.observation_size, self.action_space.n))
-
-    def step(self, actions):
-        self.visit_count[self.s, actions] += 1
-        visit_count = self.visit_count[self.s, actions]
-        s, r, t, i = super().step(actions)
-        if visit_count < self.visits_until_known and not self.evaluation:
-            r = self.rmax
-            t = True
-        return s, r, t, i
-
-
-class RandomGridWorld(gridworld_env.random_gridworld.RandomGridWorld):
-    def __init__(self, random=None, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        self.observation_sizes = [
-            space_to_size(space) for space in self.observation_space.spaces
-        ]
-        self.observation_space = Box(
-            low=np.zeros(sum(self.observation_sizes)),
-            high=np.zeros(sum(self.observation_sizes)))
-
-    def obs_vector(self, obs):
-        return vectorize(
-            [onehot(x, size) for x, size in zip(obs, self.observation_sizes)])
-
-    def step(self, actions):
-        s, r, t, i = super().step(actions)
-        return self.obs_vector(s), r, t, i
-
-    def reset(self):
-        o = super().reset()
-        return self.obs_vector(o)
-
-
 class TasksGridWorld(GridWorld):
     def __init__(self,
                  env_id: str,
@@ -229,7 +186,6 @@ class TasksGridWorld(GridWorld):
         self.task_states = np.ravel_multi_index(
             np.where(self.desc == ' '), dims=self.desc.shape)
         self.observation_size = space_to_size(self.observation_space)
-        self.evaluation = False
 
         # task stuff
         self.task_index = None
@@ -269,6 +225,51 @@ class TasksGridWorld(GridWorld):
         self.task_vector = onehot(task_state, self.observation_size)
         self.assign(**{self.task_letter: [task_state]})
 
+    def obs_vector(self, obs):
+        components = [onehot(obs, self.observation_size)]
+        if self.include_task_in_obs:
+            components.append(self.task_vector)
+        return vectorize(components)
+
+
+class RMaxGridWorld(TasksGridWorld):
+    def __init__(self, visits_until_known, env_id, **kwargs):
+        super().__init__(env_id=env_id, **kwargs)
+
+        self.task_states = np.ravel_multi_index(
+            np.where(self.desc == ' '), dims=self.desc.shape)
+        self.task_index = 0
+        env_id = env_id[:-len('GridWorld-v0')]
+        if env_id in ['8x8Wall', '12x3Wall', '16x16Wall']:
+            self.rmax = 1
+        elif env_id in ['5x13Lava']:
+            self.rmax = 100
+            self.num_eval = len(self.task_states)
+        else:
+            raise RuntimeError('Invalid ID:', env_id)
+
+        self.visits_until_known = visits_until_known
+        self.visit_count = np.zeros((self.observation_size, self.action_space.n))
+
+    def set_task(self, task_index):
+        self.task_index = task_index
+        task_state = self.task_states[self.task_index]
+        self.assign(**{'*': [task_state]})
+
+    def step(self, actions):
+        self.visit_count[self.s, actions] += 1
+        visit_count = self.visit_count[self.s, actions]
+        s, r, t, i = super().step(actions)
+        if visit_count < self.visits_until_known and not self.evaluation:
+            r = self.rmax
+            t = True
+        return s, r, t, i
+
+
+class TrainTasksGridWorld(TasksGridWorld):
+    def set_task_dist(self, dist):
+        self.task_dist = dist
+
     def reset(self):
         if not self.evaluation:
             task_index = self.np_random.choice(
@@ -277,20 +278,9 @@ class TasksGridWorld(GridWorld):
             self.task_prob = self.task_dist[task_index]
         return super().reset()
 
-    def obs_vector(self, obs):
-        components = [onehot(obs, self.observation_size)]
-        if self.include_task_in_obs:
-            components.append(self.task_vector)
-        return vectorize(components)
-
-
-class TrainTasksGridWorld(TasksGridWorld):
-    def set_task_dist(self, dist):
-        self.task_dist = dist
-
 
 def unwrap_tasks(env):
-    return unwrap_env(env, lambda e: hasattr(e, 'set_task_dist'))
+    return unwrap_env(env, lambda e: hasattr(e, 'get_task_and_prob'))
 
 
 def worker(remote, parent_remote, env_fn_wrapper):
