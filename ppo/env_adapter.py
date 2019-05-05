@@ -173,6 +173,7 @@ class GridWorld(gridworld_env.gridworld.GridWorld):
 class RMaxGridWorld(GridWorld):
     def __init__(self, visits_until_known, env_id, **kwargs):
         super().__init__(env_id=env_id, **kwargs)
+        self.evaluation = False
         env_id = env_id[:-len('GridWorld-v0')]
         if env_id in ['8x8Wall', '12x3Wall', '16x16Wall']:
             self.rmax = 1
@@ -188,7 +189,7 @@ class RMaxGridWorld(GridWorld):
         self.visit_count[self.s, actions] += 1
         visit_count = self.visit_count[self.s, actions]
         s, r, t, i = super().step(actions)
-        if visit_count < self.visits_until_known:
+        if visit_count < self.visits_until_known and not self.evaluation:
             r = self.rmax
             t = True
         return s, r, t, i
@@ -197,6 +198,7 @@ class RMaxGridWorld(GridWorld):
 class RandomGridWorld(gridworld_env.random_gridworld.RandomGridWorld):
     def __init__(self, random=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
         self.observation_sizes = [
             space_to_size(space) for space in self.observation_space.spaces
         ]
