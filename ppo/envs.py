@@ -12,8 +12,6 @@ from gym.wrappers import TimeLimit
 
 from common.running_mean_std import RunningMeanStd
 from common.vec_env import VecEnvWrapper
-from common.vec_env.dummy_vec_env import DummyVecEnv
-from common.vec_env.subproc_vec_env import SubprocVecEnv
 from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
 from ppo.env_adapter import TasksDummyVecEnv, TasksSubprocVecEnv
 
@@ -31,12 +29,7 @@ def wrap_env(env_thunk,
         raise NotImplementedError
 
     env.seed(seed + rank)
-    if evaluation:
-        try:
-            env.set_task(rank)
-            env.unwrapped.eval_mode(rank)
-        except AttributeError:
-            pass
+    env.set_rank(rank, eval_mode=evaluation)
 
     obs_shape = env.observation_space.shape
 

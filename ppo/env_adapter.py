@@ -45,6 +45,9 @@ class HSREnv(hsr.env.HSREnv):
 
         super().__init__(starts=starts, goals=[goal], **kwargs)
 
+    def set_rank(self, rank, eval_mode):
+        pass
+
 
 class SaveStateHSREnv(HSREnv):
     def __init__(self, save_path: Path, **kwargs):
@@ -112,8 +115,9 @@ class AutoCurriculumHSREnv(HSREnv):
     def get_task_and_prob(self):
         return self.task_index, self.task_prob
 
-    def set_task(self, task_index):
-        self.task_index = task_index
+    def set_rank(self, rank, eval_mode):
+        self.task_index = rank
+        self.evaluation = eval_mode
 
     def set_task_dist(self, dist):
         self.task_dist = dist
@@ -152,8 +156,8 @@ class GridWorld(gridworld_env.gridworld.GridWorld):
         )
         self.observation_size = space_to_size(self.observation_space)
 
-    def eval_mode(self, rank=None):
-        self.evaluation = True
+    def set_rank(self, rank, eval_mode):
+        self.evaluation = eval_mode
         self._render = self._render and rank == 0
 
     def obs_vector(self, obs):
@@ -209,6 +213,11 @@ class TasksGridWorld(GridWorld):
             low=np.zeros(size),
             high=np.ones(size),
         )
+
+    def set_rank(self, rank, eval_mode):
+        super().set_rank(rank, eval_mode)
+        if eval_mode:
+            self.set_task(rank)
 
     def get_task_and_prob(self):
         return self.task_index, self.task_prob

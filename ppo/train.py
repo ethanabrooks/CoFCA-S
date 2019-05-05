@@ -56,7 +56,6 @@ def train(
         task_history,
         tasks_args=None,
         reward_based_task_args=None,
-        rmax=False,
 ):
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
