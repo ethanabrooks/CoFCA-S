@@ -1,19 +1,19 @@
 # third party
-import pickle
-import time
 from multiprocessing import Pipe, Process
 from pathlib import Path
+import pickle
+import time
 from typing import List
 
-import numpy as np
 # first party
 from gym.spaces import Box, Discrete
+import numpy as np
 
-import gridworld_env
-import hsr
 from common.vec_env import CloudpickleWrapper, VecEnv
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
+import gridworld_env
+import hsr
 from hsr.env import GoalSpec
 from mujoco_py import MjSimState
 from rl_utils.gym import space_to_size, unwrap_env
@@ -129,9 +129,7 @@ class AutoCurriculumHSREnv(HSREnv):
 
 
 class GridWorld(gridworld_env.gridworld.GridWorld):
-    def __init__(self, env_id,
-                 render: bool = False,
-                 *args, **kwargs):
+    def __init__(self, env_id, render: bool = False, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         self.evaluation = False
@@ -156,7 +154,7 @@ class GridWorld(gridworld_env.gridworld.GridWorld):
 
     def eval_mode(self, rank=None):
         self.evaluation = True
-        self._render = rank == 0
+        self._render = self._render and rank == 0
 
     def obs_vector(self, obs):
         return onehot(obs, self.observation_size)
@@ -177,11 +175,7 @@ class GridWorld(gridworld_env.gridworld.GridWorld):
 
 
 class TasksGridWorld(GridWorld):
-    def __init__(self,
-                 env_id: str,
-                 task_letter='*',
-                 *args,
-                 **kwargs):
+    def __init__(self, env_id: str, task_letter='*', *args, **kwargs):
         super().__init__(*args, env_id=env_id, **kwargs)
         self.task_states = np.ravel_multi_index(
             np.where(self.desc == ' '), dims=self.desc.shape)
@@ -249,7 +243,8 @@ class RMaxGridWorld(TasksGridWorld):
             raise RuntimeError('Invalid ID:', env_id)
 
         self.visits_until_known = visits_until_known
-        self.visit_count = np.zeros((self.observation_size, self.action_space.n))
+        self.visit_count = np.zeros((self.observation_size,
+                                     self.action_space.n))
 
     def set_task(self, task_index):
         self.task_index = task_index
