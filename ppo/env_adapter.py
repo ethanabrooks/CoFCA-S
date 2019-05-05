@@ -252,7 +252,8 @@ class RMaxGridWorld(TasksGridWorld):
         self.assign(**{'*': [task_state]})
 
     def step(self, actions):
-        self.visit_count[self.s, actions] += 1
+        if not self.evaluation:
+            self.visit_count[self.s, actions] += 1
         visit_count = self.visit_count[self.s, actions]
         s, r, t, i = super().step(actions)
         if visit_count < self.visits_until_known and not self.evaluation:

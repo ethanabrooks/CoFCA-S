@@ -36,7 +36,7 @@ def wrap_env(env_thunk,
             env.set_task(rank)
         except AttributeError:
             pass
-    env.unwrapped.eval_mode(rank)
+        env.unwrapped.eval_mode(rank)
 
     obs_shape = env.observation_space.shape
 
