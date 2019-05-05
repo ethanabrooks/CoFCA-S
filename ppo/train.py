@@ -10,7 +10,7 @@ import torch
 from gym.spaces import Discrete
 from tensorboardX import SummaryWriter
 
-from ppo.env_adapter import AutoCurriculumHSREnv, GridWorld
+from ppo.env_adapter import AutoCurriculumHSREnv, GridWorld, MTLGridWorld
 from ppo.envs import VecNormalize, make_vec_envs
 from ppo.policy import Policy
 from ppo.storage import RolloutStorage, TasksRolloutStorage
@@ -122,10 +122,13 @@ def train(
     task_generator = None
     if train_tasks:
         last_n_tasks = ReplayBuffer(maxlen=task_history)
+        last_n_alphas = None
         task_counts = np.zeros(num_tasks)
         last_gradient = torch.zeros(num_tasks).to(device)
 
         sampling_strategy = tasks_args['sampling_strategy']
+        if sampling_strategy == 'mtl':
+            last_n_alphas = ReplayBuffer(maxlen=task_history)
         if sampling_strategy in ['reward-variance', 'reward-range']:
             task_generator = RewardBasedTaskGenerator(
                 task_size=num_tasks, **reward_based_task_args, **tasks_args)
@@ -286,9 +289,11 @@ def train(
 
         train_results, *task_stuff = agent.update(rollouts, gamma)
         if train_tasks:
-            tasks_trained, grads_per_task = task_stuff
+            tasks_trained, grads_per_task, alphas = task_stuff
             for k, v in grads_per_task.items():
                 last_gradient[k] = v
+            if alphas is not None:
+                last_n_alphas.append(alphas)
 
         rollouts.after_update()
         total_num_steps = (j + 1) * num_processes * num_steps
@@ -351,6 +356,9 @@ def train(
                         elif isinstance(unwrapped, AutoCurriculumHSREnv):
                             plt.bar(
                                 np.arange(len(heatmap_values)), heatmap_values)
+                        elif isinstance(unwrapped, MTLGridWorld):
+                            plt.bar(
+                                np.arange(len(heatmap_values)), heatmap_values)
                         else:
                             return
                         writer.add_figure(name, fig, total_num_steps)
@@ -361,9 +369,12 @@ def train(
 
                     count_history = np.zeros(num_tasks)
                     count_history[unique_values] = unique_counts
-                    plot(count_history, 'last 1e4 tasks')
-                    plot(task_counts, 'all tasks')
-                    plot(last_gradient.to('cpu').numpy(), 'last gradient')
+                    if sampling_strategy == 'mtl':
+                        plot(last_n_alphas, f'last {task_history} alphas')
+                    else:
+                        plot(count_history, f'last {task_history} tasks')
+                        plot(task_counts, 'all tasks')
+                        plot(last_gradient.to('cpu').numpy(), 'last gradient')
 
             episode_rewards = []
             time_steps = []

@@ -151,8 +151,8 @@ class PPO:
                     pre_update_loss[i] = loss
 
         if self.train_tasks:
+            alphas = None
             grad_vectors = None
-            grads_per_task = {}
             grad_sum_per_task = {}
             rets_per_task = {}
             entropy_per_task = {}
@@ -307,7 +307,7 @@ class PPO:
                 return_values[k] = v / n
 
         if self.train_tasks:
-            return return_values, tasks_to_train, grad_sum_per_task
+            return return_values, tasks_to_train, grad_sum_per_task, alphas
         else:
             return return_values, None
 
