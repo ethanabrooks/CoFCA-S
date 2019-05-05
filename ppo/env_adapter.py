@@ -235,6 +235,12 @@ class TasksGridWorld(GridWorld):
         return vectorize(components)
 
 
+class MTLGridWorld(TasksGridWorld):
+    def set_rank(self, rank, eval_mode):
+        super().set_rank(rank, eval_mode)
+        self.set_task(rank)
+
+
 class RMaxGridWorld(TasksGridWorld):
     def __init__(self, visits_until_known, env_id, **kwargs):
         super().__init__(env_id=env_id, **kwargs)
@@ -254,11 +260,6 @@ class RMaxGridWorld(TasksGridWorld):
         self.visits_until_known = visits_until_known
         self.visit_count = np.zeros((self.observation_size,
                                      self.action_space.n))
-
-    def set_task(self, task_index):
-        self.task_index = task_index
-        task_state = self.task_states[self.task_index]
-        self.assign(**{'*': [task_state]})
 
     def step(self, actions):
         if not self.evaluation:
