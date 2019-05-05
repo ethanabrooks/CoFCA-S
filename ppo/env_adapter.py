@@ -256,9 +256,8 @@ class RMaxGridWorld(TasksGridWorld):
             self.visit_count[self.s, actions] += 1
         visit_count = self.visit_count[self.s, actions]
         s, r, t, i = super().step(actions)
-        if visit_count < self.visits_until_known and not self.evaluation:
-            r = self.rmax
-            t = True
+        if not self.evaluation:
+            r += self.rmax / np.sqrt(visit_count + 1)
         return s, r, t, i
 
 
