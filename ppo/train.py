@@ -8,15 +8,15 @@ from pathlib import Path
 import numpy as np
 import torch
 from gym.spaces import Discrete
+from rl_utils import ReplayBuffer, space_to_size
 from tensorboardX import SummaryWriter
 
 from ppo.env_adapter import AutoCurriculumHSREnv, GridWorld
 from ppo.envs import VecNormalize, make_vec_envs
 from ppo.policy import Policy
 from ppo.storage import RolloutStorage, TasksRolloutStorage
-from ppo.task_generator import GoalGAN, RewardBasedTaskGenerator, TaskGenerator
+from ppo.task_generator import RewardBasedTaskGenerator, TaskGenerator
 from ppo.update import PPO
-from rl_utils import ReplayBuffer, space_to_size
 
 
 def get_freer_gpu():
@@ -56,7 +56,7 @@ def train(
         task_history,
         tasks_args=None,
         reward_based_task_args=None,
-        gan_args=None,
+        rmax=False,
 ):
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
@@ -128,8 +128,6 @@ def train(
         if sampling_strategy in ['reward-variance', 'reward-range']:
             task_generator = RewardBasedTaskGenerator(
                 task_size=num_tasks, **reward_based_task_args, **tasks_args)
-        elif sampling_strategy == 'goal-gan':
-            task_generator = GoalGAN(**tasks_args, **gan_args)
         else:
             task_generator = TaskGenerator(task_size=num_tasks, **tasks_args)
         task_generator = task_generator.to(device)
@@ -158,7 +156,10 @@ def train(
         )
 
     if eval_interval:
-        num_eval = sample_env.unwrapped.num_eval if train_tasks else num_processes
+        try:
+            num_eval = sample_env.unwrapped.num_eval
+        except AttributeError:
+            num_eval = num_processes
         eval_envs = make_vec_envs(
             seed=seed + num_processes,
             make_env=make_env,
@@ -372,6 +373,8 @@ def train(
             eval_dones = np.zeros(num_eval)
 
             obs = eval_envs.reset()
+            tasks, _ = eval_envs.unwrapped.get_tasks_and_probs()
+            print('tasks', tasks)
             eval_recurrent_hidden_states = torch.zeros(
                 num_eval,
                 actor_critic.recurrent_hidden_state_size,

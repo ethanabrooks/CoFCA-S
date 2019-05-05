@@ -31,11 +31,12 @@ def wrap_env(env_thunk,
         raise NotImplementedError
 
     env.seed(seed + rank)
-    try:
-        env.set_task(rank)
-    except AttributeError:
-        pass
-    env.unwrapped.evaluation = evaluation
+    if evaluation:
+        try:
+            env.set_task(rank)
+        except AttributeError:
+            pass
+        env.unwrapped.eval_mode(rank)
 
     obs_shape = env.observation_space.shape
 
@@ -80,16 +81,10 @@ def make_vec_envs(make_env,
     ]
 
     synchronous = synchronous or len(envs) == 1 or sys.platform == 'darwin'
-    if train_tasks:
-        if synchronous:
-            envs = TasksDummyVecEnv(envs)
-        else:
-            envs = TasksSubprocVecEnv(envs)
+    if synchronous:
+        envs = TasksDummyVecEnv(envs)
     else:
-        if synchronous:
-            envs = DummyVecEnv(envs)
-        else:
-            envs = SubprocVecEnv(envs)
+        envs = TasksSubprocVecEnv(envs)
 
     if len(envs.observation_space.shape) == 1 and normalize:
         if gamma is None:
