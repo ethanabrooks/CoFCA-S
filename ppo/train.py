@@ -8,7 +8,6 @@ from pathlib import Path
 import numpy as np
 import torch
 from gym.spaces import Discrete
-from rl_utils import ReplayBuffer, space_to_size
 from tensorboardX import SummaryWriter
 
 from ppo.env_adapter import AutoCurriculumHSREnv, GridWorld
@@ -17,6 +16,7 @@ from ppo.policy import Policy
 from ppo.storage import RolloutStorage, TasksRolloutStorage
 from ppo.task_generator import RewardBasedTaskGenerator, TaskGenerator
 from ppo.update import PPO
+from rl_utils import ReplayBuffer, space_to_size
 
 
 def get_freer_gpu():
@@ -373,8 +373,6 @@ def train(
             eval_dones = np.zeros(num_eval)
 
             obs = eval_envs.reset()
-            tasks, _ = eval_envs.unwrapped.get_tasks_and_probs()
-            print('tasks', tasks)
             eval_recurrent_hidden_states = torch.zeros(
                 num_eval,
                 actor_critic.recurrent_hidden_state_size,

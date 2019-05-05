@@ -4,11 +4,11 @@ import functools
 import sys
 
 import gym
-from gym.spaces.box import Box
-from gym.wrappers import TimeLimit
 import numpy as np
 import torch
 import torch.nn as nn
+from gym.spaces.box import Box
+from gym.wrappers import TimeLimit
 
 from common.running_mean_std import RunningMeanStd
 from common.vec_env import VecEnvWrapper
@@ -34,9 +34,9 @@ def wrap_env(env_thunk,
     if evaluation:
         try:
             env.set_task(rank)
+            env.unwrapped.eval_mode(rank)
         except AttributeError:
             pass
-        env.unwrapped.eval_mode(rank)
 
     obs_shape = env.observation_space.shape
 
