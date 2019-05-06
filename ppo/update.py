@@ -1,8 +1,8 @@
 # stdlib
 # third party
 # first party
-from collections import Counter
 import math
+from collections import Counter
 
 import torch
 import torch.nn as nn
@@ -43,6 +43,7 @@ class PPO:
                  batch_size,
                  value_loss_coef,
                  entropy_coef,
+                 entropy_grade,
                  learning_rate=None,
                  eps=None,
                  max_grad_norm=None,
@@ -58,6 +59,7 @@ class PPO:
 
         self.value_loss_coef = value_loss_coef
         self.entropy_coef = entropy_coef
+        self.entropy_grade = entropy_grade
 
         self.max_grad_norm = max_grad_norm
         self.use_clipped_value_loss = use_clipped_value_loss
@@ -156,7 +158,12 @@ class PPO:
                 # Compute loss
                 value_losses, action_losses, entropy \
                     = components = self.compute_loss_components(sample)
-                entropy_bonus = entropy * self.entropy_coef
+                if self.actor_critic.continuous:
+                    entropy_bonus = torch.tanh(entropy / self.entropy_grade)
+                else:
+                    entropy_bonus = entropy
+                entropy_bonus *= self.entropy_coef
+
                 # if self.train_tasks:
                 # exp = self.task_generator.task_size - sample.tasks.float(
                 # ) - 1

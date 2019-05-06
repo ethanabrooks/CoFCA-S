@@ -1,20 +1,21 @@
 import argparse
 import functools
-from pathlib import Path
 import pickle
+from pathlib import Path
 
 import gym
 from torch import nn as nn
-from rl_utils import hierarchical_parse_args, parse_vector
 
 import gridworld_env
 import hsr.util
-from ppo.env_adapter import AutoCurriculumHSREnv, HSREnv, SaveStateHSREnv, TrainTasksGridWorld, \
-    GridWorld, RMaxGridWorld
+from ppo.env_adapter import (AutoCurriculumHSREnv, GridWorld, HSREnv,
+                             RMaxGridWorld, SaveStateHSREnv,
+                             TrainTasksGridWorld)
 from ppo.envs import wrap_env
 from ppo.task_generator import SamplingStrategy
 from ppo.train import train
 from ppo.util import parse_activation
+from rl_utils import hierarchical_parse_args, parse_vector
 
 try:
     import dm_control2gym
@@ -62,7 +63,6 @@ def build_parser():
     parser.add_argument('--num-processes', type=int, default=1)
 
     network_parser = parser.add_argument_group('network_args')
-    network_parser.add_argument('--entropy-grade', type=float, default=10)
     network_parser.add_argument('--recurrent', action='store_true')
     network_parser.add_argument('--hidden-size', type=int, default=256)
     network_parser.add_argument('--num-layers', type=int, default=3)
@@ -70,6 +70,7 @@ def build_parser():
         '--activation', type=parse_activation, default=nn.ReLU())
 
     ppo_parser = parser.add_argument_group('ppo_args')
+    ppo_parser.add_argument('--entropy-grade', type=float, default=10)
     ppo_parser.add_argument('--clip-param', type=float, default=0.2, help=' ')
     ppo_parser.add_argument('--ppo-epoch', type=int, default=4, help=' ')
     ppo_parser.add_argument('--batch-size', type=int, default=32, help=' ')
@@ -106,7 +107,7 @@ def add_tasks_args(parser):
     tasks_parser.add_argument(
         '--sampling-strategy',
         choices=[s.name for s in SamplingStrategy] +
-                ['reward-variance', 'reward-range'],
+        ['reward-variance', 'reward-range'],
         default='experiment')
 
 
@@ -119,20 +120,22 @@ def cli():
     def make_env_fn(max_episode_steps, visits_until_known, **env_args):
         def env_thunk():
             if visits_until_known:
-                return RMaxGridWorld(**env_args, visits_until_known=visits_until_known)
+                return RMaxGridWorld(
+                    **env_args, visits_until_known=visits_until_known)
             return GridWorld(**env_args)
 
         return functools.partial(
-            wrap_env,
-            env_thunk=env_thunk,
-            max_episode_steps=max_episode_steps)
+            wrap_env, env_thunk=env_thunk, max_episode_steps=max_episode_steps)
 
-    def _train(env_id, max_episode_steps, render, visits_until_known, **kwargs):
+    def _train(env_id, max_episode_steps, render, visits_until_known,
+               **kwargs):
         if 'GridWorld' in env_id:
             args = gridworld_env.get_args(env_id)
-            args.update(max_episode_steps=max_episode_steps or args['max_episode_steps'],
-                        render=render,
-                        visits_until_known=visits_until_known)
+            args.update(
+                max_episode_steps=max_episode_steps
+                or args['max_episode_steps'],
+                render=render,
+                visits_until_known=visits_until_known)
             make_env = make_env_fn(**args)
         else:
 
@@ -171,8 +174,9 @@ def tasks_cli():
 
     def _train(env_id, max_episode_steps, render, **kwargs):
         args = gridworld_env.get_args(env_id)
-        args.update(max_episode_steps=max_episode_steps or args['max_episode_steps'],
-                    render=render)
+        args.update(
+            max_episode_steps=max_episode_steps or args['max_episode_steps'],
+            render=render)
         train(make_env=make_env_fn(**args), **kwargs)
 
     _train(**hierarchical_parse_args(parser))
