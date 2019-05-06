@@ -1,14 +1,14 @@
 import csv
+from io import StringIO
 import itertools
+from pathlib import Path
 import subprocess
 import time
-from io import StringIO
-from pathlib import Path
 
-import numpy as np
-import torch
 from gym.spaces import Discrete
+import numpy as np
 from tensorboardX import SummaryWriter
+import torch
 
 from ppo.env_adapter import AutoCurriculumHSREnv, GridWorld, MTLGridWorld
 from ppo.envs import VecNormalize, make_vec_envs
@@ -364,14 +364,19 @@ def train(
                         writer.add_figure(name, fig, total_num_steps)
                         plt.close()
 
-                    unique_values, unique_counts = np.unique(
-                        last_n_tasks.array().astype(int), return_counts=True)
-
-                    count_history = np.zeros(num_tasks)
-                    count_history[unique_values] = unique_counts
                     if sampling_strategy == 'mtl':
-                        plot(last_n_alphas, f'last {task_history} alphas')
+                        unique_values, unique_counts = np.unique(
+                            last_n_alphas.array().astype(int),
+                            return_counts=True)
+                        alphas_history = np.zeros(num_tasks)
+                        alphas_history[unique_values] = unique_counts
+                        plot(alphas_history, f'last {task_history} alphas')
                     else:
+                        unique_values, unique_counts = np.unique(
+                            last_n_tasks.array().astype(int),
+                            return_counts=True)
+                        count_history = np.zeros(num_tasks)
+                        count_history[unique_values] = unique_counts
                         plot(count_history, f'last {task_history} tasks')
                         plot(task_counts, 'all tasks')
                         plot(last_gradient.to('cpu').numpy(), 'last gradient')
