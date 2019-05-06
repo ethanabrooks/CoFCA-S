@@ -293,7 +293,7 @@ def train(
             for k, v in grads_per_task.items():
                 last_gradient[k] = v
             if alphas is not None:
-                last_n_alphas.append(alphas)
+                last_n_alphas.append(alphas.cpu().numpy())
 
         rollouts.after_update()
         total_num_steps = (j + 1) * num_processes * num_steps

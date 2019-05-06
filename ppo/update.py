@@ -20,20 +20,20 @@ def global_norm(grads):
     norm = 0
     for grad in grads:
         if grad is not None:
-            norm += grad.norm(2) ** 2
-    return norm ** .5
+            norm += grad.norm(2)**2
+    return norm**.5
 
 
 def l2_norm(list_of_tensors):
-    return sum([torch.sum(x ** 2) for x in list_of_tensors if x is not None])
+    return sum([torch.sum(x**2) for x in list_of_tensors if x is not None])
 
 
 def epanechnikov_kernel(x):
-    return 3 / 4 * (1 - x ** 2)
+    return 3 / 4 * (1 - x**2)
 
 
 def gaussian_kernel(x):
-    return (2 * math.pi) ** -.5 * torch.exp(-.5 * x ** 2)
+    return (2 * math.pi)**-.5 * torch.exp(-.5 * x**2)
 
 
 class PPO:
@@ -114,7 +114,7 @@ class PPO:
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         if advantages.numel() > 1:
             advantages = (advantages - advantages.mean()) / (
-                    advantages.std() + 1e-5)
+                advantages.std() + 1e-5)
         update_values = Counter()
         update_values.update(n=0)
         task_values = Counter()
@@ -178,7 +178,8 @@ class PPO:
                     value_loss_per_task[task] = val_loss.mean().item()
 
                     if self.sampling_strategy == 'mtl':
-                        loss = self.compute_loss(*components, importance_weighting=None)
+                        loss = self.compute_loss(
+                            *components, importance_weighting=None)
                     else:
                         loss = self.compute_loss(
                             action_loss=action_loss,
@@ -198,14 +199,16 @@ class PPO:
                     if self.sampling_strategy == 'pg':
                         post_update_loss[task] = loss
                     if self.sampling_strategy == 'mtl':
-                        grad_vector = torch.cat([g.view(-1) for g in grad if g is not None])
+                        grad_vector = torch.cat(
+                            [g.view(-1) for g in grad if g is not None])
                         if grad_vectors is None:
                             grad_vectors = torch.zeros(tasks_to_train.numel(),
                                                        grad_vector.numel())
                         grad_vectors[task] = grad_vector
                     if self.sampling_strategy == 'abs_grads':
-                        grad_sum_per_task[task] = sum(
-                            g.abs().sum() for g in grad if g is not None).item()
+                        grad_sum_per_task[task] = sum(g.abs().sum()
+                                                      for g in grad
+                                                      if g is not None).item()
 
             if self.sampling_strategy == 'abs_grads':
                 self.task_generator.update(grad_sum_per_task)
@@ -229,13 +232,15 @@ class PPO:
                 self.task_generator.update(rets_per_task)
             elif self.sampling_strategy == 'mtl':
                 assert self.ppo_epoch == 0
-                alphas = frank_wolfe_solver(grad_vectors, tasks_to_train.numel())
+                alphas = frank_wolfe_solver(grad_vectors,
+                                            tasks_to_train.numel())
                 grad_vector = alphas @ grad_vectors
 
                 sections = [p.numel() for p in self.actor_critic.parameters()]
                 gradients = torch.split(grad_vector, sections)
 
-                for param, grad in zip(self.actor_critic.parameters(), gradients):
+                for param, grad in zip(self.actor_critic.parameters(),
+                                       gradients):
                     assert param.numel() == grad.numel()
                     param.grad = grad.view(param.shape)
 
@@ -358,8 +363,8 @@ class PPO:
                 else:
                     denom = exp_avg_sq.sqrt().add_(group['eps'])
 
-                bias_correction1 = 1 - beta1 ** state['step']
-                bias_correction2 = 1 - beta2 ** state['step']
+                bias_correction1 = 1 - beta1**state['step']
+                bias_correction2 = 1 - beta2**state['step']
                 step_size = group['lr'] * math.sqrt(
                     bias_correction2) / bias_correction1
                 sizes.append(step_size)
