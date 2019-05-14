@@ -163,7 +163,10 @@ class PPO:
                         entropy / self.entropy_grade) * self.entropy_coef
                 else:
                     entropy_bonus = entropy * self.entropy_coef
-                entropy_bonus = entropy_bonus * self.entropy_coef
+
+                uncertainty = torch.abs(gamma**sample.tasks.float() -
+                                        sample.value_preds)
+                entropy_bonus = uncertainty * entropy_bonus * self.entropy_coef
 
                 # if self.train_tasks:
                 # exp = self.task_generator.task_size - sample.tasks.float(
