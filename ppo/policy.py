@@ -176,11 +176,8 @@ class CNNBase(NNBase):
             # init_(nn.Conv2d(64, 32, kernel_size=3, stride=1)), nn.ReLU(), Flatten(),
             # init_(nn.Linear(32 * 7 * 7, hidden_size)), nn.ReLU())
 
-            init_(nn.Conv2d(num_inputs, 32, kernel_size=3, stride=1, padding=1)), nn.ReLU(),
-            Flatten(),
-            # init_(nn.Conv2d(32, 64, kernel_size=3, stride=1)), nn.ReLU(),
-            # init_(nn.Conv2d(32, 64, kernel_size=3, stride=1)), nn.ReLU(),
-            # init_(nn.Conv2d(64, 32, kernel_size=3, stride=1)), nn.ReLU(), Flatten(),
+            init_(nn.Conv2d(num_inputs, 32, kernel_size=3, stride=1, padding=1)),
+            nn.ReLU(), Flatten(),
             init_(nn.Linear(32 * 4, hidden_size)), nn.ReLU())
 
         init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
