@@ -1,4 +1,7 @@
 # third party
+from collections import namedtuple
+from typing import Generator
+
 import torch
 from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
 
@@ -7,14 +10,20 @@ def _flatten_helper(T, N, _tensor):
     return _tensor.view(T * N, *_tensor.size()[2:])
 
 
+Batch = namedtuple(
+    'Batch', 'obs recurrent_hidden_states actions value_preds ret '
+    'masks old_action_log_probs adv tasks importance_weighting process')
+
+
 class RolloutStorage(object):
-    def __init__(self,
-                 num_steps,
-                 num_processes,
-                 obs_shape,
-                 action_space,
-                 recurrent_hidden_state_size,
-                 ):
+    def __init__(
+            self,
+            num_steps,
+            num_processes,
+            obs_shape,
+            action_space,
+            recurrent_hidden_state_size,
+    ):
         self.obs = torch.zeros(num_steps + 1, num_processes, *obs_shape)
         self.recurrent_hidden_states = torch.zeros(
             num_steps + 1, num_processes, recurrent_hidden_state_size)
@@ -46,13 +55,13 @@ class RolloutStorage(object):
         self.masks = self.masks.to(device)
 
     def insert(self, obs, recurrent_hidden_states, actions, action_log_probs,
-               value_preds, rewards, masks):
+               values, rewards, masks):
         self.obs[self.step + 1].copy_(obs)
         self.recurrent_hidden_states[self.step +
                                      1].copy_(recurrent_hidden_states)
         self.actions[self.step].copy_(actions)
         self.action_log_probs[self.step].copy_(action_log_probs)
-        self.value_preds[self.step].copy_(value_preds)
+        self.value_preds[self.step].copy_(values)
         self.rewards[self.step].copy_(rewards.unsqueeze(dim=1))
         self.masks[self.step + 1].copy_(masks)
         self.step = (self.step + 1) % self.num_steps
@@ -77,40 +86,57 @@ class RolloutStorage(object):
                 self.returns[step] = self.returns[step + 1] * \
                                      gamma * self.masks[step + 1] + self.rewards[step]
 
-    def feed_forward_generator(self, advantages, num_mini_batch):
+    def feed_forward_generator(self, advantages, batch_size) -> \
+            Generator[Batch, None, None]:
         num_steps, num_processes = self.rewards.size()[0:2]
-        batch_size = num_processes * num_steps
-        assert batch_size >= num_mini_batch, (
+        total_batch_size = num_processes * num_steps
+        assert total_batch_size >= batch_size, (
             "PPO requires the number of processes ({}) "
             "* number of steps ({}) = {} "
             "to be greater than or equal to the number of PPO mini batches ({})."
             "".format(num_processes, num_steps, num_processes * num_steps,
-                      num_mini_batch))
-        mini_batch_size = batch_size // num_mini_batch
+                      batch_size))
+        mini_batch_size = total_batch_size // batch_size
 
+        random_sampler = SubsetRandomSampler(range(total_batch_size))
         sampler = BatchSampler(
-            SubsetRandomSampler(range(batch_size)),
-            mini_batch_size,
+            sampler=random_sampler,
+            batch_size=mini_batch_size,
             drop_last=False)
+        assert len(sampler) == batch_size
         for indices in sampler:
-            obs_batch = self.obs[:-1].view(-1, *self.obs.size()[2:])[indices]
-            recurrent_hidden_states_batch = self.recurrent_hidden_states[:-1].view(
-                -1, self.recurrent_hidden_states.size(-1))[indices]
-            actions_batch = self.actions.view(-1,
-                                              self.actions.size(-1))[indices]
-            value_preds_batch = self.value_preds[:-1].view(-1, 1)[indices]
-            return_batch = self.returns[:-1].view(-1, 1)[indices]
-            masks_batch = self.masks[:-1].view(-1, 1)[indices]
-            old_action_log_probs_batch = self.action_log_probs.view(-1,
-                                                                    1)[indices]
-            # TODO: calculate d logP / dΘ here
-            adv_targ = advantages.view(-1, 1)[indices]
+            assert len(indices) == mini_batch_size
+            yield self.make_batch(advantages, indices)
 
-            yield obs_batch, recurrent_hidden_states_batch, actions_batch, \
-                  value_preds_batch, return_batch, masks_batch, \
-                  old_action_log_probs_batch, adv_targ
+    def make_batch(self, advantages, indices):
+        obs_batch = self.obs[:-1].view(-1, *self.obs.size()[2:])[indices]
+        recurrent_hidden_states_batch = self.recurrent_hidden_states[:-1].view(
+            -1, self.recurrent_hidden_states.size(-1))[indices]
+        actions_batch = self.actions.view(-1, self.actions.size(-1))[indices]
+        value_preds_batch = self.value_preds[:-1].view(-1, 1)[indices]
+        return_batch = self.returns[:-1].view(-1, 1)[indices]
+        masks_batch = self.masks[:-1].view(-1, 1)[indices]
+        old_action_log_probs_batch = self.action_log_probs.view(-1, 1)[indices]
+        adv_targ = advantages.view(-1, 1)[indices]
+        num_steps, num_processes = self.rewards.size()[0:2]
+        process = torch.arange(num_processes).repeat(num_steps,
+                                                     1).view(-1, 1)[indices]
+        batch = Batch(
+            obs=obs_batch,
+            recurrent_hidden_states=recurrent_hidden_states_batch,
+            actions=actions_batch,
+            value_preds=value_preds_batch,
+            ret=return_batch,
+            masks=masks_batch,
+            old_action_log_probs=old_action_log_probs_batch,
+            adv=adv_targ,
+            process=process,
+            tasks=None,
+            importance_weighting=None)
+        return batch
 
-    def recurrent_generator(self, advantages, num_mini_batch):
+    def recurrent_generator(self, advantages, num_mini_batch) -> \
+            Generator[Batch, None, None]:
         num_processes = self.rewards.size(1)
         assert num_processes >= num_mini_batch, (
             "PPO requires the number of processes ({}) "
@@ -162,10 +188,18 @@ class RolloutStorage(object):
             value_preds_batch = _flatten_helper(T, N, value_preds_batch)
             return_batch = _flatten_helper(T, N, return_batch)
             masks_batch = _flatten_helper(T, N, masks_batch)
-            old_action_log_probs_batch = _flatten_helper(T, N, \
-                                                         old_action_log_probs_batch)
+            old_action_log_probs_batch = _flatten_helper(
+                T, N, old_action_log_probs_batch)
             adv_targ = _flatten_helper(T, N, adv_targ)
 
-            yield obs_batch, recurrent_hidden_states_batch, actions_batch, \
-                  value_preds_batch, return_batch, masks_batch, \
-                  old_action_log_probs_batch, adv_targ
+            yield Batch(
+                obs=obs_batch,
+                recurrent_hidden_states=recurrent_hidden_states_batch,
+                actions=actions_batch,
+                value_preds=value_preds_batch,
+                ret=return_batch,
+                masks=masks_batch,
+                old_action_log_probs=old_action_log_probs_batch,
+                adv=adv_targ,
+                tasks=None,
+                importance_weighting=None)

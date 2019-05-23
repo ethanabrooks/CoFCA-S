@@ -5,9 +5,9 @@ import argparse
 from pathlib import Path
 
 import torch.nn as nn
-from hsr.util import add_env_args, add_wrapper_args
+from rl_utils import parse_activation, hierarchical_parse_args
 
-from utils.arguments import parse_groups, parse_activation
+from hsr.util import add_env_args, add_wrapper_args
 
 
 def build_parser():
@@ -143,7 +143,7 @@ def build_parser():
 
 
 def get_args():
-    return {**parse_groups(build_parser()),
+    return {**hierarchical_parse_args(build_parser()),
             **dict(env_args={})}
 
 
@@ -153,4 +153,4 @@ def get_hsr_args():
     env_parser.add_argument('--max-steps', type=int)
     add_env_args(env_parser)
     add_wrapper_args(parser.add_argument_group('wrapper_args'))
-    return parse_groups(parser)
+    return hierarchical_parse_args(parser)

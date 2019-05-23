@@ -15,7 +15,6 @@ from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from ppo.env_adapter import HSREnv
-from ppo.gridworld import GoalGridworld
 
 try:
     import dm_control2gym
@@ -44,15 +43,6 @@ def make_env(env_id, seed, rank, log_dir, add_timestep, allow_early_resets,
         elif env_id.startswith("dm"):
             _, domain, task = env_id.split('.')
             env = dm_control2gym.make(domain_name=domain, task_name=task)
-        elif env_id == 'gridworld':
-            desc = '      '
-            env = TimeLimit(
-                GoalGridworld(
-                    desc=[desc],
-                    actions=np.array([[0, -1], [0, 1]]),
-                    action_strings="◀▶",
-                ),
-                max_episode_steps=len(desc) + 1)
         else:
             env = gym.make(env_id)
 

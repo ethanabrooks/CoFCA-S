@@ -1,6 +1,8 @@
 # third party
+# first party
 import torch
 import torch.nn as nn
+from gym.spaces import Box, Discrete
 
 # first party
 from ppo.distributions import Categorical, DiagGaussian
@@ -24,14 +26,15 @@ class Policy(nn.Module):
         else:
             raise NotImplementedError
 
-        if action_space.__class__.__name__ == "Discrete":
+        if isinstance(action_space, Discrete):
             num_outputs = action_space.n
             self.dist = Categorical(self.base.output_size, num_outputs)
-        elif action_space.__class__.__name__ == "Box":
+        elif isinstance(action_space, Box):
             num_outputs = action_space.shape[0]
             self.dist = DiagGaussian(self.base.output_size, num_outputs)
         else:
             raise NotImplementedError
+        self.continuous = isinstance(action_space, Box)
 
     @property
     def is_recurrent(self):
@@ -47,6 +50,7 @@ class Policy(nn.Module):
 
     def act(self, inputs, rnn_hxs, masks, deterministic=False):
         value, actor_features, rnn_hxs = self.base(inputs, rnn_hxs, masks)
+
         dist = self.dist(actor_features)
 
         if deterministic:
@@ -55,8 +59,6 @@ class Policy(nn.Module):
             action = dist.sample()
 
         action_log_probs = dist.log_probs(action)
-        dist_entropy = dist.entropy().mean()
-
         return value, action, action_log_probs, rnn_hxs
 
     def get_value(self, inputs, rnn_hxs, masks):
@@ -68,9 +70,8 @@ class Policy(nn.Module):
         dist = self.dist(actor_features)
 
         action_log_probs = dist.log_probs(action)
-        dist_entropy = dist.entropy().mean()
-
-        return value, action_log_probs, dist_entropy, rnn_hxs
+        entropy = dist.entropy().view(-1, 1)
+        return value, action_log_probs, entropy, rnn_hxs
 
 
 class NNBase(nn.Module):
@@ -164,10 +165,8 @@ class CNNBase(NNBase):
     def __init__(self, num_inputs, recurrent=False, hidden_size=512):
         super(CNNBase, self).__init__(recurrent, hidden_size, hidden_size)
 
-        init_ = lambda m: init(m,
-                               nn.init.orthogonal_,
-                               lambda x: nn.init.constant_(x, 0),
-                               nn.init.calculate_gain('relu'))
+        init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
+                               constant_(x, 0), nn.init.calculate_gain('relu'))
 
         self.main = nn.Sequential(
             init_(nn.Conv2d(num_inputs, 32, 8, stride=4)), nn.ReLU(),
@@ -175,9 +174,8 @@ class CNNBase(NNBase):
             init_(nn.Conv2d(64, 32, 3, stride=1)), nn.ReLU(), Flatten(),
             init_(nn.Linear(32 * 7 * 7, hidden_size)), nn.ReLU())
 
-        init_ = lambda m: init(m,
-                               nn.init.orthogonal_,
-                               lambda x: nn.init.constant_(x, 0))
+        init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
+                               constant_(x, 0))
 
         self.critic_linear = init_(nn.Linear(hidden_size, 1))
 

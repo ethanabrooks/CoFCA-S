@@ -3,11 +3,12 @@ from collections import namedtuple
 from multiprocessing import Pipe, Process
 
 # first party
+from rl_utils import concat_spaces, vectorize, space_shape, unwrap_env
+
 import hsr
 from common.vec_env import CloudpickleWrapper, VecEnv
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
-from utils.utils import concat_spaces, space_shape, vectorize, unwrap_env
 
 
 class HSREnv(hsr.HSREnv):
