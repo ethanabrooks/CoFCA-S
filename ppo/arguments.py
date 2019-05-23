@@ -5,8 +5,8 @@ import argparse
 from pathlib import Path
 
 import torch.nn as nn
+from hsr.util import add_env_args, add_wrapper_args
 
-from scripts.hsr import add_env_args, add_wrapper_args
 from utils.arguments import parse_groups, parse_activation
 
 
