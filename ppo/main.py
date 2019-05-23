@@ -159,6 +159,7 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
                 eval_log_dir,
                 add_timestep,
                 device,
+                env_args=env_args,
                 allow_early_resets=True)
 
             # vec_norm = get_vec_normalize(eval_envs)
