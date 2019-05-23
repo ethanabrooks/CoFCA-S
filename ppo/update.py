@@ -39,8 +39,9 @@ class PPO:
 
     def update(self, rollouts: RolloutStorage):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
-        advantages = (advantages - advantages.mean()) / (
-            advantages.std() + 1e-5)
+        if advantages.numel() > 1:
+            advantages = (advantages - advantages.mean()) / (
+                advantages.std() + 1e-5)
 
         value_loss_epoch = 0
         action_loss_epoch = 0
@@ -83,8 +84,8 @@ class PPO:
                     value_loss = 0.5 * F.mse_loss(sample.ret, values)
 
                 self.optimizer.zero_grad()
-                (value_loss * self.value_loss_coef + action_loss -
-                 dist_entropy * self.entropy_coef).backward()
+                (value_loss * self.value_loss_coef + action_loss
+                 - dist_entropy * self.entropy_coef).backward()
 
                 if self.unsupervised:
                     expected_return_delta = torch.mean(
