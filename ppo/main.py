@@ -8,17 +8,16 @@ import numpy as np
 import torch
 from tensorboardX import SummaryWriter
 
+# noinspection PyUnresolvedReferences
+import gridworld_env
 # first party
 from hsr.util import env_wrapper
 from ppo.arguments import get_args, get_hsr_args
 from ppo.envs import make_vec_envs
 from ppo.policy import Policy
-from ppo.update import PPO
 from ppo.storage import RolloutStorage
+from ppo.update import PPO
 from ppo.utils import get_vec_normalize
-# noinspection PyUnresolvedReferences
-import gridworld_env
-
 
 # third party
 
@@ -78,7 +77,9 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
     rollouts.to(device)
 
     rewards_counter = np.zeros(num_processes)
+    time_step_counter = np.zeros(num_processes)
     episode_rewards = []
+    time_steps = []
 
     start = time.time()
     for j in range(num_updates):
@@ -94,9 +95,12 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
             obs, reward, done, infos = envs.step(action)
 
             # track rewards
-            rewards_counter += reward
+            rewards_counter += reward.numpy()
+            time_step_counter += 1
             episode_rewards.append(rewards_counter[done])
+            time_steps.append(time_step_counter[done])
             rewards_counter[done] = 0
+            time_step_counter[done] = 0
 
             # If done then clean the history of observations.
             masks = torch.FloatTensor(
