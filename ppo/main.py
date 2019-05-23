@@ -177,7 +177,6 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
             eval_masks = torch.zeros(num_processes, 1, device=device)
 
             while len(eval_episode_rewards) < 10:
-                print('.', end='')
                 with torch.no_grad():
                     _, action, _, eval_recurrent_hidden_states = actor_critic.act(
                         obs,
