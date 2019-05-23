@@ -14,16 +14,14 @@ setup(
     author='Ethan Brooks',
     author_email='ethanabrooks@gmail.com',
     packages=find_packages(),
+    scripts=['load'],
     entry_points=dict(console_scripts=[
         'ppo=ppo.main:cli',
         'hsr=ppo.main:hsr_cli',
-        'tb=tb:main',
     ]),
     install_requires=[
-        'Cython==0.29',
-        'gym>=0.10.9',
-        'matplotlib==3.0.2',
-        'numpy==1.15.4',
-        'opencv-python==3.4.3.18',
-        'torch==0.4.1',
+        'gym',
+        'numpy',
+        'torch',
+        'tensorboardX==1.6',
     ])
