@@ -40,7 +40,7 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
 
     eval_log_dir = None
     if log_dir:
-        writer = SummaryWriter(log_dir=log_dir)
+        writer = SummaryWriter(log_dir=str(log_dir))
         eval_log_dir = log_dir.joinpath("eval")
 
         for _dir in [log_dir, eval_log_dir]:
