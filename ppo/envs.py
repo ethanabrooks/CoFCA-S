@@ -1,23 +1,21 @@
 # stdlib
-import os
 
 # third party
 import sys
 
-from baselines import bench
-# from baselines.common.atari_wrappers import make_atari, wrap_deepmind
-from baselines.common.vec_env import VecEnvWrapper
-from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
-from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
-from baselines.common.vec_env.vec_normalize import VecNormalize as VecNormalize_
 import gym
-from gym.spaces.box import Box
 import numpy as np
 import torch
+from gym.spaces.box import Box
 from gym.wrappers import TimeLimit
 
+from common.atari_wrappers import wrap_deepmind
+from common.vec_env import VecEnvWrapper
+from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
+from common.vec_env.dummy_vec_env import DummyVecEnv
+from common.vec_env.subproc_vec_env import SubprocVecEnv
+from ppo.env_adapter import HSREnv
 from ppo.gridworld import GoalGridworld
-from ppo.hsr_wrapper import HSREnv
 
 try:
     import dm_control2gym
@@ -60,8 +58,8 @@ def make_env(env_id, seed, rank, log_dir, add_timestep, allow_early_resets,
 
         is_atari = hasattr(gym.envs, 'atari') and isinstance(
             env.unwrapped, gym.envs.atari.atari_env.AtariEnv)
-        if is_atari:
-            env = make_atari(env_id)
+        # if is_atari:
+        #     env = make_atari(env_id)
 
         env.seed(seed + rank)
 
@@ -70,12 +68,6 @@ def make_env(env_id, seed, rank, log_dir, add_timestep, allow_early_resets,
         if add_timestep and len(
                 obs_shape) == 1 and str(env).find('TimeLimit') > -1:
             env = AddTimestep(env)
-
-        if log_dir is not None:
-            env = bench.Monitor(
-                env,
-                os.path.join(log_dir, str(rank)),
-                allow_early_resets=allow_early_resets)
 
         if is_atari:
             if len(env.observation_space.shape) == 3:

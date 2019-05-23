@@ -1,22 +1,22 @@
 # stdlib
 import copy
-import glob
 import os
 import time
 from pathlib import Path
 
 import numpy as np
 import torch
-# first party
-from scripts.hsr import env_wrapper
 from tensorboardX import SummaryWriter
 
+# first party
+from hsr.util import env_wrapper
 from ppo.arguments import get_args, get_hsr_args
 from ppo.envs import make_vec_envs
 from ppo.model import Policy
 from ppo.ppo import PPO
 from ppo.storage import RolloutStorage
 from ppo.utils import get_vec_normalize
+
 
 # third party
 

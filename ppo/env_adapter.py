@@ -2,13 +2,11 @@
 from collections import namedtuple
 from multiprocessing import Pipe, Process
 
-import numpy as np
 # first party
-from baselines.common.vec_env import CloudpickleWrapper, VecEnv
-from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
-from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
-from environments import hsr
-from gym.spaces import Box
+import hsr
+from common.vec_env import CloudpickleWrapper, VecEnv
+from common.vec_env.dummy_vec_env import DummyVecEnv
+from common.vec_env.subproc_vec_env import SubprocVecEnv
 from utils.utils import concat_spaces, space_shape, vectorize, unwrap_env
 
 
@@ -27,9 +25,6 @@ class HSREnv(hsr.HSREnv):
     def reset(self):
         return vectorize(super().reset())
 
-
-class MoveGripperEnv(HSREnv, hsr.MoveGripperEnv):
-    pass
 
 
 StepData = namedtuple('StepData', 'actions reward_params')

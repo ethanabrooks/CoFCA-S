@@ -1,12 +1,11 @@
-from collections import namedtuple
-from contextlib import contextmanager
-import functools
-from functools import wraps
-from pathlib import Path
 import re
 import tempfile
-from typing import List
 import xml.etree.ElementTree as ET
+from collections import namedtuple
+from contextlib import contextmanager
+from functools import wraps
+from pathlib import Path
+from typing import List
 
 from gym.spaces import Box
 from rl_utils import parse_space, parse_vector
