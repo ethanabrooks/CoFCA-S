@@ -16,6 +16,8 @@ from ppo.model import Policy
 from ppo.ppo import PPO
 from ppo.storage import RolloutStorage
 from ppo.utils import get_vec_normalize
+# noinspection PyUnresolvedReferences
+import gridworld_env
 
 
 # third party
@@ -141,10 +143,11 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
                     ":.2f}\n".format(
                         np.mean(episode_rewards), np.median(episode_rewards),
                         np.min(episode_rewards), np.max(episode_rewards)))
-            writer.add_scalar('return', np.mean(episode_rewards), j)
-            for k, v in train_results.items():
-                if log_dir and np.isscalar(v):
-                    writer.add_scalar(k.replace('_', ' '), v, j)
+            if log_dir:
+                writer.add_scalar('return', np.mean(episode_rewards), j)
+                for k, v in train_results.items():
+                    if log_dir and np.isscalar(v):
+                        writer.add_scalar(k.replace('_', ' '), v, j)
             episode_rewards = []
 
         if eval_interval is not None and j % eval_interval == eval_interval - 1:

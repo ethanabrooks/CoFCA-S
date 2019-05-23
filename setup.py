@@ -21,7 +21,7 @@ setup(
     ]),
     install_requires=[
         'Cython==0.29',
-        'gym==0.10.9',
+        'gym>=0.10.9',
         'matplotlib==3.0.2',
         'numpy==1.15.4',
         'opencv-python==3.4.3.18',
