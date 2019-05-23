@@ -1,0 +1,10 @@
+{
+    "text_map": ["s--*"],
+    "transitions": [[0, 1], [0, -1]],
+    "random": {"s":  1, "*":  1},
+    "start": "s",
+    "terminal": "*",
+    "reward": {
+        "*": 1
+    }
+}

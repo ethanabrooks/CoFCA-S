@@ -1,0 +1,9 @@
+{
+    "text_map": ["                   g"],
+    "transitions": [[0, 1], [0, -1]],
+    "start": "*",
+    "terminal": "g",
+    "reward": {
+        "g": 1
+    }
+}

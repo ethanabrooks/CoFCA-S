@@ -1,0 +1,17 @@
+{
+  "text_map": [
+    "       ",
+    "       ",
+    "       ",
+    "   g   ",
+    "       ",
+    "       ",
+    "       "
+  ],
+    "start": "*",
+    "terminal": "g",
+    "reward": {
+        "g": 1
+    },
+  "max_episode_steps": 7
+}

@@ -1,0 +1,12 @@
+{
+    "text_map": [
+        "rrgg",
+        "rrgg",
+        "bbyy",
+        "bbyy"
+    ],
+    "objects": [ ["1", "2", "3" ]],
+    "max_episode_steps":
+    24,
+    "class": "LogicGridWorld"
+}
