@@ -59,7 +59,8 @@ class LogicGridWorld(gym.Env):
         self.pos = None
 
         self.randomize_positions()
-        self.observation_space = spaces.Box(low=0, high=1, shape=self.get_observation().shape)
+        self.observation_space = spaces.Box(
+            low=0, high=1, shape=self.get_observation().shape)
         self.action_space = spaces.Discrete(len(self.transitions) + 1)
 
     @property
@@ -117,8 +118,10 @@ class LogicGridWorld(gym.Env):
     def get_observation(self):
         h, w, = self.background.shape
         objects_one_hot = np.zeros((h, w, self.objects.size), dtype=bool)
-        idx = np.hstack([self.objects_pos,
-                         np.expand_dims(np.arange(self.objects.size), 1)])
+        idx = np.hstack([
+            self.objects_pos,
+            np.expand_dims(np.arange(self.objects.size), 1)
+        ])
         set_index(objects_one_hot, idx, True)
 
         grasped_one_hot = np.zeros_like(self.background, dtype=bool)
@@ -128,7 +131,10 @@ class LogicGridWorld(gym.Env):
         agent_one_hot = np.zeros_like(self.background, dtype=bool)
         set_index(agent_one_hot, self.pos, True)
 
-        obs = [self.one_hot_background, objects_one_hot, grasped_one_hot, agent_one_hot]
+        obs = [
+            self.one_hot_background, objects_one_hot, grasped_one_hot,
+            agent_one_hot
+        ]
         if not self.partial_obs:
             dest_one_hot = np.zeros((h, w, self.colors.size + 1))
             todo_one_hot = np.zeros_like(self.background)
@@ -147,7 +153,7 @@ class LogicGridWorld(gym.Env):
                 set_index(todo_one_hot, todo_pos, True)
             obs += [dest_one_hot, todo_one_hot]
 
-        return np.dstack(obs).astype(float).flatten() # TODO
+        return np.dstack(obs).astype(float).flatten()  # TODO
 
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)
@@ -184,8 +190,8 @@ class LogicGridWorld(gym.Env):
 
         # reward / terminal
         if self.task_type == 'touch':
-            success = np.all(np.isin(self.task_objects,
-                                     self.objects[self.touched]))
+            success = np.all(
+                np.isin(self.task_objects, self.objects[self.touched]))
         elif self.task_type == 'move':
             object_colors = self.get_colors_for(self.task_objects)
             success = np.all(object_colors == self.target_color)
@@ -197,10 +203,13 @@ class LogicGridWorld(gym.Env):
         return self.get_observation(), r, t, {}
 
     def randomize_positions(self):
-        randoms = self.np_random.choice(self.background.size,
-                                        replace=False,
-                                        size=self.objects.size + 1, )
-        self.pos, *self.objects_pos = zip(*np.unravel_index(randoms, self.background.shape))
+        randoms = self.np_random.choice(
+            self.background.size,
+            replace=False,
+            size=self.objects.size + 1,
+        )
+        self.pos, *self.objects_pos = zip(
+            *np.unravel_index(randoms, self.background.shape))
         self.objects_pos = np.array(self.objects_pos)
 
     def reset(self):
@@ -215,14 +224,16 @@ class LogicGridWorld(gym.Env):
         self.object_type = self.np_random.choice(len(self.objects_list))
         objects = self.objects_list[self.object_type]
         object_colors = self.get_colors_for(objects)
-        self.task_color = self.np_random.choice(np.unique(object_colors))  # exclude empty colors
+        self.task_color = self.np_random.choice(
+            np.unique(object_colors))  # exclude empty colors
         self.task_objects = objects[object_colors == self.task_color]
         self.task_objects.sort()
 
         target_choices = self.colors
         task_obj_colors = self.get_colors_for(self.task_objects)
         if self.task_type == 'move' and task_obj_colors.size == 1:
-            target_choices = target_choices[target_choices != task_obj_colors.item()]
+            target_choices = target_choices[
+                target_choices != task_obj_colors.item()]
         self.target_color = self.np_random.choice(target_choices)
 
         return self.get_observation()
