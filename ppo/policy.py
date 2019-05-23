@@ -20,7 +20,7 @@ class Policy(nn.Module):
         if network_args is None:
             network_args = {}
         if len(obs_shape) == 3:
-            self.base = CNNBase(obs_shape[0])
+            self.base = CNNBase(*obs_shape)
         elif len(obs_shape) == 1:
             self.base = MLPBase(obs_shape[0], **network_args)
         else:
@@ -163,7 +163,7 @@ class NNBase(nn.Module):
 
 
 class CNNBase(NNBase):
-    def __init__(self, num_inputs, recurrent=False, hidden_size=512):
+    def __init__(self, d, h, w, recurrent=False, hidden_size=512):
         super(CNNBase, self).__init__(recurrent, hidden_size, hidden_size)
 
         init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
@@ -176,9 +176,9 @@ class CNNBase(NNBase):
             # init_(nn.Conv2d(64, 32, kernel_size=3, stride=1)), nn.ReLU(), Flatten(),
             # init_(nn.Linear(32 * 7 * 7, hidden_size)), nn.ReLU())
 
-            init_(nn.Conv2d(num_inputs, 32, kernel_size=3, stride=1, padding=1)),
+            init_(nn.Conv2d(d, 32, kernel_size=3, stride=1, padding=1)),
             nn.ReLU(), Flatten(),
-            init_(nn.Linear(32 * 4, hidden_size)), nn.ReLU())
+            init_(nn.Linear(32 * h * w, hidden_size)), nn.ReLU())
 
         init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
                                constant_(x, 0))
