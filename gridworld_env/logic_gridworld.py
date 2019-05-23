@@ -58,7 +58,7 @@ class LogicGridWorld(gym.Env):
         self.target_color = None
         self.pos = None
 
-        self.randomize_positions()
+        self.reset()
         self.observation_space = spaces.Box(
             low=0, high=1, shape=self.get_observation().shape)
         self.action_space = spaces.Discrete(len(self.transitions) + 1)
@@ -136,13 +136,13 @@ class LogicGridWorld(gym.Env):
             agent_one_hot
         ]
         if not self.partial_obs:
-            dest_one_hot = np.zeros((h, w, self.colors.size + 1))
-            todo_one_hot = np.zeros_like(self.background)
+            dest_one_hot = np.zeros((h, w, self.colors.size + 1), dtype=bool)
+            todo_one_hot = np.zeros_like(self.background, dtype=bool)
             if self.task_type == 'touch':
                 dest_one_hot[:, :, -1] = True
                 todo_objects = self.to_touch()
             elif self.task_type == 'move':
-                dest_one_hot[:, :, :] = self.target_color == self.colors
+                dest_one_hot[:, :, :-1] = (self.target_color == self.colors).reshape(1, 1, -1)
                 todo_objects = self.to_move()
             else:
                 raise RuntimeError
