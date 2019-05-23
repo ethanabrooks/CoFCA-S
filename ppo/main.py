@@ -12,7 +12,7 @@ from tensorboardX import SummaryWriter
 from hsr.util import env_wrapper
 from ppo.arguments import get_args, get_hsr_args
 from ppo.envs import make_vec_envs
-from ppo.model import Policy
+from ppo.policy import Policy
 from ppo.ppo import PPO
 from ppo.storage import RolloutStorage
 from ppo.utils import get_vec_normalize
