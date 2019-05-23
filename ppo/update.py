@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
-from ppo.storage import RolloutStorage, Batch
+from ppo.storage import Batch, RolloutStorage
 
 
 class PPO:
@@ -34,7 +34,8 @@ class PPO:
         self.max_grad_norm = max_grad_norm
         self.use_clipped_value_loss = use_clipped_value_loss
 
-        self.optimizer = optim.Adam(actor_critic.parameters(), lr=learning_rate, eps=eps)
+        self.optimizer = optim.Adam(
+            actor_critic.parameters(), lr=learning_rate, eps=eps)
         self.reward_function = None
 
     def update(self, rollouts: RolloutStorage):
@@ -84,8 +85,8 @@ class PPO:
                     value_loss = 0.5 * F.mse_loss(sample.ret, values)
 
                 self.optimizer.zero_grad()
-                (value_loss * self.value_loss_coef + action_loss
-                 - dist_entropy * self.entropy_coef).backward()
+                (value_loss * self.value_loss_coef + action_loss -
+                 dist_entropy * self.entropy_coef).backward()
 
                 if self.unsupervised:
                     expected_return_delta = torch.mean(

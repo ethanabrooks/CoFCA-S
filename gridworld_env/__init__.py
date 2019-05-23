@@ -4,8 +4,8 @@ from pathlib import Path
 from gym.envs import register
 
 from gridworld_env.gridworld import GridWorld
-from gridworld_env.random_gridworld import RandomGridWorld
 from gridworld_env.logic_gridworld import LogicGridWorld
+from gridworld_env.random_gridworld import RandomGridWorld
 
 SUFFIX = 'GridWorld-v0'
 JSON_PATH = Path(__file__).parent.joinpath('json')

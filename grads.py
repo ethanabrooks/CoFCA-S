@@ -1,6 +1,8 @@
 #! /usr/bin/env python
 
+import ipdb
 import torch
+
 x = torch.tensor(2., requires_grad=True)
 y = torch.tensor(3., requires_grad=True)
 z = x + y
@@ -14,5 +16,4 @@ print('y.grad', y.grad)
 w.backward()
 print('y.grad', y.grad)
 w.backward()
-import ipdb
 ipdb.set_trace()

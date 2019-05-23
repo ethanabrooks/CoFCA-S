@@ -23,7 +23,8 @@ def run(env, actions=None):
         while action not in actions:
             action = input('act:')
             if action == 'p':
-                import ipdb; ipdb.set_trace()
+                import ipdb
+                ipdb.set_trace()
 
         s, r, t, i = env.step(actions.index(action))
         print('reward', r)
@@ -37,5 +38,4 @@ def run(env, actions=None):
 
 if __name__ == '__main__':
     # noinspection PyUnresolvedReferences
-    import gridworld_env
     cli()

@@ -1,16 +1,16 @@
 # stdlib
 import copy
 import os
-import time
 from pathlib import Path
+import time
 
 import numpy as np
-import torch
 from tensorboardX import SummaryWriter
+import torch
 
 # noinspection PyUnresolvedReferences
-import gridworld_env
 # first party
+import gridworld_env
 from hsr.util import env_wrapper
 from ppo.arguments import get_args, get_hsr_args
 from ppo.envs import make_vec_envs

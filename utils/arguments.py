@@ -120,7 +120,7 @@ def mutate_xml(changes: List[XMLSetter], dofs: List[str], goal_space: Box,
                         rgba=rgba[i],
                         condim='6',
                         solimp="0.99 0.99 "
-                               "0.01",
+                        "0.01",
                         solref='0.01 1'))
                 ET.SubElement(
                     body, 'freejoint', attrib=dict(name=f'block{i}joint'))

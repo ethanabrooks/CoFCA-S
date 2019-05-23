@@ -1,16 +1,16 @@
-import re
-import tempfile
-import xml.etree.ElementTree as ET
 from collections import namedtuple
 from contextlib import contextmanager
 from functools import wraps
 from pathlib import Path
+import re
+import tempfile
 from typing import List
+import xml.etree.ElementTree as ET
 
 from gym.spaces import Box
-from rl_utils import parse_space, parse_vector
 
 from hsr.env import get_xml_filepath
+from rl_utils import parse_space, parse_vector
 
 
 def add_env_args(parser):

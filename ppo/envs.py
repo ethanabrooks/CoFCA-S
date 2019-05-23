@@ -4,16 +4,16 @@
 import sys
 
 import gym
-import numpy as np
-import torch
 from gym.spaces.box import Box
 from gym.wrappers import TimeLimit
+import numpy as np
+import torch
 
 from common.atari_wrappers import wrap_deepmind
 from common.vec_env import VecEnvWrapper
-from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
+from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
 from ppo.env_adapter import HSREnv
 
 try:

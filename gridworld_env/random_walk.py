@@ -1,5 +1,4 @@
 import argparse
-import time
 
 import gym
 
@@ -27,5 +26,4 @@ def run(env):
 
 if __name__ == '__main__':
     # noinspection PyUnresolvedReferences
-    import gridworld_env
     cli()

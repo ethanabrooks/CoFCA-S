@@ -1,11 +1,11 @@
 import glfw
 import mujoco_py
 import numpy as np
-from rl_utils import argparse, space_to_size, hierarchical_parse_args
 
 import hsr
 from ppo.env_adapter import HSREnv
 from ppo.main import add_hsr_args
+from rl_utils import argparse, hierarchical_parse_args, space_to_size
 
 
 class ControlViewer(mujoco_py.MjViewer):
@@ -17,17 +17,18 @@ class ControlViewer(mujoco_py.MjViewer):
 
     def key_callback(self, window, key, scancode, action, mods):
         super().key_callback(window, key, scancode, action, mods)
-        keys = [glfw.KEY_0,
-                glfw.KEY_1,
-                glfw.KEY_2,
-                glfw.KEY_3,
-                glfw.KEY_4,
-                glfw.KEY_5,
-                glfw.KEY_6,
-                glfw.KEY_7,
-                glfw.KEY_8,
-                glfw.KEY_9,
-                ]
+        keys = [
+            glfw.KEY_0,
+            glfw.KEY_1,
+            glfw.KEY_2,
+            glfw.KEY_3,
+            glfw.KEY_4,
+            glfw.KEY_5,
+            glfw.KEY_6,
+            glfw.KEY_7,
+            glfw.KEY_8,
+            glfw.KEY_9,
+        ]
         if key in keys:
             self.active_joint = keys.index(key)
             print(self.sim.model.joint_names[self.active_joint])

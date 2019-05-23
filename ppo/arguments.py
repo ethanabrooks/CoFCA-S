@@ -1,13 +1,12 @@
 # stdlib
-import argparse
-
 # third party
+import argparse
 from pathlib import Path
 
 import torch.nn as nn
-from rl_utils import parse_activation, hierarchical_parse_args
 
 from hsr.util import add_env_args, add_wrapper_args
+from rl_utils import hierarchical_parse_args, parse_activation
 
 
 def build_parser():
@@ -17,9 +16,7 @@ def build_parser():
         type=float,
         default=0.99,
         help='discount factor for rewards (default: 0.99)')
-    parser.add_argument(
-        '--normalize',
-        action='store_true')
+    parser.add_argument('--normalize', action='store_true')
     parser.add_argument(
         '--use-gae',
         action='store_true',
@@ -80,9 +77,7 @@ def build_parser():
         type=Path,
         help='directory to save agent logs (default: ./trained_models/)')
     parser.add_argument(
-        '--cuda',
-        action='store_true',
-        help='enables CUDA training')
+        '--cuda', action='store_true', help='enables CUDA training')
     parser.add_argument(
         '--add-timestep',
         action='store_true',
@@ -98,8 +93,8 @@ def build_parser():
     network_parser.add_argument('--recurrent', action='store_true')
     network_parser.add_argument('--hidden-size', type=int, default=256)
     network_parser.add_argument('--num-layers', type=int, default=3)
-    network_parser.add_argument('--activation', type=parse_activation,
-                                default=nn.ReLU())
+    network_parser.add_argument(
+        '--activation', type=parse_activation, default=nn.ReLU())
 
     ppo_parser = parser.add_argument_group('ppo_args')
     ppo_parser.add_argument(
@@ -143,8 +138,7 @@ def build_parser():
 
 
 def get_args():
-    return {**hierarchical_parse_args(build_parser()),
-            **dict(env_args={})}
+    return {**hierarchical_parse_args(build_parser()), **dict(env_args={})}
 
 
 def get_hsr_args():

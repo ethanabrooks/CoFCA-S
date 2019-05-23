@@ -3,12 +3,11 @@ from collections import namedtuple
 from multiprocessing import Pipe, Process
 
 # first party
-from rl_utils import concat_spaces, vectorize, space_shape, unwrap_env
-
-import hsr
 from common.vec_env import CloudpickleWrapper, VecEnv
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
+import hsr
+from rl_utils import concat_spaces, space_shape, unwrap_env, vectorize
 
 
 class HSREnv(hsr.HSREnv):
@@ -25,7 +24,6 @@ class HSREnv(hsr.HSREnv):
 
     def reset(self):
         return vectorize(super().reset())
-
 
 
 StepData = namedtuple('StepData', 'actions reward_params')
@@ -56,23 +54,28 @@ class UnsupervisedEnv(hsr.HSREnv):
 
     def step(self, actions):
         s, r, t, i = super().step(actions)
-        observation = Observation(observation=s.observation, params=s.goal,
-                                  achieved=self.achieved_goal())
+        observation = Observation(
+            observation=s.observation,
+            params=s.goal,
+            achieved=self.achieved_goal())
         return vectorize(observation), r, t, i
 
     def reset(self):
         o = super().reset()
         print('reset params', o.goal)
-        return vectorize(Observation(observation=o.observation, params=o.goal,
-                                     achieved=self.achieved_goal()))
+        return vectorize(
+            Observation(
+                observation=o.observation,
+                params=o.goal,
+                achieved=self.achieved_goal()))
 
     @staticmethod
     def reward_function(achieved, params, dim):
-        return -((achieved - params) ** 2).sum(dim)
+        return -((achieved - params)**2).sum(dim)
 
     def compute_reward(self):
-        return self.reward_function(achieved=self.achieved_goal(),
-                                    params=self.reward_params, dim=0)
+        return self.reward_function(
+            achieved=self.achieved_goal(), params=self.reward_params, dim=0)
 
     def compute_terminal(self):
         return False
@@ -130,9 +133,12 @@ class UnsupervisedSubprocVecEnv(SubprocVecEnv):
         nenvs = len(env_fns)
         self.remotes, self.work_remotes = zip(*[Pipe() for _ in range(nenvs)])
         self.ps = [
-            Process(target=worker, args=(work_remote, remote, CloudpickleWrapper(env_fn)))
-            for (work_remote, remote, env_fn) in
-            zip(self.work_remotes, self.remotes, env_fns)]
+            Process(
+                target=worker,
+                args=(work_remote, remote, CloudpickleWrapper(env_fn)))
+            for (work_remote, remote,
+                 env_fn) in zip(self.work_remotes, self.remotes, env_fns)
+        ]
         for p in self.ps:
             p.daemon = True  # if the main process crashes, we should not cause things
             # to hang

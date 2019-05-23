@@ -1,9 +1,9 @@
 import gym
-import numpy as np
-import six
 from gym import spaces
 from gym.utils import seeding
 from gym.utils.colorize import color2num
+import numpy as np
+import six
 
 
 def set_index(array, idxs, value):
