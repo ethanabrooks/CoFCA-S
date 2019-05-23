@@ -153,7 +153,7 @@ class LogicGridWorld(gym.Env):
                 set_index(todo_one_hot, todo_pos, True)
             obs += [dest_one_hot, todo_one_hot]
 
-        return np.dstack(obs).astype(float).flatten()  # TODO
+        return np.dstack(obs).astype(float).transpose(2, 0, 1)  # TODO
 
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)

@@ -20,7 +20,7 @@ class Policy(nn.Module):
         if network_args is None:
             network_args = {}
         if len(obs_shape) == 3:
-            self.base = CNNBase(obs_shape[0], **network_args)
+            self.base = CNNBase(obs_shape[0])
         elif len(obs_shape) == 1:
             self.base = MLPBase(obs_shape[0], **network_args)
         else:
@@ -170,10 +170,18 @@ class CNNBase(NNBase):
                                constant_(x, 0), nn.init.calculate_gain('relu'))
 
         self.main = nn.Sequential(
-            init_(nn.Conv2d(num_inputs, 32, 8, stride=4)), nn.ReLU(),
-            init_(nn.Conv2d(32, 64, 4, stride=2)), nn.ReLU(),
-            init_(nn.Conv2d(64, 32, 3, stride=1)), nn.ReLU(), Flatten(),
-            init_(nn.Linear(32 * 7 * 7, hidden_size)), nn.ReLU())
+            # init_(nn.Conv2d(num_inputs, 32, 8, stride=4)), nn.ReLU(),
+            # init_(nn.Conv2d(32, 64, kernel_size=4, stride=2)), nn.ReLU(),
+            # init_(nn.Conv2d(32, 64, kernel_size=4, stride=2)), nn.ReLU(),
+            # init_(nn.Conv2d(64, 32, kernel_size=3, stride=1)), nn.ReLU(), Flatten(),
+            # init_(nn.Linear(32 * 7 * 7, hidden_size)), nn.ReLU())
+
+            init_(nn.Conv2d(num_inputs, 32, kernel_size=3, stride=1, padding=1)), nn.ReLU(),
+            Flatten(),
+            # init_(nn.Conv2d(32, 64, kernel_size=3, stride=1)), nn.ReLU(),
+            # init_(nn.Conv2d(32, 64, kernel_size=3, stride=1)), nn.ReLU(),
+            # init_(nn.Conv2d(64, 32, kernel_size=3, stride=1)), nn.ReLU(), Flatten(),
+            init_(nn.Linear(32 * 4, hidden_size)), nn.ReLU())
 
         init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
                                constant_(x, 0))
@@ -183,7 +191,7 @@ class CNNBase(NNBase):
         self.train()
 
     def forward(self, inputs, rnn_hxs, masks):
-        x = self.main(inputs / 255.0)
+        x = self.main(inputs)
 
         if self.is_recurrent:
             x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)
