@@ -15,11 +15,13 @@ class Flatten(nn.Module):
 
 
 class Policy(nn.Module):
-    def __init__(self, obs_shape, action_space, network_args=None):
+    def __init__(self, obs_shape, action_space, logic_network=False, **network_args):
         super(Policy, self).__init__()
         if network_args is None:
             network_args = {}
-        if len(obs_shape) == 3:
+        if logic_network:
+            self.base = LogicBase(*obs_shape)
+        elif len(obs_shape) == 3:
             self.base = CNNBase(*obs_shape)
         elif len(obs_shape) == 1:
             self.base = MLPBase(obs_shape[0], **network_args)
@@ -162,9 +164,9 @@ class NNBase(nn.Module):
         return x, hxs
 
 
-class CNNBase(NNBase):
+class LogicBase(NNBase):
     def __init__(self, d, h, w, recurrent=False, hidden_size=512):
-        super(CNNBase, self).__init__(recurrent, hidden_size, hidden_size)
+        super(LogicBase, self).__init__(recurrent, hidden_size, hidden_size)
 
         init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
                                constant_(x, 0), nn.init.calculate_gain('relu'))
@@ -179,6 +181,36 @@ class CNNBase(NNBase):
             init_(nn.Conv2d(d, 32, kernel_size=3, stride=1, padding=1)),
             nn.ReLU(), Flatten(),
             init_(nn.Linear(32 * h * w, hidden_size)), nn.ReLU())
+
+        init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
+                               constant_(x, 0))
+
+        self.critic_linear = init_(nn.Linear(hidden_size, 1))
+
+        self.train()
+
+    def forward(self, inputs, rnn_hxs, masks):
+        x = self.main(inputs)
+
+        if self.is_recurrent:
+            x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)
+
+        return self.critic_linear(x), x, rnn_hxs
+
+
+class CNNBase(NNBase):
+    def __init__(self, d, h, w, recurrent=False, hidden_size=512):
+        super(CNNBase, self).__init__(recurrent, hidden_size, hidden_size)
+
+        init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
+                               constant_(x, 0), nn.init.calculate_gain('relu'))
+
+        self.main = nn.Sequential(
+            init_(nn.Conv2d(d, 32, 8, stride=4)), nn.ReLU(),
+            init_(nn.Conv2d(32, 64, kernel_size=4, stride=2)), nn.ReLU(),
+            init_(nn.Conv2d(32, 64, kernel_size=4, stride=2)), nn.ReLU(),
+            init_(nn.Conv2d(64, 32, kernel_size=3, stride=1)), nn.ReLU(), Flatten(),
+            init_(nn.Linear(32 * 7 * 7, hidden_size)), nn.ReLU())
 
         init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
                                constant_(x, 0))

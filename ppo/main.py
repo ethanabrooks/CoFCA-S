@@ -59,7 +59,7 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
     actor_critic = Policy(
         envs.observation_space.shape,
         envs.action_space,
-        network_args=network_args)
+        **network_args)
     actor_critic.to(device)
 
     agent = PPO(actor_critic=actor_critic, **ppo_args)
