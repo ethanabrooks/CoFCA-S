@@ -32,7 +32,7 @@ def main():
 def tb(port, path):
     active_sessions = cmd('tmux ls -F #{session_name}'.split())
     session_name = f'tensorboard{port}'
-    logdir = Path(os.getcwd(), '.runs', 'log-dir', path)
+    logdir = Path(os.getcwd(), '.runs', 'logdir', path)
     if not logdir.exists():
         raise RuntimeError(f'Path {logdir} does not exist.')
     command = f'tensorboard --logdir={logdir} --port={port}'
