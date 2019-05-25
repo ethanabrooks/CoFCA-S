@@ -2,7 +2,7 @@
     "text_map": [
         "rrgg"
     ],
-    "objects": [ ["1"]],
+    "objects": [ ["1", "2"]],
     "max_episode_steps":
     24,
     "class": "LogicGridWorld"

@@ -165,24 +165,20 @@ class NNBase(nn.Module):
 
 
 class LogicBase(NNBase):
-    def __init__(self, d, h, w, hidden_size=512):
+    def __init__(self, d, h, w, similarity_measure, hidden_size=512):
         super(LogicBase, self).__init__(recurrent=True,
                                         recurrent_input_size=hidden_size,
                                         hidden_size=hidden_size)
 
+        self.similarity_measure = similarity_measure
         init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
                                constant_(x, 0), nn.init.calculate_gain('relu'))
 
-        self.main = nn.Sequential(
-            # init_(nn.Conv2d(num_inputs, 32, 8, stride=4)), nn.ReLU(),
-            # init_(nn.Conv2d(32, 64, kernel_size=4, stride=2)), nn.ReLU(),
-            # init_(nn.Conv2d(32, 64, kernel_size=4, stride=2)), nn.ReLU(),
-            # init_(nn.Conv2d(64, 32, kernel_size=3, stride=1)), nn.ReLU(), Flatten(),
-            # init_(nn.Linear(32 * 7 * 7, hidden_size)), nn.ReLU())
-
-            init_(nn.Conv2d(d, 32, kernel_size=3, stride=1, padding=1)),
+        self.conv = init_(nn.Conv2d(d, 32, kernel_size=3, stride=1, padding=1))
+        self.mlp = nn.Sequential(
             nn.ReLU(), Flatten(),
             init_(nn.Linear(32 * h * w, hidden_size)), nn.ReLU())
+        self.main = nn.Sequential(self.conv, self.mlp)
 
         init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
                                constant_(x, 0))
@@ -191,69 +187,24 @@ class LogicBase(NNBase):
 
         self.train()
 
-    def _forward_gru(self, x, hxs, masks):
-        if x.size(0) == hxs.size(0):
-            x, hxs = self.gru(x.unsqueeze(0), (hxs * masks).unsqueeze(0))
-            x = x.squeeze(0)
-            hxs = hxs.squeeze(0)
-        else:
-            # x is a (T, N, -1) tensor that has been flatten to (T * N, -1)
-            N = hxs.size(0)
-            T = int(x.size(0) / N)
-
-            # unflatten
-            x = x.view(T, N, x.size(1))
-
-            # Same deal with masks
-            masks = masks.view(T, N)
-
-            # Let's figure out which steps in the sequence have a zero for any agent
-            # We will always assume t=0 has a zero in it as that makes the logic cleaner
-            has_zeros = ((masks[1:] == 0.0) \
-                         .any(dim=-1)
-                         .nonzero()
-                         .squeeze()
-                         .cpu())
-
-            # +1 to correct the masks[1:]
-            if has_zeros.dim() == 0:
-                # Deal with scalar
-                has_zeros = [has_zeros.item() + 1]
-            else:
-                has_zeros = (has_zeros + 1).numpy().tolist()
-
-            # add t=0 and t=T to the list
-            has_zeros = [0] + has_zeros + [T]
-
-            hxs = hxs.unsqueeze(0)
-            outputs = []
-            for i in range(len(has_zeros) - 1):
-                # We can now process steps that don't have any zeros in masks together!
-                # This is much faster
-                start_idx = has_zeros[i]
-                end_idx = has_zeros[i + 1]
-
-                rnn_scores, hxs = self.gru(
-                    x[start_idx:end_idx],
-                    hxs * masks[start_idx].view(1, -1, 1))
-
-                outputs.append(rnn_scores)
-
-            # assert len(outputs) == T
-            # x is a (T, N, -1) tensor
-            x = torch.cat(outputs, dim=0)
-            # flatten
-            x = x.view(T * N, -1)
-            hxs = hxs.squeeze(0)
-
-        return x, hxs
-
     def forward(self, inputs, rnn_hxs, masks):
-        x = self.main(inputs)
+        if torch.all(rnn_hxs == 0):  # first step of episode
+            rnn_hxs = inputs[-1]  # to do objects
+        conv_out = self.conv(inputs)
+        iterate = inputs[-2]
+        key, x = torch.split(self.mlp(conv_out), 2)
 
-        if self.is_recurrent:
-            x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)
+        if self.similarity_measure == 'dot-product':
+            similarity = torch.dot(key, conv_out)
+            import ipdb; ipdb.set_trace()
+        elif self.similarity_measure == 'euclidean-distance':
+            similarity = torch.norm(key - conv_out)
+            import ipdb; ipdb.set_trace()
+        elif self.similarity_measure == 'cosine-similarity':
+            similarity = torch.nn.functional.cosine_similarity(key, conv_out)
+            import ipdb; ipdb.set_trace()
 
+        rnn_hxs = rnn_hxs - iterate * similarity
         return self.critic_linear(x), x, rnn_hxs
 
 

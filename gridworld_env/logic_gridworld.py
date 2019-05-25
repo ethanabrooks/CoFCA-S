@@ -20,10 +20,9 @@ def get_index(array, idxs):
 
 
 class LogicGridWorld(gym.Env):
-    def __init__(self, objects, text_map, partial_obs=False):
+    def __init__(self, objects, text_map):
         super().__init__()
 
-        self.partial_obs = partial_obs
         self.np_random = np.random
 
         self.transitions = np.array([
@@ -38,7 +37,6 @@ class LogicGridWorld(gym.Env):
         self.background = np.array([list(r) for r in text_map])
         self.objects_list = list(map(np.array, objects))
         self.objects = np.concatenate(objects)
-        self.objects.sort()
 
         self.task_types = ['move', 'touch']
         self.colors = np.unique(self.background)
@@ -57,6 +55,8 @@ class LogicGridWorld(gym.Env):
         self.task_type = None
         self.target_color = None
         self.pos = None
+        self.last_to_touch = None
+        self.last_to_move = None
 
         self.reset()
         self.observation_space = spaces.Box(
@@ -135,23 +135,26 @@ class LogicGridWorld(gym.Env):
             self.one_hot_background, objects_one_hot, grasped_one_hot,
             agent_one_hot
         ]
-        if not self.partial_obs:
-            dest_one_hot = np.zeros((h, w, self.colors.size + 1), dtype=bool)
-            todo_one_hot = np.zeros_like(self.background, dtype=bool)
-            if self.task_type == 'touch':
-                dest_one_hot[:, :, -1] = True
-                todo_objects = self.to_touch()
-            elif self.task_type == 'move':
-                dest_one_hot[:, :, :-1] = (self.target_color == self.colors).reshape(1, 1, -1)
-                todo_objects = self.to_move()
-            else:
-                raise RuntimeError
 
-            todo = np.isin(self.objects, todo_objects)
-            todo_pos = self.objects_pos[todo]
-            if todo_pos.size > 0:
-                set_index(todo_one_hot, todo_pos, True)
-            obs += [dest_one_hot, todo_one_hot]
+        # partial observability stuff
+        dest_one_hot = np.zeros((h, w, self.colors.size + 1), dtype=bool)
+        todo_one_hot = np.zeros_like(self.background, dtype=bool)
+        if self.task_type == 'touch':
+            dest_one_hot[:, :, -1] = True
+            iterate = self.to_touch().size < self.last_to_touch.size
+            todo_objects = self.to_touch()
+        elif self.task_type == 'move':
+            dest_one_hot[:, :, :-1] = (self.target_color == self.colors).reshape(1, 1, -1)
+            iterate = self.to_move().size < self.last_to_move.size
+            todo_objects = self.to_move()
+        else:
+            raise RuntimeError
+        iterate = np.full(self.background.shape, iterate)
+        todo = np.isin(self.objects, todo_objects)
+        todo_pos = self.objects_pos[todo]
+        if todo_pos.size > 0:
+            set_index(todo_one_hot, todo_pos, True)
+        obs += [dest_one_hot, iterate, todo_one_hot]
 
         return np.dstack(obs).astype(float).transpose(2, 0, 1)  # TODO
 
@@ -166,6 +169,9 @@ class LogicGridWorld(gym.Env):
         return get_index(self.background, self.objects_pos[idxs])
 
     def step(self, a):
+        last_to_move = self.to_move()
+        last_to_touch = self.to_touch()
+
         n_transitions = len(self.transitions)
         if a < n_transitions:
             # move
@@ -186,6 +192,8 @@ class LogicGridWorld(gym.Env):
                 elif not any(self.object_grasped):
                     self.object_grasped[idx] = 1
 
+        self.last_to_touch = last_to_touch
+        self.last_to_move = last_to_move
         self.touched[touching] = True
 
         # reward / terminal
@@ -227,14 +235,16 @@ class LogicGridWorld(gym.Env):
         self.task_color = self.np_random.choice(
             np.unique(object_colors))  # exclude empty colors
         self.task_objects = objects[object_colors == self.task_color]
-        self.task_objects.sort()
 
         target_choices = self.colors
-        task_obj_colors = self.get_colors_for(self.task_objects)
+        task_obj_colors = np.unique(self.get_colors_for(self.task_objects))
         if self.task_type == 'move' and task_obj_colors.size == 1:
             target_choices = target_choices[
                 target_choices != task_obj_colors.item()]
         self.target_color = self.np_random.choice(target_choices)
+
+        self.last_to_touch = self.to_touch()
+        self.last_to_move = self.to_move()
 
         return self.get_observation()
 
