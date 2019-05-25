@@ -86,6 +86,7 @@ def make_vec_envs(env_name,
                   device,
                   allow_early_resets,
                   env_args,
+                  render,
                   num_frame_stack=None):
 
     envs = [
@@ -94,7 +95,7 @@ def make_vec_envs(env_name,
     ]
 
     if len(envs) == 1 or sys.platform == 'darwin':
-        envs = DummyVecEnv(envs)
+        envs = DummyVecEnv(envs, render=render)
     else:
         envs = SubprocVecEnv(envs)
 

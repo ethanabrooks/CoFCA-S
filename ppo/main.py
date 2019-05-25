@@ -25,8 +25,11 @@ from ppo.utils import get_vec_normalize
 def main(num_frames, num_steps, num_processes, seed,
          cuda_deterministic, cuda, logdir: Path, env_name, gamma, normalize,
          add_timestep, save_interval, save_dir, log_interval, eval_interval,
-         use_gae, tau, ppo_args, env_args, network_args):
+         use_gae, tau, ppo_args, env_args, network_args, render):
     algo = 'ppo'
+
+    if render:
+        num_processes = 1
 
     num_updates = int(num_frames) // num_steps // num_processes
 
@@ -54,7 +57,7 @@ def main(num_frames, num_steps, num_processes, seed,
 
     _gamma = gamma if normalize else None
     envs = make_vec_envs(env_name, seed, num_processes, _gamma, logdir,
-                         add_timestep, device, False, env_args)
+                         add_timestep, device, False, env_args, render)
 
     actor_critic = Policy(
         envs.observation_space.shape,
@@ -164,6 +167,7 @@ def main(num_frames, num_steps, num_processes, seed,
                 add_timestep,
                 device,
                 env_args=env_args,
+                render=render,
                 allow_early_resets=True)
 
             # vec_norm = get_vec_normalize(eval_envs)
