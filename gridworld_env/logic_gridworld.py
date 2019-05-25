@@ -220,7 +220,6 @@ class LogicGridWorld(gym.Env):
         self.objects_pos = np.array(self.objects_pos)
 
     def reset(self):
-        print('RESETTING')
         self.object_grasped = np.zeros_like(self.objects, dtype=bool)
         self.touched = np.zeros_like(self.objects, dtype=bool)
         self.randomize_positions()
@@ -238,7 +237,7 @@ class LogicGridWorld(gym.Env):
         self.task_objects.sort()
 
         target_choices = self.colors
-        task_obj_colors = self.get_colors_for(self.task_objects)
+        task_obj_colors = np.unique(self.get_colors_for(self.task_objects))
         if self.task_type == 'move' and task_obj_colors.size == 1:
             target_choices = target_choices[
                 target_choices != task_obj_colors.item()]
