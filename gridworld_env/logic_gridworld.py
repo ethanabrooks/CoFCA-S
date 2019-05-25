@@ -188,7 +188,7 @@ class LogicGridWorld(gym.Env):
                 idx = touching.argmax()
                 if self.object_grasped[idx]:
                     self.object_grasped[idx] = 0
-                elif not any(self.object_grasped):
+                elif not any(self.object_grasped) and not any(touching):
                     self.object_grasped[idx] = 1
 
         self.touched[touching] = True
