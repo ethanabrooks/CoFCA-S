@@ -21,7 +21,7 @@ class Policy(nn.Module):
         if network_args is None:
             network_args = {}
         if logic:
-            self.base = LogicBase(*obs_shape)
+            self.base = LogicBase(*obs_shape, recurrent=recurrent)
         elif len(obs_shape) == 3:
             self.base = CNNBase(*obs_shape, recurrent=recurrent)
         elif len(obs_shape) == 1:
@@ -167,9 +167,9 @@ class NNBase(nn.Module):
 
 
 class LogicBase(NNBase):
-    def __init__(self, d, h, w, hidden_size=512):
+    def __init__(self, d, h, w, recurrent, hidden_size=512):
         super(LogicBase, self).__init__(
-            recurrent=True,
+            recurrent=recurrent,
             recurrent_input_size=hidden_size,
             hidden_size=hidden_size)
 
