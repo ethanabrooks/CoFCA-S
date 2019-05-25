@@ -22,8 +22,8 @@ from ppo.utils import get_vec_normalize
 # third party
 
 
-def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
-         cuda_deterministic, cuda, log_dir: Path, env_name, gamma, normalize,
+def main(num_frames, num_steps, num_processes, seed,
+         cuda_deterministic, cuda, logdir: Path, env_name, gamma, normalize,
          add_timestep, save_interval, save_dir, log_interval, eval_interval,
          use_gae, tau, ppo_args, env_args, network_args):
     algo = 'ppo'
@@ -38,11 +38,11 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
         torch.backends.cudnn.deterministic = True
 
     eval_log_dir = None
-    if log_dir:
-        writer = SummaryWriter(log_dir=str(log_dir))
-        eval_log_dir = log_dir.joinpath("eval")
+    if logdir:
+        writer = SummaryWriter(log_dir=str(logdir))
+        eval_log_dir = logdir.joinpath("eval")
 
-        for _dir in [log_dir, eval_log_dir]:
+        for _dir in [logdir, eval_log_dir]:
             try:
                 _dir.mkdir()
             except OSError:
@@ -53,7 +53,7 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
     device = torch.device("cuda:0" if cuda else "cpu")
 
     _gamma = gamma if normalize else None
-    envs = make_vec_envs(env_name, seed, num_processes, _gamma, log_dir,
+    envs = make_vec_envs(env_name, seed, num_processes, _gamma, logdir,
                          add_timestep, device, False, env_args)
 
     actor_critic = Policy(
@@ -147,10 +147,10 @@ def main(recurrent_policy, num_frames, num_steps, num_processes, seed,
                     ":.2f}\n".format(
                         np.mean(episode_rewards), np.median(episode_rewards),
                         np.min(episode_rewards), np.max(episode_rewards)))
-            if log_dir:
+            if logdir:
                 writer.add_scalar('return', np.mean(episode_rewards), j)
                 for k, v in train_results.items():
-                    if log_dir and np.isscalar(v):
+                    if logdir and np.isscalar(v):
                         writer.add_scalar(k.replace('_', ' '), v, j)
             episode_rewards = []
 

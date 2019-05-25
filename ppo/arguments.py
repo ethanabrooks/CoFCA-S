@@ -69,7 +69,7 @@ def build_parser():
         default='PongNoFrameskip-v4',
         help='environment to train on (default: PongNoFrameskip-v4)')
     parser.add_argument(
-        '--log-dir',
+        '--logdir',
         type=Path,
         help='directory to save agent logs (default: /tmp/gym)')
     parser.add_argument(
@@ -83,11 +83,6 @@ def build_parser():
         action='store_true',
         default=False,
         help='add timestep to observations')
-    parser.add_argument(
-        '--recurrent-policy',
-        action='store_true',
-        default=False,
-        help='use a recurrent policy')
 
     network_parser = parser.add_argument_group('network_args')
     network_parser.add_argument('--logic', action='store_true')
