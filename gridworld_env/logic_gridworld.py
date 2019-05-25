@@ -1,11 +1,11 @@
 import time
 
 import gym
+import numpy as np
+import six
 from gym import spaces
 from gym.utils import seeding
 from gym.utils.colorize import color2num
-import numpy as np
-import six
 
 
 def set_index(array, idxs, value):
@@ -71,7 +71,6 @@ class LogicGridWorld(gym.Env):
         return np.array(list('🛑👇👆👉👈✋👊'))
 
     def render(self, mode='human'):
-        time.sleep(2 if self.last_terminal else .5)
         print('touched:', list(self.objects[self.touched]))
         if self.task_type == 'touch':
             print('touch:', list(self.to_touch()))
@@ -106,6 +105,7 @@ class LogicGridWorld(gym.Env):
                 last = back
             print(six.u('\x1b[0m'))
         print(six.u('\x1b[39m'), end='')
+        time.sleep(2 if self.last_terminal else .5)
 
     def touching(self):
         return np.all(self.objects_pos == self.pos, axis=1)
@@ -146,7 +146,8 @@ class LogicGridWorld(gym.Env):
                 dest_one_hot[:, :, -1] = True
                 todo_objects = self.to_touch()
             elif self.task_type == 'move':
-                dest_one_hot[:, :, :-1] = (self.target_color == self.colors).reshape(1, 1, -1)
+                dest_one_hot[:, :, :-1] = (
+                    self.target_color == self.colors).reshape(1, 1, -1)
                 todo_objects = self.to_move()
             else:
                 raise RuntimeError
