@@ -71,6 +71,9 @@ def build_parser():
         default='PongNoFrameskip-v4',
         help='environment to train on (default: PongNoFrameskip-v4)')
     parser.add_argument(
+        '--load-path',
+        type=Path)
+    parser.add_argument(
         '--log-dir',
         type=Path,
         help='directory to save agent logs (default: /tmp/gym)')

@@ -26,7 +26,7 @@ from ppo.utils import get_vec_normalize
 def main(num_frames, num_steps, num_processes, seed,
          cuda_deterministic, cuda, log_dir: Path, env_name, gamma, normalize,
          add_timestep, save_interval, save_dir, log_interval, eval_interval,
-         use_gae, tau, ppo_args, env_args, network_args, render):
+         use_gae, tau, ppo_args, env_args, network_args, render, load_path):
     algo = 'ppo'
 
     if render:
@@ -89,6 +89,16 @@ def main(num_frames, num_steps, num_processes, seed,
 
     start = time.time()
     last_save = start
+
+    if load_path:
+        state_dict = torch.load(load_path)
+        actor_critic.load_state_dict(state_dict['actor_critic'])
+        agent.optimizer.load_state_dict(state_dict['optimizer'])
+        start = state_dict.get('step', -1) + 1
+        if isinstance(envs.venv, VecNormalize):
+            envs.venv.load_state_dict(state_dict['vec_normalize'])
+        print(f'Loaded parameters from {load_path}.')
+
     for j in range(num_updates):
         for step in range(num_steps):
             # Sample actions.add_argument_group('env_args')
