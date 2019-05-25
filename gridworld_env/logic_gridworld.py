@@ -1,3 +1,5 @@
+import time
+
 import gym
 from gym import spaces
 from gym.utils import seeding
@@ -57,6 +59,7 @@ class LogicGridWorld(gym.Env):
         self.pos = None
         self.last_to_touch = None
         self.last_to_move = None
+        self.last_terminal = None
 
         self.reset()
         self.observation_space = spaces.Box(
@@ -68,6 +71,7 @@ class LogicGridWorld(gym.Env):
         return np.array(list('🛑👇👆👉👈✋👊'))
 
     def render(self, mode='human'):
+        time.sleep(2 if self.last_terminal else .5)
         print('touched:', list(self.objects[self.touched]))
         if self.task_type == 'touch':
             print('touch:', list(self.to_touch()))
@@ -192,8 +196,6 @@ class LogicGridWorld(gym.Env):
                 elif not any(self.object_grasped):
                     self.object_grasped[idx] = 1
 
-        self.last_to_touch = last_to_touch
-        self.last_to_move = last_to_move
         self.touched[touching] = True
 
         # reward / terminal
@@ -205,9 +207,13 @@ class LogicGridWorld(gym.Env):
             success = np.all(object_colors == self.target_color)
         else:
             raise RuntimeError
+
         t = bool(success)
         r = float(success)
 
+        self.last_to_touch = last_to_touch
+        self.last_to_move = last_to_move
+        self.last_terminal = t
         return self.get_observation(), r, t, {}
 
     def randomize_positions(self):
@@ -245,6 +251,7 @@ class LogicGridWorld(gym.Env):
 
         self.last_to_touch = self.to_touch()
         self.last_to_move = self.to_move()
+        self.last_terminal = False
 
         return self.get_observation()
 
