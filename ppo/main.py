@@ -3,6 +3,7 @@ import copy
 import os
 from pathlib import Path
 import time
+from typing import Dict
 
 import numpy as np
 from tensorboardX import SummaryWriter
@@ -13,7 +14,7 @@ import torch
 import gridworld_env
 from hsr.util import env_wrapper
 from ppo.arguments import get_args, get_hsr_args
-from ppo.envs import make_vec_envs
+from ppo.envs import make_vec_envs, VecNormalize
 from ppo.policy import Policy
 from ppo.storage import RolloutStorage
 from ppo.update import PPO
@@ -23,7 +24,7 @@ from ppo.utils import get_vec_normalize
 
 
 def main(num_frames, num_steps, num_processes, seed,
-         cuda_deterministic, cuda, logdir: Path, env_name, gamma, normalize,
+         cuda_deterministic, cuda, log_dir: Path, env_name, gamma, normalize,
          add_timestep, save_interval, save_dir, log_interval, eval_interval,
          use_gae, tau, ppo_args, env_args, network_args, render):
     algo = 'ppo'
@@ -41,11 +42,11 @@ def main(num_frames, num_steps, num_processes, seed,
         torch.backends.cudnn.deterministic = True
 
     eval_log_dir = None
-    if logdir:
-        writer = SummaryWriter(log_dir=str(logdir))
-        eval_log_dir = logdir.joinpath("eval")
+    if log_dir:
+        writer = SummaryWriter(log_dir=str(log_dir))
+        eval_log_dir = log_dir.joinpath("eval")
 
-        for _dir in [logdir, eval_log_dir]:
+        for _dir in [log_dir, eval_log_dir]:
             try:
                 _dir.mkdir()
             except OSError:
@@ -56,7 +57,7 @@ def main(num_frames, num_steps, num_processes, seed,
     device = torch.device("cuda:0" if cuda else "cpu")
 
     _gamma = gamma if normalize else None
-    envs = make_vec_envs(env_name, seed, num_processes, _gamma, logdir,
+    envs = make_vec_envs(env_name, seed, num_processes, _gamma, log_dir,
                          add_timestep, device, False, env_args)
 
     actor_critic = Policy(
@@ -87,6 +88,7 @@ def main(num_frames, num_steps, num_processes, seed,
     time_steps = []
 
     start = time.time()
+    last_save = start
     for j in range(num_updates):
         for step in range(num_steps):
             # Sample actions.add_argument_group('env_args')
@@ -124,21 +126,24 @@ def main(num_frames, num_steps, num_processes, seed,
         train_results = agent.update(rollouts)
         rollouts.after_update()
 
-        if j % save_interval == 0 and save_dir is not None:
-            save_path = Path(save_dir, algo)
-            save_path.mkdir(exist_ok=True)
+        if log_dir and save_interval and \
+                time.time() - last_save >= save_interval:
+            last_save = time.time()
+            modules = dict(
+                optimizer=agent.optimizer,
+                actor_critic=actor_critic)  # type: Dict[str, torch.nn.Module]
 
-            # A really ugly way to save a model to CPU
-            save_model = actor_critic
-            if cuda:
-                save_model = copy.deepcopy(actor_critic).cpu()
+            if isinstance(envs.venv, VecNormalize):
+                modules.update(vec_normalize=envs.venv)
 
-            save_model = [
-                save_model,
-                getattr(get_vec_normalize(envs), 'ob_rms', None)
-            ]
+            state_dict = {
+                name: module.state_dict()
+                for name, module in modules.items()
+            }
+            save_path = Path(log_dir, 'checkpoint.pt')
+            torch.save(dict(step=j, **state_dict), save_path)
 
-            torch.save(save_model, os.path.join(save_path, env_name + ".pt"))
+            print(f'Saved parameters to {save_path}')
 
         total_num_steps = (j + 1) * num_processes * num_steps
 
@@ -154,10 +159,10 @@ def main(num_frames, num_steps, num_processes, seed,
                     ":.2f}\n".format(
                         np.mean(episode_rewards), np.median(episode_rewards),
                         np.min(episode_rewards), np.max(episode_rewards)))
-            if logdir:
+            if log_dir:
                 writer.add_scalar('return', np.mean(episode_rewards), j)
                 for k, v in train_results.items():
-                    if logdir and np.isscalar(v):
+                    if log_dir and np.isscalar(v):
                         writer.add_scalar(k.replace('_', ' '), v, j)
             episode_rewards = []
 
