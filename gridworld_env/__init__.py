@@ -6,6 +6,7 @@ from gym.envs import register
 from gridworld_env.gridworld import GridWorld
 from gridworld_env.logic_gridworld import LogicGridWorld
 from gridworld_env.random_gridworld import RandomGridWorld
+from gridworld_env.simple_pomdp import SimplePOMDP
 
 SUFFIX = 'GridWorld-v0'
 JSON_PATH = Path(__file__).parent.joinpath('json')
@@ -45,3 +46,8 @@ def register_envs():
 
 
 register_envs()
+entry_point = f'{SimplePOMDP.__module__}:{SimplePOMDP.__name__}'
+register(id='POMDP-v0',
+         entry_point=entry_point,
+         trials=1,
+         max_episode_steps=SimplePOMDP.max_episode_steps)

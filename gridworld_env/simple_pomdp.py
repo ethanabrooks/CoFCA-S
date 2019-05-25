@@ -1,12 +1,6 @@
-import time
-
 import gym
-from gym import spaces
-from gym.utils import seeding
-from gym.utils.colorize import color2num
 import numpy as np
-import six
-from gym.wrappers import TimeLimit
+from gym import spaces
 
 
 def int_to_bin_array(n: int):
@@ -14,7 +8,9 @@ def int_to_bin_array(n: int):
     return np.array(list(map(int, string)))
 
 
-class LogicGridWorld(gym.Env):
+class SimplePOMDP(gym.Env):
+    max_episode_steps = 2
+
     def __init__(self):
         super().__init__()
         self.truth = None
@@ -24,7 +20,8 @@ class LogicGridWorld(gym.Env):
 
     def step(self, action):
         s = int_to_bin_array(self.n_actions)
-        if self.turn > 0:  # requires the use of memory
+        last_turn = SimplePOMDP.max_episode_steps - 1
+        if self.turn == last_turn:  # requires the use of memory
             guess = int_to_bin_array(action)
             success = np.all(guess == self.truth)
             r = float(success)
@@ -46,7 +43,9 @@ class LogicGridWorld(gym.Env):
 
 
 def main():
-    env = TimeLimit(LogicGridWorld(), max_episode_steps=2)
+    # noinspection PyUnresolvedReferences
+    import gridworld_env
+    env = gym.make('POMDP-v0')
     env.seed(1)
     s = env.reset()
     while True:
