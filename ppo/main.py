@@ -25,8 +25,11 @@ from ppo.utils import get_vec_normalize
 def main(num_frames, num_steps, num_processes, seed,
          cuda_deterministic, cuda, logdir: Path, env_name, gamma, normalize,
          add_timestep, save_interval, save_dir, log_interval, eval_interval,
-         use_gae, tau, ppo_args, env_args, network_args):
+         use_gae, tau, ppo_args, env_args, network_args, render):
     algo = 'ppo'
+
+    if render:
+        num_processes = 1
 
     num_updates = int(num_frames) // num_steps // num_processes
 
@@ -73,6 +76,8 @@ def main(num_frames, num_steps, num_processes, seed,
     )
 
     obs = envs.reset()
+    if render:
+        envs.venv[0].render()
     rollouts.obs[0].copy_(obs)
     rollouts.to(device)
 
@@ -93,6 +98,8 @@ def main(num_frames, num_steps, num_processes, seed,
 
             # Observe reward and next obs
             obs, reward, done, infos = envs.step(action)
+            if render:
+                envs.venv[0].render()
 
             # track rewards
             rewards_counter += reward.numpy()
