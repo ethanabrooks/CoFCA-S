@@ -1,10 +1,6 @@
-# third party
-# first party
-from gym.spaces import Box, Discrete
 import torch
 import torch.nn as nn
-
-# first party
+from gym.spaces import Box, Discrete
 from ppo.distributions import Categorical, DiagGaussian
 from ppo.utils import init, init_normc_
 
@@ -15,7 +11,12 @@ class Flatten(nn.Module):
 
 
 class Policy(nn.Module):
-    def __init__(self, obs_shape, action_space, recurrent, logic=False, **network_args):
+    def __init__(self,
+                 obs_shape,
+                 action_space,
+                 recurrent,
+                 logic=False,
+                 **network_args):
         super(Policy, self).__init__()
         if network_args is None:
             network_args = {}
@@ -24,7 +25,8 @@ class Policy(nn.Module):
         elif len(obs_shape) == 3:
             self.base = CNNBase(*obs_shape, recurrent=recurrent)
         elif len(obs_shape) == 1:
-            self.base = MLPBase(obs_shape[0], recurrent=recurrent, **network_args)
+            self.base = MLPBase(
+                obs_shape[0], recurrent=recurrent, **network_args)
         else:
             raise NotImplementedError
 
@@ -166,9 +168,10 @@ class NNBase(nn.Module):
 
 class LogicBase(NNBase):
     def __init__(self, d, h, w, hidden_size=512):
-        super(LogicBase, self).__init__(recurrent=True,
-                                        recurrent_input_size=hidden_size,
-                                        hidden_size=hidden_size)
+        super(LogicBase, self).__init__(
+            recurrent=True,
+            recurrent_input_size=hidden_size,
+            hidden_size=hidden_size)
 
         init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
                                constant_(x, 0), nn.init.calculate_gain('relu'))
@@ -179,10 +182,11 @@ class LogicBase(NNBase):
             # init_(nn.Conv2d(32, 64, kernel_size=4, stride=2)), nn.ReLU(),
             # init_(nn.Conv2d(64, 32, kernel_size=3, stride=1)), nn.ReLU(), Flatten(),
             # init_(nn.Linear(32 * 7 * 7, hidden_size)), nn.ReLU())
-
             init_(nn.Conv2d(d, 32, kernel_size=3, stride=1, padding=1)),
-            nn.ReLU(), Flatten(),
-            init_(nn.Linear(32 * h * w, hidden_size)), nn.ReLU())
+            nn.ReLU(),
+            Flatten(),
+            init_(nn.Linear(32 * h * w, hidden_size)),
+            nn.ReLU())
 
         init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
                                constant_(x, 0))
@@ -268,8 +272,8 @@ class CNNBase(NNBase):
             init_(nn.Conv2d(d, 32, 8, stride=4)), nn.ReLU(),
             init_(nn.Conv2d(32, 64, kernel_size=4, stride=2)), nn.ReLU(),
             init_(nn.Conv2d(32, 64, kernel_size=4, stride=2)), nn.ReLU(),
-            init_(nn.Conv2d(64, 32, kernel_size=3, stride=1)), nn.ReLU(), Flatten(),
-            init_(nn.Linear(32 * 7 * 7, hidden_size)), nn.ReLU())
+            init_(nn.Conv2d(64, 32, kernel_size=3, stride=1)), nn.ReLU(),
+            Flatten(), init_(nn.Linear(32 * 7 * 7, hidden_size)), nn.ReLU())
 
         init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
                                constant_(x, 0))
