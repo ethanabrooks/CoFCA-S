@@ -14,12 +14,13 @@ class DummyVecEnv(VecEnv):
     avoids communication overhead)
     """
 
-    def __init__(self, env_fns):
+    def __init__(self, env_fns, render):
         """
         Arguments:
 
         env_fns: iterable of callables      functions that build environments
         """
+        self._render = render
         self.envs = [fn() for fn in env_fns]
         env = self.envs[0]
         VecEnv.__init__(self, len(env_fns), env.observation_space,
@@ -60,9 +61,14 @@ class DummyVecEnv(VecEnv):
 
             obs, self.buf_rews[e], self.buf_dones[e], self.buf_infos[
                 e] = self.envs[e].step(action)
+            if self._render:
+                self.render()
 
             if self.buf_dones[e]:
                 obs = self.envs[e].reset()
+                if self._render:
+                    self.render()
+
             self._save_obs(e, obs)
         return (self._obs_from_buf(), np.copy(self.buf_rews),
                 np.copy(self.buf_dones), self.buf_infos.copy())
@@ -70,6 +76,8 @@ class DummyVecEnv(VecEnv):
     def reset(self):
         for e in range(self.num_envs):
             obs = self.envs[e].reset()
+            if self._render:
+                self.render()
             self._save_obs(e, obs)
         return self._obs_from_buf()
 
