@@ -58,7 +58,7 @@ def main(num_frames, num_steps, num_processes, seed,
 
     _gamma = gamma if normalize else None
     envs = make_vec_envs(env_name, seed, num_processes, _gamma, log_dir,
-                         add_timestep, device, False, env_args)
+                         add_timestep, device, False, env_args, render)
 
     actor_critic = Policy(
         envs.observation_space.shape,
@@ -77,8 +77,6 @@ def main(num_frames, num_steps, num_processes, seed,
     )
 
     obs = envs.reset()
-    if render:
-        envs.venv[0].render()
     rollouts.obs[0].copy_(obs)
     rollouts.to(device)
 
@@ -110,8 +108,6 @@ def main(num_frames, num_steps, num_processes, seed,
 
             # Observe reward and next obs
             obs, reward, done, infos = envs.step(action)
-            if render:
-                envs.venv[0].render()
 
             # track rewards
             rewards_counter += reward.numpy()
@@ -186,6 +182,7 @@ def main(num_frames, num_steps, num_processes, seed,
                 add_timestep,
                 device,
                 env_args=env_args,
+                render=render,
                 allow_early_resets=True)
 
             # vec_norm = get_vec_normalize(eval_envs)
