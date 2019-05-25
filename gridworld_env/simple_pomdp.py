@@ -1,6 +1,7 @@
 import gym
 import numpy as np
 from gym import spaces
+import os
 
 
 def int_to_bin_array(n: int):
@@ -9,7 +10,7 @@ def int_to_bin_array(n: int):
 
 
 class SimplePOMDP(gym.Env):
-    max_episode_steps = 2
+    max_episode_steps = int(os.environ.get('MAX_EPISODE_STEPS', 2))
 
     def __init__(self):
         super().__init__()
