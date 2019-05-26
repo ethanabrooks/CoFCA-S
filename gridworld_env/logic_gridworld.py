@@ -38,7 +38,6 @@ class LogicGridWorld(gym.Env):
         self.background = np.array([list(r) for r in text_map])
         self.objects_list = list(map(np.array, objects))
         self.objects = np.concatenate(objects)
-        self.objects.sort()
 
         self.task_types = ['move', 'touch']
         self.colors = np.unique(self.background)
@@ -234,7 +233,6 @@ class LogicGridWorld(gym.Env):
         self.task_color = self.np_random.choice(
             np.unique(object_colors))  # exclude empty colors
         self.task_objects = objects[object_colors == self.task_color]
-        self.task_objects.sort()
 
         target_choices = self.colors
         task_obj_colors = np.unique(self.get_colors_for(self.task_objects))
