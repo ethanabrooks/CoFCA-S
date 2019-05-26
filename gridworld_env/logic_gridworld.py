@@ -22,7 +22,7 @@ def get_index(array, idxs):
 
 
 class LogicGridWorld(gym.Env):
-    def __init__(self, objects, text_map, partial=False):
+    def __init__(self, objects, text_map, partial):
         super().__init__()
         self.partial = partial
         self.np_random = np.random
