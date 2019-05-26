@@ -186,9 +186,11 @@ class LogicGridWorld(gym.Env):
             touching = self.touching()
             if any(touching):
                 idx = touching.argmax()
-                if self.object_grasped[idx]:
+                if self.object_grasped[idx] and \
+                        np.count_nonzero(touching) == 1: # prevent dropping
+                    # objects on each other
                     self.object_grasped[idx] = 0
-                elif not any(self.object_grasped) and not any(touching):
+                elif not any(self.object_grasped):
                     self.object_grasped[idx] = 1
 
         self.touched[touching] = True
