@@ -14,6 +14,7 @@ from common.vec_env import VecEnvWrapper
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
+from gridworld_env import LogicGridWorld
 from ppo.env_adapter import HSREnv
 
 try:
@@ -33,13 +34,12 @@ except ImportError:
 
 
 def make_env(env_id, seed, rank, log_dir, add_timestep, allow_early_resets,
-             env_args):
+             max_episode_steps=None, **env_args):
     def _thunk():
         if env_args:
-            max_steps = env_args.pop('max_steps', None)
-            env = HSREnv(**env_args)
-            if max_steps:
-                env = TimeLimit(env=env, max_episode_steps=max_steps)
+            env = LogicGridWorld(**env_args)
+            if max_episode_steps:
+                env = TimeLimit(env=env, max_episode_steps=max_episode_steps)
         elif env_id.startswith("dm"):
             _, domain, task = env_id.split('.')
             env = dm_control2gym.make(domain_name=domain, task_name=task)

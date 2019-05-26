@@ -223,10 +223,26 @@ def cli():
     main(**get_args())
 
 
+def logic_cli():
+    parser = build_parser()
+    env_args = parser.add_argument_group('env_args')
+    env_args.add_argument('--partial', action='store_true')
+
+    def _main(env_id, env_args, network_args, **kwargs):
+        env_args.update(gridworld_env.get_args(env_id))
+        del env_args['env_id']
+        del env_args['class']
+        network_args.update(logic=True)
+        main(env_id=env_id, env_args=env_args,
+             network_args=network_args, **kwargs)
+
+    _main(**hierarchical_parse_args(parser))
+
+
 def hsr_cli():
     args = get_hsr_args()
     env_wrapper(main)(**args)
 
 
 if __name__ == "__main__":
-    cli()
+    logic_cli()

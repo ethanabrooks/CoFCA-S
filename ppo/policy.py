@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from gym.spaces import Box, Discrete
+
 from ppo.distributions import Categorical, DiagGaussian
 from ppo.utils import init, init_normc_
 
@@ -11,17 +12,13 @@ class Flatten(nn.Module):
 
 
 class Policy(nn.Module):
-    def __init__(self,
-                 obs_shape,
-                 action_space,
-                 recurrent,
-                 logic=False,
-                 **network_args):
+    def __init__(self, obs_shape, action_space, recurrent, logic=False,
+                 similarity_measure=None, **network_args):
         super(Policy, self).__init__()
         if network_args is None:
             network_args = {}
         if logic:
-            self.base = LogicBase(*obs_shape, recurrent=recurrent)
+            self.base = LogicBase(*obs_shape, similarity_measure=similarity_measure)
         elif len(obs_shape) == 3:
             self.base = CNNBase(*obs_shape, recurrent=recurrent)
         elif len(obs_shape) == 1:

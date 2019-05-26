@@ -18,6 +18,7 @@ setup(
     entry_points=dict(console_scripts=[
         'ppo=ppo.main:cli',
         'hsr=ppo.main:hsr_cli',
+        'logic=ppo.main:logic_cli',
     ]),
     install_requires=[
         'gym',
