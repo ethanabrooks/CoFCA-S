@@ -15,12 +15,13 @@ class Flatten(nn.Module):
 
 
 class Policy(nn.Module):
-    def __init__(self, obs_shape, action_space, recurrent, logic=False, **network_args):
+    def __init__(self, obs_shape, action_space, recurrent, logic=False,
+                 similarity_measure=None, **network_args):
         super(Policy, self).__init__()
         if network_args is None:
             network_args = {}
         if logic:
-            self.base = LogicBase(*obs_shape)
+            self.base = LogicBase(*obs_shape, similarity_measure=similarity_measure)
         elif len(obs_shape) == 3:
             self.base = CNNBase(*obs_shape, recurrent=recurrent)
         elif len(obs_shape) == 1:
@@ -164,20 +165,20 @@ class NNBase(nn.Module):
         return x, hxs
 
 
-class LogicBase(NNBase):
-    def __init__(self, d, h, w, similarity_measure, hidden_size=512):
-        super(LogicBase, self).__init__(recurrent=True,
-                                        recurrent_input_size=hidden_size,
-                                        hidden_size=hidden_size)
-
+class LogicBase(nn.Module):
+    def __init__(self, d, h, w, similarity_measure,
+                 hidden_size=512):
+        self._recurrent_hidden_size = h * w
+        self._hidden_size = hidden_size
+        super(LogicBase, self).__init__()
         self.similarity_measure = similarity_measure
         init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
                                constant_(x, 0), nn.init.calculate_gain('relu'))
 
-        self.conv = init_(nn.Conv2d(d, 32, kernel_size=3, stride=1, padding=1))
+        self.conv = init_(nn.Conv2d(d, hidden_size, kernel_size=3, stride=1, padding=1))
         self.mlp = nn.Sequential(
             nn.ReLU(), Flatten(),
-            init_(nn.Linear(32 * h * w, hidden_size)), nn.ReLU())
+            init_(nn.Linear(hidden_size * h * w, hidden_size * 2)), nn.ReLU())
         self.main = nn.Sequential(self.conv, self.mlp)
 
         init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
@@ -187,24 +188,35 @@ class LogicBase(NNBase):
 
         self.train()
 
+    @property
+    def recurrent_hidden_state_size(self):
+        return self._recurrent_hidden_size
+
+    @property
+    def output_size(self):
+        return self._hidden_size
+
     def forward(self, inputs, rnn_hxs, masks):
         if torch.all(rnn_hxs == 0):  # first step of episode
-            rnn_hxs = inputs[-1]  # to do objects
-        conv_out = self.conv(inputs)
-        iterate = inputs[-2]
-        key, x = torch.split(self.mlp(conv_out), 2)
+            rnn_hxs = inputs[:, -1].view(-1)  # to do objects
+        learned_todo = rnn_hxs.view(*inputs[:, -1:].shape)
+        conv_inputs = torch.cat([inputs[:, :-1], learned_todo], dim=1)
+        conv_out = self.conv(conv_inputs)
+        sections = [self._hidden_size] * 2
+        key, x = torch.split(self.mlp(conv_out), sections, dim=-1)
+        key = key.view(-1, 1, 1)
+        conv_out = conv_out.squeeze(0)
+
+        iterate = inputs[:, -2].squeeze(0)  # whether to shift attention
 
         if self.similarity_measure == 'dot-product':
-            similarity = torch.dot(key, conv_out)
-            import ipdb; ipdb.set_trace()
+            similarity = torch.sum(key * conv_out, dim=0)
         elif self.similarity_measure == 'euclidean-distance':
-            similarity = torch.norm(key - conv_out)
-            import ipdb; ipdb.set_trace()
+            similarity = torch.norm(key - conv_out, dim=0)
         elif self.similarity_measure == 'cosine-similarity':
-            similarity = torch.nn.functional.cosine_similarity(key, conv_out)
-            import ipdb; ipdb.set_trace()
+            similarity = torch.nn.functional.cosine_similarity(key, conv_out, dim=0)
 
-        rnn_hxs = rnn_hxs - iterate * similarity
+        rnn_hxs = rnn_hxs - (iterate * similarity).view(-1)
         return self.critic_linear(x), x, rnn_hxs
 
 
