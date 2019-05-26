@@ -1,34 +1,31 @@
 # stdlib
-import copy
-import os
-from pathlib import Path
 import time
+from pathlib import Path
 from typing import Dict
 
 import numpy as np
-from tensorboardX import SummaryWriter
 import torch
+from rl_utils import hierarchical_parse_args
+from tensorboardX import SummaryWriter
 
 # noinspection PyUnresolvedReferences
 # first party
 import gridworld_env
 from hsr.util import env_wrapper
-from ppo.arguments import get_args, get_hsr_args
+from ppo.arguments import get_args, get_hsr_args, build_parser
 from ppo.envs import make_vec_envs, VecNormalize
 from ppo.policy import Policy
 from ppo.storage import RolloutStorage
 from ppo.update import PPO
-from ppo.utils import get_vec_normalize
+
 
 # third party
 
 
 def main(num_frames, num_steps, num_processes, seed,
-         cuda_deterministic, cuda, log_dir: Path, env_name, gamma, normalize,
+         cuda_deterministic, cuda, log_dir: Path, env_id, gamma, normalize,
          add_timestep, save_interval, save_dir, log_interval, eval_interval,
          use_gae, tau, ppo_args, env_args, network_args, render, load_path):
-    algo = 'ppo'
-
     if render:
         num_processes = 1
 
@@ -57,7 +54,7 @@ def main(num_frames, num_steps, num_processes, seed,
     device = torch.device("cuda:0" if cuda else "cpu")
 
     _gamma = gamma if normalize else None
-    envs = make_vec_envs(env_name, seed, num_processes, _gamma, log_dir,
+    envs = make_vec_envs(env_id, seed, num_processes, _gamma, log_dir,
                          add_timestep, device, False, env_args, render)
 
     actor_critic = Policy(
@@ -174,7 +171,7 @@ def main(num_frames, num_steps, num_processes, seed,
 
         if eval_interval is not None and j % eval_interval == eval_interval - 1:
             eval_envs = make_vec_envs(
-                env_name,
+                env_id,
                 seed + num_processes,
                 num_processes,
                 _gamma,

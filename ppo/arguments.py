@@ -67,7 +67,8 @@ def build_parser():
         default=10e6,
         help='number of frames to train (default: 10e6)')
     parser.add_argument(
-        '--env-name',
+        '--env',
+        dest='env_id',
         default='PongNoFrameskip-v4',
         help='environment to train on (default: PongNoFrameskip-v4)')
     parser.add_argument(
@@ -139,7 +140,7 @@ def build_parser():
 
 
 def get_args():
-    return {**hierarchical_parse_args(build_parser()), **dict(env_args={})}
+    return dict(**hierarchical_parse_args(build_parser()), env_args={})
 
 
 def get_hsr_args():

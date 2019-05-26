@@ -77,7 +77,7 @@ def make_env(env_id, seed, rank, log_dir, add_timestep, allow_early_resets,
     return _thunk
 
 
-def make_vec_envs(env_name,
+def make_vec_envs(env_id,
                   seed,
                   num_processes,
                   gamma,
@@ -88,9 +88,8 @@ def make_vec_envs(env_name,
                   env_args,
                   render,
                   num_frame_stack=None):
-
     envs = [
-        make_env(env_name, seed, i, log_dir, add_timestep, allow_early_resets,
+        make_env(env_id, seed, i, log_dir, add_timestep, allow_early_resets,
                  env_args) for i in range(num_processes)
     ]
 
