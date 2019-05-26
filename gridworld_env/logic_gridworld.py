@@ -56,7 +56,10 @@ class LogicGridWorld(gym.Env):
         self.task_type = None
         self.target_color = None
         self.pos = None
+        self.last_to_touch = None
+        self.last_to_move = None
         self.last_terminal = None
+        self._todo_one_hot = None
 
         self.reset()
         self.observation_space = spaces.Box(
@@ -136,24 +139,21 @@ class LogicGridWorld(gym.Env):
             self.one_hot_background, objects_one_hot, grasped_one_hot,
             agent_one_hot
         ]
-        if not self.partial:
-            dest_one_hot = np.zeros((h, w, self.colors.size + 1), dtype=bool)
-            todo_one_hot = np.zeros_like(self.background, dtype=bool)
-            if self.task_type == 'touch':
-                dest_one_hot[:, :, -1] = True
-                todo_objects = self.to_touch()
-            elif self.task_type == 'move':
-                dest_one_hot[:, :, :-1] = (
-                    self.target_color == self.colors).reshape(1, 1, -1)
-                todo_objects = self.to_move()
-            else:
-                raise RuntimeError
 
-            todo = np.isin(self.objects, todo_objects)
-            todo_pos = self.objects_pos[todo]
-            if todo_pos.size > 0:
-                set_index(todo_one_hot, todo_pos, True)
-            obs += [dest_one_hot, todo_one_hot]
+        # partial observability stuff
+        dest_one_hot = np.zeros((h, w, self.colors.size + 1), dtype=bool)
+        if self.task_type == 'touch':
+            dest_one_hot[:, :, -1] = True
+            iterate = self.to_touch().size < self.last_to_touch.size
+        elif self.task_type == 'move':
+            dest_one_hot[:, :, :-1] = (self.target_color == self.colors).reshape(1, 1, -1)
+            iterate = self.to_move().size < self.last_to_move.size
+        else:
+            raise RuntimeError
+        iterate = np.full(self.background.shape, iterate)
+        if not self.partial:
+            self._todo_one_hot = self.todo_one_hot()
+        obs += [dest_one_hot, iterate, self._todo_one_hot]
 
         return np.dstack(obs).astype(float).transpose(2, 0, 1)  # TODO
 
@@ -168,6 +168,9 @@ class LogicGridWorld(gym.Env):
         return get_index(self.background, self.objects_pos[idxs])
 
     def step(self, a):
+        last_to_move = self.to_move()
+        last_to_touch = self.to_touch()
+
         n_transitions = len(self.transitions)
         if a < n_transitions:
             # move
@@ -205,6 +208,8 @@ class LogicGridWorld(gym.Env):
         t = bool(success)
         r = float(success)
 
+        self.last_to_touch = last_to_touch
+        self.last_to_move = last_to_move
         self.last_terminal = t
         return self.get_observation(), r, t, {}
 
@@ -217,6 +222,19 @@ class LogicGridWorld(gym.Env):
         self.pos, *self.objects_pos = zip(
             *np.unravel_index(randoms, self.background.shape))
         self.objects_pos = np.array(self.objects_pos)
+
+    def todo_one_hot(self):
+        todo_one_hot = np.zeros_like(self.background, dtype=bool)
+        if self.task_type == 'touch':
+            todo_objects = self.to_touch()
+        elif self.task_type == 'move':
+            todo_objects = self.to_move()
+        else:
+            raise RuntimeError
+        todo_pos = self.objects_pos[np.isin(self.objects, todo_objects)]
+        if todo_pos.size > 0:
+            set_index(todo_one_hot, todo_pos, True)
+        return todo_one_hot
 
     def reset(self):
         self.object_grasped = np.zeros_like(self.objects, dtype=bool)
@@ -241,7 +259,11 @@ class LogicGridWorld(gym.Env):
                 target_choices != task_obj_colors.item()]
         self.target_color = self.np_random.choice(target_choices)
 
+        self.last_to_touch = self.to_touch()
+        self.last_to_move = self.to_move()
         self.last_terminal = False
+
+        self._todo_one_hot = self.todo_one_hot()
         return self.get_observation()
 
 
