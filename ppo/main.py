@@ -25,7 +25,7 @@ from ppo.update import PPO
 def main(num_frames, num_steps, num_processes, seed,
          cuda_deterministic, cuda, log_dir: Path, env_id, gamma, normalize,
          add_timestep, save_interval, save_dir, log_interval, eval_interval,
-         use_gae, tau, ppo_args, env_args, network_args, render, load_path, similarity_measure):
+         use_gae, tau, ppo_args, env_args, network_args, render, load_path):
     if render:
         num_processes = 1
 
@@ -60,7 +60,6 @@ def main(num_frames, num_steps, num_processes, seed,
     actor_critic = Policy(
         envs.observation_space.shape,
         envs.action_space,
-        similarity_measure=similarity_measure,
         **network_args)
     actor_critic.to(device)
 
@@ -226,7 +225,6 @@ def cli():
 
 def logic_cli():
     parser = build_parser()
-    parser.add_argument('--similarity-measure')
     parser.add_argument_group('env_args')
 
     def _main(env_id, env_args, network_args, **kwargs):

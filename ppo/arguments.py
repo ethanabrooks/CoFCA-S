@@ -92,6 +92,7 @@ def build_parser():
 
     network_parser = parser.add_argument_group('network_args')
     network_parser.add_argument('--logic', action='store_true')
+    network_parser.add_argument('--similarity-measure')
     network_parser.add_argument('--recurrent', action='store_true')
     network_parser.add_argument('--hidden-size', type=int, default=256)
     network_parser.add_argument('--num-layers', type=int, default=3)
