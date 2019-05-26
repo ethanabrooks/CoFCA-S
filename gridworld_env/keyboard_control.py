@@ -11,7 +11,7 @@ def cli():
 
 
 def run(env, actions=None):
-    env.seed(1)
+    env.seed(0)
     if actions is None:
         actions = 'wsadx'
     actions = list(actions)
@@ -20,6 +20,7 @@ def run(env, actions=None):
     while True:
         env.render()
         action = None
+        print(s[-2])
         while action not in actions:
             action = input('act:')
             if action == 'p':
