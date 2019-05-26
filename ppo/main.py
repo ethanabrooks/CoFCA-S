@@ -229,11 +229,13 @@ def logic_cli():
     parser.add_argument('--similarity-measure')
     parser.add_argument_group('env_args')
 
-    def _main(env_id, env_args, **kwargs):
+    def _main(env_id, env_args, network_args, **kwargs):
         env_args.update(gridworld_env.get_args(env_id))
         del env_args['env_id']
         del env_args['class']
-        main(env_id=env_id, env_args=env_args, **kwargs)
+        network_args.update(logic=True)
+        main(env_id=env_id, env_args=env_args,
+             network_args=network_args, **kwargs)
 
     _main(**hierarchical_parse_args(parser))
 
