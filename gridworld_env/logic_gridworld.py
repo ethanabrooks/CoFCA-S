@@ -22,12 +22,10 @@ def get_index(array, idxs):
 
 
 class LogicGridWorld(gym.Env):
-    def __init__(self, objects, text_map, partial_obs=False):
+    def __init__(self, objects, text_map, partial=False):
         super().__init__()
-
-        self.partial_obs = partial_obs
+        self.partial = partial
         self.np_random = np.random
-
         self.transitions = np.array([
             [-1, 0],
             [1, 0],
@@ -139,7 +137,7 @@ class LogicGridWorld(gym.Env):
             self.one_hot_background, objects_one_hot, grasped_one_hot,
             agent_one_hot
         ]
-        if not self.partial_obs:
+        if not self.partial:
             dest_one_hot = np.zeros((h, w, self.colors.size + 1), dtype=bool)
             todo_one_hot = np.zeros_like(self.background, dtype=bool)
             if self.task_type == 'touch':
