@@ -16,6 +16,7 @@ class Policy(nn.Module):
                  obs_shape,
                  action_space,
                  recurrent,
+                 hidden_size,
                  logic=False,
                  similarity_measure=None,
                  **network_args):
@@ -24,12 +25,18 @@ class Policy(nn.Module):
             network_args = {}
         if logic:
             self.base = LogicBase(
-                *obs_shape, similarity_measure=similarity_measure)
+                *obs_shape,
+                similarity_measure=similarity_measure,
+                hidden_size=hidden_size)
         elif len(obs_shape) == 3:
-            self.base = CNNBase(*obs_shape, recurrent=recurrent)
+            self.base = CNNBase(
+                *obs_shape, recurrent=recurrent, hidden_size=hidden_size)
         elif len(obs_shape) == 1:
             self.base = MLPBase(
-                obs_shape[0], recurrent=recurrent, **network_args)
+                obs_shape[0],
+                recurrent=recurrent,
+                hidden_size=hidden_size,
+                **network_args)
         else:
             raise NotImplementedError
 
@@ -256,7 +263,7 @@ class LogicBase(NNBase):
 
 
 class CNNBase(NNBase):
-    def __init__(self, d, h, w, recurrent=False, hidden_size=512):
+    def __init__(self, d, h, w, hidden_size, recurrent=False):
         recurrent_module = nn.GRU if recurrent else None
         super(CNNBase, self).__init__(recurrent_module, hidden_size,
                                       hidden_size)
