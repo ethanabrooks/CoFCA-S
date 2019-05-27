@@ -1,4 +1,7 @@
 # stdlib
+import csv
+import subprocess
+from io import StringIO
 from pathlib import Path
 import time
 from typing import Dict
@@ -18,7 +21,16 @@ from ppo.storage import RolloutStorage
 from ppo.update import PPO
 from rl_utils import hierarchical_parse_args
 
-# third party
+
+def get_freer_gpu():
+    nvidia_smi = subprocess.check_output(
+        'nvidia-smi --format=csv --query-gpu=memory.free'.split(),
+        universal_newlines=True)
+    free_memory = [
+        float(x[0].split()[0])
+        for i, x in enumerate(csv.reader(StringIO(nvidia_smi))) if i > 0
+    ]
+    return np.argmax(free_memory)
 
 
 def main(num_frames, num_steps, num_processes, seed, cuda_deterministic, cuda,
@@ -33,7 +45,8 @@ def main(num_frames, num_steps, num_processes, seed, cuda_deterministic, cuda,
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
 
-    if cuda and torch.cuda.is_available() and cuda_deterministic:
+    cuda &= torch.cuda.is_available()
+    if cuda and cuda_deterministic:
         torch.backends.cudnn.benchmark = False
         torch.backends.cudnn.deterministic = True
 
