@@ -1,31 +1,30 @@
 # stdlib
-import time
 from pathlib import Path
+import time
 from typing import Dict
 
 import numpy as np
-import torch
-from rl_utils import hierarchical_parse_args
 from tensorboardX import SummaryWriter
+import torch
 
 # noinspection PyUnresolvedReferences
 # first party
 import gridworld_env
 from hsr.util import env_wrapper
-from ppo.arguments import get_args, get_hsr_args, build_parser
-from ppo.envs import make_vec_envs, VecNormalize
+from ppo.arguments import build_parser, get_args, get_hsr_args
+from ppo.envs import VecNormalize, make_vec_envs
 from ppo.policy import Policy
 from ppo.storage import RolloutStorage
 from ppo.update import PPO
-
+from rl_utils import hierarchical_parse_args
 
 # third party
 
 
-def main(num_frames, num_steps, num_processes, seed,
-         cuda_deterministic, cuda, log_dir: Path, env_id, gamma, normalize,
-         add_timestep, save_interval, save_dir, log_interval, eval_interval,
-         use_gae, tau, ppo_args, env_args, network_args, render, load_path):
+def main(num_frames, num_steps, num_processes, seed, cuda_deterministic, cuda,
+         log_dir: Path, env_id, gamma, normalize, add_timestep, save_interval,
+         save_dir, log_interval, eval_interval, use_gae, tau, ppo_args,
+         env_args, network_args, render, load_path):
     if render:
         num_processes = 1
 
@@ -57,10 +56,8 @@ def main(num_frames, num_steps, num_processes, seed,
     envs = make_vec_envs(env_id, seed, num_processes, _gamma, log_dir,
                          add_timestep, device, False, env_args, render)
 
-    actor_critic = Policy(
-        envs.observation_space.shape,
-        envs.action_space,
-        **network_args)
+    actor_critic = Policy(envs.observation_space.shape, envs.action_space,
+                          **network_args)
     actor_critic.to(device)
 
     agent = PPO(actor_critic=actor_critic, **ppo_args)
@@ -233,8 +230,11 @@ def logic_cli():
         del env_args['env_id']
         del env_args['class']
         network_args.update(logic=True)
-        main(env_id=env_id, env_args=env_args,
-             network_args=network_args, **kwargs)
+        main(
+            env_id=env_id,
+            env_args=env_args,
+            network_args=network_args,
+            **kwargs)
 
     _main(**hierarchical_parse_args(parser))
 
