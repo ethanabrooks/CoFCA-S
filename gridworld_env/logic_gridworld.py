@@ -273,8 +273,8 @@ if __name__ == '__main__':
     import gridworld_env.keyboard_control
     import gridworld_env.random_walk
 
-    env = gym.make('4x4FourSquareGridWorld-v0')
-    # env = gym.make('1x4TwoSquareGridWorld-v0')
+    # env = gym.make('4x4FourSquareGridWorld-v0')
+    env = gym.make('1x6TwoSquareGridWorld-v0')
     actions = 'wsadx'
     gridworld_env.keyboard_control.run(env, actions=actions)
     # gridworld_env.random_walk.run(env)

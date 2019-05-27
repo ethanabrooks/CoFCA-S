@@ -20,7 +20,7 @@ def run(env, actions=None):
     while True:
         env.render()
         action = None
-        print(s[-2])
+        print(s)
         while action not in actions:
             action = input('act:')
             if action == 'p':
