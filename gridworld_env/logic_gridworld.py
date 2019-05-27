@@ -1,11 +1,11 @@
 import time
 
 import gym
+import numpy as np
+import six
 from gym import spaces
 from gym.utils import seeding
 from gym.utils.colorize import color2num
-import numpy as np
-import six
 
 
 def set_index(array, idxs, value):
@@ -22,7 +22,7 @@ def get_index(array, idxs):
 
 
 class LogicGridWorld(gym.Env):
-    def __init__(self, objects, text_map, partial=False):
+    def __init__(self, objects, text_map, partial=True):
         super().__init__()
         self.partial = partial
         self.np_random = np.random
@@ -146,7 +146,8 @@ class LogicGridWorld(gym.Env):
             dest_one_hot[:, :, -1] = True
             iterate = self.to_touch().size < self.last_to_touch.size
         elif self.task_type == 'move':
-            dest_one_hot[:, :, :-1] = (self.target_color == self.colors).reshape(1, 1, -1)
+            dest_one_hot[:, :, :-1] = (
+                self.target_color == self.colors).reshape(1, 1, -1)
             iterate = self.to_move().size < self.last_to_move.size
         else:
             raise RuntimeError
