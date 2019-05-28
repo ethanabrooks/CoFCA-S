@@ -5,6 +5,7 @@ import numpy as np
 import six
 from gym import spaces
 from gym.utils import seeding
+
 from rl_utils import cartesian_product
 
 
@@ -22,7 +23,13 @@ def get_index(array, idxs):
 
 
 class TasksGridWorld(gym.Env):
-    def __init__(self, object_types, text_map, n_objects, n_obstacles, n_subtasks, partial=False):
+    def __init__(self,
+                 object_types,
+                 text_map,
+                 n_objects,
+                 n_obstacles,
+                 n_subtasks,
+                 partial=False):
         super().__init__()
         self.n_subtasks = n_subtasks
         self.n_obstacles = n_obstacles
@@ -40,17 +47,20 @@ class TasksGridWorld(gym.Env):
         # self.state_char = '🚡'
         self.desc = np.array([list(r) for r in text_map])
 
-        self.task_types = ['visit',
-                           'pick-up',
-                           'transform',
-                           ]
-                           # 'pick-up-2',
-                           # 'transform-2',
-                           # 'pick-up-3',
-                           # 'transform-3', ]
+        self.task_types = [
+            'visit',
+            'pick-up',
+            'transform',
+        ]
+        # 'pick-up-2',
+        # 'transform-2',
+        # 'pick-up-3',
+        # 'transform-3', ]
 
         self.task_counts = [
-            1, 1, 1,
+            1,
+            1,
+            1,
             # 2, 2, 3, 3,
         ]
 
@@ -78,13 +88,15 @@ class TasksGridWorld(gym.Env):
         h, w = self.desc.shape
         choices = cartesian_product(np.arange(h), np.arange(w))
         choices = choices[np.all(choices % 2 != 0, axis=-1)]
-        randoms = self.np_random.choice(len(choices), replace=False, size=self.n_obstacles)
+        randoms = self.np_random.choice(
+            len(choices), replace=False, size=self.n_obstacles)
         self.obstacles = choices[randoms]
         set_index(self.obstacles_one_hot, self.obstacles, True)
         self.obstacles = np.array(list(self.obstacles))
         h, w = self.desc.shape
         ij = cartesian_product(np.arange(h), np.arange(w))
-        self.open_spaces = ij[np.logical_not(np.all(np.isin(ij, self.obstacles), axis=-1))]
+        self.open_spaces = ij[np.logical_not(
+            np.all(np.isin(ij, self.obstacles), axis=-1))]
         self.initialized = True
 
     @property
@@ -93,7 +105,8 @@ class TasksGridWorld(gym.Env):
 
     def render(self, mode='human'):
         task_type, task_object_type = self.task
-        print('task:', self.task_types[task_type], self.object_types[task_object_type])
+        print('task:', self.task_types[task_type],
+              self.object_types[task_object_type])
         print('task count:', self.task_count + 1)
 
         # noinspection PyTypeChecker
@@ -117,18 +130,17 @@ class TasksGridWorld(gym.Env):
             self.initialize()
 
         # tasks
-        task_types = self.np_random.choice(len(self.task_types), size=self.n_subtasks)
-        task_objects = self.np_random.choice(len(self.object_types), size=self.n_subtasks)
+        task_types = self.np_random.choice(
+            len(self.task_types), size=self.n_subtasks)
+        task_objects = self.np_random.choice(
+            len(self.object_types), size=self.n_subtasks)
         tasks = np.stack([task_types, task_objects], axis=1)
         self.tasks = iter(tasks)
 
         types = [x for t, o in tasks for x in self.task_counts[t] * [o]]
         n_random = max(len(types), self.n_objects)
         random_types = self.np_random.choice(
-            len(self.object_types),
-            replace=True,
-            size=n_random - len(types)
-        )
+            len(self.object_types), replace=True, size=n_random - len(types))
         types = np.concatenate([random_types, types])
         self.np_random.shuffle(types)
 
@@ -146,8 +158,9 @@ class TasksGridWorld(gym.Env):
 
     def objects_one_hot(self):
         h, w, = self.desc.shape
-        objects_one_hot = np.zeros((h, w, 1 + len(self.object_types)), dtype=bool)
-        idx = [k + (v,) for k, v in self.objects.items()]
+        objects_one_hot = np.zeros((h, w, 1 + len(self.object_types)),
+                                   dtype=bool)
+        idx = [k + (v, ) for k, v in self.objects.items()]
         set_index(objects_one_hot, idx, True)
         return objects_one_hot
 
@@ -168,8 +181,9 @@ class TasksGridWorld(gym.Env):
         set_index(task_objects_one_hot, idx, True)
 
         obs = [
-            self.obstacles_one_hot, self.objects_one_hot(),
-            agent_one_hot, task_type_one_hot, task_objects_one_hot
+            self.obstacles_one_hot,
+            self.objects_one_hot(), agent_one_hot, task_type_one_hot,
+            task_objects_one_hot
         ]
 
         # noinspection PyTypeChecker
