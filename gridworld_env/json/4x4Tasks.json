@@ -9,5 +9,6 @@
     "n_objects": 5,
     "n_obstacles": 2,
     "n_subtasks": 3,
-    "class": "TasksGridWorld"
+    "class": "TasksGridWorld",
+    "max_episode_steps": 63
 }
