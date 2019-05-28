@@ -171,7 +171,16 @@ class TasksGridWorld(gym.Env):
         ]
 
         # noinspection PyTypeChecker
-        return np.dstack(obs).astype(float).transpose(2, 0, 1)
+        transpose = np.dstack(obs).astype(float).transpose(2, 0, 1)
+
+        # names = ['obstacles'] + list(self.object_types) + ['ice', 'agent'] + \
+        #         list(self.task_types) + ['task objects']
+        # assert len(transpose) == len(names)
+        # for array, name in zip(transpose, names):
+        #     print(name)
+        #     print(array)
+
+        return transpose
 
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)
@@ -238,6 +247,6 @@ if __name__ == '__main__':
     import gridworld_env.keyboard_control
     import gridworld_env.random_walk
 
-    env = gym.make('8x8TasksGridWorld-v0')
+    env = gym.make('4x4TasksGridWorld-v0')
     actions = 'wsadqe'
     gridworld_env.keyboard_control.run(env, actions=actions)
