@@ -83,6 +83,7 @@ class TasksGridWorld(gym.Env):
         h, w = self.desc.shape
         ij = cartesian_product(np.arange(h), np.arange(w))
         self.open_spaces = ij[np.logical_not(np.all(np.isin(ij, self.obstacles), axis=-1))]
+        self.initialized = True
 
     @property
     def transition_strings(self):
@@ -119,23 +120,22 @@ class TasksGridWorld(gym.Env):
         tasks = np.stack([task_types, task_objects], axis=1)
         self.tasks = iter(tasks)
 
-        n_random = self.n_objects + 1  # + 1 for agent
+        types = [x for t, o in tasks for x in self.task_counts[t] * [o]]
+        n_random = max(len(types), self.n_objects)
+        random_types = self.np_random.choice(
+            len(self.object_types),
+            replace=True,
+            size=n_random - len(types)
+        )
+        types = np.concatenate([random_types, types])
+        self.np_random.shuffle(types)
+
         randoms = self.np_random.choice(
             len(self.open_spaces),
             replace=False,
-            size=n_random,
+            size=n_random + 1  # + 1 for agent
         )
-        self.pos, *objects_pos = self.open_spaces[randoms]
-        types = [x for t, o in tasks for x in self.task_counts[t] * [o]]
-        if n_random > len(types):
-            random_types = self.np_random.choice(
-                len(self.object_types),
-                replace=True,
-                size=n_random - len(types)
-            )
-            types = np.concatenate([random_types, types])
-        self.np_random.shuffle(types)
-
+        *objects_pos, self.pos = self.open_spaces[randoms]
         self.objects = {tuple(p): t for p, t in zip(objects_pos, types)}
 
         self.task_count = None
@@ -248,5 +248,5 @@ if __name__ == '__main__':
     import gridworld_env.random_walk
 
     env = gym.make('4x4TasksGridWorld-v0')
-    actions = 'wsadqe'
+    actions = 'wsadeq'
     gridworld_env.keyboard_control.run(env, actions=actions)
