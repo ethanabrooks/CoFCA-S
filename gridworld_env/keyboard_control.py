@@ -10,17 +10,14 @@ def cli():
     run(**vars(parser.parse_args()))
 
 
-def run(env, actions=None):
+def run(env, actions):
     env.seed(0)
-    if actions is None:
-        actions = 'wsadx'
     actions = list(actions)
 
     s = env.reset()
     while True:
         env.render()
         action = None
-        print(s[-2])
         while action not in actions:
             action = input('act:')
             if action == 'p':

@@ -1,11 +1,11 @@
 import time
 
 import gym
-from gym import spaces
-from gym.utils import seeding
-from gym.utils.colorize import color2num
 import numpy as np
 import six
+from gym import spaces
+from gym.utils import seeding
+from rl_utils import cartesian_product
 
 
 def set_index(array, idxs, value):
@@ -22,10 +22,14 @@ def get_index(array, idxs):
 
 
 class TasksGridWorld(gym.Env):
-    def __init__(self, objects, text_map, partial=False):
+    def __init__(self, object_types, text_map, n_objects, n_obstacles, n_subtasks, partial=False):
         super().__init__()
+        self.n_subtasks = n_subtasks
+        self.n_obstacles = n_obstacles
+        self.n_objects = n_objects
         self.partial = partial
         self.np_random = np.random
+        self.object_types = np.array(object_types)
         self.transitions = np.array([
             [-1, 0],
             [1, 0],
@@ -34,10 +38,7 @@ class TasksGridWorld(gym.Env):
         ])
 
         # self.state_char = '🚡'
-        self.state_char = '*'
         self.desc = np.array([list(r) for r in text_map])
-        self.objects_list = list(map(np.array, objects))
-        self.objects = np.concatenate(objects)
 
         self.task_types = ['visit',
                            'pick-up',
@@ -47,80 +48,125 @@ class TasksGridWorld(gym.Env):
                            'pick-up-3',
                            'transform-3', ]
 
+        self.task_counts = [
+            1, 1, 1, 2, 2, 3, 3,
+        ]
+
+        self.initialized = False
+        # set on initialize
+        self.obstacles_one_hot = np.zeros(self.desc.shape, dtype=bool)
+        self.open_spaces = None
+        self.obstacles = None
+
         # set on reset:
-        self.task_objects = None
-        self.task_type = None
+        self.objects = None
         self.pos = None
-        self.task_object_type = None
         self.task_count = None
         self.tasks = None
         self.task = None
+        self.iterate = None
+        self.last_terminal = False
 
         self.reset()
         self.observation_space = spaces.Box(
             low=0, high=1, shape=self.get_observation().shape)
         self.action_space = spaces.Discrete(len(self.transitions) + 2)
 
+    def initialize(self):
+        h, w = self.desc.shape
+        choices = cartesian_product(np.arange(h), np.arange(w))
+        choices = choices[np.all(choices % 2 != 0, axis=-1)]
+        randoms = self.np_random.choice(len(choices), replace=False, size=self.n_obstacles)
+        self.obstacles = choices[randoms]
+        set_index(self.obstacles_one_hot, self.obstacles, True)
+        self.obstacles = np.array(list(self.obstacles))
+        h, w = self.desc.shape
+        ij = cartesian_product(np.arange(h), np.arange(w))
+        self.open_spaces = ij[np.logical_not(np.all(np.isin(ij, self.obstacles), axis=-1))]
+
     @property
     def transition_strings(self):
         return np.array(list('🛑👇👆👉👈✋👊'))
 
     def render(self, mode='human'):
-        print('touched:', list(self.objects[self.touched]))
-
-        colors = dict(r='red', g='green', b='blue', y='yellow')
+        task_type, task_object_type = self.task
+        print('task:', self.task_types[task_type], self.object_types[task_object_type])
+        print('task count:', self.task_count + 1)
 
         # noinspection PyTypeChecker
-        desc = np.full_like(self.desc, ' ')
+        desc = self.desc.copy()
+        desc[self.obstacles_one_hot] = '#'
+        positions = self.objects_one_hot().transpose(2, 0, 1)
+        types = np.append(self.object_types, 'ice')
+        for pos, obj in zip(positions, types):
+            desc[pos] = obj[0]
+        desc[tuple(self.pos)] = '*'
 
-        set_index(desc, self.pos, self.state_char)
-        set_index(desc, self.objects, self.objects)  # TODO
-        touching = self.objects[self.touching()]
-        for back_row, front_row in zip(self.desc, desc):
-            print(six.u('\x1b[30m'), end='')
-            last = None
-            for back, front in zip(back_row, front_row):
-                if back != last:
-                    color = colors[back]
-                    num = color2num[color] + 10
-                    highlight = six.u(str(num))
-                    print(six.u(f'\x1b[{highlight}m'), end='')
+        for row in desc:
+            print(six.u(f'\x1b[47m'), end='')
+            print(''.join(row), end='')
+            print(six.u('\x1b[49m'))
 
-                if front in touching:
-                    print(six.u('\x1b[7m'), end='')
-                print(front, end='')
-                if front in touching:
-                    print(six.u('\x1b[27m'), end='')
-                last = back
-            print(six.u('\x1b[0m'))
-        print(six.u('\x1b[39m'), end='')
         time.sleep(2 if self.last_terminal else .5)
+
+    def reset(self):
+        if not self.initialized:
+            self.initialize()
+
+        # tasks
+        task_types = self.np_random.choice(len(self.task_types), size=self.n_subtasks)
+        task_objects = self.np_random.choice(len(self.object_types), size=self.n_subtasks)
+        tasks = np.stack([task_types, task_objects], axis=1)
+        self.tasks = iter(tasks)
+
+        n_random = self.n_objects + 1  # + 1 for agent
+        randoms = self.np_random.choice(
+            len(self.open_spaces),
+            replace=False,
+            size=n_random,
+        )
+        self.pos, *objects_pos = self.open_spaces[randoms]
+        types = [x for t, o in tasks for x in self.task_counts[t] * [o]]
+        if n_random > len(types):
+            random_types = self.np_random.choice(
+                len(self.object_types),
+                replace=True,
+                size=n_random - len(types)
+            )
+            types = np.concatenate([random_types, types])
+        self.np_random.shuffle(types)
+
+        self.objects = {tuple(p): t for p, t in zip(objects_pos, types)}
+
+        self.task_count = None
+        self.perform_iteration()
+        return self.get_observation()
+
+    def objects_one_hot(self):
+        h, w, = self.desc.shape
+        objects_one_hot = np.zeros((h, w, 1 + len(self.object_types)), dtype=bool)
+        idx = [k + (v,) for k, v in self.objects.items()]
+        set_index(objects_one_hot, idx, True)
+        return objects_one_hot
 
     def get_observation(self):
         h, w, = self.desc.shape
-        objects_one_hot = np.zeros((h, w, self.objects.size), dtype=bool)
-        idx = np.hstack([
-            self.objects,
-            np.expand_dims(np.arange(self.objects.size), 1)
-        ])
-        set_index(objects_one_hot, idx, True)
-
-        grasped_one_hot = np.zeros_like(self.desc, dtype=bool)
-        grasped_pos = self.objects[self.object_grasped]
-        set_index(grasped_one_hot, grasped_pos, True)
 
         agent_one_hot = np.zeros_like(self.desc, dtype=bool)
         set_index(agent_one_hot, self.pos, True)
 
         # partial observability stuff
+        task_type, task_object_type = self.task
         task_type_one_hot = np.zeros((h, w, len(self.task_types)), dtype=bool)
-        task_type_one_hot[:, :, self.task_type_idx] = True
+        task_type_one_hot[:, :, task_type] = True
 
+        # TODO: make this less easy
         task_objects_one_hot = np.zeros((h, w), dtype=bool)
-        set_index(task_objects_one_hot, self.objects[self.task_object_type], True)
+        idx = [k for k, v in self.objects.items() if v == task_object_type]
+        set_index(task_objects_one_hot, idx, True)
 
         obs = [
-            objects_one_hot, grasped_one_hot,
+            self.obstacles_one_hot, self.objects_one_hot(),
             agent_one_hot, task_type_one_hot, task_objects_one_hot
         ]
 
@@ -131,88 +177,60 @@ class TasksGridWorld(gym.Env):
         self.np_random, seed = seeding.np_random(seed)
         return [seed]
 
+    def perform_iteration(self):
+        self.iterate = False
+        if not self.task_count:
+            task_type, _ = self.task = next(self.tasks)
+            self.task_count = self.task_counts[task_type]
+        self.task_count -= 1
+
     def step(self, a):
+        # act
         n_transitions = len(self.transitions)
         if a < n_transitions:
             # move
-            self.pos += self.transitions[a]
+            pos = self.pos + self.transitions[a]
+            if any(np.all(self.obstacles == pos, axis=-1)):
+                pos = self.pos
             a_min = np.zeros(2)
             a_max = np.array(self.desc.shape) - 1
-            self.pos = np.clip(self.pos, a_min, a_max).astype(int)
-        touching = self.pos in self.objects
-        object_type = self.objects[self.pos]
-        picked_up = None
-        transformed = None
-        if a >= n_transitions and touching:
-            if a - n_transitions == 0:  # pick up
-                picked_up = self.objects[self.pos]
-                del self.objects[self.pos]
-            elif a - n_transitions == 1:  # transform
-                transformed = self.objects[self.pos]
-                object_type = 'ice'
+            self.pos = np.clip(pos, a_min, a_max).astype(int)
+        pos = tuple(self.pos)
+        touching = pos in self.objects
 
-        # reward / terminal
-        if 'visit' == self.task_type:
-            iterate = object_type == self.task_object_type
-        elif 'pick-up' in self.task_type:
-            iterate = picked_up == self.task_object_type
-        elif 'transform' in self.task_type:
-            iterate = transformed == self.task_object_type
-        else:
-            raise RuntimeError
+        if touching:
+            object_type = self.objects[pos]
+            picked_up = transformed = None
+            if a >= n_transitions:
+                if a - n_transitions == 0:  # pick up
+                    picked_up = object_type
+                    del self.objects[pos]
+                elif a - n_transitions == 1:  # transform
+                    transformed = object_type
+                    self.objects[pos] = len(self.object_types)
 
-        success = False
-        if iterate:
-            self.task_count -= 1
-            if self.task_count == 0:
-                try:
-                    self.task = next(self.tasks)
-                except StopIteration:
-                    success = True
+            # iterate
+            task_type_idx, task_object_type_idx = self.task
+            task_type = self.task_types[task_type_idx]
+            if 'visit' == task_type:
+                self.iterate = object_type == task_object_type_idx
+            elif 'pick-up' in task_type:
+                self.iterate = picked_up == task_object_type_idx
+            elif 'transform' in task_type:
+                self.iterate = transformed == task_object_type_idx
+            else:
+                raise RuntimeError
 
-        t = bool(success)
-        r = float(success)
-        return self.get_observation(), r, t, {}
+        # next task / terminate
+        t = False
+        if self.iterate:
+            try:
+                self.perform_iteration()
+            except StopIteration:
+                t = True
 
-    def randomize_positions(self, objects_type):
-        randoms = self.np_random.choice(
-            self.desc.size,
-            replace=False,
-            size=len(self.objects) + 1,  # + 1 for agent
-        )
-        self.pos, *objects_pos = zip(
-            *np.unravel_index(randoms, self.desc.shape))
-
-        self.objects = dict(zip(objects_pos, objects_type))
-
-    def reset(self):
-        objects_type =
-        self.randomize_positions()
-
-        # task type
-        self.task_type = self.np_random.choice(self.task_types)
-
-        # task objects
-        self.object_type = self.np_random.choice(len(self.objects_list))
-        objects = self.objects_list[self.object_type]
-        object_colors = self.get_colors_for(objects)
-        self.task_color = self.np_random.choice(
-            np.unique(object_colors))  # exclude empty colors
-        self.task_objects = objects[object_colors == self.task_color]
-
-        target_choices = self.colors
-        task_obj_colors = np.unique(self.get_colors_for(self.task_objects))
-        if self.task_type == 'move' and task_obj_colors.size == 1:
-            target_choices = target_choices[
-                target_choices != task_obj_colors.item()]
-        self.target_color = self.np_random.choice(target_choices)
-
-        self.last_to_touch = self.to_touch()
-        self.last_to_move = self.to_move()
-        self.last_terminal = False
-
-        self._todo_one_hot = self.todo_one_hot()
-        return self.get_observation()
+        self.last_terminal = t
+        return self.get_observation(), -.1, t, {}
 
 
 if __name__ == '__main__':
@@ -220,8 +238,6 @@ if __name__ == '__main__':
     import gridworld_env.keyboard_control
     import gridworld_env.random_walk
 
-    env = gym.make('4x4FourSquareGridWorld-v0')
-    # env = gym.make('1x4TwoSquareGridWorld-v0')
-    actions = 'wsadx'
+    env = gym.make('8x8TasksGridWorld-v0')
+    actions = 'wsadqe'
     gridworld_env.keyboard_control.run(env, actions=actions)
-    # gridworld_env.random_walk.run(env)

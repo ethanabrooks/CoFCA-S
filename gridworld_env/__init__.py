@@ -5,6 +5,7 @@ from gym.envs import register
 
 from gridworld_env.gridworld import GridWorld
 from gridworld_env.logic_gridworld import LogicGridWorld
+from gridworld_env.tasks_gridworld import TasksGridWorld
 from gridworld_env.random_gridworld import RandomGridWorld
 from gridworld_env.simple_pomdp import SimplePOMDP
 

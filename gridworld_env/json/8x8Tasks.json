@@ -9,6 +9,9 @@
         "        ",
         "        "
     ],
-    "objects": ["p", "s", "c", "g"],
+    "object_types": ["pig", "sheep", "cat", "greenbot"],
+    "n_objects": 20,
+    "n_obstacles": 10,
+    "n_subtasks": 5,
     "class": "TasksGridWorld"
 }
