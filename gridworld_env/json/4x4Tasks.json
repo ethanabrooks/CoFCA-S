@@ -8,7 +8,7 @@
     "object_types": ["pig", "sheep", "cat", "greenbot"],
     "n_objects": 5,
     "n_obstacles": 2,
-    "n_subtasks": 3,
+    "n_subtasks": 1,
     "class": "TasksGridWorld",
     "max_episode_steps": 63
 }
