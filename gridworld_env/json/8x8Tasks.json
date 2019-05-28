@@ -1,0 +1,14 @@
+{
+    "text_map": [
+        "        ",
+        "        ",
+        "        ",
+        "        ",
+        "        ",
+        "        ",
+        "        ",
+        "        "
+    ],
+    "objects": ["p", "s", "c", "g"],
+    "class": "TasksGridWorld"
+}
