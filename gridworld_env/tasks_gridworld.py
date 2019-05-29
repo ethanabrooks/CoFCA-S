@@ -53,9 +53,9 @@ class TasksGridWorld(gym.Env):
             'transform',
             'pick-up-2',
             'transform-2',
+            'pick-up-3',
+            'transform-3',
         ]
-        # 'pick-up-3',
-        # 'transform-3', ]
 
         self.task_counts = [
             1,
@@ -63,7 +63,8 @@ class TasksGridWorld(gym.Env):
             1,
             2,
             2,
-            # 3, 3,
+            3,
+            3,
         ]
 
         self.initialized = False
