@@ -1,14 +1,9 @@
 {
-    "text_map": [
-        "    ",
-        "    ",
-        "    ",
-        "    "
-    ],
+    "text_map": ["    ", "    ", "    ", "    "],
     "object_types": ["pig", "sheep", "cat", "greenbot"],
     "n_objects": 5,
     "n_obstacles": 2,
-    "n_subtasks": 1,
+    "n_subtasks": 2,
     "class": "TasksGridWorld",
     "max_episode_steps": 63
 }
