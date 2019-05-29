@@ -1,6 +1,7 @@
 from gym.spaces import Box, Discrete
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from ppo.distributions import Categorical, DiagGaussian
 from ppo.utils import init, init_normc_
@@ -175,6 +176,101 @@ class NNBase(nn.Module):
             hxs = hxs.squeeze(0)
 
         return x, hxs
+
+
+class TaskModule(nn.Module):
+    def __init__(self, h, w, d, similarity_measure, hidden_size):
+        super().__init__()
+        self._hidden_size = hidden_size
+        self.similarity_measure = similarity_measure
+        init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
+                               constant_(x, 0), nn.init.calculate_gain('relu'))
+        self.conv = init_(
+            nn.Conv2d(d, hidden_size, kernel_size=3, stride=1, padding=1))
+
+        self.gru = nn.GRU(input_size=hidden_size * h * w,
+                          output_size=hidden_size)
+        post_conv_size = h * w * hidden_size
+        self.phi_update = nn.Linear(post_conv_size + hidden_size, 1)
+        self.phi_shift = nn.Linear(hidden_size, 3)  # 3 for {-1, 0, +1}
+        self.mlp = nn.Sequential(
+            nn.ReLU(), Flatten(),
+            init_(nn.Linear(hidden_size * h * w, hidden_size * 2)), nn.ReLU())
+        self.main = nn.Sequential(self.conv, self.mlp)
+
+        init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
+                               constant_(x, 0))
+
+        self.critic_linear = init_(nn.Linear(hidden_size, 1))
+
+    def forward_one_step(self, x, hx):
+        h, p, r, g = torch.split(hx, [], dim=1)  # TODO
+        c = F.sigmoid(self.phi_update(h))
+        h = self.gru(x, h)
+        l = F.softmax(self.phi_shift(h))
+        p = F.c
+        initial_shape = hx.shape
+        if torch.all(hx == 0):  # first step of episode
+            hx = x[:, -1]  # to do objects
+        iterate = x[:, -2]  # whether to shift attention
+        hx = hx.view(*x[:, -1].shape)
+        conv_inputs = torch.cat([x[:, :-1], hx.unsqueeze(1)], dim=1)
+        conv_out = self.conv(conv_inputs)
+        sections = [self._hidden_size] * 2
+        key, x = torch.split(self.mlp(conv_out), sections, dim=-1)
+        key = key.view(*key.shape, 1, 1)
+
+        if self.similarity_measure == 'dot-product':
+            similarity = torch.sum(key * conv_out, dim=1)
+        elif self.similarity_measure == 'euclidean-distance':
+            similarity = torch.norm(key - conv_out, dim=1)
+        elif self.similarity_measure == 'cosine-similarity':
+            similarity = torch.nn.functional.cosine_similarity(
+                key, conv_out, dim=1)
+
+        hx = hx.squeeze(1) - iterate * similarity
+        return x, hx.view(initial_shape)
+
+    def forward(self, input, hx=None):
+        assert hx is not None
+        hx = hx[0]  # remaining hxs are generated dynamically
+        outputs = []
+        for x in input:
+            x, hx = self.forward_one_step(x, hx)
+            outputs.append((x, hx))
+
+        xs, hxs = zip(*outputs)
+        return torch.stack(xs), torch.stack(hxs)
+
+
+class TaskBase(NNBase):
+    def __init__(self, d, h, w, similarity_measure, hidden_size=512):
+        def recurrent_module(input_size, hidden_size):
+            return TaskModule(
+                h=h,
+                w=w,
+                d=d,
+                hidden_size=hidden_size,
+                similarity_measure=similarity_measure)
+
+        super(TaskBase, self).__init__(
+            recurrent_module=recurrent_module,
+            recurrent_input_size=h * w,
+            hidden_size=hidden_size)
+        self._recurrent_hidden_state_size = h * w
+
+        init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
+                               constant_(x, 0), nn.init.calculate_gain('relu'))
+        self.critic_linear = init_(nn.Linear(hidden_size, 1))
+        self.train()
+
+    @property
+    def recurrent_hidden_state_size(self):
+        return self._recurrent_hidden_state_size
+
+    def forward(self, inputs, rnn_hxs, masks):
+        x, rnn_hxs = self._forward_gru(inputs, rnn_hxs, masks)
+        return self.critic_linear(x), x, rnn_hxs
 
 
 class LogicModule(nn.Module):
