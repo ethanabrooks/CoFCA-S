@@ -1,14 +1,15 @@
 # stdlib
 import csv
+import itertools
 import subprocess
+import time
 from io import StringIO
 from pathlib import Path
-import time
 from typing import Dict
 
 import numpy as np
-from tensorboardX import SummaryWriter
 import torch
+from tensorboardX import SummaryWriter
 
 # noinspection PyUnresolvedReferences
 # first party
@@ -40,7 +41,10 @@ def main(num_frames, num_steps, num_processes, seed, cuda_deterministic, cuda,
     if render:
         num_processes = 1
 
-    num_updates = int(num_frames) // num_steps // num_processes
+    if num_frames:
+        updates_iter = int(num_frames) // num_steps // num_processes
+    else:
+        updates_iter = itertools.count()
 
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
@@ -104,7 +108,7 @@ def main(num_frames, num_steps, num_processes, seed, cuda_deterministic, cuda,
             envs.venv.load_state_dict(state_dict['vec_normalize'])
         print(f'Loaded parameters from {load_path}.')
 
-    for j in range(num_updates):
+    for j in updates_iter:
         for step in range(num_steps):
             # Sample actions.add_argument_group('env_args')
             with torch.no_grad():

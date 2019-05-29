@@ -33,9 +33,7 @@ def build_parser():
         '--cuda-deterministic',
         action='store_true',
         help="sets flags for determinism when using CUDA (potentially slow!)")
-    parser.add_argument(
-        '--render',
-        action='store_true')
+    parser.add_argument('--render', action='store_true')
     parser.add_argument(
         '--num-processes',
         type=int,
@@ -61,19 +59,13 @@ def build_parser():
         type=int,
         default=None,
         help='eval interval, one eval per n updates (default: None)')
-    parser.add_argument(
-        '--num-frames',
-        type=int,
-        default=10e6,
-        help='number of frames to train (default: 10e6)')
+    parser.add_argument('--num-frames', type=int)
     parser.add_argument(
         '--env',
         dest='env_id',
         default='PongNoFrameskip-v4',
         help='environment to train on (default: PongNoFrameskip-v4)')
-    parser.add_argument(
-        '--load-path',
-        type=Path)
+    parser.add_argument('--load-path', type=Path)
     parser.add_argument(
         '--log-dir',
         type=Path,
