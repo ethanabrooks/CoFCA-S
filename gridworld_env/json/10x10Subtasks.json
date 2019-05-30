@@ -1,0 +1,28 @@
+{
+    "text_map": [
+        "          ",
+        "          ",
+        "          ",
+        "          ",
+        "          ",
+        "          ",
+        "          ",
+        "          ",
+        "          ",
+        "          "],
+    "object_types": [
+        "cow",
+        "pig",
+        "rock",
+        "tree",
+        "box",
+        "duck",
+        "enemy",
+        "candy"
+    ],
+    "n_objects": 17,
+    "n_obstacles": 8,
+    "n_subtasks": 2,
+    "class": "TasksGridWorld",
+    "max_episode_steps": 80
+}

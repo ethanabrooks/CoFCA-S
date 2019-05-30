@@ -22,7 +22,7 @@ def get_index(array, idxs):
     return array[tuple(idxs.T)]
 
 
-class TasksGridWorld(gym.Env):
+class SubtasksGridWorld(gym.Env):
     def __init__(self,
                  object_types,
                  text_map,
