@@ -1,7 +1,7 @@
 #!/usr/bin/env zsh
 set -e
 
-repos=(rl-utils gridworld-env lab-notebook ppo)
+repos=(rl-utils lab-notebook ppo)
 for repo in $repos; do
   dir="../$repo"
   if [ ! -d $dir ]; then
