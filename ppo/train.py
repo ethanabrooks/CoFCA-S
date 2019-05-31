@@ -62,7 +62,7 @@ class Trainer:
         device = 'cpu'
         cuda &= torch.cuda.is_available()
         if cuda and cuda_deterministic:
-            device = get_freer_gpu()
+            device = torch.device('cuda', get_freer_gpu())
             torch.backends.cudnn.benchmark = False
             torch.backends.cudnn.deterministic = True
 
@@ -334,4 +334,4 @@ def get_freer_gpu():
         float(x[0].split()[0])
         for i, x in enumerate(csv.reader(StringIO(nvidia_smi))) if i > 0
     ]
-    return np.argmax(free_memory)
+    return int(np.argmax(free_memory))
