@@ -16,11 +16,11 @@ from common.atari_wrappers import wrap_deepmind
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from gridworld_env import LogicGridWorld, SubtasksGridWorld
-
-from ppo.wrappers import AddTimestep, TransposeImage, VecPyTorch, VecNormalize, VecPyTorchFrameStack, SubtasksWrapper
 from ppo.policy import Policy
 from ppo.storage import RolloutStorage
 from ppo.update import PPO
+from ppo.wrappers import (AddTimestep, SubtasksWrapper, TransposeImage,
+                          VecNormalize, VecPyTorch, VecPyTorchFrameStack)
 
 try:
     import dm_control2gym
@@ -29,11 +29,29 @@ except ImportError:
 
 
 class Trainer:
-    def __init__(self, num_steps, num_processes, seed, cuda_deterministic, cuda,
-                 log_dir: Path, env_id, gamma, normalize, add_timestep, save_interval,
-                 log_interval, eval_interval, use_gae, tau, ppo_args,
-                 network_args, render, load_path, success_reward,
-                 successes_till_done, save_dir=None):
+    def __init__(self,
+                 num_steps,
+                 num_processes,
+                 seed,
+                 cuda_deterministic,
+                 cuda,
+                 log_dir: Path,
+                 env_id,
+                 gamma,
+                 normalize,
+                 add_timestep,
+                 save_interval,
+                 log_interval,
+                 eval_interval,
+                 use_gae,
+                 tau,
+                 ppo_args,
+                 network_args,
+                 render,
+                 load_path,
+                 success_reward,
+                 successes_till_done,
+                 save_dir=None):
         save_dir = save_dir or log_dir
         if render:
             num_processes = 1
@@ -55,7 +73,8 @@ class Trainer:
         tick = time.time()
 
         _gamma = gamma if normalize else None
-        envs = self.make_vec_envs(env_id, seed, num_processes, _gamma, add_timestep, device, render)
+        envs = self.make_vec_envs(env_id, seed, num_processes, _gamma,
+                                  add_timestep, device, render)
 
         actor_critic = Policy(envs.observation_space.shape, envs.action_space,
                               **network_args)
@@ -68,14 +87,16 @@ class Trainer:
             num_processes=num_processes,
             obs_shape=envs.observation_space.shape,
             action_space=envs.action_space,
-            recurrent_hidden_state_size=actor_critic.recurrent_hidden_state_size,
+            recurrent_hidden_state_size=actor_critic.
+            recurrent_hidden_state_size,
         )
 
         obs = envs.reset()
         rollouts.obs[0].copy_(obs)
         rollouts.to(device)
         if cuda:
-            print('All values copied to GPU in', time.time() - tick, 'seconds.')
+            print('All values copied to GPU in',
+                  time.time() - tick, 'seconds.')
 
         rewards_counter = np.zeros(num_processes)
         time_step_counter = np.zeros(num_processes)
@@ -134,8 +155,8 @@ class Trainer:
                     time.time() - last_save >= save_interval:
                 last_save = time.time()
                 modules = dict(
-                    optimizer=agent.optimizer,
-                    actor_critic=actor_critic)  # type: Dict[str, torch.nn.Module]
+                    optimizer=agent.optimizer, actor_critic=actor_critic
+                )  # type: Dict[str, torch.nn.Module]
 
                 if isinstance(envs.venv, VecNormalize):
                     modules.update(vec_normalize=envs.venv)
@@ -161,8 +182,9 @@ class Trainer:
                         f"Last {len(episode_rewards)} training episodes: " +
                         "mean/median reward {:.2f}/{:.2f}, min/max reward {:.2f}/{"
                         ":.2f}\n".format(
-                            np.mean(episode_rewards), np.median(episode_rewards),
-                            np.min(episode_rewards), np.max(episode_rewards)))
+                            np.mean(episode_rewards), np.median(
+                                episode_rewards), np.min(episode_rewards),
+                            np.max(episode_rewards)))
                 if log_dir:
                     writer.add_scalar('return', np.mean(episode_rewards), j)
                     for k, v in train_results.items():
@@ -212,8 +234,10 @@ class Trainer:
 
                 eval_envs.close()
 
-                print(" Evaluation using {} episodes: mean reward {:.5f}\n".format(
-                    len(eval_episode_rewards), np.mean(eval_episode_rewards)))
+                print(" Evaluation using {} episodes: mean reward {:.5f}\n".
+                      format(
+                          len(eval_episode_rewards),
+                          np.mean(eval_episode_rewards)))
 
             if eval_episode_rewards:
                 rewards = eval_episode_rewards
@@ -222,7 +246,8 @@ class Trainer:
             else:
                 continue  # No rewards collected
 
-            if success_reward and np.concatenate(rewards).mean() > success_reward:
+            if success_reward and np.concatenate(
+                    rewards).mean() > success_reward:
                 n_success += 1
             else:
                 n_success = 0
@@ -276,7 +301,8 @@ class Trainer:
                       render,
                       num_frame_stack=None):
         envs = [
-            lambda: self.make_env(env_id, seed, i, add_timestep) for i in range(num_processes)
+            lambda: self.make_env(env_id, seed, i, add_timestep)
+            for i in range(num_processes)
         ]
 
         if len(envs) == 1 or sys.platform == 'darwin':
