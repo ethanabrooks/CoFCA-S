@@ -92,8 +92,7 @@ class Trainer:
             envs.to(device)
             actor_critic.to(device)
             rollouts.to(device)
-            print('All values copied to GPU in',
-                  time.time() - tick, 'seconds')
+            print('All values copied to GPU in', time.time() - tick, 'seconds')
         print('Using device', device)
 
         agent = PPO(actor_critic=actor_critic, **ppo_args)
@@ -172,21 +171,35 @@ class Trainer:
 
             total_num_steps = (j + 1) * num_processes * num_steps
 
+            rewards_array = np.concatenate(episode_rewards)
+            if episode_rewards:
+                reward = rewards_array.mean()
+                print(
+                    f'Obtained average reward of {reward} vs success threshold of {success_reward}'
+                )
+                if success_reward and reward > success_reward:
+                    n_success += 1
+                    print('Consecutive successes:', n_success)
+                else:
+                    if n_success > 0:
+                        print('Consecutive successes:', n_success)
+                    n_success = 0
+                if n_success == successes_till_done:
+                    return
+
             if j % log_interval == 0:
                 end = time.time()
                 fps = int(total_num_steps / (end - start))
-                episode_rewards = np.concatenate(episode_rewards)
-                if episode_rewards.size > 0:
+                if len(episode_rewards) > 0:
                     print(
                         f"Updates {j}, num timesteps {total_num_steps}, FPS {fps} \n "
                         f"Last {len(episode_rewards)} training episodes: " +
                         "mean/median reward {:.2f}/{:.2f}, min/max reward {:.2f}/{"
                         ":.2f}\n".format(
-                            np.mean(episode_rewards), np.median(
-                                episode_rewards), np.min(episode_rewards),
-                            np.max(episode_rewards)))
+                            np.mean(rewards_array), np.median(rewards_array),
+                            np.min(rewards_array), np.max(rewards_array)))
                 if log_dir:
-                    writer.add_scalar('return', np.mean(episode_rewards), j)
+                    writer.add_scalar('return', np.mean(rewards_array), j)
                     for k, v in train_results.items():
                         if log_dir and np.isscalar(v):
                             writer.add_scalar(k.replace('_', ' '), v, j)
@@ -238,25 +251,6 @@ class Trainer:
                       format(
                           len(eval_episode_rewards),
                           np.mean(eval_episode_rewards)))
-
-            if eval_episode_rewards:
-                rewards = eval_episode_rewards
-            elif episode_rewards:
-                rewards = episode_rewards
-            else:
-                continue  # No rewards collected
-
-            obtained_reward = np.concatenate(rewards).mean()
-            print(f'Obstained average reward of {obtained_reward} vs success threshold of {success_reward}')
-            if success_reward and obtained_reward > success_reward:
-                n_success += 1
-                print('Consecutive successes:', n_success)
-            else:
-                if n_success > 0:
-                    print('Consecutive successes:', n_success)
-                n_success = 0
-            if n_success == successes_till_done:
-                return
 
     @staticmethod
     def make_env(env_id, seed, rank, add_timestep):
@@ -327,6 +321,3 @@ class Trainer:
         #     envs = VecPyTorchFrameStack(envs, 4, device)
 
         return envs
-
-
-
