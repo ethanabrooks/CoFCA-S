@@ -37,7 +37,7 @@ def get_args(env_id):
     assert env_id.endswith(SUFFIX)
     path = Path(JSON_PATH, env_id[:-len(SUFFIX)]).with_suffix('.json')
     with path.open('rb') as f:
-        return dict(env_id=env_id, **json.load(f))
+        return dict(**json.load(f))
 
 
 def register_envs():

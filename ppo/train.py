@@ -254,7 +254,7 @@ class Trainer:
                 return
 
     @staticmethod
-    def make_env(env_id, seed, rank, add_timestep, max_episode_steps=None):
+    def make_env(env_id, seed, rank, add_timestep):
         if env_id.startswith("dm"):
             _, domain, task = env_id.split('.')
             env = dm_control2gym.make(domain_name=domain, task_name=task)

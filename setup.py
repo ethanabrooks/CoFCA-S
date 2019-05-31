@@ -19,7 +19,7 @@ setup(
         'ppo=ppo.main:cli',
         'hsr=ppo.main:hsr_cli',
         'logic=ppo.main:logic_cli',
-        'teach=ppo.main:teacher_cli',
+        'teach=ppo.main:teach_cli',
     ]),
     install_requires=[
         'gym',

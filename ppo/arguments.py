@@ -70,10 +70,6 @@ def build_parser():
         type=Path,
         help='directory to save agent logs (default: /tmp/gym)')
     parser.add_argument(
-        '--save-dir',
-        type=Path,
-        help='directory to save agent logs (default: ./trained_models/)')
-    parser.add_argument(
         '--no-cuda', dest='cuda', action='store_false', help='enables CUDA training')
     parser.add_argument(
         '--add-timestep',
@@ -140,7 +136,6 @@ def get_args():
 def get_hsr_args():
     parser = build_parser()
     env_parser = parser.add_argument_group('env_args')
-    env_parser.add_argument('--max-steps', type=int)
     add_env_args(env_parser)
     add_wrapper_args(parser.add_argument_group('wrapper_args'))
     return hierarchical_parse_args(parser)

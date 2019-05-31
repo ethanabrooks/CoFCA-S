@@ -51,8 +51,17 @@ class SubtasksGridWorld(gym.Env):
         self.open_spaces = None
         self.obstacles = None
 
+        def encode_task():
+            for task_type, count, obj_type in task:
+                yield (list(self.task_types).index(task_type),
+                       count,
+                       list(self.object_types).index(obj_type))
+
         # set on reset:
-        self.task = task
+        if task:
+            self.task = np.array(list(encode_task()))
+        else:
+            self.task = None
         self.subtask = None
         self.task_iter = None
         self.task_count = None
