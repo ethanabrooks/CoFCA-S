@@ -1,119 +1,53 @@
-# stdlib
-
-# third party
-import sys
-
 import gym
 import numpy as np
 import torch
-from gym.spaces.box import Box
-from gym.wrappers import TimeLimit
+from gym import spaces
+from gym.spaces import Box
+from rl_utils import onehot
 
-from common.atari_wrappers import wrap_deepmind
 from common.vec_env import VecEnvWrapper
-from common.vec_env.dummy_vec_env import DummyVecEnv
-from common.vec_env.subproc_vec_env import SubprocVecEnv
 from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
-from gridworld_env import LogicGridWorld
-
-try:
-    import dm_control2gym
-except ImportError:
-    pass
-
-try:
-    pass
-except ImportError:
-    pass
-
-try:
-    pass
-except ImportError:
-    pass
+from ppo.utils import set_index
 
 
-def make_env(env_id, seed, rank, log_dir, add_timestep, allow_early_resets,
-             max_episode_steps=None, **env_args):
-    def _thunk():
-        if env_args:
-            env = LogicGridWorld(**env_args)
-            if max_episode_steps:
-                env = TimeLimit(env=env, max_episode_steps=max_episode_steps)
-        elif env_id.startswith("dm"):
-            _, domain, task = env_id.split('.')
-            env = dm_control2gym.make(domain_name=domain, task_name=task)
-        else:
-            env = gym.make(env_id)
+class SubtasksWrapper(gym.ObservationWrapper):
+    def __init__(self, env):
+        super().__init__(env)
+        obs_space, task_space = env.observation_space.spaces
+        assert np.all(task_space.nvec == task_space.nvec[0])
+        task_channels = task_space.nvec[0, 0]  # channel per task_type
+        obs_shape = np.array(obs_space.nvec.shape)
+        obs_shape[0] += task_channels + 1  # +1 for task_objects
+        self.observation_space = Box(0, 1, shape=obs_shape)
 
-        is_atari = hasattr(gym.envs, 'atari') and isinstance(
-            env.unwrapped, gym.envs.atari.atari_env.AtariEnv)
-        # if is_atari:
-        #     env = make_atari(env_id)
+    def observation(self, observation):
+        obs, task = observation
+        _, h, w = obs.shape
+        env = self.env.unwrapped
 
-        env.seed(seed + rank)
+        # subtask pointer
+        task_type, _, task_object_type = env.subtask
+        task_type_one_hot = np.zeros((len(env.task_types), h, w), dtype=bool)
+        task_type_one_hot[task_type, :, :] = True
 
-        obs_shape = env.observation_space.shape
+        # TODO: make this less easy
+        task_objects_one_hot = np.zeros((h, w), dtype=bool)
+        idx = [k for k, v in env.objects.items() if v == task_object_type]
+        set_index(task_objects_one_hot, idx, True)
 
-        if add_timestep and len(
-                obs_shape) == 1 and str(env).find('TimeLimit') > -1:
-            env = AddTimestep(env)
+        obs = np.vstack([obs, task_type_one_hot,
+                         np.expand_dims(task_objects_one_hot, 0)])
 
-        if is_atari and len(env.observation_space.shape) == 3:
-                env = wrap_deepmind(env)
-        # elif len(env.observation_space.shape) == 3:
-        #     raise NotImplementedError(
-        #         "CNN models work only for atari,\n"
-        #         "please use a custom wrapper for a custom pixel input env.\n"
-        #         "See wrap_deepmind for an example.")
+        # names = ['obstacles'] + list(env.object_types) + ['ice', 'agent'] + \
+        #         list(env.task_types) + ['task objects']
+        # assert len(obs) == len(names)
+        # for array, name in zip(obs, names):
+        #     print(name)
+        #     print(array)
 
-        # If the input has shape (W,H,3), wrap for PyTorch convolutions
-        obs_shape = env.observation_space.shape
-        if len(obs_shape) == 3 and obs_shape[2] in [1, 3]:
-            env = TransposeImage(env)
-
-        return env
-
-    return _thunk
+        return obs.astype(float)
 
 
-def make_vec_envs(env_id,
-                  seed,
-                  num_processes,
-                  gamma,
-                  log_dir,
-                  add_timestep,
-                  device,
-                  allow_early_resets,
-                  env_args,
-                  render,
-                  num_frame_stack=None):
-    envs = [
-        make_env(env_id, seed, i, log_dir, add_timestep, allow_early_resets,
-                 env_args) for i in range(num_processes)
-    ]
-
-    if len(envs) == 1 or sys.platform == 'darwin':
-        envs = DummyVecEnv(envs, render=render)
-    else:
-        envs = SubprocVecEnv(envs)
-
-    if len(envs.observation_space.shape) == 1:
-        if gamma is None:
-            envs = VecNormalize(envs, ret=False)
-        else:
-            envs = VecNormalize(envs, gamma=gamma)
-
-    envs = VecPyTorch(envs, device)
-
-    if num_frame_stack is not None:
-        envs = VecPyTorchFrameStack(envs, num_frame_stack, device)
-    # elif len(envs.observation_space.shape) == 3:
-    #     envs = VecPyTorchFrameStack(envs, 4, device)
-
-    return envs
-
-
-# Can be used to test recurrent policies for Reacher-v2
 class MaskGoal(gym.ObservationWrapper):
     def observation(self, observation):
         if self.env._elapsed_steps > 0:
@@ -202,8 +136,6 @@ class VecNormalize(VecNormalize_):
         self.training = False
 
 
-# Derived from
-# https://github.com/openai/baselines/blob/master/baselines/common/vec_env/vec_frame_stack.py
 class VecPyTorchFrameStack(VecEnvWrapper):
     def __init__(self, venv, nstack, device=None):
         self.venv = venv
@@ -217,7 +149,7 @@ class VecPyTorchFrameStack(VecEnvWrapper):
 
         if device is None:
             device = torch.device('cpu')
-        self.stacked_obs = torch.zeros((venv.num_envs, ) +
+        self.stacked_obs = torch.zeros((venv.num_envs,) +
                                        low.shape).to(device)
 
         observation_space = gym.spaces.Box(
@@ -242,3 +174,30 @@ class VecPyTorchFrameStack(VecEnvWrapper):
 
     def close(self):
         self.venv.close()
+
+
+class OneHotWrapper(gym.Wrapper):
+    def wrap_observation(self, obs, observation_space=None):
+        if observation_space is None:
+            observation_space = self.observation_space
+        if isinstance(observation_space, spaces.Discrete):
+            return onehot(obs, observation_space.n)
+        if isinstance(observation_space, spaces.MultiDiscrete):
+            assert observation_space.contains(obs)
+
+            def one_hots():
+                nvec = observation_space.nvec
+                for o, n in zip(obs.reshape(len(obs), -1).T,
+                                nvec.reshape(len(nvec), -1).T):
+                    yield onehot(o, n)
+
+            return np.concatenate(list(one_hots()), axis=-1)
+
+
+def get_vec_normalize(venv):
+    if isinstance(venv, VecNormalize):
+        return venv
+    elif hasattr(venv, 'venv'):
+        return get_vec_normalize(venv.venv)
+
+    return None

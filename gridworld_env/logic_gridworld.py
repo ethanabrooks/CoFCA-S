@@ -7,18 +7,7 @@ from gym import spaces
 from gym.utils import seeding
 from gym.utils.colorize import color2num
 
-
-def set_index(array, idxs, value):
-    idxs = np.array(idxs)
-    if idxs.size > 0:
-        array[tuple(idxs.T)] = value
-
-
-def get_index(array, idxs):
-    idxs = np.array(idxs)
-    if idxs.size == 0:
-        return np.array([], array.dtype)
-    return array[tuple(idxs.T)]
+from ppo.utils import set_index, get_index
 
 
 class LogicGridWorld(gym.Env):
@@ -147,7 +136,7 @@ class LogicGridWorld(gym.Env):
             iterate = self.to_touch().size < self.last_to_touch.size
         elif self.task_type == 'move':
             dest_one_hot[:, :, :-1] = (
-                self.target_color == self.colors).reshape(1, 1, -1)
+                    self.target_color == self.colors).reshape(1, 1, -1)
             iterate = self.to_move().size < self.last_to_move.size
         else:
             raise RuntimeError
@@ -188,7 +177,7 @@ class LogicGridWorld(gym.Env):
             if any(touching):
                 idx = touching.argmax()
                 if self.object_grasped[idx] and \
-                        np.count_nonzero(touching) == 1: # prevent dropping
+                        np.count_nonzero(touching) == 1:  # prevent dropping
                     # objects on each other
                     self.object_grasped[idx] = 0
                 elif not any(self.object_grasped):

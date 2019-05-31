@@ -59,7 +59,6 @@ def build_parser():
         type=int,
         default=None,
         help='eval interval, one eval per n updates (default: None)')
-    parser.add_argument('--num-frames', type=int)
     parser.add_argument(
         '--env',
         dest='env_id',
@@ -75,12 +74,14 @@ def build_parser():
         type=Path,
         help='directory to save agent logs (default: ./trained_models/)')
     parser.add_argument(
-        '--cuda', action='store_true', help='enables CUDA training')
+        '--no-cuda', dest='cuda', action='store_false', help='enables CUDA training')
     parser.add_argument(
         '--add-timestep',
         action='store_true',
         default=False,
         help='add timestep to observations')
+    parser.add_argument('--success-reward', type=float)
+    parser.add_argument('--successes-till-done', type=int)
 
     network_parser = parser.add_argument_group('network_args')
     network_parser.add_argument('--logic', action='store_true')
@@ -133,7 +134,7 @@ def build_parser():
 
 
 def get_args():
-    return dict(**hierarchical_parse_args(build_parser()), env_args={})
+    return hierarchical_parse_args(build_parser())
 
 
 def get_hsr_args():
