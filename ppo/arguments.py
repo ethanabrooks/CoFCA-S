@@ -4,8 +4,6 @@ import argparse
 from pathlib import Path
 
 import torch.nn as nn
-
-from hsr.util import add_env_args, add_wrapper_args
 from rl_utils import hierarchical_parse_args, parse_activation
 
 
@@ -133,9 +131,9 @@ def get_args():
     return hierarchical_parse_args(build_parser())
 
 
-def get_hsr_args():
-    parser = build_parser()
-    env_parser = parser.add_argument_group('env_args')
-    add_env_args(env_parser)
-    add_wrapper_args(parser.add_argument_group('wrapper_args'))
-    return hierarchical_parse_args(parser)
+# def get_hsr_args():
+#     parser = build_parser()
+#     env_parser = parser.add_argument_group('env_args')
+#     add_env_args(env_parser)
+#     add_wrapper_args(parser.add_argument_group('wrapper_args'))
+#     return hierarchical_parse_args(parser)

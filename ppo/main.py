@@ -2,18 +2,13 @@
 import itertools
 from pathlib import Path
 
-import gym
-
 # noinspection PyUnresolvedReferences
 from gym.wrappers import TimeLimit
-
-import gridworld_env
-from gridworld_env import SubtasksGridWorld
-from hsr.util import env_wrapper
-from ppo.arguments import build_parser, get_args, get_hsr_args
-from ppo.train import Trainer
 from rl_utils import hierarchical_parse_args
 
+import gridworld_env
+from ppo.arguments import build_parser, get_args
+from ppo.train import Trainer
 from ppo.wrappers import SubtasksWrapper
 
 
@@ -21,9 +16,9 @@ def cli():
     Trainer(**get_args())
 
 
-def hsr_cli():
-    args = get_hsr_args()
-    env_wrapper(Trainer)(**args)
+# def hsr_cli():
+#     args = get_hsr_args()
+#     env_wrapper(Trainer)(**args)
 
 
 def teach_cli():
