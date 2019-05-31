@@ -130,6 +130,9 @@ class VecEnv(ABC):
             self.viewer = rendering.SimpleImageViewer()
         return self.viewer
 
+    def to(self, device):
+        pass
+
 
 class VecEnvWrapper(VecEnv):
     """
