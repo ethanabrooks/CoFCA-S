@@ -65,19 +65,13 @@ class Trainer:
             writer = SummaryWriter(log_dir=str(log_dir))
 
         torch.set_num_threads(1)
-        tick = time.time()
-
-        device = 'cpu'
-        if cuda:
-            device = torch.device('cuda', get_freer_gpu())
 
         _gamma = gamma if normalize else None
         envs = self.make_vec_envs(env_id, seed, num_processes, _gamma,
-                                  add_timestep, device, render)
+                                  add_timestep, render)
 
         actor_critic = Policy(envs.observation_space.shape, envs.action_space,
                               **network_args)
-        actor_critic.to(device)
 
         rollouts = RolloutStorage(
             num_steps=num_steps,
@@ -90,8 +84,14 @@ class Trainer:
 
         obs = envs.reset()
         rollouts.obs[0].copy_(obs)
-        rollouts.to(device)
+
+        device = 'cpu'
         if cuda:
+            tick = time.time()
+            device = torch.device('cuda', get_freer_gpu())
+            envs.to(device)
+            actor_critic.to(device)
+            rollouts.to(device)
             print('All values copied to GPU in',
                   time.time() - tick, 'seconds.')
 
@@ -199,8 +199,8 @@ class Trainer:
                     num_processes,
                     _gamma,
                     add_timestep,
-                    device,
                     render=render)
+                eval_envs.to(device)
 
                 # vec_norm = get_vec_normalize(eval_envs)
                 # if vec_norm is not None:
@@ -296,7 +296,6 @@ class Trainer:
                       num_processes,
                       gamma,
                       add_timestep,
-                      device,
                       render,
                       num_frame_stack=None):
         envs = [
@@ -315,13 +314,14 @@ class Trainer:
             else:
                 envs = VecNormalize(envs, gamma=gamma)
 
-        envs = VecPyTorch(envs, device)
+        envs = VecPyTorch(envs)
 
         if num_frame_stack is not None:
-            envs = VecPyTorchFrameStack(envs, num_frame_stack, device)
+            envs = VecPyTorchFrameStack(envs, num_frame_stack)
         # elif len(envs.observation_space.shape) == 3:
         #     envs = VecPyTorchFrameStack(envs, 4, device)
 
         return envs
+
 
 
