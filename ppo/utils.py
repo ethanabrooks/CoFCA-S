@@ -1,4 +1,8 @@
 # third party
+import csv
+import subprocess
+from io import StringIO
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -54,3 +58,14 @@ def get_index(array, idxs):
     if idxs.size == 0:
         return np.array([], array.dtype)
     return array[tuple(idxs.T)]
+
+
+def get_freer_gpu():
+    nvidia_smi = subprocess.check_output(
+        'nvidia-smi --format=csv --query-gpu=memory.free'.split(),
+        universal_newlines=True)
+    free_memory = [
+        float(x[0].split()[0])
+        for i, x in enumerate(csv.reader(StringIO(nvidia_smi))) if i > 0
+    ]
+    return int(np.argmax(free_memory))

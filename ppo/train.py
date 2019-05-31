@@ -1,24 +1,21 @@
-import csv
 import itertools
-import subprocess
 import sys
 import time
-from io import StringIO
 from pathlib import Path
 
 import gym
 import numpy as np
 import torch
-from gym.wrappers import TimeLimit
 from tensorboardX import SummaryWriter
 
 from common.atari_wrappers import wrap_deepmind
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
-from gridworld_env import LogicGridWorld, SubtasksGridWorld
+from gridworld_env import SubtasksGridWorld
 from ppo.policy import Policy
 from ppo.storage import RolloutStorage
 from ppo.update import PPO
+from ppo.utils import get_freer_gpu
 from ppo.wrappers import (AddTimestep, SubtasksWrapper, TransposeImage,
                           VecNormalize, VecPyTorch, VecPyTorchFrameStack)
 
@@ -59,10 +56,8 @@ class Trainer:
         torch.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
 
-        device = 'cpu'
         cuda &= torch.cuda.is_available()
         if cuda and cuda_deterministic:
-            device = torch.device('cuda', get_freer_gpu())
             torch.backends.cudnn.benchmark = False
             torch.backends.cudnn.deterministic = True
 
@@ -72,6 +67,10 @@ class Trainer:
         torch.set_num_threads(1)
         tick = time.time()
 
+        device = 'cpu'
+        if cuda:
+            device = torch.device('cuda', get_freer_gpu())
+
         _gamma = gamma if normalize else None
         envs = self.make_vec_envs(env_id, seed, num_processes, _gamma,
                                   add_timestep, device, render)
@@ -79,8 +78,6 @@ class Trainer:
         actor_critic = Policy(envs.observation_space.shape, envs.action_space,
                               **network_args)
         actor_critic.to(device)
-
-        agent = PPO(actor_critic=actor_critic, **ppo_args)
 
         rollouts = RolloutStorage(
             num_steps=num_steps,
@@ -97,6 +94,8 @@ class Trainer:
         if cuda:
             print('All values copied to GPU in',
                   time.time() - tick, 'seconds.')
+
+        agent = PPO(actor_critic=actor_critic, **ppo_args)
 
         rewards_counter = np.zeros(num_processes)
         time_step_counter = np.zeros(num_processes)
@@ -326,12 +325,3 @@ class Trainer:
         return envs
 
 
-def get_freer_gpu():
-    nvidia_smi = subprocess.check_output(
-        'nvidia-smi --format=csv --query-gpu=memory.free'.split(),
-        universal_newlines=True)
-    free_memory = [
-        float(x[0].split()[0])
-        for i, x in enumerate(csv.reader(StringIO(nvidia_smi))) if i > 0
-    ]
-    return int(np.argmax(free_memory))
