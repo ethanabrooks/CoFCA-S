@@ -1,5 +1,6 @@
 # third party
 import csv
+import random
 import subprocess
 from io import StringIO
 
@@ -58,6 +59,14 @@ def get_index(array, idxs):
     if idxs.size == 0:
         return np.array([], array.dtype)
     return array[tuple(idxs.T)]
+
+
+def get_random_gpu():
+    nvidia_smi = subprocess.check_output(
+        'nvidia-smi --format=csv --query-gpu=memory.free'.split(),
+        universal_newlines=True)
+    ngpu = len(list(csv.reader(StringIO(nvidia_smi)))) - 1
+    return random.randrange(0, ngpu)
 
 
 def get_freer_gpu():

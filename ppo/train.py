@@ -15,7 +15,7 @@ from gridworld_env import SubtasksGridWorld
 from ppo.policy import Policy
 from ppo.storage import RolloutStorage
 from ppo.update import PPO
-from ppo.utils import get_freer_gpu
+from ppo.utils import get_random_gpu
 from ppo.wrappers import (AddTimestep, SubtasksWrapper, TransposeImage,
                           VecNormalize, VecPyTorch, VecPyTorchFrameStack)
 
@@ -88,7 +88,7 @@ class Trainer:
         device = 'cpu'
         if cuda:
             tick = time.time()
-            device = torch.device('cuda', get_freer_gpu())
+            device = torch.device('cuda', get_random_gpu())
             envs.to(device)
             actor_critic.to(device)
             rollouts.to(device)
