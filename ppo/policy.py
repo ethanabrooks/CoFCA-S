@@ -60,20 +60,24 @@ class Policy(nn.Module):
         """Size of rnn_hx."""
         return self.base.recurrent_hidden_state_size
 
-    def forward(self, inputs, rnn_hxs, masks):
-        raise NotImplementedError
-
-    def act(self, inputs, rnn_hxs, masks, deterministic=False):
+    def forward(self, inputs, rnn_hxs, masks, deterministic=False, action=None):
         value, actor_features, rnn_hxs = self.base(inputs, rnn_hxs, masks)
 
         dist = self.dist(actor_features)
 
-        if deterministic:
-            action = dist.mode()
-        else:
-            action = dist.sample()
+        if action is None:
+            if deterministic:
+                action = dist.mode()
+            else:
+                action = dist.sample()
 
         action_log_probs = dist.log_probs(action)
+        dist_entropy = dist.entropy().mean()
+        return value, action, action_log_probs, dist_entropy, rnn_hxs
+
+    def act(self, inputs, rnn_hxs, masks, deterministic=False):
+        value, action, action_log_probs, _, rnn_hxs = self(
+            inputs, rnn_hxs, masks, deterministic)
         return value, action, action_log_probs, rnn_hxs
 
     def get_value(self, inputs, rnn_hxs, masks):
@@ -81,30 +85,31 @@ class Policy(nn.Module):
         return value
 
     def evaluate_actions(self, inputs, rnn_hxs, masks, action):
-        value, actor_features, rnn_hxs = self.base(inputs, rnn_hxs, masks)
-        dist = self.dist(actor_features)
-
-        action_log_probs = dist.log_probs(action)
-        dist_entropy = dist.entropy().mean()
-
+        value, _, action_log_probs, dist_entropy, rnn_hxs = self(
+            inputs, rnn_hxs, masks, action=action)
         return value, action_log_probs, dist_entropy, rnn_hxs
 
 
 class NNBase(nn.Module):
-    def __init__(self, recurrent_module: nn.RNNBase, recurrent_input_size,
+    def __init__(self, recurrent: bool, recurrent_input_size,
                  hidden_size):
         super(NNBase, self).__init__()
 
         self._hidden_size = hidden_size
-        self._recurrent = recurrent_module is not None
+        self._recurrent = recurrent
 
         if self._recurrent:
-            self.gru = recurrent_module(recurrent_input_size, hidden_size)
-            for name, param in self.gru.named_parameters():
+            self.recurrent_module = self.build_recurrent_network(recurrent_input_size,
+                                                                 hidden_size)
+            for name, param in self.recurrent_module.named_parameters():
+                print('zeroed out', name)
                 if 'bias' in name:
                     nn.init.constant_(param, 0)
                 elif 'weight' in name:
                     nn.init.orthogonal_(param)
+
+    def build_recurrent_network(self, input_size, hidden_size):
+        return nn.GRU(input_size, hidden_size)
 
     @property
     def is_recurrent(self):
@@ -122,7 +127,7 @@ class NNBase(nn.Module):
 
     def _forward_gru(self, x, hxs, masks):
         if x.size(0) == hxs.size(0):
-            x, hxs = self.gru(x.unsqueeze(0), (hxs * masks).unsqueeze(0))
+            x, hxs = self.recurrent_module(x.unsqueeze(0), (hxs * masks).unsqueeze(0))
             x = x.squeeze(0)
             hxs = hxs.squeeze(0)
         else:
@@ -138,7 +143,7 @@ class NNBase(nn.Module):
 
             # Let's figure out which steps in the sequence have a zero for any agent
             # We will always assume t=0 has a zero in it as that makes the logic cleaner
-            has_zeros = ((masks[1:] == 0.0) \
+            has_zeros = ((masks[1:] == 0.0)
                          .any(dim=-1)
                          .nonzero()
                          .squeeze()
@@ -162,7 +167,7 @@ class NNBase(nn.Module):
                 start_idx = has_zeros[i]
                 end_idx = has_zeros[i + 1]
 
-                rnn_scores, hxs = self.gru(
+                rnn_scores, hxs = self.recurrent_module(
                     x[start_idx:end_idx],
                     hxs * masks[start_idx].view(1, -1, 1))
 
@@ -176,101 +181,6 @@ class NNBase(nn.Module):
             hxs = hxs.squeeze(0)
 
         return x, hxs
-
-
-class TaskModule(nn.Module):
-    def __init__(self, h, w, d, similarity_measure, hidden_size):
-        super().__init__()
-        self._hidden_size = hidden_size
-        self.similarity_measure = similarity_measure
-        init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
-                               constant_(x, 0), nn.init.calculate_gain('relu'))
-        self.conv = init_(
-            nn.Conv2d(d, hidden_size, kernel_size=3, stride=1, padding=1))
-
-        self.gru = nn.GRU(input_size=hidden_size * h * w,
-                          output_size=hidden_size)
-        post_conv_size = h * w * hidden_size
-        self.phi_update = nn.Linear(post_conv_size + hidden_size, 1)
-        self.phi_shift = nn.Linear(hidden_size, 3)  # 3 for {-1, 0, +1}
-        self.mlp = nn.Sequential(
-            nn.ReLU(), Flatten(),
-            init_(nn.Linear(hidden_size * h * w, hidden_size * 2)), nn.ReLU())
-        self.main = nn.Sequential(self.conv, self.mlp)
-
-        init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
-                               constant_(x, 0))
-
-        self.critic_linear = init_(nn.Linear(hidden_size, 1))
-
-    def forward_one_step(self, x, hx):
-        h, p, r, g = torch.split(hx, [], dim=1)  # TODO
-        c = F.sigmoid(self.phi_update(h))
-        h = self.gru(x, h)
-        l = F.softmax(self.phi_shift(h))
-        p = F.c
-        initial_shape = hx.shape
-        if torch.all(hx == 0):  # first step of episode
-            hx = x[:, -1]  # to do objects
-        iterate = x[:, -2]  # whether to shift attention
-        hx = hx.view(*x[:, -1].shape)
-        conv_inputs = torch.cat([x[:, :-1], hx.unsqueeze(1)], dim=1)
-        conv_out = self.conv(conv_inputs)
-        sections = [self._hidden_size] * 2
-        key, x = torch.split(self.mlp(conv_out), sections, dim=-1)
-        key = key.view(*key.shape, 1, 1)
-
-        if self.similarity_measure == 'dot-product':
-            similarity = torch.sum(key * conv_out, dim=1)
-        elif self.similarity_measure == 'euclidean-distance':
-            similarity = torch.norm(key - conv_out, dim=1)
-        elif self.similarity_measure == 'cosine-similarity':
-            similarity = torch.nn.functional.cosine_similarity(
-                key, conv_out, dim=1)
-
-        hx = hx.squeeze(1) - iterate * similarity
-        return x, hx.view(initial_shape)
-
-    def forward(self, input, hx=None):
-        assert hx is not None
-        hx = hx[0]  # remaining hxs are generated dynamically
-        outputs = []
-        for x in input:
-            x, hx = self.forward_one_step(x, hx)
-            outputs.append((x, hx))
-
-        xs, hxs = zip(*outputs)
-        return torch.stack(xs), torch.stack(hxs)
-
-
-class TaskBase(NNBase):
-    def __init__(self, d, h, w, similarity_measure, hidden_size=512):
-        def recurrent_module(input_size, hidden_size):
-            return TaskModule(
-                h=h,
-                w=w,
-                d=d,
-                hidden_size=hidden_size,
-                similarity_measure=similarity_measure)
-
-        super(TaskBase, self).__init__(
-            recurrent_module=recurrent_module,
-            recurrent_input_size=h * w,
-            hidden_size=hidden_size)
-        self._recurrent_hidden_state_size = h * w
-
-        init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
-                               constant_(x, 0), nn.init.calculate_gain('relu'))
-        self.critic_linear = init_(nn.Linear(hidden_size, 1))
-        self.train()
-
-    @property
-    def recurrent_hidden_state_size(self):
-        return self._recurrent_hidden_state_size
-
-    def forward(self, inputs, rnn_hxs, masks):
-        x, rnn_hxs = self._forward_gru(inputs, rnn_hxs, masks)
-        return self.critic_linear(x), x, rnn_hxs
 
 
 class LogicModule(nn.Module):
@@ -330,16 +240,11 @@ class LogicModule(nn.Module):
 
 class LogicBase(NNBase):
     def __init__(self, d, h, w, similarity_measure, hidden_size=512):
-        def recurrent_module(input_size, hidden_size):
-            return LogicModule(
-                h=h,
-                w=w,
-                d=d,
-                hidden_size=hidden_size,
-                similarity_measure=similarity_measure)
+        self.input_shape = h, w, d
+        self.similarity_measure = similarity_measure
 
         super(LogicBase, self).__init__(
-            recurrent_module=recurrent_module,
+            recurrent=True,
             recurrent_input_size=h * w,
             hidden_size=hidden_size)
         self._recurrent_hidden_state_size = h * w
@@ -348,6 +253,12 @@ class LogicBase(NNBase):
                                constant_(x, 0), nn.init.calculate_gain('relu'))
         self.critic_linear = init_(nn.Linear(hidden_size, 1))
         self.train()
+
+    def build_recurrent_network(self, input_size, hidden_size):
+        return LogicModule(
+            *self.input_shape,
+            hidden_size=hidden_size,
+            similarity_measure=self.similarity_measure)
 
     @property
     def recurrent_hidden_state_size(self):
@@ -360,8 +271,7 @@ class LogicBase(NNBase):
 
 class CNNBase(NNBase):
     def __init__(self, d, h, w, hidden_size, recurrent=False):
-        recurrent_module = nn.GRU if recurrent else None
-        super(CNNBase, self).__init__(recurrent_module, hidden_size,
+        super(CNNBase, self).__init__(recurrent, hidden_size,
                                       hidden_size)
 
         init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.

@@ -51,24 +51,12 @@ class SubtasksGridWorld(gym.Env):
             'visit',
             'pick-up',
             'transform',
-            'pick-up-2',
-            'transform-2',
-            'pick-up-3',
-            'transform-3',
         ]
 
-        self.task_counts = [
-            1,
-            1,
-            1,
-            2,
-            2,
-            3,
-            3,
-        ]
+        self.max_task_count = 3
 
-        self.initialized = False
         # set on initialize
+        self.initialized = False
         self.obstacles_one_hot = np.zeros(self.desc.shape, dtype=bool)
         self.open_spaces = None
         self.obstacles = None
@@ -77,14 +65,24 @@ class SubtasksGridWorld(gym.Env):
         self.objects = None
         self.pos = None
         self.task_count = None
-        self.tasks = None
+        self.tasks_iter = None
         self.task = None
+        self.tasks = None
         self.iterate = None
         self.last_terminal = False
 
-        self.reset()
-        self.observation_space = spaces.Box(
-            low=0, high=1, shape=self.get_observation().shape)
+        o, t = self.reset()
+        self.observation_space = spaces.Tuple([
+            spaces.MultiDiscrete(np.ones_like(o)),
+            spaces.MultiDiscrete(
+                np.tile(
+                    np.array([len(self.task_types),
+                              self.max_task_count,
+                              len(object_types)]),
+                    (n_subtasks, 1)
+                )
+            )
+        ])
         self.action_space = spaces.Discrete(len(self.transitions) + 2)
 
     def initialize(self):
@@ -137,10 +135,13 @@ class SubtasksGridWorld(gym.Env):
             len(self.task_types), size=self.n_subtasks)
         task_objects = self.np_random.choice(
             len(self.object_types), size=self.n_subtasks)
-        tasks = np.stack([task_types, task_objects], axis=1)
-        self.tasks = iter(tasks)
+        task_counts = self.np_random.choice(
+            self.max_task_count, size=self.n_subtasks)
+        task_counts[self.task_types[task_types] == 'visit'] = 1
+        self.tasks = tasks = np.stack([task_types, task_counts, task_objects], axis=1)
+        self.tasks_iter = iter(tasks)
 
-        types = [x for t, o in tasks for x in self.task_counts[t] * [o]]
+        types = [x for t, c, o in tasks for x in c * [o]]
         n_random = max(len(types), self.n_objects)
         random_types = self.np_random.choice(
             len(self.object_types), replace=True, size=n_random - len(types))
@@ -163,7 +164,7 @@ class SubtasksGridWorld(gym.Env):
         h, w, = self.desc.shape
         objects_one_hot = np.zeros((h, w, 1 + len(self.object_types)),
                                    dtype=bool)
-        idx = [k + (v, ) for k, v in self.objects.items()]
+        idx = [k + (v,) for k, v in self.objects.items()]
         set_index(objects_one_hot, idx, True)
         return objects_one_hot
 
@@ -174,7 +175,7 @@ class SubtasksGridWorld(gym.Env):
         set_index(agent_one_hot, self.pos, True)
 
         # partial observability stuff
-        task_type, task_object_type = self.task
+        task_type, _, task_object_type = self.task
         task_type_one_hot = np.zeros((h, w, len(self.task_types)), dtype=bool)
         task_type_one_hot[:, :, task_type] = True
 
@@ -199,7 +200,7 @@ class SubtasksGridWorld(gym.Env):
         #     print(name)
         #     print(array)
 
-        return transpose
+        return transpose, self.tasks
 
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)
@@ -208,9 +209,10 @@ class SubtasksGridWorld(gym.Env):
     def perform_iteration(self):
         self.iterate = False
         if not self.task_count:
-            task_type, _ = self.task = next(self.tasks)
-            self.task_count = self.task_counts[task_type]
-        self.task_count -= 1
+            task_type, task_count, _ = self.task = next(self.tasks_iter)
+            self.task_count = task_count
+        else:
+            self.task_count -= 1
 
     def step(self, a):
         # act
@@ -238,7 +240,7 @@ class SubtasksGridWorld(gym.Env):
                     self.objects[pos] = len(self.object_types)
 
             # iterate
-            task_type_idx, task_object_type_idx = self.task
+            task_type_idx, _, task_object_type_idx = self.task
             task_type = self.task_types[task_type_idx]
             if 'visit' == task_type:
                 self.iterate = object_type == task_object_type_idx

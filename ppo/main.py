@@ -12,7 +12,6 @@ import torch
 from tensorboardX import SummaryWriter
 
 # noinspection PyUnresolvedReferences
-# first party
 import gridworld_env
 from hsr.util import env_wrapper
 from ppo.arguments import build_parser, get_args, get_hsr_args
