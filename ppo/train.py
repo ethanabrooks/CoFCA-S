@@ -93,7 +93,8 @@ class Trainer:
             actor_critic.to(device)
             rollouts.to(device)
             print('All values copied to GPU in',
-                  time.time() - tick, 'seconds.')
+                  time.time() - tick, 'seconds')
+        print('Using device', device)
 
         agent = PPO(actor_critic=actor_critic, **ppo_args)
 
@@ -245,10 +246,14 @@ class Trainer:
             else:
                 continue  # No rewards collected
 
-            if success_reward and np.concatenate(
-                    rewards).mean() > success_reward:
+            obtained_reward = np.concatenate(rewards).mean()
+            print(f'Obstained average reward of {obtained_reward} vs success threshold of {success_reward}')
+            if success_reward and obtained_reward > success_reward:
                 n_success += 1
+                print('Consecutive successes:', n_success)
             else:
+                if n_success > 0:
+                    print('Consecutive successes:', n_success)
                 n_success = 0
             if n_success == successes_till_done:
                 return
