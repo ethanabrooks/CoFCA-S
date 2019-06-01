@@ -240,14 +240,16 @@ class SubtasksGridWorld(gym.Env):
 
         # next task / terminate
         t = False
+        r = -.1
         if self.iterate:
             try:
                 self.perform_iteration()
             except StopIteration:
+                r = 1
                 t = True
 
         self.last_terminal = t
-        return self.get_observation(), -.1, t, {}
+        return self.get_observation(), r, t, {}
 
 
 if __name__ == '__main__':
