@@ -7,6 +7,7 @@ from gym.spaces import Box
 from common.vec_env import VecEnvWrapper
 from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
 from ppo.utils import set_index
+from rl_utils import onehot
 
 
 class SubtasksWrapper(gym.ObservationWrapper):
@@ -84,10 +85,10 @@ class TransposeImage(gym.ObservationWrapper):
 
 
 class VecPyTorch(VecEnvWrapper):
-    def __init__(self, venv, device):
+    def __init__(self, venv):
         """Return only every `skip`-th frame"""
         super(VecPyTorch, self).__init__(venv)
-        self.device = device
+        self.device = 'cpu'
         # TODO: Fix data types
 
     @staticmethod
@@ -112,6 +113,10 @@ class VecPyTorch(VecEnvWrapper):
         obs = torch.from_numpy(obs).float().to(self.device)
         reward = torch.from_numpy(reward).float()
         return obs, reward, done, info
+
+    def to(self, device):
+        self.device = device
+        self.venv.to(device)
 
 
 class VecNormalize(VecNormalize_):
@@ -177,6 +182,10 @@ class VecPyTorchFrameStack(VecEnvWrapper):
 
     def close(self):
         self.venv.close()
+
+    def to(self, device):
+        self.stacked_obs = self.stacked_obs.to(device)
+        self.venv.to(device)
 
 
 def get_vec_normalize(venv):

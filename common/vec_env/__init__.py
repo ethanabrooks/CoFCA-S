@@ -130,6 +130,9 @@ class VecEnv(ABC):
             self.viewer = rendering.SimpleImageViewer()
         return self.viewer
 
+    def to(self, device):
+        pass
+
 
 class VecEnvWrapper(VecEnv):
     """
@@ -164,6 +167,9 @@ class VecEnvWrapper(VecEnv):
 
     def get_images(self):
         return self.venv.get_images()
+
+    def to(self):
+        pass
 
 
 class CloudpickleWrapper(object):

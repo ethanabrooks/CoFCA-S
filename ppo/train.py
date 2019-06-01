@@ -81,10 +81,22 @@ class Trainer:
 
         obs = envs.reset()
         rollouts.obs[0].copy_(obs)
-        rollouts.to(device)
+
+        device = 'cpu'
+        if cuda:
+            tick = time.time()
+            device = torch.device('cuda', get_random_gpu())
+            envs.to(device)
+            actor_critic.to(device)
+            rollouts.to(device)
+            print('All values copied to GPU in', time.time() - tick, 'seconds')
+        print('Using device', device)
+
+        agent = PPO(actor_critic=actor_critic, **ppo_args)
 
         rewards_counter = np.zeros(num_processes)
         time_step_counter = np.zeros(num_processes)
+        n_success = 0
         episode_rewards = []
         time_steps = []
 
@@ -307,7 +319,7 @@ class Trainer:
             else:
                 envs = VecNormalize(envs, gamma=gamma)
 
-        envs = VecPyTorch(envs, device)
+        envs = VecPyTorch(envs)
 
         if num_frame_stack is not None:
             envs = VecPyTorchFrameStack(envs, num_frame_stack, device)
