@@ -1,7 +1,24 @@
 # third party
+import csv
+import random
+import subprocess
+from io import StringIO
+
 import numpy as np
 import torch
 import torch.nn as nn
+
+
+# Get a render function
+def get_render_func(venv):
+    if hasattr(venv, 'envs'):
+        return venv.envs[0].render
+    elif hasattr(venv, 'venv'):
+        return get_render_func(venv.venv)
+    elif hasattr(venv, 'env'):
+        return get_render_func(venv.env)
+
+    return None
 
 
 # Necessary for my KFAC implementation.
@@ -42,3 +59,23 @@ def get_index(array, idxs):
     if idxs.size == 0:
         return np.array([], array.dtype)
     return array[tuple(idxs.T)]
+
+
+def get_random_gpu():
+    nvidia_smi = subprocess.check_output(
+        'nvidia-smi --format=csv --query-gpu=memory.free'.split(),
+        universal_newlines=True)
+    ngpu = len(list(csv.reader(StringIO(nvidia_smi)))) - 1
+    return random.randrange(0, ngpu)
+
+
+def get_freer_gpu():
+    nvidia_smi = subprocess.check_output(
+        'nvidia-smi --format=csv --query-gpu=memory.free'.split(),
+        universal_newlines=True)
+    free_memory = [
+        float(x[0].split()[0])
+        for i, x in enumerate(csv.reader(StringIO(nvidia_smi))) if i > 0
+    ]
+    return int(np.argmax(free_memory))
+

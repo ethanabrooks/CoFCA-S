@@ -7,7 +7,6 @@ from gym.spaces import Box
 from common.vec_env import VecEnvWrapper
 from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
 from ppo.utils import set_index
-from rl_utils import onehot
 
 
 class SubtasksWrapper(gym.ObservationWrapper):
@@ -178,17 +177,6 @@ class VecPyTorchFrameStack(VecEnvWrapper):
 
     def close(self):
         self.venv.close()
-
-
-def get_render_func(venv):
-    if hasattr(venv, 'envs'):
-        return venv.envs[0].render
-    elif hasattr(venv, 'venv'):
-        return get_render_func(venv.venv)
-    elif hasattr(venv, 'env'):
-        return get_render_func(venv.env)
-
-    return None
 
 
 def get_vec_normalize(venv):

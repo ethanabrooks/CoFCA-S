@@ -6,7 +6,8 @@ import os
 import torch
 
 # first party
-from ppo.wrappers import make_vec_envs, get_render_func, get_vec_normalize
+from ppo.wrappers import make_vec_envs, get_vec_normalize
+from ppo.utils import get_render_func
 
 parser = argparse.ArgumentParser(description='RL')
 parser.add_argument(
