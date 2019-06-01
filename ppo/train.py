@@ -190,23 +190,22 @@ class Trainer:
             if j % log_interval == 0:
                 end = time.time()
                 fps = int(total_num_steps / (end - start))
-                episode_rewards = np.concatenate(episode_rewards)
-                if episode_rewards.size > 0:
+                if rewards_array.size > 0:
                     print(
                         f"Updates {j}, num timesteps {total_num_steps}, FPS {fps} \n "
                         f"Last {len(episode_rewards)} training episodes: " +
                         "mean/median reward {:.2f}/{:.2f}, min/max reward {:.2f}/{"
                         ":.2f}\n".format(
-                            np.mean(episode_rewards), np.median(
-                                episode_rewards), np.min(episode_rewards),
-                            np.max(episode_rewards)))
+                            np.mean(rewards_array), np.median(rewards_array),
+                            np.min(rewards_array), np.max(rewards_array)))
                 if log_dir:
-                    writer.add_scalar('return', np.mean(episode_rewards), j)
+                    writer.add_scalar('return', np.mean(rewards_array), j)
                     for k, v in train_results.items():
                         if log_dir and np.isscalar(v):
                             writer.add_scalar(k.replace('_', ' '), v, j)
                 episode_rewards = []
 
+            eval_episode_rewards = []
             if eval_interval is not None and j % eval_interval == eval_interval - 1:
                 eval_envs = self.make_vec_envs(
                     env_id,
@@ -214,14 +213,13 @@ class Trainer:
                     num_processes,
                     _gamma,
                     add_timestep,
-                    render)
+                    render=render)
+                eval_envs.to(device)
 
                 # vec_norm = get_vec_normalize(eval_envs)
                 # if vec_norm is not None:
                 #     vec_norm.eval()
                 #     vec_norm.ob_rms = get_vec_normalize(envs).ob_rms
-
-                eval_episode_rewards = []
 
                 obs = eval_envs.reset()
                 eval_recurrent_hidden_states = torch.zeros(

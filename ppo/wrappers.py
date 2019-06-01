@@ -142,8 +142,6 @@ class VecNormalize(VecNormalize_):
         self.training = False
 
 
-# Derived from
-# https://github.com/openai/baselines/blob/master/baselines/common/vec_env/vec_frame_stack.py
 class VecPyTorchFrameStack(VecEnvWrapper):
     def __init__(self, venv, nstack, device=None):
         self.venv = venv
