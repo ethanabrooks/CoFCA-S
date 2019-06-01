@@ -16,8 +16,8 @@ from ppo.policy import Policy
 from ppo.storage import RolloutStorage
 from ppo.update import PPO
 from ppo.utils import get_random_gpu
-from ppo.wrappers import (AddTimestep, TransposeImage, VecNormalize,
-                          VecPyTorch, VecPyTorchFrameStack, SubtasksWrapper)
+from ppo.wrappers import (AddTimestep, SubtasksWrapper, TransposeImage,
+                          VecNormalize, VecPyTorch, VecPyTorchFrameStack)
 
 try:
     import dm_control2gym
@@ -61,17 +61,8 @@ class Trainer:
             torch.backends.cudnn.benchmark = False
             torch.backends.cudnn.deterministic = True
 
-        eval_log_dir = None
         if log_dir:
             writer = SummaryWriter(log_dir=str(log_dir))
-            eval_log_dir = log_dir.joinpath("eval")
-
-            for _dir in [log_dir, eval_log_dir]:
-                try:
-                    _dir.mkdir()
-                except OSError:
-                    for f in _dir.glob('*.monitor.csv'):
-                        f.unlink()
 
         torch.set_num_threads(1)
         device = torch.device(f"cuda:{get_random_gpu()}" if cuda else "cpu")
