@@ -150,7 +150,7 @@ class Trainer:
             train_results = agent.update(rollouts)
             rollouts.after_update()
 
-            if log_dir and save_interval and \
+            if save_dir and save_interval and \
                     time.time() - last_save >= save_interval:
                 last_save = time.time()
                 modules = dict(
@@ -164,7 +164,7 @@ class Trainer:
                     name: module.state_dict()
                     for name, module in modules.items()
                 }
-                save_path = Path(log_dir, 'checkpoint.pt')
+                save_path = Path(save_dir, 'checkpoint.pt')
                 torch.save(dict(step=j, **state_dict), save_path)
 
                 print(f'Saved parameters to {save_path}')
