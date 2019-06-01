@@ -4,8 +4,6 @@ import argparse
 from pathlib import Path
 
 import torch.nn as nn
-
-# from hsr.util import add_env_args, add_wrapper_args
 from rl_utils import hierarchical_parse_args, parse_activation
 
 
@@ -60,11 +58,6 @@ def build_parser():
         default=None,
         help='eval interval, one eval per n updates (default: None)')
     parser.add_argument(
-        '--num-frames',
-        type=int,
-        default=10e6,
-        help='number of frames to train (default: 10e6)')
-    parser.add_argument(
         '--env',
         dest='env_id',
         default='PongNoFrameskip-v4',
@@ -75,16 +68,14 @@ def build_parser():
         type=Path,
         help='directory to save agent logs (default: /tmp/gym)')
     parser.add_argument(
-        '--save-dir',
-        type=Path,
-        help='directory to save agent logs (default: ./trained_models/)')
-    parser.add_argument(
-        '--cuda', action='store_true', help='enables CUDA training')
+        '--no-cuda', dest='cuda', action='store_false', help='enables CUDA training')
     parser.add_argument(
         '--add-timestep',
         action='store_true',
         default=False,
         help='add timestep to observations')
+    parser.add_argument('--success-reward', type=float)
+    parser.add_argument('--successes-till-done', type=int)
 
     network_parser = parser.add_argument_group('network_args')
     network_parser.add_argument('--logic', action='store_true')
@@ -137,13 +128,12 @@ def build_parser():
 
 
 def get_args():
-    return dict(**hierarchical_parse_args(build_parser()), env_args={})
+    return hierarchical_parse_args(build_parser())
 
 
 # def get_hsr_args():
-# parser = build_parser()
-# env_parser = parser.add_argument_group('env_args')
-# env_parser.add_argument('--max-steps', type=int)
-# add_env_args(env_parser)
-# add_wrapper_args(parser.add_argument_group('wrapper_args'))
-# return hierarchical_parse_args(parser)
+#     parser = build_parser()
+#     env_parser = parser.add_argument_group('env_args')
+#     add_env_args(env_parser)
+#     add_wrapper_args(parser.add_argument_group('wrapper_args'))
+#     return hierarchical_parse_args(parser)

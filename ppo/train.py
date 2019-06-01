@@ -1,3 +1,4 @@
+import itertools
 import sys
 import time
 from pathlib import Path
@@ -25,15 +26,32 @@ except ImportError:
 
 
 class Trainer:
-    def __init__(self, num_frames, num_steps, num_processes, seed,
-                 cuda_deterministic, cuda, log_dir: Path, env_id, gamma,
-                 normalize, add_timestep, save_interval, save_dir,
-                 log_interval, eval_interval, use_gae, tau, ppo_args, env_args,
-                 network_args, render, load_path):
+    def __init__(self,
+                 num_steps,
+                 num_processes,
+                 seed,
+                 cuda_deterministic,
+                 cuda,
+                 log_dir: Path,
+                 env_id,
+                 gamma,
+                 normalize,
+                 add_timestep,
+                 save_interval,
+                 log_interval,
+                 eval_interval,
+                 use_gae,
+                 tau,
+                 ppo_args,
+                 network_args,
+                 render,
+                 load_path,
+                 success_reward,
+                 successes_till_done,
+                 save_dir=None):
+        save_dir = save_dir or log_dir
         if render:
             num_processes = 1
-
-        num_updates = int(num_frames) // num_steps // num_processes
 
         torch.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
@@ -97,6 +115,7 @@ class Trainer:
 
         rewards_counter = np.zeros(num_processes)
         time_step_counter = np.zeros(num_processes)
+        n_success = 0
         episode_rewards = []
         time_steps = []
 
@@ -112,7 +131,7 @@ class Trainer:
                 envs.venv.load_state_dict(state_dict['vec_normalize'])
             print(f'Loaded parameters from {load_path}.')
 
-        for j in range(num_updates):
+        for j in itertools.count():
             for step in range(num_steps):
                 # Sample actions.add_argument_group('env_args')
                 with torch.no_grad():
@@ -167,6 +186,22 @@ class Trainer:
                 print(f'Saved parameters to {save_path}')
 
             total_num_steps = (j + 1) * num_processes * num_steps
+
+            rewards_array = np.concatenate(episode_rewards)
+            if rewards_array.size > 0:
+                reward = rewards_array.mean()
+                print(
+                    f'Obtained average reward of {reward} vs success threshold of {success_reward}'
+                )
+                if success_reward and reward > success_reward:
+                    n_success += 1
+                    print('Consecutive successes:', n_success)
+                else:
+                    if n_success > 0:
+                        print('Consecutive successes:', n_success)
+                    n_success = 0
+                if n_success == successes_till_done:
+                    return
 
             if j % log_interval == 0:
                 end = time.time()
