@@ -1,21 +1,33 @@
+import sys
 import time
 from pathlib import Path
 
+import gym
 import numpy as np
 import torch
+from gym.wrappers import TimeLimit
 from tensorboardX import SummaryWriter
 
-from ppo.envs import make_vec_envs, VecNormalize
+from common.atari_wrappers import wrap_deepmind
+from common.vec_env.dummy_vec_env import DummyVecEnv
+from common.vec_env.subproc_vec_env import SubprocVecEnv
+from gridworld_env import LogicGridWorld
+from ppo.envs import VecNormalize, VecPyTorch, VecPyTorchFrameStack, TransposeImage, AddTimestep
 from ppo.policy import Policy
 from ppo.storage import RolloutStorage
 from ppo.update import PPO
 
+try:
+    import dm_control2gym
+except ImportError:
+    pass
+
 
 class Trainer:
     def __init__(self, num_frames, num_steps, num_processes, seed, cuda_deterministic, cuda,
-                log_dir: Path, env_id, gamma, normalize, add_timestep, save_interval,
-                save_dir, log_interval, eval_interval, use_gae, tau, ppo_args,
-                env_args, network_args, render, load_path):
+                 log_dir: Path, env_id, gamma, normalize, add_timestep, save_interval,
+                 save_dir, log_interval, eval_interval, use_gae, tau, ppo_args,
+                 env_args, network_args, render, load_path):
         if render:
             num_processes = 1
 
@@ -45,8 +57,8 @@ class Trainer:
         device = torch.device("cuda:0" if cuda else "cpu")
 
         _gamma = gamma if normalize else None
-        envs = make_vec_envs(env_id, seed, num_processes, _gamma, log_dir,
-                             add_timestep, device, False, env_args, render)
+        envs = self.make_vec_envs(env_id, seed, num_processes, _gamma, log_dir,
+                                  add_timestep, device, False, env_args, render)
 
         actor_critic = Policy(envs.observation_space.shape, envs.action_space,
                               **network_args)
@@ -159,7 +171,7 @@ class Trainer:
                 episode_rewards = []
 
             if eval_interval is not None and j % eval_interval == eval_interval - 1:
-                eval_envs = make_vec_envs(
+                eval_envs = self.make_vec_envs(
                     env_id,
                     seed + num_processes,
                     num_processes,
@@ -206,3 +218,83 @@ class Trainer:
 
                 print(" Evaluation using {} episodes: mean reward {:.5f}\n".format(
                     len(eval_episode_rewards), np.mean(eval_episode_rewards)))
+
+    @staticmethod
+    def make_env(env_id, seed, rank, log_dir, add_timestep, allow_early_resets,
+                 max_episode_steps=None, **env_args):
+        def _thunk():
+            if env_args:
+                env = LogicGridWorld(**env_args)
+                if max_episode_steps:
+                    env = TimeLimit(env=env, max_episode_steps=max_episode_steps)
+            elif env_id.startswith("dm"):
+                _, domain, task = env_id.split('.')
+                env = dm_control2gym.make(domain_name=domain, task_name=task)
+            else:
+                env = gym.make(env_id)
+
+            is_atari = hasattr(gym.envs, 'atari') and isinstance(
+                env.unwrapped, gym.envs.atari.atari_env.AtariEnv)
+            # if is_atari:
+            #     env = make_atari(env_id)
+
+            env.seed(seed + rank)
+
+            obs_shape = env.observation_space.shape
+
+            if add_timestep and len(
+                    obs_shape) == 1 and str(env).find('TimeLimit') > -1:
+                env = AddTimestep(env)
+
+            if is_atari and len(env.observation_space.shape) == 3:
+                env = wrap_deepmind(env)
+            # elif len(env.observation_space.shape) == 3:
+            #     raise NotImplementedError(
+            #         "CNN models work only for atari,\n"
+            #         "please use a custom wrapper for a custom pixel input env.\n"
+            #         "See wrap_deepmind for an example.")
+
+            # If the input has shape (W,H,3), wrap for PyTorch convolutions
+            obs_shape = env.observation_space.shape
+            if len(obs_shape) == 3 and obs_shape[2] in [1, 3]:
+                env = TransposeImage(env)
+
+            return env
+
+        return _thunk
+
+    def make_vec_envs(self, env_id,
+                      seed,
+                      num_processes,
+                      gamma,
+                      log_dir,
+                      add_timestep,
+                      device,
+                      allow_early_resets,
+                      env_args,
+                      render,
+                      num_frame_stack=None):
+        envs = [
+            self.make_env(env_id, seed, i, log_dir, add_timestep, allow_early_resets,
+                          env_args) for i in range(num_processes)
+        ]
+
+        if len(envs) == 1 or sys.platform == 'darwin':
+            envs = DummyVecEnv(envs, render=render)
+        else:
+            envs = SubprocVecEnv(envs)
+
+        if len(envs.observation_space.shape) == 1:
+            if gamma is None:
+                envs = VecNormalize(envs, ret=False)
+            else:
+                envs = VecNormalize(envs, gamma=gamma)
+
+        envs = VecPyTorch(envs, device)
+
+        if num_frame_stack is not None:
+            envs = VecPyTorchFrameStack(envs, num_frame_stack, device)
+        # elif len(envs.observation_space.shape) == 3:
+        #     envs = VecPyTorchFrameStack(envs, 4, device)
+
+        return envs
