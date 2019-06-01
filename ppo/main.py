@@ -25,7 +25,7 @@ def get_freer_gpu():
 
 
 def cli():
-    Trainer(**get_args())
+    Trainer().train(**get_args())
 
 
 def logic_cli():
@@ -38,7 +38,7 @@ def logic_cli():
         del env_args['env_id']
         del env_args['class']
         network_args.update(logic=True)
-        Trainer(
+        Trainer().train(
             env_id=env_id,
             env_args=env_args,
             network_args=network_args,
