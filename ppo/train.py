@@ -88,7 +88,8 @@ class Trainer:
         device = 'cpu'
         if cuda:
             tick = time.time()
-            device = torch.device('cuda', get_random_gpu())
+            # device = torch.device('cuda', get_random_gpu())
+            device = torch.device('cuda', 0)
             envs.to(device)
             actor_critic.to(device)
             rollouts.to(device)
