@@ -65,20 +65,13 @@ class Trainer:
             writer = SummaryWriter(log_dir=str(log_dir))
 
         torch.set_num_threads(1)
-        device = torch.device(f"cuda:{get_random_gpu()}" if cuda else "cpu")
 
         _gamma = gamma if normalize else None
-        envs = self.make_vec_envs(
-            env_id,
-            seed + num_processes,
-            num_processes,
-            _gamma,
-            add_timestep,
-            render)
+        envs = self.make_vec_envs(env_id, seed, num_processes, _gamma,
+                                  add_timestep, render)
 
         actor_critic = Policy(envs.observation_space.shape, envs.action_space,
                               **network_args)
-        actor_critic.to(device)
 
         rollouts = RolloutStorage(
             num_steps=num_steps,
