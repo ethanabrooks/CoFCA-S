@@ -43,7 +43,7 @@ class SubtasksGridWorld(gym.Env):
             'transform',
         ])
 
-        self.max_task_count = 1
+        self.max_task_count = 2
         self.randomize_task = task is None
 
         # set on initialize
