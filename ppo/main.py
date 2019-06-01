@@ -52,4 +52,4 @@ def logic_cli():
 # env_wrapper(main)(**args)
 
 if __name__ == "__main__":
-    logic_cli()
+    cli()

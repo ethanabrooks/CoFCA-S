@@ -5,19 +5,18 @@ from pathlib import Path
 import gym
 import numpy as np
 import torch
-from gym.wrappers import TimeLimit
 from tensorboardX import SummaryWriter
 
 from common.atari_wrappers import wrap_deepmind
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
-from gridworld_env import LogicGridWorld
+from gridworld_env import SubtasksGridWorld
 from ppo.policy import Policy
 from ppo.storage import RolloutStorage
 from ppo.update import PPO
 from ppo.utils import get_random_gpu
 from ppo.wrappers import (AddTimestep, TransposeImage, VecNormalize,
-                          VecPyTorch, VecPyTorchFrameStack)
+                          VecPyTorch, VecPyTorchFrameStack, SubtasksWrapper)
 
 try:
     import dm_control2gym
@@ -60,15 +59,17 @@ class Trainer:
         device = torch.device(f"cuda:{get_random_gpu()}" if cuda else "cpu")
 
         _gamma = gamma if normalize else None
-        envs = self.make_vec_envs(env_id, seed, num_processes, _gamma, log_dir,
-                                  add_timestep, device, False, env_args,
-                                  render)
+        envs = self.make_vec_envs(
+            env_id,
+            seed + num_processes,
+            num_processes,
+            _gamma,
+            add_timestep,
+            render)
 
         actor_critic = Policy(envs.observation_space.shape, envs.action_space,
                               **network_args)
         actor_critic.to(device)
-
-        agent = PPO(actor_critic=actor_critic, **ppo_args)
 
         rollouts = RolloutStorage(
             num_steps=num_steps,
@@ -96,7 +97,6 @@ class Trainer:
 
         rewards_counter = np.zeros(num_processes)
         time_step_counter = np.zeros(num_processes)
-        n_success = 0
         episode_rewards = []
         time_steps = []
 
@@ -194,12 +194,8 @@ class Trainer:
                     seed + num_processes,
                     num_processes,
                     _gamma,
-                    eval_log_dir,
                     add_timestep,
-                    device,
-                    env_args=env_args,
-                    render=render,
-                    allow_early_resets=True)
+                    render)
 
                 # vec_norm = get_vec_normalize(eval_envs)
                 # if vec_norm is not None:
@@ -235,76 +231,57 @@ class Trainer:
                 eval_envs.close()
 
                 print(" Evaluation using {} episodes: mean reward {:.5f}\n".
-                    format(
-                    len(eval_episode_rewards),
-                    np.mean(eval_episode_rewards)))
+                      format(
+                          len(eval_episode_rewards),
+                          np.mean(eval_episode_rewards)))
 
     @staticmethod
-    def make_env(env_id,
-                 seed,
-                 rank,
-                 log_dir,
-                 add_timestep,
-                 allow_early_resets,
-                 max_episode_steps=None,
-                 **env_args):
-        def _thunk():
-            if env_args:
-                env = LogicGridWorld(**env_args)
-                if max_episode_steps:
-                    env = TimeLimit(
-                        env=env, max_episode_steps=max_episode_steps)
-            elif env_id.startswith("dm"):
-                _, domain, task = env_id.split('.')
-                env = dm_control2gym.make(domain_name=domain, task_name=task)
-            else:
-                env = gym.make(env_id)
+    def make_env(env_id, seed, rank, add_timestep):
+        if env_id.startswith("dm"):
+            _, domain, task = env_id.split('.')
+            env = dm_control2gym.make(domain_name=domain, task_name=task)
+        else:
+            env = gym.make(env_id)
 
-            is_atari = hasattr(gym.envs, 'atari') and isinstance(
-                env.unwrapped, gym.envs.atari.atari_env.AtariEnv)
-            # if is_atari:
-            #     env = make_atari(env_id)
+        is_atari = hasattr(gym.envs, 'atari') and isinstance(
+            env.unwrapped, gym.envs.atari.atari_env.AtariEnv)
+        if isinstance(env.unwrapped, SubtasksGridWorld):
+            env = SubtasksWrapper(env)
 
-            env.seed(seed + rank)
+        env.seed(seed + rank)
 
-            obs_shape = env.observation_space.shape
+        obs_shape = env.observation_space.shape
 
-            if add_timestep and len(
-                    obs_shape) == 1 and str(env).find('TimeLimit') > -1:
-                env = AddTimestep(env)
+        if add_timestep and len(
+                obs_shape) == 1 and str(env).find('TimeLimit') > -1:
+            env = AddTimestep(env)
 
-            if is_atari and len(env.observation_space.shape) == 3:
-                env = wrap_deepmind(env)
-            # elif len(env.observation_space.shape) == 3:
-            #     raise NotImplementedError(
-            #         "CNN models work only for atari,\n"
-            #         "please use a custom wrapper for a custom pixel input env.\n"
-            #         "See wrap_deepmind for an example.")
+        if is_atari and len(env.observation_space.shape) == 3:
+            env = wrap_deepmind(env)
 
-            # If the input has shape (W,H,3), wrap for PyTorch convolutions
-            obs_shape = env.observation_space.shape
-            if len(obs_shape) == 3 and obs_shape[2] in [1, 3]:
-                env = TransposeImage(env)
+        # elif len(env.observation_space.shape) == 3:
+        #     raise NotImplementedError(
+        #         "CNN models work only for atari,\n"
+        #         "please use a custom wrapper for a custom pixel input env.\n"
+        #         "See wrap_deepmind for an example.")
 
-            return env
+        # If the input has shape (W,H,3), wrap for PyTorch convolutions
+        obs_shape = env.observation_space.shape
+        if len(obs_shape) == 3 and obs_shape[2] in [1, 3]:
+            env = TransposeImage(env)
 
-        return _thunk
+        return env
 
     def make_vec_envs(self,
                       env_id,
                       seed,
                       num_processes,
                       gamma,
-                      log_dir,
                       add_timestep,
-                      device,
-                      allow_early_resets,
-                      env_args,
                       render,
                       num_frame_stack=None):
         envs = [
-            self.make_env(env_id, seed, i, log_dir, add_timestep,
-                          allow_early_resets, env_args)
+            lambda: self.make_env(env_id, seed, i, add_timestep)
             for i in range(num_processes)
         ]
 
@@ -322,7 +299,7 @@ class Trainer:
         envs = VecPyTorch(envs)
 
         if num_frame_stack is not None:
-            envs = VecPyTorchFrameStack(envs, num_frame_stack, device)
+            envs = VecPyTorchFrameStack(envs, num_frame_stack)
         # elif len(envs.observation_space.shape) == 3:
         #     envs = VecPyTorchFrameStack(envs, 4, device)
 
