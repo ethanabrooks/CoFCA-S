@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 
 # first party
-from ppo.envs import VecNormalize
+from ppo.wrappers import VecNormalize
 
 
 # Get a render function
