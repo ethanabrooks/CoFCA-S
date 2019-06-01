@@ -12,10 +12,12 @@ from common.atari_wrappers import wrap_deepmind
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from gridworld_env import LogicGridWorld
-from ppo.wrappers import VecNormalize, VecPyTorch, VecPyTorchFrameStack, TransposeImage, AddTimestep
 from ppo.policy import Policy
 from ppo.storage import RolloutStorage
 from ppo.update import PPO
+from ppo.utils import get_random_gpu
+from ppo.wrappers import (AddTimestep, TransposeImage, VecNormalize,
+                          VecPyTorch, VecPyTorchFrameStack)
 
 try:
     import dm_control2gym
@@ -24,10 +26,11 @@ except ImportError:
 
 
 class Trainer:
-    def __init__(self, num_frames, num_steps, num_processes, seed, cuda_deterministic, cuda,
-                 log_dir: Path, env_id, gamma, normalize, add_timestep, save_interval,
-                 save_dir, log_interval, eval_interval, use_gae, tau, ppo_args,
-                 env_args, network_args, render, load_path):
+    def __init__(self, num_frames, num_steps, num_processes, seed,
+                 cuda_deterministic, cuda, log_dir: Path, env_id, gamma,
+                 normalize, add_timestep, save_interval, save_dir,
+                 log_interval, eval_interval, use_gae, tau, ppo_args, env_args,
+                 network_args, render, load_path):
         if render:
             num_processes = 1
 
@@ -54,11 +57,12 @@ class Trainer:
                         f.unlink()
 
         torch.set_num_threads(1)
-        device = torch.device("cuda:0" if cuda else "cpu")
+        device = torch.device(f"cuda:{get_random_gpu()}" if cuda else "cpu")
 
         _gamma = gamma if normalize else None
         envs = self.make_vec_envs(env_id, seed, num_processes, _gamma, log_dir,
-                                  add_timestep, device, False, env_args, render)
+                                  add_timestep, device, False, env_args,
+                                  render)
 
         actor_critic = Policy(envs.observation_space.shape, envs.action_space,
                               **network_args)
@@ -71,7 +75,8 @@ class Trainer:
             num_processes=num_processes,
             obs_shape=envs.observation_space.shape,
             action_space=envs.action_space,
-            recurrent_hidden_state_size=actor_critic.recurrent_hidden_state_size,
+            recurrent_hidden_state_size=actor_critic.
+            recurrent_hidden_state_size,
         )
 
         obs = envs.reset()
@@ -134,8 +139,8 @@ class Trainer:
                     time.time() - last_save >= save_interval:
                 last_save = time.time()
                 modules = dict(
-                    optimizer=agent.optimizer,
-                    actor_critic=actor_critic)  # type: Dict[str, torch.nn.Module]
+                    optimizer=agent.optimizer, actor_critic=actor_critic
+                )  # type: Dict[str, torch.nn.Module]
 
                 if isinstance(envs.venv, VecNormalize):
                     modules.update(vec_normalize=envs.venv)
@@ -161,8 +166,9 @@ class Trainer:
                         f"Last {len(episode_rewards)} training episodes: " +
                         "mean/median reward {:.2f}/{:.2f}, min/max reward {:.2f}/{"
                         ":.2f}\n".format(
-                            np.mean(episode_rewards), np.median(episode_rewards),
-                            np.min(episode_rewards), np.max(episode_rewards)))
+                            np.mean(episode_rewards), np.median(
+                                episode_rewards), np.min(episode_rewards),
+                            np.max(episode_rewards)))
                 if log_dir:
                     writer.add_scalar('return', np.mean(episode_rewards), j)
                     for k, v in train_results.items():
@@ -216,17 +222,26 @@ class Trainer:
 
                 eval_envs.close()
 
-                print(" Evaluation using {} episodes: mean reward {:.5f}\n".format(
-                    len(eval_episode_rewards), np.mean(eval_episode_rewards)))
+                print(" Evaluation using {} episodes: mean reward {:.5f}\n".
+                      format(
+                          len(eval_episode_rewards),
+                          np.mean(eval_episode_rewards)))
 
     @staticmethod
-    def make_env(env_id, seed, rank, log_dir, add_timestep, allow_early_resets,
-                 max_episode_steps=None, **env_args):
+    def make_env(env_id,
+                 seed,
+                 rank,
+                 log_dir,
+                 add_timestep,
+                 allow_early_resets,
+                 max_episode_steps=None,
+                 **env_args):
         def _thunk():
             if env_args:
                 env = LogicGridWorld(**env_args)
                 if max_episode_steps:
-                    env = TimeLimit(env=env, max_episode_steps=max_episode_steps)
+                    env = TimeLimit(
+                        env=env, max_episode_steps=max_episode_steps)
             elif env_id.startswith("dm"):
                 _, domain, task = env_id.split('.')
                 env = dm_control2gym.make(domain_name=domain, task_name=task)
@@ -263,7 +278,8 @@ class Trainer:
 
         return _thunk
 
-    def make_vec_envs(self, env_id,
+    def make_vec_envs(self,
+                      env_id,
                       seed,
                       num_processes,
                       gamma,
@@ -275,8 +291,9 @@ class Trainer:
                       render,
                       num_frame_stack=None):
         envs = [
-            self.make_env(env_id, seed, i, log_dir, add_timestep, allow_early_resets,
-                          env_args) for i in range(num_processes)
+            self.make_env(env_id, seed, i, log_dir, add_timestep,
+                          allow_early_resets, env_args)
+            for i in range(num_processes)
         ]
 
         if len(envs) == 1 or sys.platform == 'darwin':
