@@ -1,10 +1,53 @@
 import gym
 import numpy as np
 import torch
-from gym.spaces.box import Box
+from gym import spaces
+from gym.spaces import Box
 
 from common.vec_env import VecEnvWrapper
 from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
+from ppo.utils import set_index
+from rl_utils import onehot
+
+
+class SubtasksWrapper(gym.ObservationWrapper):
+    def __init__(self, env):
+        super().__init__(env)
+        obs_space, task_space = env.observation_space.spaces
+        assert np.all(task_space.nvec == task_space.nvec[0])
+        task_channels = task_space.nvec[0, 0]  # channel per task_type
+        obs_shape = np.array(obs_space.nvec.shape)
+        obs_shape[0] += task_channels + 1  # +1 for task_objects
+        self.observation_space = Box(0, 1, shape=obs_shape)
+
+    def observation(self, observation):
+        obs, task = observation
+        _, h, w = obs.shape
+        env = self.env.unwrapped
+
+        # subtask pointer
+        task_type, _, task_object_type = env.subtask
+        task_type_one_hot = np.zeros((len(env.task_types), h, w), dtype=bool)
+        task_type_one_hot[task_type, :, :] = True
+
+        # TODO: make this less easy
+        task_objects_one_hot = np.zeros((h, w), dtype=bool)
+        idx = [k for k, v in env.objects.items() if v == task_object_type]
+        set_index(task_objects_one_hot, idx, True)
+
+        stack = np.vstack(
+            [obs, task_type_one_hot,
+             np.expand_dims(task_objects_one_hot, 0)])
+
+        # names = ['obstacles'] + list(env.object_types) + ['ice', 'agent'] + \
+        #         list(env.task_types) + ['task objects']
+        # assert len(obs) == len(names)
+        # for array, name in zip(obs, names):
+        #     print(name)
+        #     print(array)
+
+        return stack.astype(float)
+
 
 # Can be used to test recurrent policies for Reacher-v2
 class MaskGoal(gym.ObservationWrapper):
