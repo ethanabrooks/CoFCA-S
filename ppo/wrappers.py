@@ -35,7 +35,7 @@ class SubtasksWrapper(gym.ObservationWrapper):
         idx = [k for k, v in env.objects.items() if v == task_object_type]
         set_index(task_objects_one_hot, idx, True)
 
-        obs = np.vstack(
+        stack = np.vstack(
             [obs, task_type_one_hot,
              np.expand_dims(task_objects_one_hot, 0)])
 
@@ -46,7 +46,7 @@ class SubtasksWrapper(gym.ObservationWrapper):
         #     print(name)
         #     print(array)
 
-        return obs.astype(float)
+        return stack.astype(float)
 
 
 class MaskGoal(gym.ObservationWrapper):

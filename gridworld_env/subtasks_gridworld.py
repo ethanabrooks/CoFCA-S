@@ -69,9 +69,16 @@ class SubtasksGridWorld(gym.Env):
         self.pos = None
         self.last_terminal = False
 
-        o, t = self.reset()
+        h, w = self.desc.shape
         self.observation_space = spaces.Tuple([
-            spaces.MultiDiscrete(np.ones_like(o)),
+            spaces.MultiDiscrete(
+                np.ones((
+                    1 +  # obstacles
+                    1 +  # ice
+                    1 +  # agent
+                    len(object_types),
+                    h,
+                    w))),
             spaces.MultiDiscrete(
                 np.tile(
                     np.array([
