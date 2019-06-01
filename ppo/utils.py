@@ -78,4 +78,3 @@ def get_freer_gpu():
         for i, x in enumerate(csv.reader(StringIO(nvidia_smi))) if i > 0
     ]
     return int(np.argmax(free_memory))
-

@@ -20,7 +20,6 @@ class SubtasksGridWorld(gym.Env):
             n_subtasks,
             task=None,
     ):
-        self.seed(0)
         super().__init__()
         self.n_subtasks = n_subtasks
         self.n_obstacles = n_obstacles
@@ -43,7 +42,7 @@ class SubtasksGridWorld(gym.Env):
             'transform',
         ])
 
-        self.max_task_count = 3
+        self.max_task_count = 1
         self.randomize_task = task is None
 
         # set on initialize

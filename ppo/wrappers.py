@@ -142,10 +142,8 @@ class VecNormalize(VecNormalize_):
         self.training = False
 
 
-# Derived from
-# https://github.com/openai/baselines/blob/master/baselines/common/vec_env/vec_frame_stack.py
 class VecPyTorchFrameStack(VecEnvWrapper):
-    def __init__(self, venv, nstack, device=None):
+    def __init__(self, venv, nstack):
         self.venv = venv
         self.nstack = nstack
 
@@ -155,10 +153,7 @@ class VecPyTorchFrameStack(VecEnvWrapper):
         low = np.repeat(wos.low, self.nstack, axis=0)
         high = np.repeat(wos.high, self.nstack, axis=0)
 
-        if device is None:
-            device = torch.device('cpu')
-        self.stacked_obs = torch.zeros((venv.num_envs, ) +
-                                       low.shape).to(device)
+        self.stacked_obs = torch.zeros((venv.num_envs, ) + low.shape)
 
         observation_space = gym.spaces.Box(
             low=low, high=high, dtype=venv.observation_space.dtype)
@@ -186,6 +181,25 @@ class VecPyTorchFrameStack(VecEnvWrapper):
     def to(self, device):
         self.stacked_obs = self.stacked_obs.to(device)
         self.venv.to(device)
+
+
+class OneHotWrapper(gym.Wrapper):
+    def wrap_observation(self, obs, observation_space=None):
+        if observation_space is None:
+            observation_space = self.observation_space
+        if isinstance(observation_space, spaces.Discrete):
+            return onehot(obs, observation_space.n)
+        if isinstance(observation_space, spaces.MultiDiscrete):
+            assert observation_space.contains(obs)
+
+            def one_hots():
+                nvec = observation_space.nvec
+                for o, n in zip(
+                        obs.reshape(len(obs), -1).T,
+                        nvec.reshape(len(nvec), -1).T):
+                    yield onehot(o, n)
+
+            return np.concatenate(list(one_hots()), axis=-1)
 
 
 def get_vec_normalize(venv):

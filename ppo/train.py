@@ -16,8 +16,8 @@ from ppo.policy import Policy
 from ppo.storage import RolloutStorage
 from ppo.update import PPO
 from ppo.utils import get_random_gpu
-from ppo.wrappers import (AddTimestep, TransposeImage, VecNormalize,
-                          VecPyTorch, VecPyTorchFrameStack, SubtasksWrapper)
+from ppo.wrappers import (AddTimestep, SubtasksWrapper, TransposeImage,
+                          VecNormalize, VecPyTorch, VecPyTorchFrameStack)
 
 try:
     import dm_control2gym
@@ -62,33 +62,17 @@ class Trainer:
             torch.backends.cudnn.benchmark = False
             torch.backends.cudnn.deterministic = True
 
-        eval_log_dir = None
         if log_dir:
             writer = SummaryWriter(log_dir=str(log_dir))
-            eval_log_dir = log_dir.joinpath("eval")
-
-            for _dir in [log_dir, eval_log_dir]:
-                try:
-                    _dir.mkdir()
-                except OSError:
-                    for f in _dir.glob('*.monitor.csv'):
-                        f.unlink()
 
         torch.set_num_threads(1)
-        device = torch.device(f"cuda:{get_random_gpu()}" if cuda else "cpu")
 
         _gamma = gamma if normalize else None
-        envs = self.make_vec_envs(
-            env_id,
-            seed + num_processes,
-            num_processes,
-            _gamma,
-            add_timestep,
-            render, synchronous)
+        envs = self.make_vec_envs(env_id, seed, num_processes, _gamma,
+                                  add_timestep, render, synchronous)
 
         actor_critic = Policy(envs.observation_space.shape, envs.action_space,
                               **network_args)
-        actor_critic.to(device)
 
         rollouts = RolloutStorage(
             num_steps=num_steps,
@@ -167,7 +151,7 @@ class Trainer:
             train_results = agent.update(rollouts)
             rollouts.after_update()
 
-            if log_dir and save_interval and \
+            if save_dir and save_interval and \
                     time.time() - last_save >= save_interval:
                 last_save = time.time()
                 modules = dict(
@@ -181,7 +165,7 @@ class Trainer:
                     name: module.state_dict()
                     for name, module in modules.items()
                 }
-                save_path = Path(log_dir, 'checkpoint.pt')
+                save_path = Path(save_dir, 'checkpoint.pt')
                 torch.save(dict(step=j, **state_dict), save_path)
 
                 print(f'Saved parameters to {save_path}')
@@ -207,18 +191,16 @@ class Trainer:
             if j % log_interval == 0:
                 end = time.time()
                 fps = int(total_num_steps / (end - start))
-                episode_rewards = np.concatenate(episode_rewards)
-                if episode_rewards.size > 0:
+                if rewards_array.size > 0:
                     print(
                         f"Updates {j}, num timesteps {total_num_steps}, FPS {fps} \n "
                         f"Last {len(episode_rewards)} training episodes: " +
                         "mean/median reward {:.2f}/{:.2f}, min/max reward {:.2f}/{"
                         ":.2f}\n".format(
-                            np.mean(episode_rewards), np.median(
-                                episode_rewards), np.min(episode_rewards),
-                            np.max(episode_rewards)))
+                            np.mean(rewards_array), np.median(rewards_array),
+                            np.min(rewards_array), np.max(rewards_array)))
                 if log_dir:
-                    writer.add_scalar('return', np.mean(episode_rewards), j)
+                    writer.add_scalar('return', np.mean(rewards_array), j)
                     for k, v in train_results.items():
                         if log_dir and np.isscalar(v):
                             writer.add_scalar(k.replace('_', ' '), v, j)
@@ -231,8 +213,9 @@ class Trainer:
                     num_processes,
                     _gamma,
                     add_timestep,
-                    render,
-                synchronous)
+                    synchronous=synchronous,
+                    render=render)
+                eval_envs.to(device)
 
                 # vec_norm = get_vec_normalize(eval_envs)
                 # if vec_norm is not None:
