@@ -172,7 +172,7 @@ class Trainer:
             total_num_steps = (j + 1) * num_processes * num_steps
 
             rewards_array = np.concatenate(episode_rewards)
-            if episode_rewards:
+            if rewards_array.size > 0:
                 reward = rewards_array.mean()
                 print(
                     f'Obtained average reward of {reward} vs success threshold of {success_reward}'
@@ -190,7 +190,7 @@ class Trainer:
             if j % log_interval == 0:
                 end = time.time()
                 fps = int(total_num_steps / (end - start))
-                if len(episode_rewards) > 0:
+                if rewards_array.size > 0:
                     print(
                         f"Updates {j}, num timesteps {total_num_steps}, FPS {fps} \n "
                         f"Last {len(episode_rewards)} training episodes: " +
