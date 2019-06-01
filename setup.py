@@ -20,6 +20,7 @@ setup(
         'hsr=ppo.main:hsr_cli',
         'logic=ppo.main:logic_cli',
         'teach=ppo.main:teach_cli',
+        'single-task=ppo.main:single_task_cli',
     ]),
     install_requires=[
         'gym',

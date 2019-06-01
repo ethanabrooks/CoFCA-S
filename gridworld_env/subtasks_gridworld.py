@@ -1,10 +1,10 @@
 import time
 
 import gym
-import numpy as np
-import six
 from gym import spaces
 from gym.utils import seeding
+import numpy as np
+import six
 
 from ppo.utils import set_index
 from rl_utils import cartesian_product
@@ -52,8 +52,9 @@ class SubtasksGridWorld(gym.Env):
         self.obstacles = None
 
         def encode_task():
-            for task_type, count, obj_type in task:
-                yield (list(self.task_types).index(task_type), count,
+            for string in task:
+                task_type, count, obj_type = string.split()
+                yield (list(self.task_types).index(task_type), int(count),
                        list(self.object_types).index(obj_type))
 
         # set on reset:
