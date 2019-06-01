@@ -5,6 +5,7 @@ from gym.envs import register
 
 from gridworld_env.gridworld import GridWorld
 from gridworld_env.logic_gridworld import LogicGridWorld
+from gridworld_env.subtasks_gridworld import SubtasksGridWorld
 from gridworld_env.random_gridworld import RandomGridWorld
 from gridworld_env.simple_pomdp import SimplePOMDP
 
@@ -36,7 +37,7 @@ def get_args(env_id):
     assert env_id.endswith(SUFFIX)
     path = Path(JSON_PATH, env_id[:-len(SUFFIX)]).with_suffix('.json')
     with path.open('rb') as f:
-        return dict(env_id=env_id, **json.load(f))
+        return dict(**json.load(f))
 
 
 def register_envs():
