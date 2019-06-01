@@ -3,11 +3,11 @@ import numpy as np
 import torch
 from gym import spaces
 from gym.spaces import Box
-from rl_utils import onehot
 
 from common.vec_env import VecEnvWrapper
 from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
 from ppo.utils import set_index
+from rl_utils import onehot
 
 
 class SubtasksWrapper(gym.ObservationWrapper):
@@ -35,8 +35,9 @@ class SubtasksWrapper(gym.ObservationWrapper):
         idx = [k for k, v in env.objects.items() if v == task_object_type]
         set_index(task_objects_one_hot, idx, True)
 
-        obs = np.vstack([obs, task_type_one_hot,
-                         np.expand_dims(task_objects_one_hot, 0)])
+        obs = np.vstack(
+            [obs, task_type_one_hot,
+             np.expand_dims(task_objects_one_hot, 0)])
 
         # names = ['obstacles'] + list(env.object_types) + ['ice', 'agent'] + \
         #         list(env.task_types) + ['task objects']
@@ -151,8 +152,7 @@ class VecPyTorchFrameStack(VecEnvWrapper):
         low = np.repeat(wos.low, self.nstack, axis=0)
         high = np.repeat(wos.high, self.nstack, axis=0)
 
-        self.stacked_obs = torch.zeros((venv.num_envs,) +
-                                       low.shape)
+        self.stacked_obs = torch.zeros((venv.num_envs, ) + low.shape)
 
         observation_space = gym.spaces.Box(
             low=low, high=high, dtype=venv.observation_space.dtype)
@@ -193,8 +193,9 @@ class OneHotWrapper(gym.Wrapper):
 
             def one_hots():
                 nvec = observation_space.nvec
-                for o, n in zip(obs.reshape(len(obs), -1).T,
-                                nvec.reshape(len(nvec), -1).T):
+                for o, n in zip(
+                        obs.reshape(len(obs), -1).T,
+                        nvec.reshape(len(nvec), -1).T):
                     yield onehot(o, n)
 
             return np.concatenate(list(one_hots()), axis=-1)

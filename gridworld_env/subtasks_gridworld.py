@@ -6,20 +6,20 @@ import six
 from gym import spaces
 from gym.utils import seeding
 
-from rl_utils import cartesian_product
-
 from ppo.utils import set_index
+from rl_utils import cartesian_product
 
 
 class SubtasksGridWorld(gym.Env):
-    def __init__(self,
-                 text_map,
-                 object_types,
-                 n_objects,
-                 n_obstacles,
-                 n_subtasks,
-                 task=None,
-                 ):
+    def __init__(
+            self,
+            text_map,
+            object_types,
+            n_objects,
+            n_obstacles,
+            n_subtasks,
+            task=None,
+    ):
         super().__init__()
         self.n_subtasks = n_subtasks
         self.n_obstacles = n_obstacles
@@ -53,8 +53,7 @@ class SubtasksGridWorld(gym.Env):
 
         def encode_task():
             for task_type, count, obj_type in task:
-                yield (list(self.task_types).index(task_type),
-                       count,
+                yield (list(self.task_types).index(task_type), count,
                        list(self.object_types).index(obj_type))
 
         # set on reset:
@@ -75,12 +74,10 @@ class SubtasksGridWorld(gym.Env):
             spaces.MultiDiscrete(np.ones_like(o)),
             spaces.MultiDiscrete(
                 np.tile(
-                    np.array([len(self.task_types),
-                              self.max_task_count,
-                              len(object_types)]),
-                    (n_subtasks, 1)
-                )
-            )
+                    np.array([
+                        len(self.task_types), self.max_task_count,
+                        len(object_types)
+                    ]), (n_subtasks, 1)))
         ])
         self.action_space = spaces.Discrete(len(self.transitions) + 2)
 
@@ -138,7 +135,8 @@ class SubtasksGridWorld(gym.Env):
             task_counts = self.np_random.choice(
                 self.max_task_count, size=self.n_subtasks) + 1
             task_counts[self.task_types[task_types] == 'visit'] = 1
-            self.task = np.stack([task_types, task_counts, task_objects], axis=1)
+            self.task = np.stack([task_types, task_counts, task_objects],
+                                 axis=1)
         self.task_iter = iter(self.task)
 
         types = [x for t, c, o in self.task for x in c * [o]]
@@ -165,7 +163,7 @@ class SubtasksGridWorld(gym.Env):
         h, w, = self.desc.shape
         objects_one_hot = np.zeros((1 + len(self.object_types), h, w),
                                    dtype=bool)
-        idx = [(v,) + k for k, v in self.objects.items()]
+        idx = [(v, ) + k for k, v in self.objects.items()]
         set_index(objects_one_hot, idx, True)
         return objects_one_hot
 
@@ -173,9 +171,11 @@ class SubtasksGridWorld(gym.Env):
         agent_one_hot = np.zeros_like(self.desc, dtype=bool)
         set_index(agent_one_hot, self.pos, True)
 
-        obs = [np.expand_dims(self.obstacles_one_hot, 0),
-               self.objects_one_hot(),
-               np.expand_dims(agent_one_hot, 0)]
+        obs = [
+            np.expand_dims(self.obstacles_one_hot, 0),
+            self.objects_one_hot(),
+            np.expand_dims(agent_one_hot, 0)
+        ]
 
         # noinspection PyTypeChecker
         return np.vstack(obs), self.task
