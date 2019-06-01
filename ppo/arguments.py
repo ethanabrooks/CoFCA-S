@@ -70,6 +70,8 @@ def build_parser():
     parser.add_argument(
         '--no-cuda', dest='cuda', action='store_false', help='enables CUDA training')
     parser.add_argument(
+        '--synchronous', action='store_true')
+    parser.add_argument(
         '--add-timestep',
         action='store_true',
         default=False,
@@ -129,7 +131,6 @@ def build_parser():
 
 def get_args():
     return hierarchical_parse_args(build_parser())
-
 
 # def get_hsr_args():
 #     parser = build_parser()

@@ -48,6 +48,7 @@ class Trainer:
                  load_path,
                  success_reward,
                  successes_till_done,
+                 synchronous,
                  save_dir=None):
         save_dir = save_dir or log_dir
         if render:
@@ -83,7 +84,7 @@ class Trainer:
             num_processes,
             _gamma,
             add_timestep,
-            render)
+            render, synchronous)
 
         actor_critic = Policy(envs.observation_space.shape, envs.action_space,
                               **network_args)
@@ -230,7 +231,8 @@ class Trainer:
                     num_processes,
                     _gamma,
                     add_timestep,
-                    render)
+                    render,
+                synchronous)
 
                 # vec_norm = get_vec_normalize(eval_envs)
                 # if vec_norm is not None:
@@ -314,13 +316,14 @@ class Trainer:
                       gamma,
                       add_timestep,
                       render,
+                      synchronous,
                       num_frame_stack=None):
         envs = [
             lambda: self.make_env(env_id, seed, i, add_timestep)
             for i in range(num_processes)
         ]
 
-        if len(envs) == 1 or sys.platform == 'darwin':
+        if len(envs) == 1 or sys.platform == 'darwin' or synchronous:
             envs = DummyVecEnv(envs, render=render)
         else:
             envs = SubprocVecEnv(envs)
