@@ -25,11 +25,11 @@ except ImportError:
 
 
 class Trainer:
-    def train(self, num_frames, num_steps, num_processes, seed,
-              cuda_deterministic, cuda, log_dir: Path, env_id, gamma,
-              normalize, add_timestep, save_interval, save_dir,
-              log_interval, eval_interval, use_gae, tau, ppo_args, env_args,
-              network_args, render, load_path):
+    def __init__(self, num_frames, num_steps, num_processes, seed,
+                 cuda_deterministic, cuda, log_dir: Path, env_id, gamma,
+                 normalize, add_timestep, save_interval, save_dir,
+                 log_interval, eval_interval, use_gae, tau, ppo_args, env_args,
+                 network_args, render, load_path):
         if render:
             num_processes = 1
 
@@ -77,7 +77,7 @@ class Trainer:
             obs_shape=envs.observation_space.shape,
             action_space=envs.action_space,
             recurrent_hidden_state_size=actor_critic.
-                recurrent_hidden_state_size,
+            recurrent_hidden_state_size,
         )
 
         obs = envs.reset()
