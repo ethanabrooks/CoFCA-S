@@ -6,8 +6,9 @@ import os
 import torch
 
 # first party
-from ppo.wrappers import make_vec_envs, get_vec_normalize
+from ppo.train import make_vec_envs
 from ppo.utils import get_render_func
+from ppo.wrappers import get_vec_normalize
 
 parser = argparse.ArgumentParser(description='RL')
 parser.add_argument(
@@ -44,11 +45,9 @@ env = make_vec_envs(
     args.seed + 1000,
     1,
     None,
-    None,
     args.add_timestep,
     env_args=env_args,
-    device='cpu',
-    allow_early_resets=False)
+    device='cpu')
 
 # Get a render function
 render_func = get_render_func(env)
