@@ -26,7 +26,7 @@ class SubtasksGridWorld(gym.Env):
         self.n_obstacles = n_obstacles
         self.n_objects = n_objects
         self.np_random = np.random
-        self.object_types = np.array(object_types)
+        self.object_types = np.array(['sheep'])  # np.array(object_types)
         self.transitions = np.array([
             [-1, 0],
             [1, 0],
@@ -39,11 +39,11 @@ class SubtasksGridWorld(gym.Env):
 
         self.task_types = np.array([
             'visit',
-            'pick-up',
-            'transform',
+            # 'pick-up',
+            # 'transform',
         ])
 
-        self.max_task_count = 3
+        self.max_task_count = 1
         self.randomize_task = task is None
 
         # set on initialize
