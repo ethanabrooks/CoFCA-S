@@ -7,18 +7,7 @@ from gym import spaces
 from gym.utils import seeding
 from gym.utils.colorize import color2num
 
-
-def set_index(array, idxs, value):
-    idxs = np.array(idxs)
-    if idxs.size > 0:
-        array[tuple(idxs.T)] = value
-
-
-def get_index(array, idxs):
-    idxs = np.array(idxs)
-    if idxs.size == 0:
-        return np.array([], array.dtype)
-    return array[tuple(idxs.T)]
+from ppo.utils import set_index, get_index
 
 
 class LogicGridWorld(gym.Env):
