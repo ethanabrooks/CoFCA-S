@@ -143,7 +143,7 @@ class VecNormalize(VecNormalize_):
 
 
 class VecPyTorchFrameStack(VecEnvWrapper):
-    def __init__(self, venv, nstack, device=None):
+    def __init__(self, venv, nstack):
         self.venv = venv
         self.nstack = nstack
 
@@ -153,10 +153,7 @@ class VecPyTorchFrameStack(VecEnvWrapper):
         low = np.repeat(wos.low, self.nstack, axis=0)
         high = np.repeat(wos.high, self.nstack, axis=0)
 
-        if device is None:
-            device = torch.device('cpu')
-        self.stacked_obs = torch.zeros((venv.num_envs, ) +
-                                       low.shape).to(device)
+        self.stacked_obs = torch.zeros((venv.num_envs, ) + low.shape)
 
         observation_space = gym.spaces.Box(
             low=low, high=high, dtype=venv.observation_space.dtype)
