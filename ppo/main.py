@@ -1,20 +1,19 @@
 # stdlib
 import csv
 import subprocess
+import time
 from io import StringIO
 from pathlib import Path
-import time
 from typing import Dict
 
 import numpy as np
-from tensorboardX import SummaryWriter
 import torch
+from tensorboardX import SummaryWriter
 
 # noinspection PyUnresolvedReferences
 # first party
 import gridworld_env
-from hsr.util import env_wrapper
-from ppo.arguments import build_parser, get_args, get_hsr_args
+from ppo.arguments import build_parser, get_args
 from ppo.envs import VecNormalize, make_vec_envs
 from ppo.policy import Policy
 from ppo.storage import RolloutStorage
@@ -252,10 +251,9 @@ def logic_cli():
     _main(**hierarchical_parse_args(parser))
 
 
-def hsr_cli():
-    args = get_hsr_args()
-    env_wrapper(main)(**args)
-
+# def hsr_cli():
+# args = get_hsr_args()
+# env_wrapper(main)(**args)
 
 if __name__ == "__main__":
     logic_cli()

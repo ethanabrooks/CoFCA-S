@@ -15,7 +15,6 @@ from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
 from gridworld_env import LogicGridWorld
-from ppo.env_adapter import HSREnv
 
 try:
     import dm_control2gym

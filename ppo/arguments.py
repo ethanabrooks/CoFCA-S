@@ -5,7 +5,7 @@ from pathlib import Path
 
 import torch.nn as nn
 
-from hsr.util import add_env_args, add_wrapper_args
+# from hsr.util import add_env_args, add_wrapper_args
 from rl_utils import hierarchical_parse_args, parse_activation
 
 
@@ -33,9 +33,7 @@ def build_parser():
         '--cuda-deterministic',
         action='store_true',
         help="sets flags for determinism when using CUDA (potentially slow!)")
-    parser.add_argument(
-        '--render',
-        action='store_true')
+    parser.add_argument('--render', action='store_true')
     parser.add_argument(
         '--num-processes',
         type=int,
@@ -71,9 +69,7 @@ def build_parser():
         dest='env_id',
         default='PongNoFrameskip-v4',
         help='environment to train on (default: PongNoFrameskip-v4)')
-    parser.add_argument(
-        '--load-path',
-        type=Path)
+    parser.add_argument('--load-path', type=Path)
     parser.add_argument(
         '--log-dir',
         type=Path,
@@ -144,10 +140,10 @@ def get_args():
     return dict(**hierarchical_parse_args(build_parser()), env_args={})
 
 
-def get_hsr_args():
-    parser = build_parser()
-    env_parser = parser.add_argument_group('env_args')
-    env_parser.add_argument('--max-steps', type=int)
-    add_env_args(env_parser)
-    add_wrapper_args(parser.add_argument_group('wrapper_args'))
-    return hierarchical_parse_args(parser)
+# def get_hsr_args():
+# parser = build_parser()
+# env_parser = parser.add_argument_group('env_args')
+# env_parser.add_argument('--max-steps', type=int)
+# add_env_args(env_parser)
+# add_wrapper_args(parser.add_argument_group('wrapper_args'))
+# return hierarchical_parse_args(parser)
