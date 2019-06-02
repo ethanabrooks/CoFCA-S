@@ -173,6 +173,7 @@ class Trainer:
             total_num_steps = (j + 1) * num_processes * num_steps
 
             rewards_array = np.concatenate(episode_rewards)
+            time_steps_array = np.concatenate(time_steps)
             if rewards_array.size > 0:
                 reward = rewards_array.mean()
                 print(
@@ -201,6 +202,8 @@ class Trainer:
                             np.min(rewards_array), np.max(rewards_array)))
                 if log_dir:
                     writer.add_scalar('return', np.mean(rewards_array), j)
+                    writer.add_scalar('time steps', np.mean(time_steps_array),
+                                      j)
                     for k, v in train_results.items():
                         if log_dir and np.isscalar(v):
                             writer.add_scalar(k.replace('_', ' '), v, j)
