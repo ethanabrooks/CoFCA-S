@@ -77,7 +77,7 @@ class Agent(nn.Module):
 
     def act(self, inputs, rnn_hxs, masks, deterministic=False):
         value, action, action_log_probs, _, rnn_hxs = self(
-            inputs, rnn_hxs, masks, deterministic)
+            inputs=inputs, rnn_hxs=rnn_hxs, masks=masks, deterministic=deterministic)
         return value, action, action_log_probs, rnn_hxs
 
     def get_value(self, inputs, rnn_hxs, masks):
@@ -86,7 +86,7 @@ class Agent(nn.Module):
 
     def evaluate_actions(self, inputs, rnn_hxs, masks, action):
         value, _, action_log_probs, dist_entropy, rnn_hxs = self(
-            inputs, rnn_hxs, masks, action=action)
+            inputs=inputs, rnn_hxs=rnn_hxs, masks=masks, action=action)
         return value, action_log_probs, dist_entropy, rnn_hxs
 
 

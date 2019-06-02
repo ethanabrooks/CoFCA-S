@@ -59,7 +59,7 @@ class SubtasksAgent(Agent, NNBase):
                  action_space,
                  task_space,
                  hidden_size,
-                 **kwargs):
+                 recurrent):
         nn.Module.__init__(self)
         n_subtasks, subtask_size = task_space.nvec.shape
         self.task_size = n_subtasks * subtask_size
@@ -73,7 +73,8 @@ class SubtasksAgent(Agent, NNBase):
         self.recurrent_module = SubtasksRecurrence(obs_shape=obs_shape,
                                                    task_space=task_space,
                                                    hidden_size=hidden_size,
-                                                   **kwargs)
+                                                   recurrent=recurrent,
+                                                   )
 
         self.obs_size = np.prod(obs_shape)
 
@@ -84,19 +85,24 @@ class SubtasksAgent(Agent, NNBase):
         )
 
         input_size = (h * w * hidden_size +  # conv output
-                      self.task_size)
+                      sum(task_space.nvec[0]))  # task size
 
         # TODO: multiplicative interaction stuff
         if isinstance(action_space, Discrete):
             num_outputs = action_space.n
-            self.actor = Categorical(input_size, num_outputs)
+            actor = Categorical(input_size, num_outputs)
         elif isinstance(action_space, Box):
             num_outputs = action_space.shape[0]
-            self.actor = DiagGaussian(input_size, num_outputs)
+            actor = DiagGaussian(input_size, num_outputs)
         else:
             raise NotImplementedError
+        self.actor = nn.Sequential(
+            Concat(), actor
+        )
 
-        self.critic = init_(nn.Linear(input_size, 1))
+        self.critic = nn.Sequential(
+            Concat(),
+            init_(nn.Linear(input_size, 1)))
 
     @property
     def recurrent_hidden_state_size(self):
@@ -107,15 +113,18 @@ class SubtasksAgent(Agent, NNBase):
         task = inputs[:, -self.task_size:, 0, 0]
         return obs, task
 
-    def forward(self, inputs, rnn_hxs, masks, action=None, deterministic=False):
+    def get_hidden(self, inputs, rnn_hxs, masks):
         obs, task = self.parse_obs(inputs)
         # TODO: This is where we would embed the task if we were doing that
         conv_out = self.conv(obs)
+
         recurrent_inputs = torch.cat([conv_out, task], dim=-1)
         x, rnn_hxs = self._forward_gru(recurrent_inputs, rnn_hxs, masks)
-        hx = self.recurrent_module.parse_hidden(rnn_hxs)
+        return conv_out, self.recurrent_module.parse_hidden(x)
 
-        dist = self.actor(conv_out, hx.g)
+    def forward(self, inputs, rnn_hxs, masks, action=None, deterministic=False):
+        conv_out, hx = self.get_hidden(inputs, rnn_hxs, masks)
+        dist = self.actor((conv_out, hx.g))
 
         if action is None:
             if deterministic:
@@ -123,14 +132,22 @@ class SubtasksAgent(Agent, NNBase):
             else:
                 action = dist.sample()
 
-        value = self.critic(conv_out, hx.g)
+        value = self.critic((conv_out, hx.g))
         action_log_probs = dist.log_probs(action) + hx.log_prob
         dist_entropy = dist.entropy().mean()  # TODO: combine with other entropy
         return value, action, action_log_probs, dist_entropy, rnn_hxs
 
+    def get_value(self, inputs, rnn_hxs, masks):
+        conv_out, hx = self.get_hidden(inputs, rnn_hxs, masks)
+        return self.critic((conv_out, hx.g))
+
+    @property
+    def is_recurrent(self):
+        return True
+
 
 class SubtasksRecurrence(nn.Module):
-    def __init__(self, obs_shape, task_space, batch_size, hidden_size, recurrent):
+    def __init__(self, obs_shape, task_space, hidden_size, recurrent):
         super().__init__()
         self.d, self.h, self.w = d, h, w = obs_shape
         self.subtask_space = subtask_space = task_space.nvec[0]
@@ -138,7 +155,7 @@ class SubtasksRecurrence(nn.Module):
         self.subtask_size = np.sum(self.subtask_space)
         self.conv_out_size = h * w * hidden_size
 
-        # todo: policy and critic
+        # networks
         self.recurrent = recurrent
         self.f = nn.Sequential(
             Concat(),
@@ -173,9 +190,13 @@ class SubtasksRecurrence(nn.Module):
                         2  # binary: done or not done
                         )
         )
-        self.task_one_hots = [nn.Parameter(torch.zeros(batch_size, d), requires_grad=False)
-                              for d in self.subtask_space]
-        self.bidx = nn.Parameter(torch.arange(batch_size).view(-1, 1))
+
+        # embeddings
+        self.embeddings = nn.ParameterList(
+            [nn.Parameter(torch.eye(d.item()), requires_grad=False)
+             for d in subtask_space]
+        )
+
         self.state_sizes = RecurrentState(p=self.n_subtasks, r=self.subtask_size, h=hidden_size,
                                           g=self.subtask_size, b=1,
                                           log_prob=1, )
@@ -183,21 +204,20 @@ class SubtasksRecurrence(nn.Module):
     def parse_hidden(self, hx):
         return RecurrentState(*torch.split(hx, self.state_sizes, dim=-1))
 
-    def embed_task(self, task_type, count, object_type):
-        for array, idx in zip(self.task_one_hots, [task_type, count, object_type]):
-            array[:] = 0
-            array[self.bidx, idx] = 1
-        return torch.cat(self.task_one_hots, dim=-1)
+    def embed_task(self, *task_codes):
+        one_hots = [e[t.long()]
+                    for e, t in
+                    zip(self.embeddings, task_codes)]
+        return torch.cat(one_hots, dim=-1)
 
     def forward(self, input, hx=None):
         assert hx is not None
         sections = [self.conv_out_size] + [self.n_subtasks] * 3
-        obs, *task_types = torch.split(input, sections, dim=-1)
+        obs, task_type, count, obj = torch.split(input, sections, dim=-1)
 
-        M = self.embed_task(*[t.squeeze(0).long() for t in task_types])
+        count -= 1
+        M = self.embed_task(task_type[0], count[0], obj[0])
         # TODO: why are both tasks the same?
-        import ipdb;
-        ipdb.set_trace()
 
         new_episode = torch.all(hx == 0)
         hx = self.parse_hidden(hx)
@@ -218,35 +238,30 @@ class SubtasksRecurrence(nn.Module):
             l = F.softmax(self.phi_shift(hx.h), dim=1)
             p = batch_conv1d(hx.p, l, padding=1)
             r = p @ M
-            r.squeeze_(1)
 
-            p, r, h = [c * x2 + (1 - c) * x1 for x1, x2 in
+            p, r, h = [c * x2.squeeze(1) + (1 - c) * x1
+                       for x1, x2 in
                        zip([hx.p, hx.r, hx.h], [p, r, h])]
 
             # TODO: deterministic
             # g
             dist = self.pi_theta((h, r))
             g = dist.sample()
-            log_prob_g = dist.log_prob(g)
-            idxs = unravel_index3d(g, *self.subtask_space)
-            g = self.embed_task(*idxs)
+            log_prob_g = dist.log_probs(g)
 
-            g = torch.cat(unravel_index3d(g, *self.subtask_space), dim=-1)
+            idxs = unravel_index3d(g, *self.subtask_space)
+            g = self.embed_task(*idxs).squeeze(1)
             g = c * g + (1 - c) * hx.g
 
             # b
             dist = self.beta((x, g))
-            b = dist.sample()
-            log_prob_b = dist.lob_prob(b)
-            import ipdb;
-            ipdb.set_trace()
+            b = dist.sample().float()
+            log_prob_b = dist.log_probs(b)
 
             hx = RecurrentState(p=p, r=r, h=h, g=g, b=b,
                                 log_prob=(log_prob_g + log_prob_b))
             outputs.append(hx)
 
-        hx = RecurrentState(*zip(*outputs))
-        # TODO: pack and split these
-        import ipdb;
-        ipdb.set_trace()
-        return outputs[-1], outputs
+        stacked = list(map(torch.stack, zip(*outputs)))
+        hx = torch.cat(stacked, dim=-1)
+        return hx, hx[-1]
