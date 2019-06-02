@@ -12,7 +12,7 @@ class Flatten(nn.Module):
         return x.view(x.size(0), -1)
 
 
-class Policy(nn.Module):
+class Agent(nn.Module):
     def __init__(self,
                  obs_shape,
                  action_space,
@@ -21,7 +21,7 @@ class Policy(nn.Module):
                  logic=False,
                  similarity_measure=None,
                  **network_args):
-        super(Policy, self).__init__()
+        super(Agent, self).__init__()
         if network_args is None:
             network_args = {}
         if logic:

@@ -7,7 +7,7 @@ import numpy as np
 from torch import nn as nn
 from torch.nn import functional as F
 
-from ppo.policy import NNBase, Flatten, Policy
+from ppo.agent import NNBase, Flatten, Agent
 from ppo.utils import init
 from ppo.distributions import Categorical, DiagGaussian
 
@@ -37,7 +37,7 @@ def init_(network, nonlinearity=None):
 
 
 # noinspection PyMissingConstructor
-class SubtasksPolicy(Policy, NNBase):
+class SubtasksAgent(Agent, NNBase):
     def __init__(self,
                  obs_shape,
                  action_space,

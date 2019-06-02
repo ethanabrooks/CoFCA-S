@@ -12,7 +12,7 @@ from common.atari_wrappers import wrap_deepmind
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from gridworld_env import SubtasksGridWorld
-from ppo.policy import Policy
+from ppo.agent import Agent
 from ppo.storage import RolloutStorage
 from ppo.update import PPO
 from ppo.utils import get_random_gpu
@@ -25,7 +25,7 @@ except ImportError:
     pass
 
 
-class Trainer:
+class Train:
     def __init__(self,
                  num_steps,
                  num_processes,
@@ -257,8 +257,8 @@ class Trainer:
                           np.mean(eval_episode_rewards)))
 
     def build_agent(self, envs, **network_args):
-        return Policy(envs.observation_space.shape, envs.action_space,
-                              **network_args)
+        return Agent(envs.observation_space.shape, envs.action_space,
+                     **network_args)
 
     @staticmethod
     def make_env(env_id, seed, rank, add_timestep):

@@ -9,12 +9,12 @@ from rl_utils import hierarchical_parse_args
 # noinspection PyUnresolvedReferences
 import gridworld_env
 from ppo.arguments import build_parser, get_args
-from ppo.train import Trainer
+from ppo.train import Train
 from ppo.wrappers import SubtasksWrapper
 
 
 def cli():
-    Trainer(**get_args())
+    Train(**get_args())
 
 
 # def hsr_cli():
@@ -31,7 +31,7 @@ def single_task_cli():
     max_episode_steps = env_args.pop('max_episode_steps', None)
 
     def train(env_id, task, **_kwargs):
-        class SubtasksTrainer(Trainer):
+        class SubtasksTrainer(Train):
             @staticmethod
             def make_env(env_id, seed, rank, add_timestep):
                 env = SubtasksWrapper(class_(**env_args, task=task))
@@ -54,7 +54,7 @@ def teach_cli():
 
     def train(env_id, **_kwargs):
 
-        class SubtasksTrainer(Trainer):
+        class TrainSubtasks(Train):
             @staticmethod
             def make_env(env_id, seed, rank, add_timestep):
                 env = SubtasksWrapper(class_(**env_args, task=task))
@@ -64,7 +64,7 @@ def teach_cli():
                         env, max_episode_seconds=max_episode_steps)
                 return env
 
-        SubtasksTrainer(
+        TrainSubtasks(
             env_id=env_id,
             **_kwargs)
 
