@@ -95,4 +95,4 @@ def teach_cli():
 
 
 if __name__ == "__main__":
-    single_task_cli()
+    cli()
