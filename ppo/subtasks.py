@@ -45,17 +45,15 @@ class SubtasksAgent(Agent, NNBase):
                  hidden_size,
                  recurrent,
                  ):
-
+        nn.Module.__init__(self)
         self.recurrent_module = SubtasksRecurrence(*obs_shape,
                                                    *task_shape,
                                                    hidden_size=hidden_size,
                                                    recurrent=recurrent)
 
         _, self.task_size = task_shape
-        h, w, d = obs_shape
+        d, h, w = obs_shape
         self.obs_size = np.prod(obs_shape)
-        import ipdb;
-        ipdb.set_trace()  # TODO: make sure this order is correct
 
         self.conv = (nn.Sequential(
             Reshape(*obs_shape),
@@ -67,6 +65,7 @@ class SubtasksAgent(Agent, NNBase):
         input_size = (h * w * hidden_size +  # conv output
                       self.task_size)
 
+        # TODO: multiplicative interaction stuff
         if isinstance(action_space, Discrete):
             num_outputs = action_space.n
             self.actor = Categorical(input_size, num_outputs)

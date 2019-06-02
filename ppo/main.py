@@ -7,6 +7,7 @@ from gym.wrappers import TimeLimit
 from rl_utils import hierarchical_parse_args
 
 # noinspection PyUnresolvedReferences
+from gridworld_env import SubtasksGridWorld
 import gridworld_env
 from ppo.arguments import build_parser, get_args
 from ppo.subtasks import SubtasksAgent
@@ -50,17 +51,18 @@ def teach_cli():
     parsers = build_parser()
     kwargs = hierarchical_parse_args(parsers)
     env_args = gridworld_env.get_args(kwargs['env_id'])
+    class_ = eval(env_args.pop('class'))
+    max_episode_steps = env_args.pop('max_episode_steps', None)
 
     def train(env_id, **_kwargs):
-        class SubtasksTrainer(Train):
+        class TrainSubtasks(Train):
             @staticmethod
             def make_env(env_id, seed, rank, add_timestep):
-                class_ = eval(_kwargs.pop('class'))
-                env = SubtasksWrapper(class_(**_kwargs))
+                env = SubtasksWrapper(class_(**env_args))
                 env.seed(seed + rank)
-                if 'max_episode_steps' in env_args:
+                if max_episode_steps is not None:
                     env = TimeLimit(
-                        env, max_episode_seconds=int(env_args['max_episode_steps']))
+                        env, max_episode_seconds=int(max_episode_steps))
                 return env
 
             # noinspection PyMethodOverriding
@@ -72,10 +74,10 @@ def teach_cli():
                                      hidden_size, recurrent)
 
         # Train
-        SubtasksTrainer(env_id=env_id, **_kwargs)
+        TrainSubtasks(env_id=env_id, **_kwargs)
 
     train(**kwargs)
 
 
 if __name__ == "__main__":
-    single_task_cli()
+    teach_cli()

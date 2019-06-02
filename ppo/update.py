@@ -9,7 +9,7 @@ from ppo.storage import Batch, RolloutStorage
 
 class PPO:
     def __init__(self,
-                 actor_critic,
+                 agent,
                  clip_param,
                  ppo_epoch,
                  batch_size,
@@ -22,7 +22,7 @@ class PPO:
                  unsupervised=False):
 
         self.unsupervised = unsupervised
-        self.actor_critic = actor_critic
+        self.actor_critic = agent
 
         self.clip_param = clip_param
         self.ppo_epoch = ppo_epoch
@@ -35,7 +35,7 @@ class PPO:
         self.use_clipped_value_loss = use_clipped_value_loss
 
         self.optimizer = optim.Adam(
-            actor_critic.parameters(), lr=learning_rate, eps=eps)
+            agent.parameters(), lr=learning_rate, eps=eps)
         self.reward_function = None
 
     def update(self, rollouts: RolloutStorage):

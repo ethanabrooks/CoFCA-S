@@ -43,7 +43,7 @@ class Train:
                  use_gae,
                  tau,
                  ppo_args,
-                 network_args,
+                 agent_args,
                  render,
                  load_path,
                  success_reward,
@@ -71,13 +71,13 @@ class Train:
         envs = self.make_vec_envs(env_id, seed, num_processes, _gamma,
                                   add_timestep, render, synchronous)
 
-        actor_critic = self.build_agent(envs, **network_args)
+        agent = self.build_agent(envs, **agent_args)
         rollouts = RolloutStorage(
             num_steps=num_steps,
             num_processes=num_processes,
             obs_shape=envs.observation_space.shape,
             action_space=envs.action_space,
-            recurrent_hidden_state_size=actor_critic.
+            recurrent_hidden_state_size=agent.
             recurrent_hidden_state_size,
         )
 
@@ -89,12 +89,12 @@ class Train:
             tick = time.time()
             device = torch.device('cuda', get_random_gpu())
             envs.to(device)
-            actor_critic.to(device)
+            agent.to(device)
             rollouts.to(device)
             print('All values copied to GPU in', time.time() - tick, 'seconds')
         print('Using device', device)
 
-        agent = PPO(actor_critic=actor_critic, **ppo_args)
+        ppo = PPO(agent=agent, **ppo_args)
 
         rewards_counter = np.zeros(num_processes)
         time_step_counter = np.zeros(num_processes)
@@ -107,8 +107,8 @@ class Train:
 
         if load_path:
             state_dict = torch.load(load_path)
-            actor_critic.load_state_dict(state_dict['actor_critic'])
-            agent.optimizer.load_state_dict(state_dict['optimizer'])
+            agent.load_state_dict(state_dict['agent'])
+            ppo.optimizer.load_state_dict(state_dict['optimizer'])
             start = state_dict.get('step', -1) + 1
             if isinstance(envs.venv, VecNormalize):
                 envs.venv.load_state_dict(state_dict['vec_normalize'])
@@ -119,7 +119,7 @@ class Train:
                 # Sample actions.add_argument_group('env_args')
                 with torch.no_grad():
                     value, action, action_log_prob, recurrent_hidden_states = \
-                        actor_critic.act(
+                        agent.act(
                             rollouts.obs[step], rollouts.recurrent_hidden_states[step],
                             rollouts.masks[step])
 
@@ -141,19 +141,19 @@ class Train:
                                 action_log_prob, value, reward, masks)
 
             with torch.no_grad():
-                next_value = actor_critic.get_value(
+                next_value = agent.get_value(
                     rollouts.obs[-1], rollouts.recurrent_hidden_states[-1],
                     rollouts.masks[-1]).detach()
 
             rollouts.compute_returns(next_value, use_gae, gamma, tau)
-            train_results = agent.update(rollouts)
+            train_results = ppo.update(rollouts)
             rollouts.after_update()
 
             if save_dir and save_interval and \
                     time.time() - last_save >= save_interval:
                 last_save = time.time()
                 modules = dict(
-                    optimizer=agent.optimizer, actor_critic=actor_critic
+                    optimizer=ppo.optimizer, agent=agent
                 )  # type: Dict[str, torch.nn.Module]
 
                 if isinstance(envs.venv, VecNormalize):
@@ -228,13 +228,13 @@ class Train:
                 obs = eval_envs.reset()
                 eval_recurrent_hidden_states = torch.zeros(
                     num_processes,
-                    actor_critic.recurrent_hidden_state_size,
+                    agent.recurrent_hidden_state_size,
                     device=device)
                 eval_masks = torch.zeros(num_processes, 1, device=device)
 
                 while len(eval_episode_rewards) < 10:
                     with torch.no_grad():
-                        _, action, _, eval_recurrent_hidden_states = actor_critic.act(
+                        _, action, _, eval_recurrent_hidden_states = agent.act(
                             obs,
                             eval_recurrent_hidden_states,
                             eval_masks,

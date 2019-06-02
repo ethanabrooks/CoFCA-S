@@ -78,13 +78,13 @@ def build_parser():
     parser.add_argument('--success-reward', type=float)
     parser.add_argument('--successes-till-done', type=int)
 
-    network_parser = parser.add_argument_group('network_args')
-    network_parser.add_argument('--logic', action='store_true')
-    network_parser.add_argument('--similarity-measure')
-    network_parser.add_argument('--recurrent', action='store_true')
-    network_parser.add_argument('--hidden-size', type=int, default=256)
-    network_parser.add_argument('--num-layers', type=int, default=3)
-    network_parser.add_argument(
+    agent_parser = parser.add_argument_group('agent_args')
+    agent_parser.add_argument('--logic', action='store_true')
+    agent_parser.add_argument('--similarity-measure')
+    agent_parser.add_argument('--recurrent', action='store_true')
+    agent_parser.add_argument('--hidden-size', type=int, default=256)
+    agent_parser.add_argument('--num-layers', type=int, default=3)
+    agent_parser.add_argument(
         '--activation', type=parse_activation, default=nn.ReLU())
 
     ppo_parser = parser.add_argument_group('ppo_args')
