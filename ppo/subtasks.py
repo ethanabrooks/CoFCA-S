@@ -60,8 +60,6 @@ class SubtasksAgent(Agent, NNBase):
             init_(nn.Conv2d(d, hidden_size, kernel_size=3, stride=1, padding=1), 'relu'),
             nn.ReLU()))
 
-        import ipdb;
-        ipdb.set_trace()
         input_size = (h * w * hidden_size +  # conv output
                       self.task_size)
 
@@ -77,9 +75,16 @@ class SubtasksAgent(Agent, NNBase):
 
         self.critic = init_(nn.Linear(input_size, 1))
 
-    def forward(self, inputs, rnn_hxs, masks, action=None, deterministic=False):
+    @property
+    def recurrent_hidden_state_size(self):
+        return sum(self.recurrent_module.state_sizes)
+
+    def parse_obs(self, inputs):
         # TODO: remove 'hints' in obs if they are there
-        obs, task = torch.split(inputs, [self.obs_size, self.task_size], dim=-1)
+        import ipdb; ipdb.set_trace()
+
+    def forward(self, inputs, rnn_hxs, masks, action=None, deterministic=False):
+        obs, task = self.parse_obs(inputs)
         # TODO: This is where we would embed the task if we were doing that
         conv_out = self.conv(obs)
         import ipdb;
@@ -87,7 +92,7 @@ class SubtasksAgent(Agent, NNBase):
         recurrent_inputs = torch.cat([conv_out, task])
 
         x, rnn_hxs = self._forward_gru(recurrent_inputs, rnn_hxs, masks)
-        hx = self.recurrent_module.split_hidden(rnn_hxs)
+        hx = self.recurrent_module.parse_hidden(rnn_hxs)
         dist = self.actor(conv_out, hx.g)
 
         if action is None:
@@ -126,26 +131,24 @@ class SubtasksRecurrence(nn.Module):
             Concat(),
             init_(nn.Linear(conv_out_size + 2 * self.subtask_size, hidden_size), 'sigmoid'))
 
+        self.state_sizes = RecurrentState(p=self.n_subtasks, r=self.subtask_size, h=hidden_size,
+                                          g=self.subtask_size, b=1,
+                                          log_prob=1, )
+
     def sample(self, logits):
         dist = torch.distributions.Categorical(logits=logits)
         x = dist.sample()
         return x, dist.log_prob(x)
 
-    def split_hidden(self, hx):
-        return RecurrentState(*torch.split(hx, RecurrentState(p=self.n_subtasks,
-                                                              r=self.subtask_size,
-                                                              h=self.hidden_size,
-                                                              g=self.subtask_size,
-                                                              b=1,
-                                                              log_prob=1,
-                                                              ), dim=-1))
+    def parse_hidden(self, hx):
+        return RecurrentState(*torch.split(hx, self.state_sizes, dim=-1))
 
     def forward(self, input, hx=None):
         assert hx is not None
         sections = [self.obs_size, self.n_subtasks * self.subtask_size]
         obs, task = torch.split(input, sections, dim=-1)
         M = task.view(-1, self.n_subtasks, self.task_size)
-        hx = self.split_hidden(hx)
+        hx = self.parse_hidden(hx)
 
         # TODO: unzero zeroed values
         import ipdb;

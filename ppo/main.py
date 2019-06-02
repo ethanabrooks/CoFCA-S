@@ -7,8 +7,7 @@ from gym.wrappers import TimeLimit
 from rl_utils import hierarchical_parse_args
 
 # noinspection PyUnresolvedReferences
-from gridworld_env import SubtasksGridWorld
-import gridworld_env
+from gridworld_env.subtasks_gridworld import SubtasksGridWorld
 from ppo.arguments import build_parser, get_args
 from ppo.subtasks import SubtasksAgent
 from ppo.train import Train

@@ -15,9 +15,11 @@ class SubtasksWrapper(gym.ObservationWrapper):
         super().__init__(env)
         obs_space, task_space = env.observation_space.spaces
         assert np.all(task_space.nvec == task_space.nvec[0])
-        task_channels = task_space.nvec[0, 0]  # channel per task_type
+        task_channels = task_space.nvec[0, 0]
         obs_shape = np.array(obs_space.nvec.shape)
-        obs_shape[0] += task_channels + 1  # +1 for task_objects
+        obs_shape[0] += task_channels  # for task type one hot
+        obs_shape[0] += 3  # for task specification
+        obs_shape[0] += 1  # for task_objects
         self.observation_space = Box(0, 1, shape=obs_shape)
 
     def observation(self, observation):
@@ -26,9 +28,14 @@ class SubtasksWrapper(gym.ObservationWrapper):
         env = self.env.unwrapped
 
         # subtask pointer
-        task_type, _, task_object_type = env.subtask
+        task_type, task_count, task_object_type = env.subtask
         task_type_one_hot = np.zeros((len(env.task_types), h, w), dtype=bool)
         task_type_one_hot[task_type, :, :] = True
+
+        task_spec = np.zeros((3, h, w), dtype=int)
+        task_spec[0, :, :] = task_type
+        task_spec[1, :, :] = task_count
+        task_spec[2, :, :] = task_object_type
 
         # TODO: make this less easy
         task_objects_one_hot = np.zeros((h, w), dtype=bool)
@@ -37,7 +44,7 @@ class SubtasksWrapper(gym.ObservationWrapper):
 
         stack = np.vstack(
             [obs, task_type_one_hot,
-             np.expand_dims(task_objects_one_hot, 0)])
+             np.expand_dims(task_objects_one_hot, 0), task_spec])
 
         # names = ['obstacles'] + list(env.object_types) + ['ice', 'agent'] + \
         #         list(env.task_types) + ['task objects']
@@ -153,7 +160,7 @@ class VecPyTorchFrameStack(VecEnvWrapper):
         low = np.repeat(wos.low, self.nstack, axis=0)
         high = np.repeat(wos.high, self.nstack, axis=0)
 
-        self.stacked_obs = torch.zeros((venv.num_envs, ) + low.shape)
+        self.stacked_obs = torch.zeros((venv.num_envs,) + low.shape)
 
         observation_space = gym.spaces.Box(
             low=low, high=high, dtype=venv.observation_space.dtype)
