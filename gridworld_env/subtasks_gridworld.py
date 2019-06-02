@@ -19,6 +19,7 @@ class SubtasksGridWorld(gym.Env):
             n_objects,
             n_obstacles,
             n_subtasks,
+            random_obstacles,
             task=None,
     ):
         super().__init__()
@@ -43,8 +44,9 @@ class SubtasksGridWorld(gym.Env):
             'transform',
         ])
 
-        self.max_task_count = 3
-        self.randomize_task = task is None
+        self.max_task_count = 1
+        self.random_task = task is None
+        self.random_obstacles = random_obstacles
 
         # set on initialize
         self.initialized = False
@@ -90,7 +92,7 @@ class SubtasksGridWorld(gym.Env):
         ])
         self.action_space = spaces.Discrete(len(self.transitions) + 2)
 
-    def initialize(self):
+    def randomize_obstacles(self):
         h, w = self.desc.shape
         choices = cartesian_product(np.arange(h), np.arange(w))
         choices = choices[np.all(choices % 2 != 0, axis=-1)]
@@ -99,6 +101,9 @@ class SubtasksGridWorld(gym.Env):
         self.obstacles = choices[randoms]
         set_index(self.obstacles_one_hot, self.obstacles, True)
         self.obstacles = np.array(list(self.obstacles))
+
+    def initialize(self):
+        self.randomize_obstacles()
         h, w = self.desc.shape
         ij = cartesian_product(np.arange(h), np.arange(w))
         self.open_spaces = ij[np.logical_not(
@@ -134,9 +139,10 @@ class SubtasksGridWorld(gym.Env):
     def reset(self):
         if not self.initialized:
             self.initialize()
+        elif self.random_obstacles:
+            self.randomize_obstacles()
 
-        # tasks
-        if self.randomize_task:
+        if self.random_task:
             task_types = self.np_random.choice(
                 len(self.task_types), size=self.n_subtasks)
             task_objects = self.np_random.choice(
