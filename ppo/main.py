@@ -60,7 +60,7 @@ def teach_cli():
     gridworld_args = gridworld_env.get_args(kwargs['env_id'])
     class_ = eval(gridworld_args.pop('class'))
 
-    def train(env_id, task_args, **_kwargs):
+    def train(env_id, task_args, batch_size, num_processes, **_kwargs):
         max_episode_steps = gridworld_args.pop('max_episode_steps', None)
         task_args = {k: v if v else gridworld_args[k]
                      for k, v in task_args.items()}
@@ -79,10 +79,12 @@ def teach_cli():
             # noinspection PyMethodOverriding
             @staticmethod
             def build_agent(envs, hidden_size, recurrent, **kwargs):
-                return SubtasksAgent(envs.observation_space.shape,
-                                     envs.action_space,
-                                     get_task_space(**task_args),
-                                     hidden_size, recurrent)
+                return SubtasksAgent(obs_shape=envs.observation_space.shape,
+                                     action_space=envs.action_space,
+                                     batch_size=num_processes // batch_size,
+                                     task_space=get_task_space(**task_args),
+                                     hidden_size=hidden_size,
+                                     recurrent=recurrent)
 
         # Train
         TrainSubtasks(env_id=env_id, **_kwargs)

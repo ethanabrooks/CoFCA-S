@@ -78,6 +78,11 @@ def build_parser():
         action='store_true',
         default=False,
         help='add timestep to observations')
+    parser.add_argument(
+        '--batch-size',
+        type=int,
+        default=32,
+        help='number of batches for ppo (default: 32)')
     parser.add_argument('--success-reward', type=float)
     parser.add_argument('--successes-till-done', type=int)
 
@@ -101,11 +106,6 @@ def build_parser():
         type=int,
         default=4,
         help='number of ppo epochs (default: 4)')
-    ppo_parser.add_argument(
-        '--batch-size',
-        type=int,
-        default=32,
-        help='number of batches for ppo (default: 32)')
     ppo_parser.add_argument(
         '--value-loss-coef',
         type=float,

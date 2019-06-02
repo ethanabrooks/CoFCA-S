@@ -49,6 +49,7 @@ class Train:
                  success_reward,
                  successes_till_done,
                  synchronous,
+                 batch_size,
                  save_dir=None):
         save_dir = save_dir or log_dir
         if render:
@@ -94,7 +95,7 @@ class Train:
             print('All values copied to GPU in', time.time() - tick, 'seconds')
         print('Using device', device)
 
-        ppo = PPO(agent=agent, **ppo_args)
+        ppo = PPO(agent=agent, batch_size=batch_size, **ppo_args)
 
         rewards_counter = np.zeros(num_processes)
         time_step_counter = np.zeros(num_processes)

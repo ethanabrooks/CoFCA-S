@@ -59,10 +59,9 @@ class SubtasksAgent(Agent, NNBase):
                  action_space,
                  task_space,
                  hidden_size,
-                 recurrent,
-                 ):
+                 **kwargs):
         nn.Module.__init__(self)
-        n_subtasks, subtask_size = task_shape = task_space.nvec.shape
+        n_subtasks, subtask_size = task_space.nvec.shape
         self.task_size = n_subtasks * subtask_size
         n_task_types = task_space.nvec[0, 0]
         self.n_cheat_layers = (n_task_types +  # task type one hot
@@ -74,7 +73,7 @@ class SubtasksAgent(Agent, NNBase):
         self.recurrent_module = SubtasksRecurrence(obs_shape=obs_shape,
                                                    task_space=task_space,
                                                    hidden_size=hidden_size,
-                                                   recurrent=recurrent)
+                                                   **kwargs)
 
         self.obs_size = np.prod(obs_shape)
 
@@ -131,7 +130,7 @@ class SubtasksAgent(Agent, NNBase):
 
 
 class SubtasksRecurrence(nn.Module):
-    def __init__(self, obs_shape, task_space, hidden_size, recurrent):
+    def __init__(self, obs_shape, task_space, batch_size, hidden_size, recurrent):
         super().__init__()
         self.d, self.h, self.w = d, h, w = obs_shape
         self.subtask_space = subtask_space = task_space.nvec[0]
@@ -174,6 +173,9 @@ class SubtasksRecurrence(nn.Module):
                         2  # binary: done or not done
                         )
         )
+        self.task_one_hots = [nn.Parameter(torch.zeros(batch_size, d), requires_grad=False)
+                              for d in self.subtask_space]
+        self.bidx = nn.Parameter(torch.arange(batch_size).view(-1, 1))
         self.state_sizes = RecurrentState(p=self.n_subtasks, r=self.subtask_size, h=hidden_size,
                                           g=self.subtask_size, b=1,
                                           log_prob=1, )
@@ -182,13 +184,10 @@ class SubtasksRecurrence(nn.Module):
         return RecurrentState(*torch.split(hx, self.state_sizes, dim=-1))
 
     def embed_task(self, task_type, count, object_type):
-        n = task_type.shape[0]
-        one_hots = [torch.zeros(n, d, device=task_type.device)
-                    for d in self.subtask_space]
-        bidx = torch.arange(n, device=task_type.device).view(-1, 1)
-        for array, idx in zip(one_hots, [task_type, count, object_type]):
-            array[bidx, idx] = 1
-        return torch.cat(one_hots, dim=-1)
+        for array, idx in zip(self.task_one_hots, [task_type, count, object_type]):
+            array[:] = 0
+            array[self.bidx, idx] = 1
+        return torch.cat(self.task_one_hots, dim=-1)
 
     def forward(self, input, hx=None):
         assert hx is not None
@@ -197,8 +196,9 @@ class SubtasksRecurrence(nn.Module):
 
         M = self.embed_task(*[t.squeeze(0).long() for t in task_types])
         # TODO: why are both tasks the same?
-        import ipdb; ipdb.set_trace()
-        
+        import ipdb;
+        ipdb.set_trace()
+
         new_episode = torch.all(hx == 0)
         hx = self.parse_hidden(hx)
         if new_episode:
