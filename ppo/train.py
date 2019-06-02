@@ -71,9 +71,7 @@ class Trainer:
         envs = self.make_vec_envs(env_id, seed, num_processes, _gamma,
                                   add_timestep, render, synchronous)
 
-        actor_critic = Policy(envs.observation_space.shape, envs.action_space,
-                              **network_args)
-
+        actor_critic = self.build_agent(envs, **network_args)
         rollouts = RolloutStorage(
             num_steps=num_steps,
             num_processes=num_processes,
@@ -257,6 +255,10 @@ class Trainer:
                       format(
                           len(eval_episode_rewards),
                           np.mean(eval_episode_rewards)))
+
+    def build_agent(self, envs, **network_args):
+        return Policy(envs.observation_space.shape, envs.action_space,
+                              **network_args)
 
     @staticmethod
     def make_env(env_id, seed, rank, add_timestep):
