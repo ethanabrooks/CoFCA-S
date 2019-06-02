@@ -256,7 +256,8 @@ class Train:
                           len(eval_episode_rewards),
                           np.mean(eval_episode_rewards)))
 
-    def build_agent(self, envs, **network_args):
+    @staticmethod
+    def build_agent(envs, **network_args):
         return Agent(envs.observation_space.shape, envs.action_space,
                      **network_args)
 

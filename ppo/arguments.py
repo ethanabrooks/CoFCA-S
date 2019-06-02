@@ -4,8 +4,7 @@ import argparse
 from pathlib import Path
 
 import torch.nn as nn
-from rl_utils import hierarchical_parse_args, parse_activation
-
+from rl_utils import hierarchical_parse_args, parse_activation, namedtuple
 
 def build_parser():
     parser = argparse.ArgumentParser(description='RL')
