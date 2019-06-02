@@ -1,18 +1,18 @@
 import argparse
+import re
+import tempfile
 from collections.__init__ import namedtuple
 from contextlib import contextmanager
 from itertools import filterfalse
 from pathlib import Path
-import re
-import tempfile
 from typing import List, Tuple
 from xml.etree import ElementTree as ET
 
-from gym import spaces
-from gym.spaces import Box
 import numpy as np
 import tensorflow as tf
 import torch.nn as nn
+from gym import spaces
+from gym.spaces import Box
 
 from utils.utils import parametric_relu
 
@@ -21,9 +21,6 @@ def make_box(*tuples: Tuple[float, float]):
     low, high = map(np.array, zip(*[(map(float, m)) for m in tuples]))
     return spaces.Box(low=low, high=high, dtype=np.float32)
 
-
-def parse_activation(string):
-    return dict(relu=nn.ReLU())[string]
 
 
 def parse_space(dim: int):
@@ -53,22 +50,6 @@ def parse_vector(length: int, delim: str):
 
 def cast_to_int(arg: str):
     return int(float(arg))
-
-
-ACTIVATIONS = dict(
-    relu=tf.nn.relu,
-    leaky=tf.nn.leaky_relu,
-    elu=tf.nn.elu,
-    selu=tf.nn.selu,
-    prelu=parametric_relu,
-    sigmoid=tf.sigmoid,
-    tanh=tf.tanh,
-    none=None,
-)
-
-
-def parse_activation(arg: str):
-    return ACTIVATIONS[arg]
 
 
 def put_in_xml_setter(arg: str):

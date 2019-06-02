@@ -4,14 +4,15 @@ from pathlib import Path
 
 # noinspection PyUnresolvedReferences
 from gym.wrappers import TimeLimit
-from rl_utils import hierarchical_parse_args
 
 # noinspection PyUnresolvedReferences
-from gridworld_env.subtasks_gridworld import SubtasksGridWorld
+import gridworld_env
+from gridworld_env import SubtasksGridWorld
 from ppo.arguments import build_parser, get_args
 from ppo.subtasks import SubtasksAgent
 from ppo.train import Train
 from ppo.wrappers import SubtasksWrapper
+from rl_utils import hierarchical_parse_args
 
 
 def cli():

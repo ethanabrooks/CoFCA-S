@@ -4,7 +4,8 @@ import argparse
 from pathlib import Path
 
 import torch.nn as nn
-from rl_utils import hierarchical_parse_args, parse_activation, namedtuple
+from rl_utils import hierarchical_parse_args, parse_activation
+
 
 def build_parser():
     parser = argparse.ArgumentParser(description='RL')
@@ -67,9 +68,11 @@ def build_parser():
         type=Path,
         help='directory to save agent logs (default: /tmp/gym)')
     parser.add_argument(
-        '--no-cuda', dest='cuda', action='store_false', help='enables CUDA training')
-    parser.add_argument(
-        '--synchronous', action='store_true')
+        '--no-cuda',
+        dest='cuda',
+        action='store_false',
+        help='enables CUDA training')
+    parser.add_argument('--synchronous', action='store_true')
     parser.add_argument(
         '--add-timestep',
         action='store_true',
