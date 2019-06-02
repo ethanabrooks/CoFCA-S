@@ -1,18 +1,20 @@
 # stdlib
 import itertools
+import numpy as np
 from pathlib import Path
 
 # noinspection PyUnresolvedReferences
 from gym.wrappers import TimeLimit
 
-# noinspection PyUnresolvedReferences
 import gridworld_env
+# noinspection PyUnresolvedReferences
 from gridworld_env import SubtasksGridWorld
+from gridworld_env.subtasks_gridworld import get_task_space
 from ppo.arguments import build_parser, get_args
 from ppo.subtasks import SubtasksAgent
 from ppo.train import Train
 from ppo.wrappers import SubtasksWrapper
-from rl_utils import hierarchical_parse_args
+from rl_utils import hierarchical_parse_args, spaces
 
 
 def cli():
@@ -48,17 +50,26 @@ def single_task_cli():
 
 
 def teach_cli():
-    parsers = build_parser()
-    kwargs = hierarchical_parse_args(parsers)
-    env_args = gridworld_env.get_args(kwargs['env_id'])
-    class_ = eval(env_args.pop('class'))
-    max_episode_steps = env_args.pop('max_episode_steps', None)
+    parser = build_parser()
+    task_parser = parser.add_argument_group('task_args')
+    task_parser.add_argument('--task-types', nargs='*')
+    task_parser.add_argument('--max-task-count', type=int)
+    task_parser.add_argument('--object-types', nargs='*')
+    task_parser.add_argument('--n-subtasks', type=int)
+    kwargs = hierarchical_parse_args(parser)
+    gridworld_args = gridworld_env.get_args(kwargs['env_id'])
+    class_ = eval(gridworld_args.pop('class'))
 
-    def train(env_id, **_kwargs):
+    def train(env_id, task_args, **_kwargs):
+        max_episode_steps = gridworld_args.pop('max_episode_steps', None)
+        task_args = {k: v if v else gridworld_args[k]
+                     for k, v in task_args.items()}
+        gridworld_args.update(**task_args)
+
         class TrainSubtasks(Train):
             @staticmethod
             def make_env(env_id, seed, rank, add_timestep):
-                env = SubtasksWrapper(class_(**env_args))
+                env = SubtasksWrapper(class_(**gridworld_args))
                 env.seed(seed + rank)
                 if max_episode_steps is not None:
                     env = TimeLimit(
@@ -70,7 +81,7 @@ def teach_cli():
             def build_agent(envs, hidden_size, recurrent, **kwargs):
                 return SubtasksAgent(envs.observation_space.shape,
                                      envs.action_space,
-                                     (env_args['n_subtasks'], 3),
+                                     get_task_space(**task_args),
                                      hidden_size, recurrent)
 
         # Train

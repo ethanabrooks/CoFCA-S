@@ -11,15 +11,24 @@ from ppo.utils import set_index
 from rl_utils import cartesian_product
 
 
+def get_task_space(task_types, max_task_count, object_types, n_subtasks):
+    return spaces.MultiDiscrete(
+        np.tile(
+            np.array([len(task_types), max_task_count, len(object_types)]),
+            (n_subtasks, 1)))
+
+
 class SubtasksGridWorld(gym.Env):
     def __init__(
             self,
             text_map,
-            object_types,
             n_objects,
             n_obstacles,
-            n_subtasks,
             random_obstacles,
+            n_subtasks,
+            task_types,
+            max_task_count,
+            object_types,
             task=None,
     ):
         super().__init__()
@@ -38,13 +47,9 @@ class SubtasksGridWorld(gym.Env):
         # self.state_char = '🚡'
         self.desc = np.array([list(r) for r in text_map])
 
-        self.task_types = np.array([
-            'visit',
-            'pick-up',
-            'transform',
-        ])
+        self.task_types = np.array(task_types)
 
-        self.max_task_count = 1
+        self.max_task_count = max_task_count
         self.random_task = task is None
         self.random_obstacles = random_obstacles
 
@@ -83,12 +88,10 @@ class SubtasksGridWorld(gym.Env):
                     len(object_types),
                     h,
                     w))),
-            spaces.MultiDiscrete(
-                np.tile(
-                    np.array([
-                        len(self.task_types), self.max_task_count,
-                        len(object_types)
-                    ]), (n_subtasks, 1)))
+            get_task_space(task_types=self.task_types,
+                           max_task_count=self.max_task_count,
+                           object_types=object_types,
+                           n_subtasks=n_subtasks)
         ])
         self.action_space = spaces.Discrete(len(self.transitions) + 2)
 
@@ -115,10 +118,17 @@ class SubtasksGridWorld(gym.Env):
         return np.array(list('🛑👇👆👉👈✋👊'))
 
     def render(self, mode='human'):
-        task_type, _, task_object_type = self.subtask
-        print('task:', self.task_types[task_type],
-              self.object_types[task_object_type])
-        print('task count:', self.task_count)
+        def print_subtask(task_type, count, task_object_type):
+            print(self.task_types[task_type], count,
+                  self.object_types[task_object_type])
+
+        print('task:')
+        for task in self.task:
+            print_subtask(*task)
+        print()
+        print('subtask:')
+        print_subtask(*self.subtask)
+        print('remaining:', self.task_count)
 
         # noinspection PyTypeChecker
         desc = self.desc.copy()
@@ -130,9 +140,9 @@ class SubtasksGridWorld(gym.Env):
         desc[tuple(self.pos)] = '*'
 
         for row in desc:
-            print(six.u(f'\x1b[47m'), end='')
+            print(six.u(f'\x1b[47m\x1b[30m'), end='')
             print(''.join(row), end='')
-            print(six.u('\x1b[49m'))
+            print(six.u('\x1b[49m\x1b[39m'))
 
         time.sleep(2 if self.last_terminal else .5)
 
@@ -178,7 +188,7 @@ class SubtasksGridWorld(gym.Env):
         h, w, = self.desc.shape
         objects_one_hot = np.zeros((1 + len(self.object_types), h, w),
                                    dtype=bool)
-        idx = [(v, ) + k for k, v in self.objects.items()]
+        idx = [(v,) + k for k, v in self.objects.items()]
         set_index(objects_one_hot, idx, True)
         return objects_one_hot
 

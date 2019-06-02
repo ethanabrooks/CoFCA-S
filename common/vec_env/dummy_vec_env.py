@@ -76,6 +76,7 @@ class DummyVecEnv(VecEnv):
     def reset(self):
         for e in range(self.num_envs):
             obs = self.envs[e].reset()
+
             if self._render:
                 self.render()
             self._save_obs(e, obs)
@@ -95,7 +96,8 @@ class DummyVecEnv(VecEnv):
         return [env.render(mode='rgb_array') for env in self.envs]
 
     def render(self, mode='human'):
-        if self.num_envs == 1:
-            return self.envs[0].render(mode=mode)
-        else:
-            return super().render(mode=mode)
+        return self.envs[0].render(mode=mode)
+        # if self.num_envs == 1:
+        #     return self.envs[0].render(mode=mode)
+        # else:
+        #     return super().render(mode=mode)

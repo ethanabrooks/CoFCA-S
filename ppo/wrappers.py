@@ -18,7 +18,7 @@ class SubtasksWrapper(gym.ObservationWrapper):
         task_channels = task_space.nvec[0, 0]
         obs_shape = np.array(obs_space.nvec.shape)
         obs_shape[0] += task_channels  # for task type one hot
-        obs_shape[0] += 3  # for task specification
+        obs_shape[0] += np.prod(task_space.nvec.shape)  # for task specification
         obs_shape[0] += 1  # for task_objects
         self.observation_space = Box(0, 1, shape=obs_shape)
 
@@ -32,10 +32,15 @@ class SubtasksWrapper(gym.ObservationWrapper):
         task_type_one_hot = np.zeros((len(env.task_types), h, w), dtype=bool)
         task_type_one_hot[task_type, :, :] = True
 
-        task_spec = np.zeros((3, h, w), dtype=int)
-        task_spec[0, :, :] = task_type
-        task_spec[1, :, :] = task_count
-        task_spec[2, :, :] = task_object_type
+        # task spec
+        def task_iterator():
+            for column in env.task.T:  # transpose for easy splitting in Subtasks module
+                for word in column:
+                    yield word
+
+        task_spec = np.zeros(((3 * env.n_subtasks), h, w), dtype=int)
+        for row, word in zip(task_spec, task_iterator()):
+            row[:] = word
 
         # TODO: make this less easy
         task_objects_one_hot = np.zeros((h, w), dtype=bool)

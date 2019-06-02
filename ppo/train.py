@@ -52,7 +52,7 @@ class Train:
                  save_dir=None):
         save_dir = save_dir or log_dir
         if render:
-            num_processes = 1
+            synchronous = True
 
         torch.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
