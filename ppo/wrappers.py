@@ -1,8 +1,8 @@
 import gym
-import numpy as np
-import torch
 from gym import spaces
 from gym.spaces import Box
+import numpy as np
+import torch
 
 from common.vec_env import VecEnvWrapper
 from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
@@ -18,7 +18,8 @@ class SubtasksWrapper(gym.ObservationWrapper):
         task_channels = task_space.nvec[0, 0]
         obs_shape = np.array(obs_space.nvec.shape)
         obs_shape[0] += task_channels  # for task type one hot
-        obs_shape[0] += np.prod(task_space.nvec.shape)  # for task specification
+        obs_shape[0] += np.prod(
+            task_space.nvec.shape)  # for task specification
         obs_shape[0] += 1  # for task_objects
         self.observation_space = Box(0, 1, shape=obs_shape)
 
@@ -47,9 +48,10 @@ class SubtasksWrapper(gym.ObservationWrapper):
         idx = [k for k, v in env.objects.items() if v == task_object_type]
         set_index(task_objects_one_hot, idx, True)
 
-        stack = np.vstack(
-            [obs, task_type_one_hot,
-             np.expand_dims(task_objects_one_hot, 0), task_spec])
+        stack = np.vstack([
+            obs, task_type_one_hot,
+            np.expand_dims(task_objects_one_hot, 0), task_spec
+        ])
 
         # names = ['obstacles'] + list(env.object_types) + ['ice', 'agent'] + \
         #         list(env.task_types) + ['task objects']
@@ -165,7 +167,7 @@ class VecPyTorchFrameStack(VecEnvWrapper):
         low = np.repeat(wos.low, self.nstack, axis=0)
         high = np.repeat(wos.high, self.nstack, axis=0)
 
-        self.stacked_obs = torch.zeros((venv.num_envs,) + low.shape)
+        self.stacked_obs = torch.zeros((venv.num_envs, ) + low.shape)
 
         observation_space = gym.spaces.Box(
             low=low, high=high, dtype=venv.observation_space.dtype)

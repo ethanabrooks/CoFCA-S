@@ -4,11 +4,11 @@ Helpers for scripts like run_atari.py.
 
 import os
 
-from baselines import logger
-from baselines.bench import Monitor
 import gym
 from gym.wrappers import FlattenDictWrapper
 
+from baselines import logger
+from baselines.bench import Monitor
 from common import retro_wrappers, set_global_seeds
 from common.atari_wrappers import make_atari, wrap_deepmind
 from common.vec_env.dummy_vec_env import DummyVecEnv

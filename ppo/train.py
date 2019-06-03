@@ -1,12 +1,12 @@
 import itertools
+from pathlib import Path
 import sys
 import time
-from pathlib import Path
 
 import gym
 import numpy as np
-import torch
 from tensorboardX import SummaryWriter
+import torch
 
 from common.atari_wrappers import wrap_deepmind
 from common.vec_env.dummy_vec_env import DummyVecEnv
@@ -16,8 +16,7 @@ from ppo.agent import Agent
 from ppo.storage import RolloutStorage
 from ppo.update import PPO
 from ppo.utils import get_random_gpu
-from ppo.wrappers import (AddTimestep, SubtasksWrapper, TransposeImage,
-                          VecNormalize, VecPyTorch, VecPyTorchFrameStack)
+from ppo.wrappers import AddTimestep, SubtasksWrapper, TransposeImage, VecNormalize, VecPyTorch, VecPyTorchFrameStack
 
 try:
     import dm_control2gym
@@ -78,8 +77,7 @@ class Train:
             num_processes=num_processes,
             obs_shape=envs.observation_space.shape,
             action_space=envs.action_space,
-            recurrent_hidden_state_size=agent.
-            recurrent_hidden_state_size,
+            recurrent_hidden_state_size=agent.recurrent_hidden_state_size,
         )
 
         obs = envs.reset()
@@ -154,8 +152,8 @@ class Train:
                     time.time() - last_save >= save_interval:
                 last_save = time.time()
                 modules = dict(
-                    optimizer=ppo.optimizer, agent=agent
-                )  # type: Dict[str, torch.nn.Module]
+                    optimizer=ppo.optimizer,
+                    agent=agent)  # type: Dict[str, torch.nn.Module]
 
                 if isinstance(envs.venv, VecNormalize):
                     modules.update(vec_normalize=envs.venv)

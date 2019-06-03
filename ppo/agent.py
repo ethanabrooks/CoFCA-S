@@ -1,7 +1,6 @@
 from gym.spaces import Box, Discrete
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from ppo.distributions import Categorical, DiagGaussian
 from ppo.utils import init, init_normc_
@@ -60,7 +59,8 @@ class Agent(nn.Module):
         """Size of rnn_hx."""
         return self.base.recurrent_hidden_state_size
 
-    def forward(self, inputs, rnn_hxs, masks, deterministic=False, action=None):
+    def forward(self, inputs, rnn_hxs, masks, deterministic=False,
+                action=None):
         value, actor_features, rnn_hxs = self.base(inputs, rnn_hxs, masks)
 
         dist = self.dist(actor_features)
@@ -77,7 +77,10 @@ class Agent(nn.Module):
 
     def act(self, inputs, rnn_hxs, masks, deterministic=False):
         value, action, action_log_probs, _, rnn_hxs = self(
-            inputs=inputs, rnn_hxs=rnn_hxs, masks=masks, deterministic=deterministic)
+            inputs=inputs,
+            rnn_hxs=rnn_hxs,
+            masks=masks,
+            deterministic=deterministic)
         return value, action, action_log_probs, rnn_hxs
 
     def get_value(self, inputs, rnn_hxs, masks):
@@ -91,16 +94,15 @@ class Agent(nn.Module):
 
 
 class NNBase(nn.Module):
-    def __init__(self, recurrent: bool, recurrent_input_size,
-                 hidden_size):
+    def __init__(self, recurrent: bool, recurrent_input_size, hidden_size):
         super(NNBase, self).__init__()
 
         self._hidden_size = hidden_size
         self._recurrent = recurrent
 
         if self._recurrent:
-            self.recurrent_module = self.build_recurrent_network(recurrent_input_size,
-                                                                 hidden_size)
+            self.recurrent_module = self.build_recurrent_network(
+                recurrent_input_size, hidden_size)
             for name, param in self.recurrent_module.named_parameters():
                 print('zeroed out', name)
                 if 'bias' in name:
@@ -127,7 +129,8 @@ class NNBase(nn.Module):
 
     def _forward_gru(self, x, hxs, masks):
         if x.size(0) == hxs.size(0):
-            x, hxs = self.recurrent_module(x.unsqueeze(0), (hxs * masks).unsqueeze(0))
+            x, hxs = self.recurrent_module(
+                x.unsqueeze(0), (hxs * masks).unsqueeze(0))
             x = x.squeeze(0)
             hxs = hxs.squeeze(0)
         else:
@@ -143,11 +146,8 @@ class NNBase(nn.Module):
 
             # Let's figure out which steps in the sequence have a zero for any agent
             # We will always assume t=0 has a zero in it as that makes the logic cleaner
-            has_zeros = ((masks[1:] == 0.0)
-                         .any(dim=-1)
-                         .nonzero()
-                         .squeeze()
-                         .cpu())
+            has_zeros = ((masks[1:] == 0.0).any(
+                dim=-1).nonzero().squeeze().cpu())
 
             # +1 to correct the masks[1:]
             if has_zeros.dim() == 0:
@@ -271,8 +271,7 @@ class LogicBase(NNBase):
 
 class CNNBase(NNBase):
     def __init__(self, d, h, w, hidden_size, recurrent=False):
-        super(CNNBase, self).__init__(recurrent, hidden_size,
-                                      hidden_size)
+        super(CNNBase, self).__init__(recurrent, hidden_size, hidden_size)
 
         init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
                                constant_(x, 0), nn.init.calculate_gain('relu'))

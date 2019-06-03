@@ -5,8 +5,9 @@ An interface for asynchronous vectorized environments.
 import ctypes
 from multiprocessing import Array, Pipe, Process
 
-from baselines import logger
 import numpy as np
+
+from baselines import logger
 
 # local
 from . import CloudpickleWrapper, VecEnv

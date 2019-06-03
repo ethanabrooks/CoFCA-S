@@ -1,20 +1,17 @@
 # stdlib
-import itertools
-import numpy as np
-from pathlib import Path
 
 # noinspection PyUnresolvedReferences
 from gym.wrappers import TimeLimit
 
+# noinspection PyUnresolvedReferences
 import gridworld_env
 # noinspection PyUnresolvedReferences
-from gridworld_env import SubtasksGridWorld
-from gridworld_env.subtasks_gridworld import get_task_space
+from gridworld_env.subtasks_gridworld import get_task_space, SubtasksGridWorld  # noqa
 from ppo.arguments import build_parser, get_args
 from ppo.subtasks import SubtasksAgent
 from ppo.train import Train
 from ppo.wrappers import SubtasksWrapper
-from rl_utils import hierarchical_parse_args, spaces
+from rl_utils import hierarchical_parse_args
 
 
 def cli():
@@ -62,8 +59,10 @@ def teach_cli():
 
     def train(env_id, task_args, **_kwargs):
         max_episode_steps = gridworld_args.pop('max_episode_steps', None)
-        task_args = {k: v if v else gridworld_args[k]
-                     for k, v in task_args.items()}
+        task_args = {
+            k: v if v else gridworld_args[k]
+            for k, v in task_args.items()
+        }
         gridworld_args.update(**task_args)
 
         class TrainSubtasks(Train):
@@ -79,11 +78,12 @@ def teach_cli():
             # noinspection PyMethodOverriding
             @staticmethod
             def build_agent(envs, hidden_size, recurrent, **kwargs):
-                return SubtasksAgent(obs_shape=envs.observation_space.shape,
-                                     action_space=envs.action_space,
-                                     task_space=get_task_space(**task_args),
-                                     hidden_size=hidden_size,
-                                     recurrent=recurrent)
+                return SubtasksAgent(
+                    obs_shape=envs.observation_space.shape,
+                    action_space=envs.action_space,
+                    task_space=get_task_space(**task_args),
+                    hidden_size=hidden_size,
+                    recurrent=recurrent)
 
         # Train
         TrainSubtasks(env_id=env_id, **_kwargs)

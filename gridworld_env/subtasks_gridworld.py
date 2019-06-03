@@ -2,10 +2,10 @@ import re
 import time
 
 import gym
-import numpy as np
-import six
 from gym import spaces
 from gym.utils import seeding
+import numpy as np
+import six
 
 from ppo.utils import set_index
 from rl_utils import cartesian_product
@@ -14,8 +14,8 @@ from rl_utils import cartesian_product
 def get_task_space(task_types, max_task_count, object_types, n_subtasks):
     return spaces.MultiDiscrete(
         np.tile(
-            np.array([len(task_types), max_task_count, len(object_types)]),
-            (n_subtasks, 1)))
+            np.array([len(task_types), max_task_count,
+                      len(object_types)]), (n_subtasks, 1)))
 
 
 class SubtasksGridWorld(gym.Env):
@@ -88,10 +88,11 @@ class SubtasksGridWorld(gym.Env):
                     len(object_types),
                     h,
                     w))),
-            get_task_space(task_types=self.task_types,
-                           max_task_count=self.max_task_count,
-                           object_types=object_types,
-                           n_subtasks=n_subtasks)
+            get_task_space(
+                task_types=self.task_types,
+                max_task_count=self.max_task_count,
+                object_types=object_types,
+                n_subtasks=n_subtasks)
         ])
         self.action_space = spaces.Discrete(len(self.transitions) + 2)
 
@@ -188,7 +189,7 @@ class SubtasksGridWorld(gym.Env):
         h, w, = self.desc.shape
         objects_one_hot = np.zeros((1 + len(self.object_types), h, w),
                                    dtype=bool)
-        idx = [(v,) + k for k, v in self.objects.items()]
+        idx = [(v, ) + k for k, v in self.objects.items()]
         set_index(objects_one_hot, idx, True)
         return objects_one_hot
 

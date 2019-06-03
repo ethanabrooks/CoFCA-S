@@ -1,7 +1,6 @@
 import argparse
-import sys
-import configparser
 import json
+import sys
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -21,7 +20,8 @@ def get_distribution(arg):
     )[arg]
 
 
-def get_estimates(values, num_steps, num_seeds, exploration_bonus, noise_scale):
+def get_estimates(values, num_steps, num_seeds, exploration_bonus,
+                  noise_scale):
     u = np.ones(values.size)
     logits_list = [u.copy() for _ in range(num_seeds)]
 
@@ -67,7 +67,8 @@ def main(distribution, stats, num_values, num_steps, seed, num_samples,
                 yield i, sample(logits, adaptive=True), 'adaptive'
                 yield i, sample(u, adaptive=False), 'baseline'
             yield i, values.mean(), 'truth'
-            values += noise_scale * np.random.normal(noise_mean, noise_std, values.size)
+            values += noise_scale * np.random.normal(noise_mean, noise_std,
+                                                     values.size)
 
     initial_values = distribution(*stats, size=num_values)
     seaborn.distplot(initial_values)

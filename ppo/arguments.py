@@ -4,6 +4,7 @@ import argparse
 from pathlib import Path
 
 import torch.nn as nn
+
 from rl_utils import hierarchical_parse_args, parse_activation
 
 
@@ -133,6 +134,7 @@ def build_parser():
 
 def get_args():
     return hierarchical_parse_args(build_parser())
+
 
 # def get_hsr_args():
 #     parser = build_parser()

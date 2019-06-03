@@ -1,8 +1,8 @@
 # third party
 import csv
+from io import StringIO
 import random
 import subprocess
-from io import StringIO
 
 import numpy as np
 import torch

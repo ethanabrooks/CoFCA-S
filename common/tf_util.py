@@ -21,8 +21,8 @@ def switch(condition, then_expression, else_expression):
     """
     x_shape = copy.copy(then_expression.get_shape())
     x = tf.cond(
-        tf.cast(condition,
-                'bool'), lambda: then_expression, lambda: else_expression)
+        tf.cast(condition, 'bool'), lambda: then_expression,
+        lambda: else_expression)
     x.set_shape(x_shape)
     return x
 

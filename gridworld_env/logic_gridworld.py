@@ -1,13 +1,13 @@
 import time
 
 import gym
-import numpy as np
-import six
 from gym import spaces
 from gym.utils import seeding
 from gym.utils.colorize import color2num
+import numpy as np
+import six
 
-from ppo.utils import set_index, get_index
+from ppo.utils import get_index, set_index
 
 
 class LogicGridWorld(gym.Env):
@@ -136,7 +136,7 @@ class LogicGridWorld(gym.Env):
             iterate = self.to_touch().size < self.last_to_touch.size
         elif self.task_type == 'move':
             dest_one_hot[:, :, :-1] = (
-                    self.target_color == self.colors).reshape(1, 1, -1)
+                self.target_color == self.colors).reshape(1, 1, -1)
             iterate = self.to_move().size < self.last_to_move.size
         else:
             raise RuntimeError

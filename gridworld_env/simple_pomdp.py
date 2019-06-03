@@ -1,7 +1,8 @@
-import gym
-import numpy as np
-from gym import spaces
 import os
+
+import gym
+from gym import spaces
+import numpy as np
 
 
 def int_to_bin_array(n: int):
@@ -18,7 +19,7 @@ class SimplePOMDP(gym.Env):
         self.turn = 0
         self.n_actions = 3
         self.action_space = spaces.Discrete(self.n_actions)
-        self.observation_space = spaces.Box(low=0, high=1, shape=(2,))
+        self.observation_space = spaces.Box(low=0, high=1, shape=(2, ))
 
     def step(self, action):
         s = int_to_bin_array(self.n_actions)
@@ -46,7 +47,6 @@ class SimplePOMDP(gym.Env):
 
 def main():
     # noinspection PyUnresolvedReferences
-    import gridworld_env
     env = gym.make('POMDP-v0')
     env.seed(1)
     s = env.reset()

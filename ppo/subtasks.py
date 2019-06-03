@@ -30,10 +30,10 @@ class Reshape(torch.jit.ScriptModule):
 
 def init_(network, nonlinearity=None):
     if nonlinearity is None:
-        return init(network,
-                    nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0))
-    return init(network,
-                nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0),
+        return init(network, nn.init.orthogonal_,
+                    lambda x: nn.init.constant_(x, 0))
+    return init(network, nn.init.orthogonal_,
+                lambda x: nn.init.constant_(x, 0),
                 nn.init.calculate_gain(nonlinearity))
 
 
@@ -64,8 +64,8 @@ class SubtasksAgent(Agent, NNBase):
         self.task_size = n_subtasks * subtask_size
         n_task_types = task_space.nvec[0, 0]
         self.n_cheat_layers = (
-                n_task_types +  # task type one hot
-                1)  # + 1 for task objects
+            n_task_types +  # task type one hot
+            1)  # + 1 for task objects
         d, h, w = obs_shape
         d -= self.task_size + self.n_cheat_layers
         obs_shape = d, h, w
@@ -85,8 +85,8 @@ class SubtasksAgent(Agent, NNBase):
                 'relu'), nn.ReLU(), Flatten())
 
         input_size = (
-                h * w * hidden_size +  # conv output
-                sum(task_space.nvec[0]))  # task size
+            h * w * hidden_size +  # conv output
+            sum(task_space.nvec[0]))  # task size
 
         # TODO: multiplicative interaction stuff
         if isinstance(action_space, Discrete):
@@ -146,14 +146,12 @@ class SubtasksAgent(Agent, NNBase):
 
 
 def trace(module_fn, in_size):
-    return torch.jit.trace(module_fn(in_size),
-                           example_inputs=torch.rand(1, in_size))
+    return torch.jit.trace(
+        module_fn(in_size), example_inputs=torch.rand(1, in_size))
 
 
 class SubtasksRecurrence(torch.jit.ScriptModule):
-    __constants__ = [
-        'input_sections', 'subtask_space', 'state_sizes'
-    ]
+    __constants__ = ['input_sections', 'subtask_space', 'state_sizes']
 
     def __init__(self, obs_shape, task_space, hidden_size, recurrent):
         super().__init__()
@@ -168,22 +166,24 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         # networks
         self.recurrent = recurrent
         in_size = (
-                conv_out_size +  # x
-                self.subtask_size +  # r
-                self.subtask_size +  # g
-                1)  # b
+            conv_out_size +  # x
+            self.subtask_size +  # r
+            self.subtask_size +  # g
+            1)  # b
         self.f = init_(nn.Linear(in_size, hidden_size), 'sigmoid')
 
         subcontroller = nn.GRUCell if recurrent else nn.Linear
         self.subcontroller = trace(
             lambda in_size: init_(subcontroller(in_size, hidden_size)),
-            in_size=(hidden_size +  # s
-                     hidden_size))  # h
+            in_size=(
+                hidden_size +  # s
+                hidden_size))  # h
 
         self.phi_update = trace(
             lambda in_size: init_(nn.Linear(in_size, 1)),
-            in_size=(hidden_size +  # s
-                     hidden_size))  # h
+            in_size=(
+                hidden_size +  # s
+                hidden_size))  # h
 
         self.phi_shift = trace(
             lambda in_size: init_(nn.Linear(in_size, 3)),  # 3 for {-1, 0, +1}
@@ -191,19 +191,19 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
         self.pi_theta = trace(
             lambda in_size: nn.Sequential(
-                nn.Linear(
-                    in_size,
-                    np.prod(subtask_space)),  # all possible subtask specs
+                nn.Linear(in_size, np.prod(subtask_space)),  # all possible subtask specs
                 nn.Softmax(dim=-1)),
-            in_size=(hidden_size +  # h
-                     self.subtask_size))  # r
+            in_size=(
+                hidden_size +  # h
+                self.subtask_size))  # r
 
         self.beta = trace(
             lambda in_size: nn.Sequential(
                 nn.Linear(in_size, 2),  # binary: done or not done
                 nn.Softmax(dim=-1)),
-            in_size=(conv_out_size +  # x
-                     self.subtask_size))  # g
+            in_size=(
+                conv_out_size +  # x
+                self.subtask_size))  # g
 
         # embeddings
         self.type_embeddings, self.count_embeddings, self.obj_embeddings = [
@@ -231,9 +231,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             self.count_embeddings[count.long()],
             self.obj_embeddings[obj.long()],
         ],
-            dim=-1)
+                         dim=-1)
 
-    @torch.jit.script_method
     def forward(self, input, hx):
         assert hx is not None
         obs, task_type, count, obj = torch.split(
@@ -295,7 +294,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             hs.append(h)
             gs.append(g)
             bs.append(b)
-            log_probs.append(log_prob_g + log_prob_b)  # TODO
+            log_probs.append(log_prob_g + log_prob_b)
 
         outs = []
         for x in ps, rs, hs, gs, bs, log_probs:
