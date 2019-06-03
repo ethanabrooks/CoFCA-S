@@ -58,14 +58,15 @@ def interp(x1, x2, c):
 # noinspection PyMissingConstructor
 class SubtasksAgent(Agent, NNBase):
     def __init__(self, obs_shape, action_space, task_space, hidden_size,
-                 recurrent):
+                 recurrent, entropy_coef):
         nn.Module.__init__(self)
+        self.entropy_coef = entropy_coef
         n_subtasks, subtask_size = task_space.nvec.shape
         self.task_size = n_subtasks * subtask_size
         n_task_types = task_space.nvec[0, 0]
         self.n_cheat_layers = (
-            n_task_types +  # task type one hot
-            1)  # + 1 for task objects
+                n_task_types +  # task type one hot
+                1)  # + 1 for task objects
         d, h, w = obs_shape
         d -= self.task_size + self.n_cheat_layers
         obs_shape = d, h, w
@@ -85,8 +86,8 @@ class SubtasksAgent(Agent, NNBase):
                 'relu'), nn.ReLU(), Flatten())
 
         input_size = (
-            h * w * hidden_size +  # conv output
-            sum(task_space.nvec[0]))  # task size
+                h * w * hidden_size +  # conv output
+                sum(task_space.nvec[0]))  # task size
 
         # TODO: multiplicative interaction stuff
         if isinstance(action_space, Discrete):
@@ -136,6 +137,12 @@ class SubtasksAgent(Agent, NNBase):
         )  # TODO: combine with other entropy
         return value, action, action_log_probs, dist_entropy, rnn_hxs
 
+    def evaluate_actions(self, inputs, rnn_hxs, masks, action):
+        value, action_log_probs, entropy_bonus, rnn_hxs, log_values = \
+            super().evaluate_actions(inputs, rnn_hxs, masks, action)
+        aux_loss = -action_log_probs.mean() - entropy_bonus
+        return value, action_log_probs, aux_loss, rnn_hxs, log_values
+
     def get_value(self, inputs, rnn_hxs, masks):
         conv_out, hx = self.get_hidden(inputs, rnn_hxs, masks)
         return self.critic((conv_out, hx.g))
@@ -166,10 +173,10 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         # networks
         self.recurrent = recurrent
         in_size = (
-            conv_out_size +  # x
-            self.subtask_size +  # r
-            self.subtask_size +  # g
-            1)  # b
+                conv_out_size +  # x
+                self.subtask_size +  # r
+                self.subtask_size +  # g
+                1)  # b
         self.f = init_(nn.Linear(in_size, hidden_size))
 
         subcontroller = nn.GRUCell if recurrent else nn.Linear
@@ -180,8 +187,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         self.phi_update = trace(
             lambda in_size: init_(nn.Linear(in_size, 1), 'sigmoid'),
             in_size=(
-                hidden_size +  # s
-                hidden_size))  # h
+                    hidden_size +  # s
+                    hidden_size))  # h
 
         self.phi_shift = trace(
             lambda in_size: nn.Sequential(
@@ -196,16 +203,16 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 init_(nn.Linear(in_size, np.prod(subtask_space))),  # all possible subtask specs
                 nn.Softmax(dim=-1)),
             in_size=(
-                hidden_size +  # h
-                self.subtask_size))  # r
+                    hidden_size +  # h
+                    self.subtask_size))  # r
 
         self.beta = trace(
             lambda in_size: nn.Sequential(
                 init_(nn.Linear(in_size, 2)),  # binary: done or not done
                 nn.Softmax(dim=-1)),
             in_size=(
-                conv_out_size +  # x
-                self.subtask_size))  # g
+                    conv_out_size +  # x
+                    self.subtask_size))  # g
 
         # embeddings
         self.type_embeddings, self.count_embeddings, self.obj_embeddings = [
@@ -233,7 +240,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             self.count_embeddings[count.long()],
             self.obj_embeddings[obj.long()],
         ],
-                         dim=-1)
+            dim=-1)
 
     @torch.jit.script_method
     def forward(self, input, hx):
@@ -246,7 +253,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         # TODO: why are both tasks the same?
 
         p, r, h, g, b, _ = self.parse_hidden(hx)
-        if bool(torch.all(hx == 0)): # new episode
+        if bool(torch.all(hx == 0)):  # new episode
             p[:, :, 0] = 1.  # initialize pointer to first subtask
             r[:] = M[:, 0]  # initialize r to first subtask
             g[:] = M[:, 0]  # initialize g to first subtask

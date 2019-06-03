@@ -77,12 +77,13 @@ def teach_cli():
 
             # noinspection PyMethodOverriding
             @staticmethod
-            def build_agent(envs, hidden_size, recurrent, **kwargs):
+            def build_agent(envs, hidden_size, recurrent, entropy_coef, **kwargs):
                 return SubtasksAgent(
                     obs_shape=envs.observation_space.shape,
                     action_space=envs.action_space,
                     task_space=get_task_space(**task_args),
                     hidden_size=hidden_size,
+                    entropy_coef=entropy_coef,
                     recurrent=recurrent)
 
         # Train

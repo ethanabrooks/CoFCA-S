@@ -17,10 +17,12 @@ class Agent(nn.Module):
                  action_space,
                  recurrent,
                  hidden_size,
+                 entropy_coef,
                  logic=False,
                  similarity_measure=None,
                  **network_args):
         super(Agent, self).__init__()
+        self.entropy_coef = entropy_coef
         if network_args is None:
             network_args = {}
         if logic:
@@ -88,9 +90,10 @@ class Agent(nn.Module):
         return value
 
     def evaluate_actions(self, inputs, rnn_hxs, masks, action):
-        value, _, action_log_probs, dist_entropy, rnn_hxs = self(
+        value, _, action_log_probs, entropy, rnn_hxs = self(
             inputs=inputs, rnn_hxs=rnn_hxs, masks=masks, action=action)
-        return value, action_log_probs, dist_entropy, rnn_hxs
+        entropy_bonus = -self.entropy_coef * entropy
+        return value, action_log_probs, entropy_bonus, rnn_hxs, dict(entropy=entropy)
 
 
 class NNBase(nn.Module):

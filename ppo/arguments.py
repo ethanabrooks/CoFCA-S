@@ -95,6 +95,11 @@ def build_parser():
     agent_parser.add_argument('--num-layers', type=int, default=3)
     agent_parser.add_argument(
         '--activation', type=parse_activation, default=nn.ReLU())
+    agent_parser.add_argument(
+        '--entropy-coef',
+        type=float,
+        default=0.01,
+        help='entropy term coefficient (default: 0.01)')
 
     ppo_parser = parser.add_argument_group('ppo_args')
     ppo_parser.add_argument(
@@ -113,11 +118,6 @@ def build_parser():
         default=0.5,
         help='value loss coefficient (default: 0.5)')
     ppo_parser.add_argument(
-        '--entropy-coef',
-        type=float,
-        default=0.01,
-        help='entropy term coefficient (default: 0.01)')
-    ppo_parser.add_argument(
         '--learning-rate', type=float, default=7e-4, help='(default: 7e-4)')
     ppo_parser.add_argument(
         '--eps',
@@ -129,6 +129,9 @@ def build_parser():
         type=float,
         default=0.5,
         help='max norm of gradients (default: 0.5)')
+    ppo_parser.add_argument(
+        '--aux-loss-only',
+        action='store_true')
     return parser
 
 
