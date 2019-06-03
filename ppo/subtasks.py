@@ -151,7 +151,7 @@ def trace(module_fn, in_size):
 
 
 class SubtasksRecurrence(torch.jit.ScriptModule):
-    __constants__ = ['input_sections', 'subtask_space', 'state_sizes']
+    __constants__ = ['input_sections', 'subtask_space', 'state_sizes', 'recurrent']
 
     def __init__(self, obs_shape, task_space, hidden_size, recurrent):
         super().__init__()
@@ -175,19 +175,17 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         subcontroller = nn.GRUCell if recurrent else nn.Linear
         self.subcontroller = trace(
             lambda in_size: init_(subcontroller(in_size, hidden_size)),
-            in_size=(
-                hidden_size +  # s
-                hidden_size))  # h
+            in_size=conv_out_size)  # h
 
         self.phi_update = trace(
-            lambda in_size: init_(nn.Linear(in_size, 1)),
+            lambda in_size: init_(nn.Linear(in_size, 1), 'sigmoid'),
             in_size=(
                 hidden_size +  # s
                 hidden_size))  # h
 
         self.phi_shift = trace(
             lambda in_size: nn.Sequential(
-                init_(nn.Linear(in_size, hidden_size)),
+                init_(nn.Linear(in_size, hidden_size), 'relu'),
                 nn.ReLU(),
                 init_(nn.Linear(hidden_size, 3)),  # 3 for {-1, 0, +1}
             ),
@@ -195,7 +193,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
         self.pi_theta = trace(
             lambda in_size: nn.Sequential(
-                nn.Linear(in_size, np.prod(subtask_space)),  # all possible subtask specs
+                init_(nn.Linear(in_size, np.prod(subtask_space))),  # all possible subtask specs
                 nn.Softmax(dim=-1)),
             in_size=(
                 hidden_size +  # h
@@ -203,7 +201,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
         self.beta = trace(
             lambda in_size: nn.Sequential(
-                nn.Linear(in_size, 2),  # binary: done or not done
+                init_(nn.Linear(in_size, 2)),  # binary: done or not done
                 nn.Softmax(dim=-1)),
             in_size=(
                 conv_out_size +  # x
@@ -266,8 +264,12 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         n = obs.shape[0]
         for i in range(n):
             s = self.f(torch.cat([obs[i], r, g, b], dim=-1))
+
             c = torch.sigmoid(self.phi_update(torch.cat([s, h], dim=-1)))
-            h2 = self.subcontroller(torch.cat([s, h], dim=-1))
+            # if self.recurrent:
+            #     h2 = self.subcontroller(obs[i], h)
+            # else:
+            h2 = self.subcontroller(obs[i])
             # TODO: this would not work for GRU (recurrent)
             # TODO: should h be in here? this is functioning like a vanilla RNN.
 
