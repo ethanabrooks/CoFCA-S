@@ -170,7 +170,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             self.subtask_size +  # r
             self.subtask_size +  # g
             1)  # b
-        self.f = init_(nn.Linear(in_size, hidden_size), 'sigmoid')
+        self.f = init_(nn.Linear(in_size, hidden_size))
 
         subcontroller = nn.GRUCell if recurrent else nn.Linear
         self.subcontroller = trace(
@@ -186,7 +186,11 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 hidden_size))  # h
 
         self.phi_shift = trace(
-            lambda in_size: init_(nn.Linear(in_size, 3)),  # 3 for {-1, 0, +1}
+            lambda in_size: nn.Sequential(
+                init_(nn.Linear(in_size, hidden_size)),
+                nn.ReLU(),
+                init_(nn.Linear(hidden_size, 3)),  # 3 for {-1, 0, +1}
+            ),
             in_size=hidden_size)
 
         self.pi_theta = trace(
@@ -233,6 +237,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         ],
                          dim=-1)
 
+    @torch.jit.script_method
     def forward(self, input, hx):
         assert hx is not None
         obs, task_type, count, obj = torch.split(
@@ -242,9 +247,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         M = self.embed_task(task_type[0], count[0], obj[0])
         # TODO: why are both tasks the same?
 
-        new_episode = bool(torch.all(hx == 0))
         p, r, h, g, b, _ = self.parse_hidden(hx)
-        if new_episode:
+        if bool(torch.all(hx == 0)): # new episode
             p[:, :, 0] = 1.  # initialize pointer to first subtask
             r[:] = M[:, 0]  # initialize r to first subtask
             g[:] = M[:, 0]  # initialize g to first subtask
@@ -264,6 +268,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             s = self.f(torch.cat([obs[i], r, g, b], dim=-1))
             c = torch.sigmoid(self.phi_update(torch.cat([s, h], dim=-1)))
             h2 = self.subcontroller(torch.cat([s, h], dim=-1))
+            # TODO: this would not work for GRU (recurrent)
+            # TODO: should h be in here? this is functioning like a vanilla RNN.
 
             l = F.softmax(self.phi_shift(h2), dim=1)
             p2 = batch_conv1d(p, l)
