@@ -1,4 +1,5 @@
 from collections import namedtuple
+from typing import List, Tuple
 
 import torch
 from gym import spaces
@@ -43,14 +44,6 @@ def batch_conv1d(inputs, weights):
     for x, w in zip(inputs, weights):
         outputs.append(F.conv1d(x.reshape(1, 1, -1), w.reshape(1, 1, -1), padding=1))
     return torch.cat(outputs)
-
-
-def unravel_index3d(x, a, b, c):
-    x1 = x // (b * c)
-    r = x % (b * c)
-    x2 = r // c
-    x3 = r % c
-    return x1, x2, x3
 
 
 def interp(x1, x2, c):
@@ -156,14 +149,14 @@ class SubtasksAgent(Agent, NNBase):
 
 
 class SubtasksRecurrence(torch.jit.ScriptModule):
-    __constants__ = ['input_sections']
+    __constants__ = ['input_sections', 'subtask_size', 'subtask_space']
 
     def __init__(self, obs_shape, task_space, hidden_size, recurrent):
         super().__init__()
         self.d, self.h, self.w = d, h, w = obs_shape
-        self.subtask_space = subtask_space = task_space.nvec[0]
+        self.subtask_space = subtask_space = list(map(int, task_space.nvec[0]))
         self.n_subtasks, _ = task_space.nvec.shape
-        self.subtask_size = np.sum(self.subtask_space)
+        self.subtask_size = int(np.sum(self.subtask_space))
         conv_out_size = h * w * hidden_size
         input_sections = [conv_out_size] + [self.n_subtasks] * 3
         self.input_sections = [int(n) for n in input_sections]
@@ -188,13 +181,13 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             init_(nn.Linear(2 * hidden_size, 1)))
         self.phi_shift = init_(nn.Linear(hidden_size, 3))  # 3 for {-1, 0, +1}
         self.pi_theta = nn.Sequential(
-            Categorical(hidden_size +  # h
-                        self.subtask_size,  # r
-                        np.prod(subtask_space)  # all possible subtask specs
-                        )
+            nn.Linear(hidden_size +  # h
+                      self.subtask_size,  # r
+                      np.prod(subtask_space)  # all possible subtask specs
+                      )
         )
         self.beta = nn.Sequential(
-            Categorical(conv_out_size +  # x
+            nn.Linear(conv_out_size +  # x
                         self.subtask_size,  # g
                         2  # binary: done or not done
                         )
@@ -202,7 +195,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
         # embeddings
         self.embeddings = nn.ParameterList(
-            [nn.Parameter(torch.eye(d.item()), requires_grad=False)
+            [nn.Parameter(torch.eye(d), requires_grad=False)
              for d in subtask_space]
         )
 
@@ -219,8 +212,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                     zip(self.embeddings, task_codes)]
         return torch.cat(one_hots, dim=-1)
 
-    @torch.jit.script_method
-    def forward(self, input, hx=None):
+    def forward(self, input, hx):
         assert hx is not None
         obs, task_type, count, obj = torch.split(input, self.input_sections, dim=-1)
 
@@ -242,38 +234,65 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         g.squeeze_(0)
         b.squeeze_(0)
 
-        outputs = []
+        ps = []
+        rs = []
+        hs = []
+        gs = []
+        bs = []
+        log_probs = []
+
         n = obs.shape[0]
         for i in range(n):
             s = self.f(cat(obs[i], r, g, b))
             c = torch.sigmoid(self.phi_update(cat(s, h)))
-            h = self.subcontroller(cat(s, h))
+            h2 = self.subcontroller(cat(s, h))
 
-            l = F.softmax(self.phi_shift(h), dim=1)
-            p = batch_conv1d(p, l)
-            r = p @ M
+            l = F.softmax(self.phi_shift(h2), dim=1)
+            p2 = batch_conv1d(p, l)
+            r2 = p2 @ M
 
-            p = interp(p, p, c)
-            r = interp(r, r, c)
-            h = interp(h, h, c)
+            p = interp(p, p2, c)
+            r = interp(r, r2, c)
+            h = interp(h, h2, c)
 
             # TODO: deterministic
             # g
-            dist = self.pi_theta(cat(h, r))
-            g = dist.sample()
-            log_prob_g = dist.log_probs(g)
+            import ipdb; ipdb.set_trace()
+            
+            probs = torch.softmax(self.pi_theta(cat(h, r)), dim=-1)
+            g = torch.multinomial(probs, 1)
+            log_prob_g = torch.log(probs[g])
 
-            idxs = unravel_index3d(g, *self.subtask_space)
-            g2 = self.embed_task(*idxs).squeeze(1)
+            i1, i2, i3 = self.unrave_index_subtask_space(g)
+            g2 = self.embed_task(i1, i2, i3).squeeze(1)
             g = c * g2 + (1 - c) * g
 
             # b
-            dist = self.beta(cat(obs[i], g))
-            b = dist.sample().float()
-            log_prob_b = dist.log_probs(b)
+            probs = torch.softmax(self.beta(cat(obs[i], g)), dim=-1)
+            b = torch.multinomial(probs, 1)
+            log_prob_b = torch.log(probs[b])
 
-            outputs.append((p, r, h, g, b, log_prob_b + log_prob_g))
+            # outputs.append((p, r, h, g, b, log_prob_b + log_prob_g))
+            ps.append(p)
+            rs.append(r)
+            hs.append(h)
+            gs.append(g)
+            bs.append(b)
+            log_probs.append(log_prob_g + log_prob_b)  # TODO
 
-        stacked = list(map(torch.stack, zip(*outputs)))
-        hx = torch.cat(stacked, dim=-1)
+        ps = torch.stack(ps)
+        rs = torch.stack(rs)
+        hs = torch.stack(hs)
+        gs = torch.stack(gs)
+        bs = torch.stack(bs)
+        log_probs = torch.stack(log_probs)
+        hx = torch.cat([ps, rs, hs, gs, bs, log_probs], dim=-1)
         return hx, hx[-1]
+
+    def unrave_index_subtask_space(self, g):
+        x1, x2, x3 = self.subtask_space
+        g1 = g / (x2 * x3)
+        x4 = g % (x2 * x3)
+        g2 = x4 / x3
+        g3 = x4 % x3
+        return g1, g2, g3
