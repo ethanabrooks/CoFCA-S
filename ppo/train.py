@@ -1,12 +1,12 @@
 import itertools
-from pathlib import Path
 import sys
 import time
+from pathlib import Path
 
 import gym
 import numpy as np
-from tensorboardX import SummaryWriter
 import torch
+from tensorboardX import SummaryWriter
 
 from common.atari_wrappers import wrap_deepmind
 from common.vec_env.dummy_vec_env import DummyVecEnv
@@ -16,7 +16,8 @@ from ppo.agent import Agent
 from ppo.storage import RolloutStorage
 from ppo.update import PPO
 from ppo.utils import get_random_gpu
-from ppo.wrappers import AddTimestep, SubtasksWrapper, TransposeImage, VecNormalize, VecPyTorch, VecPyTorchFrameStack
+from ppo.wrappers import (AddTimestep, SubtasksWrapper, TransposeImage,
+                          VecNormalize, VecPyTorch, VecPyTorchFrameStack)
 
 try:
     import dm_control2gym
@@ -45,6 +46,7 @@ class Train:
                  agent_args,
                  render,
                  load_path,
+                 behavior_agent_load_path,
                  success_reward,
                  successes_till_done,
                  synchronous,
@@ -71,13 +73,14 @@ class Train:
         envs = self.make_vec_envs(env_id, seed, num_processes, _gamma,
                                   add_timestep, render, synchronous)
 
-        agent = self.build_agent(envs, **agent_args)
+        self.behavior_agent = self.build_behavior_agent(envs, **agent_args)
+        self.agent = self.build_agent(envs, **agent_args)
         rollouts = RolloutStorage(
             num_steps=num_steps,
             num_processes=num_processes,
             obs_shape=envs.observation_space.shape,
             action_space=envs.action_space,
-            recurrent_hidden_state_size=agent.recurrent_hidden_state_size,
+            recurrent_hidden_state_size=self.agent.recurrent_hidden_state_size,
         )
 
         obs = envs.reset()
@@ -88,12 +91,12 @@ class Train:
             tick = time.time()
             device = torch.device('cuda', get_random_gpu())
             envs.to(device)
-            agent.to(device)
+            self.agent.to(device)
             rollouts.to(device)
             print('All values copied to GPU in', time.time() - tick, 'seconds')
         print('Using device', device)
 
-        ppo = PPO(agent=agent, batch_size=batch_size, **ppo_args)
+        ppo = PPO(agent=self.agent, batch_size=batch_size, **ppo_args)
 
         rewards_counter = np.zeros(num_processes)
         time_step_counter = np.zeros(num_processes)
@@ -106,19 +109,23 @@ class Train:
 
         if load_path:
             state_dict = torch.load(load_path)
-            agent.load_state_dict(state_dict['agent'])
+            self.agent.load_state_dict(state_dict['agent'])
             ppo.optimizer.load_state_dict(state_dict['optimizer'])
             start = state_dict.get('step', -1) + 1
             if isinstance(envs.venv, VecNormalize):
                 envs.venv.load_state_dict(state_dict['vec_normalize'])
             print(f'Loaded parameters from {load_path}.')
 
+        if behavior_agent_load_path:
+            state_dict = torch.load(behavior_agent_load_path)
+            self.behavior_agent.load_state_dict(state_dict['agent'])
+
         for j in itertools.count():
             for step in range(num_steps):
                 # Sample actions.add_argument_group('env_args')
                 with torch.no_grad():
                     value, action, action_log_prob, recurrent_hidden_states = \
-                        agent.act(
+                        self.agent.act(
                             rollouts.obs[step], rollouts.recurrent_hidden_states[step],
                             rollouts.masks[step])
 
@@ -140,7 +147,7 @@ class Train:
                                 action_log_prob, value, reward, masks)
 
             with torch.no_grad():
-                next_value = agent.get_value(
+                next_value = self.agent.get_value(
                     rollouts.obs[-1], rollouts.recurrent_hidden_states[-1],
                     rollouts.masks[-1]).detach()
 
@@ -153,7 +160,7 @@ class Train:
                 last_save = time.time()
                 modules = dict(
                     optimizer=ppo.optimizer,
-                    agent=agent)  # type: Dict[str, torch.nn.Module]
+                    agent=self.agent)  # type: Dict[str, torch.nn.Module]
 
                 if isinstance(envs.venv, VecNormalize):
                     modules.update(vec_normalize=envs.venv)
@@ -227,13 +234,13 @@ class Train:
                 obs = eval_envs.reset()
                 eval_recurrent_hidden_states = torch.zeros(
                     num_processes,
-                    agent.recurrent_hidden_state_size,
+                    self.agent.recurrent_hidden_state_size,
                     device=device)
                 eval_masks = torch.zeros(num_processes, 1, device=device)
 
                 while len(eval_episode_rewards) < 10:
                     with torch.no_grad():
-                        _, action, _, eval_recurrent_hidden_states = agent.act(
+                        _, action, _, eval_recurrent_hidden_states = self.agent.act(
                             obs,
                             eval_recurrent_hidden_states,
                             eval_masks,
@@ -255,10 +262,13 @@ class Train:
                           len(eval_episode_rewards),
                           np.mean(eval_episode_rewards)))
 
+    def build_agent(self, envs, **agent_args):
+        return self.behavior_agent
+
     @staticmethod
-    def build_agent(envs, **network_args):
+    def build_behavior_agent(envs, **agent_args):
         return Agent(envs.observation_space.shape, envs.action_space,
-                     **network_args)
+                     **agent_args)
 
     @staticmethod
     def make_env(env_id, seed, rank, add_timestep):
