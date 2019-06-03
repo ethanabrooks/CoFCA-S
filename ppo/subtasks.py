@@ -6,6 +6,7 @@ from gym.spaces import Discrete, Box
 import numpy as np
 from torch import nn as nn
 from torch.nn import functional as F
+import torch.jit
 
 from ppo.agent import NNBase, Flatten, Agent
 from ppo.utils import init
@@ -36,11 +37,11 @@ def init_(network, nonlinearity=None):
                 constant_(x, 0), nn.init.calculate_gain(nonlinearity))
 
 
-def batch_conv1d(inputs, weights, padding):
+def batch_conv1d(inputs, weights):
     outputs = []
     # one convolution per instance
     for x, w in zip(inputs, weights):
-        outputs.append(F.conv1d(x.reshape(1, 1, -1), w.reshape(1, 1, -1), padding=padding))
+        outputs.append(F.conv1d(x.reshape(1, 1, -1), w.reshape(1, 1, -1), padding=1))
     return torch.cat(outputs)
 
 
@@ -50,6 +51,14 @@ def unravel_index3d(x, a, b, c):
     x2 = r // c
     x3 = r % c
     return x1, x2, x3
+
+
+def interp(x1, x2, c):
+    return c * x2.squeeze(1) + (1 - c) * x1
+
+
+def cat(*x):
+    return torch.cat(x, dim=-1)
 
 
 # noinspection PyMissingConstructor
@@ -146,20 +155,23 @@ class SubtasksAgent(Agent, NNBase):
         return True
 
 
-class SubtasksRecurrence(nn.Module):
+class SubtasksRecurrence(torch.jit.ScriptModule):
+    __constants__ = ['input_sections']
+
     def __init__(self, obs_shape, task_space, hidden_size, recurrent):
         super().__init__()
         self.d, self.h, self.w = d, h, w = obs_shape
         self.subtask_space = subtask_space = task_space.nvec[0]
         self.n_subtasks, _ = task_space.nvec.shape
         self.subtask_size = np.sum(self.subtask_space)
-        self.conv_out_size = h * w * hidden_size
+        conv_out_size = h * w * hidden_size
+        input_sections = [conv_out_size] + [self.n_subtasks] * 3
+        self.input_sections = [int(n) for n in input_sections]
 
         # networks
         self.recurrent = recurrent
         self.f = nn.Sequential(
-            Concat(),
-            init_(nn.Linear(self.conv_out_size +  # x
+            init_(nn.Linear(conv_out_size +  # x
                             self.subtask_size +  # r
                             self.subtask_size +  # g
                             1  # b
@@ -167,25 +179,22 @@ class SubtasksRecurrence(nn.Module):
 
         subcontroller = nn.GRUCell if recurrent else nn.Linear
         self.subcontroller = nn.Sequential(
-            Concat(),
             init_(subcontroller(hidden_size +  # s
                                 hidden_size,  # h
                                 hidden_size))
         )
 
         self.phi_update = nn.Sequential(
-            Concat(), init_(nn.Linear(2 * hidden_size, 1)))
+            init_(nn.Linear(2 * hidden_size, 1)))
         self.phi_shift = init_(nn.Linear(hidden_size, 3))  # 3 for {-1, 0, +1}
         self.pi_theta = nn.Sequential(
-            Concat(),
             Categorical(hidden_size +  # h
                         self.subtask_size,  # r
                         np.prod(subtask_space)  # all possible subtask specs
                         )
         )
         self.beta = nn.Sequential(
-            Concat(),
-            Categorical(self.conv_out_size +  # x
+            Categorical(conv_out_size +  # x
                         self.subtask_size,  # g
                         2  # binary: done or not done
                         )
@@ -202,7 +211,7 @@ class SubtasksRecurrence(nn.Module):
                                           log_prob=1, )
 
     def parse_hidden(self, hx):
-        return RecurrentState(*torch.split(hx, self.state_sizes, dim=-1))
+        return torch.split(hx, self.state_sizes, dim=-1)
 
     def embed_task(self, *task_codes):
         one_hots = [e[t.long()]
@@ -210,57 +219,60 @@ class SubtasksRecurrence(nn.Module):
                     zip(self.embeddings, task_codes)]
         return torch.cat(one_hots, dim=-1)
 
+    @torch.jit.script_method
     def forward(self, input, hx=None):
         assert hx is not None
-        sections = [self.conv_out_size] + [self.n_subtasks] * 3
-        obs, task_type, count, obj = torch.split(input, sections, dim=-1)
+        obs, task_type, count, obj = torch.split(input, self.input_sections, dim=-1)
 
         count -= 1
         M = self.embed_task(task_type[0], count[0], obj[0])
         # TODO: why are both tasks the same?
 
-        new_episode = torch.all(hx == 0)
-        hx = self.parse_hidden(hx)
+        new_episode = bool(torch.all(hx == 0))
+        p, r, h, g, b, _ = self.parse_hidden(hx)
         if new_episode:
-            hx.p[:, :, 0] = 1  # initialize pointer to first subtask
-            hx.r[:] = hx.g[:] = M[:, 0]  # initialize r/g to first subtask
+            p[:, :, 0] = 1.  # initialize pointer to first subtask
+            r[:] = M[:, 0]  # initialize r to first subtask
+            g[:] = M[:, 0]  # initialize g to first subtask
 
         # TODO: integrate this into parse_hidden
-        for x in hx:
-            x.squeeze_(0)
+        p.squeeze_(0)
+        r.squeeze_(0)
+        h.squeeze_(0)
+        g.squeeze_(0)
+        b.squeeze_(0)
 
         outputs = []
-        for x in obs:
-            s = self.f((x, hx.r, hx.g, hx.b))
-            c = torch.sigmoid(self.phi_update((s, hx.h)))
-            h = self.subcontroller((s, hx.h))
+        n = obs.shape[0]
+        for i in range(n):
+            s = self.f(cat(obs[i], r, g, b))
+            c = torch.sigmoid(self.phi_update(cat(s, h)))
+            h = self.subcontroller(cat(s, h))
 
-            l = F.softmax(self.phi_shift(hx.h), dim=1)
-            p = batch_conv1d(hx.p, l, padding=1)
+            l = F.softmax(self.phi_shift(h), dim=1)
+            p = batch_conv1d(p, l)
             r = p @ M
 
-            p, r, h = [c * x2.squeeze(1) + (1 - c) * x1
-                       for x1, x2 in
-                       zip([hx.p, hx.r, hx.h], [p, r, h])]
+            p = interp(p, p, c)
+            r = interp(r, r, c)
+            h = interp(h, h, c)
 
             # TODO: deterministic
             # g
-            dist = self.pi_theta((h, r))
+            dist = self.pi_theta(cat(h, r))
             g = dist.sample()
             log_prob_g = dist.log_probs(g)
 
             idxs = unravel_index3d(g, *self.subtask_space)
-            g = self.embed_task(*idxs).squeeze(1)
-            g = c * g + (1 - c) * hx.g
+            g2 = self.embed_task(*idxs).squeeze(1)
+            g = c * g2 + (1 - c) * g
 
             # b
-            dist = self.beta((x, g))
+            dist = self.beta(cat(obs[i], g))
             b = dist.sample().float()
             log_prob_b = dist.log_probs(b)
 
-            hx = RecurrentState(p=p, r=r, h=h, g=g, b=b,
-                                log_prob=(log_prob_g + log_prob_b))
-            outputs.append(hx)
+            outputs.append((p, r, h, g, b, log_prob_b + log_prob_g))
 
         stacked = list(map(torch.stack, zip(*outputs)))
         hx = torch.cat(stacked, dim=-1)
