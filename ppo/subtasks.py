@@ -152,7 +152,7 @@ def trace(module_fn, in_size):
 
 class SubtasksRecurrence(torch.jit.ScriptModule):
     __constants__ = [
-        'input_sections', 'subtask_size', 'subtask_space', 'state_sizes'
+        'input_sections', 'subtask_space', 'state_sizes'
     ]
 
     def __init__(self, obs_shape, task_space, hidden_size, recurrent):
@@ -172,10 +172,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 self.subtask_size +  # r
                 self.subtask_size +  # g
                 1)  # b
-        # self.f = torch.jit.trace(
-        self.f = \
-            init_(nn.Linear(in_size, hidden_size), 'sigmoid')
-        # , example_inputs=torch.rand(1, in_size))
+        self.f = init_(nn.Linear(in_size, hidden_size), 'sigmoid')
 
         subcontroller = nn.GRUCell if recurrent else nn.Linear
         self.subcontroller = trace(
