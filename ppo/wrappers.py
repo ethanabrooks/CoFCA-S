@@ -21,6 +21,7 @@ class SubtasksWrapper(gym.ObservationWrapper):
         obs_shape[0] += np.prod(
             task_space.nvec.shape)  # for task specification
         obs_shape[0] += 1  # for task_objects
+        obs_shape[0] += 1  # for iterate
         self.observation_space = Box(0, 1, shape=obs_shape)
 
     def observation(self, observation):
@@ -48,9 +49,11 @@ class SubtasksWrapper(gym.ObservationWrapper):
         idx = [k for k, v in env.objects.items() if v == task_object_type]
         set_index(task_objects_one_hot, idx, True)
 
+        iterate = np.full((1, h, w), env.iterate)
+
         stack = np.vstack([
             obs, task_type_one_hot,
-            np.expand_dims(task_objects_one_hot, 0), task_spec
+            np.expand_dims(task_objects_one_hot, 0), task_spec, iterate
         ])
 
         # names = ['obstacles'] + list(env.object_types) + ['ice', 'agent'] + \
