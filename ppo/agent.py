@@ -7,7 +7,9 @@ import torch.nn as nn
 from ppo.distributions import Categorical, DiagGaussian
 from ppo.utils import init, init_normc_
 
-AgentValues = namedtuple('AgentValues', 'value action action_log_probs aux_loss rnn_hxs log')
+AgentValues = namedtuple('AgentValues',
+                         'value action action_log_probs aux_loss rnn_hxs log')
+
 
 class Flatten(nn.Module):
     def forward(self, x):

@@ -10,18 +10,19 @@ from ppo.storage import Batch, RolloutStorage
 
 
 class PPO:
-    def __init__(self,
-                 agent,
-                 clip_param,
-                 ppo_epoch,
-                 batch_size,
-                 value_loss_coef,
-                 learning_rate=None,
-                 eps=None,
-                 max_grad_norm=None,
-                 use_clipped_value_loss=True,
-                 aux_loss_only=False,
-                 ):
+    def __init__(
+            self,
+            agent,
+            clip_param,
+            ppo_epoch,
+            batch_size,
+            value_loss_coef,
+            learning_rate=None,
+            eps=None,
+            max_grad_norm=None,
+            use_clipped_value_loss=True,
+            aux_loss_only=False,
+    ):
 
         self.aux_loss_only = None
         self.agent = agent
@@ -43,7 +44,7 @@ class PPO:
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         if advantages.numel() > 1:
             advantages = (advantages - advantages.mean()) / (
-                    advantages.std() + 1e-5)
+                advantages.std() + 1e-5)
 
         logger = collections.Counter()
 
@@ -82,7 +83,7 @@ class PPO:
                                              -self.clip_param, self.clip_param)
                     value_losses = (values - sample.ret).pow(2)
                     value_losses_clipped = (
-                            value_pred_clipped - sample.ret).pow(2)
+                        value_pred_clipped - sample.ret).pow(2)
                     value_loss = .5 * torch.max(value_losses,
                                                 value_losses_clipped).mean()
                 else:

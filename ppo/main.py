@@ -4,9 +4,9 @@
 from gym.wrappers import TimeLimit
 
 # noinspection PyUnresolvedReferences
-import gridworld_env
 # noinspection PyUnresolvedReferences
-from gridworld_env.subtasks_gridworld import get_task_space, SubtasksGridWorld  # noqa
+import gridworld_env
+from gridworld_env.subtasks_gridworld import SubtasksGridWorld, get_task_space  # noqa
 from ppo.arguments import build_parser, get_args
 from ppo.subtasks import SubtasksAgent
 from ppo.train import Train
@@ -78,7 +78,8 @@ def teach_cli():
 
             # noinspection PyMethodOverriding
             @staticmethod
-            def build_agent(envs, hidden_size, recurrent, entropy_coef, **kwargs):
+            def build_agent(envs, hidden_size, recurrent, entropy_coef,
+                            **kwargs):
                 return SubtasksAgent(
                     obs_shape=envs.observation_space.shape,
                     action_space=envs.action_space,
