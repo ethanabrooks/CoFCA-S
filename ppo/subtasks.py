@@ -134,7 +134,7 @@ class SubtasksAgent(Agent, NNBase):
         action_log_probs = dist.log_probs(action) + hx.log_prob
         entropy = dist.entropy()
         # TODO: combine with other entropy
-        
+
         entropy_bonus = self.entropy_coef * entropy
         aux_loss = hx.aux_loss - entropy_bonus
         return value, action, action_log_probs, aux_loss.mean(), rnn_hxs
@@ -221,6 +221,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             nn.Parameter(torch.eye(d), requires_grad=False)
             for d in subtask_space
         ]
+        self.forward_l = nn.Parameter(torch.tensor([0., 0., 1.]), requires_grad=False)
 
         self.state_sizes = RecurrentState(
             p=self.n_subtasks,
@@ -290,7 +291,10 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # TODO: this would not work for GRU (recurrent)
 
             l = F.softmax(self.phi_shift(h2), dim=1)
+            aux_loss += F.cross_entropy(l, iterate[i] * self.forward_l, reduction='none')  # TODO
+
             p2 = batch_conv1d(p, l)
+
             r2 = p2 @ M
 
             p = interp(p, p2, c)
