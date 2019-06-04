@@ -70,6 +70,7 @@ def teach_cli():
             def make_env(env_id, seed, rank, add_timestep):
                 env = SubtasksWrapper(class_(**gridworld_args))
                 env.seed(seed + rank)
+                print('Environment seed:', seed + rank)
                 if max_episode_steps is not None:
                     env = TimeLimit(
                         env, max_episode_seconds=int(max_episode_steps))
@@ -93,4 +94,4 @@ def teach_cli():
 
 
 if __name__ == "__main__":
-    cli()
+    teach_cli()

@@ -1,3 +1,4 @@
+import functools
 import itertools
 import sys
 import time
@@ -266,9 +267,9 @@ class Train:
                 eval_envs.close()
 
                 print(" Evaluation using {} episodes: mean reward {:.5f}\n".
-                      format(
-                          len(eval_episode_rewards),
-                          np.mean(eval_episode_rewards)))
+                    format(
+                    len(eval_episode_rewards),
+                    np.mean(eval_episode_rewards)))
 
     def build_agent(self, envs, **agent_args):
         return self.behavior_agent
@@ -324,8 +325,9 @@ class Train:
                       render,
                       synchronous,
                       num_frame_stack=None):
+
         envs = [
-            lambda: self.make_env(env_id, seed, i, add_timestep)
+            functools.partial(self.make_env, env_id, seed, i, add_timestep)
             for i in range(num_processes)
         ]
 
