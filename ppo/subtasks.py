@@ -152,9 +152,6 @@ class SubtasksAgent(Agent, NNBase):
 
         entropy_bonus = self.entropy_coef * entropy
         losses = {k: v for k, v in hx._asdict().items() if k.endswith('_loss')}
-
-        self.recurrent_module.check_grad(**losses)
-
         aux_loss = sum(losses.values()) - entropy_bonus - action_log_probs
 
         return AgentValues(value=value,
@@ -259,11 +256,11 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             subtask=1
         )
 
-    # @torch.jit.script_method
+    @torch.jit.script_method
     def parse_hidden(self, hx):
         return torch.split(hx, self.state_sizes, dim=-1)
 
-    # @torch.jit.script_method
+    @torch.jit.script_method
     def embed_task(self, task_type, count, obj):
         return torch.cat([
             self.type_embeddings[task_type.long()],
@@ -272,7 +269,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         ],
             dim=-1)
 
-    # @torch.jit.script_method
+    @torch.jit.script_method
     def forward(self, input, hx):
         assert hx is not None
         obs, task_type, count, obj, iterate = torch.split(
@@ -283,7 +280,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
         count -= 1
         M = self.embed_task(task_type[0], count[0], obj[0])
-        p, r, h, g, b, *_, float_subtask = self.parse_hidden(hx)
+        p, r, h, g, b, _, _, float_subtask = self.parse_hidden(hx)
 
         if bool(torch.all(hx == 0)):  # new episode
             p[:, :, 0] = 1.  # initialize pointer to first subtask
@@ -372,9 +369,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                                             obj[i, j, subtask[j]]))
             g_loss = log_prob(torch.stack(g_target), probs)
             g_losses.append(g_loss)
-
-            # debug
-            self.check_grad(g_loss=g_loss)
 
             i1, i2, i3 = self.decode(g_int)
             g2 = self.embed_task(i1, i2, i3).squeeze(1)
