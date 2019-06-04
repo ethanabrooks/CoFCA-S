@@ -132,14 +132,17 @@ class SubtasksAgent(Agent, NNBase):
 
         value = self.critic((conv_out, hx.g))
         action_log_probs = dist.log_probs(action) + hx.log_prob
-        dist_entropy = dist.entropy().mean(
-        )  # TODO: combine with other entropy
-        return value, action, action_log_probs, dist_entropy, rnn_hxs
+        entropy = dist.entropy()
+        # TODO: combine with other entropy
+        
+        entropy_bonus = self.entropy_coef * entropy
+        aux_loss = hx.aux_loss - entropy_bonus
+        return value, action, action_log_probs, aux_loss.mean(), rnn_hxs
 
     def evaluate_actions(self, inputs, rnn_hxs, masks, action):
-        value, action_log_probs, entropy_bonus, rnn_hxs, log_values = \
+        value, action_log_probs, aux_loss, rnn_hxs, log_values = \
             super().evaluate_actions(inputs, rnn_hxs, masks, action)
-        aux_loss = -action_log_probs.mean() - entropy_bonus
+        aux_loss -= action_log_probs.mean()
         return value, action_log_probs, aux_loss, rnn_hxs, log_values
 
     def get_value(self, inputs, rnn_hxs, masks):
@@ -278,7 +281,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             c = torch.sigmoid(self.phi_update(torch.cat([s, h], dim=-1)))
 
-            aux_loss = F.binary_cross_entropy(c, iterate[i], reduction='none') # TODO
+            aux_loss = F.binary_cross_entropy(c, iterate[i], reduction='none')  # TODO
 
             # if self.recurrent:
             #     h2 = self.subcontroller(obs[i], h)
