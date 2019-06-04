@@ -334,12 +334,13 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # else:
             h2 = self.subcontroller(obs[i])
 
-            l = F.softmax(self.phi_shift(h2), dim=1)
+            l_logits = self.phi_shift(h2)
+            l = F.softmax(l_logits, dim=1)
 
             # l_loss
             l_target = self.l_values[next_subtask[i].long()].view(-1)
             l_losses.append(
-                F.cross_entropy(l, l_target,
+                F.cross_entropy(l_logits, l_target,
                                 reduction='none').unsqueeze(1)  # TODO
             )
 
@@ -376,14 +377,19 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # g_loss
             g_target = []
             for j in range(m):
-                g_target.append(
-                    self.encode(task_type[i, j, subtask[j]],
-                                count[i, j, subtask[j]],
-                                obj[i, j, subtask[j]]))
+                t1 = task_type[i, j, subtask[j]]
+                t2 = count[i, j, subtask[j]]
+                t3 = obj[i, j, subtask[j]]
+                target_int = self.encode(t1, t2, t3)
+                # assert target_int == np.ravel_multi_index((int(t1), int(t2), int(t3)),
+                #                                           self.subtask_space)
+                g_target.append(target_int)
             g_loss = log_prob(torch.stack(g_target), probs)
             g_losses.append(g_loss)
 
             i1, i2, i3 = self.decode(g_int)
+            # assert (int(i1), int(i2), int(i3)) == \
+            #        np.unravel_index(int(g_int), self.subtask_space)
             g2 = self.embed_task(i1, i2, i3).squeeze(1)
             g = interp(g, g2, c)
 
