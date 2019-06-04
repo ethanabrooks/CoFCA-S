@@ -73,10 +73,10 @@ class SubtasksGridWorld(gym.Env):
         self.subtask = None
         self.task_iter = None
         self.task_count = None
-        self.iterate = None
         self.objects = None
         self.pos = None
         self.last_terminal = False
+        self.next_subtask = False
 
         h, w = self.desc.shape
         self.observation_space = spaces.Tuple([
@@ -211,14 +211,15 @@ class SubtasksGridWorld(gym.Env):
         return [seed]
 
     def perform_iteration(self):
-        self.iterate = False
-        if self.task_count is not None:
-            self.task_count -= 1
-        if not self.task_count:
+        self.next_subtask = self.task_count == 1
+        if self.task_count is None or self.next_subtask:
             task_type, task_count, _ = self.subtask = next(self.task_iter)
             self.task_count = task_count
+        else:
+            self.task_count -= 1
 
     def step(self, a):
+        self.next_subtask = False
         # act
         n_transitions = len(self.transitions)
         if a < n_transitions:
@@ -232,38 +233,31 @@ class SubtasksGridWorld(gym.Env):
         pos = tuple(self.pos)
         touching = pos in self.objects
 
+        t = False
+        r = -.1
         if touching:
+            iterate = False
             object_type = self.objects[pos]
-            picked_up = transformed = None
-            if a >= n_transitions:
-                if a - n_transitions == 0:  # pick up
-                    picked_up = object_type
-                    del self.objects[pos]
-                elif a - n_transitions == 1:  # transform
-                    transformed = object_type
-                    self.objects[pos] = len(self.object_types)
-
-            # iterate
             task_type_idx, _, task_object_type_idx = self.subtask
             task_type = self.task_types[task_type_idx]
             if 'visit' == task_type:
-                self.iterate = object_type == task_object_type_idx
-            elif 'pick-up' in task_type:
-                self.iterate = picked_up == task_object_type_idx
-            elif 'transform' in task_type:
-                self.iterate = transformed == task_object_type_idx
-            else:
-                raise RuntimeError
+                iterate = object_type == task_object_type_idx
+            if a >= n_transitions:
+                if a - n_transitions == 0:  # pick up
+                    del self.objects[pos]
+                    if 'pick-up' == task_type:
+                        iterate = object_type == task_object_type_idx  # picked up object
+                elif a - n_transitions == 1:  # transform
+                    self.objects[pos] = len(self.object_types)
+                    if 'transform' == task_type:
+                        iterate = object_type == task_object_type_idx
 
-        # next task / terminate
-        t = False
-        r = -.1
-        if self.iterate:
-            try:
-                self.perform_iteration()
-            except StopIteration:
-                r = 1
-                t = True
+            if iterate:
+                try:
+                    self.perform_iteration()
+                except StopIteration:
+                    r = 1
+                    t = True
 
         self.last_terminal = t
         return self.get_observation(), r, t, {}

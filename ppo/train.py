@@ -128,6 +128,7 @@ class Train:
                     act = self.agent(rollouts.obs[step],
                                      rollouts.recurrent_hidden_states[step],
                                      rollouts.masks[step])  # type: AgentValues
+                # act.action[:] = 'wsadeq'.index(input('act:'))
 
                 # Observe reward and next obs
                 obs, reward, done, infos = envs.step(act.action)
