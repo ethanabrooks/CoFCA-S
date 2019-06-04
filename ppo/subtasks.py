@@ -153,7 +153,7 @@ class SubtasksAgent(Agent, NNBase):
         entropy_bonus = self.entropy_coef * entropy
         losses = {k: v for k, v in hx._asdict().items() if k.endswith('_loss')}
 
-        self.recurrent_module.check_grad(**losses)
+        # self.recurrent_module.check_grad(**losses)
         aux_loss = sum(losses.values()) - entropy_bonus - action_log_probs
 
         return AgentValues(value=value,
@@ -374,8 +374,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             i1, i2, i3 = self.decode(g_int)
             g2 = self.embed_task(i1, i2, i3).squeeze(1)
-            # g = interp(g, g2, c)
-            g = g2
+            g = interp(g, g2, c)
 
             # b
             probs = self.beta(torch.cat([obs[i], g], dim=-1))
