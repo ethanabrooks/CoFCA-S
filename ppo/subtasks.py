@@ -437,4 +437,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                     if grad is None:
                         print(f'{k} has no grad wrt {name}')
                     else:
-                        print(f'mean grad of {k} wrt {name}:', grad.mean())
+                        print(f'mean grad ({v.mean().item()}) of {k} wrt {name}:', grad.mean())
+                        if torch.isnan(grad.mean()):
+                            import ipdb;
+                            ipdb.set_trace()
