@@ -1,3 +1,5 @@
+from collections import namedtuple
+
 from gym.spaces import Box, Discrete
 import torch
 import torch.nn as nn
@@ -5,6 +7,7 @@ import torch.nn as nn
 from ppo.distributions import Categorical, DiagGaussian
 from ppo.utils import init, init_normc_
 
+AgentValues = namedtuple('AgentValues', 'value action action_log_probs aux_loss rnn_hxs log')
 
 class Flatten(nn.Module):
     def forward(self, x):
@@ -74,26 +77,18 @@ class Agent(nn.Module):
                 action = dist.sample()
 
         action_log_probs = dist.log_probs(action)
-        dist_entropy = dist.entropy().mean()
-        return value, action, action_log_probs, dist_entropy, rnn_hxs
-
-    def act(self, inputs, rnn_hxs, masks, deterministic=False):
-        value, action, action_log_probs, _, rnn_hxs = self(
-            inputs=inputs,
+        entropy = dist.entropy().mean()
+        return AgentValues(
+            value=value,
+            action=action,
+            action_log_probs=action_log_probs,
+            aux_loss=-self.entropy_coef * entropy,
             rnn_hxs=rnn_hxs,
-            masks=masks,
-            deterministic=deterministic)
-        return value, action, action_log_probs, rnn_hxs
+            log=dict(entropy=entropy))
 
     def get_value(self, inputs, rnn_hxs, masks):
         value, _, _ = self.base(inputs, rnn_hxs, masks)
         return value
-
-    def evaluate_actions(self, inputs, rnn_hxs, masks, action):
-        value, _, action_log_probs, entropy, rnn_hxs = self(
-            inputs=inputs, rnn_hxs=rnn_hxs, masks=masks, action=action)
-        entropy_bonus = -self.entropy_coef * entropy
-        return value, action_log_probs, entropy_bonus, rnn_hxs, dict(entropy=entropy)
 
 
 class NNBase(nn.Module):

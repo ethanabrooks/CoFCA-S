@@ -7,7 +7,7 @@ from torch import nn as nn
 import torch.jit
 from torch.nn import functional as F
 
-from ppo.agent import Agent, Flatten, NNBase
+from ppo.agent import Agent, Flatten, NNBase, AgentValues
 from ppo.distributions import Categorical, DiagGaussian
 from ppo.utils import init
 

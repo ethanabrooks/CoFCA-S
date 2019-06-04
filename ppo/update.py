@@ -24,7 +24,7 @@ class PPO:
                  ):
 
         self.aux_loss_only = None
-        self.actor_critic = agent
+        self.agent = agent
 
         self.clip_param = clip_param
         self.ppo_epoch = ppo_epoch
@@ -48,7 +48,7 @@ class PPO:
         logger = collections.Counter()
 
         for e in range(self.ppo_epoch):
-            if self.actor_critic.is_recurrent:
+            if self.agent.is_recurrent:
                 data_generator = rollouts.recurrent_generator(
                     advantages, self.num_mini_batch)
             else:
@@ -58,10 +58,11 @@ class PPO:
             sample: Batch
             for sample in data_generator:
                 # Reshape to do in a single forward pass for all steps
-                values, action_log_probs, loss, \
-                rnn_hxs, log_values = self.actor_critic.evaluate_actions(
-                    sample.obs, sample.recurrent_hidden_states,
-                    sample.masks, sample.actions)
+                values, _, action_log_probs, loss, \
+                rnn_hxs, log_values = self.agent(
+                    inputs=sample.obs,
+                    rnn_hxs=sample.recurrent_hidden_states,
+                    masks=sample.masks, action=sample.actions)
                 logger.update(**log_values)
 
                 if not self.aux_loss_only:
@@ -92,7 +93,7 @@ class PPO:
                 self.optimizer.zero_grad()
                 loss.backward()
 
-                nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
+                nn.utils.clip_grad_norm_(self.agent.parameters(),
                                          self.max_grad_norm)
                 self.optimizer.step()
 

@@ -12,7 +12,7 @@ from common.atari_wrappers import wrap_deepmind
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from gridworld_env import SubtasksGridWorld
-from ppo.agent import Agent
+from ppo.agent import Agent, AgentValues
 from ppo.storage import RolloutStorage
 from ppo.update import PPO
 from ppo.utils import get_random_gpu
@@ -124,13 +124,13 @@ class Train:
             for step in range(num_steps):
                 # Sample actions.add_argument_group('env_args')
                 with torch.no_grad():
-                    value, action, action_log_prob, recurrent_hidden_states = \
-                        self.agent.act(
-                            rollouts.obs[step], rollouts.recurrent_hidden_states[step],
-                            rollouts.masks[step])
+                    # act: AgentValues
+                    act = self.agent(
+                        rollouts.obs[step], rollouts.recurrent_hidden_states[step],
+                        rollouts.masks[step])  # type: AgentValues
 
                 # Observe reward and next obs
-                obs, reward, done, infos = envs.step(action)
+                obs, reward, done, infos = envs.step(act.action)
 
                 # track rewards
                 rewards_counter += reward.numpy()
@@ -143,15 +143,22 @@ class Train:
                 # If done then clean the history of observations.
                 masks = torch.FloatTensor(
                     [[0.0] if done_ else [1.0] for done_ in done])
-                rollouts.insert(obs, recurrent_hidden_states, action,
-                                action_log_prob, value, reward, masks)
+                rollouts.insert(obs=obs,
+                                recurrent_hidden_states=act.rnn_hxs,
+                                actions=act.action,
+                                action_log_probs=act.action_log_probs,
+                                values=act.value,
+                                rewards=reward, masks=masks)
 
             with torch.no_grad():
                 next_value = self.agent.get_value(
                     rollouts.obs[-1], rollouts.recurrent_hidden_states[-1],
                     rollouts.masks[-1]).detach()
 
-            rollouts.compute_returns(next_value, use_gae, gamma, tau)
+            rollouts.compute_returns(next_value=next_value,
+                                     use_gae=use_gae,
+                                     gamma=gamma,
+                                     tau=tau)
             train_results = ppo.update(rollouts)
             rollouts.after_update()
 
@@ -240,14 +247,15 @@ class Train:
 
                 while len(eval_episode_rewards) < 10:
                     with torch.no_grad():
-                        _, action, _, eval_recurrent_hidden_states = self.agent.act(
+                        act = self.agent(
                             obs,
                             eval_recurrent_hidden_states,
                             eval_masks,
                             deterministic=True)
+                        eval_recurrent_hidden_states = act.rnn_hxs
 
                     # Observe reward and next obs
-                    obs, reward, done, infos = eval_envs.step(action)
+                    obs, reward, done, infos = eval_envs.step(act.action)
 
                     eval_masks = torch.FloatTensor(
                         [[0.0] if done_ else [1.0] for done_ in done])
