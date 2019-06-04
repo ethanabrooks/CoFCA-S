@@ -61,12 +61,15 @@ def get_index(array, idxs):
     return array[tuple(idxs.T)]
 
 
-def get_random_gpu():
+def get_n_gpu():
     nvidia_smi = subprocess.check_output(
         'nvidia-smi --format=csv --query-gpu=memory.free'.split(),
         universal_newlines=True)
-    ngpu = len(list(csv.reader(StringIO(nvidia_smi)))) - 1
-    return random.randrange(0, ngpu)
+    return len(list(csv.reader(StringIO(nvidia_smi)))) - 1
+
+
+def get_random_gpu():
+    return random.randrange(0, get_n_gpu())
 
 
 def get_freer_gpu():

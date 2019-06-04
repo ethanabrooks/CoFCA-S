@@ -1,5 +1,6 @@
 import functools
 import itertools
+import re
 from pathlib import Path
 import sys
 import time
@@ -16,7 +17,7 @@ from gridworld_env import SubtasksGridWorld
 from ppo.agent import Agent
 from ppo.storage import RolloutStorage
 from ppo.update import PPO
-from ppo.utils import get_random_gpu
+from ppo.utils import get_random_gpu, get_n_gpu
 from ppo.wrappers import AddTimestep, SubtasksWrapper, TransposeImage, VecNormalize, VecPyTorch, VecPyTorchFrameStack
 
 try:
@@ -51,6 +52,7 @@ class Train:
                  successes_till_done,
                  synchronous,
                  batch_size,
+                 run_id,
                  save_dir=None):
         save_dir = save_dir or log_dir
         if render:
@@ -88,8 +90,14 @@ class Train:
 
         device = 'cpu'
         if cuda:
+            device_num = get_random_gpu()
+            if run_id:
+                match = re.search('\d+$', run_id)
+                if match:
+                    device_num = int(match.group()) % get_n_gpu()
+
+            device = torch.device('cuda', device_num)
             tick = time.time()
-            device = torch.device('cuda', get_random_gpu())
             envs.to(device)
             self.agent.to(device)
             rollouts.to(device)

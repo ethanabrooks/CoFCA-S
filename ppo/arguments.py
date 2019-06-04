@@ -11,6 +11,8 @@ from rl_utils import hierarchical_parse_args, parse_activation
 def build_parser():
     parser = argparse.ArgumentParser(description='RL')
     parser.add_argument(
+        '--run-id', help=' ')
+    parser.add_argument(
         '--gamma',
         type=float,
         default=0.99,
