@@ -73,7 +73,7 @@ class PPO:
                     surr2 = torch.clamp(ratio, 1.0 - self.clip_param,
                                         1.0 + self.clip_param) * sample.adv
                     action_loss = -torch.min(surr1, surr2).mean()
-                    logger.update(action_loss=action_loss.item())
+                    logger.update(action_loss=action_loss)
                     loss += action_loss
 
                 if self.use_clipped_value_loss:
@@ -88,7 +88,7 @@ class PPO:
                                                 value_losses_clipped).mean()
                 else:
                     value_loss = 0.5 * F.mse_loss(sample.ret, values)
-                logger.update(value_loss=value_loss.item())
+                logger.update(value_loss=value_loss)
                 loss += self.value_loss_coef * value_loss
 
                 self.optimizer.zero_grad()
@@ -102,4 +102,4 @@ class PPO:
                 logger.update(n=1.)
 
         n = logger.pop('n')
-        return {k: v / n for k, v in logger.items()}
+        return {k: v.mean().item() / n for k, v in logger.items()}
