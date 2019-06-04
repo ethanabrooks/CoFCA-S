@@ -55,6 +55,12 @@ class SubtasksWrapper(gym.ObservationWrapper):
             obs, task_type_one_hot,
             np.expand_dims(task_objects_one_hot, 0), task_spec, iterate
         ])
+        print('obs', obs.shape)
+        print('task_type', task_type_one_hot.shape)
+        print('task_objects', task_objects_one_hot.shape)
+        print('task_spec', task_spec.shape)
+        print('iterate', iterate.shape)
+        print('stack', stack.shape)
 
         # names = ['obstacles'] + list(env.object_types) + ['ice', 'agent'] + \
         #         list(env.task_types) + ['task objects']

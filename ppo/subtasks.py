@@ -56,6 +56,7 @@ def batch_conv1d(inputs, weights):
 def interp(x1, x2, c):
     return c * x2.squeeze(1) + (1 - c) * x1
 
+
 @torch.jit.script
 def log_prob(i, probs):
     return torch.log(torch.gather(probs, -1, i))
@@ -70,13 +71,13 @@ class SubtasksAgent(Agent, NNBase):
         n_subtasks, subtask_size = task_space.nvec.shape
         self.task_size = n_subtasks * subtask_size
         n_task_types = task_space.nvec[0, 0]
-        self.n_cheat_layers = (
+        self.ignored_layers = (
                 n_task_types +  # task type one hot
                 1 +  # task objects
                 1)  # iterate
         d, h, w = obs_shape
-        d -= self.task_size + self.n_cheat_layers
-        obs_shape = d, h, w
+        d -= self.task_size + self.ignored_layers
+        self.obs_shape = obs_shape = d, h, w
 
         self.recurrent_module = SubtasksRecurrence(
             obs_shape=obs_shape,
@@ -114,9 +115,10 @@ class SubtasksAgent(Agent, NNBase):
         return sum(self.recurrent_module.state_sizes)
 
     def get_hidden(self, inputs, rnn_hxs, masks):
-        obs = inputs[:, :-(self.task_size + self.n_cheat_layers)]
-        task = inputs[:, -self.task_size:, 0, 0]
-        iterate = inputs[:, -1:, 0, 0]
+        sections = [self.obs_shape[0], self.ignored_layers - 1, self.task_size, 1]
+        obs, _, task, iterate = torch.split(inputs, sections, dim=1)
+        task = task[:, :, 0, 0]
+        iterate = iterate[:, :, 0, 0]
 
         # TODO: This is where we would embed the task if we were doing that
 
@@ -249,7 +251,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
     def parse_hidden(self, hx):
         return torch.split(hx, self.state_sizes, dim=-1)
 
-    @torch.jit.script_method
+    # @torch.jit.script_method
     def embed_task(self, task_type, count, obj):
         return torch.cat([
             self.type_embeddings[task_type.long()],
@@ -268,9 +270,10 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             x.detach_()
 
         count -= 1
-        M = self.embed_task(task_type[0], count[0], obj[0])
-        # TODO: why are both tasks the same?
 
+        import ipdb;
+        ipdb.set_trace()
+        M = self.embed_task(task_type[0], count[0], obj[0])
         p, r, h, g, b, *_, subtask = self.parse_hidden(hx)
 
         if bool(torch.all(hx == 0)):  # new episode
@@ -313,7 +316,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             l = F.softmax(self.phi_shift(h2), dim=1)
             l_target = self.l_values[iterate[i].long()].view(-1)
-            import ipdb; ipdb.set_trace()
+            import ipdb;
+            ipdb.set_trace()
             l_losses.append(
                 F.cross_entropy(l, l_target, reduction='none').unsqueeze(1)  # TODO
             )
