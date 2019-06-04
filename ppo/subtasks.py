@@ -334,12 +334,13 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # else:
             h2 = self.subcontroller(obs[i])
 
-            l = F.softmax(self.phi_shift(h2), dim=1)
+            l_logits = self.phi_shift(h2)
+            l = F.softmax(l_logits, dim=1)
 
             # l_loss
             l_target = self.l_values[next_subtask[i].long()].view(-1)
             l_losses.append(
-                F.cross_entropy(l, l_target,
+                F.cross_entropy(l_logits, l_target,
                                 reduction='none').unsqueeze(1)  # TODO
             )
 
