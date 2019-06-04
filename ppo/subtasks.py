@@ -80,7 +80,7 @@ class SubtasksAgent(Agent, NNBase):
         self.ignored_layers = (
             n_task_types +  # task type one hot
             1 +  # task objects
-            1)  # iterate
+            1)  # next_subtask
         d, h, w = obs_shape
         d -= self.task_size + self.ignored_layers
         self.obs_shape = obs_shape = d, h, w
@@ -124,14 +124,14 @@ class SubtasksAgent(Agent, NNBase):
         sections = [
             self.obs_shape[0], self.ignored_layers - 1, self.task_size, 1
         ]
-        obs, _, task, iterate = torch.split(inputs, sections, dim=1)
+        obs, _, task, next_subtask = torch.split(inputs, sections, dim=1)
         task = task[:, :, 0, 0]
-        iterate = iterate[:, :, 0, 0]
+        next_subtask = next_subtask[:, :, 0, 0]
 
         # TODO: This is where we would embed the task if we were doing that
 
         conv_out = self.conv(obs)
-        recurrent_inputs = torch.cat([conv_out, task, iterate], dim=-1)
+        recurrent_inputs = torch.cat([conv_out, task, next_subtask], dim=-1)
         x, rnn_hxs = self._forward_gru(recurrent_inputs, rnn_hxs, masks)
         return conv_out, RecurrentState(*self.recurrent_module.parse_hidden(x))
 
@@ -278,10 +278,10 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
     @torch.jit.script_method
     def forward(self, input, hx):
         assert hx is not None
-        obs, task_type, count, obj, iterate = torch.split(
+        obs, task_type, count, obj, next_subtask = torch.split(
             input, self.input_sections, dim=-1)
 
-        for x in task_type, count, obj, iterate:
+        for x in task_type, count, obj, next_subtask:
             x.detach_()
 
         count -= 1
@@ -312,8 +312,11 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         subtasks = []
 
         n = obs.shape[0]
+        # print('Recurrence: next_subtask', next_subtask)
+        # if torch.any(next_subtask > 0):
+        #     import ipdb; ipdb.set_trace()
         for i in range(n):
-            float_subtask += iterate[i]
+            float_subtask += next_subtask[i]
             subtasks.append(float_subtask)
             subtask = float_subtask.long()
             m = M.shape[0]
@@ -323,7 +326,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             # c_loss
             c_losses.append(
-                F.binary_cross_entropy(c, iterate[i], reduction='none'))
+                F.binary_cross_entropy(c, next_subtask[i], reduction='none'))
 
             # TODO: figure this out
             # if self.recurrent:
@@ -334,7 +337,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             l = F.softmax(self.phi_shift(h2), dim=1)
 
             # l_loss
-            l_target = self.l_values[iterate[i].long()].view(-1)
+            l_target = self.l_values[next_subtask[i].long()].view(-1)
             l_losses.append(
                 F.cross_entropy(l, l_target,
                                 reduction='none').unsqueeze(1)  # TODO
@@ -391,7 +394,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             b = b.float()
 
             # b_loss
-            b_losses.append(log_prob(iterate[i].long(), probs))
+            b_losses.append(log_prob(next_subtask[i].long(), probs))
 
             ps.append(p)
             rs.append(r)
