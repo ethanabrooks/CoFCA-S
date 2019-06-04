@@ -11,7 +11,7 @@ from ppo.agent import Agent, Flatten, NNBase
 from ppo.distributions import Categorical, DiagGaussian
 from ppo.utils import init
 
-RecurrentState = namedtuple('RecurrentState', 'p r h g b log_prob')
+RecurrentState = namedtuple('RecurrentState', 'p r h g b log_prob aux_loss')
 
 
 class Concat(torch.jit.ScriptModule):
@@ -66,7 +66,8 @@ class SubtasksAgent(Agent, NNBase):
         n_task_types = task_space.nvec[0, 0]
         self.n_cheat_layers = (
                 n_task_types +  # task type one hot
-                1)  # + 1 for task objects
+                1 +  # task objects
+                1)  # iterate
         d, h, w = obs_shape
         d -= self.task_size + self.n_cheat_layers
         obs_shape = d, h, w
@@ -106,17 +107,15 @@ class SubtasksAgent(Agent, NNBase):
     def recurrent_hidden_state_size(self):
         return sum(self.recurrent_module.state_sizes)
 
-    def parse_obs(self, inputs):
+    def get_hidden(self, inputs, rnn_hxs, masks):
         obs = inputs[:, :-(self.task_size + self.n_cheat_layers)]
         task = inputs[:, -self.task_size:, 0, 0]
-        return obs, task
+        iterate = inputs[:, -1:, 0, 0]
 
-    def get_hidden(self, inputs, rnn_hxs, masks):
-        obs, task = self.parse_obs(inputs)
         # TODO: This is where we would embed the task if we were doing that
-        conv_out = self.conv(obs)
 
-        recurrent_inputs = torch.cat([conv_out, task], dim=-1)
+        conv_out = self.conv(obs)
+        recurrent_inputs = torch.cat([conv_out, task, iterate], dim=-1)
         x, rnn_hxs = self._forward_gru(recurrent_inputs, rnn_hxs, masks)
         return conv_out, RecurrentState(*self.recurrent_module.parse_hidden(x))
 
@@ -167,7 +166,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         self.n_subtasks, _ = task_space.nvec.shape
         self.subtask_size = int(np.sum(self.subtask_space))
         conv_out_size = h * w * hidden_size
-        input_sections = [conv_out_size] + [self.n_subtasks] * 3
+        input_sections = [conv_out_size] + [self.n_subtasks] * 3 + [1]
         self.input_sections = [int(n) for n in input_sections]
 
         # networks
@@ -227,6 +226,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             g=self.subtask_size,
             b=1,
             log_prob=1,
+            aux_loss=1,
         )
 
     @torch.jit.script_method
@@ -245,14 +245,17 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
     @torch.jit.script_method
     def forward(self, input, hx):
         assert hx is not None
-        obs, task_type, count, obj = torch.split(
+        obs, task_type, count, obj, iterate = torch.split(
             input, self.input_sections, dim=-1)
+
+        for x in task_type, count, obj, iterate:
+            x.detach_()
 
         count -= 1
         M = self.embed_task(task_type[0], count[0], obj[0])
         # TODO: why are both tasks the same?
 
-        p, r, h, g, b, _ = self.parse_hidden(hx)
+        p, r, h, g, b, _, _ = self.parse_hidden(hx)
         if bool(torch.all(hx == 0)):  # new episode
             p[:, :, 0] = 1.  # initialize pointer to first subtask
             r[:] = M[:, 0]  # initialize r to first subtask
@@ -267,18 +270,21 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         gs = []
         bs = []
         log_probs = []
+        aux_losses = []
 
         n = obs.shape[0]
         for i in range(n):
             s = self.f(torch.cat([obs[i], r, g, b], dim=-1))
 
             c = torch.sigmoid(self.phi_update(torch.cat([s, h], dim=-1)))
+
+            aux_loss = F.binary_cross_entropy(c, iterate[i], reduction='none') # TODO
+
             # if self.recurrent:
             #     h2 = self.subcontroller(obs[i], h)
             # else:
             h2 = self.subcontroller(obs[i])
             # TODO: this would not work for GRU (recurrent)
-            # TODO: should h be in here? this is functioning like a vanilla RNN.
 
             l = F.softmax(self.phi_shift(h2), dim=1)
             p2 = batch_conv1d(p, l)
@@ -310,9 +316,10 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             gs.append(g)
             bs.append(b)
             log_probs.append(log_prob_g + log_prob_b)
+            aux_losses.append(aux_loss)
 
         outs = []
-        for x in ps, rs, hs, gs, bs, log_probs:
+        for x in ps, rs, hs, gs, bs, log_probs, aux_losses:
             outs.append(torch.stack(x))
 
         hx = torch.cat(outs, dim=-1)
