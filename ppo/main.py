@@ -6,7 +6,8 @@ from gym.wrappers import TimeLimit
 # noinspection PyUnresolvedReferences
 # noinspection PyUnresolvedReferences
 import gridworld_env
-from gridworld_env.subtasks_gridworld import SubtasksGridWorld, get_task_space  # noqa
+from gridworld_env.subtasks_gridworld import SubtasksGridWorld  # noqa
+from gridworld_env.subtasks_gridworld import get_task_space
 from ppo.arguments import build_parser, get_args
 from ppo.subtasks import SubtasksAgent
 from ppo.train import Train

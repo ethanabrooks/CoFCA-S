@@ -2,10 +2,10 @@ import re
 import time
 
 import gym
-from gym import spaces
-from gym.utils import seeding
 import numpy as np
 import six
+from gym import spaces
+from gym.utils import seeding
 
 from ppo.utils import set_index
 from rl_utils import cartesian_product

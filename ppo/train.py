@@ -1,14 +1,14 @@
 import functools
 import itertools
 import re
-from pathlib import Path
 import sys
 import time
+from pathlib import Path
 
 import gym
 import numpy as np
-from tensorboardX import SummaryWriter
 import torch
+from tensorboardX import SummaryWriter
 
 from common.atari_wrappers import wrap_deepmind
 from common.vec_env.dummy_vec_env import DummyVecEnv
@@ -17,8 +17,9 @@ from gridworld_env import SubtasksGridWorld
 from ppo.agent import Agent
 from ppo.storage import RolloutStorage
 from ppo.update import PPO
-from ppo.utils import get_random_gpu, get_n_gpu
-from ppo.wrappers import AddTimestep, SubtasksWrapper, TransposeImage, VecNormalize, VecPyTorch, VecPyTorchFrameStack
+from ppo.utils import get_n_gpu, get_random_gpu
+from ppo.wrappers import (AddTimestep, SubtasksWrapper, TransposeImage,
+                          VecNormalize, VecPyTorch, VecPyTorchFrameStack)
 
 try:
     import dm_control2gym

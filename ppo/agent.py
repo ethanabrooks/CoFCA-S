@@ -1,8 +1,8 @@
 from collections import namedtuple
 
-from gym.spaces import Box, Discrete
 import torch
 import torch.nn as nn
+from gym.spaces import Box, Discrete
 
 from ppo.distributions import Categorical, DiagGaussian
 from ppo.utils import init, init_normc_
