@@ -1,5 +1,7 @@
 # stdlib
 
+from collections import ChainMap
+
 # noinspection PyUnresolvedReferences
 from gym.wrappers import TimeLimit
 
@@ -24,18 +26,19 @@ def class_parser(string):
 
 
 def make_subtasks_env(env_id, **kwargs):
-    gridworld_args = gridworld_env.get_args(env_id)
-    gridworld_args.update(**{k:v for k, v in kwargs.items() if v})
-
     def helper(rank, seed, class_, max_episode_steps, **_kwargs):
         env = SubtasksWrapper(class_parser(class_)(**_kwargs))
         env.seed(seed + rank)
         print('Environment seed:', seed + rank)
         if max_episode_steps is not None:
-            env = TimeLimit(env, max_episode_seconds=int(max_episode_steps))
+            env = TimeLimit(env, max_episode_steps=int(max_episode_steps))
         return env
 
-    return helper(**gridworld_args)
+    gridworld_args = gridworld_env.get_args(env_id)
+    kwargs = {k: v for k, v in kwargs.items() if v is not None}
+    return helper(**ChainMap(
+        kwargs, gridworld_args
+    ))  # combines kwargs and gridworld_args with preference for kwargs
 
 
 def subtasks_cli():
@@ -52,16 +55,12 @@ def subtasks_cli():
             @staticmethod
             def make_env(env_id, seed, rank, add_timestep):
                 return make_subtasks_env(
-                    env_id=env_id,
-                    rank=rank,
-                    seed=seed,
-                    **task_args
-                )
+                    env_id=env_id, rank=rank, seed=seed, **task_args)
 
             # noinspection PyMethodOverriding
             @staticmethod
-            def build_behavior_agent(envs, hidden_size, recurrent, entropy_coef,
-                                     **_):
+            def build_behavior_agent(envs, hidden_size, recurrent,
+                                     entropy_coef, **_):
                 return SubtasksAgent(
                     obs_shape=envs.observation_space.shape,
                     action_space=envs.action_space,
@@ -125,16 +124,11 @@ def teach_cli():
             @staticmethod
             def make_env(env_id, seed, rank, add_timestep):
                 return make_subtasks_env(
-                    env_id=env_id,
-                    rank=rank,
-                    seed=seed,
-                    **task_args
-                )
+                    env_id=env_id, rank=rank, seed=seed, **task_args)
 
             # noinspection PyMethodOverriding
             @staticmethod
-            def build_agent(envs, hidden_size, recurrent, entropy_coef,
-                            **_):
+            def build_agent(envs, hidden_size, recurrent, entropy_coef, **_):
                 return SubtasksAgent(
                     obs_shape=envs.observation_space.shape,
                     action_space=envs.action_space,
