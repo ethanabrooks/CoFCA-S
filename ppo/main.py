@@ -19,23 +19,60 @@ def cli():
     Train(**get_args())
 
 
-def class_parser(str):
-    return dict(SubtasksGridWorld=SubtasksGridWorld)[str]
-
-
-def _make_subtasks_env(rank, seed, class_, max_episode_steps, **kwargs):
-    env = SubtasksWrapper(class_parser(class_)(**kwargs))
-    env.seed(seed + rank)
-    print('Environment seed:', seed + rank)
-    if max_episode_steps is not None:
-        env = TimeLimit(env, max_episode_seconds=int(max_episode_steps))
-    return env
+def class_parser(string):
+    return dict(SubtasksGridWorld=SubtasksGridWorld)[string]
 
 
 def make_subtasks_env(env_id, **kwargs):
     gridworld_args = gridworld_env.get_args(env_id)
     gridworld_args.update(**kwargs)
-    return _make_subtasks_env(**gridworld_args)
+
+    def helper(rank, seed, class_, max_episode_steps, **_kwargs):
+        env = SubtasksWrapper(class_parser(class_)(**_kwargs))
+        env.seed(seed + rank)
+        print('Environment seed:', seed + rank)
+        if max_episode_steps is not None:
+            env = TimeLimit(env, max_episode_seconds=int(max_episode_steps))
+        return env
+
+    return helper(**gridworld_args)
+
+
+def subtasks_cli():
+    parser = build_parser()
+    task_parser = parser.add_argument_group('task_args')
+    task_parser.add_argument('--task-types', nargs='*')
+    task_parser.add_argument('--max-task-count', type=int)
+    task_parser.add_argument('--object-types', nargs='*')
+    task_parser.add_argument('--n-subtasks', type=int)
+    kwargs = hierarchical_parse_args(parser)
+
+    def train(task_args, **_kwargs):
+        class TrainTeacher(Train):
+            @staticmethod
+            def make_env(env_id, seed, rank, add_timestep):
+                return make_subtasks_env(
+                    env_id=env_id,
+                    rank=rank,
+                    seed=seed,
+                    **task_args
+                )
+
+            # noinspection PyMethodOverriding
+            @staticmethod
+            def build_behavior_agent(envs, hidden_size, recurrent, entropy_coef,
+                                     **_):
+                return SubtasksAgent(
+                    obs_shape=envs.observation_space.shape,
+                    action_space=envs.action_space,
+                    task_space=get_task_space(**task_args),
+                    hidden_size=hidden_size,
+                    entropy_coef=entropy_coef,
+                    recurrent=recurrent)
+
+        TrainTeacher(**_kwargs)
+
+    train(**kwargs)
 
 
 def train_teacher_cli():
