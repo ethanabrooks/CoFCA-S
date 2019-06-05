@@ -68,7 +68,9 @@ def subtasks_cli():
                     task_space=get_task_space(**task_args),
                     hidden_size=hidden_size,
                     entropy_coef=entropy_coef,
-                    recurrent=recurrent)
+                    recurrent=recurrent,
+                    use_aux_loss=False,
+                )
 
         TrainTeacher(**_kwargs)
 
@@ -145,7 +147,8 @@ def teach_cli():
                     task_space=get_task_space(**task_args),
                     hidden_size=hidden_size,
                     entropy_coef=entropy_coef,
-                    recurrent=recurrent)
+                    recurrent=recurrent,
+                    use_aux_loss=True)
 
             @staticmethod
             def build_behavior_agent(envs, **agent_args):
