@@ -25,7 +25,7 @@ def class_parser(string):
 
 def make_subtasks_env(env_id, **kwargs):
     gridworld_args = gridworld_env.get_args(env_id)
-    gridworld_args.update(**kwargs)
+    gridworld_args.update(**{k:v for k, v in kwargs.items() if v})
 
     def helper(rank, seed, class_, max_episode_steps, **_kwargs):
         env = SubtasksWrapper(class_parser(class_)(**_kwargs))
@@ -121,21 +121,15 @@ def teach_cli():
     task_parser.add_argument('--n-subtasks', type=int)
 
     def train(env_id, task_args, ppo_args, **kwargs):
-        gridworld_args = gridworld_env.get_args(env_id)
-        max_episode_steps = gridworld_args.pop('max_episode_steps', None)
-        task_args = {k: v for k, v in task_args.items() if v}
-        gridworld_args.update(**task_args)
-        class_ = eval(gridworld_args.pop('class'))
-
         class TrainSubtasks(Train):
             @staticmethod
             def make_env(env_id, seed, rank, add_timestep):
                 return make_subtasks_env(
+                    env_id=env_id,
                     rank=rank,
                     seed=seed,
-                    class_=class_,
-                    max_episode_steps=max_episode_steps,
-                    **gridworld_args)
+                    **task_args
+                )
 
             # noinspection PyMethodOverriding
             @staticmethod
