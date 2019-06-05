@@ -119,6 +119,12 @@ class SubtasksAgent(Agent, NNBase):
                 nn.Conv2d(d, hidden_size, kernel_size=3, stride=1, padding=1),
                 'relu'), nn.ReLU(), Flatten())
 
+        conv_weight_shape = hidden_size, d, 3, 3
+        self.conv_weight = nn.Sequential(
+            nn.Linear(self.recurrent_module.subtask_size,
+                      np.prod(conv_weight_shape)),
+            Reshape(-1, *conv_weight_shape))
+
         input_size = (
                 h * w * hidden_size +  # conv output
                 sum(task_space.nvec[0]))  # task size
@@ -153,7 +159,15 @@ class SubtasksAgent(Agent, NNBase):
         conv_out = self.conv(obs)
         recurrent_inputs = torch.cat([conv_out, task, next_subtask], dim=-1)
         x, rnn_hxs = self._forward_gru(recurrent_inputs, rnn_hxs, masks)
-        return conv_out, RecurrentState(*self.recurrent_module.parse_hidden(x))
+        hx = RecurrentState(*self.recurrent_module.parse_hidden(x))
+
+        # multiplicative interaction
+        weights = self.conv_weight(hx.g)
+        outs = []
+        for ob, weight in zip(obs, weights):
+            outs.append(F.conv2d(ob.unsqueeze(0), weight, padding=(1, 1)))
+        multiplicative_out = torch.cat(outs).view(*conv_out.shape)
+        return multiplicative_out, hx
 
     def forward(self, inputs, rnn_hxs, masks, action=None,
                 deterministic=False):
