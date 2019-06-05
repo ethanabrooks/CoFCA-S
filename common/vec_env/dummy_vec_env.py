@@ -1,5 +1,5 @@
-from gym import spaces
 import numpy as np
+from gym import spaces
 
 # local
 from . import VecEnv
@@ -61,15 +61,15 @@ class DummyVecEnv(VecEnv):
 
             obs, self.buf_rews[e], self.buf_dones[e], self.buf_infos[
                 e] = self.envs[e].step(action)
-            if self._render:
-                self.render()
 
             if self.buf_dones[e]:
-                obs = self.envs[e].reset()
-                if self._render:
+                if e == 0 and self._render:
                     self.render()
+                obs = self.envs[e].reset()
 
             self._save_obs(e, obs)
+        if self._render:
+            self.render()
         return (self._obs_from_buf(), np.copy(self.buf_rews),
                 np.copy(self.buf_dones), self.buf_infos.copy())
 
@@ -77,9 +77,9 @@ class DummyVecEnv(VecEnv):
         for e in range(self.num_envs):
             obs = self.envs[e].reset()
 
-            if self._render:
-                self.render()
             self._save_obs(e, obs)
+        if self._render:
+            self.render()
         return self._obs_from_buf()
 
     def _save_obs(self, e, obs):
