@@ -129,7 +129,6 @@ class SubtasksAgent(Agent, NNBase):
                 h * w * hidden_size +  # conv output
                 sum(task_space.nvec[0]))  # task size
 
-        # TODO: multiplicative interaction stuff
         if isinstance(action_space, Discrete):
             num_outputs = action_space.n
             actor = Categorical(input_size, num_outputs)
