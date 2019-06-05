@@ -131,7 +131,6 @@ def build_parser():
         type=float,
         default=0.5,
         help='max norm of gradients (default: 0.5)')
-    ppo_parser.add_argument('--aux-loss-only', action='store_true')
     return parser
 
 

@@ -78,6 +78,9 @@ class Train:
 
         self.behavior_agent = self.build_behavior_agent(envs, **agent_args)
         self.agent = self.build_agent(envs, **agent_args)
+        if self.agent.is_recurrent and self.behavior_agent.is_recurrent:
+            raise RuntimeError('Currently having both a recurrent agent and'
+                               'a recurrent behavior agent is not supported.')
         rollouts = RolloutStorage(
             num_steps=num_steps,
             num_processes=num_processes,
@@ -102,7 +105,7 @@ class Train:
             envs.to(device)
             self.agent.to(device)
             rollouts.to(device)
-            print('All values copied to GPU in', time.time() - tick, 'seconds')
+            print('Values copied to GPU in', time.time() - tick, 'seconds')
         print('Using device', device)
 
         ppo = PPO(agent=self.agent, batch_size=batch_size, **ppo_args)
@@ -128,15 +131,22 @@ class Train:
         if behavior_agent_load_path:
             state_dict = torch.load(behavior_agent_load_path)
             self.behavior_agent.load_state_dict(state_dict['agent'])
+            if isinstance(envs.venv, VecNormalize):
+                envs.venv.load_state_dict(state_dict['vec_normalize'])
+            print(f'Loaded behavior parameters from {load_path}.')
 
         for j in itertools.count():
             for step in range(num_steps):
                 # Sample actions.add_argument_group('env_args')
                 with torch.no_grad():
-                    # act: AgentValues
-                    act = self.agent(rollouts.obs[step],
-                                     rollouts.recurrent_hidden_states[step],
-                                     rollouts.masks[step])  # type: AgentValues
+                    act = self.behavior_agent(rollouts.obs[step],
+                                              rollouts.recurrent_hidden_states[step],
+                                              rollouts.masks[step])  # type: AgentValues
+                    if self.agent is not self.behavior_agent:
+                        act = self.agent(rollouts.obs[step],
+                                         rollouts.recurrent_hidden_states[step],
+                                         rollouts.masks[step], action=act.action)
+
                 # act.action[:] = 'wsadeq'.index(input('act:'))
 
                 # Observe reward and next obs

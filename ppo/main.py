@@ -58,7 +58,7 @@ def teach_cli():
     gridworld_args = gridworld_env.get_args(kwargs['env_id'])
     class_ = eval(gridworld_args.pop('class'))
 
-    def train(env_id, task_args, **_kwargs):
+    def train(env_id, task_args, ppo_args, **_kwargs):
         max_episode_steps = gridworld_args.pop('max_episode_steps', None)
         task_args = {
             k: v if v else gridworld_args[k]
@@ -90,7 +90,8 @@ def teach_cli():
                     recurrent=recurrent)
 
         # Train
-        TrainSubtasks(env_id=env_id, **_kwargs)
+        ppo_args.update(aux_loss_only=True)
+        TrainSubtasks(env_id=env_id, ppo_args=ppo_args, **_kwargs)
 
     train(**kwargs)
 

@@ -24,7 +24,7 @@ class PPO:
             aux_loss_only=False,
     ):
 
-        self.aux_loss_only = None
+        self.aux_loss_only = aux_loss_only
         self.agent = agent
 
         self.clip_param = clip_param
