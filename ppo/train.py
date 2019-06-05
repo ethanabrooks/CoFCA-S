@@ -78,7 +78,11 @@ class Train:
 
         self.behavior_agent = self.build_behavior_agent(envs, **agent_args)
         self.agent = self.build_agent(envs, **agent_args)
-        if self.agent.is_recurrent and self.behavior_agent.is_recurrent:
+        if all((
+                self.agent is not self.behavior_agent,
+                self.agent.is_recurrent,
+                self.behavior_agent.is_recurrent,
+        )):
             raise RuntimeError('Currently having both a recurrent agent and'
                                'a recurrent behavior agent is not supported.')
         rollouts = RolloutStorage(
