@@ -143,14 +143,14 @@ class Train:
                 # Sample actions.add_argument_group('env_args')
                 with torch.no_grad():
                     act = self.behavior_agent(
-                        rollouts.obs[step],
-                        rollouts.recurrent_hidden_states[step],
-                        rollouts.masks[step])  # type: AgentValues
+                        inputs=rollouts.obs[step],
+                        rnn_hxs=rollouts.recurrent_hidden_states[step],
+                        masks=rollouts.masks[step])  # type: AgentValues
                     if self.agent is not self.behavior_agent:
                         act = self.agent(
-                            rollouts.obs[step],
-                            rollouts.recurrent_hidden_states[step],
-                            rollouts.masks[step],
+                            inputs=rollouts.obs[step],
+                            rnn_hxs=rollouts.recurrent_hidden_states[step],
+                            masks=rollouts.masks[step],
                             action=act.action)
 
                 # act.action[:] = 'wsadeq'.index(input('act:'))

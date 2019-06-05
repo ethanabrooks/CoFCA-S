@@ -24,7 +24,6 @@ class Agent(nn.Module):
                  hidden_size,
                  entropy_coef,
                  logic=False,
-                 similarity_measure=None,
                  **network_args):
         super(Agent, self).__init__()
         self.entropy_coef = entropy_coef
@@ -33,7 +32,6 @@ class Agent(nn.Module):
         if logic:
             self.base = LogicBase(
                 *obs_shape,
-                similarity_measure=similarity_measure,
                 hidden_size=hidden_size)
         elif len(obs_shape) == 3:
             self.base = CNNBase(

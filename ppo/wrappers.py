@@ -52,8 +52,10 @@ class SubtasksWrapper(gym.ObservationWrapper):
         next_subtask = np.full((1, h, w), env.next_subtask)
 
         stack = np.vstack([
-            obs, task_type_one_hot,
-            np.expand_dims(task_objects_one_hot, 0), task_spec, next_subtask
+            obs,
+            np.expand_dims(task_objects_one_hot, 0),
+            task_type_one_hot,
+            task_spec, next_subtask
         ])
         # print('obs', obs.shape)
         # print('task_type', task_type_one_hot.shape)

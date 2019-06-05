@@ -9,7 +9,7 @@ import gridworld_env
 from gridworld_env.subtasks_gridworld import SubtasksGridWorld  # noqa
 from gridworld_env.subtasks_gridworld import get_task_space
 from ppo.arguments import build_parser, get_args
-from ppo.subtasks import SubtasksAgent
+from ppo.subtasks import SubtasksAgent, SubtasksTeacher
 from ppo.train import Train
 from ppo.wrappers import SubtasksWrapper
 from rl_utils import hierarchical_parse_args
@@ -17,11 +17,6 @@ from rl_utils import hierarchical_parse_args
 
 def cli():
     Train(**get_args())
-
-
-# def hsr_cli():
-#     args = get_hsr_args()
-#     env_wrapper(Trainer)(**args)
 
 
 def single_task_cli():
@@ -43,6 +38,57 @@ def single_task_cli():
                 return env
 
         SubtasksTrainer(env_id=env_id, **_kwargs)
+
+    train(**kwargs)
+
+
+def make_subtasks_env(rank, seed, class_, max_episode_steps, **kwargs):
+    env = SubtasksWrapper(class_(**kwargs))
+    env.seed(seed + rank)
+    print('Environment seed:', seed + rank)
+    if max_episode_steps is not None:
+        env = TimeLimit(env, max_episode_seconds=int(max_episode_steps))
+    return env
+
+
+def train_teacher_cli():
+    parser = build_parser()
+    parser.add_argument('--task-types', nargs='*')
+    parser.add_argument('--max-task-count', type=int)
+    parser.add_argument('--object-types', nargs='*')
+    parser.add_argument('--n-subtasks', type=int)
+    kwargs = hierarchical_parse_args(parser)
+    gridworld_args = gridworld_env.get_args(kwargs['env_id'])
+    class_ = eval(gridworld_args.pop('class'))
+    max_episode_steps = gridworld_args.pop('max_episode_steps', None)
+
+    def train(task_types, max_task_count, object_types, n_subtasks, **_kwargs):
+        gridworld_args.update(
+            task_types=task_types,
+            max_task_count=max_task_count,
+            object_types=object_types,
+            n_subtasks=n_subtasks)
+
+        class TrainTeacher(Train):
+            @staticmethod
+            def make_env(env_id, seed, rank, add_timestep):
+                return make_subtasks_env(
+                    rank=rank,
+                    seed=seed,
+                    class_=class_,
+                    max_episode_steps=max_episode_steps,
+                    **gridworld_args)
+
+            @staticmethod
+            def build_behavior_agent(envs, **agent_args):
+                return SubtasksTeacher(
+                    obs_shape=envs.observation_space.shape,
+                    action_space=envs.action_space,
+                    n_task_types=len(task_types),
+                    n_objects=len(object_types),
+                    **agent_args)
+
+        TrainTeacher(**_kwargs)
 
     train(**kwargs)
 
@@ -69,13 +115,12 @@ def teach_cli():
         class TrainSubtasks(Train):
             @staticmethod
             def make_env(env_id, seed, rank, add_timestep):
-                env = SubtasksWrapper(class_(**gridworld_args))
-                env.seed(seed + rank)
-                print('Environment seed:', seed + rank)
-                if max_episode_steps is not None:
-                    env = TimeLimit(
-                        env, max_episode_seconds=int(max_episode_steps))
-                return env
+                return make_subtasks_env(
+                    rank=rank,
+                    seed=seed,
+                    class_=class_,
+                    max_episode_steps=max_episode_steps,
+                    **gridworld_args)
 
             # noinspection PyMethodOverriding
             @staticmethod
@@ -97,4 +142,4 @@ def teach_cli():
 
 
 if __name__ == "__main__":
-    teach_cli()
+    train_teacher_cli()

@@ -68,6 +68,25 @@ def log_prob(i, probs):
     return torch.log(torch.gather(probs, -1, i))
 
 
+class SubtasksTeacher(Agent):
+    def __init__(self, n_task_types, n_objects, obs_shape, **kwargs):
+        self.n_obj_types = n_objects
+        self.n_task_types = n_task_types
+        self.d = (
+            1 +  # obstacles
+            self.n_obj_types + 1 +  # agent
+            1 +  # task objects
+            self.n_task_types)
+        _, h, w = obs_shape
+        super().__init__(obs_shape=(self.d, h, w), **kwargs)
+
+    def forward(self, inputs, **kwargs):
+        return super().forward(inputs[:, :self.d], **kwargs)
+
+    def get_value(self, inputs, rnn_hxs, masks):
+        return super().get_value(inputs[:, :self.d], rnn_hxs, masks)
+
+
 # noinspection PyMissingConstructor
 class SubtasksAgent(Agent, NNBase):
     def __init__(self, obs_shape, action_space, task_space, hidden_size,

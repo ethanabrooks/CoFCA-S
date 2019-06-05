@@ -21,6 +21,7 @@ setup(
         'logic=ppo.main:logic_cli',
         'teach=ppo.main:teach_cli',
         'single-task=ppo.main:single_task_cli',
+        'train-teacher=ppo.main:train_teacher_cli',
     ]),
     install_requires=[
         'gym',
