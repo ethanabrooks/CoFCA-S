@@ -100,17 +100,13 @@ def teach_cli():
     task_parser.add_argument('--max-task-count', type=int)
     task_parser.add_argument('--object-types', nargs='*')
     task_parser.add_argument('--n-subtasks', type=int)
-    kwargs = hierarchical_parse_args(parser)
-    gridworld_args = gridworld_env.get_args(kwargs['env_id'])
-    class_ = eval(gridworld_args.pop('class'))
 
-    def train(env_id, task_args, ppo_args, **_kwargs):
+    def train(env_id, task_args, ppo_args, **kwargs):
+        gridworld_args = gridworld_env.get_args(env_id)
         max_episode_steps = gridworld_args.pop('max_episode_steps', None)
-        task_args = {
-            k: v if v else gridworld_args[k]
-            for k, v in task_args.items()
-        }
+        task_args = {k: v for k, v in task_args.items() if v}
         gridworld_args.update(**task_args)
+        class_ = eval(gridworld_args.pop('class'))
 
         class TrainSubtasks(Train):
             @staticmethod
@@ -125,7 +121,7 @@ def teach_cli():
             # noinspection PyMethodOverriding
             @staticmethod
             def build_agent(envs, hidden_size, recurrent, entropy_coef,
-                            **kwargs):
+                            **_):
                 return SubtasksAgent(
                     obs_shape=envs.observation_space.shape,
                     action_space=envs.action_space,
@@ -134,12 +130,21 @@ def teach_cli():
                     entropy_coef=entropy_coef,
                     recurrent=recurrent)
 
+            @staticmethod
+            def build_behavior_agent(envs, **agent_args):
+                return SubtasksTeacher(
+                    obs_shape=envs.observation_space.shape,
+                    action_space=envs.action_space,
+                    n_task_types=len(task_args['task_types']),
+                    n_objects=len(task_args['object_types']),
+                    **agent_args)
+
         # Train
         ppo_args.update(aux_loss_only=True)
-        TrainSubtasks(env_id=env_id, ppo_args=ppo_args, **_kwargs)
+        TrainSubtasks(env_id=env_id, ppo_args=ppo_args, **kwargs)
 
-    train(**kwargs)
+    train(**(hierarchical_parse_args(parser)))
 
 
 if __name__ == "__main__":
-    train_teacher_cli()
+    teach_cli()
