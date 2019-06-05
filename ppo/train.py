@@ -122,13 +122,13 @@ class Train:
         last_save = start
 
         if load_path:
-            state_dict = torch.load(behavior_agent_load_path)
+            state_dict = torch.load(load_path)
             self.agent.load_state_dict(state_dict['agent'])
             ppo.optimizer.load_state_dict(state_dict['optimizer'])
             start = state_dict.get('step', -1) + 1
             if isinstance(envs.venv, VecNormalize):
                 envs.venv.load_state_dict(state_dict['vec_normalize'])
-            print(f'Loaded parameters from {behavior_agent_load_path}.')
+            print(f'Loaded parameters from {load_path}.')
 
         if behavior_agent_load_path:
             state_dict = torch.load(behavior_agent_load_path)
