@@ -211,12 +211,12 @@ class Train:
 
             rewards_array = np.concatenate(episode_rewards)
             time_steps_array = np.concatenate(time_steps)
-            if rewards_array.size > 0:
+            if rewards_array.size > 0 and success_reward:
                 reward = rewards_array.mean()
                 print(
                     f'Obtained average reward of {reward} vs success threshold of {success_reward}'
                 )
-                if success_reward and reward > success_reward:
+                if reward > success_reward:
                     n_success += 1
                     print('Consecutive successes:', n_success)
                 else:
