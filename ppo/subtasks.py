@@ -171,7 +171,7 @@ class SubtasksAgent(Agent, NNBase):
         entropy = dist.entropy()
         # TODO: combine with other entropy?
 
-        entropy_bonus = self.entropy_coef * entropy
+        entropy_bonus = self.entropy_coef * entropy.mean()
         losses = dict(neg_action_log_prob=-action_log_probs)
         # losses = {k: v for k, v in hx._asdict().items() if k.endswith('_loss')}
         # losses.update(action_log_prob=action_log_probs)
@@ -179,7 +179,7 @@ class SubtasksAgent(Agent, NNBase):
         # self.recurrent_module.check_grad(**losses)
         aux_loss = -entropy_bonus
         if self.use_aux_loss:
-            aux_loss += sum(losses.values())
+            aux_loss += torch.sum(losses.values())
 
         return AgentValues(
             value=value,
