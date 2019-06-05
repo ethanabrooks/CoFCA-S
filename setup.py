@@ -23,9 +23,4 @@ setup(
         'single-task=ppo.main:single_task_cli',
         'train-teacher=ppo.main:train_teacher_cli',
     ]),
-    install_requires=[
-        'gym',
-        'numpy',
-        'torch',
-        'tensorboardX==1.6',
-    ])
+    install_requires=[])
