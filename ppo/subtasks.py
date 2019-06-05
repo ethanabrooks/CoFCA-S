@@ -171,11 +171,12 @@ class SubtasksAgent(Agent, NNBase):
         # TODO: combine with other entropy?
 
         entropy_bonus = self.entropy_coef * entropy
-        losses = {k: v for k, v in hx._asdict().items() if k.endswith('_loss')}
-        losses.update(action_log_prob=action_log_probs)
+        losses = dict(neg_action_log_prob=-action_log_probs)
+        # losses = {k: v for k, v in hx._asdict().items() if k.endswith('_loss')}
+        # losses.update(action_log_prob=action_log_probs)
 
         # self.recurrent_module.check_grad(**losses)
-        aux_loss = sum(losses.values()) - entropy_bonus - action_log_probs
+        aux_loss = sum(losses.values()) - entropy_bonus
 
         return AgentValues(
             value=value,
@@ -400,10 +401,12 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 # assert target_int == np.ravel_multi_index((int(t1), int(t2), int(t3)),
                 #                                           self.subtask_space)
                 g_target.append(target_int)
-            g_loss = log_prob(torch.stack(g_target), probs)
+            g_target = torch.stack(g_target)
+            g_loss = log_prob(g_target, probs)
             g_losses.append(g_loss)
 
-            i1, i2, i3 = self.decode(g_int)
+            # i1, i2, i3 = self.decode(g_int)
+            i1, i2, i3 = self.decode(g_target)  # TODO
             # assert (int(i1), int(i2), int(i3)) == \
             #        np.unravel_index(int(g_int), self.subtask_space)
             g2 = self.embed_task(i1, i2, i3).squeeze(1)
