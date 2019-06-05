@@ -10,7 +10,7 @@
             "transform"
         ],
     "max_task_count": 3,
-    "class": "SubtasksGridWorld",
+    "class_": "SubtasksGridWorld",
     "max_episode_steps": 63,
     "random_obstacles": true
 }

@@ -19,36 +19,23 @@ def cli():
     Train(**get_args())
 
 
-def single_task_cli():
-    parser = build_parser()
-    parser.add_argument('--subtask', dest='task', action='append')
-    kwargs = hierarchical_parse_args(parser)
-    env_args = gridworld_env.get_args(kwargs['env_id'])
-    class_ = eval(env_args.pop('class'))
-    max_episode_steps = env_args.pop('max_episode_steps', None)
-
-    def train(env_id, task, **_kwargs):
-        class SubtasksTrainer(Train):
-            @staticmethod
-            def make_env(env_id, seed, rank, add_timestep):
-                env = SubtasksWrapper(class_(**env_args, task=task))
-                env.seed(seed + rank)
-                if max_episode_steps:
-                    env = TimeLimit(env, max_episode_seconds=max_episode_steps)
-                return env
-
-        SubtasksTrainer(env_id=env_id, **_kwargs)
-
-    train(**kwargs)
+def class_parser(str):
+    return dict(SubtasksGridWorld=SubtasksGridWorld)[str]
 
 
-def make_subtasks_env(rank, seed, class_, max_episode_steps, **kwargs):
-    env = SubtasksWrapper(class_(**kwargs))
+def _make_subtasks_env(rank, seed, class_, max_episode_steps, **kwargs):
+    env = SubtasksWrapper(class_parser(class_)(**kwargs))
     env.seed(seed + rank)
     print('Environment seed:', seed + rank)
     if max_episode_steps is not None:
         env = TimeLimit(env, max_episode_seconds=int(max_episode_steps))
     return env
+
+
+def make_subtasks_env(env_id, **kwargs):
+    gridworld_args = gridworld_env.get_args(env_id)
+    gridworld_args.update(**kwargs)
+    return _make_subtasks_env(**gridworld_args)
 
 
 def train_teacher_cli():
@@ -58,26 +45,19 @@ def train_teacher_cli():
     parser.add_argument('--object-types', nargs='*')
     parser.add_argument('--n-subtasks', type=int)
     kwargs = hierarchical_parse_args(parser)
-    gridworld_args = gridworld_env.get_args(kwargs['env_id'])
-    class_ = eval(gridworld_args.pop('class'))
-    max_episode_steps = gridworld_args.pop('max_episode_steps', None)
 
     def train(task_types, max_task_count, object_types, n_subtasks, **_kwargs):
-        gridworld_args.update(
-            task_types=task_types,
-            max_task_count=max_task_count,
-            object_types=object_types,
-            n_subtasks=n_subtasks)
-
         class TrainTeacher(Train):
             @staticmethod
             def make_env(env_id, seed, rank, add_timestep):
                 return make_subtasks_env(
+                    env_id=env_id,
+                    task_types=task_types,
+                    max_task_count=max_task_count,
+                    object_types=object_types,
+                    n_subtasks=n_subtasks,
                     rank=rank,
-                    seed=seed,
-                    class_=class_,
-                    max_episode_steps=max_episode_steps,
-                    **gridworld_args)
+                    seed=seed)
 
             @staticmethod
             def build_behavior_agent(envs, **agent_args):
