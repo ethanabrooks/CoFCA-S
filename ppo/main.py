@@ -31,7 +31,7 @@ def make_subtasks_env(env_id, **kwargs):
         env.seed(seed + rank)
         print('Environment seed:', seed + rank)
         if max_episode_steps is not None:
-            env = TimeLimit(env, max_episode_seconds=int(max_episode_steps))
+            env = TimeLimit(env, max_episode_steps=int(max_episode_steps))
         return env
 
     gridworld_args = gridworld_env.get_args(env_id)
