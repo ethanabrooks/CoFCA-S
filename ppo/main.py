@@ -1,7 +1,6 @@
 # stdlib
 
 from collections import ChainMap
-
 # noinspection PyUnresolvedReferences
 from pathlib import Path
 
@@ -62,8 +61,7 @@ def subtasks_cli():
 
             # noinspection PyMethodOverriding
             @staticmethod
-            def build_agent(envs, hidden_size, recurrent,
-                                     entropy_coef, **_):
+            def build_agent(envs, hidden_size, recurrent, entropy_coef, **_):
                 return SubtasksAgent(
                     obs_shape=envs.observation_space.shape,
                     action_space=envs.action_space,
@@ -122,7 +120,7 @@ def teach_cli():
     task_parser.add_argument('--object-types', nargs='*')
     task_parser.add_argument('--n-subtasks', type=int, required=True)
 
-    def train(env_id, task_args, ppo_args, **kwargs):
+    def train(env_id, task_args, ppo_args, behavior_agent_load_path, **kwargs):
         class TrainSubtasks(Train):
             @staticmethod
             def make_env(env_id, seed, rank, add_timestep):
@@ -132,7 +130,7 @@ def teach_cli():
             # noinspection PyMethodOverriding
             @staticmethod
             def build_agent(envs, hidden_size, recurrent, entropy_coef,
-                            behavior_agent_load_path, **agent_args):
+                            **agent_args):
                 imitation_agent = SubtasksTeacher(
                     hidden_size=hidden_size,
                     recurrent=recurrent,
@@ -148,7 +146,8 @@ def teach_cli():
                 if isinstance(envs.venv, VecNormalize):
                     envs.venv.load_state_dict(state_dict['vec_normalize'])
                 print(
-                    f'Loaded behavior parameters from {behavior_agent_load_path}.')
+                    f'Loaded behavior parameters from {behavior_agent_load_path}.'
+                )
 
                 return SubtasksAgent(
                     obs_shape=envs.observation_space.shape,

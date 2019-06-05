@@ -59,7 +59,7 @@ class PPO:
             sample: Batch
             for sample in data_generator:
                 # Reshape to do in a single forward pass for all steps
-                values, _, action_log_probs, loss, \
+                values, _, action_log_probs, _, loss, \
                 rnn_hxs, log_values = self.agent(
                     inputs=sample.obs,
                     rnn_hxs=sample.recurrent_hidden_states,
