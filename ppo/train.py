@@ -104,6 +104,8 @@ class Train:
             tick = time.time()
             envs.to(device)
             self.agent.to(device)
+            if self.behavior_agent is not self.agent:
+                self.behavior_agent.to(device)
             rollouts.to(device)
             print('Values copied to GPU in', time.time() - tick, 'seconds')
         print('Using device', device)
@@ -139,13 +141,16 @@ class Train:
             for step in range(num_steps):
                 # Sample actions.add_argument_group('env_args')
                 with torch.no_grad():
-                    act = self.behavior_agent(rollouts.obs[step],
-                                              rollouts.recurrent_hidden_states[step],
-                                              rollouts.masks[step])  # type: AgentValues
+                    act = self.behavior_agent(
+                        rollouts.obs[step],
+                        rollouts.recurrent_hidden_states[step],
+                        rollouts.masks[step])  # type: AgentValues
                     if self.agent is not self.behavior_agent:
-                        act = self.agent(rollouts.obs[step],
-                                         rollouts.recurrent_hidden_states[step],
-                                         rollouts.masks[step], action=act.action)
+                        act = self.agent(
+                            rollouts.obs[step],
+                            rollouts.recurrent_hidden_states[step],
+                            rollouts.masks[step],
+                            action=act.action)
 
                 # act.action[:] = 'wsadeq'.index(input('act:'))
 
