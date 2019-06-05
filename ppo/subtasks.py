@@ -166,12 +166,13 @@ class SubtasksAgent(Agent, NNBase):
                 action = dist.sample()
 
         value = self.critic((conv_out, hx.g))
-        action_log_probs = dist.log_probs(action) + hx.log_prob
+        action_log_probs = dist.log_probs(action)
         entropy = dist.entropy()
         # TODO: combine with other entropy?
 
         entropy_bonus = self.entropy_coef * entropy
         losses = {k: v for k, v in hx._asdict().items() if k.endswith('_loss')}
+        losses.update(action_log_prob=action_log_probs)
 
         # self.recurrent_module.check_grad(**losses)
         aux_loss = sum(losses.values()) - entropy_bonus - action_log_probs
@@ -179,7 +180,7 @@ class SubtasksAgent(Agent, NNBase):
         return AgentValues(
             value=value,
             action=action,
-            action_log_probs=action_log_probs,
+            action_log_probs=action_log_probs + hx.log_prob,
             aux_loss=aux_loss.mean(),
             rnn_hxs=rnn_hxs,
             log=losses)
