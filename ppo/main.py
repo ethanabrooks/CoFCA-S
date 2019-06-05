@@ -3,6 +3,9 @@
 from collections import ChainMap
 
 # noinspection PyUnresolvedReferences
+from pathlib import Path
+
+import torch
 from gym.wrappers import TimeLimit
 
 # noinspection PyUnresolvedReferences
@@ -13,7 +16,7 @@ from gridworld_env.subtasks_gridworld import get_task_space
 from ppo.arguments import build_parser, get_args
 from ppo.subtasks import SubtasksAgent, SubtasksTeacher
 from ppo.train import Train
-from ppo.wrappers import SubtasksWrapper
+from ppo.wrappers import SubtasksWrapper, VecNormalize
 from rl_utils import hierarchical_parse_args
 
 
@@ -59,7 +62,7 @@ def subtasks_cli():
 
             # noinspection PyMethodOverriding
             @staticmethod
-            def build_behavior_agent(envs, hidden_size, recurrent,
+            def build_agent(envs, hidden_size, recurrent,
                                      entropy_coef, **_):
                 return SubtasksAgent(
                     obs_shape=envs.observation_space.shape,
@@ -68,7 +71,6 @@ def subtasks_cli():
                     hidden_size=hidden_size,
                     entropy_coef=entropy_coef,
                     recurrent=recurrent,
-                    use_aux_loss=False,
                 )
 
         TrainTeacher(**_kwargs)
@@ -98,7 +100,7 @@ def train_teacher_cli():
                     seed=seed)
 
             @staticmethod
-            def build_behavior_agent(envs, **agent_args):
+            def build_agent(envs, **agent_args):
                 return SubtasksTeacher(
                     obs_shape=envs.observation_space.shape,
                     action_space=envs.action_space,
@@ -113,11 +115,12 @@ def train_teacher_cli():
 
 def teach_cli():
     parser = build_parser()
+    parser.add_argument('--behavior-agent-load-path', type=Path, required=True)
     task_parser = parser.add_argument_group('task_args')
     task_parser.add_argument('--task-types', nargs='*')
-    task_parser.add_argument('--max-task-count', type=int)
+    task_parser.add_argument('--max-task-count', type=int, required=True)
     task_parser.add_argument('--object-types', nargs='*')
-    task_parser.add_argument('--n-subtasks', type=int)
+    task_parser.add_argument('--n-subtasks', type=int, required=True)
 
     def train(env_id, task_args, ppo_args, **kwargs):
         class TrainSubtasks(Train):
@@ -128,7 +131,25 @@ def teach_cli():
 
             # noinspection PyMethodOverriding
             @staticmethod
-            def build_agent(envs, hidden_size, recurrent, entropy_coef, **_):
+            def build_agent(envs, hidden_size, recurrent, entropy_coef,
+                            behavior_agent_load_path, **agent_args):
+                imitation_agent = SubtasksTeacher(
+                    hidden_size=hidden_size,
+                    recurrent=recurrent,
+                    entropy_coef=entropy_coef,
+                    obs_shape=envs.observation_space.shape,
+                    action_space=envs.action_space,
+                    n_task_types=len(task_args['task_types']),
+                    n_objects=len(task_args['object_types']),
+                    **agent_args)
+
+                state_dict = torch.load(behavior_agent_load_path)
+                imitation_agent.load_state_dict(state_dict['agent'])
+                if isinstance(envs.venv, VecNormalize):
+                    envs.venv.load_state_dict(state_dict['vec_normalize'])
+                print(
+                    f'Loaded behavior parameters from {behavior_agent_load_path}.')
+
                 return SubtasksAgent(
                     obs_shape=envs.observation_space.shape,
                     action_space=envs.action_space,
@@ -136,16 +157,7 @@ def teach_cli():
                     hidden_size=hidden_size,
                     entropy_coef=entropy_coef,
                     recurrent=recurrent,
-                    use_aux_loss=True)
-
-            @staticmethod
-            def build_behavior_agent(envs, **agent_args):
-                return SubtasksTeacher(
-                    obs_shape=envs.observation_space.shape,
-                    action_space=envs.action_space,
-                    n_task_types=len(task_args['task_types']),
-                    n_objects=len(task_args['object_types']),
-                    **agent_args)
+                    imitation_agent=imitation_agent)
 
         # Train
         ppo_args.update(aux_loss_only=True)

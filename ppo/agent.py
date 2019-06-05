@@ -8,7 +8,7 @@ from ppo.distributions import Categorical, DiagGaussian
 from ppo.utils import init, init_normc_
 
 AgentValues = namedtuple('AgentValues',
-                         'value action action_log_probs aux_loss rnn_hxs log')
+                         'value action action_log_probs dist aux_loss rnn_hxs log')
 
 
 class Flatten(nn.Module):
@@ -84,6 +84,7 @@ class Agent(nn.Module):
             action_log_probs=action_log_probs,
             aux_loss=-self.entropy_coef * entropy,
             rnn_hxs=rnn_hxs,
+            dist=dist,
             log=dict(entropy=entropy))
 
     def get_value(self, inputs, rnn_hxs, masks):

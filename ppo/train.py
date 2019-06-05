@@ -48,7 +48,6 @@ class Train:
                  agent_args,
                  render,
                  load_path,
-                 behavior_agent_load_path,
                  success_reward,
                  successes_till_done,
                  synchronous,
@@ -76,15 +75,7 @@ class Train:
         envs = self.make_vec_envs(env_id, seed, num_processes, _gamma,
                                   add_timestep, render, synchronous)
 
-        self.behavior_agent = self.build_behavior_agent(envs, **agent_args)
         self.agent = self.build_agent(envs, **agent_args)
-        if all((
-                self.agent is not self.behavior_agent,
-                self.agent.is_recurrent,
-                self.behavior_agent.is_recurrent,
-        )):
-            raise RuntimeError('Currently having both a recurrent agent and'
-                               'a recurrent behavior agent is not supported.')
         rollouts = RolloutStorage(
             num_steps=num_steps,
             num_processes=num_processes,
@@ -108,8 +99,6 @@ class Train:
             tick = time.time()
             envs.to(device)
             self.agent.to(device)
-            if self.behavior_agent is not self.agent:
-                self.behavior_agent.to(device)
             rollouts.to(device)
             print('Values copied to GPU in', time.time() - tick, 'seconds')
         print('Using device', device)
@@ -134,28 +123,15 @@ class Train:
                 envs.venv.load_state_dict(state_dict['vec_normalize'])
             print(f'Loaded parameters from {load_path}.')
 
-        if behavior_agent_load_path:
-            state_dict = torch.load(behavior_agent_load_path)
-            self.behavior_agent.load_state_dict(state_dict['agent'])
-            if isinstance(envs.venv, VecNormalize):
-                envs.venv.load_state_dict(state_dict['vec_normalize'])
-            print(
-                f'Loaded behavior parameters from {behavior_agent_load_path}.')
 
         for j in itertools.count():
             for step in range(num_steps):
                 # Sample actions.add_argument_group('env_args')
                 with torch.no_grad():
-                    act = self.behavior_agent(
+                    act = self.agent(
                         inputs=rollouts.obs[step],
                         rnn_hxs=rollouts.recurrent_hidden_states[step],
                         masks=rollouts.masks[step])  # type: AgentValues
-                    if self.agent is not self.behavior_agent:
-                        act = self.agent(
-                            inputs=rollouts.obs[step],
-                            rnn_hxs=rollouts.recurrent_hidden_states[step],
-                            masks=rollouts.masks[step],
-                            action=act.action)
 
                 # act.action[:] = 'wsadeq'.index(input('act:'))
 
@@ -300,11 +276,8 @@ class Train:
                           len(eval_episode_rewards),
                           np.mean(eval_episode_rewards)))
 
-    def build_agent(self, envs, **agent_args):
-        return self.behavior_agent
-
     @staticmethod
-    def build_behavior_agent(envs, **agent_args):
+    def build_agent(envs, **agent_args):
         return Agent(envs.observation_space.shape, envs.action_space,
                      **agent_args)
 

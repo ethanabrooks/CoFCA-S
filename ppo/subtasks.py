@@ -90,9 +90,9 @@ class SubtasksTeacher(Agent):
 # noinspection PyMissingConstructor
 class SubtasksAgent(Agent, NNBase):
     def __init__(self, obs_shape, action_space, task_space, hidden_size,
-                 recurrent, entropy_coef, use_aux_loss):
+                 recurrent, entropy_coef, imitation_agent=None):
         nn.Module.__init__(self)
-        self.use_aux_loss = use_aux_loss
+        self.imitation_agent = imitation_agent
         self.entropy_coef = entropy_coef
         n_subtasks, subtask_size = task_space.nvec.shape
         self.task_size = n_subtasks * subtask_size
@@ -191,8 +191,11 @@ class SubtasksAgent(Agent, NNBase):
 
         # self.recurrent_module.check_grad(**losses)
         aux_loss = -entropy_bonus
-        if self.use_aux_loss:
-            aux_loss += sum(losses.values()).view(-1)
+        if self.imitation_agent:
+            imitation_dist = self.imitation_agent(inputs, rnn_hxs, masks).dist
+            import ipdb; ipdb.set_trace()
+            aux_loss -= imitation_dist.probs @ torch.log(dist.probs)
+            # aux_loss += sum(losses.values()).view(-1)
 
         return AgentValues(
             value=value,
@@ -200,6 +203,7 @@ class SubtasksAgent(Agent, NNBase):
             action_log_probs=action_log_probs + hx.log_prob,
             aux_loss=aux_loss.mean(),
             rnn_hxs=rnn_hxs,
+            dist=dist,
             log=losses)
 
     def get_value(self, inputs, rnn_hxs, masks):
