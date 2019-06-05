@@ -157,7 +157,7 @@ class Train:
                             masks=rollouts.masks[step],
                             action=act.action)
 
-                # act.action[:] = 'wsadeq'.index(input('act:'))
+                act.action[:] = 'wsadeq'.index(input('act:'))
 
                 # Observe reward and next obs
                 obs, reward, done, infos = envs.step(act.action)

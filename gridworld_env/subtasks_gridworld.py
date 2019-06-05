@@ -103,6 +103,7 @@ class SubtasksGridWorld(gym.Env):
         randoms = self.np_random.choice(
             len(choices), replace=False, size=self.n_obstacles)
         self.obstacles = choices[randoms]
+        self.obstacles_one_hot[:] = 0
         set_index(self.obstacles_one_hot, self.obstacles, True)
         self.obstacles = np.array(list(self.obstacles))
 
