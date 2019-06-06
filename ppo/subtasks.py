@@ -84,15 +84,18 @@ class SubtasksTeacher(Agent):
         super().__init__(obs_shape=(self.d, h, w), **kwargs)
 
     def forward(self, inputs, *args, **kwargs):
-        next_subtask = bool(inputs[:, -1, 0, 0])
-        if next_subtask:
-            self.subtask_idx = (self.subtask_idx + 1) % self.n_subtasks
+        batch_size, _, h, w = inputs.shape
+        next_subtask = inputs[:, -1, 0, 0].long()
+        self.subtask_idx = (next_subtask + self.subtask_idx) % self.n_subtasks
         base_obs = inputs[:, :self.base_obs_d]
-        start = self.base_obs_d + self.subtask_idx
-        idxs = [start, start + self.n_subtasks, start + 2 * self.n_subtasks]
-        task_spec = inputs[:, idxs, :, :]
+        tasks = inputs[:, self.base_obs_d:-1, :, :].view(
+            -1, 3, self.n_subtasks, h, w)
+        batch_size = tasks.shape[0]
+        current_subtasks = tasks[torch.arange(batch_size), :, self.subtask_idx]
+        # print('current_subtask', current_subtasks[0, :, 0, 0])
+
         return super().forward(
-            torch.cat([base_obs, task_spec], dim=1), *args, **kwargs)
+            torch.cat([base_obs, current_subtasks], dim=1), *args, **kwargs)
 
     def get_value(self, inputs, rnn_hxs, masks):
         return super().get_value(inputs[:, :self.d], rnn_hxs, masks)
