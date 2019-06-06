@@ -435,7 +435,9 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # assert (int(i1), int(i2), int(i3)) == \
             #        np.unravel_index(int(g_int), self.subtask_space)
             g2 = self.embed_task(i1, i2, i3).squeeze(1)
-            g = interp(g, g2, c)
+
+            g = g2
+            # g = interp(g, g2, c) # TODO
 
             # b
             probs = self.beta(torch.cat([obs[i], g], dim=-1))
