@@ -123,7 +123,6 @@ class Train:
                 envs.venv.load_state_dict(state_dict['vec_normalize'])
             print(f'Loaded parameters from {load_path}.')
 
-
         for j in itertools.count():
             for step in range(num_steps):
                 # Sample actions.add_argument_group('env_args')

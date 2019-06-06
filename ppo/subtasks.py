@@ -70,18 +70,29 @@ def log_prob(i, probs):
 
 class SubtasksTeacher(Agent):
     def __init__(self, task_space, obs_shape, **kwargs):
-        n_subtasks, subtask_size = task_space.nvec.shape
-        n_obj_types, _, _ = subtask_space = task_space.nvec[0]
-        self.d = (
+        self.n_subtasks, self.subtask_size = task_space.nvec.shape
+        _, _, n_obj_types = subtask_space = task_space.nvec[0]
+        self.base_obs_d = (
             1 +  # obstacles
             n_obj_types +  # objects one hot
-            1 +  # agent
-            np.prod(subtask_space))  # task type one hot
+            1 +  # ice
+            1)  # agent
         _, h, w = obs_shape
+        self.d = self.base_obs_d + 3  # subtask spec
+        self.subtask_idx = 0
+
         super().__init__(obs_shape=(self.d, h, w), **kwargs)
 
     def forward(self, inputs, *args, **kwargs):
-        return super().forward(inputs[:, :self.d], *args, **kwargs)
+        next_subtask = bool(inputs[:, -1, 0, 0])
+        if next_subtask:
+            self.subtask_idx = (self.subtask_idx + 1) % self.n_subtasks
+        base_obs = inputs[:, :self.base_obs_d]
+        start = self.base_obs_d + self.subtask_idx
+        idxs = [start, start + self.n_subtasks, start + 2 * self.n_subtasks]
+        task_spec = inputs[:, idxs, :, :]
+        return super().forward(
+            torch.cat([base_obs, task_spec], dim=1), *args, **kwargs)
 
     def get_value(self, inputs, rnn_hxs, masks):
         return super().get_value(inputs[:, :self.d], rnn_hxs, masks)
