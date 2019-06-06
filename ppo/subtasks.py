@@ -1,10 +1,10 @@
 from collections import namedtuple
 
+from gym.spaces import Box, Discrete
 import numpy as np
 import torch
-import torch.jit
-from gym.spaces import Box, Discrete
 from torch import nn as nn
+import torch.jit
 from torch.nn import functional as F
 
 from ppo.agent import Agent, AgentValues, Flatten, NNBase
@@ -43,10 +43,10 @@ class Reshape(torch.jit.ScriptModule):
 
 def init_(network, nonlinearity=None):
     if nonlinearity is None:
-        return init(network,
-                    nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0))
-    return init(network,
-                nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0),
+        return init(network, nn.init.orthogonal_,
+                    lambda x: nn.init.constant_(x, 0))
+    return init(network, nn.init.orthogonal_,
+                lambda x: nn.init.constant_(x, 0),
                 nn.init.calculate_gain(nonlinearity))
 
 
@@ -142,21 +142,18 @@ class SubtasksAgent(Agent, NNBase):
         #                   hidden_size, kernel_size=3, stride=1, padding=1),
         #         'relu'), nn.ReLU(), Flatten())
 
-        input_size = (
-            h * w * hidden_size +  # conv output
-            sum(task_space.nvec[0]))  # task size
+        input_size = h * w * hidden_size  # conv output
 
         if isinstance(action_space, Discrete):
             num_outputs = action_space.n
-            actor = Categorical(input_size, num_outputs)
+            self.actor = Categorical(input_size, num_outputs)
         elif isinstance(action_space, Box):
             num_outputs = action_space.shape[0]
-            actor = DiagGaussian(input_size, num_outputs)
+            self.actor = DiagGaussian(input_size, num_outputs)
         else:
             raise NotImplementedError
-        self.actor = nn.Sequential(Concat(), actor)
 
-        self.critic = nn.Sequential(Concat(), init_(nn.Linear(input_size, 1)))
+        self.critic = init_(nn.Linear(input_size, 1))
 
     @property
     def recurrent_hidden_state_size(self):
@@ -191,7 +188,7 @@ class SubtasksAgent(Agent, NNBase):
     def forward(self, inputs, rnn_hxs, masks, action=None,
                 deterministic=False):
         conv_out, hx = self.get_hidden(inputs, rnn_hxs, masks)
-        dist = self.actor((conv_out, hx.g))
+        dist = self.actor(conv_out)
 
         if action is None:
             if deterministic:
@@ -199,7 +196,7 @@ class SubtasksAgent(Agent, NNBase):
             else:
                 action = dist.sample()
 
-        value = self.critic((conv_out, hx.g))
+        value = self.critic(conv_out)
         action_log_probs = dist.log_probs(action)
         entropy = dist.entropy()
         # TODO: combine with other entropy?
@@ -221,15 +218,16 @@ class SubtasksAgent(Agent, NNBase):
         return AgentValues(
             value=value,
             action=action,
-            action_log_probs=action_log_probs + hx.log_prob,
+            action_log_probs=action_log_probs,  # TODO: + hx.log_prob,
             aux_loss=aux_loss.mean(),
-            rnn_hxs=torch.cat(hx, dim=-1),
+            # TODO: rnn_hxs=torch.cat(hx, dim=-1),
+            rnn_hxs=rnn_hxs,
             dist=dist,
             log=losses)
 
     def get_value(self, inputs, rnn_hxs, masks):
         conv_out, hx = self.get_hidden(inputs, rnn_hxs, masks)
-        return self.critic((conv_out, hx.g))
+        return self.critic(conv_out)
 
     @property
     def is_recurrent(self):
@@ -283,8 +281,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
         self.pi_theta = trace(
             lambda in_size: nn.Sequential(
-                init_(nn.Linear(in_size, np.prod(self.subtask_space))
-                      ),  # all possible subtask specs
+                init_(nn.Linear(in_size, np.prod(self.subtask_space))),  # all possible subtask specs
                 nn.Softmax(dim=-1)),
             in_size=(
                 hidden_size +  # h
