@@ -160,7 +160,8 @@ class SubtasksAgent(Agent, NNBase):
 
     @property
     def recurrent_hidden_state_size(self):
-        return sum(self.recurrent_module.state_sizes)
+        return 1
+        # return sum(self.recurrent_module.state_sizes)
 
     def get_hidden(self, inputs, rnn_hxs, masks):
         obs, subtasks, task, next_subtask = torch.split(
@@ -171,9 +172,9 @@ class SubtasksAgent(Agent, NNBase):
         # TODO: This is where we would embed the task if we were doing that
 
         conv_out = self.conv1(obs)
-        recurrent_inputs = torch.cat([conv_out, task, next_subtask], dim=-1)
-        x, rnn_hxs = self._forward_gru(recurrent_inputs, rnn_hxs, masks)
-        hx = RecurrentState(*self.recurrent_module.parse_hidden(x))
+        # recurrent_inputs = torch.cat([conv_out, task, next_subtask], dim=-1)
+        # x, rnn_hxs = self._forward_gru(recurrent_inputs, rnn_hxs, masks)
+        # hx = RecurrentState(*self.recurrent_module.parse_hidden(x))
 
         # multiplicative interaction
         # weights = self.conv_weight(subtasks[:, :, 0, 0])
@@ -186,7 +187,7 @@ class SubtasksAgent(Agent, NNBase):
         # TODO: subtasks = hx.g.view(*hx.g.shape, 1, 1).expand(*hx.g.shape, h, w)
         out = self.conv2((obs, subtasks))
 
-        return out, hx
+        return out, rnn_hxs  # TODO: THIS NEEDS TO CHANGE WHEN YOU GO BACK TO RECURRENT
 
     def forward(self, inputs, rnn_hxs, masks, action=None,
                 deterministic=False):
