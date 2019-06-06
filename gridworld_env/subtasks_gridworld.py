@@ -1,12 +1,13 @@
+from collections import namedtuple
+import itertools
 import re
 import time
-from collections import namedtuple
 
 import gym
-import numpy as np
-import six
 from gym import spaces
 from gym.utils import seeding
+import numpy as np
+import six
 
 from ppo.utils import set_index
 from rl_utils import cartesian_product
@@ -151,6 +152,32 @@ class SubtasksGridWorld(gym.Env):
 
         time.sleep(2 if self.last_terminal else .5)
 
+    def subtask_generator(self):
+        task_types = np.arange(len(self.task_types))
+        object_types = np.arange(len(self.object_types))
+        task_counts = np.arange(self.max_task_count)
+        multiple_options = [
+            (i, x)
+            for i, x in enumerate([task_types, task_counts, object_types])
+            if len(x) > 1
+        ]
+        last_subtask = None
+        while True:
+            task_type = self.np_random.choice(task_types)
+            task_count = self.np_random.choice(self.max_task_count) + 1
+            task_object = self.np_random.choice(object_types)
+            if self.task_types[task_type] == 'visit':
+                task_count = 1
+            subtask = [task_type, task_count, task_object]
+            if subtask == last_subtask:
+                if multiple_options:
+                    idx, param = multiple_options[self.np_random.choice(
+                        len(multiple_options))]
+                    options = [x for x in param if x != subtask[idx]]
+                    subtask[idx] = self.np_random.choice(options)
+            yield subtask
+            last_subtask = subtask
+
     def reset(self):
         if not self.initialized:
             self.initialize()
@@ -158,15 +185,9 @@ class SubtasksGridWorld(gym.Env):
             self.randomize_obstacles()
 
         if self.random_task:
-            task_types = self.np_random.choice(
-                len(self.task_types), size=self.n_subtasks)
-            task_objects = self.np_random.choice(
-                len(self.object_types), size=self.n_subtasks)
-            task_counts = self.np_random.choice(
-                self.max_task_count, size=self.n_subtasks) + 1
-            task_counts[self.task_types[task_types] == 'visit'] = 1
-            self.task = np.stack([task_types, task_counts, task_objects],
-                                 axis=1)
+            task_iter = itertools.islice(self.subtask_generator(),
+                                         self.n_subtasks)
+            self.task = np.array(list(task_iter))
         self.task_iter = iter(self.task)
 
         types = [x for t, c, o in self.task for x in c * [o]]
