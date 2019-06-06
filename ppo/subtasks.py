@@ -24,8 +24,12 @@ RecurrentState = namedtuple(
 
 
 class Concat(torch.jit.ScriptModule):
+    def __init__(self, dim=-1):
+        self.dim = dim
+        super().__init__()
+
     def forward(self, input):
-        return torch.cat(input, dim=-1)
+        return torch.cat(input, dim=self.dim)
 
 
 class Reshape(torch.jit.ScriptModule):
