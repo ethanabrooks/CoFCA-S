@@ -107,14 +107,14 @@ def train_teacher_cli():
 
 def teach_cli():
     parser = build_parser()
-    parser.add_argument('--behavior-agent-load-path', type=Path, required=True)
+    parser.add_argument('--imitation-agent-load-path', type=Path, required=True)
     task_parser = parser.add_argument_group('task_args')
     task_parser.add_argument('--task-types', nargs='*')
     task_parser.add_argument('--max-task-count', type=int, required=True)
     task_parser.add_argument('--object-types', nargs='*')
     task_parser.add_argument('--n-subtasks', type=int, required=True)
 
-    def train(env_id, task_args, ppo_args, behavior_agent_load_path, **kwargs):
+    def train(env_id, task_args, ppo_args, imitation_agent_load_path, **kwargs):
         task_space = get_task_space(**task_args)
 
         class TrainSubtasks(Train):
@@ -136,12 +136,12 @@ def teach_cli():
                     task_space=task_space,
                     **agent_args)
 
-                state_dict = torch.load(behavior_agent_load_path)
+                state_dict = torch.load(imitation_agent_load_path)
                 imitation_agent.load_state_dict(state_dict['agent'])
                 if isinstance(envs.venv, VecNormalize):
                     envs.venv.load_state_dict(state_dict['vec_normalize'])
                 print(
-                    f'Loaded behavior parameters from {behavior_agent_load_path}.'
+                    f'Loaded imitation parameters from {imitation_agent_load_path}.'
                 )
 
                 return SubtasksAgent(
