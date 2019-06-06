@@ -105,8 +105,10 @@ class SubtasksAgent(Agent, NNBase):
                  hidden_size,
                  recurrent,
                  entropy_coef,
+                 multiplicative_interaction,
                  imitation_agent=None):
         nn.Module.__init__(self)
+        self.multiplicative_interaction = multiplicative_interaction
         self.imitation_agent = imitation_agent
         self.entropy_coef = entropy_coef
         self.obs_sections = get_subtasks_obs_sections(task_space)
@@ -130,20 +132,22 @@ class SubtasksAgent(Agent, NNBase):
                     stride=1,
                     padding=1), 'relu'), nn.ReLU(), Flatten())
 
-        # conv_weight_shape = hidden_size, self.obs_sections.base, 3, 3
-        # self.conv_weight = nn.Sequential(
-        #     nn.Linear(self.obs_sections.subtask, np.prod(conv_weight_shape)),
-        #     Reshape(-1, *conv_weight_shape))
+        if multiplicative_interaction:
+            conv_weight_shape = hidden_size, self.obs_sections.base, 3, 3
+            self.conv_weight = nn.Sequential(
+                nn.Linear(self.obs_sections.subtask, np.prod(conv_weight_shape)),
+                Reshape(-1, *conv_weight_shape))
 
-        self.conv2 = nn.Sequential(
-            Concat(dim=1),
-            init_(
-                nn.Conv2d(
-                    self.obs_sections.base + self.obs_sections.subtask,
-                    hidden_size,
-                    kernel_size=3,
-                    stride=1,
-                    padding=1), 'relu'), nn.ReLU(), Flatten())
+        else:
+            self.conv2 = nn.Sequential(
+                Concat(dim=1),
+                init_(
+                    nn.Conv2d(
+                        self.obs_sections.base + self.obs_sections.subtask,
+                        hidden_size,
+                        kernel_size=3,
+                        stride=1,
+                        padding=1), 'relu'), nn.ReLU(), Flatten())
 
         input_size = h * w * hidden_size  # conv output
 
@@ -173,17 +177,17 @@ class SubtasksAgent(Agent, NNBase):
 
         # assert torch.all(subtasks[:, :, 0, 0] == hx.g)
 
-        # multiplicative interaction
-        # weights = self.conv_weight(subtasks[:, :, 0, 0])
-        # outs = []
-        # for ob, weight in zip(obs, weights):
-        #     outs.append(F.conv2d(ob.unsqueeze(0), weight, padding=(1, 1)))
-        # out = torch.cat(outs).view(*conv_out.shape)
-
-        _, _, h, w = obs.shape
-        g = hx.g.view(*hx.g.shape, 1, 1).expand(*hx.g.shape, h, w)
-        # g = subtasks
-        out = self.conv2((obs, g))
+        if self.multiplicative_interaction:
+            weights = self.conv_weight(subtasks[:, :, 0, 0])
+            outs = []
+            for ob, weight in zip(obs, weights):
+                outs.append(F.conv2d(ob.unsqueeze(0), weight, padding=(1, 1)))
+            out = torch.cat(outs).view(*conv_out.shape)
+        else:
+            _, _, h, w = obs.shape
+            g = hx.g.view(*hx.g.shape, 1, 1).expand(*hx.g.shape, h, w)
+            # g = subtasks
+            out = self.conv2((obs, g))
 
         return out, hx
         # return out, rnn_hxs
@@ -224,8 +228,8 @@ class SubtasksAgent(Agent, NNBase):
             imitation_dist = self.imitation_agent(inputs, rnn_hxs, masks).dist
             imitation_probs = imitation_dist.probs.detach().unsqueeze(1)
             log_probs = torch.log(dist.probs).unsqueeze(2)
-            imitation_loss = (imitation_probs @ log_probs).view(-1)
-            aux_loss -= imitation_loss
+            imitation_loss = -(imitation_probs @ log_probs).view(-1)
+            aux_loss += imitation_loss
             losses.update(imitation_loss=imitation_loss)
 
         return AgentValues(
