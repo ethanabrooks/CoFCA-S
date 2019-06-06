@@ -78,32 +78,26 @@ def subtasks_cli():
 
 def train_teacher_cli():
     parser = build_parser()
-    parser.add_argument('--task-types', nargs='*')
-    parser.add_argument('--max-task-count', type=int)
-    parser.add_argument('--object-types', nargs='*')
-    parser.add_argument('--n-subtasks', type=int)
+    task_parser = parser.add_argument_group('task_args')
+    task_parser.add_argument('--task-types', nargs='*')
+    task_parser.add_argument('--max-task-count', type=int, required=True)
+    task_parser.add_argument('--object-types', nargs='*')
+    task_parser.add_argument('--n-subtasks', type=int, required=True)
     kwargs = hierarchical_parse_args(parser)
 
-    def train(task_types, max_task_count, object_types, n_subtasks, **_kwargs):
+    def train(task_args, **_kwargs):
         class TrainTeacher(Train):
             @staticmethod
             def make_env(env_id, seed, rank, add_timestep):
                 return make_subtasks_env(
-                    env_id=env_id,
-                    task_types=task_types,
-                    max_task_count=max_task_count,
-                    object_types=object_types,
-                    n_subtasks=n_subtasks,
-                    rank=rank,
-                    seed=seed)
+                    env_id=env_id, rank=rank, seed=seed, **task_args)
 
             @staticmethod
             def build_agent(envs, **agent_args):
                 return SubtasksTeacher(
                     obs_shape=envs.observation_space.shape,
                     action_space=envs.action_space,
-                    n_task_types=len(task_types),
-                    n_objects=len(object_types),
+                    task_space=get_task_space(**task_args),
                     **agent_args)
 
         TrainTeacher(**_kwargs)
@@ -121,6 +115,8 @@ def teach_cli():
     task_parser.add_argument('--n-subtasks', type=int, required=True)
 
     def train(env_id, task_args, ppo_args, behavior_agent_load_path, **kwargs):
+        task_space = get_task_space(**task_args)
+
         class TrainSubtasks(Train):
             @staticmethod
             def make_env(env_id, seed, rank, add_timestep):
@@ -137,8 +133,7 @@ def teach_cli():
                     entropy_coef=entropy_coef,
                     obs_shape=envs.observation_space.shape,
                     action_space=envs.action_space,
-                    n_task_types=len(task_args['task_types']),
-                    n_objects=len(task_args['object_types']),
+                    task_space=task_space,
                     **agent_args)
 
                 state_dict = torch.load(behavior_agent_load_path)
@@ -152,7 +147,7 @@ def teach_cli():
                 return SubtasksAgent(
                     obs_shape=envs.observation_space.shape,
                     action_space=envs.action_space,
-                    task_space=get_task_space(**task_args),
+                    task_space=task_space,
                     hidden_size=hidden_size,
                     entropy_coef=entropy_coef,
                     recurrent=recurrent,
@@ -166,4 +161,4 @@ def teach_cli():
 
 
 if __name__ == "__main__":
-    teach_cli()
+    cli()

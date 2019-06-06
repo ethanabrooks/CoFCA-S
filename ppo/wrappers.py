@@ -1,8 +1,8 @@
 import gym
-from gym import spaces
-from gym.spaces import Box
 import numpy as np
 import torch
+from gym import spaces
+from gym.spaces import Box
 
 from common.vec_env import VecEnvWrapper
 from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
@@ -17,10 +17,8 @@ class SubtasksWrapper(gym.ObservationWrapper):
         assert np.all(task_space.nvec == task_space.nvec[0])
         task_channels = task_space.nvec[0, 0]
         obs_shape = np.array(obs_space.nvec.shape)
-        obs_shape[0] += task_channels  # for task type one hot
         obs_shape[0] += np.prod(
             task_space.nvec.shape)  # for task specification
-        obs_shape[0] += 1  # for task_objects
         obs_shape[0] += 1  # for iterate
         self.observation_space = Box(0, 1, shape=obs_shape)
 
@@ -31,8 +29,9 @@ class SubtasksWrapper(gym.ObservationWrapper):
 
         # subtask pointer
         task_type, task_count, task_object_type = env.subtask
-        task_type_one_hot = np.zeros((len(env.task_types), h, w), dtype=bool)
-        task_type_one_hot[task_type, :, :] = True
+
+        # task_type_one_hot = np.zeros((len(env.task_types), h, w), dtype=bool)
+        # task_type_one_hot[task_type, :, :] = True
 
         # task spec
         def task_iterator():
@@ -44,19 +43,13 @@ class SubtasksWrapper(gym.ObservationWrapper):
         for row, word in zip(task_spec, task_iterator()):
             row[:] = word
 
-        # TODO: make this less easy
-        task_objects_one_hot = np.zeros((h, w), dtype=bool)
-        idx = [k for k, v in env.objects.items() if v == task_object_type]
-        set_index(task_objects_one_hot, idx, True)
+        # task_objects_one_hot = np.zeros((h, w), dtype=bool)
+        # idx = [k for k, v in env.objects.items() if v == task_object_type]
+        # set_index(task_objects_one_hot, idx, True)
 
         next_subtask = np.full((1, h, w), env.next_subtask)
 
-        stack = np.vstack([
-            obs,
-            np.expand_dims(task_objects_one_hot, 0),
-            task_type_one_hot,
-            task_spec, next_subtask
-        ])
+        stack = np.vstack([obs, task_spec, next_subtask])
         # print('obs', obs.shape)
         # print('task_type', task_type_one_hot.shape)
         # print('task_objects', task_objects_one_hot.shape)

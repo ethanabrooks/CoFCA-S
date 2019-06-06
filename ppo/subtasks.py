@@ -69,14 +69,14 @@ def log_prob(i, probs):
 
 
 class SubtasksTeacher(Agent):
-    def __init__(self, n_task_types, n_objects, obs_shape, **kwargs):
-        self.n_obj_types = n_objects
-        self.n_task_types = n_task_types
+    def __init__(self, task_space, obs_shape, **kwargs):
+        n_subtasks, subtask_size = task_space.nvec.shape
+        n_obj_types, _, _ = subtask_space = task_space.nvec[0]
         self.d = (
             1 +  # obstacles
-            self.n_obj_types + 1 +  # agent
-            1 +  # task objects
-            self.n_task_types)
+            n_obj_types +  # objects one hot
+            1 +  # agent
+            np.prod(subtask_space))  # task type one hot
         _, h, w = obs_shape
         super().__init__(obs_shape=(self.d, h, w), **kwargs)
 
@@ -103,10 +103,7 @@ class SubtasksAgent(Agent, NNBase):
         n_subtasks, subtask_size = task_space.nvec.shape
         self.task_size = n_subtasks * subtask_size
         n_task_types = task_space.nvec[0, 0]
-        self.ignored_layers = (
-            n_task_types +  # task type one hot
-            1 +  # task objects
-            1)  # next_subtask
+        self.ignored_layers = 1  # next_subtask
         d, h, w = obs_shape
         d -= self.task_size + self.ignored_layers
         self.obs_shape = obs_shape = d, h, w
@@ -234,10 +231,10 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
     def __init__(self, obs_shape, task_space, hidden_size, recurrent):
         super().__init__()
-        self.d, self.h, self.w = d, h, w = obs_shape
-        self.subtask_space = subtask_space = list(map(int, task_space.nvec[0]))
         self.n_subtasks, _ = task_space.nvec.shape
+        self.subtask_space = subtask_space = list(map(int, task_space.nvec[0]))
         self.subtask_size = int(np.sum(self.subtask_space))
+        _, h, w = obs_shape
         conv_out_size = h * w * hidden_size
         input_sections = [conv_out_size] + [self.n_subtasks] * 3 + [1]
         self.input_sections = [int(n) for n in input_sections]

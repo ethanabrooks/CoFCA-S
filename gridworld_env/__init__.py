@@ -13,9 +13,9 @@ SUFFIX = 'GridWorld-v0'
 JSON_PATH = Path(__file__).parent.joinpath('json')
 
 
-def register_from_string(env_id, **kwargs):
-    if 'class' in kwargs:
-        class_ = eval(kwargs.pop('class'))
+def register_from_string(env_id, class_=None, **kwargs):
+    if class_ == 'SubtasksGridWorld':
+        class_ = SubtasksGridWorld
     elif 'random' in kwargs:
         class_ = RandomGridWorld
     else:
