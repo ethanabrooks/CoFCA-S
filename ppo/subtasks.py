@@ -158,10 +158,6 @@ class SubtasksAgent(Agent, NNBase):
 
         self.critic = init_(nn.Linear(input_size, 1))
 
-    @property
-    def recurrent_hidden_state_size(self):
-        return sum(self.recurrent_module.state_sizes)
-
     def get_hidden(self, inputs, rnn_hxs, masks):
         obs, subtasks, task, next_subtask = torch.split(
             inputs, self.obs_sections, dim=1)
@@ -171,9 +167,11 @@ class SubtasksAgent(Agent, NNBase):
         # TODO: This is where we would embed the task if we were doing that
 
         conv_out = self.conv1(obs)
-        recurrent_inputs = torch.cat([conv_out, task, next_subtask], dim=-1)
-        x, rnn_hxs = self._forward_gru(recurrent_inputs, rnn_hxs, masks)
-        hx = RecurrentState(*self.recurrent_module.parse_hidden(x))
+        # recurrent_inputs = torch.cat([conv_out, task, next_subtask], dim=-1)
+        # x, rnn_hxs = self._forward_gru(recurrent_inputs, rnn_hxs, masks)
+        # hx = RecurrentState(*self.recurrent_module.parse_hidden(x))
+
+        # assert torch.all(subtasks[:, :, 0, 0] == hx.g)
 
         # multiplicative interaction
         # weights = self.conv_weight(subtasks[:, :, 0, 0])
@@ -183,10 +181,22 @@ class SubtasksAgent(Agent, NNBase):
         # out = torch.cat(outs).view(*conv_out.shape)
 
         _, _, h, w = obs.shape
-        g = hx.g.view(*hx.g.shape, 1, 1).expand(*hx.g.shape, h, w)
+        # g = hx.g.view(*hx.g.shape, 1, 1).expand(*hx.g.shape, h, w)
+        g = subtasks
         out = self.conv2((obs, g))
 
-        return out, hx
+        # return out, hx TODO uncomment
+        return out, rnn_hxs
+
+    @property
+    def recurrent_hidden_state_size(self):
+        return 1
+        # return sum(self.recurrent_module.state_sizes)  TODO uncomment
+
+
+    @property
+    def is_recurrent(self):
+        return True
 
     def forward(self, inputs, rnn_hxs, masks, action=None,
                 deterministic=False):
@@ -230,10 +240,6 @@ class SubtasksAgent(Agent, NNBase):
     def get_value(self, inputs, rnn_hxs, masks):
         conv_out, hx = self.get_hidden(inputs, rnn_hxs, masks)
         return self.critic(conv_out)
-
-    @property
-    def is_recurrent(self):
-        return True
 
 
 def trace(module_fn, in_size):
