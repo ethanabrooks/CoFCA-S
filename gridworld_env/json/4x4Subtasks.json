@@ -3,7 +3,7 @@
     "object_types": ["pig", "sheep", "cat", "greenbot"],
     "n_objects": 2,
     "n_obstacles": 2,
-    "n_subtasks": 1,
+    "n_subtasks": 3,
     "task_types": ["visit", "pick-up", "transform"],
     "max_task_count": 3,
     "class_": "SubtasksGridWorld",

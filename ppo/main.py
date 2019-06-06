@@ -3,6 +3,7 @@
 from collections import ChainMap
 # noinspection PyUnresolvedReferences
 from pathlib import Path
+from pprint import pprint
 
 import torch
 from gym.wrappers import TimeLimit
@@ -26,6 +27,9 @@ def class_parser(string):
 
 def make_subtasks_env(env_id, **kwargs):
     def helper(rank, seed, class_, max_episode_steps, **_kwargs):
+        if rank == 1:
+            print('Environment args:')
+            pprint(_kwargs)
         env = SubtasksWrapper(class_parser(class_)(**_kwargs))
         env.seed(seed + rank)
         print('Environment seed:', seed + rank)
@@ -48,14 +52,19 @@ def subtasks_cli():
     task_parser.add_argument('--max-task-count', type=int)
     task_parser.add_argument('--object-types', nargs='*')
     task_parser.add_argument('--n-subtasks', type=int)
+    parser.add_argument('--n-objects', type=int)
     kwargs = hierarchical_parse_args(parser)
 
-    def train(task_args, multiplicative_interaction, **_kwargs):
+    def train(task_args, multiplicative_interaction, n_objects, **_kwargs):
         class TrainTeacher(Train):
             @staticmethod
             def make_env(env_id, seed, rank, add_timestep):
                 return make_subtasks_env(
-                    env_id=env_id, rank=rank, seed=seed, **task_args)
+                    env_id=env_id,
+                    rank=rank,
+                    seed=seed,
+                    n_objects=n_objects,
+                    **task_args)
 
             # noinspection PyMethodOverriding
             @staticmethod
@@ -82,14 +91,19 @@ def train_teacher_cli():
     task_parser.add_argument('--max-task-count', type=int, required=True)
     task_parser.add_argument('--object-types', nargs='*')
     task_parser.add_argument('--n-subtasks', type=int, required=True)
+    parser.add_argument('--n-objects', type=int, required=True)
     kwargs = hierarchical_parse_args(parser)
 
-    def train(task_args, **_kwargs):
+    def train(task_args, n_objects, **_kwargs):
         class TrainTeacher(Train):
             @staticmethod
             def make_env(env_id, seed, rank, add_timestep):
                 return make_subtasks_env(
-                    env_id=env_id, rank=rank, seed=seed, **task_args)
+                    env_id=env_id,
+                    rank=rank,
+                    seed=seed,
+                    n_objects=n_objects,
+                    **task_args)
 
             @staticmethod
             def build_agent(envs, **agent_args):
@@ -120,16 +134,21 @@ def teach_cli():
     subtasks_parser.add_argument('--subtasks-recurrent', action='store_true')
     subtasks_parser.add_argument(
         '--multiplicative-interaction', action='store_true')
+    parser.add_argument('--n-objects', type=int, required=True)
 
     def train(env_id, task_args, ppo_args, imitation_agent_load_path,
-              subtasks_args, **kwargs):
+              subtasks_args, n_objects, **kwargs):
         task_space = get_task_space(**task_args)
 
         class TrainSubtasks(Train):
             @staticmethod
             def make_env(env_id, seed, rank, add_timestep):
                 return make_subtasks_env(
-                    env_id=env_id, rank=rank, seed=seed, **task_args)
+                    env_id=env_id,
+                    rank=rank,
+                    seed=seed,
+                    n_objects=n_objects,
+                    **task_args)
 
             # noinspection PyMethodOverriding
             @staticmethod
