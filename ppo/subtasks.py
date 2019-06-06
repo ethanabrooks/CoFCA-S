@@ -218,8 +218,7 @@ class SubtasksAgent(Agent, NNBase):
         # TODO: combine with other entropy?
 
         entropy_bonus = self.entropy_coef * entropy
-        losses = dict(neg_action_log_prob=-action_log_probs)
-        # losses = {k: v for k, v in hx._asdict().items() if k.endswith('_loss')}
+        losses = {k: v for k, v in hx._asdict().items() if k.endswith('_loss')}
         # losses.update(action_log_prob=action_log_probs)
 
         # self.recurrent_module.check_grad(**losses)
