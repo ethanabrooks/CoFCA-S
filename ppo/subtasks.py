@@ -184,8 +184,7 @@ class SubtasksAgent(Agent, NNBase):
 
         _, _, h, w = obs.shape
         g = hx.g.view(*hx.g.shape, 1, 1).expand(*hx.g.shape, h, w)
-        assert torch.all(g == subtasks)
-        out = self.conv2((obs, subtasks))
+        out = self.conv2((obs, g))
 
         return out, hx
 
