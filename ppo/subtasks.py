@@ -130,17 +130,20 @@ class SubtasksAgent(Agent, NNBase):
                     stride=1,
                     padding=1), 'relu'), nn.ReLU(), Flatten())
 
-        conv_weight_shape = hidden_size, self.obs_sections.base, 3, 3
-        self.conv_weight = nn.Sequential(
-            nn.Linear(self.obs_sections.subtask, np.prod(conv_weight_shape)),
-            Reshape(-1, *conv_weight_shape))
+        # conv_weight_shape = hidden_size, self.obs_sections.base, 3, 3
+        # self.conv_weight = nn.Sequential(
+        #     nn.Linear(self.obs_sections.subtask, np.prod(conv_weight_shape)),
+        #     Reshape(-1, *conv_weight_shape))
 
-        # self.conv2 = nn.Sequential(
-        #     Concat(dim=1),
-        #     init_(
-        #         nn.Conv2d(self.obs_sections.base + self.obs_sections.subtask,
-        #                   hidden_size, kernel_size=3, stride=1, padding=1),
-        #         'relu'), nn.ReLU(), Flatten())
+        self.conv2 = nn.Sequential(
+            Concat(dim=1),
+            init_(
+                nn.Conv2d(
+                    self.obs_sections.base + self.obs_sections.subtask,
+                    hidden_size,
+                    kernel_size=3,
+                    stride=1,
+                    padding=1), 'relu'), nn.ReLU(), Flatten())
 
         input_size = h * w * hidden_size  # conv output
 
@@ -160,7 +163,7 @@ class SubtasksAgent(Agent, NNBase):
         return sum(self.recurrent_module.state_sizes)
 
     def get_hidden(self, inputs, rnn_hxs, masks):
-        obs, _, task, next_subtask = torch.split(
+        obs, subtasks, task, next_subtask = torch.split(
             inputs, self.obs_sections, dim=1)
         task = task[:, :, 0, 0]
         next_subtask = next_subtask[:, :, 0, 0]
@@ -173,15 +176,15 @@ class SubtasksAgent(Agent, NNBase):
         hx = RecurrentState(*self.recurrent_module.parse_hidden(x))
 
         # multiplicative interaction
-        weights = self.conv_weight(hx.g)
-        outs = []
-        for ob, weight in zip(obs, weights):
-            outs.append(F.conv2d(ob.unsqueeze(0), weight, padding=(1, 1)))
-        out = torch.cat(outs).view(*conv_out.shape)
+        # weights = self.conv_weight(subtasks[:, :, 0, 0])
+        # outs = []
+        # for ob, weight in zip(obs, weights):
+        #     outs.append(F.conv2d(ob.unsqueeze(0), weight, padding=(1, 1)))
+        # out = torch.cat(outs).view(*conv_out.shape)
 
-        # _, _, h, w = obs.shape
-        # g = hx.g.view(*hx.g.shape, 1, 1).expand(*hx.g.shape, h, w)
-        # out = self.conv2((obs, g))
+        _, _, h, w = obs.shape
+        # TODO: subtasks = hx.g.view(*hx.g.shape, 1, 1).expand(*hx.g.shape, h, w)
+        out = self.conv2((obs, subtasks))
 
         return out, hx
 
