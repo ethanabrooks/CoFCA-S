@@ -1,5 +1,6 @@
 import re
 import time
+from collections import namedtuple
 
 import gym
 import numpy as np
@@ -9,6 +10,8 @@ from gym.utils import seeding
 
 from ppo.utils import set_index
 from rl_utils import cartesian_product
+
+ObsSections = namedtuple('ObsSections', 'base subtask task next_subtask')
 
 
 def get_task_space(task_types, max_task_count, object_types, n_subtasks):
@@ -190,7 +193,7 @@ class SubtasksGridWorld(gym.Env):
         h, w, = self.desc.shape
         objects_one_hot = np.zeros((1 + len(self.object_types), h, w),
                                    dtype=bool)
-        idx = [(v, ) + k for k, v in self.objects.items()]
+        idx = [(v,) + k for k, v in self.objects.items()]
         set_index(objects_one_hot, idx, True)
         return objects_one_hot
 

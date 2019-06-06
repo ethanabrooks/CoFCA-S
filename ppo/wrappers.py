@@ -3,11 +3,24 @@ import numpy as np
 import torch
 from gym import spaces
 from gym.spaces import Box
+from rl_utils import onehot
 
 from common.vec_env import VecEnvWrapper
 from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
-from ppo.utils import set_index
-from rl_utils import onehot
+from gridworld_env.subtasks_gridworld import ObsSections
+
+
+def get_subtasks_obs_sections(task_space):
+    n_subtasks, size_subtask = task_space.shape
+    return ObsSections(base=(
+            1 +  # obstacles
+            task_space.nvec[0, 2] +  # objects one hot
+            1 +  # ice
+            1),  # agent
+        subtask=(sum(task_space.nvec[0])),  # one hots
+        task=size_subtask * n_subtasks,  # int codes
+        next_subtask=1
+    )
 
 
 class SubtasksWrapper(gym.ObservationWrapper):
@@ -15,12 +28,9 @@ class SubtasksWrapper(gym.ObservationWrapper):
         super().__init__(env)
         obs_space, task_space = env.observation_space.spaces
         assert np.all(task_space.nvec == task_space.nvec[0])
-        task_channels = task_space.nvec[0, 0]
-        obs_shape = np.array(obs_space.nvec.shape)
-        obs_shape[0] += np.prod(
-            task_space.nvec.shape)  # for task specification
-        obs_shape[0] += 1  # for iterate
-        self.observation_space = Box(0, 1, shape=obs_shape)
+        _, h, w = obs_space.shape
+        d = sum(get_subtasks_obs_sections(task_space))
+        self.observation_space = Box(0, 1, shape=(d, h, w))
 
     def observation(self, observation):
         obs, task = observation
@@ -30,8 +40,13 @@ class SubtasksWrapper(gym.ObservationWrapper):
         # subtask pointer
         task_type, task_count, task_object_type = env.subtask
 
-        # task_type_one_hot = np.zeros((len(env.task_types), h, w), dtype=bool)
-        # task_type_one_hot[task_type, :, :] = True
+        task_type_one_hot = np.zeros((len(env.task_types), h, w), dtype=bool)
+        task_count_one_hot = np.zeros((env.max_task_count, h, w), dtype=bool)
+        task_object_one_hot = np.zeros((len(env.object_types), h, w), dtype=bool)
+
+        task_type_one_hot[task_type, :, :] = True
+        task_count_one_hot[task_count -1, :, :] = True
+        task_object_one_hot[task_object_type, :, :] = True
 
         # task spec
         def task_iterator():
@@ -49,7 +64,11 @@ class SubtasksWrapper(gym.ObservationWrapper):
 
         next_subtask = np.full((1, h, w), env.next_subtask)
 
-        stack = np.vstack([obs, task_spec, next_subtask])
+        stack = np.vstack([obs,
+                           task_type_one_hot,
+                           task_count_one_hot,
+                           task_object_one_hot,
+                           task_spec, next_subtask])
         # print('obs', obs.shape)
         # print('task_type', task_type_one_hot.shape)
         # print('task_objects', task_objects_one_hot.shape)
@@ -171,7 +190,7 @@ class VecPyTorchFrameStack(VecEnvWrapper):
         low = np.repeat(wos.low, self.nstack, axis=0)
         high = np.repeat(wos.high, self.nstack, axis=0)
 
-        self.stacked_obs = torch.zeros((venv.num_envs, ) + low.shape)
+        self.stacked_obs = torch.zeros((venv.num_envs,) + low.shape)
 
         observation_space = gym.spaces.Box(
             low=low, high=high, dtype=venv.observation_space.dtype)

@@ -161,4 +161,4 @@ def teach_cli():
 
 
 if __name__ == "__main__":
-    cli()
+    subtasks_cli()
