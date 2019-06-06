@@ -167,9 +167,9 @@ class SubtasksAgent(Agent, NNBase):
         # TODO: This is where we would embed the task if we were doing that
 
         conv_out = self.conv1(obs)
-        # recurrent_inputs = torch.cat([conv_out, task, next_subtask], dim=-1)
-        # x, rnn_hxs = self._forward_gru(recurrent_inputs, rnn_hxs, masks)
-        # hx = RecurrentState(*self.recurrent_module.parse_hidden(x))
+        recurrent_inputs = torch.cat([conv_out, task, next_subtask], dim=-1)
+        x, rnn_hxs = self._forward_gru(recurrent_inputs, rnn_hxs, masks)
+        hx = RecurrentState(*self.recurrent_module.parse_hidden(x))
 
         # assert torch.all(subtasks[:, :, 0, 0] == hx.g)
 
@@ -181,18 +181,18 @@ class SubtasksAgent(Agent, NNBase):
         # out = torch.cat(outs).view(*conv_out.shape)
 
         _, _, h, w = obs.shape
-        # g = hx.g.view(*hx.g.shape, 1, 1).expand(*hx.g.shape, h, w)
-        g = subtasks
+        g = hx.g.view(*hx.g.shape, 1, 1).expand(*hx.g.shape, h, w)
+        # g = subtasks
         out = self.conv2((obs, g))
 
-        # return out, hx TODO uncomment
-        return out, rnn_hxs
+        return out, hx
+        # return out, rnn_hxs
 
     @property
     def recurrent_hidden_state_size(self):
-        return 1
-        # return sum(self.recurrent_module.state_sizes)  TODO uncomment
-
+        # return 1
+        return sum(self.recurrent_module.state_sizes)
+    #
     @property
     def is_recurrent(self):
         return True
@@ -233,8 +233,8 @@ class SubtasksAgent(Agent, NNBase):
             action=action,
             action_log_probs=action_log_probs,  # TODO: + hx.log_prob,
             aux_loss=aux_loss.mean(),
-            # rnn_hxs=torch.cat(hx, dim=-1),  # TODO uncomment
-            rnn_hxs=rnn_hxs,
+            rnn_hxs=torch.cat(hx, dim=-1),
+            # rnn_hxs=rnn_hxs,
             dist=dist,
             log=losses)
 
@@ -412,7 +412,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             l_target = self.l_values[next_subtask[i].long()].view(-1)
             l_losses.append(
                 F.cross_entropy(l_logits, l_target,
-                                reduction='none').unsqueeze(1)  # TODO
+                                reduction='none').unsqueeze(1)
             )
 
             p2 = batch_conv1d(p, l)
