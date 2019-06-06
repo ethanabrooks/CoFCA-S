@@ -186,11 +186,9 @@ class SubtasksAgent(Agent, NNBase):
         else:
             _, _, h, w = obs.shape
             g = hx.g.view(*hx.g.shape, 1, 1).expand(*hx.g.shape, h, w)
-            # g = subtasks
             out = self.conv2((obs, g))
 
         return out, hx
-        # return out, rnn_hxs
 
     @property
     def recurrent_hidden_state_size(self):
@@ -402,6 +400,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # c_loss
             c_losses.append(
                 F.binary_cross_entropy(c, next_subtask[i], reduction='none'))
+            c = next_subtask[i]  # TODO
 
             # TODO: figure this out
             # if self.recurrent:
@@ -462,8 +461,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             g_loss = log_prob(g_target, probs)
             g_losses.append(g_loss)
 
-            # i1, i2, i3 = self.decode(g_int)
-            i1, i2, i3 = self.decode(g_target)  # TODO
+            i1, i2, i3 = self.decode(g_int)
+            # i1, i2, i3 = self.decode(g_target)
             # assert (int(i1), int(i2), int(i3)) == \
             #        np.unravel_index(int(g_int), self.subtask_space)
             g2 = self.embed_task(i1, i2, i3).squeeze(1)

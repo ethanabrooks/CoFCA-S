@@ -108,7 +108,7 @@ def train_teacher_cli():
 def teach_cli():
     parser = build_parser()
     parser.add_argument(
-        '--imitation-agent-load-path', type=Path, required=True)
+        '--imitation-agent-load-path', type=Path)
     task_parser = parser.add_argument_group('task_args')
     task_parser.add_argument('--task-types', nargs='*')
     task_parser.add_argument('--max-task-count', type=int, required=True)
@@ -135,19 +135,21 @@ def teach_cli():
             # noinspection PyMethodOverriding
             @staticmethod
             def build_agent(envs, **agent_args):
-                imitation_agent = SubtasksTeacher(
-                    obs_shape=envs.observation_space.shape,
-                    action_space=envs.action_space,
-                    task_space=task_space,
-                    **agent_args)
+                imitation_agent = None
+                if imitation_agent_load_path:
+                    imitation_agent = SubtasksTeacher(
+                        obs_shape=envs.observation_space.shape,
+                        action_space=envs.action_space,
+                        task_space=task_space,
+                        **agent_args)
 
-                state_dict = torch.load(imitation_agent_load_path)
-                imitation_agent.load_state_dict(state_dict['agent'])
-                if isinstance(envs.venv, VecNormalize):
-                    envs.venv.load_state_dict(state_dict['vec_normalize'])
-                print(
-                    f'Loaded imitation parameters from {imitation_agent_load_path}.'
-                )
+                    state_dict = torch.load(imitation_agent_load_path)
+                    imitation_agent.load_state_dict(state_dict['agent'])
+                    if isinstance(envs.venv, VecNormalize):
+                        envs.venv.load_state_dict(state_dict['vec_normalize'])
+                    print(
+                        f'Loaded imitation parameters from {imitation_agent_load_path}.'
+                    )
 
                 return SubtasksAgent(
                     obs_shape=envs.observation_space.shape,
