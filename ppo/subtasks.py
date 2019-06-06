@@ -223,7 +223,7 @@ class SubtasksAgent(Agent, NNBase):
             action=action,
             action_log_probs=action_log_probs + hx.log_prob,
             aux_loss=aux_loss.mean(),
-            rnn_hxs=rnn_hxs,
+            rnn_hxs=torch.cat(hx, dim=-1),
             dist=dist,
             log=losses)
 
