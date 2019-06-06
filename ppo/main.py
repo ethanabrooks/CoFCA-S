@@ -5,6 +5,7 @@ from collections import ChainMap
 from pathlib import Path
 
 import torch
+import torch.nn as nn
 from gym.wrappers import TimeLimit
 
 # noinspection PyUnresolvedReferences
@@ -16,7 +17,7 @@ from ppo.arguments import build_parser, get_args
 from ppo.subtasks import SubtasksAgent, SubtasksTeacher
 from ppo.train import Train
 from ppo.wrappers import SubtasksWrapper, VecNormalize
-from rl_utils import hierarchical_parse_args
+from rl_utils import hierarchical_parse_args, parse_activation
 
 
 def cli():
@@ -107,14 +108,22 @@ def train_teacher_cli():
 
 def teach_cli():
     parser = build_parser()
-    parser.add_argument('--imitation-agent-load-path', type=Path, required=True)
+    parser.add_argument(
+        '--imitation-agent-load-path', type=Path, required=True)
     task_parser = parser.add_argument_group('task_args')
     task_parser.add_argument('--task-types', nargs='*')
     task_parser.add_argument('--max-task-count', type=int, required=True)
     task_parser.add_argument('--object-types', nargs='*')
     task_parser.add_argument('--n-subtasks', type=int, required=True)
+    subtasks_parser = parser.add_argument_group('subtasks_args')
+    subtasks_parser.add_argument(
+        '--subtasks-hidden-size', type=int, required=True)
+    subtasks_parser.add_argument(
+        '--subtasks-entropy-coef', type=float, default=0.01)
+    subtasks_parser.add_argument('--subtasks-recurrent', action='store_true')
 
-    def train(env_id, task_args, ppo_args, imitation_agent_load_path, **kwargs):
+    def train(env_id, task_args, ppo_args, imitation_agent_load_path,
+              subtasks_args, **kwargs):
         task_space = get_task_space(**task_args)
 
         class TrainSubtasks(Train):
@@ -125,12 +134,8 @@ def teach_cli():
 
             # noinspection PyMethodOverriding
             @staticmethod
-            def build_agent(envs, hidden_size, recurrent, entropy_coef,
-                            **agent_args):
+            def build_agent(envs, **agent_args):
                 imitation_agent = SubtasksTeacher(
-                    hidden_size=hidden_size,
-                    recurrent=recurrent,
-                    entropy_coef=entropy_coef,
                     obs_shape=envs.observation_space.shape,
                     action_space=envs.action_space,
                     task_space=task_space,
@@ -148,9 +153,9 @@ def teach_cli():
                     obs_shape=envs.observation_space.shape,
                     action_space=envs.action_space,
                     task_space=task_space,
-                    hidden_size=hidden_size,
-                    entropy_coef=entropy_coef,
-                    recurrent=recurrent,
+                    hidden_size=subtasks_args['subtasks_hidden_size'],
+                    entropy_coef=subtasks_args['subtasks_entropy_coef'],
+                    recurrent=subtasks_args['subtasks_recurrent'],
                     imitation_agent=imitation_agent)
 
         # Train
