@@ -6,15 +6,14 @@ from pathlib import Path
 
 import torch
 from gym.wrappers import TimeLimit
-from rl_utils import hierarchical_parse_args
 
 import gridworld_env
-from gridworld_env.subtasks_gridworld import SubtasksGridWorld
-from gridworld_env.subtasks_gridworld import get_task_space
+from gridworld_env.subtasks_gridworld import SubtasksGridWorld, get_task_space
 from ppo.arguments import build_parser, get_args
 from ppo.subtasks import SubtasksAgent, SubtasksTeacher
 from ppo.train import Train
 from ppo.wrappers import SubtasksWrapper, VecNormalize
+from rl_utils import hierarchical_parse_args
 
 
 def cli():
@@ -51,7 +50,7 @@ def subtasks_cli():
     task_parser.add_argument('--n-subtasks', type=int)
     kwargs = hierarchical_parse_args(parser)
 
-    def train(task_args, multiplicative_interaction,**_kwargs):
+    def train(task_args, multiplicative_interaction, **_kwargs):
         class TrainTeacher(Train):
             @staticmethod
             def make_env(env_id, seed, rank, add_timestep):
@@ -107,8 +106,7 @@ def train_teacher_cli():
 
 def teach_cli():
     parser = build_parser()
-    parser.add_argument(
-        '--imitation-agent-load-path', type=Path)
+    parser.add_argument('--imitation-agent-load-path', type=Path)
     task_parser = parser.add_argument_group('task_args')
     task_parser.add_argument('--task-types', nargs='*')
     task_parser.add_argument('--max-task-count', type=int, required=True)
@@ -120,7 +118,8 @@ def teach_cli():
     subtasks_parser.add_argument(
         '--subtasks-entropy-coef', type=float, default=0.01)
     subtasks_parser.add_argument('--subtasks-recurrent', action='store_true')
-    subtasks_parser.add_argument('--multiplicative-interaction', action='store_true')
+    subtasks_parser.add_argument(
+        '--multiplicative-interaction', action='store_true')
 
     def train(env_id, task_args, ppo_args, imitation_agent_load_path,
               subtasks_args, **kwargs):
@@ -158,7 +157,8 @@ def teach_cli():
                     hidden_size=subtasks_args['subtasks_hidden_size'],
                     entropy_coef=subtasks_args['subtasks_entropy_coef'],
                     recurrent=subtasks_args['subtasks_recurrent'],
-                    multiplicative_interaction=subtasks_args['multiplicative_interaction'],
+                    multiplicative_interaction=subtasks_args[
+                        'multiplicative_interaction'],
                     imitation_agent=imitation_agent)
 
         # Train
