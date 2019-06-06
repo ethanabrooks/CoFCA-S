@@ -193,7 +193,7 @@ class SubtasksGridWorld(gym.Env):
         h, w, = self.desc.shape
         objects_one_hot = np.zeros((1 + len(self.object_types), h, w),
                                    dtype=bool)
-        idx = [(v,) + k for k, v in self.objects.items()]
+        idx = [(v, ) + k for k, v in self.objects.items()]
         set_index(objects_one_hot, idx, True)
         return objects_one_hot
 
