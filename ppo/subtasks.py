@@ -125,17 +125,17 @@ class SubtasksAgent(Agent, NNBase):
                 'relu'), nn.ReLU(), Flatten())
 
         conv_weight_shape = hidden_size, self.obs_sections.base, 3, 3
-        # self.conv_weight = nn.Sequential(
-        #     nn.Linear(self.obs_sections.subtask,
-        #               np.prod(conv_weight_shape)),
-        #     Reshape(-1, *conv_weight_shape))
+        self.conv_weight = nn.Sequential(
+            nn.Linear(self.obs_sections.subtask,
+                      np.prod(conv_weight_shape)),
+            Reshape(-1, *conv_weight_shape))
 
-        self.conv2 = nn.Sequential(
-            Concat(dim=1),
-            init_(
-                nn.Conv2d(self.obs_sections.base + self.obs_sections.subtask,
-                          hidden_size, kernel_size=3, stride=1, padding=1),
-                'relu'), nn.ReLU(), Flatten())
+        # self.conv2 = nn.Sequential(
+        #     Concat(dim=1),
+        #     init_(
+        #         nn.Conv2d(self.obs_sections.base + self.obs_sections.subtask,
+        #                   hidden_size, kernel_size=3, stride=1, padding=1),
+        #         'relu'), nn.ReLU(), Flatten())
 
         input_size = (
                 h * w * hidden_size +  # conv output
@@ -170,16 +170,15 @@ class SubtasksAgent(Agent, NNBase):
         hx = RecurrentState(*self.recurrent_module.parse_hidden(x))
 
         # multiplicative interaction
-        # weights = self.conv_weight(hx.g)
-        # outs = []
-        # for ob, weight in zip(obs, weights):
-        #     outs.append(F.conv2d(ob.unsqueeze(0), weight, padding=(1, 1)))
-        # multiplicative_out = torch.cat(outs).view(*conv_out.shape)
+        weights = self.conv_weight(hx.g)
+        outs = []
+        for ob, weight in zip(obs, weights):
+            outs.append(F.conv2d(ob.unsqueeze(0), weight, padding=(1, 1)))
+        out = torch.cat(outs).view(*conv_out.shape)
 
-        _, _, h, w = obs.shape
-        print('task', hx.g[0])
-        g = hx.g.view(*hx.g.shape, 1, 1).expand(*hx.g.shape, h, w)
-        out = self.conv2((obs, g))
+        # _, _, h, w = obs.shape
+        # g = hx.g.view(*hx.g.shape, 1, 1).expand(*hx.g.shape, h, w)
+        # out = self.conv2((obs, g))
 
         return out, hx
 
