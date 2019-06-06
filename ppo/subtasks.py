@@ -186,11 +186,9 @@ class SubtasksAgent(Agent, NNBase):
         else:
             _, _, h, w = obs.shape
             g = hx.g.view(*hx.g.shape, 1, 1).expand(*hx.g.shape, h, w)
-            # g = subtasks
             out = self.conv2((obs, g))
 
         return out, hx
-        # return out, rnn_hxs
 
     @property
     def recurrent_hidden_state_size(self):
