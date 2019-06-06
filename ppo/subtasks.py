@@ -403,6 +403,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # c_loss
             c_losses.append(
                 F.binary_cross_entropy(c, next_subtask[i], reduction='none'))
+            c = next_subtask[i]  # TODO
 
             # TODO: figure this out
             # if self.recurrent:
@@ -462,8 +463,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             g_loss = log_prob(g_target, probs)
             g_losses.append(g_loss)
 
-            # i1, i2, i3 = self.decode(g_int)
-            i1, i2, i3 = self.decode(g_target)  # TODO
+            i1, i2, i3 = self.decode(g_int)
+            # i1, i2, i3 = self.decode(g_target)
             # assert (int(i1), int(i2), int(i3)) == \
             #        np.unravel_index(int(g_int), self.subtask_space)
             g2 = self.embed_task(i1, i2, i3).squeeze(1)
