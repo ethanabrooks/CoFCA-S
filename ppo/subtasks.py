@@ -222,7 +222,7 @@ class SubtasksAgent(Agent, NNBase):
         # losses.update(action_log_prob=action_log_probs)
 
         # self.recurrent_module.check_grad(**losses)
-        aux_loss = -entropy_bonus
+        aux_loss = hx.b_loss - entropy_bonus
         if self.imitation_agent:
             imitation_dist = self.imitation_agent(inputs, rnn_hxs, masks).dist
             imitation_probs = imitation_dist.probs.detach().unsqueeze(1)
