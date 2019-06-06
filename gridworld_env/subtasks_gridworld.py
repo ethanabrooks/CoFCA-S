@@ -1,13 +1,14 @@
-from collections import namedtuple
 import itertools
 import re
 import time
+from collections import namedtuple
 
 import gym
-from gym import spaces
-from gym.utils import seeding
 import numpy as np
 import six
+from gym import spaces
+from gym.envs.registration import EnvSpec
+from gym.utils import seeding
 
 from ppo.utils import set_index
 from rl_utils import cartesian_product
@@ -36,6 +37,7 @@ class SubtasksGridWorld(gym.Env):
             task=None,
     ):
         super().__init__()
+        self.spec = EnvSpec
         self.n_subtasks = n_subtasks
         self.n_obstacles = n_obstacles
         self.n_objects = n_objects
