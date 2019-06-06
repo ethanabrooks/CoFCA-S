@@ -81,17 +81,20 @@ class SubtasksTeacher(Agent):
         self.d = self.obs_sections.base + self.obs_sections.subtask
         super().__init__(obs_shape=(self.d, h, w), **kwargs)
 
-    def forward(self, inputs, *args, **kwargs):
+    def preprocess_obs(self, inputs):
         batch_size, _, h, w = inputs.shape
         base_obs = inputs[:, :self.obs_sections.base]
         start = self.obs_sections.base
         stop = self.obs_sections.base + self.obs_sections.subtask
         subtask = inputs[:, start:stop, :, :]
+        return torch.cat([base_obs, subtask], dim=1)
+
+    def forward(self, inputs, *args, **kwargs):
         return super().forward(
-            torch.cat([base_obs, subtask], dim=1), *args, **kwargs)
+            self.preprocess_obs(inputs), *args, **kwargs)
 
     def get_value(self, inputs, rnn_hxs, masks):
-        return super().get_value(inputs[:, :self.d], rnn_hxs, masks)
+        return super().get_value(self.preprocess_obs(inputs), rnn_hxs, masks)
 
 
 # noinspection PyMissingConstructor
