@@ -53,9 +53,11 @@ def subtasks_cli():
     task_parser.add_argument('--object-types', nargs='*')
     task_parser.add_argument('--n-subtasks', type=int)
     parser.add_argument('--n-objects', type=int)
+    parser.add_argument('--max-episode-steps', type=int)
     kwargs = hierarchical_parse_args(parser)
 
-    def train(task_args, multiplicative_interaction, n_objects, **_kwargs):
+    def train(task_args, multiplicative_interaction, n_objects,
+              max_episode_steps, **_kwargs):
         class TrainTeacher(Train):
             @staticmethod
             def make_env(env_id, seed, rank, add_timestep):
@@ -64,6 +66,7 @@ def subtasks_cli():
                     rank=rank,
                     seed=seed,
                     n_objects=n_objects,
+                    max_episode_steps=max_episode_steps,
                     **task_args)
 
             # noinspection PyMethodOverriding
@@ -135,9 +138,10 @@ def teach_cli():
     subtasks_parser.add_argument(
         '--multiplicative-interaction', action='store_true')
     parser.add_argument('--n-objects', type=int, required=True)
+    parser.add_argument('--max-episode-steps', type=int)
 
     def train(env_id, task_args, ppo_args, teacher_agent_load_path,
-              subtasks_args, n_objects, **kwargs):
+              subtasks_args, n_objects, max_episode_steps, **kwargs):
         task_space = get_task_space(**task_args)
 
         class TrainSubtasks(Train):
@@ -147,6 +151,7 @@ def teach_cli():
                     env_id=env_id,
                     rank=rank,
                     seed=seed,
+                    max_episode_steps=max_episode_steps,
                     n_objects=n_objects,
                     **task_args)
 
