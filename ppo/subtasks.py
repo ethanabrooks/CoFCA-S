@@ -207,6 +207,8 @@ class SubtasksAgent(Agent, NNBase):
         obs, g_target, task, next_subtask = torch.split(
             inputs, self.obs_sections, dim=1)
         conv_out, hx = self.get_hidden(inputs, rnn_hxs, masks)
+        # print('g       ', hx.g[0])
+        # print('g_target', g_target[0, :, 0, 0])
         log_probs = hx.log_prob
         if self.teacher_agent:
             _, _, h, w = obs.shape
@@ -235,9 +237,10 @@ class SubtasksAgent(Agent, NNBase):
         losses = {k: v for k, v in hx._asdict().items() if k.endswith('_loss')}
         g_accuracy = torch.all(hx.g == g_target[:, :, 0, 0], dim=-1).float()
 
-        # self.recurrent_module.check_grad(**losses)
+        # self.recurrent_module.check_grad(log_probs=log_probs)
         # aux_loss = sum(losses.values()).view(-1) - entropy_bonus
-        aux_loss = losses['g_loss'].view(-1) - entropy_bonus
+        # aux_loss = losses['g_loss'].view(-1) - entropy_bonus
+        aux_loss = -entropy_bonus + losses['g_loss'].view(-1)
 
         return AgentValues(
             value=value,
