@@ -139,7 +139,7 @@ class SubtasksGridWorld(gym.Env):
         print_subtask(*self.subtask)
         print('remaining:', self.task_count)
         print('action:', end=' ')
-        if self.last_action:
+        if self.last_action is not None:
             print(self.transition_strings[self.last_action])
         else:
             print('reset')
