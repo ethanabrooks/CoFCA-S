@@ -236,11 +236,12 @@ class SubtasksAgent(Agent, NNBase):
         entropy_bonus = self.entropy_coef * entropy
         losses = {k: v for k, v in hx._asdict().items() if k.endswith('_loss')}
         g_accuracy = torch.all(hx.g == g_target[:, :, 0, 0], dim=-1).float()
+        losses.update(g_loss=(g_accuracy - 0.5) * -hx.log_prob.view(-1))
 
         # self.recurrent_module.check_grad(log_probs=log_probs)
         # aux_loss = sum(losses.values()).view(-1) - entropy_bonus
         # aux_loss = losses['g_loss'].view(-1) - entropy_bonus
-        aux_loss = -entropy_bonus + losses['g_loss'].view(-1)
+        aux_loss = -entropy_bonus + losses['g_loss']
 
         return AgentValues(
             value=value,
