@@ -178,7 +178,7 @@ def teach_cli():
                     recurrent=subtasks_args['subtasks_recurrent'],
                     multiplicative_interaction=subtasks_args[
                         'multiplicative_interaction'],
-                    imitation_agent=imitation_agent)
+                    teacher_agent=imitation_agent)
 
         # Train
         # ppo_args.update(aux_loss_only=True)

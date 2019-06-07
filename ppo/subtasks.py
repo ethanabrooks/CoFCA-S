@@ -106,10 +106,11 @@ class SubtasksAgent(Agent, NNBase):
                  recurrent,
                  entropy_coef,
                  multiplicative_interaction,
-                 imitation_agent=None):
+                 teacher_agent=None):
         nn.Module.__init__(self)
         self.multiplicative_interaction = multiplicative_interaction
-        self.imitation_agent = imitation_agent
+        assert isinstance(teacher_agent, SubtasksTeacher)
+        self.teacher_agent = teacher_agent
         self.entropy_coef = entropy_coef
         self.obs_sections = get_subtasks_obs_sections(task_space)
         d, h, w = obs_shape
@@ -223,8 +224,8 @@ class SubtasksAgent(Agent, NNBase):
 
         # self.recurrent_module.check_grad(**losses)
         aux_loss = sum(losses.values()).view(-1) - entropy_bonus
-        if self.imitation_agent:
-            imitation_dist = self.imitation_agent(inputs, rnn_hxs, masks).dist
+        if self.teacher_agent:
+            imitation_dist = self.teacher_agent(inputs, rnn_hxs, masks).dist
             imitation_probs = imitation_dist.probs.detach().unsqueeze(1)
             log_probs = torch.log(dist.probs).unsqueeze(2)
             imitation_obj = (imitation_probs @ log_probs).view(-1)
