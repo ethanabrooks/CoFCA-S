@@ -197,7 +197,14 @@ class SubtasksAgent(Agent, NNBase):
         # return 1
         return sum(self.recurrent_module.state_sizes)
 
-    #
+    def get_actor_dist(self, inputs, g):
+        obs, subtasks, task, next_subtask = torch.split(
+            inputs, self.obs_sections, dim=1)
+        _, _, h, w = obs.shape
+        _g = g.view(*g.shape, 1, 1).expand(*g.shape, h, w)
+        conv_out = self.conv2((obs, _g))
+        return self.actor(conv_out)
+
     @property
     def is_recurrent(self):
         return True
@@ -205,6 +212,9 @@ class SubtasksAgent(Agent, NNBase):
     def forward(self, inputs, rnn_hxs, masks, action=None,
                 deterministic=False):
         conv_out, hx = self.get_hidden(inputs, rnn_hxs, masks)
+        # dumb = self.get_actor_dist(inputs, hx.g)
+        # import ipdb; ipdb.set_trace()
+
         dist = self.actor(conv_out)
 
         if action is None:
