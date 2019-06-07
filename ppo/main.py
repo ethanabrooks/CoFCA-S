@@ -180,8 +180,6 @@ def teach_cli():
                         'multiplicative_interaction'],
                     teacher_agent=imitation_agent)
 
-        # Train
-        # ppo_args.update(aux_loss_only=True)
         TrainSubtasks(env_id=env_id, ppo_args=ppo_args, **kwargs)
 
     train(**(hierarchical_parse_args(parser)))
