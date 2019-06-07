@@ -120,7 +120,7 @@ def train_teacher_cli():
 
 def teach_cli():
     parser = build_parser()
-    parser.add_argument('--imitation-agent-load-path', type=Path)
+    parser.add_argument('--teacher-agent-load-path', type=Path)
     task_parser = parser.add_argument_group('task_args')
     task_parser.add_argument('--task-types', nargs='*')
     task_parser.add_argument('--max-task-count', type=int, required=True)
@@ -136,7 +136,7 @@ def teach_cli():
         '--multiplicative-interaction', action='store_true')
     parser.add_argument('--n-objects', type=int, required=True)
 
-    def train(env_id, task_args, ppo_args, imitation_agent_load_path,
+    def train(env_id, task_args, ppo_args, teacher_agent_load_path,
               subtasks_args, n_objects, **kwargs):
         task_space = get_task_space(**task_args)
 
@@ -153,20 +153,20 @@ def teach_cli():
             # noinspection PyMethodOverriding
             @staticmethod
             def build_agent(envs, **agent_args):
-                imitation_agent = None
-                if imitation_agent_load_path:
-                    imitation_agent = SubtasksTeacher(
+                teacher_agent = None
+                if teacher_agent_load_path:
+                    teacher_agent = SubtasksTeacher(
                         obs_shape=envs.observation_space.shape,
                         action_space=envs.action_space,
                         task_space=task_space,
                         **agent_args)
 
-                    state_dict = torch.load(imitation_agent_load_path)
-                    imitation_agent.load_state_dict(state_dict['agent'])
+                    state_dict = torch.load(teacher_agent_load_path)
+                    teacher_agent.load_state_dict(state_dict['agent'])
                     if isinstance(envs.venv, VecNormalize):
                         envs.venv.load_state_dict(state_dict['vec_normalize'])
                     print(
-                        f'Loaded imitation parameters from {imitation_agent_load_path}.'
+                        f'Loaded teacher parameters from {teacher_agent_load_path}.'
                     )
 
                 return SubtasksAgent(
@@ -178,10 +178,8 @@ def teach_cli():
                     recurrent=subtasks_args['subtasks_recurrent'],
                     multiplicative_interaction=subtasks_args[
                         'multiplicative_interaction'],
-                    teacher_agent=imitation_agent)
+                    teacher_agent=teacher_agent)
 
-        # Train
-        # ppo_args.update(aux_loss_only=True)
         TrainSubtasks(env_id=env_id, ppo_args=ppo_args, **kwargs)
 
     train(**(hierarchical_parse_args(parser)))
