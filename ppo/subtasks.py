@@ -205,6 +205,7 @@ class SubtasksAgent(Agent, NNBase):
     def forward(self, inputs, rnn_hxs, masks, action=None,
                 deterministic=False):
         conv_out, hx = self.get_hidden(inputs, rnn_hxs, masks)
+        log_probs = hx.log_prob
         if self.teacher_agent:
             act = self.teacher_agent(inputs, rnn_hxs, masks, action=action)
             dist = act.dist
@@ -218,9 +219,9 @@ class SubtasksAgent(Agent, NNBase):
                     action = dist.mode()
                 else:
                     action = dist.sample()
+            log_probs += dist.log_probs(action)
 
         value = self.critic(conv_out)
-        action_log_probs = dist.log_probs(action)
         entropy = dist.entropy()
         # TODO: combine with other entropy?
 
@@ -234,7 +235,7 @@ class SubtasksAgent(Agent, NNBase):
         return AgentValues(
             value=value,
             action=action,
-            action_log_probs=action_log_probs + hx.log_prob,
+            action_log_probs=log_probs,
             aux_loss=aux_loss.mean(),
             rnn_hxs=torch.cat(hx, dim=-1),
             # rnn_hxs=rnn_hxs,
