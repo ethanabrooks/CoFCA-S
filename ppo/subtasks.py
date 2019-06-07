@@ -489,7 +489,11 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             g2 = self.embed_task(i1, i2, i3).squeeze(1)
 
             g_accuracy = torch.all(r == g2, dim=-1, keepdim=True).float()
-            g_loss = g_accuracy * -log_prob(g_int, probs)
+            g_loss = (g_accuracy - .5) * -log_prob(g_int, probs)
+            # if bool(g_accuracy.item()):
+                # print('probs', probs)
+                # print('g_int', g_int)
+                # print('log_prob', -log_prob(g_int, probs))
             g_losses.append(g_loss)
 
             g = g2
