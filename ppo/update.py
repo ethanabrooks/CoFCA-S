@@ -47,7 +47,6 @@ class PPO:
                 advantages.std() + 1e-5)
 
         logger = collections.Counter()
-        gs = []
 
         for e in range(self.ppo_epoch):
             if self.agent.is_recurrent:
@@ -65,8 +64,6 @@ class PPO:
                     inputs=sample.obs,
                     rnn_hxs=sample.recurrent_hidden_states,
                     masks=sample.masks, action=sample.actions)
-
-                gs.extend([g.item() for g in log_values.pop('gs')])
                 logger.update(**log_values)
 
                 if not self.aux_loss_only:
@@ -105,4 +102,4 @@ class PPO:
                 logger.update(n=1.)
 
         n = logger.pop('n')
-        return dict(gs=gs, **{k: v.mean().item() / n for k, v in logger.items()})
+        return {k: v.mean().item() / n for k, v in logger.items()}
