@@ -157,7 +157,7 @@ class SubtasksGridWorld(gym.Env):
     def subtask_generator(self):
         task_types = np.arange(len(self.task_types))
         object_types = np.arange(len(self.object_types))
-        task_counts = np.arange(self.max_task_count) + 1
+        task_counts = np.arange(self.max_task_count)
         multiple_options = [
             (i, x)
             for i, x in enumerate([task_types, task_counts, object_types])
@@ -166,7 +166,7 @@ class SubtasksGridWorld(gym.Env):
         last_subtask = None
         while True:
             task_type = self.np_random.choice(task_types)
-            task_count = self.np_random.choice(task_counts)
+            task_count = self.np_random.choice(self.max_task_count) + 1
             task_object = self.np_random.choice(object_types)
             if self.task_types[task_type] == 'visit':
                 task_count = 1
