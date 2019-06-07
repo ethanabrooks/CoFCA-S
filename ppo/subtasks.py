@@ -500,7 +500,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             hs.append(h)
             gs.append(g)
             bs.append(b)
-            log_probs.append(log_prob_g + log_prob_b)
+            # log_probs.append(log_prob_g + log_prob_b) # TODO
+            log_probs.append(log_prob_g)
 
         outs = []
         for x in (ps, rs, hs, gs, bs, log_probs, c_losses, l_losses, p_losses,
