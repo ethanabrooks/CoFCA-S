@@ -165,6 +165,7 @@ class Train:
             rollouts.compute_returns(
                 next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau)
             train_results = ppo.update(rollouts)
+
             rollouts.after_update()
 
             if save_dir and save_interval and \
@@ -220,6 +221,7 @@ class Train:
                     writer.add_scalar('return', np.mean(rewards_array), j)
                     writer.add_scalar('time steps', np.mean(time_steps_array),
                                       j)
+                    writer.add_histogram('g', np.array(train_results.pop('gs')))
                     for k, v in train_results.items():
                         if log_dir and np.isscalar(v):
                             writer.add_scalar(k.replace('_', ' '), v, j)
