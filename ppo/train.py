@@ -221,7 +221,8 @@ class Train:
                     writer.add_scalar('return', np.mean(rewards_array), j)
                     writer.add_scalar('time steps', np.mean(time_steps_array),
                                       j)
-                    writer.add_histogram('g', np.array(train_results.pop('gs')))
+                    writer.add_histogram('g', np.array(train_results.pop('gs')), j)
+
                     for k, v in train_results.items():
                         if log_dir and np.isscalar(v):
                             writer.add_scalar(k.replace('_', ' '), v, j)
