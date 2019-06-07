@@ -230,10 +230,12 @@ class SubtasksAgent(Agent, NNBase):
             imitation_probs = imitation_dist.probs.detach().unsqueeze(1)
             log_probs = torch.log(dist.probs).unsqueeze(2)
             imitation_obj = (imitation_probs @ log_probs).view(-1)
-            imitation_loss = -imitation_obj
-            aux_loss += (
-                imitation_loss - imitation_obj.detach() * hx.log_prob.view(-1))
-            losses.update(imitation_loss=imitation_loss)
+            imitation_wrt_g = imitation_obj.detach() * hx.log_prob.view(-1)
+            aux_loss -= (imitation_obj + imitation_wrt_g)  # minus cuz loss
+            losses.update(
+                imitation_obj=imitation_obj,
+                imitation_wrt_g=imitation_wrt_g,
+            )
 
         return AgentValues(
             value=value,
