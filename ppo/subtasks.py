@@ -450,8 +450,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             r_losses.append(torch.mean(r_loss, dim=-1, keepdim=True))
 
             p = interp(p, p2, c)
-            # r = interp(r, r2, c) #TODO
-            r = r_target
+            r = interp(r, r2, c) #TODO
+            # r = r_target
 
             h = interp(h, h2, c)
 
