@@ -238,8 +238,7 @@ class SubtasksAgent(Agent, NNBase):
         losses = {k: v for k, v in hx._asdict().items() if k.endswith('_loss')}
 
         # self.recurrent_module.check_grad(**losses)
-        aux_loss = sum([v for k, v in losses.items() if k != 'g_loss'
-                        ]).view(-1)
+        aux_loss = sum(losses.values()).view(-1)
 
         return AgentValues(
             value=value,
