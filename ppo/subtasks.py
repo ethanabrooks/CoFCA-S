@@ -204,11 +204,11 @@ class SubtasksAgent(Agent, NNBase):
 
     def forward(self, inputs, rnn_hxs, masks, action=None,
                 deterministic=False):
+        obs, g_target, task, next_subtask = torch.split(
+            inputs, self.obs_sections, dim=1)
         conv_out, hx = self.get_hidden(inputs, rnn_hxs, masks)
         log_probs = hx.log_prob
         if self.teacher_agent:
-            obs, _, task, next_subtask = torch.split(
-                inputs, self.obs_sections, dim=1)
             _, _, h, w = obs.shape
             g = hx.g.view(*hx.g.shape, 1, 1).expand(*hx.g.shape, h, w)
             inputs = torch.cat([obs, g, task, next_subtask], dim=1)
@@ -233,6 +233,7 @@ class SubtasksAgent(Agent, NNBase):
 
         entropy_bonus = self.entropy_coef * entropy
         losses = {k: v for k, v in hx._asdict().items() if k.endswith('_loss')}
+        g_accuracy = torch.all(hx.g == g_target[:, :, 0, 0], dim=-1).float()
 
         # self.recurrent_module.check_grad(**losses)
         # aux_loss = sum(losses.values()).view(-1) - entropy_bonus
@@ -246,7 +247,7 @@ class SubtasksAgent(Agent, NNBase):
             rnn_hxs=torch.cat(hx, dim=-1),
             # rnn_hxs=rnn_hxs,
             dist=dist,
-            log=losses)
+            log=dict(**losses, g_accuracy=g_accuracy))
 
     def get_value(self, inputs, rnn_hxs, masks):
         conv_out, hx = self.get_hidden(inputs, rnn_hxs, masks)
