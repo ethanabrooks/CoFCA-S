@@ -1,10 +1,10 @@
 from collections import namedtuple
 
-from gym.spaces import Box, Discrete
 import numpy as np
 import torch
-from torch import nn as nn
 import torch.jit
+from gym.spaces import Box, Discrete
+from torch import nn as nn
 from torch.nn import functional as F
 
 from ppo.agent import Agent, AgentValues, Flatten, NNBase
@@ -229,10 +229,10 @@ class SubtasksAgent(Agent, NNBase):
             imitation_dist = self.imitation_agent(inputs, rnn_hxs, masks).dist
             imitation_probs = imitation_dist.probs.detach().unsqueeze(1)
             log_probs = torch.log(dist.probs).unsqueeze(2)
-            imitation_loss = -(imitation_probs @ log_probs).view(-1)
+            imitation_obj = (imitation_probs @ log_probs).view(-1)
+            imitation_loss = -imitation_obj
             aux_loss += (
-                imitation_loss + imitation_loss.detach() * hx.log_prob.view(-1)
-                + imitation_loss)
+                imitation_loss - imitation_obj.detach() * hx.log_prob.view(-1))
             losses.update(imitation_loss=imitation_loss)
 
         return AgentValues(
@@ -356,7 +356,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         ],
                          dim=-1)
 
-    # @torch.jit.script_method
+    @torch.jit.script_method
     def forward(self, input, hx):
         assert hx is not None
         obs, task_type, count, obj, next_subtask = torch.split(
@@ -460,7 +460,9 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             # TODO: deterministic
             # g
+            # print('r', r[0])
             probs = self.pi_theta(torch.cat([h, r], dim=-1))
+            # print('probs', probs[0])
             g_int = torch.multinomial(probs, 1)
             log_prob_g = log_prob(g_int, probs)
             g_ints.append(g_int.float())
@@ -484,6 +486,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # assert (int(i1), int(i2), int(i3)) == \
             #        np.unravel_index(int(g_int), self.subtask_space)
             g2 = self.embed_task(i1, i2, i3).squeeze(1)
+            # print('g', g2[0])
 
             g = g2
             # g = interp(g, g2, c) # TODO
