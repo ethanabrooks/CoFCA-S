@@ -187,7 +187,8 @@ class SubtasksAgent(Agent, NNBase):
             out = torch.cat(outs).view(*conv_out.shape)
         else:
             _, _, h, w = obs.shape
-            g = hx.g.view(*hx.g.shape, 1, 1).expand(*hx.g.shape, h, w)
+            # g = hx.g.view(*hx.g.shape, 1, 1).expand(*hx.g.shape, h, w) # TODO
+            g = hx.r.view(*hx.r.shape, 1, 1).expand(*hx.r.shape, h, w)
             out = self.conv2((obs, g))
 
         return out, hx
@@ -240,17 +241,18 @@ class SubtasksAgent(Agent, NNBase):
             imitation_probs = imitation_dist.probs.detach().unsqueeze(1)
             log_probs = torch.log(dist.probs).unsqueeze(2)
             imitation_obj = (imitation_probs @ log_probs).view(-1)
-            imitation_wrt_g = imitation_obj.detach() * hx.log_prob.view(-1)
-            aux_loss -= (imitation_obj + imitation_wrt_g)  # minus cuz loss
+            # imitation_wrt_g = imitation_obj.detach() * hx.log_prob.view(-1) TODO
+            # aux_loss -= (imitation_obj + imitation_wrt_g)  # minus cuz loss TODO
+            aux_loss -= imitation_obj  # minus cuz loss
             losses.update(
                 imitation_obj=imitation_obj,
-                imitation_wrt_g=imitation_wrt_g,
             )
 
         return AgentValues(
             value=value,
             action=action,
-            action_log_probs=action_log_probs + hx.log_prob,
+            # action_log_probs=action_log_probs + hx.log_prob, TODO
+            action_log_probs=action_log_probs,
             aux_loss=aux_loss.mean(),
             rnn_hxs=torch.cat(hx, dim=-1),
             # rnn_hxs=rnn_hxs,
@@ -439,21 +441,22 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                                 reduction='none').unsqueeze(1))
 
             l_repl = self.l_values[l_target]
-            p2 = batch_conv1d(p, l_repl)
+            # p2 = batch_conv1d(p, l_repl)
+            p2 = batch_conv1d(p, l)
 
             # p_losss
-            p_repl = []
-            for j in range(m):
-                p_repl.append(self.p_values[subtask[j]])
-            p_repl = torch.stack(p_repl)
+            # p_repl = []
+            # for j in range(m):
+            #     p_repl.append(self.p_values[subtask[j]])
+            # p_repl = torch.stack(p_repl)
 
             p_losses.append(
                 F.cross_entropy(
                     p2.squeeze(1), subtask.squeeze(1),
                     reduction='none').unsqueeze(1))
 
-            # r2 = p2 @ M #TODO
-            r2 = p_repl @ M
+            r2 = p2 @ M
+            # r2 = p_repl @ M
 
             # r_loss
             r_target = []
@@ -461,12 +464,12 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 r_target.append(M[j, subtask[j]])
             r_target = torch.cat(r_target).detach()
             r_loss = F.binary_cross_entropy(
-                r2.squeeze(1), r_target, reduction='none')
+                torch.clamp(r2.squeeze(1), 0, 1), r_target, reduction='none')
             r_losses.append(torch.mean(r_loss, dim=-1, keepdim=True))
 
             p = interp(p, p2, c)
-            # r = interp(r, r2, c) #TODO
-            r = r_target
+            r = interp(r, r2, c)
+            # r = r_target
 
             # h = interp(h, h2, c)  # TODO
 
