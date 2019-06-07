@@ -314,7 +314,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 self.subtask_space):
             self.register_buffer(name, torch.eye(int(d)))
 
-        self.register_buffer('l_values', torch.tensor([[1], [2]]))
+        self.register_buffer('l_targets', torch.tensor([[1], [2]]))
+        self.register_buffer('l_values', torch.eye(3))
         self.register_buffer('p_values', torch.eye(n_subtasks))
 
         task_sections = [n_subtasks] * task_space.nvec.shape[1]
@@ -414,12 +415,13 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             l = F.softmax(l_logits, dim=1)
 
             # l_loss
-            l_target = self.l_values[next_subtask[i].long()].view(-1)
+            l_target = self.l_targets[next_subtask[i].long()].view(-1)
             l_losses.append(
                 F.cross_entropy(l_logits, l_target,
                                 reduction='none').unsqueeze(1))
 
-            p2 = batch_conv1d(p, l)
+            l_repl = self.l_values[l_target]
+            p2 = batch_conv1d(p, l_repl)
 
             # p_losss
             p_repl = []
