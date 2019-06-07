@@ -467,7 +467,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 #                                           self.subtask_space)
                 g_target.append(target_int)
             g_target = torch.stack(g_target)
-            g_loss = log_prob(g_target, probs)
+            g_loss = -log_prob(g_target, probs)
             g_losses.append(g_loss)
 
             i1, i2, i3 = self.decode(g_int)
@@ -486,7 +486,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             b = b.float()
 
             # b_loss
-            b_losses.append(log_prob(next_subtask[i].long(), probs))
+            b_losses.append(-log_prob(next_subtask[i].long(), probs))
 
             ps.append(p)
             rs.append(r)
