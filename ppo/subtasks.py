@@ -186,8 +186,8 @@ class SubtasksAgent(Agent, NNBase):
             out = torch.cat(outs).view(*conv_out.shape)
         else:
             _, _, h, w = obs.shape
-            g = hx.g.view(*hx.g.shape, 1, 1).expand(*hx.g.shape, h, w)
-            out = self.conv2((obs, g))
+            r = hx.r.view(*hx.r.shape, 1, 1).expand(*hx.r.shape, h, w)
+            out = self.conv2((obs, r))
 
         return out, hx
 
