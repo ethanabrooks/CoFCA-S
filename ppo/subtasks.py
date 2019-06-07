@@ -165,11 +165,8 @@ class SubtasksAgent(Agent, NNBase):
         self.critic = init_(nn.Linear(input_size, 1))
 
     def get_hidden(self, inputs, rnn_hxs, masks):
-        if isinstance(inputs, list):
-            obs, subtasks, task, next_subtask = inputs
-        else:
-            obs, subtasks, task, next_subtask = torch.split(
-                inputs, self.obs_sections, dim=1)
+        obs, subtasks, task, next_subtask = torch.split(
+            inputs, self.obs_sections, dim=1)
         task = task[:, :, 0, 0]
         next_subtask = next_subtask[:, :, 0, 0]
 
@@ -208,17 +205,16 @@ class SubtasksAgent(Agent, NNBase):
     def forward(self, inputs, rnn_hxs, masks, action=None,
                 deterministic=False):
         conv_out, hx = self.get_hidden(inputs, rnn_hxs, masks)
-        value = self.critic(conv_out)
-
+        log_probs = hx.log_prob
         if self.teacher_agent:
             obs, _, task, next_subtask = torch.split(
                 inputs, self.obs_sections, dim=1)
             _, _, h, w = obs.shape
-            subtask = hx.g.view(*hx.g.shape, 1, 1).expand(*hx.g.shape, h, w)
-            inputs = torch.cat([obs, subtask, task, next_subtask], dim=1)
-            act = self.teacher_agent(inputs, rnn_hxs, masks)
-            dist = act.dist
+            g = hx.g.view(*hx.g.shape, 1, 1).expand(*hx.g.shape, h, w)
+            inputs = torch.cat([obs, g, task, next_subtask], dim=1)
 
+            act = self.teacher_agent(inputs, rnn_hxs, masks, action=action)
+            dist = act.dist
             if action is None:
                 action = act.action
         else:
@@ -229,22 +225,23 @@ class SubtasksAgent(Agent, NNBase):
                     action = dist.mode()
                 else:
                     action = dist.sample()
+            log_probs += dist.log_probs(action)
 
-        action_log_probs = dist.log_probs(action) + hx.log_prob
-        entropy = dist.entropy()  # TODO: sum with other entropy
+        value = self.critic(conv_out)
+        entropy = dist.entropy()
+        # TODO: combine with other entropy?
 
         entropy_bonus = self.entropy_coef * entropy
-
         losses = {k: v for k, v in hx._asdict().items() if k.endswith('_loss')}
 
         # self.recurrent_module.check_grad(**losses)
-        aux_loss = sum(losses.values()).view(-1)
+        aux_loss = sum(losses.values()).view(-1) - entropy_bonus
 
         return AgentValues(
             value=value,
             action=action,
-            action_log_probs=action_log_probs,
-            aux_loss=-torch.mean(entropy_bonus + aux_loss),
+            action_log_probs=log_probs,
+            aux_loss=aux_loss.mean(),
             rnn_hxs=torch.cat(hx, dim=-1),
             # rnn_hxs=rnn_hxs,
             dist=dist,
