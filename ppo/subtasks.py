@@ -14,13 +14,13 @@ from ppo.wrappers import get_subtasks_obs_sections
 
 RecurrentState = namedtuple(
     'RecurrentState', 'p r h g b log_prob '
-                      'c_loss '
-                      'l_loss '
-                      'p_loss '
-                      'r_loss '
-                      'g_loss '
-                      'b_loss '
-                      'subtask')
+    'c_loss '
+    'l_loss '
+    'p_loss '
+    'r_loss '
+    'g_loss '
+    'b_loss '
+    'subtask')
 
 
 class Concat(torch.jit.ScriptModule):
@@ -275,10 +275,10 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         # networks
         self.recurrent = recurrent
         in_size = (
-                conv_out_size +  # x
-                subtask_size +  # r
-                subtask_size +  # g
-                1)  # b
+            conv_out_size +  # x
+            subtask_size +  # r
+            subtask_size +  # g
+            1)  # b
         self.f = init_(nn.Linear(in_size, hidden_size))
 
         subcontroller = nn.GRUCell if recurrent else nn.Linear
@@ -289,8 +289,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         self.phi_update = trace(
             lambda in_size: init_(nn.Linear(in_size, 1), 'sigmoid'),
             in_size=(
-                    hidden_size +  # s
-                    hidden_size))  # h
+                hidden_size +  # s
+                hidden_size))  # h
 
         self.phi_shift = trace(
             lambda in_size: nn.Sequential(
@@ -306,20 +306,20 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                       ),  # all possible subtask specs
                 nn.Softmax(dim=-1)),
             in_size=(
-                    hidden_size +  # h
-                    subtask_size))  # r
+                hidden_size +  # h
+                subtask_size))  # r
 
         self.beta = trace(
             lambda in_size: nn.Sequential(
                 init_(nn.Linear(in_size, 2)),  # binary: done or not done
                 nn.Softmax(dim=-1)),
             in_size=(
-                    conv_out_size +  # x
-                    subtask_size))  # g
+                conv_out_size +  # x
+                subtask_size))  # g
 
         # embeddings
         for name, d in zip(
-                ['type_embeddings', 'count_embeddings', 'obj_embeddings'],
+            ['type_embeddings', 'count_embeddings', 'obj_embeddings'],
                 self.subtask_space):
             self.register_buffer(name, torch.eye(int(d)))
 
@@ -358,7 +358,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             self.count_embeddings[count.long()],
             self.obj_embeddings[obj.long()],
         ],
-            dim=-1)
+                         dim=-1)
 
     @torch.jit.script_method
     def forward(self, input, hx):
