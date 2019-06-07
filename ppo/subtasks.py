@@ -205,13 +205,19 @@ class SubtasksAgent(Agent, NNBase):
     def forward(self, inputs, rnn_hxs, masks, action=None,
                 deterministic=False):
         conv_out, hx = self.get_hidden(inputs, rnn_hxs, masks)
-        dist = self.actor(conv_out)
+        if self.teacher_agent:
+            act = self.teacher_agent(inputs, rnn_hxs, masks, action=action)
+            dist = act.dist
+            if action is None:
+                action = act.action
+        else:
+            dist = self.actor(conv_out)
 
-        if action is None:
-            if deterministic:
-                action = dist.mode()
-            else:
-                action = dist.sample()
+            if action is None:
+                if deterministic:
+                    action = dist.mode()
+                else:
+                    action = dist.sample()
 
         value = self.critic(conv_out)
         action_log_probs = dist.log_probs(action)
@@ -224,15 +230,6 @@ class SubtasksAgent(Agent, NNBase):
 
         # self.recurrent_module.check_grad(**losses)
         aux_loss = sum(losses.values()).view(-1) - entropy_bonus
-        if self.teacher_agent:
-            imitation_dist = self.teacher_agent(inputs, rnn_hxs, masks).dist
-            imitation_probs = imitation_dist.probs.detach().unsqueeze(1)
-            log_probs = torch.log(dist.probs).unsqueeze(2)
-            imitation_obj = (imitation_probs @ log_probs).view(-1)
-            aux_loss -= (
-                imitation_obj + imitation_obj.detach() * hx.log_prob.flatten()
-            )  # TODO: is this right?
-            losses.update(imitation_obj=imitation_obj)
 
         return AgentValues(
             value=value,
