@@ -20,6 +20,7 @@ RecurrentState = namedtuple(
     'r_loss '
     'g_loss '
     'b_loss '
+                      'g_int '
     'subtask')
 
 
@@ -240,7 +241,7 @@ class SubtasksAgent(Agent, NNBase):
             rnn_hxs=torch.cat(hx, dim=-1),
             # rnn_hxs=rnn_hxs,
             dist=dist,
-            log=losses)
+            log=dict(losses, gs=hx.g_int))
 
     def get_value(self, inputs, rnn_hxs, masks):
         conv_out, hx = self.get_hidden(inputs, rnn_hxs, masks)
@@ -336,6 +337,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             r_loss=1,
             g_loss=1,
             b_loss=1,
+            g_int=1,
             subtask=1)
         self.state_sizes = RecurrentState(*map(int, state_sizes))
 
@@ -352,7 +354,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         ],
                          dim=-1)
 
-    @torch.jit.script_method
+    # @torch.jit.script_method
     def forward(self, input, hx):
         assert hx is not None
         obs, task_type, count, obj, next_subtask = torch.split(
@@ -363,7 +365,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
         count -= 1
         M = self.embed_task(task_type[0], count[0], obj[0])
-        p, r, h, g, b, _, _, _, _, _, _, _, float_subtask = self.parse_hidden(
+        p, r, h, g, b, _, _, _, _, _, _, _, _, float_subtask = self.parse_hidden(
             hx)
 
         if bool(torch.all(hx == 0)):  # new episode
@@ -386,6 +388,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         r_losses = []
         g_losses = []
         b_losses = []
+        g_ints = []
         subtasks = []
 
         n = obs.shape[0]
@@ -458,6 +461,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             probs = self.pi_theta(torch.cat([h, r], dim=-1))
             g_int = torch.multinomial(probs, 1)
             log_prob_g = log_prob(g_int, probs)
+            g_ints.append(g_int.float())
 
             # g_loss
             g_target = []
@@ -500,7 +504,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
         outs = []
         for x in (ps, rs, hs, gs, bs, log_probs, c_losses, l_losses, p_losses,
-                  r_losses, g_losses, b_losses, subtasks):
+                  r_losses, g_losses, b_losses, g_ints, subtasks):
             outs.append(torch.stack(x))
 
         # for k, out, state_size in zip(RecurrentState._fields, outs, self.state_sizes):
