@@ -236,7 +236,7 @@ class SubtasksAgent(Agent, NNBase):
         return AgentValues(
             value=value,
             action=action,
-            action_log_probs=action_log_probs,  # TODO: + hx.log_prob,
+            action_log_probs=action_log_probs + hx.log_prob,
             aux_loss=aux_loss.mean(),
             rnn_hxs=torch.cat(hx, dim=-1),
             # rnn_hxs=rnn_hxs,
