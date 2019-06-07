@@ -82,6 +82,7 @@ class SubtasksGridWorld(gym.Env):
         self.objects = None
         self.pos = None
         self.last_terminal = False
+        self.last_action = None
         self.next_subtask = False
 
         h, w = self.desc.shape
@@ -123,7 +124,7 @@ class SubtasksGridWorld(gym.Env):
 
     @property
     def transition_strings(self):
-        return np.array(list('🛑👇👆👉👈✋👊'))
+        return np.array(list('👆👇👈👉pt'))
 
     def render(self, mode='human'):
         def print_subtask(task_type, count, task_object_type):
@@ -137,6 +138,11 @@ class SubtasksGridWorld(gym.Env):
         print('subtask:')
         print_subtask(*self.subtask)
         print('remaining:', self.task_count)
+        print('action:', end=' ')
+        if self.last_action:
+            print(self.transition_strings[self.last_action])
+        else:
+            print('reset')
 
         # noinspection PyTypeChecker
         desc = self.desc.copy()
@@ -210,6 +216,8 @@ class SubtasksGridWorld(gym.Env):
 
         self.task_count = None
         self.perform_iteration()
+        self.last_terminal = False
+        self.last_action = None
         return self.get_observation()
 
     def objects_one_hot(self):
@@ -246,6 +254,7 @@ class SubtasksGridWorld(gym.Env):
             self.task_count -= 1
 
     def step(self, a):
+        self.last_action = a
         self.next_subtask = False
         # act
         n_transitions = len(self.transitions)
