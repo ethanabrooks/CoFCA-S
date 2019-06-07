@@ -1,10 +1,10 @@
 from collections import namedtuple
 
+from gym.spaces import Box, Discrete
 import numpy as np
 import torch
-import torch.jit
-from gym.spaces import Box, Discrete
 from torch import nn as nn
+import torch.jit
 from torch.nn import functional as F
 
 from ppo.agent import Agent, AgentValues, Flatten, NNBase
@@ -20,7 +20,7 @@ RecurrentState = namedtuple(
     'r_loss '
     'g_loss '
     'b_loss '
-                      'g_int '
+    'g_int '
     'subtask')
 
 
@@ -230,8 +230,9 @@ class SubtasksAgent(Agent, NNBase):
             imitation_probs = imitation_dist.probs.detach().unsqueeze(1)
             log_probs = torch.log(dist.probs).unsqueeze(2)
             imitation_loss = -(imitation_probs @ log_probs).view(-1)
-            imitation_loss += imitation_loss.detach() * hx.log_prob.view(-1)   # TODO: is this right?
-            aux_loss += imitation_loss + imitation_loss
+            aux_loss += (
+                imitation_loss + imitation_loss.detach() * hx.log_prob.view(-1)
+                + imitation_loss)
             losses.update(imitation_loss=imitation_loss)
 
         return AgentValues(
@@ -455,7 +456,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # r = interp(r, r2, c) #TODO
             r = r_target
 
-            h = interp(h, h2, c)
+            # h = interp(h, h2, c)  # TODO
 
             # TODO: deterministic
             # g
