@@ -222,7 +222,7 @@ class SubtasksAgent(Agent, NNBase):
         # losses.update(action_log_prob=action_log_probs)
 
         # self.recurrent_module.check_grad(**losses)
-        aux_loss = hx.b_loss - entropy_bonus
+        aux_loss = sum(losses.values()).view(-1) - entropy_bonus
         if self.imitation_agent:
             imitation_dist = self.imitation_agent(inputs, rnn_hxs, masks).dist
             imitation_probs = imitation_dist.probs.detach().unsqueeze(1)
@@ -422,12 +422,18 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             p2 = batch_conv1d(p, l)
 
             # p_losss
+            p_repl = []
+            for j in range(m):
+                p_repl.append(self.p_values[subtask[j]])
+            p_repl = torch.stack(p_repl)
+
             p_losses.append(
                 F.cross_entropy(
                     p2.squeeze(1), subtask.squeeze(1),
                     reduction='none').unsqueeze(1))
 
-            r2 = p2 @ M
+            # r2 = p2 @ M #TODO
+            r2 = p_repl @ M
 
             # r_loss
             r_target = []
@@ -439,7 +445,9 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             r_losses.append(torch.mean(r_loss, dim=-1, keepdim=True))
 
             p = interp(p, p2, c)
-            r = interp(r, r2, c)
+            # r = interp(r, r2, c) #TODO
+            r = r_target
+
             h = interp(h, h2, c)
 
             # TODO: deterministic
