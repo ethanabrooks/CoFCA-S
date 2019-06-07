@@ -207,6 +207,12 @@ class SubtasksAgent(Agent, NNBase):
         conv_out, hx = self.get_hidden(inputs, rnn_hxs, masks)
         log_probs = hx.log_prob
         if self.teacher_agent:
+            obs, _, task, next_subtask = torch.split(
+                inputs, self.obs_sections, dim=1)
+            _, _, h, w = obs.shape
+            g = hx.g.view(*hx.g.shape, 1, 1).expand(*hx.g.shape, h, w)
+            inputs = torch.cat([obs, g, task, next_subtask], dim=1)
+
             act = self.teacher_agent(inputs, rnn_hxs, masks, action=action)
             dist = act.dist
             if action is None:
