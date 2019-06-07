@@ -307,9 +307,10 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 init_(nn.Linear(in_size, np.prod(self.subtask_space))
                       ),  # all possible subtask specs
                 nn.Softmax(dim=-1)),
-            in_size=(
-                hidden_size +  # h
-                subtask_size))  # r
+            in_size=(2))
+        # TODO
+        # hidden_size +  # h
+        # subtask_size))  # r
 
         self.beta = trace(
             lambda in_size: nn.Sequential(
@@ -362,7 +363,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         ],
                          dim=-1)
 
-    @torch.jit.script_method
+    # @torch.jit.script_method
     def forward(self, input, hx):
         assert hx is not None
         obs, task_type, count, obj, next_subtask = torch.split(
@@ -465,7 +466,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             # TODO: deterministic
             # g
-            probs = self.pi_theta(torch.cat([h, r], dim=-1))
+            # probs = self.pi_theta(torch.cat([h, r], dim=-1))
+            probs = self.pi_theta(r[:, 2:])
             g_int = torch.multinomial(probs, 1)
             log_prob_g = log_prob(g_int, probs)
 
@@ -491,9 +493,9 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             g_accuracy = torch.all(r == g2, dim=-1, keepdim=True).float()
             g_loss = (g_accuracy - .5) * -log_prob(g_int, probs)
             # if bool(g_accuracy.item()):
-                # print('probs', probs)
-                # print('g_int', g_int)
-                # print('log_prob', -log_prob(g_int, probs))
+            # print('probs', probs)
+            # print('g_int', g_int)
+            # print('log_prob', -log_prob(g_int, probs))
             g_losses.append(g_loss)
 
             g = g2
