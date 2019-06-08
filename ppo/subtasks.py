@@ -241,7 +241,7 @@ class SubtasksAgent(Agent, NNBase):
         else:
             # dist = self.actor(conv_out)
             # print('inputs', g_target[:, :, 0, 0])
-            dist = self.recurrent_module.pi_theta2(hx.g)
+            dist = self.recurrent_module.pi_theta2(hx.r)
             action, log_prob = sample_pi_theta2(dist, action)
 
         log_probs = log_prob
