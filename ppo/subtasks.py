@@ -490,9 +490,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # g
             # probs = self.pi_theta(torch.cat([h, r], dim=-1))
             dist = self.pi_theta2(r)
-
-            g_int = dist.sample()
-            log_prob_g = dist.log_probs(g_int)
+            g_int, log_prob_g = sample_pi_theta2(dist, action=None)
             outputs.g_int.append(g_int.float())
 
             # g_loss
