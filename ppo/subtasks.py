@@ -488,9 +488,10 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # TODO: deterministic
             # g
             # probs = self.pi_theta(torch.cat([h, r], dim=-1))
-            probs = self.pi_theta(r[:, 2:])
-            g_int = torch.multinomial(probs, 1)
-            log_prob_g = log_prob(g_int, probs)
+            dist = self.pi_theta2(r)
+
+            g_int = dist.sample()
+            log_prob_g = dist.log_probs(g_int)
             outputs.g_int.append(g_int.float())
 
             # g_loss
@@ -504,7 +505,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 #                                           self.subtask_space)
                 g_target.append(target_int)
             g_target = torch.stack(g_target)
-            g_loss = -log_prob(g_target, probs)
 
             # i1, i2, i3 = self.decode(g_int)
             i1, i2, i3 = self.decode(g_target)
