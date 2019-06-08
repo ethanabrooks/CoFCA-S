@@ -199,18 +199,15 @@ class SubtasksAgent(Agent, NNBase):
                 outs.append(F.conv2d(ob.unsqueeze(0), weight, padding=(1, 1)))
             out = torch.cat(outs).view(*conv_out.shape)
         else:
-            _, _, h, w = obs.shape
-            g = broadcast_3d(hx.g, (h, w))
+            g = broadcast_3d(hx.g, obs.shape[2:])
             out = self.conv2((obs, g))
 
         return out, hx
 
     @property
     def recurrent_hidden_state_size(self):
-        # return 1
         return sum(self.recurrent_module.state_sizes)
 
-    #
     @property
     def is_recurrent(self):
         return True
@@ -232,17 +229,15 @@ class SubtasksAgent(Agent, NNBase):
                 action = act.action
             log_probs = act.log_probs
         else:
-            # dist = self.actor(conv_out)
-            # print('inputs', g_target[:, :, 0, 0])
-            dist = self.recurrent_module.pi_theta2(hx.r)
             if action is None:
                 action = hx.g_int.long()
 
-        log_probs = FixedCategorical(probs=hx.g_probs).log_probs(action)
+        dist = FixedCategorical(probs=hx.g_probs)
+        log_probs = dist.log_probs(action)
+        entropy = dist.entropy()
+        # TODO: combine with other entropy
 
         value = self.critic(conv_out)
-        entropy = torch.zeros_like(log_probs)
-        # TODO: combine with other entropy?
 
         entropy_bonus = self.entropy_coef * entropy
         losses = {k: v for k, v in hx._asdict().items() if k.endswith('_loss')}
@@ -259,7 +254,6 @@ class SubtasksAgent(Agent, NNBase):
             action_log_probs=log_probs,
             aux_loss=aux_loss.mean(),
             rnn_hxs=torch.cat(hx, dim=-1),
-            # rnn_hxs=rnn_hxs,
             log=dict(**losses, g_accuracy=g_accuracy))
 
     def get_value(self, inputs, rnn_hxs, masks):
@@ -312,13 +306,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             ),
             in_size=hidden_size)
 
-        self.pi_theta = trace(
-            lambda in_size: nn.Sequential(
-                init_(nn.Linear(in_size, np.prod(self.subtask_space))
-                      ),  # all possible subtask specs
-                nn.Softmax(dim=-1)),
-            in_size=(2))
-        self.pi_theta2 = nn.Sequential(
+        self.pi_theta = nn.Sequential(
             Broadcast3d(h, w),
             init_(
                 nn.Conv2d(
@@ -327,10 +315,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                     kernel_size=3,
                     stride=1,
                     padding=1), 'relu'), nn.ReLU(), Flatten(),
-            Categorical(h * w * hidden_size, 2))
-        # TODO
-        # hidden_size +  # h
-        # subtask_size))  # r
+            Categorical(h * w * hidden_size, np.prod(self.subtask_space)))
 
         self.beta = trace(
             lambda in_size: nn.Sequential(
@@ -475,15 +460,13 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             outputs.r_loss.append(torch.mean(r_loss, dim=-1, keepdim=True))
 
             p = interp(p, p2, c)
-            # r = interp(r, r2, c) #TODO
-            r = r_target
+            r = interp(r, r2, c)
 
             h = interp(h, h2, c)
 
             # TODO: deterministic
             # g
-            # probs = self.pi_theta(torch.cat([h, r], dim=-1))
-            dist = self.pi_theta2(r)
+            dist = self.pi_theta(r)
             g_int = dist.sample()
             outputs.g_int.append(g_int.float())
             outputs.g_probs.append(dist.probs)
@@ -500,7 +483,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 g_target.append(target_int)
             g_target = torch.stack(g_target)
 
-            # i1, i2, i3 = self.decode(g_int)
+            # i1, i2, i3 = self.decode(g_int)  TODO
             i1, i2, i3 = self.decode(g_target)
             # assert (int(i1), int(i2), int(i3)) == \
             #        np.unravel_index(int(g_int), self.subtask_space)
@@ -508,10 +491,10 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             g_loss = F.binary_cross_entropy(g2, r_target, reduction='none')
             outputs.g_loss.append(torch.mean(g_loss, dim=-1, keepdim=True))
 
-            g = g2
-            # g = interp(g, g2, c) # TODO
+            g = interp(g, g2, c)
 
             # b
+            # TODO: fix all this
             probs = self.beta(torch.cat([obs[i], g], dim=-1))
             b = torch.multinomial(probs, 1)
             log_prob_b = log_prob(b, probs)
@@ -529,11 +512,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         stacked = []
         for x in outputs:
             stacked.append(torch.stack(x))
-
-        # for k, out, state_size in zip(RecurrentState._fields, outs, self.state_sizes):
-        #     out_shape = out.shape[2]
-        #     if out_shape != state_size:
-        #         print(k, out_shape, state_size)
 
         hx = torch.cat(stacked, dim=-1)
         return hx, hx[-1]
