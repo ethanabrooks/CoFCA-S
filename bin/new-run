@@ -1,0 +1,25 @@
+#!/usr/bin/env zsh
+if [[ "$1" =~ '[0-9]+' && "$1" = $MATCH ]]; then
+  runs new "${@:2}"
+  port="$1"
+else
+  runs new "$@"
+fi
+for arg in "$@"; do
+  if [[ $arg =~ '--path=(\S+)/[0-9]+' ]] then
+    run_dir="$match[1]"
+  fi
+  if [[ $arg =~ '--path=(\S+)' ]] then
+    run_path="$match[1]"
+    if ! [[ -v run_dir ]]; then
+      run_dir="$run_path"
+    fi
+  fi
+done
+if [[ -v run_dir && -v port ]]; then
+  echo tb $port $run_dir
+  tb $port $run_dir
+fi
+if [[ -v run_path ]]; then
+  tmux attach -t $run_path
+fi
