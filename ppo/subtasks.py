@@ -8,12 +8,12 @@ from torch import nn as nn
 from torch.nn import functional as F
 
 from ppo.agent import Agent, AgentValues, Flatten, NNBase
-from ppo.distributions import Categorical, DiagGaussian
+from ppo.distributions import Categorical, DiagGaussian, FixedCategorical
 from ppo.utils import init
 from ppo.wrappers import get_subtasks_obs_sections
 
 RecurrentState = namedtuple(
-    'RecurrentState', 'p r h g g_int b log_prob '
+    'RecurrentState', 'p r h b g g_int g_probs '
     'c_loss '
     'l_loss '
     'p_loss '
@@ -238,15 +238,18 @@ class SubtasksAgent(Agent, NNBase):
             dist = act.dist
             if action is None:
                 action = act.action
+            log_probs = act.log_probs
         else:
             # dist = self.actor(conv_out)
             # print('inputs', g_target[:, :, 0, 0])
             dist = self.recurrent_module.pi_theta2(hx.r)
             if action is None:
                 action = hx.g_int.long()
-            action, log_prob = sample_pi_theta2(dist, action)
+            action, log_probs = sample_pi_theta2(dist, action)
 
-        log_probs = log_prob
+        log_prob_g = FixedCategorical(probs=hx.g_probs).log_prob(action)
+        if not torch.all(log_probs == log_prob_g):
+            import ipdb; ipdb.set_trace()
 
         value = self.critic(conv_out)
         entropy = torch.zeros_like(log_probs)
@@ -369,7 +372,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             g=subtask_size,
             g_int=1,
             b=1,
-            log_prob=1,
+            g_probs=np.prod(self.subtask_space),
             c_loss=1,
             l_loss=1,
             p_loss=1,
@@ -492,8 +495,9 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # g
             # probs = self.pi_theta(torch.cat([h, r], dim=-1))
             dist = self.pi_theta2(r)
-            g_int, log_prob_g = sample_pi_theta2(dist, action=None)
+            g_int = dist.sample()
             outputs.g_int.append(g_int.float())
+            outputs.g_probs.append(dist.probs)
 
             # g_loss
             g_target = []
@@ -532,8 +536,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             outputs.h.append(h)
             outputs.g.append(g)
             outputs.b.append(b)
-            # log_probs.append(log_prob_g + log_prob_b) # TODO
-            outputs.log_prob.append(log_prob_g)
 
         stacked = []
         for x in outputs:
