@@ -14,7 +14,7 @@ setup(
     author='Ethan Brooks',
     author_email='ethanabrooks@gmail.com',
     packages=find_packages(),
-    scripts=['load'],
+    scripts=['bin/load', 'bin/from-json'],
     entry_points=dict(console_scripts=[
         'ppo=ppo.main:cli',
         'hsr=ppo.main:hsr_cli',
