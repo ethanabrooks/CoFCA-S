@@ -1,3 +1,5 @@
+import time
+
 import gym
 import numpy as np
 import torch
@@ -36,17 +38,29 @@ class DebugWrapper(gym.Wrapper):
             [0, 1, 1],
         ])
         self.action_space = spaces.Discrete(int(self.size_subtask_space))
+        self.last_action = None
+        self.last_reward = None
 
     def step(self, action):
         # action, subtask = np.unravel_index(
         # action, (self.size_action_space, self.size_subtask_space))
         # s, r, t, i = super().step(action)
         r = float(np.all(self.possible_subtasks[action] == self.env.subtask))
+        self.last_action = action
+        self.last_reward = r
         # print('guess', action, self.possible_subtasks[action])
         # print('truth', self.env.subtask)
         # print('reward', r)
         return self.env.get_observation(), r, True, {}
         # TODO: make episodes more than 1 step
+
+    def render(self, mode='human'):
+        action = self.last_action
+        print('guess', action, self.possible_subtasks[action])
+        print('truth', self.env.subtask)
+        print('reward', self.last_reward)
+        print()
+        time.sleep(.5)
 
 
 class SubtasksWrapper(gym.ObservationWrapper):
