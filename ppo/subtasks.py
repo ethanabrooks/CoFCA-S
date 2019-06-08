@@ -162,6 +162,7 @@ class SubtasksAgent(Agent, NNBase):
             self.actor = DiagGaussian(input_size, num_outputs)
         else:
             raise NotImplementedError
+        self.pi_theta = Categorical(input_size, num_outputs)
 
         self.critic = init_(nn.Linear(input_size, 1))
 
@@ -221,7 +222,8 @@ class SubtasksAgent(Agent, NNBase):
             if action is None:
                 action = act.action
         else:
-            dist = self.actor(conv_out)
+            # dist = self.actor(conv_out)
+            dist = self.pi_theta(conv_out)
 
             if action is None:
                 if deterministic:
