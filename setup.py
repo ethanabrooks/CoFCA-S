@@ -18,6 +18,7 @@ setup(
         'bin/load',
         'bin/from-json',
         'bin/no-log-dir',
+        'bin/watch-best',
     ],
     entry_points=dict(console_scripts=[
         'ppo=ppo.main:cli',
