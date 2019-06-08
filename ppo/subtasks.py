@@ -47,8 +47,7 @@ class Broadcast3d(torch.jit.ScriptModule):
         self.shape = shape
 
     def forward(self, inputs):
-        return inputs.view(*inputs.shape, 1, 1).expand(*inputs.shape,
-                                                       *self.shape)
+        return broadcast_3d(inputs, self.shape)
 
 
 def init_(network, nonlinearity=None):
@@ -58,6 +57,10 @@ def init_(network, nonlinearity=None):
     return init(network,
                 nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0),
                 nn.init.calculate_gain(nonlinearity))
+
+
+def broadcast_3d(inputs, shape):
+    return inputs.view(*inputs.shape, 1, 1).expand(*inputs.shape, *shape)
 
 
 @torch.jit.script
@@ -197,7 +200,7 @@ class SubtasksAgent(Agent, NNBase):
             out = torch.cat(outs).view(*conv_out.shape)
         else:
             _, _, h, w = obs.shape
-            g = hx.g.view(*hx.g.shape, 1, 1).expand(*hx.g.shape, h, w)
+            g = broadcast_3d(hx.g, (h, w))
             out = self.conv2((obs, g))
 
         return out, hx
@@ -220,9 +223,9 @@ class SubtasksAgent(Agent, NNBase):
         # print('g       ', hx.g[0])
         # print('g_target', g_target[0, :, 0, 0])
         log_probs = hx.log_prob
+        _, _, h, w = obs.shape
         if self.teacher_agent:
-            _, _, h, w = obs.shape
-            g = hx.g.view(*hx.g.shape, 1, 1).expand(*hx.g.shape, h, w)
+            g = broadcast_3d(g_target[:, :, 0, 0], (h, w))
             inputs = torch.cat([obs, g, task, next_subtask], dim=1)
 
             act = self.teacher_agent(inputs, rnn_hxs, masks, action=action)
@@ -232,9 +235,6 @@ class SubtasksAgent(Agent, NNBase):
         else:
             # dist = self.actor(conv_out)
             # print('inputs', g_target[:, :, 0, 0])
-            _, _, h, w = obs.shape
-            # g = hx.g.view(*hx.g.shape, 1, 1).expand(*hx.g.shape, h, w)
-            # debug_out = self.conv_debug((g, ))
             dist = self.recurrent_module.pi_theta2(hx.g)
 
             if action is None:
