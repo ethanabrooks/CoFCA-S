@@ -8,5 +8,3 @@ for arg in "$@"; do
     tmux attach -t "$match[1]/0"
   fi
 done
-
-

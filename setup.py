@@ -16,6 +16,7 @@ setup(
     packages=find_packages(),
     scripts=[
         'bin/load',
+        'bin/new-run',
         'bin/from-json',
         'bin/no-log-dir',
         'bin/watch-best',
