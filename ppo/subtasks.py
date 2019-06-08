@@ -151,19 +151,6 @@ class SubtasksAgent(Agent, NNBase):
                         kernel_size=3,
                         stride=1,
                         padding=1), 'relu'), nn.ReLU(), Flatten())
-            self.conv_debug = nn.Sequential(
-                Concat(dim=1),
-                init_(
-                    nn.Conv2d(
-                        # self.obs_sections.base + self.obs_sections.subtask,
-                        self.obs_sections.subtask,
-                        hidden_size,
-                        kernel_size=3,
-                        stride=1,
-                        padding=1),
-                    'relu'),
-                nn.ReLU(),
-                Flatten())
 
         input_size = h * w * hidden_size  # conv output
 
@@ -238,7 +225,7 @@ class SubtasksAgent(Agent, NNBase):
             _, _, h, w = obs.shape
             g = hx.g.view(*hx.g.shape, 1, 1).expand(*hx.g.shape, h, w)
             # debug_out = self.conv_debug((g, ))
-            dist = self.recurrent_module.pi_theta2(hx.g)
+            dist = self.recurrent_module.pi_theta2(g)
 
             if action is None:
                 if deterministic:
@@ -327,12 +314,14 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 nn.Softmax(dim=-1)),
             in_size=(2))
         self.pi_theta2 = nn.Sequential(
-            init_(nn.Linear(4, 3 * hidden_size), 'relu'),
-            nn.ReLU(),
-            init_(nn.Linear(3 * hidden_size, 3 * hidden_size), 'relu'),
-            nn.ReLU(),
-            Categorical(3 * hidden_size, 2),
-        )
+            init_(
+                nn.Conv2d(
+                    subtask_size,
+                    hidden_size,
+                    kernel_size=3,
+                    stride=1,
+                    padding=1), 'relu'), nn.ReLU(), Flatten(),
+            Categorical(h * w * hidden_size, 2))
         # TODO
         # hidden_size +  # h
         # subtask_size))  # r
