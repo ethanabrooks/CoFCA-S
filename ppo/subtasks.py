@@ -109,7 +109,6 @@ class SubtasksAgent(Agent, NNBase):
                  teacher_agent=None):
         nn.Module.__init__(self)
         self.multiplicative_interaction = multiplicative_interaction
-        assert isinstance(teacher_agent, SubtasksTeacher)
         self.teacher_agent = teacher_agent
         self.entropy_coef = entropy_coef
         self.obs_sections = get_subtasks_obs_sections(task_space)
@@ -211,6 +210,7 @@ class SubtasksAgent(Agent, NNBase):
         # print('g_target', g_target[0, :, 0, 0])
         log_probs = hx.log_prob
         if self.teacher_agent:
+            assert isinstance(teacher_agent, SubtasksTeacher)
             _, _, h, w = obs.shape
             g = hx.g.view(*hx.g.shape, 1, 1).expand(*hx.g.shape, h, w)
             inputs = torch.cat([obs, g, task, next_subtask], dim=1)

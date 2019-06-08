@@ -45,7 +45,7 @@ class SubtasksWrapper(gym.ObservationWrapper):
         task_object_one_hot = np.zeros((len(env.object_types), h, w), dtype=bool)
 
         task_type_one_hot[task_type, :, :] = True
-        task_count_one_hot[task_count -1, :, :] = True
+        task_count_one_hot[task_count - 1, :, :] = True
         task_object_one_hot[task_object_type, :, :] = True
 
         # task spec
