@@ -67,7 +67,7 @@ def sample_pi_theta2(dist, action):
     if action is None:
         action = dist.sample()
     log_prob = dist.log_probs(action)
-    return action, log_prob, dist
+    return action, log_prob
 
 
 @torch.jit.script
@@ -241,8 +241,8 @@ class SubtasksAgent(Agent, NNBase):
         else:
             # dist = self.actor(conv_out)
             # print('inputs', g_target[:, :, 0, 0])
-            action, log_prob, dist = sample_pi_theta2(
-                self.recurrent_module.pi_theta2(hx.g), action)
+            dist = self.recurrent_module.pi_theta2(hx.g)
+            action, log_prob = sample_pi_theta2(dist, action)
 
         log_probs = log_prob
 
@@ -266,7 +266,6 @@ class SubtasksAgent(Agent, NNBase):
             aux_loss=aux_loss.mean(),
             rnn_hxs=torch.cat(hx, dim=-1),
             # rnn_hxs=rnn_hxs,
-            dist=dist,
             log=dict(**losses, g_accuracy=g_accuracy))
 
     def get_value(self, inputs, rnn_hxs, masks):
