@@ -247,9 +247,10 @@ class SubtasksAgent(Agent, NNBase):
                 action = hx.g_int.long()
             action, log_probs = sample_pi_theta2(dist, action)
 
-        log_prob_g = FixedCategorical(probs=hx.g_probs).log_prob(action)
-        if not torch.all(log_probs == log_prob_g):
-            import ipdb; ipdb.set_trace()
+        log_probs = FixedCategorical(probs=hx.g_probs).log_probs(action)
+        # if not torch.allclose(log_probs, log_prob_g):
+        # import ipdb
+        # ipdb.set_trace()
 
         value = self.critic(conv_out)
         entropy = torch.zeros_like(log_probs)
