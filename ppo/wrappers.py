@@ -23,6 +23,20 @@ def get_subtasks_obs_sections(task_space):
     )
 
 
+class DebugWrapper(gym.Wrapper):
+    def __init__(self, env):
+        super().__init__(env)
+        obs_space, task_space = env.observation_space.spaces
+        self.action_space = spaces.Discrete(np.prod(task_space.nvec[0]))
+
+    def step(self, action):
+        if np.all(self.env.task[action] == self.env.subtask):
+            r = 1
+        else:
+            r = 0
+        return self.env.get_observation(), r, True, {}
+
+
 class SubtasksWrapper(gym.ObservationWrapper):
     def __init__(self, env):
         super().__init__(env)

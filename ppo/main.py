@@ -13,7 +13,7 @@ from gridworld_env.subtasks_gridworld import SubtasksGridWorld, get_task_space
 from ppo.arguments import build_parser, get_args
 from ppo.subtasks import SubtasksAgent, SubtasksTeacher
 from ppo.train import Train
-from ppo.wrappers import SubtasksWrapper, VecNormalize
+from ppo.wrappers import SubtasksWrapper, VecNormalize, DebugWrapper
 from rl_utils import hierarchical_parse_args
 
 
@@ -30,7 +30,7 @@ def make_subtasks_env(env_id, **kwargs):
         if rank == 1:
             print('Environment args:')
             pprint(_kwargs)
-        env = SubtasksWrapper(class_parser(class_)(**_kwargs))
+        env = SubtasksWrapper(DebugWrapper(class_parser(class_)(**_kwargs)))
         env.seed(seed + rank)
         print('Environment seed:', seed + rank)
         if max_episode_steps is not None:
@@ -192,4 +192,4 @@ def teach_cli():
 
 
 if __name__ == "__main__":
-    teach_cli()
+    subtasks_cli()
