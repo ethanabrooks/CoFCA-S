@@ -63,13 +63,6 @@ def broadcast_3d(inputs, shape):
     return inputs.view(*inputs.shape, 1, 1).expand(*inputs.shape, *shape)
 
 
-def sample_pi_theta2(dist, action):
-    if action is None:
-        action = dist.sample()
-    log_prob = dist.log_probs(action)
-    return action, log_prob
-
-
 @torch.jit.script
 def batch_conv1d(inputs, weights):
     outputs = []
@@ -235,7 +228,6 @@ class SubtasksAgent(Agent, NNBase):
             inputs = torch.cat([obs, g, task, next_subtask], dim=1)
 
             act = self.teacher_agent(inputs, rnn_hxs, masks, action=action)
-            dist = act.dist
             if action is None:
                 action = act.action
             log_probs = act.log_probs
@@ -245,12 +237,8 @@ class SubtasksAgent(Agent, NNBase):
             dist = self.recurrent_module.pi_theta2(hx.r)
             if action is None:
                 action = hx.g_int.long()
-            action, log_probs = sample_pi_theta2(dist, action)
 
         log_probs = FixedCategorical(probs=hx.g_probs).log_probs(action)
-        # if not torch.allclose(log_probs, log_prob_g):
-        # import ipdb
-        # ipdb.set_trace()
 
         value = self.critic(conv_out)
         entropy = torch.zeros_like(log_probs)
