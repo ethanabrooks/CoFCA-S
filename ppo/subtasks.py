@@ -63,8 +63,7 @@ def broadcast_3d(inputs, shape):
     return inputs.view(*inputs.shape, 1, 1).expand(*inputs.shape, *shape)
 
 
-def sample_pi_theta2(pi_theta2, r):
-    dist = pi_theta2(r)
+def sample_pi_theta2(dist):
     action = dist.sample()
     log_prob = dist.log_probs(action)
     return action, log_prob, dist
@@ -242,7 +241,8 @@ class SubtasksAgent(Agent, NNBase):
         else:
             # dist = self.actor(conv_out)
             # print('inputs', g_target[:, :, 0, 0])
-            dist = self.recurrent_module.pi_theta2(hx.g)
+            _, _, dist = sample_pi_theta2(
+                self.recurrent_module.pi_theta2(hx.g))
 
             if action is None:
                 if deterministic:
