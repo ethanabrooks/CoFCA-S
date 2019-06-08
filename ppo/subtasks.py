@@ -109,7 +109,8 @@ class SubtasksAgent(Agent, NNBase):
                  teacher_agent=None):
         nn.Module.__init__(self)
         self.multiplicative_interaction = multiplicative_interaction
-        assert isinstance(teacher_agent, SubtasksTeacher)
+        if teacher_agent:
+            assert isinstance(teacher_agent, SubtasksTeacher)
         self.teacher_agent = teacher_agent
         self.entropy_coef = entropy_coef
         self.obs_sections = get_subtasks_obs_sections(task_space)
