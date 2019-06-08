@@ -221,7 +221,8 @@ class SubtasksAgent(Agent, NNBase):
                 action = act.action
         else:
             # dist = self.actor(conv_out)
-            dist = self.recurrent_module.pi_theta2(g_target[:, :, 0, 0])
+            # print('input', g_target[:, :, 0, 0])
+            dist = self.recurrent_module.pi_theta2(obs[:, :, 0, 0])
 
             if action is None:
                 if deterministic:
@@ -309,7 +310,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                       ),  # all possible subtask specs
                 nn.Softmax(dim=-1)),
             in_size=(2))
-        self.pi_theta2 = Categorical(4, 2)
+        self.pi_theta2 = Categorical(5, 2)
         # TODO
         # hidden_size +  # h
         # subtask_size))  # r
