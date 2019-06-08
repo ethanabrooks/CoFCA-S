@@ -229,7 +229,6 @@ class SubtasksAgent(Agent, NNBase):
         conv_out, hx = self.get_hidden(inputs, rnn_hxs, masks)
         # print('g       ', hx.g[0])
         # print('g_target', g_target[0, :, 0, 0])
-        log_probs = hx.log_prob
         _, _, h, w = obs.shape
         if self.teacher_agent:
             g = broadcast_3d(g_target[:, :, 0, 0], (h, w))
@@ -245,7 +244,7 @@ class SubtasksAgent(Agent, NNBase):
             action, log_prob, dist = sample_pi_theta2(
                 self.recurrent_module.pi_theta2(hx.g), action)
 
-            log_probs += log_prob
+        log_probs = log_prob
 
         value = self.critic(conv_out)
         entropy = dist.entropy()
