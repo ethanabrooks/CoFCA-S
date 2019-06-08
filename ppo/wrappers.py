@@ -1,8 +1,8 @@
 import gym
-from gym import spaces
-from gym.spaces import Box
 import numpy as np
 import torch
+from gym import spaces
+from gym.spaces import Box
 
 from common.vec_env import VecEnvWrapper
 from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
@@ -30,7 +30,7 @@ class DebugWrapper(gym.Wrapper):
         self.size_subtask_space = np.prod(task_space.nvec[0])
         self.size_action_space = env.action_space.n
         self.action_space = spaces.Discrete(
-            self.size_subtask_space * self.size_action_space)
+            int(self.size_subtask_space * self.size_action_space))
 
     def step(self, action):
         action, subtask = np.unravel_index(
