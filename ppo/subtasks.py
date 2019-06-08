@@ -162,8 +162,6 @@ class SubtasksAgent(Agent, NNBase):
             self.actor = DiagGaussian(input_size, num_outputs)
         else:
             raise NotImplementedError
-        self.pi_theta = Categorical(input_size, num_outputs)
-
         self.critic = init_(nn.Linear(input_size, 1))
 
     def get_hidden(self, inputs, rnn_hxs, masks):
@@ -223,7 +221,7 @@ class SubtasksAgent(Agent, NNBase):
                 action = act.action
         else:
             # dist = self.actor(conv_out)
-            dist = self.pi_theta(conv_out)
+            dist = self.recurrent_module.pi_theta2(conv_out)
 
             if action is None:
                 if deterministic:
@@ -311,6 +309,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                       ),  # all possible subtask specs
                 nn.Softmax(dim=-1)),
             in_size=(2))
+        self.pi_theta2 = Categorical(h * w * hidden_size, 2)
         # TODO
         # hidden_size +  # h
         # subtask_size))  # r
