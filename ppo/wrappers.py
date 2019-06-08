@@ -31,16 +31,20 @@ class DebugWrapper(gym.Wrapper):
         self.size_action_space = env.action_space.n
         # self.action_space = spaces.Discrete(
         # int(self.size_subtask_space * self.size_action_space))
-        self.possible_subtasks = np.hstack([np.ones((2, 2)), np.eye(2)])
+        self.possible_subtasks = np.array([
+            [0, 1, 0],
+            [0, 1, 1],
+        ])
         self.action_space = spaces.Discrete(int(self.size_subtask_space))
 
     def step(self, action):
         # action, subtask = np.unravel_index(
         # action, (self.size_action_space, self.size_subtask_space))
         # s, r, t, i = super().step(action)
-        r = np.all(self.possible_subtasks[action] == self.env.subtask)
-        # print('guess', subtask, self.env.task[subtask])
+        r = float(np.all(self.possible_subtasks[action] == self.env.subtask))
+        # print('guess', action, self.possible_subtasks[action])
         # print('truth', self.env.subtask)
+        # print('reward', r)
         return self.env.get_observation(), r, True, {}
         # TODO: make episodes more than 1 step
 
