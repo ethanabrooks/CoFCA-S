@@ -247,7 +247,7 @@ class SubtasksAgent(Agent, NNBase):
         log_probs = log_prob
 
         value = self.critic(conv_out)
-        entropy = dist.entropy()
+        entropy = torch.zeros_like(log_probs)
         # TODO: combine with other entropy?
 
         entropy_bonus = self.entropy_coef * entropy
