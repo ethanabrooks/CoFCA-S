@@ -237,8 +237,8 @@ class SubtasksAgent(Agent, NNBase):
             # print('input', g_target[:, :, 0, 0])
             _, _, h, w = obs.shape
             g = hx.g.view(*hx.g.shape, 1, 1).expand(*hx.g.shape, h, w)
-            debug_out = self.conv_debug((g, ))
-            dist = self.recurrent_module.pi_theta2(debug_out)
+            # debug_out = self.conv_debug((g, ))
+            dist = self.recurrent_module.pi_theta2(hx.g)
 
             if action is None:
                 if deterministic:
@@ -326,7 +326,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                       ),  # all possible subtask specs
                 nn.Softmax(dim=-1)),
             in_size=(2))
-        self.pi_theta2 = Categorical(h * w * hidden_size, 2)
+        self.pi_theta2 = Categorical(4, 2)
         # TODO
         # hidden_size +  # h
         # subtask_size))  # r
