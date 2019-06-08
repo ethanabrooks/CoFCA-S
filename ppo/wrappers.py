@@ -27,14 +27,17 @@ class DebugWrapper(gym.Wrapper):
     def __init__(self, env):
         super().__init__(env)
         obs_space, task_space = env.observation_space.spaces
-        self.action_space = spaces.Discrete(np.prod(task_space.nvec[0]))
+        self.size_subtask_space = np.prod(task_space.nvec[0])
+        self.size_action_space = env.action_space.n
+        self.action_space = spaces.Discrete(
+            self.size_subtask_space * self.size_action_space)
 
     def step(self, action):
-        if np.all(self.env.task[action] == self.env.subtask):
-            r = 1
-        else:
-            r = 0
-        return self.env.get_observation(), r, True, {}
+        action, subtask = np.unravel_index(
+            action, (self.size_action_space, self.size_subtask_space))
+        s, r, t, i = super().step(action)
+        r += np.all(self.env.task[subtask] == self.env.subtask)
+        return s, r, True, i  # TODO: make episodes more than 1 step
 
 
 class SubtasksWrapper(gym.ObservationWrapper):
