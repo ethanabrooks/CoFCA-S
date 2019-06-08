@@ -441,7 +441,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                                 reduction='none').unsqueeze(1))
 
             l_repl = self.l_values[l_target]
-            p2 = batch_conv1d(p, l_repl)
+            p2 = batch_conv1d(p, l)
 
             # p_losss
             p_repl = []
@@ -454,8 +454,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                     p2.squeeze(1), subtask.squeeze(1),
                     reduction='none').unsqueeze(1))
 
-            # r2 = p2 @ M #TODO
-            r2 = p_repl @ M
+            r2 = p2 @ M  #TODO
 
             # r_loss
             r_target = []
