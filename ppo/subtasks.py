@@ -28,8 +28,8 @@ class Concat(torch.jit.ScriptModule):
         self.dim = dim
         super().__init__()
 
-    def forward(self, input):
-        return torch.cat(input, dim=self.dim)
+    def forward(self, inputs):
+        return torch.cat(inputs, dim=self.dim)
 
 
 class Reshape(torch.jit.ScriptModule):
@@ -37,8 +37,18 @@ class Reshape(torch.jit.ScriptModule):
         super().__init__()
         self.shape = shape
 
-    def forward(self, input):
-        return input.view(*self.shape)
+    def forward(self, inputs):
+        return inputs.view(*self.shape)
+
+
+class Broadcast3d(torch.jit.ScriptModule):
+    def __init__(self, *shape):
+        super().__init__()
+        self.shape = shape
+
+    def forward(self, inputs):
+        return inputs.view(*inputs.shape, 1, 1).expand(*inputs.shape,
+                                                       *self.shape)
 
 
 def init_(network, nonlinearity=None):
@@ -221,11 +231,11 @@ class SubtasksAgent(Agent, NNBase):
                 action = act.action
         else:
             # dist = self.actor(conv_out)
-            # print('input', g_target[:, :, 0, 0])
+            # print('inputs', g_target[:, :, 0, 0])
             _, _, h, w = obs.shape
-            g = hx.g.view(*hx.g.shape, 1, 1).expand(*hx.g.shape, h, w)
+            # g = hx.g.view(*hx.g.shape, 1, 1).expand(*hx.g.shape, h, w)
             # debug_out = self.conv_debug((g, ))
-            dist = self.recurrent_module.pi_theta2(g)
+            dist = self.recurrent_module.pi_theta2(hx.g)
 
             if action is None:
                 if deterministic:
@@ -314,6 +324,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 nn.Softmax(dim=-1)),
             in_size=(2))
         self.pi_theta2 = nn.Sequential(
+            Broadcast3d(h, w),
             init_(
                 nn.Conv2d(
                     subtask_size,
