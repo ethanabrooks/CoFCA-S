@@ -1,8 +1,8 @@
 #!/usr/bin/env zsh
-echo runs from-json "${@:2}"
+runs from-json "${@:2}"
 for arg in "$@"; do
   if [[ $arg =~ '--path=(\S+)' ]] then
-    echo tb $1 $match[1] 
+    tb $1 $match[1] 
   fi
 done
 
