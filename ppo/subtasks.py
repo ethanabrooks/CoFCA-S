@@ -13,7 +13,7 @@ from ppo.utils import init
 from ppo.wrappers import get_subtasks_obs_sections
 
 RecurrentState = namedtuple(
-    'RecurrentState', 'p r h g b log_prob '
+    'RecurrentState', 'p r h g g_int b log_prob '
     'c_loss '
     'l_loss '
     'p_loss '
@@ -364,6 +364,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             r=subtask_size,
             h=hidden_size,
             g=subtask_size,
+            g_int=1,
             b=1,
             log_prob=1,
             c_loss=1,
@@ -490,6 +491,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             probs = self.pi_theta(r[:, 2:])
             g_int = torch.multinomial(probs, 1)
             log_prob_g = log_prob(g_int, probs)
+            outputs.g_int.append(g_int.float())
 
             # g_loss
             g_target = []
