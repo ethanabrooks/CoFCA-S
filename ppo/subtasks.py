@@ -326,7 +326,11 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                       ),  # all possible subtask specs
                 nn.Softmax(dim=-1)),
             in_size=(2))
-        self.pi_theta2 = Categorical(4, 2)
+        self.pi_theta2 = nn.Sequential(
+            init_(nn.Linear(4, hidden_size), 'relu'),
+            nn.ReLU(),
+            Categorical(hidden_size, 2),
+        )
         # TODO
         # hidden_size +  # h
         # subtask_size))  # r
