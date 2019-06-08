@@ -423,7 +423,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # c_loss
             outputs.c_loss.append(
                 F.binary_cross_entropy(c, next_subtask[i], reduction='none'))
-            c = next_subtask[i]  # TODO
+            # c = next_subtask[i] 
 
             # TODO: figure this out
             # if self.recurrent:
