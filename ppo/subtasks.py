@@ -63,6 +63,13 @@ def broadcast_3d(inputs, shape):
     return inputs.view(*inputs.shape, 1, 1).expand(*inputs.shape, *shape)
 
 
+def sample_pi_theta2(pi_theta2, r):
+    dist = pi_theta2(r)
+    action = dist.sample()
+    log_prob = dist.log_probs(action)
+    return action, log_prob, dist
+
+
 @torch.jit.script
 def batch_conv1d(inputs, weights):
     outputs = []
