@@ -95,9 +95,10 @@ def train_teacher_cli():
     task_parser.add_argument('--object-types', nargs='*')
     task_parser.add_argument('--n-subtasks', type=int, required=True)
     parser.add_argument('--n-objects', type=int, required=True)
+    parser.add_argument('--max-episode-steps', type=int)
     kwargs = hierarchical_parse_args(parser)
 
-    def train(task_args, n_objects, **_kwargs):
+    def train(task_args, n_objects, max_episode_steps, **_kwargs):
         class TrainTeacher(Train):
             @staticmethod
             def make_env(env_id, seed, rank, add_timestep):
@@ -106,6 +107,7 @@ def train_teacher_cli():
                     rank=rank,
                     seed=seed,
                     n_objects=n_objects,
+                    max_episode_steps=max_episode_steps,
                     **task_args)
 
             @staticmethod
