@@ -155,11 +155,15 @@ class SubtasksAgent(Agent, NNBase):
                 Concat(dim=1),
                 init_(
                     nn.Conv2d(
-                        self.obs_sections.base + self.obs_sections.subtask,
+                        # self.obs_sections.base + self.obs_sections.subtask,
+                        self.obs_sections.base,
                         hidden_size,
                         kernel_size=3,
                         stride=1,
-                        padding=1), 'relu'), nn.ReLU(), Flatten())
+                        padding=1),
+                    'relu'),
+                nn.ReLU(),
+                Flatten())
 
         input_size = h * w * hidden_size  # conv output
 
@@ -233,7 +237,7 @@ class SubtasksAgent(Agent, NNBase):
             # print('input', g_target[:, :, 0, 0])
             _, _, h, w = obs.shape
             g = hx.g.view(*hx.g.shape, 1, 1).expand(*hx.g.shape, h, w)
-            debug_out = self.conv_debug((obs, g))
+            debug_out = self.conv_debug((obs, ))
             dist = self.recurrent_module.pi_theta2(debug_out)
 
             if action is None:
