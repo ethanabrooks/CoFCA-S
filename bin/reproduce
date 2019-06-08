@@ -1,6 +1,7 @@
 #!/usr/bin/env zsh
 runs kill --active
-runs from-json "${@:2}"
+cmd=$(runs reproduce "${@:2}")
+eval "$cmd"
 for arg in "$@"; do
   if [[ $arg =~ '--path=(\S+)' ]] then
     echo "tb $1 $match[1] "
@@ -8,5 +9,3 @@ for arg in "$@"; do
     tmux attach -t "$match[1]/0"
   fi
 done
-
-
