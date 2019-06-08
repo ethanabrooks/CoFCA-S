@@ -37,7 +37,7 @@ class DebugWrapper(gym.Wrapper):
             action, (self.size_action_space, self.size_subtask_space))
         s, r, t, i = super().step(action)
         r += np.all(self.env.task[subtask] == self.env.subtask)
-        return s, r, True, i  # TODO: make episodes more than 1 step
+        return s, r, t, i  # TODO: make episodes more than 1 step
 
 
 class SubtasksWrapper(gym.ObservationWrapper):
