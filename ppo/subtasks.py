@@ -141,7 +141,8 @@ class SubtasksAgent(Agent, NNBase):
 
         value = self.critic(conv_out)
 
-        g_accuracy = torch.all(hx.g == g_target[:, :, 0, 0], dim=-1).float()
+        g_accuracy = torch.all(
+            (hx.g - g_target[:, :, 0, 0]).abs() < 1e-3, dim=-1).float()
 
         log = dict(g_accuracy=g_accuracy)
         for k, v in hx._asdict().items():
@@ -428,6 +429,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             # TODO: deterministic
             # g
+            # dist = self.pi_theta((h, r))  # TODO
             dist = self.pi_theta((h, r_target))
             g_int = dist.sample()
             outputs.g_int.append(g_int.float())
