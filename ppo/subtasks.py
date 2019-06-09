@@ -383,6 +383,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             s = self.f(torch.cat([obs[i], r, g, b], dim=-1))
             c = torch.sigmoid(self.phi_update(torch.cat([s, h], dim=-1)))
+            c = next_subtask[i]
 
             # c_loss
             outputs.c_loss.append(
