@@ -141,8 +141,7 @@ class SubtasksAgent(Agent, NNBase):
 
         value = self.critic(conv_out)
 
-        g_accuracy = torch.all(
-            (hx.g - g_target[:, :, 0, 0]).abs() < 1e-3, dim=-1)
+        g_accuracy = torch.all(hx.g.round() == g_target[:, :, 0, 0], dim=-1)
 
         log = dict(g_accuracy=g_accuracy.float())
         for k, v in hx._asdict().items():
