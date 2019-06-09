@@ -329,13 +329,10 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             Categorical(h * w * hidden_size, np.prod(self.subtask_space)),
         )
 
-        self.beta = trace(
-            lambda in_size: nn.Sequential(
-                init_(nn.Linear(in_size, 2)),  # binary: done or not done
-                nn.Softmax(dim=-1)),
-            in_size=(
-                conv_out_size +  # x
-                subtask_size))  # g
+        self.beta = Categorical(
+            conv_out_size +  # x
+            subtask_size,  # g
+            2)
 
         # embeddings
         for name, d in zip(
@@ -485,12 +482,11 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             g = interp(g, g2, c)
 
             # b
-            # TODO: fix all this
-            probs = self.beta(torch.cat([obs[i], g], dim=-1))
-            b = torch.multinomial(probs, 1).float()
+            dist = self.beta(torch.cat([obs[i], g], dim=-1))
+            b = dist.sample().float()
 
             # b_loss
-            outputs.b_loss.append(-log_prob(next_subtask[i].long(), probs))
+            outputs.b_loss.append(dist.log_probs(next_subtask[i]))
 
             outputs.p.append(p)
             outputs.r.append(r)
