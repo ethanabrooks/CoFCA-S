@@ -384,6 +384,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             s = self.f(torch.cat([obs[i], r, g, b], dim=-1))
             c = torch.sigmoid(self.phi_update(torch.cat([s, h], dim=-1)))
+            c = next_subtask[i]  # TODO
 
             # c_loss
             outputs.c_loss.append(
@@ -404,7 +405,10 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 F.cross_entropy(l_logits, l_target,
                                 reduction='none').unsqueeze(1))
 
-            p2 = batch_conv1d(p, l)
+            # p2 = batch_conv1d(p, l) # TODO
+            l_repl = self.l_values[torch.zeros_like(
+                next_subtask[i]).long().flatten()]
+            p2 = batch_conv1d(p, l_repl)
 
             # p_losss
             outputs.p_loss.append(
@@ -429,8 +433,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             # TODO: deterministic
             # g
-            # dist = self.pi_theta((h, r))  # TODO
-            dist = self.pi_theta((h, r_target))
+            dist = self.pi_theta((h, r))
             g_int = dist.sample()
             outputs.g_int.append(g_int.float())
             outputs.g_probs.append(dist.probs)
