@@ -142,7 +142,7 @@ class SubtasksAgent(Agent, NNBase):
         value = self.critic(conv_out)
 
         g_accuracy = torch.all(
-            (hx.g - g_target[:, :, 0, 0]).abs() < 1e-3, dim=-1).float()
+            (hx.g - g_target[:, :, 0, 0]).abs() < 1e-3, dim=-1)
 
         log = dict(g_accuracy=g_accuracy)
         for k, v in hx._asdict().items():
@@ -352,7 +352,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
         count -= 1
         M = self.embed_task(task_type[0], count[0], obj[0])
-        new_episode = bool(torch.all(hx == 0))
+        new_episode = torch.all(hx.squeeze(0) == 0, dim=-1)
         hx = self.parse_hidden(hx)
 
         p = hx.p
@@ -362,13 +362,12 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         h = hx.h
         float_subtask = hx.subtask
 
-        if new_episode:  # new episode
-            p[:, :, 0] = 1.  # initialize pointer to first subtask
-            r[:] = M[:, 0]  # initialize r to first subtask
-            g[:] = M[:, 0]  # initialize g to first subtask
-
         for x in hx:
             x.squeeze_(0)
+
+        p[new_episode, 0] = 1.  # initialize pointer to first subtask
+        r[new_episode] = M[new_episode, 0]  # initialize r to first subtask
+        g[new_episode] = M[new_episode, 0]  # initialize g to first subtask
 
         outputs = RecurrentState(*[[] for _ in RecurrentState._fields])
 
@@ -376,6 +375,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         # print('Recurrence: next_subtask', next_subtask)
         # if torch.any(next_subtask > 0):
         #     import ipdb; ipdb.set_trace()
+
         for i in range(n):
             float_subtask += next_subtask[i]
             outputs.subtask.append(float_subtask)
