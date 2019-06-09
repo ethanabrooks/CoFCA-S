@@ -14,7 +14,7 @@ from ppo.arguments import build_parser, get_args
 from ppo.subtasks import SubtasksAgent
 from ppo.teacher import SubtasksTeacher
 from ppo.train import Train
-from ppo.wrappers import DebugWrapper, SubtasksWrapper, VecNormalize
+from ppo.wrappers import SubtasksWrapper, VecNormalize
 from rl_utils import hierarchical_parse_args
 
 
@@ -53,12 +53,14 @@ def subtasks_cli():
     task_parser.add_argument('--max-task-count', type=int)
     task_parser.add_argument('--object-types', nargs='*')
     task_parser.add_argument('--n-subtasks', type=int)
+    parser.add_argument('--multiplicative-interaction', action='store_true')
+    parser.add_argument('--b-loss-coef', type=float, default=.03)
     parser.add_argument('--n-objects', type=int)
     parser.add_argument('--max-episode-steps', type=int)
     kwargs = hierarchical_parse_args(parser)
 
     def train(task_args, multiplicative_interaction, n_objects,
-              max_episode_steps, **_kwargs):
+              max_episode_steps, b_loss_coef, **_kwargs):
         class TrainTeacher(Train):
             @staticmethod
             def make_env(env_id, seed, rank, add_timestep):
@@ -81,6 +83,7 @@ def subtasks_cli():
                     entropy_coef=entropy_coef,
                     recurrent=recurrent,
                     multiplicative_interaction=multiplicative_interaction,
+                    b_loss_coef=b_loss_coef,
                 )
 
         TrainTeacher(**_kwargs)
@@ -138,6 +141,7 @@ def teach_cli():
     subtasks_parser.add_argument(
         '--subtasks-entropy-coef', type=float, default=0.01)
     subtasks_parser.add_argument('--subtasks-recurrent', action='store_true')
+    subtasks_parser.add_argument('--b-loss-coef', type=float, default=.03)
     subtasks_parser.add_argument(
         '--multiplicative-interaction', action='store_true')
     parser.add_argument('--n-objects', type=int, required=True)
@@ -186,6 +190,7 @@ def teach_cli():
                     recurrent=subtasks_args['subtasks_recurrent'],
                     multiplicative_interaction=subtasks_args[
                         'multiplicative_interaction'],
+                    b_loss_coef=subtasks_args['b_loss_coef'],
                     teacher_agent=teacher_agent)
 
         # ppo_args.update(aux_loss_only=True)
