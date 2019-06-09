@@ -433,7 +433,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             # TODO: deterministic
             # g
-            dist = self.pi_theta((h, r_target))
+            dist = self.pi_theta((h, r))
             g_int = dist.sample()
             outputs.g_int.append(g_int.float())
             outputs.g_probs.append(dist.probs)
