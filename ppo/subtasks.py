@@ -16,7 +16,7 @@ from ppo.utils import batch_conv1d, broadcast_3d, init_, interp, trace
 from ppo.wrappers import SubtasksActions, get_subtasks_obs_sections
 
 RecurrentState = namedtuple(
-    'RecurrentState', 'p r h b b_probs g g_int g_probs '
+    'RecurrentState', 'c p r h b b_probs g g_int g_probs '
     'c_loss '
     'l_loss '
     'p_loss '
@@ -156,7 +156,7 @@ class SubtasksAgent(Agent, NNBase):
             rnn_hxs=torch.cat(hx, dim=-1),
             log=log)
 
-    def get_hidden(self, inputs, rnn_hxs, masks):
+    def get_hidden(self, inputs, last_hxs, masks):
         obs, subtasks, task, next_subtask = torch.split(
             inputs, self.obs_sections, dim=1)
         task = task[:, :, 0, 0]
@@ -166,8 +166,8 @@ class SubtasksAgent(Agent, NNBase):
 
         conv_out = self.conv1(obs)
         recurrent_inputs = torch.cat([conv_out, task, next_subtask], dim=-1)
-        x, rnn_hxs = self._forward_gru(recurrent_inputs, rnn_hxs, masks)
-        hx = RecurrentState(*self.recurrent_module.parse_hidden(x))
+        all_hxs, last_hxs = self._forward_gru(recurrent_inputs, last_hxs, masks)
+        all_hxs = RecurrentState(*self.recurrent_module.parse_hidden(all_hxs))
 
         # assert torch.all(subtasks[:, :, 0, 0] == hx.g)
 
@@ -178,10 +178,10 @@ class SubtasksAgent(Agent, NNBase):
                 outs.append(F.conv2d(ob.unsqueeze(0), weight, padding=(1, 1)))
             out = torch.cat(outs).view(*conv_out.shape)
         else:
-            g = broadcast_3d(hx.g, obs.shape[2:])
+            g = broadcast_3d(all_hxs.g, obs.shape[2:])
             out = self.conv2((obs, g))
 
-        return out, hx
+        return out, all_hxs
 
     @property
     def recurrent_hidden_state_size(self):
@@ -279,6 +279,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                           1]  # 1 for next_subtask
         self.input_sections = list(map(int, input_sections))
         state_sizes = RecurrentState(
+            c=1,
             p=n_subtasks,
             r=subtask_size,
             h=hidden_size,
@@ -383,6 +384,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             s = self.f(torch.cat([obs[i], r, g, b], dim=-1))
             c = torch.sigmoid(self.phi_update(torch.cat([s, h], dim=-1)))
+            outputs.c.append(c)
 
             # c_loss
             outputs.c_loss.append(
