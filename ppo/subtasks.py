@@ -104,7 +104,7 @@ class SubtasksAgent(Agent, NNBase):
         # print('g       ', hx.g[0])
         # print('g_target', g_target[0, :, 0, 0])
         g_dist = FixedCategorical(probs=hx.g_probs)
-        aux_loss = -g_dist.entropy() * self.entropy_coef
+        aux_loss = .03 * hx.c_loss - g_dist.entropy() * self.entropy_coef
         _, _, h, w = obs.shape
 
         if action is None:
@@ -383,7 +383,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             s = self.f(torch.cat([obs[i], r, g, b], dim=-1))
             c = torch.sigmoid(self.phi_update(torch.cat([s, h], dim=-1)))
-            c = next_subtask[i]
 
             # c_loss
             outputs.c_loss.append(
