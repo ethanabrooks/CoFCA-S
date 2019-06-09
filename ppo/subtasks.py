@@ -219,6 +219,8 @@ class SubtasksAgent(Agent, NNBase):
         conv_out, hx = self.get_hidden(inputs, rnn_hxs, masks)
         # print('g       ', hx.g[0])
         # print('g_target', g_target[0, :, 0, 0])
+        g_dist = FixedCategorical(probs=hx.g_probs)
+        aux_loss = -g_dist.entropy() * self.entropy_coef
         _, _, h, w = obs.shape
         if self.teacher_agent:
             g = broadcast_3d(g_target[:, :, 0, 0], (h, w))
@@ -231,10 +233,8 @@ class SubtasksAgent(Agent, NNBase):
         else:
             if action is None:
                 action = hx.g_int.long()
+        log_probs = g_dist.log_probs(action)
 
-        dist = FixedCategorical(probs=hx.g_probs)
-        log_probs = dist.log_probs(action)
-        entropy = dist.entropy()
         # TODO: combine with other entropy
 
         value = self.critic(conv_out)
@@ -249,7 +249,7 @@ class SubtasksAgent(Agent, NNBase):
             value=value,
             action=action,
             action_log_probs=log_probs,
-            aux_loss=self.entropy_coef * entropy.mean(),
+            aux_loss=aux_loss.mean(),
             rnn_hxs=torch.cat(hx, dim=-1),
             log=log)
 
