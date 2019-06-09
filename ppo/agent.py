@@ -5,15 +5,11 @@ import torch.nn as nn
 from gym.spaces import Box, Discrete
 
 from ppo.distributions import Categorical, DiagGaussian
+from ppo.layers import Flatten
 from ppo.utils import init, init_normc_
 
 AgentValues = namedtuple('AgentValues',
                          'value action action_log_probs aux_loss rnn_hxs log')
-
-
-class Flatten(nn.Module):
-    def forward(self, x):
-        return x.view(x.size(0), -1)
 
 
 class Agent(nn.Module):

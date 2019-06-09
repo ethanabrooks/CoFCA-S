@@ -4,13 +4,14 @@ import numpy as np
 import torch
 import torch.jit
 from gym import spaces
-from gym.spaces import Box, Discrete, MultiDiscrete
+from gym.spaces import Box, Discrete
 from torch import nn as nn
 from torch.nn import functional as F
 
-from ppo.agent import Agent, AgentValues, Flatten, NNBase
+from ppo.agent import Agent, AgentValues, NNBase
+from ppo.layers import Flatten, Concat, Reshape, Broadcast3d
 from ppo.distributions import Categorical, DiagGaussian, FixedCategorical
-from ppo.utils import init
+from ppo.utils import init_, broadcast_3d, batch_conv1d, interp, trace
 from ppo.wrappers import SubtasksActions, get_subtasks_obs_sections
 
 RecurrentState = namedtuple(
@@ -22,69 +23,6 @@ RecurrentState = namedtuple(
     'g_loss '
     'b_loss '
     'subtask')
-
-
-class Concat(torch.jit.ScriptModule):
-    def __init__(self, dim=-1):
-        self.dim = dim
-        super().__init__()
-
-    def forward(self, inputs):
-        return torch.cat(inputs, dim=self.dim)
-
-
-class Reshape(torch.jit.ScriptModule):
-    def __init__(self, *shape):
-        super().__init__()
-        self.shape = shape
-
-    def forward(self, inputs):
-        return inputs.view(*self.shape)
-
-
-class Broadcast3d(torch.jit.ScriptModule):
-    def __init__(self, *shape):
-        super().__init__()
-        self.shape = shape
-
-    def forward(self, inputs):
-        return broadcast_3d(inputs, self.shape)
-
-
-def init_(network, nonlinearity=None):
-    if nonlinearity is None:
-        return init(network,
-                    nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0))
-    return init(network,
-                nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0),
-                nn.init.calculate_gain(nonlinearity))
-
-
-def broadcast_3d(inputs, shape):
-    return inputs.view(*inputs.shape, 1, 1).expand(*inputs.shape, *shape)
-
-
-@torch.jit.script
-def batch_conv1d(inputs, weights):
-    outputs = []
-    # one convolution per instance
-    n = inputs.shape[0]
-    for i in range(n):
-        x = inputs[i]
-        w = weights[i]
-        outputs.append(
-            F.conv1d(x.reshape(1, 1, -1), w.reshape(1, 1, -1), padding=1))
-    return torch.cat(outputs)
-
-
-@torch.jit.script
-def interp(x1, x2, c):
-    return c * x2.squeeze(1) + (1 - c) * x1
-
-
-@torch.jit.script
-def log_prob(i, probs):
-    return torch.log(torch.gather(probs, -1, i))
 
 
 class SubtasksTeacher(Agent):
@@ -292,11 +230,6 @@ class SubtasksAgent(Agent, NNBase):
     def get_value(self, inputs, rnn_hxs, masks):
         conv_out, hx = self.get_hidden(inputs, rnn_hxs, masks)
         return self.critic(conv_out)
-
-
-def trace(module_fn, in_size):
-    return torch.jit.trace(
-        module_fn(in_size), example_inputs=torch.rand(1, in_size))
 
 
 class SubtasksRecurrence(torch.jit.ScriptModule):
