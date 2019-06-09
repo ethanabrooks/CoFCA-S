@@ -104,7 +104,7 @@ class SubtasksAgent(Agent, NNBase):
         # print('g       ', hx.g[0])
         # print('g_target', g_target[0, :, 0, 0])
         g_dist = FixedCategorical(probs=hx.g_probs)
-        aux_loss = -g_dist.entropy() * self.entropy_coef
+        aux_loss = hx.b_loss - g_dist.entropy() * self.entropy_coef
         _, _, h, w = obs.shape
 
         if action is None:
@@ -403,7 +403,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 F.cross_entropy(l_logits, l_target,
                                 reduction='none').unsqueeze(1))
 
-            p2 = batch_conv1d(p, l) 
+            p2 = batch_conv1d(p, l)
 
             # p_losss
             outputs.p_loss.append(
