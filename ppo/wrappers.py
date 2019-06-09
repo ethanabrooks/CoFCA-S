@@ -45,7 +45,7 @@ class DebugWrapper(gym.Wrapper):
         s, _, t, i = super().step(action)
         guess = self.possible_subtasks[int(actions.g)]
         truth = self.env.unwrapped.subtask
-        r = float(np.all(truth == truth))
+        r = float(np.all(guess == truth))
         self.last_action = actions
         self.last_reward = r
         return s, r, True, i  #TODO
