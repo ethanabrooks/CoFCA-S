@@ -9,9 +9,9 @@ from torch import nn as nn
 from torch.nn import functional as F
 
 from ppo.agent import Agent, AgentValues, NNBase
-from ppo.layers import Flatten, Concat, Reshape, Broadcast3d
 from ppo.distributions import Categorical, DiagGaussian, FixedCategorical
-from ppo.utils import init_, broadcast_3d, batch_conv1d, interp, trace
+from ppo.layers import Broadcast3d, Concat, Flatten, Reshape
+from ppo.utils import batch_conv1d, broadcast_3d, init_, interp, trace
 from ppo.wrappers import SubtasksActions, get_subtasks_obs_sections
 
 RecurrentState = namedtuple(
@@ -199,15 +199,15 @@ class SubtasksAgent(Agent, NNBase):
             b_dist = FixedCategorical(probs=hx.b_probs)
             if action is None:
                 actions = SubtasksActions(
-                    a=hx.g_int,
-                    # a=a_dist.sample().float() # TODO
+                    # a=hx.g_int,
+                    a=a_dist.sample().float(),  # TODO
                     b=hx.b,
                     g=hx.g_int)
             log_probs = (
-                # a_dist.log_probs(actions.a) + TODO
+                a_dist.log_probs(actions.a) +  # TODO
                 b_dist.log_probs(actions.b) + g_dist.log_probs(actions.g))
             aux_loss -= (
-                # a_dist.entropy() + TODO
+                a_dist.entropy() +  # TODO
                 b_dist.entropy()) * self.entropy_coef
 
         value = self.critic(conv_out)
