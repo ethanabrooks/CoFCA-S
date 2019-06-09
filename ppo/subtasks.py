@@ -404,10 +404,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 F.cross_entropy(l_logits, l_target,
                                 reduction='none').unsqueeze(1))
 
-            # p2 = batch_conv1d(p, l) # TODO
-            l_repl = self.l_values[torch.zeros_like(
-                next_subtask[i]).long().flatten()]
-            p2 = batch_conv1d(p, l_repl)
+            p2 = batch_conv1d(p, l) 
 
             # p_losss
             outputs.p_loss.append(
