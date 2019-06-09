@@ -423,7 +423,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # c_loss
             outputs.c_loss.append(
                 F.binary_cross_entropy(c, next_subtask[i], reduction='none'))
-            # c = next_subtask[i]
 
             # TODO: figure this out
             # if self.recurrent:
@@ -440,15 +439,9 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 F.cross_entropy(l_logits, l_target,
                                 reduction='none').unsqueeze(1))
 
-            l_repl = self.l_values[l_target]
             p2 = batch_conv1d(p, l)
 
             # p_losss
-            p_repl = []
-            for j in range(m):
-                p_repl.append(self.p_values[subtask[j]])
-            p_repl = torch.stack(p_repl)
-
             outputs.p_loss.append(
                 F.cross_entropy(
                     p2.squeeze(1), subtask.squeeze(1),
@@ -467,7 +460,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             p = interp(p, p2, c)
             r = interp(r, r2, c)
-
             h = interp(h, h2, c)
 
             # TODO: deterministic
@@ -478,19 +470,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             outputs.g_probs.append(dist.probs)
 
             # g_loss
-            g_target = []
-            for j in range(m):
-                t1 = task_type[i, j, subtask[j]]
-                t2 = count[i, j, subtask[j]]
-                t3 = obj[i, j, subtask[j]]
-                target_int = self.encode(t1, t2, t3)
-                # assert target_int == np.ravel_multi_index((int(t1), int(t2), int(t3)),
-                #                                           self.subtask_space)
-                g_target.append(target_int)
-            g_target = torch.stack(g_target)
-
             i1, i2, i3 = self.decode(g_int)
-            # i1, i2, i3 = self.decode(g_target)
             # assert (int(i1), int(i2), int(i3)) == \
             #        np.unravel_index(int(g_int), self.subtask_space)
             g2 = self.embed_task(i1, i2, i3).squeeze(1)
@@ -502,9 +482,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # b
             # TODO: fix all this
             probs = self.beta(torch.cat([obs[i], g], dim=-1))
-            b = torch.multinomial(probs, 1)
-            log_prob_b = log_prob(b, probs)
-            b = b.float()
+            b = torch.multinomial(probs, 1).float()
 
             # b_loss
             outputs.b_loss.append(-log_prob(next_subtask[i].long(), probs))
