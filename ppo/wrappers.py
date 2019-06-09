@@ -17,10 +17,10 @@ def get_subtasks_obs_sections(task_space):
     n_subtasks, size_subtask = task_space.shape
     return ObsSections(
         base=(
-                1 +  # obstacles
-                task_space.nvec[0, 2] +  # objects one hot
-                1 +  # ice
-                1),  # agent
+            1 +  # obstacles
+            task_space.nvec[0, 2] +  # objects one hot
+            1 +  # ice
+            1),  # agent
         subtask=(sum(task_space.nvec[0])),  # one hots
         task=size_subtask * n_subtasks,  # int codes
         next_subtask=1)
@@ -29,39 +29,34 @@ def get_subtasks_obs_sections(task_space):
 class DebugWrapper(gym.Wrapper):
     def __init__(self, env):
         super().__init__(env)
-        obs_space, task_space = env.observation_space.spaces
-        self.size_subtask_space = np.prod(task_space.nvec[0])
-        self.size_action_space = env.action_space.n
         # self.action_space = spaces.Discrete(
         # int(self.size_subtask_space * self.size_action_space))
         self.possible_subtasks = np.array([
             [0, 1, 0],
             [0, 1, 1],
         ])
-        self.action_space = spaces.Discrete(int(self.size_subtask_space))
         self.last_action = None
         self.last_reward = None
 
     def step(self, action):
+        actions = SubtasksActions(*action)
         # action, subtask = np.unravel_index(
         # action, (self.size_action_space, self.size_subtask_space))
-        # s, r, t, i = super().step(action)
-        r = float(np.all(self.possible_subtasks[action] == self.env.subtask))
+        s, r, t, i = super().step(action)
+        guess = self.possible_subtasks[int(actions.g)]
+        truth = self.env.unwrapped.subtask
+        r += float(np.all(truth == truth))
         self.last_action = action
         self.last_reward = r
-        # print('guess', action, self.possible_subtasks[action])
-        # print('truth', self.env.subtask)
-        # print('reward', r)
-        return self.env.get_observation(), r, True, {}
-        # TODO: make episodes more than 1 step
+        return s, r, t, i
 
     def render(self, mode='human'):
         action = self.last_action
+        print()
         print('guess', action, self.possible_subtasks[action])
         print('truth', self.env.subtask)
         print('reward', self.last_reward)
-        print()
-        time.sleep(.5)
+        super().render()
 
 
 SubtasksActions = namedtuple('SubtasksActions', 'a b g')
@@ -74,11 +69,13 @@ class SubtasksWrapper(gym.Wrapper):
         assert np.all(task_space.nvec == task_space.nvec[0])
         _, h, w = obs_space.shape
         d = sum(get_subtasks_obs_sections(task_space))
+        self.task_space = task_space
         self.observation_space = Box(0, 1, shape=(d, h, w))
         self.action_space = spaces.Tuple(
-            SubtasksActions(a=env.action_space,
-                            b=spaces.Discrete(2),
-                            g=spaces.Discrete(task_space.nvec[0].prod())))
+            SubtasksActions(
+                a=env.action_space,
+                b=spaces.Discrete(2),
+                g=spaces.Discrete(task_space.nvec[0].prod())))
 
     def step(self, action):
         action = int(SubtasksActions(*action).a)
@@ -246,7 +243,7 @@ class VecPyTorchFrameStack(VecEnvWrapper):
         low = np.repeat(wos.low, self.nstack, axis=0)
         high = np.repeat(wos.high, self.nstack, axis=0)
 
-        self.stacked_obs = torch.zeros((venv.num_envs,) + low.shape)
+        self.stacked_obs = torch.zeros((venv.num_envs, ) + low.shape)
 
         observation_space = gym.spaces.Box(
             low=low, high=high, dtype=venv.observation_space.dtype)
