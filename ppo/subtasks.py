@@ -36,8 +36,10 @@ class SubtasksAgent(Agent, NNBase):
                  recurrent,
                  entropy_coef,
                  multiplicative_interaction,
+                 b_loss_coef,
                  teacher_agent=None):
         nn.Module.__init__(self)
+        self.b_loss_coef = b_loss_coef
         self.multiplicative_interaction = multiplicative_interaction
         if teacher_agent:
             assert isinstance(teacher_agent, SubtasksTeacher)
@@ -104,7 +106,7 @@ class SubtasksAgent(Agent, NNBase):
         # print('g       ', hx.g[0])
         # print('g_target', g_target[0, :, 0, 0])
         g_dist = FixedCategorical(probs=hx.g_probs)
-        aux_loss = hx.b_loss - g_dist.entropy() * self.entropy_coef
+        aux_loss = self.b_loss_coef * hx.b_loss - g_dist.entropy() * self.entropy_coef
         _, _, h, w = obs.shape
 
         if action is None:
