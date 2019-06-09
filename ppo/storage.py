@@ -3,6 +3,7 @@ from collections import namedtuple
 from typing import Generator
 
 import torch
+from gym import spaces
 from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
 
 
@@ -12,7 +13,7 @@ def _flatten_helper(T, N, _tensor):
 
 Batch = namedtuple(
     'Batch', 'obs recurrent_hidden_states actions value_preds ret '
-    'masks old_action_log_probs adv tasks importance_weighting')
+             'masks old_action_log_probs adv tasks importance_weighting')
 
 
 class RolloutStorage(object):
@@ -32,12 +33,22 @@ class RolloutStorage(object):
         self.value_preds = torch.zeros(num_steps + 1, num_processes, 1)
         self.returns = torch.zeros(num_steps + 1, num_processes, 1)
         self.action_log_probs = torch.zeros(num_steps, num_processes, 1)
-        if action_space.__class__.__name__ == 'Discrete':
-            action_shape = 1
-        else:
-            action_shape = action_space.shape[0]
-        self.actions = torch.zeros(num_steps, num_processes, action_shape)
-        if action_space.__class__.__name__ == 'Discrete':
+
+        def buffer_size(space):
+            if isinstance(space, spaces.Discrete):
+                return 1
+            elif isinstance(space, spaces.MultiDiscrete):
+                return space.nvec.shape[0]
+            elif isinstance(space, spaces.Box):
+                return space.shape[0]
+            elif isinstance(space, spaces.Tuple):
+                return sum(buffer_size(s) for s in space.spaces)
+            else:
+                raise NotImplementedError
+
+        self.actions = torch.zeros(num_steps, num_processes,
+                                   buffer_size(action_space))
+        if isinstance(action_space, (spaces.Discrete, spaces.MultiDiscrete)):
             self.actions = self.actions.long()
         self.masks = torch.ones(num_steps + 1, num_processes, 1)
 

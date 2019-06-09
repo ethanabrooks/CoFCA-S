@@ -1,10 +1,11 @@
 import time
+from collections import namedtuple
 
 import gym
 import numpy as np
 import torch
 from gym import spaces
-from gym.spaces import Box
+from gym.spaces import Box, MultiDiscrete
 
 from common.vec_env import VecEnvWrapper
 from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
@@ -16,10 +17,10 @@ def get_subtasks_obs_sections(task_space):
     n_subtasks, size_subtask = task_space.shape
     return ObsSections(
         base=(
-            1 +  # obstacles
-            task_space.nvec[0, 2] +  # objects one hot
-            1 +  # ice
-            1),  # agent
+                1 +  # obstacles
+                task_space.nvec[0, 2] +  # objects one hot
+                1 +  # ice
+                1),  # agent
         subtask=(sum(task_space.nvec[0])),  # one hots
         task=size_subtask * n_subtasks,  # int codes
         next_subtask=1)
@@ -63,7 +64,10 @@ class DebugWrapper(gym.Wrapper):
         time.sleep(.5)
 
 
-class SubtasksWrapper(gym.ObservationWrapper):
+SubtasksActions = namedtuple('SubtasksActions', 'a b g')
+
+
+class SubtasksWrapper(gym.Wrapper):
     def __init__(self, env):
         super().__init__(env)
         obs_space, task_space = env.observation_space.spaces
@@ -71,8 +75,20 @@ class SubtasksWrapper(gym.ObservationWrapper):
         _, h, w = obs_space.shape
         d = sum(get_subtasks_obs_sections(task_space))
         self.observation_space = Box(0, 1, shape=(d, h, w))
+        self.action_space = spaces.Tuple(
+            SubtasksActions(a=env.action_space,
+                            b=spaces.Discrete(2),
+                            g=spaces.Discrete(task_space.nvec[0].prod())))
 
-    def observation(self, observation):
+    def step(self, action):
+        action = int(SubtasksActions(*action).a)
+        s, r, t, i = super().step(action)
+        return self.wrap_observation(s), r, t, i
+
+    def reset(self, **kwargs):
+        return self.wrap_observation(super().reset())
+
+    def wrap_observation(self, observation):
         obs, task = observation
         _, h, w = obs.shape
         env = self.env.unwrapped
@@ -230,7 +246,7 @@ class VecPyTorchFrameStack(VecEnvWrapper):
         low = np.repeat(wos.low, self.nstack, axis=0)
         high = np.repeat(wos.high, self.nstack, axis=0)
 
-        self.stacked_obs = torch.zeros((venv.num_envs, ) + low.shape)
+        self.stacked_obs = torch.zeros((venv.num_envs,) + low.shape)
 
         observation_space = gym.spaces.Box(
             low=low, high=high, dtype=venv.observation_space.dtype)
