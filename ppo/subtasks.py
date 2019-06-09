@@ -107,13 +107,10 @@ class SubtasksAgent(Agent, NNBase):
         aux_loss = -g_dist.entropy() * self.entropy_coef
         _, _, h, w = obs.shape
 
-        def parse_action(_action):
-            return SubtasksActions(*torch.split(_action, [1, 1, 1], dim=-1))
-
         if action is None:
             teacher_agent_action = None
         else:
-            actions = parse_action(action)
+            actions = SubtasksActions(*torch.split(action, [1, 1, 1], dim=-1))
             teacher_agent_action = actions.a
 
         if self.teacher_agent:
@@ -123,8 +120,11 @@ class SubtasksAgent(Agent, NNBase):
             act = self.teacher_agent(
                 inputs, rnn_hxs, masks, action=teacher_agent_action)
             if action is None:
-                actions = parse_action(act.action.float())._replace(
-                    g=hx.g_int, b=hx.b)
+                actions = SubtasksActions(
+                    a=act.action.float()[:, :1],
+                    g=hx.g_int,
+                    b=hx.b,
+                )
             log_probs = act.action_log_probs.detach() + g_dist.log_probs(
                 actions.g)
             aux_loss += act.aux_loss

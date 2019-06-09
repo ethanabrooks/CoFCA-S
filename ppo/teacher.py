@@ -1,7 +1,7 @@
 import torch
 
 from ppo.agent import Agent
-from ppo.wrappers import get_subtasks_obs_sections, SubtasksActions
+from ppo.wrappers import SubtasksActions, get_subtasks_obs_sections
 
 
 class SubtasksTeacher(Agent):
@@ -24,9 +24,12 @@ class SubtasksTeacher(Agent):
         subtask = inputs[:, start:stop, :, :]
         return torch.cat([base_obs, subtask], dim=1)
 
-    def forward(self, inputs, *args, **kwargs):
-        act = super().forward(self.preprocess_obs(inputs), *args, **kwargs)
-        n = inputs.shape[0]
+    def forward(self, inputs, *args, action=None, **kwargs):
+        if action is not None:
+            action = action[:, :1]
+
+        act = super().forward(
+            self.preprocess_obs(inputs), action=action, *args, **kwargs)
         g = torch.zeros_like(act.action)
         b = torch.zeros_like(act.action)
         actions = SubtasksActions(a=act.action, b=b, g=g)
