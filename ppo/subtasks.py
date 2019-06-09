@@ -403,7 +403,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 F.cross_entropy(l_logits, l_target,
                                 reduction='none').unsqueeze(1))
 
-            p2 = batch_conv1d(p, l) 
+            p2 = batch_conv1d(p, l)
 
             # p_losss
             outputs.p_loss.append(
@@ -428,7 +428,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             # TODO: deterministic
             # g
-            dist = self.pi_theta((h, r))
+            dist = self.pi_theta((h, r_target))
             g_int = dist.sample()
             outputs.g_int.append(g_int.float())
             outputs.g_probs.append(dist.probs)
