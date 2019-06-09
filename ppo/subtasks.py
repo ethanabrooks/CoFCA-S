@@ -88,13 +88,16 @@ def log_prob(i, probs):
 
 
 class SubtasksTeacher(Agent):
-    def __init__(self, task_space, obs_shape, **kwargs):
+    def __init__(self, task_space, obs_shape, action_space, **kwargs):
         self.obs_sections = get_subtasks_obs_sections(task_space)
         d, h, w = obs_shape
         assert d == sum(self.obs_sections)
         self.d = self.obs_sections.base + self.obs_sections.subtask
-        self.last_subtask = None
-        super().__init__(obs_shape=(self.d, h, w), **kwargs)
+        self.action_spaces = SubtasksActions(*action_space.spaces)
+        super().__init__(
+            obs_shape=(self.d, h, w),
+            action_space=self.action_spaces.a,
+            **kwargs)
 
     def preprocess_obs(self, inputs):
         batch_size, _, h, w = inputs.shape
@@ -102,24 +105,18 @@ class SubtasksTeacher(Agent):
         start = self.obs_sections.base
         stop = self.obs_sections.base + self.obs_sections.subtask
         subtask = inputs[:, start:stop, :, :]
-        return base_obs, subtask
+        return torch.cat([base_obs, subtask], dim=1)
 
     def forward(self, inputs, *args, **kwargs):
-        base_obs, subtask = self.preprocess_obs(inputs)
-        inputs = torch.cat([base_obs, subtask], dim=1)
-        act = super().forward(inputs, *args, **kwargs)
+        act = super().forward(self.preprocess_obs(inputs), *args, **kwargs)
         n = inputs.shape[0]
-        if self.last_subtask is None:
-            b = torch.zeros((n, 1), device=inputs.device)
-        else:
-            b = torch.all(subtask == self.last_subtask, dim=-1)
-        self.last_subtask = subtask
-        return act._replace(
-            action=SubtasksActions(a=act.action, b=b, g=subtask))
+        g = torch.zeros_like(act.action)
+        b = torch.zeros_like(act.action)
+        actions = SubtasksActions(a=act.action, b=b, g=g)
+        return act._replace(action=torch.cat(actions, dim=-1))
 
     def get_value(self, inputs, rnn_hxs, masks):
-        return super().get_value(
-            torch.cat(self.preprocess_obs(inputs), dim=1), rnn_hxs, masks)
+        return super().get_value(self.preprocess_obs(inputs), rnn_hxs, masks)
 
 
 # noinspection PyMissingConstructor
@@ -247,8 +244,7 @@ class SubtasksAgent(Agent, NNBase):
 
             act = self.teacher_agent(inputs, rnn_hxs, masks, action=action)
             if action is None:
-                actions = SubtasksActions(
-                    a=act.action.a, b=act.action.b, g=hx.g)
+                actions = SubtasksActions(a=act.action, b=hx.b, g=hx.g)
             log_probs = act.action_log_probs + g_dist.log_probs(actions.g)
             aux_loss += act.aux_loss
         else:
