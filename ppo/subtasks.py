@@ -1,16 +1,17 @@
 from collections import namedtuple
 
-import numpy as np
-import torch
-import torch.jit
 from gym import spaces
 from gym.spaces import Box, Discrete
+import numpy as np
+import torch
 from torch import nn as nn
+import torch.jit
 from torch.nn import functional as F
 
 from ppo.agent import Agent, AgentValues, NNBase
 from ppo.distributions import Categorical, DiagGaussian, FixedCategorical
 from ppo.layers import Broadcast3d, Concat, Flatten, Reshape
+from ppo.teacher import SubtasksTeacher
 from ppo.utils import batch_conv1d, broadcast_3d, init_, interp, trace
 from ppo.wrappers import SubtasksActions, get_subtasks_obs_sections
 
@@ -23,38 +24,6 @@ RecurrentState = namedtuple(
     'g_loss '
     'b_loss '
     'subtask')
-
-
-class SubtasksTeacher(Agent):
-    def __init__(self, task_space, obs_shape, action_space, **kwargs):
-        self.obs_sections = get_subtasks_obs_sections(task_space)
-        d, h, w = obs_shape
-        assert d == sum(self.obs_sections)
-        self.d = self.obs_sections.base + self.obs_sections.subtask
-        self.action_spaces = SubtasksActions(*action_space.spaces)
-        super().__init__(
-            obs_shape=(self.d, h, w),
-            action_space=self.action_spaces.a,
-            **kwargs)
-
-    def preprocess_obs(self, inputs):
-        batch_size, _, h, w = inputs.shape
-        base_obs = inputs[:, :self.obs_sections.base]
-        start = self.obs_sections.base
-        stop = self.obs_sections.base + self.obs_sections.subtask
-        subtask = inputs[:, start:stop, :, :]
-        return torch.cat([base_obs, subtask], dim=1)
-
-    def forward(self, inputs, *args, **kwargs):
-        act = super().forward(self.preprocess_obs(inputs), *args, **kwargs)
-        n = inputs.shape[0]
-        g = torch.zeros_like(act.action)
-        b = torch.zeros_like(act.action)
-        actions = SubtasksActions(a=act.action, b=b, g=g)
-        return act._replace(action=torch.cat(actions, dim=-1))
-
-    def get_value(self, inputs, rnn_hxs, masks):
-        return super().get_value(self.preprocess_obs(inputs), rnn_hxs, masks)
 
 
 # noinspection PyMissingConstructor
@@ -127,41 +96,6 @@ class SubtasksAgent(Agent, NNBase):
             raise NotImplementedError
         self.critic = init_(nn.Linear(input_size, 1))
 
-    def get_hidden(self, inputs, rnn_hxs, masks):
-        obs, subtasks, task, next_subtask = torch.split(
-            inputs, self.obs_sections, dim=1)
-        task = task[:, :, 0, 0]
-        next_subtask = next_subtask[:, :, 0, 0]
-
-        # TODO: This is where we would embed the task if we were doing that
-
-        conv_out = self.conv1(obs)
-        recurrent_inputs = torch.cat([conv_out, task, next_subtask], dim=-1)
-        x, rnn_hxs = self._forward_gru(recurrent_inputs, rnn_hxs, masks)
-        hx = RecurrentState(*self.recurrent_module.parse_hidden(x))
-
-        # assert torch.all(subtasks[:, :, 0, 0] == hx.g)
-
-        if self.multiplicative_interaction:
-            weights = self.conv_weight(subtasks[:, :, 0, 0])
-            outs = []
-            for ob, weight in zip(obs, weights):
-                outs.append(F.conv2d(ob.unsqueeze(0), weight, padding=(1, 1)))
-            out = torch.cat(outs).view(*conv_out.shape)
-        else:
-            g = broadcast_3d(hx.g, obs.shape[2:])
-            out = self.conv2((obs, g))
-
-        return out, hx
-
-    @property
-    def recurrent_hidden_state_size(self):
-        return sum(self.recurrent_module.state_sizes)
-
-    @property
-    def is_recurrent(self):
-        return True
-
     def forward(self, inputs, rnn_hxs, masks, action=None,
                 deterministic=False):
         obs, g_target, task, next_subtask = torch.split(
@@ -226,6 +160,41 @@ class SubtasksAgent(Agent, NNBase):
             aux_loss=aux_loss.mean(),
             rnn_hxs=torch.cat(hx, dim=-1),
             log=log)
+
+    def get_hidden(self, inputs, rnn_hxs, masks):
+        obs, subtasks, task, next_subtask = torch.split(
+            inputs, self.obs_sections, dim=1)
+        task = task[:, :, 0, 0]
+        next_subtask = next_subtask[:, :, 0, 0]
+
+        # TODO: This is where we would embed the task if we were doing that
+
+        conv_out = self.conv1(obs)
+        recurrent_inputs = torch.cat([conv_out, task, next_subtask], dim=-1)
+        x, rnn_hxs = self._forward_gru(recurrent_inputs, rnn_hxs, masks)
+        hx = RecurrentState(*self.recurrent_module.parse_hidden(x))
+
+        # assert torch.all(subtasks[:, :, 0, 0] == hx.g)
+
+        if self.multiplicative_interaction:
+            weights = self.conv_weight(subtasks[:, :, 0, 0])
+            outs = []
+            for ob, weight in zip(obs, weights):
+                outs.append(F.conv2d(ob.unsqueeze(0), weight, padding=(1, 1)))
+            out = torch.cat(outs).view(*conv_out.shape)
+        else:
+            g = broadcast_3d(hx.g, obs.shape[2:])
+            out = self.conv2((obs, g))
+
+        return out, hx
+
+    @property
+    def recurrent_hidden_state_size(self):
+        return sum(self.recurrent_module.state_sizes)
+
+    @property
+    def is_recurrent(self):
+        return True
 
     def get_value(self, inputs, rnn_hxs, masks):
         conv_out, hx = self.get_hidden(inputs, rnn_hxs, masks)
@@ -344,6 +313,37 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             self.obj_embeddings[obj.long()],
         ],
                          dim=-1)
+
+    def encode(self, g1, g2, g3):
+        x1, x2, x3 = self.subtask_space
+        return (g1 * (x2 * x3) + g2 * x3 + g3).long()
+
+    def decode(self, g):
+        x1, x2, x3 = self.subtask_space
+        g1 = g // (x2 * x3)
+        x4 = g % (x2 * x3)
+        g2 = x4 // x3
+        g3 = x4 % x3
+        return g1, g2, g3
+
+    def check_grad(self, **kwargs):
+        for k, v in kwargs.items():
+            if v.grad_fn is not None:
+                grads = torch.autograd.grad(
+                    v.mean(),
+                    self.parameters(),
+                    retain_graph=True,
+                    allow_unused=True)
+                for (name, _), grad in zip(self.named_parameters(), grads):
+                    if grad is None:
+                        print(f'{k} has no grad wrt {name}')
+                    else:
+                        print(
+                            f'mean grad ({v.mean().item()}) of {k} wrt {name}:',
+                            grad.mean())
+                        if torch.isnan(grad.mean()):
+                            import ipdb
+                            ipdb.set_trace()
 
     # @torch.jit.script_method
     def forward(self, input, hx):
@@ -468,34 +468,3 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
         hx = torch.cat(stacked, dim=-1)
         return hx, hx[-1]
-
-    def encode(self, g1, g2, g3):
-        x1, x2, x3 = self.subtask_space
-        return (g1 * (x2 * x3) + g2 * x3 + g3).long()
-
-    def decode(self, g):
-        x1, x2, x3 = self.subtask_space
-        g1 = g // (x2 * x3)
-        x4 = g % (x2 * x3)
-        g2 = x4 // x3
-        g3 = x4 % x3
-        return g1, g2, g3
-
-    def check_grad(self, **kwargs):
-        for k, v in kwargs.items():
-            if v.grad_fn is not None:
-                grads = torch.autograd.grad(
-                    v.mean(),
-                    self.parameters(),
-                    retain_graph=True,
-                    allow_unused=True)
-                for (name, _), grad in zip(self.named_parameters(), grads):
-                    if grad is None:
-                        print(f'{k} has no grad wrt {name}')
-                    else:
-                        print(
-                            f'mean grad ({v.mean().item()}) of {k} wrt {name}:',
-                            grad.mean())
-                        if torch.isnan(grad.mean()):
-                            import ipdb
-                            ipdb.set_trace()
