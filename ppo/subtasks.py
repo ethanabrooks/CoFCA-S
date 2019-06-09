@@ -253,7 +253,8 @@ class SubtasksAgent(Agent, NNBase):
             if action is None:
                 actions = parse_action(act.action.float())._replace(
                     g=hx.g_int, b=hx.b)
-            log_probs = act.action_log_probs + g_dist.log_probs(actions.g)
+            log_probs = act.action_log_probs.detach() + g_dist.log_probs(
+                actions.g)
             aux_loss += act.aux_loss
         else:
             a_dist = self.actor(conv_out)
