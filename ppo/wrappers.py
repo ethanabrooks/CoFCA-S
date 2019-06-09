@@ -52,13 +52,13 @@ class DebugWrapper(gym.Wrapper):
 
     def render(self, mode='human'):
         action = self.last_action
-        print()
+        print('########################################')
+        super().render()
         if action is not None:
             g = int(action.g)
             print('guess', g, self.possible_subtasks[g])
         print('truth', self.env.unwrapped.subtask)
         print('reward', self.last_reward)
-        super().render()
 
 
 SubtasksActions = namedtuple('SubtasksActions', 'a b g')

@@ -1,15 +1,13 @@
 # third party
 import csv
-from io import StringIO
 import random
 import subprocess
+from io import StringIO
 
 import numpy as np
 import torch
 import torch.jit
 import torch.nn as nn
-
-
 # Get a render function
 from torch import nn as nn
 from torch.nn import functional as F
