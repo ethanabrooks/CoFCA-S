@@ -42,10 +42,10 @@ class DebugWrapper(gym.Wrapper):
         actions = SubtasksActions(*action)
         # action, subtask = np.unravel_index(
         # action, (self.size_action_space, self.size_subtask_space))
-        s, r, t, i = super().step(action)
+        s, _, t, i = super().step(action)
         guess = self.possible_subtasks[int(actions.g)]
         truth = self.env.unwrapped.subtask
-        r += float(np.all(truth == truth))
+        r = float(np.all(truth == truth))
         self.last_action = actions
         self.last_reward = r
         return s, r, t, i
