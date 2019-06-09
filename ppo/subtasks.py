@@ -441,7 +441,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             g_loss = F.binary_cross_entropy(g2, r_target, reduction='none')
             outputs.g_loss.append(torch.mean(g_loss, dim=-1, keepdim=True))
 
-            g = interp(g, g2, c)
+            # g = interp(g, g2, c) # TODO
+            g = g2
 
             # b
             dist = self.beta(torch.cat([obs[i], g], dim=-1))
