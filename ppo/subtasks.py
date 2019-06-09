@@ -454,7 +454,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                     p2.squeeze(1), subtask.squeeze(1),
                     reduction='none').unsqueeze(1))
 
-            r2 = p2 @ M  #TODO
+            r2 = p2 @ M
 
             # r_loss
             r_target = []
@@ -472,7 +472,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             # TODO: deterministic
             # g
-            dist = self.pi_theta((h, r_target))
+            dist = self.pi_theta((h, r))
             g_int = dist.sample()
             outputs.g_int.append(g_int.float())
             outputs.g_probs.append(dist.probs)
