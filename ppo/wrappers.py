@@ -48,7 +48,7 @@ class DebugWrapper(gym.Wrapper):
         r = float(np.all(guess == truth))
         self.last_action = actions
         self.last_reward = r
-        return s, r, True, i  #TODO
+        return s, r, t, i  #TODO
 
     def render(self, mode='human'):
         action = self.last_action
