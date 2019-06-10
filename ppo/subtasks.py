@@ -188,10 +188,10 @@ class SubtasksAgent(Agent, NNBase):
                 outs.append(F.conv2d(ob.unsqueeze(0), weight, padding=(1, 1)))
             out = torch.cat(outs).view(*conv_out.shape)
         else:
-            g = broadcast_3d(all_hxs.g, obs.shape[2:])
+            g = broadcast_3d(hx.g, obs.shape[2:])
             out = self.conv2((obs, g))
 
-        return out, all_hxs
+        return out, hx
 
     @property
     def recurrent_hidden_state_size(self):
