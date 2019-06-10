@@ -140,7 +140,7 @@ class SubtasksAgent(Agent, NNBase):
                     c=hx.c,
                 )
             log_probs = (act.action_log_probs.detach() + g_dist.log_probs(
-                actions.g) + c_dist.log_prob(actions.c))
+                actions.g) + c_dist.log_probs(actions.c))
             aux_loss += act.aux_loss
         else:
             a_dist = self.actor(conv_out)
