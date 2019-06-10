@@ -402,7 +402,11 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             # c_loss
             outputs.c_loss.append(
-                F.binary_cross_entropy(c, next_subtask[i], reduction='none'))
+                F.binary_cross_entropy(
+                    torch.clamp(c, 0., 1.),
+                    next_subtask[i],
+                    reduction='none',
+                ))
 
             # TODO: figure this out
             # if self.recurrent:
@@ -435,7 +439,10 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 r_target.append(M[j, subtask[j]])
             r_target = torch.cat(r_target).detach()
             r_loss = F.binary_cross_entropy(
-                r2.squeeze(1), r_target, reduction='none')
+                torch.clamp(r2.squeeze(1), 0., 1.),
+                r_target,
+                reduction='none',
+            )
             outputs.r_loss.append(torch.mean(r_loss, dim=-1, keepdim=True))
 
             p = interp(p, p2, c)
@@ -454,7 +461,11 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # assert (int(i1), int(i2), int(i3)) == \
             #        np.unravel_index(int(g_int), self.subtask_space)
             g2 = self.embed_task(i1, i2, i3).squeeze(1)
-            g_loss = F.binary_cross_entropy(g2, r_target, reduction='none')
+            g_loss = F.binary_cross_entropy(
+                torch.clamp(g2, 0., 1.),
+                r_target,
+                reduction='none',
+            )
             outputs.g_loss.append(torch.mean(g_loss, dim=-1, keepdim=True))
 
             g = interp(g, g2, c)
