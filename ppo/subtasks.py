@@ -223,7 +223,10 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
         subcontroller = nn.GRUCell if recurrent else nn.Linear
         self.subcontroller = trace(
-            lambda in_size: init_(subcontroller(in_size, hidden_size)),
+            lambda in_size: nn.Sequential(
+                init_(subcontroller(in_size, hidden_size), 'relu'),
+                nn.ReLU(),
+            ),
             in_size=conv_out_size)  # h
 
         self.phi_update = trace(
