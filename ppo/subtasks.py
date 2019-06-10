@@ -37,7 +37,6 @@ class SubtasksAgent(Agent, NNBase):
                  entropy_coef,
                  b_loss_coef,
                  multiplicative_interaction,
-                 b_loss_coef,
                  teacher_agent=None):
         nn.Module.__init__(self)
         self.b_loss_coef = b_loss_coef

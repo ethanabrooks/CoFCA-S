@@ -57,7 +57,6 @@ def subtasks_cli():
     parser.add_argument('--b-loss-coef', type=float, default=.03)
     parser.add_argument('--n-objects', type=int)
     parser.add_argument('--max-episode-steps', type=int)
-    parser.add_argument('--b-loss-coef', type=float, default=0.03)
     kwargs = hierarchical_parse_args(parser)
 
     def train(task_args, multiplicative_interaction, n_objects,
@@ -85,7 +84,6 @@ def subtasks_cli():
                     b_loss_coef=b_loss_coef,
                     recurrent=recurrent,
                     multiplicative_interaction=multiplicative_interaction,
-                    b_loss_coef=b_loss_coef,
                 )
 
         TrainTeacher(**_kwargs)
@@ -145,7 +143,6 @@ def teach_cli():
     subtasks_parser.add_argument(
         '--b-loss-coef', type=float, default=0.03)
     subtasks_parser.add_argument('--subtasks-recurrent', action='store_true')
-    subtasks_parser.add_argument('--b-loss-coef', type=float, default=.03)
     subtasks_parser.add_argument(
         '--multiplicative-interaction', action='store_true')
     parser.add_argument('--n-objects', type=int, required=True)
@@ -195,7 +192,6 @@ def teach_cli():
                     recurrent=subtasks_args['subtasks_recurrent'],
                     multiplicative_interaction=subtasks_args[
                         'multiplicative_interaction'],
-                    b_loss_coef=subtasks_args['b_loss_coef'],
                     teacher_agent=teacher_agent)
 
         # ppo_args.update(aux_loss_only=True)
