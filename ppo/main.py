@@ -57,6 +57,7 @@ def subtasks_cli():
     parser.add_argument('--b-loss-coef', type=float, default=.03)
     parser.add_argument('--n-objects', type=int)
     parser.add_argument('--max-episode-steps', type=int)
+    parser.add_argument('--b-loss-coef', type=float, default=0.03)
     kwargs = hierarchical_parse_args(parser)
 
     def train(task_args, multiplicative_interaction, n_objects,
@@ -81,6 +82,7 @@ def subtasks_cli():
                     task_space=get_task_space(**task_args),
                     hidden_size=hidden_size,
                     entropy_coef=entropy_coef,
+                    b_loss_coef=b_loss_coef,
                     recurrent=recurrent,
                     multiplicative_interaction=multiplicative_interaction,
                     b_loss_coef=b_loss_coef,
@@ -140,6 +142,8 @@ def teach_cli():
         '--subtasks-hidden-size', type=int, required=True)
     subtasks_parser.add_argument(
         '--subtasks-entropy-coef', type=float, default=0.01)
+    subtasks_parser.add_argument(
+        '--b-loss-coef', type=float, default=0.03)
     subtasks_parser.add_argument('--subtasks-recurrent', action='store_true')
     subtasks_parser.add_argument('--b-loss-coef', type=float, default=.03)
     subtasks_parser.add_argument(
@@ -187,6 +191,7 @@ def teach_cli():
                     task_space=task_space,
                     hidden_size=subtasks_args['subtasks_hidden_size'],
                     entropy_coef=subtasks_args['subtasks_entropy_coef'],
+                    b_loss_coef=subtasks_args['b_loss_coef'],
                     recurrent=subtasks_args['subtasks_recurrent'],
                     multiplicative_interaction=subtasks_args[
                         'multiplicative_interaction'],

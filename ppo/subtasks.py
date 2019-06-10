@@ -35,6 +35,7 @@ class SubtasksAgent(Agent, NNBase):
                  hidden_size,
                  recurrent,
                  entropy_coef,
+                 b_loss_coef,
                  multiplicative_interaction,
                  b_loss_coef,
                  teacher_agent=None):
@@ -106,7 +107,7 @@ class SubtasksAgent(Agent, NNBase):
         # print('g       ', hx.g[0])
         # print('g_target', g_target[0, :, 0, 0])
         g_dist = FixedCategorical(probs=hx.g_probs)
-        aux_loss = self.b_loss_coef * hx.b_loss - g_dist.entropy() * self.entropy_coef
+        aux_loss = hx.c_loss - g_dist.entropy() * self.entropy_coef  # TODO
         _, _, h, w = obs.shape
 
         if action is None:
@@ -117,7 +118,15 @@ class SubtasksAgent(Agent, NNBase):
 
         if self.teacher_agent:
             g = broadcast_3d(hx.g, (h, w))
-            inputs = torch.cat([obs, g, task, next_subtask], dim=1)
+            inputs = torch.cat(
+                [
+                    obs,
+                    g_target,  #TODO
+                    # g,
+                    task,
+                    next_subtask
+                ],
+                dim=1)  # TODO
 
             act = self.teacher_agent(
                 inputs, rnn_hxs, masks, action=teacher_agent_action)
@@ -127,8 +136,8 @@ class SubtasksAgent(Agent, NNBase):
                     g=hx.g_int,
                     b=hx.b,
                 )
-            log_probs = act.action_log_probs.detach() + g_dist.log_probs(
-                actions.g)
+            log_probs = act.action_log_probs.detach()
+            # + g_dist.log_probs( actions.g) # TODO
             aux_loss += act.aux_loss
         else:
             a_dist = self.actor(conv_out)
@@ -158,7 +167,7 @@ class SubtasksAgent(Agent, NNBase):
             rnn_hxs=torch.cat(hx, dim=-1),
             log=log)
 
-    def get_hidden(self, inputs, last_hxs, masks):
+    def get_hidden(self, inputs, last_hx, masks):
         obs, subtasks, task, next_subtask = torch.split(
             inputs, self.obs_sections, dim=1)
         task = task[:, :, 0, 0]
@@ -168,8 +177,8 @@ class SubtasksAgent(Agent, NNBase):
 
         conv_out = self.conv1(obs)
         recurrent_inputs = torch.cat([conv_out, task, next_subtask], dim=-1)
-        all_hxs, last_hxs = self._forward_gru(recurrent_inputs, last_hxs, masks)
-        all_hxs = RecurrentState(*self.recurrent_module.parse_hidden(all_hxs))
+        all_hxs, last_hx = self._forward_gru(recurrent_inputs, last_hx, masks)
+        hx = RecurrentState(*self.recurrent_module.parse_hidden(all_hxs))
 
         # assert torch.all(subtasks[:, :, 0, 0] == hx.g)
 
@@ -217,11 +226,17 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             subtask_size +  # r
             subtask_size +  # g
             1)  # b
-        self.f = init_(nn.Linear(in_size, hidden_size))
+        self.f = nn.Sequential(
+            init_(nn.Linear(in_size, hidden_size), 'relu'),
+            nn.ReLU(),
+        )
 
         subcontroller = nn.GRUCell if recurrent else nn.Linear
         self.subcontroller = trace(
-            lambda in_size: init_(subcontroller(in_size, hidden_size)),
+            lambda in_size: nn.Sequential(
+                init_(subcontroller(in_size, hidden_size), 'relu'),
+                nn.ReLU(),
+            ),
             in_size=conv_out_size)  # h
 
         self.phi_update = trace(
@@ -388,7 +403,11 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             # c_loss
             outputs.c_loss.append(
-                F.binary_cross_entropy(c, next_subtask[i], reduction='none'))
+                F.binary_cross_entropy(
+                    torch.clamp(c, 0., 1.),
+                    next_subtask[i],
+                    reduction='none',
+                ))
 
             # TODO: figure this out
             # if self.recurrent:
@@ -402,8 +421,11 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # l_loss
             l_target = self.l_targets[next_subtask[i].long()].view(-1)
             outputs.l_loss.append(
-                F.cross_entropy(l_logits, l_target,
-                                reduction='none').unsqueeze(1))
+                F.cross_entropy(
+                    l_logits,
+                    l_target,
+                    reduction='none',
+                ).unsqueeze(1))
 
             p2 = batch_conv1d(p, l)
 
@@ -421,7 +443,10 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 r_target.append(M[j, subtask[j]])
             r_target = torch.cat(r_target).detach()
             r_loss = F.binary_cross_entropy(
-                r2.squeeze(1), r_target, reduction='none')
+                torch.clamp(r2.squeeze(1), 0., 1.),
+                r_target,
+                reduction='none',
+            )
             outputs.r_loss.append(torch.mean(r_loss, dim=-1, keepdim=True))
 
             p = interp(p, p2, c)
@@ -440,7 +465,11 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # assert (int(i1), int(i2), int(i3)) == \
             #        np.unravel_index(int(g_int), self.subtask_space)
             g2 = self.embed_task(i1, i2, i3).squeeze(1)
-            g_loss = F.binary_cross_entropy(g2, r_target, reduction='none')
+            g_loss = F.binary_cross_entropy(
+                torch.clamp(g2, 0., 1.),
+                r_target,
+                reduction='none',
+            )
             outputs.g_loss.append(torch.mean(g_loss, dim=-1, keepdim=True))
 
             g = interp(g, g2, c)
