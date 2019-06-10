@@ -416,8 +416,11 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # l_loss
             l_target = self.l_targets[next_subtask[i].long()].view(-1)
             outputs.l_loss.append(
-                F.cross_entropy(l_logits, l_target,
-                                reduction='none').unsqueeze(1))
+                F.cross_entropy(
+                    l_logits,
+                    l_target,
+                    reduction='none',
+                ).unsqueeze(1))
 
             p2 = batch_conv1d(p, l)
 
@@ -435,7 +438,10 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 r_target.append(M[j, subtask[j]])
             r_target = torch.cat(r_target).detach()
             r_loss = F.binary_cross_entropy(
-                r2.squeeze(1), r_target, reduction='none')
+                torch.clamp(r2.squeeze(1), 0., 1.),
+                r_target,
+                reduction='none',
+            )
             outputs.r_loss.append(torch.mean(r_loss, dim=-1, keepdim=True))
 
             p = interp(p, p2, c)
