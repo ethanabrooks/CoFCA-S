@@ -164,7 +164,7 @@ class SubtasksAgent(Agent, NNBase):
             rnn_hxs=torch.cat(hx, dim=-1),
             log=log)
 
-    def get_hidden(self, inputs, rnn_hxs, masks):
+    def get_hidden(self, inputs, last_hx, masks):
         obs, subtasks, task, next_subtask = torch.split(
             inputs, self.obs_sections, dim=1)
         task = task[:, :, 0, 0]
@@ -174,8 +174,8 @@ class SubtasksAgent(Agent, NNBase):
 
         conv_out = self.conv1(obs)
         recurrent_inputs = torch.cat([conv_out, task, next_subtask], dim=-1)
-        x, rnn_hxs = self._forward_gru(recurrent_inputs, rnn_hxs, masks)
-        hx = RecurrentState(*self.recurrent_module.parse_hidden(x))
+        all_hxs, last_hx = self._forward_gru(recurrent_inputs, last_hx, masks)
+        hx = RecurrentState(*self.recurrent_module.parse_hidden(all_hxs))
 
         # assert torch.all(subtasks[:, :, 0, 0] == hx.g)
 
