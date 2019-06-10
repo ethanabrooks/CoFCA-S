@@ -106,7 +106,7 @@ class SubtasksAgent(Agent, NNBase):
         # print('g       ', hx.g[0])
         # print('g_target', g_target[0, :, 0, 0])
         g_dist = FixedCategorical(probs=hx.g_probs)
-        aux_loss = .01 * hx.r_loss - g_dist.entropy() * self.entropy_coef
+        aux_loss = -g_dist.entropy() * self.entropy_coef
         _, _, h, w = obs.shape
 
         if action is None:
