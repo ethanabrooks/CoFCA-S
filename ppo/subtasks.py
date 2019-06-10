@@ -448,6 +448,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # TODO: deterministic
             # g
             new_probs = self.pi_theta((h, r)).probs
+            c = c.clone()
             c[new_episode] = 1.
             dist = FixedCategorical(probs=interp(hx.g_probs, new_probs, c))
             g_int = dist.sample()
