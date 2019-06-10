@@ -104,7 +104,7 @@ class SubtasksAgent(Agent, NNBase):
         # print('g       ', hx.g[0])
         # print('g_target', g_target[0, :, 0, 0])
         g_dist = FixedCategorical(probs=hx.g_probs)
-        aux_loss = .03 * hx.r_loss - g_dist.entropy() * self.entropy_coef
+        aux_loss = hx.c_loss - g_dist.entropy() * self.entropy_coef  # TODO
         _, _, h, w = obs.shape
 
         if action is None:
@@ -115,7 +115,15 @@ class SubtasksAgent(Agent, NNBase):
 
         if self.teacher_agent:
             g = broadcast_3d(hx.g, (h, w))
-            inputs = torch.cat([obs, g, task, next_subtask], dim=1)
+            inputs = torch.cat(
+                [
+                    obs,
+                    g_target,  #TODO
+                    # g,
+                    task,
+                    next_subtask
+                ],
+                dim=1)  # TODO
 
             act = self.teacher_agent(
                 inputs, rnn_hxs, masks, action=teacher_agent_action)
@@ -125,8 +133,8 @@ class SubtasksAgent(Agent, NNBase):
                     g=hx.g_int,
                     b=hx.b,
                 )
-            log_probs = act.action_log_probs.detach() + g_dist.log_probs(
-                actions.g)
+            log_probs = act.action_log_probs.detach()
+            # + g_dist.log_probs( actions.g) # TODO
             aux_loss += act.aux_loss
         else:
             a_dist = self.actor(conv_out)
@@ -389,7 +397,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             s = self.f(torch.cat([obs[i], r, g, b], dim=-1))
             c = torch.sigmoid(self.phi_update(torch.cat([s, h], dim=-1)))
-            c = next_subtask[i]
 
             # c_loss
             outputs.c_loss.append(
