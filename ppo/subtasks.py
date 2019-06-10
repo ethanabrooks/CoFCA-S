@@ -137,6 +137,7 @@ class SubtasksAgent(Agent, NNBase):
                     a=act.action.float()[:, :1],
                     g=hx.g_int,
                     b=hx.b,
+                    c=hx.c,
                 )
             log_probs = act.action_log_probs.detach() + g_dist.log_probs(
                 actions.g)
@@ -242,11 +243,10 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             ),
             in_size=conv_out_size)  # h
 
-        self.phi_update = trace(
-            lambda in_size: init_(nn.Linear(in_size, 1), 'sigmoid'),
-            in_size=(
-                hidden_size +  # s
-                hidden_size))  # h
+        self.phi_update = Categorical(
+            hidden_size +  # s
+            hidden_size,  #h
+            2)
 
         self.phi_shift = trace(
             lambda in_size: nn.Sequential(
@@ -403,17 +403,13 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             m = M.shape[0]
 
             s = self.f(torch.cat([obs[i], r, g, b], dim=-1))
-            c = torch.sigmoid(self.phi_update(torch.cat([s, h], dim=-1)))
-            c = next_subtask[i]  #TODO
+            dist = self.phi_update(torch.cat([s, h], dim=-1))
+            c = dist.sample().float()
             outputs.c.append(c)
+            # outputs.c_probs.append(dist.probs)
 
             # c_loss
-            outputs.c_loss.append(
-                F.binary_cross_entropy(
-                    torch.clamp(c, 0., 1.),
-                    next_subtask[i],
-                    reduction='none',
-                ))
+            outputs.c_loss.append(dist.log_probs(next_subtask[i]))
 
             # TODO: figure this out
             # if self.recurrent:
