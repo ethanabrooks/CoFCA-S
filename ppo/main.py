@@ -1,13 +1,12 @@
 # stdlib
 
-from collections import ChainMap
 # noinspection PyUnresolvedReferences
+from collections import ChainMap
 from pathlib import Path
 from pprint import pprint
 
-import torch
 from gym.wrappers import TimeLimit
-from rl_utils import hierarchical_parse_args
+import torch
 
 import gridworld_env
 from gridworld_env.subtasks_gridworld import SubtasksGridWorld, get_task_space
@@ -16,6 +15,7 @@ from ppo.subtasks import SubtasksAgent
 from ppo.teacher import SubtasksTeacher
 from ppo.train import Train
 from ppo.wrappers import SubtasksWrapper, VecNormalize
+from rl_utils import hierarchical_parse_args
 
 
 def cli():
@@ -40,9 +40,9 @@ def make_subtasks_env(env_id, **kwargs):
 
     gridworld_args = gridworld_env.get_args(env_id)
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
-    return helper(**ChainMap(
-        kwargs, gridworld_args
-    ))  # combines kwargs and gridworld_args with preference for kwargs
+    return helper(
+        **ChainMap(kwargs, gridworld_args)
+    )  # combines kwargs and gridworld_args with preference for kwargs
 
 
 def subtasks_cli():
@@ -53,8 +53,7 @@ def subtasks_cli():
     task_parser.add_argument('--max-task-count', type=int)
     task_parser.add_argument('--object-types', nargs='*')
     task_parser.add_argument('--n-subtasks', type=int)
-    parser.add_argument(
-        '--multiplicative-interaction', action='store_true')
+    parser.add_argument('--multiplicative-interaction', action='store_true')
     parser.add_argument('--b-loss-coef', type=float, default=.03)
     parser.add_argument('--n-objects', type=int)
     parser.add_argument('--max-episode-steps', type=int)

@@ -1,11 +1,11 @@
 from collections import namedtuple
 
-import numpy as np
-import torch
-import torch.jit
 from gym import spaces
 from gym.spaces import Box, Discrete
+import numpy as np
+import torch
 from torch import nn as nn
+import torch.jit
 from torch.nn import functional as F
 
 from ppo.agent import Agent, AgentValues, NNBase
@@ -106,7 +106,8 @@ class SubtasksAgent(Agent, NNBase):
         # print('g       ', hx.g[0])
         # print('g_target', g_target[0, :, 0, 0])
         g_dist = FixedCategorical(probs=hx.g_probs)
-        aux_loss = self.b_loss_coef * hx.b_loss - g_dist.entropy() * self.entropy_coef
+        aux_loss = self.b_loss_coef * hx.b_loss - g_dist.entropy(
+        ) * self.entropy_coef
         _, _, h, w = obs.shape
 
         if action is None:
@@ -168,7 +169,8 @@ class SubtasksAgent(Agent, NNBase):
 
         conv_out = self.conv1(obs)
         recurrent_inputs = torch.cat([conv_out, task, next_subtask], dim=-1)
-        all_hxs, last_hxs = self._forward_gru(recurrent_inputs, last_hxs, masks)
+        all_hxs, last_hxs = self._forward_gru(recurrent_inputs, last_hxs,
+                                              masks)
         all_hxs = RecurrentState(*self.recurrent_module.parse_hidden(all_hxs))
 
         # assert torch.all(subtasks[:, :, 0, 0] == hx.g)

@@ -1,6 +1,6 @@
 import torch
-import torch.jit
 from torch import nn as nn
+import torch.jit
 
 from ppo.utils import broadcast_3d
 

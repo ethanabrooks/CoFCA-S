@@ -1,11 +1,10 @@
-import time
 from collections import namedtuple
 
 import gym
+from gym import spaces
+from gym.spaces import Box
 import numpy as np
 import torch
-from gym import spaces
-from gym.spaces import Box, MultiDiscrete
 
 from common.vec_env import VecEnvWrapper
 from common.vec_env.vec_normalize import VecNormalize as VecNormalize_

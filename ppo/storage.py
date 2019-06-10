@@ -2,8 +2,8 @@
 from collections import namedtuple
 from typing import Generator
 
-import torch
 from gym import spaces
+import torch
 from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
 
 
@@ -13,7 +13,7 @@ def _flatten_helper(T, N, _tensor):
 
 Batch = namedtuple(
     'Batch', 'obs recurrent_hidden_states actions value_preds ret '
-             'masks old_action_log_probs adv tasks importance_weighting')
+    'masks old_action_log_probs adv tasks importance_weighting')
 
 
 class RolloutStorage(object):
