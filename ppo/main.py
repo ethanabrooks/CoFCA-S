@@ -47,7 +47,6 @@ def make_subtasks_env(env_id, **kwargs):
 
 def subtasks_cli():
     parser = build_parser()
-    parser.add_argument('--multiplicative-interaction', action='store_true')
     task_parser = parser.add_argument_group('task_args')
     task_parser.add_argument('--task-types', nargs='*')
     task_parser.add_argument('--max-task-count', type=int)
