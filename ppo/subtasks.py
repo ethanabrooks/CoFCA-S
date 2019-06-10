@@ -16,8 +16,7 @@ from ppo.utils import batch_conv1d, broadcast_3d, init_, interp, trace
 from ppo.wrappers import SubtasksActions, get_subtasks_obs_sections
 
 RecurrentState = namedtuple(
-    'RecurrentState',
-    'p '
+    'RecurrentState', 'p '
     'r '
     'h '
     'b '
@@ -26,7 +25,7 @@ RecurrentState = namedtuple(
     'g_int '
     'g_probs '
     'c '
-    # 'c_probs '
+    'c_probs '
     'c_loss '
     'l_loss '
     'p_loss '
@@ -147,8 +146,7 @@ class SubtasksAgent(Agent, NNBase):
             b_dist = FixedCategorical(probs=hx.b_probs)
             if action is None:
                 actions = SubtasksActions(
-                    a=a_dist.sample().float(), b=hx.b, g=hx.g_int,
-                    c=hx.c)  # TODO
+                    a=a_dist.sample().float(), b=hx.b, g=hx.g_int, c=hx.c)
             log_probs = (a_dist.log_probs(actions.a) + b_dist.log_probs(
                 actions.b) + g_dist.log_probs(actions.g))
             aux_loss -= (
@@ -308,6 +306,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             b_probs=2,
             g_probs=np.prod(self.subtask_space),
             c=1,
+            c_probs=2,
             c_loss=1,
             l_loss=1,
             p_loss=1,
@@ -406,7 +405,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             dist = self.phi_update(torch.cat([s, h], dim=-1))
             c = dist.sample().float()
             outputs.c.append(c)
-            # outputs.c_probs.append(dist.probs)
+            outputs.c_probs.append(dist.probs)
 
             # c_loss
             outputs.c_loss.append(dist.log_probs(next_subtask[i]))
