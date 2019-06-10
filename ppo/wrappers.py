@@ -61,7 +61,7 @@ class DebugWrapper(gym.Wrapper):
         print('reward', self.last_reward)
 
 
-SubtasksActions = namedtuple('SubtasksActions', 'a b g')
+SubtasksActions = namedtuple('SubtasksActions', 'a b g c')
 
 
 class SubtasksWrapper(gym.Wrapper):
@@ -77,7 +77,9 @@ class SubtasksWrapper(gym.Wrapper):
             SubtasksActions(
                 a=env.action_space,
                 b=spaces.Discrete(2),
-                g=spaces.Discrete(task_space.nvec[0].prod())))
+                g=spaces.Discrete(task_space.nvec[0].prod()),
+                c=spaces.Discrete(2)
+            ))
 
     def step(self, action):
         action = int(SubtasksActions(*action).a)

@@ -1,11 +1,11 @@
 from collections import namedtuple
 
-import numpy as np
-import torch
-import torch.jit
 from gym import spaces
 from gym.spaces import Box, Discrete
+import numpy as np
+import torch
 from torch import nn as nn
+import torch.jit
 from torch.nn import functional as F
 
 from ppo.agent import Agent, AgentValues, NNBase
@@ -16,7 +16,17 @@ from ppo.utils import batch_conv1d, broadcast_3d, init_, interp, trace
 from ppo.wrappers import SubtasksActions, get_subtasks_obs_sections
 
 RecurrentState = namedtuple(
-    'RecurrentState', 'p r h b b_probs g g_int g_probs '
+    'RecurrentState',
+    'p '
+    'r '
+    'h '
+    'b '
+    'b_probs '
+    'g '
+    'g_int '
+    'g_probs '
+    'c '
+    # 'c_probs '
     'c_loss '
     'l_loss '
     'p_loss '
@@ -112,7 +122,8 @@ class SubtasksAgent(Agent, NNBase):
         if action is None:
             teacher_agent_action = None
         else:
-            actions = SubtasksActions(*torch.split(action, [1, 1, 1], dim=-1))
+            actions = SubtasksActions(
+                *torch.split(action, [1, 1, 1, 1], dim=-1))
             teacher_agent_action = actions.a
 
         if self.teacher_agent:
@@ -135,7 +146,8 @@ class SubtasksAgent(Agent, NNBase):
             b_dist = FixedCategorical(probs=hx.b_probs)
             if action is None:
                 actions = SubtasksActions(
-                    a=a_dist.sample().float(), b=hx.b, g=hx.g_int)
+                    a=a_dist.sample().float(), b=hx.b, g=hx.g_int,
+                    c=hx.c)  # TODO
             log_probs = (a_dist.log_probs(actions.a) + b_dist.log_probs(
                 actions.b) + g_dist.log_probs(actions.g))
             aux_loss -= (
@@ -295,6 +307,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             b=1,
             b_probs=2,
             g_probs=np.prod(self.subtask_space),
+            c=1,
             c_loss=1,
             l_loss=1,
             p_loss=1,
@@ -392,6 +405,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             s = self.f(torch.cat([obs[i], r, g, b], dim=-1))
             c = torch.sigmoid(self.phi_update(torch.cat([s, h], dim=-1)))
             c = next_subtask[i]  #TODO
+            outputs.c.append(c)
 
             # c_loss
             outputs.c_loss.append(
