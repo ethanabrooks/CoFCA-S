@@ -107,7 +107,7 @@ class SubtasksAgent(Agent, NNBase):
         # print('g       ', hx.g[0])
         # print('g_target', g_target[0, :, 0, 0])
         g_dist = FixedCategorical(probs=hx.g_probs)
-        aux_loss = hx.c_loss - g_dist.entropy() * self.entropy_coef  # TODO
+        aux_loss = .01 * hx.r_loss - g_dist.entropy() * self.entropy_coef
         _, _, h, w = obs.shape
 
         if action is None:
@@ -118,15 +118,7 @@ class SubtasksAgent(Agent, NNBase):
 
         if self.teacher_agent:
             g = broadcast_3d(hx.g, (h, w))
-            inputs = torch.cat(
-                [
-                    obs,
-                    g_target,  #TODO
-                    # g,
-                    task,
-                    next_subtask
-                ],
-                dim=1)  # TODO
+            inputs = torch.cat([obs, g, task, next_subtask], dim=1)
 
             act = self.teacher_agent(
                 inputs, rnn_hxs, masks, action=teacher_agent_action)
@@ -136,8 +128,8 @@ class SubtasksAgent(Agent, NNBase):
                     g=hx.g_int,
                     b=hx.b,
                 )
-            log_probs = act.action_log_probs.detach()
-            # + g_dist.log_probs( actions.g) # TODO
+            log_probs = act.action_log_probs.detach() + g_dist.log_probs(
+                actions.g)
             aux_loss += act.aux_loss
         else:
             a_dist = self.actor(conv_out)
@@ -226,17 +218,11 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             subtask_size +  # r
             subtask_size +  # g
             1)  # b
-        self.f = nn.Sequential(
-            init_(nn.Linear(in_size, hidden_size), 'relu'),
-            nn.ReLU(),
-        )
+        self.f = init_(nn.Linear(in_size, hidden_size))
 
         subcontroller = nn.GRUCell if recurrent else nn.Linear
         self.subcontroller = trace(
-            lambda in_size: nn.Sequential(
-                init_(subcontroller(in_size, hidden_size), 'relu'),
-                nn.ReLU(),
-            ),
+            lambda in_size: init_(subcontroller(in_size, hidden_size)),
             in_size=conv_out_size)  # h
 
         self.phi_update = trace(
