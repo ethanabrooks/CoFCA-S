@@ -226,11 +226,14 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             lambda in_size: init_(subcontroller(in_size, hidden_size)),
             in_size=conv_out_size)  # h
 
-        self.phi_update = trace(
-            lambda in_size: init_(nn.Linear(in_size, 1), 'sigmoid'),
-            in_size=(
-                hidden_size +  # s
-                hidden_size))  # h
+        self.phi_update = trace(lambda in_size: nn.Sequential(
+            init_(nn.Linear(in_size, hidden_size), 'relu'),
+            nn.ReLU(),
+
+                                                              init_(nn.Linear(hidden_size, 1), 'sigmoid'), ),
+                                in_size=(
+                                        hidden_size +  # s
+                                        hidden_size))  # h
 
         self.phi_shift = trace(
             lambda in_size: nn.Sequential(
