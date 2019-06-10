@@ -188,6 +188,7 @@ def teach_cli():
                     hidden_size=subtasks_args['subtasks_hidden_size'],
                     entropy_coef=subtasks_args['subtasks_entropy_coef'],
                     recurrent=subtasks_args['subtasks_recurrent'],
+                    b_loss_coef=subtasks_args['b_loss_coef'],
                     multiplicative_interaction=subtasks_args[
                         'multiplicative_interaction'],
                     teacher_agent=teacher_agent)
