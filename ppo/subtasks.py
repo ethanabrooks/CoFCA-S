@@ -117,15 +117,7 @@ class SubtasksAgent(Agent, NNBase):
 
         if self.teacher_agent:
             g = broadcast_3d(hx.g, (h, w))
-            inputs = torch.cat(
-                [
-                    obs,
-                    g_target,  #TODO
-                    # g,
-                    task,
-                    next_subtask
-                ],
-                dim=1)  # TODO
+            inputs = torch.cat([obs, g, task, next_subtask], dim=1)
 
             act = self.teacher_agent(
                 inputs, rnn_hxs, masks, action=teacher_agent_action)
@@ -135,8 +127,8 @@ class SubtasksAgent(Agent, NNBase):
                     g=hx.g_int,
                     b=hx.b,
                 )
-            log_probs = act.action_log_probs.detach()
-            # + g_dist.log_probs( actions.g) # TODO
+            log_probs = act.action_log_probs.detach() + g_dist.log_probs(
+                actions.g)
             aux_loss += act.aux_loss
         else:
             a_dist = self.actor(conv_out)
