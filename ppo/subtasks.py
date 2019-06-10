@@ -115,7 +115,8 @@ class SubtasksAgent(Agent, NNBase):
         # print('g       ', hx.g[0])
         # print('g_target', g_target[0, :, 0, 0])
         g_dist = FixedCategorical(probs=hx.g_probs)
-        aux_loss = -g_dist.entropy() * self.entropy_coef
+        c_dist = FixedCategorical(probs=hx.c_probs)
+        aux_loss = -(g_dist.entropy() + c_dist.entropy()) * self.entropy_coef
         _, _, h, w = obs.shape
 
         if action is None:
@@ -138,8 +139,8 @@ class SubtasksAgent(Agent, NNBase):
                     b=hx.b,
                     c=hx.c,
                 )
-            log_probs = act.action_log_probs.detach() + g_dist.log_probs(
-                actions.g)
+            log_probs = (act.action_log_probs.detach() + g_dist.log_probs(
+                actions.g) + c_dist.log_prob(actions.c))
             aux_loss += act.aux_loss
         else:
             a_dist = self.actor(conv_out)
@@ -147,8 +148,9 @@ class SubtasksAgent(Agent, NNBase):
             if action is None:
                 actions = SubtasksActions(
                     a=a_dist.sample().float(), b=hx.b, g=hx.g_int, c=hx.c)
-            log_probs = (a_dist.log_probs(actions.a) + b_dist.log_probs(
-                actions.b) + g_dist.log_probs(actions.g))
+            log_probs = (
+                a_dist.log_probs(actions.a) + b_dist.log_probs(actions.b) +
+                g_dist.log_probs(actions.g) + c_dist.log_probs(actions.c))
             aux_loss -= (
                 a_dist.entropy() + b_dist.entropy()) * self.entropy_coef
 
