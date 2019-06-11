@@ -379,7 +379,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         r[new_episode] = M[new_episode, 0]  # initialize r to first subtask
         g[new_episode] = M[new_episode, 0]  # initialize g to first subtask
 
-
         outputs = RecurrentState(*[[] for _ in RecurrentState._fields])
 
         outputs.prev_g_probs.append(hx.g_probs)
@@ -406,7 +405,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                     reduction='none',
                 ))
 
-            c = next_subtask[i]  #TODO
             outputs.c.append(c)
 
             # TODO: figure this out
