@@ -106,32 +106,53 @@ class SubtasksAgent(Agent, NNBase):
         # print('g_target', g_target[0, :, 0, 0])
         _, _, h, w = obs.shape
 
-        a_dist = self.actor(conv_out)
-        b_dist = FixedCategorical(probs=hx.b_probs)
-        g_dist = FixedCategorical(probs=hx.g_probs)
+        if self.hard_update:
+            dists = SubtasksActions(
+                a=self.actor(conv_out),
+                b=FixedCategorical(hx.b_probs),
+                c=FixedCategorical(hx.c_probs),
+                g=FixedCategorical(hx.g_probs),
+                l=FixedCategorical(hx.l_probs)
+            )
+        else:
+            dists = SubtasksActions(
+                a=self.actor(conv_out),
+                b=FixedCategorical(hx.b_probs),
+                c=None,
+                g=FixedCategorical(hx.g_probs),
+                l=None,
+            )
         if action is None:
             actions = SubtasksActions(
-                a=a_dist.sample().float(), b=hx.b, g=hx.g_int, l=hx.l, c=hx.c)
+                a=dists.a.sample().float(), b=hx.b, g=hx.g_int, l=hx.l, c=hx.c)
         else:
             actions = SubtasksActions(*torch.split(
                 action, [1 for _ in SubtasksActions._fields], dim=-1))
-        action_log_probs = a_dist.log_probs(actions.a) + b_dist.log_probs(
-            actions.b)
-        aux_loss = -(g_dist.entropy() + a_dist.entropy() +
-                     b_dist.entropy()) * self.entropy_coef
+
+        log_probs1 = dists.a.log_probs(actions.a) + dists.b.log_probs(actions.b)
+        log_probs2 = dists.g.log_probs(actions.g)
+        entropies1 = dists.a.entropy() + dists.b.entropy()
+        entropies2 = dists.g.entropy()
+        if self.hard_update:
+            log_probs1 += dists.c.log_probs(actions.c)
+            log_probs2 += dists.l.log_probs(actions.l)
+            entropies1 += dists.c.entropy()
+            entropies2 += dists.l.entropy()
 
         g_accuracy = torch.all(hx.g.round() == g_target[:, :, 0, 0], dim=-1)
         log = dict(g_accuracy=g_accuracy.float())
 
+        log_probs = log_probs1 + hx.c * log_probs2
+        aux_loss = self.entropy_coef * (entropies1 + hx.c * entropies2)
+
         if self.teacher_agent:
             imitation_dist = self.teacher_agent(inputs, rnn_hxs, masks).dist
             imitation_probs = imitation_dist.probs.detach().unsqueeze(1)
-            log_probs = torch.log(a_dist.probs).unsqueeze(2)
-            imitation_obj = (imitation_probs @ log_probs).view(-1)
+            our_log_probs = torch.log(dists.a.probs).unsqueeze(2)
+            imitation_obj = (imitation_probs @ our_log_probs).view(-1)
             log.update(imitation_obj=imitation_obj)
             aux_loss -= imitation_obj
 
-        log_probs = action_log_probs + (hx.c * g_dist.log_probs(actions.g))
         value = self.critic(conv_out)
         for k, v in hx._asdict().items():
             if k.endswith('_loss'):
