@@ -105,7 +105,6 @@ class SubtasksAgent(Agent, NNBase):
         conv_out, hx = self.get_hidden(inputs, rnn_hxs, masks)
         # print('g       ', hx.g[0])
         # print('g_target', g_target[0, :, 0, 0])
-        prev_g_dist = FixedCategorical(probs=hx.prev_g_probs)
         g_dist = FixedCategorical(probs=hx.g_probs)
         aux_loss = -g_dist.entropy() * self.entropy_coef
         _, _, h, w = obs.shape
@@ -458,11 +457,11 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             dist = FixedCategorical(probs=interp(hx.g_probs, dist.probs, c))
             g_int = dist.sample()
             outputs.g_int.append(g_int.float())
-            if not outputs.g_probs:
-                outputs.prev_g_probs[0][new_episode] = dist.probs[new_episode]
-                # This ensures that the g_probs for all new episodes
-                # are interpolated with themselves (because there is
-                # no previous g_probs to interpolate with).
+            # if not outputs.g_probs:
+            # outputs.prev_g_probs[0][new_episode] = dist.probs[new_episode]
+            # This ensures that the g_probs for all new episodes
+            # are interpolated with themselves (because there is
+            # no previous g_probs to interpolate with).
 
             outputs.prev_g_probs.append(dist.probs)
             outputs.g_probs.append(dist.probs)
