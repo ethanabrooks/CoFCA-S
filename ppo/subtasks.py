@@ -345,22 +345,22 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
     def check_grad(self, **kwargs):
         for k, v in kwargs.items():
-            if v.grad_fn is not None:
-                grads = torch.autograd.grad(
-                    v.mean(),
-                    self.parameters(),
-                    retain_graph=True,
-                    allow_unused=True)
-                for (name, _), grad in zip(self.named_parameters(), grads):
-                    if grad is None:
-                        print(f'{k} has no grad wrt {name}')
-                    else:
-                        print(
-                            f'mean grad ({v.mean().item()}) of {k} wrt {name}:',
-                            grad.mean())
-                        if torch.isnan(grad.mean()):
-                            import ipdb
-                            ipdb.set_trace()
+            if v.grad_fn is None:
+                continue
+            grads = torch.autograd.grad(
+                v.mean(),
+                self.parameters(),
+                retain_graph=True,
+                allow_unused=True)
+            for (name, _), grad in zip(self.named_parameters(), grads):
+                if grad is None:
+                    print(f'{k} has no grad wrt {name}')
+                else:
+                    print(f'mean grad of {k} ({v.mean().item()}) wrt {name}:',
+                          grad.mean())
+                    if torch.isnan(grad.mean()):
+                        import ipdb
+                        ipdb.set_trace()
 
     # @torch.jit.script_method
     def forward(self, input, hx):
