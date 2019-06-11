@@ -407,7 +407,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             logits = self.phi_update(torch.cat([s, h], dim=-1))
             if self.hard_update:
                 dist = FixedCategorical(logits=logits)
-                c = dist.sample()
+                c = dist.sample().float()
                 outputs.c_probs.append(dist.probs)
             else:
                 c = torch.sigmoid(logits[:, :1])
