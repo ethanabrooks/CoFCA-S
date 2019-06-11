@@ -143,11 +143,7 @@ class SubtasksAgent(Agent, NNBase):
         log = dict(g_accuracy=g_accuracy.float())
 
         log_probs = log_probs1 + hx.c * log_probs2
-        aux_loss = self.alpha * hx.b_loss + self.entropy_coef * (
-            entropies1 + hx.c * entropies2)
-        if self.hard_update:
-            aux_loss += self.zeta * torch.norm(
-                dists.c.probs, p=1, dim=-1, keepdim=True)
+        aux_loss = self.entropy_coef * (entropies1 + hx.c * entropies2)
 
         if self.teacher_agent:
             imitation_dist = self.teacher_agent(inputs, rnn_hxs, masks).dist
@@ -424,7 +420,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                     reduction='none',
                 ))
 
-            # c = next_subtask[i]  # TODO
+            c = next_subtask[i]  # TODO
             outputs.c.append(c)
 
             # TODO: figure this out
