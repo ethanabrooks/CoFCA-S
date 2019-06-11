@@ -16,7 +16,7 @@ from ppo.utils import batch_conv1d, broadcast_3d, init_, interp, trace
 from ppo.wrappers import SubtasksActions, get_subtasks_obs_sections
 
 RecurrentState = namedtuple(
-    'RecurrentState', 'p r h b b_probs g g_int g_probs '
+    'RecurrentState', 'p r h b b_probs g g_int g_probs c '
     'c_loss '
     'l_loss '
     'p_loss '
@@ -295,6 +295,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             b=1,
             b_probs=2,
             g_probs=np.prod(self.subtask_space),
+            c=1,
             c_loss=1,
             l_loss=1,
             p_loss=1,
@@ -391,7 +392,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             s = self.f(torch.cat([obs[i], r, g, b], dim=-1))
             c = torch.sigmoid(self.phi_update(torch.cat([s, h], dim=-1)))
-            c = next_subtask[i]  #TODO
 
             # c_loss
             outputs.c_loss.append(
@@ -400,6 +400,9 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                     next_subtask[i],
                     reduction='none',
                 ))
+
+            c = next_subtask[i]  #TODO
+            outputs.c.append(c)
 
             # TODO: figure this out
             # if self.recurrent:
