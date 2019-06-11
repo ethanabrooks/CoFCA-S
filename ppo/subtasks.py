@@ -393,7 +393,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                     reduction='none',
                 ))
 
-            c = next_subtask[i]  #TODO
             outputs.c.append(c)
 
             # TODO: figure this out
