@@ -54,12 +54,13 @@ def subtasks_cli():
     task_parser.add_argument('--n-subtasks', type=int)
     parser.add_argument('--multiplicative-interaction', action='store_true')
     parser.add_argument('--alpha', type=float, default=.03)
+    parser.add_argument('--zeta', type=float, default=.1)
     parser.add_argument('--n-objects', type=int)
     parser.add_argument('--max-episode-steps', type=int)
     kwargs = hierarchical_parse_args(parser)
 
     def train(task_args, multiplicative_interaction, n_objects,
-              max_episode_steps, alpha, **_kwargs):
+              max_episode_steps, alpha, zeta, **_kwargs):
         class TrainTeacher(Train):
             @staticmethod
             def make_env(env_id, seed, rank, add_timestep):
@@ -81,6 +82,7 @@ def subtasks_cli():
                     hidden_size=hidden_size,
                     entropy_coef=entropy_coef,
                     alpha=alpha,
+                    zeta=zeta,
                     recurrent=recurrent,
                     multiplicative_interaction=multiplicative_interaction,
                 )
@@ -140,6 +142,7 @@ def teach_cli():
     subtasks_parser.add_argument(
         '--subtasks-entropy-coef', type=float, default=0.01)
     subtasks_parser.add_argument('--alpha', type=float, default=0.03)
+    subtasks_parser.add_argument('--zeta', type=float, default=.1)
     subtasks_parser.add_argument('--subtasks-recurrent', action='store_true')
     subtasks_parser.add_argument(
         '--multiplicative-interaction', action='store_true')
@@ -187,6 +190,7 @@ def teach_cli():
                     hidden_size=subtasks_args['subtasks_hidden_size'],
                     entropy_coef=subtasks_args['subtasks_entropy_coef'],
                     alpha=subtasks_args['alpha'],
+                    zeta=subtasks_args['zeta'],
                     recurrent=subtasks_args['subtasks_recurrent'],
                     multiplicative_interaction=subtasks_args[
                         'multiplicative_interaction'],
