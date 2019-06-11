@@ -405,10 +405,10 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             s = self.f(torch.cat([obs[i], r, g, b], dim=-1))
             logits = self.phi_update(torch.cat([s, h], dim=-1))
-            # if self.hard_update:
-            # dist = FixedCategorical(logits=logits)
-            # c = dist.sample()
-            # outputs.c_probs.append(dist.probs)
+            if self.hard_update:
+                dist = FixedCategorical(logits=logits)
+                c = dist.sample().float()
+                # outputs.c_probs.append(dist.probs)
             # else:
             c = torch.sigmoid(logits[:, :1])
             outputs.c_probs.append(torch.zeros_like(logits))
