@@ -12,17 +12,15 @@ from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
 from gridworld_env.subtasks_gridworld import ObsSections
 from rl_utils import onehot
 
-SubtasksActions = namedtuple('SubtasksActions', 'a b g prev_g')
-
 
 def get_subtasks_obs_sections(task_space):
     n_subtasks, size_subtask = task_space.shape
     return ObsSections(
         base=(
-                1 +  # obstacles
-                task_space.nvec[0, 2] +  # objects one hot
-                1 +  # ice
-                1),  # agent
+            1 +  # obstacles
+            task_space.nvec[0, 2] +  # objects one hot
+            1 +  # ice
+            1),  # agent
         subtask=(sum(task_space.nvec[0])),  # one hots
         task=size_subtask * n_subtasks,  # int codes
         next_subtask=1)
@@ -50,7 +48,7 @@ class DebugWrapper(gym.Wrapper):
         r = float(np.all(guess == truth))
         self.last_action = actions
         self.last_reward = r
-        return s, r, t, i  # TODO
+        return s, r, t, i  #TODO
 
     def render(self, mode='human'):
         action = self.last_action
@@ -61,6 +59,9 @@ class DebugWrapper(gym.Wrapper):
             print('guess', g, self.possible_subtasks[g])
         print('truth', self.env.unwrapped.subtask)
         print('reward', self.last_reward)
+
+
+SubtasksActions = namedtuple('SubtasksActions', 'a b g')
 
 
 class SubtasksWrapper(gym.Wrapper):
@@ -76,9 +77,7 @@ class SubtasksWrapper(gym.Wrapper):
             SubtasksActions(
                 a=env.action_space,
                 b=spaces.Discrete(2),
-                g=spaces.Discrete(task_space.nvec[0].prod()),
-                prev_g=spaces.Discrete(task_space.nvec[0].prod())),
-        )
+                g=spaces.Discrete(task_space.nvec[0].prod())))
 
     def step(self, action):
         action = int(SubtasksActions(*action).a)
@@ -246,7 +245,7 @@ class VecPyTorchFrameStack(VecEnvWrapper):
         low = np.repeat(wos.low, self.nstack, axis=0)
         high = np.repeat(wos.high, self.nstack, axis=0)
 
-        self.stacked_obs = torch.zeros((venv.num_envs,) + low.shape)
+        self.stacked_obs = torch.zeros((venv.num_envs, ) + low.shape)
 
         observation_space = gym.spaces.Box(
             low=low, high=high, dtype=venv.observation_space.dtype)
