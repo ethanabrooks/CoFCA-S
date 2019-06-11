@@ -1,11 +1,11 @@
 from collections import namedtuple
 
-from gym import spaces
-from gym.spaces import Box, Discrete
 import numpy as np
 import torch
-from torch import nn as nn
 import torch.jit
+from gym import spaces
+from gym.spaces import Box, Discrete
+from torch import nn as nn
 from torch.nn import functional as F
 
 from ppo.agent import Agent, AgentValues, NNBase
@@ -121,18 +121,19 @@ class SubtasksAgent(Agent, NNBase):
         aux_loss = -(g_dist.entropy() + a_dist.entropy() +
                      b_dist.entropy()) * self.entropy_coef
 
+        g_accuracy = torch.all(hx.g.round() == g_target[:, :, 0, 0], dim=-1)
+        log = dict(g_accuracy=g_accuracy.float())
+
         if self.teacher_agent:
             imitation_dist = self.teacher_agent(inputs, rnn_hxs, masks).dist
             imitation_probs = imitation_dist.probs.detach().unsqueeze(1)
             log_probs = torch.log(a_dist.probs).unsqueeze(2)
             imitation_obj = (imitation_probs @ log_probs).view(-1)
+            log.update(imitation_obj=imitation_obj)
             aux_loss -= imitation_obj
 
         log_probs = action_log_probs + (hx.c * g_dist.log_probs(actions.g))
         value = self.critic(conv_out)
-        g_accuracy = torch.all(hx.g.round() == g_target[:, :, 0, 0], dim=-1)
-
-        log = dict(g_accuracy=g_accuracy.float())
         for k, v in hx._asdict().items():
             if k.endswith('_loss'):
                 log[k] = v
