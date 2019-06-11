@@ -170,7 +170,8 @@ class SubtasksAgent(Agent, NNBase):
         log_probs = (
             hx.c *
             (dists.g.log_probs(actions.g) + dists.l.log_probs(actions.l)) +
-            dists.c.log_probs(actions.c) + action_log_prob)
+            # dists.c.log_probs(actions.c) + # TODO
+            action_log_prob)
 
         aux_loss += self.zeta * torch.norm(
             hx.c_probs[:, 1], p=1)  # penalize task switching
@@ -432,6 +433,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             # c_loss
             outputs.c_loss.append(dist.log_probs(next_subtask[i]))
+            c = next_subtask[i]  # TODO
 
             # TODO: figure this out
             # if self.recurrent:
