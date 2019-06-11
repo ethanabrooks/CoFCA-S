@@ -105,6 +105,7 @@ class SubtasksAgent(Agent, NNBase):
         conv_out, hx = self.get_hidden(inputs, rnn_hxs, masks)
         # print('g       ', hx.g[0])
         # print('g_target', g_target[0, :, 0, 0])
+        prev_g_dist = FixedCategorical(probs=hx.prev_g_probs)
         g_dist = FixedCategorical(probs=hx.g_probs)
         aux_loss = -g_dist.entropy() * self.entropy_coef
         _, _, h, w = obs.shape
@@ -139,7 +140,7 @@ class SubtasksAgent(Agent, NNBase):
                 actions.b)
             aux_loss -= (
                 a_dist.entropy() + b_dist.entropy()) * self.entropy_coef
-        log_probs = action_log_probs + g_dist.log_probs(actions.g)
+        log_probs = action_log_probs + (hx.c * g_dist.log_probs(actions.g))
 
         value = self.critic(conv_out)
 
@@ -378,6 +379,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         r[new_episode] = M[new_episode, 0]  # initialize r to first subtask
         g[new_episode] = M[new_episode, 0]  # initialize g to first subtask
 
+
         outputs = RecurrentState(*[[] for _ in RecurrentState._fields])
 
         outputs.prev_g_probs.append(hx.g_probs)
@@ -454,17 +456,13 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # TODO: deterministic
             # g
             dist = self.pi_theta((h, r))
-            c = c.clone()
-            c[new_episode] = 1.
-            probs = torch.clamp(interp(hx.g_probs, dist.probs, c), 0., 1.)
-            dist = FixedCategorical(probs=probs)
             g_int = dist.sample()
             outputs.g_int.append(g_int.float())
-            # if not outputs.g_probs:
-            # outputs.prev_g_probs[0][new_episode] = dist.probs[new_episode]
-            # This ensures that the g_probs for all new episodes
-            # are interpolated with themselves (because there is
-            # no previous g_probs to interpolate with).
+            if not outputs.g_probs:
+                outputs.prev_g_probs[0][new_episode] = dist.probs[new_episode]
+                # This ensures that the g_probs for all new episodes
+                # are interpolated with themselves (because there is
+                # no previous g_probs to interpolate with).
 
             outputs.prev_g_probs.append(dist.probs)
             outputs.g_probs.append(dist.probs)
@@ -481,8 +479,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             )
             outputs.g_loss.append(torch.mean(g_loss, dim=-1, keepdim=True))
 
-            # g = interp(g, g2, c)
-            g = g2
+            g = interp(g, g2, c)
 
             # b
             dist = self.beta(torch.cat([obs[i], g], dim=-1))
