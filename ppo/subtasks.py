@@ -139,7 +139,7 @@ class SubtasksAgent(Agent, NNBase):
                 actions.b)
             aux_loss -= (
                 a_dist.entropy() + b_dist.entropy()) * self.entropy_coef
-        log_probs = action_log_probs + (hx.c * g_dist.log_probs(actions.g))
+        log_probs = action_log_probs + g_dist.log_probs(actions.g)
 
         value = self.critic(conv_out)
 
