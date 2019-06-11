@@ -1,12 +1,12 @@
 # stdlib
 
-from collections import ChainMap
 # noinspection PyUnresolvedReferences
+from collections import ChainMap
 from pathlib import Path
 from pprint import pprint
 
-import torch
 from gym.wrappers import TimeLimit
+import torch
 
 import gridworld_env
 from gridworld_env.subtasks_gridworld import SubtasksGridWorld, get_task_space
@@ -40,9 +40,9 @@ def make_subtasks_env(env_id, **kwargs):
 
     gridworld_args = gridworld_env.get_args(env_id)
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
-    return helper(**ChainMap(
-        kwargs, gridworld_args
-    ))  # combines kwargs and gridworld_args with preference for kwargs
+    return helper(
+        **ChainMap(kwargs, gridworld_args)
+    )  # combines kwargs and gridworld_args with preference for kwargs
 
 
 def subtasks_cli():

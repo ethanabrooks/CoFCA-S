@@ -1,11 +1,11 @@
 from collections import namedtuple
 
-import numpy as np
-import torch
-import torch.jit
 from gym import spaces
 from gym.spaces import Box, Discrete
+import numpy as np
+import torch
 from torch import nn as nn
+import torch.jit
 from torch.nn import functional as F
 
 from ppo.agent import Agent, AgentValues, NNBase

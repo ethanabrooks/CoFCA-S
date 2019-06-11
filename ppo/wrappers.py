@@ -1,11 +1,10 @@
-import time
 from collections import namedtuple
 
 import gym
+from gym import spaces
+from gym.spaces import Box
 import numpy as np
 import torch
-from gym import spaces
-from gym.spaces import Box, MultiDiscrete
 
 from common.vec_env import VecEnvWrapper
 from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
@@ -63,8 +62,6 @@ class DebugWrapper(gym.Wrapper):
         print('reward', self.last_reward)
 
 
-
-
 class SubtasksWrapper(gym.Wrapper):
     def __init__(self, env):
         super().__init__(env)
@@ -80,8 +77,7 @@ class SubtasksWrapper(gym.Wrapper):
                 b=spaces.Discrete(2),
                 g=spaces.Discrete(task_space.nvec[0].prod()),
                 c=spaces.Discrete(2),
-                l=spaces.Discrete(3)
-            ))
+                l=spaces.Discrete(3)))
 
     def step(self, action):
         action = int(SubtasksActions(*action).a)

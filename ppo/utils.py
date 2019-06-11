@@ -1,15 +1,14 @@
 # third party
 import csv
+from io import StringIO
 import random
 import subprocess
-from io import StringIO
 
 import numpy as np
 import torch
+from torch import nn as nn
 import torch.jit
 import torch.nn as nn
-# Get a render function
-from torch import nn as nn
 from torch.nn import functional as F
 
 
@@ -88,10 +87,10 @@ def get_freer_gpu():
 
 def init_(network, nonlinearity=None):
     if nonlinearity is None:
-        return init(network,
-                    nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0))
-    return init(network,
-                nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0),
+        return init(network, nn.init.orthogonal_,
+                    lambda x: nn.init.constant_(x, 0))
+    return init(network, nn.init.orthogonal_,
+                lambda x: nn.init.constant_(x, 0),
                 nn.init.calculate_gain(nonlinearity))
 
 
