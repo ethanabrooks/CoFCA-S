@@ -16,14 +16,8 @@ from ppo.utils import batch_conv1d, broadcast_3d, init_, interp, trace
 from ppo.wrappers import SubtasksActions, get_subtasks_obs_sections
 
 RecurrentState = namedtuple(
-    'RecurrentState', 'p r h b b_probs g g_int g_probs prev_g_probs c '
-    'c_loss '
-    'l_loss '
-    'p_loss '
-    'r_loss '
-    'g_loss '
-    'b_loss '
-    'subtask')
+    'RecurrentState', 'p r h b b_probs g g_int g_probs c '
+    'c_loss l_loss p_loss r_loss g_loss b_loss subtask')
 
 
 # noinspection PyMissingConstructor
@@ -202,10 +196,10 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         # networks
         self.recurrent = recurrent
         in_size = (
-            conv_out_size +  # x
-            subtask_size +  # r
-            subtask_size +  # g
-            1)  # b
+                conv_out_size +  # x
+                subtask_size +  # r
+                subtask_size +  # g
+                1)  # b
         self.f = nn.Sequential(
             init_(nn.Linear(in_size, hidden_size), 'relu'),
             nn.ReLU(),
@@ -222,8 +216,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         self.phi_update = trace(
             lambda in_size: init_(nn.Linear(in_size, 1), 'sigmoid'),
             in_size=(
-                hidden_size +  # s
-                hidden_size))  # h
+                    hidden_size +  # s
+                    hidden_size))  # h
 
         self.phi_shift = trace(
             lambda in_size: nn.Sequential(
@@ -241,8 +235,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                     init_(
                         nn.Conv2d(
                             (
-                                subtask_size +  # r
-                                hidden_size),  # h
+                                    subtask_size +  # r
+                                    hidden_size),  # h
                             hidden_size,
                             kernel_size=3,
                             stride=1,
@@ -263,7 +257,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
         # embeddings
         for name, d in zip(
-            ['type_embeddings', 'count_embeddings', 'obj_embeddings'],
+                ['type_embeddings', 'count_embeddings', 'obj_embeddings'],
                 self.subtask_space):
             self.register_buffer(name, torch.eye(int(d)))
 
@@ -284,7 +278,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             b=1,
             b_probs=2,
             g_probs=np.prod(self.subtask_space),
-            prev_g_probs=np.prod(self.subtask_space),
             c=1,
             c_loss=1,
             l_loss=1,
@@ -306,7 +299,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             self.count_embeddings[count.long()],
             self.obj_embeddings[obj.long()],
         ],
-                         dim=-1)
+            dim=-1)
 
     def encode(self, g1, g2, g3):
         x1, x2, x3 = self.subtask_space
@@ -369,8 +362,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
         outputs = RecurrentState(*[[] for _ in RecurrentState._fields])
 
-        outputs.prev_g_probs.append(hx.g_probs)
-
         n = obs.shape[0]
         # print('Recurrence: next_subtask', next_subtask)
         # if torch.any(next_subtask > 0):
@@ -393,7 +384,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                     reduction='none',
                 ))
 
-            c = next_subtask[i]  #TODO
+            c = next_subtask[i]  # TODO
             outputs.c.append(c)
 
             # TODO: figure this out
@@ -440,18 +431,15 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             r = interp(r, r2, c)
             h = interp(h, h2, c)
 
+            outputs.p.append(p)
+            outputs.r.append(r)
+            outputs.h.append(h)
+
             # TODO: deterministic
             # g
             dist = self.pi_theta((h, r))
             g_int = dist.sample()
             outputs.g_int.append(g_int.float())
-            if not outputs.g_probs:
-                outputs.prev_g_probs[0][new_episode] = dist.probs[new_episode]
-                # This ensures that the g_probs for all new episodes
-                # are interpolated with themselves (because there is
-                # no previous g_probs to interpolate with).
-
-            outputs.prev_g_probs.append(dist.probs)
             outputs.g_probs.append(dist.probs)
 
             # g_loss
@@ -465,8 +453,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 reduction='none',
             )
             outputs.g_loss.append(torch.mean(g_loss, dim=-1, keepdim=True))
-
             g = interp(g, g2, c)
+            outputs.g.append(g)
 
             # b
             dist = self.beta(torch.cat([obs[i], g], dim=-1))
@@ -475,14 +463,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             # b_loss
             outputs.b_loss.append(dist.log_probs(next_subtask[i]))
-
-            outputs.p.append(p)
-            outputs.r.append(r)
-            outputs.h.append(h)
-            outputs.g.append(g)
             outputs.b.append(b)
 
-        outputs.prev_g_probs.pop()
         stacked = []
         for x in outputs:
             stacked.append(torch.stack(x))
