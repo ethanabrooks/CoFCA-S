@@ -31,8 +31,10 @@ class SubtasksAgent(Agent, NNBase):
                  entropy_coef,
                  alpha,
                  multiplicative_interaction,
+                 zeta,
                  teacher_agent=None):
         nn.Module.__init__(self)
+        self.zeta = zeta
         self.alpha = alpha
         self.multiplicative_interaction = multiplicative_interaction
         if teacher_agent:
