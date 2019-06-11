@@ -17,24 +17,24 @@ from ppo.wrappers import SubtasksActions, get_subtasks_obs_sections
 
 RecurrentState = namedtuple(
     'RecurrentState', 'p '
-                      'r '
-                      'h '
-                      'b '
-                      'b_probs '
-                      'g '
-                      'g_int '
-                      'g_probs '
-                      'c '
-                      'c_probs '
-                      'l '
-                      'l_probs '
-                      'c_loss '
-                      'l_loss '
-                      'p_loss '
-                      'r_loss '
-                      'g_loss '
-                      'b_loss '
-                      'subtask')
+    'r '
+    'h '
+    'b '
+    'b_probs '
+    'g '
+    'g_int '
+    'g_probs '
+    'c '
+    'c_probs '
+    'l '
+    'l_probs '
+    'c_loss '
+    'l_loss '
+    'p_loss '
+    'r_loss '
+    'g_loss '
+    'b_loss '
+    'subtask')
 
 
 # noinspection PyMissingConstructor
@@ -123,9 +123,9 @@ class SubtasksAgent(Agent, NNBase):
             b=None,
             g=FixedCategorical(probs=hx.g_probs),
             c=FixedCategorical(probs=hx.c_probs),
-            l=FixedCategorical(probs=hx.l_probs)
-        )
-        aux_loss = -sum(d.entropy() for d in dists if d is not None) * self.entropy_coef
+            l=FixedCategorical(probs=hx.l_probs))
+        aux_loss = -sum(d.entropy()
+                        for d in dists if d is not None) * self.entropy_coef
         _, _, h, w = obs.shape
 
         if action is None:
@@ -150,21 +150,30 @@ class SubtasksAgent(Agent, NNBase):
                     l=hx.l,
                 )
             aux_loss += act.aux_loss
-            action_log_prob = act.action_log_probs
+            action_log_prob = act.action_log_probs.detach()
 
         else:
             a_dist = self.actor(conv_out)
             b_dist = FixedCategorical(probs=hx.b_probs)
             if action is None:
                 actions = SubtasksActions(
-                    a=a_dist.sample().float(), b=hx.b, g=hx.g_int, c=hx.c, l=hx.l)
-            aux_loss -= (a_dist.entropy() + b_dist.entropy()) * self.entropy_coef
-            action_log_prob = a_dist.log_probs(actions.a) + b_dist.log_probs(actions.b)
+                    a=a_dist.sample().float(),
+                    b=hx.b,
+                    g=hx.g_int,
+                    c=hx.c,
+                    l=hx.l)
+            aux_loss -= (
+                a_dist.entropy() + b_dist.entropy()) * self.entropy_coef
+            action_log_prob = a_dist.log_probs(actions.a) + b_dist.log_probs(
+                actions.b)
 
-        log_probs = (hx.c * (dists.g.log_probs(actions.g) + dists.l.log_probs(actions.l))
-                     + dists.c.log_probs(actions.c) + action_log_prob)
+        log_probs = (
+            hx.c *
+            (dists.g.log_probs(actions.g) + dists.l.log_probs(actions.l)) +
+            dists.c.log_probs(actions.c) + action_log_prob)
 
-        aux_loss += self.zeta * torch.norm(hx.c_probs[:, 1], p=1)  # penalize task switching
+        aux_loss += self.zeta * torch.norm(
+            hx.c_probs[:, 1], p=1)  # penalize task switching
         value = self.critic(conv_out)
         g_accuracy = torch.all(hx.g.round() == g_target[:, :, 0, 0], dim=-1)
 
@@ -236,10 +245,10 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         # networks
         self.recurrent = recurrent
         in_size = (
-                conv_out_size +  # x
-                subtask_size +  # r
-                subtask_size +  # g
-                1)  # b
+            conv_out_size +  # x
+            subtask_size +  # r
+            subtask_size +  # g
+            1)  # b
         self.f = nn.Sequential(
             init_(nn.Linear(in_size, hidden_size), 'relu'),
             nn.ReLU(),
@@ -261,8 +270,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         self.phi_shift = nn.Sequential(
             trace(
                 lambda in_size: nn.Sequential(
-                    init_(nn.Linear(in_size, hidden_size), 'relu'),
-                    nn.ReLU()),
+                    init_(nn.Linear(in_size, hidden_size), 'relu'), nn.ReLU()),
                 in_size=hidden_size),
             Categorical(hidden_size, 3),  # 3 for {-1, 0, +1}
         )
@@ -275,8 +283,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                     init_(
                         nn.Conv2d(
                             (
-                                    subtask_size +  # r
-                                    hidden_size),  # h
+                                subtask_size +  # r
+                                hidden_size),  # h
                             hidden_size,
                             kernel_size=3,
                             stride=1,
@@ -297,7 +305,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
         # embeddings
         for name, d in zip(
-                ['type_embeddings', 'count_embeddings', 'obj_embeddings'],
+            ['type_embeddings', 'count_embeddings', 'obj_embeddings'],
                 self.subtask_space):
             self.register_buffer(name, torch.eye(int(d)))
 
@@ -342,7 +350,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             self.count_embeddings[count.long()],
             self.obj_embeddings[obj.long()],
         ],
-            dim=-1)
+                         dim=-1)
 
     def encode(self, g1, g2, g3):
         x1, x2, x3 = self.subtask_space
