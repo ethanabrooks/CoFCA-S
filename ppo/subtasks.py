@@ -145,9 +145,7 @@ class SubtasksAgent(Agent, NNBase):
                 actions.b)
             aux_loss -= (
                 a_dist.entropy() + b_dist.entropy()) * self.entropy_coef
-        log_probs = action_log_probs + (
-            hx.c * g_dist.log_probs(actions.g) +
-            (1 - hx.c) * prev_g_dist.log_probs(actions.prev_g))
+        log_probs = action_log_probs + g_dist.log_probs(actions.g)  # TODO
 
         value = self.critic(conv_out)
 
@@ -456,9 +454,14 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             )
             outputs.r_loss.append(torch.mean(r_loss, dim=-1, keepdim=True))
 
-            p = interp(p, p2, c)
-            r = interp(r, r2, c)
-            h = interp(h, h2, c)
+            # p = interp(p, p2.squeeze(1, c)
+            # r = interp(r, r2.squeeze(1, c)
+            # h = interp(h, h2.squeeze(1, c)
+
+            # TODO
+            p = p2.squeeze(1)
+            r = r2.squeeze(1)
+            h = h2.squeeze(1)
 
             # TODO: deterministic
             # g
@@ -489,7 +492,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             )
             outputs.g_loss.append(torch.mean(g_loss, dim=-1, keepdim=True))
 
-            g = interp(g, g2, c)
+            # g = interp(g, g2, c)
+            g = g2  # TODO
 
             # b
             dist = self.beta(torch.cat([obs[i], g], dim=-1))
