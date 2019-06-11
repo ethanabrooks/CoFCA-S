@@ -220,7 +220,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             in_size=conv_out_size)  # h
 
         self.phi_update = trace(
-            lambda in_size: init_(nn.Linear(in_size, 1), 'sigmoid'),
+            lambda in_size: init_(nn.Linear(in_size, 2), 'sigmoid'),
             in_size=(
                     hidden_size +  # s
                     hidden_size))  # h
@@ -383,7 +383,13 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             m = M.shape[0]
 
             s = self.f(torch.cat([obs[i], r, g, b], dim=-1))
-            c = torch.sigmoid(self.phi_update(torch.cat([s, h], dim=-1)))
+            logits = self.phi_update(torch.cat([s, h], dim=-1))
+            if self.hard_update:
+                dist = FixedCategorical(logits=logits)
+                c = dist.sample()
+                outputs.c_probs.append(dist.probs)
+            else:
+                c = torch.sigmoid(logits[:, :1])
 
             # c_loss
             outputs.c_loss.append(
@@ -403,19 +409,23 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # else:
             h2 = self.subcontroller(obs[i])
 
-            l_logits = self.phi_shift(h2)
-            l = F.softmax(l_logits, dim=1)
+            logits = self.phi_shift(h2)
             if self.hard_update:
+                dist = FixedCategorical(logits=logits)
+                l = dist.sample()
                 outputs.l.append(l.float())
+                outputs.l_probs.append(dist.probs)
+                l = self.l_values[l]
             else:
-                outputs.l.append(l.argmax(dim=-1, keepdim=True).float())
-            outputs.l_probs.append(l)
+                l = F.softmax(logits, dim=1)
+                outputs.l.append(torch.zeros_like(c))  # dummy value
+                outputs.l_probs.append(torch.zeros_like(l))  # dummy value
 
             # l_loss
             l_target = self.l_targets[next_subtask[i].long()].view(-1)
             outputs.l_loss.append(
                 F.cross_entropy(
-                    l_logits,
+                    logits,
                     l_target,
                     reduction='none',
                 ).unsqueeze(1))
