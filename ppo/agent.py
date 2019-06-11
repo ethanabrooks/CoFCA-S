@@ -9,7 +9,7 @@ from ppo.layers import Flatten
 from ppo.utils import init, init_normc_
 
 AgentValues = namedtuple('AgentValues',
-                         'value action action_log_probs aux_loss rnn_hxs log')
+                         'value action action_log_probs aux_loss rnn_hxs log dist')
 
 
 class Agent(nn.Module):
@@ -77,6 +77,7 @@ class Agent(nn.Module):
             action=action,
             action_log_probs=action_log_probs,
             aux_loss=-self.entropy_coef * entropy,
+            dist=dist,
             rnn_hxs=rnn_hxs,
             log=dict(entropy=entropy))
 

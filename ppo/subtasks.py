@@ -189,6 +189,7 @@ class SubtasksAgent(Agent, NNBase):
             action_log_probs=log_probs,
             aux_loss=aux_loss.mean(),
             rnn_hxs=torch.cat(hx, dim=-1),
+            dist=None,
             log=log)
 
     def get_hidden(self, inputs, last_hx, masks):
