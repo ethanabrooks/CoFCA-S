@@ -411,6 +411,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # outputs.c_probs.append(dist.probs)
             # else:
             c = torch.sigmoid(logits[:, :1])
+            outputs.c_probs.append(torch.zeros_like(logits))
 
             # c_loss
             outputs.c_loss.append(
@@ -422,7 +423,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             c = next_subtask[i]  # TODO
             outputs.c.append(c)
-            outputs.c_probs.append(torch.cat([c, 1 - c], dim=-1))
 
             # TODO: figure this out
             # if self.recurrent:
