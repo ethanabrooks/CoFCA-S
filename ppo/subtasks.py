@@ -1,11 +1,11 @@
 from collections import namedtuple
 
-import numpy as np
-import torch
-import torch.jit
 from gym import spaces
 from gym.spaces import Box, Discrete
+import numpy as np
+import torch
 from torch import nn as nn
+import torch.jit
 from torch.nn import functional as F
 
 from ppo.agent import Agent, AgentValues, NNBase
@@ -105,45 +105,31 @@ class SubtasksAgent(Agent, NNBase):
         conv_out, hx = self.get_hidden(inputs, rnn_hxs, masks)
         # print('g       ', hx.g[0])
         # print('g_target', g_target[0, :, 0, 0])
-        prev_g_dist = FixedCategorical(probs=hx.prev_g_probs)
-        g_dist = FixedCategorical(probs=hx.g_probs)
-        aux_loss = -g_dist.entropy() * self.entropy_coef
         _, _, h, w = obs.shape
 
+        a_dist = self.actor(conv_out)
+        b_dist = FixedCategorical(probs=hx.b_probs)
+        g_dist = FixedCategorical(probs=hx.g_probs)
         if action is None:
-            teacher_agent_action = None
+            actions = SubtasksActions(
+                a=a_dist.sample().float(), b=hx.b, g=hx.g_int)
         else:
-            actions = SubtasksActions(*torch.split(action, [1, 1, 1], dim=-1))
-            teacher_agent_action = actions.a
+            actions = SubtasksActions(*torch.split(
+                action, [1 for _ in SubtasksActions._fields], dim=-1))
+        action_log_probs = a_dist.log_probs(actions.a) + b_dist.log_probs(
+            actions.b)
+        aux_loss = -(g_dist.entropy() + a_dist.entropy() +
+                     b_dist.entropy()) * self.entropy_coef
 
         if self.teacher_agent:
-            g = broadcast_3d(hx.g, (h, w))
-            inputs = torch.cat([obs, g, task, next_subtask], dim=1)
+            imitation_dist = self.teacher_agent(inputs, rnn_hxs, masks).dist
+            imitation_probs = imitation_dist.probs.detach().unsqueeze(1)
+            log_probs = torch.log(a_dist.probs).unsqueeze(2)
+            imitation_obj = (imitation_probs @ log_probs).view(-1)
+            aux_loss -= imitation_obj
 
-            act = self.teacher_agent(
-                inputs, rnn_hxs, masks, action=teacher_agent_action)
-            if action is None:
-                actions = SubtasksActions(
-                    a=act.action.float()[:, :1],
-                    g=hx.g_int,
-                    b=hx.b,
-                )
-            action_log_probs = act.action_log_probs.detach()
-            aux_loss += act.aux_loss
-        else:
-            a_dist = self.actor(conv_out)
-            b_dist = FixedCategorical(probs=hx.b_probs)
-            if action is None:
-                actions = SubtasksActions(
-                    a=a_dist.sample().float(), b=hx.b, g=hx.g_int)
-            action_log_probs = a_dist.log_probs(actions.a) + b_dist.log_probs(
-                actions.b)
-            aux_loss -= (
-                a_dist.entropy() + b_dist.entropy()) * self.entropy_coef
         log_probs = action_log_probs + (hx.c * g_dist.log_probs(actions.g))
-
         value = self.critic(conv_out)
-
         g_accuracy = torch.all(hx.g.round() == g_target[:, :, 0, 0], dim=-1)
 
         log = dict(g_accuracy=g_accuracy.float())
@@ -157,6 +143,7 @@ class SubtasksAgent(Agent, NNBase):
             action_log_probs=log_probs,
             aux_loss=aux_loss.mean(),
             rnn_hxs=torch.cat(hx, dim=-1),
+            dist=None,
             log=log)
 
     def get_hidden(self, inputs, last_hx, masks):
@@ -378,7 +365,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         p[new_episode, 0] = 1.  # initialize pointer to first subtask
         r[new_episode] = M[new_episode, 0]  # initialize r to first subtask
         g[new_episode] = M[new_episode, 0]  # initialize g to first subtask
-
 
         outputs = RecurrentState(*[[] for _ in RecurrentState._fields])
 
