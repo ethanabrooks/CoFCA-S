@@ -379,7 +379,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         r[new_episode] = M[new_episode, 0]  # initialize r to first subtask
         g[new_episode] = M[new_episode, 0]  # initialize g to first subtask
 
-
         outputs = RecurrentState(*[[] for _ in RecurrentState._fields])
 
         outputs.prev_g_probs.append(hx.g_probs)
@@ -456,6 +455,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # TODO: deterministic
             # g
             dist = self.pi_theta((h, r))
+            dist = FixedCategorical(probs=interp(hx.g_probs, dist.probs, c))
             g_int = dist.sample()
             outputs.g_int.append(g_int.float())
             if not outputs.g_probs:
@@ -479,7 +479,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             )
             outputs.g_loss.append(torch.mean(g_loss, dim=-1, keepdim=True))
 
-            g = interp(g, g2, c)
+            # g = interp(g, g2, c)
+            g = g2
 
             # b
             dist = self.beta(torch.cat([obs[i], g], dim=-1))
