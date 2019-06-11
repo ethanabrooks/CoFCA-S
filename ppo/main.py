@@ -144,6 +144,7 @@ def teach_cli():
     subtasks_parser.add_argument('--alpha', type=float, default=0.03)
     subtasks_parser.add_argument('--zeta', type=float, default=.1)
     subtasks_parser.add_argument('--subtasks-recurrent', action='store_true')
+    subtasks_parser.add_argument('--hard-update', action='store_true')
     subtasks_parser.add_argument(
         '--multiplicative-interaction', action='store_true')
     parser.add_argument('--n-objects', type=int, required=True)
@@ -183,18 +184,17 @@ def teach_cli():
                         f'Loaded teacher parameters from {teacher_agent_load_path}.'
                     )
 
+                _subtasks_args = {
+                    k.replace('subtasks_', ''): v
+                    for k, v in subtasks_args.items()
+                }
+
                 return SubtasksAgent(
                     obs_shape=envs.observation_space.shape,
                     action_space=envs.action_space,
                     task_space=task_space,
-                    hidden_size=subtasks_args['subtasks_hidden_size'],
-                    entropy_coef=subtasks_args['subtasks_entropy_coef'],
-                    alpha=subtasks_args['alpha'],
-                    zeta=subtasks_args['zeta'],
-                    recurrent=subtasks_args['subtasks_recurrent'],
-                    multiplicative_interaction=subtasks_args[
-                        'multiplicative_interaction'],
-                    teacher_agent=teacher_agent)
+                    teacher_agent=teacher_agent,
+                    **_subtasks_args)
 
         # ppo_args.update(aux_loss_only=True)
         TrainSubtasks(env_id=env_id, ppo_args=ppo_args, **kwargs)
@@ -203,4 +203,4 @@ def teach_cli():
 
 
 if __name__ == "__main__":
-    subtasks_cli()
+    teach_cli()

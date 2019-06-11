@@ -16,7 +16,7 @@ from ppo.utils import batch_conv1d, broadcast_3d, init_, interp, trace
 from ppo.wrappers import SubtasksActions, get_subtasks_obs_sections
 
 RecurrentState = namedtuple(
-    'RecurrentState', 'p r h b b_probs g g_int g_probs c '
+    'RecurrentState', 'p r h b b_probs g g_int g_probs c l '
     'c_loss l_loss p_loss r_loss g_loss b_loss subtask')
 
 
@@ -27,12 +27,12 @@ class SubtasksAgent(Agent, NNBase):
                  action_space,
                  task_space,
                  hidden_size,
-                 recurrent,
                  entropy_coef,
                  alpha,
                  multiplicative_interaction,
                  zeta,
-                 teacher_agent=None):
+                 teacher_agent=None,
+                 **kwargs):
         nn.Module.__init__(self)
         self.zeta = zeta
         self.alpha = alpha
@@ -50,7 +50,7 @@ class SubtasksAgent(Agent, NNBase):
             w=w,
             task_space=task_space,
             hidden_size=hidden_size,
-            recurrent=recurrent,
+            **kwargs,
         )
 
         self.conv1 = nn.Sequential(
@@ -108,7 +108,7 @@ class SubtasksAgent(Agent, NNBase):
         g_dist = FixedCategorical(probs=hx.g_probs)
         if action is None:
             actions = SubtasksActions(
-                a=a_dist.sample().float(), b=hx.b, g=hx.g_int)
+                a=a_dist.sample().float(), b=hx.b, g=hx.g_int, l=hx.l, c=hx.c)
         else:
             actions = SubtasksActions(*torch.split(
                 action, [1 for _ in SubtasksActions._fields], dim=-1))
@@ -188,10 +188,11 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         'input_sections', 'subtask_space', 'state_sizes', 'recurrent'
     ]
 
-    def __init__(self, h, w, task_space, hidden_size, recurrent):
+    def __init__(self, h, w, task_space, hidden_size, recurrent, hard_update):
         super().__init__()
         conv_out_size = h * w * hidden_size
         self.subtask_space = list(map(int, task_space.nvec[0]))
+        self.hard_update = hard_update
         subtask_size = sum(self.subtask_space)
         n_subtasks = task_space.shape[0]
 
@@ -281,6 +282,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             b_probs=2,
             g_probs=np.prod(self.subtask_space),
             c=1,
+            l=1,
             c_loss=1,
             l_loss=1,
             p_loss=1,
@@ -397,6 +399,10 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             l_logits = self.phi_shift(h2)
             l = F.softmax(l_logits, dim=1)
+            if self.hard_update:
+                outputs.l.append(l.float())
+            else:
+                outputs.l.append(l.argmax(dim=-1, keepdim=True).float())
 
             # l_loss
             l_target = self.l_targets[next_subtask[i].long()].view(-1)

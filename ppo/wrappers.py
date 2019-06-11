@@ -11,6 +11,8 @@ from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
 from gridworld_env.subtasks_gridworld import ObsSections
 from rl_utils import onehot
 
+SubtasksActions = namedtuple('SubtasksActions', 'a b g c l')
+
 
 def get_subtasks_obs_sections(task_space):
     n_subtasks, size_subtask = task_space.shape
@@ -60,9 +62,6 @@ class DebugWrapper(gym.Wrapper):
         print('reward', self.last_reward)
 
 
-SubtasksActions = namedtuple('SubtasksActions', 'a b g')
-
-
 class SubtasksWrapper(gym.Wrapper):
     def __init__(self, env):
         super().__init__(env)
@@ -76,7 +75,9 @@ class SubtasksWrapper(gym.Wrapper):
             SubtasksActions(
                 a=env.action_space,
                 b=spaces.Discrete(2),
-                g=spaces.Discrete(task_space.nvec[0].prod())))
+                g=spaces.Discrete(task_space.nvec[0].prod()),
+                c=spaces.Discrete(2),
+                l=spaces.Discrete(3)))
 
     def step(self, action):
         action = int(SubtasksActions(*action).a)
