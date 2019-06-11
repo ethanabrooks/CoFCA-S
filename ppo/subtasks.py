@@ -16,7 +16,7 @@ from ppo.utils import batch_conv1d, broadcast_3d, init_, interp, trace
 from ppo.wrappers import SubtasksActions, get_subtasks_obs_sections
 
 RecurrentState = namedtuple(
-    'RecurrentState', 'p r h b b_probs g g_int g_probs c l '
+    'RecurrentState', 'p r h b b_probs g g_int g_probs c c_probs l l_probs '
                       'c_loss l_loss p_loss r_loss g_loss b_loss subtask')
 
 
@@ -31,11 +31,13 @@ class SubtasksAgent(Agent, NNBase):
                  alpha,
                  multiplicative_interaction,
                  zeta,
+                 hard_update,
                  teacher_agent=None,
                  **kwargs):
         nn.Module.__init__(self)
         self.zeta = zeta
         self.alpha = alpha
+        self.hard_update = hard_update
         self.multiplicative_interaction = multiplicative_interaction
         if teacher_agent:
             assert isinstance(teacher_agent, SubtasksTeacher)
@@ -50,6 +52,7 @@ class SubtasksAgent(Agent, NNBase):
             w=w,
             task_space=task_space,
             hidden_size=hidden_size,
+            hard_update=hard_update,
             **kwargs,
         )
 
@@ -216,35 +219,19 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             ),
             in_size=conv_out_size)  # h
 
-        if self.hard_update:
-            self.phi_update = Categorical(
-                hidden_size +  # s
-                hidden_size,  # h
-                2)
-        else:
-            self.phi_update = trace(
-                lambda in_size: init_(nn.Linear(in_size, 1), 'sigmoid'),
-                in_size=(
-                        hidden_size +  # s
-                        hidden_size))  # h
+        self.phi_update = trace(
+            lambda in_size: init_(nn.Linear(in_size, 1), 'sigmoid'),
+            in_size=(
+                    hidden_size +  # s
+                    hidden_size))  # h
 
-        if self.hard_update:
-            self.phi_shift = nn.Sequential(
-                trace(
-
-                    lambda in_size: nn.Sequential(
-                        init_(nn.Linear(in_size, hidden_size), 'relu'), nn.ReLU()),
-                    in_size=hidden_size),
-                Categorical(hidden_size, 3),  # 3 for {-1, 0, +1}
-            )
-        else:
-            self.phi_shift = trace(
-                lambda in_size: nn.Sequential(
-                    init_(nn.Linear(in_size, hidden_size), 'relu'),
-                    nn.ReLU(),
-                    init_(nn.Linear(hidden_size, 3)),  # 3 for {-1, 0, +1}
-                ),
-                in_size=hidden_size)
+        self.phi_shift = trace(
+            lambda in_size: nn.Sequential(
+                init_(nn.Linear(in_size, hidden_size), 'relu'),
+                nn.ReLU(),
+                init_(nn.Linear(hidden_size, 3)),  # 3 for {-1, 0, +1}
+            ),
+            in_size=hidden_size)
 
         self.pi_theta = nn.Sequential(
             Concat(dim=-1),
@@ -298,7 +285,9 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             b_probs=2,
             g_probs=np.prod(self.subtask_space),
             c=1,
+            c_probs=2,
             l=1,
+            l_probs=3,
             c_loss=1,
             l_loss=1,
             p_loss=1,
@@ -406,6 +395,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             c = next_subtask[i]  # TODO
             outputs.c.append(c)
+            outputs.c_probs.append(torch.cat([c, 1-c], dim=-1))
 
             # TODO: figure this out
             # if self.recurrent:
@@ -419,6 +409,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 outputs.l.append(l.float())
             else:
                 outputs.l.append(l.argmax(dim=-1, keepdim=True).float())
+            outputs.l_probs.append(l)
 
             # l_loss
             l_target = self.l_targets[next_subtask[i].long()].view(-1)
