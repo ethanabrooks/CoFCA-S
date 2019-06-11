@@ -112,9 +112,9 @@ def batch_conv1d(inputs, weights):
     return torch.cat(outputs)
 
 
-@torch.jit.script
+# @torch.jit.script
 def interp(x1, x2, c):
-    return c * x2.squeeze(1) + (1 - c) * x1
+    return c * x2 + (1 - c) * x1
 
 
 @torch.jit.script

@@ -17,13 +17,13 @@ from ppo.wrappers import SubtasksActions, get_subtasks_obs_sections
 
 RecurrentState = namedtuple(
     'RecurrentState', 'p r h b b_probs g g_int prev_g g_probs prev_g_probs c '
-    'c_loss '
-    'l_loss '
-    'p_loss '
-    'r_loss '
-    'g_loss '
-    'b_loss '
-    'subtask')
+                      'c_loss '
+                      'l_loss '
+                      'p_loss '
+                      'r_loss '
+                      'g_loss '
+                      'b_loss '
+                      'subtask')
 
 
 # noinspection PyMissingConstructor
@@ -98,60 +98,61 @@ class SubtasksAgent(Agent, NNBase):
             raise NotImplementedError
         self.critic = init_(nn.Linear(input_size, 1))
 
+    def embed(self, g):
+        i1, i2, i3 = self.recurrent_module.decode(g)
+        return self.recurrent_module.embed_task(i1, i2, i3).squeeze(1)
+
     def forward(self, inputs, rnn_hxs, masks, action=None,
                 deterministic=False):
-        obs, g_target, task, next_subtask = torch.split(
-            inputs, self.obs_sections, dim=1)
-        conv_out, hx = self.get_hidden(inputs, rnn_hxs, masks)
-        # print('g       ', hx.g[0])
-        # print('g_target', g_target[0, :, 0, 0])
-        prev_g_dist = FixedCategorical(probs=hx.prev_g_probs)
-        g_dist = FixedCategorical(probs=hx.g_probs)
-        aux_loss = -g_dist.entropy() * self.entropy_coef
+        obs, g_target, task, next_subtask = input_sections = self.parse_inputs(inputs)
         _, _, h, w = obs.shape
+        hx = self.get_hx(*input_sections, rnn_hxs, masks)
 
         if action is None:
-            teacher_agent_action = None
+            prev_g = hx.prev_g
+            g = hx.g_int
         else:
             actions = SubtasksActions(
                 *torch.split(action, [1] * action.shape[-1], dim=-1))
-            teacher_agent_action = actions.a
+            prev_g = actions.prev_g
+            g = actions.g
 
-        if self.teacher_agent:
-            g = broadcast_3d(hx.g, (h, w))
-            inputs = torch.cat([obs, g, task, next_subtask], dim=1)
+        g1 = self.embed(prev_g)
+        g2 = self.embed(g)
 
-            act = self.teacher_agent(
-                inputs, rnn_hxs, masks, action=teacher_agent_action)
-            if action is None:
-                actions = SubtasksActions(
-                    a=act.action.float()[:, :1],
-                    g=hx.g_int,
-                    b=hx.b,
-                    prev_g=hx.prev_g,
-                )
-            action_log_probs = act.action_log_probs.detach()
-            aux_loss += act.aux_loss
-        else:
-            a_dist = self.actor(conv_out)
-            b_dist = FixedCategorical(probs=hx.b_probs)
-            if action is None:
-                actions = SubtasksActions(
-                    a=a_dist.sample().float(),
-                    b=hx.b,
-                    g=hx.g_int,
-                    prev_g=hx.prev_g)
-            action_log_probs = a_dist.log_probs(actions.a) + b_dist.log_probs(
-                actions.b)
-            aux_loss -= (
-                a_dist.entropy() + b_dist.entropy()) * self.entropy_coef
-        log_probs = action_log_probs + (
-            hx.c * g_dist.log_probs(actions.g) +
-            (1 - hx.c) * prev_g_dist.log_probs(actions.prev_g))
+        def get_action_dist(g):
+            if self.teacher_agent:
+                g_broad = broadcast_3d(g, (h, w))
+                _inputs = torch.cat([obs, g_broad, task, next_subtask], dim=1)
+                return self.teacher_agent(_inputs, rnn_hxs, masks, action=action).dist
+            else:
+                return self.actor(self.get_last_hidden(obs, g))
 
-        value = self.critic(conv_out)
+        a_dist1 = get_action_dist(g1)
+        a_dist2 = get_action_dist(g2)
+        action_dist = FixedCategorical(probs=interp(a_dist1.probs, a_dist2.probs, hx.c))
+        if action is None:
+            actions = SubtasksActions(a=action_dist.sample().float(),
+                                      b=hx.b,
+                                      g=g,
+                                      prev_g=prev_g)
 
-        g_accuracy = torch.all(hx.g.round() == g_target[:, :, 0, 0], dim=-1)
+        log_prob_a = action_dist.log_probs(actions.a)
+
+        g_dist1 = FixedCategorical(probs=hx.prev_g_probs)
+        g_dist2 = FixedCategorical(probs=hx.g_probs)
+        log_prob_g = 1 / log_prob_a.exp() * (
+            interp(a_dist1.log_probs(actions.a).exp() * g_dist1.log_probs(actions.prev_g),
+                   a_dist2.log_probs(actions.a).exp() * g_dist2.log_probs(actions.g),
+                   hx.c)
+        )
+        aux_loss = -self.entropy_coef * (interp(g_dist1.entropy(), g_dist2.entropy(), hx.c) +
+                                         interp(a_dist1.entropy(), a_dist2.entropy(), hx.c))
+
+        g = interp(g1, g2, hx.c)
+        value = self.critic(self.get_last_hidden(obs, g))
+
+        g_accuracy = torch.all(g.round() == g_target[:, :, 0, 0], dim=-1)
 
         log = dict(g_accuracy=g_accuracy.float())
         for k, v in hx._asdict().items():
@@ -161,14 +162,16 @@ class SubtasksAgent(Agent, NNBase):
         return AgentValues(
             value=value,
             action=torch.cat(actions, dim=-1),
-            action_log_probs=log_probs,
+            action_log_probs=log_prob_a + log_prob_g,
             aux_loss=aux_loss.mean(),
             rnn_hxs=torch.cat(hx, dim=-1),
+            dist=None,
             log=log)
 
-    def get_hidden(self, inputs, last_hx, masks):
-        obs, subtasks, task, next_subtask = torch.split(
-            inputs, self.obs_sections, dim=1)
+    def parse_inputs(self, inputs):
+        return torch.split(inputs, self.obs_sections, dim=1)
+
+    def get_hx(self, obs, subtasks, task, next_subtask, last_hx, masks):
         task = task[:, :, 0, 0]
         next_subtask = next_subtask[:, :, 0, 0]
 
@@ -177,21 +180,39 @@ class SubtasksAgent(Agent, NNBase):
         conv_out = self.conv1(obs)
         recurrent_inputs = torch.cat([conv_out, task, next_subtask], dim=-1)
         all_hxs, last_hx = self._forward_gru(recurrent_inputs, last_hx, masks)
-        hx = RecurrentState(*self.recurrent_module.parse_hidden(all_hxs))
+        return RecurrentState(*self.recurrent_module.parse_hidden(all_hxs))
 
         # assert torch.all(subtasks[:, :, 0, 0] == hx.g)
 
+    def get_last_hidden(self, obs, g):
         if self.multiplicative_interaction:
-            weights = self.conv_weight(subtasks[:, :, 0, 0])
+            weights = self.conv_weight(g)
             outs = []
             for ob, weight in zip(obs, weights):
                 outs.append(F.conv2d(ob.unsqueeze(0), weight, padding=(1, 1)))
-            out = torch.cat(outs).view(*conv_out.shape)
+            return torch.cat(outs).view(*conv_out.shape)
         else:
-            g = broadcast_3d(hx.g, obs.shape[2:])
-            out = self.conv2((obs, g))
+            g_broad = broadcast_3d(g, obs.shape[2:])
+            return self.conv2((obs, g_broad))
 
-        return out, hx
+    def get_teacher_action_dist(self, g, obs, subtasks, task, next_subtask, rnn_hxs, masks, action):
+        _, _, h, w = obs.shape
+        g = broadcast_3d(g, (h, w))
+        inputs = torch.cat([obs, g, task, next_subtask], dim=1)
+
+        return self.teacher_agent(
+            inputs, rnn_hxs, masks, action=action).dist
+
+    def get_action_dist(self, g, obs, subtasks, task, next_subtask, actor_input, rnn_hxs, masks, action):
+        _, _, h, w = obs.shape
+        if self.teacher_agent:
+            g = broadcast_3d(g, (h, w))
+            inputs = torch.cat([obs, g, task, next_subtask], dim=1)
+
+            return self.teacher_agent(
+                inputs, rnn_hxs, masks, action=action).dist
+        else:
+            return self.actor(actor_input)
 
     @property
     def recurrent_hidden_state_size(self):
@@ -202,8 +223,9 @@ class SubtasksAgent(Agent, NNBase):
         return True
 
     def get_value(self, inputs, rnn_hxs, masks):
-        conv_out, hx = self.get_hidden(inputs, rnn_hxs, masks)
-        return self.critic(conv_out)
+        obs, *other_sections = self.parse_inputs(inputs)
+        hx = self.get_hx(obs, *other_sections, rnn_hxs, masks)
+        return self.critic(self.get_last_hidden(obs, hx.g))
 
 
 class SubtasksRecurrence(torch.jit.ScriptModule):
@@ -221,10 +243,10 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         # networks
         self.recurrent = recurrent
         in_size = (
-            conv_out_size +  # x
-            subtask_size +  # r
-            subtask_size +  # g
-            1)  # b
+                conv_out_size +  # x
+                subtask_size +  # r
+                subtask_size +  # g
+                1)  # b
         self.f = nn.Sequential(
             init_(nn.Linear(in_size, hidden_size), 'relu'),
             nn.ReLU(),
@@ -241,8 +263,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         self.phi_update = trace(
             lambda in_size: init_(nn.Linear(in_size, 1), 'sigmoid'),
             in_size=(
-                hidden_size +  # s
-                hidden_size))  # h
+                    hidden_size +  # s
+                    hidden_size))  # h
 
         self.phi_shift = trace(
             lambda in_size: nn.Sequential(
@@ -260,8 +282,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                     init_(
                         nn.Conv2d(
                             (
-                                subtask_size +  # r
-                                hidden_size),  # h
+                                    subtask_size +  # r
+                                    hidden_size),  # h
                             hidden_size,
                             kernel_size=3,
                             stride=1,
@@ -282,7 +304,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
         # embeddings
         for name, d in zip(
-            ['type_embeddings', 'count_embeddings', 'obj_embeddings'],
+                ['type_embeddings', 'count_embeddings', 'obj_embeddings'],
                 self.subtask_space):
             self.register_buffer(name, torch.eye(int(d)))
 
@@ -326,7 +348,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             self.count_embeddings[count.long()],
             self.obj_embeddings[obj.long()],
         ],
-                         dim=-1)
+            dim=-1)
 
     def encode(self, g1, g2, g3):
         x1, x2, x3 = self.subtask_space
@@ -457,9 +479,9 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             )
             outputs.r_loss.append(torch.mean(r_loss, dim=-1, keepdim=True))
 
-            p = interp(p, p2, c)
-            r = interp(r, r2, c)
-            h = interp(h, h2, c)
+            p = interp(p, p2.squeeze(1), c)
+            r = interp(r, r2.squeeze(1), c)
+            h = interp(h, h2.squeeze(1), c)
 
             # TODO: deterministic
             # g
@@ -490,7 +512,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             )
             outputs.g_loss.append(torch.mean(g_loss, dim=-1, keepdim=True))
 
-            g = interp(g, g2, c)
+            # g = interp(g, g2, c)
+            g = g2
 
             # b
             dist = self.beta(torch.cat([obs[i], g], dim=-1))
