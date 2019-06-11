@@ -141,9 +141,8 @@ def teach_cli():
         '--subtasks-hidden-size', type=int, required=True)
     subtasks_parser.add_argument(
         '--subtasks-entropy-coef', type=float, default=0.01)
-    subtasks_parser.add_argument(
-        '--alpha', type=float, default=0.03)
-    parser.add_argument('--zeta', type=float, default=.1)
+    subtasks_parser.add_argument('--alpha', type=float, default=0.03)
+    subtasks_parser.add_argument('--zeta', type=float, default=.1)
     subtasks_parser.add_argument('--subtasks-recurrent', action='store_true')
     subtasks_parser.add_argument(
         '--multiplicative-interaction', action='store_true')
