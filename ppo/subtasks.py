@@ -35,11 +35,11 @@ class SubtasksAgent(Agent, NNBase):
                  hidden_size,
                  recurrent,
                  entropy_coef,
-                 b_loss_coef,
+                 alpha,
                  multiplicative_interaction,
                  teacher_agent=None):
         nn.Module.__init__(self)
-        self.b_loss_coef = b_loss_coef
+        self.alpha = alpha
         self.multiplicative_interaction = multiplicative_interaction
         if teacher_agent:
             assert isinstance(teacher_agent, SubtasksTeacher)
