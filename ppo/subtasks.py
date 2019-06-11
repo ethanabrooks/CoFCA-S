@@ -431,16 +431,16 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             h2 = self.subcontroller(obs[i])
 
             logits = self.phi_shift(h2)
-            # if self.hard_update:
-            # dist = FixedCategorical(logits=logits)
-            # l = dist.sample()
-            # outputs.l.append(l.float())
-            # outputs.l_probs.append(dist.probs)
-            # l = self.l_values[l]
-            # else:
-            l = F.softmax(logits, dim=1)
-            outputs.l.append(torch.zeros_like(c))  # dummy value
-            outputs.l_probs.append(torch.zeros_like(l))  # dummy value
+            if self.hard_update:
+                dist = FixedCategorical(logits=logits)
+                l = dist.sample()
+                outputs.l.append(l.float())
+                outputs.l_probs.append(dist.probs)
+                l = self.l_values[l]
+            else:
+                l = F.softmax(logits, dim=1)
+                outputs.l.append(torch.zeros_like(c))  # dummy value
+                outputs.l_probs.append(torch.zeros_like(l))  # dummy value
 
             # l_loss
             l_target = self.l_targets[next_subtask[i].long()].view(-1)
