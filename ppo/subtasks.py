@@ -144,9 +144,6 @@ class SubtasksAgent(Agent, NNBase):
         aux_loss = -self.alpha * hx.b_loss - (
             entropies1 + entropies2) * self.entropy_coef
 
-        log_probs = log_probs1 + hx.c * log_probs2
-        aux_loss = self.entropy_coef * (entropies1 + hx.c * entropies2)
-
         if self.teacher_agent:
             imitation_dist = self.teacher_agent(inputs, rnn_hxs, masks).dist
             imitation_probs = imitation_dist.probs.detach().unsqueeze(1)
