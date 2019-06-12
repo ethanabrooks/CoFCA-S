@@ -129,6 +129,7 @@ class SubtasksAgent(Agent, NNBase):
                 action, [1 for _ in SubtasksActions._fields], dim=-1))
         log_probs1 = dists.a.log_probs(actions.a) + dists.b.log_probs(
             actions.b)
+        log_probs2 = dists.g.log_probs(actions.g)
 
         entropies1 = dists.a.entropy() + dists.b.entropy()
         entropies2 = dists.g.entropy()
@@ -151,7 +152,6 @@ class SubtasksAgent(Agent, NNBase):
             log.update(imitation_obj=imitation_obj)
             aux_loss -= imitation_obj
 
-        log_probs2 = dists.g.log_probs(actions.g)
         log_probs = log_probs1 + hx.c * log_probs2
         value = self.critic(conv_out)
         for k, v in hx._asdict().items():
