@@ -106,21 +106,21 @@ class SubtasksAgent(Agent, NNBase):
         # print('g_target', g_target[0, :, 0, 0])
         _, _, h, w = obs.shape
 
-        # if self.hard_update:
-            # dists = SubtasksActions(
-                # a=self.actor(conv_out),
-                # b=FixedCategorical(hx.b_probs),
-                # c=FixedCategorical(hx.c_probs),
-                # g=FixedCategorical(hx.g_probs),
-                # l=FixedCategorical(hx.l_probs))
-        # else:
-        dists = SubtasksActions(
-            a=self.actor(conv_out),
-            b=FixedCategorical(hx.b_probs),
-            c=None,
-            g=FixedCategorical(hx.g_probs),
-            l=None,
-        )
+        if self.hard_update:
+            dists = SubtasksActions(
+                a=self.actor(conv_out),
+                b=FixedCategorical(hx.b_probs),
+                c=FixedCategorical(hx.c_probs),
+                g=FixedCategorical(hx.g_probs),
+                l=FixedCategorical(hx.l_probs))
+        else:
+            dists = SubtasksActions(
+                a=self.actor(conv_out),
+                b=FixedCategorical(hx.b_probs),
+                c=None,
+                g=FixedCategorical(hx.g_probs),
+                l=None,
+            )
         if action is None:
             actions = SubtasksActions(
                 a=dists.a.sample().float(), b=hx.b, g=hx.g_int, l=hx.l, c=hx.c)
@@ -405,9 +405,9 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             s = self.f(torch.cat([obs[i], r, g, b], dim=-1))
             logits = self.phi_update(torch.cat([s, h], dim=-1))
             # if self.hard_update:
-                # dist = FixedCategorical(logits=logits)
-                # c = dist.sample().float()
-                # outputs.c_probs.append(dist.probs)
+            # dist = FixedCategorical(logits=logits)
+            # c = dist.sample().float()
+            # outputs.c_probs.append(dist.probs)
             # else:
             c = torch.sigmoid(logits[:, :1])
             outputs.c_probs.append(torch.zeros_like(logits))  # dummy value
@@ -431,11 +431,11 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             logits = self.phi_shift(h2)
             # if self.hard_update:
-                # dist = FixedCategorical(logits=logits)
-                # l = dist.sample()
-                # outputs.l.append(l.float())
-                # outputs.l_probs.append(dist.probs)
-                # l = self.l_values[l]
+            # dist = FixedCategorical(logits=logits)
+            # l = dist.sample()
+            # outputs.l.append(l.float())
+            # outputs.l_probs.append(dist.probs)
+            # l = self.l_values[l]
             # else:
             l = F.softmax(logits, dim=1)
             outputs.l.append(torch.zeros_like(c))  # dummy value
