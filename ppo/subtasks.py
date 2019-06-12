@@ -102,9 +102,7 @@ class SubtasksAgent(Agent, NNBase):
                 nn.Linear(
                     self.obs_sections.base *
                     (self.action_space.a.n + int(task_space.nvec[0].sum())),
-                    hidden_size), 'relu'),
-            nn.ReLU(),
-            init_(nn.Linear(hidden_size, 1), 'sigmoid'),
+                    1), 'sigmoid'),
         )
         self.register_buffer('a_values', torch.eye(self.action_space.a.n))
 
