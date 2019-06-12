@@ -141,7 +141,7 @@ class SubtasksAgent(Agent, NNBase):
 
         g_accuracy = torch.all(hx.g.round() == g_target[:, :, 0, 0], dim=-1)
         log = dict(g_accuracy=g_accuracy.float())
-        aux_loss = -self.alpha * hx.b_loss - (
+        aux_loss = self.alpha * hx.b_loss - (
             entropies1 + entropies2) * self.entropy_coef
 
         if self.teacher_agent:
