@@ -96,6 +96,7 @@ class SubtasksAgent(Agent, NNBase):
         else:
             raise NotImplementedError
         self.critic = init_(nn.Linear(input_size, 1))
+        self.debug = init_(nn.Linear(input_size, 1), 'sigmoid')
 
     def forward(self, inputs, rnn_hxs, masks, action=None,
                 deterministic=False):
@@ -105,6 +106,21 @@ class SubtasksAgent(Agent, NNBase):
         # print('g       ', hx.g[0])
         # print('g_target', g_target[0, :, 0, 0])
         _, _, h, w = obs.shape
+
+        c_guess = F.sigmoid(self.debug(conv_out))
+
+        if torch.any(hx.c > 0):
+            weight = torch.ones_like(hx.c)
+            weight[hx.c > 0] /= torch.sum(hx.c > 0)
+            weight[hx.c == 0] /= torch.sum(hx.c == 0)
+        else:
+            weight = None
+
+        c_loss = F.binary_cross_entropy(torch.clamp(c_guess, 0., 1.), hx.c,
+                                        weight=weight)
+        c_accuracy = torch.mean((c_guess.round() == hx.c).float())
+        c_precision = torch.mean((c_guess.round()[c_guess > 0] == hx.c[c_guess > 0]).float())
+        c_recall = torch.mean((c_guess.round()[hx.c > 0] == hx.c[hx.c > 0]).float())
 
         if self.hard_update:
             dists = SubtasksActions(
@@ -140,8 +156,11 @@ class SubtasksAgent(Agent, NNBase):
             # entropies2 += dists.l.entropy()
 
         g_accuracy = torch.all(hx.g.round() == g_target[:, :, 0, 0], dim=-1)
-        log = dict(g_accuracy=g_accuracy.float())
-        aux_loss = self.alpha * (hx.b_loss + hx.c_loss) - (
+        log = dict(g_accuracy=g_accuracy.float(),
+                   c_accuracy=c_accuracy,
+                   c_recall=c_recall,
+                   c_precision=c_precision)
+        aux_loss = self.alpha * c_loss - (
             entropies1 + entropies2) * self.entropy_coef
 
         if self.teacher_agent:
@@ -157,6 +176,8 @@ class SubtasksAgent(Agent, NNBase):
         for k, v in hx._asdict().items():
             if k.endswith('_loss'):
                 log[k] = v
+
+        log['c_loss'] = c_loss
 
         return AgentValues(
             value=value,
