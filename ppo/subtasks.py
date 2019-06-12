@@ -119,7 +119,7 @@ class SubtasksAgent(Agent, NNBase):
         else:
             actions = SubtasksActions(*torch.split(
                 action, [1 for _ in SubtasksActions._fields], dim=-1))
-        action_log_probs = dists.a.log_probs(actions.a) + dists.b.log_probs(
+        log_probs1 = dists.a.log_probs(actions.a) + dists.b.log_probs(
             actions.b)
         aux_loss = -(dists.g.entropy() + dists.a.entropy() +
                      dists.b.entropy()) * self.entropy_coef
@@ -130,12 +130,13 @@ class SubtasksAgent(Agent, NNBase):
         if self.teacher_agent:
             imitation_dist = self.teacher_agent(inputs, rnn_hxs, masks).dist
             imitation_probs = imitation_dist.probs.detach().unsqueeze(1)
-            log_probs = torch.log(dists.a.probs).unsqueeze(2)
-            imitation_obj = (imitation_probs @ log_probs).view(-1)
+            our_log_probs = torch.log(dists.a.probs).unsqueeze(2)
+            imitation_obj = (imitation_probs @ our_log_probs).view(-1)
             log.update(imitation_obj=imitation_obj)
             aux_loss -= imitation_obj
 
-        log_probs = action_log_probs + (hx.c * dists.g.log_probs(actions.g))
+        log_probs2 = dists.g.log_probs(actions.g)
+        log_probs = log_probs1 + hx.c * log_probs2
         value = self.critic(conv_out)
         for k, v in hx._asdict().items():
             if k.endswith('_loss'):
