@@ -17,7 +17,7 @@ from ppo.wrappers import SubtasksActions, get_subtasks_obs_sections
 
 RecurrentState = namedtuple(
     'RecurrentState', 'p r h b b_probs g g_int g_probs c c_probs l l_probs '
-    'c_loss l_loss p_loss r_loss g_loss b_loss subtask')
+                      'c_loss l_loss p_loss r_loss g_loss b_loss subtask')
 
 
 # noinspection PyMissingConstructor
@@ -139,10 +139,9 @@ class SubtasksAgent(Agent, NNBase):
             entropies1 += dists.c.entropy()
             entropies2 += dists.l.entropy()
 
-        aux_loss = -(entropies1 + entropies2) * self.entropy_coef
-
         g_accuracy = torch.all(hx.g.round() == g_target[:, :, 0, 0], dim=-1)
         log = dict(g_accuracy=g_accuracy.float())
+        aux_loss = -(entropies1 + entropies2) * self.entropy_coef
 
         if self.teacher_agent:
             imitation_dist = self.teacher_agent(inputs, rnn_hxs, masks).dist
@@ -223,10 +222,10 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         # networks
         self.recurrent = recurrent
         in_size = (
-            conv_out_size +  # x
-            subtask_size +  # r
-            subtask_size +  # g
-            1)  # b
+                conv_out_size +  # x
+                subtask_size +  # r
+                subtask_size +  # g
+                1)  # b
         self.f = nn.Sequential(
             init_(nn.Linear(in_size, hidden_size), 'relu'),
             nn.ReLU(),
@@ -243,8 +242,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         self.phi_update = trace(
             lambda in_size: init_(nn.Linear(in_size, 2), 'sigmoid'),
             in_size=(
-                hidden_size +  # s
-                hidden_size))  # h
+                    hidden_size +  # s
+                    hidden_size))  # h
 
         self.phi_shift = trace(
             lambda in_size: nn.Sequential(
@@ -262,8 +261,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                     init_(
                         nn.Conv2d(
                             (
-                                subtask_size +  # r
-                                hidden_size),  # h
+                                    subtask_size +  # r
+                                    hidden_size),  # h
                             hidden_size,
                             kernel_size=3,
                             stride=1,
@@ -284,7 +283,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
         # embeddings
         for name, d in zip(
-            ['type_embeddings', 'count_embeddings', 'obj_embeddings'],
+                ['type_embeddings', 'count_embeddings', 'obj_embeddings'],
                 self.subtask_space):
             self.register_buffer(name, torch.eye(int(d)))
 
@@ -329,7 +328,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             self.count_embeddings[count.long()],
             self.obj_embeddings[obj.long()],
         ],
-                         dim=-1)
+            dim=-1)
 
     def encode(self, g1, g2, g3):
         x1, x2, x3 = self.subtask_space
