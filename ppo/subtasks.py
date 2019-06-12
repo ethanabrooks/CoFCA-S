@@ -1,11 +1,11 @@
 from collections import namedtuple
 
-from gym import spaces
-from gym.spaces import Box, Discrete
 import numpy as np
 import torch
-from torch import nn as nn
 import torch.jit
+from gym import spaces
+from gym.spaces import Box, Discrete
+from torch import nn as nn
 from torch.nn import functional as F
 
 from ppo.agent import Agent, AgentValues, NNBase
@@ -13,7 +13,8 @@ from ppo.distributions import Categorical, DiagGaussian, FixedCategorical
 from ppo.layers import Broadcast3d, Concat, Flatten, Reshape
 from ppo.teacher import SubtasksTeacher
 from ppo.utils import batch_conv1d, broadcast_3d, init_, interp, trace
-from ppo.wrappers import SubtasksActions, get_subtasks_action_sections, get_subtasks_obs_sections
+from ppo.wrappers import (SubtasksActions, get_subtasks_action_sections,
+                          get_subtasks_obs_sections)
 
 RecurrentState = namedtuple(
     'RecurrentState', 'p r h b b_probs g g_int g_probs c c_probs l l_probs '
@@ -180,7 +181,8 @@ class SubtasksAgent(Agent, NNBase):
             c_accuracy=c_accuracy,
             c_recall=c_recall,
             c_precision=c_precision)
-        aux_loss = -(entropies1 + entropies2) * self.entropy_coef
+        aux_loss = self.alpha * c_loss - self.entropy_coef * (
+            entropies1 + entropies2)
 
         if self.teacher_agent:
             imitation_dist = self.teacher_agent(inputs, rnn_hxs, masks).dist
