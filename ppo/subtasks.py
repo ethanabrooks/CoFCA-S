@@ -191,7 +191,7 @@ class SubtasksAgent(Agent, NNBase):
             c_accuracy=c_accuracy,
             c_recall=c_recall,
             c_precision=c_precision)
-        aux_loss = c_loss - self.entropy_coef * (
+        aux_loss = self.alpha * c_loss - self.entropy_coef * (
             entropies1 + entropies2)
 
         if self.teacher_agent:
