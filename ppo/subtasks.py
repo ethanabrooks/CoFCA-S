@@ -97,12 +97,16 @@ class SubtasksAgent(Agent, NNBase):
         else:
             raise NotImplementedError
         self.critic = init_(nn.Linear(input_size, 1))
-        self.debug = init_(
-            nn.Linear(
-                # input_size +
-                self.action_space.a.n + 1,
-                1),
-            'sigmoid')
+        self.debug = nn.Sequential(
+            init_(
+                nn.Linear(
+                    self.obs_sections.base + self.action_space.a.n + int(
+                        task_space.nvec[0].sum()),
+                    # input_size +
+                    hidden_size),
+                'relu'),
+            nn.ReLU(),
+            init_(nn.Linear(hidden_size, 1), 'sigmoid'))
         self.register_buffer('a_values', torch.eye(self.action_space.a.n))
 
     def forward(self, inputs, rnn_hxs, masks, action=None,
@@ -162,13 +166,10 @@ class SubtasksAgent(Agent, NNBase):
         g_accuracy = torch.all(hx.g.round() == g_target[:, :, 0, 0], dim=-1)
 
         a_idxs = actions.a.flatten().long()
-        debug_in = torch.cat(
-            [
-                # conv_out,
-                self.a_values[a_idxs],
-                hx.c
-            ],  # TODO
-            dim=-1)
+        agent_layer = obs[:, 6, :, :].long()
+        i, j, k = torch.split(agent_layer.nonzero(), [1, 1, 1], dim=-1)
+        debug_obs = obs[i, :, j, k].squeeze(1)
+        debug_in = torch.cat([debug_obs, hx.g, self.a_values[a_idxs]], dim=-1)
         c_guess = torch.sigmoid(self.debug(debug_in))
 
         if torch.any(hx.c > 0):
