@@ -137,7 +137,7 @@ class SubtasksAgent(Agent, NNBase):
             log_probs1 += dists.c.log_probs(actions.c)
             log_probs2 += dists.l.log_probs(actions.l)
             entropies1 += dists.c.entropy()
-            # entropies2 += dists.l.entropy()
+            entropies2 += dists.l.entropy()
 
         aux_loss = -(entropies1 + entropies2) * self.entropy_coef
 
