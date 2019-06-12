@@ -116,11 +116,13 @@ class SubtasksAgent(Agent, NNBase):
         else:
             weight = None
 
-        c_loss = F.binary_cross_entropy(torch.clamp(c_guess, 0., 1.), hx.c,
-                                        weight=weight)
+        c_loss = F.binary_cross_entropy(
+            torch.clamp(c_guess, 0., 1.), hx.c.detach(), weight=weight)
         c_accuracy = torch.mean((c_guess.round() == hx.c).float())
-        c_precision = torch.mean((c_guess.round()[c_guess > 0] == hx.c[c_guess > 0]).float())
-        c_recall = torch.mean((c_guess.round()[hx.c > 0] == hx.c[hx.c > 0]).float())
+        c_precision = torch.mean(
+            (c_guess.round()[c_guess > 0] == hx.c[c_guess > 0]).float())
+        c_recall = torch.mean(
+            (c_guess.round()[hx.c > 0] == hx.c[hx.c > 0]).float())
 
         if self.hard_update:
             dists = SubtasksActions(
@@ -156,10 +158,11 @@ class SubtasksAgent(Agent, NNBase):
             # entropies2 += dists.l.entropy()
 
         g_accuracy = torch.all(hx.g.round() == g_target[:, :, 0, 0], dim=-1)
-        log = dict(g_accuracy=g_accuracy.float(),
-                   c_accuracy=c_accuracy,
-                   c_recall=c_recall,
-                   c_precision=c_precision)
+        log = dict(
+            g_accuracy=g_accuracy.float(),
+            c_accuracy=c_accuracy,
+            c_recall=c_recall,
+            c_precision=c_precision)
         aux_loss = self.alpha * c_loss - (
             entropies1 + entropies2) * self.entropy_coef
 
