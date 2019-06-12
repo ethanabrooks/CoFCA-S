@@ -99,8 +99,8 @@ class SubtasksAgent(Agent, NNBase):
         self.critic = init_(nn.Linear(input_size, 1))
         self.debug = init_(
             nn.Linear(
-                # input_size + self.action_space.a.n +
-                1,
+                # input_size +
+                self.action_space.a.n + 1,
                 1),
             'sigmoid')
         self.register_buffer('a_values', torch.eye(self.action_space.a.n))
@@ -162,10 +162,13 @@ class SubtasksAgent(Agent, NNBase):
         g_accuracy = torch.all(hx.g.round() == g_target[:, :, 0, 0], dim=-1)
 
         a_idxs = actions.a.flatten().long()
-        debug_in = hx.c  # TODO
-        # torch.cat(
-        # [conv_out, self.a_values[a_idxs], hx.c],  # TODO
-        # dim=-1)
+        debug_in = torch.cat(
+            [
+                # conv_out,
+                self.a_values[a_idxs],
+                hx.c
+            ],  # TODO
+            dim=-1)
         c_guess = torch.sigmoid(self.debug(debug_in))
 
         if torch.any(hx.c > 0):
