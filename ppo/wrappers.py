@@ -1,10 +1,10 @@
 from collections import namedtuple
 
 import gym
-from gym import spaces
-from gym.spaces import Box
 import numpy as np
 import torch
+from gym import spaces
+from gym.spaces import Box
 
 from common.vec_env import VecEnvWrapper
 from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
@@ -89,7 +89,8 @@ class SubtasksWrapper(gym.Wrapper):
 
     def step(self, action):
         action_sections = np.cumsum(
-            get_subtasks_action_sections(self.action_space.spaces))[:-1]
+            get_subtasks_action_sections(
+                self.action_space.spaces))[:-1].astype(int)
         actions = SubtasksActions(*np.split(action, action_sections))
         action = int(actions.a)
         s, r, t, i = super().step(action)
