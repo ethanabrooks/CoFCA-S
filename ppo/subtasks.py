@@ -133,11 +133,11 @@ class SubtasksAgent(Agent, NNBase):
         log_probs2 = dists.g.log_probs(actions.g)
         entropies1 = dists.a.entropy() + dists.b.entropy()
         entropies2 = dists.g.entropy()
-        # if self.hard_update:
-        # log_probs1 += dists.c.log_probs(actions.c)
-        # log_probs2 += dists.l.log_probs(actions.l)
-        # entropies1 += dists.c.entropy()
-        # entropies2 += dists.l.entropy()
+        if self.hard_update:
+            log_probs1 += dists.c.log_probs(actions.c)
+            # log_probs2 += dists.l.log_probs(actions.l)
+            entropies1 += dists.c.entropy()
+            # entropies2 += dists.l.entropy()
 
         g_accuracy = torch.all(hx.g.round() == g_target[:, :, 0, 0], dim=-1)
         log = dict(g_accuracy=g_accuracy.float())
