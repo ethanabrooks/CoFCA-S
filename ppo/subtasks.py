@@ -106,13 +106,21 @@ class SubtasksAgent(Agent, NNBase):
         # print('g_target', g_target[0, :, 0, 0])
         _, _, h, w = obs.shape
 
-        dists = SubtasksActions(
-            a=self.actor(conv_out),
-            b=FixedCategorical(hx.b_probs),
-            g=FixedCategorical(hx.g_probs),
-            c=None,
-            l=None,
-        )
+        if self.hard_update:
+            dists = SubtasksActions(
+                a=self.actor(conv_out),
+                b=FixedCategorical(hx.b_probs),
+                c=FixedCategorical(hx.c_probs),
+                g=FixedCategorical(hx.g_probs),
+                l=FixedCategorical(hx.l_probs))
+        else:
+            dists = SubtasksActions(
+                a=self.actor(conv_out),
+                b=FixedCategorical(hx.b_probs),
+                c=None,
+                g=FixedCategorical(hx.g_probs),
+                l=None,
+            )
         if action is None:
             actions = SubtasksActions(
                 a=dists.a.sample().float(), b=hx.b, g=hx.g_int, l=hx.l, c=hx.c)
