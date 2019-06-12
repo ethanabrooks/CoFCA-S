@@ -13,7 +13,7 @@ from ppo.distributions import Categorical, DiagGaussian, FixedCategorical
 from ppo.layers import Broadcast3d, Concat, Flatten, Reshape
 from ppo.teacher import SubtasksTeacher
 from ppo.utils import batch_conv1d, broadcast_3d, init_, interp, trace
-from ppo.wrappers import SubtasksActions, get_subtasks_obs_sections
+from ppo.wrappers import SubtasksActions, get_subtasks_obs_sections, get_subtasks_action_sections
 
 RecurrentState = namedtuple(
     'RecurrentState', 'p r h b b_probs g g_int g_probs c c_probs l l_probs '
@@ -86,25 +86,33 @@ class SubtasksAgent(Agent, NNBase):
         input_size = h * w * hidden_size  # conv output
 
         assert isinstance(action_space, spaces.Tuple)
-        action_space = SubtasksActions(*action_space.spaces)
-        if isinstance(action_space.a, Discrete):
-            num_outputs = action_space.a.n
+        self.action_space = SubtasksActions(*action_space.spaces)
+        if isinstance(self.action_space.a, Discrete):
+            num_outputs = self.action_space.a.n
             self.actor = Categorical(input_size, num_outputs)
-        elif isinstance(action_space.a, Box):
-            num_outputs = action_space.a.shape[0]
+        elif isinstance(self.action_space.a, Box):
+            num_outputs = self.action_space.a.shape[0]
             self.actor = DiagGaussian(input_size, num_outputs)
         else:
             raise NotImplementedError
         self.critic = init_(nn.Linear(input_size, 1))
         self.debug = init_(
-            nn.Linear(input_size + action_space.a.n, 1), 'sigmoid')
-        self.register_buffer('a_values', torch.eye(action_space.a.n))
+            nn.Linear(input_size + self.action_space.a.n, 1), 'sigmoid')
+        self.register_buffer('a_values', torch.eye(self.action_space.a.n))
 
     def forward(self, inputs, rnn_hxs, masks, action=None,
                 deterministic=False):
         obs, g_target, task, next_subtask = torch.split(
             inputs, self.obs_sections, dim=1)
-        conv_out, hx = self.get_hidden(inputs, rnn_hxs, masks)
+
+        if action is None:
+            conv_out, hx = self.get_hidden(inputs, rnn_hxs, masks, g=None)
+        else:
+            action_sections = get_subtasks_action_sections(self.action_space)
+            actions = SubtasksActions(*torch.split(
+                action, action_sections, dim=-1))
+            conv_out, hx = self.get_hidden(inputs, rnn_hxs, masks, g=actions.g)
+
         # print('g       ', hx.g[0])
         # print('g_target', g_target[0, :, 0, 0])
         _, _, h, w = obs.shape
@@ -115,7 +123,9 @@ class SubtasksAgent(Agent, NNBase):
                 b=FixedCategorical(hx.b_probs),
                 c=FixedCategorical(hx.c_probs),
                 g=FixedCategorical(hx.g_probs),
-                l=FixedCategorical(hx.l_probs))
+                l=FixedCategorical(hx.l_probs),
+                g_int=None
+            )
         else:
             dists = SubtasksActions(
                 a=self.actor(conv_out),
@@ -123,17 +133,17 @@ class SubtasksAgent(Agent, NNBase):
                 c=None,
                 g=FixedCategorical(hx.g_probs),
                 l=None,
+                g_int=None
             )
+
         if action is None:
             actions = SubtasksActions(
-                a=dists.a.sample().float(), b=hx.b, g=hx.g_int, l=hx.l, c=hx.c)
-        else:
-            actions = SubtasksActions(*torch.split(
-                action, [1 for _ in SubtasksActions._fields], dim=-1))
+                a=dists.a.sample().float(), b=hx.b, g=hx.g, l=hx.l, c=hx.c,
+            g_int=hx.g_int)
 
         log_probs1 = dists.a.log_probs(actions.a) + dists.b.log_probs(
             actions.b)
-        log_probs2 = dists.g.log_probs(actions.g)
+        log_probs2 = dists.g.log_probs(actions.g_int)
         entropies1 = dists.a.entropy() + dists.b.entropy()
         entropies2 = dists.g.entropy()
         if self.hard_update:
@@ -168,7 +178,7 @@ class SubtasksAgent(Agent, NNBase):
             c_accuracy=c_accuracy,
             c_recall=c_recall,
             c_precision=c_precision)
-        aux_loss = self.alpha * c_loss - (
+        aux_loss = - (
             entropies1 + entropies2) * self.entropy_coef
 
         if self.teacher_agent:
@@ -196,7 +206,7 @@ class SubtasksAgent(Agent, NNBase):
             dist=None,
             log=log)
 
-    def get_hidden(self, inputs, last_hx, masks):
+    def get_hidden(self, inputs, last_hx, masks, g):
         obs, subtasks, task, next_subtask = torch.split(
             inputs, self.obs_sections, dim=1)
         task = task[:, :, 0, 0]
@@ -212,14 +222,17 @@ class SubtasksAgent(Agent, NNBase):
         # assert torch.all(subtasks[:, :, 0, 0] == hx.g)
 
         if self.multiplicative_interaction:
-            weights = self.conv_weight(subtasks[:, :, 0, 0])
-            outs = []
-            for ob, weight in zip(obs, weights):
-                outs.append(F.conv2d(ob.unsqueeze(0), weight, padding=(1, 1)))
-            out = torch.cat(outs).view(*conv_out.shape)
+            raise NotImplementedError
+            # weights = self.conv_weight(subtasks[:, :, 0, 0])
+            # outs = []
+            # for ob, weight in zip(obs, weights):
+            #     outs.append(F.conv2d(ob.unsqueeze(0), weight, padding=(1, 1)))
+            # out = torch.cat(outs).view(*conv_out.shape)
         else:
-            g = broadcast_3d(hx.g, obs.shape[2:])
-            out = self.conv2((obs, g))
+            if g is None:
+                g = hx.g
+            g_broad = broadcast_3d(g, obs.shape[2:])
+            out = self.conv2((obs, g_broad))
 
         return out, hx
 
@@ -232,7 +245,7 @@ class SubtasksAgent(Agent, NNBase):
         return True
 
     def get_value(self, inputs, rnn_hxs, masks):
-        conv_out, hx = self.get_hidden(inputs, rnn_hxs, masks)
+        conv_out, hx = self.get_hidden(inputs, rnn_hxs, masks, g=None)  # TODO!
         return self.critic(conv_out)
 
 
