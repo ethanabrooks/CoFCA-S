@@ -508,7 +508,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             outputs.b_probs.append(dist.probs)
 
             # b_loss
-            outputs.b_loss.append(dist.log_probs(next_subtask[i]))
+            outputs.b_loss.append(-dist.log_probs(next_subtask[i]))
             outputs.b.append(b)
 
         stacked = []
