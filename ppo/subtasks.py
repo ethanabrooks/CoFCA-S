@@ -166,8 +166,8 @@ class SubtasksAgent(Agent, NNBase):
         i, j, k = torch.split(agent_layer.nonzero(), [1, 1, 1], dim=-1)
         debug_obs = obs[i, :, j, k].squeeze(1)
         n = obs.shape[0]
-        part1 =  hx.g.unsqueeze(1) * debug_obs.unsqueeze(2)
-        part2 =  hx.g.unsqueeze(1) * self.a_values[a_idxs].unsqueeze(2)
+        part1 = g_target[:, :, 0, 0].unsqueeze(1) * debug_obs.unsqueeze(2)
+        part2 = g_target[:, :, 0, 0].unsqueeze(1) * self.a_values[a_idxs].unsqueeze(2)
         debug_in = torch.cat([
             part1,
             part2
