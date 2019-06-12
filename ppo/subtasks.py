@@ -137,13 +137,12 @@ class SubtasksAgent(Agent, NNBase):
             log_probs1 += dists.c.log_probs(actions.c)
             log_probs2 += dists.l.log_probs(actions.l)
             entropies1 += dists.c.entropy()
-            entropies2 += dists.l.entropy()
+            # entropies2 += dists.l.entropy()
+
+        aux_loss = -(entropies1 + entropies2) * self.entropy_coef
 
         g_accuracy = torch.all(hx.g.round() == g_target[:, :, 0, 0], dim=-1)
         log = dict(g_accuracy=g_accuracy.float())
-
-        log_probs = log_probs1 + hx.c * log_probs2
-        aux_loss = self.entropy_coef * (entropies1 + entropies2)
 
         if self.teacher_agent:
             imitation_dist = self.teacher_agent(inputs, rnn_hxs, masks).dist
@@ -153,6 +152,7 @@ class SubtasksAgent(Agent, NNBase):
             log.update(imitation_obj=imitation_obj)
             aux_loss -= imitation_obj
 
+        log_probs = log_probs1 + hx.c * log_probs2
         value = self.critic(conv_out)
         for k, v in hx._asdict().items():
             if k.endswith('_loss'):
