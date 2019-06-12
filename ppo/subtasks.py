@@ -133,14 +133,16 @@ class SubtasksAgent(Agent, NNBase):
         log_probs2 = dists.g.log_probs(actions.g)
         entropies1 = dists.a.entropy() + dists.b.entropy()
         entropies2 = dists.g.entropy()
-        if self.hard_update:
-            log_probs1 += dists.c.log_probs(actions.c)
-            log_probs2 += dists.l.log_probs(actions.l)
-            entropies1 += dists.c.entropy()
-            entropies2 += dists.l.entropy()
+        # if self.hard_update:
+        # log_probs1 += dists.c.log_probs(actions.c)
+        # log_probs2 += dists.l.log_probs(actions.l)
+        # entropies1 += dists.c.entropy()
+        # entropies2 += dists.l.entropy()
 
         g_accuracy = torch.all(hx.g.round() == g_target[:, :, 0, 0], dim=-1)
         log = dict(g_accuracy=g_accuracy.float())
+        aux_loss = -self.alpha * hx.b_loss - (
+            entropies1 + entropies2) * self.entropy_coef
 
         log_probs = log_probs1 + hx.c * log_probs2
         aux_loss = self.entropy_coef * (entropies1 + hx.c * entropies2)
@@ -153,6 +155,7 @@ class SubtasksAgent(Agent, NNBase):
             log.update(imitation_obj=imitation_obj)
             aux_loss -= imitation_obj
 
+        log_probs = log_probs1 + hx.c * log_probs2
         value = self.critic(conv_out)
         for k, v in hx._asdict().items():
             if k.endswith('_loss'):
@@ -431,16 +434,16 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             h2 = self.subcontroller(obs[i])
 
             logits = self.phi_shift(h2)
-            if self.hard_update:
-                dist = FixedCategorical(logits=logits)
-                l = dist.sample()
-                outputs.l.append(l.float())
-                outputs.l_probs.append(dist.probs)
-                l = self.l_values[l]
-            else:
-                l = F.softmax(logits, dim=1)
-                outputs.l.append(torch.zeros_like(c))  # dummy value
-                outputs.l_probs.append(torch.zeros_like(l))  # dummy value
+            # if self.hard_update:
+            # dist = FixedCategorical(logits=logits)
+            # l = dist.sample()
+            # outputs.l.append(l.float())
+            # outputs.l_probs.append(dist.probs)
+            # l = self.l_values[l]
+            # else:
+            l = F.softmax(logits, dim=1)
+            outputs.l.append(torch.zeros_like(c))  # dummy value
+            outputs.l_probs.append(torch.zeros_like(l))  # dummy value
 
             # l_loss
             l_target = self.l_targets[next_subtask[i].long()].view(-1)
