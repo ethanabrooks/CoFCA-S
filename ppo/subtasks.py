@@ -169,11 +169,13 @@ class SubtasksAgent(Agent, NNBase):
         i, j, k = torch.split(agent_layer.nonzero(), [1, 1, 1], dim=-1)
         debug_obs = obs[i, :, j, k].squeeze(1)
         n = obs.shape[0]
+        part1 = debug_obs.unsqueeze(1) * hx.g.unsqueeze(2)
+        part2 = debug_obs.unsqueeze(1) * self.a_values[a_idxs].unsqueeze(2)
         debug_in = torch.cat([
-            debug_obs.unsqueeze(1) * hx.g.unsqueeze(2),
-            debug_obs.unsqueeze(1) * self.a_values[a_idxs].unsqueeze(2)
+            part1,
+            part2
         ],
-                             dim=1).view(n, -1)
+            dim=1).view(n, -1)
         c_guess = torch.sigmoid(self.debug(debug_in))
 
         if torch.any(hx.c > 0):
