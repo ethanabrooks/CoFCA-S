@@ -13,7 +13,7 @@ from ppo.distributions import Categorical, DiagGaussian, FixedCategorical
 from ppo.layers import Broadcast3d, Concat, Flatten, Reshape
 from ppo.teacher import SubtasksTeacher
 from ppo.utils import batch_conv1d, broadcast_3d, init_, interp, trace
-from ppo.wrappers import SubtasksActions, get_subtasks_obs_sections, get_subtasks_action_sections
+from ppo.wrappers import SubtasksActions, get_subtasks_action_sections, get_subtasks_obs_sections
 
 RecurrentState = namedtuple(
     'RecurrentState', 'p r h b b_probs g g_int g_probs c c_probs l l_probs '
@@ -109,8 +109,8 @@ class SubtasksAgent(Agent, NNBase):
             conv_out, hx = self.get_hidden(inputs, rnn_hxs, masks, g=None)
         else:
             action_sections = get_subtasks_action_sections(self.action_space)
-            actions = SubtasksActions(*torch.split(
-                action, action_sections, dim=-1))
+            actions = SubtasksActions(
+                *torch.split(action, action_sections, dim=-1))
             conv_out, hx = self.get_hidden(inputs, rnn_hxs, masks, g=actions.g)
 
         # print('g       ', hx.g[0])
@@ -124,8 +124,7 @@ class SubtasksAgent(Agent, NNBase):
                 c=FixedCategorical(hx.c_probs),
                 g=FixedCategorical(hx.g_probs),
                 l=FixedCategorical(hx.l_probs),
-                g_int=None
-            )
+                g_int=None)
         else:
             dists = SubtasksActions(
                 a=self.actor(conv_out),
@@ -133,13 +132,16 @@ class SubtasksAgent(Agent, NNBase):
                 c=None,
                 g=FixedCategorical(hx.g_probs),
                 l=None,
-                g_int=None
-            )
+                g_int=None)
 
         if action is None:
             actions = SubtasksActions(
-                a=dists.a.sample().float(), b=hx.b, g=hx.g, l=hx.l, c=hx.c,
-            g_int=hx.g_int)
+                a=dists.a.sample().float(),
+                b=hx.b,
+                g=hx.g,
+                l=hx.l,
+                c=hx.c,
+                g_int=hx.g_int)
 
         log_probs1 = dists.a.log_probs(actions.a) + dists.b.log_probs(
             actions.b)
@@ -178,8 +180,7 @@ class SubtasksAgent(Agent, NNBase):
             c_accuracy=c_accuracy,
             c_recall=c_recall,
             c_precision=c_precision)
-        aux_loss = - (
-            entropies1 + entropies2) * self.entropy_coef
+        aux_loss = -(entropies1 + entropies2) * self.entropy_coef
 
         if self.teacher_agent:
             imitation_dist = self.teacher_agent(inputs, rnn_hxs, masks).dist
