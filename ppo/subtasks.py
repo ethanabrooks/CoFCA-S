@@ -100,13 +100,11 @@ class SubtasksAgent(Agent, NNBase):
         self.debug = nn.Sequential(
             init_(
                 nn.Linear(
-                    self.obs_sections.base + self.action_space.a.n + int(
-                        task_space.nvec[0].sum()),
+                    self.obs_sections.base * (self.action_space.a.n + int(
+                        task_space.nvec[0].sum())),
                     # input_size +
-                    hidden_size),
-                'relu'),
-            nn.ReLU(),
-            init_(nn.Linear(hidden_size, 1), 'sigmoid'))
+                    1),
+                'sigmoid'))
         self.register_buffer('a_values', torch.eye(self.action_space.a.n))
 
     def forward(self, inputs, rnn_hxs, masks, action=None,
@@ -169,7 +167,11 @@ class SubtasksAgent(Agent, NNBase):
         agent_layer = obs[:, 6, :, :].long()
         i, j, k = torch.split(agent_layer.nonzero(), [1, 1, 1], dim=-1)
         debug_obs = obs[i, :, j, k].squeeze(1)
-        debug_in = torch.cat([debug_obs, hx.g, self.a_values[a_idxs]], dim=-1)
+        n = obs.shape[0]
+        debug_in = torch.cat([
+            debug_obs.unsqueeze(1) * hx.g.unsqueeze(2),
+            debug_obs.unsqueeze(1) * self.a_values[a_idxs].unsqueeze(2)],
+            dim=1).view(n, -1)
         c_guess = torch.sigmoid(self.debug(debug_in))
 
         if torch.any(hx.c > 0):
