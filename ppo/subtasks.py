@@ -127,15 +127,15 @@ class SubtasksAgent(Agent, NNBase):
         else:
             actions = SubtasksActions(*torch.split(
                 action, [1 for _ in SubtasksActions._fields], dim=-1))
+
         log_probs1 = dists.a.log_probs(actions.a) + dists.b.log_probs(
             actions.b)
         log_probs2 = dists.g.log_probs(actions.g)
-
         entropies1 = dists.a.entropy() + dists.b.entropy()
         entropies2 = dists.g.entropy()
         if self.hard_update:
             log_probs1 += dists.c.log_probs(actions.c)
-            # log_probs2 += dists.l.log_probs(actions.l)
+            log_probs2 += dists.l.log_probs(actions.l)
             entropies1 += dists.c.entropy()
             # entropies2 += dists.l.entropy()
 
