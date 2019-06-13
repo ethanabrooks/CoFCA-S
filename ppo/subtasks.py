@@ -450,7 +450,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                     weight=weight,
                     reduction='none'))
 
-            c = next_subtask[i]  # TODO
+            # c = next_subtask[i]  # TODO
             outputs.c.append(c)
 
             # TODO: figure this out
