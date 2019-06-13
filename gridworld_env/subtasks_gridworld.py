@@ -1,14 +1,14 @@
-from collections import namedtuple
 import itertools
 import re
 import time
+from collections import namedtuple
 
 import gym
+import numpy as np
+import six
 from gym import spaces
 from gym.envs.registration import EnvSpec
 from gym.utils import seeding
-import numpy as np
-import six
 
 from ppo.utils import set_index
 from rl_utils import cartesian_product
@@ -83,6 +83,7 @@ class SubtasksGridWorld(gym.Env):
         self.pos = None
         self.last_terminal = False
         self.last_action = None
+        self.last_reward = None
         self.next_subtask = False
 
         h, w = self.desc.shape
@@ -158,7 +159,13 @@ class SubtasksGridWorld(gym.Env):
             print(''.join(row), end='')
             print(six.u('\x1b[49m\x1b[39m'))
 
-        time.sleep(2 if self.last_terminal else .5)
+        if self.last_terminal:
+            if self.last_reward == 1.:
+                print('#############')
+                print('Task complete')
+                print('#############')
+            time.sleep(1)
+        time.sleep(1)
 
     def subtask_generator(self):
         task_types = np.arange(len(self.task_types))
@@ -218,6 +225,7 @@ class SubtasksGridWorld(gym.Env):
         self.perform_iteration()
         self.last_terminal = False
         self.last_action = None
+        self.last_reward = None
         return self.get_observation()
 
     def objects_one_hot(self):
@@ -298,6 +306,7 @@ class SubtasksGridWorld(gym.Env):
                     t = True
 
         self.last_terminal = t
+        self.last_reward = r
         return obs, r, t, {}
 
 

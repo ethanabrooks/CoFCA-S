@@ -1,14 +1,14 @@
 import functools
 import itertools
-from pathlib import Path
 import re
 import sys
 import time
+from pathlib import Path
 
 import gym
 import numpy as np
-from tensorboardX import SummaryWriter
 import torch
+from tensorboardX import SummaryWriter
 
 from common.atari_wrappers import wrap_deepmind
 from common.vec_env.dummy_vec_env import DummyVecEnv
@@ -18,7 +18,8 @@ from ppo.agent import Agent
 from ppo.storage import RolloutStorage
 from ppo.update import PPO
 from ppo.utils import get_n_gpu, get_random_gpu
-from ppo.wrappers import AddTimestep, SubtasksWrapper, TransposeImage, VecNormalize, VecPyTorch, VecPyTorchFrameStack
+from ppo.wrappers import (AddTimestep, SubtasksWrapper, TransposeImage,
+                          VecNormalize, VecPyTorch, VecPyTorchFrameStack)
 
 try:
     import dm_control2gym
@@ -84,6 +85,7 @@ class Train:
         )
 
         obs = envs.reset()
+        input()
         rollouts.obs[0].copy_(obs)
 
         device = 'cpu'
