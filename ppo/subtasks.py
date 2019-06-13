@@ -184,7 +184,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         self.debug = nn.Sequential(
             init_(
                 nn.Linear(
-                    int(task_space.nvec[0].sum()) *
+                    1 + int(task_space.nvec[0].sum()) *
                     (self.obs_sections.base + action_space.a.n), 1),
                 'sigmoid'), )
 
@@ -429,7 +429,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 2)
             cat = torch.cat([part1, part2], dim=1)
             bsize = cat.shape[0]
-            debug_in = cat.view(bsize, -1)
+            reshape = cat.view(bsize, -1)
+            debug_in = torch.cat([reshape, next_subtask[i]], dim=-1)
 
             # print(debug_in[:, [39, 30, 21, 12, 98, 89]])
             # print(next_subtask[i])
