@@ -225,10 +225,13 @@ class SubtasksAgent(Agent, NNBase):
         return True
 
     def get_value(self, inputs, rnn_hxs, masks):
+        obs, g_target, task, next_subtask = torch.split(
+            inputs, self.obs_sections, dim=1)
         n = inputs.shape[0]
         all_hxs, last_hx = self._forward_gru(
             inputs.view(n, -1), rnn_hxs, masks)
-        return self.recurrent_module.parse_hidden(all_hxs).v
+        g_broad = broadcast_3d(self.recurrent_module.parse_hidden(all_hxs).g, obs.shape[2:])
+        return self.critic(self.conv2((obs, g_broad)))
 
 
 class SubtasksRecurrence(torch.jit.ScriptModule):
