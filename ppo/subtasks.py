@@ -53,20 +53,6 @@ class SubtasksAgent(Agent, NNBase):
             **kwargs,
         )
         self.obs_sections = get_subtasks_obs_sections(task_space)
-        _, h, w = obs_shape
-        input_size = h * w * hidden_size  # conv output
-
-        self.conv2 = nn.Sequential(
-            Concat(dim=1),
-            init_(
-                nn.Conv2d(
-                    self.obs_sections.base + self.obs_sections.subtask,
-                    hidden_size,
-                    kernel_size=3,
-                    stride=1,
-                    padding=
-                    1), 'relu'), nn.ReLU(), Flatten())
-        self.critic = init_(nn.Linear(input_size, 1))
 
     def forward(self, inputs, rnn_hxs, masks, action=None,
                 deterministic=False):
@@ -144,7 +130,8 @@ class SubtasksAgent(Agent, NNBase):
         log_probs = log_probs1 + hx.c * log_probs2
 
         g_broad = broadcast_3d(actions.g, obs.shape[2:])
-        value = self.critic(self.conv2((obs, g_broad)))
+        value = self.recurrent_module.critic(
+            self.recurrent_module.conv2((obs, g_broad)))
 
         for k, v in hx._asdict().items():
             if k.endswith('_loss'):
@@ -159,27 +146,11 @@ class SubtasksAgent(Agent, NNBase):
             dist=None,
             log=log)
 
-    def get_hidden(self, inputs, last_hx, masks, g):
-        obs, subtasks, task, next_subtask = torch.split(
-            inputs, self.obs_sections, dim=1)
-        task = task[:, :, 0, 0]
-        next_subtask = next_subtask[:, :, 0, 0]
-
-        # TODO: This is where we would embed the task if we were doing that
-
-        conv_out = self.conv1(obs)
-        recurrent_inputs = torch.cat([conv_out, task, next_subtask], dim=-1)
-        all_hxs, last_hx = self._forward_gru(recurrent_inputs, last_hx, masks)
-        hx = RecurrentState(*self.recurrent_module.parse_hidden(all_hxs))
-
-        # assert torch.all(subtasks[:, :, 0, 0] == hx.g)
-
-        if g is None:
-            g = hx.g
-        g_broad = broadcast_3d(g, obs.shape[2:])
-        out = self.conv2((obs, g_broad))
-
-        return out, hx
+    def get_value(self, inputs, rnn_hxs, masks):
+        n = inputs.shape[0]
+        all_hxs, last_hx = self._forward_gru(
+            inputs.view(n, -1), rnn_hxs, masks)
+        return self.recurrent_module.parse_hidden(all_hxs).v
 
     @property
     def recurrent_hidden_state_size(self):
@@ -188,15 +159,6 @@ class SubtasksAgent(Agent, NNBase):
     @property
     def is_recurrent(self):
         return True
-
-    def get_value(self, inputs, rnn_hxs, masks):
-        obs, g_target, task, next_subtask = torch.split(
-            inputs, self.obs_sections, dim=1)
-        n = inputs.shape[0]
-        all_hxs, last_hx = self._forward_gru(
-            inputs.view(n, -1), rnn_hxs, masks)
-        g_broad = broadcast_3d(self.recurrent_module.parse_hidden(all_hxs).g, obs.shape[2:])
-        return self.critic(self.conv2((obs, g_broad)))
 
 
 class SubtasksRecurrence(torch.jit.ScriptModule):
@@ -215,7 +177,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         n_subtasks = task_space.shape[0]
         self.obs_sections = get_subtasks_obs_sections(task_space)
         self.obs_shape = d, h, w
-        self.action_space = action_space
 
         # networks
         self.recurrent = recurrent
@@ -267,10 +228,10 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         self.critic = init_(nn.Linear(input_size, 1))
 
         in_size = (
-                conv_out_size +  # x
-                subtask_size +  # r
-                subtask_size +  # g
-                1)  # b
+            conv_out_size +  # x
+            subtask_size +  # r
+            subtask_size +  # g
+            1)  # b
         self.f = nn.Sequential(
             init_(nn.Linear(in_size, hidden_size), 'relu'),
             nn.ReLU(),
@@ -287,8 +248,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         self.phi_update = trace(
             lambda in_size: init_(nn.Linear(in_size, 2), 'sigmoid'),
             in_size=(
-                    hidden_size +  # s
-                    hidden_size))  # h
+                hidden_size +  # s
+                hidden_size))  # h
 
         self.phi_shift = trace(
             lambda in_size: nn.Sequential(
@@ -306,8 +267,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                     init_(
                         nn.Conv2d(
                             (
-                                    subtask_size +  # r
-                                    hidden_size),  # h
+                                subtask_size +  # r
+                                hidden_size),  # h
                             hidden_size,
                             kernel_size=3,
                             stride=1,
@@ -328,7 +289,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
         # embeddings
         for name, d in zip(
-                ['type_embeddings', 'count_embeddings', 'obj_embeddings'],
+            ['type_embeddings', 'count_embeddings', 'obj_embeddings'],
                 self.subtask_space):
             self.register_buffer(name, torch.eye(int(d)))
 
@@ -375,7 +336,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             self.count_embeddings[count.long()],
             self.obj_embeddings[obj.long()],
         ],
-            dim=-1)
+                         dim=-1)
 
     def encode(self, g1, g2, g3):
         x1, x2, x3 = self.subtask_space
