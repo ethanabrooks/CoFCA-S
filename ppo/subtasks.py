@@ -225,9 +225,23 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             subtask_size +  # r
             subtask_size +  # g
             1)  # b
+
         self.f = nn.Sequential(
-            init_(nn.Linear(in_size, hidden_size), 'relu'),
+            Concat(1),
+            init_(
+                nn.Conv2d(
+                    self.obs_sections.base +  # obs
+                    action_space.a.n +  # hx.a
+                    subtask_size +  # hx.g
+                    subtask_size,  # hx.r
+                    hidden_size,
+                    kernel_size=3,
+                    stride=1,
+                    padding=1),
+                'relu'),
+            nn.MaxPool2d(kernel_size=(h + 2, w + 2), stride=1, padding=1),
             nn.ReLU(),
+            Flatten(),
         )
 
         subcontroller = nn.GRUCell if recurrent else nn.Linear
@@ -238,16 +252,13 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             ),
             in_size=conv_out_size)  # h
 
-        debug_in_size = subtask_size * (
-            self.obs_sections.base + action_space.a.n) + subtask_size
-
         self.phi_update = trace(
             # lambda in_size: init_(nn.Linear(in_size, 2), 'sigmoid'),
             # in_size=(
             # hidden_size +  s
             # hidden_size))  h
-            lambda in_size: init_(nn.Linear(debug_in_size, 1), 'sigmoid'),
-            in_size=(debug_in_size))
+            lambda in_size: init_(nn.Linear(in_size, 1), 'sigmoid'),
+            in_size=(hidden_size))
 
         self.phi_shift = trace(
             lambda in_size: nn.Sequential(
@@ -257,7 +268,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 init_(nn.Linear(in_size, 3)),  # 3 for {-1, 0, +1}
             ),
             # in_size=hidden_size)
-            in_size=debug_in_size)
+            in_size=hidden_size)
 
         self.pi_theta = nn.Sequential(
             Concat(dim=-1),
@@ -420,21 +431,15 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # c = torch.sigmoid(logits[:, :1])
             # outputs.c_probs.append(torch.zeros_like(logits))  # dummy value
 
-            a_idxs = hx.a.flatten().long()
-            agent_layer = obs[i, :, 6, :, :].long()
-            j, k, l = torch.split(agent_layer.nonzero(), [1, 1, 1], dim=-1)
-            debug_obs = obs[i, j, :, k, l].squeeze(1)
-            part1 = subtasks[i].unsqueeze(1) * debug_obs.unsqueeze(2)
-            part2 = subtasks[i].unsqueeze(1) * self.a_values[a_idxs].unsqueeze(
-                2)
-            cat = torch.cat([part1, part2], dim=1)
-            bsize = cat.shape[0]
-            reshape = cat.view(bsize, -1)
-            debug_in = torch.cat([reshape, r], dim=-1)
+            a_idx = hx.a.long().flatten()
+            context = broadcast_3d(
+                torch.cat([self.a_values[a_idx], hx.g, hx.r], dim=-1),
+                self.obs_shape[1:])
+            h = self.f((obs[i], context))
 
             # print(debug_in[:, [39, 30, 21, 12, 98, 89]])
             # print(next_subtask[i])
-            c = torch.sigmoid(self.phi_update(debug_in))
+            c = torch.sigmoid(self.phi_update(h))
             outputs.c_truth.append(next_subtask[i])
 
             if torch.any(next_subtask[i] > 0):
@@ -459,7 +464,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # else:
             # h2 = self.subcontroller(conv_out)
 
-            logits = self.phi_shift(debug_in)
+            logits = self.phi_shift(h)
             # if self.hard_update:
             # dist = FixedCategorical(logits=logits)
             # l = dist.sample()
