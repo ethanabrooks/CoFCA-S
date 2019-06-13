@@ -107,20 +107,10 @@ class SubtasksAgent(Agent, NNBase):
 
         # print('g       ', hx.g[0])
         # print('g_target', g_target[0, :, 0, 0])
-        if action is None:
-            g = hx.g
-        else:
-            action_sections = get_subtasks_action_sections(self.action_space)
-            actions = SubtasksActions(
-                *torch.split(action, action_sections, dim=-1))
-            g = actions.g
-
-        g_broad = broadcast_3d(g, obs.shape[2:])
-        conv_out = self.conv2((obs, g_broad))
 
         if self.hard_update:
             dists = SubtasksActions(
-                a=self.actor(conv_out),
+                a=FixedCategorical(hx.a_probs),
                 b=FixedCategorical(hx.b_probs),
                 c=FixedCategorical(hx.c_probs),
                 g=FixedCategorical(hx.g_probs),
@@ -128,7 +118,7 @@ class SubtasksAgent(Agent, NNBase):
                 g_int=None)
         else:
             dists = SubtasksActions(
-                a=self.actor(conv_out),
+                a=FixedCategorical(hx.a_probs),
                 b=FixedCategorical(hx.b_probs),
                 c=None,
                 g=FixedCategorical(hx.g_probs),
@@ -137,12 +127,11 @@ class SubtasksAgent(Agent, NNBase):
 
         if action is None:
             actions = SubtasksActions(
-                a=dists.a.sample().float(),
-                b=hx.b,
-                g=hx.g,
-                l=hx.l,
-                c=hx.c,
-                g_int=hx.g_int)
+                a=hx.a, b=hx.b, g=hx.g, l=hx.l, c=hx.c, g_int=hx.g_int)
+        else:
+            action_sections = get_subtasks_action_sections(self.action_space)
+            actions = SubtasksActions(
+                *torch.split(action, action_sections, dim=-1))
 
         log_probs1 = dists.a.log_probs(actions.a) + dists.b.log_probs(
             actions.b)
@@ -180,7 +169,10 @@ class SubtasksAgent(Agent, NNBase):
             aux_loss -= imitation_obj
 
         log_probs = log_probs1 + hx.c * log_probs2
-        value = self.critic(conv_out)
+
+        g_broad = broadcast_3d(actions.g, obs.shape[2:])
+        value = self.critic(self.conv2((obs, g_broad)))
+
         for k, v in hx._asdict().items():
             if k.endswith('_loss'):
                 log[k] = v
@@ -504,6 +496,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             c = next_subtask[i]  # TODO
             outputs.c.append(c)
+            outputs.c_guess.append(c)
 
             # TODO: figure this out
             # if self.recurrent:
@@ -592,10 +585,18 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             outputs.b_loss.append(-dist.log_probs(next_subtask[i]))
             outputs.b.append(b)
 
-            outputs.a.append(b)
-            outputs.a_probs.append(b.expand(b.shape[0], self.action_space.a.n))
-            outputs.v.append(b)
-            outputs.c_guess.append(c)
+            # a
+            g_broad = broadcast_3d(g, self.obs_shape[1:])
+            conv_out2 = self.conv2((obs[i], g_broad))
+            dist = self.actor(conv_out2)
+            a = dist.sample()
+            # a[:] = 'wsadeq'.index(input('act:'))
+
+            outputs.a.append(a.float())
+            outputs.a_probs.append(dist.probs)
+
+            # v
+            outputs.v.append(self.critic(conv_out2))
 
         stacked = []
         for x in outputs:
