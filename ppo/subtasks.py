@@ -1,11 +1,11 @@
 from collections import namedtuple
 
-from gym import spaces
-from gym.spaces import Box, Discrete
 import numpy as np
 import torch
-from torch import nn as nn
 import torch.jit
+from gym import spaces
+from gym.spaces import Box, Discrete
+from torch import nn as nn
 from torch.nn import functional as F
 
 from ppo.agent import Agent, AgentValues, NNBase
@@ -13,7 +13,8 @@ from ppo.distributions import Categorical, DiagGaussian, FixedCategorical
 from ppo.layers import Broadcast3d, Concat, Flatten, Reshape
 from ppo.teacher import SubtasksTeacher
 from ppo.utils import batch_conv1d, broadcast_3d, init_, interp, trace
-from ppo.wrappers import SubtasksActions, get_subtasks_action_sections, get_subtasks_obs_sections
+from ppo.wrappers import (SubtasksActions, get_subtasks_action_sections,
+                          get_subtasks_obs_sections)
 
 RecurrentState = namedtuple(
     'RecurrentState',
@@ -180,13 +181,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         # networks
         self.recurrent = recurrent
 
-        self.debug = nn.Sequential(
-            init_(
-                nn.Linear(
-                    int(task_space.nvec[0].sum()) *
-                    (self.obs_sections.base + action_space.a.n), 1),
-                'sigmoid'), )
-
         self.conv1 = nn.Sequential(
             init_(
                 nn.Conv2d(
@@ -244,19 +238,26 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             ),
             in_size=conv_out_size)  # h
 
+        debug_in_size = int(task_space.nvec[0].sum()) * (
+            self.obs_sections.base + action_space.a.n)
+
         self.phi_update = trace(
-            lambda in_size: init_(nn.Linear(in_size, 2), 'sigmoid'),
-            in_size=(
-                hidden_size +  # s
-                hidden_size))  # h
+            # lambda in_size: init_(nn.Linear(in_size, 2), 'sigmoid'),
+            # in_size=(
+            # hidden_size +  s
+            # hidden_size))  h
+            lambda in_size: init_(nn.Linear(debug_in_size, 1), 'sigmoid'),
+            in_size=(debug_in_size))
 
         self.phi_shift = trace(
             lambda in_size: nn.Sequential(
-                init_(nn.Linear(in_size, hidden_size), 'relu'),
-                nn.ReLU(),
-                init_(nn.Linear(hidden_size, 3)),  # 3 for {-1, 0, +1}
+                # init_(nn.Linear(in_size, hidden_size), 'relu'),
+                # nn.ReLU(),
+                # init_(nn.Linear(hidden_size, 3)),  # 3 for {-1, 0, +1}
+                init_(nn.Linear(in_size, 3)),  # 3 for {-1, 0, +1}
             ),
-            in_size=hidden_size)
+            # in_size=hidden_size)
+            in_size=debug_in_size)
 
         self.pi_theta = nn.Sequential(
             Concat(dim=-1),
@@ -410,14 +411,14 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             conv_out = self.conv1(obs[i])
 
             s = self.f(torch.cat([conv_out, r, g, b], dim=-1))
-            logits = self.phi_update(torch.cat([s, h], dim=-1))
-            if self.hard_update:
-                dist = FixedCategorical(logits=logits)
-                c = dist.sample().float()
-                outputs.c_probs.append(dist.probs)
-            else:
-                c = torch.sigmoid(logits[:, :1])
-                outputs.c_probs.append(torch.zeros_like(logits))  # dummy value
+            # logits = self.phi_update(torch.cat([s, h], dim=-1))
+            # if self.hard_update:
+            # dist = FixedCategorical(logits=logits)
+            # c = dist.sample().float()
+            # outputs.c_probs.append(dist.probs)
+            # else:
+            # c = torch.sigmoid(logits[:, :1])
+            # outputs.c_probs.append(torch.zeros_like(logits))  # dummy value
 
             a_idxs = hx.a.flatten().long()
             agent_layer = obs[i, :, 6, :, :].long()
@@ -432,7 +433,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             # print(debug_in[:, [39, 30, 21, 12, 98, 89]])
             # print(next_subtask[i])
-            c = torch.sigmoid(self.debug(debug_in))
+            c = torch.sigmoid(self.phi_update(debug_in))
             outputs.c_truth.append(next_subtask[i])
 
             if torch.any(next_subtask[i] > 0):
@@ -449,7 +450,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             else:
                 outputs.c_loss.append(torch.zeros_like(c))
 
-            # c = next_subtask[i]  # TODO
             outputs.c.append(c)
 
             # TODO: figure this out
@@ -458,7 +458,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # else:
             h2 = self.subcontroller(conv_out)
 
-            logits = self.phi_shift(h2)
+            logits = self.phi_shift(debug_in)
             # if self.hard_update:
             # dist = FixedCategorical(logits=logits)
             # l = dist.sample()
@@ -534,6 +534,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             dist = self.beta(torch.cat([conv_out, g], dim=-1))
             b = dist.sample().float()
             outputs.b_probs.append(dist.probs)
+            outputs.c_probs.append(torch.zeros_like(dist.probs))  # TODO
 
             # b_loss
             outputs.b_loss.append(-dist.log_probs(next_subtask[i]))
