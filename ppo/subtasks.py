@@ -100,16 +100,23 @@ class SubtasksAgent(Agent, NNBase):
         obs, g_target, task, next_subtask = torch.split(
             inputs, self.obs_sections, dim=1)
 
+        n = inputs.shape[0]
+        all_hxs, last_hx = self._forward_gru(
+            inputs.view(n, -1), rnn_hxs, masks)
+        hx = RecurrentState(*self.recurrent_module.parse_hidden(all_hxs))
+
+        # print('g       ', hx.g[0])
+        # print('g_target', g_target[0, :, 0, 0])
         if action is None:
-            conv_out, hx = self.get_hidden(inputs, rnn_hxs, masks, g=None)
+            g = hx.g
         else:
             action_sections = get_subtasks_action_sections(self.action_space)
             actions = SubtasksActions(
                 *torch.split(action, action_sections, dim=-1))
-            conv_out, hx = self.get_hidden(inputs, rnn_hxs, masks, g=actions.g)
+            g = actions.g
 
-        # print('g       ', hx.g[0])
-        # print('g_target', g_target[0, :, 0, 0])
+        g_broad = broadcast_3d(g, obs.shape[2:])
+        conv_out = self.conv2((obs, g_broad))
 
         if self.hard_update:
             dists = SubtasksActions(
@@ -158,11 +165,11 @@ class SubtasksAgent(Agent, NNBase):
         #     (hx.c_guess.round()[hx.c > 0] == hx.c[hx.c > 0]).float())
         log = dict(
             g_accuracy=g_accuracy.float())
-            # c_accuracy=c_accuracy,
-            # c_recall=c_recall,
-            # c_precision=c_precision)
+        # c_accuracy=c_accuracy,
+        # c_recall=c_recall,
+        # c_precision=c_precision)
         aux_loss = - self.entropy_coef * (
-            entropies1 + entropies2)
+                entropies1 + entropies2)
 
         if self.teacher_agent:
             imitation_dist = self.teacher_agent(inputs, rnn_hxs, masks).dist
@@ -218,8 +225,10 @@ class SubtasksAgent(Agent, NNBase):
         return True
 
     def get_value(self, inputs, rnn_hxs, masks):
-        conv_out, hx = self.get_hidden(inputs, rnn_hxs, masks, g=None)  # TODO!
-        return self.critic(conv_out)
+        n = inputs.shape[0]
+        all_hxs, last_hx = self._forward_gru(
+            inputs.view(n, -1), rnn_hxs, masks)
+        return self.recurrent_module.parse_hidden(all_hxs).v
 
 
 class SubtasksRecurrence(torch.jit.ScriptModule):
@@ -290,10 +299,10 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         self.critic = init_(nn.Linear(input_size, 1))
 
         in_size = (
-            conv_out_size +  # x
-            subtask_size +  # r
-            subtask_size +  # g
-            1)  # b
+                conv_out_size +  # x
+                subtask_size +  # r
+                subtask_size +  # g
+                1)  # b
         self.f = nn.Sequential(
             init_(nn.Linear(in_size, hidden_size), 'relu'),
             nn.ReLU(),
@@ -310,8 +319,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         self.phi_update = trace(
             lambda in_size: init_(nn.Linear(in_size, 2), 'sigmoid'),
             in_size=(
-                hidden_size +  # s
-                hidden_size))  # h
+                    hidden_size +  # s
+                    hidden_size))  # h
 
         self.phi_shift = trace(
             lambda in_size: nn.Sequential(
@@ -329,8 +338,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                     init_(
                         nn.Conv2d(
                             (
-                                subtask_size +  # r
-                                hidden_size),  # h
+                                    subtask_size +  # r
+                                    hidden_size),  # h
                             hidden_size,
                             kernel_size=3,
                             stride=1,
@@ -351,7 +360,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
         # embeddings
         for name, d in zip(
-            ['type_embeddings', 'count_embeddings', 'obj_embeddings'],
+                ['type_embeddings', 'count_embeddings', 'obj_embeddings'],
                 self.subtask_space):
             self.register_buffer(name, torch.eye(int(d)))
 
@@ -360,10 +369,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         self.register_buffer('p_values', torch.eye(n_subtasks))
         self.register_buffer('a_values', torch.eye(action_space.a.n))
 
-        task_sections = [n_subtasks] * task_space.nvec.shape[1]
-        input_sections = [conv_out_size, *task_sections,
-                          1]  # 1 for next_subtask
-        self.input_sections = list(map(int, input_sections))
+        self.task_sections = [n_subtasks] * task_space.nvec.shape[1]
         state_sizes = RecurrentState(
             p=n_subtasks,
             r=subtask_size,
@@ -401,7 +407,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             self.count_embeddings[count.long()],
             self.obj_embeddings[obj.long()],
         ],
-                         dim=-1)
+            dim=-1)
 
     def encode(self, g1, g2, g3):
         x1, x2, x3 = self.subtask_space
@@ -435,16 +441,19 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                             ipdb.set_trace()
 
     # @torch.jit.script_method
-    def forward(self, input, hx):
+    def forward(self, inputs, hx):
         assert hx is not None
-        obs, task_type, count, obj, next_subtask = torch.split(
-            input, self.input_sections, dim=-1)
+        T, N, _ = inputs.shape
+        inputs = inputs.view(T, N, *self.obs_shape)
 
-        for x in task_type, count, obj, next_subtask:
-            x.detach_()
+        obs, subtasks, task, next_subtask = torch.split(
+            inputs, self.obs_sections, dim=2)
+        subtasks = subtasks[:, :, :, 0, 0]
+        task = task[:, :, :, 0, 0]
+        next_subtask = next_subtask[:, :, :, 0, 0]
+        task_type, count, obj = torch.split(task, self.task_sections, dim=-1)
 
-        count -= 1
-        M = self.embed_task(task_type[0], count[0], obj[0])
+        M = self.embed_task(task_type[0], (count - 1)[0], obj[0])
         new_episode = torch.all(hx.squeeze(0) == 0, dim=-1)
         hx = self.parse_hidden(hx)
 
@@ -465,17 +474,14 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         outputs = RecurrentState(*[[] for _ in RecurrentState._fields])
 
         n = obs.shape[0]
-        # print('Recurrence: next_subtask', next_subtask)
-        # if torch.any(next_subtask > 0):
-        #     import ipdb; ipdb.set_trace()
-
         for i in range(n):
             float_subtask += next_subtask[i]
             outputs.subtask.append(float_subtask)
             subtask = float_subtask.long()
             m = M.shape[0]
+            conv_out = self.conv1(obs[i])
 
-            s = self.f(torch.cat([obs[i], r, g, b], dim=-1))
+            s = self.f(torch.cat([conv_out, r, g, b], dim=-1))
             logits = self.phi_update(torch.cat([s, h], dim=-1))
             if self.hard_update:
                 dist = FixedCategorical(logits=logits)
@@ -500,7 +506,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # if self.recurrent:
             #     h2 = self.subcontroller(obs[i], h)
             # else:
-            h2 = self.subcontroller(obs[i])
+            h2 = self.subcontroller(conv_out)
 
             logits = self.phi_shift(h2)
             # if self.hard_update:
@@ -575,7 +581,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             outputs.g.append(g)
 
             # b
-            dist = self.beta(torch.cat([obs[i], g], dim=-1))
+            dist = self.beta(torch.cat([conv_out, g], dim=-1))
             b = dist.sample().float()
             outputs.b_probs.append(dist.probs)
 
