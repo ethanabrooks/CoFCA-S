@@ -439,8 +439,9 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             if torch.any(next_subtask[i] > 0):
                 weight = torch.ones_like(c)
-                weight[next_subtask[i] > 0] /= torch.sum(next_subtask[i] > 0)
-                weight[next_subtask[i] == 0] /= torch.sum(next_subtask[i] == 0)
+                weight[next_subtask[i] > 0]
+                weight[next_subtask[i] == 0] /= (2 * torch.sum(
+                    next_subtask[i] == 0))
             else:
                 weight = None
 
