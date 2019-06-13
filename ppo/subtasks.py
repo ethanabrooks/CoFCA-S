@@ -31,7 +31,6 @@ class SubtasksAgent(Agent, NNBase):
                  hidden_size,
                  entropy_coef,
                  alpha,
-                 multiplicative_interaction,
                  zeta,
                  hard_update,
                  teacher_agent=None,
@@ -40,22 +39,18 @@ class SubtasksAgent(Agent, NNBase):
         self.zeta = zeta
         self.alpha = alpha
         self.hard_update = hard_update
-        self.multiplicative_interaction = multiplicative_interaction
         if teacher_agent:
             assert isinstance(teacher_agent, SubtasksTeacher)
         self.teacher_agent = teacher_agent
         self.entropy_coef = entropy_coef
+        self.action_space = SubtasksActions(*action_space.spaces)
         self.obs_sections = get_subtasks_obs_sections(task_space)
-        d, h, w = obs_shape
-        assert d == sum(self.obs_sections)
-
         self.recurrent_module = SubtasksRecurrence(
             obs_shape=obs_shape,
-            action_space=SubtasksActions(*action_space.spaces),
+            action_space=self.action_space,
             task_space=task_space,
             hidden_size=hidden_size,
             hard_update=hard_update,
-            multiplicative_interaction=multiplicative_interaction,
             **kwargs,
         )
 
@@ -68,24 +63,17 @@ class SubtasksAgent(Agent, NNBase):
                     stride=1,
                     padding=1), 'relu'), nn.ReLU(), Flatten())
 
-        if multiplicative_interaction:
-            conv_weight_shape = hidden_size, self.obs_sections.base, 3, 3
-            self.conv_weight = nn.Sequential(
-                nn.Linear(self.obs_sections.subtask,
-                          np.prod(conv_weight_shape)),
-                Reshape(-1, *conv_weight_shape))
+        self.conv2 = nn.Sequential(
+            Concat(dim=1),
+            init_(
+                nn.Conv2d(
+                    self.obs_sections.base + self.obs_sections.subtask,
+                    hidden_size,
+                    kernel_size=3,
+                    stride=1,
+                    padding=1), 'relu'), nn.ReLU(), Flatten())
 
-        else:
-            self.conv2 = nn.Sequential(
-                Concat(dim=1),
-                init_(
-                    nn.Conv2d(
-                        self.obs_sections.base + self.obs_sections.subtask,
-                        hidden_size,
-                        kernel_size=3,
-                        stride=1,
-                        padding=1), 'relu'), nn.ReLU(), Flatten())
-
+        _, h, w = obs_shape
         input_size = h * w * hidden_size  # conv output
 
         assert isinstance(action_space, spaces.Tuple)
@@ -122,7 +110,6 @@ class SubtasksAgent(Agent, NNBase):
 
         # print('g       ', hx.g[0])
         # print('g_target', g_target[0, :, 0, 0])
-        _, _, h, w = obs.shape
 
         if self.hard_update:
             dists = SubtasksActions(
@@ -163,38 +150,18 @@ class SubtasksAgent(Agent, NNBase):
 
         g_accuracy = torch.all(hx.g.round() == g_target[:, :, 0, 0], dim=-1)
 
-        a_idxs = actions.a.flatten().long()
-        agent_layer = obs[:, 6, :, :].long()
-        i, j, k = torch.split(agent_layer.nonzero(), [1, 1, 1], dim=-1)
-        debug_obs = obs[i, :, j, k].squeeze(1)
-        n = obs.shape[0]
-        part1 = g_target[:, :, 0, 0].unsqueeze(1) * debug_obs.unsqueeze(2)
-        part2 = g_target[:, :, 0, 0].unsqueeze(
-            1) * self.a_values[a_idxs].unsqueeze(2)
-        debug_in = torch.cat([part1, part2], dim=1).view(n, -1)
-        c_guess = torch.sigmoid(self.debug(debug_in))
-
-        if torch.any(hx.c > 0):
-            weight = torch.ones_like(hx.c)
-            weight[hx.c > 0] /= torch.sum(hx.c > 0)
-            weight[hx.c == 0] /= torch.sum(hx.c == 0)
-        else:
-            weight = None
-
-        c_loss = F.binary_cross_entropy(
-            torch.clamp(c_guess, 0., 1.), hx.c.detach(), weight=weight)
-        c_accuracy = torch.mean((c_guess.round() == hx.c).float())
-        c_precision = torch.mean(
-            (c_guess.round()[c_guess > 0] == hx.c[c_guess > 0]).float())
-        c_recall = torch.mean(
-            (c_guess.round()[hx.c > 0] == hx.c[hx.c > 0]).float())
-
+        # c_accuracy = torch.mean((hx.c_guess.round() == hx.c).float())
+        # c_precision = torch.mean(
+        #     (hx.c_guess.round()[hx.c_guess > 0] == hx.c[hx.c_guess > 0]
+        #      ).float())
+        # c_recall = torch.mean(
+        #     (hx.c_guess.round()[hx.c > 0] == hx.c[hx.c > 0]).float())
         log = dict(
-            g_accuracy=g_accuracy.float(),
-            c_accuracy=c_accuracy,
-            c_recall=c_recall,
-            c_precision=c_precision)
-        aux_loss = self.alpha * c_loss - self.entropy_coef * (
+            g_accuracy=g_accuracy.float())
+            # c_accuracy=c_accuracy,
+            # c_recall=c_recall,
+            # c_precision=c_precision)
+        aux_loss = - self.entropy_coef * (
             entropies1 + entropies2)
 
         if self.teacher_agent:
@@ -210,8 +177,6 @@ class SubtasksAgent(Agent, NNBase):
         for k, v in hx._asdict().items():
             if k.endswith('_loss'):
                 log[k] = v
-
-        log['c_loss'] = c_loss
 
         return AgentValues(
             value=value,
@@ -237,18 +202,10 @@ class SubtasksAgent(Agent, NNBase):
 
         # assert torch.all(subtasks[:, :, 0, 0] == hx.g)
 
-        if self.multiplicative_interaction:
-            raise NotImplementedError
-            # weights = self.conv_weight(subtasks[:, :, 0, 0])
-            # outs = []
-            # for ob, weight in zip(obs, weights):
-            #     outs.append(F.conv2d(ob.unsqueeze(0), weight, padding=(1, 1)))
-            # out = torch.cat(outs).view(*conv_out.shape)
-        else:
-            if g is None:
-                g = hx.g
-            g_broad = broadcast_3d(g, obs.shape[2:])
-            out = self.conv2((obs, g_broad))
+        if g is None:
+            g = hx.g
+        g_broad = broadcast_3d(g, obs.shape[2:])
+        out = self.conv2((obs, g_broad))
 
         return out, hx
 
