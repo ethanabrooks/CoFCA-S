@@ -44,7 +44,6 @@ class SubtasksAgent(Agent, NNBase):
         self.teacher_agent = teacher_agent
         self.entropy_coef = entropy_coef
         self.action_space = SubtasksActions(*action_space.spaces)
-        self.obs_sections = get_subtasks_obs_sections(task_space)
         self.recurrent_module = SubtasksRecurrence(
             obs_shape=obs_shape,
             action_space=self.action_space,
@@ -53,15 +52,9 @@ class SubtasksAgent(Agent, NNBase):
             hard_update=hard_update,
             **kwargs,
         )
-
-        self.conv1 = nn.Sequential(
-            init_(
-                nn.Conv2d(
-                    self.obs_sections.base,
-                    hidden_size,
-                    kernel_size=3,
-                    stride=1,
-                    padding=1), 'relu'), nn.ReLU(), Flatten())
+        self.obs_sections = get_subtasks_obs_sections(task_space)
+        _, h, w = obs_shape
+        input_size = h * w * hidden_size  # conv output
 
         self.conv2 = nn.Sequential(
             Concat(dim=1),
@@ -71,29 +64,9 @@ class SubtasksAgent(Agent, NNBase):
                     hidden_size,
                     kernel_size=3,
                     stride=1,
-                    padding=1), 'relu'), nn.ReLU(), Flatten())
-
-        _, h, w = obs_shape
-        input_size = h * w * hidden_size  # conv output
-
-        assert isinstance(action_space, spaces.Tuple)
-        self.action_space = SubtasksActions(*action_space.spaces)
-        if isinstance(self.action_space.a, Discrete):
-            num_outputs = self.action_space.a.n
-            self.actor = Categorical(input_size, num_outputs)
-        elif isinstance(self.action_space.a, Box):
-            num_outputs = self.action_space.a.shape[0]
-            self.actor = DiagGaussian(input_size, num_outputs)
-        else:
-            raise NotImplementedError
+                    padding=
+                    1), 'relu'), nn.ReLU(), Flatten())
         self.critic = init_(nn.Linear(input_size, 1))
-        self.debug = nn.Sequential(
-            init_(
-                nn.Linear(
-                    int(task_space.nvec[0].sum()) *
-                    (self.obs_sections.base + self.action_space.a.n), 1),
-                'sigmoid'), )
-        self.register_buffer('a_values', torch.eye(self.action_space.a.n))
 
     def forward(self, inputs, rnn_hxs, masks, action=None,
                 deterministic=False):
