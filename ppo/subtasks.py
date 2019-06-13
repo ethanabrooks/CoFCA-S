@@ -1,11 +1,11 @@
 from collections import namedtuple
 
-import numpy as np
-import torch
-import torch.jit
 from gym import spaces
 from gym.spaces import Box, Discrete
+import numpy as np
+import torch
 from torch import nn as nn
+import torch.jit
 from torch.nn import functional as F
 
 from ppo.agent import Agent, AgentValues, NNBase
@@ -13,12 +13,11 @@ from ppo.distributions import Categorical, DiagGaussian, FixedCategorical
 from ppo.layers import Broadcast3d, Concat, Flatten, Reshape
 from ppo.teacher import SubtasksTeacher
 from ppo.utils import batch_conv1d, broadcast_3d, init_, interp, trace
-from ppo.wrappers import (SubtasksActions, get_subtasks_action_sections,
-                          get_subtasks_obs_sections)
+from ppo.wrappers import SubtasksActions, get_subtasks_action_sections, get_subtasks_obs_sections
 
 RecurrentState = namedtuple(
     'RecurrentState',
-    'p r h b b_probs g g_int g_probs c c_probs l l_probs a a_probs v c_guess '
+    'p r h b b_probs g g_int g_probs c c_probs l l_probs a a_probs v c_truth '
     'c_loss l_loss p_loss r_loss g_loss b_loss subtask')
 
 
@@ -105,12 +104,12 @@ class SubtasksAgent(Agent, NNBase):
 
         g_accuracy = torch.all(hx.g.round() == g_target[:, :, 0, 0], dim=-1)
 
-        c_accuracy = torch.mean((hx.c_guess.round() == hx.c).float())
+        c_accuracy = torch.mean((hx.c.round() == hx.c_truth).float())
         c_precision = torch.mean(
-            (hx.c_guess.round()[hx.c_guess > 0] == hx.c[hx.c_guess > 0]
-             ).float())
+            (hx.c.round()[hx.c > 0] == hx.c_truth[hx.c > 0]).float())
         c_recall = torch.mean(
-            (hx.c_guess.round()[hx.c > 0] == hx.c[hx.c > 0]).float())
+            (hx.c.round()[hx.c_truth > 0] == hx.c_truth[hx.c_truth > 0]
+             ).float())
         log = dict(
             g_accuracy=g_accuracy.float(),
             c_accuracy=c_accuracy,
@@ -309,7 +308,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             b_probs=2,
             g_probs=np.prod(self.subtask_space),
             c=1,
-            c_guess=1,
+            c_truth=1,
             c_probs=2,
             l=1,
             a=1,
@@ -434,7 +433,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # print(debug_in[:, [39, 30, 21, 12, 98, 89]])
             # print(next_subtask[i])
             c = torch.sigmoid(self.debug(debug_in))
-            outputs.c_guess.append(c)
+            outputs.c_truth.append(next_subtask[i])
 
             if torch.any(next_subtask[i] > 0):
                 weight = torch.ones_like(c)
