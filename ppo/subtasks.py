@@ -112,12 +112,12 @@ class SubtasksAgent(Agent, NNBase):
         c_recall = torch.mean(
             (hx.c_guess.round()[hx.c > 0] == hx.c[hx.c > 0]).float())
         log = dict(
-            g_accuracy=g_accuracy.float())
-        # c_accuracy=c_accuracy,
-        # c_recall=c_recall,
-        # c_precision=c_precision)
-        aux_loss = - self.entropy_coef * (
-                entropies1 + entropies2)
+            g_accuracy=g_accuracy.float(),
+            c_accuracy=c_accuracy,
+            c_recall=c_recall,
+            c_precision=c_precision)
+        aux_loss = self.alpha * hx.c_loss - self.entropy_coef * (
+            entropies1 + entropies2)
 
         if self.teacher_agent:
             imitation_dist = self.teacher_agent(inputs, rnn_hxs, masks).dist
