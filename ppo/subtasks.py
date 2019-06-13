@@ -420,17 +420,38 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 c = torch.sigmoid(logits[:, :1])
                 outputs.c_probs.append(torch.zeros_like(logits))  # dummy value
 
-            # c_loss
+            a_idxs = hx.a.flatten().long()
+            agent_layer = obs[i, :, 6, :, :].long()
+            j, k, l = torch.split(agent_layer.nonzero(), [1, 1, 1], dim=-1)
+            debug_obs = obs[i, j, :, k, l].squeeze(1)
+            part1 = subtasks[i].unsqueeze(1) * debug_obs.unsqueeze(2)
+            part2 = subtasks[i].unsqueeze(1) * self.a_values[a_idxs].unsqueeze(
+                2)
+            cat = torch.cat([part1, part2], dim=1)
+            bsize = cat.shape[0]
+            debug_in = cat.view(bsize, -1)
+
+            # print(debug_in[:, [39, 30, 21, 12, 98, 89]])
+            # print(next_subtask[i])
+            c = torch.sigmoid(self.debug(debug_in))
+            outputs.c_guess.append(c)
+
+            if torch.any(next_subtask[i] > 0):
+                weight = torch.ones_like(c)
+                weight[next_subtask[i] > 0] /= torch.sum(next_subtask[i] > 0)
+                weight[next_subtask[i] == 0] /= torch.sum(next_subtask[i] == 0)
+            else:
+                weight = None
+
             outputs.c_loss.append(
                 F.binary_cross_entropy(
                     torch.clamp(c, 0., 1.),
                     next_subtask[i],
-                    reduction='none',
-                ))
+                    weight=weight,
+                    reduction='none'))
 
             c = next_subtask[i]  # TODO
             outputs.c.append(c)
-            outputs.c_guess.append(c)
 
             # TODO: figure this out
             # if self.recurrent:
