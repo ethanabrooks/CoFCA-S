@@ -75,7 +75,8 @@ class SubtasksAgent(Agent, NNBase):
                 c=FixedCategorical(hx.c_probs),
                 g_embed=None,
                 l=FixedCategorical(hx.l_probs),
-                g_int=FixedCategorical(hx.g_probs),)
+                g_int=FixedCategorical(hx.g_probs),
+            )
         else:
             dists = SubtasksActions(
                 a=FixedCategorical(hx.a_probs),
@@ -87,7 +88,12 @@ class SubtasksAgent(Agent, NNBase):
 
         if action is None:
             actions = SubtasksActions(
-                a=hx.a, b=hx.b, g_embed=hx.g_embed, l=hx.l, c=hx.c, g_int=hx.g_int)
+                a=hx.a,
+                b=hx.b,
+                g_embed=hx.g_embed,
+                l=hx.l,
+                c=hx.c,
+                g_int=hx.g_int)
         else:
             action_sections = get_subtasks_action_sections(self.action_space)
             actions = SubtasksActions(
@@ -175,9 +181,9 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         super().__init__()
         d, h, w = obs_shape
         conv_out_size = h * w * hidden_size
-        self.subtask_space = list(map(int, task_space.nvec[0]))
+        subtask_space = list(map(int, task_space.nvec[0]))
         self.hard_update = hard_update
-        subtask_size = sum(self.subtask_space)
+        subtask_size = sum(subtask_space)
         n_subtasks = task_space.shape[0]
         self.obs_sections = get_subtasks_obs_sections(task_space)
         self.obs_shape = d, h, w
@@ -283,7 +289,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 ),
                 example_inputs=torch.rand(1, subtask_size + hidden_size, h, w),
             ),
-            Categorical(h * w * hidden_size, np.prod(self.subtask_space)),
+            Categorical(h * w * hidden_size, np.prod(subtask_space)),
         )
 
         self.beta = Categorical(
@@ -294,12 +300,16 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         # embeddings
         for name, d in zip(
             ['type_embeddings', 'count_embeddings', 'obj_embeddings'],
-                self.subtask_space):
+                subtask_space):
             self.register_buffer(name, torch.eye(int(d)))
 
         self.register_buffer('l_one_hots', torch.eye(3))
         self.register_buffer('p_one_hots', torch.eye(n_subtasks))
         self.register_buffer('a_one_hots', torch.eye(action_space.a.n))
+        self.register_buffer('g_one_hots',
+                             torch.eye(int(np.prod(subtask_space))))
+        self.register_buffer('subtask_space',
+                             torch.tensor(task_space.nvec[0].astype(np.int64)))
 
         self.task_sections = [n_subtasks] * task_space.nvec.shape[1]
         state_sizes = RecurrentState(
@@ -310,7 +320,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             g_int=1,
             b=1,
             b_probs=2,
-            g_probs=np.prod(self.subtask_space),
+            g_probs=np.prod(subtask_space),
             c=1,
             c_truth=1,
             c_probs=2,
@@ -341,12 +351,22 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         ],
                          dim=-1)
 
-    def encode(self, g1, g2, g3):
-        x1, x2, x3 = self.subtask_space
-        return (g1 * (x2 * x3) + g2 * x3 + g3).long()
+    def encode(self, g_embed):
+        factord_code = g_embed.nonzero()[:, 1:].view(-1, 3)
+        factord_code -= F.pad(
+            torch.cumsum(self.subtask_space, dim=0)[:2], (1, 0), 'constant', 0)
+        # numpy_codes = factord_code.clone().numpy()
+        factord_code[:, :-1] *= self.subtask_space[1:]  # g1 * x2, g2 * x3
+        factord_code[:, 0] *= self.subtask_space[2]  # g1 * x3
+        codes = factord_code.sum(dim=-1)
+        # codes1 = codes.numpy()
+        # codes2 = np.ravel_multi_index(numpy_codes.T, (self.subtask_space.numpy()))
+        # if not np.array_equal(codes1, codes2):
+        #     import ipdb; ipdb.set_trace()
+        return codes
 
     def decode(self, g):
-        x1, x2, x3 = self.subtask_space
+        x1, x2, x3 = self.subtask_space.to(g.dtype)
         g1 = g // (x2 * x3)
         x4 = g % (x2 * x3)
         g2 = x4 // x3
@@ -404,7 +424,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
         p[new_episode, 0] = 1.  # initialize pointer to first subtask
         r[new_episode] = M[new_episode, 0]  # initialize r to first subtask
-        g_embed1[new_episode] = M[new_episode, 0]  # initialize g_embed1 to first subtask
+        g_embed1[new_episode] = M[new_episode,
+                                  0]  # initialize g_embed1 to first subtask
 
         outputs = RecurrentState(*[[] for _ in RecurrentState._fields])
 
