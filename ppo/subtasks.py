@@ -1,11 +1,11 @@
 from collections import namedtuple
 
-from gym import spaces
-from gym.spaces import Box, Discrete
 import numpy as np
 import torch
-from torch import nn as nn
 import torch.jit
+from gym import spaces
+from gym.spaces import Box, Discrete
+from torch import nn as nn
 from torch.nn import functional as F
 
 from ppo.agent import Agent, AgentValues, NNBase
@@ -13,7 +13,8 @@ from ppo.distributions import Categorical, DiagGaussian, FixedCategorical
 from ppo.layers import Broadcast3d, Concat, Flatten, Reshape
 from ppo.teacher import SubtasksTeacher
 from ppo.utils import batch_conv1d, broadcast_3d, init_, interp, trace
-from ppo.wrappers import SubtasksActions, get_subtasks_action_sections, get_subtasks_obs_sections
+from ppo.wrappers import (SubtasksActions, get_subtasks_action_sections,
+                          get_subtasks_obs_sections)
 
 RecurrentState = namedtuple(
     'RecurrentState',
@@ -58,7 +59,6 @@ class SubtasksAgent(Agent, NNBase):
         obs, g_target, task, next_subtask = torch.split(
             inputs, self.obs_sections, dim=1)
 
-
         n = inputs.shape[0]
         all_hxs, last_hx = self._forward_gru(
             inputs.view(n, -1), rnn_hxs, masks)
@@ -92,9 +92,10 @@ class SubtasksAgent(Agent, NNBase):
             actions = SubtasksActions(
                 *torch.split(action, action_sections, dim=-1))
 
-        log_probs = sum(dist.log_probs(a) for dist, a in zip(dists, actions)
-                        if dist is not None)
-        entropies = sum(dists.entropy() for dist in dists if dist is not None)
+        log_probs = sum(
+            dist.log_probs(a) for dist, a in zip(dists, actions)
+            if dist is not None)
+        entropies = sum(dist.entropy() for dist in dists if dist is not None)
 
         g_accuracy = torch.all(hx.g.round() == g_target[:, :, 0, 0], dim=-1)
 
