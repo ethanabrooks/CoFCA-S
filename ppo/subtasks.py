@@ -390,9 +390,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
         p = hx.p
         r = hx.r
-        g = hx.g
-        b = hx.b
-        h = hx.h
         float_subtask = hx.subtask
 
         for x in hx:
