@@ -18,7 +18,7 @@ from ppo.wrappers import (SubtasksActions, get_subtasks_action_sections,
 
 RecurrentState = namedtuple(
     'RecurrentState',
-    'p r h b b_probs g g_int g_probs c c_probs l l_probs a a_probs v c_truth '
+    'p r h b b_probs g_embed g_int g_probs c c_probs l l_probs a a_probs v c_truth '
     'c_loss l_loss p_loss r_loss g_loss b_loss subtask')
 
 
@@ -73,21 +73,21 @@ class SubtasksAgent(Agent, NNBase):
                 a=FixedCategorical(hx.a_probs),
                 b=FixedCategorical(hx.b_probs),
                 c=FixedCategorical(hx.c_probs),
-                g=FixedCategorical(hx.g_probs),
+                g_embed=None,
                 l=FixedCategorical(hx.l_probs),
-                g_int=None)
+                g_int=FixedCategorical(hx.g_probs),)
         else:
             dists = SubtasksActions(
                 a=FixedCategorical(hx.a_probs),
                 b=FixedCategorical(hx.b_probs),
                 c=None,
-                g=FixedCategorical(hx.g_probs),
+                g_embed=None,
                 l=None,
-                g_int=None)
+                g_int=FixedCategorical(hx.g_probs))
 
         if action is None:
             actions = SubtasksActions(
-                a=hx.a, b=hx.b, g=hx.g, l=hx.l, c=hx.c, g_int=hx.g_int)
+                a=hx.a, b=hx.b, g_embed=hx.g_embed, l=hx.l, c=hx.c, g_int=hx.g_int)
         else:
             action_sections = get_subtasks_action_sections(self.action_space)
             actions = SubtasksActions(
@@ -95,16 +95,16 @@ class SubtasksAgent(Agent, NNBase):
 
         log_probs1 = dists.a.log_probs(actions.a) + dists.b.log_probs(
             actions.b)
-        log_probs2 = dists.g.log_probs(actions.g_int)
+        log_probs2 = dists.g_int.log_probs(actions.g_int)
         entropies1 = dists.a.entropy() + dists.b.entropy()
-        entropies2 = dists.g.entropy()
+        entropies2 = dists.g_int.entropy()
         if self.hard_update:
             log_probs1 += dists.c.log_probs(actions.c)
             # log_probs2 += dists.l.log_probs(actions.l)
             entropies1 += dists.c.entropy()
             # entropies2 += dists.l.entropy()
 
-        g_accuracy = torch.all(hx.g.round() == g_target[:, :, 0, 0], dim=-1)
+        g_accuracy = torch.all(hx.g_embed.round() == g_target[:, :, 0, 0], dim=-1)
 
         c_accuracy = torch.mean((hx.c.round() == hx.c_truth).float())
         c_precision = torch.mean(
@@ -130,7 +130,7 @@ class SubtasksAgent(Agent, NNBase):
 
         log_probs = log_probs1 + hx.c * log_probs2
 
-        g_embed = actions.g
+        g_embed = actions.g_embed
         g_broad = broadcast_3d(g_embed, obs.shape[2:])
         value = rm.critic(rm.conv2((obs, g_broad)))
 
@@ -303,7 +303,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             p=n_subtasks,
             r=subtask_size,
             h=hidden_size,
-            g=subtask_size,
+            g_embed=subtask_size,
             g_int=1,
             b=1,
             b_probs=2,
@@ -391,7 +391,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
         p = hx.p
         r = hx.r
-        g_embed1 = hx.g
+        g_embed1 = hx.g_embed
         b = hx.b
         h = hx.h
         float_subtask = hx.subtask
@@ -532,7 +532,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             )
             outputs.g_loss.append(torch.mean(g_loss, dim=-1, keepdim=True))
             g_embed1 = interp(g_embed1, g_embed2, c)
-            outputs.g.append(g_embed1)
+            outputs.g_embed.append(g_embed1)
 
             # b
             dist = self.beta(torch.cat([conv_out, g_embed1], dim=-1))
