@@ -404,7 +404,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
         p[new_episode, 0] = 1.  # initialize pointer to first subtask
         r[new_episode] = M[new_episode, 0]  # initialize r to first subtask
-        g_embed1[new_episode] = M[new_episode, 0]  # initialize g_embed1 to first subtask
 
         outputs = RecurrentState(*[[] for _ in RecurrentState._fields])
 
@@ -534,7 +533,9 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 reduction='none',
             )
             outputs.g_loss.append(torch.mean(g_loss, dim=-1, keepdim=True))
-            g_embed1 = interp(g_embed1, g_embed2, c)
+            c_g = c.clone()
+            c_g[new_episode] = 1
+            g_embed1 = interp(g_embed1, g_embed2, c_g)
             outputs.g_embed.append(g_embed1)
 
             # b
