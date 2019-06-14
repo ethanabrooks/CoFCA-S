@@ -125,8 +125,8 @@ class SubtasksAgent(Agent, NNBase):
             c_recall=(torch.mean(
                 (c[hx.c_truth > 0] == hx.c_truth[hx.c_truth > 0]).float())),
             c_precision=(torch.mean((c[c > 0] == hx.c_truth[c > 0]).float())),
-            std_per_subtask=torch.mean(self.subtask_choices.float(),
-                                       dim=1).std(dim=-1))
+            entropy_per_subtask=FixedCategorical(
+                logits=self.subtask_choices.float()).entropy())
         aux_loss = self.alpha * hx.c_loss - self.entropy_coef * entropies
 
         if self.teacher_agent:
