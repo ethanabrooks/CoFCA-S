@@ -3,7 +3,6 @@ from collections import namedtuple
 import numpy as np
 import torch
 import torch.jit
-from gym import spaces
 from gym.spaces import Box, Discrete
 from torch import nn as nn
 from torch.nn import functional as F
@@ -53,10 +52,16 @@ class SubtasksAgent(Agent, NNBase):
             **kwargs,
         )
         self.obs_sections = get_subtasks_obs_sections(task_space)
+        self.register_buffer(
+            'subtask_choices',
+            torch.zeros(
+                self.action_space.g_int.n,
+                self.action_space.g_int.n,
+                dtype=torch.long))
 
     def forward(self, inputs, rnn_hxs, masks, action=None,
                 deterministic=False):
-        obs, g_target, task, next_subtask = torch.split(
+        obs, subtask, task, next_subtask = torch.split(
             inputs, self.obs_sections, dim=1)
 
         n = inputs.shape[0]
@@ -99,32 +104,31 @@ class SubtasksAgent(Agent, NNBase):
             actions = SubtasksActions(
                 *torch.split(action, action_sections, dim=-1))
 
-        log_probs1 = dists.a.log_probs(actions.a) + dists.b.log_probs(
-            actions.b)
-        log_probs2 = dists.g_int.log_probs(actions.g_int)
-        entropies1 = dists.a.entropy() + dists.b.entropy()
-        entropies2 = dists.g_int.entropy()
-        if self.hard_update:
-            log_probs1 += dists.c.log_probs(actions.c)
-            # log_probs2 += dists.l.log_probs(actions.l)
-            entropies1 += dists.c.entropy()
-            # entropies2 += dists.l.entropy()
+        log_probs = sum(
+            dist.log_probs(a) for dist, a in zip(dists, actions)
+            if dist is not None)
+        entropies = sum(dist.entropy() for dist in dists if dist is not None)
 
         # g_accuracy = torch.all(hx.g_embed.round() == g_target[:, :, 0, 0], dim=-1)
 
-        c_accuracy = torch.mean((hx.c.round() == hx.c_truth).float())
-        c_precision = torch.mean(
-            (hx.c.round()[hx.c > 0] == hx.c_truth[hx.c > 0]).float())
-        c_recall = torch.mean(
-            (hx.c.round()[hx.c_truth > 0] == hx.c_truth[hx.c_truth > 0]
-             ).float())
+        if action is not None:
+            subtask_int = rm.encode(subtask[:, :, 0, 0])
+            codes = torch.unique(subtask_int)
+            g_one_hots = rm.g_one_hots[actions.g_int.long().flatten()].long()
+            for code in codes:
+                idx = subtask_int == code
+                self.subtask_choices[code] += g_one_hots[idx].sum(dim=0)
+
+        c = hx.c.round()
         log = dict(
             # g_accuracy=g_accuracy.float(),
-            c_accuracy=c_accuracy,
-            c_recall=c_recall,
-            c_precision=c_precision)
-        aux_loss = self.alpha * hx.c_loss - self.entropy_coef * (
-            entropies1 + entropies2)
+            c_accuracy=(torch.mean((c == hx.c_truth).float())),
+            c_recall=(torch.mean(
+                (c[hx.c_truth > 0] == hx.c_truth[hx.c_truth > 0]).float())),
+            c_precision=(torch.mean((c[c > 0] == hx.c_truth[c > 0]).float())),
+            std_per_subtask=torch.mean(self.subtask_choices.float(),
+                                       dim=1).std(dim=-1))
+        aux_loss = self.alpha * hx.c_loss - self.entropy_coef * entropies
 
         if self.teacher_agent:
             imitation_dist = self.teacher_agent(inputs, rnn_hxs, masks).dist
@@ -134,12 +138,10 @@ class SubtasksAgent(Agent, NNBase):
             log.update(imitation_obj=imitation_obj)
             aux_loss -= imitation_obj
 
-        log_probs = log_probs1 + hx.c * log_probs2
-
         if action is None:
             value = hx.v
         else:
-            g_embed = rm.embed_task(actions.g_int)
+            g_embed = rm.embed_task(actions.g_int.long())
             g_broad = broadcast_3d(g_embed, obs.shape[2:])
             value = rm.critic(rm.conv2((obs, g_broad)))
 
