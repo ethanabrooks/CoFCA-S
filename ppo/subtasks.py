@@ -391,7 +391,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
         p = hx.p
         r = hx.r
-        g = hx.g
+        g_embed1 = hx.g
         b = hx.b
         h = hx.h
         float_subtask = hx.subtask
@@ -401,7 +401,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
         p[new_episode, 0] = 1.  # initialize pointer to first subtask
         r[new_episode] = M[new_episode, 0]  # initialize r to first subtask
-        g[new_episode] = M[new_episode, 0]  # initialize g to first subtask
+        g_embed1[new_episode] = M[new_episode, 0]  # initialize g_embed1 to first subtask
 
         outputs = RecurrentState(*[[] for _ in RecurrentState._fields])
 
@@ -413,7 +413,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             m = M.shape[0]
             conv_out = self.conv1(obs[i])
 
-            # s = self.f(torch.cat([conv_out, r, g, b], dim=-1))
+            # s = self.f(torch.cat([conv_out, r, g_embed1, b], dim=-1))
             # logits = self.phi_update(torch.cat([s, h], dim=-1))
             # if self.hard_update:
             # dist = FixedCategorical(logits=logits)
@@ -517,25 +517,25 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # TODO: deterministic
             # g
             dist = self.pi_theta((h, r))
-            g_int = dist.sample()
-            outputs.g_int.append(g_int.float())
+            g = dist.sample()
+            outputs.g_int.append(g.float())
             outputs.g_probs.append(dist.probs)
 
             # g_loss
             # assert (int(i1), int(i2), int(i3)) == \
             #        np.unravel_index(int(g_int), self.subtask_space)
-            g2 = self.embed_task(g_int)
+            g_embed2 = self.embed_task(g)
             g_loss = F.binary_cross_entropy(
-                torch.clamp(g2, 0., 1.),
+                torch.clamp(g_embed2, 0., 1.),
                 r_target,
                 reduction='none',
             )
             outputs.g_loss.append(torch.mean(g_loss, dim=-1, keepdim=True))
-            g = interp(g, g2, c)
-            outputs.g.append(g)
+            g_embed1 = interp(g_embed1, g_embed2, c)
+            outputs.g.append(g_embed1)
 
             # b
-            dist = self.beta(torch.cat([conv_out, g], dim=-1))
+            dist = self.beta(torch.cat([conv_out, g_embed1], dim=-1))
             b = dist.sample().float()
             outputs.b_probs.append(dist.probs)
             outputs.c_probs.append(torch.zeros_like(dist.probs))  # TODO
@@ -545,7 +545,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             outputs.b.append(b)
 
             # a
-            g_broad = broadcast_3d(g, self.obs_shape[1:])
+            g_broad = broadcast_3d(g_embed1, self.obs_shape[1:])
             conv_out2 = self.conv2((obs[i], g_broad))
             dist = self.actor(conv_out2)
             a = dist.sample()
