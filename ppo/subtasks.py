@@ -93,16 +93,10 @@ class SubtasksAgent(Agent, NNBase):
             actions = SubtasksActions(
                 *torch.split(action, action_sections, dim=-1))
 
-        log_probs1 = dists.a.log_probs(actions.a) + dists.b.log_probs(
-            actions.b)
-        log_probs2 = dists.g_int.log_probs(actions.g_int)
-        entropies1 = dists.a.entropy() + dists.b.entropy()
-        entropies2 = dists.g_int.entropy()
-        if self.hard_update:
-            log_probs1 += dists.c.log_probs(actions.c)
-            # log_probs2 += dists.l.log_probs(actions.l)
-            entropies1 += dists.c.entropy()
-            # entropies2 += dists.l.entropy()
+        log_probs = sum(
+            dist.log_probs(a) for dist, a in zip(dists, actions)
+            if dist is not None)
+        entropies = sum(dist.entropy() for dist in dists if dist is not None)
 
         # g_accuracy = torch.all(hx.g_embed.round() == g_target[:, :, 0, 0], dim=-1)
 
@@ -117,8 +111,7 @@ class SubtasksAgent(Agent, NNBase):
             c_accuracy=c_accuracy,
             c_recall=c_recall,
             c_precision=c_precision)
-        aux_loss = self.alpha * hx.c_loss - self.entropy_coef * (
-            entropies1 + entropies2)
+        aux_loss = self.alpha * hx.c_loss - self.entropy_coef * entropies
 
         if self.teacher_agent:
             imitation_dist = self.teacher_agent(inputs, rnn_hxs, masks).dist
@@ -127,8 +120,6 @@ class SubtasksAgent(Agent, NNBase):
             imitation_obj = (imitation_probs @ our_log_probs).view(-1)
             log.update(imitation_obj=imitation_obj)
             aux_loss -= imitation_obj
-
-        log_probs = log_probs1 + hx.c * log_probs2
 
         if action is None:
             value = hx.v
@@ -300,6 +291,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         self.register_buffer('l_one_hots', torch.eye(3))
         self.register_buffer('p_one_hots', torch.eye(n_subtasks))
         self.register_buffer('a_one_hots', torch.eye(action_space.a.n))
+        self.register_buffer('g_one_hots', torch.eye(int(np.prod(self.subtask_space))))
 
         self.task_sections = [n_subtasks] * task_space.nvec.shape[1]
         state_sizes = RecurrentState(
@@ -518,7 +510,11 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             # TODO: deterministic
             # g
-            dist = self.pi_theta((h, r))
+            probs = self.pi_theta((h, r)).probs
+            g_prev = self.g_one_hots[hx.g_int.long()].squeeze(1)
+            c_g = c.clone()
+            c_g[new_episode] = 1
+            dist = FixedCategorical(probs=interp(g_prev, probs, c_g))
             g = dist.sample()
             outputs.g_int.append(g.float())
             outputs.g_probs.append(dist.probs)
