@@ -119,14 +119,25 @@ class SubtasksAgent(Agent, NNBase):
                 self.subtask_choices[code] += g_one_hots[idx].sum(dim=0)
 
         c = hx.c.round()
+
+        # For derivation, see https://en.wikipedia.org/wiki/Cram%C3%A9r%27s_V
+        choices = self.subtask_choices.float()
+        cramers_v = torch.tensor(0.)
+        n = choices.sum()
+        if n > 0:
+            ni = choices.sum(dim=0, keepdim=True)
+            nj = choices.sum(dim=1, keepdim=True)
+            Ei = ni * nj / n
+            if torch.all(Ei > 0):
+                cramers_v = torch.sum((choices - Ei) ** 2 / Ei)
+
         log = dict(
             # g_accuracy=g_accuracy.float(),
             c_accuracy=(torch.mean((c == hx.c_truth).float())),
             c_recall=(torch.mean(
                 (c[hx.c_truth > 0] == hx.c_truth[hx.c_truth > 0]).float())),
             c_precision=(torch.mean((c[c > 0] == hx.c_truth[c > 0]).float())),
-            entropy_per_subtask=FixedCategorical(
-                logits=self.subtask_choices.float()).entropy())
+            subtask_association=cramers_v)
         aux_loss = self.alpha * hx.c_loss - self.entropy_coef * entropies
 
         if self.teacher_agent:
