@@ -423,10 +423,12 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         for x in hx:
             x.squeeze_(0)
 
-        p[new_episode, 0] = 1.  # initialize pointer to first subtask
-        r[new_episode] = M[new_episode, 0]  # initialize r to first subtask
-        g_embed1[new_episode] = M[new_episode,
-                                  0]  # initialize g_embed1 to first subtask
+        if torch.any(new_episode):
+            p[new_episode, 0] = 1.  # initialize pointer to first subtask
+            r[new_episode] = M[new_episode, 0]  # initialize r to first subtask
+            g0 = M[new_episode, 0]
+            g_embed1[new_episode] = g0  # initialize g_embed1 to first subtask
+            hx.g_int[new_episode] = self.encode(g0).unsqueeze(1).float()
 
         outputs = RecurrentState(*[[] for _ in RecurrentState._fields])
 
