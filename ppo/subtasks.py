@@ -100,11 +100,12 @@ class SubtasksAgent(Agent, NNBase):
 
         # g_accuracy = torch.all(hx.g_embed.round() == g_target[:, :, 0, 0], dim=-1)
 
-        c_accuracy = torch.mean((hx.c.round() == hx.c_truth).float())
+        c = hx.c.round()
+        c_accuracy = torch.mean((c == hx.c_truth).float())
         c_precision = torch.mean(
-            (hx.c.round()[hx.c > 0] == hx.c_truth[hx.c > 0]).float())
+            (c[c > 0] == hx.c_truth[c > 0]).float())
         c_recall = torch.mean(
-            (hx.c.round()[hx.c_truth > 0] == hx.c_truth[hx.c_truth > 0]
+            (c[hx.c_truth > 0] == hx.c_truth[hx.c_truth > 0]
              ).float())
         log = dict(
             # g_accuracy=g_accuracy.float(),
