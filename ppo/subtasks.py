@@ -104,7 +104,7 @@ class SubtasksAgent(Agent, NNBase):
             entropies1 += dists.c.entropy()
             # entropies2 += dists.l.entropy()
 
-        g_accuracy = torch.all(hx.g_embed.round() == g_target[:, :, 0, 0], dim=-1)
+        # g_accuracy = torch.all(hx.g_embed.round() == g_target[:, :, 0, 0], dim=-1)
 
         c_accuracy = torch.mean((hx.c.round() == hx.c_truth).float())
         c_precision = torch.mean(
@@ -113,7 +113,7 @@ class SubtasksAgent(Agent, NNBase):
             (hx.c.round()[hx.c_truth > 0] == hx.c_truth[hx.c_truth > 0]
              ).float())
         log = dict(
-            g_accuracy=g_accuracy.float(),
+            # g_accuracy=g_accuracy.float(),
             c_accuracy=c_accuracy,
             c_recall=c_recall,
             c_precision=c_precision)
@@ -130,9 +130,12 @@ class SubtasksAgent(Agent, NNBase):
 
         log_probs = log_probs1 + hx.c * log_probs2
 
-        g_embed = actions.g_embed
-        g_broad = broadcast_3d(g_embed, obs.shape[2:])
-        value = rm.critic(rm.conv2((obs, g_broad)))
+        if action is None:
+            value = hx.v
+        else:
+            g_embed = rm.embed_task(actions.g_int)
+            g_broad = broadcast_3d(g_embed, obs.shape[2:])
+            value = rm.critic(rm.conv2((obs, g_broad)))
 
         for k, v in hx._asdict().items():
             if k.endswith('_loss'):
