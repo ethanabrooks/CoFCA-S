@@ -55,7 +55,7 @@ def subtasks_cli():
     task_parser.add_argument('--n-subtasks', type=int)
     parser.add_argument('--multiplicative-interaction', action='store_true')
     parser.add_argument('--alpha', type=float, default=.03)
-    parser.add_argument('--zeta', type=float, default=.1)
+    parser.add_argument('--zeta', type=float, default=.0001)
     parser.add_argument('--n-objects', type=int)
     parser.add_argument('--max-episode-steps', type=int)
     kwargs = hierarchical_parse_args(parser)
@@ -143,7 +143,7 @@ def teach_cli():
     subtasks_parser.add_argument(
         '--subtasks-entropy-coef', type=float, default=0.01)
     subtasks_parser.add_argument('--alpha', type=float, default=0.03)
-    subtasks_parser.add_argument('--zeta', type=float, default=.1)
+    subtasks_parser.add_argument('--zeta', type=float, default=.0001)
     subtasks_parser.add_argument('--subtasks-recurrent', action='store_true')
     subtasks_parser.add_argument('--hard-update', action='store_true')
     subtasks_parser.add_argument(
