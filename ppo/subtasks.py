@@ -131,7 +131,8 @@ class SubtasksAgent(Agent, NNBase):
                 (c[hx.c_truth > 0] == hx.c_truth[hx.c_truth > 0]).float())),
             c_precision=(torch.mean((c[c > 0] == hx.c_truth[c > 0]).float())),
             subtask_association=cramers_v)
-        aux_loss = self.alpha * hx.c_loss - self.entropy_coef * entropies
+        # aux_loss = self.alpha * hx.c_loss - self.entropy_coef * entropies
+        aux_loss = torch.mean(hx.c_loss + hx.l_loss + hx.g_loss)  # TODO
 
         if self.teacher_agent:
             imitation_dist = self.teacher_agent(inputs, rnn_hxs, masks).dist
@@ -139,7 +140,7 @@ class SubtasksAgent(Agent, NNBase):
             our_log_probs = torch.log(dists.a.probs).unsqueeze(2)
             imitation_obj = (imitation_probs @ our_log_probs).view(-1)
             log.update(imitation_obj=imitation_obj)
-            aux_loss -= imitation_obj
+            aux_loss -= torch.mean(imitation_obj)
 
         if action is None:
             value = hx.v
@@ -156,7 +157,7 @@ class SubtasksAgent(Agent, NNBase):
             value=value,
             action=torch.cat(actions, dim=-1),
             action_log_probs=log_probs,
-            aux_loss=aux_loss.mean(),
+            aux_loss=aux_loss,
             rnn_hxs=torch.cat(hx, dim=-1),
             dist=None,
             log=log)
@@ -422,7 +423,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         p = hx.p
         r = hx.r
         g_embed1 = hx.g_embed
-        b = hx.b
         h = hx.h
         float_subtask = hx.subtask
 
@@ -487,6 +487,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             else:
                 outputs.c_loss.append(torch.zeros_like(c))
 
+            c = next_subtask[i] #TODO
             outputs.c.append(c)
 
             # TODO: figure this out
@@ -516,6 +517,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                     reduction='none',
                 ).unsqueeze(1))
 
+            l = self.l_one_hots[l_target]  # TODO
             p2 = batch_conv1d(p, l)
 
             # p_losss
@@ -550,7 +552,10 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # TODO: deterministic
             # g
             dist = self.pi_theta((h, r))
-            g = dist.sample()
+            g_target = self.encode(r2.squeeze(1))
+            outputs.g_loss.append(-dist.log_probs(g_target))
+            # g = dist.sample()
+            g = g_target.unsqueeze(1)  # TODO
             outputs.g_int.append(g.float())
             outputs.g_probs.append(dist.probs)
 
@@ -558,12 +563,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # assert (int(i1), int(i2), int(i3)) == \
             #        np.unravel_index(int(g_int), self.subtask_space)
             g_embed2 = self.embed_task(g)
-            g_loss = F.binary_cross_entropy(
-                torch.clamp(g_embed2, 0., 1.),
-                r_target,
-                reduction='none',
-            )
-            outputs.g_loss.append(torch.mean(g_loss, dim=-1, keepdim=True))
             g_embed1 = interp(g_embed1, g_embed2, c)
             outputs.g_embed.append(g_embed1)
 
