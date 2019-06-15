@@ -96,8 +96,9 @@ class SubtasksAgent(Agent, NNBase):
             actions = SubtasksActions(
                 *torch.split(action, action_sections, dim=-1))
 
-        log_probs = (dists.a.log_probs(actions.a) +
-                     hx.c * dists.g_int.log_probs(actions.g_int))
+        log_probs = sum(
+            dist.log_probs(a) for dist, a in zip(dists, actions)
+            if dist is not None)
         entropies = sum(dist.entropy() for dist in dists if dist is not None)
 
         if action is not None:
