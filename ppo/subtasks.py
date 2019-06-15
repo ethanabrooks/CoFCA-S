@@ -1,4 +1,6 @@
 from collections import namedtuple
+from functools import reduce
+import operator
 
 from gym.spaces import Box, Discrete
 import numpy as np
@@ -193,6 +195,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         n_subtasks = task_space.shape[0]
         self.obs_sections = get_subtasks_obs_sections(task_space)
         self.obs_shape = d, h, w
+        self.task_sections = [n_subtasks] * task_space.nvec.shape[1]
 
         # networks
         self.recurrent = recurrent
@@ -258,8 +261,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             ),
             in_size=conv_out_size)  # h
 
-        debug_in_size = subtask_size * (
-            self.obs_sections.base + action_space.a.n) + subtask_size
+        debug_in_size = (
+            action_space.g_int.n * action_space.a.n * self.obs_sections.base)
 
         self.phi_update = trace(
             # lambda in_size: init_(nn.Linear(in_size, 2), 'sigmoid'),
@@ -320,7 +323,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         self.register_buffer('subtask_space',
                              torch.tensor(task_space.nvec[0].astype(np.int64)))
 
-        self.task_sections = [n_subtasks] * task_space.nvec.shape[1]
         state_sizes = RecurrentState(
             p=n_subtasks,
             r=subtask_size,
@@ -460,14 +462,19 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             a_idxs = hx.a.flatten().long()
             agent_layer = obs[i, :, 6, :, :].long()
             j, k, l = torch.split(agent_layer.nonzero(), [1, 1, 1], dim=-1)
-            debug_obs = obs[i, j, :, k, l].squeeze(1)
-            part1 = g_embed1.unsqueeze(1) * debug_obs.unsqueeze(2)
-            part2 = g_embed1.unsqueeze(1) * self.a_one_hots[a_idxs].unsqueeze(
-                2)
-            cat = torch.cat([part1, part2], dim=1)
-            bsize = cat.shape[0]
-            reshape = cat.view(bsize, -1)
-            debug_in = torch.cat([reshape, r], dim=-1)
+
+            def get_debug_in(subtask_param):
+                debug_obs = obs[i, j, :, k, l].squeeze(1)
+                task_part = subtask_param[:, :3]
+                obj_part = subtask_param[:, 4:]
+                action_part = self.a_one_hots[a_idxs]
+                obs4d = (debug_obs.unsqueeze(2).unsqueeze(3).unsqueeze(4) *
+                         task_part.unsqueeze(1).unsqueeze(3).unsqueeze(4) *
+                         obj_part.unsqueeze(1).unsqueeze(2).unsqueeze(4) *
+                         action_part.unsqueeze(1).unsqueeze(2).unsqueeze(3))
+                return obs4d.view(m, -1)
+
+            debug_in = get_debug_in(g_embed1)
 
             # print(debug_in[:, [39, 30, 21, 12, 98, 89]])
             # print(next_subtask[i])
