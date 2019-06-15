@@ -239,13 +239,13 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
         self.critic = init_(nn.Linear(input_size, 1))
 
-        in_size = (
-            conv_out_size +  # x
-            subtask_size +  # r
-            subtask_size +  # g
-            1)  # b
+        # b
         self.f = nn.Sequential(
-            init_(nn.Linear(in_size, hidden_size), 'relu'),
+            init_(nn.Linear((
+                        conv_out_size +  # x
+                        subtask_size +  # r
+                        subtask_size +  # g
+                        1), hidden_size), 'relu'),
             nn.ReLU(),
         )
 
@@ -266,7 +266,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # hidden_size +  s
             # hidden_size))  h
             lambda in_size: init_(nn.Linear(debug_in_size, 1), 'sigmoid'),
-            in_size=(debug_in_size))
+            in_size=debug_in_size)
 
         self.phi_shift = trace(
             lambda in_size: nn.Sequential(
@@ -298,8 +298,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 ),
                 example_inputs=torch.rand(1, subtask_size + hidden_size, h, w),
             ),
-            Categorical(h * w * hidden_size, np.prod(subtask_space)),
-        )
+            Categorical(h * w * hidden_size, action_space.g.n))
 
         self.beta = Categorical(
             conv_out_size +  # x
@@ -314,9 +313,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
         self.register_buffer('l_one_hots', torch.eye(3))
         self.register_buffer('p_one_hots', torch.eye(n_subtasks))
-        self.register_buffer('a_one_hots', torch.eye(action_space.a.n))
-        self.register_buffer('g_one_hots',
-                             torch.eye(int(np.prod(subtask_space))))
+        self.register_buffer('a_one_hots', torch.eye(int(action_space.a.n)))
+        self.register_buffer('g_one_hots', torch.eye(int(action_space.g.n))),
         self.register_buffer('subtask_space',
                              torch.tensor(task_space.nvec[0].astype(np.int64)))
 
@@ -328,7 +326,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             g=1,
             b=1,
             b_probs=2,
-            g_probs=np.prod(subtask_space),
+            g_probs=action_space.g.n,
             c=1,
             c_truth=1,
             c_probs=2,
@@ -445,7 +443,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             m = M.shape[0]
             conv_out = self.conv1(obs[i])
 
-            # s = self.f(torch.cat([conv_out, r, g_embed, b], dim=-1))
+            # s = self.f(torch.cat([conv_out, r, g, b], dim=-1))
             # logits = self.phi_update(torch.cat([s, h], dim=-1))
             # if self.hard_update:
             # dist = FixedCategorical(logits=logits)
