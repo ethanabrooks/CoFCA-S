@@ -130,7 +130,8 @@ class SubtasksAgent(Agent, NNBase):
             Ei = ni * nj / n
             if torch.all(Ei > 0):
                 chi_squared = torch.sum((choices - Ei)**2 / Ei)
-                cramers_v = torch.sqrt(chi_squared / n / self.action_space.g_int.n)
+                cramers_v = torch.sqrt(
+                    chi_squared / n / self.action_space.g_int.n)
 
         log = dict(
             # g_accuracy=g_accuracy.float(),
