@@ -108,8 +108,6 @@ class SubtasksAgent(Agent, NNBase):
             if dist is not None)
         entropies = sum(dist.entropy() for dist in dists if dist is not None)
 
-        # g_accuracy = torch.all(hx.g_embed.round() == g_target[:, :, 0, 0], dim=-1)
-
         if action is not None:
             subtask_int = rm.encode(subtask[:, :, 0, 0])
             codes = torch.unique(subtask_int)
@@ -244,13 +242,17 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
         self.critic = init_(nn.Linear(input_size, 1))
 
-        in_size = (
-            conv_out_size +  # x
-            subtask_size +  # r
-            subtask_size +  # g
-            1)  # b
+        # b
         self.f = nn.Sequential(
-            init_(nn.Linear(in_size, hidden_size), 'relu'),
+            init_(
+                nn.Linear(
+                    (
+                        conv_out_size +  # x
+                        subtask_size +  # r
+                        subtask_size +  # g
+                        1),
+                    hidden_size),
+                'relu'),
             nn.ReLU(),
         )
 
@@ -271,7 +273,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # hidden_size +  s
             # hidden_size))  h
             lambda in_size: init_(nn.Linear(debug_in_size, 1), 'sigmoid'),
-            in_size=(debug_in_size))
+            in_size=debug_in_size)
 
         self.phi_shift = trace(
             lambda in_size: nn.Sequential(
@@ -303,8 +305,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 ),
                 example_inputs=torch.rand(1, subtask_size + hidden_size, h, w),
             ),
-            Categorical(h * w * hidden_size, np.prod(subtask_space)),
-        )
+            Categorical(h * w * hidden_size, action_space.g_int.n))
 
         self.beta = Categorical(
             conv_out_size +  # x
@@ -319,9 +320,9 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
         self.register_buffer('l_one_hots', torch.eye(3))
         self.register_buffer('p_one_hots', torch.eye(n_subtasks))
-        self.register_buffer('a_one_hots', torch.eye(action_space.a.n))
-        self.register_buffer('g_one_hots',
-                             torch.eye(int(np.prod(subtask_space))))
+        self.register_buffer('a_one_hots', torch.eye(int(action_space.a.n)))
+        self.register_buffer('g_one_hots', torch.eye(
+            int(action_space.g_int.n))),
         self.register_buffer('subtask_space',
                              torch.tensor(task_space.nvec[0].astype(np.int64)))
 
