@@ -315,7 +315,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         self.register_buffer('l_one_hots', torch.eye(3))
         self.register_buffer('p_one_hots', torch.eye(n_subtasks))
         self.register_buffer('a_one_hots', torch.eye(int(action_space.a.n)))
-        self.register_buffer('g_one_hots', torch.eye(int(action_space.g_int.n))),
+        self.register_buffer('g_one_hots', torch.eye(
+            int(action_space.g_int.n))),
         self.register_buffer('subtask_space',
                              torch.tensor(task_space.nvec[0].astype(np.int64)))
 
@@ -460,9 +461,9 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             agent_layer = obs[i, :, 6, :, :].long()
             j, k, l = torch.split(agent_layer.nonzero(), [1, 1, 1], dim=-1)
             debug_obs = obs[i, j, :, k, l].squeeze(1)
-            part1 = subtasks[i].unsqueeze(1) * debug_obs.unsqueeze(2)
-            part2 = subtasks[i].unsqueeze(
-                1) * self.a_one_hots[a_idxs].unsqueeze(2)
+            part1 = g_embed1.unsqueeze(1) * debug_obs.unsqueeze(2)
+            part2 = g_embed1.unsqueeze(1) * self.a_one_hots[a_idxs].unsqueeze(
+                2)
             cat = torch.cat([part1, part2], dim=1)
             bsize = cat.shape[0]
             reshape = cat.view(bsize, -1)
@@ -487,7 +488,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             else:
                 outputs.c_loss.append(torch.zeros_like(c))
 
-            c = next_subtask[i] #TODO
+            c = next_subtask[i]  #TODO
             outputs.c.append(c)
 
             # TODO: figure this out
