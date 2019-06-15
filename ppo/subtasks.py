@@ -108,8 +108,6 @@ class SubtasksAgent(Agent, NNBase):
             if dist is not None)
         entropies = sum(dist.entropy() for dist in dists if dist is not None)
 
-        # g_accuracy = torch.all(hx.g_embed.round() == g_target[:, :, 0, 0], dim=-1)
-
         if action is not None:
             subtask_int = rm.encode(subtask[:, :, 0, 0])
             codes = torch.unique(subtask_int)
@@ -119,14 +117,26 @@ class SubtasksAgent(Agent, NNBase):
                 self.subtask_choices[code] += g_one_hots[idx].sum(dim=0)
 
         c = hx.c.round()
+
+        # For derivation, see https://en.wikipedia.org/wiki/Cram%C3%A9r%27s_V
+        choices = self.subtask_choices.float()
+        cramers_v = torch.tensor(0.)
+        n = choices.sum()
+        if n > 0:
+            ni = choices.sum(dim=0, keepdim=True)
+            nj = choices.sum(dim=1, keepdim=True)
+            Ei = ni * nj / n
+            if torch.all(Ei > 0):
+                chi_squared = torch.sum((choices - Ei)**2 / Ei)
+                cramers_v = torch.sqrt(chi_squared / n / self.action_space.g_int.n)
+
         log = dict(
             # g_accuracy=g_accuracy.float(),
             c_accuracy=(torch.mean((c == hx.c_truth).float())),
             c_recall=(torch.mean(
                 (c[hx.c_truth > 0] == hx.c_truth[hx.c_truth > 0]).float())),
             c_precision=(torch.mean((c[c > 0] == hx.c_truth[c > 0]).float())),
-            std_per_subtask=torch.mean(self.subtask_choices.float(),
-                                       dim=1).std(dim=-1))
+            subtask_association=cramers_v)
         aux_loss = self.alpha * hx.c_loss - self.entropy_coef * entropies
 
         if self.teacher_agent:
