@@ -254,9 +254,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             ),
             in_size=conv_out_size)  # h
 
-        # debug_in_size = subtask_size * (
-        # self.obs_sections.base + action_space.a.n) + subtask_size
-        debug_in_size = 1
+        debug_in_size = subtask_size * (
+            self.obs_sections.base + action_space.a.n) + subtask_size + 1
 
         self.phi_update = trace(
             # lambda in_size: init_(nn.Linear(in_size, 2), 'sigmoid'),
@@ -465,7 +464,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             # print(debug_in[:, [39, 30, 21, 12, 98, 89]])
             # print(next_subtask[i])
-            c = torch.sigmoid(self.phi_update(next_subtask[i]))
+            c = torch.sigmoid(self.phi_update(debug_in))
             outputs.c_truth.append(next_subtask[i])
 
             if torch.any(next_subtask[i] > 0):
@@ -490,7 +489,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # else:
             # h2 = self.subcontroller(conv_out)
 
-            logits = self.phi_shift(next_subtask[i])
+            logits = self.phi_shift(debug_in)
             # if self.hard_update:
             # dist = FixedCategorical(logits=logits)
             # l = dist.sample()
