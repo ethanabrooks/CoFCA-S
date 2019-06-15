@@ -1,17 +1,17 @@
 from collections import namedtuple
 
 import gym
-import numpy as np
-import torch
 from gym import spaces
 from gym.spaces import Box
+import numpy as np
+import torch
 
 from common.vec_env import VecEnvWrapper
 from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
 from gridworld_env.subtasks_gridworld import ObsSections
 from rl_utils import onehot
 
-SubtasksActions = namedtuple('SubtasksActions', 'a b g_embed c l g_int')
+SubtasksActions = namedtuple('SubtasksActions', 'a b c l g_int')
 
 
 def get_subtasks_obs_sections(task_space):
@@ -81,8 +81,6 @@ class SubtasksWrapper(gym.Wrapper):
             SubtasksActions(
                 a=env.action_space,
                 b=spaces.Discrete(2),
-                g_embed=spaces.Box(
-                    low=0, high=1, shape=(task_space.nvec[0].sum(), )),
                 g_int=spaces.Discrete(task_space.nvec[0].prod()),
                 c=spaces.Discrete(2),
                 l=spaces.Discrete(3)))
