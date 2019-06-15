@@ -130,7 +130,8 @@ class SubtasksAgent(Agent, NNBase):
             Ei = ni * nj / n
             if torch.all(Ei > 0):
                 chi_squared = torch.sum((choices - Ei)**2 / Ei)
-                cramers_v = torch.sqrt(chi_squared / n / self.action_space.g_int.n)
+                cramers_v = torch.sqrt(
+                    chi_squared / n / self.action_space.g_int.n)
 
         log = dict(
             # g_accuracy=g_accuracy.float(),
@@ -565,14 +566,13 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # g_loss
             # assert (int(i1), int(i2), int(i3)) == \
             #        np.unravel_index(int(g_int), self.subtask_space)
-            g_embed2 = self.embed_task(g)
+            g_embed1 = self.embed_task(g)
             g_loss = F.binary_cross_entropy(
-                torch.clamp(g_embed2, 0., 1.),
+                torch.clamp(g_embed1, 0., 1.),
                 r_target,
                 reduction='none',
             )
             outputs.g_loss.append(torch.mean(g_loss, dim=-1, keepdim=True))
-            g_embed1 = interp(g_embed1, g_embed2, c)
             outputs.g_embed.append(g_embed1)
 
             # b
