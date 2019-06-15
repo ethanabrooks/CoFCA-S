@@ -568,9 +568,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 reduction='none',
             )
             outputs.g_loss.append(torch.mean(g_loss, dim=-1, keepdim=True))
-            c_g = c.clone()
-            c_g[new_episode] = 1
-            g_embed1 = interp(g_embed1, g_embed2, c_g)
+            g_embed1 = interp(g_embed1, g_embed2, c)
             outputs.g_embed.append(g_embed1)
 
             # b
