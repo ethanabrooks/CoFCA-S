@@ -54,7 +54,8 @@ class SubtasksAgent(Agent, NNBase):
         self.register_buffer(
             'subtask_choices',
             torch.zeros(
-                self.action_space.g.n, self.action_space.g.n,
+                self.action_space.g.n,
+                self.action_space.g.n,
                 dtype=torch.long))
 
     def forward(self, inputs, rnn_hxs, masks, action=None,
@@ -88,7 +89,12 @@ class SubtasksAgent(Agent, NNBase):
                 g=FixedCategorical(hx.g_probs))
 
         if action is None:
-            actions = SubtasksActions(a=hx.a, b=hx.b, l=hx.l, c=hx.c, g=hx.g)
+            actions = SubtasksActions(
+                a=hx.a,
+                b=hx.b,
+                l=hx.l,
+                c=hx.c,
+                g=hx.g)
         else:
             action_sections = get_subtasks_action_sections(self.action_space)
             actions = SubtasksActions(
@@ -119,7 +125,8 @@ class SubtasksAgent(Agent, NNBase):
             Ei = ni * nj / n
             if torch.all(Ei > 0):
                 chi_squared = torch.sum((choices - Ei)**2 / Ei)
-                cramers_v = torch.sqrt(chi_squared / n / self.action_space.g.n)
+                cramers_v = torch.sqrt(
+                    chi_squared / n / self.action_space.g.n)
 
         log = dict(
             # g_accuracy=g_accuracy.float(),
@@ -234,15 +241,11 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
         # b
         self.f = nn.Sequential(
-            init_(
-                nn.Linear(
-                    (
+            init_(nn.Linear((
                         conv_out_size +  # x
                         subtask_size +  # r
                         subtask_size +  # g
-                        1),
-                    hidden_size),
-                'relu'),
+                        1), hidden_size), 'relu'),
             nn.ReLU(),
         )
 
@@ -466,7 +469,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # print(next_subtask[i])
             c = torch.sigmoid(self.phi_update(debug_in))
             outputs.c_truth.append(next_subtask[i])
-            c = next_subtask[i] #TODO
 
             if torch.any(next_subtask[i] > 0):
                 weight = torch.ones_like(c)
