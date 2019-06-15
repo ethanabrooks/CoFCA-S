@@ -16,7 +16,7 @@ from ppo.wrappers import SubtasksActions, get_subtasks_action_sections, get_subt
 
 RecurrentState = namedtuple(
     'RecurrentState',
-    'p r h b b_probs g_int g_probs c c_probs l l_probs a a_probs v c_truth '
+    'p r h b b_probs g g_probs c c_probs l l_probs a a_probs v c_truth '
     'c_loss l_loss p_loss r_loss g_loss b_loss subtask')
 
 
@@ -54,8 +54,8 @@ class SubtasksAgent(Agent, NNBase):
         self.register_buffer(
             'subtask_choices',
             torch.zeros(
-                self.action_space.g_int.n,
-                self.action_space.g_int.n,
+                self.action_space.g.n,
+                self.action_space.g.n,
                 dtype=torch.long))
 
     def forward(self, inputs, rnn_hxs, masks, action=None,
@@ -78,7 +78,7 @@ class SubtasksAgent(Agent, NNBase):
                 b=FixedCategorical(hx.b_probs),
                 c=FixedCategorical(hx.c_probs),
                 l=FixedCategorical(hx.l_probs),
-                g_int=FixedCategorical(hx.g_probs),
+                g=FixedCategorical(hx.g_probs),
             )
         else:
             dists = SubtasksActions(
@@ -86,7 +86,7 @@ class SubtasksAgent(Agent, NNBase):
                 b=FixedCategorical(hx.b_probs),
                 c=None,
                 l=None,
-                g_int=FixedCategorical(hx.g_probs))
+                g=FixedCategorical(hx.g_probs))
 
         if action is None:
             actions = SubtasksActions(
@@ -94,7 +94,7 @@ class SubtasksAgent(Agent, NNBase):
                 b=hx.b,
                 l=hx.l,
                 c=hx.c,
-                g_int=hx.g_int)
+                g=hx.g)
         else:
             action_sections = get_subtasks_action_sections(self.action_space)
             actions = SubtasksActions(
@@ -108,7 +108,7 @@ class SubtasksAgent(Agent, NNBase):
         if action is not None:
             subtask_int = rm.encode(subtask[:, :, 0, 0])
             codes = torch.unique(subtask_int)
-            g_one_hots = rm.g_one_hots[actions.g_int.long().flatten()].long()
+            g_one_hots = rm.g_one_hots[actions.g.long().flatten()].long()
             for code in codes:
                 idx = subtask_int == code
                 self.subtask_choices[code] += g_one_hots[idx].sum(dim=0)
@@ -126,7 +126,7 @@ class SubtasksAgent(Agent, NNBase):
             if torch.all(Ei > 0):
                 chi_squared = torch.sum((choices - Ei)**2 / Ei)
                 cramers_v = torch.sqrt(
-                    chi_squared / n / self.action_space.g_int.n)
+                    chi_squared / n / self.action_space.g.n)
 
         log = dict(
             # g_accuracy=g_accuracy.float(),
@@ -148,7 +148,7 @@ class SubtasksAgent(Agent, NNBase):
         if action is None:
             value = hx.v
         else:
-            g_embed = rm.embed_task(actions.g_int.long())
+            g_embed = rm.embed_task(actions.g.long())
             g_broad = broadcast_3d(g_embed, obs.shape[2:])
             value = rm.critic(rm.conv2((obs, g_broad)))
 
@@ -325,7 +325,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             p=n_subtasks,
             r=subtask_size,
             h=hidden_size,
-            g_int=1,
+            g=1,
             b=1,
             b_probs=2,
             g_probs=np.prod(subtask_space),
@@ -433,7 +433,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             p[new_episode, 0] = 1.  # initialize pointer to first subtask
             r[new_episode] = M[new_episode, 0]  # initialize r to first subtask
             g0 = M[new_episode, 0]
-            hx.g_int[new_episode] = self.encode(g0).unsqueeze(1).float()
+            hx.g[new_episode] = self.encode(g0).unsqueeze(1).float()
 
         outputs = RecurrentState(*[[] for _ in RecurrentState._fields])
 
@@ -549,15 +549,15 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # TODO: deterministic
             # g
             probs = self.pi_theta((h, r)).probs
-            g_prev = self.g_one_hots[hx.g_int.long()].squeeze(1)
+            g_prev = self.g_one_hots[hx.g.long()].squeeze(1)
             dist = FixedCategorical(probs=interp(g_prev, probs, c))
             g = dist.sample()
-            outputs.g_int.append(g.float())
+            outputs.g.append(g.float())
             outputs.g_probs.append(dist.probs)
 
             # g_loss
             # assert (int(i1), int(i2), int(i3)) == \
-            #        np.unravel_index(int(g_int), self.subtask_space)
+            #        np.unravel_index(int(g), self.subtask_space)
             g_embed = self.embed_task(g)
             g_loss = F.binary_cross_entropy(
                 torch.clamp(g_embed, 0., 1.),

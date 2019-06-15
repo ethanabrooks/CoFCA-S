@@ -31,7 +31,7 @@ class SubtasksTeacher(Agent):
         act = super().forward(
             self.preprocess_obs(inputs), action=action, *args, **kwargs)
         x = torch.zeros_like(act.action)
-        actions = SubtasksActions(a=act.action, b=x, g_int=x, c=x, l=x)
+        actions = SubtasksActions(a=act.action, b=x, g=x, c=x, l=x)
         return act._replace(action=torch.cat(actions, dim=-1))
 
     def get_value(self, inputs, rnn_hxs, masks):
