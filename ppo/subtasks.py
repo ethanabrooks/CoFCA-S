@@ -547,7 +547,10 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             # TODO: deterministic
             # g
-            dist = self.pi_theta((h, r))
+            probs = self.pi_theta((h, r)).probs
+            g_one_hot = self.g_one_hots[hx.g_int.long().flatten()]
+            dist = FixedCategorical(probs=interp(g_one_hot, probs, c))
+            # dist = self.pi_theta((h, r))
             g = dist.sample()
             outputs.g_int.append(g.float())
             outputs.g_probs.append(dist.probs)
@@ -562,7 +565,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 reduction='none',
             )
             outputs.g_loss.append(torch.mean(g_loss, dim=-1, keepdim=True))
-            g_embed1 = interp(g_embed1, g_embed2, c)
+            # g_embed1 = interp(g_embed1, g_embed2, c)
+            g_embed1 = g_embed2
             outputs.g_embed.append(g_embed1)
 
             # b
