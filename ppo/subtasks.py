@@ -77,7 +77,6 @@ class SubtasksAgent(Agent, NNBase):
                 a=FixedCategorical(hx.a_probs),
                 b=FixedCategorical(hx.b_probs),
                 c=FixedCategorical(hx.c_probs),
-                g_embed=None,
                 l=FixedCategorical(hx.l_probs),
                 g_int=FixedCategorical(hx.g_probs),
             )
@@ -86,18 +85,12 @@ class SubtasksAgent(Agent, NNBase):
                 a=FixedCategorical(hx.a_probs),
                 b=FixedCategorical(hx.b_probs),
                 c=None,
-                g_embed=None,
                 l=None,
                 g_int=FixedCategorical(hx.g_probs))
 
         if action is None:
             actions = SubtasksActions(
-                a=hx.a,
-                b=hx.b,
-                g_embed=hx.g_embed,
-                l=hx.l,
-                c=hx.c,
-                g_int=hx.g_int)
+                a=hx.a, b=hx.b, l=hx.l, c=hx.c, g_int=hx.g_int)
         else:
             action_sections = get_subtasks_action_sections(self.action_space)
             actions = SubtasksActions(
@@ -128,7 +121,8 @@ class SubtasksAgent(Agent, NNBase):
             Ei = ni * nj / n
             if torch.all(Ei > 0):
                 chi_squared = torch.sum((choices - Ei)**2 / Ei)
-                cramers_v = torch.sqrt(chi_squared / n / self.action_space.g_int.n)
+                cramers_v = torch.sqrt(
+                    chi_squared / n / self.action_space.g_int.n)
 
         log = dict(
             # g_accuracy=g_accuracy.float(),
