@@ -63,7 +63,7 @@ class SubtasksAgent(Agent, NNBase):
         obs, subtask, task, next_subtask = torch.split(
             inputs, self.obs_sections, dim=1)
 
-        n = inputs.shape[0]
+        n = inputs.size(0)
         actions = None
         if action is not None:
             action_sections = get_subtasks_action_sections(self.action_space)
@@ -164,7 +164,7 @@ class SubtasksAgent(Agent, NNBase):
             log=log)
 
     def get_value(self, inputs, rnn_hxs, masks):
-        n = inputs.shape[0]
+        n = inputs.size(0)
         all_hxs, last_hx = self._forward_gru(
             inputs.view(n, -1), rnn_hxs, masks)
         return self.recurrent_module.parse_hidden(all_hxs).v
@@ -446,12 +446,12 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
         past_a = torch.cat([hx.a.unsqueeze(0), a], dim=0)
 
-        n = obs.shape[0]
+        n = obs.size(0)
         for i in range(n):
             float_subtask += next_subtask[i]
             outputs.subtask.append(float_subtask)
             subtask = float_subtask.long()
-            m = M.shape[0]
+            m = M.size(0)
             conv_out = self.conv1(obs[i])
 
             # s = self.f(torch.cat([conv_out, r, g_embed1, b], dim=-1))
