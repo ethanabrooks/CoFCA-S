@@ -228,19 +228,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                         stride=1,
                         padding=1), 'relu'), nn.ReLU(), Flatten())
 
-        input_size = h * w * hidden_size  # conv output
-        if isinstance(action_space.a, Discrete):
-            num_outputs = action_space.a.n
-            self.actor = Categorical(input_size, num_outputs)
-        elif isinstance(action_space.a, Box):
-            num_outputs = action_space.a.size(0)
-            self.actor = DiagGaussian(input_size, num_outputs)
-        else:
-            raise NotImplementedError
-
-        self.critic = init_(nn.Linear(input_size, 1))
-
-        # b
         self.f = nn.Sequential(
             Parallel(
                 init_(nn.Linear(self.obs_sections.base, hidden_size)),
@@ -278,12 +265,37 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
         self.pi_theta = nn.Sequential(
             Concat(dim=-1),
-            Categorical(
-                hidden_size +  # h
-                subtask_size,  # r
-                action_space.g_int.n))
+            Broadcast3d(h, w),
+            torch.jit.trace(
+                nn.Sequential(
+                    init_(
+                        nn.Conv2d(
+                            (
+                                subtask_size +  # r
+                                hidden_size),  # h
+                            hidden_size,
+                            kernel_size=3,
+                            stride=1,
+                            padding=1),
+                        'relu'),
+                    nn.ReLU(),
+                    Flatten(),
+                ),
+                example_inputs=torch.rand(1, subtask_size + hidden_size, h, w),
+            ),
+            Categorical(h * w * hidden_size, action_space.g_int.n))
 
         self.beta = Categorical(hidden_size, 2)
+        input_size = h * w * hidden_size  # conv output
+        if isinstance(action_space.a, Discrete):
+            num_outputs = action_space.a.n
+            self.actor = Categorical(input_size, num_outputs)
+        elif isinstance(action_space.a, Box):
+            num_outputs = action_space.a.size(0)
+            self.actor = DiagGaussian(input_size, num_outputs)
+        else:
+            raise NotImplementedError
+        self.critic = init_(nn.Linear(input_size, 1))
 
         # embeddings
         for name, d in zip(
