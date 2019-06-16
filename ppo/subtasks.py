@@ -277,10 +277,10 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         self.pi_theta = nn.Sequential(
             Concat(dim=-1),
             Categorical(
-                hidden_size  # h
-                + subtask_size,  # r
-                action_space.g_int.n),
-        )
+                hidden_size +  # h
+                subtask_size,  # r
+                action_space.g_int.n))
+
         self.beta = Categorical(hidden_size, 2)
         self.critic = init_(nn.Linear(input_size, 1))
 
@@ -532,10 +532,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             g_int[i][new] = dist.sample()[new].float()
             outputs.g_int.append(g_int[i])
             outputs.g_probs.append(dist.probs)
-
-            # g_loss
-            # assert (int(i1), int(i2), int(i3)) == \
-            #        np.unravel_index(int(g_int), self.subtask_space)
 
             # b
             dist = self.beta(h)
