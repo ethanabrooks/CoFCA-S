@@ -16,8 +16,10 @@ from ppo.wrappers import SubtasksActions, get_subtasks_action_sections, get_subt
 
 RecurrentState = namedtuple(
     'RecurrentState',
-    'p r h b b_probs g_binary g_int g_probs c c_probs l l_probs a a_probs v c_truth '
-    'c_loss l_loss p_loss r_loss g_loss b_loss subtask')
+    'p r h g_binary g_int g_probs c c_probs l l_probs a a_probs v c_truth '
+    'c_loss l_loss p_loss r_loss g_loss subtask')
+
+# 'b b_probs b_loss'
 
 
 def outer_product(a, b):
@@ -85,7 +87,6 @@ class SubtasksAgent(Agent, NNBase):
         if self.hard_update:
             dists = SubtasksActions(
                 a=FixedCategorical(hx.a_probs),
-                b=FixedCategorical(hx.b_probs),
                 c=FixedCategorical(hx.c_probs),
                 l=FixedCategorical(hx.l_probs),
                 g_int=FixedCategorical(hx.g_probs),
@@ -93,14 +94,12 @@ class SubtasksAgent(Agent, NNBase):
         else:
             dists = SubtasksActions(
                 a=FixedCategorical(hx.a_probs),
-                b=FixedCategorical(hx.b_probs),
                 c=None,
                 l=None,
                 g_int=FixedCategorical(hx.g_probs))
 
         if action is None:
-            actions = SubtasksActions(
-                a=hx.a, b=hx.b, l=hx.l, c=hx.c, g_int=hx.g_int)
+            actions = SubtasksActions(a=hx.a, l=hx.l, c=hx.c, g_int=hx.g_int)
 
         log_probs = sum(
             dist.log_probs(a) for dist, a in zip(dists, actions)
@@ -244,7 +243,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
         self.critic = init_(nn.Linear(input_size, 1))
 
-        # b
         self.f = init_(
             nn.Linear(
                 int(self.obs_sections.base * action_space.a.n *
@@ -323,8 +321,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             h=hidden_size,
             g_binary=subtask_size,
             g_int=1,
-            b=1,
-            b_probs=2,
             g_probs=action_space.g_int.n,
             c=1,
             c_truth=1,
@@ -339,7 +335,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             p_loss=1,
             r_loss=1,
             g_loss=1,
-            b_loss=1,
             subtask=1)
         self.state_sizes = RecurrentState(*map(int, state_sizes))
 
@@ -487,6 +482,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 outputs.c_loss.append(torch.zeros_like(c))
 
             outputs.c.append(c)
+            outputs.c_probs.append(torch.zeros(m, 2, device=c.device))
 
             # TODO: figure this out
             # if self.recurrent:
@@ -564,14 +560,13 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             outputs.g_binary.append(g_binary)
 
             # b
-            dist = self.beta(torch.cat([conv_out, g_binary], dim=-1))
-            b = dist.sample().float()
-            outputs.b_probs.append(dist.probs)
-            outputs.c_probs.append(torch.zeros_like(dist.probs))  # TODO
+            # dist = self.beta(h)
+            # b = dist.sample().float()
+            # outputs.b_probs.append(dist.probs)
 
             # b_loss
-            outputs.b_loss.append(-dist.log_probs(next_subtask[i]))
-            outputs.b.append(b)
+            # outputs.b_loss.append(-dist.log_probs(next_subtask[i]))
+            # outputs.b.append(b)
 
             # a
             g_broad = broadcast_3d(g_binary, self.obs_shape[1:])
