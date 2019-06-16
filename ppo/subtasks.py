@@ -430,6 +430,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         r = hx.r
         g_embed1 = hx.g_embed
         h = hx.h
+        g_int = torch.cat([hx.g_int, g_int], dim=0)
         float_subtask = hx.subtask
 
         for x in hx:
@@ -440,7 +441,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             r[new_episode] = M[new_episode, 0]  # initialize r to first subtask
             g0 = M[new_episode, 0]
             g_embed1[new_episode] = g0  # initialize g_embed1 to first subtask
-            hx.g_int[new_episode] = self.encode(g0).unsqueeze(1).float()
+            g_int[0, new_episode] = self.encode(g0).unsqueeze(1).float()
 
         outputs = RecurrentState(*[[] for _ in RecurrentState._fields])
 
@@ -579,21 +580,22 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             # TODO: deterministic
             # g
-            probs = self.pi_theta((h, r)).probs
-            dist = FixedCategorical(probs=interp(hx.g_probs, probs, c))
+            probs1 = self.g_one_hots[g_int[i].long().flatten()]
+            probs2 = self.pi_theta((h, r)).probs
+            dist = FixedCategorical(probs=interp(probs1, probs2, c))
 
             # dist = self.pi_theta((h, r))
             g_target = self.encode(M[torch.arange(m), subtask.flatten()])
             outputs.g_loss.append(-dist.log_probs(g_target))
-            new = g_int[i] < 0
-            g_int[i][new] = dist.sample()[new].float()
-            outputs.g_int.append(g_int[i])
+            new = g_int[i + 1] < 0
+            g_int[i + 1, new] = dist.sample()[new].float()
+            outputs.g_int.append(g_int[i + 1])
             outputs.g_probs.append(dist.probs)
 
             # g_loss
             # assert (int(i1), int(i2), int(i3)) == \
             #        np.unravel_index(int(g_int), self.subtask_space)
-            g_embed2 = self.embed_task(g_int[i])
+            g_embed2 = self.embed_task(g_int[i + 1])
             # g_embed1 = interp(g_embed1, g_embed2, c)
             g_embed1 = g_embed2
             outputs.g_embed.append(g_embed1)
