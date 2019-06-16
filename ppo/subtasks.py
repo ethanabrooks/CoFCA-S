@@ -16,7 +16,7 @@ from ppo.wrappers import SubtasksActions, get_subtasks_action_sections, get_subt
 
 RecurrentState = namedtuple(
     'RecurrentState',
-    'p r h b b_probs g_embed g_int g_probs c c_probs l l_probs a a_probs v c_truth '
+    'p r h b b_probs g_binary g_int g_probs c c_probs l l_probs a a_probs v c_truth '
     'c_loss l_loss p_loss r_loss g_loss b_loss subtask')
 
 
@@ -146,8 +146,8 @@ class SubtasksAgent(Agent, NNBase):
         if action is None:
             value = hx.v
         else:
-            g_embed = rm.embed_task(actions.g_int.long())
-            g_broad = broadcast_3d(g_embed, obs.shape[2:])
+            g_binary = rm.task_to_one_hot(actions.g_int.long())
+            g_broad = broadcast_3d(g_binary, obs.shape[2:])
             value = rm.critic(rm.conv2((obs, g_broad)))
 
         for k, v in hx._asdict().items():
@@ -328,7 +328,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             p=self.n_subtasks,
             r=subtask_size,
             h=hidden_size,
-            g_embed=subtask_size,
+            g_binary=subtask_size,
             g_int=1,
             b=1,
             b_probs=2,
@@ -363,8 +363,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         ],
                          dim=-1)
 
-    def encode(self, g_embed):
-        factord_code = g_embed.nonzero()[:, 1:].view(-1, 3)
+    def encode(self, g_binary):
+        factord_code = g_binary.nonzero()[:, 1:].view(-1, 3)
         factord_code -= F.pad(
             torch.cumsum(self.subtask_space, dim=0)[:2], (1, 0), 'constant', 0)
         # numpy_codes = factord_code.clone().numpy()
@@ -385,7 +385,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         g3 = x4 % x3
         return g1, g2, g3
 
-    def embed_task(self, g):
+    def task_to_one_hot(self, g):
         return self.task_one_hots(*self.decode(g)).squeeze(1)
 
     def check_grad(self, **kwargs):
@@ -428,7 +428,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
         p = hx.p
         r = hx.r
-        g_embed1 = hx.g_embed
+        g_binary = hx.g_binary
         h = hx.h
         float_subtask = hx.subtask
 
@@ -439,7 +439,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             p[new_episode, 0] = 1.  # initialize pointer to first subtask
             r[new_episode] = M[new_episode, 0]  # initialize r to first subtask
             g0 = M[new_episode, 0]
-            g_embed1[new_episode] = g0  # initialize g_embed1 to first subtask
+            g_binary[new_episode] = g0  # initialize g_binary to first subtask
             hx.g_int[new_episode] = self.encode(g0).unsqueeze(1).float()
 
         outputs = RecurrentState(*[[] for _ in RecurrentState._fields])
@@ -454,7 +454,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             m = M.size(0)
             conv_out = self.conv1(obs[i])
 
-            # s = self.f(torch.cat([conv_out, r, g_embed1, b], dim=-1))
+            # s = self.f(torch.cat([conv_out, r, g_binary, b], dim=-1))
             # logits = self.phi_update(torch.cat([s, h], dim=-1))
             # if self.hard_update:
             # dist = FixedCategorical(logits=logits)
@@ -494,7 +494,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             h = self.f((
                 debug_obs,
                 self.a_one_hots[a_idxs],
-                *torch.split(g_embed1, tuple(self.task_nvec[0]), dim=-1),
+                *torch.split(g_binary, tuple(self.task_nvec[0]), dim=-1),
             ))
 
             # print(debug_in[:, [39, 30, 21, 12, 98, 89]])
@@ -589,12 +589,12 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # g_loss
             # assert (int(i1), int(i2), int(i3)) == \
             #        np.unravel_index(int(g_int), self.subtask_space)
-            g_embed2 = self.embed_task(g_int[i])
-            g_embed1 = interp(g_embed1, g_embed2, c)
-            outputs.g_embed.append(g_embed1)
+            g_binary2 = self.task_to_one_hot(g_int[i])
+            g_binary = interp(g_binary, g_binary2, c)
+            outputs.g_binary.append(g_binary)
 
             # b
-            dist = self.beta(torch.cat([conv_out, g_embed1], dim=-1))
+            dist = self.beta(torch.cat([conv_out, g_binary], dim=-1))
             b = dist.sample().float()
             outputs.b_probs.append(dist.probs)
             outputs.c_probs.append(torch.zeros_like(dist.probs))  # TODO
@@ -604,7 +604,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             outputs.b.append(b)
 
             # a
-            g_broad = broadcast_3d(g_embed1, self.obs_shape[1:])
+            g_broad = broadcast_3d(g_binary, self.obs_shape[1:])
             conv_out2 = self.conv2((obs[i], g_broad))
             dist = self.actor(conv_out2)
             new = a[i] < 0
