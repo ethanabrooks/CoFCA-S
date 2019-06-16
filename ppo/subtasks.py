@@ -429,7 +429,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         r = hx.r
         g_binary = hx.g_binary
         float_subtask = hx.subtask
-        past_a = torch.cat([hx.a, a], dim=0)
+        a = torch.cat([hx.a, a], dim=0)
 
         for x in hx:
             x.squeeze_(0)
@@ -461,7 +461,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # c = torch.sigmoid(logits[:, :1])
             # outputs.c_probs.append(torch.zeros_like(logits))  # dummy value
 
-            a_idxs = past_a[i].flatten().long()
+            a_idxs = a[i].flatten().long()
             agent_layer = obs[i, :, 6, :, :].long()
             j, k, l = torch.split(agent_layer.nonzero(), [1, 1, 1], dim=-1)
             debug_obs = obs[i, j, :, k, l].squeeze(1)
@@ -580,12 +580,12 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             g_broad = broadcast_3d(g_binary, self.obs_shape[1:])
             conv_out2 = self.conv2((obs[i], g_broad))
             dist = self.actor(conv_out2)
-            new = past_a[i + 1] < 0
+            new = a[i + 1] < 0
             sample = dist.sample()[new].float()
-            past_a[i + 1, new] = sample
+            a[i + 1, new] = sample
             # a[:] = 'wsadeq'.index(input('act:'))
 
-            outputs.a.append(past_a[i + 1])
+            outputs.a.append(a[i + 1])
             outputs.a_probs.append(dist.probs)
 
             # v
