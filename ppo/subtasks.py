@@ -479,7 +479,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             def get_debug_in(subtask_param):
                 debug_obs = obs[i, j, :, k, l].squeeze(1)
                 task_part = subtask_param[:, :3]
-                obj_part = subtask_param[:, 4:]
+                obj_part = subtask_param[:, -4:]
                 action_part = self.a_one_hots[a_idxs]
                 obs4d = (debug_obs.unsqueeze(2).unsqueeze(3).unsqueeze(4) *
                          task_part.unsqueeze(1).unsqueeze(3).unsqueeze(4) *
