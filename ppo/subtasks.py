@@ -135,7 +135,7 @@ class SubtasksAgent(Agent, NNBase):
             subtask_association=cramers_v)
         # aux_loss = self.alpha * hx.c_loss - self.entropy_coef * entropies
         aux_loss = self.alpha * torch.mean(
-            hx.c_loss + hx.l_loss + hx.g_loss)  # TODO
+            hx.c_loss + hx.l_loss)  # TODO
 
         if self.teacher_agent:
             imitation_dist = self.teacher_agent(inputs, rnn_hxs, masks).dist
