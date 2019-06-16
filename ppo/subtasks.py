@@ -134,7 +134,8 @@ class SubtasksAgent(Agent, NNBase):
             c_precision=(torch.mean((c[c > 0] == hx.c_truth[c > 0]).float())),
             subtask_association=cramers_v)
         # aux_loss = self.alpha * hx.c_loss - self.entropy_coef * entropies
-        aux_loss = self.alpha * torch.mean(hx.c_loss + hx.l_loss + hx.g_loss)  # TODO
+        aux_loss = self.alpha * torch.mean(
+            hx.c_loss + hx.l_loss + hx.g_loss)  # TODO
 
         if self.teacher_agent:
             imitation_dist = self.teacher_agent(inputs, rnn_hxs, masks).dist
@@ -271,8 +272,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
         # debug_in_size = (
         # action_space.g_int.n * action_space.a.n * self.obs_sections.base)
-        # debug_in_size = action_space.a.n + 2
-        debug_in_size = 1
+        debug_in_size = action_space.a.n + 2
 
         self.phi_update = trace(
             # lambda in_size: init_(nn.Linear(in_size, 2), 'sigmoid'),
@@ -499,8 +499,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 return torch.cat(o, dim=-1)
                 # return obs4d.view(m, -1)
 
-            debug_in = torch.any(
-                get_debug_in(g_embed1) > 0., dim=-1, keepdim=True).float()
+            debug_in = get_debug_in(g_embed1).float()
 
             # print(debug_in[:, [39, 30, 21, 12, 98, 89]])
             # print(next_subtask[i])
