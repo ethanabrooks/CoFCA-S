@@ -1,6 +1,4 @@
 from collections import namedtuple
-from functools import reduce
-import operator
 
 from gym.spaces import Box, Discrete
 import numpy as np
@@ -66,8 +64,14 @@ class SubtasksAgent(Agent, NNBase):
             inputs, self.obs_sections, dim=1)
 
         n = inputs.shape[0]
+        actions = None
+        if action is not None:
+            action_sections = get_subtasks_action_sections(self.action_space)
+            actions = SubtasksActions(
+                *torch.split(action, action_sections, dim=-1))
+
         all_hxs, last_hx = self._forward_gru(
-            inputs.view(n, -1), rnn_hxs, masks)
+            inputs.view(n, -1), rnn_hxs, masks, actions=actions)
         rm = self.recurrent_module
         hx = RecurrentState(*rm.parse_hidden(all_hxs))
 
@@ -93,10 +97,6 @@ class SubtasksAgent(Agent, NNBase):
         if action is None:
             actions = SubtasksActions(
                 a=hx.a, b=hx.b, l=hx.l, c=hx.c, g_int=hx.g_int)
-        else:
-            action_sections = get_subtasks_action_sections(self.action_space)
-            actions = SubtasksActions(
-                *torch.split(action, action_sections, dim=-1))
 
         log_probs = sum(
             dist.log_probs(a) for dist, a in zip(dists, actions)
@@ -170,6 +170,13 @@ class SubtasksAgent(Agent, NNBase):
             inputs.view(n, -1), rnn_hxs, masks)
         return self.recurrent_module.parse_hidden(all_hxs).v
 
+    def _forward_gru(self, x, hxs, masks, actions=None):
+        if actions is None:
+            y = F.pad(x, (0, 2), 'constant', -1)
+        else:
+            y = torch.cat([x, actions.a, actions.g_int], dim=-1)
+        return super()._forward_gru(y, hxs, masks)
+
     @property
     def recurrent_hidden_state_size(self):
         return sum(self.recurrent_module.state_sizes)
@@ -196,6 +203,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         self.obs_sections = get_subtasks_obs_sections(task_space)
         self.obs_shape = d, h, w
         self.task_sections = [n_subtasks] * task_space.nvec.shape[1]
+        self.action_space = action_space
 
         # networks
         self.recurrent = recurrent
@@ -411,9 +419,10 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
     # @torch.jit.script_method
     def forward(self, inputs, hx):
         assert hx is not None
-        T, N, _ = inputs.shape
+        T, N, d = inputs.shape
+        inputs = inputs.view(T, N, -1)
+        inputs, a, g_int = torch.split(inputs, [d - 2, 1, 1], dim=2)
         inputs = inputs.view(T, N, *self.obs_shape)
-
         obs, subtasks, task, next_subtask = torch.split(
             inputs, self.obs_sections, dim=2)
         subtasks = subtasks[:, :, :, 0, 0]
@@ -575,18 +584,19 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             # TODO: deterministic
             # g
-            dist = self.pi_theta((h, r))
+            dist = self.pi_theta((h, r))  # TODO: h is a garbage value
             g_target = self.encode(r2.squeeze(1))
             outputs.g_loss.append(-dist.log_probs(g_target))
-            # g = dist.sample()
-            g = g_target.unsqueeze(1)  # TODO
-            outputs.g_int.append(g.float())
+            new = g_int[i] < 0
+            # g_int[i][new] = distr.sample()[new] # TODO
+            g_int[i, new] = g_target.unsqueeze(1)[new].float()
+            outputs.g_int.append(g_int[i])
             outputs.g_probs.append(dist.probs)
 
             # g_loss
             # assert (int(i1), int(i2), int(i3)) == \
             #        np.unravel_index(int(g_int), self.subtask_space)
-            g_embed2 = self.embed_task(g)
+            g_embed2 = self.embed_task(g_int[i])
             g_embed1 = interp(g_embed1, g_embed2, c)
             outputs.g_embed.append(g_embed1)
 
@@ -604,10 +614,11 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             g_broad = broadcast_3d(g_embed1, self.obs_shape[1:])
             conv_out2 = self.conv2((obs[i], g_broad))
             dist = self.actor(conv_out2)
-            a = dist.sample()
+            new = a[i] < 0
+            a[i, new] = dist.sample()[new].float()
             # a[:] = 'wsadeq'.index(input('act:'))
 
-            outputs.a.append(a.float())
+            outputs.a.append(a[i])
             outputs.a_probs.append(dist.probs)
 
             # v
