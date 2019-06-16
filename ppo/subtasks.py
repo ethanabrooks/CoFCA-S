@@ -257,44 +257,20 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             in_size=conv_out_size)  # h
 
         self.phi_update = trace(
-            # lambda in_size: init_(nn.Linear(in_size, 2), 'sigmoid'),
-            # in_size=(
-            # hidden_size +  s
-            # hidden_size))  h
             lambda in_size: init_(nn.Linear(in_size, 1), 'sigmoid'),
             in_size=hidden_size)
 
         self.phi_shift = trace(
             lambda in_size: nn.Sequential(
-                # init_(nn.Linear(in_size, hidden_size), 'relu'),
-                # nn.ReLU(),
-                # init_(nn.Linear(hidden_size, 3)),  # 3 for {-1, 0, +1}
                 init_(nn.Linear(in_size, 3)),  # 3 for {-1, 0, +1}
             ),
             # in_size=hidden_size)
             in_size=hidden_size)
 
-        self.pi_theta = nn.Sequential(
-            Concat(dim=-1),
-            Broadcast3d(h, w),
-            torch.jit.trace(
-                nn.Sequential(
-                    init_(
-                        nn.Conv2d(
-                            (
-                                subtask_size +  # r
-                                hidden_size),  # h
-                            hidden_size,
-                            kernel_size=3,
-                            stride=1,
-                            padding=1),
-                        'relu'),
-                    nn.ReLU(),
-                    Flatten(),
-                ),
-                example_inputs=torch.rand(1, subtask_size + hidden_size, h, w),
-            ),
-            Categorical(h * w * hidden_size, action_space.g_int.n))
+        self.pi_theta = Categorical(
+            subtask_size *  # r
+            hidden_size,  # h
+            action_space.g_int.n)
 
         self.beta = Categorical(
             conv_out_size +  # x
@@ -544,7 +520,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             # TODO: deterministic
             # g
-            dist = self.pi_theta((h, r))
+            dist = self.pi_theta(outer_product(h, r).view(m, -1))
             g_target = self.encode(M[torch.arange(m), subtask.flatten()])
             outputs.g_loss.append(-dist.log_probs(g_target))
             new = g_int[i] < 0
