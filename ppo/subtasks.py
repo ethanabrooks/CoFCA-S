@@ -133,8 +133,7 @@ class SubtasksAgent(Agent, NNBase):
                 (c[hx.c_truth > 0] == hx.c_truth[hx.c_truth > 0]).float())),
             c_precision=(torch.mean((c[c > 0] == hx.c_truth[c > 0]).float())),
             subtask_association=cramers_v)
-        # aux_loss = self.alpha * hx.c_loss - self.entropy_coef * entropies
-        aux_loss = self.alpha * torch.mean(hx.c_loss)  # TODO
+        aux_loss = -self.entropy_coef * entropies.mean()
 
         if self.teacher_agent:
             imitation_dist = self.teacher_agent(inputs, rnn_hxs, masks).dist
