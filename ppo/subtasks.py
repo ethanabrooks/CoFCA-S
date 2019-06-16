@@ -452,6 +452,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
         outputs = RecurrentState(*[[] for _ in RecurrentState._fields])
 
+        past_a = torch.cat([hx.a.unsqueeze(0), a], dim=0)
+
         n = obs.shape[0]
         for i in range(n):
             float_subtask += next_subtask[i]
@@ -470,7 +472,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # c = torch.sigmoid(logits[:, :1])
             # outputs.c_probs.append(torch.zeros_like(logits))  # dummy value
 
-            a_idxs = hx.a.flatten().long()
+            a_idxs = past_a[i].flatten().long()
             agent_layer = obs[i, :, 6, :, :].long()
             j, k, l = torch.split(agent_layer.nonzero(), [1, 1, 1], dim=-1)
 
