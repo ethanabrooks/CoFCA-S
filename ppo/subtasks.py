@@ -134,8 +134,7 @@ class SubtasksAgent(Agent, NNBase):
             c_precision=(torch.mean((c[c > 0] == hx.c_truth[c > 0]).float())),
             subtask_association=cramers_v)
         # aux_loss = self.alpha * hx.c_loss - self.entropy_coef * entropies
-        aux_loss = self.alpha * torch.mean(
-            hx.c_loss + hx.l_loss)  # TODO
+        aux_loss = self.alpha * torch.mean(hx.c_loss + hx.l_loss)  # TODO
 
         if self.teacher_agent:
             imitation_dist = self.teacher_agent(inputs, rnn_hxs, masks).dist
@@ -582,12 +581,11 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             # TODO: deterministic
             # g
-            dist = self.pi_theta((h, r))  # TODO: h is a garbage value
+            dist = self.pi_theta((h, r))
             g_target = self.encode(r2.squeeze(1))
             outputs.g_loss.append(-dist.log_probs(g_target))
             new = g_int[i] < 0
-            # g_int[i][new] = distr.sample()[new] # TODO
-            g_int[i, new] = g_target.unsqueeze(1)[new].float()
+            g_int[i][new] = dist.sample()[new].float()
             outputs.g_int.append(g_int[i])
             outputs.g_probs.append(dist.probs)
 
