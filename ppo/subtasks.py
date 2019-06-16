@@ -278,25 +278,10 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
         self.pi_theta = nn.Sequential(
             Concat(dim=-1),
-            Broadcast3d(h, w),
-            torch.jit.trace(
-                nn.Sequential(
-                    init_(
-                        nn.Conv2d(
-                            (
-                                subtask_size +  # r
-                                hidden_size),  # h
-                            hidden_size,
-                            kernel_size=3,
-                            stride=1,
-                            padding=1),
-                        'relu'),
-                    nn.ReLU(),
-                    Flatten(),
-                ),
-                example_inputs=torch.rand(1, subtask_size + hidden_size, h, w),
-            ),
-            Categorical(h * w * hidden_size, action_space.g_int.n))
+            Categorical(
+                hidden_size +  # h
+                subtask_size,  # r
+                action_space.g_int.n))
 
         self.beta = Categorical(hidden_size, 2)
 
