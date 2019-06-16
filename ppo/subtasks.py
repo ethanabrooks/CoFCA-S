@@ -205,7 +205,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             init_(
                 nn.Conv2d(
                     self.obs_sections.base,
-                    hidden_size,
+                    subtask_size,
                     kernel_size=3,
                     stride=1,
                     padding=1), 'relu'),
@@ -215,7 +215,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         self.conv2 = nn.Sequential(
             init_(
                 nn.Conv2d(
-                    hidden_size,
+                    subtask_size,
                     hidden_size,
                     kernel_size=3,
                     stride=1,
@@ -548,8 +548,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             outputs.g_binary.append(g_binary)
 
             conv_out1 = self.conv1(obs[i])
-            g_embed = self.phi(g_binary).unsqueeze(2).unsqueeze(3)
-            conv_out2 = self.conv2(conv_out1 * g_embed)
+            conv_out2 = self.conv2(
+                conv_out1 * g_binary.unsqueeze(2).unsqueeze(3))
 
             # a
             dist = self.actor(conv_out2)
