@@ -20,6 +20,10 @@ RecurrentState = namedtuple(
     'c_loss l_loss p_loss r_loss g_loss b_loss subtask')
 
 
+def outer_product(a, b):
+    return a.unsqueeze(1) * b.unsqueeze(2)
+
+
 # noinspection PyMissingConstructor
 class SubtasksAgent(Agent, NNBase):
     def __init__(self,
@@ -228,14 +232,10 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                         stride=1,
                         padding=1), 'relu'), nn.ReLU(), Flatten())
 
-        self.f = nn.Sequential(
-            Parallel(
-                init_(nn.Linear(self.obs_sections.base, hidden_size)),
-                init_(nn.Linear(action_space.a.n, hidden_size)),
-                *[init_(nn.Linear(i, hidden_size)) for i in self.task_nvec[0]],
-            ),
-            Product(),
-        )
+        self.f = init_(
+            nn.Linear(
+                self.obs_sections.base * action_space.a.n *
+                action_space.g_int.n, hidden_size))
 
         subcontroller = nn.GRUCell if recurrent else nn.Linear
         self.subcontroller = trace(
@@ -451,13 +451,17 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             a_idxs = past_a[i].flatten().long()
             agent_layer = obs[i, :, 6, :, :].long()
             j, k, l = torch.split(agent_layer.nonzero(), [1, 1, 1], dim=-1)
-            debug_obs = obs[i, j, :, k, l].squeeze(1)
+            agent_obs = obs[i, j, :, k, l].squeeze(1)
+            a_one_hots = self.a_one_hots[a_idxs]
+            multiplicative_obs = outer_product(agent_obs, a_one_hots).view(
+                m, -1)
+            subtask_parts = torch.split(
+                g_binary, tuple(self.task_nvec[0]), dim=-1)
+            for part in subtask_parts:
+                multiplicative_obs = outer_product(multiplicative_obs, part)
+                multiplicative_obs = multiplicative_obs.view(m, -1)
 
-            h = self.f((
-                debug_obs,
-                self.a_one_hots[a_idxs],
-                *torch.split(g_binary, tuple(self.task_nvec[0]), dim=-1),
-            ))
+            h = self.f(multiplicative_obs)
 
             c = torch.sigmoid(self.phi_update(h))
             outputs.c_truth.append(next_subtask[i])
