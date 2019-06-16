@@ -208,31 +208,25 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                     hidden_size,
                     kernel_size=3,
                     stride=1,
-                    padding=1), 'relu'),
-            nn.ReLU(),
-        )
+                    padding=1), 'relu'), nn.ReLU(), Flatten())
 
-        self.conv2 = nn.Sequential(
-            init_(
-                nn.Conv2d(
-                    hidden_size,
-                    hidden_size,
-                    kernel_size=3,
-                    stride=1,
-                    padding=1), 'relu'),
-            nn.ReLU(),
-            Flatten(),
-        )
+        if multiplicative_interaction:
+            conv_weight_shape = hidden_size, self.obs_sections.base, 3, 3
+            self.conv_weight = nn.Sequential(
+                nn.Linear(self.obs_sections.subtask,
+                          np.prod(conv_weight_shape)),
+                Reshape(-1, *conv_weight_shape))
 
-        input_size = h * w * hidden_size  # conv output
-        if isinstance(action_space.a, Discrete):
-            num_outputs = action_space.a.n
-            self.actor = Categorical(input_size, num_outputs)
-        elif isinstance(action_space.a, Box):
-            num_outputs = action_space.a.size(0)
-            self.actor = DiagGaussian(input_size, num_outputs)
         else:
-            raise NotImplementedError
+            self.conv2 = nn.Sequential(
+                Concat(dim=1),
+                init_(
+                    nn.Conv2d(
+                        self.obs_sections.base + self.obs_sections.subtask,
+                        hidden_size,
+                        kernel_size=3,
+                        stride=1,
+                        padding=1), 'relu'), nn.ReLU(), Flatten())
 
         self.f = nn.Sequential(
             Parallel(
@@ -250,11 +244,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 nn.ReLU(),
             ),
             in_size=conv_out_size)  # h
-
-        self.phi = trace(
-            lambda in_size: init_(nn.Linear(in_size, hidden_size)),
-            in_size=subtask_size,
-        )
 
         self.phi_update = trace(
             # lambda in_size: init_(nn.Linear(in_size, 2), 'sigmoid'),
@@ -276,12 +265,36 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
         self.pi_theta = nn.Sequential(
             Concat(dim=-1),
-            Categorical(
-                hidden_size +  # h
-                subtask_size,  # r
-                action_space.g_int.n))
+            Broadcast3d(h, w),
+            torch.jit.trace(
+                nn.Sequential(
+                    init_(
+                        nn.Conv2d(
+                            (
+                                subtask_size +  # r
+                                hidden_size),  # h
+                            hidden_size,
+                            kernel_size=3,
+                            stride=1,
+                            padding=1),
+                        'relu'),
+                    nn.ReLU(),
+                    Flatten(),
+                ),
+                example_inputs=torch.rand(1, subtask_size + hidden_size, h, w),
+            ),
+            Categorical(h * w * hidden_size, action_space.g_int.n))
 
         self.beta = Categorical(hidden_size, 2)
+        input_size = h * w * hidden_size  # conv output
+        if isinstance(action_space.a, Discrete):
+            num_outputs = action_space.a.n
+            self.actor = Categorical(input_size, num_outputs)
+        elif isinstance(action_space.a, Box):
+            num_outputs = action_space.a.size(0)
+            self.actor = DiagGaussian(input_size, num_outputs)
+        else:
+            raise NotImplementedError
         self.critic = init_(nn.Linear(input_size, 1))
 
         # embeddings
@@ -533,6 +546,15 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             outputs.g_int.append(g_int[i])
             outputs.g_probs.append(dist.probs)
 
+            # g_loss
+            # assert (int(i1), int(i2), int(i3)) == \
+            #        np.unravel_index(int(g_int), self.subtask_space)
+            g_binary2 = self.task_to_one_hot(g_int[i])
+            g_binary = interp(g_binary, g_binary2, c)
+            outputs.g_binary.append(g_binary)
+
+            conv_out = self.conv1(obs[i])
+
             # b
             dist = self.beta(h)
             b = dist.sample().float()
@@ -543,15 +565,9 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             outputs.b_loss.append(-dist.log_probs(next_subtask[i]))
             outputs.b.append(b)
 
-            g_binary2 = self.task_to_one_hot(g_int[i])
-            g_binary = interp(g_binary, g_binary2, c)
-            outputs.g_binary.append(g_binary)
-
-            conv_out1 = self.conv1(obs[i])
-            g_embed = self.phi(g_binary).unsqueeze(2).unsqueeze(3)
-            conv_out2 = self.conv2(conv_out1 * g_embed)
-
             # a
+            g_broad = broadcast_3d(g_binary, self.obs_shape[1:])
+            conv_out2 = self.conv2((obs[i], g_broad))
             dist = self.actor(conv_out2)
             new = a[i] < 0
             a[i, new] = dist.sample()[new].float()
