@@ -133,7 +133,8 @@ class SubtasksAgent(Agent, NNBase):
                 (c[hx.c_truth > 0] == hx.c_truth[hx.c_truth > 0]).float())),
             c_precision=(torch.mean((c[c > 0] == hx.c_truth[c > 0]).float())),
             subtask_association=cramers_v)
-        aux_loss = -self.entropy_coef * entropies.mean()
+        aux_loss = self.alpha * hx.c_loss.mean() - self.entropy_coef * entropies.mean(
+        )
 
         if self.teacher_agent:
             imitation_dist = self.teacher_agent(inputs, rnn_hxs, masks).dist
@@ -501,7 +502,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # print(debug_in[:, [39, 30, 21, 12, 98, 89]])
             # print(next_subtask[i])
             c = torch.sigmoid(self.phi_update(h))
-            c = next_subtask[i]
             outputs.c_truth.append(next_subtask[i])
 
             if torch.any(next_subtask[i] > 0):
