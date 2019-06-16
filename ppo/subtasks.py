@@ -270,9 +270,9 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             ),
             in_size=conv_out_size)  # h
 
-        # debug_in_size = (
-        # action_space.g_int.n * action_space.a.n * self.obs_sections.base)
-        debug_in_size = action_space.a.n + 2
+        debug_in_size = (
+            action_space.g_int.n * action_space.a.n * self.obs_sections.base)
+        # debug_in_size = action_space.a.n + 2
 
         self.phi_update = trace(
             # lambda in_size: init_(nn.Linear(in_size, 2), 'sigmoid'),
@@ -491,13 +491,13 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 # print(action_part[0])
                 # print(obs4d[0, 2, 0, 1, :])
                 p, q = torch.split(obj_part.nonzero(), [1, 1], dim=-1)
-                o = [
-                    obs4d[p, q + 1, 0, q, :].squeeze(1),
-                    obs4d[p, q + 1, 1, q, 4],
-                    obs4d[p, q + 1, 2, q, 5],
-                ]
-                return torch.cat(o, dim=-1)
-                # return obs4d.view(m, -1)
+                # o = [
+                # obs4d[p, q + 1, 0, q, :].squeeze(1),
+                # obs4d[p, q + 1, 1, q, 4],
+                # obs4d[p, q + 1, 2, q, 5],
+                # ]
+                # return torch.cat(o, dim=-1)
+                return obs4d.view(m, -1)
 
             debug_in = get_debug_in(g_embed1).float()
 
