@@ -580,16 +580,16 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             g_broad = broadcast_3d(g_binary, self.obs_shape[1:])
             conv_out2 = self.conv2((obs[i], g_broad))
             dist = self.actor(conv_out2)
-            new = a[i] < 0
-            sample = dist.sample()[new].float()
-            a[i, new] = sample
-            past_a[i + 1, new] = sample
             if not torch.all(a[i] == past_a[i + 1]):
                 import ipdb
                 ipdb.set_trace()
+            new = past_a[i + 1] < 0
+            sample = dist.sample()[new].float()
+            a[i, new] = sample
+            past_a[i + 1, new] = sample
             # a[:] = 'wsadeq'.index(input('act:'))
 
-            outputs.a.append(a[i])
+            outputs.a.append(past_a[i + 1])
             outputs.a_probs.append(dist.probs)
 
             # v
