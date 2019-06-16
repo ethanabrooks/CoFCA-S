@@ -429,6 +429,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         r = hx.r
         g_binary = hx.g_binary
         float_subtask = hx.subtask
+        past_a = torch.cat([hx.a, a], dim=0)
 
         for x in hx:
             x.squeeze_(0)
@@ -441,8 +442,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             hx.g_int[new_episode] = self.encode(g0).unsqueeze(1).float()
 
         outputs = RecurrentState(*[[] for _ in RecurrentState._fields])
-
-        past_a = torch.cat([hx.a.unsqueeze(0), a], dim=0)
 
         n = obs.size(0)
         for i in range(n):
@@ -582,7 +581,12 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             conv_out2 = self.conv2((obs[i], g_broad))
             dist = self.actor(conv_out2)
             new = a[i] < 0
-            a[i, new] = dist.sample()[new].float()
+            sample = dist.sample()[new].float()
+            a[i, new] = sample
+            past_a[i + 1, new] = sample
+            if not torch.all(a[i] == past_a[i + 1]):
+                import ipdb
+                ipdb.set_trace()
             # a[:] = 'wsadeq'.index(input('act:'))
 
             outputs.a.append(a[i])
