@@ -143,19 +143,12 @@ class SubtasksAgent(Agent, NNBase):
             log.update(imitation_obj=imitation_obj)
             aux_loss -= torch.mean(imitation_obj)
 
-        if action is None:
-            value = hx.v
-        else:
-            g_one_hots = rm.task_to_one_hot(actions.g_int.long())
-            g_broad = broadcast_3d(g_one_hots, obs.shape[2:])
-            value = rm.critic(rm.conv2((obs, g_broad)))
-
         for k, v in hx._asdict().items():
             if k.endswith('_loss'):
                 log[k] = v
 
         return AgentValues(
-            value=value,
+            value=hx.v,
             action=torch.cat(actions, dim=-1),
             action_log_probs=log_probs,
             aux_loss=aux_loss,
@@ -568,8 +561,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             conv_out = self.conv1(obs[i])
 
-            conv_out = self.conv1(obs[i])
-
             # b
             dist = self.beta(torch.cat([conv_out, g_binary], dim=-1))
             b = dist.sample().float()
@@ -581,7 +572,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             outputs.b.append(b)
 
             # a
-            conv_out = self.conv1(obs[i])
             g_broad = broadcast_3d(g_binary, self.obs_shape[1:])
             conv_out2 = self.conv2((obs[i], g_broad))
             dist = self.actor(conv_out2)
