@@ -469,36 +469,12 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             j, k, l = torch.split(agent_layer.nonzero(), [1, 1, 1], dim=-1)
             debug_obs = obs[i, j, :, k, l].squeeze(1)
 
-            def get_debug_in(subtask_param):
-                task_part = subtask_param[:, :3]
-                obj_part = subtask_param[:, -4:]
-                action_part = self.a_one_hots[a_idxs]
-                obs4d = (debug_obs.unsqueeze(2).unsqueeze(3).unsqueeze(4) *
-                         task_part.unsqueeze(1).unsqueeze(3).unsqueeze(4) *
-                         obj_part.unsqueeze(1).unsqueeze(2).unsqueeze(4) *
-                         action_part.unsqueeze(1).unsqueeze(2).unsqueeze(3))
-                # print(debug_obs[0])
-                # print(task_part[0])
-                # print(obj_part[0])
-                # print(action_part[0])
-                # print(obs4d[0, 2, 0, 1, :])
-                p, q = torch.split(obj_part.nonzero(), [1, 1], dim=-1)
-                # o = [
-                # obs4d[p, q + 1, 0, q, :].squeeze(1),
-                # obs4d[p, q + 1, 1, q, 4],
-                # obs4d[p, q + 1, 2, q, 5],
-                # ]
-                # return torch.cat(o, dim=-1)
-                return obs4d.view(m, -1)
-
             h = self.f((
                 debug_obs,
                 self.a_one_hots[a_idxs],
                 *torch.split(g_binary, tuple(self.task_nvec[0]), dim=-1),
             ))
 
-            # print(debug_in[:, [39, 30, 21, 12, 98, 89]])
-            # print(next_subtask[i])
             c = torch.sigmoid(self.phi_update(h))
             outputs.c_truth.append(next_subtask[i])
 
