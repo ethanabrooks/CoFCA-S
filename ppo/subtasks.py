@@ -298,10 +298,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             ),
             Categorical(h * w * hidden_size, action_space.g_int.n))
 
-        self.beta = Categorical(
-            conv_out_size +  # x
-            subtask_size,  # g
-            2)
+        self.beta = Categorical(hidden_size, 2)
 
         # embeddings
         for name, d in zip(
@@ -562,7 +559,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             conv_out = self.conv1(obs[i])
 
             # b
-            dist = self.beta(torch.cat([conv_out, g_binary], dim=-1))
+            dist = self.beta(h)
             b = dist.sample().float()
             outputs.b_probs.append(dist.probs)
             outputs.c_probs.append(torch.zeros_like(dist.probs))  # TODO
