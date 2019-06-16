@@ -263,12 +263,9 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # in_size=hidden_size)
             in_size=hidden_size)
 
-        self.pi_theta = nn.Sequential(
-            Concat(dim=-1),
-            Categorical(
-                hidden_size +  # h
-                subtask_size,  # r
-                action_space.g_int.n))
+        self.pi_theta = Categorical(
+            subtask_size,  # r
+            action_space.g_int.n)
 
         self.beta = Categorical(hidden_size, 2)
         input_size = h * w * hidden_size  # conv output
@@ -408,9 +405,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         if torch.any(new_episode):
             p[new_episode, 0] = 1.  # initialize pointer to first subtask
             r[new_episode] = M[new_episode, 0]  # initialize r to first subtask
-            g0 = M[new_episode, 0]
-            g_binary[new_episode] = g0  # initialize g_binary to first subtask
-            hx.g_int[new_episode] = self.encode(g0).unsqueeze(1).float()
 
         outputs = RecurrentState(*[[] for _ in RecurrentState._fields])
 
@@ -523,7 +517,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             # TODO: deterministic
             # g
-            dist = self.pi_theta((h, r))
+            dist = self.pi_theta(r)
             g_target = self.encode(M[torch.arange(m), subtask.flatten()])
             outputs.g_loss.append(-dist.log_probs(g_target))
             new = g_int[i] < 0
