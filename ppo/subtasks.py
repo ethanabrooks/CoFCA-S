@@ -251,15 +251,12 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
         # b
         self.f = nn.Sequential(
-            Concat(dim=-1),
-            init_(nn.Linear(self.obs_sections.base + action_space.a.n + sum(self.task_nvec[0]),
-                      hidden_size))
-            # Parallel(
-            #     init_(nn.Linear(self.obs_sections.base, hidden_size)),
-            #     init_(nn.Linear(action_space.a.n, hidden_size)),
-            #     *[init_(nn.Linear(i, hidden_size)) for i in self.task_nvec[0]],
-            # ),
-            # Product(),
+            Parallel(
+                init_(nn.Linear(self.obs_sections.base, hidden_size)),
+                init_(nn.Linear(action_space.a.n, hidden_size)),
+                *[init_(nn.Linear(i, hidden_size)) for i in self.task_nvec[0]],
+            ),
+            Product(),
         )
 
         subcontroller = nn.GRUCell if recurrent else nn.Linear
