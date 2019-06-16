@@ -143,19 +143,12 @@ class SubtasksAgent(Agent, NNBase):
             log.update(imitation_obj=imitation_obj)
             aux_loss -= torch.mean(imitation_obj)
 
-        if action is None:
-            value = hx.v
-        else:
-            g_binary = rm.task_to_one_hot(actions.g_int.long())
-            g_broad = broadcast_3d(g_binary, obs.shape[2:])
-            value = rm.critic(rm.conv2((obs, g_broad)))
-
         for k, v in hx._asdict().items():
             if k.endswith('_loss'):
                 log[k] = v
 
         return AgentValues(
-            value=value,
+            value=hx.v,
             action=torch.cat(actions, dim=-1),
             action_log_probs=log_probs,
             aux_loss=aux_loss,
