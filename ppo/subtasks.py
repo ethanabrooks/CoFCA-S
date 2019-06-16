@@ -364,13 +364,13 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                          dim=-1)
 
     def encode(self, g_binary):
-        factord_code = g_binary.nonzero()[:, 1:].view(-1, 3)
-        factord_code -= F.pad(
+        factored_code = g_binary.nonzero()[:, 1:].view(-1, 3)
+        factored_code -= F.pad(
             torch.cumsum(self.subtask_space, dim=0)[:2], (1, 0), 'constant', 0)
         # numpy_codes = factord_code.clone().numpy()
-        factord_code[:, :-1] *= self.subtask_space[1:]  # g1 * x2, g2 * x3
-        factord_code[:, 0] *= self.subtask_space[2]  # g1 * x3
-        codes = factord_code.sum(dim=-1)
+        factored_code[:, :-1] *= self.subtask_space[1:]  # g1 * x2, g2 * x3
+        factored_code[:, 0] *= self.subtask_space[2]  # g1 * x3
+        codes = factored_code.sum(dim=-1)
         # codes1 = codes.numpy()
         # codes2 = np.ravel_multi_index(numpy_codes.T, (self.subtask_space.numpy()))
         # if not np.array_equal(codes1, codes2):
