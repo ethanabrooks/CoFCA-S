@@ -63,7 +63,7 @@ class SubtasksAgent(Agent, NNBase):
         obs, subtask, task, next_subtask = torch.split(
             inputs, self.obs_sections, dim=1)
 
-        n = inputs.shape[0]
+        n = inputs.size(0)
         actions = None
         if action is not None:
             action_sections = get_subtasks_action_sections(self.action_space)
@@ -164,7 +164,7 @@ class SubtasksAgent(Agent, NNBase):
             log=log)
 
     def get_value(self, inputs, rnn_hxs, masks):
-        n = inputs.shape[0]
+        n = inputs.size(0)
         all_hxs, last_hx = self._forward_gru(
             inputs.view(n, -1), rnn_hxs, masks)
         return self.recurrent_module.parse_hidden(all_hxs).v
@@ -240,7 +240,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             num_outputs = action_space.a.n
             self.actor = Categorical(input_size, num_outputs)
         elif isinstance(action_space.a, Box):
-            num_outputs = action_space.a.shape[0]
+            num_outputs = action_space.a.size(0)
             self.actor = DiagGaussian(input_size, num_outputs)
         else:
             raise NotImplementedError
@@ -364,13 +364,13 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                          dim=-1)
 
     def encode(self, g_binary):
-        factord_code = g_binary.nonzero()[:, 1:].view(-1, 3)
-        factord_code -= F.pad(
+        factored_code = g_binary.nonzero()[:, 1:].view(-1, 3)
+        factored_code -= F.pad(
             torch.cumsum(self.subtask_space, dim=0)[:2], (1, 0), 'constant', 0)
         # numpy_codes = factord_code.clone().numpy()
-        factord_code[:, :-1] *= self.subtask_space[1:]  # g1 * x2, g2 * x3
-        factord_code[:, 0] *= self.subtask_space[2]  # g1 * x3
-        codes = factord_code.sum(dim=-1)
+        factored_code[:, :-1] *= self.subtask_space[1:]  # g1 * x2, g2 * x3
+        factored_code[:, 0] *= self.subtask_space[2]  # g1 * x3
+        codes = factored_code.sum(dim=-1)
         # codes1 = codes.numpy()
         # codes2 = np.ravel_multi_index(numpy_codes.T, (self.subtask_space.numpy()))
         # if not np.array_equal(codes1, codes2):
@@ -416,7 +416,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         inputs = inputs.view(T, N, *self.obs_shape)
         obs, subtasks, task, next_subtask = torch.split(
             inputs, self.obs_sections, dim=2)
-        subtasks = subtasks[:, :, :, 0, 0]
         task = task[:, :, :, 0, 0]
         next_subtask = next_subtask[:, :, :, 0, 0]
         sections = [self.n_subtasks] * self.task_nvec.shape[1]
@@ -429,7 +428,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         p = hx.p
         r = hx.r
         g_binary = hx.g_binary
-        h = hx.h
         float_subtask = hx.subtask
 
         for x in hx:
@@ -439,22 +437,21 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             p[new_episode, 0] = 1.  # initialize pointer to first subtask
             r[new_episode] = M[new_episode, 0]  # initialize r to first subtask
             g0 = M[new_episode, 0]
-            g_binary[
-                new_episode] = g0  # initialize g_one_hot1 to first subtask
+            g_binary[new_episode] = g0  # initialize g_binary to first subtask
             hx.g_int[new_episode] = self.encode(g0).unsqueeze(1).float()
 
         outputs = RecurrentState(*[[] for _ in RecurrentState._fields])
 
         past_a = torch.cat([hx.a.unsqueeze(0), a], dim=0)
 
-        n = obs.shape[0]
+        n = obs.size(0)
         for i in range(n):
             float_subtask += next_subtask[i]
             outputs.subtask.append(float_subtask)
             subtask = float_subtask.long()
-            m = M.shape[0]
+            m = M.size(0)
 
-            # s = self.f(torch.cat([conv_out, r, g_one_hot1, b], dim=-1))
+            # s = self.f(torch.cat([conv_out, r, g_binary, b], dim=-1))
             # logits = self.phi_update(torch.cat([s, h], dim=-1))
             # if self.hard_update:
             # dist = FixedCategorical(logits=logits)
@@ -475,8 +472,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 *torch.split(g_binary, tuple(self.task_nvec[0]), dim=-1),
             ))
 
-            # print(debug_in[:, [39, 30, 21, 12, 98, 89]])
-            # print(next_subtask[i])
             c = torch.sigmoid(self.phi_update(h))
             outputs.c_truth.append(next_subtask[i])
 
