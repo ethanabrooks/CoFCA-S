@@ -11,7 +11,7 @@ from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
 from gridworld_env.subtasks_gridworld import ObsSections
 from rl_utils import onehot
 
-SubtasksActions = namedtuple('SubtasksActions', 'a b g c l')
+SubtasksActions = namedtuple('SubtasksActions', 'a b c l g_int')
 
 
 def get_subtasks_obs_sections(task_space):
@@ -27,6 +27,11 @@ def get_subtasks_obs_sections(task_space):
         next_subtask=1)
 
 
+def get_subtasks_action_sections(action_spaces):
+    return SubtasksActions(
+        *[s.shape[0] if isinstance(s, Box) else 1 for s in action_spaces])
+
+
 class DebugWrapper(gym.Wrapper):
     def __init__(self, env):
         super().__init__(env)
@@ -40,7 +45,8 @@ class DebugWrapper(gym.Wrapper):
         self.last_reward = None
 
     def step(self, action):
-        actions = SubtasksActions(*action)
+        action_sections = get_subtasks_action_sections(self.action_space)
+        actions = SubtasksActions(*np.split(action, action_sections))
         # action, subtask = np.unravel_index(
         # action, (self.size_action_space, self.size_subtask_space))
         s, _, t, i = super().step(action)
@@ -49,7 +55,7 @@ class DebugWrapper(gym.Wrapper):
         r = float(np.all(guess == truth))
         self.last_action = actions
         self.last_reward = r
-        return s, r, t, i  #TODO
+        return s, r, t, i  # TODO
 
     def render(self, mode='human'):
         action = self.last_action
@@ -75,12 +81,16 @@ class SubtasksWrapper(gym.Wrapper):
             SubtasksActions(
                 a=env.action_space,
                 b=spaces.Discrete(2),
-                g=spaces.Discrete(task_space.nvec[0].prod()),
+                g_int=spaces.Discrete(task_space.nvec[0].prod()),
                 c=spaces.Discrete(2),
                 l=spaces.Discrete(3)))
 
     def step(self, action):
-        action = int(SubtasksActions(*action).a)
+        action_sections = np.cumsum(
+            get_subtasks_action_sections(
+                self.action_space.spaces))[:-1].astype(int)
+        actions = SubtasksActions(*np.split(action, action_sections))
+        action = int(actions.a)
         s, r, t, i = super().step(action)
         return self.wrap_observation(s), r, t, i
 

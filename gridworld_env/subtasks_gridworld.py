@@ -269,6 +269,8 @@ class SubtasksGridWorld(gym.Env):
         pos = tuple(self.pos)
         touching = pos in self.objects
 
+        obs = self.get_observation()
+
         t = False
         r = -.1
         if touching:
@@ -296,7 +298,7 @@ class SubtasksGridWorld(gym.Env):
                     t = True
 
         self.last_terminal = t
-        return self.get_observation(), r, t, {}
+        return obs, r, t, {}
 
 
 if __name__ == '__main__':
