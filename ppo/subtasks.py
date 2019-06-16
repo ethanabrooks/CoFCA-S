@@ -504,8 +504,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             # print(debug_in[:, [39, 30, 21, 12, 98, 89]])
             # print(next_subtask[i])
-            # c = torch.sigmoid(self.phi_update(debug_in))
-            c = debug_in
+            c = torch.sigmoid(self.phi_update(debug_in))
             outputs.c_truth.append(next_subtask[i])
 
             if torch.any(next_subtask[i] > 0):
