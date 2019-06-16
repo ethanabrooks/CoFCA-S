@@ -1,3 +1,6 @@
+import operator
+from functools import reduce
+
 import torch
 from torch import nn as nn
 import torch.jit
@@ -35,3 +38,20 @@ class Broadcast3d(torch.jit.ScriptModule):
 
     def forward(self, inputs):
         return broadcast_3d(inputs, self.shape)
+
+
+class Product(torch.jit.ScriptModule):
+    @staticmethod
+    def forward(inputs):
+        return reduce(operator.mul, inputs, 1)
+
+
+class Parallel(torch.jit.ScriptModule):
+    def __init__(self, *modules):
+        super().__init__()
+        self.modules = modules
+
+    def forward(self, inputs):
+        return tuple([m(x) for m, x in zip(self.modules, inputs)])
+
+
