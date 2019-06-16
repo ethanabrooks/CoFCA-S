@@ -547,7 +547,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                     reduction='none',
                 ).unsqueeze(1))
 
-            l = self.l_one_hots[l_target]  # TODO
             p2 = batch_conv1d(p, l)
 
             # p_losss
