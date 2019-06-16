@@ -238,8 +238,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         else:
             raise NotImplementedError
 
-        self.critic = init_(nn.Linear(input_size, 1))
-
         # b
         self.f = nn.Sequential(
             Parallel(
@@ -304,6 +302,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             Categorical(h * w * hidden_size, action_space.g_int.n))
 
         self.beta = Categorical(hidden_size, 2)
+        self.critic = init_(nn.Linear(input_size, 1))
 
         # embeddings
         for name, d in zip(
@@ -554,15 +553,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             outputs.g_int.append(g_int[i])
             outputs.g_probs.append(dist.probs)
 
-            # g_loss
-            # assert (int(i1), int(i2), int(i3)) == \
-            #        np.unravel_index(int(g_int), self.subtask_space)
-            g_binary2 = self.task_to_one_hot(g_int[i])
-            g_binary = interp(g_binary, g_binary2, c)
-            outputs.g_binary.append(g_binary)
-
-            conv_out = self.conv1(obs[i])
-
             # b
             dist = self.beta(h)
             b = dist.sample().float()
@@ -572,6 +562,10 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # b_loss
             outputs.b_loss.append(-dist.log_probs(next_subtask[i]))
             outputs.b.append(b)
+
+            g_binary2 = self.task_to_one_hot(g_int[i])
+            g_binary = interp(g_binary, g_binary2, c)
+            outputs.g_binary.append(g_binary)
 
             # a
             g_broad = broadcast_3d(self.phi(g_binary), self.obs_shape[1:])
