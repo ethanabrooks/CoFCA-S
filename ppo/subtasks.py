@@ -208,7 +208,9 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                     hidden_size,
                     kernel_size=3,
                     stride=1,
-                    padding=1), 'relu'), nn.ReLU(), Flatten())
+                    padding=1), 'relu'),
+            nn.ReLU(),
+        )
 
         if multiplicative_interaction:
             conv_weight_shape = hidden_size, self.obs_sections.base, 3, 3
@@ -222,7 +224,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 Concat(dim=1),
                 init_(
                     nn.Conv2d(
-                        self.obs_sections.base + hidden_size,
+                        2 * hidden_size,
                         hidden_size,
                         kernel_size=3,
                         stride=1,
@@ -566,10 +568,12 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             g_binary2 = self.task_to_one_hot(g_int[i])
             g_binary = interp(g_binary, g_binary2, c)
             outputs.g_binary.append(g_binary)
+            conv_out1 = self.conv1(obs[i])
+            g_embed = self.phi(g_binary)
 
             # a
-            g_broad = broadcast_3d(self.phi(g_binary), self.obs_shape[1:])
-            conv_out2 = self.conv2((obs[i], g_broad))
+            g_broad = broadcast_3d(g_embed, self.obs_shape[1:])
+            conv_out2 = self.conv2((conv_out1, g_broad))
             dist = self.actor(conv_out2)
             new = a[i] < 0
             a[i, new] = dist.sample()[new].float()
