@@ -270,7 +270,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             ),
             in_size=conv_out_size)  # h
 
-        debug_in_size = (
+        debug_in_size = int(
             action_space.g_int.n * action_space.a.n * self.obs_sections.base)
         # debug_in_size = action_space.a.n + 2
 
