@@ -416,7 +416,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         inputs = inputs.view(T, N, *self.obs_shape)
         obs, subtasks, task, next_subtask = torch.split(
             inputs, self.obs_sections, dim=2)
-        subtasks = subtasks[:, :, :, 0, 0]
         task = task[:, :, :, 0, 0]
         next_subtask = next_subtask[:, :, :, 0, 0]
         sections = [self.n_subtasks] * self.task_nvec.shape[1]
@@ -429,7 +428,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         p = hx.p
         r = hx.r
         g_binary = hx.g_binary
-        h = hx.h
         float_subtask = hx.subtask
 
         for x in hx:
