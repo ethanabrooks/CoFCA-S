@@ -578,7 +578,10 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             # TODO: deterministic
             # g
-            dist = self.pi_theta((h, r))
+            probs = self.pi_theta((h, r)).probs
+            dist = FixedCategorical(probs=interp(hx.g_probs, probs, c))
+
+            # dist = self.pi_theta((h, r))
             g_target = self.encode(M[torch.arange(m), subtask.flatten()])
             outputs.g_loss.append(-dist.log_probs(g_target))
             new = g_int[i] < 0
@@ -590,7 +593,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # assert (int(i1), int(i2), int(i3)) == \
             #        np.unravel_index(int(g_int), self.subtask_space)
             g_embed2 = self.embed_task(g_int[i])
-            g_embed1 = interp(g_embed1, g_embed2, c)
+            # g_embed1 = interp(g_embed1, g_embed2, c)
+            g_embed1 = g_embed2
             outputs.g_embed.append(g_embed1)
 
             # b
