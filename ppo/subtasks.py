@@ -501,7 +501,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # print(debug_in[:, [39, 30, 21, 12, 98, 89]])
             # print(next_subtask[i])
             c = torch.sigmoid(self.phi_update(h))
-            c = next_subtask[i]
+            # c = next_subtask[i]
             outputs.c_truth.append(next_subtask[i])
 
             if torch.any(next_subtask[i] > 0):
@@ -580,9 +580,10 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             # TODO: deterministic
             # g
-            probs1 = self.g_one_hots[g_int[i].long().flatten()]
-            probs2 = self.pi_theta((h, r)).probs
-            dist = FixedCategorical(probs=interp(probs1, probs2, c))
+            # probs1 = self.g_one_hots[g_int[i].long().flatten()]
+            # probs2 = self.pi_theta((h, r)).probs
+            # dist = FixedCategorical(probs=interp(probs1, probs2, c))
+            dist = self.pi_theta((h, r))
 
             # dist = self.pi_theta((h, r))
             g_target = self.encode(M[torch.arange(m), subtask.flatten()])
@@ -596,8 +597,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # assert (int(i1), int(i2), int(i3)) == \
             #        np.unravel_index(int(g_int), self.subtask_space)
             g_embed2 = self.embed_task(g_int[i + 1])
-            # g_embed1 = interp(g_embed1, g_embed2, c)
-            g_embed1 = g_embed2
+            g_embed1 = interp(g_embed1, g_embed2, c)
+            # g_embed1 = g_embed2
             outputs.g_embed.append(g_embed1)
 
             # b
