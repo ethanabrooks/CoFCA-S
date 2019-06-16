@@ -517,7 +517,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             else:
                 outputs.c_loss.append(torch.zeros_like(c))
 
-            c = next_subtask[i]  # TODO
             outputs.c.append(c)
 
             # TODO: figure this out
