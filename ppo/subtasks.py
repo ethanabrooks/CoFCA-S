@@ -5,13 +5,11 @@ import numpy as np
 import torch
 from torch import nn as nn
 import torch.jit
-from gym.spaces import Box, Discrete
-from torch import nn as nn
 from torch.nn import functional as F
 
 from ppo.agent import Agent, AgentValues, NNBase
 from ppo.distributions import Categorical, DiagGaussian, FixedCategorical
-from ppo.layers import Broadcast3d, Concat, Flatten, Parallel, Product, Reshape
+from ppo.layers import Concat, Flatten, Parallel, Product, Reshape
 from ppo.teacher import SubtasksTeacher
 from ppo.utils import batch_conv1d, broadcast_3d, init_, interp, trace
 from ppo.wrappers import SubtasksActions, get_subtasks_action_sections, get_subtasks_obs_sections
