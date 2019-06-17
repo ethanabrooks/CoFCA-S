@@ -9,7 +9,7 @@ from torch.nn import functional as F
 
 from ppo.agent import Agent, AgentValues, NNBase
 from ppo.distributions import Categorical, DiagGaussian, FixedCategorical
-from ppo.layers import Concat, Flatten, Parallel, Product, Reshape, Broadcast3d
+from ppo.layers import Broadcast3d, Concat, Flatten, Parallel, Product, Reshape
 from ppo.teacher import SubtasksTeacher
 from ppo.utils import batch_conv1d, broadcast_3d, init_, interp, trace
 from ppo.wrappers import (SubtasksActions, get_subtasks_action_sections,
@@ -18,7 +18,7 @@ from ppo.wrappers import (SubtasksActions, get_subtasks_action_sections,
 RecurrentState = namedtuple(
     'RecurrentState',
     'p r h b b_probs g_binary g_int g_probs c c_probs l l_probs a a_probs v c_truth '
-    'c_loss l_loss p_loss r_loss g_loss b_loss subtask')
+    'c_loss l_loss g_loss b_loss subtask')
 
 
 # noinspection PyMissingConstructor
@@ -341,8 +341,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             l_probs=3,
             c_loss=1,
             l_loss=1,
-            p_loss=1,
-            r_loss=1,
             g_loss=1,
             b_loss=1,
             subtask=1)
@@ -522,27 +520,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 ).unsqueeze(1))
 
             p2 = batch_conv1d(p, l)
-
-            # p_losss
-            outputs.p_loss.append(
-                F.cross_entropy(
-                    p2.squeeze(1), subtask.squeeze(1),
-                    reduction='none').unsqueeze(1))
-
             r2 = p2 @ M
-
-            # r_loss
-            r_target = []
-            for j in range(m):
-                r_target.append(M[j, subtask[j]])
-            r_target = torch.cat(r_target).detach()
-            r_loss = F.binary_cross_entropy(
-                torch.clamp(r2.squeeze(1), 0., 1.),
-                r_target,
-                reduction='none',
-            )
-            outputs.r_loss.append(torch.mean(r_loss, dim=-1, keepdim=True))
-
             p = interp(p, p2.squeeze(1), c)
             r = interp(r, r2.squeeze(1), c)
 
@@ -555,17 +533,19 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # TODO: deterministic
             # g
             dist = self.pi_theta((h, r))
-            g_target = self.encode(r_target)
-            outputs.g_loss.append(-dist.log_probs(g_target))
             new = g_int[i] < 0
             g_int[i][new] = dist.sample()[new].float()
             outputs.g_int.append(g_int[i])
             outputs.g_probs.append(dist.probs)
 
             # g_loss
-            # assert (int(i1), int(i2), int(i3)) == \
-            #        np.unravel_index(int(g_int), self.subtask_space)
-            g_binary2 = self.task_to_one_hot(g_int[i])
+            g_target = []
+            for j in range(N):
+                g_target.append(self.encode(M[j, subtask[j]]))
+            g_target = torch.stack(g_target).detach()
+            outputs.g_loss.append(-dist.log_probs(g_target))
+
+            g_binary2 = self.task_to_one_hot(g_int[i].flatten())
             g_binary = interp(g_binary, g_binary2, c)
             outputs.g_binary.append(g_binary)
 
