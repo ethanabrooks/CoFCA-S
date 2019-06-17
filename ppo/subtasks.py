@@ -504,7 +504,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             r_repl = torch.stack(r_repl).squeeze(1).detach()
 
             # g
-            dist = self.pi_theta(r_repl)
+            probs = self.pi_theta(r_repl).probs
+            dist = FixedCategorical(probs=interp(hx.g_probs, probs, c))
             sample_new(actions.g_int[i], dist)
             outputs.g_int.append(actions.g_int[i])
             outputs.g_probs.append(dist.probs)
@@ -516,8 +517,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             g_target = torch.stack(g_target).detach()
             outputs.g_loss.append(-dist.log_probs(g_target))
 
-            g_binary2 = self.g_int_to_binary(actions.g_int[i].flatten())
-            g_binary = interp(g_binary, g_binary2, c)
+            g_binary = self.g_int_to_binary(actions.g_int[i].flatten())
+            # g_binary = interp(g_binary, g_binary2, c)
             outputs.g_binary.append(g_binary)
 
             # b
