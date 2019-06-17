@@ -547,9 +547,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # TODO: deterministic
             # g
             dist = self.pi_theta((h, r))
-            new = g_int[i] < 0
-            g_int[i][new] = dist.sample()[new].float()
-            outputs.g_int.append(g_int[i])
+            sample_new(actions.g_int[i], dist)
+            outputs.g_int.append(actions.g_int[i])
             outputs.g_probs.append(dist.probs)
 
             # g_loss
@@ -559,26 +558,24 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             g_target = torch.stack(g_target).detach()
             outputs.g_loss.append(-dist.log_probs(g_target))
 
-            g_binary2 = self.g_int_to_binary(g_int[i].flatten())
+            g_binary2 = self.g_int_to_binary(actions.g_int[i].flatten())
             g_binary = interp(g_binary, g_binary2, c)
             outputs.g_binary.append(g_binary)
 
             # b
             dist = self.beta(torch.cat([conv_out, g_binary], dim=-1))
-            b = dist.sample().float()
+            sample_new(actions.b[i], dist)
             outputs.b_probs.append(dist.probs)
 
             # b_loss
             outputs.b_loss.append(-dist.log_probs(next_subtask[i]))
-            outputs.b.append(b)
+            outputs.b.append(actions.b[i])
 
             # a
             g_broad = broadcast_3d(g_binary, self.obs_shape[1:])
             conv_out2 = self.conv2((obs[i], g_broad))
             dist = self.actor(conv_out2)
-            new = a[i + 1] < 0
-            sample = dist.sample()[new].float()
-            a[i + 1, new] = sample
+            sample_new(a[i + 1], dist)
             # a[:] = 'wsadeq'.index(input('act:'))
 
             outputs.a.append(a[i + 1])
