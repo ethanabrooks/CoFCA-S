@@ -405,8 +405,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         inputs, *actions = torch.split(
             inputs.detach(), [D - n_actions] + [1] * n_actions, dim=2)
         actions = SubtasksActions(*actions)
-        a = actions.a
-        g_int = actions.g_int
         inputs = inputs.view(T, N, *self.obs_shape)
         obs, subtasks, task, next_subtask = torch.split(
             inputs, self.obs_sections, dim=2)
@@ -567,12 +565,12 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         for x in outputs:
             stacked.append(torch.stack(x))
 
-        for name, x, size in zip(RecurrentState._fields, stacked,
-                                 self.state_sizes):
-            if x.size(2) != size:
-                print(name, x, size)
-                import ipdb
-                ipdb.set_trace()
+        # for name, x, size in zip(RecurrentState._fields, stacked,
+        #                          self.state_sizes):
+        #     if x.size(2) != size:
+        #         print(name, x, size)
+        #         import ipdb
+        #         ipdb.set_trace()
 
         hx = torch.cat(stacked, dim=-1)
         return hx, hx[-1]
