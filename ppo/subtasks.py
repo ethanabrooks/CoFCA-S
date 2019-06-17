@@ -79,25 +79,35 @@ class SubtasksAgent(Agent, NNBase):
         # print('g       ', hx.g[0])
         # print('g_target', g_target[0, :, 0, 0])
 
+        if self.teacher_agent:
+            a_dist = None
+        else:
+            a_dist = FixedCategorical(hx.a_probs)
+
         if self.hard_update:
             dists = SubtasksActions(
-                a=FixedCategorical(hx.a_probs),
-                b=FixedCategorical(hx.b_probs),
+                a=a_dist,
+                b=None,
                 c=FixedCategorical(hx.c_probs),
                 l=FixedCategorical(hx.l_probs),
                 g_int=FixedCategorical(hx.g_probs),
             )
         else:
             dists = SubtasksActions(
-                a=FixedCategorical(hx.a_probs),
-                b=FixedCategorical(hx.b_probs),
+                a=a_dist,
+                b=None,
                 c=None,
                 l=None,
                 g_int=FixedCategorical(hx.g_probs))
 
         if action is None:
+            if self.teacher_agent:
+                a = self.teacher_agent(inputs, rnn_hxs,
+                                       masks).action[:, :1].float()
+            else:
+                a = hx.a
             actions = SubtasksActions(
-                a=hx.a, b=hx.b, l=hx.l, c=hx.c, g_int=hx.g_int)
+                a=a, b=hx.b, l=hx.l, c=hx.c, g_int=hx.g_int)
 
         log_probs = sum(
             dist.log_probs(a) for dist, a in zip(dists, actions)
@@ -134,14 +144,6 @@ class SubtasksAgent(Agent, NNBase):
             c_precision=(torch.mean((c[c > 0] == hx.c_truth[c > 0]).float())),
             subtask_association=cramers_v)
         aux_loss = -self.entropy_coef * entropies.mean()
-
-        if self.teacher_agent:
-            imitation_dist = self.teacher_agent(inputs, rnn_hxs, masks).dist
-            imitation_probs = imitation_dist.probs.detach().unsqueeze(1)
-            our_log_probs = torch.log(dists.a.probs).unsqueeze(2)
-            imitation_obj = (imitation_probs @ our_log_probs).view(-1)
-            log.update(imitation_obj=imitation_obj)
-            aux_loss -= torch.mean(imitation_obj)
 
         for k, v in hx._asdict().items():
             if k.endswith('_loss'):
@@ -263,21 +265,13 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             in_size=conv_out_size)  # h
 
         self.phi_update = trace(
-            # lambda in_size: init_(nn.Linear(in_size, 2), 'sigmoid'),
-            # in_size=(
-            # hidden_size +  s
-            # hidden_size))  h
             lambda in_size: init_(nn.Linear(in_size, 1), 'sigmoid'),
             in_size=hidden_size)
 
         self.phi_shift = trace(
             lambda in_size: nn.Sequential(
-                # init_(nn.Linear(in_size, hidden_size), 'relu'),
-                # nn.ReLU(),
-                # init_(nn.Linear(hidden_size, 3)),  # 3 for {-1, 0, +1}
                 init_(nn.Linear(in_size, 3)),  # 3 for {-1, 0, +1}
             ),
-            # in_size=hidden_size)
             in_size=hidden_size)
 
         self.pi_theta = nn.Sequential(
