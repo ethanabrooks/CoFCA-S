@@ -520,8 +520,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             # TODO: deterministic
             # g
-            dist = self.pi_theta(outer_product(h, r).view(m, -1))
-            g_target = self.encode(M[torch.arange(m), subtask.flatten()])
+            dist = self.pi_theta((h, r))
+            g_target = self.encode(r_target)
             outputs.g_loss.append(-dist.log_probs(g_target))
             new = g_int[i] < 0
             g_int[i][new] = dist.sample()[new].float()
