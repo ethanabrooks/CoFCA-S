@@ -102,7 +102,9 @@ class SubtasksAgent(Agent, NNBase):
 
         if action is None:
             if self.teacher_agent:
-                a = self.teacher_agent(inputs, rnn_hxs,
+                g = broadcast_3d(hx.g_binary, obs.shape[2:])
+                teacher_inputs = torch.cat([obs, g, task, next_subtask], dim=1)
+                a = self.teacher_agent(teacher_inputs, rnn_hxs,
                                        masks).action[:, :1].float()
             else:
                 a = hx.a
