@@ -40,9 +40,9 @@ def make_subtasks_env(env_id, **kwargs):
 
     gridworld_args = gridworld_env.get_args(env_id)
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
-    return helper(
-        **ChainMap(kwargs, gridworld_args)
-    )  # combines kwargs and gridworld_args with preference for kwargs
+    return helper(**ChainMap(
+        kwargs, gridworld_args
+    ))  # combines kwargs and gridworld_args with preference for kwargs
 
 
 def subtasks_cli():
@@ -137,6 +137,7 @@ def teach_cli():
     task_parser.add_argument('--object-types', nargs='*')
     task_parser.add_argument('--n-subtasks', type=int, required=True)
     subtasks_parser = parser.add_argument_group('subtasks_args')
+    subtasks_parser.add_argument('--embedding-dim', type=int, required=True)
     subtasks_parser.add_argument(
         '--subtasks-hidden-size', type=int, required=True)
     subtasks_parser.add_argument(
