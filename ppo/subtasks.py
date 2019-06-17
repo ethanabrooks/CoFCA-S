@@ -1,10 +1,10 @@
 from collections import namedtuple
 
+from gym.spaces import Box, Discrete
 import numpy as np
 import torch
-import torch.jit
-from gym.spaces import Box, Discrete
 from torch import nn as nn
+import torch.jit
 from torch.nn import functional as F
 
 from ppo.agent import Agent, AgentValues, NNBase
@@ -12,8 +12,7 @@ from ppo.distributions import Categorical, DiagGaussian, FixedCategorical
 from ppo.layers import Broadcast3d, Concat, Flatten, Parallel, Product, Reshape
 from ppo.teacher import SubtasksTeacher
 from ppo.utils import batch_conv1d, broadcast_3d, init_, interp, trace
-from ppo.wrappers import (SubtasksActions, get_subtasks_action_sections,
-                          get_subtasks_obs_sections)
+from ppo.wrappers import SubtasksActions, get_subtasks_action_sections, get_subtasks_obs_sections
 
 RecurrentState = namedtuple(
     'RecurrentState',
@@ -79,25 +78,37 @@ class SubtasksAgent(Agent, NNBase):
         # print('g       ', hx.g[0])
         # print('g_target', g_target[0, :, 0, 0])
 
+        if self.teacher_agent:
+            a_dist = None
+        else:
+            a_dist = FixedCategorical(hx.a_probs)
+
         if self.hard_update:
             dists = SubtasksActions(
-                a=FixedCategorical(hx.a_probs),
-                b=FixedCategorical(hx.b_probs),
+                a=a_dist,
+                b=None,
                 c=FixedCategorical(hx.c_probs),
                 l=FixedCategorical(hx.l_probs),
                 g_int=FixedCategorical(hx.g_probs),
             )
         else:
             dists = SubtasksActions(
-                a=FixedCategorical(hx.a_probs),
-                b=FixedCategorical(hx.b_probs),
+                a=a_dist,
+                b=None,
                 c=None,
                 l=None,
                 g_int=FixedCategorical(hx.g_probs))
 
         if action is None:
+            if self.teacher_agent:
+                g = broadcast_3d(hx.g_binary, obs.shape[2:])
+                teacher_inputs = torch.cat([obs, g, task, next_subtask], dim=1)
+                a = self.teacher_agent(teacher_inputs, rnn_hxs,
+                                       masks).action[:, :1].float()
+            else:
+                a = hx.a
             actions = SubtasksActions(
-                a=hx.a, b=hx.b, l=hx.l, c=hx.c, g_int=hx.g_int)
+                a=a, b=hx.b, l=hx.l, c=hx.c, g_int=hx.g_int)
 
         log_probs = sum(
             dist.log_probs(a) for dist, a in zip(dists, actions)
@@ -134,14 +145,6 @@ class SubtasksAgent(Agent, NNBase):
             c_precision=(torch.mean((c[c > 0] == hx.c_truth[c > 0]).float())),
             subtask_association=cramers_v)
         aux_loss = -self.entropy_coef * entropies.mean()
-
-        if self.teacher_agent:
-            imitation_dist = self.teacher_agent(inputs, rnn_hxs, masks).dist
-            imitation_probs = imitation_dist.probs.detach().unsqueeze(1)
-            our_log_probs = torch.log(dists.a.probs).unsqueeze(2)
-            imitation_obj = (imitation_probs @ our_log_probs).view(-1)
-            log.update(imitation_obj=imitation_obj)
-            aux_loss -= torch.mean(imitation_obj)
 
         for k, v in hx._asdict().items():
             if k.endswith('_loss'):
@@ -271,27 +274,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             ),
             in_size=1)
 
-        # self.pi_theta = nn.Sequential(
-        #     Concat(dim=-1),
-        #     Broadcast3d(h, w),
-        #     torch.jit.trace(
-        #         nn.Sequential(
-        #             init_(
-        #                 nn.Conv2d(
-        #                     (
-        #                         subtask_size +  # r
-        #                         hidden_size),  # h
-        #                     hidden_size,
-        #                     kernel_size=3,
-        #                     stride=1,
-        #                     padding=1),
-        #                 'relu'),
-        #             nn.ReLU(),
-        #             Flatten(),
-        #         ),
-        #         example_inputs=torch.rand(1, subtask_size + hidden_size, h, w),
-        #     ),
-        #     Categorical(h * w * hidden_size, action_space.g_int.n))
         self.pi_theta = Categorical(subtask_size, action_space.g_int.n)
 
         self.beta = Categorical(
