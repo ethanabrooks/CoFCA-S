@@ -441,6 +441,17 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             conv_out = self.conv1(obs[i])
 
             # s = self.f(torch.cat([conv_out, r, g_binary, b], dim=-1))
+            a_idxs = a[i].flatten().long()
+            agent_layer = obs[i, :, 6, :, :].long()
+            j, k, l = torch.split(agent_layer.nonzero(), [1, 1, 1], dim=-1)
+            debug_obs = obs[i, j, :, k, l].squeeze(1)
+
+            h = self.f((
+                debug_obs,
+                self.a_one_hots[a_idxs],
+                *torch.split(g_binary, tuple(self.task_nvec[0]), dim=-1),
+            ))
+
             logits = self.phi_update(h)
             if self.hard_update:
                 dist = FixedCategorical(logits=logits)
@@ -470,18 +481,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                     outputs.c_loss.append(torch.zeros_like(c))
 
             outputs.c.append(c)
-
-            # a_idxs = a[i].flatten().long()
-            # agent_layer = obs[i, :, 6, :, :].long()
-            # j, k, l = torch.split(agent_layer.nonzero(), [1, 1, 1], dim=-1)
-            # debug_obs = obs[i, j, :, k, l].squeeze(1)
-
-            # h = self.f((
-            #     debug_obs,
-            #     self.a_one_hots[a_idxs],
-            #     *torch.split(g_binary, tuple(self.task_nvec[0]), dim=-1),
-            # ))
-
             outputs.c_truth.append(next_subtask[i])
             # TODO: figure this out
             # if self.recurrent:
@@ -562,11 +561,12 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             stacked.append(torch.stack(x))
 
         # for name, x, size in zip(RecurrentState._fields, stacked,
-        #                          self.state_sizes):
-        #     if x.size(2) != size:
-        #         print(name, x, size)
-        #         import ipdb
-        #         ipdb.set_trace()
+        # self.state_sizes):
+        # if x.size(2) != size:
+        # print(name, x, size)
+        # import ipdb
+        # ipdb.set_trace()
+        # print(name, x.size())
 
         hx = torch.cat(stacked, dim=-1)
         return hx, hx[-1]
