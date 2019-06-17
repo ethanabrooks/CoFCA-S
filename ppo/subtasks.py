@@ -258,8 +258,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             in_size=conv_out_size)  # h
 
         self.phi_update = trace(
-            lambda in_size: init_(nn.Linear(in_size, 1), 'sigmoid'),
-            in_size=1)
+            lambda in_size: init_(nn.Linear(in_size, 1), 'sigmoid'), in_size=1)
 
         self.phi_shift = trace(
             lambda in_size: nn.Sequential(
@@ -537,7 +536,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             # TODO: deterministic
             # g
-            dist = self.pi_theta(r_target)
+            dist = self.pi_theta(r)
             g_target = self.encode(r_target)
             outputs.g_loss.append(-dist.log_probs(g_target))
             new = g_int[i] < 0
