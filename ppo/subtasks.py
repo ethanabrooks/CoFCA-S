@@ -105,7 +105,7 @@ class SubtasksAgent(Agent, NNBase):
         entropies = sum(dist.entropy() for dist in dists if dist is not None)
 
         if action is not None:
-            subtask_int = rm.encode(subtask[:, :, 0, 0])
+            subtask_int = rm.g_binary_to_int(subtask[:, :, 0, 0])
             codes = torch.unique(subtask_int)
             g_one_hots = rm.g_one_hots[actions.g_int.long().flatten()].long()
             for code in codes:
@@ -359,7 +359,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         ],
                          dim=-1)
 
-    def encode(self, g_binary):
+    def g_binary_to_int(self, g_binary):
         factored_code = g_binary.nonzero()[:, 1:].view(-1, 3)
         factored_code -= F.pad(
             torch.cumsum(self.subtask_space, dim=0)[:2], (1, 0), 'constant', 0)
@@ -373,7 +373,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         #     import ipdb; ipdb.set_trace()
         return codes
 
-    def decode(self, g):
+    def g_int_to_123(self, g):
         x1, x2, x3 = self.subtask_space.to(g.dtype)
         g1 = g // (x2 * x3)
         x4 = g % (x2 * x3)
@@ -381,8 +381,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         g3 = x4 % x3
         return g1, g2, g3
 
-    def task_to_one_hot(self, g):
-        return self.task_one_hots(*self.decode(g)).squeeze(1)
+    def g_int_to_binary(self, g):
+        return self.task_one_hots(*self.g_int_to_123(g)).squeeze(1)
 
     def check_grad(self, **kwargs):
         for k, v in kwargs.items():
@@ -440,7 +440,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             r[new_episode] = M[new_episode, 0]  # initialize r to first subtask
             g0 = M[new_episode, 0]
             g_binary[new_episode] = g0  # initialize g_binary to first subtask
-            hx.g_int[new_episode] = self.encode(g0).unsqueeze(1).float()
+            hx.g_int[new_episode] = self.g_binary_to_int(g0).unsqueeze(
+                1).float()
 
         outputs = RecurrentState(*[[] for _ in RecurrentState._fields])
 
@@ -541,11 +542,11 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # g_loss
             g_target = []
             for j in range(N):
-                g_target.append(self.encode(M[j, subtask[j]]))
+                g_target.append(self.g_binary_to_int(M[j, subtask[j]]))
             g_target = torch.stack(g_target).detach()
             outputs.g_loss.append(-dist.log_probs(g_target))
 
-            g_binary2 = self.task_to_one_hot(g_int[i].flatten())
+            g_binary2 = self.g_int_to_binary(g_int[i].flatten())
             g_binary = interp(g_binary, g_binary2, c)
             outputs.g_binary.append(g_binary)
 
