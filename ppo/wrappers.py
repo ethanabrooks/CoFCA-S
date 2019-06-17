@@ -1,10 +1,10 @@
 from collections import namedtuple
 
 import gym
-from gym import spaces
-from gym.spaces import Box
 import numpy as np
 import torch
+from gym import spaces
+from gym.spaces import Box
 
 from common.vec_env import VecEnvWrapper
 from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
@@ -56,7 +56,7 @@ class DebugWrapper(gym.Wrapper):
         subtask = self.env.unwrapped.subtask.copy()
         subtask[1] -= 1
         truth = np.ravel_multi_index(subtask, self.subtask_space)
-        r = float(np.all(guess == truth))
+        r = float(np.all(guess == truth)) - 1
         self.last_action = actions
         self.last_reward = r
         return s, r, t, i
