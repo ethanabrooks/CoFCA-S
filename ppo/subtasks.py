@@ -112,9 +112,6 @@ class SubtasksAgent(Agent, NNBase):
             for code in codes:
                 idx = subtask_int == code
                 self.subtask_choices[code] += g_one_hots[idx].sum(dim=0)
-
-        c = hx.c.round()
-
         # For derivation, see https://en.wikipedia.org/wiki/Cram%C3%A9r%27s_V
         choices = self.subtask_choices.float()
         cramers_v = torch.tensor(0.)
@@ -128,6 +125,7 @@ class SubtasksAgent(Agent, NNBase):
                 cramers_v = torch.sqrt(
                     chi_squared / n / self.action_space.g_int.n)
 
+        c = hx.c.round()
         log = dict(
             # g_accuracy=g_accuracy.float(),
             c_accuracy=(torch.mean((c == hx.c_truth).float())),
@@ -421,11 +419,12 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         new_episode = torch.all(hx.squeeze(0) == 0, dim=-1)
         hx = self.parse_hidden(hx)
 
+        h = hx.h
         p = hx.p
         r = hx.r
         g_binary = hx.g_binary
         float_subtask = hx.subtask
-        a = torch.cat([hx.a, a], dim=0)
+        a = torch.cat([hx.a, actions.a], dim=0)
 
         for x in hx:
             x.squeeze_(0)
