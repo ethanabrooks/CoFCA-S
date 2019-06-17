@@ -445,15 +445,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             conv_out = self.conv1(obs[i])
 
             # s = self.f(torch.cat([conv_out, r, g_binary, b], dim=-1))
-            # logits = self.phi_update(torch.cat([s, h], dim=-1))
-            # if self.hard_update:
-            # dist = FixedCategorical(logits=logits)
-            # c = dist.sample().float()
-            # outputs.c_probs.append(dist.probs)
-            # else:
-            # c = torch.sigmoid(logits[:, :1])
-            # outputs.c_probs.append(torch.zeros_like(logits))  # dummy value
-
             a_idxs = a[i].flatten().long()
             agent_layer = obs[i, :, 6, :, :].long()
             j, k, l = torch.split(agent_layer.nonzero(), [1, 1, 1], dim=-1)
