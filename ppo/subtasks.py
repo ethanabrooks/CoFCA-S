@@ -104,6 +104,7 @@ class SubtasksAgent(Agent, NNBase):
             if dist is not None)
         entropies = sum(dist.entropy() for dist in dists if dist is not None)
 
+        # Compute Cramer V
         if action is not None:
             subtask_int = rm.g_binary_to_int(subtask[:, :, 0, 0])
             codes = torch.unique(subtask_int)
@@ -362,16 +363,10 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
     def g_binary_to_int(self, g_binary):
         factored_code = g_binary.nonzero()[:, 1:].view(-1, 3)
         factored_code -= F.pad(
-            torch.cumsum(self.subtask_space, dim=0)[:2], (1, 0), 'constant', 0)
-        # numpy_codes = factord_code.clone().numpy()
+            torch.cumsum(self.subtask_space, dim=0)[:2], [1, 0], 'constant', 0)
         factored_code[:, :-1] *= self.subtask_space[1:]  # g1 * x2, g2 * x3
         factored_code[:, 0] *= self.subtask_space[2]  # g1 * x3
-        codes = factored_code.sum(dim=-1)
-        # codes1 = codes.numpy()
-        # codes2 = np.ravel_multi_index(numpy_codes.T, (self.subtask_space.numpy()))
-        # if not np.array_equal(codes1, codes2):
-        #     import ipdb; ipdb.set_trace()
-        return codes
+        return factored_code.sum(dim=-1)
 
     def g_int_to_123(self, g):
         x1, x2, x3 = self.subtask_space.to(g.dtype)
@@ -524,9 +519,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             r2 = p2 @ M
             p = interp(p, p2.squeeze(1), c)
             r = interp(r, r2.squeeze(1), c)
-
-            # h = interp(h, h2, c)
-
             outputs.p.append(p)
             outputs.r.append(r)
             outputs.h.append(h)
