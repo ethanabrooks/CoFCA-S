@@ -1,18 +1,19 @@
 from collections import namedtuple
 
-from gym.spaces import Box, Discrete
 import numpy as np
 import torch
-from torch import nn as nn
 import torch.jit
+from gym.spaces import Box, Discrete
+from torch import nn as nn
 from torch.nn import functional as F
 
 from ppo.agent import Agent, AgentValues, NNBase
 from ppo.distributions import Categorical, DiagGaussian, FixedCategorical
-from ppo.layers import Broadcast3d, Concat, Flatten, Parallel, Product, Reshape
+from ppo.layers import Concat, Flatten, Parallel, Product, Reshape, Broadcast3d
 from ppo.teacher import SubtasksTeacher
 from ppo.utils import batch_conv1d, broadcast_3d, init_, interp, trace
-from ppo.wrappers import SubtasksActions, get_subtasks_action_sections, get_subtasks_obs_sections
+from ppo.wrappers import (SubtasksActions, get_subtasks_action_sections,
+                          get_subtasks_obs_sections)
 
 RecurrentState = namedtuple(
     'RecurrentState',
@@ -164,9 +165,9 @@ class SubtasksAgent(Agent, NNBase):
 
     def _forward_gru(self, x, hxs, masks, actions=None):
         if actions is None:
-            y = F.pad(x, (0, 2), 'constant', -1)
+            y = F.pad(x, [0, len(SubtasksActions._fields)], 'constant', -1)
         else:
-            y = torch.cat([x, actions.a, actions.g_int], dim=-1)
+            y = torch.cat([x] + list(actions), dim=-1)
         return super()._forward_gru(y, hxs, masks)
 
     @property
@@ -176,6 +177,11 @@ class SubtasksAgent(Agent, NNBase):
     @property
     def is_recurrent(self):
         return True
+
+
+def sample_new(x, dist):
+    new = x < 0
+    x[new] = dist.sample()[new].float()
 
 
 class SubtasksRecurrence(torch.jit.ScriptModule):
@@ -240,7 +246,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
         self.critic = init_(nn.Linear(input_size, 1))
 
-        # b
         self.f = nn.Sequential(
             Parallel(
                 init_(nn.Linear(self.obs_sections.base, hidden_size)),
@@ -403,9 +408,14 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
     # @torch.jit.script_method
     def forward(self, inputs, hx):
         assert hx is not None
-        T, N, d = inputs.shape
+        T, N, D = inputs.shape
         inputs = inputs.view(T, N, -1)
-        inputs, a, g_int = torch.split(inputs, [d - 2, 1, 1], dim=2)
+        n_actions = len(SubtasksActions._fields)
+        inputs, *actions = torch.split(
+            inputs.detach(), [D - n_actions] + [1] * n_actions, dim=2)
+        actions = SubtasksActions(*actions)
+        a = actions.a
+        g_int = actions.g_int
         inputs = inputs.view(T, N, *self.obs_shape)
         obs, subtasks, task, next_subtask = torch.split(
             inputs, self.obs_sections, dim=2)
@@ -587,6 +597,13 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         stacked = []
         for x in outputs:
             stacked.append(torch.stack(x))
+
+        # for name, x, size in zip(RecurrentState._fields, stacked,
+        #                          self.state_sizes):
+        #     if x.size(2) != size:
+        #         print(name, x, size)
+        #         import ipdb
+        #         ipdb.set_trace()
 
         hx = torch.cat(stacked, dim=-1)
         return hx, hx[-1]
