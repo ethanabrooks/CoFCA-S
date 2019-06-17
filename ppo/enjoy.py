@@ -75,7 +75,7 @@ if args.env_name.find('Bullet') > -1:
 
     torsoId = -1
     for i in range(p.getNumBodies()):
-        if (p.getBodyInfo(i)[0].g_int_to_123() == "torso"):
+        if (p.getBodyInfo(i)[0].decode() == "torso"):
             torsoId = i
 
 while True:
