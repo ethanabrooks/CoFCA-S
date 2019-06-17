@@ -405,8 +405,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         inputs, *actions = torch.split(
             inputs.detach(), [D - n_actions] + [1] * n_actions, dim=2)
         actions = SubtasksActions(*actions)
-        a = actions.a
-        g_int = actions.g_int
         inputs = inputs.view(T, N, *self.obs_shape)
         obs, subtasks, task, next_subtask = torch.split(
             inputs, self.obs_sections, dim=2)
@@ -516,25 +514,24 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # h2 = self.subcontroller(conv_out)
 
             logits = self.phi_shift(h)
-            # if self.hard_update:
-            # dist = FixedCategorical(logits=logits)
-            # l = dist.sample()
-            # outputs.l.append(l.float())
-            # outputs.l_probs.append(dist.probs)
-            # l = self.l_one_hots[l]
-            # else:
-            l = F.softmax(logits, dim=1)
-            outputs.l.append(torch.zeros_like(c))  # dummy value
-            outputs.l_probs.append(torch.zeros_like(l))  # dummy value
-
-            # l_loss
             l_target = 1 - next_subtask[i].long().flatten()
-            outputs.l_loss.append(
-                F.cross_entropy(
-                    logits,
-                    l_target,
-                    reduction='none',
-                ).unsqueeze(1))
+            if self.hard_update:
+                dist = FixedCategorical(logits=logits)
+                sample_new(actions.l[i], dist)
+                outputs.l.append(actions.l[i].float())
+                outputs.l_probs.append(dist.probs)
+                l = self.l_one_hots[actions.l[i].long().flatten()]
+                outputs.l_loss.append(-dist.log_probs(l_target))
+            else:
+                l = F.softmax(logits, dim=1)
+                outputs.l.append(torch.zeros_like(l)[:, :1])  # dummy value
+                outputs.l_probs.append(torch.zeros_like(l))  # dummy value
+                outputs.l_loss.append(
+                    F.cross_entropy(
+                        logits,
+                        l_target,
+                        reduction='none',
+                    ).unsqueeze(1))
 
             p2 = batch_conv1d(p, l)
             r2 = p2 @ M
