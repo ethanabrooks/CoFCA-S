@@ -468,7 +468,16 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 *torch.split(g_binary, tuple(self.task_nvec[0]), dim=-1),
             ))
 
-            c = torch.sigmoid(self.phi_update(h))
+            logits = self.phi_update(h)
+            if self.hard_update:
+                dist = FixedCategorical(logits=logits)
+                new = actions.c[i] < 0
+                c = actions.c[i].clone()
+                c[new] = dist.sample()[new].float()
+                outputs.c_probs.append(dist.probs)
+                outputs.c_loss.append(-dist.log_probs(next_subtask[i]))
+            else:
+                c = torch.sigmoid(logits)
             outputs.c_truth.append(next_subtask[i])
 
             if torch.any(next_subtask[i] > 0):
