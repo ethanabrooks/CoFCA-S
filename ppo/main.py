@@ -47,20 +47,20 @@ def make_subtasks_env(env_id, **kwargs):
 
 def subtasks_cli():
     parser = build_parser()
-    parser.add_argument('--multiplicative-interaction', action='store_true')
     task_parser = parser.add_argument_group('task_args')
     task_parser.add_argument('--task-types', nargs='*')
     task_parser.add_argument('--max-task-count', type=int)
     task_parser.add_argument('--object-types', nargs='*')
     task_parser.add_argument('--n-subtasks', type=int)
     parser.add_argument('--multiplicative-interaction', action='store_true')
-    parser.add_argument('--b-loss-coef', type=float, default=.03)
+    parser.add_argument('--alpha', type=float, default=.03)
+    parser.add_argument('--zeta', type=float, default=.0001)
     parser.add_argument('--n-objects', type=int)
     parser.add_argument('--max-episode-steps', type=int)
     kwargs = hierarchical_parse_args(parser)
 
     def train(task_args, multiplicative_interaction, n_objects,
-              max_episode_steps, b_loss_coef, **_kwargs):
+              max_episode_steps, alpha, zeta, **_kwargs):
         class TrainTeacher(Train):
             @staticmethod
             def make_env(env_id, seed, rank, add_timestep):
@@ -81,9 +81,10 @@ def subtasks_cli():
                     task_space=get_task_space(**task_args),
                     hidden_size=hidden_size,
                     entropy_coef=entropy_coef,
+                    alpha=alpha,
+                    zeta=zeta,
                     recurrent=recurrent,
                     multiplicative_interaction=multiplicative_interaction,
-                    b_loss_coef=b_loss_coef,
                 )
 
         TrainTeacher(**_kwargs)
@@ -140,8 +141,10 @@ def teach_cli():
         '--subtasks-hidden-size', type=int, required=True)
     subtasks_parser.add_argument(
         '--subtasks-entropy-coef', type=float, default=0.01)
+    subtasks_parser.add_argument('--alpha', type=float, default=0.03)
+    subtasks_parser.add_argument('--zeta', type=float, default=.0001)
     subtasks_parser.add_argument('--subtasks-recurrent', action='store_true')
-    subtasks_parser.add_argument('--b-loss-coef', type=float, default=.03)
+    subtasks_parser.add_argument('--hard-update', action='store_true')
     subtasks_parser.add_argument(
         '--multiplicative-interaction', action='store_true')
     parser.add_argument('--n-objects', type=int, required=True)
@@ -181,17 +184,17 @@ def teach_cli():
                         f'Loaded teacher parameters from {teacher_agent_load_path}.'
                     )
 
+                _subtasks_args = {
+                    k.replace('subtasks_', ''): v
+                    for k, v in subtasks_args.items()
+                }
+
                 return SubtasksAgent(
                     obs_shape=envs.observation_space.shape,
                     action_space=envs.action_space,
                     task_space=task_space,
-                    hidden_size=subtasks_args['subtasks_hidden_size'],
-                    entropy_coef=subtasks_args['subtasks_entropy_coef'],
-                    recurrent=subtasks_args['subtasks_recurrent'],
-                    b_loss_coef=subtasks_args['b_loss_coef'],
-                    multiplicative_interaction=subtasks_args[
-                        'multiplicative_interaction'],
-                    teacher_agent=teacher_agent)
+                    teacher_agent=teacher_agent,
+                    **_subtasks_args)
 
         # ppo_args.update(aux_loss_only=True)
         TrainSubtasks(env_id=env_id, ppo_args=ppo_args, **kwargs)

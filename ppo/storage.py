@@ -42,7 +42,7 @@ class RolloutStorage(object):
             elif isinstance(space, spaces.Box):
                 return space.shape[0]
             elif isinstance(space, spaces.Tuple):
-                return sum(buffer_size(s) for s in space.spaces)
+                return int(sum(buffer_size(s) for s in space.spaces))
             else:
                 raise NotImplementedError
 
