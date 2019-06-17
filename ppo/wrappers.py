@@ -37,25 +37,29 @@ class DebugWrapper(gym.Wrapper):
         super().__init__(env)
         # self.action_space = spaces.Discrete(
         # int(self.size_subtask_space * self.size_action_space))
-        self.possible_subtasks = np.array([
-            [0, 1, 0],
-            [0, 1, 1],
-        ])
         self.last_action = None
         self.last_reward = None
+        self.subtask_space = env.task_space.nvec[0]
 
     def step(self, action):
-        action_sections = get_subtasks_action_sections(self.action_space)
-        actions = SubtasksActions(*np.split(action, action_sections))
+        action_sections = get_subtasks_action_sections(
+            self.action_space.spaces)
+        actions = SubtasksActions(*[
+            int(x.item()) for x in np.split(action,
+                                            np.cumsum(action_sections)[:-1])
+        ])
+
         # action, subtask = np.unravel_index(
         # action, (self.size_action_space, self.size_subtask_space))
         s, _, t, i = super().step(action)
-        guess = self.possible_subtasks[int(actions.g)]
-        truth = self.env.unwrapped.subtask
+        guess = int(actions.g_int)
+        subtask = self.env.unwrapped.subtask.copy()
+        subtask[1] -= 1
+        truth = np.ravel_multi_index(subtask, self.subtask_space)
         r = float(np.all(guess == truth))
         self.last_action = actions
         self.last_reward = r
-        return s, r, t, i  # TODO
+        return s, r, t, i
 
     def render(self, mode='human'):
         action = self.last_action
