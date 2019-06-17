@@ -19,7 +19,7 @@ setup(
         'bin/new-run',
         'bin/from-json',
         'bin/nld',
-        'bin/watch-best',
+        'bin/show-best',
         'bin/reproduce',
     ],
     entry_points=dict(console_scripts=[
