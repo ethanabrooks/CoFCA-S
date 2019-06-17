@@ -1,7 +1,8 @@
 #!/usr/bin/env zsh
 set -e
 
-active_runs=$(runs ls --active)
+filter=${1:-'--active'}
+active_runs=$(runs ls "$filter")
 active_runs=("${(f)active_runs}")
 first_run="${active_runs[1]}"
 directory=$(echo "$first_run" | sed 's/[[:digit:]]*$//')
