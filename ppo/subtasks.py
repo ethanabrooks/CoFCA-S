@@ -5,6 +5,8 @@ import numpy as np
 import torch
 from torch import nn as nn
 import torch.jit
+from gym.spaces import Box, Discrete
+from torch import nn as nn
 from torch.nn import functional as F
 
 from ppo.agent import Agent, AgentValues, NNBase
@@ -145,6 +147,14 @@ class SubtasksAgent(Agent, NNBase):
             c_precision=(torch.mean((c[c > 0] == hx.c_truth[c > 0]).float())),
             subtask_association=cramers_v)
         aux_loss = -self.entropy_coef * entropies.mean()
+
+        if self.teacher_agent:
+            imitation_dist = self.teacher_agent(inputs, rnn_hxs, masks).dist
+            imitation_probs = imitation_dist.probs.detach().unsqueeze(1)
+            our_log_probs = torch.log(dists.a.probs).unsqueeze(2)
+            imitation_obj = (imitation_probs @ our_log_probs).view(-1)
+            log.update(imitation_obj=imitation_obj)
+            aux_loss -= torch.mean(imitation_obj)
 
         for k, v in hx._asdict().items():
             if k.endswith('_loss'):
@@ -496,7 +506,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             outputs.h.append(h)
 
             # TODO: deterministic
-            # g_loss
+            # r_repl
             r_repl = []
             for j in range(N):
                 r_repl.append(M[j, subtask[j]])
