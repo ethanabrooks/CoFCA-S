@@ -240,7 +240,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
         self.critic = init_(nn.Linear(input_size, 1))
 
-        # b
         self.f = nn.Sequential(
             Parallel(
                 init_(nn.Linear(self.obs_sections.base, hidden_size)),
@@ -259,44 +258,37 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             in_size=conv_out_size)  # h
 
         self.phi_update = trace(
-            # lambda in_size: init_(nn.Linear(in_size, 2), 'sigmoid'),
-            # in_size=(
-            # hidden_size +  s
-            # hidden_size))  h
             lambda in_size: init_(nn.Linear(in_size, 1), 'sigmoid'),
-            in_size=hidden_size)
+            in_size=1)
 
         self.phi_shift = trace(
             lambda in_size: nn.Sequential(
-                # init_(nn.Linear(in_size, hidden_size), 'relu'),
-                # nn.ReLU(),
-                # init_(nn.Linear(hidden_size, 3)),  # 3 for {-1, 0, +1}
                 init_(nn.Linear(in_size, 3)),  # 3 for {-1, 0, +1}
             ),
-            # in_size=hidden_size)
-            in_size=hidden_size)
+            in_size=1)
 
-        self.pi_theta = nn.Sequential(
-            Concat(dim=-1),
-            Broadcast3d(h, w),
-            torch.jit.trace(
-                nn.Sequential(
-                    init_(
-                        nn.Conv2d(
-                            (
-                                subtask_size +  # r
-                                hidden_size),  # h
-                            hidden_size,
-                            kernel_size=3,
-                            stride=1,
-                            padding=1),
-                        'relu'),
-                    nn.ReLU(),
-                    Flatten(),
-                ),
-                example_inputs=torch.rand(1, subtask_size + hidden_size, h, w),
-            ),
-            Categorical(h * w * hidden_size, action_space.g_int.n))
+        # self.pi_theta = nn.Sequential(
+        #     Concat(dim=-1),
+        #     Broadcast3d(h, w),
+        #     torch.jit.trace(
+        #         nn.Sequential(
+        #             init_(
+        #                 nn.Conv2d(
+        #                     (
+        #                         subtask_size +  # r
+        #                         hidden_size),  # h
+        #                     hidden_size,
+        #                     kernel_size=3,
+        #                     stride=1,
+        #                     padding=1),
+        #                 'relu'),
+        #             nn.ReLU(),
+        #             Flatten(),
+        #         ),
+        #         example_inputs=torch.rand(1, subtask_size + hidden_size, h, w),
+        #     ),
+        #     Categorical(h * w * hidden_size, action_space.g_int.n))
+        self.pi_theta = Categorical(subtask_size, action_space.g_int.n)
 
         self.beta = Categorical(
             conv_out_size +  # x
@@ -418,6 +410,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         new_episode = torch.all(hx.squeeze(0) == 0, dim=-1)
         hx = self.parse_hidden(hx)
 
+        h = hx.h
         p = hx.p
         r = hx.r
         g_binary = hx.g_binary
@@ -454,18 +447,18 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # c = torch.sigmoid(logits[:, :1])
             # outputs.c_probs.append(torch.zeros_like(logits))  # dummy value
 
-            a_idxs = a[i].flatten().long()
-            agent_layer = obs[i, :, 6, :, :].long()
-            j, k, l = torch.split(agent_layer.nonzero(), [1, 1, 1], dim=-1)
-            debug_obs = obs[i, j, :, k, l].squeeze(1)
+            # a_idxs = a[i].flatten().long()
+            # agent_layer = obs[i, :, 6, :, :].long()
+            # j, k, l = torch.split(agent_layer.nonzero(), [1, 1, 1], dim=-1)
+            # debug_obs = obs[i, j, :, k, l].squeeze(1)
 
-            h = self.f((
-                debug_obs,
-                self.a_one_hots[a_idxs],
-                *torch.split(g_binary, tuple(self.task_nvec[0]), dim=-1),
-            ))
+            # h = self.f((
+            #     debug_obs,
+            #     self.a_one_hots[a_idxs],
+            #     *torch.split(g_binary, tuple(self.task_nvec[0]), dim=-1),
+            # ))
 
-            c = torch.sigmoid(self.phi_update(h))
+            c = torch.sigmoid(self.phi_update(next_subtask[i]))
             outputs.c_truth.append(next_subtask[i])
 
             if torch.any(next_subtask[i] > 0):
@@ -490,7 +483,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # else:
             # h2 = self.subcontroller(conv_out)
 
-            logits = self.phi_shift(h)
+            logits = self.phi_shift(next_subtask[i])
             # if self.hard_update:
             # dist = FixedCategorical(logits=logits)
             # l = dist.sample()
@@ -544,7 +537,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             # TODO: deterministic
             # g
-            dist = self.pi_theta((h, r))
+            dist = self.pi_theta(r_target)
             g_target = self.encode(r_target)
             outputs.g_loss.append(-dist.log_probs(g_target))
             new = g_int[i] < 0
