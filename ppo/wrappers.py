@@ -35,8 +35,6 @@ def get_subtasks_action_sections(action_spaces):
 class DebugWrapper(gym.Wrapper):
     def __init__(self, env):
         super().__init__(env)
-        # self.action_space = spaces.Discrete(
-        # int(self.size_subtask_space * self.size_action_space))
         self.last_guess = None
         self.last_reward = None
         self.subtask_space = env.task_space.nvec[0]
@@ -48,14 +46,9 @@ class DebugWrapper(gym.Wrapper):
             int(x.item()) for x in np.split(action,
                                             np.cumsum(action_sections)[:-1])
         ])
-
-        # action, subtask = np.unravel_index(
-        # action, (self.size_action_space, self.size_subtask_space))
         s, _, t, i = super().step(action)
         guess = int(actions.g_int)
-        subtask = self.env.unwrapped.subtask.copy()
-        subtask[1] -= 1
-        truth = np.ravel_multi_index(subtask, self.subtask_space)
+        truth = int(self.env.unwrapped.subtask_idx)
         r = float(np.all(guess == truth)) - 1
         self.last_guess = guess
         self.last_reward = r
@@ -65,10 +58,7 @@ class DebugWrapper(gym.Wrapper):
         print('########################################')
         super().render(sleep_time=0)
         print('guess', self.last_guess)
-        subtask = self.env.unwrapped.subtask.copy()
-        subtask[1] -= 1
-        truth = np.ravel_multi_index(subtask, self.subtask_space)
-        print('truth', truth)
+        print('truth', self.env.unwrapped.subtask_idx)
         print('reward', self.last_reward)
         input('pause')
 
@@ -86,7 +76,7 @@ class SubtasksWrapper(gym.Wrapper):
             SubtasksActions(
                 a=env.action_space,
                 b=spaces.Discrete(2),
-                g_int=spaces.Discrete(task_space.nvec[0].prod()),
+                g_int=spaces.Discrete(env.n_subtasks),
                 c=spaces.Discrete(2),
                 l=spaces.Discrete(3)))
 

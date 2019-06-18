@@ -76,6 +76,7 @@ class SubtasksGridWorld(gym.Env):
             self.task = np.array(list(encode_task()))
         else:
             self.task = None
+        self.subtask_idx = None
         self.subtask = None
         self.task_iter = None
         self.task_count = None
@@ -215,6 +216,7 @@ class SubtasksGridWorld(gym.Env):
         self.objects = {tuple(p): t for p, t in zip(objects_pos, types)}
 
         self.task_count = None
+        self.subtask_idx = -1
         self.perform_iteration()
         self.last_terminal = False
         self.last_action = None
@@ -248,6 +250,7 @@ class SubtasksGridWorld(gym.Env):
     def perform_iteration(self):
         self.next_subtask = self.task_count == 1
         if self.task_count is None or self.next_subtask:
+            self.subtask_idx += 1
             task_type, task_count, _ = self.subtask = next(self.task_iter)
             self.task_count = task_count
         else:
