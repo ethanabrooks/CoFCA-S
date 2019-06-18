@@ -241,8 +241,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
         self.phi_update = trace(
             lambda in_size: init_(nn.Linear(in_size, 1), 'sigmoid'),
-            in_size=self.obs_sections.base * action_space.a.n * int(
-                task_space.nvec[0].prod()))
+            in_size=hidden_size)
 
         self.phi_shift = trace(
             lambda in_size: nn.Sequential(
@@ -396,26 +395,32 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             debug_obs = obs[i, j, :, k, l].squeeze(1)
 
             def get_debug_in(subtask_param):
-                task_part = subtask_param[:, :3]
-                obj_part = subtask_param[:, -4:]
-                action_part = self.a_one_hots[a_idxs]
-                obs4d = (debug_obs.unsqueeze(2).unsqueeze(3).unsqueeze(4) *
-                         task_part.unsqueeze(1).unsqueeze(3).unsqueeze(4) *
-                         obj_part.unsqueeze(1).unsqueeze(2).unsqueeze(4) *
-                         action_part.unsqueeze(1).unsqueeze(2).unsqueeze(3))
+                return self.f((
+                    debug_obs,
+                    self.a_one_hots[a_idxs],
+                    *torch.split(
+                        subtask_param, tuple(self.task_nvec[0]), dim=-1),
+                ))
+                # task_part = subtask_param[:, :3]
+                # obj_part = subtask_param[:, -4:]
+                # action_part = self.a_one_hots[a_idxs]
+                # obs4d = (debug_obs.unsqueeze(2).unsqueeze(3).unsqueeze(4) *
+                # task_part.unsqueeze(1).unsqueeze(3).unsqueeze(4) *
+                # obj_part.unsqueeze(1).unsqueeze(2).unsqueeze(4) *
+                # action_part.unsqueeze(1).unsqueeze(2).unsqueeze(3))
                 # print('obs', debug_obs[0])
                 # print('task', task_part[0])
                 # print('obj', obj_part[0])
                 # print('action', action_part[0])
-                p, q = torch.split(obj_part.nonzero(), [1, 1], dim=-1)
-                o = [
-                    obs4d[p, q + 1, 0, q, :].squeeze(1),
-                    obs4d[p, q + 1, 1, q, 4],
-                    obs4d[p, q + 1, 2, q, 5],
-                ]
+                # p, q = torch.split(obj_part.nonzero(), [1, 1], dim=-1)
+                # o = [
+                # obs4d[p, q + 1, 0, q, :].squeeze(1),
+                # obs4d[p, q + 1, 1, q, 4],
+                # obs4d[p, q + 1, 2, q, 5],
+                # ]
                 # print('o', o)
                 # return torch.cat(o, dim=-1)
-                return obs4d.view(N, -1)
+                # return obs4d.view(N, -1)
 
             subtask = float_subtask.long()
             subtask_param = M[torch.arange(N), subtask.long().flatten()]
