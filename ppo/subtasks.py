@@ -22,24 +22,12 @@ RecurrentState = namedtuple(
 
 # noinspection PyMissingConstructor
 class SubtasksAgent(Agent, NNBase):
-    def __init__(self,
-                 obs_shape,
-                 action_space,
-                 task_space,
-                 hidden_size,
-                 entropy_coef,
-                 alpha,
-                 zeta,
-                 hard_update,
-                 teacher_agent=None,
-                 **kwargs):
+    def __init__(self, obs_shape, action_space, task_space, hidden_size,
+                 entropy_coef, alpha, zeta, hard_update, **kwargs):
         nn.Module.__init__(self)
         self.zeta = zeta
         self.alpha = alpha
         self.hard_update = hard_update
-        if teacher_agent:
-            assert isinstance(teacher_agent, SubtasksTeacher)
-        self.teacher_agent = teacher_agent
         self.entropy_coef = entropy_coef
         self.action_space = SubtasksActions(*action_space.spaces)
         self.recurrent_module = SubtasksRecurrence(
@@ -80,14 +68,13 @@ class SubtasksAgent(Agent, NNBase):
         rm = self.recurrent_module
         hx = RecurrentState(*rm.parse_hidden(all_hxs))
 
-        if self.teacher_agent:
-            a_dist = None
-        else:
-            a_dist = FixedCategorical(hx.a_probs)
+        if action is None:
+            actions = SubtasksActions(
+                a=hx.a, b=hx.b, l=hx.l, c=hx.c, g_int=hx.g_int)
 
         if self.hard_update:
             dists = SubtasksActions(
-                a=a_dist,
+                a=FixedCategorical(hx.a_probs),
                 b=None,
                 c=FixedCategorical(hx.c_probs),
                 l=FixedCategorical(hx.l_probs),
@@ -95,22 +82,11 @@ class SubtasksAgent(Agent, NNBase):
             )
         else:
             dists = SubtasksActions(
-                a=a_dist,
+                a=FixedCategorical(hx.a_probs),
                 b=None,
                 c=None,
                 l=None,
                 g_int=FixedCategorical(hx.g_probs))
-
-        if action is None:
-            if self.teacher_agent:
-                g = broadcast_3d(hx.g_binary, obs.shape[2:])
-                teacher_inputs = torch.cat([obs, g, task, next_subtask], dim=1)
-                a = self.teacher_agent(teacher_inputs, rnn_hxs,
-                                       masks).action[:, :1].float()
-            else:
-                a = hx.a
-            actions = SubtasksActions(
-                a=a, b=hx.b, l=hx.l, c=hx.c, g_int=hx.g_int)
 
         log_probs = sum(
             dist.log_probs(a) for dist, a in zip(dists, actions)
@@ -195,7 +171,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
     ]
 
     def __init__(self, obs_shape, action_space, task_space, hidden_size,
-                 recurrent, hard_update):
+                 recurrent, hard_update, teacher_agent):
         super().__init__()
         d, h, w = obs_shape
         conv_out_size = h * w * hidden_size
@@ -208,6 +184,9 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         self.task_nvec = task_space.nvec
         self.action_space = action_space
         self.n_subtasks = n_subtasks
+        if teacher_agent:
+            assert isinstance(teacher_agent, SubtasksTeacher)
+        self.teacher_agent = teacher_agent
 
         # networks
         self.recurrent = recurrent
@@ -375,10 +354,10 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             inputs.detach(), [D - n_actions] + [1] * n_actions, dim=2)
         actions = SubtasksActions(*actions)
         inputs = inputs.view(T, N, *self.obs_shape)
-        obs, subtasks, task, next_subtask = torch.split(
+        obs, subtasks, task_broad, next_subtask_broad = torch.split(
             inputs, self.obs_sections, dim=2)
-        task = task[:, :, :, 0, 0]
-        next_subtask = next_subtask[:, :, :, 0, 0]
+        task = task_broad[:, :, :, 0, 0]
+        next_subtask = next_subtask_broad[:, :, :, 0, 0]
         sections = [self.n_subtasks] * self.task_nvec.shape[1]
         task_type, count, obj = torch.split(task, sections, dim=-1)
 
@@ -564,9 +543,16 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # a
             g_broad = broadcast_3d(g_binary, self.obs_shape[1:])
             conv_out2 = self.conv2((obs[i], g_broad))
-            dist = self.actor(conv_out2)
+            if self.teacher_agent is None:
+                dist = self.actor(conv_out2)
+            else:
+                g = broadcast_3d(g_binary, obs.shape[3:])
+                teacher_inputs = torch.cat(
+                    [obs[i], g, task_broad[i], next_subtask_broad[i]], dim=1)
+                dist = self.teacher_agent(
+                    teacher_inputs, rnn_hxs=None, masks=None).dist
             sample_new(a[i + 1], dist)
-            print('a', a[i+1])
+            print('a', a[i + 1])
             # a[:] = 'wsadeq'.index(input('act:'))
 
             outputs.a.append(a[i + 1])
