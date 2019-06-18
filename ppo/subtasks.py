@@ -195,7 +195,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
     ]
 
     def __init__(self, obs_shape, action_space, task_space, hidden_size,
-                 recurrent, hard_update, multiplicative_interaction):
+                 recurrent, hard_update):
         super().__init__()
         d, h, w = obs_shape
         conv_out_size = h * w * hidden_size
@@ -221,23 +221,15 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                     stride=1,
                     padding=1), 'relu'), nn.ReLU(), Flatten())
 
-        if multiplicative_interaction:
-            conv_weight_shape = hidden_size, self.obs_sections.base, 3, 3
-            self.conv_weight = nn.Sequential(
-                nn.Linear(self.obs_sections.subtask,
-                          np.prod(conv_weight_shape)),
-                Reshape(-1, *conv_weight_shape))
-
-        else:
-            self.conv2 = nn.Sequential(
-                Concat(dim=1),
-                init_(
-                    nn.Conv2d(
-                        self.obs_sections.base + self.obs_sections.subtask,
-                        hidden_size,
-                        kernel_size=3,
-                        stride=1,
-                        padding=1), 'relu'), nn.ReLU(), Flatten())
+        self.conv2 = nn.Sequential(
+            Concat(dim=1),
+            init_(
+                nn.Conv2d(
+                    self.obs_sections.base + self.obs_sections.subtask,
+                    hidden_size,
+                    kernel_size=3,
+                    stride=1,
+                    padding=1), 'relu'), nn.ReLU(), Flatten())
 
         input_size = h * w * hidden_size  # conv output
         if isinstance(action_space.a, Discrete):

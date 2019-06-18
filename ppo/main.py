@@ -40,9 +40,9 @@ def make_subtasks_env(env_id, **kwargs):
 
     gridworld_args = gridworld_env.get_args(env_id)
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
-    return helper(**ChainMap(
-        kwargs, gridworld_args
-    ))  # combines kwargs and gridworld_args with preference for kwargs
+    return helper(
+        **ChainMap(kwargs, gridworld_args)
+    )  # combines kwargs and gridworld_args with preference for kwargs
 
 
 def subtasks_cli():
@@ -52,15 +52,13 @@ def subtasks_cli():
     task_parser.add_argument('--max-task-count', type=int)
     task_parser.add_argument('--object-types', nargs='*')
     task_parser.add_argument('--n-subtasks', type=int)
-    parser.add_argument('--multiplicative-interaction', action='store_true')
     parser.add_argument('--alpha', type=float, default=.03)
     parser.add_argument('--zeta', type=float, default=.0001)
     parser.add_argument('--n-objects', type=int)
     parser.add_argument('--max-episode-steps', type=int)
     kwargs = hierarchical_parse_args(parser)
 
-    def train(task_args, multiplicative_interaction, n_objects,
-              max_episode_steps, alpha, zeta, **_kwargs):
+    def train(task_args, n_objects, max_episode_steps, alpha, zeta, **_kwargs):
         class TrainTeacher(Train):
             @staticmethod
             def make_env(env_id, seed, rank, add_timestep):
@@ -84,7 +82,6 @@ def subtasks_cli():
                     alpha=alpha,
                     zeta=zeta,
                     recurrent=recurrent,
-                    multiplicative_interaction=multiplicative_interaction,
                 )
 
         TrainTeacher(**_kwargs)
@@ -145,8 +142,6 @@ def teach_cli():
     subtasks_parser.add_argument('--zeta', type=float, default=.0001)
     subtasks_parser.add_argument('--subtasks-recurrent', action='store_true')
     subtasks_parser.add_argument('--hard-update', action='store_true')
-    subtasks_parser.add_argument(
-        '--multiplicative-interaction', action='store_true')
     parser.add_argument('--n-objects', type=int, required=True)
     parser.add_argument('--max-episode-steps', type=int)
 
