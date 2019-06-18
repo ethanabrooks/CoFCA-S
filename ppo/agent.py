@@ -8,8 +8,8 @@ from ppo.distributions import Categorical, DiagGaussian
 from ppo.layers import Flatten
 from ppo.utils import init, init_normc_
 
-AgentValues = namedtuple('AgentValues',
-                         'value action action_log_probs aux_loss rnn_hxs log dist')
+AgentValues = namedtuple(
+    'AgentValues', 'value action action_log_probs aux_loss rnn_hxs log dist')
 
 
 class Agent(nn.Module):
