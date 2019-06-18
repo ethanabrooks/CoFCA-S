@@ -511,7 +511,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             r_repl = torch.stack(r_repl).squeeze(1).detach()
 
             # g
-            probs = self.pi_theta(r_repl).probs
+            probs = self.pi_theta(r).probs
             # dist = FixedCategorical(probs=interp(hx.g_probs, probs, c))
             dist = FixedCategorical(probs=probs)
             sample_new(actions.g_int[i], dist)
