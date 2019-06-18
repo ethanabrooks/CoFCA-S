@@ -100,8 +100,7 @@ class SubtasksAgent(Agent, NNBase):
                 b=None,
                 c=None,
                 l=None,
-                # g_int=FixedCategorical(hx.g_probs))
-                g_int=None)  # TODO
+                g_int=FixedCategorical(hx.g_probs))
 
         if action is None:
             if self.teacher_agent:
@@ -149,7 +148,7 @@ class SubtasksAgent(Agent, NNBase):
             c_precision=(torch.mean((c[c > 0] == hx.c_truth[c > 0]).float())),
         )
         # subtask_association=cramers_v)
-        aux_loss = hx.c_loss - self.entropy_coef * entropies.mean()
+        aux_loss = hx.c_loss.mean() - self.entropy_coef * entropies.mean() # TODO
 
         for k, v in hx._asdict().items():
             if k.endswith('_loss'):
