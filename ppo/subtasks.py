@@ -95,15 +95,11 @@ class SubtasksAgent(Agent, NNBase):
                 g_int=FixedCategorical(hx.g_probs),
             )
         else:
-            # probs = rm.pi_theta(subtask[:, :, 0, 0]).probs
-            # old_g = rm.g_one_hots[hx.g_int.long().flatten()]
-            # g_dist = FixedCategorical(probs=interp(old_g, hx.g_probs, hx.c))
             dists = SubtasksActions(
                 a=a_dist,
                 b=None,
                 c=None,
                 l=None,
-                # g_int=g_dist)
                 g_int=FixedCategorical(hx.g_probs))
 
         if action is None:
@@ -280,7 +276,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             lambda in_size: nn.Sequential(
                 init_(nn.Linear(in_size, 3)),  # 3 for {-1, 0, +1}
             ),
-            in_size=1)
+            in_size=hidden_size)
 
         self.pi_theta = Categorical(subtask_size, action_space.g_int.n)
 
@@ -475,7 +471,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # else:
             # h2 = self.subcontroller(conv_out)
 
-            logits = self.phi_shift(next_subtask[i])
+            logits = self.phi_shift(h)
             l_target = 1 - next_subtask[i].long().flatten()
             if self.hard_update:
                 dist = FixedCategorical(logits=logits)
