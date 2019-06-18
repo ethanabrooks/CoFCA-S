@@ -100,7 +100,8 @@ class SubtasksAgent(Agent, NNBase):
                 b=None,
                 c=None,
                 l=None,
-                g_int=FixedCategorical(hx.g_probs))
+                # g_int=FixedCategorical(hx.g_probs))
+                g_int=None)  # TODO
 
         if action is None:
             if self.teacher_agent:
@@ -148,7 +149,7 @@ class SubtasksAgent(Agent, NNBase):
             c_precision=(torch.mean((c[c > 0] == hx.c_truth[c > 0]).float())),
         )
         # subtask_association=cramers_v)
-        aux_loss = -self.entropy_coef * entropies.mean()
+        aux_loss = hx.c_loss - self.entropy_coef * entropies.mean()
 
         for k, v in hx._asdict().items():
             if k.endswith('_loss'):
@@ -483,6 +484,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                         l_target,
                         reduction='none',
                     ).unsqueeze(1))
+                l_idxs = torch.zeros_like(c).long().flatten()
+                l = self.l_one_hots[l_idxs]  # TODO
 
             p2 = batch_conv1d(p, l)
             p2[:, -1] += 1 - p2.sum(dim=-1)
