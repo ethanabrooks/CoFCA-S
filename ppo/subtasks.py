@@ -95,7 +95,10 @@ class SubtasksAgent(Agent, NNBase):
                 g_int=FixedCategorical(hx.g_probs),
             )
         else:
-            g_dist = rm.pi_theta(subtask[:, :, 0, 0])
+            c = torch.sigmoid(rm.phi_update(next_subtask[:, :, 0, 0])[:, :1])
+            probs = rm.pi_theta(subtask[:, :, 0, 0]).probs
+            old_g = rm.g_one_hots[hx.g_int.long().flatten()]
+            g_dist = FixedCategorical(probs=interp(old_g, hx.g_probs, c))
             dists = SubtasksActions(
                 a=a_dist, b=None, c=None, l=None, g_int=g_dist)
             # g_int=FixedCategorical(hx.g_probs))
