@@ -240,7 +240,9 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             in_size=conv_out_size)  # h
 
         self.phi_update = trace(
-            lambda in_size: init_(nn.Linear(in_size, 1), 'sigmoid'), in_size=8)
+            lambda in_size: init_(nn.Linear(in_size, 1), 'sigmoid'),
+            in_size=self.obs_sections.base * action_space.a.n * int(
+                task_space.nvec[0].prod()))
 
         self.phi_shift = trace(
             lambda in_size: nn.Sequential(
@@ -413,8 +415,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                     obs4d[p, q + 1, 2, q, 5],
                 ]
                 # print('o', o)
-                return torch.cat(o, dim=-1)
-                # return obs4d.view(N, -1)
+                # return torch.cat(o, dim=-1)
+                return obs4d.view(N, -1)
 
             subtask = float_subtask.long()
             subtask_param = M[torch.arange(N), subtask.long().flatten()]
