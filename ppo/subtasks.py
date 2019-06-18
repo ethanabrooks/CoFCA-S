@@ -512,10 +512,10 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             r_repl = torch.stack(r_repl).squeeze(1).detach()
 
             # g
-            cg = self.phi_update(get_debug_in(hx.g_binary))
+            # cg = self.phi_update(get_debug_in(hx.g_binary))
             old_g = self.g_one_hots[g_int[i].long().flatten()]
             dist = FixedCategorical(
-                probs=torch.clamp(interp(old_g, p, cg), 0., 1.))
+                probs=torch.clamp(interp(old_g, p, c), 0., 1.))
             # dist = FixedCategorical(probs=p)
             sample_new(g_int[i + 1], dist)
             outputs.g_int.append(g_int[i + 1])
