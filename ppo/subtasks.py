@@ -493,8 +493,10 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             p2 = batch_conv1d(p, l)
             r2 = p2 @ M
-            p = interp(p, p2.squeeze(1), c)
-            r = interp(r, r2.squeeze(1), c)
+            # p = interp(p, p2.squeeze(1), c)
+            # r = interp(r, r2.squeeze(1), c)
+            p = p2.squeeze(1)
+            r = r2.squeeze(1)
             outputs.p.append(p)
             outputs.r.append(r)
             outputs.h.append(h)
