@@ -58,6 +58,8 @@ class SubtasksAgent(Agent, NNBase):
                 self.action_space.g_int.n,
                 self.action_space.g_int.n,
                 dtype=torch.long))
+        self.debug_network = Categorical(task_space.nvec[0].sum(),
+                                   self.action_space.g_int.n)
 
     def forward(self, inputs, rnn_hxs, masks, action=None,
                 deterministic=False):
@@ -98,7 +100,8 @@ class SubtasksAgent(Agent, NNBase):
                 b=None,
                 c=None,
                 l=None,
-                g_int=FixedCategorical(hx.g_probs))
+                g_int=self.debug_network(subtask[:, :, 0, 0]))
+            # g_int=FixedCategorical(hx.g_probs))
 
         if action is None:
             if self.teacher_agent:
