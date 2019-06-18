@@ -307,7 +307,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             g_int=1,
             b=1,
             b_probs=2,
-            g_probs=action_space.g_int.n,
+            g_probs=self.n_subtasks,
             c=1,
             c_truth=1,
             c_probs=2,
@@ -462,7 +462,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 else:
                     outputs.c_loss.append(torch.zeros_like(c))
 
-            outputs.c.append(c)
+            outputs.c.append(next_subtask[i])
 
             outputs.c_truth.append(next_subtask[i])
             # TODO: figure this out
@@ -490,8 +490,12 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                         l_target,
                         reduction='none',
                     ).unsqueeze(1))
+                l_idxs = torch.zeros_like(c).long().flatten()
+                l = self.l_one_hots[l_idxs]  # TODO
 
             p2 = batch_conv1d(p, l)
+            p2 = torch.max(p2, torch.zeros_like(p2))
+            p2 = p2 / p2.sum(dim=-1, keepdim=True)
             r2 = p2 @ M
             p = interp(p, p2.squeeze(1), c)
             r = interp(r, r2.squeeze(1), c)
@@ -507,22 +511,24 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             r_repl = torch.stack(r_repl).squeeze(1).detach()
 
             # g
-            probs = self.pi_theta(r).probs
+            # probs = self.pi_theta(r).probs
             # dist = FixedCategorical(probs=interp(hx.g_probs, probs, c))
-            dist = FixedCategorical(probs=probs)
+            dist = FixedCategorical(probs=p)
             sample_new(actions.g_int[i], dist)
             outputs.g_int.append(actions.g_int[i])
             outputs.g_probs.append(dist.probs)
 
             # g_loss
-            g_target = []
-            for j in range(N):
-                g_target.append(self.g_binary_to_int(M[j, subtask[j]]))
-            g_target = torch.stack(g_target).detach()
-            outputs.g_loss.append(-dist.log_probs(g_target))
+            # g_target = []
+            # for j in range(N):
+            # g_target.append(self.g_binary_to_int(M[j, subtask[j]]))
+            # g_target = torch.stack(g_target).detach()
+            outputs.g_loss.append(-dist.log_probs(subtask))
 
-            g_binary2 = self.g_int_to_binary(actions.g_int[i].flatten())
-            g_binary = interp(g_binary, g_binary2, c)
+            # g_binary2 = self.g_int_to_binary(actions.g_int[i].flatten())
+            # g_binary = interp(g_binary, g_binary2, c)
+            g_idxs = actions.g_int[i].long().flatten()
+            g_binary = M[torch.arange(N), g_idxs]
             outputs.g_binary.append(g_binary)
 
             # b
@@ -552,11 +558,12 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             stacked.append(torch.stack(x))
 
         # for name, x, size in zip(RecurrentState._fields, stacked,
-        #                          self.state_sizes):
-        #     if x.size(2) != size:
-        #         print(name, x, size)
-        #         import ipdb
-        #         ipdb.set_trace()
+                                 # self.state_sizes):
+            # if x.size(2) != size:
+                # print(name, x, size)
+                # import ipdb
+                # ipdb.set_trace()
+            # print(name, x.shape)
 
         hx = torch.cat(stacked, dim=-1)
         return hx, hx[-1]
