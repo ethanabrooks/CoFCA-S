@@ -436,8 +436,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 outputs.c_probs.append(dist.probs)
                 outputs.c_loss.append(-dist.log_probs(next_subtask[i]))
             else:
-                # c = torch.sigmoid(logits[:, :1])
-                c = next_subtask[i]
+                c = torch.sigmoid(logits[:, :1])
                 outputs.c_probs.append(torch.zeros(
                     (N, 2), device=c.device))  # dummy value
                 if torch.any(next_subtask[i] > 0):
