@@ -81,9 +81,6 @@ class SubtasksAgent(Agent, NNBase):
         rm = self.recurrent_module
         hx = RecurrentState(*rm.parse_hidden(all_hxs))
 
-        # print('g       ', hx.g[0])
-        # print('g_target', g_target[0, :, 0, 0])
-
         if self.teacher_agent:
             a_dist = None
         else:
@@ -98,12 +95,9 @@ class SubtasksAgent(Agent, NNBase):
                 g_int=FixedCategorical(hx.g_probs),
             )
         else:
+            g_dist = rm.pi_theta(subtask[:, :, 0, 0])
             dists = SubtasksActions(
-                a=a_dist,
-                b=None,
-                c=None,
-                l=None,
-                g_int=self.debug_network(subtask[:, :, 0, 0]))
+                a=a_dist, b=None, c=None, l=None, g_int=g_dist)
             # g_int=FixedCategorical(hx.g_probs))
 
         if action is None:
