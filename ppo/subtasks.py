@@ -262,8 +262,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             in_size=conv_out_size)  # h
 
         self.phi_update = trace(
-            lambda in_size: init_(nn.Linear(in_size, 1), 'sigmoid'),
-            in_size=hidden_size)
+            lambda in_size: init_(nn.Linear(in_size, 1), 'sigmoid'), in_size=1)
 
         self.phi_shift = trace(
             lambda in_size: nn.Sequential(
@@ -427,7 +426,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             ))
 
             # s = self.f(torch.cat([conv_out, r, g_binary, b], dim=-1))
-            logits = self.phi_update(h)
+            logits = self.phi_update(next_subtask[i])
             if self.hard_update:
                 dist = FixedCategorical(logits=logits)
                 new = actions.c[i] < 0
