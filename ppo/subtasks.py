@@ -420,7 +420,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             subtask = float_subtask.long()
             subtask_param = M[torch.arange(N), subtask.long().flatten()]
-            debug_in = get_debug_in(subtask_param).float()
+            debug_in = get_debug_in(hx.g_binary).float()
             float_subtask += next_subtask[i]
             outputs.subtask.append(float_subtask)
 
