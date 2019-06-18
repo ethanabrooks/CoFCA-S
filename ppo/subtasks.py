@@ -241,7 +241,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
         self.phi_update = trace(
             lambda in_size: init_(nn.Linear(in_size, 1), 'sigmoid'),
-            in_size=self.obs_sections.base * action_space.a.n * int(
+            in_size=2 * self.obs_sections.base * action_space.a.n * int(
                 task_space.nvec[0].prod()))
 
         self.phi_shift = trace(
@@ -419,7 +419,9 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             subtask = float_subtask.long()
             subtask_param = M[torch.arange(N), subtask.long().flatten()]
-            debug_in = get_debug_in(hx.r).float()
+            debug_in = torch.cat(
+                [get_debug_in(hx.r),
+                 get_debug_in(hx.g_binary)], dim=-1).float()
             float_subtask += next_subtask[i]
             outputs.subtask.append(float_subtask)
 
@@ -512,7 +514,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             r_repl = torch.stack(r_repl).squeeze(1).detach()
 
             # g
-            # cg = self.phi_update(get_debug_in(hx.g_binary))
             old_g = self.g_one_hots[g_int[i].long().flatten()]
             dist = FixedCategorical(
                 probs=torch.clamp(interp(old_g, p, c), 0., 1.))
