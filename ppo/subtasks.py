@@ -1,10 +1,10 @@
 from collections import namedtuple
 
+from gym.spaces import Box, Discrete
 import numpy as np
 import torch
-import torch.jit
-from gym.spaces import Box, Discrete
 from torch import nn as nn
+import torch.jit
 from torch.nn import functional as F
 
 from ppo.agent import Agent, AgentValues, NNBase
@@ -12,8 +12,7 @@ from ppo.distributions import Categorical, DiagGaussian, FixedCategorical
 from ppo.layers import Concat, Flatten, Parallel, Product, Reshape
 from ppo.teacher import SubtasksTeacher
 from ppo.utils import batch_conv1d, broadcast_3d, init_, interp, trace
-from ppo.wrappers import (SubtasksActions, get_subtasks_action_sections,
-                          get_subtasks_obs_sections)
+from ppo.wrappers import SubtasksActions, get_subtasks_action_sections, get_subtasks_obs_sections
 
 RecurrentState = namedtuple(
     'RecurrentState',
@@ -262,8 +261,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             in_size=conv_out_size)  # h
 
         self.phi_update = trace(
-            lambda in_size: init_(nn.Linear(in_size, 1), 'sigmoid'),
-            in_size=hidden_size)
+            lambda in_size: init_(nn.Linear(in_size, 1), 'sigmoid'), in_size=8)
 
         self.phi_shift = trace(
             lambda in_size: nn.Sequential(
@@ -420,14 +418,43 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             j, k, l = torch.split(agent_layer.nonzero(), [1, 1, 1], dim=-1)
             debug_obs = obs[i, j, :, k, l].squeeze(1)
 
-            h = self.f((
-                debug_obs,
-                self.a_one_hots[a_idxs],
-                *torch.split(g_binary, tuple(self.task_nvec[0]), dim=-1),
-            ))
+            def get_debug_in(subtask_param):
+                task_part = subtask_param[:, :3]
+                obj_part = subtask_param[:, -4:]
+                action_part = self.a_one_hots[a_idxs]
+                obs4d = (debug_obs.unsqueeze(2).unsqueeze(3).unsqueeze(4) *
+                         task_part.unsqueeze(1).unsqueeze(3).unsqueeze(4) *
+                         obj_part.unsqueeze(1).unsqueeze(2).unsqueeze(4) *
+                         action_part.unsqueeze(1).unsqueeze(2).unsqueeze(3))
+                # print(debug_obs[0])
+                # print(task_part[0])
+                # print(obj_part[0])
+                # print(action_part[0])
+                # print(obs4d[0, 2, 0, 1, :])
+                p, q = torch.split(obj_part.nonzero(), [1, 1], dim=-1)
+                o = [
+                    obs4d[p, q + 1, 0, q, :].squeeze(1),
+                    obs4d[p, q + 1, 1, q, 4],
+                    obs4d[p, q + 1, 2, q, 5],
+                ]
+                import ipdb
+                ipdb.set_trace()
+                return torch.cat(o, dim=-1)
+                # return obs4d.view(N, -1)
+
+            subtask_param = M[torch.arange(N), subtask.long().flatten()]
+            debug_in = get_debug_in(subtask_param).float()
+
+            print('debug_in', debug_in)
+            print('truth', next_subtask[i])
+            # h = self.f((
+            # debug_obs,
+            # self.a_one_hots[a_idxs],
+            # *torch.split(g_binary, tuple(self.task_nvec[0]), dim=-1),
+            # ))
 
             # s = self.f(torch.cat([conv_out, r, g_binary, b], dim=-1))
-            logits = self.phi_update(h)
+            logits = self.phi_update(debug_in)
             if self.hard_update:
                 dist = FixedCategorical(logits=logits)
                 new = actions.c[i] < 0
@@ -436,8 +463,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 outputs.c_probs.append(dist.probs)
                 outputs.c_loss.append(-dist.log_probs(next_subtask[i]))
             else:
-                # c = torch.sigmoid(logits[:, :1])
-                c = next_subtask[i]
+                c = torch.sigmoid(logits[:, :1])
+                # c = next_subtask[i]
                 outputs.c_probs.append(torch.zeros(
                     (N, 2), device=c.device))  # dummy value
                 if torch.any(next_subtask[i] > 0):
@@ -539,6 +566,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             conv_out2 = self.conv2((obs[i], g_broad))
             dist = self.actor(conv_out2)
             sample_new(a[i + 1], dist)
+            print('a', a[i+1])
             # a[:] = 'wsadeq'.index(input('act:'))
 
             outputs.a.append(a[i + 1])

@@ -1,10 +1,10 @@
 from collections import namedtuple
 
 import gym
-import numpy as np
-import torch
 from gym import spaces
 from gym.spaces import Box
+import numpy as np
+import torch
 
 from common.vec_env import VecEnvWrapper
 from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
@@ -60,7 +60,7 @@ class DebugWrapper(gym.Wrapper):
         print('guess', self.last_guess)
         print('truth', self.env.unwrapped.subtask_idx)
         print('reward', self.last_reward)
-        input('pause')
+        # input('pause')
 
 
 class SubtasksWrapper(gym.Wrapper):
