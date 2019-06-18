@@ -401,45 +401,13 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                     *torch.split(
                         subtask_param, tuple(self.task_nvec[0]), dim=-1),
                 ))
-                # task_part = subtask_param[:, :3]
-                # obj_part = subtask_param[:, -4:]
-                # action_part = self.a_one_hots[a_idxs]
-                # obs4d = (debug_obs.unsqueeze(2).unsqueeze(3).unsqueeze(4) *
-                # task_part.unsqueeze(1).unsqueeze(3).unsqueeze(4) *
-                # obj_part.unsqueeze(1).unsqueeze(2).unsqueeze(4) *
-                # action_part.unsqueeze(1).unsqueeze(2).unsqueeze(3))
-                # print('obs', debug_obs[0])
-                # print('task', task_part[0])
-                # print('obj', obj_part[0])
-                # print('action', action_part[0])
-                # p, q = torch.split(obj_part.nonzero(), [1, 1], dim=-1)
-                # o = [
-                # obs4d[p, q + 1, 0, q, :].squeeze(1),
-                # obs4d[p, q + 1, 1, q, 4],
-                # obs4d[p, q + 1, 2, q, 5],
-                # ]
-                # print('o', o)
-                # return torch.cat(o, dim=-1)
-                # return obs4d.view(N, -1)
 
             subtask = float_subtask.long()
-            subtask_param = M[torch.arange(N), subtask.long().flatten()]
-            phi_update_in = get_phi_update_in(hx.r).float()
+            h = get_phi_update_in(hx.r).float()
             float_subtask += next_subtask[i]
             outputs.subtask.append(float_subtask)
 
-            # print('phi_update_in', phi_update_in)
-            # print('truth', next_subtask[i])
-            # if not torch.all(torch.any(phi_update_in > 0, dim=-1, keepdim=True).float() == next_subtask[i]):
-            # import ipdb; ipdb.set_trace()
-            # h = self.f((
-            # debug_obs,
-            # self.a_one_hots[a_idxs],
-            # *torch.split(g_binary, tuple(self.task_nvec[0]), dim=-1),
-            # ))
-
-            # s = self.f(torch.cat([conv_out, r, g_binary, b], dim=-1))
-            logits = self.phi_update(phi_update_in)
+            logits = self.phi_update(h)
             if self.hard_update:
                 dist = FixedCategorical(logits=logits)
                 new = actions.c[i] < 0
@@ -533,8 +501,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # g_target = torch.stack(g_target).detach()
             outputs.g_loss.append(-dist.log_probs(subtask))
 
-            # g_binary2 = self.g_int_to_binary(g_int[i +1 ].flatten())
-            # g_binary = interp(g_binary, g_binary2, c)
             g_idxs = g_int[i + 1].long().flatten()
             g_binary = M[torch.arange(N), g_idxs]
             outputs.g_binary.append(g_binary)
