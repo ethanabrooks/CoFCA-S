@@ -58,8 +58,11 @@ class SubtasksAgent(Agent, NNBase):
                 self.action_space.g_int.n,
                 self.action_space.g_int.n,
                 dtype=torch.long))
-        self.debug_network = Categorical(task_space.nvec[0].sum(),
-                                   self.action_space.g_int.n)
+        self.debug_network = nn.Sequential(
+            init_(nn.Linear(task_space.nvec[0].sum(), hidden_size), 'relu'),
+            nn.ReLU(),
+            Categorical(hidden_size, self.action_space.g_int.n),
+        )
 
     def forward(self, inputs, rnn_hxs, masks, action=None,
                 deterministic=False):
