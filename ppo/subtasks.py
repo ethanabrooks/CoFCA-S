@@ -462,7 +462,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 else:
                     outputs.c_loss.append(torch.zeros_like(c))
 
-            outputs.c.append(next_subtask[i])
+            outputs.c.append(c)
 
             outputs.c_truth.append(next_subtask[i])
             # TODO: figure this out
@@ -558,12 +558,12 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             stacked.append(torch.stack(x))
 
         # for name, x, size in zip(RecurrentState._fields, stacked,
-                                 # self.state_sizes):
-            # if x.size(2) != size:
-                # print(name, x, size)
-                # import ipdb
-                # ipdb.set_trace()
-            # print(name, x.shape)
+        # self.state_sizes):
+        # if x.size(2) != size:
+        # print(name, x, size)
+        # import ipdb
+        # ipdb.set_trace()
+        # print(name, x.shape)
 
         hx = torch.cat(stacked, dim=-1)
         return hx, hx[-1]
