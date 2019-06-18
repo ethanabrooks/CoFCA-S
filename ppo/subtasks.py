@@ -443,7 +443,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 outputs.c_probs.append(dist.probs)
                 outputs.c_loss.append(-dist.log_probs(next_subtask[i]))
             else:
-                c = torch.sigmoid(logits[:, :1])
+                # c = torch.sigmoid(logits[:, :1])
+                c = next_subtask[i]
                 outputs.c_probs.append(torch.zeros(
                     (N, 2), device=c.device))  # dummy value
                 if torch.any(next_subtask[i] > 0):
@@ -494,8 +495,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 l = self.l_one_hots[l_idxs]  # TODO
 
             p2 = batch_conv1d(p, l)
-            p2 = torch.max(p2, torch.zeros_like(p2))
-            p2 = p2 / p2.sum(dim=-1, keepdim=True)
+            p2[:, -1] += 1 - p2.sum(dim=-1)
+            p2 = torch.clamp(p2, 0., 1.)
             r2 = p2 @ M
             p = interp(p, p2.squeeze(1), c)
             r = interp(r, r2.squeeze(1), c)
