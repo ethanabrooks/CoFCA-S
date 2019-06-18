@@ -1,14 +1,14 @@
-from collections import namedtuple
 import itertools
 import re
 import time
+from collections import namedtuple
 
 import gym
+import numpy as np
+import six
 from gym import spaces
 from gym.envs.registration import EnvSpec
 from gym.utils import seeding
-import numpy as np
-import six
 
 from ppo.utils import set_index
 from rl_utils import cartesian_product
@@ -126,7 +126,7 @@ class SubtasksGridWorld(gym.Env):
     def transition_strings(self):
         return np.array(list('👆👇👈👉pt'))
 
-    def render(self, mode='human'):
+    def render(self, mode='human', sleep_time=.5):
         def print_subtask(task_type, count, task_object_type):
             print(self.task_types[task_type], count,
                   self.object_types[task_object_type])
@@ -158,7 +158,7 @@ class SubtasksGridWorld(gym.Env):
             print(''.join(row), end='')
             print(six.u('\x1b[49m\x1b[39m'))
 
-        time.sleep(2 if self.last_terminal else .5)
+        time.sleep(4 * sleep_time if self.last_terminal else sleep_time)
 
     def subtask_generator(self):
         task_types = np.arange(len(self.task_types))

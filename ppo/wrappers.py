@@ -57,19 +57,20 @@ class DebugWrapper(gym.Wrapper):
         subtask[1] -= 1
         truth = np.ravel_multi_index(subtask, self.subtask_space)
         r = float(np.all(guess == truth)) - 1
-        self.last_guess = actions
+        self.last_guess = guess
         self.last_reward = r
         return s, r, t, i
 
     def render(self, mode='human'):
         print('########################################')
-        super().render()
+        super().render(sleep_time=0)
         print('guess', self.last_guess)
         subtask = self.env.unwrapped.subtask.copy()
         subtask[1] -= 1
         truth = np.ravel_multi_index(subtask, self.subtask_space)
         print('truth', truth)
         print('reward', self.last_reward)
+        input('pause')
 
 
 class SubtasksWrapper(gym.Wrapper):
