@@ -95,22 +95,9 @@ class SubtasksAgent(Agent, NNBase):
                 g_int=FixedCategorical(hx.g_probs),
             )
         else:
-            old_hx = RecurrentState(*rm.parse_hidden(rnn_hxs))
-            a_idxs = torch.cat([old_hx.a, hx.a], dim=0)[:obs.size(0)]
-            agent_layer = obs[:, 6, :, :].long()
-            j, k, l = torch.split(agent_layer.nonzero(), [1, 1, 1], dim=-1)
-            debug_obs = obs[j, :, k, l].squeeze(1)
-
-            h = rm.f((
-                debug_obs,
-                rm.a_one_hots[a_idxs.long().flatten()],
-                *torch.split(
-                    subtask[:, :, 0, 0], tuple(rm.task_nvec[0]), dim=-1),
-            ))
-            c = torch.sigmoid(rm.phi_update(h)[:, :1])
             probs = rm.pi_theta(subtask[:, :, 0, 0]).probs
             old_g = rm.g_one_hots[hx.g_int.long().flatten()]
-            g_dist = FixedCategorical(probs=interp(old_g, hx.g_probs, c))
+            g_dist = FixedCategorical(probs=interp(old_g, hx.g_probs, hx.c))
             dists = SubtasksActions(
                 a=a_dist, b=None, c=None, l=None, g_int=g_dist)
             # g_int=FixedCategorical(hx.g_probs))
