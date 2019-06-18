@@ -387,9 +387,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
         n = obs.size(0)
         for i in range(n):
-            float_subtask += next_subtask[i]
-            outputs.subtask.append(float_subtask)
-            subtask = float_subtask.long()
             conv_out = self.conv1(obs[i])
 
             a_idxs = a[i].flatten().long()
@@ -405,27 +402,30 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                          task_part.unsqueeze(1).unsqueeze(3).unsqueeze(4) *
                          obj_part.unsqueeze(1).unsqueeze(2).unsqueeze(4) *
                          action_part.unsqueeze(1).unsqueeze(2).unsqueeze(3))
-                # print(debug_obs[0])
-                # print(task_part[0])
-                # print(obj_part[0])
-                # print(action_part[0])
-                # print(obs4d[0, 2, 0, 1, :])
+                # print('obs', debug_obs[0])
+                # print('task', task_part[0])
+                # print('obj', obj_part[0])
+                # print('action', action_part[0])
                 p, q = torch.split(obj_part.nonzero(), [1, 1], dim=-1)
                 o = [
                     obs4d[p, q + 1, 0, q, :].squeeze(1),
                     obs4d[p, q + 1, 1, q, 4],
                     obs4d[p, q + 1, 2, q, 5],
                 ]
-                import ipdb
-                ipdb.set_trace()
+                # print('o', o)
                 return torch.cat(o, dim=-1)
                 # return obs4d.view(N, -1)
 
+            subtask = float_subtask.long()
             subtask_param = M[torch.arange(N), subtask.long().flatten()]
             debug_in = get_debug_in(subtask_param).float()
+            float_subtask += next_subtask[i]
+            outputs.subtask.append(float_subtask)
 
-            print('debug_in', debug_in)
-            print('truth', next_subtask[i])
+            # print('debug_in', debug_in)
+            # print('truth', next_subtask[i])
+            # if not torch.all(torch.any(debug_in > 0, dim=-1, keepdim=True).float() == next_subtask[i]):
+            # import ipdb; ipdb.set_trace()
             # h = self.f((
             # debug_obs,
             # self.a_one_hots[a_idxs],
@@ -552,7 +552,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 dist = self.teacher_agent(
                     teacher_inputs, rnn_hxs=None, masks=None).dist
             sample_new(a[i + 1], dist)
-            print('a', a[i + 1])
             # a[:] = 'wsadeq'.index(input('act:'))
 
             outputs.a.append(a[i + 1])
