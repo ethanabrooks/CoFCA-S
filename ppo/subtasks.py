@@ -266,8 +266,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         self.register_buffer('l_one_hots', torch.eye(3))
         self.register_buffer('p_one_hots', torch.eye(self.n_subtasks))
         self.register_buffer('a_one_hots', torch.eye(int(action_space.a.n)))
-        self.register_buffer('g_one_hots',
-                             torch.eye(int(task_space.nvec[0].prod())))
+        self.register_buffer('g_one_hots', torch.eye(action_space.g_int.n))
         self.register_buffer('subtask_space',
                              torch.tensor(task_space.nvec[0].astype(np.int64)))
 
@@ -372,8 +371,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         r = hx.r
         g_binary = hx.g_binary
         float_subtask = hx.subtask
-        a = torch.cat([hx.a, actions.a], dim=0)
-
         for x in hx:
             x.squeeze_(0)
 
@@ -382,8 +379,10 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             r[new_episode] = M[new_episode, 0]  # initialize r to first subtask
             g0 = M[new_episode, 0]
             g_binary[new_episode] = g0  # initialize g_binary to first subtask
-            hx.g_int[new_episode] = self.g_binary_to_int(g0).unsqueeze(
-                1).float()
+            hx.g_int[new_episode] = 0.
+
+        a = torch.cat([hx.a.unsqueeze(0), actions.a], dim=0)
+        g_int = torch.cat([hx.g_int.unsqueeze(0), actions.g_int], dim=0)
 
         outputs = RecurrentState(*[[] for _ in RecurrentState._fields])
 
@@ -513,11 +512,13 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             r_repl = torch.stack(r_repl).squeeze(1).detach()
 
             # g
-            # probs = self.pi_theta(r).probs
-            # dist = FixedCategorical(probs=interp(hx.g_probs, probs, c))
-            dist = FixedCategorical(probs=p)
-            sample_new(actions.g_int[i], dist)
-            outputs.g_int.append(actions.g_int[i])
+            cg = self.phi_update(get_debug_in(hx.g_binary))
+            old_g = self.g_one_hots[g_int[i].long().flatten()]
+            dist = FixedCategorical(
+                probs=torch.clamp(interp(old_g, p, cg), 0., 1.))
+            # dist = FixedCategorical(probs=p)
+            sample_new(g_int[i + 1], dist)
+            outputs.g_int.append(g_int[i + 1])
             outputs.g_probs.append(dist.probs)
 
             # g_loss
@@ -527,9 +528,9 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # g_target = torch.stack(g_target).detach()
             outputs.g_loss.append(-dist.log_probs(subtask))
 
-            # g_binary2 = self.g_int_to_binary(actions.g_int[i].flatten())
+            # g_binary2 = self.g_int_to_binary(g_int[i +1 ].flatten())
             # g_binary = interp(g_binary, g_binary2, c)
-            g_idxs = actions.g_int[i].long().flatten()
+            g_idxs = g_int[i + 1].long().flatten()
             g_binary = M[torch.arange(N), g_idxs]
             outputs.g_binary.append(g_binary)
 
