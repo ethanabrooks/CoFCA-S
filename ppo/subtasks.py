@@ -95,12 +95,16 @@ class SubtasksAgent(Agent, NNBase):
                 g_int=FixedCategorical(hx.g_probs),
             )
         else:
-            probs = rm.pi_theta(subtask[:, :, 0, 0]).probs
-            old_g = rm.g_one_hots[hx.g_int.long().flatten()]
-            g_dist = FixedCategorical(probs=interp(old_g, hx.g_probs, hx.c))
+            # probs = rm.pi_theta(subtask[:, :, 0, 0]).probs
+            # old_g = rm.g_one_hots[hx.g_int.long().flatten()]
+            # g_dist = FixedCategorical(probs=interp(old_g, hx.g_probs, hx.c))
             dists = SubtasksActions(
-                a=a_dist, b=None, c=None, l=None, g_int=g_dist)
-            # g_int=FixedCategorical(hx.g_probs))
+                a=a_dist,
+                b=None,
+                c=None,
+                l=None,
+                # g_int=g_dist)
+                g_int=FixedCategorical(hx.g_probs))
 
         if action is None:
             if self.teacher_agent:
@@ -523,8 +527,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             g_target = torch.stack(g_target).detach()
             outputs.g_loss.append(-dist.log_probs(g_target))
 
-            g_binary = self.g_int_to_binary(actions.g_int[i].flatten())
-            # g_binary = interp(g_binary, g_binary2, c)
+            g_binary2 = self.g_int_to_binary(actions.g_int[i].flatten())
+            g_binary = interp(g_binary, g_binary2, c)
             outputs.g_binary.append(g_binary)
 
             # b
