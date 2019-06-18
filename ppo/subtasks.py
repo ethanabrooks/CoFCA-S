@@ -464,8 +464,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                         l_target,
                         reduction='none',
                     ).unsqueeze(1))
-                l_idxs = torch.zeros_like(c).long().flatten()
-                l = self.l_one_hots[l_idxs]  # TODO
 
             p2 = batch_conv1d(p, l)
             p2[:, -1] += 1 - p2.sum(dim=-1)
