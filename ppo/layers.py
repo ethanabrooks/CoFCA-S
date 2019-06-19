@@ -5,7 +5,16 @@ import torch
 from torch import nn as nn
 import torch.jit
 
-from ppo.utils import broadcast_3d
+from ppo.utils import broadcast3d
+
+
+class CumSum(torch.jit.ScriptModule):
+    def __init__(self, **kwargs):
+        self.kwargs = kwargs
+        super().__init__()
+
+    def forward(self, inputs):
+        return torch.cumsum(inputs, **self.kwargs)
 
 
 class Flatten(nn.Module):
@@ -14,12 +23,12 @@ class Flatten(nn.Module):
 
 
 class Concat(torch.jit.ScriptModule):
-    def __init__(self, dim=-1):
-        self.dim = dim
+    def __init__(self, **kwargs):
+        self.kwargs = kwargs
         super().__init__()
 
     def forward(self, inputs):
-        return torch.cat(inputs, dim=self.dim)
+        return torch.cat(inputs, **self.kwargs)
 
 
 class Reshape(torch.jit.ScriptModule):
@@ -37,7 +46,7 @@ class Broadcast3d(torch.jit.ScriptModule):
         self.shape = shape
 
     def forward(self, inputs):
-        return broadcast_3d(inputs, self.shape)
+        return broadcast3d(inputs, self.shape)
 
 
 class Product(torch.jit.ScriptModule):

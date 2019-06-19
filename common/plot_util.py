@@ -3,12 +3,11 @@ import json
 import os
 import os.path as osp
 
+from baselines.bench import monitor
+from baselines.logger import read_csv, read_json
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas
-
-from baselines.bench import monitor
-from baselines.logger import read_csv, read_json
 
 
 def smooth(y, radius, mode='two_sided', valid_only=False):

@@ -1,7 +1,7 @@
+from baselines.a2c.utils import fc
 import gym
 import tensorflow as tf
 
-from baselines.a2c.utils import fc
 from common import tf_util
 from common.distributions import make_pdtype
 from common.input import encode_observation, observation_placeholder

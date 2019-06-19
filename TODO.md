@@ -1,3 +1,6 @@
-* parallelize teacher training
-* finish code for Jun's algorithm
-* write code for skill distillation
+* implement and check `imitation`
+* implement `train-metacontroller`/`imitate`
+* bring in embeddings
+* implement analogy loss
+* develop train/test sets
+* get analogies working

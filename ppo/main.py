@@ -6,8 +6,9 @@ from collections import ChainMap
 from pathlib import Path
 from pprint import pprint
 
-from gym.wrappers import TimeLimit
 import torch
+from gym.wrappers import TimeLimit
+from rl_utils import hierarchical_parse_args
 
 import gridworld_env
 from gridworld_env.subtasks_gridworld import SubtasksGridWorld, get_task_space
@@ -16,7 +17,6 @@ from ppo.subtasks import SubtasksAgent
 from ppo.teacher import SubtasksTeacher
 from ppo.train import Train
 from ppo.wrappers import SubtasksWrapper, VecNormalize
-from rl_utils import hierarchical_parse_args
 
 
 def cli():
@@ -41,9 +41,9 @@ def make_subtasks_env(env_id, **kwargs):
 
     gridworld_args = gridworld_env.get_args(env_id)
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
-    return helper(
-        **ChainMap(kwargs, gridworld_args)
-    )  # combines kwargs and gridworld_args with preference for kwargs
+    return helper(**ChainMap(
+        kwargs, gridworld_args
+    ))  # combines kwargs and gridworld_args with preference for kwargs
 
 
 def subtasks_cli():
@@ -169,16 +169,16 @@ def teach_cli():
             # noinspection PyMethodOverriding
             @staticmethod
             def build_agent(envs, **agent_args):
-                teacher_agent = None
+                agent = None
                 if teacher_agent_load_path:
-                    teacher_agent = SubtasksTeacher(
+                    agent = SubtasksTeacher(
                         obs_shape=envs.observation_space.shape,
                         action_space=envs.action_space,
                         task_space=task_space,
                         **agent_args)
 
                     state_dict = torch.load(teacher_agent_load_path)
-                    teacher_agent.load_state_dict(state_dict['agent'])
+                    agent.load_state_dict(state_dict['agent'])
                     if isinstance(envs.venv, VecNormalize):
                         envs.venv.load_state_dict(state_dict['vec_normalize'])
                     print(
@@ -194,7 +194,7 @@ def teach_cli():
                     obs_shape=envs.observation_space.shape,
                     action_space=envs.action_space,
                     task_space=task_space,
-                    teacher_agent=teacher_agent,
+                    teacher_agent=agent,
                     **_subtasks_args)
 
         # ppo_args.update(aux_loss_only=True)
