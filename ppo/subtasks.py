@@ -350,6 +350,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 values=outputs.cr,
                 losses=outputs.cr_loss,
                 probs=outputs.cr_probs)
+            g_binary = M[torch.arange(N), G[t]]
             cg = phi_update(
                 subtask_param=g_binary,
                 values=outputs.cg,
@@ -375,11 +376,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             outputs.g_probs.append(dist.probs)
             outputs.g_loss.append(-dist.log_probs(subtask))
 
-            g_idxs = G[t + 1].long().flatten()
-            g_binary = M[torch.arange(N), g_idxs]
-            outputs.g_binary.append(g_binary)
-
             # a
+            g_binary = M[torch.arange(N), G[t + 1]]
             g_broad = broadcast3d(g_binary, self.obs_shape[1:])
             conv_out = self.conv((obs[t], g_broad))
             if self.agent is None:
