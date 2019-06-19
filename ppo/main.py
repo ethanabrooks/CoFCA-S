@@ -5,8 +5,9 @@ from collections import ChainMap
 from pathlib import Path
 from pprint import pprint
 
-from gym.wrappers import TimeLimit
 import torch
+from gym.wrappers import TimeLimit
+from rl_utils import hierarchical_parse_args
 
 import gridworld_env
 from gridworld_env.subtasks_gridworld import SubtasksGridWorld, get_task_space
