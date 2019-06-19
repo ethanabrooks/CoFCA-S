@@ -37,9 +37,10 @@ class SubtasksStudent(SubtasksTeacher):
         self.register_buffer('subtask_space',
                              torch.tensor(task_space.nvec[0].astype(np.int64)))
 
-    @property
-    def d(self):
-        return self.obs_sections.base + self.embedding_dim
+    # TODO
+    # @property
+    # def d(self):
+        # return self.obs_sections.base + self.embedding_dim
 
     def preprocess_obs(self, inputs):
         obs, subtasks, task_broad, next_subtask_broad = torch.split(
@@ -48,7 +49,8 @@ class SubtasksStudent(SubtasksTeacher):
                                self.subtask_space).cumsum(dim=-1)
         embedded = self.embeddings(idxs)
         broadcast = broadcast3d(embedded, self.obs_shape[-2:])
-        return torch.cat([obs, broadcast], dim=1)
+        return torch.cat([obs, subtasks], dim=1)  # TODO
+        # return torch.cat([obs, broadcast], dim=1)
 
     def forward(self, inputs, *args, action=None, **kwargs):
         obs, subtasks, task_broad, next_subtask_broad = torch.split(
