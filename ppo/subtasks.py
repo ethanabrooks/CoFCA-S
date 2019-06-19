@@ -367,8 +367,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 debug_obs = obs[i, j, :, k, l].squeeze(1)
                 task_sections = torch.split(
                     subtask_param, tuple(self.task_nvec[0]), dim=-1)
-                parts = (debug_obs, ) + task_sections + (
-                    self.a_one_hots[idxs], )
+                parts = (debug_obs, self.a_one_hots[idxs]) + task_sections
                 if self.multiplicative_interaction:
                     return self.f(parts)
                 obs4d = 1
