@@ -162,7 +162,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                     stride=1,
                     padding=1), 'relu'), nn.ReLU(), Flatten())
 
-        self.conv2 = nn.Sequential(
+        self.conv = nn.Sequential(
             Concat(dim=1),
             init_(
                 nn.Conv2d(
@@ -500,7 +500,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             # a
             g_broad = broadcast_3d(g_binary, self.obs_shape[1:])
-            conv_out2 = self.conv2((obs[i], g_broad))
+            conv_out2 = self.conv((obs[i], g_broad))
             if self.agent is None:
                 dist = self.actor(conv_out2)
             else:
