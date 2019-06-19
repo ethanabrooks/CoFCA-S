@@ -15,8 +15,7 @@ from ppo.arguments import build_parser, get_args
 from ppo.subtasks import SubtasksAgent
 from ppo.teacher import SubtasksTeacher
 from ppo.train import Train
-from ppo.wrappers import DebugWrapper, SubtasksWrapper, VecNormalize
-from rl_utils import hierarchical_parse_args
+from ppo.wrappers import SubtasksWrapper, VecNormalize
 
 
 def cli():
