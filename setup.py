@@ -29,6 +29,6 @@ setup(
         'teach=ppo.main:teach_cli',
         'single-task=ppo.main:single_task_cli',
         'train-teacher=ppo.main:train_teacher_cli',
-        'subtasks=ppo.main:subtasks_cli',
+        'train-student=ppo.main:train_student_cli',
     ]),
     install_requires=[])

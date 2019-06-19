@@ -24,8 +24,7 @@ RecurrentState = namedtuple(
 # noinspection PyMissingConstructor
 class SubtasksAgent(Agent, NNBase):
     def __init__(self, obs_shape, action_space, task_space, hidden_size,
-                 entropy_coef, alpha, zeta, hard_update, teacher_agent,
-                 **kwargs):
+                 entropy_coef, alpha, zeta, hard_update, agent, **kwargs):
         nn.Module.__init__(self)
         self.zeta = zeta
         self.alpha = alpha
@@ -38,11 +37,11 @@ class SubtasksAgent(Agent, NNBase):
             task_space=task_space,
             hidden_size=hidden_size,
             hard_update=hard_update,
-            teacher_agent=teacher_agent,
+            agent=agent,
             **kwargs,
         )
         self.obs_sections = get_subtasks_obs_sections(task_space)
-        self.agent = teacher_agent
+        self.agent = agent
 
     def forward(self, inputs, rnn_hxs, masks, action=None,
                 deterministic=False):
@@ -125,8 +124,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
     ]
 
     def __init__(self, obs_shape, action_space, task_space, hidden_size,
-                 recurrent, hard_update, teacher_agent,
-                 multiplicative_interaction):
+                 recurrent, hard_update, agent, multiplicative_interaction):
         super().__init__()
         d, h, w = obs_shape
         subtask_space = list(map(int, task_space.nvec[0]))
@@ -139,9 +137,9 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         self.task_nvec = task_space.nvec
         self.action_space = action_space
         self.n_subtasks = n_subtasks
-        if teacher_agent:
-            assert isinstance(teacher_agent, SubtasksTeacher)
-        self.agent = teacher_agent
+        if agent:
+            assert isinstance(agent, SubtasksTeacher)
+        self.agent = agent
         self.recurrent = recurrent
 
         self.conv = nn.Sequential(
@@ -224,14 +222,10 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
     # @torch.jit.script_method
     def g_binary_to_int(self, g_binary):
-        g123 = self.g_binary_to_123(g_binary)
+        g123 = g_binary_to_123(g_binary, self.subtask_space)
         g123[:, :-1] *= self.subtask_space[1:]  # g1 * x2, g2 * x3
         g123[:, 0] *= self.subtask_space[2]  # g1 * x3
         return g123.sum(dim=-1)
-
-    # @torch.jit.script_method
-    def g_binary_to_123(self, g_binary):
-        return g_binary_to_123(g_binary, self.subtask_space)
 
     # @torch.jit.script_method
     def g_int_to_123(self, g):
