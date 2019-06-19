@@ -35,37 +35,32 @@ def get_subtasks_action_sections(action_spaces):
 class DebugWrapper(gym.Wrapper):
     def __init__(self, env):
         super().__init__(env)
-        # self.action_space = spaces.Discrete(
-        # int(self.size_subtask_space * self.size_action_space))
-        self.possible_subtasks = np.array([
-            [0, 1, 0],
-            [0, 1, 1],
-        ])
-        self.last_action = None
+        self.last_guess = None
         self.last_reward = None
+        self.subtask_space = env.task_space.nvec[0]
 
     def step(self, action):
-        action_sections = get_subtasks_action_sections(self.action_space)
-        actions = SubtasksActions(*np.split(action, action_sections))
-        # action, subtask = np.unravel_index(
-        # action, (self.size_action_space, self.size_subtask_space))
+        action_sections = get_subtasks_action_sections(
+            self.action_space.spaces)
+        actions = SubtasksActions(*[
+            int(x.item()) for x in np.split(action,
+                                            np.cumsum(action_sections)[:-1])
+        ])
         s, _, t, i = super().step(action)
-        guess = self.possible_subtasks[int(actions.g)]
-        truth = self.env.unwrapped.subtask
-        r = float(np.all(guess == truth))
-        self.last_action = actions
+        guess = int(actions.g_int)
+        truth = int(self.env.unwrapped.subtask_idx)
+        r = float(np.all(guess == truth)) - 1
+        self.last_guess = guess
         self.last_reward = r
-        return s, r, t, i  # TODO
+        return s, r, t, i
 
     def render(self, mode='human'):
-        action = self.last_action
         print('########################################')
-        super().render()
-        if action is not None:
-            g = int(action.g)
-            print('guess', g, self.possible_subtasks[g])
-        print('truth', self.env.unwrapped.subtask)
+        super().render(sleep_time=0)
+        print('guess', self.last_guess)
+        print('truth', self.env.unwrapped.subtask_idx)
         print('reward', self.last_reward)
+        # input('pause')
 
 
 class SubtasksWrapper(gym.Wrapper):
@@ -81,7 +76,7 @@ class SubtasksWrapper(gym.Wrapper):
             SubtasksActions(
                 a=env.action_space,
                 b=spaces.Discrete(2),
-                g_int=spaces.Discrete(task_space.nvec[0].prod()),
+                g_int=spaces.Discrete(env.n_subtasks),
                 c=spaces.Discrete(2),
                 l=spaces.Discrete(3)))
 
