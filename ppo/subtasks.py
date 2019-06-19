@@ -148,7 +148,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         self.n_subtasks = n_subtasks
         if teacher_agent:
             assert isinstance(teacher_agent, SubtasksTeacher)
-        self.teacher_agent = teacher_agent
+        self.agent = teacher_agent
 
         # networks
         self.recurrent = recurrent
@@ -501,13 +501,13 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # a
             g_broad = broadcast_3d(g_binary, self.obs_shape[1:])
             conv_out2 = self.conv2((obs[i], g_broad))
-            if self.teacher_agent is None:
+            if self.agent is None:
                 dist = self.actor(conv_out2)
             else:
                 g = broadcast_3d(g_binary, obs.shape[3:])
                 teacher_inputs = torch.cat(
                     [obs[i], g, task_broad[i], next_subtask_broad[i]], dim=1)
-                dist = self.teacher_agent(
+                dist = self.agent(
                     teacher_inputs, rnn_hxs=None, masks=None).dist
             sample_new(a_ints[i + 1], dist)
             # a[:] = 'wsadeq'.index(input('act:'))
