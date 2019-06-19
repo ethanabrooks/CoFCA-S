@@ -5,9 +5,8 @@ from collections import ChainMap
 from pathlib import Path
 from pprint import pprint
 
-import torch
 from gym.wrappers import TimeLimit
-from rl_utils import hierarchical_parse_args
+import torch
 
 import gridworld_env
 from gridworld_env.subtasks_gridworld import SubtasksGridWorld, get_task_space
@@ -17,6 +16,7 @@ from ppo.subtasks import SubtasksAgent
 from ppo.teacher import SubtasksTeacher
 from ppo.train import Train
 from ppo.wrappers import SubtasksWrapper, VecNormalize
+from rl_utils import hierarchical_parse_args
 
 
 def cli():
@@ -124,9 +124,7 @@ def teach_cli():
     subtasks_parser.add_argument(
         '--subtasks-hidden-size', type=int, required=True)
     subtasks_parser.add_argument(
-        '--subtasks-entropy-coef', type=float, default=0.01)
-    subtasks_parser.add_argument('--alpha', type=float, default=0.03)
-    subtasks_parser.add_argument('--zeta', type=float, default=.0001)
+        '--subtasks-entropy-coef', type=float, required=True)
     subtasks_parser.add_argument('--subtasks-recurrent', action='store_true')
     subtasks_parser.add_argument('--hard-update', action='store_true')
     subtasks_parser.add_argument(
@@ -183,4 +181,4 @@ def teach_cli():
 
 
 if __name__ == "__main__":
-    train_teacher_cli()
+    teach_cli()

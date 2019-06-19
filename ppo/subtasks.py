@@ -24,10 +24,8 @@ RecurrentState = namedtuple(
 # noinspection PyMissingConstructor
 class SubtasksAgent(Agent, NNBase):
     def __init__(self, obs_shape, action_space, task_space, hidden_size,
-                 entropy_coef, alpha, zeta, hard_update, agent, **kwargs):
+                 entropy_coef, hard_update, agent, **kwargs):
         nn.Module.__init__(self)
-        self.zeta = zeta
-        self.alpha = alpha
         self.hard_update = hard_update
         self.entropy_coef = entropy_coef
         self.action_space = SubtasksActions(*action_space.spaces)
