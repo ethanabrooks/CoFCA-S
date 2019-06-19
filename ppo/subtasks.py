@@ -183,11 +183,10 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 in_size=(self.obs_sections.base * action_space.a.n * int(
                     task_space.nvec[0].prod())))
 
-        self.part_one_hots = []
         for i, d in enumerate(self.task_nvec[0]):
-            name = f'part{i}_one_hot'
-            self.register_buffer(name, torch.eye(int(d)))
-            self.part_one_hots.append(getattr(self, name))
+            self.register_buffer(f'part{i}_one_hot', torch.eye(int(d)))
+        self.register_buffer('l_one_hots', torch.eye(3))
+        self.register_buffer('p_one_hots', torch.eye(self.n_subtasks))
         self.register_buffer('a_one_hots', torch.eye(int(action_space.a.n)))
         self.register_buffer('g_one_hots', torch.eye(action_space.g_int.n))
         self.register_buffer('subtask_space',
@@ -220,7 +219,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
     # @torch.jit.script_method
     def g123_to_binary(self, *g123):
         return torch.cat([
-            one_hot[g.long()] for g, one_hot in zip(g123, self.part_one_hots)
+            getattr(self, f'part{i}_one_hot')[g.long()]
+            for i, g in enumerate(g123)
         ],
                          dim=-1)
 
