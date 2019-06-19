@@ -40,7 +40,7 @@ class SubtasksStudent(SubtasksTeacher):
     # TODO
     # @property
     # def d(self):
-        # return self.obs_sections.base + self.embedding_dim
+    # return self.obs_sections.base + self.embedding_dim
 
     def preprocess_obs(self, inputs):
         obs, subtasks, task_broad, next_subtask_broad = torch.split(
@@ -53,6 +53,7 @@ class SubtasksStudent(SubtasksTeacher):
         # return torch.cat([obs, broadcast], dim=1)
 
     def forward(self, inputs, *args, action=None, **kwargs):
+        return super().forward(inputs, *args, action=action, **kwargs)
         obs, subtasks, task_broad, next_subtask_broad = torch.split(
             inputs, self.obs_sections, dim=1)
         subtasks = subtasks[:, :, 0, 0]
@@ -103,6 +104,6 @@ class SubtasksStudent(SubtasksTeacher):
                 max=self.tau_diff)  # increase the side
             analogy_loss += (sim_loss + dis_loss + dif_loss)
 
-        act = super().forward(inputs, *args, **kwargs)
+        act = super().forward(inputs, *args, action=action, **kwargs)
         return act._replace(
             aux_loss=act.aux_loss + self.xi * analogy_loss.mean())
