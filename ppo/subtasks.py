@@ -10,6 +10,7 @@ from torch.nn import functional as F
 from ppo.agent import Agent, AgentValues, NNBase
 from ppo.distributions import Categorical, DiagGaussian, FixedCategorical
 from ppo.layers import Concat, Flatten, Parallel, Product
+from ppo.student import g_binary_to_123
 from ppo.teacher import SubtasksTeacher
 from ppo.utils import broadcast3d, init_, interp, trace
 from ppo.wrappers import SubtasksActions, get_subtasks_action_sections, get_subtasks_obs_sections
@@ -79,9 +80,8 @@ class SubtasksAgent(Agent, NNBase):
             dist.log_probs(a) for dist, a in zip(dists, actions)
             if dist is not None)
         entropies = sum(dist.entropy() for dist in dists if dist is not None)
-
-        log = {k: v for k, v in hx._asdict().items() if k.endswith('_loss')}
         aux_loss = -self.entropy_coef * entropies.mean()
+        log = {k: v for k, v in hx._asdict().items() if k.endswith('_loss')}
 
         return AgentValues(
             value=hx.v,
@@ -225,15 +225,17 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
     # @torch.jit.script_method
     def g_binary_to_int(self, g_binary):
-        g123 = g_binary.nonzero()[:, 1:].view(-1, 3)
-        g123 -= F.pad(
-            torch.cumsum(self.subtask_space, dim=0)[:2], [1, 0], 'constant', 0)
+        g123 = self.g_binary_to_123(g_binary)
         g123[:, :-1] *= self.subtask_space[1:]  # g1 * x2, g2 * x3
         g123[:, 0] *= self.subtask_space[2]  # g1 * x3
         return g123.sum(dim=-1)
 
     # @torch.jit.script_method
-    def g_to_123(self, g):
+    def g_binary_to_123(self, g_binary):
+        return g_binary_to_123(g_binary, self.subtask_space)
+
+    # @torch.jit.script_method
+    def g_int_to_123(self, g):
         x1, x2, x3 = self.subtask_space.to(g.dtype)
         g1 = g // (x2 * x3)
         x4 = g % (x2 * x3)
