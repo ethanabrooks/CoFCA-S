@@ -51,10 +51,10 @@ class SubtasksStudent(SubtasksTeacher):
         return torch.cat([obs, broadcast], dim=1)
 
     def forward(self, inputs, *args, action=None, **kwargs):
-        return super().forward(inputs, *args, action=action, **kwargs)
         obs, subtasks, task_broad, next_subtask_broad = torch.split(
             inputs, self.obs_sections, dim=1)
         subtasks = subtasks[:, :, 0, 0]
+        return super().forward(inputs, *args, action=action, **kwargs)
 
         g123 = g_binary_to_123(subtasks, self.subtask_space)
         action1, object1 = torch.split(g123, [2, 1], dim=-1)
