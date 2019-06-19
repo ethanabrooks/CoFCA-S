@@ -174,13 +174,15 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
     ]
 
     def __init__(self, obs_shape, action_space, task_space, hidden_size,
-                 recurrent, hard_update, teacher_agent):
+                 recurrent, hard_update, teacher_agent,
+                 multiplicative_interaction):
         super().__init__()
         d, h, w = obs_shape
         conv_out_size = h * w * hidden_size
         subtask_space = list(map(int, task_space.nvec[0]))
         subtask_size = sum(subtask_space)
         n_subtasks = task_space.shape[0]
+        self.multiplicative_interaction = multiplicative_interaction
         self.hard_update = hard_update
         self.obs_sections = get_subtasks_obs_sections(task_space)
         self.obs_shape = d, h, w
