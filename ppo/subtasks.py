@@ -361,29 +361,22 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             idxs = a_ints[i].flatten().long()
             agent_layer = obs[i, :, 6, :, :].long()
-            j, k, l = torch.split(agent_layer.nonzero(), [1, 1, 1], dim=-1)
-            debug_obs = obs[i, j, :, k, l].squeeze(1)
 
             def get_debug_in(subtask_param):
-                task_part = subtask_param[:, :3]
-                obj_part = subtask_param[:, -4:]
-                action_part = self.a_one_hots[idxs]
-                obs4d = (debug_obs.unsqueeze(2).unsqueeze(3).unsqueeze(4) *
-                         task_part.unsqueeze(1).unsqueeze(3).unsqueeze(4) *
-                         obj_part.unsqueeze(1).unsqueeze(2).unsqueeze(4) *
-                         action_part.unsqueeze(1).unsqueeze(2).unsqueeze(3))
-                # print('obs', debug_obs[0])
-                # print('task', task_part[0])
-                # print('obj', obj_part[0])
-                # print('action', action_part[0])
-                p, q = torch.split(obj_part.nonzero(), [1, 1], dim=-1)
-                o = [
-                    obs4d[p, q + 1, 0, q, :].squeeze(1),
-                    obs4d[p, q + 1, 1, q, 4],
-                    obs4d[p, q + 1, 2, q, 5],
-                ]
-                # print('o', o)
-                # return torch.cat(o, dim=-1)
+                j, k, l = torch.split(agent_layer.nonzero(), [1, 1, 1], dim=-1)
+                debug_obs = obs[i, j, :, k, l].squeeze(1)
+                task_sections = torch.split(
+                    subtask_param, tuple(self.task_nvec[0]), dim=-1)
+                parts = (debug_obs, ) + task_sections + (
+                    self.a_one_hots[idxs], )
+                if self.multiplicative_interaction:
+                    return self.f(parts)
+                obs4d = 1
+                for i1, part in enumerate(parts):
+                    for i2 in range(len(parts)):
+                        if i1 != i2:
+                            part.unsqueeze_(i2 + 1)
+                    obs4d = obs4d * part
                 return obs4d.view(N, -1)
 
             subtask = float_subtask.long()
