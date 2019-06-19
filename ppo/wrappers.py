@@ -79,6 +79,7 @@ class SubtasksWrapper(gym.Wrapper):
                 cg=spaces.Discrete(2),
                 cr=spaces.Discrete(2),
             ))
+        self.last_g = None
 
     def step(self, action):
         action_sections = np.cumsum(
