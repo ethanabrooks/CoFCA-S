@@ -87,14 +87,14 @@ def get_freer_gpu():
 
 def init_(network, nonlinearity=None):
     if nonlinearity is None:
-        return init(network,
-                    nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0))
-    return init(network,
-                nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0),
+        return init(network, nn.init.orthogonal_,
+                    lambda x: nn.init.constant_(x, 0))
+    return init(network, nn.init.orthogonal_,
+                lambda x: nn.init.constant_(x, 0),
                 nn.init.calculate_gain(nonlinearity))
 
 
-def broadcast_3d(inputs, shape):
+def broadcast3d(inputs, shape):
     return inputs.view(*inputs.shape, 1, 1).expand(*inputs.shape, *shape)
 
 

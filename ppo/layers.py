@@ -5,7 +5,7 @@ import torch
 from torch import nn as nn
 import torch.jit
 
-from ppo.utils import broadcast_3d
+from ppo.utils import broadcast3d
 
 
 class Flatten(nn.Module):
@@ -37,7 +37,7 @@ class Broadcast3d(torch.jit.ScriptModule):
         self.shape = shape
 
     def forward(self, inputs):
-        return broadcast_3d(inputs, self.shape)
+        return broadcast3d(inputs, self.shape)
 
 
 class Product(torch.jit.ScriptModule):
