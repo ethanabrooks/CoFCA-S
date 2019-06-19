@@ -80,9 +80,8 @@ class SubtasksAgent(Agent, NNBase):
             dist.log_probs(a) for dist, a in zip(dists, actions)
             if dist is not None)
         entropies = sum(dist.entropy() for dist in dists if dist is not None)
-
-        log = {k: v for k, v in hx._asdict().items() if k.endswith('_loss')}
         aux_loss = -self.entropy_coef * entropies.mean()
+        log = {k: v for k, v in hx._asdict().items() if k.endswith('_loss')}
 
         return AgentValues(
             value=hx.v,
@@ -224,24 +223,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         ],
                          dim=-1)
 
-    # @torch.jit.script_method
-    def g_binary_to_int(self, g_binary):
-        g123 = g_binary.nonzero()[:, 1:].view(-1, 3)
-        g123 -= F.pad(
-            torch.cumsum(self.subtask_space, dim=0)[:2], [1, 0], 'constant', 0)
-        g123[:, :-1] *= self.subtask_space[1:]  # g1 * x2, g2 * x3
-        g123[:, 0] *= self.subtask_space[2]  # g1 * x3
-        return g123.sum(dim=-1)
-
-    # @torch.jit.script_method
-    def g_int_to_123(self, g):
-        x1, x2, x3 = self.subtask_space.to(g.dtype)
-        g1 = g // (x2 * x3)
-        x4 = g % (x2 * x3)
-        g2 = x4 // x3
-        g3 = x4 % x3
-        return g1, g2, g3
-
     def check_grad(self, **kwargs):
         for k, v in kwargs.items():
             if v.grad_fn is not None:
@@ -293,8 +274,9 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         if torch.any(new_episode):
             p[new_episode, 0] = 1.  # initialize pointer to first subtask
             r[new_episode] = M[new_episode, 0]  # initialize r to first subtask
-            g0 = M[new_episode, 0]
-            g_binary[new_episode] = g0  # initialize g_binary to first subtask
+
+            # initialize g to first subtask
+            g_binary[new_episode] = M[new_episode, 0]
             hx.g_int[new_episode] = 0.
 
         a_ints = torch.cat([hx.a.unsqueeze(0), actions.a], dim=0)
@@ -325,14 +307,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                         if i1 != i2:
                             part.unsqueeze_(i2 + 1)
                     obs4d = obs4d * part
-                #
-                # task_part = subtask_param[:, :3]
-                # obj_part = subtask_param[:, -4:]
-                # action_part = self.a_one_hots[a_idxs]
-                # obs4d = (debug_obs.unsqueeze(2).unsqueeze(3).unsqueeze(4) *
-                #          task_part.unsqueeze(1).unsqueeze(3).unsqueeze(4) *
-                #          obj_part.unsqueeze(1).unsqueeze(2).unsqueeze(4) *
-                #          action_part.unsqueeze(1).unsqueeze(2).unsqueeze(3))
+
                 c_logits = self.phi_update(obs4d.view(N, -1))
                 if self.hard_update:
                     c_dist = FixedCategorical(logits=c_logits)
