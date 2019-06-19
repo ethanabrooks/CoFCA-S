@@ -31,7 +31,7 @@ def make_subtasks_env(env_id, **kwargs):
         if rank == 1:
             print('Environment args:')
             pprint(_kwargs)
-        env = SubtasksWrapper(class_parser(class_)(**_kwargs))
+        env = DebugWrapper(SubtasksWrapper(class_parser(class_)(**_kwargs)))
         env.seed(seed + rank)
         print('Environment seed:', seed + rank)
         if max_episode_steps is not None:
@@ -40,9 +40,9 @@ def make_subtasks_env(env_id, **kwargs):
 
     gridworld_args = gridworld_env.get_args(env_id)
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
-    return helper(
-        **ChainMap(kwargs, gridworld_args)
-    )  # combines kwargs and gridworld_args with preference for kwargs
+    return helper(**ChainMap(
+        kwargs, gridworld_args
+    ))  # combines kwargs and gridworld_args with preference for kwargs
 
 
 def subtasks_cli():
