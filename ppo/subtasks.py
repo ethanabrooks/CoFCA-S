@@ -96,41 +96,8 @@ class SubtasksAgent(Agent, NNBase):
             if dist is not None)
         entropies = sum(dist.entropy() for dist in dists if dist is not None)
 
-        # Compute Cramer V
-        # if action is not None:
-        #     subtask_int = rm.g_binary_to_int(subtask[:, :, 0, 0])
-        #     codes = torch.unique(subtask_int)
-        #     g_one_hots = rm.g_one_hots[actions.g_int.long().flatten()].long()
-        #     for code in codes:
-        #         idx = subtask_int == code
-        #         self.subtask_choices[code] += g_one_hots[idx].sum(dim=0)
-        # # For derivation, see https://en.wikipedia.org/wiki/Cram%C3%A9r%27s_V
-        # choices = self.subtask_choices.float()
-        # cramers_v = torch.tensor(0.)
-        # n = choices.sum()
-        # if n > 0:
-        #     ni = choices.sum(dim=0, keepdim=True)
-        #     nj = choices.sum(dim=1, keepdim=True)
-        #     Ei = ni * nj / n
-        #     if torch.all(Ei > 0):
-        #         chi_squared = torch.sum((choices - Ei)**2 / Ei)
-        #         cramers_v = torch.sqrt(
-        #             chi_squared / n / self.action_space.g_int.n)
-
-        c = hx.c.round()
-        log = dict(
-            # g_accuracy=g_accuracy.float(),
-            c_accuracy=(torch.mean((c == hx.c_truth).float())),
-            c_recall=(torch.mean(
-                (c[hx.c_truth > 0] == hx.c_truth[hx.c_truth > 0]).float())),
-            c_precision=(torch.mean((c[c > 0] == hx.c_truth[c > 0]).float())),
-        )
-        # subtask_association=cramers_v)
+        log = {k: v for k, v in hx._asdict().items() if k.endswith('_loss')}
         aux_loss = -self.entropy_coef * entropies.mean()
-
-        for k, v in hx._asdict().items():
-            if k.endswith('_loss'):
-                log[k] = v
 
         return AgentValues(
             value=hx.v,
