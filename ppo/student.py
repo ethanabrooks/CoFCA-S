@@ -1,5 +1,6 @@
 import itertools
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -23,14 +24,18 @@ class SubtasksStudent(SubtasksTeacher):
         self.tau_diff = tau_diff
         self.embedding_dim = embedding_dim
         n_types, max_count, n_objects = task_space.nvec[0]
-        self.actions = torch.cartesian_prod(
-            torch.arange(n_types), torch.arange(max_count)).long()
-        # TODO: deal with visit when max count > 1
-        self.objects = torch.arange(n_objects).long().unsqueeze(1)
         super().__init__(**kwargs, task_space=task_space)
         self.embeddings = nn.EmbeddingBag(
             int(task_space.nvec[0].sum()), embedding_dim)
-        self.register_buffer('subtask_space', torch.tensor(task_space.nvec[0]))
+        self.register_buffer(
+            'actions',
+            torch.cartesian_prod(
+                torch.arange(n_types), torch.arange(max_count)).long())
+        # TODO: deal with visit when max count > 1
+        self.register_buffer('objects',
+                             torch.arange(n_objects).long().unsqueeze(1))
+        self.register_buffer('subtask_space',
+                             torch.tensor(task_space.nvec[0].astype(np.int64)))
 
     @property
     def d(self):
