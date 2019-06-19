@@ -57,19 +57,14 @@ def train_skill_cli(student):
     parser.add_argument('--n-objects', type=int, required=True)
     parser.add_argument('--max-episode-steps', type=int)
     if student:
-        parser.add_argument('--embedding-dim', type=int, required=True)
-        parser.add_argument('--tau-diss', type=float, required=True)
-        parser.add_argument('--tau-diff', type=float, required=True)
-        parser.add_argument('--xi', type=float, required=True)
+        student_parser = parser.add_argument_group('student_args')
+        student_parser.add_argument('--embedding-dim', type=int, required=True)
+        student_parser.add_argument('--tau-diss', type=float, required=True)
+        student_parser.add_argument('--tau-diff', type=float, required=True)
+        student_parser.add_argument('--xi', type=float, required=True)
     kwargs = hierarchical_parse_args(parser)
 
-    def train(task_args,
-              n_objects,
-              max_episode_steps,
-              embedding_dim=None,
-              tau_diss=None,
-              tau_diff=None,
-              xi=None,
+    def train(task_args, n_objects, max_episode_steps, student_args,
               **_kwargs):
         class TrainSkill(Train):
             @staticmethod
@@ -90,12 +85,7 @@ def train_skill_cli(student):
                     task_space=get_task_space(**task_args),
                     **agent_args)
                 if student:
-                    return SubtasksStudent(
-                        **agent_args,
-                        embedding_dim=embedding_dim,
-                        xi=xi,
-                        tau_diff=tau_diff,
-                        tau_diss=tau_diss)
+                    return SubtasksStudent(**agent_args, **student_args)
                 else:
                     return SubtasksTeacher(**agent_args)
 
