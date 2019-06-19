@@ -4,6 +4,7 @@ Tests for asynchronous vectorized environments.
 
 import gym
 import numpy as np
+
 import pytest
 
 # local
