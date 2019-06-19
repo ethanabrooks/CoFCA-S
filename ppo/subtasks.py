@@ -17,7 +17,7 @@ from ppo.wrappers import SubtasksActions, get_subtasks_action_sections, get_subt
 
 RecurrentState = namedtuple(
     'RecurrentState',
-    'a cg cr r p g g_binary a_probs cg_probs cr_probs g_probs v g_loss cr_loss cg_loss subtask'
+    'a cg cr r p g a_probs cg_probs cr_probs g_probs v g_loss cr_loss cg_loss subtask'
 )
 
 
@@ -198,7 +198,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             r=subtask_size,
             p=n_subtasks,
             g=1,
-            g_binary=subtask_size,
             a_probs=action_space.a.n,
             cg_probs=2,
             cr_probs=2,
@@ -286,7 +285,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
         p = hx.p
         r = hx.r
-        g_binary = hx.g_binary
         float_subtask = hx.subtask
         for x in hx:
             x.squeeze_(0)
@@ -294,8 +292,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         if torch.any(new_episode):
             p[new_episode, 0] = 1.  # initialize pointer to first subtask
             r[new_episode] = M[new_episode, 0]  # initialize r to first subtask
-            g0 = M[new_episode, 0]
-            g_binary[new_episode] = g0  # initialize g_binary to first subtask
+
+            # initialize g to first subtask
             hx.g[new_episode] = 0.
 
         A = torch.cat([hx.a.unsqueeze(0), actions.a], dim=0).long().squeeze(2)
