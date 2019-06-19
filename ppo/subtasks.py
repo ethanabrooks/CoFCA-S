@@ -257,7 +257,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         return RecurrentState(*torch.split(hx, self.state_sizes, dim=-1))
 
     # @torch.jit.script_method
-    def task_one_hots(self, *g123):
+    def g123_to_binary(self, *g123):
         return torch.cat([
             getattr(self, f'part{i}_one_hot')[g.long()]
             for i, g in enumerate(g123)
@@ -281,7 +281,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         return g1, g2, g3
 
     def g_int_to_binary(self, g):
-        return self.task_one_hots(*self.g_int_to_123(g)).squeeze(1)
+        return self.g123_to_binary(*self.g_int_to_123(g)).squeeze(1)
 
     def check_grad(self, **kwargs):
         for k, v in kwargs.items():
@@ -319,7 +319,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         sections = [self.n_subtasks] * self.task_nvec.shape[1]
         task_type, count, obj = torch.split(task, sections, dim=-1)
 
-        M = self.task_one_hots(task_type[0], (count - 1)[0], obj[0])
+        M = self.g123_to_binary(task_type[0], (count - 1)[0], obj[0])
         new_episode = torch.all(hx.squeeze(0) == 0, dim=-1)
         hx = self.parse_hidden(hx)
 
