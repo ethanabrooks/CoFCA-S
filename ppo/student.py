@@ -100,7 +100,6 @@ class SubtasksStudent(SubtasksTeacher):
                 torch.norm(a - b, dim=-1),
                 max=self.tau_diff)  # increase the side
             analogy_loss += (sim_loss + dis_loss + dif_loss)
-        return super().forward(inputs, *args, action=action, **kwargs)
 
         act = super().forward(inputs, *args, action=action, **kwargs)
         return act._replace(
