@@ -327,8 +327,12 @@ class Train:
                       num_frame_stack=None):
 
         envs = [
-            functools.partial(self.make_env, env_id, seed, i, add_timestep)
-            for i in range(num_processes)
+            functools.partial(
+                self.make_env,
+                env_id=env_id,
+                seed=seed,
+                rank=i,
+                add_timestep=add_timestep) for i in range(num_processes)
         ]
 
         if len(envs) == 1 or sys.platform == 'darwin' or synchronous:
