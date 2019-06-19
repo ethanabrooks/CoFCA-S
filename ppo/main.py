@@ -5,8 +5,9 @@ from collections import ChainMap
 from pathlib import Path
 from pprint import pprint
 
-from gym.wrappers import TimeLimit
 import torch
+from gym.wrappers import TimeLimit
+from rl_utils import hierarchical_parse_args
 
 import gridworld_env
 from gridworld_env.subtasks_gridworld import SubtasksGridWorld, get_task_space
@@ -52,13 +53,15 @@ def subtasks_cli():
     task_parser.add_argument('--max-task-count', type=int)
     task_parser.add_argument('--object-types', nargs='*')
     task_parser.add_argument('--n-subtasks', type=int)
+    parser.add_argument('--multiplicative-interaction', action='store_true')
     parser.add_argument('--alpha', type=float, default=.03)
     parser.add_argument('--zeta', type=float, default=.0001)
     parser.add_argument('--n-objects', type=int)
     parser.add_argument('--max-episode-steps', type=int)
     kwargs = hierarchical_parse_args(parser)
 
-    def train(task_args, n_objects, max_episode_steps, alpha, zeta, **_kwargs):
+    def train(task_args, multiplicative_interaction, n_objects,
+              max_episode_steps, alpha, zeta, **_kwargs):
         class TrainTeacher(Train):
             @staticmethod
             def make_env(env_id, seed, rank, add_timestep):
@@ -82,6 +85,7 @@ def subtasks_cli():
                     alpha=alpha,
                     zeta=zeta,
                     recurrent=recurrent,
+                    multiplicative_interaction=multiplicative_interaction,
                 )
 
         TrainTeacher(**_kwargs)
@@ -142,6 +146,8 @@ def teach_cli():
     subtasks_parser.add_argument('--zeta', type=float, default=.0001)
     subtasks_parser.add_argument('--subtasks-recurrent', action='store_true')
     subtasks_parser.add_argument('--hard-update', action='store_true')
+    subtasks_parser.add_argument(
+        '--multiplicative-interaction', action='store_true')
     parser.add_argument('--n-objects', type=int, required=True)
     parser.add_argument('--max-episode-steps', type=int)
 
@@ -163,16 +169,16 @@ def teach_cli():
             # noinspection PyMethodOverriding
             @staticmethod
             def build_agent(envs, **agent_args):
-                teacher_agent = None
+                agent = None
                 if teacher_agent_load_path:
-                    teacher_agent = SubtasksTeacher(
+                    agent = SubtasksTeacher(
                         obs_shape=envs.observation_space.shape,
                         action_space=envs.action_space,
                         task_space=task_space,
                         **agent_args)
 
                     state_dict = torch.load(teacher_agent_load_path)
-                    teacher_agent.load_state_dict(state_dict['agent'])
+                    agent.load_state_dict(state_dict['agent'])
                     if isinstance(envs.venv, VecNormalize):
                         envs.venv.load_state_dict(state_dict['vec_normalize'])
                     print(
@@ -188,7 +194,7 @@ def teach_cli():
                     obs_shape=envs.observation_space.shape,
                     action_space=envs.action_space,
                     task_space=task_space,
-                    teacher_agent=teacher_agent,
+                    teacher_agent=agent,
                     **_subtasks_args)
 
         # ppo_args.update(aux_loss_only=True)
