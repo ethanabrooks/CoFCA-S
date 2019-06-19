@@ -11,7 +11,7 @@ from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
 from gridworld_env.subtasks_gridworld import ObsSections
 from rl_utils import onehot
 
-SubtasksActions = namedtuple('SubtasksActions', 'a cr cg g_int')
+SubtasksActions = namedtuple('SubtasksActions', 'a cr cg g')
 
 
 def get_subtasks_obs_sections(task_space):
@@ -47,7 +47,7 @@ class DebugWrapper(gym.Wrapper):
                                             np.cumsum(action_sections)[:-1])
         ])
         s, _, t, i = super().step(action)
-        guess = int(actions.g_int)
+        guess = int(actions.g)
         truth = int(self.env.unwrapped.subtask_idx)
         r = float(np.all(guess == truth)) - 1
         self.last_guess = guess
@@ -75,7 +75,7 @@ class SubtasksWrapper(gym.Wrapper):
         self.action_space = spaces.Tuple(
             SubtasksActions(
                 a=env.action_space,
-                g_int=spaces.Discrete(env.n_subtasks),
+                g=spaces.Discrete(env.n_subtasks),
                 cg=spaces.Discrete(2),
                 cr=spaces.Discrete(2),
             ))
@@ -86,7 +86,7 @@ class SubtasksWrapper(gym.Wrapper):
                 self.action_space.spaces))[:-1].astype(int)
         actions = SubtasksActions(*np.split(action, action_sections))
         action = int(actions.a)
-        self.last_g = int(actions.g_int)
+        self.last_g = int(actions.g)
         s, r, t, i = super().step(action)
         return self.wrap_observation(s), r, t, i
 
