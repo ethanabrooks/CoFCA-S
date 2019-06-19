@@ -116,7 +116,7 @@ class SubtasksAgent(Agent, NNBase):
 
 def sample_new(x, dist):
     new = x < 0
-    x[new] = dist.sample()[new].float()
+    x[new] = dist.sample()[new].flatten()
 
 
 class SubtasksRecurrence(torch.jit.ScriptModule):
@@ -298,8 +298,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             g_binary[new_episode] = g0  # initialize g_binary to first subtask
             hx.g[new_episode] = 0.
 
-        A = torch.cat([hx.a.unsqueeze(0), actions.a], dim=0)
-        G = torch.cat([hx.g.unsqueeze(0), actions.g], dim=0)
+        A = torch.cat([hx.a.unsqueeze(0), actions.a], dim=0).long().squeeze(2)
+        G = torch.cat([hx.g.unsqueeze(0), actions.g], dim=0).long().squeeze(2)
 
         outputs = RecurrentState(*[[] for _ in RecurrentState._fields])
 
@@ -308,7 +308,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             float_subtask += next_subtask[t]
             outputs.subtask.append(float_subtask)
 
-            idxs = A[t].flatten().long()
             agent_layer = obs[t, :, 6, :, :].long()
             j, k, l = torch.split(agent_layer.nonzero(), [1, 1, 1], dim=-1)
 
@@ -316,7 +315,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 debug_obs = obs[t, j, :, k, l].squeeze(1)
                 task_sections = torch.split(
                     subtask_param, tuple(self.task_nvec[0]), dim=-1)
-                parts = (debug_obs, self.a_one_hots[idxs]) + task_sections
+                parts = (debug_obs, self.a_one_hots[A[t]]) + task_sections
                 if self.multiplicative_interaction:
                     return self.f(parts)
                 obs4d = 1
@@ -325,14 +324,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                         if i1 != i2:
                             part.unsqueeze_(i2 + 1)
                     obs4d = obs4d * part
-                #
-                # task_part = subtask_param[:, :3]
-                # obj_part = subtask_param[:, -4:]
-                # action_part = self.a_one_hots[a_idxs]
-                # obs4d = (debug_obs.unsqueeze(2).unsqueeze(3).unsqueeze(4) *
-                #          task_part.unsqueeze(1).unsqueeze(3).unsqueeze(4) *
-                #          obj_part.unsqueeze(1).unsqueeze(2).unsqueeze(4) *
-                #          action_part.unsqueeze(1).unsqueeze(2).unsqueeze(3))
+
                 c_logits = self.phi_update(obs4d.view(N, -1))
                 if self.hard_update:
                     c_dist = FixedCategorical(logits=c_logits)
@@ -384,7 +376,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             outputs.r.append(r)
 
             # g
-            old_g = self.g_one_hots[G[t].long().flatten()]
+            old_g = self.g_one_hots[G[t]]
             dist = FixedCategorical(
                 probs=torch.clamp(interp(old_g, p, cg), 0., 1.))
             sample_new(G[t + 1], dist)
@@ -415,16 +407,14 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # v
             outputs.v.append(self.critic(conv_out))
 
-        stacked = []
-
         # for name, x in zip(RecurrentState._fields, outputs):
         #     if not x:
         #         print(name)
         #         import ipdb
         #         ipdb.set_trace()
 
-        for x in outputs:
-            stacked.append(torch.stack(x))
+        stacked = [torch.stack(x) for x in outputs]
+        stacked = [x.float().view(*x.shape[:2], -1) for x in stacked]
 
         # for name, x, size in zip(RecurrentState._fields, stacked,
         #                          self.state_sizes):
