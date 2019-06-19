@@ -1,14 +1,14 @@
+from collections import namedtuple
 import itertools
 import re
 import time
-from collections import namedtuple
 
 import gym
-import numpy as np
-import six
 from gym import spaces
 from gym.envs.registration import EnvSpec
 from gym.utils import seeding
+import numpy as np
+import six
 
 from ppo.utils import set_index
 from rl_utils import cartesian_product
@@ -158,8 +158,7 @@ class SubtasksGridWorld(gym.Env):
             print(six.u(f'\x1b[47m\x1b[30m'), end='')
             print(''.join(row), end='')
             print(six.u('\x1b[49m\x1b[39m'))
-
-        time.sleep(4 * sleep_time if self.last_terminal else sleep_time)
+        # time.sleep(4 * sleep_time if self.last_terminal else sleep_time)
 
     def subtask_generator(self):
         task_types = np.arange(len(self.task_types))
