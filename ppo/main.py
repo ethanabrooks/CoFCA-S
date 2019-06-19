@@ -128,9 +128,13 @@ def train_teacher_cli():
     train(**kwargs)
 
 
+def train_student():
+    pass
+
+
 def teach_cli():
     parser = build_parser()
-    parser.add_argument('--teacher-agent-load-path', type=Path)
+    parser.add_argument('--agent-load-path', type=Path)
     task_parser = parser.add_argument_group('task_args')
     task_parser.add_argument('--task-types', nargs='*')
     task_parser.add_argument('--max-task-count', type=int, required=True)
@@ -150,7 +154,7 @@ def teach_cli():
     parser.add_argument('--n-objects', type=int, required=True)
     parser.add_argument('--max-episode-steps', type=int)
 
-    def train(env_id, task_args, ppo_args, teacher_agent_load_path,
+    def train(env_id, task_args, ppo_args, agent_load_path,
               subtasks_args, n_objects, max_episode_steps, **kwargs):
         task_space = get_task_space(**task_args)
 
@@ -169,19 +173,19 @@ def teach_cli():
             @staticmethod
             def build_agent(envs, **agent_args):
                 agent = None
-                if teacher_agent_load_path:
+                if agent_load_path:
                     agent = SubtasksTeacher(
                         obs_shape=envs.observation_space.shape,
                         action_space=envs.action_space,
                         task_space=task_space,
                         **agent_args)
 
-                    state_dict = torch.load(teacher_agent_load_path)
+                    state_dict = torch.load(agent_load_path)
                     agent.load_state_dict(state_dict['agent'])
                     if isinstance(envs.venv, VecNormalize):
                         envs.venv.load_state_dict(state_dict['vec_normalize'])
                     print(
-                        f'Loaded teacher parameters from {teacher_agent_load_path}.'
+                        f'Loaded teacher parameters from {agent_load_path}.'
                     )
 
                 _subtasks_args = {
@@ -193,7 +197,7 @@ def teach_cli():
                     obs_shape=envs.observation_space.shape,
                     action_space=envs.action_space,
                     task_space=task_space,
-                    teacher_agent=agent,
+                    agent=agent,
                     **_subtasks_args)
 
         # ppo_args.update(aux_loss_only=True)
