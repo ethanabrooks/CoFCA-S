@@ -320,20 +320,11 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                     c = torch.sigmoid(c_logits[:, :1])
                     values.append(c)
                     probs.append(torch.zeros_like(c_logits))  # dummy value
-                    new_subtask = next_subtask[i] > 0
-                    old_subtask = 1 - new_subtask
-                    if torch.any(new_subtask):
-                        weight = torch.ones_like(c)
-                        weight[new_subtask] /= torch.sum(new_subtask)
-                        weight[old_subtask] /= torch.sum(old_subtask)
-                        losses.append(
-                            F.binary_cross_entropy(
-                                torch.clamp(c, 0., 1.),
-                                next_subtask[i],
-                                weight=weight,
-                                reduction='none'))
-                    else:
-                        losses.append(torch.zeros_like(c))
+                    losses.append(
+                        F.binary_cross_entropy(
+                            torch.clamp(c, 0., 1.),
+                            next_subtask[i],
+                            reduction='none'))
                 return c
 
             # c

@@ -1,4 +1,3 @@
-* fix c loss
 * fix Cramer V
 * implement and check `imitation`
 * implement `train-metacontroller`/`imitate`
