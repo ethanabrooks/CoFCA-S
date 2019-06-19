@@ -81,12 +81,8 @@ class SubtasksAgent(Agent, NNBase):
             if dist is not None)
         entropies = sum(dist.entropy() for dist in dists if dist is not None)
 
-        log = dict()
+        log = {k: v for k, v in hx._asdict() if k.endswith('_loss')}
         aux_loss = -self.entropy_coef * entropies.mean()
-
-        for k, v in hx._asdict().items():
-            if k.endswith('_loss'):
-                log[k] = v
 
         return AgentValues(
             value=hx.v,
