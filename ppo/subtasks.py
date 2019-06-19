@@ -158,7 +158,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         self.n_subtasks = n_subtasks
         if teacher_agent:
             assert isinstance(teacher_agent, SubtasksTeacher)
-        self.teacher_agent = teacher_agent
+        self.agent = teacher_agent
 
         # networks
         self.recurrent = recurrent
@@ -172,7 +172,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                     stride=1,
                     padding=1), 'relu'), nn.ReLU(), Flatten())
 
-        self.conv2 = nn.Sequential(
+        self.conv = nn.Sequential(
             Concat(dim=1),
             init_(
                 nn.Conv2d(
@@ -274,6 +274,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         ],
                          dim=-1)
 
+    # @torch.jit.script_method
     def g_binary_to_int(self, g_binary):
         g123 = g_binary.nonzero()[:, 1:].view(-1, 3)
         g123 -= F.pad(
@@ -282,6 +283,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         g123[:, 0] *= self.subtask_space[2]  # g1 * x3
         return g123.sum(dim=-1)
 
+    # @torch.jit.script_method
     def g_int_to_123(self, g):
         x1, x2, x3 = self.subtask_space.to(g.dtype)
         g1 = g // (x2 * x3)
@@ -510,14 +512,14 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             # a
             g_broad = broadcast_3d(g_binary, self.obs_shape[1:])
-            conv_out2 = self.conv2((obs[i], g_broad))
-            if self.teacher_agent is None:
+            conv_out2 = self.conv((obs[i], g_broad))
+            if self.agent is None:
                 dist = self.actor(conv_out2)
             else:
                 g = broadcast_3d(g_binary, obs.shape[3:])
                 teacher_inputs = torch.cat(
                     [obs[i], g, task_broad[i], next_subtask_broad[i]], dim=1)
-                dist = self.teacher_agent(
+                dist = self.agent(
                     teacher_inputs, rnn_hxs=None, masks=None).dist
             sample_new(a_ints[i + 1], dist)
             # a[:] = 'wsadeq'.index(input('act:'))
