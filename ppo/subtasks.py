@@ -265,12 +265,12 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                          dim=-1)
 
     def g_binary_to_int(self, g_binary):
-        factored_code = g_binary.nonzero()[:, 1:].view(-1, 3)
-        factored_code -= F.pad(
+        g123 = g_binary.nonzero()[:, 1:].view(-1, 3)
+        g123 -= F.pad(
             torch.cumsum(self.subtask_space, dim=0)[:2], [1, 0], 'constant', 0)
-        factored_code[:, :-1] *= self.subtask_space[1:]  # g1 * x2, g2 * x3
-        factored_code[:, 0] *= self.subtask_space[2]  # g1 * x3
-        return factored_code.sum(dim=-1)
+        g123[:, :-1] *= self.subtask_space[1:]  # g1 * x2, g2 * x3
+        g123[:, 0] *= self.subtask_space[2]  # g1 * x3
+        return g123.sum(dim=-1)
 
     def g_int_to_123(self, g):
         x1, x2, x3 = self.subtask_space.to(g.dtype)
