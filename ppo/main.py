@@ -64,7 +64,10 @@ def train_skill_cli(student):
         student_parser.add_argument('--xi', type=float, required=True)
     kwargs = hierarchical_parse_args(parser)
 
-    def train(task_args, n_objects, max_episode_steps, student_args,
+    def train(task_args,
+              n_objects,
+              max_episode_steps,
+              student_args=None,
               **_kwargs):
         class TrainSkill(Train):
             @staticmethod
