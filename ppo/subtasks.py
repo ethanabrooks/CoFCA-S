@@ -338,8 +338,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             g_binary[new_episode] = g0  # initialize g_binary to first subtask
             hx.g_int[new_episode] = 0.
 
-        a = torch.cat([hx.a.unsqueeze(0), actions.a], dim=0)
-        g_int = torch.cat([hx.g_int.unsqueeze(0), actions.g_int], dim=0)
+        a_ints = torch.cat([hx.a.unsqueeze(0), actions.a], dim=0)
+        g_ints = torch.cat([hx.g_int.unsqueeze(0), actions.g_int], dim=0)
 
         outputs = RecurrentState(*[[] for _ in RecurrentState._fields])
 
@@ -347,7 +347,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         for i in range(n):
             conv_out = self.conv1(obs[i])
 
-            a_idxs = a[i].flatten().long()
+            idxs = a_ints[i].flatten().long()
             agent_layer = obs[i, :, 6, :, :].long()
             j, k, l = torch.split(agent_layer.nonzero(), [1, 1, 1], dim=-1)
             debug_obs = obs[i, j, :, k, l].squeeze(1)
@@ -355,7 +355,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             def get_debug_in(subtask_param):
                 task_part = subtask_param[:, :3]
                 obj_part = subtask_param[:, -4:]
-                action_part = self.a_one_hots[a_idxs]
+                action_part = self.a_one_hots[idxs]
                 obs4d = (debug_obs.unsqueeze(2).unsqueeze(3).unsqueeze(4) *
                          task_part.unsqueeze(1).unsqueeze(3).unsqueeze(4) *
                          obj_part.unsqueeze(1).unsqueeze(2).unsqueeze(4) *
@@ -470,12 +470,12 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             # g
             cg = self.phi_update(get_debug_in(hx.g_binary))
-            old_g = self.g_one_hots[g_int[i].long().flatten()]
+            old_g = self.g_one_hots[g_ints[i].long().flatten()]
             dist = FixedCategorical(
                 probs=torch.clamp(interp(old_g, p, cg), 0., 1.))
             # dist = FixedCategorical(probs=p)
-            sample_new(g_int[i + 1], dist)
-            outputs.g_int.append(g_int[i + 1])
+            sample_new(g_ints[i + 1], dist)
+            outputs.g_int.append(g_ints[i + 1])
             outputs.g_probs.append(dist.probs)
 
             # g_loss
@@ -485,7 +485,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             # g_target = torch.stack(g_target).detach()
             outputs.g_loss.append(-dist.log_probs(subtask))
 
-            g_idxs = g_int[i + 1].long().flatten()
+            g_idxs = g_ints[i + 1].long().flatten()
             g_binary = M[torch.arange(N), g_idxs]
             outputs.g_binary.append(g_binary)
 
@@ -509,10 +509,10 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                     [obs[i], g, task_broad[i], next_subtask_broad[i]], dim=1)
                 dist = self.teacher_agent(
                     teacher_inputs, rnn_hxs=None, masks=None).dist
-            sample_new(a[i + 1], dist)
+            sample_new(a_ints[i + 1], dist)
             # a[:] = 'wsadeq'.index(input('act:'))
 
-            outputs.a.append(a[i + 1])
+            outputs.a.append(a_ints[i + 1])
             outputs.a_probs.append(dist.probs)
 
             # v
