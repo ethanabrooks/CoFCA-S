@@ -74,7 +74,6 @@ class SubtasksStudent(SubtasksTeacher):
 
         action2 = sample_analogy_counterparts(self.actions, exclude=action1)
         object2 = sample_analogy_counterparts(self.objects, exclude=object1)
-        return super().forward(inputs, *args, action=action, **kwargs)
 
         def embed(action, object):
             idxs = torch.cat([action, object], dim=-1).cumsum(dim=-1)
@@ -84,6 +83,7 @@ class SubtasksStudent(SubtasksTeacher):
         embedding2 = embed(action1, object1)
         embedding3 = embed(action2, object2)
         embedding4 = embed(action2, object1)
+        return super().forward(inputs, *args, action=action, **kwargs)
 
         analogy_loss = 0
         for a, b, c, d in [[embedding1, embedding2, embedding3, embedding4],
