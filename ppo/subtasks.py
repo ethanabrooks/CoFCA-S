@@ -301,18 +301,17 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
         outputs = RecurrentState(*[[] for _ in RecurrentState._fields])
 
-        n = obs.size(0)
-        for i in range(n):
+        for t in range(T):
             subtask = float_subtask.long()
-            float_subtask += next_subtask[i]
+            float_subtask += next_subtask[t]
             outputs.subtask.append(float_subtask)
 
-            idxs = A[i].flatten().long()
-            agent_layer = obs[i, :, 6, :, :].long()
+            idxs = A[t].flatten().long()
+            agent_layer = obs[t, :, 6, :, :].long()
             j, k, l = torch.split(agent_layer.nonzero(), [1, 1, 1], dim=-1)
 
             def phi_update(subtask_param, values, losses, probs):
-                debug_obs = obs[i, j, :, k, l].squeeze(1)
+                debug_obs = obs[t, j, :, k, l].squeeze(1)
                 task_sections = torch.split(
                     subtask_param, tuple(self.task_nvec[0]), dim=-1)
                 parts = (debug_obs, self.a_one_hots[idxs]) + task_sections
@@ -335,16 +334,16 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 c_logits = self.phi_update(obs4d.view(N, -1))
                 if self.hard_update:
                     c_dist = FixedCategorical(logits=c_logits)
-                    c = actions.c[i]
+                    c = actions.c[t]
                     sample_new(c, c_dist)
                     values.append(c)
                     probs.append(c_dist.probs)
-                    losses.append(-c_dist.log_probs(next_subtask[i]))
+                    losses.append(-c_dist.log_probs(next_subtask[t]))
                 else:
                     c = torch.sigmoid(c_logits[:, :1])
                     values.append(c)
                     probs.append(torch.zeros_like(c_logits))  # dummy value
-                    new_subtask = next_subtask[i] > 0
+                    new_subtask = next_subtask[t] > 0
                     old_subtask = 1 - new_subtask
                     if torch.any(new_subtask):
                         weight = torch.ones_like(c)
@@ -353,7 +352,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                         losses.append(
                             F.binary_cross_entropy(
                                 torch.clamp(c, 0., 1.),
-                                next_subtask[i],
+                                next_subtask[t],
                                 weight=weight,
                                 reduction='none'))
                     else:
@@ -383,32 +382,32 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             outputs.r.append(r)
 
             # g
-            old_g = self.g_one_hots[G[i].long().flatten()]
+            old_g = self.g_one_hots[G[t].long().flatten()]
             dist = FixedCategorical(
                 probs=torch.clamp(interp(old_g, p, cg), 0., 1.))
-            sample_new(G[i + 1], dist)
-            outputs.g.append(G[i + 1])
+            sample_new(G[t + 1], dist)
+            outputs.g.append(G[t + 1])
             outputs.g_probs.append(dist.probs)
             outputs.g_loss.append(-dist.log_probs(subtask))
 
-            g_idxs = G[i + 1].long().flatten()
+            g_idxs = G[t + 1].long().flatten()
             g_binary = M[torch.arange(N), g_idxs]
             outputs.g_binary.append(g_binary)
 
             # a
             g_broad = broadcast3d(g_binary, self.obs_shape[1:])
-            conv_out = self.conv((obs[i], g_broad))
+            conv_out = self.conv((obs[t], g_broad))
             if self.agent is None:
                 dist = self.actor(conv_out)
             else:
                 agent_inputs = torch.cat(
-                    [obs[i], g_broad, task_broad[i], next_subtask_broad[i]],
+                    [obs[t], g_broad, task_broad[t], next_subtask_broad[t]],
                     dim=1)
                 dist = self.agent(agent_inputs, rnn_hxs=None, masks=None).dist
-            sample_new(A[i + 1], dist)
+            sample_new(A[t + 1], dist)
             # a[:] = 'wsadeq'.index(input('act:'))
 
-            outputs.a.append(A[i + 1])
+            outputs.a.append(A[t + 1])
             outputs.a_probs.append(dist.probs)
 
             # v
