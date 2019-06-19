@@ -223,6 +223,24 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         ],
                          dim=-1)
 
+    # @torch.jit.script_method
+    def g_binary_to_int(self, g_binary):
+        g123 = g_binary.nonzero()[:, 1:].view(-1, 3)
+        g123 -= F.pad(
+            torch.cumsum(self.subtask_space, dim=0)[:2], [1, 0], 'constant', 0)
+        g123[:, :-1] *= self.subtask_space[1:]  # g1 * x2, g2 * x3
+        g123[:, 0] *= self.subtask_space[2]  # g1 * x3
+        return g123.sum(dim=-1)
+
+    # @torch.jit.script_method
+    def g_int_to_123(self, g):
+        x1, x2, x3 = self.subtask_space.to(g.dtype)
+        g1 = g // (x2 * x3)
+        x4 = g % (x2 * x3)
+        g2 = x4 // x3
+        g3 = x4 % x3
+        return g1, g2, g3
+
     def check_grad(self, **kwargs):
         for k, v in kwargs.items():
             if v.grad_fn is not None:
@@ -266,7 +284,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
         p = hx.p
         r = hx.r
-        g_binary = hx.g_binary
+        old_g_binary = hx.g_binary
         float_subtask = hx.subtask
         for x in hx:
             x.squeeze_(0)
@@ -276,7 +294,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             r[new_episode] = M[new_episode, 0]  # initialize r to first subtask
 
             # initialize g to first subtask
-            g_binary[new_episode] = M[new_episode, 0]
+            old_g_binary[new_episode] = M[new_episode, 0]
             hx.g_int[new_episode] = 0.
 
         a_ints = torch.cat([hx.a.unsqueeze(0), actions.a], dim=0)
@@ -333,6 +351,11 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 values=outputs.cr,
                 losses=outputs.cr_loss,
                 probs=outputs.cr_probs)
+            g_idxs = g_ints[i].long().flatten()
+            g_binary = M[torch.arange(N), g_idxs]
+            if not torch.all(g_binary == old_g_binary):
+                import ipdb
+                ipdb.set_trace()
             cg = phi_update(
                 subtask_param=g_binary,
                 values=outputs.cg,
@@ -360,6 +383,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             g_idxs = g_ints[i + 1].long().flatten()
             g_binary = M[torch.arange(N), g_idxs]
+            old_g_binary = M[torch.arange(N), g_idxs]
             outputs.g_binary.append(g_binary)
 
             # a
