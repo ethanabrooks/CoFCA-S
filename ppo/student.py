@@ -83,7 +83,6 @@ class SubtasksStudent(SubtasksTeacher):
         embedding2 = embed(action1, object1)
         embedding3 = embed(action2, object2)
         embedding4 = embed(action2, object1)
-        return super().forward(inputs, *args, action=action, **kwargs)
 
         analogy_loss = 0
         for a, b, c, d in [[embedding1, embedding2, embedding3, embedding4],
@@ -101,6 +100,7 @@ class SubtasksStudent(SubtasksTeacher):
                 torch.norm(a - b, dim=-1),
                 max=self.tau_diff)  # increase the side
             analogy_loss += (sim_loss + dis_loss + dif_loss)
+        return super().forward(inputs, *args, action=action, **kwargs)
 
         act = super().forward(inputs, *args, action=action, **kwargs)
         return act._replace(
