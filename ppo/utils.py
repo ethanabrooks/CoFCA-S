@@ -94,7 +94,7 @@ def init_(network, nonlinearity=None):
                 nn.init.calculate_gain(nonlinearity))
 
 
-def broadcast_3d(inputs, shape):
+def broadcast3d(inputs, shape):
     return inputs.view(*inputs.shape, 1, 1).expand(*inputs.shape, *shape)
 
 
