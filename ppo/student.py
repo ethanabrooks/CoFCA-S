@@ -54,7 +54,6 @@ class SubtasksStudent(SubtasksTeacher):
         obs, subtasks, task_broad, next_subtask_broad = torch.split(
             inputs, self.obs_sections, dim=1)
         subtasks = subtasks[:, :, 0, 0]
-        return super().forward(inputs, *args, action=action, **kwargs)
 
         g123 = g_binary_to_123(subtasks, self.subtask_space)
         action1, object1 = torch.split(g123, [2, 1], dim=-1)
@@ -75,6 +74,7 @@ class SubtasksStudent(SubtasksTeacher):
 
         action2 = sample_analogy_counterparts(self.actions, exclude=action1)
         object2 = sample_analogy_counterparts(self.objects, exclude=object1)
+        return super().forward(inputs, *args, action=action, **kwargs)
 
         def embed(action, object):
             idxs = torch.cat([action, object], dim=-1).cumsum(dim=-1)
