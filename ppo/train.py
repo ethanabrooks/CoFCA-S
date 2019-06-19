@@ -1,9 +1,11 @@
 import functools
 import itertools
+from collections import Counter, defaultdict
 from pathlib import Path
 import re
 import sys
 import time
+from typing import Dict
 
 import gym
 import numpy as np
@@ -14,7 +16,7 @@ from common.atari_wrappers import wrap_deepmind
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from gridworld_env import SubtasksGridWorld
-from ppo.agent import Agent
+from ppo.agent import Agent, AgentValues  # noqa
 from ppo.storage import RolloutStorage
 from ppo.update import PPO
 from ppo.utils import get_n_gpu, get_random_gpu
@@ -104,11 +106,7 @@ class Train:
 
         ppo = PPO(agent=self.agent, batch_size=batch_size, **ppo_args)
 
-        rewards_counter = np.zeros(num_processes)
-        time_step_counter = np.zeros(num_processes)
         n_success = 0
-        episode_rewards = []
-        time_steps = []
 
         start = time.time()
         last_save = start
@@ -123,38 +121,14 @@ class Train:
             print(f'Loaded parameters from {load_path}.')
 
         for j in itertools.count():
-            for step in range(num_steps):
-                # Sample actions.add_argument_group('env_args')
-                with torch.no_grad():
-                    act = self.agent(
-                        inputs=rollouts.obs[step],
-                        rnn_hxs=rollouts.recurrent_hidden_states[step],
-                        masks=rollouts.masks[step])  # type: AgentValues
-
-                # act.action[:] = 'wsadeq'.index(input('act:'))
-
-                # Observe reward and next obs
-                obs, reward, done, infos = envs.step(act.action)
-
-                # track rewards
-                rewards_counter += reward.numpy()
-                time_step_counter += 1
-                episode_rewards.append(rewards_counter[done])
-                time_steps.append(time_step_counter[done])
-                rewards_counter[done] = 0
-                time_step_counter[done] = 0
-
-                # If done then clean the history of observations.
-                masks = torch.FloatTensor(
-                    [[0.0] if done_ else [1.0] for done_ in done])
-                rollouts.insert(
-                    obs=obs,
-                    recurrent_hidden_states=act.rnn_hxs,
-                    actions=act.action,
-                    action_log_probs=act.action_log_probs,
-                    values=act.value,
-                    rewards=reward,
-                    masks=masks)
+            episode_values = self.run_epoch(
+                obs=rollouts.obs[0],
+                rnn_hxs=rollouts.recurrent_hidden_states[0],
+                masks=rollouts.masks[0],
+                envs=envs,
+                num_steps=num_steps,
+                rollouts=rollouts,
+            )
 
             with torch.no_grad():
                 next_value = self.agent.get_value(
@@ -187,8 +161,7 @@ class Train:
 
             total_num_steps = (j + 1) * num_processes * num_steps
 
-            rewards_array = np.concatenate(episode_rewards)
-            time_steps_array = np.concatenate(time_steps)
+            rewards_array = episode_values['reward']
             if rewards_array.size > 0 and success_reward:
                 reward = rewards_array.mean()
                 print(
@@ -208,21 +181,21 @@ class Train:
                 end = time.time()
                 fps = int(total_num_steps / (end - start))
                 if rewards_array.size > 0:
+                    # noinspection PyStringFormat
                     print(
                         f"Updates {j}, num timesteps {total_num_steps}, FPS {fps} \n "
-                        f"Last {len(episode_rewards)} training episodes: " +
+                        f"Last {len(rewards_array)} training episodes: " +
                         "mean/median reward {:.2f}/{:.2f}, min/max reward {:.2f}/{"
                         ":.2f}\n".format(
                             np.mean(rewards_array), np.median(rewards_array),
                             np.min(rewards_array), np.max(rewards_array)))
                 if log_dir:
                     writer.add_scalar('return', np.mean(rewards_array), j)
-                    writer.add_scalar('time steps', np.mean(time_steps_array),
-                                      j)
+                    writer.add_scalar('time steps',
+                                      np.mean(episode_values['time_step']), j)
                     for k, v in train_results.items():
                         if log_dir and np.isscalar(v):
                             writer.add_scalar(k.replace('_', ' '), v, j)
-                episode_rewards = []
 
             if eval_interval is not None and j % eval_interval == eval_interval - 1:
                 eval_envs = self.make_vec_envs(
@@ -240,39 +213,61 @@ class Train:
                 #     vec_norm.eval()
                 #     vec_norm.ob_rms = get_vec_normalize(envs).ob_rms
 
-                eval_episode_rewards = []
-
-                obs = eval_envs.reset()
                 eval_recurrent_hidden_states = torch.zeros(
                     num_processes,
                     self.agent.recurrent_hidden_state_size,
                     device=device)
                 eval_masks = torch.zeros(num_processes, 1, device=device)
 
-                while len(eval_episode_rewards) < 10:
-                    with torch.no_grad():
-                        act = self.agent(
-                            obs,
-                            eval_recurrent_hidden_states,
-                            eval_masks,
-                            deterministic=True)
-                        eval_recurrent_hidden_states = act.rnn_hxs
-
-                    # Observe reward and next obs
-                    obs, reward, done, infos = eval_envs.step(act.action)
-
-                    eval_masks = torch.FloatTensor(
-                        [[0.0] if done_ else [1.0] for done_ in done])
-                    for info in infos:
-                        if 'episode' in info.keys():
-                            eval_episode_rewards.append(info['episode']['r'])
+                eval_lists = self.run_epoch(
+                    obs=eval_envs.reset(),
+                    rnn_hxs=eval_recurrent_hidden_states,
+                    masks=eval_masks,
+                    envs=eval_envs,
+                    num_steps=num_steps,
+                    rollouts=None)
 
                 eval_envs.close()
 
                 print(" Evaluation using {} episodes: mean reward {:.5f}\n".
                       format(
-                          len(eval_episode_rewards),
-                          np.mean(eval_episode_rewards)))
+                          np.mean(eval_lists['episodes']),
+                          np.mean(eval_lists['rewards'])))
+
+    def run_epoch(self, obs, rnn_hxs, masks, envs, num_steps, rollouts):
+        counters = Counter()
+        epoch_values = defaultdict(list)
+        for step in range(num_steps):
+            with torch.no_grad():
+                act = self.agent(
+                    inputs=obs, rnn_hxs=rnn_hxs,
+                    masks=masks)  # type: AgentValues
+
+            # Observe reward and next obs
+            obs, reward, done, infos = envs.step(act.action)
+
+            # track rewards
+            counters['reward'] += reward.numpy()
+            counters['time_step'] += np.ones_like(reward.numpy())
+            epoch_values['reward'].append(counters['reward'][done])
+            epoch_values['time_step'].append(counters['time_step'][done])
+            counters['reward'][done] = 0
+            counters['time_step'][done] = 0
+            counters['episodes'] += done
+
+            # If done then clean the history of observations.
+            masks = torch.FloatTensor(
+                [[0.0] if done_ else [1.0] for done_ in done])
+            if rollouts:
+                rollouts.insert(
+                    obs=obs,
+                    recurrent_hidden_states=act.rnn_hxs,
+                    actions=act.action,
+                    action_log_probs=act.action_log_probs,
+                    values=act.value,
+                    rewards=reward,
+                    masks=masks)
+        return {k: np.concatenate(v) for k, v in epoch_values.items()}
 
     @staticmethod
     def build_agent(envs, **agent_args):
