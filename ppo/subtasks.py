@@ -229,12 +229,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             subtask_size,  # g
             2)
 
-        # embeddings
-        for name, d in zip(
-            ['type_embeddings', 'count_embeddings', 'obj_embeddings'],
-                subtask_space):
-            self.register_buffer(name, torch.eye(int(d)))
-
+        for i, d in enumerate(self.task_nvec[0]):
+            self.register_buffer(f'part{i}_one_hot', torch.eye(int(d)))
         self.register_buffer('l_one_hots', torch.eye(3))
         self.register_buffer('p_one_hots', torch.eye(self.n_subtasks))
         self.register_buffer('a_one_hots', torch.eye(int(action_space.a.n)))
@@ -270,12 +266,11 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
     def parse_hidden(self, hx):
         return RecurrentState(*torch.split(hx, self.state_sizes, dim=-1))
 
-    @torch.jit.script_method
-    def task_one_hots(self, task_type, count, obj):
+    # @torch.jit.script_method
+    def task_one_hots(self, *g123):
         return torch.cat([
-            self.type_embeddings[task_type.long()],
-            self.count_embeddings[count.long()],
-            self.obj_embeddings[obj.long()],
+            getattr(self, f'part{i}_one_hot')[g.long()]
+            for i, g in enumerate(g123)
         ],
                          dim=-1)
 
