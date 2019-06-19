@@ -42,7 +42,17 @@ class SubtasksAgent(Agent, NNBase):
             **kwargs,
         )
         self.obs_sections = get_subtasks_obs_sections(task_space)
-        self.agent = teacher_agent
+        self.register_buffer(
+            'subtask_choices',
+            torch.zeros(
+                self.action_space.g_int.n,
+                self.action_space.g_int.n,
+                dtype=torch.long))
+        self.debug_network = nn.Sequential(
+            init_(nn.Linear(task_space.nvec[0].sum(), hidden_size), 'relu'),
+            nn.ReLU(),
+            Categorical(hidden_size, self.action_space.g_int.n),
+        )
 
     def forward(self, inputs, rnn_hxs, masks, action=None,
                 deterministic=False):
