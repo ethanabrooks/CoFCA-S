@@ -86,6 +86,7 @@ class SubtasksWrapper(gym.Wrapper):
                 self.action_space.spaces))[:-1].astype(int)
         actions = SubtasksActions(*np.split(action, action_sections))
         action = int(actions.a)
+        self.last_g = int(actions.g_int)
         s, r, t, i = super().step(action)
         return self.wrap_observation(s), r, t, i
 
@@ -144,6 +145,19 @@ class SubtasksWrapper(gym.Wrapper):
         #     print(array)
 
         return stack.astype(float)
+
+    def render(self, mode='human'):
+        super().render(mode=mode)
+        if self.last_g is not None:
+            g_type, g_count, g_obj = tuple(self.task[self.last_g])
+            env = self.env.unwrapped
+            print(
+                'Assigned subtask:',
+                env.task_types[g_type],
+                g_count,
+                env.object_types[g_obj],
+            )
+        input('paused')
 
 
 # Can be used to test recurrent policies for Reacher-v2
