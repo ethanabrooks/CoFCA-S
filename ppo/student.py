@@ -84,7 +84,9 @@ class SubtasksStudent(SubtasksTeacher):
         embedding3 = embed(action2, object2)
         embedding4 = embed(action2, object1)
 
-        analogy_loss = 0
+        sim_loss = 0
+        dis_loss = 0
+        dif_loss = 0
         for a, b, c, d in [[embedding1, embedding2, embedding3, embedding4],
                            [embedding2, embedding4, embedding1, embedding3]]:
             """
@@ -92,15 +94,19 @@ class SubtasksStudent(SubtasksTeacher):
             | | | | | |
             c-d 3-4 1-3
             """
-            sim_loss = F.mse_loss(a - b, c - d)  # a:b::c:d
-            dis_loss = -torch.clamp(
+            sim_loss += F.mse_loss(a - b, c - d)  # a:b::c:d
+            dis_loss += -torch.clamp(
                 torch.norm(a - d, dim=-1),
-                max=self.tau_diss)  # increase the diagonal
-            dif_loss = -torch.clamp(
+                max=self.tau_diss).mean()  # increase the diagonal
+            dif_loss += -torch.clamp(
                 torch.norm(a - b, dim=-1),
-                max=self.tau_diff)  # increase the side
-            analogy_loss += (sim_loss + dis_loss + dif_loss)
+                max=self.tau_diff).mean()  # increase the side
 
+        analogy_loss = sim_loss + dis_loss + dif_loss
         act = super().forward(inputs, *args, action=action, **kwargs)
-        return act._replace(
-            aux_loss=act.aux_loss + self.xi * analogy_loss.mean())
+        act.log.update(
+            sim_loss=sim_loss,
+            dis_loss=dis_loss,
+            dif_loss=dif_loss,
+            analogy_loss=analogy_loss)
+        return act._replace(aux_loss=act.aux_loss + self.xi * analogy_loss)
