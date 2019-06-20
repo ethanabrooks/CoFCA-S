@@ -1,6 +1,6 @@
+from collections import Counter, defaultdict
 import functools
 import itertools
-from collections import Counter, defaultdict
 from pathlib import Path
 import re
 import sys
@@ -238,8 +238,8 @@ class Train:
 
                 print(" Evaluation using {} episodes: mean reward {:.5f}\n".
                       format(
-                          np.mean(eval_lists['episodes']),
-                          np.mean(eval_lists['rewards'])))
+                          len(eval_lists['reward']),
+                          np.mean(eval_lists['reward'])))
 
     def run_epoch(self, obs, rnn_hxs, masks, envs, num_steps, rollouts):
         counters = Counter()
