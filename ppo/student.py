@@ -49,8 +49,7 @@ class SubtasksStudent(SubtasksTeacher):
                                self.subtask_space).cumsum(dim=-1)
         embedded = self.embeddings(idxs)
         broadcast = broadcast3d(embedded, self.obs_shape[-2:])
-        return torch.cat([obs, subtasks], dim=1)  # TODO
-        # return torch.cat([obs, broadcast], dim=1)
+        return torch.cat([obs, broadcast], dim=1)
 
     def forward(self, inputs, *args, action=None, **kwargs):
         return super().forward(inputs, *args, action=action, **kwargs)
