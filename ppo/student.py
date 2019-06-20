@@ -26,8 +26,11 @@ class SubtasksStudent(SubtasksTeacher):
         self.task_space = task_space
         n_types, max_count, n_objects = task_space.nvec[0]
         super().__init__(**kwargs, task_space=task_space)
-        self.embeddings = nn.EmbeddingBag(
-            int(task_space.nvec[0].sum()), embedding_dim)
+        # self.embeddings = nn.EmbeddingBag(
+        #     int(task_space.nvec[0].sum()), embedding_dim)
+        self.embeddings = nn.ModuleList(
+            nn.Embedding(n, embedding_dim) for n in task_space.nvec[0])
+
         self.register_buffer(
             'actions',
             torch.cartesian_prod(
@@ -40,40 +43,37 @@ class SubtasksStudent(SubtasksTeacher):
 
     @property
     def d(self):
-        print(self.obs_sections.base, *self.task_space.nvec[0])
-        return self.obs_sections.base * int(self.task_space.nvec[0].prod())
+        return self.obs_sections.base * self.embedding_dim**3
         # return self.obs_sections.base + self.embedding_dim
 
     def preprocess_obs(self, inputs):
         obs, subtasks, task_broad, next_subtask_broad = torch.split(
             inputs, self.obs_sections, dim=1)
         n, d, h, w = obs.shape
-        task_sections = torch.split(
-            subtasks[:, :, 0, 0], tuple(self.task_space.nvec[0]), dim=-1)
+        g123 = g_binary_to_123(subtasks[:, :, 0, 0], self.subtask_space)
+        g123 = torch.split(g123, [1, 1, 1], dim=-1)
+        embeddings = [e(s.flatten()) for e, s in zip(self.embeddings, g123)]
         obs6d = 1
-        for i1, part in enumerate(task_sections):
-            for i2 in range(len(task_sections) + 2):  # 2 for h,w
+        for i1, part in enumerate(embeddings):
+            for i2 in range(len(embeddings) + 2):  # 2 for h,w
                 if i1 != i2:
                     part.unsqueeze_(i2 + 1)
             obs6d = obs6d * part
-
         obs7d = obs.view(n, d, 1, 1, 1, h, w) * obs6d.unsqueeze(1)
         return obs7d.view(n, -1, h, w)
         # broadcast = broadcast3d(embedded, self.obs_shape[-2:])
         # return torch.cat([obs, broadcast], dim=1)
 
-
-'''
-        idxs = g_binary_to_123(subtasks[:, :, 0, 0],
-                               self.subtask_space).cumsum(dim=-1)
-        embedded = self.embeddings(idxs)
-        broadcast = broadcast3d(embedded, self.obs_shape[-2:])
-        return torch.cat([obs, broadcast], dim=1)
-
+        # idxs = g_binary_to_123(subtasks[:, :, 0, 0],
+        #                        self.subtask_space).cumsum(dim=-1)
+        # embedded = self.embeddings(idxs)
+        # broadcast = broadcast3d(embedded, self.obs_shape[-2:])
+        # return torch.cat([obs, broadcast], dim=1)
 
     def forward(self, inputs, *args, action=None, **kwargs):
         obs, subtasks, task_broad, next_subtask_broad = torch.split(
             inputs, self.obs_sections, dim=1)
+        n = obs.size(0)
         subtasks = subtasks[:, :, 0, 0]
 
         g123 = g_binary_to_123(subtasks, self.subtask_space)
@@ -88,7 +88,6 @@ class SubtasksStudent(SubtasksTeacher):
             options2 = options[torch.nonzero(1 - excluded)[:, 1]].view(
                 obs.size(0), n_options, -1)
 
-            n = obs.size(0)
             idxs = torch.multinomial(
                 torch.ones(n_options), num_samples=n, replacement=True).long()
             return options2[torch.arange(n), idxs]
@@ -96,9 +95,18 @@ class SubtasksStudent(SubtasksTeacher):
         action2 = sample_analogy_counterparts(self.actions, exclude=action1)
         object2 = sample_analogy_counterparts(self.objects, exclude=object1)
 
-        def embed(action, object):
-            idxs = torch.cat([action, object], dim=-1).cumsum(dim=-1)
-            return self.embeddings(idxs)
+        def embed(*values):
+            values = torch.cat(values, dim=-1)
+            embeds = 1
+            for i, v in enumerate(torch.split(values, [1, 1, 1], dim=-1)):
+                emb = self.embeddings[i](v.flatten())
+                for j in range(3):
+                    if i != j:
+                        emb.unsqueeze_(j + 1)
+                embeds = embeds * emb
+            return embeds.view(n, -1)
+            # idxs = torch.cat([action, object], dim=-1).cumsum(dim=-1)
+            # return self.embeddings(idxs)
 
         embedding1 = embed(action1, object2)
         embedding2 = embed(action1, object1)
@@ -131,4 +139,3 @@ class SubtasksStudent(SubtasksTeacher):
             dif_loss=dif_loss,
             analogy_loss=analogy_loss)
         return act._replace(aux_loss=act.aux_loss + self.xi * analogy_loss)
-'''
