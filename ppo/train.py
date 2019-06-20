@@ -48,6 +48,7 @@ class Train:
                  ppo_args,
                  agent_args,
                  render,
+                 render_eval,
                  load_path,
                  success_reward,
                  successes_till_done,
@@ -56,8 +57,6 @@ class Train:
                  run_id,
                  save_dir=None):
         save_dir = save_dir or log_dir
-        if render:
-            synchronous = True
 
         torch.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
@@ -79,7 +78,7 @@ class Train:
             gamma=(gamma if normalize else None),
             add_timestep=add_timestep,
             render=render,
-            synchronous=synchronous,
+            synchronous=True if render else synchronous,
             evaluation=False)
 
         self.agent = self.build_agent(envs, **agent_args)
@@ -211,8 +210,8 @@ class Train:
                     gamma=gamma if normalize else None,
                     add_timestep=add_timestep,
                     evaluation=True,
-                    synchronous=synchronous,
-                    render=render)
+                    synchronous=True if render_eval else synchronous,
+                    render=render_eval)
                 eval_envs.to(device)
 
                 # vec_norm = get_vec_normalize(eval_envs)

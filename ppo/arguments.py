@@ -32,6 +32,7 @@ def build_parser():
         action='store_true',
         help="sets flags for determinism when using CUDA (potentially slow!)")
     parser.add_argument('--render', action='store_true')
+    parser.add_argument('--render-eval', action='store_true')
     parser.add_argument(
         '--num-processes',
         type=int,
