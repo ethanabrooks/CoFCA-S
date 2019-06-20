@@ -76,6 +76,7 @@ class SubtasksGridWorld(gym.Env):
             self.task = np.array(list(encode_task()))
         else:
             self.task = None
+        self.subtask_idx = None
         self.subtask = None
         self.task_iter = None
         self.task_count = None
@@ -127,7 +128,7 @@ class SubtasksGridWorld(gym.Env):
     def transition_strings(self):
         return np.array(list('👆👇👈👉pt'))
 
-    def render(self, mode='human'):
+    def render(self, mode='human', sleep_time=.5):
         def print_subtask(task_type, count, task_object_type):
             print(self.task_types[task_type], count,
                   self.object_types[task_object_type])
@@ -158,14 +159,7 @@ class SubtasksGridWorld(gym.Env):
             print(six.u(f'\x1b[47m\x1b[30m'), end='')
             print(''.join(row), end='')
             print(six.u('\x1b[49m\x1b[39m'))
-
-        if self.last_terminal:
-            if self.last_reward == 1.:
-                print('#############')
-                print('Task complete')
-                print('#############')
-            time.sleep(1)
-        time.sleep(1)
+        # time.sleep(4 * sleep_time if self.last_terminal else sleep_time)
 
     def subtask_generator(self):
         task_types = np.arange(len(self.task_types))
@@ -222,6 +216,7 @@ class SubtasksGridWorld(gym.Env):
         self.objects = {tuple(p): t for p, t in zip(objects_pos, types)}
 
         self.task_count = None
+        self.subtask_idx = -1
         self.perform_iteration()
         self.last_terminal = False
         self.last_action = None
@@ -256,6 +251,7 @@ class SubtasksGridWorld(gym.Env):
     def perform_iteration(self):
         self.next_subtask = self.task_count == 1
         if self.task_count is None or self.next_subtask:
+            self.subtask_idx += 1
             task_type, task_count, _ = self.subtask = next(self.task_iter)
             self.task_count = task_count
         else:

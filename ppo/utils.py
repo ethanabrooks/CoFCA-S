@@ -87,14 +87,14 @@ def get_freer_gpu():
 
 def init_(network, nonlinearity=None):
     if nonlinearity is None:
-        return init(network, nn.init.orthogonal_,
-                    lambda x: nn.init.constant_(x, 0))
-    return init(network, nn.init.orthogonal_,
-                lambda x: nn.init.constant_(x, 0),
+        return init(network,
+                    nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0))
+    return init(network,
+                nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0),
                 nn.init.calculate_gain(nonlinearity))
 
 
-def broadcast_3d(inputs, shape):
+def broadcast3d(inputs, shape):
     return inputs.view(*inputs.shape, 1, 1).expand(*inputs.shape, *shape)
 
 
@@ -113,7 +113,7 @@ def batch_conv1d(inputs, weights):
 
 @torch.jit.script
 def interp(x1, x2, c):
-    return c * x2.squeeze(1) + (1 - c) * x1
+    return c * x2 + (1 - c) * x1
 
 
 @torch.jit.script
