@@ -67,7 +67,7 @@ class SubtasksGridWorld(gym.Env):
         self.possible_subtasks = np.array([
             x for x in itertools.product(
                 range(len(task_types)),
-                range(max_task_count),
+                range(1, 1 + max_task_count),
                 range(len(object_types)),
             ) if not test_subtasks or x not in test_subtasks
         ])
