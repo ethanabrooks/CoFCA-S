@@ -150,8 +150,8 @@ class SubtasksWrapper(gym.Wrapper):
     def render(self, mode='human'):
         super().render(mode=mode)
         if self.last_g is not None:
-            g_type, g_count, g_obj = tuple(self.task[self.last_g])
             env = self.env.unwrapped
+            g_type, g_count, g_obj = tuple(env.task[self.last_g])
             print(
                 'Assigned subtask:',
                 env.task_types[g_type],
