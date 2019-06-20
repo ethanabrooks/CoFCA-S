@@ -74,7 +74,6 @@ class SubtasksStudent(SubtasksTeacher):
 
         action2 = sample_analogy_counterparts(self.actions, exclude=action1)
         object2 = sample_analogy_counterparts(self.objects, exclude=object1)
-        return super().forward(inputs, *args, action=action, **kwargs)
 
         def embed(action, object):
             idxs = torch.cat([action, object], dim=-1).cumsum(dim=-1)
