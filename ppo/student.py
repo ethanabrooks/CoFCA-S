@@ -23,6 +23,7 @@ class SubtasksStudent(SubtasksTeacher):
         self.tau_diss = tau_diss
         self.tau_diff = tau_diff
         self.embedding_dim = embedding_dim
+        self.task_space = task_space
         n_types, max_count, n_objects = task_space.nvec[0]
         super().__init__(**kwargs, task_space=task_space)
         self.embeddings = nn.EmbeddingBag(
@@ -39,16 +40,36 @@ class SubtasksStudent(SubtasksTeacher):
 
     @property
     def d(self):
-        return self.obs_sections.base + self.embedding_dim
+        print(self.obs_sections.base, *self.task_space.nvec[0])
+        return self.obs_sections.base * int(self.task_space.nvec[0].prod())
+        # return self.obs_sections.base + self.embedding_dim
 
     def preprocess_obs(self, inputs):
         obs, subtasks, task_broad, next_subtask_broad = torch.split(
             inputs, self.obs_sections, dim=1)
+        n, d, h, w = obs.shape
+        task_sections = torch.split(
+            subtasks[:, :, 0, 0], tuple(self.task_space.nvec[0]), dim=-1)
+        obs6d = 1
+        for i1, part in enumerate(task_sections):
+            for i2 in range(len(task_sections) + 2):  # 2 for h,w
+                if i1 != i2:
+                    part.unsqueeze_(i2 + 1)
+            obs6d = obs6d * part
+
+        obs7d = obs.view(n, d, 1, 1, 1, h, w) * obs6d.unsqueeze(1)
+        return obs7d.view(n, -1, h, w)
+        # broadcast = broadcast3d(embedded, self.obs_shape[-2:])
+        # return torch.cat([obs, broadcast], dim=1)
+
+
+'''
         idxs = g_binary_to_123(subtasks[:, :, 0, 0],
                                self.subtask_space).cumsum(dim=-1)
         embedded = self.embeddings(idxs)
         broadcast = broadcast3d(embedded, self.obs_shape[-2:])
         return torch.cat([obs, broadcast], dim=1)
+
 
     def forward(self, inputs, *args, action=None, **kwargs):
         obs, subtasks, task_broad, next_subtask_broad = torch.split(
@@ -110,3 +131,4 @@ class SubtasksStudent(SubtasksTeacher):
             dif_loss=dif_loss,
             analogy_loss=analogy_loss)
         return act._replace(aux_loss=act.aux_loss + self.xi * analogy_loss)
+'''
