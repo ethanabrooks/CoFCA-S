@@ -159,6 +159,10 @@ class SubtasksGridWorld(gym.Env):
             print(six.u(f'\x1b[47m\x1b[30m'), end='')
             print(''.join(row), end='')
             print(six.u('\x1b[49m\x1b[39m'))
+        if self.last_reward > 0 and self.last_terminal:
+            print('~~~~~~~~~~~~~')
+            print('Task complete')
+            print('~~~~~~~~~~~~~')
         # time.sleep(4 * sleep_time if self.last_terminal else sleep_time)
 
     def subtask_generator(self):

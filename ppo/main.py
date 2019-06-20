@@ -5,7 +5,6 @@ from collections import ChainMap
 from pathlib import Path
 from pprint import pprint
 
-from gym.wrappers import TimeLimit
 import torch
 
 import gridworld_env
@@ -15,7 +14,7 @@ from ppo.student import SubtasksStudent
 from ppo.subtasks import SubtasksAgent
 from ppo.teacher import SubtasksTeacher
 from ppo.train import Train
-from ppo.wrappers import SubtasksWrapper, VecNormalize
+from ppo.wrappers import SubtasksWrapper, VecNormalize, TimeLimit
 from rl_utils import hierarchical_parse_args
 
 
@@ -42,9 +41,9 @@ def make_subtasks_env(env_id, **kwargs):
     gridworld_args = gridworld_env.get_args(env_id)
     kwargs.update(add_timestep=None)
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
-    return helper(**ChainMap(
-        kwargs, gridworld_args
-    ))  # combines kwargs and gridworld_args with preference for kwargs
+    return helper(
+        **ChainMap(kwargs, gridworld_args)
+    )  # combines kwargs and gridworld_args with preference for kwargs
 
 
 def train_skill_cli(student):

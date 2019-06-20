@@ -5,6 +5,7 @@ from gym import spaces
 from gym.spaces import Box
 import numpy as np
 import torch
+from gym.wrappers import TimeLimit as GymTimeLimit
 
 from common.vec_env import VecEnvWrapper
 from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
@@ -321,3 +322,12 @@ def get_vec_normalize(venv):
         return get_vec_normalize(venv.venv)
 
     return None
+
+
+class TimeLimit(GymTimeLimit):
+    def render(self, *args, **kwargs):
+        super().render(*args, **kwargs)
+        if self._past_limit():
+            print('~~~~~~~~~~~')
+            print('Out of time')
+            print('~~~~~~~~~~~')
