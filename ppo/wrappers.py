@@ -3,9 +3,9 @@ from collections import namedtuple
 import gym
 from gym import spaces
 from gym.spaces import Box
+from gym.wrappers import TimeLimit as GymTimeLimit
 import numpy as np
 import torch
-from gym.wrappers import TimeLimit as GymTimeLimit
 
 from common.vec_env import VecEnvWrapper
 from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
@@ -327,7 +327,7 @@ def get_vec_normalize(venv):
 class TimeLimit(GymTimeLimit):
     def render(self, *args, **kwargs):
         super().render(*args, **kwargs)
-        if self._past_limit():
+        if self._max_episode_steps is not None and self._max_episode_steps <= self._elapsed_steps:
             print('~~~~~~~~~~~')
             print('Out of time')
             print('~~~~~~~~~~~')
