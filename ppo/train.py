@@ -72,9 +72,15 @@ class Train:
 
         torch.set_num_threads(1)
 
-        _gamma = gamma if normalize else None
-        envs = self.make_vec_envs(env_id, seed, num_processes, _gamma,
-                                  add_timestep, render, synchronous)
+        envs = self.make_vec_envs(
+            env_id=env_id,
+            seed=seed,
+            num_processes=num_processes,
+            gamma=(gamma if normalize else None),
+            add_timestep=add_timestep,
+            render=render,
+            synchronous=synchronous,
+            evaluation=False)
 
         self.agent = self.build_agent(envs, **agent_args)
         rollouts = RolloutStorage(
@@ -199,11 +205,12 @@ class Train:
 
             if eval_interval is not None and j % eval_interval == eval_interval - 1:
                 eval_envs = self.make_vec_envs(
-                    env_id,
-                    seed + num_processes,
-                    num_processes,
-                    _gamma,
-                    add_timestep,
+                    env_id=env_id,
+                    seed=seed + num_processes,
+                    num_processes=num_processes,
+                    gamma=gamma if normalize else None,
+                    add_timestep=add_timestep,
+                    evaluation=True,
                     synchronous=synchronous,
                     render=render)
                 eval_envs.to(device)
@@ -319,6 +326,7 @@ class Train:
                       add_timestep,
                       render,
                       synchronous,
+                      evaluation,
                       num_frame_stack=None):
 
         envs = [
@@ -327,7 +335,8 @@ class Train:
                 env_id=env_id,
                 seed=seed,
                 rank=i,
-                add_timestep=add_timestep) for i in range(num_processes)
+                add_timestep=add_timestep,
+                evaluation=evaluation) for i in range(num_processes)
         ]
 
         if len(envs) == 1 or sys.platform == 'darwin' or synchronous:
