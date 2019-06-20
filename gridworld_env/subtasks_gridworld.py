@@ -1,14 +1,14 @@
+from collections import namedtuple
 import itertools
 import re
 import time
-from collections import namedtuple
 
 import gym
-import numpy as np
-import six
 from gym import spaces
 from gym.envs.registration import EnvSpec
 from gym.utils import seeding
+import numpy as np
+import six
 
 from ppo.utils import set_index
 from rl_utils import cartesian_product
