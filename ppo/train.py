@@ -127,7 +127,7 @@ class Train:
             print(f'Loaded parameters from {load_path}.')
 
         for j in itertools.count():
-            episode_values = self.run_epoch(
+            train_values = self.run_epoch(
                 obs=rollouts.obs[0],
                 rnn_hxs=rollouts.recurrent_hidden_states[0],
                 masks=rollouts.masks[0],
@@ -167,7 +167,7 @@ class Train:
 
             total_num_steps = (j + 1) * num_processes * num_steps
 
-            rewards_array = episode_values['reward']
+            rewards_array = train_values['reward']
             if rewards_array.size > 0 and success_reward:
                 reward = rewards_array.mean()
                 print(
@@ -198,7 +198,7 @@ class Train:
                 if log_dir:
                     writer.add_scalar('return', np.mean(rewards_array), j)
                     writer.add_scalar('time steps',
-                                      np.mean(episode_values['time_step']), j)
+                                      np.mean(train_values['time_step']), j)
                     for k, v in train_results.items():
                         if log_dir and np.isscalar(v):
                             writer.add_scalar(k.replace('_', ' '), v, j)
@@ -226,7 +226,7 @@ class Train:
                     device=device)
                 eval_masks = torch.zeros(num_processes, 1, device=device)
 
-                eval_lists = self.run_epoch(
+                eval_values = self.run_epoch(
                     obs=eval_envs.reset(),
                     rnn_hxs=eval_recurrent_hidden_states,
                     masks=eval_masks,
@@ -238,8 +238,13 @@ class Train:
 
                 print(" Evaluation using {} episodes: mean reward {:.5f}\n".
                       format(
-                          len(eval_lists['reward']),
-                          np.mean(eval_lists['reward'])))
+                          len(eval_values['reward']),
+                          np.mean(eval_values['reward'])))
+                if log_dir:
+                    writer.add_scalar('eval return',
+                                      np.mean(eval_values['reward']), j)
+                    writer.add_scalar('eval time steps',
+                                      np.mean(train_values['time_step']), j)
 
     def run_epoch(self, obs, rnn_hxs, masks, envs, num_steps, rollouts):
         counters = Counter()
