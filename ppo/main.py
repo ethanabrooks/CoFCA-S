@@ -32,8 +32,7 @@ def make_subtasks_env(env_id, **kwargs):
         if rank == 1:
             print('Environment args:')
             pprint(_kwargs)
-        env = SubtasksWrapper(class_parser(class_)(**_kwargs, evaluation=False,
-            eval_subtasks=[]))
+        env = SubtasksWrapper(class_parser(class_)(**_kwargs))
         env.seed(seed + rank)
         print('Environment seed:', seed + rank)
         if max_episode_steps is not None:
@@ -130,6 +129,7 @@ def teach_cli():
     env_parser.add_argument(
         '--eval-subtask',
         dest='eval_subtasks',
+        default=[],
         type=int,
         nargs=3,
         action='append')
@@ -179,4 +179,4 @@ def teach_cli():
 
 
 if __name__ == "__main__":
-    train_student_cli()
+    teach_cli()
