@@ -1,3 +1,4 @@
+import pprint
 from collections import Counter, defaultdict
 import functools
 import itertools
@@ -112,7 +113,6 @@ class Train:
         ppo = PPO(agent=self.agent, batch_size=batch_size, **ppo_args)
 
         n_success = 0
-
         start = time.time()
         last_save = start
 
@@ -169,38 +169,26 @@ class Train:
             rewards_array = train_values['reward']
             if rewards_array.size > 0 and success_reward:
                 reward = rewards_array.mean()
-                print(
-                    f'Obtained average reward of {reward} vs success threshold of {success_reward}'
-                )
                 if reward > success_reward:
                     n_success += 1
-                    print('Consecutive successes:', n_success)
                 else:
-                    if n_success > 0:
-                        print('Consecutive successes:', n_success)
                     n_success = 0
                 if n_success == successes_till_done:
                     return
 
             if j % log_interval == 0:
                 end = time.time()
-                fps = int(total_num_steps / (end - start))
-                if rewards_array.size > 0:
-                    # noinspection PyStringFormat
-                    print(
-                        f"Updates {j}, num timesteps {total_num_steps}, FPS {fps} \n "
-                        f"Last {len(rewards_array)} training episodes: " +
-                        "mean/median reward {:.2f}/{:.2f}, min/max reward {:.2f}/{"
-                        ":.2f}\n".format(
-                            np.mean(rewards_array), np.median(rewards_array),
-                            np.min(rewards_array), np.max(rewards_array)))
-                if log_dir:
-                    writer.add_scalar('return', np.mean(rewards_array), j)
-                    writer.add_scalar('time steps',
-                                      np.mean(train_values['time_step']), j)
-                    for k, v in train_results.items():
-                        if log_dir and np.isscalar(v):
-                            writer.add_scalar(k.replace('_', ' '), v, j)
+                fps = total_num_steps / (end - start)
+                log_values = dict(
+                    fps=fps,
+                    reward=rewards_array,
+                    time_steps=train_values['time_step'],
+                    **train_results)
+                for k, v in log_values.items():
+                    mean = np.mean(v)
+                    print(f'{k}: {mean}')
+                    if log_dir:
+                        writer.add_scalar(k, mean, total_num_steps)
 
             if eval_interval is not None and j % eval_interval == eval_interval - 1:
                 eval_envs = self.make_vec_envs(
@@ -235,15 +223,15 @@ class Train:
 
                 eval_envs.close()
 
-                print(" Evaluation using {} episodes: mean reward {:.5f}\n".
-                      format(
-                          len(eval_values['reward']),
-                          np.mean(eval_values['reward'])))
-                if log_dir:
-                    writer.add_scalar('eval return',
-                                      np.mean(eval_values['reward']), j)
-                    writer.add_scalar('eval time steps',
-                                      np.mean(train_values['time_step']), j)
+                log_values = dict(
+                    eval_return=eval_values['reward'],
+                    eval_time_steps=eval_values['time_step'],
+                )
+                for k, v in log_values.items():
+                    mean = np.mean(v)
+                    print(f'{k}: {mean}')
+                    if log_dir:
+                        writer.add_scalar(k, mean, total_num_steps)
 
     def run_epoch(self, obs, rnn_hxs, masks, envs, num_steps, rollouts):
         counters = Counter()
