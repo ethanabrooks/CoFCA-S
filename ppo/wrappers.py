@@ -129,14 +129,14 @@ class SubtasksWrapper(gym.Wrapper):
 
         stack = np.vstack([obs, *subtask_one_hots, task_spec, next_subtask])
         # print('obs', obs.shape)
-        # print('task_type', task_type_one_hot.shape)
+        # print('interaction', interaction_one_hot.shape)
         # print('task_objects', task_objects_one_hot.shape)
         # print('task_spec', task_spec.shape)
         # print('iterate', iterate.shape)
         # print('stack', stack.shape)
 
         # names = ['obstacles'] + list(env.object_types) + ['ice', 'agent'] + \
-        #         list(env.task_types) + ['task objects']
+        #         list(env.interactions) + ['task objects']
         # assert len(obs) == len(names)
         # for array, name in zip(obs, names):
         #     print(name)
@@ -151,7 +151,7 @@ class SubtasksWrapper(gym.Wrapper):
             g_type, g_count, g_obj = tuple(env.task[self.last_g])
             print(
                 'Assigned subtask:',
-                env.task_types[g_type],
+                env.interactions[g_type],
                 g_count,
                 env.object_types[g_obj],
             )

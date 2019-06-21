@@ -296,17 +296,17 @@ class SubtasksGridWorld(gym.Env):
         if touching:
             iterate = False
             object_type = self.objects[pos]
-            task_type = self.interactions[self.subtask.interaction]
-            if 'visit' == task_type:
+            interaction = self.interactions[self.subtask.interaction]
+            if 'visit' == interaction:
                 iterate = object_type == self.subtask.object
             if a >= n_transitions:
                 if a - n_transitions == 0:  # pick up
                     del self.objects[pos]
-                    if 'pick-up' == task_type:
+                    if 'pick-up' == interaction:
                         iterate = object_type == self.subtask.object  # picked up object
                 elif a - n_transitions == 1:  # transform
                     self.objects[pos] = len(self.object_types)
-                    if 'transform' == task_type:
+                    if 'transform' == interaction:
                         iterate = object_type == self.subtask.object
 
             if iterate:
