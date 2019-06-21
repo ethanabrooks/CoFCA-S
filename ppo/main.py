@@ -3,7 +3,6 @@
 # noinspection PyUnresolvedReferences
 from collections import ChainMap
 from pathlib import Path
-from pprint import pprint
 
 from gym.wrappers import TimeLimit
 import torch
@@ -31,7 +30,8 @@ def make_subtasks_env(env_id, **kwargs):
     def helper(seed, rank, class_, max_episode_steps, **_kwargs):
         if rank == 1:
             print('Environment args:')
-            pprint(_kwargs)
+            for k, v in _kwargs.items():
+                print(f'{k:20}{v}')
         env = SubtasksWrapper(class_parser(class_)(**_kwargs))
         env.seed(seed + rank)
         print('Environment seed:', seed + rank)
