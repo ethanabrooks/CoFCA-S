@@ -32,7 +32,8 @@ def make_subtasks_env(env_id, **kwargs):
         if rank == 1:
             print('Environment args:')
             pprint(_kwargs)
-        env = SubtasksWrapper(class_parser(class_)(**_kwargs))
+        env = SubtasksWrapper(class_parser(class_)(**_kwargs, evaluation=False,
+            eval_subtasks=[]))
         env.seed(seed + rank)
         print('Environment seed:', seed + rank)
         if max_episode_steps is not None:
