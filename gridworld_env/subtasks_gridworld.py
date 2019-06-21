@@ -14,7 +14,6 @@ from ppo.utils import set_index
 from rl_utils import cartesian_product
 
 ObsSections = namedtuple('ObsSections', 'base subtask task next_subtask')
-
 Subtask = namedtuple('Subtask', 'interaction count object')
 
 
