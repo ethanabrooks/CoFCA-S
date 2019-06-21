@@ -1,17 +1,16 @@
-import pprint
-from collections import Counter, defaultdict
 import functools
 import itertools
-from pathlib import Path
 import re
 import sys
 import time
+from collections import Counter, defaultdict
+from pathlib import Path
 from typing import Dict
 
 import gym
 import numpy as np
-from tensorboardX import SummaryWriter
 import torch
+from tensorboardX import SummaryWriter
 
 from common.atari_wrappers import wrap_deepmind
 from common.vec_env.dummy_vec_env import DummyVecEnv
@@ -255,8 +254,8 @@ class Train:
             counters['episodes'] += done
 
             # If done then clean the history of observations.
-            masks = torch.FloatTensor(
-                [[0.0] if done_ else [1.0] for done_ in done])
+            masks = torch.FloatTensor(done, device=obs.device).unsqueeze(1)
+
             if rollouts:
                 rollouts.insert(
                     obs=obs,
