@@ -99,21 +99,21 @@ class SubtasksWrapper(gym.Wrapper):
         _, h, w = obs.shape
         env = self.env.unwrapped
 
-        # subtask pointer
-        task_type, task_count, task_object_type = env.subtask
+        # subtask one hots
+        subtask_one_hots = env.Subtask(
+            interaction=np.zeros((len(env.interactions), h, w), dtype=bool),
+            count=np.zeros((env.max_task_count, h, w), dtype=bool),
+            object=np.zeros((len(env.object_types), h, w), dtype=bool))
 
-        task_type_one_hot = np.zeros((len(env.task_types), h, w), dtype=bool)
-        task_count_one_hot = np.zeros((env.max_task_count, h, w), dtype=bool)
-        task_object_one_hot = np.zeros((len(env.object_types), h, w),
-                                       dtype=bool)
-
-        task_type_one_hot[task_type, :, :] = True
-        task_count_one_hot[task_count - 1, :, :] = True
-        task_object_one_hot[task_object_type, :, :] = True
+        subtask_one_hots.interaction[env.subtask.interaction, :, :] = True
+        subtask_one_hots.count[env.subtask.count - 1, :, :] = True
+        subtask_one_hots.object[env.subtask.object, :, :] = True
 
         # task spec
+        task = np.array([tuple(x) for x in env.task])
+
         def task_iterator():
-            for column in env.task.T:  # transpose for easy splitting in Subtasks module
+            for column in task.T:  # transpose for easy splitting in Subtasks module
                 for word in column:
                     yield word
 
@@ -127,10 +127,7 @@ class SubtasksWrapper(gym.Wrapper):
 
         next_subtask = np.full((1, h, w), env.next_subtask)
 
-        stack = np.vstack([
-            obs, task_type_one_hot, task_count_one_hot, task_object_one_hot,
-            task_spec, next_subtask
-        ])
+        stack = np.vstack([obs, *subtask_one_hots, task_spec, next_subtask])
         # print('obs', obs.shape)
         # print('task_type', task_type_one_hot.shape)
         # print('task_objects', task_objects_one_hot.shape)
