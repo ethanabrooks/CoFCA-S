@@ -175,4 +175,4 @@ def teach_cli():
 
 
 if __name__ == "__main__":
-    train_teacher_cli()
+    teach_cli()
