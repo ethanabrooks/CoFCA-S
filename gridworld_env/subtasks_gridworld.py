@@ -74,12 +74,14 @@ class SubtasksGridWorld(gym.Env):
                 )))
         possible_subtasks = np.expand_dims(self.possible_subtasks, 0)
         eval_subtasks = np.expand_dims(eval_subtasks, 1)
-        in_eval = (possible_subtasks == eval_subtasks).all(axis=-1).any(axis=0)
-        if evaluation:
-            self.possible_subtasks = self.possible_subtasks[in_eval]
-        else:
-            not_in_eval = np.logical_not(in_eval)
-            self.possible_subtasks = self.possible_subtasks[not_in_eval]
+        if eval_subtasks:
+            in_eval = possible_subtasks == eval_subtasks
+            in_eval = in_eval.all(axis=-1).any(axis=0)
+            if evaluation:
+                self.possible_subtasks = self.possible_subtasks[in_eval]
+            else:
+                not_in_eval = np.logical_not(in_eval)
+                self.possible_subtasks = self.possible_subtasks[not_in_eval]
 
         def encode_task():
             for string in task:
