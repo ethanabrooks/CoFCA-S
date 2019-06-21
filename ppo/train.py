@@ -254,7 +254,8 @@ class Train:
             counters['episodes'] += done
 
             # If done then clean the history of observations.
-            masks = torch.FloatTensor(done, device=obs.device).unsqueeze(1)
+            masks = torch.tensor(
+                done, device=obs.device, dtype=torch.float32).unsqueeze(1)
 
             if rollouts:
                 rollouts.insert(
