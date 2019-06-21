@@ -14,7 +14,7 @@ from ppo.student import SubtasksStudent
 from ppo.subtasks import SubtasksAgent
 from ppo.teacher import SubtasksTeacher
 from ppo.train import Train
-from ppo.wrappers import SubtasksWrapper, VecNormalize, TimeLimit
+from ppo.wrappers import SubtasksWrapper, VecNormalize, TimeLimit, get_subtasks_obs_sections
 from rl_utils import hierarchical_parse_args
 
 
@@ -129,6 +129,10 @@ def teach_cli():
         task_space = get_task_space(**task_args)
 
         class TrainSubtasks(Train):
+            def __init__(self, **kwargs):
+                self.obs_sections = get_subtasks_obs_sections(task_space)
+                super().__init__(**kwargs)
+
             @staticmethod
             def make_env(**_kwargs):
                 return make_subtasks_env(

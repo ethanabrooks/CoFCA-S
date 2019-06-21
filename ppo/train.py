@@ -136,6 +136,10 @@ class Train:
                 # Observe reward and next obs
                 obs, reward, done, infos = envs.step(act.action)
 
+                import ipdb
+                ipdb.set_trace()
+                _, subtasks, _, _ = torch.split(obs, self.obs_sections, dim=1)
+
                 # track rewards
                 rewards_counter += reward.numpy()
                 time_step_counter += 1
