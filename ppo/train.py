@@ -1,16 +1,16 @@
+from collections import Counter, defaultdict
 import functools
 import itertools
+from pathlib import Path
 import re
 import sys
 import time
-from collections import Counter, defaultdict
-from pathlib import Path
 from typing import Dict
 
 import gym
 import numpy as np
-import torch
 from tensorboardX import SummaryWriter
+import torch
 
 from common.atari_wrappers import wrap_deepmind
 from common.vec_env.dummy_vec_env import DummyVecEnv
@@ -183,9 +183,11 @@ class Train:
                     reward=rewards_array,
                     time_steps=train_values['time_step'],
                     **train_results)
+                print()
+                print('Epoch', j)
                 for k, v in log_values.items():
                     mean = np.mean(v)
-                    print(f'{k}: {mean}')
+                    print(f'{k:20}{mean}')
                     if log_dir:
                         writer.add_scalar(k, mean, total_num_steps)
 
