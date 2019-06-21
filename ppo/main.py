@@ -18,6 +18,27 @@ from ppo.wrappers import SubtasksWrapper, VecNormalize
 from rl_utils import hierarchical_parse_args
 
 
+def add_task_args(parser):
+    task_parser = parser.add_argument_group('task_args')
+    task_parser.add_argument('--interactions', nargs='*')
+    task_parser.add_argument('--max-task-count', type=int, required=True)
+    task_parser.add_argument('--object-types', nargs='*')
+    task_parser.add_argument('--n-subtasks', type=int, required=True)
+
+
+def add_env_args(parser):
+    env_parser = parser.add_argument_group('env_args')
+    env_parser.add_argument('--n-objects', type=int, required=True)
+    env_parser.add_argument('--max-episode-steps', type=int)
+    env_parser.add_argument(
+        '--eval-subtask',
+        dest='eval_subtasks',
+        default=[],
+        type=int,
+        nargs=3,
+        action='append')
+
+
 def cli():
     Train(**get_args())
 
@@ -42,27 +63,15 @@ def make_subtasks_env(env_id, **kwargs):
     gridworld_args = gridworld_env.get_args(env_id)
     kwargs.update(add_timestep=None)
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
-    return helper(
-        **ChainMap(kwargs, gridworld_args)
-    )  # combines kwargs and gridworld_args with preference for kwargs
+    return helper(**ChainMap(
+        kwargs, gridworld_args
+    ))  # combines kwargs and gridworld_args with preference for kwargs
 
 
 def train_skill_cli(student):
     parser = build_parser()
-    task_parser = parser.add_argument_group('task_args')
-    task_parser.add_argument('--interactions', nargs='*')
-    task_parser.add_argument('--max-task-count', type=int, required=True)
-    task_parser.add_argument('--object-types', nargs='*')
-    task_parser.add_argument('--n-subtasks', type=int, required=True)
-    env_parser = parser.add_argument_group('env_args')
-    env_parser.add_argument('--n-objects', type=int, required=True)
-    env_parser.add_argument('--max-episode-steps', type=int)
-    env_parser.add_argument(
-        '--eval-subtask',
-        dest='eval_subtasks',
-        type=int,
-        nargs=3,
-        action='append')
+    add_task_args(parser)
+    add_env_args(parser)
     if student:
         student_parser = parser.add_argument_group('student_args')
         student_parser.add_argument('--embedding-dim', type=int, required=True)
@@ -84,7 +93,7 @@ def train_skill_cli(student):
             @staticmethod
             def build_agent(envs, **agent_args):
                 agent_args = dict(
-                    obs_shape=envs.observation_space.shape,
+                    obs_space=envs.observation_space,
                     action_space=envs.action_space,
                     task_space=get_task_space(**task_args),
                     **agent_args)
@@ -109,11 +118,8 @@ def train_student_cli():
 def teach_cli():
     parser = build_parser()
     parser.add_argument('--agent-load-path', type=Path)
-    task_parser = parser.add_argument_group('task_args')
-    task_parser.add_argument('--interactions', nargs='*')
-    task_parser.add_argument('--max-task-count', type=int, required=True)
-    task_parser.add_argument('--object-types', nargs='*')
-    task_parser.add_argument('--n-subtasks', type=int, required=True)
+    add_task_args(parser)
+    add_env_args(parser)
     subtasks_parser = parser.add_argument_group('subtasks_args')
     subtasks_parser.add_argument(
         '--subtasks-hidden-size', type=int, required=True)
@@ -123,16 +129,6 @@ def teach_cli():
     subtasks_parser.add_argument('--hard-update', action='store_true')
     subtasks_parser.add_argument(
         '--multiplicative-interaction', action='store_true')
-    env_parser = parser.add_argument_group('env_args')
-    env_parser.add_argument('--n-objects', type=int, required=True)
-    env_parser.add_argument('--max-episode-steps', type=int)
-    env_parser.add_argument(
-        '--eval-subtask',
-        dest='eval_subtasks',
-        default=[],
-        type=int,
-        nargs=3,
-        action='append')
 
     def train(env_id, task_args, ppo_args, agent_load_path, subtasks_args,
               env_args, **kwargs):
@@ -149,7 +145,7 @@ def teach_cli():
                 agent = None
                 if agent_load_path:
                     agent = SubtasksTeacher(
-                        obs_shape=envs.observation_space.shape,
+                        obs_space=envs.observation_space,
                         action_space=envs.action_space,
                         task_space=task_space,
                         **agent_args)
@@ -166,7 +162,7 @@ def teach_cli():
                 }
 
                 return SubtasksAgent(
-                    obs_shape=envs.observation_space.shape,
+                    obs_space=envs.observation_space,
                     action_space=envs.action_space,
                     task_space=task_space,
                     agent=agent,
@@ -179,4 +175,4 @@ def teach_cli():
 
 
 if __name__ == "__main__":
-    teach_cli()
+    train_teacher_cli()

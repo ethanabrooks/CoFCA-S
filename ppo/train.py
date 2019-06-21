@@ -85,7 +85,7 @@ class Train:
         rollouts = RolloutStorage(
             num_steps=num_steps,
             num_processes=num_processes,
-            obs_shape=envs.observation_space.shape,
+            obs_space=envs.observation_space,
             action_space=envs.action_space,
             recurrent_hidden_state_size=self.agent.recurrent_hidden_state_size,
         )
@@ -338,7 +338,8 @@ class Train:
         else:
             envs = SubprocVecEnv(envs)
 
-        if len(envs.observation_space.shape) == 1:
+        if envs.observation_space.shape and len(  # TODO
+                envs.observation_space.shape) == 1:
             if gamma is None:
                 envs = VecNormalize(envs, ret=False)
             else:

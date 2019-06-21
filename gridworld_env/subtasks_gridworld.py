@@ -1,7 +1,6 @@
 from collections import namedtuple
 import itertools
 import re
-import time
 
 import gym
 from gym import spaces
@@ -13,7 +12,6 @@ import six
 from ppo.utils import set_index
 from rl_utils import cartesian_product
 
-ObsSections = namedtuple('ObsSections', 'base subtask task next_subtask')
 Subtask = namedtuple('Subtask', 'interaction count object')
 
 
@@ -70,7 +68,7 @@ class SubtasksGridWorld(gym.Env):
             list(
                 itertools.product(
                     range(len(interactions)),
-                    range(1, 1 + max_task_count),
+                    range(max_task_count),
                     range(len(object_types)),
                 )))
         possible_subtasks = np.expand_dims(self.possible_subtasks, 0)
@@ -109,13 +107,14 @@ class SubtasksGridWorld(gym.Env):
         h, w = self.desc.shape
         self.observation_space = spaces.Tuple([
             spaces.MultiDiscrete(
-                np.ones((
+                np.array([
                     1 +  # obstacles
                     1 +  # ice
                     1 +  # agent
                     len(object_types),
                     h,
-                    w))),
+                    w
+                ])),
             get_task_space(
                 interactions=self.interactions,
                 max_task_count=self.max_task_count,
@@ -126,7 +125,7 @@ class SubtasksGridWorld(gym.Env):
 
         class _Subtask(Subtask):
             def __str__(subtask):
-                return f'{self.interactions[subtask.interaction]} {subtask.count} {self.object_types[subtask.object]}'
+                return f'{self.interactions[subtask.interaction]} {subtask.count + 1} {self.object_types[subtask.object]}'
 
         self.Subtask = _Subtask
 
@@ -160,7 +159,7 @@ class SubtasksGridWorld(gym.Env):
         print()
         print('subtask:')
         print(self.subtask)
-        print('remaining:', self.task_count)
+        print('remaining:', self.task_count + 1)
         print('action:', end=' ')
         if self.last_action is not None:
             print(self.transition_strings[self.last_action])
@@ -195,7 +194,7 @@ class SubtasksGridWorld(gym.Env):
             yield self.Subtask(*last_subtask)
 
     def get_required_objects(self, subtask):
-        yield from [subtask.object] * subtask.count
+        yield from [subtask.object] * (subtask.count + 1)
 
     def reset(self):
         if not self.initialized:
@@ -265,7 +264,7 @@ class SubtasksGridWorld(gym.Env):
         return next(self.task_iter)
 
     def perform_iteration(self):
-        self.next_subtask = self.task_count == 1
+        self.next_subtask = self.task_count == 0
         if self.task_count is None or self.next_subtask:
             self.subtask_idx += 1
             self.subtask = self.get_next_subtask()
