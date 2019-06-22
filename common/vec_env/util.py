@@ -7,8 +7,6 @@ from collections import OrderedDict
 import gym
 import numpy as np
 
-from rl_utils import space_shape
-
 
 def copy_obs_dict(obs):
     """
