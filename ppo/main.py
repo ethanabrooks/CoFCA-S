@@ -3,7 +3,6 @@
 # noinspection PyUnresolvedReferences
 from collections import ChainMap
 from pathlib import Path
-from pprint import pprint
 
 from gym.wrappers import TimeLimit
 import torch
@@ -19,6 +18,27 @@ from ppo.wrappers import SubtasksWrapper, VecNormalize
 from rl_utils import hierarchical_parse_args
 
 
+def add_task_args(parser):
+    task_parser = parser.add_argument_group('task_args')
+    task_parser.add_argument('--interactions', nargs='*')
+    task_parser.add_argument('--max-task-count', type=int, required=True)
+    task_parser.add_argument('--object-types', nargs='*')
+    task_parser.add_argument('--n-subtasks', type=int, required=True)
+
+
+def add_env_args(parser):
+    env_parser = parser.add_argument_group('env_args')
+    env_parser.add_argument('--n-objects', type=int, required=True)
+    env_parser.add_argument('--max-episode-steps', type=int)
+    env_parser.add_argument(
+        '--eval-subtask',
+        dest='eval_subtasks',
+        default=[],
+        type=int,
+        nargs=3,
+        action='append')
+
+
 def cli():
     Train(**get_args())
 
@@ -31,9 +51,10 @@ def make_subtasks_env(env_id, **kwargs):
     def helper(seed, rank, class_, max_episode_steps, **_kwargs):
         if rank == 1:
             print('Environment args:')
-            pprint(_kwargs)
-        env = SubtasksWrapper(class_parser(class_)(**_kwargs, evaluation=False,
-            eval_subtasks=[]))
+            for k, v in _kwargs.items():
+                print(f'{k:20}{v}')
+        env = SubtasksWrapper(
+            class_parser(class_)(evaluation=False, **_kwargs))
         env.seed(seed + rank)
         print('Environment seed:', seed + rank)
         if max_episode_steps is not None:
@@ -50,13 +71,8 @@ def make_subtasks_env(env_id, **kwargs):
 
 def train_skill_cli(student):
     parser = build_parser()
-    task_parser = parser.add_argument_group('task_args')
-    task_parser.add_argument('--interactions', nargs='*')
-    task_parser.add_argument('--max-task-count', type=int, required=True)
-    task_parser.add_argument('--object-types', nargs='*')
-    task_parser.add_argument('--n-subtasks', type=int, required=True)
-    parser.add_argument('--n-objects', type=int, required=True)
-    parser.add_argument('--max-episode-steps', type=int)
+    add_task_args(parser)
+    add_env_args(parser)
     if student:
         student_parser = parser.add_argument_group('student_args')
         student_parser.add_argument('--embedding-dim', type=int, required=True)
@@ -65,21 +81,15 @@ def train_skill_cli(student):
         student_parser.add_argument('--xi', type=float, required=True)
     kwargs = hierarchical_parse_args(parser)
 
-    def train(task_args,
-              n_objects,
-              max_episode_steps,
-              student_args=None,
-              **_kwargs):
+    def train(task_args, env_args, student_args=None, **_kwargs):
         class TrainSkill(Train):
             @staticmethod
-            def make_env(env_id, seed, rank, add_timestep):
+            def make_env(add_timestep, **make_env_args):
                 return make_subtasks_env(
-                    env_id=env_id,
-                    rank=rank,
-                    seed=seed,
-                    n_objects=n_objects,
-                    max_episode_steps=max_episode_steps,
-                    **task_args)
+                    **env_args,
+                    **make_env_args,
+                    **task_args,
+                )
 
             @staticmethod
             def build_agent(envs, **agent_args):
@@ -109,11 +119,8 @@ def train_student_cli():
 def teach_cli():
     parser = build_parser()
     parser.add_argument('--agent-load-path', type=Path)
-    task_parser = parser.add_argument_group('task_args')
-    task_parser.add_argument('--interactions', nargs='*')
-    task_parser.add_argument('--max-task-count', type=int, required=True)
-    task_parser.add_argument('--object-types', nargs='*')
-    task_parser.add_argument('--n-subtasks', type=int, required=True)
+    add_task_args(parser)
+    add_env_args(parser)
     subtasks_parser = parser.add_argument_group('subtasks_args')
     subtasks_parser.add_argument(
         '--subtasks-hidden-size', type=int, required=True)
@@ -123,21 +130,15 @@ def teach_cli():
     subtasks_parser.add_argument('--hard-update', action='store_true')
     subtasks_parser.add_argument(
         '--multiplicative-interaction', action='store_true')
-    parser.add_argument('--n-objects', type=int, required=True)
-    parser.add_argument('--max-episode-steps', type=int)
 
     def train(env_id, task_args, ppo_args, agent_load_path, subtasks_args,
-              n_objects, max_episode_steps, **kwargs):
+              env_args, **kwargs):
         task_space = get_task_space(**task_args)
 
         class TrainSubtasks(Train):
             @staticmethod
             def make_env(**_kwargs):
-                return make_subtasks_env(
-                    max_episode_steps=max_episode_steps,
-                    n_objects=n_objects,
-                    **_kwargs,
-                    **task_args)
+                return make_subtasks_env(**env_args, **_kwargs, **task_args)
 
             # noinspection PyMethodOverriding
             @staticmethod

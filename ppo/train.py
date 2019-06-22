@@ -46,6 +46,7 @@ class Train:
                  ppo_args,
                  agent_args,
                  render,
+                 render_eval,
                  load_path,
                  success_reward,
                  successes_till_done,
