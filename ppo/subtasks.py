@@ -23,14 +23,14 @@ RecurrentState = namedtuple(
 
 # noinspection PyMissingConstructor
 class SubtasksAgent(Agent, NNBase):
-    def __init__(self, obs_shape, action_space, task_space, hidden_size,
+    def __init__(self, obs_space, action_space, task_space, hidden_size,
                  entropy_coef, hard_update, agent, **kwargs):
         nn.Module.__init__(self)
         self.hard_update = hard_update
         self.entropy_coef = entropy_coef
         self.action_space = SubtasksActions(*action_space.spaces)
         self.recurrent_module = SubtasksRecurrence(
-            obs_shape=obs_shape,
+            obs_space=obs_space,
             action_space=self.action_space,
             task_space=task_space,
             hidden_size=hidden_size,
@@ -121,10 +121,10 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         'input_sections', 'subtask_space', 'state_sizes', 'recurrent'
     ]
 
-    def __init__(self, obs_shape, action_space, task_space, hidden_size,
+    def __init__(self, obs_space, action_space, task_space, hidden_size,
                  recurrent, hard_update, agent, multiplicative_interaction):
         super().__init__()
-        d, h, w = obs_shape
+        d, h, w = obs_space.shape
         subtask_space = list(map(int, task_space.nvec[0]))
         subtask_size = sum(subtask_space)
         n_subtasks = task_space.shape[0]

@@ -5,9 +5,9 @@ from ppo.wrappers import SubtasksActions, get_subtasks_obs_sections
 
 
 class SubtasksTeacher(Agent):
-    def __init__(self, task_space, obs_shape, action_space, **kwargs):
+    def __init__(self, task_space, obs_space, action_space, **kwargs):
         self.obs_sections = get_subtasks_obs_sections(task_space)
-        d, h, w = self.obs_shape = obs_shape
+        d, h, w = self.obs_shape = obs_space.shape
         assert d == sum(self.obs_sections)
         self.action_spaces = SubtasksActions(*action_space.spaces)
         super().__init__(

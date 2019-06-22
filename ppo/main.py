@@ -63,9 +63,9 @@ def make_subtasks_env(env_id, **kwargs):
     gridworld_args = gridworld_env.get_args(env_id)
     kwargs.update(add_timestep=None)
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
-    return helper(
-        **ChainMap(kwargs, gridworld_args)
-    )  # combines kwargs and gridworld_args with preference for kwargs
+    return helper(**ChainMap(
+        kwargs, gridworld_args
+    ))  # combines kwargs and gridworld_args with preference for kwargs
 
 
 def train_skill_cli(student):
@@ -93,7 +93,7 @@ def train_skill_cli(student):
             @staticmethod
             def build_agent(envs, **agent_args):
                 agent_args = dict(
-                    obs_shape=envs.observation_space.shape,
+                    obs_space=envs.observation_space,
                     action_space=envs.action_space,
                     task_space=get_task_space(**task_args),
                     **agent_args)
@@ -145,7 +145,7 @@ def teach_cli():
                 agent = None
                 if agent_load_path:
                     agent = SubtasksTeacher(
-                        obs_shape=envs.observation_space.shape,
+                        obs_space=envs.observation_space,
                         action_space=envs.action_space,
                         task_space=task_space,
                         **agent_args)
@@ -162,7 +162,7 @@ def teach_cli():
                 }
 
                 return SubtasksAgent(
-                    obs_shape=envs.observation_space.shape,
+                    obs_space=envs.observation_space,
                     action_space=envs.action_space,
                     task_space=task_space,
                     agent=agent,
