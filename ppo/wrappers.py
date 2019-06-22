@@ -113,7 +113,9 @@ class SubtasksWrapper(gym.Wrapper):
 
         # task spec
         def task_iterator():
-            for column in env.task.T:  # transpose for easy splitting in Subtasks module
+            for column in np.array(
+                    env.task
+            ).T:  # transpose for easy splitting in Subtasks module
                 for word in column:
                     yield word
 

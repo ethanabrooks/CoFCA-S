@@ -84,9 +84,10 @@ class SubtasksGridWorld(gym.Env):
 
         def encode_task():
             for string in task:
-                interaction, count, obj_type = re.split('[\s\\\]+', string)
-                yield (list(self.interactions).index(interaction), int(count),
-                       list(self.object_types).index(obj_type))
+                subtask = Subtask(*re.split('[\s\\\]+', string))
+                yield (list(self.interactions).index(subtask.interaction),
+                       int(subtask.count),
+                       list(self.object_types).index(subtask.object))
 
         # set on reset:
         if task:
@@ -121,6 +122,12 @@ class SubtasksGridWorld(gym.Env):
         ])
         self.action_space = spaces.Discrete(len(self.transitions) + 2)
 
+        class _Subtask(Subtask):
+            def __str__(subtask):
+                return f'{self.interactions[subtask.interaction]} {subtask.count + 1} {self.object_types[subtask.object]}'
+
+        self.Subtask = _Subtask
+
     def randomize_obstacles(self):
         h, w = self.desc.shape
         choices = cartesian_product(np.arange(h), np.arange(w))
@@ -145,16 +152,12 @@ class SubtasksGridWorld(gym.Env):
         return np.array(list('👆👇👈👉pt'))
 
     def render(self, mode='human', sleep_time=.5):
-        def print_subtask(interaction, count, task_object_type):
-            print(self.interactions[interaction], count + 1,
-                  self.object_types[task_object_type])
-
         print('task:')
-        for task in self.task:
-            print_subtask(*task)
+        for line in self.task:
+            print(line)
         print()
         print('subtask:')
-        print_subtask(*self.subtask)
+        print(self.subtask)
         print('remaining:', self.task_count + 1)
         print('action:', end=' ')
         if self.last_action is not None:
@@ -187,7 +190,10 @@ class SubtasksGridWorld(gym.Env):
                 possible_subtasks = possible_subtasks[subset]
             choice = self.np_random.choice(len(possible_subtasks))
             last_subtask = possible_subtasks[choice]
-            yield last_subtask
+            yield self.Subtask(*last_subtask)
+
+    def get_required_objects(self, subtask):
+        yield from [subtask.object] * (subtask.count + 1)
 
     def reset(self):
         if not self.initialized:
@@ -198,10 +204,14 @@ class SubtasksGridWorld(gym.Env):
         if self.random_task:
             task_iter = itertools.islice(self.subtask_generator(),
                                          self.n_subtasks)
-            self.task = np.array(list(task_iter))
+            self.task = list(task_iter)
         self.task_iter = iter(self.task)
 
-        types = [x for t, c, o in self.task for x in (c + 1) * [o]]
+        def object_types():
+            for subtask in self.task:
+                yield from self.get_required_objects(subtask)
+
+        types = list(object_types())
         n_random = max(len(types), self.n_objects)
         random_types = self.np_random.choice(
             len(self.object_types), replace=True, size=n_random - len(types))
@@ -249,12 +259,15 @@ class SubtasksGridWorld(gym.Env):
         self.np_random, seed = seeding.np_random(seed)
         return [seed]
 
+    def get_next_subtask(self):
+        return next(self.task_iter)
+
     def perform_iteration(self):
         self.next_subtask = self.task_count == 0
         if self.task_count is None or self.next_subtask:
             self.subtask_idx += 1
-            interaction, task_count, _ = self.subtask = next(self.task_iter)
-            self.task_count = task_count
+            self.subtask = self.get_next_subtask()
+            self.task_count = self.subtask.count
         else:
             self.task_count -= 1
 
@@ -281,19 +294,18 @@ class SubtasksGridWorld(gym.Env):
         if touching:
             iterate = False
             object_type = self.objects[pos]
-            interaction_idx, _, task_object_type_idx = self.subtask
-            interaction = self.interactions[interaction_idx]
+            interaction = self.interactions[self.subtask.interaction]
             if 'visit' == interaction:
-                iterate = object_type == task_object_type_idx
+                iterate = object_type == self.subtask.object
             if a >= n_transitions:
                 if a - n_transitions == 0:  # pick up
                     del self.objects[pos]
                     if 'pick-up' == interaction:
-                        iterate = object_type == task_object_type_idx  # picked up object
+                        iterate = object_type == self.subtask.object  # picked up object
                 elif a - n_transitions == 1:  # transform
                     self.objects[pos] = len(self.object_types)
                     if 'transform' == interaction:
-                        iterate = object_type == task_object_type_idx
+                        iterate = object_type == self.subtask.object
 
             if iterate:
                 try:
