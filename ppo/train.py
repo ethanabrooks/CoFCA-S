@@ -1,9 +1,11 @@
+from collections import Counter, defaultdict
 import functools
 import itertools
 from pathlib import Path
 import re
 import sys
 import time
+from typing import Dict
 
 import gym
 import numpy as np
@@ -14,7 +16,7 @@ from common.atari_wrappers import wrap_deepmind
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from gridworld_env import SubtasksGridWorld
-from ppo.agent import Agent
+from ppo.agent import Agent, AgentValues  # noqa
 from ppo.storage import RolloutStorage
 from ppo.update import PPO
 from ppo.utils import get_n_gpu, get_random_gpu
@@ -55,8 +57,6 @@ class Train:
                  run_id,
                  save_dir=None):
         save_dir = save_dir or log_dir
-        if render:
-            synchronous = True
 
         torch.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
@@ -71,9 +71,15 @@ class Train:
 
         torch.set_num_threads(1)
 
-        _gamma = gamma if normalize else None
-        envs = self.make_vec_envs(env_id, seed, num_processes, _gamma,
-                                  add_timestep, render, synchronous)
+        envs = self.make_vec_envs(
+            env_id=env_id,
+            seed=seed,
+            num_processes=num_processes,
+            gamma=(gamma if normalize else None),
+            add_timestep=add_timestep,
+            render=render,
+            synchronous=True if render else synchronous,
+            evaluation=False)
 
         self.agent = self.build_agent(envs, **agent_args)
         rollouts = RolloutStorage(
@@ -124,8 +130,8 @@ class Train:
             print(f'Loaded parameters from {load_path}.')
 
         for j in itertools.count():
-            self.run_epoch(
-                inputs=rollouts.obs[0],
+            train_values = self.run_epoch(
+                obs=rollouts.obs[0],
                 rnn_hxs=rollouts.recurrent_hidden_states[0],
                 masks=rollouts.masks[0],
                 envs=envs,
@@ -168,51 +174,41 @@ class Train:
             total_num_steps = (j + 1) * num_processes * num_steps
 
             rewards_array = np.concatenate(episode_rewards)
-            time_steps_array = np.concatenate(time_steps)
             if rewards_array.size > 0 and success_reward:
                 reward = rewards_array.mean()
-                print(
-                    f'Obtained average reward of {reward} vs success threshold of {success_reward}'
-                )
                 if reward > success_reward:
                     n_success += 1
-                    print('Consecutive successes:', n_success)
                 else:
-                    if n_success > 0:
-                        print('Consecutive successes:', n_success)
                     n_success = 0
                 if n_success == successes_till_done:
                     return
 
             if j % log_interval == 0:
                 end = time.time()
-                fps = int(total_num_steps / (end - start))
-                if rewards_array.size > 0:
-                    print(
-                        f"Updates {j}, num timesteps {total_num_steps}, FPS {fps} \n "
-                        f"Last {len(episode_rewards)} training episodes: " +
-                        "mean/median reward {:.2f}/{:.2f}, min/max reward {:.2f}/{"
-                        ":.2f}\n".format(
-                            np.mean(rewards_array), np.median(rewards_array),
-                            np.min(rewards_array), np.max(rewards_array)))
-                if log_dir:
-                    writer.add_scalar('return', np.mean(rewards_array), j)
-                    writer.add_scalar('time steps', np.mean(time_steps_array),
-                                      j)
-                    for k, v in train_results.items():
-                        if log_dir and np.isscalar(v):
-                            writer.add_scalar(k.replace('_', ' '), v, j)
-                episode_rewards = []
+                fps = total_num_steps / (end - start)
+                log_values = dict(
+                    fps=fps,
+                    reward=rewards_array,
+                    time_steps=np.concatenate(time_steps),
+                    **train_results)
+                print()
+                print('Epoch', j)
+                for k, v in log_values.items():
+                    mean = np.mean(v)
+                    print(f'{k:20}{mean}')
+                    if log_dir:
+                        writer.add_scalar(k, mean, total_num_steps)
 
             if eval_interval is not None and j % eval_interval == eval_interval - 1:
                 eval_envs = self.make_vec_envs(
-                    env_id,
-                    seed + num_processes,
-                    num_processes,
-                    _gamma,
-                    add_timestep,
-                    synchronous=synchronous,
-                    render=render)
+                    env_id=env_id,
+                    seed=seed + num_processes,
+                    num_processes=num_processes,
+                    gamma=gamma if normalize else None,
+                    add_timestep=add_timestep,
+                    evaluation=True,
+                    synchronous=True if render_eval else synchronous,
+                    render=render_eval)
                 eval_envs.to(device)
 
                 # vec_norm = get_vec_normalize(eval_envs)
@@ -221,6 +217,7 @@ class Train:
                 #     vec_norm.ob_rms = get_vec_normalize(envs).ob_rms
 
                 eval_episode_rewards = []
+                eval_time_steps = []
 
                 obs = eval_envs.reset()
                 eval_recurrent_hidden_states = torch.zeros(
@@ -231,31 +228,44 @@ class Train:
 
                 self.run_epoch(
                     envs=eval_envs,
+                    obs=obs,
+                    rnn_hxs=eval_recurrent_hidden_states,
+                    masks=eval_masks,
                     episode_rewards=eval_episode_rewards,
                     num_steps=num_steps,
                     rewards_counter=None,
                     rollouts=None,
                     time_step_counter=None,
-                    time_steps=[])
+                    time_steps=eval_time_steps)
 
                 eval_envs.close()
 
-                print(" Evaluation using {} episodes: mean reward {:.5f}\n".
-                      format(
-                          len(eval_episode_rewards),
-                          np.mean(eval_episode_rewards)))
+                log_values = dict(
+                    eval_return=eval_episode_rewards, eval_time_steps=eval)
+                for k, v in log_values.items():
+                    mean = np.mean(v)
+                    print(f'{k}: {mean}')
+                    if log_dir:
+                        writer.add_scalar(k, mean, total_num_steps)
 
-    def run_epoch(self, inputs, rnn_hxs, masks, envs, episode_rewards,
-                  num_steps, rewards_counter, rollouts, time_step_counter,
-                  time_steps):
+    def run_epoch(self,
+                  obs,
+                  rnn_hxs,
+                  masks,
+                  envs,
+                  num_steps,
+                  rollouts,
+                  rewards_counter=None,
+                  time_step_counter=None,
+                  episode_rewards=None,
+                  time_steps=None):
+        counters = Counter()
+        epoch_values = defaultdict(list)
         for step in range(num_steps):
-            # Sample actions.add_argument_group('env_args')
             with torch.no_grad():
                 act = self.agent(
-                    inputs=inputs, rnn_hxs=rnn_hxs,
+                    inputs=obs, rnn_hxs=rnn_hxs,
                     masks=masks)  # type: AgentValues
-
-            # act.action[:] = 'wsadeq'.index(input('act:'))
 
             # Observe reward and next obs
             obs, reward, done, infos = envs.step(act.action)
@@ -271,7 +281,6 @@ class Train:
             # If done then clean the history of observations.
             masks = torch.tensor(
                 1 - done, dtype=torch.float32, device=obs.device).unsqueeze(1)
-            inputs = obs
             rnn_hxs = act.rnn_hxs
             if rollouts is not None:
                 rollouts.insert(
@@ -282,6 +291,7 @@ class Train:
                     values=act.value,
                     rewards=reward,
                     masks=masks)
+        return {k: np.concatenate(v) for k, v in epoch_values.items()}
 
     @staticmethod
     def build_agent(envs, **agent_args):
@@ -326,22 +336,16 @@ class Train:
         return env
 
     def make_vec_envs(self,
-                      env_id,
-                      seed,
                       num_processes,
                       gamma,
-                      add_timestep,
                       render,
                       synchronous,
-                      num_frame_stack=None):
+                      num_frame_stack=None,
+                      **kwargs):
 
         envs = [
-            functools.partial(
-                self.make_env,
-                env_id=env_id,
-                seed=seed,
-                rank=i,
-                add_timestep=add_timestep) for i in range(num_processes)
+            functools.partial(self.make_env, rank=i, **kwargs)
+            for i in range(num_processes)
         ]
 
         if len(envs) == 1 or sys.platform == 'darwin' or synchronous:
@@ -349,7 +353,8 @@ class Train:
         else:
             envs = SubprocVecEnv(envs)
 
-        if len(envs.observation_space.shape) == 1:
+        if envs.observation_space.shape and len(  # TODO
+                envs.observation_space.shape) == 1:
             if gamma is None:
                 envs = VecNormalize(envs, ret=False)
             else:
