@@ -53,8 +53,7 @@ def make_subtasks_env(env_id, **kwargs):
             print('Environment args:')
             for k, v in _kwargs.items():
                 print(f'{k:20}{v}')
-        env = SubtasksWrapper(
-            class_parser(class_)(evaluation=False, **_kwargs))
+        env = SubtasksWrapper(class_parser(class_)(**_kwargs))
         env.seed(seed + rank)
         print('Environment seed:', seed + rank)
         if max_episode_steps is not None:
@@ -64,9 +63,9 @@ def make_subtasks_env(env_id, **kwargs):
     gridworld_args = gridworld_env.get_args(env_id)
     kwargs.update(add_timestep=None)
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
-    return helper(**ChainMap(
-        kwargs, gridworld_args
-    ))  # combines kwargs and gridworld_args with preference for kwargs
+    return helper(
+        **ChainMap(kwargs, gridworld_args)
+    )  # combines kwargs and gridworld_args with preference for kwargs
 
 
 def train_skill_cli(student):

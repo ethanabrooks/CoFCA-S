@@ -1,9 +1,11 @@
+from collections import Counter, defaultdict
 import functools
 import itertools
 from pathlib import Path
 import re
 import sys
 import time
+from typing import Dict
 
 import gym
 import numpy as np
@@ -55,8 +57,6 @@ class Train:
                  run_id,
                  save_dir=None):
         save_dir = save_dir or log_dir
-        if render:
-            synchronous = True
 
         torch.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
@@ -71,9 +71,15 @@ class Train:
 
         torch.set_num_threads(1)
 
-        _gamma = gamma if normalize else None
-        envs = self.make_vec_envs(env_id, seed, num_processes, _gamma,
-                                  add_timestep, render, synchronous)
+        envs = self.make_vec_envs(
+            env_id=env_id,
+            seed=seed,
+            num_processes=num_processes,
+            gamma=(gamma if normalize else None),
+            add_timestep=add_timestep,
+            render=render,
+            synchronous=True if render else synchronous,
+            evaluation=False)
 
         self.agent = self.build_agent(envs, **agent_args)
         rollouts = RolloutStorage(
@@ -206,13 +212,14 @@ class Train:
 
             if eval_interval is not None and j % eval_interval == eval_interval - 1:
                 eval_envs = self.make_vec_envs(
-                    env_id,
-                    seed + num_processes,
-                    num_processes,
-                    _gamma,
-                    add_timestep,
-                    synchronous=synchronous,
-                    render=render)
+                    env_id=env_id,
+                    seed=seed + num_processes,
+                    num_processes=num_processes,
+                    gamma=gamma if normalize else None,
+                    add_timestep=add_timestep,
+                    evaluation=True,
+                    synchronous=True if render_eval else synchronous,
+                    render=render_eval)
                 eval_envs.to(device)
 
                 # vec_norm = get_vec_normalize(eval_envs)
@@ -326,22 +333,16 @@ class Train:
         return env
 
     def make_vec_envs(self,
-                      env_id,
-                      seed,
                       num_processes,
                       gamma,
-                      add_timestep,
                       render,
                       synchronous,
-                      num_frame_stack=None):
+                      num_frame_stack=None,
+                      **kwargs):
 
         envs = [
-            functools.partial(
-                self.make_env,
-                env_id=env_id,
-                seed=seed,
-                rank=i,
-                add_timestep=add_timestep) for i in range(num_processes)
+            functools.partial(self.make_env, rank=i, **kwargs)
+            for i in range(num_processes)
         ]
 
         if len(envs) == 1 or sys.platform == 'darwin' or synchronous:
