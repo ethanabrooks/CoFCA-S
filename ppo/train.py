@@ -270,8 +270,7 @@ class Train:
 
             # If done then clean the history of observations.
             masks = torch.tensor(
-                [[0.0] if done_ else [1.0] for done_ in done],
-                dtype=torch.float32, device=obs.device)
+                1 - done, dtype=torch.float32, device=obs.device).unsqueeze(1)
             inputs = obs
             rnn_hxs = act.rnn_hxs
             if rollouts is not None:
