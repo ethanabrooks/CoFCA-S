@@ -124,38 +124,8 @@ class Train:
             print(f'Loaded parameters from {load_path}.')
 
         for j in itertools.count():
-            for step in range(num_steps):
-                # Sample actions.add_argument_group('env_args')
-                with torch.no_grad():
-                    act = self.agent(
-                        inputs=rollouts.obs[step],
-                        rnn_hxs=rollouts.recurrent_hidden_states[step],
-                        masks=rollouts.masks[step])  # type: AgentValues
-
-                # act.action[:] = 'wsadeq'.index(input('act:'))
-
-                # Observe reward and next obs
-                obs, reward, done, infos = envs.step(act.action)
-
-                # track rewards
-                rewards_counter += reward.numpy()
-                time_step_counter += 1
-                episode_rewards.append(rewards_counter[done])
-                time_steps.append(time_step_counter[done])
-                rewards_counter[done] = 0
-                time_step_counter[done] = 0
-
-                # If done then clean the history of observations.
-                masks = torch.FloatTensor(
-                    [[0.0] if done_ else [1.0] for done_ in done])
-                rollouts.insert(
-                    obs=obs,
-                    recurrent_hidden_states=act.rnn_hxs,
-                    actions=act.action,
-                    action_log_probs=act.action_log_probs,
-                    values=act.value,
-                    rewards=reward,
-                    masks=masks)
+            self.run_epoch(envs, episode_rewards, num_steps, rewards_counter,
+                           rollouts, time_step_counter, time_steps)
 
             with torch.no_grad():
                 next_value = self.agent.get_value(
@@ -250,23 +220,14 @@ class Train:
                     device=device)
                 eval_masks = torch.zeros(num_processes, 1, device=device)
 
-                while len(eval_episode_rewards) < 10:
-                    with torch.no_grad():
-                        act = self.agent(
-                            obs,
-                            eval_recurrent_hidden_states,
-                            eval_masks,
-                            deterministic=True)
-                        eval_recurrent_hidden_states = act.rnn_hxs
-
-                    # Observe reward and next obs
-                    obs, reward, done, infos = eval_envs.step(act.action)
-
-                    eval_masks = torch.FloatTensor(
-                        [[0.0] if done_ else [1.0] for done_ in done])
-                    for info in infos:
-                        if 'episode' in info.keys():
-                            eval_episode_rewards.append(info['episode']['r'])
+                self.run_epoch(
+                    envs=eval_envs,
+                    episode_rewards=eval_episode_rewards,
+                    num_steps=num_steps,
+                    rewards_counter=None,
+                    rollouts=None,
+                    time_step_counter=None,
+                    time_steps=[])
 
                 eval_envs.close()
 
@@ -274,6 +235,41 @@ class Train:
                       format(
                           len(eval_episode_rewards),
                           np.mean(eval_episode_rewards)))
+
+    def run_epoch(self, envs, episode_rewards, num_steps, rewards_counter,
+                  rollouts, time_step_counter, time_steps):
+        for step in range(num_steps):
+            # Sample actions.add_argument_group('env_args')
+            with torch.no_grad():
+                act = self.agent(
+                    inputs=rollouts.obs[step],
+                    rnn_hxs=rollouts.recurrent_hidden_states[step],
+                    masks=rollouts.masks[step])  # type: AgentValues
+
+            # act.action[:] = 'wsadeq'.index(input('act:'))
+
+            # Observe reward and next obs
+            obs, reward, done, infos = envs.step(act.action)
+
+            # track rewards
+            rewards_counter += reward.numpy()
+            time_step_counter += 1
+            episode_rewards.append(rewards_counter[done])
+            time_steps.append(time_step_counter[done])
+            rewards_counter[done] = 0
+            time_step_counter[done] = 0
+
+            # If done then clean the history of observations.
+            masks = torch.FloatTensor(
+                [[0.0] if done_ else [1.0] for done_ in done])
+            rollouts.insert(
+                obs=obs,
+                recurrent_hidden_states=act.rnn_hxs,
+                actions=act.action,
+                action_log_probs=act.action_log_probs,
+                values=act.value,
+                rewards=reward,
+                masks=masks)
 
     @staticmethod
     def build_agent(envs, **agent_args):
