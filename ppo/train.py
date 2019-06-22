@@ -257,9 +257,10 @@ class Train:
 
             # If done then clean the history of observations.
             masks = torch.tensor(
-                1 - done, device=obs.device, dtype=torch.float32).unsqueeze(1)
-
-            if rollouts:
+                1 - done, dtype=torch.float32, device=obs.device).unsqueeze(1)
+            inputs = obs
+            rnn_hxs = act.rnn_hxs
+            if rollouts is not None:
                 rollouts.insert(
                     obs=obs,
                     recurrent_hidden_states=act.rnn_hxs,
