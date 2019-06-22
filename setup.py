@@ -18,7 +18,7 @@ setup(
         'bin/load',
         'bin/new-run',
         'bin/from-json',
-        'bin/nld',
+        'bin/dbg',
         'bin/show-best',
         'bin/reproduce',
     ],
