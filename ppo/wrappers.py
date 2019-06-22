@@ -100,14 +100,14 @@ class SubtasksWrapper(gym.Wrapper):
         env = self.env.unwrapped
 
         # subtask pointer
-        task_type, task_count, task_object_type = env.subtask
+        interaction, task_count, task_object_type = env.subtask
 
-        task_type_one_hot = np.zeros((len(env.task_types), h, w), dtype=bool)
+        interaction_one_hot = np.zeros((len(env.interactions), h, w), dtype=bool)
         task_count_one_hot = np.zeros((env.max_task_count, h, w), dtype=bool)
         task_object_one_hot = np.zeros((len(env.object_types), h, w),
                                        dtype=bool)
 
-        task_type_one_hot[task_type, :, :] = True
+        interaction_one_hot[interaction, :, :] = True
         task_count_one_hot[task_count - 1, :, :] = True
         task_object_one_hot[task_object_type, :, :] = True
 
@@ -128,18 +128,18 @@ class SubtasksWrapper(gym.Wrapper):
         next_subtask = np.full((1, h, w), env.next_subtask)
 
         stack = np.vstack([
-            obs, task_type_one_hot, task_count_one_hot, task_object_one_hot,
+            obs, interaction_one_hot, task_count_one_hot, task_object_one_hot,
             task_spec, next_subtask
         ])
         # print('obs', obs.shape)
-        # print('task_type', task_type_one_hot.shape)
+        # print('interaction', interaction_one_hot.shape)
         # print('task_objects', task_objects_one_hot.shape)
         # print('task_spec', task_spec.shape)
         # print('iterate', iterate.shape)
         # print('stack', stack.shape)
 
         # names = ['obstacles'] + list(env.object_types) + ['ice', 'agent'] + \
-        #         list(env.task_types) + ['task objects']
+        #         list(env.interactions) + ['task objects']
         # assert len(obs) == len(names)
         # for array, name in zip(obs, names):
         #     print(name)
@@ -154,7 +154,7 @@ class SubtasksWrapper(gym.Wrapper):
             env = self.env.unwrapped
             print(
                 'Assigned subtask:',
-                env.task_types[g_type],
+                env.interactions[g_type],
                 g_count,
                 env.object_types[g_obj],
             )

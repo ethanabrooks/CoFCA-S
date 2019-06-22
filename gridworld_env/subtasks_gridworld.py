@@ -16,10 +16,10 @@ from rl_utils import cartesian_product
 ObsSections = namedtuple('ObsSections', 'base subtask task next_subtask')
 
 
-def get_task_space(task_types, max_task_count, object_types, n_subtasks):
+def get_task_space(interactions, max_task_count, object_types, n_subtasks):
     return spaces.MultiDiscrete(
         np.tile(
-            np.array([len(task_types), max_task_count,
+            np.array([len(interactions), max_task_count,
                       len(object_types)]), (n_subtasks, 1)))
 
 
@@ -30,7 +30,7 @@ class SubtasksGridWorld(gym.Env):
                  n_obstacles,
                  random_obstacles,
                  n_subtasks,
-                 task_types,
+                 interactions,
                  max_task_count,
                  object_types,
                  evaluation,
@@ -53,7 +53,7 @@ class SubtasksGridWorld(gym.Env):
         # self.state_char = '🚡'
         self.desc = np.array([list(r) for r in text_map])
 
-        self.task_types = np.array(task_types)
+        self.interactions = np.array(interactions)
         self.max_task_count = max_task_count
         self.object_types = np.array(object_types)
         self.random_task = task is None
@@ -68,7 +68,7 @@ class SubtasksGridWorld(gym.Env):
         self.possible_subtasks = np.array(
             list(
                 itertools.product(
-                    range(len(task_types)),
+                    range(len(interactions)),
                     range(1, 1 + max_task_count),
                     range(len(object_types)),
                 )))
@@ -85,8 +85,8 @@ class SubtasksGridWorld(gym.Env):
 
         def encode_task():
             for string in task:
-                task_type, count, obj_type = re.split('[\s\\\]+', string)
-                yield (list(self.task_types).index(task_type), int(count),
+                interaction, count, obj_type = re.split('[\s\\\]+', string)
+                yield (list(self.interactions).index(interaction), int(count),
                        list(self.object_types).index(obj_type))
 
         # set on reset:
@@ -115,7 +115,7 @@ class SubtasksGridWorld(gym.Env):
                     h,
                     w))),
             get_task_space(
-                task_types=self.task_types,
+                interactions=self.interactions,
                 max_task_count=self.max_task_count,
                 object_types=object_types,
                 n_subtasks=n_subtasks)
@@ -146,8 +146,8 @@ class SubtasksGridWorld(gym.Env):
         return np.array(list('👆👇👈👉pt'))
 
     def render(self, mode='human', sleep_time=.5):
-        def print_subtask(task_type, count, task_object_type):
-            print(self.task_types[task_type], count,
+        def print_subtask(interaction, count, task_object_type):
+            print(self.interactions[interaction], count,
                   self.object_types[task_object_type])
 
         print('task:')
@@ -254,7 +254,7 @@ class SubtasksGridWorld(gym.Env):
         self.next_subtask = self.task_count == 1
         if self.task_count is None or self.next_subtask:
             self.subtask_idx += 1
-            task_type, task_count, _ = self.subtask = next(self.task_iter)
+            interaction, task_count, _ = self.subtask = next(self.task_iter)
             self.task_count = task_count
         else:
             self.task_count -= 1
@@ -282,18 +282,18 @@ class SubtasksGridWorld(gym.Env):
         if touching:
             iterate = False
             object_type = self.objects[pos]
-            task_type_idx, _, task_object_type_idx = self.subtask
-            task_type = self.task_types[task_type_idx]
-            if 'visit' == task_type:
+            interaction_idx, _, task_object_type_idx = self.subtask
+            interaction = self.interactions[interaction_idx]
+            if 'visit' == interaction:
                 iterate = object_type == task_object_type_idx
             if a >= n_transitions:
                 if a - n_transitions == 0:  # pick up
                     del self.objects[pos]
-                    if 'pick-up' == task_type:
+                    if 'pick-up' == interaction:
                         iterate = object_type == task_object_type_idx  # picked up object
                 elif a - n_transitions == 1:  # transform
                     self.objects[pos] = len(self.object_types)
-                    if 'transform' == task_type:
+                    if 'transform' == interaction:
                         iterate = object_type == task_object_type_idx
 
             if iterate:

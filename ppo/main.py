@@ -51,7 +51,7 @@ def make_subtasks_env(env_id, **kwargs):
 def train_skill_cli(student):
     parser = build_parser()
     task_parser = parser.add_argument_group('task_args')
-    task_parser.add_argument('--task-types', nargs='*')
+    task_parser.add_argument('--interactions', nargs='*')
     task_parser.add_argument('--max-task-count', type=int, required=True)
     task_parser.add_argument('--object-types', nargs='*')
     task_parser.add_argument('--n-subtasks', type=int, required=True)
@@ -110,7 +110,7 @@ def teach_cli():
     parser = build_parser()
     parser.add_argument('--agent-load-path', type=Path)
     task_parser = parser.add_argument_group('task_args')
-    task_parser.add_argument('--task-types', nargs='*')
+    task_parser.add_argument('--interactions', nargs='*')
     task_parser.add_argument('--max-task-count', type=int, required=True)
     task_parser.add_argument('--object-types', nargs='*')
     task_parser.add_argument('--n-subtasks', type=int, required=True)
