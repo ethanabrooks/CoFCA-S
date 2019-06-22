@@ -85,7 +85,7 @@ class Train:
         rollouts = RolloutStorage(
             num_steps=num_steps,
             num_processes=num_processes,
-            obs_shape=envs.observation_space.shape,
+            obs_space=envs.observation_space,
             action_space=envs.action_space,
             recurrent_hidden_state_size=self.agent.recurrent_hidden_state_size,
         )

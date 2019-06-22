@@ -2,9 +2,11 @@
 from collections import namedtuple
 from typing import Generator
 
-from gym import spaces
 import torch
+from gym import spaces
 from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
+
+from common.vec_env.util import buffer_shape
 
 
 def _flatten_helper(T, N, _tensor):
@@ -21,11 +23,13 @@ class RolloutStorage(object):
             self,
             num_steps,
             num_processes,
-            obs_shape,
+            obs_space,
             action_space,
             recurrent_hidden_state_size,
     ):
-        self.obs = torch.zeros(num_steps + 1, num_processes, *obs_shape)
+        self.obs = torch.zeros(num_steps + 1, num_processes,
+                               *buffer_shape(obs_space))
+
         self.recurrent_hidden_states = torch.zeros(
             num_steps + 1, num_processes, recurrent_hidden_state_size)
 
@@ -34,20 +38,8 @@ class RolloutStorage(object):
         self.returns = torch.zeros(num_steps + 1, num_processes, 1)
         self.action_log_probs = torch.zeros(num_steps, num_processes, 1)
 
-        def buffer_size(space):
-            if isinstance(space, spaces.Discrete):
-                return 1
-            elif isinstance(space, spaces.MultiDiscrete):
-                return space.nvec.shape[0]
-            elif isinstance(space, spaces.Box):
-                return space.shape[0]
-            elif isinstance(space, spaces.Tuple):
-                return int(sum(buffer_size(s) for s in space.spaces))
-            else:
-                raise NotImplementedError
-
         self.actions = torch.zeros(num_steps, num_processes,
-                                   buffer_size(action_space))
+                                   *buffer_shape(action_space))
         if isinstance(action_space, (spaces.Discrete, spaces.MultiDiscrete)):
             self.actions = self.actions.long()
         self.masks = torch.ones(num_steps + 1, num_processes, 1)
