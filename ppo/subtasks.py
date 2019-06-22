@@ -271,7 +271,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         sections = [self.n_subtasks] * self.task_nvec.shape[1]
         interaction, count, obj = torch.split(task, sections, dim=-1)
 
-        M = self.g123_to_binary(interaction[0], (count - 1)[0], obj[0])
+        M = self.g123_to_binary(interaction[0], count[0], obj[0])
         new_episode = torch.all(hx.squeeze(0) == 0, dim=-1)
         hx = self.parse_hidden(hx)
 

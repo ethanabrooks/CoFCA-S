@@ -1,3 +1,4 @@
+from collections import namedtuple
 import itertools
 import re
 
@@ -10,6 +11,8 @@ import six
 
 from ppo.utils import set_index
 from rl_utils import cartesian_product
+
+Subtask = namedtuple('Subtask', 'interaction count object')
 
 
 def get_task_space(interactions, max_task_count, object_types, n_subtasks):
@@ -65,7 +68,7 @@ class SubtasksGridWorld(gym.Env):
             list(
                 itertools.product(
                     range(len(interactions)),
-                    range(1, 1 + max_task_count),
+                    range(max_task_count),
                     range(len(object_types)),
                 )))
         possible_subtasks = np.expand_dims(self.possible_subtasks, 0)
@@ -143,7 +146,7 @@ class SubtasksGridWorld(gym.Env):
 
     def render(self, mode='human', sleep_time=.5):
         def print_subtask(interaction, count, task_object_type):
-            print(self.interactions[interaction], count,
+            print(self.interactions[interaction], count + 1,
                   self.object_types[task_object_type])
 
         print('task:')
@@ -152,7 +155,7 @@ class SubtasksGridWorld(gym.Env):
         print()
         print('subtask:')
         print_subtask(*self.subtask)
-        print('remaining:', self.task_count)
+        print('remaining:', self.task_count + 1)
         print('action:', end=' ')
         if self.last_action is not None:
             print(self.transition_strings[self.last_action])
@@ -198,7 +201,7 @@ class SubtasksGridWorld(gym.Env):
             self.task = np.array(list(task_iter))
         self.task_iter = iter(self.task)
 
-        types = [x for t, c, o in self.task for x in c * [o]]
+        types = [x for t, c, o in self.task for x in (c + 1) * [o]]
         n_random = max(len(types), self.n_objects)
         random_types = self.np_random.choice(
             len(self.object_types), replace=True, size=n_random - len(types))
@@ -247,7 +250,7 @@ class SubtasksGridWorld(gym.Env):
         return [seed]
 
     def perform_iteration(self):
-        self.next_subtask = self.task_count == 1
+        self.next_subtask = self.task_count == 0
         if self.task_count is None or self.next_subtask:
             self.subtask_idx += 1
             interaction, task_count, _ = self.subtask = next(self.task_iter)
