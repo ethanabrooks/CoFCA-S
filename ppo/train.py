@@ -184,7 +184,7 @@ class Train:
                     mean = np.mean(v)
                     print(f'{k:20}{mean}')
                     if log_dir:
-                        writer.add_scalar(k, mean, j)
+                        writer.add_scalar(k, mean, total_num_steps)
 
                 # writer.add_scalar('time_steps',
                 #                   np.mean(counter['episode_time_steps']), j)
