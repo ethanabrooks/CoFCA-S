@@ -8,7 +8,6 @@ import torch
 
 from common.vec_env import VecEnvWrapper
 from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
-from gridworld_env.subtasks_gridworld import ObsSections
 from rl_utils import onehot
 
 SubtasksActions = namedtuple('SubtasksActions', 'a cr cg g')
@@ -16,7 +15,7 @@ SubtasksActions = namedtuple('SubtasksActions', 'a cr cg g')
 
 def get_subtasks_obs_sections(task_space):
     n_subtasks, size_subtask = task_space.shape
-    return ObsSections(
+    return SubtasksObs(
         base=(
             1 +  # obstacles
             task_space.nvec[0, 2] +  # objects one hot
@@ -102,7 +101,8 @@ class SubtasksWrapper(gym.Wrapper):
         # subtask pointer
         interaction, task_count, task_object_type = env.subtask
 
-        interaction_one_hot = np.zeros((len(env.interactions), h, w), dtype=bool)
+        interaction_one_hot = np.zeros((len(env.interactions), h, w),
+                                       dtype=bool)
         task_count_one_hot = np.zeros((env.max_task_count, h, w), dtype=bool)
         task_object_one_hot = np.zeros((len(env.object_types), h, w),
                                        dtype=bool)
@@ -321,3 +321,6 @@ def get_vec_normalize(venv):
         return get_vec_normalize(venv.venv)
 
     return None
+
+
+SubtasksObs = namedtuple('ObsSections', 'base subtask task next_subtask')

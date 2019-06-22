@@ -1,7 +1,5 @@
-from collections import namedtuple
 import itertools
 import re
-import time
 
 import gym
 from gym import spaces
@@ -12,8 +10,6 @@ import six
 
 from ppo.utils import set_index
 from rl_utils import cartesian_product
-
-ObsSections = namedtuple('ObsSections', 'base subtask task next_subtask')
 
 
 def get_task_space(interactions, max_task_count, object_types, n_subtasks):
