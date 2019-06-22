@@ -313,24 +313,16 @@ class Train:
         return env
 
     def make_vec_envs(self,
-                      env_id,
-                      seed,
                       num_processes,
                       gamma,
-                      add_timestep,
                       render,
                       synchronous,
-                      evaluation,
-                      num_frame_stack=None):
+                      num_frame_stack=None,
+                      **kwargs):
 
         envs = [
-            functools.partial(
-                self.make_env,
-                env_id=env_id,
-                seed=seed,
-                rank=i,
-                add_timestep=add_timestep,
-                evaluation=evaluation) for i in range(num_processes)
+            functools.partial(self.make_env, rank=i, **kwargs)
+            for i in range(num_processes)
         ]
 
         if len(envs) == 1 or sys.platform == 'darwin' or synchronous:
