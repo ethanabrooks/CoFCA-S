@@ -107,13 +107,14 @@ class SubtasksGridWorld(gym.Env):
         h, w = self.desc.shape
         self.observation_space = spaces.Tuple([
             spaces.MultiDiscrete(
-                np.ones((
+                np.array([
                     1 +  # obstacles
                     1 +  # ice
                     1 +  # agent
                     len(object_types),
                     h,
-                    w))),
+                    w
+                ])),
             get_task_space(
                 interactions=self.interactions,
                 max_task_count=self.max_task_count,

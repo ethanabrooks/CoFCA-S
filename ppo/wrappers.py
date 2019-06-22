@@ -67,7 +67,7 @@ class SubtasksWrapper(gym.Wrapper):
         super().__init__(env)
         obs_space, task_space = env.observation_space.spaces
         assert np.all(task_space.nvec == task_space.nvec[0])
-        _, h, w = obs_space.shape
+        _, h, w = obs_space.nvec
         d = sum(get_subtasks_obs_sections(task_space))
         self.task_space = task_space
         self.observation_space = Box(0, 1, shape=(d, h, w))
@@ -114,8 +114,8 @@ class SubtasksWrapper(gym.Wrapper):
         # task spec
         def task_iterator():
             for column in np.array(
-                    env.task
-            ).T:  # transpose for easy splitting in Subtasks module
+                    env.
+                    task).T:  # transpose for easy splitting in Subtasks module
                 for word in column:
                     yield word
 
