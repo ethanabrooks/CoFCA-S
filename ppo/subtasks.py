@@ -370,7 +370,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 v = self.critic(conv_out)
             else:
                 agent_inputs = torch.cat(
-                    [obs[t].flatten(), g123, task[t], next_subtask[t]], dim=-1)
+                    [obs[t].view(N, -1), g123, task[t], next_subtask[t]],
+                    dim=-1)
                 act = self.agent(agent_inputs, rnn_hxs=None, masks=None)
                 dist = act.dist
                 v = act.value

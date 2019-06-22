@@ -22,8 +22,6 @@ class DebugWrapper(gym.Wrapper):
         self.subtask_space = env.task_space.nvec[0]
 
     def step(self, action):
-        import ipdb
-        ipdb.set_trace()
         action_sections = SubtasksWrapper.parse_action(self, action)
         actions = SubtasksActions(*[
             int(x.item()) for x in np.split(action,
