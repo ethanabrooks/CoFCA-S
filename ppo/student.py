@@ -1,19 +1,10 @@
-import itertools
-
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ppo.teacher import SubtasksTeacher
+from ppo.teacher import SubtasksTeacher, g_binary_to_123
 from ppo.utils import broadcast3d
-
-
-def g_binary_to_123(g_binary, subtask_space):
-    g123 = g_binary.nonzero()[:, 1:].view(-1, 3)
-    g123 -= F.pad(
-        torch.cumsum(subtask_space, dim=0)[:2], [1, 0], 'constant', 0)
-    return g123
 
 
 class SubtasksStudent(SubtasksTeacher):

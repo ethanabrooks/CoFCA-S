@@ -1,4 +1,5 @@
 import torch
+from torch.nn import functional as F
 
 from ppo.agent import Agent
 from ppo.wrappers import SubtasksActions, get_subtasks_obs_sections
@@ -36,3 +37,10 @@ class SubtasksTeacher(Agent):
 
     def get_value(self, inputs, rnn_hxs, masks):
         return super().get_value(self.preprocess_obs(inputs), rnn_hxs, masks)
+
+
+def g_binary_to_123(g_binary, subtask_space):
+    g123 = g_binary.nonzero()[:, 1:].view(-1, 3)
+    g123 -= F.pad(
+        torch.cumsum(subtask_space, dim=0)[:2], [1, 0], 'constant', 0)
+    return g123

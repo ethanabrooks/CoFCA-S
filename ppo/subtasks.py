@@ -10,8 +10,7 @@ from torch.nn import functional as F
 from ppo.agent import Agent, AgentValues, NNBase
 from ppo.distributions import Categorical, DiagGaussian, FixedCategorical
 from ppo.layers import Concat, Flatten, Parallel, Product
-from ppo.student import g_binary_to_123
-from ppo.teacher import SubtasksTeacher
+from ppo.teacher import SubtasksTeacher, g_binary_to_123
 from ppo.utils import broadcast3d, init_, interp, trace
 from ppo.wrappers import SubtasksActions, get_subtasks_action_sections, get_subtasks_obs_sections
 
