@@ -1,16 +1,16 @@
-from collections import Counter, defaultdict
 import functools
 import itertools
-from pathlib import Path
 import re
 import sys
 import time
+from collections import Counter
+from pathlib import Path
 from typing import Dict
 
 import gym
 import numpy as np
-from tensorboardX import SummaryWriter
 import torch
+from tensorboardX import SummaryWriter
 
 from common.atari_wrappers import wrap_deepmind
 from common.vec_env.dummy_vec_env import DummyVecEnv
@@ -111,12 +111,7 @@ class Train:
 
         ppo = PPO(agent=self.agent, batch_size=batch_size, **ppo_args)
 
-        rewards_counter = np.zeros(num_processes)
-        time_step_counter = np.zeros(num_processes)
-        n_success = 0
-        episode_rewards = []
-        time_steps = []
-
+        counter = Counter()
         start = time.time()
         last_save = start
 
@@ -130,17 +125,14 @@ class Train:
             print(f'Loaded parameters from {load_path}.')
 
         for j in itertools.count():
-            train_values = self.run_epoch(
+            epoch_counter = self.run_epoch(
                 obs=rollouts.obs[0],
                 rnn_hxs=rollouts.recurrent_hidden_states[0],
                 masks=rollouts.masks[0],
                 envs=envs,
-                episode_rewards=episode_rewards,
                 num_steps=num_steps,
-                rewards_counter=rewards_counter,
                 rollouts=rollouts,
-                time_step_counter=time_step_counter,
-                time_steps=time_steps)
+                counter=counter)
 
             with torch.no_grad():
                 next_value = self.agent.get_value(
@@ -173,14 +165,13 @@ class Train:
 
             total_num_steps = (j + 1) * num_processes * num_steps
 
-            rewards_array = np.concatenate(episode_rewards)
-            if rewards_array.size > 0 and success_reward:
-                reward = rewards_array.mean()
+            if epoch_counter['rewards'] and success_reward:
+                reward = np.mean(counter['episode_rewards'])
                 if reward > success_reward:
-                    n_success += 1
+                    epoch_counter['successes'] += 1
                 else:
-                    n_success = 0
-                if n_success == successes_till_done:
+                    epoch_counter['successes'] = 0
+                if epoch_counter['successes'] == successes_till_done:
                     return
 
             if j % log_interval == 0:
@@ -188,8 +179,8 @@ class Train:
                 fps = total_num_steps / (end - start)
                 log_values = dict(
                     fps=fps,
-                    reward=rewards_array,
-                    time_steps=np.concatenate(time_steps),
+                    reward=(epoch_counter['rewards']),
+                    time_steps=epoch_counter['time_steps'],
                     **train_results)
                 print()
                 print('Epoch', j)
@@ -197,8 +188,12 @@ class Train:
                     mean = np.mean(v)
                     print(f'{k:20}{mean}')
                     if log_dir:
-                        writer.add_scalar(k, mean, total_num_steps)
+                        writer.add_scalar(k, mean, j)
 
+                writer.add_scalar('return', np.mean(epoch_counter['rewards']),
+                                  j)
+                # writer.add_scalar('time_steps',
+                #                   np.mean(counter['episode_time_steps']), j)
             if eval_interval is not None and j % eval_interval == eval_interval - 1:
                 eval_envs = self.make_vec_envs(
                     env_id=env_id,
@@ -231,12 +226,9 @@ class Train:
                     obs=obs,
                     rnn_hxs=eval_recurrent_hidden_states,
                     masks=eval_masks,
-                    episode_rewards=eval_episode_rewards,
                     num_steps=num_steps,
-                    rewards_counter=None,
                     rollouts=None,
-                    time_step_counter=None,
-                    time_steps=eval_time_steps)
+                )
 
                 eval_envs.close()
 
@@ -248,19 +240,17 @@ class Train:
                     if log_dir:
                         writer.add_scalar(k, mean, total_num_steps)
 
-    def run_epoch(self,
-                  obs,
-                  rnn_hxs,
-                  masks,
-                  envs,
-                  num_steps,
-                  rollouts,
-                  rewards_counter=None,
-                  time_step_counter=None,
-                  episode_rewards=None,
-                  time_steps=None):
-        counters = Counter()
-        epoch_values = defaultdict(list)
+    def run_epoch(
+            self,
+            obs,
+            rnn_hxs,
+            masks,
+            envs,
+            num_steps,
+            rollouts,
+            counter,
+    ):
+        episode_counter = Counter(rewards=[], time_steps=[])
         for step in range(num_steps):
             with torch.no_grad():
                 act = self.agent(
@@ -271,12 +261,12 @@ class Train:
             obs, reward, done, infos = envs.step(act.action)
 
             # track rewards
-            rewards_counter += reward.numpy()
-            time_step_counter += 1
-            episode_rewards.append(rewards_counter[done])
-            time_steps.append(time_step_counter[done])
-            rewards_counter[done] = 0
-            time_step_counter[done] = 0
+            counter['reward'] += reward.numpy()
+            counter['time_step'] += np.ones_like(done)
+            episode_counter['rewards'] += list(counter['reward'][done])
+            episode_counter['time_steps'] += list(counter['time_step'][done])
+            counter['reward'][done] = 0
+            counter['time_step'][done] = 0
 
             # If done then clean the history of observations.
             masks = torch.tensor(
@@ -291,7 +281,8 @@ class Train:
                     values=act.value,
                     rewards=reward,
                     masks=masks)
-        return {k: np.concatenate(v) for k, v in epoch_values.items()}
+
+        return episode_counter
 
     @staticmethod
     def build_agent(envs, **agent_args):
