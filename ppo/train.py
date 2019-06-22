@@ -177,11 +177,7 @@ class Train:
             if j % log_interval == 0:
                 end = time.time()
                 fps = total_num_steps / (end - start)
-                log_values = dict(
-                    fps=fps,
-                    reward=(epoch_counter['rewards']),
-                    time_steps=epoch_counter['time_steps'],
-                    **train_results)
+                log_values = dict(fps=fps, **epoch_counter, **train_results)
                 print()
                 print('Epoch', j)
                 for k, v in log_values.items():
@@ -190,8 +186,6 @@ class Train:
                     if log_dir:
                         writer.add_scalar(k, mean, j)
 
-                writer.add_scalar('return', np.mean(epoch_counter['rewards']),
-                                  j)
                 # writer.add_scalar('time_steps',
                 #                   np.mean(counter['episode_time_steps']), j)
             if eval_interval is not None and j % eval_interval == eval_interval - 1:
