@@ -11,24 +11,7 @@ from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
 from rl_utils import onehot
 
 SubtasksActions = namedtuple('SubtasksActions', 'a cr cg g')
-
-
-def get_subtasks_obs_sections(task_space):
-    n_subtasks, size_subtask = task_space.shape
-    return SubtasksObs(
-        base=(
-            1 +  # obstacles
-            task_space.nvec[0, 2] +  # objects one hot
-            1 +  # ice
-            1),  # agent
-        subtask=(sum(task_space.nvec[0])),  # one hots
-        task=size_subtask * n_subtasks,  # int codes
-        next_subtask=1)
-
-
-def get_subtasks_action_sections(action_spaces):
-    return SubtasksActions(
-        *[s.shape[0] if isinstance(s, Box) else 1 for s in action_spaces])
+SubtasksObs = namedtuple('SubtasksObs', 'base subtask task next_subtask')
 
 
 class DebugWrapper(gym.Wrapper):
@@ -39,8 +22,7 @@ class DebugWrapper(gym.Wrapper):
         self.subtask_space = env.task_space.nvec[0]
 
     def step(self, action):
-        action_sections = get_subtasks_action_sections(
-            self.action_space.spaces)
+        action_sections = SubtasksWrapper.parse_action(self, action)
         actions = SubtasksActions(*[
             int(x.item()) for x in np.split(action,
                                             np.cumsum(action_sections)[:-1])
@@ -67,10 +49,14 @@ class SubtasksWrapper(gym.Wrapper):
         super().__init__(env)
         obs_space, task_space = env.observation_space.spaces
         assert np.all(task_space.nvec == task_space.nvec[0])
-        _, h, w = obs_space.nvec
-        d = sum(get_subtasks_obs_sections(task_space))
         self.task_space = task_space
-        self.observation_space = Box(0, 1, shape=(d, h, w))
+        self.observation_space = spaces.Tuple(
+            SubtasksObs(
+                base=Box(0, 1, shape=obs_space.nvec),
+                subtask=spaces.MultiDiscrete(task_space.nvec[0]),
+                task=task_space,
+                next_subtask=spaces.Discrete(2),
+            ))
         self.action_space = spaces.Tuple(
             SubtasksActions(
                 a=env.action_space,
@@ -81,10 +67,8 @@ class SubtasksWrapper(gym.Wrapper):
         self.last_g = None
 
     def step(self, action):
-        action_sections = np.cumsum(
-            get_subtasks_action_sections(
-                self.action_space.spaces))[:-1].astype(int)
-        actions = SubtasksActions(*np.split(action, action_sections))
+        actions = SubtasksActions(
+            *np.split(action, len(self.action_space.spaces)))
         action = int(actions.a)
         self.last_g = int(actions.g)
         s, r, t, i = super().step(action)
@@ -129,10 +113,11 @@ class SubtasksWrapper(gym.Wrapper):
 
         next_subtask = np.full((1, h, w), env.next_subtask)
 
-        stack = np.vstack([
+        obs_parts = [
             obs, interaction_one_hot, task_count_one_hot, task_object_one_hot,
             task_spec, next_subtask
-        ])
+        ]
+        stack = np.vstack(obs_parts)
         # print('obs', obs.shape)
         # print('interaction', interaction_one_hot.shape)
         # print('task_objects', task_objects_one_hot.shape)
@@ -152,8 +137,8 @@ class SubtasksWrapper(gym.Wrapper):
     def render(self, mode='human'):
         super().render(mode=mode)
         if self.last_g is not None:
-            g_type, g_count, g_obj = tuple(self.task[self.last_g])
             env = self.env.unwrapped
+            g_type, g_count, g_obj = tuple(env.task[self.last_g])
             print(
                 'Assigned subtask:',
                 env.interactions[g_type],
@@ -323,6 +308,3 @@ def get_vec_normalize(venv):
         return get_vec_normalize(venv.venv)
 
     return None
-
-
-SubtasksObs = namedtuple('ObsSections', 'base subtask task next_subtask')

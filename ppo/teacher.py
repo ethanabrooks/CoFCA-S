@@ -1,15 +1,21 @@
 import torch
 from torch.nn import functional as F
+import numpy as np
 
 from ppo.agent import Agent
-from ppo.wrappers import SubtasksActions, get_subtasks_obs_sections
+from ppo.wrappers import SubtasksActions, SubtasksObs
 
 
 class SubtasksTeacher(Agent):
-    def __init__(self, task_space, obs_space, action_space, **kwargs):
-        self.obs_sections = get_subtasks_obs_sections(task_space)
-        d, h, w = self.obs_shape = obs_space.shape
-        assert d == sum(self.obs_sections)
+    def __init__(self, obs_space, action_space, **kwargs):
+        self.obs_space = SubtasksObs(*obs_space.spaces)
+        d, h, w = self.obs_shape = self.obs_space.base.shape
+        self.obs_sections = SubtasksObs(
+            base=d,
+            subtask=int(self.obs_space.subtask.nvec.sum()),
+            task=int(np.prod(self.obs_space.task.nvec.shape)),
+            next_subtask=1,
+        )
         self.action_spaces = SubtasksActions(*action_space.spaces)
         super().__init__(
             obs_shape=(self.d, h, w),

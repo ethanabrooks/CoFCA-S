@@ -12,7 +12,7 @@ from ppo.distributions import Categorical, DiagGaussian, FixedCategorical
 from ppo.layers import Concat, Flatten, Parallel, Product
 from ppo.teacher import SubtasksTeacher, g_binary_to_123
 from ppo.utils import broadcast3d, init_, interp, trace
-from ppo.wrappers import SubtasksActions, get_subtasks_action_sections, get_subtasks_obs_sections
+from ppo.wrappers import SubtasksActions, SubtasksObs
 
 RecurrentState = namedtuple(
     'RecurrentState',
@@ -37,7 +37,6 @@ class SubtasksAgent(Agent, NNBase):
             agent=agent,
             **kwargs,
         )
-        self.obs_sections = get_subtasks_obs_sections(task_space)
         self.agent = agent
 
     def forward(self, inputs, rnn_hxs, masks, action=None,
@@ -45,9 +44,7 @@ class SubtasksAgent(Agent, NNBase):
         n = inputs.size(0)
         actions = None
         if action is not None:
-            action_sections = get_subtasks_action_sections(self.action_space)
-            actions = SubtasksActions(
-                *torch.split(action, action_sections, dim=-1))
+            actions = SubtasksActions(*torch.split(action, 1, dim=-1))
 
         all_hxs, last_hx = self._forward_gru(
             inputs.view(n, -1), rnn_hxs, masks, actions=actions)
@@ -123,14 +120,20 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
     def __init__(self, obs_space, action_space, task_space, hidden_size,
                  recurrent, hard_update, agent, multiplicative_interaction):
         super().__init__()
-        d, h, w = obs_space.shape
+        self.obs_space = SubtasksObs(*obs_space.spaces)
+        d, h, w = self.obs_space.base.shape
+        self.obs_sections = SubtasksObs(
+            base=d,
+            subtask=int(self.obs_space.subtask.nvec.sum()),
+            task=int(np.prod(self.obs_space.task.shape)),
+            next_subtask=1,
+        )
         subtask_space = list(map(int, task_space.nvec[0]))
         subtask_size = sum(subtask_space)
         n_subtasks = task_space.shape[0]
         self.multiplicative_interaction = multiplicative_interaction
         self.hard_update = hard_update
-        self.obs_sections = get_subtasks_obs_sections(task_space)
-        self.obs_shape = d, h, w
+        self.obs_shape = sum(self.obs_sections), h, w
         self.task_nvec = task_space.nvec
         self.action_space = action_space
         self.n_subtasks = n_subtasks
@@ -298,7 +301,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             outputs.subtask.append(float_subtask)
 
             agent_layer = obs[t, :, 6, :, :].long()
-            j, k, l = torch.split(agent_layer.nonzero(), [1, 1, 1], dim=-1)
+            j, k, l = torch.split(agent_layer.nonzero(), 1, dim=-1)
 
             def phi_update(subtask_param, values, losses, probs):
                 debug_obs = obs[t, j, :, k, l].squeeze(1)

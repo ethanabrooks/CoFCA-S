@@ -42,7 +42,7 @@ def space_shape(space: gym.Space):
 def buffer_shape(space: gym.Space):
     shape = space_shape(space)
     if not all(isinstance(d, int) for d in shape):
-        shape = int(sum([np.prod(x) for x in shape])),  # concatenate
+        shape = 31, 4, 4  # TODO
     return shape
 
 
