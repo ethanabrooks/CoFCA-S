@@ -1,16 +1,17 @@
+from collections import Counter, defaultdict
 import functools
 import itertools
+from pathlib import Path
 import re
 import sys
 import time
-from collections import Counter
-from pathlib import Path
 from typing import Dict
 
 import gym
 import numpy as np
-import torch
 from tensorboardX import SummaryWriter
+import torch
+from tqdm import tqdm
 
 from common.atari_wrappers import wrap_deepmind
 from common.vec_env.dummy_vec_env import DummyVecEnv
@@ -66,6 +67,7 @@ class Train:
             torch.backends.cudnn.benchmark = False
             torch.backends.cudnn.deterministic = True
 
+        writer = None
         if log_dir:
             writer = SummaryWriter(log_dir=str(log_dir))
 
@@ -125,6 +127,10 @@ class Train:
             print(f'Loaded parameters from {load_path}.')
 
         for j in itertools.count():
+            if j % log_interval == 0:
+                log_progress = tqdm(total=log_interval)
+            if eval_interval and j % eval_interval == 0:
+                eval_progress = tqdm(total=eval_interval)
             epoch_counter = self.run_epoch(
                 obs=rollouts.obs[0],
                 rnn_hxs=rollouts.recurrent_hidden_states[0],
@@ -174,20 +180,16 @@ class Train:
                 if epoch_counter['successes'] == successes_till_done:
                     return
 
-            if j % log_interval == 0:
+            if j % log_interval == 0 and writer is not None:
                 end = time.time()
                 fps = total_num_steps / (end - start)
                 log_values = dict(fps=fps, **epoch_counter, **train_results)
-                print()
-                print('Epoch', j)
-                for k, v in log_values.items():
-                    mean = np.mean(v)
-                    print(f'{k:20}{mean}')
-                    if log_dir:
-                        writer.add_scalar(k, mean, total_num_steps)
+                if writer:
+                    for k, v in log_values.items():
+                        writer.add_scalar(k, np.mean(v), total_num_steps)
 
-                # writer.add_scalar('time_steps',
-                #                   np.mean(counter['episode_time_steps']), j)
+            log_progress.update()
+
             if eval_interval is not None and j % eval_interval == eval_interval - 1:
                 eval_envs = self.make_vec_envs(
                     env_id=env_id,
@@ -213,21 +215,23 @@ class Train:
                 eval_masks = torch.zeros(num_processes, 1, device=device)
                 eval_counter = Counter()
 
-                self.run_epoch(
+                eval_values = self.run_epoch(
                     envs=eval_envs,
                     obs=obs,
                     rnn_hxs=eval_recurrent_hidden_states,
                     masks=eval_masks,
                     num_steps=num_steps,
                     rollouts=None,
-                    counter=eval_counter,
-                )
+                    counter=eval_counter)
 
                 eval_envs.close()
 
-                if log_dir:
-                    for k, v in eval_counter.items():
+                if writer is not None:
+                    for k, v in eval_values.items():
                         writer.add_scalar(k, np.mean(v), total_num_steps)
+
+            if eval_interval:
+                eval_progress.update()
 
     def run_epoch(
             self,
