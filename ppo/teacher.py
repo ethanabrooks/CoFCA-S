@@ -1,8 +1,9 @@
+import numpy as np
 import torch
 from torch.nn import functional as F
-import numpy as np
 
 from ppo.agent import Agent
+from ppo.utils import broadcast3d
 from ppo.wrappers import SubtasksActions, SubtasksObs
 
 
@@ -27,12 +28,19 @@ class SubtasksTeacher(Agent):
 
     @property
     def d(self):
-        return self.obs_sections.base + self.obs_sections.subtask
+        return self.obs_sections.base + int(self.obs_spaces.subtask.nvec.sum())
 
     def preprocess_obs(self, inputs):
         obs, subtasks, task_broad, next_subtask_broad = torch.split(
             inputs, self.obs_sections, dim=1)
-        return torch.cat([obs, subtasks], dim=1)
+        subtasks = torch.split(subtasks[:, :, 0, 0], 1, dim=-1)
+        subtasks = torch.cat([
+            getattr(self, f'part{i}_one_hot')[g.long().flatten()]
+            for i, g in enumerate(subtasks)
+        ],
+                             dim=-1)
+        return torch.cat([obs, broadcast3d(subtasks, self.obs_shape[-2:])],
+                         dim=1)
 
     def forward(self, inputs, *args, action=None, **kwargs):
         if action is not None:
