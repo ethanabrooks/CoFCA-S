@@ -124,7 +124,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         d, h, w = self.obs_space.base.shape
         self.obs_sections = SubtasksObs(
             base=d,
-            subtask=int(self.obs_space.subtask.nvec.sum()),
+            subtask=int(np.prod(self.obs_space.subtask.shape)),
             task=int(np.prod(self.obs_space.task.shape)),
             next_subtask=1,
         )
@@ -146,7 +146,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             Concat(dim=1),
             init_(
                 nn.Conv2d(
-                    self.obs_sections.base + self.obs_sections.subtask,
+                    self.obs_sections.base + int(
+                        self.obs_space.subtask.nvec.sum()),
                     hidden_size,
                     kernel_size=3,
                     stride=1,
@@ -252,8 +253,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                             f'mean grad ({v.mean().item()}) of {k} wrt {name}:',
                             grad.mean())
                         if torch.isnan(grad.mean()):
-                            import ipdb
-                            ipdb.set_trace()
+                            raise RuntimeError
 
     # @torch.jit.script_method
     def forward(self, inputs, hx):
@@ -272,7 +272,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         next_subtask = next_subtask_broad[:, :, :, 0, 0]
         sections = [self.n_subtasks] * self.task_nvec.shape[1]
         interaction, count, obj = torch.split(task, sections, dim=-1)
-
         M = self.g123_to_binary(interaction[0], count[0], obj[0])
         new_episode = torch.all(hx.squeeze(0) == 0, dim=-1)
         hx = self.parse_hidden(hx)
@@ -375,6 +374,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             if self.agent is None:
                 dist = self.actor(conv_out)
             else:
+                g123 = g_binary_to_123(g_binary, self.subtask_space).float()
+                g_broad = broadcast3d(g123, self.obs_shape[1:])
                 agent_inputs = torch.cat(
                     [obs[t], g_broad, task_broad[t], next_subtask_broad[t]],
                     dim=1)
