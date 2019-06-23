@@ -205,15 +205,13 @@ class Train:
                 #     vec_norm.eval()
                 #     vec_norm.ob_rms = get_vec_normalize(envs).ob_rms
 
-                eval_episode_rewards = []
-                eval_time_steps = []
-
                 obs = eval_envs.reset()
                 eval_recurrent_hidden_states = torch.zeros(
                     num_processes,
                     self.agent.recurrent_hidden_state_size,
                     device=device)
                 eval_masks = torch.zeros(num_processes, 1, device=device)
+                eval_counter = Counter()
 
                 self.run_epoch(
                     envs=eval_envs,
@@ -222,17 +220,14 @@ class Train:
                     masks=eval_masks,
                     num_steps=num_steps,
                     rollouts=None,
+                    counter=eval_counter,
                 )
 
                 eval_envs.close()
 
-                log_values = dict(
-                    eval_return=eval_episode_rewards, eval_time_steps=eval)
-                for k, v in log_values.items():
-                    mean = np.mean(v)
-                    print(f'{k}: {mean}')
-                    if log_dir:
-                        writer.add_scalar(k, mean, total_num_steps)
+                if log_dir:
+                    for k, v in eval_counter.items():
+                        writer.add_scalar(k, np.mean(v), total_num_steps)
 
     def run_epoch(
             self,
