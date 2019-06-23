@@ -42,7 +42,7 @@ def space_shape(space: gym.Space):
 def buffer_shape(space: gym.Space):
     shape = space_shape(space)
     if not all(isinstance(d, int) for d in shape):
-        shape = 26, 4, 4  # TODO
+        shape = 14, 4, 4  # TODO
     return shape
 
 
