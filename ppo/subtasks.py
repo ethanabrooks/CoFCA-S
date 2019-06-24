@@ -262,7 +262,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         interaction, count, obj = [x[0, :, :, 0] for x in task]
         M123 = torch.stack([interaction, count, obj], dim=-1)
         one_hots = [self.part0_one_hot, self.part1_one_hot, self.part2_one_hot]
-        g123 = (interaction, count, obj)
+        g123 = [interaction, count, obj]
         M = g123_to_binary(g123, one_hots)
         new_episode = torch.all(hx.squeeze(0) == 0, dim=-1)
         hx = self.parse_hidden(hx)
@@ -359,11 +359,14 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             outputs.g_loss.append(-dist.log_probs(subtask))
 
             # a
-            g_binary = M[torch.arange(N), G[t + 1]]
-            conv_out = self.conv((obs[t],
-                                  broadcast3d(g_binary, self.obs_shape[1:])))
             if self.agent is None:
+                g_binary = M[torch.arange(N), G[t + 1]]
+                conv_out = self.conv((obs[t],
+                                      broadcast3d(g_binary,
+                                                  self.obs_shape[1:])))
                 dist = self.actor(conv_out)
+                # v
+                v = self.critic(conv_out)
             else:
                 g123 = M123[torch.arange(N), G[t + 1]]
                 agent_inputs = torch.cat([
@@ -371,15 +374,15 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                     self.agent_dummy_values.expand(N, -1)
                 ],
                                          dim=1)
-                dist = self.agent(agent_inputs, rnn_hxs=None, masks=None).dist
+                act = self.agent(agent_inputs, rnn_hxs=None, masks=None)
+                dist = act.dist
+                v = act.value
+
             sample_new(A[t + 1], dist)
             # a[:] = 'wsadeq'.index(input('act:'))
-
             outputs.a.append(A[t + 1])
             outputs.a_probs.append(dist.probs)
-
-            # v
-            outputs.v.append(self.critic(conv_out))
+            outputs.v.append(v)
 
         # for name, x in zip(RecurrentState._fields, outputs):
         #     if not x:
