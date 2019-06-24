@@ -123,7 +123,7 @@ class SubtasksWrapper(gym.Wrapper):
             print(
                 'Assigned subtask:',
                 env.interactions[g_type],
-                g_count,
+                g_count + 1,
                 env.object_types[g_obj],
             )
         input('paused')

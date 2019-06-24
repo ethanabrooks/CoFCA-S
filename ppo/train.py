@@ -66,6 +66,7 @@ class Train:
             torch.backends.cudnn.benchmark = False
             torch.backends.cudnn.deterministic = True
 
+        writer = None
         if log_dir:
             writer = SummaryWriter(log_dir=str(log_dir))
 
@@ -178,12 +179,13 @@ class Train:
                 if epoch_counter['successes'] == successes_till_done:
                     return
 
-            if j % log_interval == 0:
+            if j % log_interval == 0 and writer is not None:
                 end = time.time()
                 fps = total_num_steps / (end - start)
                 log_values = dict(fps=fps, **epoch_counter, **train_results)
-                for k, v in log_values.items():
-                    writer.add_scalar(k, np.mean(v), total_num_steps)
+                if writer:
+                    for k, v in log_values.items():
+                        writer.add_scalar(k, np.mean(v), total_num_steps)
 
             log_progress.update()
 
@@ -204,14 +206,13 @@ class Train:
                 #     vec_norm.eval()
                 #     vec_norm.ob_rms = get_vec_normalize(envs).ob_rms
 
-                eval_counter = Counter()
-
                 obs = eval_envs.reset()
                 eval_recurrent_hidden_states = torch.zeros(
                     num_processes,
                     self.agent.recurrent_hidden_state_size,
                     device=device)
                 eval_masks = torch.zeros(num_processes, 1, device=device)
+                eval_counter = Counter()
 
                 eval_values = self.run_epoch(
                     envs=eval_envs,
@@ -224,8 +225,9 @@ class Train:
 
                 eval_envs.close()
 
-                for k, v in eval_values.items():
-                    writer.add_scalar(k, np.mean(v), total_num_steps)
+                if writer is not None:
+                    for k, v in eval_values.items():
+                        writer.add_scalar(k, np.mean(v), total_num_steps)
 
             if eval_interval:
                 eval_progress.update()

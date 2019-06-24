@@ -1,12 +1,12 @@
+import numpy as np
 import torch
 from torch.nn import functional as F
 
 import gridworld_env.subtasks_gridworld as subtasks_gridworld
-import ppo.wrappers
 from ppo.agent import Agent
 from ppo.utils import broadcast3d
+import ppo.wrappers
 from ppo.wrappers import SubtasksActions
-import numpy as np
 
 
 class SubtasksTeacher(Agent):
@@ -31,11 +31,9 @@ class SubtasksTeacher(Agent):
     def preprocess_obs(self, inputs):
         obs, g123, _, _ = torch.split(inputs, self.obs_sections, dim=1)
         obs = obs.view(obs.size(0), *self.obs_shape)
-        g_binary = g123_to_binary(
-            g123,
-            one_hots=[
-                self.part0_one_hot, self.part1_one_hot, self.part2_one_hot
-            ])
+        g123 = [x.flatten() for x in torch.split(g123, 1, dim=-1)]
+        one_hots = [self.part0_one_hot, self.part1_one_hot, self.part2_one_hot]
+        g_binary = g123_to_binary(g123, one_hots)
         g_broad = broadcast3d(g_binary, self.obs_shape[-2:])
         return torch.cat([obs, g_broad], dim=1)
 
@@ -60,7 +58,5 @@ def g_binary_to_123(g_binary, subtask_space):
 
 
 def g123_to_binary(g123, one_hots):
-    g123 = torch.split(g123, [1] * len(one_hots), dim=-1)
-    return torch.cat(
-        [one_hot[g.long().flatten()] for one_hot, g in zip(one_hots, g123)],
-        dim=-1)
+    return torch.cat([one_hot[g.long()] for one_hot, g in zip(one_hots, g123)],
+                     dim=-1)
