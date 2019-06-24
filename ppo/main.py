@@ -8,19 +8,19 @@ from gym.wrappers import TimeLimit
 import torch
 
 import gridworld_env
-import ppo
 from gridworld_env.control_flow_gridworld import ControlFlowGridWorld
 from gridworld_env.subtasks_gridworld import SubtasksGridWorld
+import ppo
 from ppo.arguments import build_parser, get_args
-from ppo.train import Train
-from ppo.wrappers import VecNormalize
-from ppo.subtasks.wrappers import Wrapper
-from rl_utils import hierarchical_parse_args
+import ppo.control_flow.agent
+import ppo.control_flow.wrappers
+import ppo.subtasks.agent
 import ppo.subtasks.student
 import ppo.subtasks.teacher
-import ppo.control_flow.agent
-import ppo.subtasks.agent
-import ppo.control_flow.wrappers
+from ppo.subtasks.wrappers import Wrapper
+from ppo.train import Train
+from ppo.wrappers import VecNormalize
+from rl_utils import hierarchical_parse_args
 
 
 def add_task_args(parser):
@@ -77,9 +77,9 @@ def make_subtasks_env(env_id, **kwargs):
     gridworld_args = gridworld_env.get_args(env_id)
     kwargs.update(add_timestep=None)
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
-    return helper(
-        **ChainMap(kwargs, gridworld_args)
-    )  # combines kwargs and gridworld_args with preference for kwargs
+    return helper(**ChainMap(
+        kwargs, gridworld_args
+    ))  # combines kwargs and gridworld_args with preference for kwargs
 
 
 def train_lower_level_cli(student):

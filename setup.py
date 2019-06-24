@@ -24,9 +24,8 @@ setup(
     ],
     entry_points=dict(console_scripts=[
         'ppo=ppo.main:cli',
-        'subtasks=ppo.main:subtasks_cli',
-        'control-flow=ppo.main:control_flow_cli',
         'teacher=ppo.main:teacher_cli',
         'student=ppo.main:student_cli',
+        'metacontroller=ppo.main:metacontroller_cli',
     ]),
     install_requires=[])
