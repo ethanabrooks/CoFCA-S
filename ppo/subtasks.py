@@ -270,15 +270,11 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         obs, _, task, next_subtask = torch.split(
             inputs, self.obs_sections, dim=2)
         obs = obs.view(T, N, *self.obs_shape)
-        interaction, count, obj = torch.split(
-            task.view(T, N, self.n_subtasks, self.obs_space.subtask.nvec.size),
-            1,
-            dim=-1)
-        M = self.g123_to_binary(
-            interaction[0, :, :, 0],
-            count[0, :, :, 0],
-            obj[0, :, :, 0],
-        )
+        task = task.view(T, N, self.n_subtasks,
+                         self.obs_space.subtask.nvec.size)
+        task = torch.split(task, 1, dim=-1)
+        interaction, count, obj = [x[0, :, :, 0] for x in task]
+        M = self.g123_to_binary(interaction, count, obj)
         new_episode = torch.all(hx.squeeze(0) == 0, dim=-1)
         hx = self.parse_hidden(hx)
 
