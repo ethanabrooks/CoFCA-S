@@ -1,5 +1,0 @@
-#!/usr/bin/env zsh
-set -e
-cmd=$(echo $@ | sed 's/--log-dir=[^ ]*//')
-echo "$cmd"
-eval "$cmd"
