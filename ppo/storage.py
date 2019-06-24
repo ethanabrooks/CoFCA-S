@@ -40,8 +40,8 @@ class RolloutStorage(object):
         self.returns = torch.zeros(num_steps + 1, num_processes, 1)
         self.action_log_probs = torch.zeros(num_steps, num_processes, 1)
 
-        self.actions = torch.zeros(num_steps, num_processes, 4)  # TODO
-        # *buffer_shape(action_space))
+        self.actions = torch.zeros(num_steps, num_processes,
+                                   *buffer_shape(action_space))
         if isinstance(action_space, (spaces.Discrete, spaces.MultiDiscrete)):
             self.actions = self.actions.long()
         self.masks = torch.ones(num_steps + 1, num_processes, 1)
