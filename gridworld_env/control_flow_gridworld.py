@@ -3,12 +3,7 @@ from dataclasses import dataclass
 
 from gridworld_env import SubtasksGridWorld
 
-
-@dataclass
-class Branch:
-    condition: int
-    true_path: None  # Subtask
-    false_path: None  # Subtask
+Branch = namedtuple('Branch', 'condition true_path false_path')
 
 
 class ControlFlowGridWorld(SubtasksGridWorld):

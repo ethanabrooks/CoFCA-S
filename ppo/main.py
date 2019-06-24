@@ -204,4 +204,4 @@ def metacontroller_cli():
 
 
 if __name__ == "__main__":
-    metacontroller_cli()
+    teacher_cli()

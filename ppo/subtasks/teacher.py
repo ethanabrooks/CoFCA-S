@@ -27,7 +27,7 @@ class Teacher(Agent):
                 int(self.obs_spaces.subtask.nvec.sum()))  # one-hot subtask
 
     def preprocess_obs(self, inputs):
-        obs, g123, _, _ = torch.split(inputs, self.obs_sections, dim=1)
+        obs, g123 = torch.split(inputs, self.obs_sections, dim=1)[:2]
         obs = obs.view(obs.size(0), *self.obs_shape)
         g123 = [x.flatten() for x in torch.split(g123, 1, dim=-1)]
         one_hots = [self.part0_one_hot, self.part1_one_hot, self.part2_one_hot]

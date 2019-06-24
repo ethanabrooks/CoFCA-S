@@ -1,21 +1,19 @@
 from collections import namedtuple
-from functools import reduce
-from operator import mul
 
-from gym.spaces import Box, Discrete
 import numpy as np
 import torch
-from torch import nn as nn
 import torch.jit
+from gym.spaces import Box, Discrete
+from torch import nn as nn
 from torch.nn import functional as F
 
+import ppo
 from ppo.agent import AgentValues, NNBase
 from ppo.distributions import Categorical, DiagGaussian, FixedCategorical
 from ppo.layers import Concat, Flatten, Parallel, Product
 from ppo.subtasks.teacher import Teacher, g123_to_binary, g_binary_to_123
-from ppo.utils import broadcast3d, init_, interp, trace
 from ppo.subtasks.wrappers import Actions, Obs
-import ppo
+from ppo.utils import broadcast3d, init_, interp, trace
 
 RecurrentState = namedtuple(
     'RecurrentState',
