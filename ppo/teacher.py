@@ -9,12 +9,12 @@ from ppo.wrappers import SubtasksActions, SubtasksObs
 
 class SubtasksTeacher(Agent):
     def __init__(self, obs_space, action_space, **kwargs):
-        self.obs_space = SubtasksObs(*obs_space.spaces)
-        d, h, w = self.obs_shape = self.obs_space.base.shape
+        self.obs_spaces = SubtasksObs(*obs_space.spaces)
+        d, h, w = self.obs_shape = self.obs_spaces.base.shape
         self.obs_sections = SubtasksObs(
             base=d * h * w,
-            subtask=int(self.obs_space.subtask.nvec.sum()),
-            task=int(np.prod(self.obs_space.task.nvec.shape)),
+            subtask=int(self.obs_spaces.subtask.nvec.sum()),
+            task=int(np.prod(self.obs_spaces.task.nvec.shape)),
             next_subtask=1,
         )
         self.action_spaces = SubtasksActions(*action_space.spaces)
@@ -23,12 +23,12 @@ class SubtasksTeacher(Agent):
             action_space=self.action_spaces.a,
             **kwargs)
 
-        for i, d in enumerate(self.obs_space.subtask.nvec):
+        for i, d in enumerate(self.obs_spaces.subtask.nvec):
             self.register_buffer(f'part{i}_one_hot', torch.eye(int(d)))
 
     @property
     def d(self):
-        return self.obs_space.base.shape[0] + self.obs_sections.subtask
+        return self.obs_spaces.base.shape[0] + self.obs_sections.subtask
 
     def preprocess_obs(self, inputs):
         obs, subtasks, task_broad, next_subtask_broad = torch.split(
