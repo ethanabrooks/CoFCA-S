@@ -359,8 +359,9 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             outputs.g_loss.append(-dist.log_probs(subtask))
 
             # a
+            idxs = torch.arange(N), G[t + 1]
             if self.agent is None:
-                g_binary = M[torch.arange(N), G[t + 1]]
+                g_binary = M[idxs]
                 conv_out = self.conv((obs[t],
                                       broadcast3d(g_binary,
                                                   self.obs_shape[1:])))
@@ -368,7 +369,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                 # v
                 v = self.critic(conv_out)
             else:
-                g123 = M123[torch.arange(N), G[t + 1]]
+                g123 = M123[idxs]
                 agent_inputs = torch.cat([
                     obs[t].view(N, -1), g123,
                     self.agent_dummy_values.expand(N, -1)
