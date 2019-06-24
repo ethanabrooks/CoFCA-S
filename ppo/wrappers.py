@@ -65,6 +65,7 @@ class SubtasksWrapper(gym.Wrapper):
                 cr=spaces.Discrete(2),
             ))
         self.last_g = None
+        self.g_one_hots = [np.eye(d) for d in task_space.nvec[0]]
 
     def step(self, action):
         actions = SubtasksActions(
@@ -82,41 +83,21 @@ class SubtasksWrapper(gym.Wrapper):
         _, h, w = obs.shape
         env = self.env.unwrapped
 
-        # subtask pointer
-        interaction, task_count, task_object_type = env.subtask
+        def broadcast3d(x):
+            x = np.array(x)
+            return np.broadcast_to(
+                x.reshape(-1, 1, 1),
+                (x.size, h, w),
+            )
 
-        interaction_one_hot = np.zeros((len(env.interactions), h, w),
-                                       dtype=bool)
-        task_count_one_hot = np.zeros((env.max_task_count, h, w), dtype=bool)
-        task_object_one_hot = np.zeros((len(env.object_types), h, w),
-                                       dtype=bool)
-
-        interaction_one_hot[interaction, :, :] = True
-        task_count_one_hot[task_count - 1, :, :] = True
-        task_object_one_hot[task_object_type, :, :] = True
-
-        # task spec
-        def task_iterator():
-            for column in np.array(
-                    env.
-                    task).T:  # transpose for easy splitting in Subtasks module
-                for word in column:
-                    yield word
-
-        task_spec = np.zeros(((3 * env.n_subtasks), h, w), dtype=int)
-        for row, word in zip(task_spec, task_iterator()):
-            row[:] = word
-
-        # task_objects_one_hot = np.zeros((h, w), dtype=bool)
-        # idx = [k for k, v in env.objects.items() if v == task_object_type]
-        # set_index(task_objects_one_hot, idx, True)
-
+        subtask_binary = np.concatenate(
+            [one_hot[g] for one_hot, g in zip(self.g_one_hots, env.subtask)])
+        subtask = broadcast3d(subtask_binary)
+        # subtask = broadcast3d(env.subtask)
+        task_spec = broadcast3d(env.task)
         next_subtask = np.full((1, h, w), env.next_subtask)
 
-        obs_parts = [
-            obs, interaction_one_hot, task_count_one_hot, task_object_one_hot,
-            task_spec, next_subtask
-        ]
+        obs_parts = [obs, subtask, task_spec, next_subtask]
         stack = np.vstack(obs_parts)
         # print('obs', obs.shape)
         # print('interaction', interaction_one_hot.shape)
