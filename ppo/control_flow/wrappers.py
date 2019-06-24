@@ -25,6 +25,7 @@ class Wrapper(ppo.subtasks.wrappers.Wrapper):
             next_subtask=obs_spaces.next_subtask,
             control=spaces.MultiDiscrete(control_nvec))
         self.observation_space = spaces.Tuple(obs)
+        self.subtasks = None
 
     def wrap_observation(self, observation):
         obs, task = observation
@@ -36,14 +37,14 @@ class Wrapper(ppo.subtasks.wrappers.Wrapper):
                 yield branch.true_path
                 yield branch.false_path
 
-        subtasks = list(get_subtasks())
+        self.subtasks = list(get_subtasks())
 
         def get_control_flow():
             for branch in task:
                 yield (
                     branch.condition,
-                    subtasks.index(branch.true_path),
-                    subtasks.index(branch.false_path),
+                    self.subtasks.index(branch.true_path),
+                    self.subtasks.index(branch.false_path),
                 )
 
         control = list(get_control_flow())
@@ -51,9 +52,12 @@ class Wrapper(ppo.subtasks.wrappers.Wrapper):
         observation = Obs(
             base=obs,
             subtask=env.subtask,
-            subtasks=subtasks,
+            subtasks=self.subtasks,
             control=control,
             next_subtask=[env.next_subtask],
         )
         return np.concatenate(
             [np.array(list(x)).flatten() for x in observation])
+
+    def chosen_subtask(self, env):
+        return self.subtasks[self.last_g]

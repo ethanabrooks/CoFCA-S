@@ -89,7 +89,7 @@ class Wrapper(gym.Wrapper):
         super().render(mode=mode)
         if self.last_g is not None:
             env = self.env.unwrapped
-            g_type, g_count, g_obj = tuple(env.task[self.last_g])
+            g_type, g_count, g_obj = tuple(self.chosen_subtask(env))
             print(
                 'Assigned subtask:',
                 env.interactions[g_type],
@@ -97,3 +97,6 @@ class Wrapper(gym.Wrapper):
                 env.object_types[g_obj],
             )
         input('paused')
+
+    def chosen_subtask(self, env):
+        return env.task[self.last_g]
