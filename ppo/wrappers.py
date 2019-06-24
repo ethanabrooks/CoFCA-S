@@ -82,19 +82,25 @@ class SubtasksWrapper(gym.Wrapper):
         _, h, w = obs.shape
         env = self.env.unwrapped
 
-        def broadcast3d(x):
-            x = np.array(x)
-            return np.broadcast_to(
-                x.reshape(-1, 1, 1),
-                (x.size, h, w),
-            )
+        # def task_iterator():
+        #     for column in task.T:  # transpose for easy splitting in Subtasks module
+        #         for word in column:
+        #             yield word
 
-        task = broadcast3d(env.task)
-        next_subtask = broadcast3d(env.next_subtask)
-        subtask = broadcast3d(env.subtask)
+        observation = SubtasksObs(
+            base=obs,
+            subtask=env.subtask,
+            task=env.task,
+            next_subtask=env.next_subtask)
+        for obs, space in zip(observation, self.observation_space.spaces):
+            assert space.contains(np.array(obs))
 
-        obs_parts = [obs, subtask, task, next_subtask]
-        stack = np.vstack(obs_parts)
+        return np.concatenate([np.array(x).flatten() for x in observation])
+
+        # task_objects_one_hot = np.zeros((h, w), dtype=bool)
+        # idx = [k for k, v in env.objects.items() if v == task_object_type]
+        # set_index(task_objects_one_hot, idx, True)
+
         # print('obs', obs.shape)
         # print('interaction', interaction_one_hot.shape)
         # print('task_objects', task_objects_one_hot.shape)
@@ -109,8 +115,6 @@ class SubtasksWrapper(gym.Wrapper):
         #     print(name)
         #     print(array)
 
-        return stack.astype(float)
-
     def render(self, mode='human'):
         super().render(mode=mode)
         if self.last_g is not None:
@@ -119,7 +123,7 @@ class SubtasksWrapper(gym.Wrapper):
             print(
                 'Assigned subtask:',
                 env.interactions[g_type],
-                g_count,
+                g_count + 1,
                 env.object_types[g_obj],
             )
         input('paused')

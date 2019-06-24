@@ -121,11 +121,11 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                  recurrent, hard_update, agent, multiplicative_interaction):
         super().__init__()
         self.obs_space = SubtasksObs(*obs_space.spaces)
-        d, h, w = self.obs_space.base.shape
+        d, h, w = self.obs_shape = self.obs_space.base.shape
         self.obs_sections = SubtasksObs(
-            base=d,
+            base=d * h * w,
             subtask=int(np.prod(self.obs_space.subtask.nvec.shape)),
-            task=int(np.prod(self.obs_space.task.shape)),
+            task=int(np.prod(self.obs_space.task.nvec.shape)),
             next_subtask=1,
         )
         subtask_space = list(map(int, task_space.nvec[0]))
@@ -133,7 +133,6 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         n_subtasks = task_space.shape[0]
         self.multiplicative_interaction = multiplicative_interaction
         self.hard_update = hard_update
-        self.obs_shape = sum(self.obs_sections), h, w
         self.task_nvec = task_space.nvec
         self.action_space = action_space
         self.n_subtasks = n_subtasks
@@ -146,8 +145,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             Concat(dim=1),
             init_(
                 nn.Conv2d(
-                    self.obs_sections.base + int(
-                        self.obs_space.subtask.nvec.sum()),
+                    d + int(self.obs_space.subtask.nvec.sum()),
                     hidden_size,
                     kernel_size=3,
                     stride=1,
@@ -168,7 +166,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         if multiplicative_interaction:
             self.phi_update = nn.Sequential(
                 Parallel(
-                    init_(nn.Linear(self.obs_sections.base, hidden_size)),
+                    init_(nn.Linear(d, hidden_size)),
                     init_(nn.Linear(action_space.a.n, hidden_size)),
                     *[
                         init_(nn.Linear(i, hidden_size))
@@ -178,8 +176,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         else:
             self.phi_update = trace(
                 lambda in_size: init_(nn.Linear(in_size, 2), 'sigmoid'),
-                in_size=(self.obs_sections.base * action_space.a.n * int(
-                    task_space.nvec[0].prod())))
+                in_size=(
+                    d * action_space.a.n * int(task_space.nvec[0].prod())))
 
         for i, d in enumerate(self.task_nvec[0]):
             self.register_buffer(f'part{i}_one_hot', torch.eye(int(d)))
@@ -189,6 +187,10 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         self.register_buffer('g_one_hots', torch.eye(action_space.g.n))
         self.register_buffer('subtask_space',
                              torch.tensor(task_space.nvec[0].astype(np.int64)))
+        self.register_buffer(
+            'agent_dummy_values',
+            torch.zeros(
+                1, self.obs_sections.task + self.obs_sections.next_subtask))
 
         state_sizes = RecurrentState(
             a=1,
@@ -260,17 +262,14 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
     def forward(self, inputs, hx):
         assert hx is not None
         T, N, D = inputs.shape
-        inputs = inputs.view(T, N, -1)
         # noinspection PyProtectedMember
         n_actions = len(SubtasksActions._fields)
         inputs, *actions = torch.split(
             inputs.detach(), [D - n_actions] + [1] * n_actions, dim=2)
         actions = SubtasksActions(*actions)
-        inputs = inputs.view(T, N, *self.obs_shape)
-        obs, subtasks, task_broad, next_subtask_broad = torch.split(
+        obs, _, task, next_subtask = torch.split(
             inputs, self.obs_sections, dim=2)
-        task = task_broad[:, :, :, 0, 0]
-        next_subtask = next_subtask_broad[:, :, :, 0, 0]
+        obs = obs.view(T, N, *self.obs_shape)
         interaction, count, obj = torch.split(
             task.view(T, N, self.n_subtasks, self.obs_space.subtask.nvec.size),
             1,
@@ -381,9 +380,11 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             if self.agent is None:
                 dist = self.actor(conv_out)
             else:
-                agent_inputs = torch.cat(
-                    [obs[t], g_broad, task_broad[t], next_subtask_broad[t]],
-                    dim=1)
+                agent_inputs = torch.cat([
+                    obs[t].view(N, -1), g_binary,
+                    self.agent_dummy_values.expand(N, -1)
+                ],
+                                         dim=1)
                 dist = self.agent(agent_inputs, rnn_hxs=None, masks=None).dist
             sample_new(A[t + 1], dist)
             # a[:] = 'wsadeq'.index(input('act:'))

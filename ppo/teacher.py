@@ -3,6 +3,7 @@ import torch
 from torch.nn import functional as F
 
 from ppo.agent import Agent
+from ppo.utils import broadcast3d
 from ppo.wrappers import SubtasksActions, SubtasksObs
 
 
@@ -11,7 +12,7 @@ class SubtasksTeacher(Agent):
         self.obs_space = SubtasksObs(*obs_space.spaces)
         d, h, w = self.obs_shape = self.obs_space.base.shape
         self.obs_sections = SubtasksObs(
-            base=d,
+            base=d * h * w,
             subtask=int(self.obs_space.subtask.nvec.sum()),
             task=int(np.prod(self.obs_space.task.nvec.shape)),
             next_subtask=1,
@@ -27,11 +28,13 @@ class SubtasksTeacher(Agent):
 
     @property
     def d(self):
-        return self.obs_sections.base + self.obs_sections.subtask
+        return self.obs_space.base.shape[0] + self.obs_sections.subtask
 
     def preprocess_obs(self, inputs):
         obs, subtasks, task_broad, next_subtask_broad = torch.split(
             inputs, self.obs_sections, dim=1)
+        obs = obs.view(-1, *self.obs_shape)
+        subtasks = broadcast3d(subtasks, (self.obs_shape[-2:]))
         return torch.cat([obs, subtasks], dim=1)
 
     def forward(self, inputs, *args, action=None, **kwargs):
