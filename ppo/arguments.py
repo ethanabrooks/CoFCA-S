@@ -5,7 +5,11 @@ from pathlib import Path
 
 import torch.nn as nn
 
-from rl_utils import hierarchical_parse_args, parse_activation
+from rl_utils import hierarchical_parse_args
+
+
+def parse_activation(string):
+    return dict(relu=nn.ReLU)[string]
 
 
 def build_parser():
