@@ -24,11 +24,9 @@ setup(
     ],
     entry_points=dict(console_scripts=[
         'ppo=ppo.main:cli',
-        'hsr=ppo.main:hsr_cli',
-        'logic=ppo.main:logic_cli',
-        'teach=ppo.main:teach_cli',
-        'single-task=ppo.main:single_task_cli',
-        'train-teacher=ppo.main:train_teacher_cli',
-        'train-student=ppo.main:train_student_cli',
+        'subtasks=ppo.main:subtasks_cli',
+        'control-flow=ppo.main:control_flow_cli',
+        'teacher=ppo.main:teacher_cli',
+        'student=ppo.main:student_cli',
     ]),
     install_requires=[])

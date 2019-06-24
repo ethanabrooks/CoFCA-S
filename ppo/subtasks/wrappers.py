@@ -75,23 +75,17 @@ class Wrapper(gym.Wrapper):
         obs, task = observation
         _, h, w = obs.shape
         env = self.env.unwrapped
-
-        # def task_iterator():
-        #     for column in task.T:  # transpose for easy splitting in Subtasks module
-        #         for word in column:
-        #             yield word
-
         observation = Obs(
             base=obs,
             subtask=env.subtask,
             task=env.task,
             next_subtask=env.next_subtask)
-        for obs, space in zip(observation, self.observation_space.spaces):
-            assert space.contains(np.array(obs))
+        # for obs, space in zip(observation, self.observation_space.spaces):
+        #     assert space.contains(np.array(obs))
 
         return np.concatenate([np.array(x).flatten() for x in observation])
 
-    def render(self, mode='human'):
+    def render(self, mode='human', **kwargs):
         super().render(mode=mode)
         if self.last_g is not None:
             env = self.env.unwrapped

@@ -2,17 +2,14 @@ import numpy as np
 import torch
 from torch.nn import functional as F
 
-import gridworld_env.subtasks_gridworld as subtasks_gridworld
-import ppo.subtasks.wrappers
 from ppo.agent import Agent
-from ppo.utils import broadcast3d
-import ppo.wrappers
 from ppo.subtasks.wrappers import Actions
+from ppo.utils import broadcast3d
 
 
 class Teacher(Agent):
-    def __init__(self, obs_space, action_space, **kwargs):
-        self.obs_spaces = ppo.subtasks.wrappers.Obs(*obs_space.spaces)
+    def __init__(self, obs_spaces, action_space, **kwargs):
+        self.obs_spaces = obs_spaces
         _, h, w = self.obs_shape = self.obs_spaces.base.shape
         self.action_spaces = Actions(*action_space.spaces)
         self.obs_sections = [int(np.prod(s.shape)) for s in self.obs_spaces]

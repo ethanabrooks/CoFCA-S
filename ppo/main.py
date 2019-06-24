@@ -8,15 +8,19 @@ from gym.wrappers import TimeLimit
 import torch
 
 import gridworld_env
+import ppo
+from gridworld_env.control_flow_gridworld import ControlFlowGridWorld
 from gridworld_env.subtasks_gridworld import SubtasksGridWorld
 from ppo.arguments import build_parser, get_args
-from ppo.subtasks.student import Student
-from ppo.subtasks.agent import Agent
-from ppo.subtasks.teacher import Teacher
 from ppo.train import Train
 from ppo.wrappers import VecNormalize
 from ppo.subtasks.wrappers import Wrapper
 from rl_utils import hierarchical_parse_args
+import ppo.subtasks.student
+import ppo.subtasks.teacher
+import ppo.control_flow.agent
+import ppo.subtasks.agent
+import ppo.control_flow.wrappers
 
 
 def add_task_args(parser):
@@ -44,17 +48,26 @@ def cli():
     Train(**get_args())
 
 
-def class_parser(string):
-    return dict(SubtasksGridWorld=SubtasksGridWorld)[string]
+def get_spaces(envs, control_flow):
+    obs_spaces = envs.observation_space.spaces
+    if control_flow:
+        obs_spaces = ppo.control_flow.wrappers.Obs(*obs_spaces)
+    else:
+        obs_spaces = ppo.subtasks.wrappers.Obs(*obs_spaces)
+    return obs_spaces
 
 
 def make_subtasks_env(env_id, **kwargs):
-    def helper(seed, rank, class_, max_episode_steps, **_kwargs):
+    def helper(seed, rank, control_flow, max_episode_steps, class_, **_kwargs):
         if rank == 1:
             print('Environment args:')
             for k, v in _kwargs.items():
                 print(f'{k:20}{v}')
-        env = Wrapper(class_parser(class_)(**_kwargs))
+        if control_flow:
+            env = ppo.control_flow.wrappers.Wrapper(
+                ControlFlowGridWorld(**_kwargs))
+        else:
+            env = ppo.subtasks.wrappers.Wrapper(SubtasksGridWorld(**_kwargs))
         env.seed(seed + rank)
         print('Environment seed:', seed + rank)
         if max_episode_steps is not None:
@@ -69,8 +82,9 @@ def make_subtasks_env(env_id, **kwargs):
     )  # combines kwargs and gridworld_args with preference for kwargs
 
 
-def train_skill_cli(student):
+def train_lower_level_cli(student):
     parser = build_parser()
+    parser.add_argument('--control-flow', action='store_true')
     add_task_args(parser)
     add_env_args(parser)
     if student:
@@ -81,7 +95,7 @@ def train_skill_cli(student):
         student_parser.add_argument('--xi', type=float, required=True)
     kwargs = hierarchical_parse_args(parser)
 
-    def train(task_args, env_args, student_args=None, **_kwargs):
+    def train(task_args, env_args, control_flow, student_args=None, **_kwargs):
         class TrainSkill(Train):
             @staticmethod
             def make_env(add_timestep, **make_env_args):
@@ -89,35 +103,38 @@ def train_skill_cli(student):
                     **env_args,
                     **make_env_args,
                     **task_args,
-                )
+                    control_flow=control_flow)
 
             @staticmethod
             def build_agent(envs, **agent_args):
+                obs_spaces = get_spaces(envs, control_flow)
                 agent_args = dict(
-                    obs_space=envs.observation_space,
+                    obs_spaces=obs_spaces,
                     action_space=envs.action_space,
                     **agent_args)
                 if student:
-                    return Student(**agent_args, **student_args)
+                    return ppo.subtasks.student.Student(
+                        **agent_args, **student_args)
                 else:
-                    return Teacher(**agent_args)
+                    return ppo.subtasks.teacher.Teacher(**agent_args)
 
         TrainSkill(**_kwargs)
 
     train(**kwargs)
 
 
-def train_teacher_cli():
-    train_skill_cli(student=False)
+def teacher_cli():
+    train_lower_level_cli(student=False)
 
 
-def train_student_cli():
-    train_skill_cli(student=True)
+def student_cli():
+    train_lower_level_cli(student=True)
 
 
-def teach_cli():
+def metacontroller_cli():
     parser = build_parser()
     parser.add_argument('--agent-load-path', type=Path)
+    parser.add_argument('--control-flow', action='store_true')
     add_task_args(parser)
     add_env_args(parser)
     subtasks_parser = parser.add_argument_group('subtasks_args')
@@ -131,19 +148,24 @@ def teach_cli():
         '--multiplicative-interaction', action='store_true')
 
     def train(env_id, task_args, ppo_args, agent_load_path, subtasks_args,
-              env_args, **kwargs):
+              env_args, control_flow, **kwargs):
         class TrainSubtasks(Train):
             @staticmethod
             def make_env(**_kwargs):
-                return make_subtasks_env(**env_args, **_kwargs, **task_args)
+                return make_subtasks_env(
+                    **env_args,
+                    **_kwargs,
+                    **task_args,
+                    control_flow=control_flow)
 
             # noinspection PyMethodOverriding
             @staticmethod
             def build_agent(envs, **agent_args):
                 agent = None
+                obs_spaces = get_spaces(envs, control_flow)
                 if agent_load_path:
-                    agent = Teacher(
-                        obs_space=envs.observation_space,
+                    agent = ppo.subtasks.teacher.Teacher(
+                        obs_spaces=obs_spaces,
                         action_space=envs.action_space,
                         **agent_args)
 
@@ -155,6 +177,7 @@ def teach_cli():
                     )
                     agent.load_state_dict(state_dict['agent'])
                     if isinstance(envs.venv, VecNormalize):
+                        # noinspection PyUnresolvedReferences
                         envs.venv.load_state_dict(state_dict['vec_normalize'])
                     print(f'Loaded teacher parameters from {agent_load_path}.')
 
@@ -163,11 +186,16 @@ def teach_cli():
                     for k, v in subtasks_args.items()
                 }
 
-                return Agent(
-                    obs_space=envs.observation_space,
+                metacontroller_kwargs = dict(
+                    obs_spaces=obs_spaces,
                     action_space=envs.action_space,
                     agent=agent,
                     **_subtasks_args)
+                if control_flow:
+                    return ppo.control_flow.agent.Agent(
+                        **metacontroller_kwargs)
+                else:
+                    return ppo.subtasks.agent.Agent(**metacontroller_kwargs)
 
         # ppo_args.update(aux_loss_only=True)
         TrainSubtasks(env_id=env_id, ppo_args=ppo_args, **kwargs)
@@ -176,4 +204,4 @@ def teach_cli():
 
 
 if __name__ == "__main__":
-    teach_cli()
+    metacontroller_cli()

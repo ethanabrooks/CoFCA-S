@@ -4,17 +4,20 @@ from dataclasses import dataclass
 from gridworld_env import SubtasksGridWorld
 
 
+@dataclass
+class Branch:
+    condition: int
+    true_path: None  # Subtask
+    false_path: None  # Subtask
+
+
 class ControlFlowGridWorld(SubtasksGridWorld):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         _self = self
 
-        @dataclass
-        class Branch:
-            condition: int
-            true_path: _self.Subtask
-            false_path: _self.Subtask
-
+        class _Branch(Branch):
+            # noinspection PyMethodParameters
             def __str__(branch):
                 return f'''\
 if {self.object_types[branch.condition]}:
@@ -23,12 +26,13 @@ else:
     {branch.false_path}
 '''
 
-        self.Branch = Branch
+        self.Branch = _Branch
 
     def subtask_generator(self):
         while True:
             subtask1, subtask2 = self.np_random.choice(
                 len(self.possible_subtasks), size=2)
+            # noinspection PyArgumentList
             yield self.Branch(
                 condition=(self.np_random.choice(len(self.object_types))),
                 false_path=self.Subtask(*self.possible_subtasks[subtask1]),

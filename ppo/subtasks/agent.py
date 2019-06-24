@@ -1,4 +1,6 @@
 from collections import namedtuple
+from functools import reduce
+from operator import mul
 
 from gym.spaces import Box, Discrete
 import numpy as np
@@ -23,23 +25,26 @@ RecurrentState = namedtuple(
 
 # noinspection PyMissingConstructor
 class Agent(ppo.agent.Agent, NNBase):
-    def __init__(self, obs_space, action_space, hidden_size, entropy_coef,
+    def __init__(self, obs_spaces, action_space, hidden_size, entropy_coef,
                  hard_update, agent, **kwargs):
         nn.Module.__init__(self)
         self.hard_update = hard_update
         self.entropy_coef = entropy_coef
         self.action_spaces = Actions(*action_space.spaces)
-        self.obs_spaces = Obs(*obs_space.spaces)
+        self.obs_spaces = obs_spaces
         self.recurrent_module = self.build_recurrent_module(
-            agent, hard_update, hidden_size, **kwargs)
+            agent=agent,
+            hard_update=hard_update,
+            hidden_size=hidden_size,
+            obs_spaces=self.obs_spaces,
+            action_spaces=self.action_spaces,
+            **kwargs)
         self.agent = agent
 
     # noinspection PyMethodOverriding
     def build_recurrent_module(self, agent, hard_update, hidden_size,
                                **kwargs):
         return Recurrence(
-            obs_spaces=self.obs_spaces,
-            action_spaces=self.action_spaces,
             hidden_size=hidden_size,
             hard_update=hard_update,
             agent=agent,
@@ -146,9 +151,12 @@ class Recurrence(torch.jit.ScriptModule):
                 nn.Conv2d(
                     d + int(self.obs_spaces.subtask.nvec.sum()),
                     hidden_size,
-                    kernel_size=3,
+                    kernel_size=3,  # TODO: kernel_size=1
                     stride=1,
-                    padding=1), 'relu'), nn.ReLU(), Flatten())
+                    padding=1),
+                'relu'),
+            nn.ReLU(),
+            Flatten())
 
         input_size = h * w * hidden_size  # conv output
         if isinstance(action_spaces.a, Discrete):
@@ -256,115 +264,148 @@ class Recurrence(torch.jit.ScriptModule):
     def forward(self, inputs, hx):
         assert hx is not None
         T, N, D = inputs.shape
+
+        # detach actions
         # noinspection PyProtectedMember
         n_actions = len(Actions._fields)
         inputs, *actions = torch.split(
             inputs.detach(), [D - n_actions] + [1] * n_actions, dim=2)
         actions = Actions(*actions)
-        obs, _, task, next_subtask = torch.split(
-            inputs, self.obs_sections, dim=2)
-        obs = obs.view(T, N, *self.obs_shape)
-        task = task.view(T, N, self.n_subtasks,
-                         self.obs_spaces.subtask.nvec.size)
+
+        # parse non-action inputs
+        inputs = Obs(*torch.split(inputs, self.obs_sections, dim=2))
+        obs = inputs.base.view(T, N, *self.obs_shape)
+        task = inputs.task.view(T, N, self.n_subtasks,
+                                self.obs_spaces.subtask.nvec.size)
+
+        # build memory
         task = torch.split(task, 1, dim=-1)
         interaction, count, obj = [x[0, :, :, 0] for x in task]
         M123 = torch.stack([interaction, count, obj], dim=-1)
         one_hots = [self.part0_one_hot, self.part1_one_hot, self.part2_one_hot]
         g123 = (interaction, count, obj)
         M = g123_to_binary(g123, one_hots)
+
+        # parse hidden
         new_episode = torch.all(hx.squeeze(0) == 0, dim=-1)
         hx = self.parse_hidden(hx)
-
         p = hx.p
         r = hx.r
-        float_subtask = hx.subtask
         for x in hx:
             x.squeeze_(0)
-
         if torch.any(new_episode):
             p[new_episode, 0] = 1.  # initialize pointer to first subtask
             r[new_episode] = M[new_episode, 0]  # initialize r to first subtask
-
             # initialize g to first subtask
             hx.g[new_episode] = 0.
 
-        A = torch.cat([hx.a.unsqueeze(0), actions.a], dim=0).long().squeeze(2)
-        G = torch.cat([hx.g.unsqueeze(0), actions.g], dim=0).long().squeeze(2)
+        def update_attention(p):
+            p2 = F.pad(p, [1, 0], 'constant', 0)[:, :-1]
+            p2[:, -1] += 1 - p2.sum(dim=-1)
+            return p2
 
-        outputs = RecurrentState(*[[] for _ in RecurrentState._fields])
+        return self.pack(
+            self.inner_loop(
+                a=hx.a,
+                g=hx.g,
+                M=M,
+                M123=M123,
+                N=N,
+                T=T,
+                float_subtask=hx.subtask,
+                next_subtask=inputs.next_subtask,
+                obs=obs,
+                p=p,
+                r=r,
+                actions=actions,
+                update_attention=update_attention))
 
+    def pack(self, outputs):
+        zipped = list(zip(*outputs))
+        for name, x in zip(RecurrentState._fields, zipped):
+            if not x:
+                print(name)
+                import ipdb
+                ipdb.set_trace()
+
+        stacked = [torch.stack(x) for x in zipped]
+        preprocessed = [x.float().view(*x.shape[:2], -1) for x in stacked]
+
+        for name, x, size in zip(RecurrentState._fields, preprocessed,
+                                 self.state_sizes):
+            if x.size(2) != size:
+                print(name, x, size)
+                import ipdb
+                ipdb.set_trace()
+            if x.dtype != torch.float32:
+                print(name)
+                import ipdb
+                ipdb.set_trace()
+
+        hx = torch.cat(preprocessed, dim=-1)
+        return hx, hx[-1]
+
+    def inner_loop(self, a, g, M, M123, N, T, float_subtask, next_subtask, obs,
+                   p, r, actions, update_attention):
+        # combine past and present actions (sampled values)
+        A = torch.cat([a.unsqueeze(0), actions.a], dim=0).long().squeeze(2)
+        G = torch.cat([g.unsqueeze(0), actions.g], dim=0).long().squeeze(2)
         for t in range(T):
             subtask = float_subtask.long()
             float_subtask += next_subtask[t]
-            outputs.subtask.append(float_subtask)
 
             agent_layer = obs[t, :, 6, :, :].long()
             j, k, l = torch.split(agent_layer.nonzero(), 1, dim=-1)
 
-            def phi_update(subtask_param, values, losses, probs):
+            def phi_update(subtask_param):
                 debug_obs = obs[t, j, :, k, l].squeeze(1)
                 task_sections = torch.split(
                     subtask_param, tuple(self.obs_spaces.subtask.nvec), dim=-1)
                 parts = (debug_obs, self.a_one_hots[A[t]]) + task_sections
                 if self.multiplicative_interaction:
                     return self.f(parts)
-                obs4d = 1
+                outer_produce_obs = 1
                 for i1, part in enumerate(parts):
                     for i2 in range(len(parts)):
                         if i1 != i2:
                             part.unsqueeze_(i2 + 1)
-                    obs4d = obs4d * part
+                    outer_produce_obs = outer_produce_obs * part
 
-                c_logits = self.phi_update(obs4d.view(N, -1))
+                c_logits = self.phi_update(outer_produce_obs.view(N, -1))
                 if self.hard_update:
                     c_dist = FixedCategorical(logits=c_logits)
                     c = actions.c[t]
                     sample_new(c, c_dist)
-                    values.append(c)
-                    probs.append(c_dist.probs)
-                    losses.append(-c_dist.log_probs(next_subtask[t]))
+                    probs = c_dist.probs
+                    loss = -c_dist.log_probs(next_subtask[t])
                 else:
                     c = torch.sigmoid(c_logits[:, :1])
-                    values.append(c)
-                    probs.append(torch.zeros_like(c_logits))  # dummy value
-                    losses.append(
-                        F.binary_cross_entropy(
-                            torch.clamp(c, 0., 1.),
-                            next_subtask[t],
-                            reduction='none'))
-                return c
+                    probs = torch.zeros_like(c_logits)  # dummy value
+                    loss = F.binary_cross_entropy(
+                        torch.clamp(c, 0., 1.),
+                        next_subtask[t],
+                        reduction='none')
+                return c, loss, probs
 
-            # c
-            cr = phi_update(
-                subtask_param=r,
-                values=outputs.cr,
-                losses=outputs.cr_loss,
-                probs=outputs.cr_probs)
+            # cr
+            cr, cr_loss, cr_probs = phi_update(subtask_param=r, )
+
+            # cg
             g_binary = M[torch.arange(N), G[t]]
-            cg = phi_update(
-                subtask_param=g_binary,
-                values=outputs.cg,
-                losses=outputs.cg_loss,
-                probs=outputs.cg_probs)
+            cg, cg_loss, cg_probs = phi_update(subtask_param=g_binary, )
 
             # p
-            p2 = F.pad(p, [1, 0], 'constant', 0)[:, :-1]
-            p2[:, -1] += 1 - p2.sum(dim=-1)
+            p2 = update_attention(p)
             p = interp(p, p2, cr)
-            outputs.p.append(p)
 
             # r
             r = (p.unsqueeze(1) @ M).squeeze(1)
-            outputs.r.append(r)
 
             # g
             old_g = self.g_one_hots[G[t]]
-            dist = FixedCategorical(
+            g_dist = FixedCategorical(
                 probs=torch.clamp(interp(old_g, p, cg), 0., 1.))
-            sample_new(G[t + 1], dist)
-            outputs.g.append(G[t + 1])
-            outputs.g_probs.append(dist.probs)
-            outputs.g_loss.append(-dist.log_probs(subtask))
+            sample_new(G[t + 1], g_dist)
 
             # a
             idxs = torch.arange(N), G[t + 1]
@@ -372,7 +413,7 @@ class Recurrence(torch.jit.ScriptModule):
             conv_out = self.conv((obs[t],
                                   broadcast3d(g_binary, self.obs_shape[1:])))
             if self.agent is None:
-                dist = self.actor(conv_out)
+                a_dist = self.actor(conv_out)
             else:
                 g123 = M123[idxs]
                 agent_inputs = torch.cat([
@@ -380,35 +421,24 @@ class Recurrence(torch.jit.ScriptModule):
                     self.agent_dummy_values.expand(N, -1)
                 ],
                                          dim=1)
-                dist = self.agent(agent_inputs, rnn_hxs=None, masks=None).dist
-            sample_new(A[t + 1], dist)
+                a_dist = self.agent(
+                    agent_inputs, rnn_hxs=None, masks=None).dist
+            sample_new(A[t + 1], a_dist)
             # a[:] = 'wsadeq'.index(input('act:'))
 
-            outputs.a.append(A[t + 1])
-            outputs.a_probs.append(dist.probs)
-
-            # v
-            outputs.v.append(self.critic(conv_out))
-
-        # for name, x in zip(RecurrentState._fields, outputs):
-        #     if not x:
-        #         print(name)
-        #         import ipdb
-        #         ipdb.set_trace()
-
-        stacked = [torch.stack(x) for x in outputs]
-        stacked = [x.float().view(*x.shape[:2], -1) for x in stacked]
-
-        # for name, x, size in zip(RecurrentState._fields, stacked,
-        #                          self.state_sizes):
-        #     if x.size(2) != size:
-        #         print(name, x, size)
-        #         import ipdb
-        #         ipdb.set_trace()
-        #     if x.dtype != torch.float32:
-        #         print(name)
-        #         import ipdb
-        #         ipdb.set_trace()
-
-        hx = torch.cat(stacked, dim=-1)
-        return hx, hx[-1]
+            yield RecurrentState(
+                cg=cg,
+                cr=cr,
+                cg_loss=cg_loss,
+                cr_loss=cr_loss,
+                cg_probs=cg_probs,
+                cr_probs=cr_probs,
+                p=p,
+                r=r,
+                g=G[t + 1],
+                g_probs=g_dist.probs,
+                g_loss=-g_dist.log_probs(subtask),
+                a=A[t + 1],
+                a_probs=a_dist.probs,
+                subtask=float_subtask,
+                v=self.critic(conv_out))
