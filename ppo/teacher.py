@@ -1,6 +1,6 @@
+import numpy as np
 import torch
 from torch.nn import functional as F
-import numpy as np
 
 from ppo.agent import Agent
 from ppo.wrappers import SubtasksActions, SubtasksObs
@@ -21,6 +21,9 @@ class SubtasksTeacher(Agent):
             obs_shape=(self.d, h, w),
             action_space=self.action_spaces.a,
             **kwargs)
+
+        for i, d in enumerate(self.obs_space.subtask.nvec):
+            self.register_buffer(f'part{i}_one_hot', torch.eye(int(d)))
 
     @property
     def d(self):
