@@ -7,8 +7,6 @@ from collections import OrderedDict
 import gym
 import numpy as np
 
-from rl_utils import space_shape
-
 
 def copy_obs_dict(obs):
     """
@@ -25,6 +23,27 @@ def dict_to_obs(obs_dict):
     if set(obs_dict.keys()) == {None}:
         return obs_dict[None]
     return obs_dict
+
+
+def space_shape(space: gym.Space):
+    if isinstance(space, gym.spaces.Box):
+        return space.low.shape
+    if isinstance(space, gym.spaces.Dict):
+        return {k: space_shape(v) for k, v in space.spaces.items()}
+    if isinstance(space, gym.spaces.Tuple):
+        return tuple(space_shape(s) for s in space.spaces)
+    if isinstance(space, gym.spaces.MultiDiscrete):
+        return (space.nvec.size, )
+    if isinstance(space, gym.spaces.Discrete):
+        return 1,
+    raise NotImplementedError
+
+
+def buffer_shape(space: gym.Space):
+    shape = space_shape(space)
+    if not all(isinstance(d, int) for d in shape):
+        shape = int(sum([np.prod(x) for x in shape])),  # concatenate
+    return shape
 
 
 def obs_space_info(obs_space):
@@ -47,7 +66,8 @@ def obs_space_info(obs_space):
     dtypes = {}
     for key, space in subspaces.items():
         keys.append(key)
-        shapes[key] = space_shape(space)
+        shape = buffer_shape(space)
+        shapes[key] = shape
         dtypes[key] = space.dtype
     return keys, shapes, dtypes
 
