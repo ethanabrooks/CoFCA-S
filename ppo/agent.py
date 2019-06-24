@@ -94,7 +94,7 @@ class NNBase(nn.Module):
         self._recurrent = recurrent
 
         if self._recurrent:
-            self.recurrent_module = self.build_recurrent_network(
+            self.recurrent_module = self.build_recurrent_module(
                 recurrent_input_size, hidden_size)
             for name, param in self.recurrent_module.named_parameters():
                 print('zeroed out', name)
@@ -103,7 +103,7 @@ class NNBase(nn.Module):
                 elif 'weight' in name:
                     nn.init.orthogonal_(param)
 
-    def build_recurrent_network(self, input_size, hidden_size):
+    def build_recurrent_module(self, input_size, hidden_size):
         return nn.GRU(input_size, hidden_size)
 
     @property
@@ -247,7 +247,7 @@ class LogicBase(NNBase):
         self.critic_linear = init_(nn.Linear(hidden_size, 1))
         self.train()
 
-    def build_recurrent_network(self, input_size, hidden_size):
+    def build_recurrent_module(self, input_size, hidden_size):
         return LogicModule(
             *self.input_shape,
             hidden_size=hidden_size,

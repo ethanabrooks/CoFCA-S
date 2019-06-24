@@ -3,10 +3,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ppo.teacher import SubtasksTeacher, g_binary_to_123
+from ppo.subtasks.teacher import Teacher, g_binary_to_123
 
 
-class SubtasksStudent(SubtasksTeacher):
+class Student(Teacher):
     def __init__(self, embedding_dim, tau_diss, tau_diff, task_space, xi,
                  **kwargs):
         self.xi = xi

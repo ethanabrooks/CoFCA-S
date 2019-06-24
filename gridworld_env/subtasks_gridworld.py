@@ -323,8 +323,8 @@ if __name__ == '__main__':
     import gym
     import gridworld_env.keyboard_control
     import gridworld_env.random_walk
-    from ppo.wrappers import SubtasksWrapper
+    from ppo.subtasks.wrappers import Wrapper
 
-    env = SubtasksWrapper(gym.make('4x4SubtasksGridWorld-v0'))
+    env = Wrapper(gym.make('4x4SubtasksGridWorld-v0'))
     actions = 'wsadeq'
     gridworld_env.keyboard_control.run(env, actions=actions)

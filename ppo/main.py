@@ -8,13 +8,14 @@ from gym.wrappers import TimeLimit
 import torch
 
 import gridworld_env
-from gridworld_env.subtasks_gridworld import SubtasksGridWorld, get_task_space
+from gridworld_env.subtasks_gridworld import SubtasksGridWorld
 from ppo.arguments import build_parser, get_args
-from ppo.student import SubtasksStudent
-from ppo.subtasks import SubtasksAgent
-from ppo.teacher import SubtasksTeacher
+from ppo.subtasks.student import Student
+from ppo.subtasks.agent import Agent
+from ppo.subtasks.teacher import Teacher
 from ppo.train import Train
-from ppo.wrappers import SubtasksWrapper, VecNormalize
+from ppo.wrappers import VecNormalize
+from ppo.subtasks.wrappers import Wrapper
 from rl_utils import hierarchical_parse_args
 
 
@@ -53,7 +54,7 @@ def make_subtasks_env(env_id, **kwargs):
             print('Environment args:')
             for k, v in _kwargs.items():
                 print(f'{k:20}{v}')
-        env = SubtasksWrapper(class_parser(class_)(**_kwargs))
+        env = Wrapper(class_parser(class_)(**_kwargs))
         env.seed(seed + rank)
         print('Environment seed:', seed + rank)
         if max_episode_steps is not None:
@@ -63,9 +64,9 @@ def make_subtasks_env(env_id, **kwargs):
     gridworld_args = gridworld_env.get_args(env_id)
     kwargs.update(add_timestep=None)
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
-    return helper(**ChainMap(
-        kwargs, gridworld_args
-    ))  # combines kwargs and gridworld_args with preference for kwargs
+    return helper(
+        **ChainMap(kwargs, gridworld_args)
+    )  # combines kwargs and gridworld_args with preference for kwargs
 
 
 def train_skill_cli(student):
@@ -95,12 +96,11 @@ def train_skill_cli(student):
                 agent_args = dict(
                     obs_space=envs.observation_space,
                     action_space=envs.action_space,
-                    task_space=get_task_space(**task_args),
                     **agent_args)
                 if student:
-                    return SubtasksStudent(**agent_args, **student_args)
+                    return Student(**agent_args, **student_args)
                 else:
-                    return SubtasksTeacher(**agent_args)
+                    return Teacher(**agent_args)
 
         TrainSkill(**_kwargs)
 
@@ -132,8 +132,6 @@ def teach_cli():
 
     def train(env_id, task_args, ppo_args, agent_load_path, subtasks_args,
               env_args, **kwargs):
-        task_space = get_task_space(**task_args)
-
         class TrainSubtasks(Train):
             @staticmethod
             def make_env(**_kwargs):
@@ -144,10 +142,9 @@ def teach_cli():
             def build_agent(envs, **agent_args):
                 agent = None
                 if agent_load_path:
-                    agent = SubtasksTeacher(
+                    agent = Teacher(
                         obs_space=envs.observation_space,
                         action_space=envs.action_space,
-                        task_space=task_space,
                         **agent_args)
 
                     state_dict = torch.load(agent_load_path)
@@ -166,10 +163,9 @@ def teach_cli():
                     for k, v in subtasks_args.items()
                 }
 
-                return SubtasksAgent(
+                return Agent(
                     obs_space=envs.observation_space,
                     action_space=envs.action_space,
-                    task_space=task_space,
                     agent=agent,
                     **_subtasks_args)
 

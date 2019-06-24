@@ -21,7 +21,8 @@ from ppo.agent import Agent, AgentValues  # noqa
 from ppo.storage import RolloutStorage
 from ppo.update import PPO
 from ppo.utils import get_n_gpu, get_random_gpu
-from ppo.wrappers import AddTimestep, SubtasksWrapper, TransposeImage, VecNormalize, VecPyTorch, VecPyTorchFrameStack
+from ppo.wrappers import AddTimestep, TransposeImage, VecNormalize, VecPyTorch, VecPyTorchFrameStack
+from ppo.subtasks.wrappers import Wrapper
 
 try:
     import dm_control2gym
@@ -294,7 +295,7 @@ class Train:
         is_atari = hasattr(gym.envs, 'atari') and isinstance(
             env.unwrapped, gym.envs.atari.atari_env.AtariEnv)
         if isinstance(env.unwrapped, SubtasksGridWorld):
-            env = SubtasksWrapper(env)
+            env = Wrapper(env)
 
         env.seed(seed + rank)
 

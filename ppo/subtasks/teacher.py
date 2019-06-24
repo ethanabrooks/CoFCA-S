@@ -3,17 +3,18 @@ import torch
 from torch.nn import functional as F
 
 import gridworld_env.subtasks_gridworld as subtasks_gridworld
+import ppo.subtasks.wrappers
 from ppo.agent import Agent
 from ppo.utils import broadcast3d
 import ppo.wrappers
-from ppo.wrappers import SubtasksActions
+from ppo.subtasks.wrappers import Actions
 
 
-class SubtasksTeacher(Agent):
+class Teacher(Agent):
     def __init__(self, obs_space, action_space, **kwargs):
-        self.obs_spaces = ppo.wrappers.SubtasksObs(*obs_space.spaces)
+        self.obs_spaces = ppo.subtasks.wrappers.Obs(*obs_space.spaces)
         _, h, w = self.obs_shape = self.obs_spaces.base.shape
-        self.action_spaces = SubtasksActions(*action_space.spaces)
+        self.action_spaces = Actions(*action_space.spaces)
         self.obs_sections = [int(np.prod(s.shape)) for s in self.obs_spaces]
         super().__init__(
             obs_shape=(self.d, h, w),
@@ -43,7 +44,7 @@ class SubtasksTeacher(Agent):
         act = super().forward(
             self.preprocess_obs(inputs), action=action, *args, **kwargs)
         x = torch.zeros_like(act.action)
-        actions = SubtasksActions(a=act.action, g=x, cg=x, cr=x)
+        actions = Actions(a=act.action, g=x, cg=x, cr=x)
         return act._replace(action=torch.cat(actions, dim=-1))
 
     def get_value(self, inputs, rnn_hxs, masks):
