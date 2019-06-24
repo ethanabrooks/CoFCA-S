@@ -124,7 +124,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
         d, h, w = self.obs_space.base.shape
         self.obs_sections = SubtasksObs(
             base=d,
-            subtask=int(self.obs_space.subtask.nvec.sum()),
+            subtask=int(np.prod(self.obs_space.subtask.nvec.shape)),
             task=int(np.prod(self.obs_space.task.shape)),
             next_subtask=1,
         )
@@ -146,7 +146,8 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
             Concat(dim=1),
             init_(
                 nn.Conv2d(
-                    self.obs_sections.base + self.obs_sections.subtask,
+                    self.obs_sections.base + int(
+                        self.obs_space.subtask.nvec.sum()),
                     hidden_size,
                     kernel_size=3,
                     stride=1,

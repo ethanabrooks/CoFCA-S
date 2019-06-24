@@ -110,13 +110,17 @@ class SubtasksWrapper(gym.Wrapper):
         # task_objects_one_hot = np.zeros((h, w), dtype=bool)
         # idx = [k for k, v in env.objects.items() if v == task_object_type]
         # set_index(task_objects_one_hot, idx, True)
+        def broadcast3d(x):
+            x = np.array(x)
+            return np.broadcast_to(
+                x.reshape(-1, 1, 1),
+                (x.size, h, w),
+            )
 
         next_subtask = np.full((1, h, w), env.next_subtask)
+        subtask = broadcast3d(env.subtask)
 
-        obs_parts = [
-            obs, interaction_one_hot, task_count_one_hot, task_object_one_hot,
-            task_spec, next_subtask
-        ]
+        obs_parts = [obs, subtask, task_spec, next_subtask]
         stack = np.vstack(obs_parts)
         # print('obs', obs.shape)
         # print('interaction', interaction_one_hot.shape)
