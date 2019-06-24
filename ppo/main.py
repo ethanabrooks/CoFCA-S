@@ -151,6 +151,11 @@ def teach_cli():
                         **agent_args)
 
                     state_dict = torch.load(agent_load_path)
+                    state_dict['agent'].update(
+                        part0_one_hot=agent.part0_one_hot,
+                        part1_one_hot=agent.part1_one_hot,
+                        part2_one_hot=agent.part2_one_hot,
+                    )
                     agent.load_state_dict(state_dict['agent'])
                     if isinstance(envs.venv, VecNormalize):
                         envs.venv.load_state_dict(state_dict['vec_normalize'])
