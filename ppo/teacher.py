@@ -1,23 +1,20 @@
-import numpy as np
 import torch
 from torch.nn import functional as F
 
+import gridworld_env.subtasks_gridworld as subtasks_gridworld
+import ppo.wrappers
 from ppo.agent import Agent
 from ppo.utils import broadcast3d
-from ppo.wrappers import SubtasksActions, SubtasksObs
+from ppo.wrappers import SubtasksActions
+import numpy as np
 
 
 class SubtasksTeacher(Agent):
     def __init__(self, obs_space, action_space, **kwargs):
-        self.obs_spaces = SubtasksObs(*obs_space.spaces)
-        d, h, w = self.obs_shape = self.obs_spaces.base.shape
-        self.obs_sections = SubtasksObs(
-            base=d * h * w,
-            subtask=int(self.obs_spaces.subtask.nvec.sum()),
-            task=int(np.prod(self.obs_spaces.task.nvec.shape)),
-            next_subtask=1,
-        )
+        self.obs_spaces = ppo.wrappers.SubtasksObs(*obs_space.spaces)
+        _, h, w = self.obs_shape = self.obs_spaces.base.shape
         self.action_spaces = SubtasksActions(*action_space.spaces)
+        self.obs_sections = [int(np.prod(s.shape)) for s in self.obs_spaces]
         super().__init__(
             obs_shape=(self.d, h, w),
             action_space=self.action_spaces.a,
@@ -28,19 +25,23 @@ class SubtasksTeacher(Agent):
 
     @property
     def d(self):
-        return self.obs_spaces.base.shape[0] + self.obs_sections.subtask
+        return (self.obs_spaces.base.shape[0] +  # base observation channels
+                int(self.obs_spaces.subtask.nvec.sum()))  # one-hot subtask
 
     def preprocess_obs(self, inputs):
-        obs, subtasks, task_broad, next_subtask_broad = torch.split(
-            inputs, self.obs_sections, dim=1)
-        obs = obs.view(-1, *self.obs_shape)
-        subtasks = broadcast3d(subtasks, (self.obs_shape[-2:]))
-        return torch.cat([obs, subtasks], dim=1)
+        obs, g123, _, _ = torch.split(inputs, self.obs_sections, dim=1)
+        obs = obs.view(obs.size(0), *self.obs_shape)
+        g_binary = g123_to_binary(
+            g123,
+            one_hots=[
+                self.part0_one_hot, self.part1_one_hot, self.part2_one_hot
+            ])
+        g_broad = broadcast3d(g_binary, self.obs_shape[-2:])
+        return torch.cat([obs, g_broad], dim=1)
 
     def forward(self, inputs, *args, action=None, **kwargs):
         if action is not None:
             action = action[:, :1]
-
         act = super().forward(
             self.preprocess_obs(inputs), action=action, *args, **kwargs)
         x = torch.zeros_like(act.action)
@@ -56,3 +57,10 @@ def g_binary_to_123(g_binary, subtask_space):
     g123 -= F.pad(
         torch.cumsum(subtask_space, dim=0)[:2], [1, 0], 'constant', 0)
     return g123
+
+
+def g123_to_binary(g123, one_hots):
+    g123 = torch.split(g123, [1] * len(one_hots), dim=-1)
+    return torch.cat(
+        [one_hot[g.long().flatten()] for one_hot, g in zip(one_hots, g123)],
+        dim=-1)

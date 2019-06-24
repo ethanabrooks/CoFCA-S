@@ -274,6 +274,7 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                          self.obs_space.subtask.nvec.size)
         task = torch.split(task, 1, dim=-1)
         interaction, count, obj = [x[0, :, :, 0] for x in task]
+        M123 = torch.stack([interaction, count, obj], dim=-1)
         M = self.g123_to_binary(interaction, count, obj)
         new_episode = torch.all(hx.squeeze(0) == 0, dim=-1)
         hx = self.parse_hidden(hx)
@@ -371,13 +372,14 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
 
             # a
             g_binary = M[torch.arange(N), G[t + 1]]
-            g_broad = broadcast3d(g_binary, self.obs_shape[1:])
-            conv_out = self.conv((obs[t], g_broad))
+            conv_out = self.conv((obs[t],
+                                  broadcast3d(g_binary, self.obs_shape[1:])))
             if self.agent is None:
                 dist = self.actor(conv_out)
             else:
+                g123 = M123[torch.arange(N), G[t + 1]]
                 agent_inputs = torch.cat([
-                    obs[t].view(N, -1), g_binary,
+                    obs[t].view(N, -1), g123,
                     self.agent_dummy_values.expand(N, -1)
                 ],
                                          dim=1)
