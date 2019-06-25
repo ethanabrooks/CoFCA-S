@@ -1,7 +1,6 @@
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from gridworld_env.control_flow_gridworld import Branch
 from ppo.control_flow.wrappers import Obs
