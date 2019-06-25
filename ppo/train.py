@@ -63,6 +63,7 @@ class Train:
 
         torch.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
+        np.random.seed(seed)
 
         cuda &= torch.cuda.is_available()
         if cuda and cuda_deterministic:
@@ -176,7 +177,7 @@ class Train:
             mean_success_rate = np.mean(epoch_counter['successes'])
             if target_success_rate and mean_success_rate > target_success_rate:
                 print('Finished training with success rate of',
-                        mean_success_rate)
+                      mean_success_rate)
                 return
 
             if j % log_interval == 0 and writer is not None:
@@ -261,7 +262,8 @@ class Train:
             episode_rewards = counter['reward'][done]
             episode_counter['rewards'] += list(episode_rewards)
             if self.success_reward is not None:
-                episode_counter['success'] += list(episode_rewards >= -self.success_reward )
+                episode_counter['success'] += list(
+                    episode_rewards >= -self.success_reward)
             episode_counter['time_steps'] += list(counter['time_step'][done])
             counter['reward'][done] = 0
             counter['time_step'][done] = 0
