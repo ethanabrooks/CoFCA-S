@@ -25,7 +25,7 @@ def get_task_space(interactions, max_task_count, object_types, n_subtasks):
 class SubtasksGridWorld(gym.Env):
     def __init__(self,
                  text_map,
-                 n_objects,
+                 min_objects,
                  n_obstacles,
                  random_obstacles,
                  n_subtasks,
@@ -42,7 +42,7 @@ class SubtasksGridWorld(gym.Env):
         self.spec = EnvSpec
         self.n_subtasks = n_subtasks
         self.n_obstacles = n_obstacles
-        self.n_objects = n_objects
+        self.min_objects = min_objects
         self.np_random = np.random
         self.transitions = np.array([
             [-1, 0],
@@ -226,7 +226,7 @@ class SubtasksGridWorld(gym.Env):
                 yield from self.get_required_objects(subtask)
 
         types = list(object_types())
-        n_random = max(len(types), self.n_objects)
+        n_random = max(len(types), self.min_objects)
         random_types = self.np_random.choice(
             len(self.object_types), replace=True, size=n_random - len(types))
         types = np.concatenate([random_types, types])
@@ -241,9 +241,8 @@ class SubtasksGridWorld(gym.Env):
 
         self.objects = {tuple(p): t for p, t in zip(objects_pos, types)}
 
-        self.task_count = None
-        self.subtask_idx = -1
-        self.perform_iteration()
+        self.subtask_idx = 0
+        self.task_count = self.subtask.count
         self.last_terminal = False
         self.last_action = None
         return self.get_observation()
@@ -272,16 +271,6 @@ class SubtasksGridWorld(gym.Env):
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)
         return [seed]
-
-    def perform_iteration(self):
-        self.next_subtask = self.task_count == 0
-        if self.task_count is None or self.next_subtask:
-            self.subtask_idx += 1
-            if self.subtask is None:
-                raise StopIteration
-            self.task_count = self.subtask.count
-        else:
-            self.task_count -= 1
 
     def step(self, a):
         self.last_action = a
@@ -320,11 +309,15 @@ class SubtasksGridWorld(gym.Env):
                         iterate = object_type == self.subtask.object
 
             if iterate:
-                try:
-                    self.perform_iteration()
-                except StopIteration:
-                    r = 1
-                    t = True
+                if self.task_count == 0:
+                    self.subtask_idx += 1
+                    if self.subtask is None:
+                        r = 1
+                        t = True
+                    else:
+                        self.task_count = self.subtask.count
+                else:
+                    self.task_count -= 1
 
         self.last_terminal = t
         return obs, r, t, {}
