@@ -1,3 +1,4 @@
+import itertools
 from collections import namedtuple
 
 from gridworld_env import SubtasksGridWorld
@@ -8,6 +9,7 @@ Branch = namedtuple('Branch', 'condition true_path false_path')
 class ControlFlowGridWorld(SubtasksGridWorld):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.subtasks = None
         world = self
 
         class _Branch(Branch):
@@ -24,30 +26,36 @@ else:
 
     def subtask_generator(self):
         max_value = 0
-        while True:
-            subtask1, subtask2 = self.np_random.randint(
-                max_value, len(self.possible_subtasks), size=2)
-            max_value = max([max_value, subtask1, subtask2])
-            if max_value == len(self.possible_subtasks) - 1:
-                max_value = 0
-            # noinspection PyArgumentList
-            yield self.Branch(
-                condition=self.np_random.choice(len(self.object_types)),
-                false_path=self.Subtask(*self.possible_subtasks[subtask1]),
-                true_path=self.Subtask(*self.possible_subtasks[subtask2]))
+        choices = self.np_random.choice(
+            len(self.possible_subtasks), size=self.n_subtasks)
+        self.subtasks = [
+            self.Subtask(*x) for x in self.possible_subtasks[choices]
+        ]
+        for i in itertools.count():
+            branch1 = self.np_random.random_integers(i, max_value + 1)
+            max_value = max(max_value, branch1)
+            branch2 = self.np_random.random_integers(i, max_value + 1)
+            max_value = max(max_value, branch2)
+            if branch1 == branch2:
+                yield self.Subtask(self.possible_subtasks[branch1])
+            else:
+                yield self.Branch(
+                    condition=self.np_random.choice(len(self.object_types)),
+                    true_path=self.subtasks[branch1],
+                    false_path=self.subtasks[branch1],
+                )
+            if max_value == self.n_subtasks:
+                raise StopIteration
 
     def get_next_subtask(self):
-        next_line = next(self.task_iter)
-        if isinstance(next_line, self.Branch):
-            resolution = self.evaluate_condition(next_line.condition)
-            return [next_line.false_path, next_line.true_path][resolution]
-        return next_line
+        if isinstance(self.subtask, self.Branch):
+            resolution = self.evaluate_condition(self.subtask.condition)
+            return [self.subtask.false_path,
+                    self.subtask.true_path][resolution]
+        return self.subtask
 
-    def get_required_objects(self, branch):
-        if self.np_random.binomial(1, .5):
-            yield branch.condition
-        yield from super().get_required_objects(branch.true_path)
-        yield from super().get_required_objects(branch.false_path)
+    def required_objects(self, _):
+        yield from super().required_objects(self.subtasks)
 
     def evaluate_condition(self, object_type):
         return object_type in self.objects.values()
