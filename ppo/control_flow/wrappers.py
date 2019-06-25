@@ -12,19 +12,21 @@ class Wrapper(ppo.subtasks.wrappers.Wrapper):
     def __init__(self, env):
         super().__init__(env)
         obs_spaces = ppo.subtasks.wrappers.Obs(*self.observation_space.spaces)
+        act_spaces = ppo.subtasks.wrappers.Actions(*self.action_space.spaces)
         interactions, max_count, objects = obs_spaces.subtask.nvec
         n_subtasks = 2 * env.n_subtasks  # 2 per branch
         control_nvec = np.array([[objects, n_subtasks, n_subtasks]]).repeat(
             env.n_subtasks, axis=0)
         subtasks_nvec = np.expand_dims(obs_spaces.subtask.nvec, 0).repeat(
             n_subtasks, axis=0)
-        obs = Obs(
-            base=obs_spaces.base,
-            subtask=obs_spaces.subtask,
-            subtasks=spaces.MultiDiscrete(subtasks_nvec),
-            next_subtask=obs_spaces.next_subtask,
-            control=spaces.MultiDiscrete(control_nvec))
-        self.observation_space = spaces.Tuple(obs)
+        self.observation_space = spaces.Tuple(
+            Obs(base=obs_spaces.base,
+                subtask=obs_spaces.subtask,
+                subtasks=spaces.MultiDiscrete(subtasks_nvec),
+                next_subtask=obs_spaces.next_subtask,
+                control=spaces.MultiDiscrete(control_nvec)))
+        self.action_space = spaces.Tuple(
+            act_spaces._replace(g=spaces.Discrete(n_subtasks)))
         self.subtasks = None
 
     def wrap_observation(self, observation):

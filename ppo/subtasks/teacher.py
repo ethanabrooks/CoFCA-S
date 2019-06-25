@@ -50,8 +50,7 @@ class Teacher(Agent):
 
 def g_binary_to_123(g_binary, subtask_space):
     g123 = g_binary.nonzero()[:, 1:].view(-1, 3)
-    g123 -= F.pad(
-        torch.cumsum(subtask_space, dim=0)[:2], [1, 0], 'constant', 0)
+    g123 -= F.pad(torch.cumsum(subtask_space, dim=0)[:2], [1, 0])
     return g123
 
 

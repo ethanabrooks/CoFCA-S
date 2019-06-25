@@ -140,8 +140,7 @@ class Recurrence(torch.jit.ScriptModule):
         self.obs_spaces = obs_spaces
         self.subtask_nvec = self.obs_spaces.subtask.nvec
         d, h, w = self.obs_shape = obs_spaces.base.shape
-        self.obs_sections = Obs(
-            *[int(np.prod(s.shape)) for s in self.obs_spaces])
+        self.obs_sections = self.get_obs_sections()
 
         self.conv = nn.Sequential(
             Concat(dim=1),
@@ -186,8 +185,6 @@ class Recurrence(torch.jit.ScriptModule):
                 in_size=(d * action_spaces.a.n * int(
                     self.obs_spaces.subtask.nvec.prod())))
 
-        self.n_subtasks = obs_spaces.task.nvec.shape[0]
-
         for i, x in enumerate(self.obs_spaces.subtask.nvec):
             self.register_buffer(f'part{i}_one_hot', torch.eye(int(x)))
         self.register_buffer('a_one_hots', torch.eye(int(action_spaces.a.n)))
@@ -214,10 +211,20 @@ class Recurrence(torch.jit.ScriptModule):
             subtask=1,
         )
         self.state_sizes = RecurrentState(*map(int, state_sizes))
+        self.register_agent_dummy_values()
+
+    def register_agent_dummy_values(self):
         self.register_buffer(
             'agent_dummy_values',
             torch.zeros(
                 1, self.obs_sections.task + self.obs_sections.next_subtask))
+
+    @property
+    def n_subtasks(self):
+        return self.obs_spaces.task.nvec.shape[0]
+
+    def get_obs_sections(self):
+        return Obs(*[int(np.prod(s.shape)) for s in self.obs_spaces])
 
     # @torch.jit.script_method
     def parse_hidden(self, hx):
@@ -297,8 +304,8 @@ class Recurrence(torch.jit.ScriptModule):
             # initialize g to first subtask
             hx.g[new_episode] = 0.
 
-        def update_attention(p):
-            p2 = F.pad(p, [1, 0], 'constant', 0)[:, :-1]
+        def update_attention(p, t):
+            p2 = F.pad(p, [1, 0])[:, :-1]
             p2[:, -1] += 1 - p2.sum(dim=-1)
             return p2
 
@@ -393,7 +400,7 @@ class Recurrence(torch.jit.ScriptModule):
             cg, cg_loss, cg_probs = phi_update(subtask_param=g_binary, )
 
             # p
-            p2 = update_attention(p)
+            p2 = update_attention(p, t)
             p = interp(p, p2, cr)
 
             # r
