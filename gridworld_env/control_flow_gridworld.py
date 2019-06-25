@@ -1,5 +1,4 @@
 from collections import namedtuple
-from dataclasses import dataclass
 
 from gridworld_env import SubtasksGridWorld
 
@@ -9,16 +8,16 @@ Branch = namedtuple('Branch', 'condition true_path false_path')
 class ControlFlowGridWorld(SubtasksGridWorld):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        _self = self
+        world = self
 
         class _Branch(Branch):
             # noinspection PyMethodParameters
-            def __str__(branch):
+            def __str__(self):
                 return f'''\
-if {self.object_types[branch.condition]}:
-    {branch.true_path}
+if {world.object_types[self.condition]}:
+    {self.true_path}
 else:
-    {branch.false_path}
+    {self.false_path}
 '''
 
         self.Branch = _Branch
@@ -33,7 +32,7 @@ else:
                 max_value = 0
             # noinspection PyArgumentList
             yield self.Branch(
-                condition=(self.np_random.choice(len(self.object_types))),
+                condition=self.np_random.choice(len(self.object_types)),
                 false_path=self.Subtask(*self.possible_subtasks[subtask1]),
                 true_path=self.Subtask(*self.possible_subtasks[subtask2]))
 
