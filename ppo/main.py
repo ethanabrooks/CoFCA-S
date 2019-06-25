@@ -34,12 +34,13 @@ def add_task_args(parser):
 def add_env_args(parser):
     env_parser = parser.add_argument_group('env_args')
     env_parser.add_argument('--n-objects', type=int, required=True)
-    env_parser.add_argument('--eval-subtask',
-                            dest='eval_subtasks',
-                            default=[],
-                            type=int,
-                            nargs=3,
-                            action='append')
+    env_parser.add_argument(
+        '--eval-subtask',
+        dest='eval_subtasks',
+        default=[],
+        type=int,
+        nargs=3,
+        action='append')
 
 
 def cli():
@@ -106,9 +107,10 @@ def train_lower_level_cli(student):
             @staticmethod
             def build_agent(envs, **agent_args):
                 obs_spaces = get_spaces(envs, control_flow)
-                agent_args = dict(obs_spaces=obs_spaces,
-                                  action_space=envs.action_space,
-                                  **agent_args)
+                agent_args = dict(
+                    obs_spaces=obs_spaces,
+                    action_space=envs.action_space,
+                    **agent_args)
                 if student:
                     return ppo.subtasks.student.Student(
                         **agent_args, **student_args)
@@ -135,16 +137,14 @@ def metacontroller_cli():
     add_task_args(parser)
     add_env_args(parser)
     subtasks_parser = parser.add_argument_group('subtasks_args')
-    subtasks_parser.add_argument('--subtasks-hidden-size',
-                                 type=int,
-                                 required=True)
-    subtasks_parser.add_argument('--subtasks-entropy-coef',
-                                 type=float,
-                                 required=True)
+    subtasks_parser.add_argument(
+        '--subtasks-hidden-size', type=int, required=True)
+    subtasks_parser.add_argument(
+        '--subtasks-entropy-coef', type=float, required=True)
     subtasks_parser.add_argument('--subtasks-recurrent', action='store_true')
     subtasks_parser.add_argument('--hard-update', action='store_true')
-    subtasks_parser.add_argument('--multiplicative-interaction',
-                                 action='store_true')
+    subtasks_parser.add_argument(
+        '--multiplicative-interaction', action='store_true')
 
     def train(env_id, task_args, ppo_args, agent_load_path, subtasks_args,
               env_args, control_flow, **kwargs):
@@ -186,10 +186,11 @@ def metacontroller_cli():
                     for k, v in subtasks_args.items()
                 }
 
-                metacontroller_kwargs = dict(obs_spaces=obs_spaces,
-                                             action_space=envs.action_space,
-                                             agent=agent,
-                                             **_subtasks_args)
+                metacontroller_kwargs = dict(
+                    obs_spaces=obs_spaces,
+                    action_space=envs.action_space,
+                    agent=agent,
+                    **_subtasks_args)
                 if control_flow:
                     return ppo.control_flow.agent.Agent(
                         **metacontroller_kwargs)
@@ -203,4 +204,4 @@ def metacontroller_cli():
 
 
 if __name__ == "__main__":
-    student_cli()
+    metacontroller_cli()

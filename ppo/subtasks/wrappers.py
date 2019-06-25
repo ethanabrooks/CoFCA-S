@@ -1,9 +1,9 @@
 from collections import namedtuple
 
 import gym
-import numpy as np
 from gym import spaces
 from gym.spaces import Box
+import numpy as np
 
 Actions = namedtuple('Actions', 'a cr cg g')
 Obs = namedtuple('Obs', 'base subtask task next_subtask')
@@ -48,7 +48,7 @@ class Wrapper(gym.Wrapper):
         self.observation_space = spaces.Tuple(
             Obs(
                 base=Box(0, 1, shape=obs_space.nvec),
-                subtask=spaces.MultiDiscrete(task_space.nvec[0]),
+                subtask=spaces.Discrete(task_space.nvec.shape[0]),
                 task=task_space,
                 next_subtask=spaces.Discrete(2),
             ))
@@ -75,14 +75,12 @@ class Wrapper(gym.Wrapper):
         obs, task = observation
         _, h, w = obs.shape
         env = self.env.unwrapped
-        observation = Obs(
-            base=obs,
-            subtask=env.subtask,
-            task=env.task,
-            next_subtask=env.next_subtask)
+        observation = Obs(base=obs,
+                          subtask=env.subtask_idx,
+                          task=env.task,
+                          next_subtask=env.next_subtask)
         # for obs, space in zip(observation, self.observation_space.spaces):
-        #     assert space.contains(np.array(obs))
-
+        # assert space.contains(np.array(obs))
         return np.concatenate([np.array(x).flatten() for x in observation])
 
     def render(self, mode='human', **kwargs):
