@@ -53,11 +53,12 @@ class Train:
                  render_eval,
                  load_path,
                  success_reward,
-                 successes_till_done,
+                 target_success_rate,
                  synchronous,
                  batch_size,
                  run_id,
                  save_dir=None):
+        self.success_reward = success_reward
         save_dir = save_dir or log_dir
 
         torch.manual_seed(seed)
@@ -172,14 +173,11 @@ class Train:
 
             total_num_steps = (j + 1) * num_processes * num_steps
 
-            if epoch_counter['rewards'] and success_reward:
-                reward = np.mean(counter['episode_rewards'])
-                if reward > success_reward:
-                    epoch_counter['successes'] += 1
-                else:
-                    epoch_counter['successes'] = 0
-                if epoch_counter['successes'] == successes_till_done:
-                    return
+            mean_success_rate = np.mean(epoch_counter['successes'])
+            if target_success_rate and mean_success_rate > target_success_rate:
+                print('Finished training with success rate of',
+                        mean_success_rate)
+                return
 
             if j % log_interval == 0 and writer is not None:
                 end = time.time()
@@ -187,7 +185,9 @@ class Train:
                 log_values = dict(fps=fps, **epoch_counter, **train_results)
                 if writer:
                     for k, v in log_values.items():
-                        writer.add_scalar(k, np.mean(v), total_num_steps)
+                        mean = np.mean(v)
+                        if not np.isnan(mean):
+                            writer.add_scalar(k, np.mean(v), total_num_steps)
 
             log_progress.update()
 
@@ -245,7 +245,7 @@ class Train:
             counter,
     ):
         # noinspection PyTypeChecker
-        episode_counter = Counter(rewards=[], time_steps=[])
+        episode_counter = Counter(rewards=[], time_steps=[], success=[])
         for step in range(num_steps):
             with torch.no_grad():
                 act = self.agent(
@@ -258,7 +258,10 @@ class Train:
             # track rewards
             counter['reward'] += reward.numpy()
             counter['time_step'] += np.ones_like(done)
-            episode_counter['rewards'] += list(counter['reward'][done])
+            episode_rewards = counter['reward'][done]
+            episode_counter['rewards'] += list(episode_rewards)
+            if self.success_reward is not None:
+                episode_counter['success'] += list(episode_rewards >= -self.success_reward )
             episode_counter['time_steps'] += list(counter['time_step'][done])
             counter['reward'][done] = 0
             counter['time_step'][done] = 0
