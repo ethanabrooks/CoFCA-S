@@ -131,9 +131,9 @@ class Train:
 
         for j in itertools.count():
             if j % log_interval == 0:
-                log_progress = tqdm(total=log_interval)
+                log_progress = tqdm(total=log_interval, desc='log ')
             if eval_interval and j % eval_interval == 0:
-                eval_progress = tqdm(total=eval_interval)
+                eval_progress = tqdm(total=eval_interval, desc='eval')
             epoch_counter = self.run_epoch(
                 obs=rollouts.obs[0],
                 rnn_hxs=rollouts.recurrent_hidden_states[0],
