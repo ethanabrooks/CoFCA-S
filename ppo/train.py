@@ -37,6 +37,7 @@ class Train:
                  seed,
                  cuda_deterministic,
                  cuda,
+                 max_episode_steps,
                  log_dir: Path,
                  env_id,
                  gamma,
@@ -223,7 +224,8 @@ class Train:
                     obs=obs,
                     rnn_hxs=eval_recurrent_hidden_states,
                     masks=eval_masks,
-                    num_steps=num_steps,
+                    num_steps=max(num_steps, max_episode_steps)
+                    if max_episode_steps else num_steps,
                     rollouts=None,
                     counter=eval_counter)
 
