@@ -24,9 +24,13 @@ else:
         self.Branch = _Branch
 
     def subtask_generator(self):
+        max_value = 0
         while True:
-            subtask1, subtask2 = self.np_random.choice(
-                len(self.possible_subtasks), size=2)
+            subtask1, subtask2 = self.np_random.randint(
+                max_value, len(self.possible_subtasks), size=2)
+            max_value = max([max_value, subtask1, subtask2])
+            if max_value == len(self.possible_subtasks) - 1:
+                max_value = 0
             # noinspection PyArgumentList
             yield self.Branch(
                 condition=(self.np_random.choice(len(self.object_types))),
