@@ -76,15 +76,14 @@ class Train:
 
         torch.set_num_threads(1)
 
-        envs = self.make_vec_envs(
-            env_id=env_id,
-            seed=seed,
-            num_processes=num_processes,
-            gamma=(gamma if normalize else None),
-            add_timestep=add_timestep,
-            render=render,
-            synchronous=True if render else synchronous,
-            evaluation=False)
+        envs = self.make_vec_envs(env_id=env_id,
+                                  seed=seed,
+                                  num_processes=num_processes,
+                                  gamma=(gamma if normalize else None),
+                                  add_timestep=add_timestep,
+                                  render=render,
+                                  synchronous=True if render else synchronous,
+                                  evaluation=False)
 
         self.agent = self.build_agent(envs, **agent_args)
         rollouts = RolloutStorage(
@@ -148,8 +147,10 @@ class Train:
                     rollouts.obs[-1], rollouts.recurrent_hidden_states[-1],
                     rollouts.masks[-1]).detach()
 
-            rollouts.compute_returns(
-                next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau)
+            rollouts.compute_returns(next_value=next_value,
+                                     use_gae=use_gae,
+                                     gamma=gamma,
+                                     tau=tau)
             train_results = ppo.update(rollouts)
             rollouts.after_update()
 
@@ -230,7 +231,8 @@ class Train:
 
                 if writer is not None:
                     for k, v in eval_values.items():
-                        writer.add_scalar(k, np.mean(v), total_num_steps)
+                        writer.add_scalar(f'eval_{k}', np.mean(v),
+                                          total_num_steps)
 
             if eval_interval:
                 eval_progress.update()
@@ -249,9 +251,8 @@ class Train:
         episode_counter = Counter(rewards=[], time_steps=[], success=[])
         for step in range(num_steps):
             with torch.no_grad():
-                act = self.agent(
-                    inputs=obs, rnn_hxs=rnn_hxs,
-                    masks=masks)  # type: AgentValues
+                act = self.agent(inputs=obs, rnn_hxs=rnn_hxs,
+                                 masks=masks)  # type: AgentValues
 
             # Observe reward and next obs
             obs, reward, done, infos = envs.step(act.action)
@@ -269,18 +270,18 @@ class Train:
             counter['time_step'][done] = 0
 
             # If done then clean the history of observations.
-            masks = torch.tensor(
-                1 - done, dtype=torch.float32, device=obs.device).unsqueeze(1)
+            masks = torch.tensor(1 - done,
+                                 dtype=torch.float32,
+                                 device=obs.device).unsqueeze(1)
             rnn_hxs = act.rnn_hxs
             if rollouts is not None:
-                rollouts.insert(
-                    obs=obs,
-                    recurrent_hidden_states=act.rnn_hxs,
-                    actions=act.action,
-                    action_log_probs=act.action_log_probs,
-                    values=act.value,
-                    rewards=reward,
-                    masks=masks)
+                rollouts.insert(obs=obs,
+                                recurrent_hidden_states=act.rnn_hxs,
+                                actions=act.action,
+                                action_log_probs=act.action_log_probs,
+                                values=act.value,
+                                rewards=reward,
+                                masks=masks)
 
         return episode_counter
 
