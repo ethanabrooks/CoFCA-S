@@ -231,8 +231,10 @@ class Train:
 
                 eval_envs.close()
 
+                print('Evaluation outcome:')
                 if writer is not None:
                     for k, v in eval_values.items():
+                        print(f'eval_{k}', np.mean(v))
                         writer.add_scalar(f'eval_{k}', np.mean(v),
                                           total_num_steps)
 
