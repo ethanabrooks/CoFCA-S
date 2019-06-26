@@ -97,7 +97,9 @@ class ControlFlowGridWorld(SubtasksGridWorld):
         self.conditions = self.np_random.choice(len(self.object_types), size=n)
         self.subtask_idx = 0
         self.pred = self.evaluate_condition()
+        print('env pred', self.pred)
         self.subtask_idx = self.get_next_subtask()
+        print('control flow gridworld idx', self.subtask_idx)
         self.count = self.subtask.count
         return o._replace(conditions=self.conditions, control=self.control)
 
