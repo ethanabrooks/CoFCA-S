@@ -9,7 +9,7 @@ Obs = namedtuple('Obs', 'base subtasks conditions control')
 
 
 class ControlFlowGridWorld(SubtasksGridWorld):
-    def __init__(self, *args, single_condition=False, **kwargs):
+    def __init__(self, *args, single_condition=True, **kwargs):
         super().__init__(*args, **kwargs)
         self.single_condition = single_condition
         self.conditions = None
@@ -102,12 +102,12 @@ class ControlFlowGridWorld(SubtasksGridWorld):
         return self.control[self.subtask_idx, int(resolution)]
 
     def get_required_objects(self, _):
-        yield from super().get_required_objects(self.subtasks)
-        # for line in self.subtasks:
-        #     if isinstance(line, self.Branch):
-        #         if line.condition not in required_objects:
-        #             if self.np_random.rand() < .5:
-        #                 yield line.condition
+        required_objects = list(super().get_required_objects(self.subtasks))
+        yield from required_objects
+        # for condition in self.conditions:
+        # if condition not in required_objects:
+        # if self.np_random.rand() < .5:
+        # yield condition
 
 
 def main(seed, n_subtasks):
