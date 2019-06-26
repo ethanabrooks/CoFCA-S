@@ -9,7 +9,6 @@ from rl_utils import hierarchical_parse_args
 import torch
 
 import gridworld_env
-from gridworld_env import control_flow_gridworld
 from gridworld_env.control_flow_gridworld import ControlFlowGridWorld
 from gridworld_env.subtasks_gridworld import SubtasksGridWorld
 import ppo
@@ -34,6 +33,7 @@ def add_task_args(parser):
 def add_env_args(parser):
     env_parser = parser.add_argument_group('env_args')
     env_parser.add_argument('--min-objects', type=int, required=True)
+    env_parser.add_argument('--debug', action='store_true')
     env_parser.add_argument(
         '--eval-subtask',
         dest='eval_subtasks',
@@ -57,15 +57,20 @@ def get_spaces(envs, control_flow):
 
 
 def make_subtasks_env(env_id, **kwargs):
-    def helper(seed, rank, control_flow, max_episode_steps, class_, **_kwargs):
+    def helper(seed, rank, control_flow, max_episode_steps, class_, debug,
+               **_kwargs):
         if rank == 1:
             print('Environment args:')
             for k, v in _kwargs.items():
                 print(f'{k:20}{v}')
         if control_flow:
             env = ppo.control_flow.Wrapper(ControlFlowGridWorld(**_kwargs))
+            if debug:
+                env = ppo.control_flow.DebugWrapper(env)
         else:
             env = ppo.subtasks.Wrapper(SubtasksGridWorld(**_kwargs))
+            if debug:
+                env = ppo.subtasks.DebugWrapper(env)
         env.seed(seed + rank)
         if max_episode_steps is not None:
             env = TimeLimit(env, max_episode_steps=int(max_episode_steps))

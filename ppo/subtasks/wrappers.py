@@ -2,7 +2,7 @@ from collections import namedtuple
 
 import gym
 from gym import spaces
-from gym.spaces import Box
+from gym.spaces import Box, Discrete
 import numpy as np
 
 Actions = namedtuple('Actions', 'a cr cg g')
@@ -14,15 +14,17 @@ class DebugWrapper(gym.Wrapper):
         super().__init__(env)
         self.last_guess = None
         self.last_reward = None
-        self.subtask_space = env.subtasks_space.nvec[0]
+        self.subtask_space = Obs(
+            *env.observation_space.spaces).subtasks.nvec[0]
+        action_spaces = Actions(*env.action_space.spaces)
+        for x in action_spaces:
+            assert isinstance(x, Discrete)
+        self.action_sections = len(action_spaces)
 
     def step(self, action):
-        action_sections = Wrapper.parse_action(self, action)
-        actions = Actions(*[
-            int(x.item()) for x in np.split(action,
-                                            np.cumsum(action_sections)[:-1])
-        ])
         s, _, t, i = super().step(action)
+        actions = Actions(
+            *[x.item() for x in np.split(action, self.action_sections)])
         guess = int(actions.g)
         truth = int(self.env.unwrapped.subtask_idx)
         r = float(np.all(guess == truth)) - 1
