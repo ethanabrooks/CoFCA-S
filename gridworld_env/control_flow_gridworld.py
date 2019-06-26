@@ -12,6 +12,9 @@ class ControlFlowGridWorld(SubtasksGridWorld):
     def __init__(self, *args, single_condition=True, **kwargs):
         super().__init__(*args, **kwargs)
         self.single_condition = single_condition
+        if single_condition:
+            assert n_subtasks == 2
+
         self.conditions = None
         self.control = None
         obs_space, subtasks_space = self.observation_space.spaces
