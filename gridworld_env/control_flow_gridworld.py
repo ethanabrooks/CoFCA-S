@@ -22,37 +22,26 @@ class ControlFlowGridWorld(SubtasksGridWorld):
         ])
 
     def render_task(self):
-        def get_subtask(i):
-            try:
-                return f'{i}:{self.subtasks[i]}'
-            except IndexError:
-                return None
-
         def helper(i, indent):
-            try:
-                neg, pos = self.control[i]
-                condition = self.conditions[i]
-            except IndexError:
-                return f'{indent}control terminate'
-            pos_subtask = get_subtask(pos)
-            neg_subtask = get_subtask(neg)
-            print('condition', condition, self.object_types[condition])
-            print('neg', neg_subtask)
-            print('pos', pos_subtask)
+            neg, pos = self.control[i]
+            condition = self.conditions[i]
 
-            def develop_branch(j, subtask):
-                if subtask is None:
-                    return 'terminate'
-                return f"{subtask}\n{helper(j, indent)}"
+            def develop_branch(j, add_indent):
+                new_indent = indent + add_indent
+                try:
+                    subtask = f'{j}:{self.subtasks[j]}'
+                except IndexError:
+                    return f'{new_indent}terminate'
+                return f"{new_indent}{subtask}\n{helper(j, new_indent)}"
 
-            if pos_subtask == neg_subtask:
-                return f'{indent}{develop_branch(pos, pos_subtask)}'
+            if pos == neg:
+                return f"{develop_branch(pos, '')}"
             else:
                 return f'''\
 {indent}if {condition}:{self.object_types[condition]}:
-{indent}    {develop_branch(pos, pos_subtask)}
+{develop_branch(pos, '    ')}
 {indent}else:
-{indent}    {develop_branch(neg, neg_subtask)}
+{develop_branch(neg, '    ')}
 '''
 
         print(helper(i=0, indent=''))
