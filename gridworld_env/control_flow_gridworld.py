@@ -9,14 +9,15 @@ Obs = namedtuple('Obs', 'base subtasks conditions control')
 
 
 class ControlFlowGridWorld(SubtasksGridWorld):
-    def __init__(self, *args, single_condition=True, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, *args, n_subtasks, single_condition=True, **kwargs):
+        super().__init__(*args, n_subtasks=n_subtasks, **kwargs)
         self.single_condition = single_condition
         if single_condition:
             assert n_subtasks == 2
 
         self.conditions = None
         self.control = None
+        self.pred = None
         obs_space, subtasks_space = self.observation_space.spaces
         self.observation_space = spaces.Tuple(
             Obs(
@@ -95,14 +96,18 @@ class ControlFlowGridWorld(SubtasksGridWorld):
         self.control = 1 + np.array(list(get_control()))
         self.conditions = self.np_random.choice(len(self.object_types), size=n)
         self.subtask_idx = 0
+        self.pred = self.evaluate_condition()
         self.subtask_idx = self.get_next_subtask()
         self.count = self.subtask.count
         return o._replace(conditions=self.conditions, control=self.control)
 
     def get_next_subtask(self):
-        object_type = self.conditions[self.subtask_idx]
-        resolution = object_type in self.objects.values()
+        resolution = self.evaluate_condition()
         return self.control[self.subtask_idx, int(resolution)]
+
+    def evaluate_condition(self):
+        object_type = self.conditions[self.subtask_idx]
+        return object_type in self.objects.values()
 
     def get_required_objects(self, _):
         required_objects = list(super().get_required_objects(self.subtasks))

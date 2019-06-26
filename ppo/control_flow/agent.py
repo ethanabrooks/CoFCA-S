@@ -22,9 +22,9 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
             *[int(np.prod(s.shape)) for s in self.obs_spaces])
         self.register_buffer('branch_one_hots', torch.eye(self.n_subtasks))
         num_object_types = int(self.obs_spaces.subtasks.nvec[0, 2])
-        self.register_buffer('condition_one_hots',
-                             torch.eye(num_object_types +
-                                       1))  # +1 for determinism
+        self.register_buffer(
+            'condition_one_hots',
+            torch.eye(num_object_types + 1))  # +1 for determinism
         self.register_buffer(
             'rows',
             torch.arange(self.n_subtasks).unsqueeze(-1).float())
@@ -50,6 +50,7 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
             conditions=self.obs_spaces.conditions.nvec.shape,
             control=self.obs_spaces.control.nvec.shape,
             next_subtask=[1],
+            pred=[1],
         )
 
     @property
@@ -119,11 +120,12 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
             hx.g[new_episode] = 0.
 
         def update_attention(p, t):
-            o = inputs.base[t].unsqueeze(2)
-            c = (p.unsqueeze(1) @ conditions).view(N, 1, -1, 1, 1)
-            pred = self.phi_shift(o * c)
+            # o = inputs.base[t].unsqueeze(2)
+            # c = (p.unsqueeze(1) @ conditions).view(N, 1, -1, 1, 1)
+            # pred = self.phi_shift(o * c)
+            pred = inputs.pred[t].view(N, 1, 1)
             trans = pred * true_path + (1 - pred) * false_path
-            return (trans @ p.unsqueeze(-1)).squeeze(-1)
+            return (p @ trans).squeeze(1)
 
         return self.pack(
             self.inner_loop(

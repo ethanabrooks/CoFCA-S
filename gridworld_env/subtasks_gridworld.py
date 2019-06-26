@@ -101,7 +101,6 @@ class SubtasksGridWorld(gym.Env):
         self.pos = None
         self.last_terminal = False
         self.last_action = None
-        self.next_subtask = False
 
         h, w = self.desc.shape
         self.observation_space = spaces.Tuple([
@@ -272,7 +271,6 @@ class SubtasksGridWorld(gym.Env):
 
     def step(self, a):
         self.last_action = a
-        self.next_subtask = False
         # act
         n_transitions = len(self.transitions)
         if a < n_transitions:
