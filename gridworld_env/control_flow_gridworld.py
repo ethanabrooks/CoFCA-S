@@ -1,12 +1,12 @@
-import itertools
 from collections import namedtuple
-import numpy as np
 
+import numpy as np
 from gym import spaces
 
 from gridworld_env import SubtasksGridWorld
 
 Branch = namedtuple('Branch', 'condition true_path false_path')
+Obs = namedtuple('Obs', 'base subtasks conditions control')
 
 
 class ControlFlowGridWorld(SubtasksGridWorld):
@@ -15,12 +15,21 @@ class ControlFlowGridWorld(SubtasksGridWorld):
         self.single_condition = single_condition
         self.conditions = None
         self.control = None
-        self.subtasks = None
         obs_space, subtasks_space = self.observation_space.spaces
-        self.observation_space = spaces.Tuple([
-            obs_space, subtasks_space,
-            spaces.MultiBinary(self.n_subtasks**2)
-        ])
+        self.observation_space = spaces.Tuple(
+            Obs(
+                base=obs_space,
+                subtasks=spaces.MultiDiscrete(
+                    np.tile(subtasks_space.nvec[:1],
+                            [self.n_subtasks + 1, 1])),
+                conditions=spaces.MultiDiscrete(
+                    np.array([len(
+                        self.object_types)]).repeat(self.n_subtasks + 1)),
+                control=spaces.MultiDiscrete(
+                    np.tile(
+                        np.array([[self.n_subtasks + 1]]),
+                        [self.n_subtasks + 1, 2])),  # binary conditions
+            ))
 
     def render_task(self):
         def helper(i, indent):
@@ -30,7 +39,7 @@ class ControlFlowGridWorld(SubtasksGridWorld):
             def develop_branch(j, add_indent):
                 new_indent = indent + add_indent
                 try:
-                    subtask = f'{j}:{self.subtasks[j]}'
+                    subtask = f'{j}:{self.task[j]}'
                 except IndexError:
                     return f'{new_indent}terminate'
                 return f"{new_indent}{subtask}\n{helper(j, new_indent)}"
@@ -49,7 +58,11 @@ class ControlFlowGridWorld(SubtasksGridWorld):
 
     def get_observation(self):
         obs, task = super().get_observation()
-        return obs, task, self.control
+        return Obs(
+            base=obs,
+            subtasks=task,
+            control=self.control,
+            conditions=self.conditions)
 
     def task_generator(self):
         choices = self.np_random.choice(
@@ -65,16 +78,17 @@ class ControlFlowGridWorld(SubtasksGridWorld):
             for i in range(n):
                 if self.single_condition:
                     if i == 0:
-                        yield 1, 2
+                        yield 0, 1
                     else:
-                        yield 3, 3
+                        yield 2, 2
                 else:
                     yield self.np_random.randint(
-                        i + 1,
-                        n + (i > 0),  # prevent termination on first turn
+                        i,
+                        self.n_subtasks +
+                        (i > 0),  # prevent termination on first turn
                         size=2)
 
-        self.control = np.array(list(get_control()))
+        self.control = 1 + np.array(list(get_control()))
         self.conditions = self.np_random.choice(len(self.object_types), size=n)
         self.subtask_idx = 0
         self.subtask_idx = self.get_next_subtask()
@@ -87,8 +101,7 @@ class ControlFlowGridWorld(SubtasksGridWorld):
         return self.control[self.subtask_idx, int(resolution)]
 
     def get_required_objects(self, _):
-        required_objects = list(super().get_required_objects(self.subtasks))
-        yield from required_objects
+        yield from super().get_required_objects(self.task)
         # for line in self.task:
         #     if isinstance(line, self.Branch):
         #         if line.condition not in required_objects:
