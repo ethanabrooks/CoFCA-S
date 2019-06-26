@@ -24,10 +24,8 @@ def unpack(seq, sizes):
     """
     seq = list(seq)
     it = iter(seq)
-    assert sum(
-        1 if s is None else s
-        for s in sizes) == len(seq), "Trying to unpack %s into %s" % (seq,
-                                                                      sizes)
+    assert sum(1 if s is None else s
+               for s in sizes) == len(seq), "Trying to unpack %s into %s" % (seq, sizes)
     for size in sizes:
         if size is None:
             yield it.__next__()
@@ -63,10 +61,7 @@ class EzPickle(object):
         self._ezpickle_kwargs = kwargs
 
     def __getstate__(self):
-        return {
-            "_ezpickle_args": self._ezpickle_args,
-            "_ezpickle_kwargs": self._ezpickle_kwargs
-        }
+        return {"_ezpickle_args": self._ezpickle_args, "_ezpickle_kwargs": self._ezpickle_kwargs}
 
     def __setstate__(self, d):
         out = type(self)(*d["_ezpickle_args"], **d["_ezpickle_kwargs"])
@@ -159,8 +154,7 @@ class RunningAvg(object):
         if self._value is None:
             self._value = new_val
         else:
-            self._value = self._gamma * self._value + (
-                1.0 - self._gamma) * new_val
+            self._value = self._gamma * self._value + (1.0 - self._gamma) * new_val
 
     def __float__(self):
         """Get the current estimate"""
@@ -182,12 +176,7 @@ def boolean_flag(parser, name, default=False, help=None):
         help string for the flag
     """
     dest = name.replace('-', '_')
-    parser.add_argument(
-        "--" + name,
-        action="store_true",
-        default=default,
-        dest=dest,
-        help=help)
+    parser.add_argument("--" + name, action="store_true", default=default, dest=dest, help=help)
     parser.add_argument("--no-" + name, action="store_false", dest=dest)
 
 
@@ -245,9 +234,7 @@ def relatively_safe_pickle_dump(obj, path, compression=False):
         with tempfile.NamedTemporaryFile() as uncompressed_file:
             pickle.dump(obj, uncompressed_file)
             uncompressed_file.file.flush()
-            with zipfile.ZipFile(
-                    temp_storage, "w",
-                    compression=zipfile.ZIP_DEFLATED) as myzip:
+            with zipfile.ZipFile(temp_storage, "w", compression=zipfile.ZIP_DEFLATED) as myzip:
                 myzip.write(uncompressed_file.name, "data")
     else:
         with open(temp_storage, "wb") as f:
@@ -272,8 +259,7 @@ def pickle_load(path, compression=False):
     """
 
     if compression:
-        with zipfile.ZipFile(
-                path, "r", compression=zipfile.ZIP_DEFLATED) as myzip:
+        with zipfile.ZipFile(path, "r", compression=zipfile.ZIP_DEFLATED) as myzip:
             with myzip.open("data") as f:
                 return pickle.load(f)
     else:

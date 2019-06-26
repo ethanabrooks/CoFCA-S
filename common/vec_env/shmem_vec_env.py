@@ -5,8 +5,9 @@ An interface for asynchronous vectorized environments.
 import ctypes
 from multiprocessing import Array, Pipe, Process
 
-from baselines import logger
 import numpy as np
+
+from baselines import logger
 
 # local
 from . import CloudpickleWrapper, VecEnv
@@ -41,11 +42,9 @@ class ShmemVecEnv(VecEnv):
                 dummy.close()
                 del dummy
         VecEnv.__init__(self, len(env_fns), observation_space, action_space)
-        self.obs_keys, self.obs_shapes, self.obs_dtypes = obs_space_info(
-            observation_space)
+        self.obs_keys, self.obs_shapes, self.obs_dtypes = obs_space_info(observation_space)
         self.obs_bufs = [{
-            k: Array(_NP_TO_CT[self.obs_dtypes[k].type],
-                     int(np.prod(self.obs_shapes[k])))
+            k: Array(_NP_TO_CT[self.obs_dtypes[k].type], int(np.prod(self.obs_shapes[k])))
             for k in self.obs_keys
         } for _ in env_fns]
         self.parent_pipes = []
@@ -55,8 +54,8 @@ class ShmemVecEnv(VecEnv):
             parent_pipe, child_pipe = Pipe()
             proc = Process(
                 target=_subproc_worker,
-                args=(child_pipe, parent_pipe, wrapped_fn, obs_buf,
-                      self.obs_shapes, self.obs_dtypes, self.obs_keys))
+                args=(child_pipe, parent_pipe, wrapped_fn, obs_buf, self.obs_shapes,
+                      self.obs_dtypes, self.obs_keys))
             proc.daemon = True
             self.procs.append(proc)
             self.parent_pipes.append(parent_pipe)
@@ -68,8 +67,7 @@ class ShmemVecEnv(VecEnv):
 
     def reset(self):
         if self.waiting_step:
-            logger.warn(
-                'Called reset() while waiting for the step to complete')
+            logger.warn('Called reset() while waiting for the step to complete')
             self.step_wait()
         for pipe in self.parent_pipes:
             pipe.send(('reset', None))
@@ -107,15 +105,14 @@ class ShmemVecEnv(VecEnv):
 
             bufs = [b[k] for b in self.obs_bufs]
             o = [
-                np.frombuffer(b.get_obj(), dtype=self.obs_dtypes[k]).reshape(
-                    self.obs_shapes[k]) for b in bufs
+                np.frombuffer(b.get_obj(), dtype=self.obs_dtypes[k]).reshape(self.obs_shapes[k])
+                for b in bufs
             ]
             result[k] = np.array(o)
         return dict_to_obs(result)
 
 
-def _subproc_worker(pipe, parent_pipe, env_fn_wrapper, obs_bufs, obs_shapes,
-                    obs_dtypes, keys):
+def _subproc_worker(pipe, parent_pipe, env_fn_wrapper, obs_bufs, obs_shapes, obs_dtypes, keys):
     """
     Control a single environment instance using IPC and
     shared memory.
@@ -125,8 +122,7 @@ def _subproc_worker(pipe, parent_pipe, env_fn_wrapper, obs_bufs, obs_shapes,
         flatdict = obs_to_dict(maybe_dict_obs)
         for k in keys:
             dst = obs_bufs[k].get_obj()
-            dst_np = np.frombuffer(
-                dst, dtype=obs_dtypes[k]).reshape(obs_shapes[k])  # pylint: disable=W0212
+            dst_np = np.frombuffer(dst, dtype=obs_dtypes[k]).reshape(obs_shapes[k])  # pylint: disable=W0212
             np.copyto(dst_np, flatdict[k])
 
     env = env_fn_wrapper.x()

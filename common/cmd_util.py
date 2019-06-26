@@ -4,11 +4,11 @@ Helpers for scripts like run_atari.py.
 
 import os
 
-from baselines import logger
-from baselines.bench import Monitor
 import gym
 from gym.wrappers import FlattenDictWrapper
 
+from baselines import logger
+from baselines.bench import Monitor
 from common import retro_wrappers, set_global_seeds
 from common.atari_wrappers import make_atari, wrap_deepmind
 from common.vec_env.dummy_vec_env import DummyVecEnv
@@ -49,8 +49,7 @@ def make_vec_env(env_id,
 
     set_global_seeds(seed)
     if num_env > 1:
-        return SubprocVecEnv(
-            [make_thunk(i + start_index) for i in range(num_env)])
+        return SubprocVecEnv([make_thunk(i + start_index) for i in range(num_env)])
     else:
         return DummyVecEnv([make_thunk(start_index)])
 
@@ -78,8 +77,7 @@ def make_env(env_id,
     else:
         env = gym.make(env_id)
 
-    if flatten_dict_observations and isinstance(env.observation_space,
-                                                gym.spaces.Dict):
+    if flatten_dict_observations and isinstance(env.observation_space, gym.spaces.Dict):
         keys = env.observation_space.spaces.keys()
         env = gym.wrappers.FlattenDictWrapper(env, dict_keys=list(keys))
 
@@ -109,8 +107,7 @@ def make_mujoco_env(env_id, seed, reward_scale=1.0):
     myseed = seed + 1000 * rank if seed is not None else None
     set_global_seeds(myseed)
     env = gym.make(env_id)
-    logger_path = None if logger.get_dir() is None else os.path.join(
-        logger.get_dir(), str(rank))
+    logger_path = None if logger.get_dir() is None else os.path.join(logger.get_dir(), str(rank))
     env = Monitor(env, logger_path, allow_early_resets=True)
     env.seed(seed)
     if reward_scale != 1.0:
@@ -139,8 +136,7 @@ def arg_parser():
     Create an empty argparse.ArgumentParser.
     """
     import argparse
-    return argparse.ArgumentParser(
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    return argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
 
 def atari_arg_parser():
@@ -161,19 +157,14 @@ def common_arg_parser():
     Create an argparse.ArgumentParser for run_mujoco.py.
     """
     parser = arg_parser()
-    parser.add_argument(
-        '--env', help='environment ID', type=str, default='Reacher-v2')
+    parser.add_argument('--env', help='environment ID', type=str, default='Reacher-v2')
     parser.add_argument('--seed', help='RNG seed', type=int, default=None)
     parser.add_argument('--alg', help='Algorithm', type=str, default='ppo2')
     parser.add_argument('--num_timesteps', type=float, default=1e6),
     parser.add_argument(
-        '--network',
-        help='network type (mlp, cnn, lstm, cnn_lstm, conv_only)',
-        default=None)
+        '--network', help='network type (mlp, cnn, lstm, cnn_lstm, conv_only)', default=None)
     parser.add_argument(
-        '--gamestate',
-        help='game state to load (so far only used in retro games)',
-        default=None)
+        '--gamestate', help='game state to load (so far only used in retro games)', default=None)
     parser.add_argument(
         '--num_env',
         help=
@@ -181,15 +172,9 @@ def common_arg_parser():
         default=None,
         type=int)
     parser.add_argument(
-        '--reward_scale',
-        help='Reward scale factor. Default: 1.0',
-        default=1.0,
-        type=float)
+        '--reward_scale', help='Reward scale factor. Default: 1.0', default=1.0, type=float)
     parser.add_argument(
-        '--save_path',
-        help='Path to save trained model to',
-        default=None,
-        type=str)
+        '--save_path', help='Path to save trained model to', default=None, type=str)
     parser.add_argument(
         '--save_video_interval',
         help='Save video every x steps (0 = disabled)',
@@ -209,8 +194,7 @@ def robotics_arg_parser():
     Create an argparse.ArgumentParser for run_mujoco.py.
     """
     parser = arg_parser()
-    parser.add_argument(
-        '--env', help='environment ID', type=str, default='FetchReach-v0')
+    parser.add_argument('--env', help='environment ID', type=str, default='FetchReach-v0')
     parser.add_argument('--seed', help='RNG seed', type=int, default=None)
     parser.add_argument('--num-timesteps', type=int, default=int(1e6))
     return parser

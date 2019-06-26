@@ -86,8 +86,7 @@ class SubtasksGridWorld(gym.Env):
         def encode_task():
             for string in task:
                 subtask = Subtask(*re.split('[\s\\\]+', string))
-                yield (list(self.interactions).index(subtask.interaction),
-                       int(subtask.count),
+                yield (list(self.interactions).index(subtask.interaction), int(subtask.count),
                        list(self.object_types).index(subtask.object))
 
         # set on reset:
@@ -143,8 +142,7 @@ class SubtasksGridWorld(gym.Env):
         h, w = self.desc.shape
         choices = cartesian_product(np.arange(h), np.arange(w))
         choices = choices[np.all(choices % 2 != 0, axis=-1)]
-        randoms = self.np_random.choice(
-            len(choices), replace=False, size=self.n_obstacles)
+        randoms = self.np_random.choice(len(choices), replace=False, size=self.n_obstacles)
         self.obstacles = choices[randoms]
         self.obstacles_one_hot[:] = 0
         set_index(self.obstacles_one_hot, self.obstacles, True)
@@ -154,8 +152,7 @@ class SubtasksGridWorld(gym.Env):
         self.randomize_obstacles()
         h, w = self.desc.shape
         ij = cartesian_product(np.arange(h), np.arange(w))
-        self.open_spaces = ij[np.logical_not(
-            np.all(np.isin(ij, self.obstacles), axis=-1))]
+        self.open_spaces = ij[np.logical_not(np.all(np.isin(ij, self.obstacles), axis=-1))]
         self.initialized = True
 
     @property
@@ -204,8 +201,7 @@ class SubtasksGridWorld(gym.Env):
         for _ in range(self.n_subtasks):
             possible_subtasks = self.possible_subtasks
             if last_subtask is not None:
-                subset = np.any(
-                    self.possible_subtasks != last_subtask, axis=-1)
+                subset = np.any(self.possible_subtasks != last_subtask, axis=-1)
                 possible_subtasks = possible_subtasks[subset]
             choice = self.np_random.choice(len(possible_subtasks))
             last_subtask = possible_subtasks[choice]
@@ -247,8 +243,7 @@ class SubtasksGridWorld(gym.Env):
 
     def objects_one_hot(self):
         h, w, = self.desc.shape
-        objects_one_hot = np.zeros((1 + len(self.object_types), h, w),
-                                   dtype=bool)
+        objects_one_hot = np.zeros((1 + len(self.object_types), h, w), dtype=bool)
         idx = [(v, ) + k for k, v in self.objects.items()]
         set_index(objects_one_hot, idx, True)
         return objects_one_hot
@@ -328,7 +323,6 @@ if __name__ == '__main__':
     import gym
     import gridworld_env.keyboard_control
     import gridworld_env.random_walk
-    from ppo.subtasks.wrappers import Wrapper
 
     env = gym.make('4x4SubtasksGridWorld-v0')
     actions = 'wsadeq'

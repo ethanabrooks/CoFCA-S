@@ -75,8 +75,7 @@ class HSREnv(MujocoEnv):
             grip_pos = self.gripper_pos()
             dt = self.sim.nsubsteps * self.sim.timestep
             object_pos = self.block_pos()
-            grip_velp = .5 * sum(
-                self.sim.get_body_xvelp(name) for name in self._finger_names)
+            grip_velp = .5 * sum(self.sim.get_body_xvelp(name) for name in self._finger_names)
             # rotations
             object_rot = mat2euler(self.sim.get_body_xmat(self._block_name))
 
@@ -87,14 +86,10 @@ class HSREnv(MujocoEnv):
             # gripper state
             object_rel_pos = object_pos - grip_pos
             object_velp -= grip_velp
-            gripper_state = np.array([
-                self.model.get_joint_qpos_addr(f'hand_{x}_proximal_joint')
-                for x in 'lr'
-            ])
-            qvels = np.array([
-                self.model.get_joint_qpos_addr(f'hand_{x}_proximal_joint')
-                for x in 'lr'
-            ])
+            gripper_state = np.array(
+                [self.model.get_joint_qpos_addr(f'hand_{x}_proximal_joint') for x in 'lr'])
+            qvels = np.array(
+                [self.model.get_joint_qpos_addr(f'hand_{x}_proximal_joint') for x in 'lr'])
             gripper_vel = dt * .5 * qvels
 
             obs = np.concatenate([
@@ -166,10 +161,8 @@ class HSREnv(MujocoEnv):
             return GoalSpec(a, b, distance)
 
         self.goals = [sample_from_spaces(*s) for s in self.goals_specs]
-        self.sim.data.mocap_pos[:] = np.concatenate([
-            x for s in self.goals for x in [s.a, s.b]
-            if isinstance(x, np.ndarray)
-        ])
+        self.sim.data.mocap_pos[:] = np.concatenate(
+            [x for s in self.goals for x in [s.a, s.b] if isinstance(x, np.ndarray)])
 
         state = self.new_state()
         self.sim.set_state(state)
@@ -180,9 +173,7 @@ class HSREnv(MujocoEnv):
         return self.sim.data.get_body_xpos(self._block_name)
 
     def gripper_pos(self):
-        finger1, finger2 = [
-            self.sim.data.get_body_xpos(name) for name in self._finger_names
-        ]
+        finger1, finger2 = [self.sim.data.get_body_xpos(name) for name in self._finger_names]
         return (finger1 + finger2) / 2.
 
     def close(self):
@@ -258,17 +249,14 @@ def mat2euler(mat):
     mat = np.asarray(mat, dtype=np.float64)
     assert mat.shape[-2:] == (3, 3), "Invalid shape matrix {}".format(mat)
 
-    cy = np.sqrt(mat[..., 2, 2] * mat[..., 2, 2] +
-                 mat[..., 1, 2] * mat[..., 1, 2])
+    cy = np.sqrt(mat[..., 2, 2] * mat[..., 2, 2] + mat[..., 1, 2] * mat[..., 1, 2])
     condition = cy > np.finfo(np.float64).eps * 4.
     euler = np.empty(mat.shape[:-1], dtype=np.float64)
-    euler[..., 2] = np.where(condition,
-                             -np.arctan2(mat[..., 0, 1], mat[..., 0, 0]),
+    euler[..., 2] = np.where(condition, -np.arctan2(mat[..., 0, 1], mat[..., 0, 0]),
                              -np.arctan2(-mat[..., 1, 0], mat[..., 1, 1]))
     euler[..., 1] = np.where(condition, -np.arctan2(-mat[..., 0, 2], cy),
                              -np.arctan2(-mat[..., 0, 2], cy))
-    euler[..., 0] = np.where(condition,
-                             -np.arctan2(mat[..., 1, 2], mat[..., 2, 2]), 0.0)
+    euler[..., 0] = np.where(condition, -np.arctan2(mat[..., 1, 2], mat[..., 2, 2]), 0.0)
     return euler
 
 

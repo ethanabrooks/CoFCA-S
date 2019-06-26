@@ -1,8 +1,8 @@
 import os
 
-from baselines import logger
 from gym.wrappers.monitoring import video_recorder
 
+from baselines import logger
 from common.vec_env import VecEnvWrapper
 
 
@@ -11,8 +11,7 @@ class VecVideoRecorder(VecEnvWrapper):
     Wrap VecEnv to record rendered image as mp4 video.
     """
 
-    def __init__(self, venv, directory, record_video_trigger,
-                 video_length=200):
+    def __init__(self, venv, directory, record_video_trigger, video_length=200):
         """
         # Arguments
             venv: VecEnv to wrap
@@ -50,12 +49,10 @@ class VecVideoRecorder(VecEnvWrapper):
         self.close_video_recorder()
 
         base_path = os.path.join(
-            self.directory, '{}.video.{}.video{:06}'.format(
-                self.file_prefix, self.file_infix, self.step_id))
+            self.directory, '{}.video.{}.video{:06}'.format(self.file_prefix, self.file_infix,
+                                                            self.step_id))
         self.video_recorder = video_recorder.VideoRecorder(
-            env=self.venv,
-            base_path=base_path,
-            metadata={'step_id': self.step_id})
+            env=self.venv, base_path=base_path, metadata={'step_id': self.step_id})
 
         self.video_recorder.capture_frame()
         self.recorded_frames = 1

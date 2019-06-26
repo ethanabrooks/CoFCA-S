@@ -3,12 +3,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ppo.subtasks.teacher import Teacher, g_binary_to_123
+from ppo.subtasks.teacher import Teacher
 
 
 class Student(Teacher):
-    def __init__(self, obs_spaces, embedding_dim, tau_diss, tau_diff, xi,
-                 **kwargs):
+    def __init__(self, obs_spaces, embedding_dim, tau_diss, tau_diff, xi, **kwargs):
         self.xi = xi
         self.tau_diss = tau_diss
         self.tau_diff = tau_diff
@@ -16,18 +15,14 @@ class Student(Teacher):
         subtask_nvec = obs_spaces.subtask.nvec
         n_types, max_count, n_objects = subtask_nvec
         super().__init__(**kwargs, obs_spaces=obs_spaces)
-        self.embeddings = nn.EmbeddingBag(
-            int(subtask_nvec.sum()), embedding_dim)
+        self.embeddings = nn.EmbeddingBag(int(subtask_nvec.sum()), embedding_dim)
 
         self.register_buffer(
             'actions',
-            torch.cartesian_prod(
-                torch.arange(n_types), torch.arange(max_count)).long())
+            torch.cartesian_prod(torch.arange(n_types), torch.arange(max_count)).long())
         # TODO: deal with visit when max count > 1
-        self.register_buffer('objects',
-                             torch.arange(n_objects).long().unsqueeze(1))
-        self.register_buffer('subtask_space',
-                             torch.tensor(subtask_nvec.astype(np.int64)))
+        self.register_buffer('objects', torch.arange(n_objects).long().unsqueeze(1))
+        self.register_buffer('subtask_space', torch.tensor(subtask_nvec.astype(np.int64)))
 
     @property
     def d(self):
@@ -52,8 +47,7 @@ class Student(Teacher):
             exclude = exclude.view(n, 1, -1, options.shape[1])
             m, d = options.shape
             # noinspection PyTypeChecker
-            excluded = torch.any(
-                torch.all(exclude == options.view(1, m, 1, d), dim=-1), dim=-1)
+            excluded = torch.any(torch.all(exclude == options.view(1, m, 1, d), dim=-1), dim=-1)
 
             def sample():
                 for e in excluded:
@@ -62,10 +56,8 @@ class Student(Teacher):
 
             return torch.stack(list(sample()))
 
-        action2 = sample_analogy_counterparts(
-            self.actions, exclude=action1.unsqueeze(1))
-        object2 = sample_analogy_counterparts(
-            self.objects, exclude=object1.unsqueeze(1))
+        action2 = sample_analogy_counterparts(self.actions, exclude=action1.unsqueeze(1))
+        object2 = sample_analogy_counterparts(self.objects, exclude=object1.unsqueeze(1))
         action3 = sample_analogy_counterparts(
             self.actions, exclude=torch.stack([action1, action2], dim=1))
         object3 = sample_analogy_counterparts(
@@ -93,21 +85,16 @@ class Student(Teacher):
             """
             sim_loss += F.mse_loss(a - b, c - d)  # a:b::c:d
             dif_loss += -torch.clamp(
-                torch.norm(a - b, dim=-1),
-                max=self.tau_diff).mean()  # increase the side
+                torch.norm(a - b, dim=-1), max=self.tau_diff).mean()  # increase the side
 
         for a, b, c, d in [
             [embedding1, embedding2, embedding5, embedding4],
             [embedding1, embedding2, embedding3, embedding6],
         ]:
-            dis_loss -= torch.clamp(
-                F.mse_loss(a - b, c - d), max=self.tau_diss)
+            dis_loss -= torch.clamp(F.mse_loss(a - b, c - d), max=self.tau_diss)
 
         analogy_loss = sim_loss + dis_loss + dif_loss
         act = super().forward(inputs, *args, action=action, **kwargs)
         act.log.update(
-            sim_loss=sim_loss,
-            dis_loss=dis_loss,
-            dif_loss=dif_loss,
-            analogy_loss=analogy_loss)
+            sim_loss=sim_loss, dis_loss=dis_loss, dif_loss=dif_loss, analogy_loss=analogy_loss)
         return act._replace(aux_loss=act.aux_loss + self.xi * analogy_loss)
