@@ -333,23 +333,39 @@ class SubtasksRecurrence(torch.jit.ScriptModule):
                             torch.clamp(c, 0., 1.),
                             next_subtask[t],
                             reduction='none'))
-                return c
+                else:
+                    outputs.c_loss.append(torch.zeros_like(c))
 
-            # c
-            cr = phi_update(
-                subtask_param=r,
-                values=outputs.cr,
-                losses=outputs.cr_loss,
-                probs=outputs.cr_probs)
-            g_binary = M_binary[torch.arange(N), G[t]]
-            cg = phi_update(
-                subtask_param=g_binary,
-                values=outputs.cg,
-                losses=outputs.cg_loss,
-                probs=outputs.cg_probs)
+            outputs.c.append(c)
 
-            # p
-            p2 = F.pad(p, [1, 0], 'constant', 0)[:, :-1]
+            outputs.c_truth.append(next_subtask[i])
+            # TODO: figure this out
+            # if self.recurrent:
+            #     h2 = self.subcontroller(obs[i], h)
+            # else:
+            # h2 = self.subcontroller(conv_out)
+
+            logits = self.phi_shift(h)
+            l_target = 1 - next_subtask[i].long().flatten()
+            if self.hard_update:
+                dist = FixedCategorical(logits=logits)
+                sample_new(actions.l[i], dist)
+                outputs.l.append(actions.l[i].float())
+                outputs.l_probs.append(dist.probs)
+                l = self.l_one_hots[actions.l[i].long().flatten()]
+                outputs.l_loss.append(-dist.log_probs(l_target))
+            else:
+                l = F.softmax(logits, dim=1)
+                outputs.l.append(torch.zeros_like(l)[:, :1])  # dummy value
+                outputs.l_probs.append(torch.zeros_like(l))  # dummy value
+                outputs.l_loss.append(
+                    F.cross_entropy(
+                        logits,
+                        l_target,
+                        reduction='none',
+                    ).unsqueeze(1))
+
+            p2 = batch_conv1d(p, l)
             p2[:, -1] += 1 - p2.sum(dim=-1)
             p = interp(p, p2, cr)
             outputs.p.append(p)
