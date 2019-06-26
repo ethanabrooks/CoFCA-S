@@ -9,7 +9,7 @@ Obs = namedtuple('Obs', 'base subtasks conditions control')
 
 
 class ControlFlowGridWorld(SubtasksGridWorld):
-    def __init__(self, *args, n_subtasks, single_condition=True, **kwargs):
+    def __init__(self, *args, n_subtasks, single_condition=False, **kwargs):
         super().__init__(*args, n_subtasks=n_subtasks, **kwargs)
         self.single_condition = single_condition
         if single_condition:
