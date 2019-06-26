@@ -25,7 +25,7 @@ def get_task_space(interactions, max_task_count, object_types, n_subtasks):
 class SubtasksGridWorld(gym.Env):
     def __init__(self,
                  text_map,
-                 n_objects,
+                 min_objects,
                  n_obstacles,
                  random_obstacles,
                  n_subtasks,
@@ -42,7 +42,7 @@ class SubtasksGridWorld(gym.Env):
         self.spec = EnvSpec
         self.n_subtasks = n_subtasks
         self.n_obstacles = n_obstacles
-        self.n_objects = n_objects
+        self.min_objects = min_objects
         self.np_random = np.random
         self.transitions = np.array([
             [-1, 0],
@@ -92,11 +92,10 @@ class SubtasksGridWorld(gym.Env):
 
         # set on reset:
         if task:
-            self.task = np.array(list(encode_task()))
+            self.subtasks = np.array(list(encode_task()))
         else:
-            self.task = None
+            self.subtasks = None
         self.subtask_idx = 0
-        self.task_iter = None
         self.task_count = None
         self.objects = None
         self.pos = None
@@ -126,14 +125,17 @@ class SubtasksGridWorld(gym.Env):
 
         class _Subtask(Subtask):
             def __str__(self):
-                return f'{world.interactions[self.interaction]} {self.count + 1} {world.object_types[self.object]}'
+                string = f'{world.interactions[self.interaction]} {self.count + 1} {world.object_types[self.object]}'
+                if self.count > 0:
+                    string += 's'
+                return string
 
         self.Subtask = _Subtask
 
     @property
     def subtask(self):
         try:
-            return self.task[self.subtask_idx]
+            return self.subtasks[self.subtask_idx]
         except IndexError:
             return None
 
@@ -162,9 +164,7 @@ class SubtasksGridWorld(gym.Env):
 
     def render(self, mode='human', sleep_time=.5):
         print('task:')
-        for line in self.task:
-            print(line)
-        print()
+        self.render_task()
         if self.subtask is None:
             print('*************')
             print('Task Complete')
@@ -194,9 +194,14 @@ class SubtasksGridWorld(gym.Env):
             print(six.u('\x1b[49m\x1b[39m'))
         # time.sleep(4 * sleep_time if self.last_terminal else sleep_time)
 
-    def subtask_generator(self):
+    def render_task(self):
+        for line in self.subtasks:
+            print(line)
+        print()
+
+    def task_generator(self):
         last_subtask = None
-        while True:
+        for _ in range(self.n_subtasks):
             possible_subtasks = self.possible_subtasks
             if last_subtask is not None:
                 subset = np.any(
@@ -206,8 +211,9 @@ class SubtasksGridWorld(gym.Env):
             last_subtask = possible_subtasks[choice]
             yield self.Subtask(*last_subtask)
 
-    def get_required_objects(self, subtask):
-        yield from [subtask.object] * (subtask.count + 1)
+    def get_required_objects(self, task):
+        for subtask in task:
+            yield from [subtask.object] * (subtask.count + 1)
 
     def reset(self):
         if not self.initialized:
@@ -216,17 +222,9 @@ class SubtasksGridWorld(gym.Env):
             self.randomize_obstacles()
 
         if self.random_task:
-            task_iter = itertools.islice(self.subtask_generator(),
-                                         self.n_subtasks)
-            self.task = list(task_iter)
-        self.task_iter = iter(self.task)
-
-        def object_types():
-            for subtask in self.task:
-                yield from self.get_required_objects(subtask)
-
-        types = list(object_types())
-        n_random = max(len(types), self.n_objects)
+            self.subtasks = list(self.task_generator())
+        types = list(self.get_required_objects(self.subtasks))
+        n_random = max(len(types), self.min_objects)
         random_types = self.np_random.choice(
             len(self.object_types), replace=True, size=n_random - len(types))
         types = np.concatenate([random_types, types])
@@ -241,9 +239,8 @@ class SubtasksGridWorld(gym.Env):
 
         self.objects = {tuple(p): t for p, t in zip(objects_pos, types)}
 
-        self.task_count = None
-        self.subtask_idx = -1
-        self.perform_iteration()
+        self.subtask_idx = 0
+        self.task_count = self.subtask.count
         self.last_terminal = False
         self.last_action = None
         return self.get_observation()
@@ -267,21 +264,11 @@ class SubtasksGridWorld(gym.Env):
         ]
 
         # noinspection PyTypeChecker
-        return np.vstack(obs), self.task
+        return np.vstack(obs), self.subtasks
 
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)
         return [seed]
-
-    def perform_iteration(self):
-        self.next_subtask = self.task_count == 0
-        if self.task_count is None or self.next_subtask:
-            self.subtask_idx += 1
-            if self.subtask is None:
-                raise StopIteration
-            self.task_count = self.subtask.count
-        else:
-            self.task_count -= 1
 
     def step(self, a):
         self.last_action = a
@@ -320,14 +307,21 @@ class SubtasksGridWorld(gym.Env):
                         iterate = object_type == self.subtask.object
 
             if iterate:
-                try:
-                    self.perform_iteration()
-                except StopIteration:
-                    r = 1
-                    t = True
+                if self.task_count == 0:
+                    self.subtask_idx = self.get_next_subtask()
+                    if self.subtask is None:
+                        r = 1
+                        t = True
+                    else:
+                        self.task_count = self.subtask.count
+                else:
+                    self.task_count -= 1
 
         self.last_terminal = t
         return obs, r, t, {}
+
+    def get_next_subtask(self):
+        return self.subtask_idx + 1
 
 
 if __name__ == '__main__':

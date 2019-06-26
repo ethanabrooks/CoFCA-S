@@ -33,7 +33,7 @@ def add_task_args(parser):
 
 def add_env_args(parser):
     env_parser = parser.add_argument_group('env_args')
-    env_parser.add_argument('--n-objects', type=int, required=True)
+    env_parser.add_argument('--min-objects', type=int, required=True)
     env_parser.add_argument(
         '--eval-subtask',
         dest='eval_subtasks',

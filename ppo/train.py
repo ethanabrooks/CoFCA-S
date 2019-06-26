@@ -59,6 +59,8 @@ class Train:
                  batch_size,
                  run_id,
                  save_dir=None):
+        if render_eval and not render:
+            eval_interval = 1
         self.success_reward = success_reward
         save_dir = save_dir or log_dir
 
