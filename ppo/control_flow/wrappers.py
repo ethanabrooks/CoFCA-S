@@ -12,11 +12,6 @@ Obs = namedtuple('Obs',
                  'base subtask subtasks conditions control next_subtask')
 
 
-class DebugWrapper(ppo.subtasks.DebugWrapper):
-    def __init__(self, env):
-        super().__init__(env)
-
-
 class Wrapper(ppo.subtasks.Wrapper):
     def __init__(self, env):
         gym.Wrapper.__init__(self, env)

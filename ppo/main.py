@@ -65,12 +65,10 @@ def make_subtasks_env(env_id, **kwargs):
                 print(f'{k:20}{v}')
         if control_flow:
             env = ppo.control_flow.Wrapper(ControlFlowGridWorld(**_kwargs))
-            if debug:
-                env = ppo.control_flow.DebugWrapper(env)
         else:
             env = ppo.subtasks.Wrapper(SubtasksGridWorld(**_kwargs))
-            if debug:
-                env = ppo.subtasks.DebugWrapper(env)
+        if debug:
+            env = ppo.subtasks.DebugWrapper(env)
         env.seed(seed + rank)
         if max_episode_steps is not None:
             env = TimeLimit(env, max_episode_steps=int(max_episode_steps))

@@ -14,8 +14,6 @@ class DebugWrapper(gym.Wrapper):
         super().__init__(env)
         self.last_guess = None
         self.last_reward = None
-        self.subtask_space = Obs(
-            *env.observation_space.spaces).subtasks.nvec[0]
         action_spaces = Actions(*env.action_space.spaces)
         for x in action_spaces:
             assert isinstance(x, Discrete)
