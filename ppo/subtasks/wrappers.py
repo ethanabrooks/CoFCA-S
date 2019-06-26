@@ -21,14 +21,12 @@ class DebugWrapper(gym.Wrapper):
 
     def step(self, action):
         s, _, t, i = super().step(action)
-        actions = Actions(
-            *[x.item() for x in np.split(action, self.action_sections)])
+        actions = Actions(*[x.item() for x in np.split(action, self.action_sections)])
         guess = int(actions.g)
         truth = int(self.env.unwrapped.subtask_idx)
         r = float(np.all(guess == truth)) - 1
         self.last_guess = guess
         self.last_reward = r
-        t = True # TODO
         return s, r, t, i
 
     def render(self, mode='human'):
@@ -81,11 +79,10 @@ class Wrapper(gym.Wrapper):
         obs, *_ = observation
         _, h, w = obs.shape
         env = self.env.unwrapped
-        observation = Obs(
-            base=obs,
-            subtask=env.subtask_idx,
-            subtasks=env.subtasks,
-            next_subtask=self.next_subtask)
+        observation = Obs(base=obs,
+                          subtask=env.subtask_idx,
+                          subtasks=env.subtasks,
+                          next_subtask=self.next_subtask)
         # for obs, space in zip(observation, self.observation_space.spaces):
         # assert space.contains(np.array(obs))
         return np.concatenate([np.array(x).flatten() for x in observation])
