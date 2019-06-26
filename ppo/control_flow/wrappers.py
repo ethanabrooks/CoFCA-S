@@ -8,15 +8,13 @@ import numpy as np
 import gridworld_env.control_flow_gridworld
 import ppo.subtasks.wrappers
 
-Obs = namedtuple('Obs',
-                 'base subtask subtasks conditions control next_subtask pred')
+Obs = namedtuple('Obs', 'base subtask subtasks conditions control next_subtask pred')
 
 
 class Wrapper(ppo.subtasks.Wrapper):
     def __init__(self, env):
         gym.Wrapper.__init__(self, env)
-        obs_spaces = gridworld_env.control_flow_gridworld.Obs(
-            *env.observation_space.spaces)
+        obs_spaces = gridworld_env.control_flow_gridworld.Obs(*env.observation_space.spaces)
         obs_spaces = Obs(
             base=obs_spaces.base,
             subtasks=obs_spaces.subtasks,

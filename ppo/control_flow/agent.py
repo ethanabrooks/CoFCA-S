@@ -120,16 +120,17 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
             return (p.unsqueeze(1) @ trans).squeeze(1)
 
         return self.pack(
-            self.inner_loop(a=hx.a,
-                            g=hx.g,
-                            M=M,
-                            M123=M123,
-                            N=N,
-                            T=T,
-                            float_subtask=hx.subtask,
-                            next_subtask=inputs.next_subtask,
-                            obs=inputs.base,
-                            p=p,
-                            r=r,
-                            actions=actions,
-                            update_attention=update_attention))
+            self.inner_loop(
+                a=hx.a,
+                g=hx.g,
+                M=M,
+                M123=M123,
+                N=N,
+                T=T,
+                float_subtask=hx.subtask,
+                next_subtask=inputs.next_subtask,
+                obs=inputs.base,
+                p=p,
+                r=r,
+                actions=actions,
+                update_attention=update_attention))

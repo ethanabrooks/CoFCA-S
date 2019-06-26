@@ -4,7 +4,6 @@ Tests for asynchronous vectorized environments.
 
 import gym
 import numpy as np
-
 import pytest
 
 # local
@@ -32,8 +31,7 @@ def assert_envs_equal(env1, env2, num_steps):
         np.random.seed(1337)
         for _ in range(num_steps):
             actions = np.array(
-                np.random.randint(0, 0x100, size=joint_shape),
-                dtype=env1.action_space.dtype)
+                np.random.randint(0, 0x100, size=joint_shape), dtype=env1.action_space.dtype)
             for env in [env1, env2]:
                 env.step_async(actions)
             outs1 = env1.step_wait()
@@ -80,15 +78,13 @@ class SimpleEnv(gym.Env):
     def __init__(self, seed, shape, dtype):
         np.random.seed(seed)
         self._dtype = dtype
-        self._start_obs = np.array(
-            np.random.randint(0, 0x100, size=shape), dtype=dtype)
+        self._start_obs = np.array(np.random.randint(0, 0x100, size=shape), dtype=dtype)
         self._max_steps = seed + 1
         self._cur_obs = None
         self._cur_step = 0
         # this is 0xFF instead of 0x100 because the Box space includes
         # the high end, while randint does not
-        self.action_space = gym.spaces.Box(
-            low=0, high=0xFF, shape=shape, dtype=dtype)
+        self.action_space = gym.spaces.Box(low=0, high=0xFF, shape=shape, dtype=dtype)
         self.observation_space = self.action_space
 
     def step(self, action):

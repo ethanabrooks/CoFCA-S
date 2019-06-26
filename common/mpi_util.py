@@ -33,8 +33,7 @@ def gpu_count():
     """
     if shutil.which('nvidia-smi') is None:
         return 0
-    output = subprocess.check_output(
-        ['nvidia-smi', '--query-gpu=gpu_name', '--format=csv'])
+    output = subprocess.check_output(['nvidia-smi', '--query-gpu=gpu_name', '--format=csv'])
     return max(0, len(output.split(b'\n')) - 2)
 
 
@@ -100,9 +99,8 @@ def dict_gather(comm, d, op='mean', assert_all_have_data=True):
     result = {}
     for (k, li) in k2li.items():
         if assert_all_have_data:
-            assert len(
-                li) == size, "only %i out of %i MPI workers have sent '%s'" % (
-                    len(li), size, k)
+            assert len(li) == size, "only %i out of %i MPI workers have sent '%s'" % (len(li),
+                                                                                      size, k)
         if op == 'mean':
             result[k] = np.mean(li, axis=0)
         elif op == 'sum':

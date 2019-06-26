@@ -8,16 +8,13 @@ from typing import List
 import xml.etree.ElementTree as ET
 
 from gym.spaces import Box
+from rl_utils import parse_space, parse_vector
 
 from hsr.env import get_xml_filepath
-from rl_utils import parse_space, parse_vector
 
 
 def add_env_args(parser):
-    parser.add_argument(
-        '--image-dims',
-        type=parse_vector(length=2, delim=','),
-        default='800,800')
+    parser.add_argument('--image-dims', type=parse_vector(length=2, delim=','), default='800,800')
     parser.add_argument('--block-space', type=parse_space(dim=4))
     parser.add_argument('--min-lift-height', type=float, default=None)
     parser.add_argument('--obs-type', type=str, default=None)
@@ -36,8 +33,7 @@ def add_wrapper_args(parser):
     parser.add_argument('--use-dof', type=str, action='append', default=[])
     parser.add_argument('--geofence', type=float, required=True)
     parser.add_argument('--n-blocks', type=int, default=0)
-    parser.add_argument(
-        '--goal-space', type=parse_space(dim=3), required=True)  # TODO
+    parser.add_argument('--goal-space', type=parse_space(dim=3), required=True)  # TODO
 
 
 def xml_setter(arg: str):
@@ -52,14 +48,13 @@ def xml_setter(arg: str):
 
 def env_wrapper(func):
     @wraps(func)
-    def _wrapper(set_xml, use_dof, n_blocks, goal_space, xml_file, geofence,
-                 env_args: dict, **kwargs):
+    def _wrapper(set_xml, use_dof, n_blocks, goal_space, xml_file, geofence, env_args: dict,
+                 **kwargs):
         xml_filepath = get_xml_filepath(xml_file)
         if set_xml is None:
             set_xml = []
         site_size = ' '.join([str(geofence)] * 3)
-        path = Path('worldbody', 'body[@name="goal"]', 'site[@name="goal"]',
-                    'size')
+        path = Path('worldbody', 'body[@name="goal"]', 'site[@name="goal"]', 'size')
         set_xml += [XMLSetter(path=f'./{path}', value=site_size)]
         with mutate_xml(
                 changes=set_xml,
@@ -85,8 +80,8 @@ XMLSetter = namedtuple('XMLSetter', 'path value')
 
 
 @contextmanager
-def mutate_xml(changes: List[XMLSetter], dofs: List[str], goal_space: Box,
-               n_blocks: int, xml_filepath: Path):
+def mutate_xml(changes: List[XMLSetter], dofs: List[str], goal_space: Box, n_blocks: int,
+               xml_filepath: Path):
     def rel_to_abs(path: Path):
         return Path(xml_filepath.parent, path)
 
@@ -108,8 +103,7 @@ def mutate_xml(changes: List[XMLSetter], dofs: List[str], goal_space: Box,
                 pos = ' '.join(map(str, goal_space.sample()))
                 name = f'block{i}'
 
-                body = ET.SubElement(
-                    worldbody, 'body', attrib=dict(name=name, pos=pos))
+                body = ET.SubElement(worldbody, 'body', attrib=dict(name=name, pos=pos))
                 ET.SubElement(
                     body,
                     'geom',
@@ -123,8 +117,7 @@ def mutate_xml(changes: List[XMLSetter], dofs: List[str], goal_space: Box,
                         solimp="0.99 0.99 "
                         "0.01",
                         solref='0.01 1'))
-                ET.SubElement(
-                    body, 'freejoint', attrib=dict(name=f'block{i}joint'))
+                ET.SubElement(body, 'freejoint', attrib=dict(name=f'block{i}joint'))
 
         for change in changes:
             parent = re.sub('/[^/]*$', '', change.path)
@@ -159,8 +152,7 @@ def mutate_xml(changes: List[XMLSetter], dofs: List[str], goal_space: Box,
         return tree
 
     included_files = [
-        rel_to_abs(e.get('file'))
-        for e in ET.parse(xml_filepath).findall('*/include')
+        rel_to_abs(e.get('file')) for e in ET.parse(xml_filepath).findall('*/include')
     ]
 
     temp = {

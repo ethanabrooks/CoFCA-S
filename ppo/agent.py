@@ -8,8 +8,7 @@ from ppo.distributions import Categorical, DiagGaussian
 from ppo.layers import Flatten
 from ppo.utils import init, init_normc_
 
-AgentValues = namedtuple(
-    'AgentValues', 'value action action_log_probs aux_loss rnn_hxs log dist')
+AgentValues = namedtuple('AgentValues', 'value action action_log_probs aux_loss rnn_hxs log dist')
 
 
 class Agent(nn.Module):
@@ -28,14 +27,10 @@ class Agent(nn.Module):
         if logic:
             self.base = LogicBase(*obs_shape, hidden_size=hidden_size)
         elif len(obs_shape) == 3:
-            self.base = CNNBase(
-                *obs_shape, recurrent=recurrent, hidden_size=hidden_size)
+            self.base = CNNBase(*obs_shape, recurrent=recurrent, hidden_size=hidden_size)
         elif len(obs_shape) == 1:
             self.base = MLPBase(
-                obs_shape[0],
-                recurrent=recurrent,
-                hidden_size=hidden_size,
-                **network_args)
+                obs_shape[0], recurrent=recurrent, hidden_size=hidden_size, **network_args)
         else:
             raise NotImplementedError
 
@@ -58,8 +53,7 @@ class Agent(nn.Module):
         """Size of rnn_hx."""
         return self.base.recurrent_hidden_state_size
 
-    def forward(self, inputs, rnn_hxs, masks, deterministic=False,
-                action=None):
+    def forward(self, inputs, rnn_hxs, masks, deterministic=False, action=None):
         value, actor_features, rnn_hxs = self.base(inputs, rnn_hxs, masks)
 
         dist = self.dist(actor_features)
@@ -94,8 +88,7 @@ class NNBase(nn.Module):
         self._recurrent = recurrent
 
         if self._recurrent:
-            self.recurrent_module = self.build_recurrent_module(
-                recurrent_input_size, hidden_size)
+            self.recurrent_module = self.build_recurrent_module(recurrent_input_size, hidden_size)
             for name, param in self.recurrent_module.named_parameters():
                 print('zeroed out', name)
                 if 'bias' in name:
@@ -122,8 +115,7 @@ class NNBase(nn.Module):
 
     def _forward_gru(self, x, hxs, masks):
         if x.size(0) == hxs.size(0):
-            x, hxs = self.recurrent_module(
-                x.unsqueeze(0), (hxs * masks).unsqueeze(0))
+            x, hxs = self.recurrent_module(x.unsqueeze(0), (hxs * masks).unsqueeze(0))
             x = x.squeeze(0)
             hxs = hxs.squeeze(0)
         else:
@@ -139,8 +131,7 @@ class NNBase(nn.Module):
 
             # Let's figure out which steps in the sequence have a zero for any agent
             # We will always assume t=0 has a zero in it as that makes the logic cleaner
-            has_zeros = ((masks[1:] == 0.0).any(
-                dim=-1).nonzero().squeeze().cpu())
+            has_zeros = ((masks[1:] == 0.0).any(dim=-1).nonzero().squeeze().cpu())
 
             # +1 to correct the masks[1:]
             if has_zeros.dim() == 0:
@@ -160,9 +151,8 @@ class NNBase(nn.Module):
                 start_idx = has_zeros[i]
                 end_idx = has_zeros[i + 1]
 
-                rnn_scores, hxs = self.recurrent_module(
-                    x[start_idx:end_idx],
-                    hxs * masks[start_idx].view(1, -1, 1))
+                rnn_scores, hxs = self.recurrent_module(x[start_idx:end_idx],
+                                                        hxs * masks[start_idx].view(1, -1, 1))
 
                 outputs.append(rnn_scores)
 
@@ -183,16 +173,14 @@ class LogicModule(nn.Module):
         self.similarity_measure = similarity_measure
         init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
                                constant_(x, 0), nn.init.calculate_gain('relu'))
-        self.conv = init_(
-            nn.Conv2d(d, hidden_size, kernel_size=3, stride=1, padding=1))
+        self.conv = init_(nn.Conv2d(d, hidden_size, kernel_size=3, stride=1, padding=1))
 
-        self.mlp = nn.Sequential(
-            nn.ReLU(), Flatten(),
-            init_(nn.Linear(hidden_size * h * w, hidden_size * 2)), nn.ReLU())
+        self.mlp = nn.Sequential(nn.ReLU(), Flatten(),
+                                 init_(nn.Linear(hidden_size * h * w, hidden_size * 2)),
+                                 nn.ReLU())
         self.main = nn.Sequential(self.conv, self.mlp)
 
-        init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
-                               constant_(x, 0))
+        init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0))
 
         self.critic_linear = init_(nn.Linear(hidden_size, 1))
 
@@ -213,8 +201,7 @@ class LogicModule(nn.Module):
         elif self.similarity_measure == 'euclidean-distance':
             similarity = torch.norm(key - conv_out, dim=1)
         elif self.similarity_measure == 'cosine-similarity':
-            similarity = torch.nn.functional.cosine_similarity(
-                key, conv_out, dim=1)
+            similarity = torch.nn.functional.cosine_similarity(key, conv_out, dim=1)
 
         hx = hx.squeeze(1) - iterate * similarity
         return x, hx.view(initial_shape)
@@ -237,9 +224,7 @@ class LogicBase(NNBase):
         self.similarity_measure = similarity_measure
 
         super(LogicBase, self).__init__(
-            recurrent=True,
-            recurrent_input_size=h * w,
-            hidden_size=hidden_size)
+            recurrent=True, recurrent_input_size=h * w, hidden_size=hidden_size)
         self._recurrent_hidden_state_size = h * w
 
         init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
@@ -270,8 +255,7 @@ class CNNBase(NNBase):
                                constant_(x, 0), nn.init.calculate_gain('relu'))
 
         self.main = nn.Sequential(
-            init_(
-                nn.Conv2d(d, hidden_size, kernel_size=3, stride=1, padding=1)),
+            init_(nn.Conv2d(d, hidden_size, kernel_size=3, stride=1, padding=1)),
             # init_(nn.Conv2d(d, 32, 8, stride=4)), nn.ReLU(),
             # init_(nn.Conv2d(32, 64, kernel_size=4, stride=2)), nn.ReLU(),
             # init_(nn.Conv2d(32, 64, kernel_size=4, stride=2)), nn.ReLU(),
@@ -282,8 +266,7 @@ class CNNBase(NNBase):
             init_(nn.Linear(hidden_size * h * w, hidden_size)),
             nn.ReLU())
 
-        init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
-                               constant_(x, 0))
+        init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0))
 
         self.critic_linear = init_(nn.Linear(hidden_size, 1))
 
@@ -299,17 +282,14 @@ class CNNBase(NNBase):
 
 
 class MLPBase(NNBase):
-    def __init__(self, num_inputs, hidden_size, num_layers, recurrent,
-                 activation):
+    def __init__(self, num_inputs, hidden_size, num_layers, recurrent, activation):
         recurrent_module = nn.GRU if recurrent else None
-        super(MLPBase, self).__init__(recurrent_module, num_inputs,
-                                      hidden_size)
+        super(MLPBase, self).__init__(recurrent_module, num_inputs, hidden_size)
 
         if recurrent:
             num_inputs = hidden_size
 
-        init_ = lambda m: init(m, init_normc_, lambda x: nn.init.constant_(
-            x, 0))
+        init_ = lambda m: init(m, init_normc_, lambda x: nn.init.constant_(x, 0))
 
         self.actor = nn.Sequential()
         self.critic = nn.Sequential()
