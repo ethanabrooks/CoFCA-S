@@ -18,24 +18,19 @@ class Agent(ppo.subtasks.Agent):
 class Recurrence(ppo.subtasks.agent.Recurrence):
     def __init__(self, hidden_size, **kwargs):
         super().__init__(hidden_size=hidden_size, **kwargs)
-        self.obs_sections = Obs(
-            *[int(np.prod(s.shape)) for s in self.obs_spaces])
+        self.obs_sections = Obs(*[int(np.prod(s.shape)) for s in self.obs_spaces])
         self.register_buffer('branch_one_hots', torch.eye(self.n_subtasks))
         num_object_types = int(self.obs_spaces.subtasks.nvec[0, 2])
-        self.register_buffer(
-            'condition_one_hots',
-            torch.eye(num_object_types + 1))  # +1 for determinism
-        self.register_buffer(
-            'rows',
-            torch.arange(self.n_subtasks).unsqueeze(-1).float())
+        self.register_buffer('condition_one_hots',
+                             torch.eye(num_object_types + 1))  # +1 for determinism
+        self.register_buffer('rows', torch.arange(self.n_subtasks).unsqueeze(-1).float())
 
         in_channels = (
             self.obs_shape[0] *  # observation
             (num_object_types + 1))  # condition tensor d
         self.phi_shift = nn.Sequential(
             Reshape(-1, in_channels, *self.obs_shape[-2:]),
-            init_(
-                nn.Conv2d(in_channels, hidden_size, kernel_size=1, stride=1)),
+            init_(nn.Conv2d(in_channels, hidden_size, kernel_size=1, stride=1)),
             nn.MaxPool2d(kernel_size=self.obs_shape[-2:], stride=1),
             Flatten(),
             init_(nn.Linear(hidden_size, 1), 'sigmoid'),
@@ -78,15 +73,12 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
         # detach actions
         # noinspection PyProtectedMember
         n_actions = len(Actions._fields)
-        inputs, *actions = torch.split(
-            inputs.detach(), [D - n_actions] + [1] * n_actions, dim=2)
+        inputs, *actions = torch.split(inputs.detach(), [D - n_actions] + [1] * n_actions, dim=2)
         actions = Actions(*actions)
 
         # parse non-action inputs
         inputs = torch.split(inputs, self.obs_sections, dim=2)
-        inputs = Obs(*[
-            x.view(T, N, *shape) for x, shape in zip(inputs, self.obs_shapes)
-        ])
+        inputs = Obs(*[x.view(T, N, *shape) for x, shape in zip(inputs, self.obs_shapes)])
 
         # build M
         subtasks = torch.split(inputs.subtasks, 1, dim=-1)
@@ -125,20 +117,19 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
             # pred = self.phi_shift(o * c)  # TODO
             pred = inputs.pred[t].view(N, 1, 1)
             trans = pred * true_path + (1 - pred) * false_path
-            return (p @ trans).squeeze(1)
+            return (p.unsqueeze(1) @ trans).squeeze(1)
 
         return self.pack(
-            self.inner_loop(
-                a=hx.a,
-                g=hx.g,
-                M=M,
-                M123=M123,
-                N=N,
-                T=T,
-                float_subtask=hx.subtask,
-                next_subtask=inputs.next_subtask,
-                obs=inputs.base,
-                p=p,
-                r=r,
-                actions=actions,
-                update_attention=update_attention))
+            self.inner_loop(a=hx.a,
+                            g=hx.g,
+                            M=M,
+                            M123=M123,
+                            N=N,
+                            T=T,
+                            float_subtask=hx.subtask,
+                            next_subtask=inputs.next_subtask,
+                            obs=inputs.base,
+                            p=p,
+                            r=r,
+                            actions=actions,
+                            update_attention=update_attention))
