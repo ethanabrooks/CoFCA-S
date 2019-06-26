@@ -125,7 +125,10 @@ class SubtasksGridWorld(gym.Env):
 
         class _Subtask(Subtask):
             def __str__(self):
-                return f'{world.interactions[self.interaction]} {self.count + 1} {world.object_types[self.object]}'
+                string = f'{world.interactions[self.interaction]} {self.count + 1} {world.object_types[self.object]}'
+                if self.count > 0:
+                    string += 's'
+                return string
 
         self.Subtask = _Subtask
 

@@ -10,8 +10,9 @@ Branch = namedtuple('Branch', 'condition true_path false_path')
 
 
 class ControlFlowGridWorld(SubtasksGridWorld):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, single_condition=False, **kwargs):
         super().__init__(*args, **kwargs)
+        self.single_condition = single_condition
         self.conditions = None
         self.control = None
         self.subtasks = None
@@ -38,7 +39,7 @@ class ControlFlowGridWorld(SubtasksGridWorld):
                 return f"{develop_branch(pos, '')}"
             else:
                 return f'''\
-{indent}if {condition}:{self.object_types[condition]}:
+{indent}if {self.object_types[condition]}:
 {develop_branch(pos, '    ')}
 {indent}else:
 {develop_branch(neg, '    ')}
@@ -62,10 +63,16 @@ class ControlFlowGridWorld(SubtasksGridWorld):
 
         def get_control():
             for i in range(n):
-                yield self.np_random.randint(
-                    i + 1,
-                    n + (i > 0),  # prevent termination on first turn
-                    size=2)
+                if self.single_condition:
+                    if i == 0:
+                        yield 1, 2
+                    else:
+                        yield 3, 3
+                else:
+                    yield self.np_random.randint(
+                        i + 1,
+                        n + (i > 0),  # prevent termination on first turn
+                        size=2)
 
         self.control = np.array(list(get_control()))
         self.conditions = self.np_random.choice(len(self.object_types), size=n)
