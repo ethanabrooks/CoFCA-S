@@ -7,19 +7,18 @@ from gym import spaces
 from gym.envs.registration import EnvSpec
 from gym.utils import seeding
 import numpy as np
-from rl_utils import cartesian_product
 import six
 
 from ppo.utils import set_index
+from rl_utils import cartesian_product
 
 Subtask = namedtuple('Subtask', 'interaction count object')
 
 
 def get_task_space(interactions, max_task_count, object_types, n_subtasks):
     return spaces.MultiDiscrete(
-        np.tile(
-            np.array([len(interactions), max_task_count,
-                      len(object_types)]), (n_subtasks, 1)))
+        np.tile(np.array([len(interactions), max_task_count,
+                          len(object_types)]), (n_subtasks, 1)))
 
 
 class SubtasksGridWorld(gym.Env):
@@ -62,7 +61,7 @@ class SubtasksGridWorld(gym.Env):
 
         # set on initialize
         self.initialized = False
-        self.iterate=False
+        self.iterate = False
         self.obstacles_one_hot = np.zeros(self.desc.shape, dtype=bool)
         self.open_spaces = None
         self.obstacles = None
@@ -87,8 +86,7 @@ class SubtasksGridWorld(gym.Env):
         def encode_task():
             for string in task:
                 subtask = Subtask(*re.split('[\s\\\]+', string))
-                yield (list(self.interactions).index(subtask.interaction),
-                       int(subtask.count),
+                yield (list(self.interactions).index(subtask.interaction), int(subtask.count),
                        list(self.object_types).index(subtask.object))
 
         # set on reset:
@@ -114,11 +112,10 @@ class SubtasksGridWorld(gym.Env):
                     h,
                     w
                 ])),
-            get_task_space(
-                interactions=self.interactions,
-                max_task_count=self.max_task_count,
-                object_types=object_types,
-                n_subtasks=n_subtasks)
+            get_task_space(interactions=self.interactions,
+                           max_task_count=self.max_task_count,
+                           object_types=object_types,
+                           n_subtasks=n_subtasks)
         ])
         self.action_space = spaces.Discrete(len(self.transitions) + 2)
         world = self
@@ -143,8 +140,7 @@ class SubtasksGridWorld(gym.Env):
         h, w = self.desc.shape
         choices = cartesian_product(np.arange(h), np.arange(w))
         choices = choices[np.all(choices % 2 != 0, axis=-1)]
-        randoms = self.np_random.choice(
-            len(choices), replace=False, size=self.n_obstacles)
+        randoms = self.np_random.choice(len(choices), replace=False, size=self.n_obstacles)
         self.obstacles = choices[randoms]
         self.obstacles_one_hot[:] = 0
         set_index(self.obstacles_one_hot, self.obstacles, True)
@@ -154,8 +150,7 @@ class SubtasksGridWorld(gym.Env):
         self.randomize_obstacles()
         h, w = self.desc.shape
         ij = cartesian_product(np.arange(h), np.arange(w))
-        self.open_spaces = ij[np.logical_not(
-            np.all(np.isin(ij, self.obstacles), axis=-1))]
+        self.open_spaces = ij[np.logical_not(np.all(np.isin(ij, self.obstacles), axis=-1))]
         self.initialized = True
 
     @property
@@ -204,8 +199,7 @@ class SubtasksGridWorld(gym.Env):
         for _ in range(self.n_subtasks):
             possible_subtasks = self.possible_subtasks
             if last_subtask is not None:
-                subset = np.any(
-                    self.possible_subtasks != last_subtask, axis=-1)
+                subset = np.any(self.possible_subtasks != last_subtask, axis=-1)
                 possible_subtasks = possible_subtasks[subset]
             choice = self.np_random.choice(len(possible_subtasks))
             last_subtask = possible_subtasks[choice]
@@ -225,8 +219,9 @@ class SubtasksGridWorld(gym.Env):
             self.subtasks = list(self.subtasks_generator())
         types = list(self.get_required_objects(self.subtasks))
         n_random = max(len(types), self.min_objects)
-        random_types = self.np_random.choice(
-            len(self.object_types), replace=True, size=n_random - len(types))
+        random_types = self.np_random.choice(len(self.object_types),
+                                             replace=True,
+                                             size=n_random - len(types))
         types = np.concatenate([random_types, types])
         self.np_random.shuffle(types)
 
@@ -248,8 +243,7 @@ class SubtasksGridWorld(gym.Env):
 
     def objects_one_hot(self):
         h, w, = self.desc.shape
-        objects_one_hot = np.zeros((1 + len(self.object_types), h, w),
-                                   dtype=bool)
+        objects_one_hot = np.zeros((1 + len(self.object_types), h, w), dtype=bool)
         idx = [(v, ) + k for k, v in self.objects.items()]
         set_index(objects_one_hot, idx, True)
         return objects_one_hot
@@ -272,6 +266,8 @@ class SubtasksGridWorld(gym.Env):
         return [seed]
 
     def step(self, a):
+        t = False
+        r = -.1
         if self.iterate:
             if self.count == 0:
                 self.subtask_idx = self.get_next_subtask()
@@ -299,9 +295,7 @@ class SubtasksGridWorld(gym.Env):
 
         obs = self.get_observation()
 
-        t = False
-        r = -.1
-        if touching:
+        if touching and not t:
             self.iterate = False
             object_type = self.objects[pos]
             interaction = self.interactions[self.subtask.interaction]
