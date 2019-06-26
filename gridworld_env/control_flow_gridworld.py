@@ -1,11 +1,10 @@
 from collections import namedtuple
 
-import numpy as np
 from gym import spaces
+import numpy as np
 
 from gridworld_env import SubtasksGridWorld
 
-Branch = namedtuple('Branch', 'condition true_path false_path')
 Obs = namedtuple('Obs', 'base subtasks conditions control')
 
 
@@ -28,8 +27,10 @@ class ControlFlowGridWorld(SubtasksGridWorld):
                 control=spaces.MultiDiscrete(
                     np.tile(
                         np.array([[self.n_subtasks + 1]]),
-                        [self.n_subtasks + 1, 2])),  # binary conditions
-            ))
+                        [
+                            self.n_subtasks + 1,
+                            2  # binary conditions
+                        ]))))
 
     def render_task(self):
         def helper(i, indent):
@@ -39,7 +40,7 @@ class ControlFlowGridWorld(SubtasksGridWorld):
             def develop_branch(j, add_indent):
                 new_indent = indent + add_indent
                 try:
-                    subtask = f'{j}:{self.task[j]}'
+                    subtask = f'{j}:{self.subtasks[j]}'
                 except IndexError:
                     return f'{new_indent}terminate'
                 return f"{new_indent}{subtask}\n{helper(j, new_indent)}"
@@ -64,7 +65,7 @@ class ControlFlowGridWorld(SubtasksGridWorld):
             control=self.control,
             conditions=self.conditions)
 
-    def task_generator(self):
+    def subtasks_generator(self):
         choices = self.np_random.choice(
             len(self.possible_subtasks), size=self.n_subtasks + 1)
         for subtask in self.possible_subtasks[choices]:
@@ -92,8 +93,8 @@ class ControlFlowGridWorld(SubtasksGridWorld):
         self.conditions = self.np_random.choice(len(self.object_types), size=n)
         self.subtask_idx = 0
         self.subtask_idx = self.get_next_subtask()
-        self.task_count = self.subtask.count
-        return o
+        self.count = self.subtask.count
+        return o._replace(conditions=self.conditions, control=self.control)
 
     def get_next_subtask(self):
         object_type = self.conditions[self.subtask_idx]
@@ -101,8 +102,8 @@ class ControlFlowGridWorld(SubtasksGridWorld):
         return self.control[self.subtask_idx, int(resolution)]
 
     def get_required_objects(self, _):
-        yield from super().get_required_objects(self.task)
-        # for line in self.task:
+        yield from super().get_required_objects(self.subtasks)
+        # for line in self.subtasks:
         #     if isinstance(line, self.Branch):
         #         if line.condition not in required_objects:
         #             if self.np_random.rand() < .5:

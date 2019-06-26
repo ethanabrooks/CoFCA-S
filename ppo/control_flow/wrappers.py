@@ -1,65 +1,50 @@
 from collections import namedtuple
 
+import gym
 from gym import spaces
+from gym.spaces import Box
 import numpy as np
 
+import gridworld_env.control_flow_gridworld
 import ppo.subtasks.wrappers
 
-Obs = namedtuple('Obs', 'base subtask subtasks control next_subtask')
+Obs = namedtuple('Obs',
+                 'base subtask subtasks conditions control next_subtask')
 
 
-class Wrapper(ppo.subtasks.wrappers.Wrapper):
+class Wrapper(ppo.subtasks.Wrapper):
     def __init__(self, env):
-        super().__init__(env)
-        obs_spaces = ppo.subtasks.wrappers.Obs(*self.observation_space.spaces)
-        act_spaces = ppo.subtasks.wrappers.Actions(*self.action_space.spaces)
-        interactions, max_count, objects = obs_spaces.subtask.nvec
-        n_subtasks = 2 * env.n_subtasks  # 2 per branch
-        control_nvec = np.array([[objects, n_subtasks, n_subtasks]]).repeat(
-            env.n_subtasks, axis=0)
-        subtasks_nvec = np.expand_dims(obs_spaces.subtask.nvec, 0).repeat(
-            n_subtasks, axis=0)
+        gym.Wrapper.__init__(self, env)
+        obs_spaces = gridworld_env.control_flow_gridworld.Obs(
+            *self.observation_space.spaces)
+        obs_spaces = Obs(
+            base=obs_spaces.base,
+            subtasks=obs_spaces.subtasks,
+            conditions=obs_spaces.conditions,
+            control=obs_spaces.control,
+            subtask=spaces.Discrete(obs_spaces.subtasks.nvec.shape[0]),
+            next_subtask=spaces.Discrete(2),
+        )
+        # noinspection PyProtectedMember
         self.observation_space = spaces.Tuple(
-            Obs(base=obs_spaces.base,
-                subtask=obs_spaces.subtask,
-                subtasks=spaces.MultiDiscrete(subtasks_nvec),
-                next_subtask=obs_spaces.next_subtask,
-                control=spaces.MultiDiscrete(control_nvec)))
+            obs_spaces._replace(base=Box(0, 1, shape=obs_spaces.base.nvec), ))
         self.action_space = spaces.Tuple(
-            act_spaces._replace(g=spaces.Discrete(n_subtasks)))
-        self.subtasks = None
+            ppo.subtasks.Actions(
+                a=env.action_space,
+                g=spaces.Discrete(env.n_subtasks + 1),
+                cg=spaces.Discrete(2),
+                cr=spaces.Discrete(2),
+            ))
+        self.last_g = None
 
     def wrap_observation(self, observation):
-        obs, task = observation
-        _, h, w = obs.shape
-        env = self.env.unwrapped
-
-        def get_subtasks():
-            for branch in task:
-                yield branch.true_path
-                yield branch.false_path
-
-        self.subtasks = list(get_subtasks())
-
-        def get_control_flow():
-            for branch in task:
-                yield (
-                    branch.condition,
-                    self.subtasks.index(branch.true_path),
-                    self.subtasks.index(branch.false_path),
-                )
-
-        control = list(get_control_flow())
-
-        observation = Obs(
-            base=obs,
-            subtask=env.subtask,
-            subtasks=self.subtasks,
-            control=control,
-            next_subtask=[env.next_subtask],
-        )
-        return np.concatenate(
-            [np.array(list(x)).flatten() for x in observation])
-
-    def chosen_subtask(self, env):
-        return self.subtasks[self.last_g]
+        obs = gridworld_env.control_flow_gridworld.Obs(*observation)
+        obs = Obs(
+            base=obs.base,
+            subtasks=obs.subtasks,
+            conditions=obs.conditions,
+            control=obs.control,
+            subtask=[self.env.unwrapped.subtask_idx],
+            next_subtask=[self.env.unwrapped.next_subtask])
+        # print([np.shape(x) for x in obs])
+        return np.concatenate([np.array(list(x)).flatten() for x in obs])

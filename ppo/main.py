@@ -5,9 +5,11 @@ from collections import ChainMap
 from pathlib import Path
 
 from gym.wrappers import TimeLimit
+from rl_utils import hierarchical_parse_args
 import torch
 
 import gridworld_env
+from gridworld_env import control_flow_gridworld
 from gridworld_env.control_flow_gridworld import ControlFlowGridWorld
 from gridworld_env.subtasks_gridworld import SubtasksGridWorld
 import ppo
@@ -17,10 +19,8 @@ import ppo.control_flow.wrappers
 import ppo.subtasks.agent
 import ppo.subtasks.student
 import ppo.subtasks.teacher
-from ppo.subtasks.wrappers import Wrapper
 from ppo.train import Train
 from ppo.wrappers import VecNormalize
-from rl_utils import hierarchical_parse_args
 
 
 def add_task_args(parser):
@@ -50,9 +50,9 @@ def cli():
 def get_spaces(envs, control_flow):
     obs_spaces = envs.observation_space.spaces
     if control_flow:
-        obs_spaces = ppo.control_flow.wrappers.Obs(*obs_spaces)
+        obs_spaces = ppo.control_flow.Obs(*obs_spaces)
     else:
-        obs_spaces = ppo.subtasks.wrappers.Obs(*obs_spaces)
+        obs_spaces = ppo.subtasks.Obs(*obs_spaces)
     return obs_spaces
 
 
@@ -63,10 +63,9 @@ def make_subtasks_env(env_id, **kwargs):
             for k, v in _kwargs.items():
                 print(f'{k:20}{v}')
         if control_flow:
-            env = ppo.control_flow.wrappers.Wrapper(
-                ControlFlowGridWorld(**_kwargs))
+            env = ppo.control_flow.Wrapper(ControlFlowGridWorld(**_kwargs))
         else:
-            env = ppo.subtasks.wrappers.Wrapper(SubtasksGridWorld(**_kwargs))
+            env = ppo.subtasks.Wrapper(SubtasksGridWorld(**_kwargs))
         env.seed(seed + rank)
         if max_episode_steps is not None:
             env = TimeLimit(env, max_episode_steps=int(max_episode_steps))
@@ -75,9 +74,9 @@ def make_subtasks_env(env_id, **kwargs):
     gridworld_args = gridworld_env.get_args(env_id)
     kwargs.update(add_timestep=None)
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
-    return helper(**ChainMap(
-        kwargs, gridworld_args
-    ))  # combines kwargs and gridworld_args with preference for kwargs
+    return helper(
+        **ChainMap(kwargs, gridworld_args)
+    )  # combines kwargs and gridworld_args with preference for kwargs
 
 
 def train_lower_level_cli(student):
@@ -112,10 +111,9 @@ def train_lower_level_cli(student):
                     action_space=envs.action_space,
                     **agent_args)
                 if student:
-                    return ppo.subtasks.student.Student(
-                        **agent_args, **student_args)
+                    return ppo.subtasks.Student(**agent_args, **student_args)
                 else:
-                    return ppo.subtasks.teacher.Teacher(**agent_args)
+                    return ppo.subtasks.Teacher(**agent_args)
 
         TrainSkill(**_kwargs)
 
@@ -164,7 +162,7 @@ def metacontroller_cli():
                 agent = None
                 obs_spaces = get_spaces(envs, control_flow)
                 if agent_load_path:
-                    agent = ppo.subtasks.teacher.Teacher(
+                    agent = ppo.subtasks.Teacher(
                         obs_spaces=obs_spaces,
                         action_space=envs.action_space,
                         **agent_args)
@@ -192,10 +190,9 @@ def metacontroller_cli():
                     agent=agent,
                     **_subtasks_args)
                 if control_flow:
-                    return ppo.control_flow.agent.Agent(
-                        **metacontroller_kwargs)
+                    return ppo.control_flow.Agent(**metacontroller_kwargs)
                 else:
-                    return ppo.subtasks.agent.Agent(**metacontroller_kwargs)
+                    return ppo.subtasks.Agent(**metacontroller_kwargs)
 
         # ppo_args.update(aux_loss_only=True)
         TrainSubtasks(env_id=env_id, ppo_args=ppo_args, **kwargs)
