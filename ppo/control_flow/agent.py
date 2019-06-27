@@ -116,12 +116,12 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
             hx.g[new_episode] = 0.
 
         def update_attention(p, t):
-            d, h, w = self.obs_shape
-            o = inputs.base[t].view(N, d, h * w)
-            c = (p.unsqueeze(1) @ conditions).squeeze(1)
-            c = F.pad(c, (1, 1)).unsqueeze(1)  # TODO
-            pred = self.phi_shift(c @ o).unsqueeze(-1)  # TODO
-            # pred = inputs.pred[t].view(N, 1, 1)
+            # d, h, w = self.obs_shape
+            # o = inputs.base[t].view(N, d, h * w)
+            # c = (p.unsqueeze(1) @ conditions).squeeze(1)
+            # c = F.pad(c, (1, 1)).unsqueeze(1)  # TODO
+            # pred = self.phi_shift(c @ o).unsqueeze(-1)  # TODO
+            pred = inputs.pred[t].view(N, 1, 1)
             trans = pred * true_path + (1 - pred) * false_path
             return (p.unsqueeze(1) @ trans).squeeze(1)
 
