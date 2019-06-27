@@ -119,7 +119,8 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
             d, h, w = self.obs_shape
             o = inputs.base[t].view(N, d, h * w)[:, 1:-2]  # 1 for obstacles 2 for ice and agent
             condition_idx = (inputs.subtask[t]).flatten().long()
-            c = conditions[torch.arange(N, device=truth.device), condition_idx]
+            c2 = conditions[torch.arange(N, device=truth.device), condition_idx]
+            c = (p.unsqueeze(1) @ conditions).squeeze(1)
             phi_in = (c.unsqueeze(1) @ o).squeeze(1)
             # print('agent subtask', inputs.subtask[t])
             # print('agent conditions', conditions)
