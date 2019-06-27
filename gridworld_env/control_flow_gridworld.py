@@ -82,13 +82,13 @@ class ControlFlowGridWorld(SubtasksGridWorld):
         self.control = 1 + np.array(list(get_control()))
         self.conditions = self.np_random.choice(len(self.object_types), size=n)
         self.subtask_idx = 0
-        self.pred = self.evaluate_condition()
         self.subtask_idx = self.get_next_subtask()
         self.count = self.subtask.count
         return o._replace(conditions=self.conditions, control=self.control)
 
     def get_next_subtask(self):
         resolution = self.evaluate_condition()
+        self.pred = resolution
         return self.control[self.subtask_idx, int(resolution)]
 
     def evaluate_condition(self):

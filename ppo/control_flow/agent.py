@@ -116,23 +116,20 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
             # c = (p.unsqueeze(1) @ conditions).view(N, 1, -1, 1, 1)
             # pred = self.phi_shift(o * c)  # TODO
             pred = inputs.pred[t].view(N, 1, 1)
-            print('pred', pred)
             trans = pred * true_path + (1 - pred) * false_path
-            print('trans', trans)
             return (p.unsqueeze(1) @ trans).squeeze(1)
 
         return self.pack(
-            self.inner_loop(
-                a=hx.a,
-                g=hx.g,
-                M=M,
-                M123=M123,
-                N=N,
-                T=T,
-                float_subtask=hx.subtask,
-                next_subtask=inputs.next_subtask,
-                obs=inputs.base,
-                p=p,
-                r=r,
-                actions=actions,
-                update_attention=update_attention))
+            self.inner_loop(a=hx.a,
+                            g=hx.g,
+                            M=M,
+                            M123=M123,
+                            N=N,
+                            T=T,
+                            float_subtask=hx.subtask,
+                            next_subtask=inputs.next_subtask,
+                            obs=inputs.base,
+                            p=p,
+                            r=r,
+                            actions=actions,
+                            update_attention=update_attention))

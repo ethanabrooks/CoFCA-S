@@ -374,7 +374,6 @@ class Recurrence(torch.jit.ScriptModule):
             g_binary = M[torch.arange(N), G[t]]
             cg, cg_loss, cg_probs = phi_update(subtask_param=g_binary, )
             cr = cg = next_subtask[t]  # TODO
-            print('next_subtask', cr)
 
             # p
             p2 = update_attention(p, t)

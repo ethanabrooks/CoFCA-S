@@ -20,13 +20,14 @@ class DebugWrapper(gym.Wrapper):
         self.action_sections = len(action_spaces)
 
     def step(self, action):
-        s, _, t, i = super().step(action)
         actions = Actions(*[x.item() for x in np.split(action, self.action_sections)])
         guess = int(actions.g)
         truth = int(self.env.unwrapped.subtask_idx)
         r = float(np.all(guess == truth)) - 1
         if r < 0:
-            import ipdb; ipdb.set_trace()
+            import ipdb
+            ipdb.set_trace()
+        s, _, t, i = super().step(action)
 
         self.last_guess = guess
         self.last_reward = r
@@ -45,7 +46,6 @@ class DebugWrapper(gym.Wrapper):
 
 class Wrapper(gym.Wrapper):
     def __init__(self, env):
-        self.next_subtask = None
         super().__init__(env)
         obs_space, subtasks_space = env.observation_space.spaces
         assert np.all(subtasks_space.nvec == subtasks_space.nvec[0])
@@ -67,7 +67,6 @@ class Wrapper(gym.Wrapper):
         self.last_g = None
 
     def step(self, action):
-        self.next_subtask = False
         actions = Actions(*np.split(action, len(self.action_space.spaces)))
         action = int(actions.a)
         self.last_g = int(actions.g)
@@ -75,18 +74,16 @@ class Wrapper(gym.Wrapper):
         return self.wrap_observation(s), r, t, i
 
     def reset(self, **kwargs):
-        self.next_subtask = True
         return self.wrap_observation(super().reset())
 
     def wrap_observation(self, observation):
         obs, *_ = observation
         _, h, w = obs.shape
         env = self.env.unwrapped
-        observation = Obs(
-            base=obs,
-            subtask=env.subtask_idx,
-            subtasks=env.subtasks,
-            next_subtask=self.next_subtask)
+        observation = Obs(base=obs,
+                          subtask=env.subtask_idx,
+                          subtasks=env.subtasks,
+                          next_subtask=env.next_subtask)
         # for obs, space in zip(observation, self.observation_space.spaces):
         # assert space.contains(np.array(obs))
         return np.concatenate([np.array(x).flatten() for x in observation])
