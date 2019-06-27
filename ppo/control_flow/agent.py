@@ -27,17 +27,16 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
         self.n_conditions = self.obs_spaces.conditions.shape[0]
 
         d, h, w = self.obs_shape
-        in_size = num_object_types * d * h * w
         self.phi_shift = nn.Sequential(
-            Reshape(-1, in_size),
-            init_(nn.Linear(in_size, 1), 'sigmoid'),
+            Reshape(-1, num_object_types * d, h, w),
+            # init_(nn.Linear(in_size, 1), 'sigmoid'),
             # Reshape(-1, in_channels, *self.obs_shape[-2:]),
-            # init_(nn.Conv2d(in_channels, hidden_size, kernel_size=1, stride=1)),
-            # nn.MaxPool2d(kernel_size=self.obs_shape[-2:], stride=1),
-            # Flatten(),
-            # init_(nn.Linear(hidden_size, 1), 'sigmoid'),
-            # nn.Sigmoid(),
-            # Reshape(-1, 1, 1),
+            init_(nn.Conv2d(num_object_types * d, hidden_size, kernel_size=1, stride=1)),
+            nn.MaxPool2d(kernel_size=self.obs_shape[-2:], stride=1),
+            Flatten(),
+            init_(nn.Linear(hidden_size, 1), 'sigmoid'),
+            nn.Sigmoid(),
+            Reshape(-1, 1, 1),
         )
         self.obs_shapes = Obs(
             base=self.obs_spaces.base.shape,
@@ -130,21 +129,22 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
             # if torch.any(pred != truth):
             #     import ipdb
             #     ipdb.set_trace()
-            pred = pred.unsqueeze(-1)
+            # pred = pred.unsqueeze(-1)
             trans = pred * true_path + (1 - pred) * false_path
             return (p.unsqueeze(1) @ trans).squeeze(1)
 
         return self.pack(
-            self.inner_loop(a=hx.a,
-                            g=hx.g,
-                            M=M,
-                            M123=M123,
-                            N=N,
-                            T=T,
-                            float_subtask=hx.subtask,
-                            next_subtask=inputs.next_subtask,
-                            obs=inputs.base,
-                            p=p,
-                            r=r,
-                            actions=actions,
-                            update_attention=update_attention))
+            self.inner_loop(
+                a=hx.a,
+                g=hx.g,
+                M=M,
+                M123=M123,
+                N=N,
+                T=T,
+                float_subtask=hx.subtask,
+                next_subtask=inputs.next_subtask,
+                obs=inputs.base,
+                p=p,
+                r=r,
+                actions=actions,
+                update_attention=update_attention))
