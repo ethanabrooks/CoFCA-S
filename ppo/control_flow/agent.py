@@ -126,8 +126,8 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
             # print('agent conditions', conditions)
             # print('agent obs', o.view(N, -1, h, w))
             # print('agent debug obs', phi_in.view(N, h, w))
-            pred = torch.any(phi_in > 0, dim=-1, keepdim=True).float()
-            # pred = self.phi_shift((c @ o).squeeze(1))  # TODO
+            # pred = torch.any(phi_in > 0, dim=-1, keepdim=True).float()
+            pred = self.phi_shift(phi_in)  # TODO
             # if torch.any(pred != truth):
             #     import ipdb
             #     ipdb.set_trace()
