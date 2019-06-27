@@ -93,7 +93,7 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
         control = inputs.control[0]
         rows = self.rows.expand_as(control)
         # point terminal branches back at themselves TODO: is this right?
-        control = inputs.control[0].where(control != self.n_subtasks, rows)
+        control = inputs.control[0].where(control < self.n_subtasks, rows)
         false_path, true_path = torch.split(control, 1, dim=-1)
         true_path = self.branch_one_hots[true_path.squeeze(-1).long()]
         false_path = self.branch_one_hots[false_path.squeeze(-1).long()]
