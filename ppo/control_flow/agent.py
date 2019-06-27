@@ -112,24 +112,9 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
             hx.g[new_episode] = 0.
 
         def update_attention(p, t):
-            truth = inputs.pred[t]
-            d, h, w = self.obs_shape
-            o = inputs.base[t].view(N, d, h * w)[:, 1:-2]  # 1 for obstacles 2 for ice and agent
-            condition_idx = (inputs.subtask[t]).flatten().long()
-            c2 = conditions[torch.arange(N, device=truth.device), condition_idx]
             c = (p.unsqueeze(1) @ conditions).squeeze(1)
             phi_in = c.view(N, conditions.size(2), 1, 1, 1) * inputs.base[t].unsqueeze(1)
-            # phi_in = (c.unsqueeze(1) @ o).squeeze(1)
-            # print('agent subtask', inputs.subtask[t])
-            # print('agent conditions', conditions)
-            # print('agent obs', o.view(N, -1, h, w))
-            # print('agent debug obs', phi_in.view(N, h, w))
-            # pred = torch.any(phi_in > 0, dim=-1, keepdim=True).float()
             pred = self.phi_shift(phi_in)  # TODO
-            # if torch.any(pred != truth):
-            #     import ipdb
-            #     ipdb.set_trace()
-            # pred = pred.unsqueeze(-1)
             trans = pred * true_path + (1 - pred) * false_path
             return (p.unsqueeze(1) @ trans).squeeze(1)
 
