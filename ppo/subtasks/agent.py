@@ -377,11 +377,7 @@ class Recurrence(torch.jit.ScriptModule):
 
             # p
             p2 = update_attention(p, t)
-            print('old p', p)
-            print('new p', p2)
-            print('cr', cr)
             p = interp(p, p2, cr)
-            print('post-interp p', p)
 
             # r
             r = (p.unsqueeze(1) @ M).squeeze(1)

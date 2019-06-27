@@ -274,7 +274,6 @@ class SubtasksGridWorld(gym.Env):
         r = -.1
         if self.iterate:
             if self.count == 0 or self.count is None:
-                print('STEP GET NEXT SUBTASK eval condition')
                 self.subtask_idx = self.get_next_subtask()
                 if self.subtask is None:
                     r = 1

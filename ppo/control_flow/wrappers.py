@@ -39,7 +39,6 @@ class Wrapper(ppo.subtasks.Wrapper):
     def wrap_observation(self, observation):
         obs = gridworld_env.control_flow_gridworld.Obs(*observation)
         env = self.env.unwrapped
-        print('wrap_observation env.subtask_idx', env.subtask_idx)
         obs = Obs(
             base=obs.base,
             subtasks=obs.subtasks,

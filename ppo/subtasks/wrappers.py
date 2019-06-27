@@ -30,9 +30,9 @@ class DebugWrapper(gym.Wrapper):
             truth = self.truth  # keep truth at old value
 
         r = float(np.all(guess == truth)) - 1
-        if r < 0:
-            import ipdb
-            ipdb.set_trace()
+        # if r < 0:
+        #     import ipdb
+        #     ipdb.set_trace()
 
         self.truth = truth
         self.last_guess = guess
@@ -105,4 +105,4 @@ class Wrapper(gym.Wrapper):
                 g_count + 1,
                 env.object_types[g_obj],
             )
-        # input('paused')
+        input('paused')

@@ -92,7 +92,6 @@ class ControlFlowGridWorld(SubtasksGridWorld):
         self.count = None
         self.iterate = True
         self.next_subtask = True
-        print('RESET eval condition')
         self.pred = self.evaluate_condition()
         return o._replace(conditions=self.conditions, control=self.control)
 
@@ -103,16 +102,8 @@ class ControlFlowGridWorld(SubtasksGridWorld):
         return self.control[self.subtask_idx, int(resolution)]
 
     def evaluate_condition(self):
-        print('vvvvvvvvvvvvvvvvvvvvv beginning of eval condition vvvvvvvvvvvvvvvvvv')
-        print('conditions:')
-        print(self.conditions)
-        print('evaluate_condition subtask_idx', self.subtask_idx)
         object_type = self.conditions[self.subtask_idx]
-        print('object_type', object_type)
-        print('objects.values', self.objects.values())
-        res = object_type in self.objects.values()
-        print('res', res)
-        return res
+        return object_type in self.objects.values()
 
     def get_required_objects(self, _):
         required_objects = list(super().get_required_objects(self.subtasks))
