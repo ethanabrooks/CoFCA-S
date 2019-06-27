@@ -40,6 +40,12 @@ class ControlFlowGridWorld(SubtasksGridWorld):
         except IndexError:
             pass
 
+    def render_current_subtask(self):
+        if self.subtask_idx == 0:
+            print('none')
+        else:
+            super().render_current_subtask()
+
     def render_task(self):
         def helper(i, indent):
             neg, pos = self.control[i]
@@ -47,10 +53,13 @@ class ControlFlowGridWorld(SubtasksGridWorld):
 
             def develop_branch(j, add_indent):
                 new_indent = indent + add_indent
-                try:
-                    subtask = f'{j}:{self.subtasks[j]}'
-                except IndexError:
-                    return f'{new_indent}terminate'
+                if j == 0:
+                    subtask = f''
+                else:
+                    try:
+                        subtask = f'{j}:{self.subtasks[j]}'
+                    except IndexError:
+                        return f'{new_indent}terminate'
                 return f"{new_indent}{subtask}\n{helper(j, new_indent)}"
 
             if pos == neg:

@@ -17,8 +17,9 @@ Subtask = namedtuple('Subtask', 'interaction count object')
 
 def get_task_space(interactions, max_task_count, object_types, n_subtasks):
     return spaces.MultiDiscrete(
-        np.tile(np.array([len(interactions), max_task_count,
-                          len(object_types)]), (n_subtasks, 1)))
+        np.tile(
+            np.array([len(interactions), max_task_count,
+                      len(object_types)]), (n_subtasks, 1)))
 
 
 class SubtasksGridWorld(gym.Env):
@@ -113,10 +114,11 @@ class SubtasksGridWorld(gym.Env):
                     h,
                     w
                 ])),
-            get_task_space(interactions=self.interactions,
-                           max_task_count=self.max_task_count,
-                           object_types=object_types,
-                           n_subtasks=n_subtasks)
+            get_task_space(
+                interactions=self.interactions,
+                max_task_count=self.max_task_count,
+                object_types=object_types,
+                n_subtasks=n_subtasks)
         ])
         self.action_space = spaces.Discrete(len(self.transitions) + 2)
         world = self
@@ -167,7 +169,7 @@ class SubtasksGridWorld(gym.Env):
             print('*************')
         else:
             print('subtask:')
-            print(self.subtask)
+            self.render_current_subtask()
         if self.count is not None:
             print('remaining:', self.count + 1)
         print('action:', end=' ')
@@ -190,6 +192,9 @@ class SubtasksGridWorld(gym.Env):
             print(''.join(row), end='')
             print(six.u('\x1b[49m\x1b[39m'))
         # time.sleep(4 * sleep_time if self.last_terminal else sleep_time)
+
+    def render_current_subtask(self):
+        print(f'{self.subtask_idx}:{self.subtask}')
 
     def render_task(self):
         for line in self.subtasks:
@@ -221,9 +226,8 @@ class SubtasksGridWorld(gym.Env):
             self.subtasks = list(self.subtasks_generator())
         types = list(self.get_required_objects(self.subtasks))
         n_random = max(len(types), self.min_objects)
-        random_types = self.np_random.choice(len(self.object_types),
-                                             replace=True,
-                                             size=n_random - len(types))
+        random_types = self.np_random.choice(
+            len(self.object_types), replace=True, size=n_random - len(types))
         types = np.concatenate([random_types, types])
         self.np_random.shuffle(types)
 
