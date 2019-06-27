@@ -45,10 +45,9 @@ def cli():
 def get_spaces(envs, control_flow):
     obs_spaces = envs.observation_space.spaces
     if control_flow:
-        obs_spaces = ppo.control_flow.Obs(*obs_spaces)
+        return ppo.control_flow.Obs(*obs_spaces)
     else:
-        obs_spaces = ppo.subtasks.Obs(*obs_spaces)
-    return obs_spaces
+        return ppo.subtasks.Obs(*obs_spaces)
 
 
 def make_subtasks_env(env_id, **kwargs):
