@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from ppo.control_flow.wrappers import Obs
 from ppo.layers import Flatten, Reshape
@@ -25,17 +26,20 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
                              torch.eye(num_object_types + 1))  # +1 for determinism
         self.register_buffer('rows', torch.arange(self.n_subtasks).unsqueeze(-1).float())
 
+        d, h, w = self.obs_shape
         in_channels = (
             self.obs_shape[0] *  # observation
             (num_object_types + 1))  # condition tensor d
         self.phi_shift = nn.Sequential(
-            Reshape(-1, in_channels, *self.obs_shape[-2:]),
-            init_(nn.Conv2d(in_channels, hidden_size, kernel_size=1, stride=1)),
-            nn.MaxPool2d(kernel_size=self.obs_shape[-2:], stride=1),
-            Flatten(),
-            init_(nn.Linear(hidden_size, 1), 'sigmoid'),
-            nn.Sigmoid(),
-            Reshape(-1, 1, 1),
+            Reshape(-1, h * w),
+            init_(nn.Linear(h * w, 1), 'sigmoid'),
+            # Reshape(-1, in_channels, *self.obs_shape[-2:]),
+            # init_(nn.Conv2d(in_channels, hidden_size, kernel_size=1, stride=1)),
+            # nn.MaxPool2d(kernel_size=self.obs_shape[-2:], stride=1),
+            # Flatten(),
+            # init_(nn.Linear(hidden_size, 1), 'sigmoid'),
+            # nn.Sigmoid(),
+            # Reshape(-1, 1, 1),
         )
         self.n_conditions = self.obs_spaces.conditions.shape[0]
         self.obs_shapes = Obs(
@@ -112,10 +116,12 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
             hx.g[new_episode] = 0.
 
         def update_attention(p, t):
-            # o = inputs.base[t].unsqueeze(2)
-            # c = (p.unsqueeze(1) @ conditions).view(N, 1, -1, 1, 1)
-            # pred = self.phi_shift(o * c)
-            pred = inputs.pred[t].view(N, 1, 1)  # TODO
+            d, h, w = self.obs_shape
+            o = inputs.base[t].view(N, d, h * w)
+            c = (p.unsqueeze(1) @ conditions).squeeze(1)
+            c = F.pad(c, (1, 1)).unsqueeze(1)  # TODO
+            pred = self.phi_shift(c @ o).unsqueeze(-1)  # TODO
+            # pred = inputs.pred[t].view(N, 1, 1)
             trans = pred * true_path + (1 - pred) * false_path
             return (p.unsqueeze(1) @ trans).squeeze(1)
 
