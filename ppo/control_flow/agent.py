@@ -24,14 +24,13 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
         num_object_types = int(self.obs_spaces.subtasks.nvec[0, 2])
         self.register_buffer('condition_one_hots', torch.eye(num_object_types))
         self.register_buffer('rows', torch.arange(self.n_subtasks).unsqueeze(-1).float())
+        self.n_conditions = self.obs_spaces.conditions.shape[0]
 
         d, h, w = self.obs_shape
-        in_channels = (
-            self.obs_shape[0] *  # observation
-            (num_object_types + 1))  # condition tensor d
+        in_size = (self.n_conditions - 1) * d * h * w
         self.phi_shift = nn.Sequential(
-            Reshape(-1, h * w),
-            init_(nn.Linear(h * w, 1), 'sigmoid'),
+            Reshape(-1, in_size),
+            init_(nn.Linear(in_size, 1), 'sigmoid'),
             # Reshape(-1, in_channels, *self.obs_shape[-2:]),
             # init_(nn.Conv2d(in_channels, hidden_size, kernel_size=1, stride=1)),
             # nn.MaxPool2d(kernel_size=self.obs_shape[-2:], stride=1),
@@ -40,7 +39,6 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
             # nn.Sigmoid(),
             # Reshape(-1, 1, 1),
         )
-        self.n_conditions = self.obs_spaces.conditions.shape[0]
         self.obs_shapes = Obs(
             base=self.obs_spaces.base.shape,
             subtask=[1],
@@ -121,7 +119,8 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
             condition_idx = (inputs.subtask[t]).flatten().long()
             c2 = conditions[torch.arange(N, device=truth.device), condition_idx]
             c = (p.unsqueeze(1) @ conditions).squeeze(1)
-            phi_in = (c.unsqueeze(1) @ o).squeeze(1)
+            phi_in = c.view(N, self.n_conditions - 1, 1, 1, 1) * inputs.base[t].unsqueeze(1)
+            # phi_in = (c.unsqueeze(1) @ o).squeeze(1)
             # print('agent subtask', inputs.subtask[t])
             # print('agent conditions', conditions)
             # print('agent obs', o.view(N, -1, h, w))
@@ -136,16 +135,17 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
             return (p.unsqueeze(1) @ trans).squeeze(1)
 
         return self.pack(
-            self.inner_loop(a=hx.a,
-                            g=hx.g,
-                            M=M,
-                            M123=M123,
-                            N=N,
-                            T=T,
-                            float_subtask=hx.subtask,
-                            next_subtask=inputs.next_subtask,
-                            obs=inputs.base,
-                            p=p,
-                            r=r,
-                            actions=actions,
-                            update_attention=update_attention))
+            self.inner_loop(
+                a=hx.a,
+                g=hx.g,
+                M=M,
+                M123=M123,
+                N=N,
+                T=T,
+                float_subtask=hx.subtask,
+                next_subtask=inputs.next_subtask,
+                obs=inputs.base,
+                p=p,
+                r=r,
+                actions=actions,
+                update_attention=update_attention))
