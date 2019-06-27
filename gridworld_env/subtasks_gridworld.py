@@ -248,7 +248,6 @@ class SubtasksGridWorld(gym.Env):
         #TODO refactor
         h, w, = self.desc.shape
         objects_one_hot = np.zeros((1 + len(self.object_types), h, w), dtype=bool)
-        print('objects_one_hot objects', self.objects)
         idx = [(v, ) + k for k, v in self.objects.items()]
         set_index(objects_one_hot, idx, True)
         return objects_one_hot
@@ -270,16 +269,12 @@ class SubtasksGridWorld(gym.Env):
         self.np_random, seed = seeding.np_random(seed)
         return [seed]
 
-    def get_next_subtask(self):
-        return self.iterate and not self.count
-
     def step(self, a):
-        self.next_subtask = False
         t = False
         r = -.1
         if self.iterate:
             if self.count == 0 or self.count is None:
-                self.next_subtask = True
+                print('STEP GET NEXT SUBTASK eval condition')
                 self.subtask_idx = self.get_next_subtask()
                 if self.subtask is None:
                     r = 1
@@ -304,6 +299,7 @@ class SubtasksGridWorld(gym.Env):
         touching = pos in self.objects
 
         obs = self.get_observation()
+        self.set_pred()
 
         if touching and not t:
             self.iterate = False
@@ -322,10 +318,14 @@ class SubtasksGridWorld(gym.Env):
                         self.iterate = object_type == self.subtask.object
 
         self.last_terminal = t
+        self.next_subtask = self.iterate and self.count == 0
         return obs, r, t, {}
 
     def get_next_subtask(self):
         return self.subtask_idx + 1
+
+    def set_pred(self):
+        pass
 
 
 if __name__ == '__main__':

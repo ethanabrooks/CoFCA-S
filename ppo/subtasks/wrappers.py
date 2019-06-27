@@ -1,9 +1,9 @@
 from collections import namedtuple
 
 import gym
+import numpy as np
 from gym import spaces
 from gym.spaces import Box, Discrete
-import numpy as np
 
 Actions = namedtuple('Actions', 'a cr cg g')
 Obs = namedtuple('Obs', 'base subtask subtasks next_subtask')
@@ -18,22 +18,25 @@ class DebugWrapper(gym.Wrapper):
         for x in action_spaces:
             assert isinstance(x, Discrete)
         self.action_sections = len(action_spaces)
+        self.truth = None
 
     def step(self, action):
         actions = Actions(*[x.item() for x in np.split(action, self.action_sections)])
         s, _, t, i = super().step(action)
         guess = int(actions.g)
-        truth = int(self.env.unwrapped.subtask_idx)
-        print('guess', guess)
-        print('truth', truth)
+        env = self.env.unwrapped
+        truth = int(env.subtask_idx)
+        if truth > env.n_subtasks:  # truth is out of bounds
+            truth = self.truth  # keep truth at old value
+
         r = float(np.all(guess == truth)) - 1
         if r < 0:
             import ipdb
             ipdb.set_trace()
 
+        self.truth = truth
         self.last_guess = guess
         self.last_reward = r
-        print('********************************end of wrapper step**********************')
         return s, r, t, i
 
     def render(self, mode='human'):
@@ -102,4 +105,4 @@ class Wrapper(gym.Wrapper):
                 g_count + 1,
                 env.object_types[g_obj],
             )
-        input('paused')
+        # input('paused')

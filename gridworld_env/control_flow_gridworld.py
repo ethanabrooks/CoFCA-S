@@ -11,6 +11,7 @@ Obs = namedtuple('Obs', 'base subtasks conditions control')
 class ControlFlowGridWorld(SubtasksGridWorld):
     def __init__(self, *args, n_subtasks, force_branching=True, **kwargs):
         super().__init__(*args, n_subtasks=n_subtasks, **kwargs)
+        self.pred = None
         self.force_branching = force_branching
         if force_branching:
             assert n_subtasks % 2 == 0
@@ -32,6 +33,12 @@ class ControlFlowGridWorld(SubtasksGridWorld):
                             self.n_subtasks + 1,
                             2  # binary conditions
                         ]))))
+
+    def set_pred(self):
+        try:
+            self.pred = self.evaluate_condition()
+        except IndexError:
+            pass
 
     def render_task(self):
         def helper(i, indent):
@@ -84,24 +91,28 @@ class ControlFlowGridWorld(SubtasksGridWorld):
         self.subtask_idx = 0
         self.count = None
         self.iterate = True
+        self.next_subtask = True
+        print('RESET eval condition')
+        self.pred = self.evaluate_condition()
         return o._replace(conditions=self.conditions, control=self.control)
 
     def get_next_subtask(self):
         if self.subtask_idx > self.n_subtasks:
             return None
-
         resolution = self.evaluate_condition()
-        print('control', self.control)
-        print('subtask_idx', self.subtask_idx)
-        print('resolution', resolution)
-        print('new idx', self.control[self.subtask_idx, int(resolution)])
-
         return self.control[self.subtask_idx, int(resolution)]
 
     def evaluate_condition(self):
+        print('vvvvvvvvvvvvvvvvvvvvv beginning of eval condition vvvvvvvvvvvvvvvvvv')
+        print('conditions:')
+        print(self.conditions)
+        print('evaluate_condition subtask_idx', self.subtask_idx)
         object_type = self.conditions[self.subtask_idx]
-        print('evaluation:', object_type, self.objects)
-        return object_type in self.objects.values()
+        print('object_type', object_type)
+        print('objects.values', self.objects.values())
+        res = object_type in self.objects.values()
+        print('res', res)
+        return res
 
     def get_required_objects(self, _):
         required_objects = list(super().get_required_objects(self.subtasks))

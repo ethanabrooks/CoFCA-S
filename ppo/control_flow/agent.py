@@ -120,22 +120,26 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
             o = inputs.base[t].view(N, d, h * w)[:, 1:-2]  # 1 for obstacles 2 for ice and agent
             condition_idx = (inputs.subtask[t]).flatten().long()
             c = conditions[torch.arange(N, device=truth.device), condition_idx]
+            print(conditions)
+            print('agent inputs.subtask[t]', inputs.subtask[t])
+            print('agent condition_idx', condition_idx)
+            print('agent condition', c)
             phi_in = (c.unsqueeze(1) @ o).squeeze(1)
             # print('agent subtask', inputs.subtask[t])
             # print('agent conditions', conditions)
             # print('agent obs', o.view(N, -1, h, w))
             # print('agent debug obs', phi_in.view(N, h, w))
             pred = torch.any(phi_in > 0, dim=-1, keepdim=True).float()
-            print('agent pred', pred)
+            print('phi_in ', phi_in)
+            print('pred ', pred)
+            print('^^^^^^^^^^^^^^^^^^^^^^^^ end of computation of pred ^^^^^^^^^^^^^^^^^^^^^')
             # pred = self.phi_shift((c @ o).squeeze(1))  # TODO
             if torch.any(pred != truth):
                 import ipdb
                 ipdb.set_trace()
             pred = pred.unsqueeze(-1)
             trans = pred * true_path + (1 - pred) * false_path
-            print('p', p)
-            print('agent trans', trans)
-            print('p @ trans', (p.unsqueeze(1) @ trans).squeeze(1))
+            print(trans)
             return (p.unsqueeze(1) @ trans).squeeze(1)
 
         return self.pack(
