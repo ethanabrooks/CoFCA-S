@@ -17,7 +17,6 @@ class ControlFlowGridWorld(SubtasksGridWorld):
 
         self.conditions = None
         self.control = None
-        self.pred = None
         obs_space, subtasks_space = self.observation_space.spaces
         self.observation_space = spaces.Tuple(
             Obs(
@@ -88,12 +87,12 @@ class ControlFlowGridWorld(SubtasksGridWorld):
         return o._replace(conditions=self.conditions, control=self.control)
 
     def get_next_subtask(self):
-        resolution = self.evaluate_condition()
-        self.pred = resolution
+        resolution = self.evaluate_condition(self.subtask_idx)
         return self.control[self.subtask_idx, int(resolution)]
 
-    def evaluate_condition(self):
-        object_type = self.conditions[self.subtask_idx]
+    def evaluate_condition(self, subtask_idx):
+        object_type = self.conditions[subtask_idx]
+        print('env objects', self.objects)
         return object_type in self.objects.values()
 
     def get_required_objects(self, _):

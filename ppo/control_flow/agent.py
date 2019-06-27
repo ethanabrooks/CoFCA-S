@@ -22,8 +22,7 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
         self.obs_sections = Obs(*[int(np.prod(s.shape)) for s in self.obs_spaces])
         self.register_buffer('branch_one_hots', torch.eye(self.n_subtasks))
         num_object_types = int(self.obs_spaces.subtasks.nvec[0, 2])
-        self.register_buffer('condition_one_hots',
-                             torch.eye(num_object_types + 1))  # +1 for determinism
+        self.register_buffer('condition_one_hots', torch.eye(num_object_types))
         self.register_buffer('rows', torch.arange(self.n_subtasks).unsqueeze(-1).float())
 
         d, h, w = self.obs_shape
@@ -116,12 +115,23 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
             hx.g[new_episode] = 0.
 
         def update_attention(p, t):
+            truth = inputs.pred[t]
             d, h, w = self.obs_shape
-            o = inputs.base[t].view(N, d, h * w)
-            c = (p.unsqueeze(1) @ conditions).squeeze(1)
-            c = F.pad(c, (1, 1)).unsqueeze(1)  # TODO
-            pred = self.phi_shift(c @ o).unsqueeze(-1)  # TODO
-            # pred = inputs.pred[t].view(N, 1, 1)
+            o = inputs.base[t].view(N, d, h * w)[:, 1:-2]  # 1 for obstacles 2 for ice and agent
+            condition_idx = (inputs.subtask[t]).flatten().long()
+            c = conditions[torch.arange(N, device=truth.device), condition_idx]
+            phi_in = (c.unsqueeze(1) @ o).squeeze(1)
+            print('agent subtask', inputs.subtask[t])
+            print('agent conditions', conditions)
+            print('agent obs', o.view(N, -1, h, w))
+            print('agent debug obs', phi_in.view(N, h, w))
+            pred = torch.any(phi_in > 0, dim=-1, keepdim=True).float()
+            print('agent pred', pred)
+            # pred = self.phi_shift((c @ o).squeeze(1))  # TODO
+            if torch.any(pred != truth):
+                import ipdb
+                ipdb.set_trace()
+            pred = pred.unsqueeze(-1)
             trans = pred * true_path + (1 - pred) * false_path
             return (p.unsqueeze(1) @ trans).squeeze(1)
 
