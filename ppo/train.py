@@ -72,6 +72,18 @@ class Train:
             torch.backends.cudnn.benchmark = False
             torch.backends.cudnn.deterministic = True
 
+        device = 'cpu'
+        if cuda:
+            device_num = get_random_gpu()
+            if run_id:
+                match = re.search('\d+$', run_id)
+                if match:
+                    device_num = int(match.group()) % get_n_gpu()
+
+            device = torch.device('cuda', device_num)
+        print('Using device', device)
+        self.device = device
+
         writer = None
         if log_dir:
             writer = SummaryWriter(logdir=str(log_dir))
@@ -100,21 +112,12 @@ class Train:
         obs = envs.reset()
         rollouts.obs[0].copy_(obs)
 
-        device = 'cpu'
         if cuda:
-            device_num = get_random_gpu()
-            if run_id:
-                match = re.search('\d+$', run_id)
-                if match:
-                    device_num = int(match.group()) % get_n_gpu()
-
-            device = torch.device('cuda', device_num)
             tick = time.time()
             envs.to(device)
             self.agent.to(device)
             rollouts.to(device)
             print('Values copied to GPU in', time.time() - tick, 'seconds')
-        print('Using device', device)
 
         ppo = PPO(agent=self.agent, batch_size=batch_size, **ppo_args)
 
@@ -123,7 +126,7 @@ class Train:
         last_save = start
 
         if load_path:
-            state_dict = torch.load(load_path)
+            state_dict = torch.load(load_path, map_location=device)
             self.agent.load_state_dict(state_dict['agent'])
             ppo.optimizer.load_state_dict(state_dict['optimizer'])
             start = state_dict.get('step', -1) + 1
