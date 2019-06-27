@@ -27,7 +27,7 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
         self.n_conditions = self.obs_spaces.conditions.shape[0]
 
         d, h, w = self.obs_shape
-        in_size = (self.n_conditions - 1) * d * h * w
+        in_size = num_object_types * d * h * w
         self.phi_shift = nn.Sequential(
             Reshape(-1, in_size),
             init_(nn.Linear(in_size, 1), 'sigmoid'),
@@ -119,7 +119,7 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
             condition_idx = (inputs.subtask[t]).flatten().long()
             c2 = conditions[torch.arange(N, device=truth.device), condition_idx]
             c = (p.unsqueeze(1) @ conditions).squeeze(1)
-            phi_in = c.view(N, self.n_conditions - 1, 1, 1, 1) * inputs.base[t].unsqueeze(1)
+            phi_in = c.view(N, conditions.size(2), 1, 1, 1) * inputs.base[t].unsqueeze(1)
             # phi_in = (c.unsqueeze(1) @ o).squeeze(1)
             # print('agent subtask', inputs.subtask[t])
             # print('agent conditions', conditions)
@@ -135,17 +135,16 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
             return (p.unsqueeze(1) @ trans).squeeze(1)
 
         return self.pack(
-            self.inner_loop(
-                a=hx.a,
-                g=hx.g,
-                M=M,
-                M123=M123,
-                N=N,
-                T=T,
-                float_subtask=hx.subtask,
-                next_subtask=inputs.next_subtask,
-                obs=inputs.base,
-                p=p,
-                r=r,
-                actions=actions,
-                update_attention=update_attention))
+            self.inner_loop(a=hx.a,
+                            g=hx.g,
+                            M=M,
+                            M123=M123,
+                            N=N,
+                            T=T,
+                            float_subtask=hx.subtask,
+                            next_subtask=inputs.next_subtask,
+                            obs=inputs.base,
+                            p=p,
+                            r=r,
+                            actions=actions,
+                            update_attention=update_attention))
