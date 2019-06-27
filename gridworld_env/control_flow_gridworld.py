@@ -82,17 +82,25 @@ class ControlFlowGridWorld(SubtasksGridWorld):
         self.control = 1 + np.array(list(get_control()))
         self.conditions = self.np_random.choice(len(self.object_types), size=n)
         self.subtask_idx = 0
-        self.subtask_idx = self.get_next_subtask()
-        self.count = self.subtask.count
+        self.count = None
+        self.iterate = True
         return o._replace(conditions=self.conditions, control=self.control)
 
     def get_next_subtask(self):
-        resolution = self.evaluate_condition(self.subtask_idx)
+        if self.subtask_idx > self.n_subtasks:
+            return None
+
+        resolution = self.evaluate_condition()
+        print('control', self.control)
+        print('subtask_idx', self.subtask_idx)
+        print('resolution', resolution)
+        print('new idx', self.control[self.subtask_idx, int(resolution)])
+
         return self.control[self.subtask_idx, int(resolution)]
 
-    def evaluate_condition(self, subtask_idx):
-        object_type = self.conditions[subtask_idx]
-        print('env objects', self.objects)
+    def evaluate_condition(self):
+        object_type = self.conditions[self.subtask_idx]
+        print('evaluation:', object_type, self.objects)
         return object_type in self.objects.values()
 
     def get_required_objects(self, _):

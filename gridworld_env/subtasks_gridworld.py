@@ -168,7 +168,8 @@ class SubtasksGridWorld(gym.Env):
         else:
             print('subtask:')
             print(self.subtask)
-        print('remaining:', self.count + 1)
+        if self.count is not None:
+            print('remaining:', self.count + 1)
         print('action:', end=' ')
         if self.last_action is not None:
             print(self.transition_strings[self.last_action])
@@ -236,16 +237,18 @@ class SubtasksGridWorld(gym.Env):
         self.objects = {tuple(p): t for p, t in zip(objects_pos, types)}
 
         self.subtask_idx = 0
-        self.count = self.subtask.count
+        self.count = 0
         self.last_terminal = False
         self.last_action = None
         self.iterate = False
-        self.next_subtask = True
+        self.next_subtask = False
         return self.get_observation()
 
     def objects_one_hot(self):
+        #TODO refactor
         h, w, = self.desc.shape
         objects_one_hot = np.zeros((1 + len(self.object_types), h, w), dtype=bool)
+        print('objects_one_hot objects', self.objects)
         idx = [(v, ) + k for k, v in self.objects.items()]
         set_index(objects_one_hot, idx, True)
         return objects_one_hot
@@ -267,12 +270,15 @@ class SubtasksGridWorld(gym.Env):
         self.np_random, seed = seeding.np_random(seed)
         return [seed]
 
+    def get_next_subtask(self):
+        return self.iterate and not self.count
+
     def step(self, a):
         self.next_subtask = False
         t = False
         r = -.1
         if self.iterate:
-            if self.count == 0:
+            if self.count == 0 or self.count is None:
                 self.next_subtask = True
                 self.subtask_idx = self.get_next_subtask()
                 if self.subtask is None:

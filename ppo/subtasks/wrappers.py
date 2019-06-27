@@ -21,16 +21,19 @@ class DebugWrapper(gym.Wrapper):
 
     def step(self, action):
         actions = Actions(*[x.item() for x in np.split(action, self.action_sections)])
+        s, _, t, i = super().step(action)
         guess = int(actions.g)
         truth = int(self.env.unwrapped.subtask_idx)
+        print('guess', guess)
+        print('truth', truth)
         r = float(np.all(guess == truth)) - 1
         if r < 0:
             import ipdb
             ipdb.set_trace()
-        s, _, t, i = super().step(action)
 
         self.last_guess = guess
         self.last_reward = r
+        print('********************************end of wrapper step**********************')
         return s, r, t, i
 
     def render(self, mode='human'):
