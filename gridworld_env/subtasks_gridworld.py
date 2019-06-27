@@ -300,8 +300,8 @@ class SubtasksGridWorld(gym.Env):
         obs = self.get_observation()
         self.set_pred()
 
+        self.iterate = False
         if touching and not t:
-            self.iterate = False
             object_type = self.objects[pos]
             interaction = self.interactions[self.subtask.interaction]
             if 'visit' == interaction:
