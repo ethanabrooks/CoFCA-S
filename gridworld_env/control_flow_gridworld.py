@@ -11,6 +11,8 @@ Obs = namedtuple('Obs', 'base subtasks conditions control')
 class ControlFlowGridWorld(SubtasksGridWorld):
     def __init__(self, *args, n_subtasks, force_branching=False, **kwargs):
         super().__init__(*args, n_subtasks=n_subtasks, **kwargs)
+        self.passing_objects = None
+        self.failing_objects = None
         self.pred = None
         self.force_branching = force_branching
         if force_branching:
@@ -18,6 +20,7 @@ class ControlFlowGridWorld(SubtasksGridWorld):
 
         self.conditions = None
         self.control = None
+        self.required_objects = None
         obs_space, subtasks_space = self.observation_space.spaces
         self.observation_space = spaces.Tuple(
             Obs(
@@ -80,15 +83,48 @@ class ControlFlowGridWorld(SubtasksGridWorld):
 
     def subtasks_generator(self):
         choices = self.np_random.choice(len(self.possible_subtasks), size=self.n_subtasks + 1)
-        for subtask in self.possible_subtasks[choices]:
-            yield self.Subtask(*subtask)
+        subtasks = [self.Subtask(*self.possible_subtasks[i]) for i in choices]
+        i = 0
+        encountered_conditions = []
+        encountered_subtasks = []
+        while True:
+            encountered_conditions.append(self.conditions[i])
+            i = self.control[i, int(self.conditions[i] in self.required_objects)]
+            if i > self.n_subtasks:
+                break
+            encountered_subtasks += [subtasks[i]]
+            # obj = subtasks[i].object
+            # # if obj == 3:
+            # #     import ipdb
+            # #     ipdb.set_trace()
+            #
+            # if obj not in self.required_objects:
+            #     if subtasks[i].interaction in {1, 2} and obj not in previous_failing_conditions:
+            #         self.required_objects += [obj]
+            #     elif subtasks[i].interaction in {0} and obj not in self.failing_conditions:
+            #         self.required_objects += [obj]
+            #     else:
+            #         obj = self.np_random.choice(self.required_objects)
+            #         subtasks[i] = subtasks[i]._replace(object=obj)
+            # if subtasks[i].interaction in {1, 2}:
+            #     self.required_objects += [obj]
+        for i, condition in enumerate(encountered_conditions):
+            obj = subtasks[i].object
+            if obj not in self.required_objects:
+                obj = self.np_random.choice(self.required_objects)
+                subtasks[i] = subtasks[i]._replace(object=obj)
+            if subtasks[i].interaction in {1, 2}:
+                for future_condition in encountered_conditions[i + 1:]:
+                    if future_condition == obj:
+                        self.required_objects += [obj]
+
+        yield from subtasks
 
     def reset(self):
-        o = super().reset()
         n = self.n_subtasks + 1
 
         def get_control():
-            for i in range(self.n_subtasks + 1):
+            for i in range(n):
                 j = 2 * i
                 if self.force_branching or self.np_random.rand() < .7:
                     yield j, j + 1
@@ -96,7 +132,18 @@ class ControlFlowGridWorld(SubtasksGridWorld):
                     yield j, j
 
         self.control = 1 + np.minimum(np.array(list(get_control())), self.n_subtasks)
-        self.conditions = self.np_random.choice(len(self.object_types), size=n)
+
+        object_types = np.arange(len(self.object_types))
+        self.np_random.shuffle(object_types)
+        object_types = object_types.reshape(-1, 2)  # TODO: what if not % 2?
+        conditions_idxs = self.np_random.choice(len(object_types), size=n)
+        branching = (self.control[:, 0] != self.control[:, 1])
+        passing = self.np_random.choice(2, size=n)
+        self.conditions = object_types[conditions_idxs, passing]
+        self.failing_conditions = self.conditions[branching * (1 - passing).astype(bool)]
+        self.required_objects = list(object_types[:, 1])
+
+        o = super().reset()
         self.subtask_idx = 0
         self.count = None
         self.iterate = True
@@ -115,19 +162,14 @@ class ControlFlowGridWorld(SubtasksGridWorld):
         return object_type in self.objects.values()
 
     def get_required_objects(self, _):
-        required_objects = list(super().get_required_objects(self.subtasks))
-        yield from required_objects
-        # for condition in self.conditions:
-        # if condition not in required_objects:
-        # if self.np_random.rand() < .5:
-        # yield condition
+        yield from self.required_objects
 
 
 def main(seed, n_subtasks):
     kwargs = gridworld_env.get_args('4x4SubtasksGridWorld-v0')
     del kwargs['class_']
     del kwargs['max_episode_steps']
-    kwargs.update(interactions=['pick-up', 'transform'], n_subtasks=n_subtasks, max_task_count=1)
+    kwargs.update(n_subtasks=n_subtasks, max_task_count=1)
     env = ControlFlowGridWorld(**kwargs, evaluation=False, eval_subtasks=[])
     actions = 'wsadeq'
     gridworld_env.keyboard_control.run(env, actions=actions, seed=seed)
