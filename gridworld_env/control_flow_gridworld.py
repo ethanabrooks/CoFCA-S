@@ -9,7 +9,7 @@ Obs = namedtuple('Obs', 'base subtasks conditions control')
 
 
 class ControlFlowGridWorld(SubtasksGridWorld):
-    def __init__(self, *args, n_subtasks, force_branching=True, **kwargs):
+    def __init__(self, *args, n_subtasks, force_branching=False, **kwargs):
         super().__init__(*args, n_subtasks=n_subtasks, **kwargs)
         self.pred = None
         self.force_branching = force_branching
@@ -90,7 +90,7 @@ class ControlFlowGridWorld(SubtasksGridWorld):
         def get_control():
             for i in range(self.n_subtasks + 1):
                 j = 2 * i
-                if self.force_branching or self.np_random.rand() < .5:
+                if self.force_branching or self.np_random.rand() < .7:
                     yield j, j + 1
                 else:
                     yield j, j
