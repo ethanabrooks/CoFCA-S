@@ -9,7 +9,7 @@ Obs = namedtuple('Obs', 'base subtasks conditions control')
 
 
 class ControlFlowGridWorld(SubtasksGridWorld):
-    def __init__(self, *args, n_subtasks, force_branching=False, **kwargs):
+    def __init__(self, *args, n_subtasks, force_branching=True, **kwargs):
         super().__init__(*args, n_subtasks=n_subtasks, **kwargs)
         self.pred = None
         self.force_branching = force_branching
@@ -89,13 +89,13 @@ class ControlFlowGridWorld(SubtasksGridWorld):
 
         def get_control():
             for i in range(self.n_subtasks + 1):
-                if (self.force_branching or self.np_random.rand() < .5
-                    ) and i + 1 < self.n_subtasks:  # no if _: do _ else terminate
-                    yield i, i + 1
+                j = 2 * i
+                if self.force_branching or self.np_random.rand() < .5:
+                    yield j, j + 1
                 else:
-                    yield i, i
+                    yield j, j
 
-        self.control = 1 + np.array(list(get_control()))
+        self.control = 1 + np.minimum(np.array(list(get_control())), self.n_subtasks)
         self.conditions = self.np_random.choice(len(self.object_types), size=n)
         self.subtask_idx = 0
         self.count = None
@@ -127,7 +127,7 @@ def main(seed, n_subtasks):
     kwargs = gridworld_env.get_args('4x4SubtasksGridWorld-v0')
     del kwargs['class_']
     del kwargs['max_episode_steps']
-    kwargs.update(interactions=['pick-up', 'transform'], n_subtasks=n_subtasks)
+    kwargs.update(interactions=['pick-up', 'transform'], n_subtasks=n_subtasks, max_task_count=1)
     env = ControlFlowGridWorld(**kwargs, evaluation=False, eval_subtasks=[])
     actions = 'wsadeq'
     gridworld_env.keyboard_control.run(env, actions=actions, seed=seed)
