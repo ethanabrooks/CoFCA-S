@@ -85,38 +85,50 @@ class ControlFlowGridWorld(SubtasksGridWorld):
         choices = self.np_random.choice(len(self.possible_subtasks), size=self.n_subtasks + 1)
         subtasks = [self.Subtask(*self.possible_subtasks[i]) for i in choices]
         i = 0
-        encountered_conditions = []
+        encountered_passing = []
+        encountered_failing = []
         encountered_subtasks = []
+        encountered_idxs = []
         while True:
-            encountered_conditions.append(self.conditions[i])
-            i = self.control[i, int(self.conditions[i] in self.required_objects)]
+            passing = self.conditions[i] in self.required_objects
+            branching = self.control[i, 0] != self.control[i, 1]
+            encountered_passing += [self.conditions[i] if branching and passing else None]
+            encountered_failing += [self.conditions[i] if branching and not passing else None]
+            i = self.control[i, int(passing)]
             if i > self.n_subtasks:
                 break
             encountered_subtasks += [subtasks[i]]
-            # obj = subtasks[i].object
-            # # if obj == 3:
-            # #     import ipdb
-            # #     ipdb.set_trace()
-            #
-            # if obj not in self.required_objects:
-            #     if subtasks[i].interaction in {1, 2} and obj not in previous_failing_conditions:
-            #         self.required_objects += [obj]
-            #     elif subtasks[i].interaction in {0} and obj not in self.failing_conditions:
-            #         self.required_objects += [obj]
-            #     else:
-            #         obj = self.np_random.choice(self.required_objects)
-            #         subtasks[i] = subtasks[i]._replace(object=obj)
-            # if subtasks[i].interaction in {1, 2}:
-            #     self.required_objects += [obj]
-        for i, condition in enumerate(encountered_conditions):
-            obj = subtasks[i].object
-            if obj not in self.required_objects:
-                obj = self.np_random.choice(self.required_objects)
-                subtasks[i] = subtasks[i]._replace(object=obj)
-            if subtasks[i].interaction in {1, 2}:
-                for future_condition in encountered_conditions[i + 1:]:
-                    if future_condition == obj:
-                        self.required_objects += [obj]
+            encountered_idxs += [i]
+
+        self.required_objects = list(set(o for o in encountered_passing if o is not None))
+        available = [x for x in self.required_objects]
+
+        print(self.object_types)
+        print('encountered_failing', encountered_failing)
+        print('encountered_idxs', encountered_idxs)
+        for i, subtask in enumerate(subtasks):
+            if i in encountered_idxs:
+                obj = subtask.object
+                to_be_removed = subtask.interaction in {1, 2}
+                print('available', available)
+                if obj not in available:
+                    print('subtask', subtask)
+                    print('encountered_failing[:i + 1]', encountered_failing[:i + 1])
+                    if (not to_be_removed and obj in encountered_failing) or (
+                            to_be_removed and obj in encountered_failing[:i + 1]):
+                        # choose a different object
+                        obj = self.np_random.choice(self.required_objects)
+                        subtasks[i] = subtask._replace(object=obj)
+
+                    # add object to map
+                    self.required_objects += [obj]
+                    available += [obj]
+                    print('required', self.required_objects)
+                    print('available', available)
+
+                if to_be_removed:
+                    available.remove(obj)
+                    print('available', available)
 
         yield from subtasks
 
