@@ -7,6 +7,7 @@ from torch import nn as nn
 import torch.jit
 from torch.nn import functional as F
 
+from gridworld_env.subtasks_gridworld import Obs
 import ppo
 from ppo.agent import AgentValues, NNBase
 from ppo.distributions import Categorical, DiagGaussian, FixedCategorical
@@ -14,7 +15,6 @@ from ppo.layers import Concat, Flatten, Parallel, Product
 import ppo.subtasks.teacher
 from ppo.subtasks.teacher import Teacher, g123_to_binary, g_binary_to_123
 from ppo.subtasks.wrappers import Actions
-from gridworld_env.subtasks_gridworld import Obs
 from ppo.utils import broadcast3d, init_, interp, trace
 
 RecurrentState = namedtuple(
@@ -187,14 +187,15 @@ class Recurrence(torch.jit.ScriptModule):
         if multiplicative_interaction:
             self.phi_update = nn.Sequential(
                 Parallel(
-                    init_(nn.Linear(d, hidden_size)),  # obs
-                    init_(nn.Linear(action_spaces.a.n, hidden_size)),  # action
+                    # self.conv2,  # obs
+                    init_(nn.Linear(d, 2)),
+                    init_(nn.Linear(action_spaces.a.n, 2)),  # action
                     *[
-                        init_(nn.Linear(i, hidden_size)) for i in self.subtask_nvec
+                        init_(nn.Linear(i, 2)) for i in self.subtask_nvec
                     ],  # subtask parameter
                 ),
                 Product(),
-                init_(nn.Linear(hidden_size, 2), "sigmoid"),
+                # init_(nn.Linear(hidden_size, 2), "sigmoid"),
             )
         else:
             self.phi_update = trace(
