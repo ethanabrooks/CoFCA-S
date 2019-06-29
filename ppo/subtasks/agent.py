@@ -131,7 +131,7 @@ def sample_new(x, dist):
     x[new] = dist.sample()[new].flatten()
 
 
-class Recurrence(torch.jit.ScriptModule):
+class Recurrence(nn.Module):
     __constants__ = ["input_sections", "subtask_space", "state_sizes", "recurrent"]
 
     def __init__(
@@ -203,10 +203,12 @@ class Recurrence(torch.jit.ScriptModule):
                 init_(nn.Linear(hidden_size, 2), "sigmoid"),
             )
         else:
-            self.phi_update = trace(
-                lambda in_size: init_(nn.Linear(in_size, 2), "sigmoid"),
-                in_size=(d * action_spaces.a.n * int(self.subtask_nvec.prod())),
-            )
+            # self.phi_update = trace(
+            # lambda in_size: init_(nn.Linear(in_size, 2), "sigmoid"),
+            in_size = d * action_spaces.a.n * int(self.subtask_nvec.prod())
+            # ,)
+            # )
+            self.phi_update = init_(nn.Linear(in_size, 2), "sigmoid")
 
         for i, x in enumerate(self.subtask_nvec):
             self.register_buffer(f"part{i}_one_hot", torch.eye(int(x)))
@@ -394,6 +396,7 @@ class Recurrence(torch.jit.ScriptModule):
         update_attention,
     ):
         # combine past and present actions (sampled values)
+        p1 = p
         A = actions.a.long().squeeze(2)
         G = torch.cat([actions.g, g.unsqueeze(0)], dim=0).long().squeeze(2)
         for t in range(T):
@@ -405,7 +408,7 @@ class Recurrence(torch.jit.ScriptModule):
 
             # p
             p2 = update_attention(p, t)
-            p = interp(p, p2, cr)
+            p = interp(p1, p2, cr)
 
             # r
             r = (p.unsqueeze(1) @ M).squeeze(1)
@@ -446,18 +449,20 @@ class Recurrence(torch.jit.ScriptModule):
                     subtask_param, tuple(self.subtask_nvec), dim=-1
                 )
                 a_one_hot = self.a_one_hots[A[t]]
-                correct_object = (obj * debug_obs[:, : self.subtask_nvec[2]]).sum(
-                    -1, keepdim=True
-                )
-                correct_action = interaction[:, :1] + (
-                    interaction[:, 1:] * a_one_hot[:, 4:]
-                ).sum(-1, keepdim=True)
-                truth = (correct_action * correct_object).detach()
-                parts = (debug_obs, a_one_hot, interaction, obj, count)
+                # correct_object = obj * debug_obs[:, : self.subtask_nvec[2]]
+                # column1 = interaction[:, :1]
+                # column2 = interaction[:, 1:] * a_one_hot[:, 4:]
+                # correct_action = torch.cat([column1, column2], dim=-1)
+                # truth = (
+                # correct_action.sum(-1, keepdim=True)
+                # * correct_object.sum(-1, keepdim=True)
+                # ).detach()
 
                 if self.multiplicative_interaction:
+                    parts = (obs[t], a_one_hot, *task_sections)
                     c_logits = self.phi_update(parts)
                 else:
+                    parts = (debug_obs, a_one_hot, interaction, obj, count)
                     outer_product_obs = 1
                     for i1, part in enumerate(parts):
                         for i2 in range(len(parts)):
@@ -478,8 +483,7 @@ class Recurrence(torch.jit.ScriptModule):
                     loss = F.binary_cross_entropy(
                         torch.clamp(c, 0.0, 1.0), next_subtask[t], reduction="none"
                     )
-                # return c, loss, probs
-                return truth, loss, probs  # TODO
+                return c, loss, probs
 
             # cr
             cr, cr_loss, cr_probs = phi_update(subtask_param=r)
