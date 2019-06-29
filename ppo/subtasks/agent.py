@@ -459,14 +459,14 @@ class Recurrence(torch.jit.ScriptModule):
                 if self.multiplicative_interaction:
                     c_logits = self.phi_update(parts)
                 else:
-                    outer_produce_obs = 1
+                    outer_product_obs = 1
                     for i1, part in enumerate(parts):
                         for i2 in range(len(parts)):
                             if i1 != i2:
                                 part.unsqueeze_(i2 + 1)
-                        outer_produce_obs = outer_produce_obs * part
+                        outer_product_obs = outer_product_obs * part
 
-                    c_logits = self.phi_update(outer_produce_obs.view(N, -1))
+                    c_logits = self.phi_update(outer_product_obs.view(N, -1))
                 if self.hard_update:
                     c_dist = FixedCategorical(logits=c_logits)
                     c = actions.c[t]
