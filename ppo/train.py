@@ -72,6 +72,17 @@ class Train:
             torch.backends.cudnn.benchmark = False
             torch.backends.cudnn.deterministic = True
 
+        self.device = 'cpu'
+        if cuda:
+            device_num = get_random_gpu()
+            if run_id:
+                match = re.search('\d+$', run_id)
+                if match:
+                    device_num = int(match.group()) % get_n_gpu()
+
+            self.device = torch.device('cuda', device_num)
+        print('Using device', self.device)
+
         writer = None
         if log_dir:
             writer = SummaryWriter(logdir=str(log_dir))
@@ -88,7 +99,7 @@ class Train:
             synchronous=True if render else synchronous,
             evaluation=False)
 
-        self.agent = self.build_agent(envs, **agent_args)
+        self.agent = self.build_agent(envs=envs, **agent_args)
         rollouts = RolloutStorage(
             num_steps=num_steps,
             num_processes=num_processes,
@@ -100,21 +111,12 @@ class Train:
         obs = envs.reset()
         rollouts.obs[0].copy_(obs)
 
-        device = 'cpu'
         if cuda:
-            device_num = get_random_gpu()
-            if run_id:
-                match = re.search('\d+$', run_id)
-                if match:
-                    device_num = int(match.group()) % get_n_gpu()
-
-            device = torch.device('cuda', device_num)
             tick = time.time()
-            envs.to(device)
-            self.agent.to(device)
-            rollouts.to(device)
+            envs.to(self.device)
+            self.agent.to(self.device)
+            rollouts.to(self.device)
             print('Values copied to GPU in', time.time() - tick, 'seconds')
-        print('Using device', device)
 
         ppo = PPO(agent=self.agent, batch_size=batch_size, **ppo_args)
 
@@ -123,7 +125,7 @@ class Train:
         last_save = start
 
         if load_path:
-            state_dict = torch.load(load_path)
+            state_dict = torch.load(load_path, map_location=self.device)
             self.agent.load_state_dict(state_dict['agent'])
             ppo.optimizer.load_state_dict(state_dict['optimizer'])
             start = state_dict.get('step', -1) + 1
@@ -203,7 +205,7 @@ class Train:
                     evaluation=True,
                     synchronous=True if render_eval else synchronous,
                     render=render_eval)
-                eval_envs.to(device)
+                eval_envs.to(self.device)
 
                 # vec_norm = get_vec_normalize(eval_envs)
                 # if vec_norm is not None:
@@ -212,8 +214,10 @@ class Train:
 
                 obs = eval_envs.reset()
                 eval_recurrent_hidden_states = torch.zeros(
-                    num_processes, self.agent.recurrent_hidden_state_size, device=device)
-                eval_masks = torch.zeros(num_processes, 1, device=device)
+                    num_processes,
+                    self.agent.recurrent_hidden_state_size,
+                    device=self.device)
+                eval_masks = torch.zeros(num_processes, 1, device=self.device)
                 eval_counter = Counter()
 
                 eval_values = self.run_epoch(
@@ -354,6 +358,6 @@ class Train:
         if num_frame_stack is not None:
             envs = VecPyTorchFrameStack(envs, num_frame_stack)
         # elif len(envs.observation_space.shape) == 3:
-        #     envs = VecPyTorchFrameStack(envs, 4, device)
+        #     envs = VecPyTorchFrameStack(envs, 4, self.device)
 
         return envs

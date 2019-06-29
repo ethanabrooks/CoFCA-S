@@ -154,8 +154,7 @@ def metacontroller_cli():
                     control_flow=control_flow)
 
             # noinspection PyMethodOverriding
-            @staticmethod
-            def build_agent(envs, **agent_args):
+            def build_agent(self, envs, **agent_args):
                 agent = None
                 obs_spaces = get_spaces(envs, control_flow)
                 if agent_load_path:
@@ -164,7 +163,7 @@ def metacontroller_cli():
                         action_space=envs.action_space,
                         **agent_args)
 
-                    state_dict = torch.load(agent_load_path)
+                    state_dict = torch.load(agent_load_path, map_location=self.device)
                     state_dict['agent'].update(
                         part0_one_hot=agent.part0_one_hot,
                         part1_one_hot=agent.part1_one_hot,
