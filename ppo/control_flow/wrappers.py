@@ -8,7 +8,7 @@ import numpy as np
 import gridworld_env.control_flow_gridworld
 import ppo.subtasks.wrappers
 
-Obs = namedtuple('Obs', 'base subtask subtasks conditions control next_subtask')
+Obs = namedtuple('Obs', 'base subtask subtasks conditions control next_subtask pred')
 
 
 class Wrapper(ppo.subtasks.Wrapper):
@@ -22,6 +22,7 @@ class Wrapper(ppo.subtasks.Wrapper):
             control=obs_spaces.control,
             subtask=spaces.Discrete(obs_spaces.subtasks.nvec.shape[0]),
             next_subtask=spaces.Discrete(2),
+            pred=spaces.Discrete(2),
         )
         # noinspection PyProtectedMember
         self.observation_space = spaces.Tuple(
@@ -37,12 +38,15 @@ class Wrapper(ppo.subtasks.Wrapper):
 
     def wrap_observation(self, observation):
         obs = gridworld_env.control_flow_gridworld.Obs(*observation)
+        env = self.env.unwrapped
         obs = Obs(
             base=obs.base,
             subtasks=obs.subtasks,
             conditions=obs.conditions,
             control=obs.control,
-            subtask=[self.env.unwrapped.subtask_idx],
-            next_subtask=[self.env.unwrapped.next_subtask])
+            subtask=[env.subtask_idx],
+            next_subtask=[self.next_subtask],
+            pred=[env.pred],
+        )
         # print([np.shape(x) for x in obs])
         return np.concatenate([np.array(list(x)).flatten() for x in obs])

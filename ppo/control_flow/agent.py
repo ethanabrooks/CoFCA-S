@@ -45,6 +45,7 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
             conditions=self.obs_spaces.conditions.nvec.shape,
             control=self.obs_spaces.control.nvec.shape,
             next_subtask=[1],
+            pred=[1],
         )
 
     @property
@@ -113,9 +114,10 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
         def update_attention(p, t):
             o = inputs.base[t].unsqueeze(2)
             c = (p.unsqueeze(1) @ conditions).view(N, 1, -1, 1, 1)
-            pred = self.phi_shift(o * c)
+            pred = self.phi_shift(o * c)  # TODO
+            # pred = inputs.pred[t].view(N, 1, 1)
             trans = pred * true_path + (1 - pred) * false_path
-            return (trans @ p.unsqueeze(-1)).squeeze(-1)
+            return (p.unsqueeze(1) @ trans).squeeze(1)
 
         return self.pack(
             self.inner_loop(
