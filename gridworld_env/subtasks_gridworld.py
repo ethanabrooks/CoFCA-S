@@ -169,8 +169,9 @@ class SubtasksGridWorld(gym.Env):
             print('*************')
         else:
             print('subtask:')
-            print(self.subtask)
-        print('remaining:', self.count + 1)
+            self.render_current_subtask()
+        if self.count is not None:
+            print('remaining:', self.count + 1)
         print('action:', end=' ')
         if self.last_action is not None:
             print(self.transition_strings[self.last_action])
@@ -180,10 +181,8 @@ class SubtasksGridWorld(gym.Env):
         # noinspection PyTypeChecker
         desc = self.desc.copy()
         desc[self.obstacles_one_hot] = '#'
-        positions = self.objects_one_hot()
-        types = np.append(self.object_types, 'ice')
-        for pos, obj in zip(positions, types):
-            desc[pos] = obj[0]
+        for pos, obj in self.objects.items():
+            desc[pos] = self.object_types[obj][0]
         desc[tuple(self.pos)] = '*'
 
         for row in desc:
@@ -191,6 +190,9 @@ class SubtasksGridWorld(gym.Env):
             print(''.join(row), end='')
             print(six.u('\x1b[49m\x1b[39m'))
         # time.sleep(4 * sleep_time if self.last_terminal else sleep_time)
+
+    def render_current_subtask(self):
+        print(f'{self.subtask_idx}:{self.subtask}')
 
     def render_task(self):
         for line in self.subtasks:
