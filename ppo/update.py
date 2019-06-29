@@ -36,22 +36,20 @@ class PPO:
         self.max_grad_norm = max_grad_norm
         self.use_clipped_value_loss = use_clipped_value_loss
 
-        self.optimizer = optim.Adam(
-            agent.parameters(), lr=learning_rate, eps=eps)
+        self.optimizer = optim.Adam(agent.parameters(), lr=learning_rate, eps=eps)
         self.reward_function = None
 
     def update(self, rollouts: RolloutStorage):
         advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
         if advantages.numel() > 1:
-            advantages = (advantages - advantages.mean()) / (
-                advantages.std() + 1e-5)
+            advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-5)
 
         logger = collections.Counter()
 
         for e in range(self.ppo_epoch):
             if self.agent.is_recurrent:
-                data_generator = rollouts.recurrent_generator(
-                    advantages, self.num_mini_batch)
+                data_generator = rollouts.recurrent_generator(advantages,
+                                                              self.num_mini_batch)
             else:
                 data_generator = rollouts.feed_forward_generator(
                     advantages, self.num_mini_batch)
@@ -71,8 +69,7 @@ class PPO:
                 logger.update(**log_values)
 
                 if not self.aux_loss_only:
-                    ratio = torch.exp(action_log_probs -
-                                      sample.old_action_log_probs)
+                    ratio = torch.exp(action_log_probs - sample.old_action_log_probs)
                     surr1 = ratio * sample.adv
                     surr2 = torch.clamp(ratio, 1.0 - self.clip_param,
                                         1.0 + self.clip_param) * sample.adv
@@ -86,10 +83,8 @@ class PPO:
                                          (values - sample.value_preds).clamp(
                                              -self.clip_param, self.clip_param)
                     value_losses = (values - sample.ret).pow(2)
-                    value_losses_clipped = (
-                        value_pred_clipped - sample.ret).pow(2)
-                    value_loss = .5 * torch.max(value_losses,
-                                                value_losses_clipped).mean()
+                    value_losses_clipped = (value_pred_clipped - sample.ret).pow(2)
+                    value_loss = .5 * torch.max(value_losses, value_losses_clipped).mean()
                 else:
                     value_loss = 0.5 * F.mse_loss(sample.ret, values)
                 logger.update(value_loss=value_loss)
@@ -98,8 +93,7 @@ class PPO:
                 self.optimizer.zero_grad()
                 loss.backward()
 
-                nn.utils.clip_grad_norm_(self.agent.parameters(),
-                                         self.max_grad_norm)
+                nn.utils.clip_grad_norm_(self.agent.parameters(), self.max_grad_norm)
                 self.optimizer.step()
 
                 # noinspection PyTypeChecker

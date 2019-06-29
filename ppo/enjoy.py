@@ -11,8 +11,7 @@ from ppo.utils import get_render_func
 from ppo.wrappers import get_vec_normalize
 
 parser = argparse.ArgumentParser(description='RL')
-parser.add_argument(
-    '--seed', type=int, default=1, help='random seed (default: 1)')
+parser.add_argument('--seed', type=int, default=1, help='random seed (default: 1)')
 parser.add_argument(
     '--log-interval',
     type=int,
@@ -61,8 +60,7 @@ if vec_norm is not None:
     vec_norm.eval()
     vec_norm.ob_rms = ob_rms
 
-recurrent_hidden_states = torch.zeros(1,
-                                      actor_critic.recurrent_hidden_state_size)
+recurrent_hidden_states = torch.zeros(1, actor_critic.recurrent_hidden_state_size)
 masks = torch.zeros(1, 1)
 
 if render_func is not None:

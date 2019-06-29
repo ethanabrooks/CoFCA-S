@@ -26,10 +26,8 @@ class RandomGridWorld(GridWorld):
     def set_randoms(self):
         n_choices = sum(self.random.values())
         possible_choices, = np.where(self.possible_choices != self.s)
-        choices = self.np_random.choice(
-            possible_choices, size=n_choices, replace=False)
-        *self.random_states, _ = np.split(
-            choices, np.cumsum(list(self.random.values())))
+        choices = self.np_random.choice(possible_choices, size=n_choices, replace=False)
+        *self.random_states, _ = np.split(choices, np.cumsum(list(self.random.values())))
 
         self.assign(**dict(zip(self.random.keys(), self.random_states)))
 

@@ -3,11 +3,12 @@ import json
 import os
 import os.path as osp
 
-from baselines.bench import monitor
-from baselines.logger import read_csv, read_json
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas
+
+from baselines.bench import monitor
+from baselines.logger import read_csv, read_json
 
 
 def smooth(y, radius, mode='two_sided', valid_only=False):
@@ -165,13 +166,7 @@ def symmetric_ema(xolds,
     xs, ys1, count_ys1 = one_sided_ema(
         xolds, yolds, low, high, n, decay_steps, low_counts_threshold=0)
     _, ys2, count_ys2 = one_sided_ema(
-        -xolds[::-1],
-        yolds[::-1],
-        -high,
-        -low,
-        n,
-        decay_steps,
-        low_counts_threshold=0)
+        -xolds[::-1], yolds[::-1], -high, -low, n, decay_steps, low_counts_threshold=0)
     ys2 = ys2[::-1]
     count_ys2 = count_ys2[::-1]
     count_ys = count_ys1 + count_ys2
@@ -232,14 +227,12 @@ def load_results(root_dir_or_dirs,
                 progcsv = osp.join(dirname, "progress.csv")
                 if enable_progress:
                     if osp.exists(progjson):
-                        result['progress'] = pandas.DataFrame(
-                            read_json(progjson))
+                        result['progress'] = pandas.DataFrame(read_json(progjson))
                     elif osp.exists(progcsv):
                         try:
                             result['progress'] = read_csv(progcsv)
                         except pandas.errors.EmptyDataError:
-                            print('skipping progress file in ', dirname,
-                                  'empty data')
+                            print('skipping progress file in ', dirname, 'empty data')
                     else:
                         if verbose:
                             print('skipping %s: no progress file' % dirname)
@@ -251,8 +244,7 @@ def load_results(root_dir_or_dirs,
                     except monitor.LoadMonitorResultsError:
                         print('skipping %s: no monitor files' % dirname)
                     except Exception as e:
-                        print('exception loading monitor file in %s: %s' %
-                              (dirname, e))
+                        print('exception loading monitor file in %s: %s' % (dirname, e))
 
                 if result.get('monitor') is not None or result.get(
                         'progress') is not None:
@@ -265,9 +257,9 @@ def load_results(root_dir_or_dirs,
 
 
 COLORS = [
-    'blue', 'green', 'red', 'cyan', 'magenta', 'yellow', 'black', 'purple',
-    'pink', 'brown', 'orange', 'teal', 'lightblue', 'lime', 'lavender',
-    'turquoise', 'darkgreen', 'tan', 'salmon', 'gold', 'darkred', 'darkblue'
+    'blue', 'green', 'red', 'cyan', 'magenta', 'yellow', 'black', 'purple', 'pink',
+    'brown', 'orange', 'teal', 'lightblue', 'lime', 'lavender', 'turquoise', 'darkgreen',
+    'tan', 'salmon', 'gold', 'darkred', 'darkblue'
 ]
 
 
@@ -349,13 +341,11 @@ def plot_results(
         splitkey = split_fn(result)
         sk2r[splitkey].append(result)
     assert len(sk2r) > 0
-    assert isinstance(resample,
-                      int), "0: don't resample. <integer>: that many samples"
+    assert isinstance(resample, int), "0: don't resample. <integer>: that many samples"
     nrows = len(sk2r)
     ncols = 1
     figsize = figsize or (6, 6 * nrows)
-    f, axarr = plt.subplots(
-        nrows, ncols, sharex=False, squeeze=False, figsize=figsize)
+    f, axarr = plt.subplots(nrows, ncols, sharex=False, squeeze=False, figsize=figsize)
 
     groups = list(set(group_fn(result) for result in allresults))
 
@@ -381,8 +371,7 @@ def plot_results(
                 if resample:
                     x, y, counts = symmetric_ema(
                         x, y, x[0], x[-1], resample, decay_steps=smooth_step)
-                l, = ax.plot(
-                    x, y, color=COLORS[groups.index(group) % len(COLORS)])
+                l, = ax.plot(x, y, color=COLORS[groups.index(group) % len(COLORS)])
                 g2l[group] = l
         if average_group:
             for group in sorted(groups):
@@ -404,12 +393,7 @@ def plot_results(
                     for (x, y) in xys:
                         ys.append(
                             symmetric_ema(
-                                x,
-                                y,
-                                low,
-                                high,
-                                resample,
-                                decay_steps=smooth_step)[1])
+                                x, y, low, high, resample, decay_steps=smooth_step)[1])
                 else:
                     assert allequal([x[:minxlen] for x in origxs]),\
                         'If you want to average unevenly sampled data, set resample=<number of samples you want>'
@@ -422,25 +406,17 @@ def plot_results(
                 g2l[group] = l
                 if shaded_err:
                     ax.fill_between(
-                        usex,
-                        ymean - ystderr,
-                        ymean + ystderr,
-                        color=color,
-                        alpha=.4)
+                        usex, ymean - ystderr, ymean + ystderr, color=color, alpha=.4)
                 if shaded_std:
                     ax.fill_between(
-                        usex,
-                        ymean - ystd,
-                        ymean + ystd,
-                        color=color,
-                        alpha=.2)
+                        usex, ymean - ystd, ymean + ystd, color=color, alpha=.2)
 
         # https://matplotlib.org/users/legend_guide.html
         plt.tight_layout()
         if any(g2l.keys()):
             ax.legend(
-                g2l.values(), ['%s (%i)' % (g, g2c[g])
-                               for g in g2l] if average_group else g2l.keys(),
+                g2l.values(),
+                ['%s (%i)' % (g, g2c[g]) for g in g2l] if average_group else g2l.keys(),
                 loc=2 if legend_outside else None,
                 bbox_to_anchor=(1, 1) if legend_outside else None)
         ax.set_title(sk)
@@ -464,8 +440,7 @@ def test_smooth():
     xs = np.cumsum(np.random.rand(norig) * 10 / norig)
     yclean = np.sin(xs)
     ys = yclean + .1 * np.random.randn(yclean.size)
-    xup, yup, _ = symmetric_ema(
-        xs, ys, xs.min(), xs.max(), nup, decay_steps=nup / ndown)
+    xup, yup, _ = symmetric_ema(xs, ys, xs.min(), xs.max(), nup, decay_steps=nup / ndown)
     xdown, ydown, _ = symmetric_ema(
         xs, ys, xs.min(), xs.max(), ndown, decay_steps=ndown / ndown)
     xsame, ysame, _ = symmetric_ema(

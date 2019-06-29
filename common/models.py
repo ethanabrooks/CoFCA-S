@@ -1,9 +1,9 @@
-from baselines.a2c import utils
-from baselines.a2c.utils import batch_to_seq, conv, conv_to_fc, fc, seq_to_batch
 import numpy as np
 import tensorflow as tf
 import tensorflow.contrib.layers as layers
 
+from baselines.a2c import utils
+from baselines.a2c.utils import batch_to_seq, conv, conv_to_fc, fc, seq_to_batch
 from common.mpi_running_mean_std import RunningMeanStd
 
 mapping = {}
@@ -32,24 +32,9 @@ def nature_cnn(unscaled_images, **conv_kwargs):
             stride=4,
             init_scale=np.sqrt(2),
             **conv_kwargs))
-    h2 = activ(
-        conv(
-            h,
-            'c2',
-            nf=64,
-            rf=4,
-            stride=2,
-            init_scale=np.sqrt(2),
-            **conv_kwargs))
+    h2 = activ(conv(h, 'c2', nf=64, rf=4, stride=2, init_scale=np.sqrt(2), **conv_kwargs))
     h3 = activ(
-        conv(
-            h2,
-            'c3',
-            nf=64,
-            rf=3,
-            stride=1,
-            init_scale=np.sqrt(2),
-            **conv_kwargs))
+        conv(h2, 'c3', nf=64, rf=3, stride=1, init_scale=np.sqrt(2), **conv_kwargs))
     h3 = conv_to_fc(h3)
     return activ(fc(h3, 'fc1', nh=512, init_scale=np.sqrt(2)))
 
@@ -77,8 +62,7 @@ def mlp(num_layers=2, num_hidden=64, activation=tf.tanh, layer_norm=False):
     def network_fn(X):
         h = tf.layers.flatten(X)
         for i in range(num_layers):
-            h = fc(
-                h, 'mlp_fc{}'.format(i), nh=num_hidden, init_scale=np.sqrt(2))
+            h = fc(h, 'mlp_fc{}'.format(i), nh=num_hidden, init_scale=np.sqrt(2))
             if layer_norm:
                 h = tf.contrib.layers.layer_norm(h, center=True, scale=True)
             h = activation(h)
@@ -103,23 +87,9 @@ def cnn_small(**conv_kwargs):
 
         activ = tf.nn.relu
         h = activ(
-            conv(
-                h,
-                'c1',
-                nf=8,
-                rf=8,
-                stride=4,
-                init_scale=np.sqrt(2),
-                **conv_kwargs))
+            conv(h, 'c1', nf=8, rf=8, stride=4, init_scale=np.sqrt(2), **conv_kwargs))
         h = activ(
-            conv(
-                h,
-                'c2',
-                nf=16,
-                rf=4,
-                stride=2,
-                init_scale=np.sqrt(2),
-                **conv_kwargs))
+            conv(h, 'c2', nf=16, rf=4, stride=2, init_scale=np.sqrt(2), **conv_kwargs))
         h = conv_to_fc(h)
         h = activ(fc(h, 'fc1', nh=128, init_scale=np.sqrt(2)))
         return h
@@ -177,12 +147,7 @@ def lstm(nlstm=128, layer_norm=False):
         h = seq_to_batch(h5)
         initial_state = np.zeros(S.shape.as_list(), dtype=float)
 
-        return h, {
-            'S': S,
-            'M': M,
-            'state': snew,
-            'initial_state': initial_state
-        }
+        return h, {'S': S, 'M': M, 'state': snew, 'initial_state': initial_state}
 
     return network_fn
 
@@ -209,12 +174,7 @@ def cnn_lstm(nlstm=128, layer_norm=False, **conv_kwargs):
         h = seq_to_batch(h5)
         initial_state = np.zeros(S.shape.as_list(), dtype=float)
 
-        return h, {
-            'S': S,
-            'M': M,
-            'state': snew,
-            'initial_state': initial_state
-        }
+        return h, {'S': S, 'M': M, 'state': snew, 'initial_state': initial_state}
 
     return network_fn
 
@@ -259,8 +219,7 @@ def conv_only(convs=[(32, 8, 4), (64, 4, 2), (64, 3, 1)], **conv_kwargs):
 
 def _normalize_clip_observation(x, clip_range=[-5.0, 5.0]):
     rms = RunningMeanStd(shape=x.shape[1:])
-    norm_x = tf.clip_by_value((x - rms.mean) / rms.std, min(clip_range),
-                              max(clip_range))
+    norm_x = tf.clip_by_value((x - rms.mean) / rms.std, min(clip_range), max(clip_range))
     return norm_x, rms
 
 

@@ -36,20 +36,16 @@ class RunningMeanStd(object):
         self.mean = tf.to_float(self._sum / self._count)
         self.std = tf.sqrt(
             tf.maximum(
-                tf.to_float(self._sumsq / self._count) - tf.square(self.mean),
-                1e-2))
+                tf.to_float(self._sumsq / self._count) - tf.square(self.mean), 1e-2))
 
         newsum = tf.placeholder(shape=self.shape, dtype=tf.float64, name='sum')
-        newsumsq = tf.placeholder(
-            shape=self.shape, dtype=tf.float64, name='var')
+        newsumsq = tf.placeholder(shape=self.shape, dtype=tf.float64, name='var')
         newcount = tf.placeholder(shape=[], dtype=tf.float64, name='count')
         self.incfiltparams = U.function([newsum, newsumsq, newcount], [],
                                         updates=[
                                             tf.assign_add(self._sum, newsum),
-                                            tf.assign_add(
-                                                self._sumsq, newsumsq),
-                                            tf.assign_add(
-                                                self._count, newcount)
+                                            tf.assign_add(self._sumsq, newsumsq),
+                                            tf.assign_add(self._count, newcount)
                                         ])
 
     def update(self, x):
@@ -64,8 +60,7 @@ class RunningMeanStd(object):
         if MPI is not None:
             MPI.COMM_WORLD.Allreduce(addvec, totalvec, op=MPI.SUM)
         self.incfiltparams(totalvec[0:n].reshape(self.shape),
-                           totalvec[n:2 * n].reshape(self.shape),
-                           totalvec[2 * n])
+                           totalvec[n:2 * n].reshape(self.shape), totalvec[2 * n])
 
 
 @U.in_session
@@ -91,10 +86,8 @@ def test_runningmeanstd():
 @U.in_session
 def test_dist():
     np.random.seed(0)
-    p1, p2, p3 = (np.random.randn(3, 1), np.random.randn(4, 1),
-                  np.random.randn(5, 1))
-    q1, q2, q3 = (np.random.randn(6, 1), np.random.randn(7, 1),
-                  np.random.randn(8, 1))
+    p1, p2, p3 = (np.random.randn(3, 1), np.random.randn(4, 1), np.random.randn(5, 1))
+    q1, q2, q3 = (np.random.randn(6, 1), np.random.randn(7, 1), np.random.randn(8, 1))
 
     # p1,p2,p3=(np.random.randn(3), np.random.randn(4), np.random.randn(5))
     # q1,q2,q3=(np.random.randn(6), np.random.randn(7), np.random.randn(8))

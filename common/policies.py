@@ -1,7 +1,7 @@
-from baselines.a2c.utils import fc
 import gym
 import tensorflow as tf
 
+from baselines.a2c.utils import fc
 from common import tf_util
 from common.distributions import make_pdtype
 from common.input import encode_observation, observation_placeholder
@@ -76,8 +76,7 @@ class PolicyWithValue(object):
         for inpt_name, data in extra_feed.items():
             if inpt_name in self.__dict__.keys():
                 inpt = self.__dict__[inpt_name]
-                if isinstance(inpt,
-                              tf.Tensor) and inpt._op.type == 'Placeholder':
+                if isinstance(inpt, tf.Tensor) and inpt._op.type == 'Placeholder':
                     feed_dict[inpt] = adjust_shape(inpt, data)
 
         return sess.run(variables, feed_dict)
@@ -99,8 +98,7 @@ class PolicyWithValue(object):
         """
 
         a, v, state, neglogp = self._evaluate(
-            [self.action, self.vf, self.state, self.neglogp], observation,
-            **extra_feed)
+            [self.action, self.vf, self.state, self.neglogp], observation, **extra_feed)
         if state.size == 0:
             state = None
         return a, v, state, neglogp
@@ -139,8 +137,7 @@ def build_policy(env,
         network_type = policy_network
         policy_network = get_network_builder(network_type)(**policy_kwargs)
 
-    def policy_fn(nbatch=None, nsteps=None, sess=None,
-                  observ_placeholder=None):
+    def policy_fn(nbatch=None, nsteps=None, sess=None, observ_placeholder=None):
         ob_space = env.observation_space
 
         X = observ_placeholder if observ_placeholder is not None else observation_placeholder(
@@ -166,8 +163,7 @@ def build_policy(env,
                     nenv = nbatch // nsteps
                     assert nenv > 0, 'Bad input for recurrent policy: batch size {} smaller than nsteps {}'.format(
                         nbatch, nsteps)
-                    policy_latent, recurrent_tensors = policy_network(
-                        encoded_x, nenv)
+                    policy_latent, recurrent_tensors = policy_network(encoded_x, nenv)
                     extra_tensors.update(recurrent_tensors)
 
         _v_net = value_network
@@ -199,6 +195,5 @@ def build_policy(env,
 
 def _normalize_clip_observation(x, clip_range=[-5.0, 5.0]):
     rms = RunningMeanStd(shape=x.shape[1:])
-    norm_x = tf.clip_by_value((x - rms.mean) / rms.std, min(clip_range),
-                              max(clip_range))
+    norm_x = tf.clip_by_value((x - rms.mean) / rms.std, min(clip_range), max(clip_range))
     return norm_x, rms

@@ -79,18 +79,16 @@ def get_freer_gpu():
         'nvidia-smi --format=csv --query-gpu=memory.free'.split(),
         universal_newlines=True)
     free_memory = [
-        float(x[0].split()[0])
-        for i, x in enumerate(csv.reader(StringIO(nvidia_smi))) if i > 0
+        float(x[0].split()[0]) for i, x in enumerate(csv.reader(StringIO(nvidia_smi)))
+        if i > 0
     ]
     return int(np.argmax(free_memory))
 
 
 def init_(network, nonlinearity=None):
     if nonlinearity is None:
-        return init(network,
-                    nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0))
-    return init(network,
-                nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0),
+        return init(network, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0))
+    return init(network, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0),
                 nn.init.calculate_gain(nonlinearity))
 
 
@@ -106,8 +104,7 @@ def batch_conv1d(inputs, weights):
     for i in range(n):
         x = inputs[i]
         w = weights[i]
-        outputs.append(
-            F.conv1d(x.reshape(1, 1, -1), w.reshape(1, 1, -1), padding=1))
+        outputs.append(F.conv1d(x.reshape(1, 1, -1), w.reshape(1, 1, -1), padding=1))
     return torch.cat(outputs)
 
 
@@ -122,5 +119,4 @@ def log_prob(i, probs):
 
 
 def trace(module_fn, in_size):
-    return torch.jit.trace(
-        module_fn(in_size), example_inputs=torch.rand(1, in_size))
+    return torch.jit.trace(module_fn(in_size), example_inputs=torch.rand(1, in_size))

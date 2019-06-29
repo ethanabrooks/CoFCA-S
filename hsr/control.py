@@ -1,11 +1,11 @@
 import glfw
+import mujoco_py
 import numpy as np
+from rl_utils import argparse, hierarchical_parse_args, space_to_size
 
 import hsr
-import mujoco_py
 from ppo.env_adapter import HSREnv
 from ppo.main import add_hsr_args
-from rl_utils import argparse, hierarchical_parse_args, space_to_size
 
 
 class ControlViewer(mujoco_py.MjViewer):
