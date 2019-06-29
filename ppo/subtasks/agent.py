@@ -173,7 +173,7 @@ class Recurrence(torch.jit.ScriptModule):
         )
 
         self.conv2 = nn.Sequential(
-            init_(nn.Conv2d(d, hidden_size, kernel_size=1, stride=1, padding=1)),
+            init_(nn.Conv2d(d, hidden_size, kernel_size=1)),
             nn.MaxPool2d(kernel_size=self.obs_shape[-2:], stride=1),
             Flatten(),
         )
@@ -193,7 +193,7 @@ class Recurrence(torch.jit.ScriptModule):
         if multiplicative_interaction:
             self.phi_update = nn.Sequential(
                 Parallel(
-                    init_(nn.Linear(hidden_size, hidden_size)),  # obs
+                    self.conv2,  # obs
                     init_(nn.Linear(action_spaces.a.n, hidden_size)),  # action
                     *[
                         init_(nn.Linear(i, hidden_size)) for i in self.subtask_nvec
@@ -440,17 +440,14 @@ class Recurrence(torch.jit.ScriptModule):
                 ).dist
             sample_new(A[t], a_dist)
 
-            h = self.conv2(obs[t])
-
             # A[t, :] = "wsadeq".index(input("act:"))
 
             def phi_update(subtask_param):
-                debug_obs = obs[t, j, :, k, l].squeeze(1)
                 interaction, count, obj = task_sections = torch.split(
                     subtask_param, tuple(self.subtask_nvec), dim=-1
                 )
                 a_one_hot = self.a_one_hots[A[t]]
-                parts = (h, a_one_hot) + task_sections
+                parts = (obs[t], a_one_hot) + task_sections
                 # correct_object = (obj * debug_obs[:, : self.subtask_nvec[2]]).sum(
                 # -1, keepdim=True
                 # )
@@ -460,15 +457,16 @@ class Recurrence(torch.jit.ScriptModule):
                 # truth = (correct_action * correct_object).detach()
 
                 if self.multiplicative_interaction:
-                    return self.f(parts)
-                outer_produce_obs = 1
-                for i1, part in enumerate(parts):
-                    for i2 in range(len(parts)):
-                        if i1 != i2:
-                            part.unsqueeze_(i2 + 1)
-                    outer_produce_obs = outer_produce_obs * part
+                    c_logits = self.phi_update(parts)
+                else:
+                    outer_produce_obs = 1
+                    for i1, part in enumerate(parts):
+                        for i2 in range(len(parts)):
+                            if i1 != i2:
+                                part.unsqueeze_(i2 + 1)
+                        outer_produce_obs = outer_produce_obs * part
 
-                c_logits = self.phi_update(outer_produce_obs.view(N, -1))
+                    c_logits = self.phi_update(outer_produce_obs.view(N, -1))
                 if self.hard_update:
                     c_dist = FixedCategorical(logits=c_logits)
                     c = actions.c[t]
