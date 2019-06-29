@@ -193,7 +193,8 @@ class Recurrence(nn.Module):
         if multiplicative_interaction:
             self.phi_update = nn.Sequential(
                 Parallel(
-                    self.conv2,  # obs
+                    # self.conv2,  # obs
+                    init_(nn.Linear(d, hidden_size)),
                     init_(nn.Linear(action_spaces.a.n, hidden_size)),  # action
                     *[
                         init_(nn.Linear(i, hidden_size)) for i in self.subtask_nvec
@@ -461,7 +462,7 @@ class Recurrence(nn.Module):
                 # ).detach()
 
                 if self.multiplicative_interaction:
-                    parts = (obs[t], a_one_hot, *task_sections)
+                    parts = (debug_obs, a_one_hot, *task_sections)
                     c_logits = self.phi_update(parts)
                 else:
                     # parts = (debug_obs, a_one_hot, interaction, obj, count)
