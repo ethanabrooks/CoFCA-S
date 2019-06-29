@@ -9,12 +9,13 @@ from rl_utils import hierarchical_parse_args
 import torch
 
 import gridworld_env
+import gridworld_env.control_flow_gridworld
 from gridworld_env.control_flow_gridworld import ControlFlowGridWorld
+import gridworld_env.subtasks_gridworld
 from gridworld_env.subtasks_gridworld import SubtasksGridWorld
 import ppo
 from ppo.arguments import build_parser, get_args
 import ppo.control_flow.agent
-import ppo.control_flow.wrappers
 import ppo.subtasks.agent
 import ppo.subtasks.student
 import ppo.subtasks.teacher
@@ -35,7 +36,12 @@ def add_env_args(parser):
     env_parser.add_argument('--min-objects', type=int, required=True)
     env_parser.add_argument('--debug', action='store_true')
     env_parser.add_argument(
-        '--eval-subtask', dest='eval_subtasks', default=[], type=int, nargs=3, action='append')
+        '--eval-subtask',
+        dest='eval_subtasks',
+        default=[],
+        type=int,
+        nargs=3,
+        action='append')
 
 
 def cli():
@@ -45,9 +51,9 @@ def cli():
 def get_spaces(envs, control_flow):
     obs_spaces = envs.observation_space.spaces
     if control_flow:
-        return ppo.control_flow.Obs(*obs_spaces)
+        return gridworld_env.control_flow_gridworld.Obs(**obs_spaces)
     else:
-        return ppo.subtasks.Obs(*obs_spaces)
+        return gridworld_env.subtasks_gridworld.Obs(**obs_spaces)
 
 
 def make_subtasks_env(env_id, **kwargs):
@@ -57,9 +63,10 @@ def make_subtasks_env(env_id, **kwargs):
             for k, v in _kwargs.items():
                 print(f'{k:20}{v}')
         if control_flow:
-            env = ppo.control_flow.Wrapper(ControlFlowGridWorld(**_kwargs))
+            env = ControlFlowGridWorld(**_kwargs)
         else:
-            env = ppo.subtasks.Wrapper(SubtasksGridWorld(**_kwargs))
+            env = SubtasksGridWorld(**_kwargs)
+        env = ppo.subtasks.Wrapper(env)
         if debug:
             env = ppo.subtasks.DebugWrapper(env)
         env.seed(seed + rank)
@@ -71,7 +78,8 @@ def make_subtasks_env(env_id, **kwargs):
     kwargs.update(add_timestep=None)
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
     return helper(**ChainMap(
-        kwargs, gridworld_args))  # combines kwargs and gridworld_args with preference for kwargs
+        kwargs,
+        gridworld_args))  # combines kwargs and gridworld_args with preference for kwargs
 
 
 def train_lower_level_cli(student):
@@ -134,8 +142,8 @@ def metacontroller_cli():
     subtasks_parser.add_argument('--hard-update', action='store_true')
     subtasks_parser.add_argument('--multiplicative-interaction', action='store_true')
 
-    def train(env_id, task_args, ppo_args, agent_load_path, subtasks_args, env_args, control_flow,
-              **kwargs):
+    def train(env_id, task_args, ppo_args, agent_load_path, subtasks_args, env_args,
+              control_flow, **kwargs):
         class TrainSubtasks(Train):
             @staticmethod
             def make_env(**_kwargs):
@@ -152,10 +160,11 @@ def metacontroller_cli():
                 obs_spaces = get_spaces(envs, control_flow)
                 if agent_load_path:
                     agent = ppo.subtasks.Teacher(
-                        obs_spaces=obs_spaces, action_space=envs.action_space, **agent_args)
+                        obs_spaces=obs_spaces,
+                        action_space=envs.action_space,
+                        **agent_args)
 
-                    state_dict = torch.load(
-                        agent_load_path, map_location=self.device)
+                    state_dict = torch.load(agent_load_path, map_location=self.device)
                     state_dict['agent'].update(
                         part0_one_hot=agent.part0_one_hot,
                         part1_one_hot=agent.part1_one_hot,
@@ -167,7 +176,10 @@ def metacontroller_cli():
                         envs.venv.load_state_dict(state_dict['vec_normalize'])
                     print(f'Loaded teacher parameters from {agent_load_path}.')
 
-                _subtasks_args = {k.replace('subtasks_', ''): v for k, v in subtasks_args.items()}
+                _subtasks_args = {
+                    k.replace('subtasks_', ''): v
+                    for k, v in subtasks_args.items()
+                }
 
                 metacontroller_kwargs = dict(
                     obs_spaces=obs_spaces,

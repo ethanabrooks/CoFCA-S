@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ppo.control_flow.wrappers import Obs
+from gridworld_env.control_flow_gridworld import Obs
 from ppo.layers import Flatten, Reshape
 import ppo.subtasks.agent
 from ppo.subtasks.teacher import g123_to_binary
@@ -73,7 +73,8 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
         # detach actions
         # noinspection PyProtectedMember
         n_actions = len(Actions._fields)
-        inputs, *actions = torch.split(inputs.detach(), [D - n_actions] + [1] * n_actions, dim=2)
+        inputs, *actions = torch.split(
+            inputs.detach(), [D - n_actions] + [1] * n_actions, dim=2)
         actions = Actions(*actions)
 
         # parse non-action inputs
@@ -120,7 +121,8 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
 
         return self.pack(
             self.inner_loop(
-                a=hx.a,
+                cr=hx.cr,
+                cg=hx.cg,
                 g=hx.g,
                 M=M,
                 M123=M123,

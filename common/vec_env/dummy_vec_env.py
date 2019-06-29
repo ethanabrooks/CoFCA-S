@@ -58,8 +58,8 @@ class DummyVecEnv(VecEnv):
             if isinstance(self.envs[e].action_space, spaces.Discrete):
                 action = int(action)
 
-            obs, self.buf_rews[e], self.buf_dones[e], self.buf_infos[e] = self.envs[e].step(
-                action)
+            obs, self.buf_rews[e], self.buf_dones[e], self.buf_infos[e] = self.envs[
+                e].step(action)
 
             if self.buf_dones[e]:
                 if e == 0 and self._render:

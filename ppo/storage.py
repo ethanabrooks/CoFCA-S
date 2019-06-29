@@ -2,11 +2,13 @@
 from collections import namedtuple
 from typing import Generator
 
+import gym
 from gym import spaces
+import numpy as np
 import torch
 from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
 
-from common.vec_env.util import buffer_shape
+from common.vec_env.util import space_shape
 
 
 def _flatten_helper(T, N, _tensor):
@@ -16,6 +18,13 @@ def _flatten_helper(T, N, _tensor):
 Batch = namedtuple(
     'Batch', 'obs recurrent_hidden_states actions value_preds ret '
     'masks old_action_log_probs adv tasks importance_weighting')
+
+
+def buffer_shape(space: gym.Space):
+    shape = space_shape(space)
+    if isinstance(shape, dict):
+        shape = int(sum(np.prod(s) for s in shape.values())),  # concatenate
+    return shape
 
 
 class RolloutStorage(object):
@@ -55,8 +64,8 @@ class RolloutStorage(object):
         self.actions = self.actions.to(device)
         self.masks = self.masks.to(device)
 
-    def insert(self, obs, recurrent_hidden_states, actions, action_log_probs, values, rewards,
-               masks):
+    def insert(self, obs, recurrent_hidden_states, actions, action_log_probs, values,
+               rewards, masks):
         self.obs[self.step + 1].copy_(obs)
         self.recurrent_hidden_states[self.step + 1].copy_(recurrent_hidden_states)
         self.actions[self.step].copy_(actions)
@@ -76,8 +85,8 @@ class RolloutStorage(object):
             self.value_preds[-1] = next_value
             gae = 0
             for step in reversed(range(self.rewards.size(0))):
-                delta = self.rewards[step] + gamma * self.value_preds[step + 1] * self.masks[
-                    step + 1] - self.value_preds[step]
+                delta = self.rewards[step] + gamma * self.value_preds[
+                    step + 1] * self.masks[step + 1] - self.value_preds[step]
                 gae = delta + gamma * tau * self.masks[step + 1] * gae
                 self.returns[step] = gae + self.value_preds[step]
         else:
@@ -131,10 +140,10 @@ class RolloutStorage(object):
     def recurrent_generator(self, advantages, num_mini_batch) -> \
             Generator[Batch, None, None]:
         num_processes = self.rewards.size(1)
-        assert num_processes >= num_mini_batch, ("PPO requires the number of processes ({}) "
-                                                 "to be greater than or equal to the number of "
-                                                 "PPO mini batches ({}).".format(
-                                                     num_processes, num_mini_batch))
+        assert num_processes >= num_mini_batch, (
+            "PPO requires the number of processes ({}) "
+            "to be greater than or equal to the number of "
+            "PPO mini batches ({}).".format(num_processes, num_mini_batch))
         num_envs_per_batch = num_processes // num_mini_batch
         perm = torch.randperm(num_processes)
         for start_ind in range(0, num_processes, num_envs_per_batch):
@@ -150,7 +159,8 @@ class RolloutStorage(object):
             for offset in range(num_envs_per_batch):
                 ind = perm[start_ind + offset]
                 obs_batch.append(self.obs[:-1, ind])
-                recurrent_hidden_states_batch.append(self.recurrent_hidden_states[0:1, ind])
+                recurrent_hidden_states_batch.append(
+                    self.recurrent_hidden_states[0:1, ind])
                 actions_batch.append(self.actions[:, ind])
                 value_preds_batch.append(self.value_preds[:-1, ind])
                 return_batch.append(self.returns[:-1, ind])
@@ -169,8 +179,8 @@ class RolloutStorage(object):
             adv_targ = torch.stack(adv_targ, 1)
 
             # States is just a (N, -1) tensor
-            recurrent_hidden_states_batch = torch.stack(recurrent_hidden_states_batch, 1).view(
-                N, -1)
+            recurrent_hidden_states_batch = torch.stack(recurrent_hidden_states_batch,
+                                                        1).view(N, -1)
 
             # Flatten the (T, N, ...) tensors to (T * N, ...)
             obs_batch = _flatten_helper(T, N, obs_batch)

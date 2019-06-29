@@ -8,7 +8,8 @@ from ppo.distributions import Categorical, DiagGaussian
 from ppo.layers import Flatten
 from ppo.utils import init, init_normc_
 
-AgentValues = namedtuple('AgentValues', 'value action action_log_probs aux_loss rnn_hxs log dist')
+AgentValues = namedtuple('AgentValues',
+                         'value action action_log_probs aux_loss rnn_hxs log dist')
 
 
 class Agent(nn.Module):
@@ -30,7 +31,10 @@ class Agent(nn.Module):
             self.base = CNNBase(*obs_shape, recurrent=recurrent, hidden_size=hidden_size)
         elif len(obs_shape) == 1:
             self.base = MLPBase(
-                obs_shape[0], recurrent=recurrent, hidden_size=hidden_size, **network_args)
+                obs_shape[0],
+                recurrent=recurrent,
+                hidden_size=hidden_size,
+                **network_args)
         else:
             raise NotImplementedError
 
@@ -88,7 +92,8 @@ class NNBase(nn.Module):
         self._recurrent = recurrent
 
         if self._recurrent:
-            self.recurrent_module = self.build_recurrent_module(recurrent_input_size, hidden_size)
+            self.recurrent_module = self.build_recurrent_module(
+                recurrent_input_size, hidden_size)
             for name, param in self.recurrent_module.named_parameters():
                 print('zeroed out', name)
                 if 'bias' in name:
@@ -151,8 +156,8 @@ class NNBase(nn.Module):
                 start_idx = has_zeros[i]
                 end_idx = has_zeros[i + 1]
 
-                rnn_scores, hxs = self.recurrent_module(x[start_idx:end_idx],
-                                                        hxs * masks[start_idx].view(1, -1, 1))
+                rnn_scores, hxs = self.recurrent_module(
+                    x[start_idx:end_idx], hxs * masks[start_idx].view(1, -1, 1))
 
                 outputs.append(rnn_scores)
 
