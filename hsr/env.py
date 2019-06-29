@@ -75,7 +75,8 @@ class HSREnv(MujocoEnv):
             grip_pos = self.gripper_pos()
             dt = self.sim.nsubsteps * self.sim.timestep
             object_pos = self.block_pos()
-            grip_velp = .5 * sum(self.sim.get_body_xvelp(name) for name in self._finger_names)
+            grip_velp = .5 * sum(
+                self.sim.get_body_xvelp(name) for name in self._finger_names)
             # rotations
             object_rot = mat2euler(self.sim.get_body_xmat(self._block_name))
 
@@ -86,10 +87,12 @@ class HSREnv(MujocoEnv):
             # gripper state
             object_rel_pos = object_pos - grip_pos
             object_velp -= grip_velp
-            gripper_state = np.array(
-                [self.model.get_joint_qpos_addr(f'hand_{x}_proximal_joint') for x in 'lr'])
-            qvels = np.array(
-                [self.model.get_joint_qpos_addr(f'hand_{x}_proximal_joint') for x in 'lr'])
+            gripper_state = np.array([
+                self.model.get_joint_qpos_addr(f'hand_{x}_proximal_joint') for x in 'lr'
+            ])
+            qvels = np.array([
+                self.model.get_joint_qpos_addr(f'hand_{x}_proximal_joint') for x in 'lr'
+            ])
             gripper_vel = dt * .5 * qvels
 
             obs = np.concatenate([
@@ -173,7 +176,9 @@ class HSREnv(MujocoEnv):
         return self.sim.data.get_body_xpos(self._block_name)
 
     def gripper_pos(self):
-        finger1, finger2 = [self.sim.data.get_body_xpos(name) for name in self._finger_names]
+        finger1, finger2 = [
+            self.sim.data.get_body_xpos(name) for name in self._finger_names
+        ]
         return (finger1 + finger2) / 2.
 
     def close(self):

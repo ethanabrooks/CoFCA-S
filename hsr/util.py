@@ -14,7 +14,8 @@ from hsr.env import get_xml_filepath
 
 
 def add_env_args(parser):
-    parser.add_argument('--image-dims', type=parse_vector(length=2, delim=','), default='800,800')
+    parser.add_argument(
+        '--image-dims', type=parse_vector(length=2, delim=','), default='800,800')
     parser.add_argument('--block-space', type=parse_space(dim=4))
     parser.add_argument('--min-lift-height', type=float, default=None)
     parser.add_argument('--obs-type', type=str, default=None)
@@ -48,8 +49,8 @@ def xml_setter(arg: str):
 
 def env_wrapper(func):
     @wraps(func)
-    def _wrapper(set_xml, use_dof, n_blocks, goal_space, xml_file, geofence, env_args: dict,
-                 **kwargs):
+    def _wrapper(set_xml, use_dof, n_blocks, goal_space, xml_file, geofence,
+                 env_args: dict, **kwargs):
         xml_filepath = get_xml_filepath(xml_file)
         if set_xml is None:
             set_xml = []

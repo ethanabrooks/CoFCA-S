@@ -73,7 +73,9 @@ class PdType(object):
 
     def sample_placeholder(self, prepend_shape, name=None):
         return tf.placeholder(
-            dtype=self.sample_dtype(), shape=prepend_shape + self.sample_shape(), name=name)
+            dtype=self.sample_dtype(),
+            shape=prepend_shape + self.sample_shape(),
+            name=name)
 
     def __eq__(self, other):
         return (type(self) == type(other)) and (self.__dict__ == other.__dict__)
@@ -221,7 +223,8 @@ class CategoricalPd(Pd):
             logits_shape_list = self.logits.get_shape().as_list()[:-1]
             for xs, ls in zip(x_shape_list, logits_shape_list):
                 if xs is not None and ls is not None:
-                    assert xs == ls, 'shape mismatch: {} in x vs {} in logits'.format(xs, ls)
+                    assert xs == ls, 'shape mismatch: {} in x vs {} in logits'.format(
+                        xs, ls)
 
             x = tf.one_hot(x, self.logits.get_shape().as_list()[-1])
         else:
@@ -278,7 +281,8 @@ class MultiCategoricalPd(Pd):
         return tf.add_n([p.entropy() for p in self.categoricals])
 
     def sample(self):
-        return tf.cast(tf.stack([p.sample() for p in self.categoricals], axis=-1), tf.int32)
+        return tf.cast(
+            tf.stack([p.sample() for p in self.categoricals], axis=-1), tf.int32)
 
     @classmethod
     def fromflat(cls, flat):
@@ -288,7 +292,8 @@ class MultiCategoricalPd(Pd):
 class DiagGaussianPd(Pd):
     def __init__(self, flat):
         self.flat = flat
-        mean, logstd = tf.split(axis=len(flat.shape) - 1, num_or_size_splits=2, value=flat)
+        mean, logstd = tf.split(
+            axis=len(flat.shape) - 1, num_or_size_splits=2, value=flat)
         self.mean = mean
         self.logstd = logstd
         self.std = tf.exp(logstd)
@@ -307,8 +312,9 @@ class DiagGaussianPd(Pd):
     def kl(self, other):
         assert isinstance(other, DiagGaussianPd)
         return tf.reduce_sum(
-            other.logstd - self.logstd + (tf.square(self.std) + tf.square(self.mean - other.mean))
-            / (2.0 * tf.square(other.std)) - 0.5,
+            other.logstd - self.logstd +
+            (tf.square(self.std) + tf.square(self.mean - other.mean)) /
+            (2.0 * tf.square(other.std)) - 0.5,
             axis=-1)
 
     def entropy(self):
@@ -339,19 +345,22 @@ class BernoulliPd(Pd):
 
     def neglogp(self, x):
         return tf.reduce_sum(
-            tf.nn.sigmoid_cross_entropy_with_logits(logits=self.logits, labels=tf.to_float(x)),
+            tf.nn.sigmoid_cross_entropy_with_logits(
+                logits=self.logits, labels=tf.to_float(x)),
             axis=-1)
 
     def kl(self, other):
         return tf.reduce_sum(
             tf.nn.sigmoid_cross_entropy_with_logits(logits=other.logits, labels=self.ps),
             axis=-1) - tf.reduce_sum(
-                tf.nn.sigmoid_cross_entropy_with_logits(logits=self.logits, labels=self.ps),
+                tf.nn.sigmoid_cross_entropy_with_logits(
+                    logits=self.logits, labels=self.ps),
                 axis=-1)
 
     def entropy(self):
         return tf.reduce_sum(
-            tf.nn.sigmoid_cross_entropy_with_logits(logits=self.logits, labels=self.ps), axis=-1)
+            tf.nn.sigmoid_cross_entropy_with_logits(logits=self.logits, labels=self.ps),
+            axis=-1)
 
     def sample(self):
         u = tf.random_uniform(tf.shape(self.ps))

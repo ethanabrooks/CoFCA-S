@@ -8,10 +8,10 @@ from gym.envs.registration import EnvSpec
 from gym.spaces import Box
 from gym.utils import seeding
 import numpy as np
+from rl_utils import cartesian_product
 import six
 
 from ppo.utils import set_index
-from rl_utils import cartesian_product
 
 Subtask = namedtuple('Subtask', 'interaction count object')
 

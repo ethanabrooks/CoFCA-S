@@ -54,8 +54,8 @@ def iterbatches(arrays,
                 batch_size=None,
                 shuffle=True,
                 include_final_partial_batch=True):
-    assert (num_batches is None) != (batch_size is
-                                     None), 'Provide num_batches or batch_size, but not both'
+    assert (num_batches is None) != (
+        batch_size is None), 'Provide num_batches or batch_size, but not both'
     arrays = tuple(map(np.asarray, arrays))
     n = arrays[0].shape[0]
     assert all(a.shape[0] == n for a in arrays[1:])

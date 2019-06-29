@@ -133,7 +133,10 @@ def mutate_xml(changes: List[XMLSetter], dofs: List[str], goal_space: Box, n_blo
         rel_to_abs(e.get('file')) for e in ET.parse(xml_filepath).findall('*/include')
     ]
 
-    temp = {path: tempfile.NamedTemporaryFile() for path in (included_files + [xml_filepath])}
+    temp = {
+        path: tempfile.NamedTemporaryFile()
+        for path in (included_files + [xml_filepath])
+    }
     try:
         for path, f in temp.items():
             tree = ET.parse(path)

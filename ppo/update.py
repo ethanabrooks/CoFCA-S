@@ -48,9 +48,11 @@ class PPO:
 
         for e in range(self.ppo_epoch):
             if self.agent.is_recurrent:
-                data_generator = rollouts.recurrent_generator(advantages, self.num_mini_batch)
+                data_generator = rollouts.recurrent_generator(advantages,
+                                                              self.num_mini_batch)
             else:
-                data_generator = rollouts.feed_forward_generator(advantages, self.num_mini_batch)
+                data_generator = rollouts.feed_forward_generator(
+                    advantages, self.num_mini_batch)
 
             sample: Batch
             for sample in data_generator:

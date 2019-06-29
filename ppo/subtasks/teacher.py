@@ -4,11 +4,7 @@ import numpy as np
 import torch
 from torch.nn import functional as F
 
-import gridworld_env.control_flow_gridworld
-import gridworld_env.subtasks_gridworld
 from ppo.agent import Agent
-import ppo.control_flow
-import ppo.subtasks
 from ppo.subtasks.wrappers import Actions
 from ppo.utils import broadcast3d
 

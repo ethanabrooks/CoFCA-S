@@ -110,7 +110,8 @@ class Downsample(gym.ObservationWrapper):
         gym.ObservationWrapper.__init__(self, env)
         (oldh, oldw, oldc) = env.observation_space.shape
         newshape = (oldh // ratio, oldw // ratio, oldc)
-        self.observation_space = spaces.Box(low=0, high=255, shape=newshape, dtype=np.uint8)
+        self.observation_space = spaces.Box(
+            low=0, high=255, shape=newshape, dtype=np.uint8)
 
     def observation(self, frame):
         height, width, _ = self.observation_space.shape
@@ -175,9 +176,8 @@ class AppendTimeout(gym.Wrapper):
             self.dict_mode = False
         self.ac_count = None
         while 1:
-            if not hasattr(
-                    env,
-                    "_max_episode_steps"):  # Looking for TimeLimit wrapper that has this field
+            if not hasattr(env, "_max_episode_steps"
+                           ):  # Looking for TimeLimit wrapper that has this field
                 env = env.env
                 continue
             break
@@ -263,7 +263,9 @@ class SonicDiscretizer(gym.ActionWrapper):
 
     def __init__(self, env):
         super(SonicDiscretizer, self).__init__(env)
-        buttons = ["B", "A", "MODE", "START", "UP", "DOWN", "LEFT", "RIGHT", "C", "Y", "X", "Z"]
+        buttons = [
+            "B", "A", "MODE", "START", "UP", "DOWN", "LEFT", "RIGHT", "C", "Y", "X", "Z"
+        ]
         actions = [['LEFT'], ['RIGHT'], ['LEFT', 'DOWN'], ['RIGHT', 'DOWN'], ['DOWN'],
                    ['DOWN', 'B'], ['B']]
         self._actions = []

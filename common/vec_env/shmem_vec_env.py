@@ -42,7 +42,8 @@ class ShmemVecEnv(VecEnv):
                 dummy.close()
                 del dummy
         VecEnv.__init__(self, len(env_fns), observation_space, action_space)
-        self.obs_keys, self.obs_shapes, self.obs_dtypes = obs_space_info(observation_space)
+        self.obs_keys, self.obs_shapes, self.obs_dtypes = obs_space_info(
+            observation_space)
         self.obs_bufs = [{
             k: Array(_NP_TO_CT[self.obs_dtypes[k].type], int(np.prod(self.obs_shapes[k])))
             for k in self.obs_keys
@@ -105,14 +106,16 @@ class ShmemVecEnv(VecEnv):
 
             bufs = [b[k] for b in self.obs_bufs]
             o = [
-                np.frombuffer(b.get_obj(), dtype=self.obs_dtypes[k]).reshape(self.obs_shapes[k])
+                np.frombuffer(b.get_obj(),
+                              dtype=self.obs_dtypes[k]).reshape(self.obs_shapes[k])
                 for b in bufs
             ]
             result[k] = np.array(o)
         return dict_to_obs(result)
 
 
-def _subproc_worker(pipe, parent_pipe, env_fn_wrapper, obs_bufs, obs_shapes, obs_dtypes, keys):
+def _subproc_worker(pipe, parent_pipe, env_fn_wrapper, obs_bufs, obs_shapes, obs_dtypes,
+                    keys):
     """
     Control a single environment instance using IPC and
     shared memory.

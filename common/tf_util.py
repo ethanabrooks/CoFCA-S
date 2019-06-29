@@ -20,7 +20,8 @@ def switch(condition, then_expression, else_expression):
         else_expression: TensorFlow operation.
     """
     x_shape = copy.copy(then_expression.get_shape())
-    x = tf.cond(tf.cast(condition, 'bool'), lambda: then_expression, lambda: else_expression)
+    x = tf.cond(
+        tf.cast(condition, 'bool'), lambda: then_expression, lambda: else_expression)
     x.set_shape(x_shape)
     return x
 
@@ -43,7 +44,9 @@ def lrelu(x, leak=0.2):
 
 def huber_loss(x, delta=1.0):
     """Reference: https://en.wikipedia.org/wiki/Huber_loss"""
-    return tf.where(tf.abs(x) < delta, tf.square(x) * 0.5, delta * (tf.abs(x) - 0.5 * delta))
+    return tf.where(
+        tf.abs(x) < delta,
+        tf.square(x) * 0.5, delta * (tf.abs(x) - 0.5 * delta))
 
 
 # ================================================================
@@ -125,7 +128,10 @@ def conv2d(x,
            summary_tag=None):
     with tf.variable_scope(name):
         stride_shape = [1, stride[0], stride[1], 1]
-        filter_shape = [filter_size[0], filter_size[1], int(x.get_shape()[3]), num_filters]
+        filter_shape = [
+            filter_size[0], filter_size[1],
+            int(x.get_shape()[3]), num_filters
+        ]
 
         # there are "num input feature maps * filter height * filter width"
         # inputs to each hidden unit
@@ -342,8 +348,8 @@ def display_var_info(vars):
         count_params += v_params
         if "/b:" in name or "/bias" in name:
             continue  # Wx+b, bias is not interesting to look at => count params, but not print
-        logger.info(
-            "   %s%s %i params %s" % (name, " " * (55 - len(name)), v_params, str(v.shape)))
+        logger.info("   %s%s %i params %s" % (name, " " * (55 - len(name)), v_params,
+                                              str(v.shape)))
 
     logger.info("Total model parameters: %0.2f million" % (count_params * 1e-6))
 

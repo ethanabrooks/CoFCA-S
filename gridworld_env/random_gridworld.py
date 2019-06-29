@@ -14,9 +14,11 @@ class RandomGridWorld(GridWorld):
         self.possible_choices = None
         super().__init__(*args, **kwargs)
         self.possible_choices = np.ravel_multi_index(
-            np.where(np.logical_not(np.isin(self.desc, self.blocked))), dims=self.desc.shape)
+            np.where(np.logical_not(np.isin(self.desc, self.blocked))),
+            dims=self.desc.shape)
         assert self.possible_choices.size
-        self.observation_space = spaces.Tuple([self.observation_space] * (1 + len(random)))
+        self.observation_space = spaces.Tuple(
+            [self.observation_space] * (1 + len(random)))
 
     def append_randoms(self, state):
         return (state, *map(int, self.random_states))

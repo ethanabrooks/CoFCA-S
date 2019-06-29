@@ -49,8 +49,8 @@ class VecVideoRecorder(VecEnvWrapper):
         self.close_video_recorder()
 
         base_path = os.path.join(
-            self.directory, '{}.video.{}.video{:06}'.format(self.file_prefix, self.file_infix,
-                                                            self.step_id))
+            self.directory, '{}.video.{}.video{:06}'.format(
+                self.file_prefix, self.file_infix, self.step_id))
         self.video_recorder = video_recorder.VideoRecorder(
             env=self.venv, base_path=base_path, metadata={'step_id': self.step_id})
 
