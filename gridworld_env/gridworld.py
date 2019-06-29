@@ -7,11 +7,11 @@ from typing import Container, Dict, Iterable, List
 # third party
 from gym import utils
 import numpy as np
+from rl_utils import cartesian_product
 from six import StringIO
 
 from gridworld_env.abstract_gridworld import AbstractGridWorld
 from gridworld_env.discrete import DiscreteEnv
-from rl_utils import cartesian_product
 
 Transition = namedtuple('Transition', 'probability new_state reward terminal')
 
@@ -34,9 +34,7 @@ class GridWorld(AbstractGridWorld, DiscreteEnv):
         # because every action technically corresponds to a _list_ of transitions (to
         # permit for stochasticity, we add an additional level to the nested list
         # if necessary
-        transitions = [
-            t if isinstance(t[0], list) else [t] for t in transitions
-        ]
+        transitions = [t if isinstance(t[0], list) else [t] for t in transitions]
 
         if probabilities is None:
             probabilities = [[1]] * len(transitions)
@@ -58,8 +56,7 @@ class GridWorld(AbstractGridWorld, DiscreteEnv):
         self._transition_matrix = None
         self._reward_matrix = None
 
-        self.desc = text_map = np.array(
-            [list(r) for r in text_map])  # type: np.ndarray
+        self.desc = text_map = np.array([list(r) for r in text_map])  # type: np.ndarray
 
         self.original_desc = self.desc.copy()
         super().__init__(
@@ -184,13 +181,11 @@ class GridWorld(AbstractGridWorld, DiscreteEnv):
             for a, transitions in action_P.items():
                 trans: Transition
                 for trans in transitions:
-                    self._transition_matrix[s1, a, trans.
-                                            new_state] = trans.probability
+                    self._transition_matrix[s1, a, trans.new_state] = trans.probability
                     self._reward_matrix[s1, a] = trans.reward
                     if trans.terminal:
                         for a in range(self.nA):
-                            self._transition_matrix[trans.new_state, a, trans.
-                                                    new_state] = 1
+                            self._transition_matrix[trans.new_state, a, trans.new_state] = 1
                             self._reward_matrix[trans.new_state, a] = 0
                             assert not np.any(self._transition_matrix > 1)
 

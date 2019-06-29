@@ -44,14 +44,11 @@ def test_runningmeanstd():
 def _helper_runningmeanstd():
     comm = MPI.COMM_WORLD
     np.random.seed(0)
-    for (triple,
-         axis) in [
-             ((np.random.randn(3), np.random.randn(4), np.random.randn(5)), 0),
-             ((np.random.randn(3, 2), np.random.randn(4, 2),
-               np.random.randn(5, 2)), 0),
-             ((np.random.randn(2, 3), np.random.randn(2, 4),
-               np.random.randn(2, 4)), 1),
-         ]:
+    for (triple, axis) in [
+        ((np.random.randn(3), np.random.randn(4), np.random.randn(5)), 0),
+        ((np.random.randn(3, 2), np.random.randn(4, 2), np.random.randn(5, 2)), 0),
+        ((np.random.randn(2, 3), np.random.randn(2, 4), np.random.randn(2, 4)), 1),
+    ]:
 
         x = np.concatenate(triple, axis=axis)
         ms1 = [x.mean(axis=axis), x.std(axis=axis), x.shape[axis]]

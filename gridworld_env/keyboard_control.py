@@ -7,11 +7,12 @@ import gym
 def cli():
     parser = argparse.ArgumentParser()
     parser.add_argument('env', type=gym.make)
+    parser.add_argument('seed', type=int)
     run(**vars(parser.parse_args()))
 
 
-def run(env, actions):
-    env.seed(0)
+def run(env, actions, seed):
+    env.seed(seed)
     actions = list(actions)
 
     s = env.reset()

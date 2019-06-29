@@ -42,13 +42,11 @@ class SegmentTree(object):
             return self._reduce_helper(start, end, 2 * node, node_start, mid)
         else:
             if mid + 1 <= start:
-                return self._reduce_helper(start, end, 2 * node + 1, mid + 1,
-                                           node_end)
+                return self._reduce_helper(start, end, 2 * node + 1, mid + 1, node_end)
             else:
                 return self._operation(
                     self._reduce_helper(start, mid, 2 * node, node_start, mid),
-                    self._reduce_helper(mid + 1, end, 2 * node + 1, mid + 1,
-                                        node_end))
+                    self._reduce_helper(mid + 1, end, 2 * node + 1, mid + 1, node_end))
 
     def reduce(self, start=0, end=None):
         """Returns result of applying `self.operation`
@@ -81,8 +79,7 @@ class SegmentTree(object):
         self._value[idx] = val
         idx //= 2
         while idx >= 1:
-            self._value[idx] = self._operation(self._value[2 * idx],
-                                               self._value[2 * idx + 1])
+            self._value[idx] = self._operation(self._value[2 * idx], self._value[2 * idx + 1])
             idx //= 2
 
     def __getitem__(self, idx):

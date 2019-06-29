@@ -5,6 +5,7 @@ Helpers for dealing with vectorized environments.
 from collections import OrderedDict
 
 import gym
+import gym.spaces
 import numpy as np
 
 
@@ -33,16 +34,19 @@ def space_shape(space: gym.Space):
     if isinstance(space, gym.spaces.Tuple):
         return tuple(space_shape(s) for s in space.spaces)
     if isinstance(space, gym.spaces.MultiDiscrete):
-        return (space.nvec.size, )
+        return space.nvec.shape
     if isinstance(space, gym.spaces.Discrete):
         return 1,
+    if isinstance(space, gym.spaces.MultiBinary):
+        return space.n,
     raise NotImplementedError
 
 
 def buffer_shape(space: gym.Space):
     shape = space_shape(space)
     if not all(isinstance(d, int) for d in shape):
-        shape = int(sum([np.prod(x) for x in shape])),  # concatenate
+        # print('buffer shape', shape)
+        shape = int(sum(np.prod(s) for s in shape)),  # concatenate
     return shape
 
 
