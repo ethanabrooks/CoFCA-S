@@ -133,6 +133,11 @@ class SubtasksGridWorld(gym.Env):
                 return string
 
         self.Subtask = _Subtask
+        self.object_one_hots = np.vstack([
+            np.eye(1 + len(self.object_types)),
+            np.zeros((1, 1 + len(self.object_types)))
+        ])
+        self.layer_one_hots = np.eye(h * w).reshape(-1, h, w)
 
     @property
     def subtask(self):
@@ -185,10 +190,8 @@ class SubtasksGridWorld(gym.Env):
         # noinspection PyTypeChecker
         desc = self.desc.copy()
         desc[self.obstacles_one_hot] = '#'
-        positions = self.objects_one_hot()
-        types = np.append(self.object_types, 'ice')
-        for pos, obj in zip(positions, types):
-            desc[pos] = obj[0]
+        for pos, obj in self.objects.items():
+            desc[pos] = obj
         desc[tuple(self.pos)] = '*'
 
         for row in desc:
@@ -252,25 +255,27 @@ class SubtasksGridWorld(gym.Env):
         self.next_subtask = False
         return self.get_observation()
 
-    def objects_one_hot(self):
-        h, w, = self.desc.shape
-        objects_one_hot = np.zeros((1 + len(self.object_types), h, w), dtype=bool)
-        idx = [(v, ) + k for k, v in self.objects.items()]
-        set_index(objects_one_hot, idx, True)
-        return objects_one_hot
-
     def get_observation(self):
         agent_one_hot = np.zeros_like(self.desc, dtype=bool)
         set_index(agent_one_hot, self.pos, True)
 
-        obs = [
-            np.expand_dims(self.obstacles_one_hot, 0),
-            self.objects_one_hot(),
-            np.expand_dims(agent_one_hot, 0)
-        ]
+        objects_desc = np.full(self.desc.shape, -1)
+        for k, v in self.objects.items():
+            objects_desc[k] = v
+
+        obstacles = self.layer_one_hots[np.ravel_multi_index(self.obstacles,
+                                                             self.desc.shape)].sum(0)
+        objects = self.object_one_hots[objects_desc]
+        agent = self.layer_one_hots[np.ravel_multi_index(self.pos, self.desc.shape)]
+
+        obs = np.dstack([
+            np.expand_dims(obstacles, 2),
+            objects,
+            np.expand_dims(agent, 2),
+        ]).transpose(2, 0, 1)
 
         # noinspection PyTypeChecker
-        return np.vstack(obs), self.subtasks
+        return obs, self.subtasks
 
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)
