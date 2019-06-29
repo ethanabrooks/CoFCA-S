@@ -1,11 +1,9 @@
 from collections import namedtuple
 
 import gym
+import numpy as np
 from gym import spaces
 from gym.spaces import Discrete
-import numpy as np
-
-from gridworld_env.subtasks_gridworld import Obs
 
 Actions = namedtuple("Actions", "a cr cg g")
 

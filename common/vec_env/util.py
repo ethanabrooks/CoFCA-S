@@ -42,14 +42,6 @@ def space_shape(space: gym.Space):
     raise NotImplementedError
 
 
-def buffer_shape(space: gym.Space):
-    shape = space_shape(space)
-    if isinstance(shape, dict):
-        # print('buffer shape', shape)
-        shape = (int(sum(np.prod(s) for s in shape.values())),)  # concatenate
-    return shape
-
-
 def obs_space_info(obs_space):
     """
     Get dict-structured information about a gym.Space.
@@ -70,7 +62,7 @@ def obs_space_info(obs_space):
     dtypes = {}
     for key, space in subspaces.items():
         keys.append(key)
-        shape = buffer_shape(space)
+        shape = space_shape(space)
         shapes[key] = shape
         dtypes[key] = space.dtype
     return keys, shapes, dtypes
