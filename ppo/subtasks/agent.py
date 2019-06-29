@@ -7,6 +7,7 @@ from torch import nn as nn
 import torch.jit
 from torch.nn import functional as F
 
+from gridworld_env.subtasks_gridworld import Obs
 import ppo
 from ppo.agent import AgentValues, NNBase
 from ppo.distributions import Categorical, DiagGaussian, FixedCategorical
@@ -14,7 +15,6 @@ from ppo.layers import Concat, Flatten, Parallel, Product
 import ppo.subtasks.teacher
 from ppo.subtasks.teacher import Teacher, g123_to_binary, g_binary_to_123
 from ppo.subtasks.wrappers import Actions
-from gridworld_env.subtasks_gridworld import Obs
 from ppo.utils import broadcast3d, init_, interp, trace
 
 RecurrentState = namedtuple(
@@ -386,8 +386,8 @@ class Recurrence(torch.jit.ScriptModule):
         update_attention,
     ):
         # combine past and present actions (sampled values)
-        A = torch.cat([a.unsqueeze(0), actions.a], dim=0).long().squeeze(2)
-        G = torch.cat([g.unsqueeze(0), actions.g], dim=0).long().squeeze(2)
+        A = torch.cat([actions.a, a.unsqueeze(0)], dim=0).long().squeeze(2)
+        G = torch.cat([actions.g, g.unsqueeze(0)], dim=0).long().squeeze(2)
         for t in range(T):
             subtask = float_subtask.long()
             float_subtask += next_subtask[t]
@@ -400,7 +400,7 @@ class Recurrence(torch.jit.ScriptModule):
                 task_sections = torch.split(
                     subtask_param, tuple(self.subtask_nvec), dim=-1
                 )
-                parts = (debug_obs, self.a_one_hots[A[t]]) + task_sections
+                parts = (debug_obs, self.a_one_hots[A[t - 1]]) + task_sections
                 if self.multiplicative_interaction:
                     return self.f(parts)
                 outer_produce_obs = 1
@@ -429,7 +429,7 @@ class Recurrence(torch.jit.ScriptModule):
             cr, cr_loss, cr_probs = phi_update(subtask_param=r)
 
             # cg
-            g_binary = M[torch.arange(N), G[t]]
+            g_binary = M[torch.arange(N), G[t - 1]]
             cg, cg_loss, cg_probs = phi_update(subtask_param=g_binary)
 
             # p
@@ -440,12 +440,12 @@ class Recurrence(torch.jit.ScriptModule):
             r = (p.unsqueeze(1) @ M).squeeze(1)
 
             # g
-            old_g = self.g_one_hots[G[t]]
+            old_g = self.g_one_hots[G[t - 1]]
             g_dist = FixedCategorical(probs=torch.clamp(interp(old_g, p, cg), 0.0, 1.0))
-            sample_new(G[t + 1], g_dist)
+            sample_new(G[t], g_dist)
 
             # a
-            g = G[t + 1]
+            g = G[t]
             g_binary = M[torch.arange(N), g]
             conv_out = self.conv((obs[t], broadcast3d(g_binary, self.obs_shape[1:])))
             if self.agent is None:
@@ -460,7 +460,7 @@ class Recurrence(torch.jit.ScriptModule):
                     dim=1,
                 )
                 a_dist = self.agent(agent_inputs, rnn_hxs=None, masks=None).dist
-            sample_new(A[t + 1], a_dist)
+            sample_new(A[t], a_dist)
             # a[:] = 'wsadeq'.index(input('act:'))
 
             yield RecurrentState(
@@ -472,10 +472,10 @@ class Recurrence(torch.jit.ScriptModule):
                 cr_probs=cr_probs,
                 p=p,
                 r=r,
-                g=G[t + 1],
+                g=g,
                 g_probs=g_dist.probs,
                 g_loss=-g_dist.log_probs(subtask),
-                a=A[t + 1],
+                a=A[t],
                 a_probs=a_dist.probs,
                 subtask=float_subtask,
                 v=self.critic(conv_out),
