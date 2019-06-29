@@ -8,10 +8,10 @@ from gym.envs.registration import EnvSpec
 from gym.spaces import Box
 from gym.utils import seeding
 import numpy as np
-from rl_utils import cartesian_product
 import six
 
 from ppo.utils import set_index
+from rl_utils import cartesian_product
 
 Subtask = namedtuple("Subtask", "interaction count object")
 Obs = namedtuple("Obs", "base subtask subtasks next_subtask")
@@ -257,6 +257,8 @@ class SubtasksGridWorld(gym.Env):
         self.count = self.subtask.count
         self.last_terminal = False
         self.last_action = None
+        self.iterate = False
+        self.next_subtask = False
         return self.get_observation()
 
     def get_observation(self):
