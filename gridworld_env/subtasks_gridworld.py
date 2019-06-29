@@ -14,6 +14,7 @@ import six
 from ppo.utils import set_index
 
 Subtask = namedtuple("Subtask", "interaction count object")
+Obs = namedtuple("Obs", "base subtask subtasks next_subtask")
 
 
 class SubtasksGridWorld(gym.Env):
