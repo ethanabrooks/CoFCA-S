@@ -8,10 +8,10 @@ from gym.envs.registration import EnvSpec
 from gym.spaces import Box
 from gym.utils import seeding
 import numpy as np
-from rl_utils import cartesian_product
 import six
 
 from ppo.utils import set_index
+from rl_utils import cartesian_product
 
 Subtask = namedtuple("Subtask", "interaction count object")
 Obs = namedtuple("Obs", "base subtask subtasks next_subtask")
@@ -198,7 +198,7 @@ class SubtasksGridWorld(gym.Env):
         desc = self.desc.copy()
         desc[self.obstacles_one_hot] = "#"
         for pos, obj in self.objects.items():
-            desc[pos] = self.object_types[obj][0]
+            desc[pos] = np.append(self.object_types, "i")[obj][0]
         desc[tuple(self.pos)] = "*"
 
         for row in desc:

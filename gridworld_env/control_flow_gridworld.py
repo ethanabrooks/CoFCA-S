@@ -5,6 +5,8 @@ import numpy as np
 
 from gridworld_env import SubtasksGridWorld
 
+Obs = namedtuple("Obs", "base subtask subtasks conditions control next_subtask pred")
+
 
 class ControlFlowGridWorld(SubtasksGridWorld):
     def __init__(self, *args, n_subtasks, force_branching=False, **kwargs):
@@ -174,4 +176,3 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int)
     parser.add_argument("--n-subtasks", type=int)
     main(**vars(parser.parse_args()))
-Obs = namedtuple("Obs", "base subtask subtasks conditions control next_subtask pred")
