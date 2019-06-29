@@ -282,12 +282,11 @@ class SubtasksGridWorld(gym.Env):
             ]
         ).transpose(2, 0, 1)
 
-        # noinspection PyTypeChecker
-        observation = Obs(
+        return Obs(
             base=obs,
-            subtask=self.subtask_idx,
-            subtasks=self.subtasks,
-            next_subtask=self.next_subtask,
+            subtask=[self.subtask_idx],
+            subtasks=np.array([self.subtasks]),
+            next_subtask=[self.next_subtask],
         )._asdict()
 
     def seed(self, seed=None):
