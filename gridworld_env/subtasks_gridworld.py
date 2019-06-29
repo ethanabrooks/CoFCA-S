@@ -285,7 +285,7 @@ class SubtasksGridWorld(gym.Env):
         return Obs(
             base=obs,
             subtask=[self.subtask_idx],
-            subtasks=self.subtasks,
+            subtasks=np.array([self.subtasks]),
             next_subtask=[self.next_subtask],
         )._asdict()
 
