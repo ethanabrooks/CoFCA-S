@@ -20,8 +20,7 @@ def frank_wolfe_solver(gradients, iterations):
         elif b >= c:
             gamma = 1
         else:
-            gamma = theta1 @ (theta1 - theta2) / (
-                (theta2 - theta1) @ (theta2 - theta1))
+            gamma = theta1 @ (theta1 - theta2) / ((theta2 - theta1) @ (theta2 - theta1))
         alphas = (1 - gamma) * alphas
         alphas[t] += gamma
 

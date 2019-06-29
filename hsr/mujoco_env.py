@@ -25,8 +25,7 @@ class MujocoEnv(gym.Env, ABC):
         if model_path.startswith("/"):
             fullpath = model_path
         else:
-            fullpath = os.path.join(
-                os.path.dirname(__file__), "assets", model_path)
+            fullpath = os.path.join(os.path.dirname(__file__), "assets", model_path)
         if not path.exists(fullpath):
             raise IOError("File %s does not exist" % fullpath)
         self.frame_skip = frame_skip
@@ -85,11 +84,10 @@ class MujocoEnv(gym.Env, ABC):
         return self.reset_model()
 
     def set_state(self, qpos, qvel):
-        assert qpos.shape == (self.model.nq, ) and qvel.shape == (
-            self.model.nv, )
+        assert qpos.shape == (self.model.nq, ) and qvel.shape == (self.model.nv, )
         old_state = self.sim.get_state()
-        new_state = mujoco_py.MjSimState(old_state.time, qpos, qvel,
-                                         old_state.act, old_state.udd_state)
+        new_state = mujoco_py.MjSimState(old_state.time, qpos, qvel, old_state.act,
+                                         old_state.udd_state)
         self.sim.set_state(new_state)
         self.sim.forward()
 
@@ -106,16 +104,14 @@ class MujocoEnv(gym.Env, ABC):
         if mode == 'rgb_array':
             self._get_viewer(mode).render(width, height)
             # window size used for old mujoco-py:
-            data = self._get_viewer(mode).read_pixels(
-                width, height, depth=False)
+            data = self._get_viewer(mode).read_pixels(width, height, depth=False)
             # original image is upside-down, so flip it
             return data[::-1, :, :]
         elif mode == 'depth_array':
             self._get_viewer(mode).render(width, height)
             # window size used for old mujoco-py:
             # Extract depth part of the read_pixels() tuple
-            data = self._get_viewer(mode).read_pixels(
-                width, height, depth=True)[1]
+            data = self._get_viewer(mode).read_pixels(width, height, depth=True)[1]
             # original image is upside-down, so flip it
             return data[::-1, :]
         elif mode == 'human':
@@ -143,8 +139,7 @@ class MujocoEnv(gym.Env, ABC):
         return self.data.get_body_xpos(body_name)
 
     def state_vector(self):
-        return np.concatenate(
-            [self.sim.data.qpos.flat, self.sim.data.qvel.flat])
+        return np.concatenate([self.sim.data.qpos.flat, self.sim.data.qvel.flat])
 
     @abstractmethod
     def _get_observation(self):

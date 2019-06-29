@@ -45,7 +45,4 @@ def register_envs():
 
 register_envs()
 entry_point = f'{SimplePOMDP.__module__}:{SimplePOMDP.__name__}'
-register(
-    id='POMDP-v0',
-    entry_point=entry_point,
-    max_episode_steps=SimplePOMDP.max_episode_steps)
+register(id='POMDP-v0', entry_point=entry_point, max_episode_steps=SimplePOMDP.max_episode_steps)

@@ -103,8 +103,7 @@ class MaxAndSkipEnv(gym.Wrapper):
         """Return only every `skip`-th frame"""
         gym.Wrapper.__init__(self, env)
         # most recent raw observations (for max pooling across time steps)
-        self._obs_buffer = np.zeros(
-            (2, ) + env.observation_space.shape, dtype=np.uint8)
+        self._obs_buffer = np.zeros((2, ) + env.observation_space.shape, dtype=np.uint8)
         self._skip = skip
 
     def step(self, action):
@@ -146,22 +145,15 @@ class WarpFrame(gym.ObservationWrapper):
         self.grayscale = grayscale
         if self.grayscale:
             self.observation_space = spaces.Box(
-                low=0,
-                high=255,
-                shape=(self.height, self.width, 1),
-                dtype=np.uint8)
+                low=0, high=255, shape=(self.height, self.width, 1), dtype=np.uint8)
         else:
             self.observation_space = spaces.Box(
-                low=0,
-                high=255,
-                shape=(self.height, self.width, 3),
-                dtype=np.uint8)
+                low=0, high=255, shape=(self.height, self.width, 3), dtype=np.uint8)
 
     def observation(self, frame):
         if self.grayscale:
             frame = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
-        frame = cv2.resize(
-            frame, (self.width, self.height), interpolation=cv2.INTER_AREA)
+        frame = cv2.resize(frame, (self.width, self.height), interpolation=cv2.INTER_AREA)
         if self.grayscale:
             frame = np.expand_dims(frame, -1)
         return frame
@@ -257,11 +249,7 @@ def make_atari(env_id, timelimit=True):
     return env
 
 
-def wrap_deepmind(env,
-                  episode_life=True,
-                  clip_rewards=True,
-                  frame_stack=False,
-                  scale=False):
+def wrap_deepmind(env, episode_life=True, clip_rewards=True, frame_stack=False, scale=False):
     """Configure environment for DeepMind-style Atari.
     """
     if episode_life:
