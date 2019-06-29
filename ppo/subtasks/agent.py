@@ -13,7 +13,8 @@ from ppo.distributions import Categorical, DiagGaussian, FixedCategorical
 from ppo.layers import Concat, Flatten, Parallel, Product
 import ppo.subtasks.teacher
 from ppo.subtasks.teacher import Teacher, g123_to_binary, g_binary_to_123
-from ppo.subtasks.wrappers import Actions, Obs
+from ppo.subtasks.wrappers import Actions
+from gridworld_env.subtasks_gridworld import Obs
 from ppo.utils import broadcast3d, init_, interp, trace
 
 RecurrentState = namedtuple(
@@ -37,7 +38,7 @@ class Agent(ppo.agent.Agent, NNBase):
         nn.Module.__init__(self)
         self.hard_update = hard_update
         self.entropy_coef = entropy_coef
-        self.action_spaces = Actions(*action_space.spaces)
+        self.action_spaces = Actions(**action_space.spaces)
         self.obs_spaces = obs_spaces
         self.recurrent_module = self.build_recurrent_module(
             agent=agent,
