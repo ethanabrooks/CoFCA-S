@@ -285,12 +285,13 @@ class SubtasksGridWorld(gym.Env):
             ]
         ).transpose(2, 0, 1)
 
-        return Obs(
+        o = Obs(
             base=obs,
-            subtask=self.subtask_idx,
+            subtask=[self.subtask_idx],
             subtasks=self.subtasks,
-            next_subtask=self.next_subtask,
+            next_subtask=[self.next_subtask],
         )
+        return np.concatenate([np.ravel(x) for x in o])
 
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)

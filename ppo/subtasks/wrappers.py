@@ -66,14 +66,7 @@ class Wrapper(gym.Wrapper):
         actions = Actions(*np.split(action, len(self.action_space.spaces)))
         action = int(actions.a)
         self.last_g = int(actions.g)
-        s, r, t, i = super().step(action)
-        return self.wrap_observation(s), r, t, i
-
-    def reset(self, **kwargs):
-        return self.wrap_observation(super().reset())
-
-    def wrap_observation(self, observation):
-        return np.concatenate([np.array(x).flatten() for x in observation])
+        return super().step(action)
 
     def render(self, mode="human", **kwargs):
         super().render(mode=mode)
