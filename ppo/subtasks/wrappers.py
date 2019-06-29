@@ -76,7 +76,7 @@ class Wrapper(gym.Wrapper):
         obs, *_ = observation
         _, h, w = obs.shape
         env = self.env.unwrapped
-        observation = Obs(
+        o = Obs(
             base=obs,
             subtask=env.subtask_idx,
             subtasks=env.subtasks,
@@ -84,7 +84,10 @@ class Wrapper(gym.Wrapper):
         )
         # for obs, space in zip(observation, self.observation_space.spaces):
         # assert space.contains(np.array(obs))
-        return np.concatenate([np.array(x).flatten() for x in observation])
+        x1 = np.concatenate([np.array(x).flatten() for x in o])
+        x2 = np.concatenate([np.array(x).flatten() for x in observation])
+        # assert np.all(x1 == x2)
+        return x2
 
     def render(self, mode="human", **kwargs):
         super().render(mode=mode)
