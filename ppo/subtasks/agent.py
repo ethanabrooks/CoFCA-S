@@ -471,8 +471,7 @@ class Recurrence(torch.jit.ScriptModule):
                     loss = F.binary_cross_entropy(
                         torch.clamp(c, 0.0, 1.0), next_subtask[t], reduction="none"
                     )
-                # return c, loss, probs
-                return truth, loss, probs  # TODO
+                return c, loss, probs
 
             # cr
             cr, cr_loss, cr_probs = phi_update(subtask_param=r)
