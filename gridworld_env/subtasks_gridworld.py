@@ -269,9 +269,8 @@ class SubtasksGridWorld(gym.Env):
         agent = self.layer_one_hots[np.ravel_multi_index(self.pos, self.desc.shape)]
 
         obs = np.dstack([
-            np.expand_dims(obstacles, 2),
             objects,
-            np.expand_dims(agent, 2),
+            np.dstack([obstacles, agent]),
         ]).transpose(2, 0, 1)
 
         # noinspection PyTypeChecker
