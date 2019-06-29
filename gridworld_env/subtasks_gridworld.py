@@ -7,10 +7,10 @@ from gym import spaces
 from gym.envs.registration import EnvSpec
 from gym.utils import seeding
 import numpy as np
-from rl_utils import cartesian_product
 import six
 
 from ppo.utils import set_index
+from rl_utils import cartesian_product
 
 Subtask = namedtuple('Subtask', 'interaction count object')
 
@@ -128,6 +128,11 @@ class SubtasksGridWorld(gym.Env):
                 return string
 
         self.Subtask = _Subtask
+        self.object_one_hots = np.vstack([
+            np.eye(1 + len(self.object_types)),
+            np.zeros((1, 1 + len(self.object_types)))
+        ])
+        self.layer_one_hots = np.eye(h * w).reshape(-1, h, w)
 
     @property
     def subtask(self):
@@ -256,14 +261,31 @@ class SubtasksGridWorld(gym.Env):
         agent_one_hot = np.zeros_like(self.desc, dtype=bool)
         set_index(agent_one_hot, self.pos, True)
 
-        obs = [
+        objects_desc = np.full(self.desc.shape, -1)
+        for k, v in self.objects.items():
+            objects_desc[k] = v
+
+        obstacles = self.layer_one_hots[np.ravel_multi_index(self.obstacles.T,
+                                                             self.desc.shape)].sum(0)
+        objects = self.object_one_hots[objects_desc]
+        agent = self.layer_one_hots[np.ravel_multi_index(self.pos, self.desc.shape)]
+
+        obs = np.dstack([
+            np.expand_dims(obstacles, 2),
+            objects,
+            np.expand_dims(agent, 2),
+            # np.dstack([obstacles, agent]),
+        ]).transpose(2, 0, 1)
+
+        obs2 = np.vstack([
             np.expand_dims(self.obstacles_one_hot, 0),
             self.objects_one_hot(),
             np.expand_dims(agent_one_hot, 0)
-        ]
+        ])
+        assert np.all(obs == obs2)
 
         # noinspection PyTypeChecker
-        return np.vstack(obs), self.subtasks
+        return obs, self.subtasks
 
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)
