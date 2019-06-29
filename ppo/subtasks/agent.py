@@ -329,6 +329,7 @@ class Recurrence(torch.jit.ScriptModule):
 
         return self.pack(
             self.inner_loop(
+                new_episode=new_episode.float(),
                 a=hx.a,
                 g=hx.g,
                 cr=hx.cr,
@@ -374,6 +375,7 @@ class Recurrence(torch.jit.ScriptModule):
 
     def inner_loop(
         self,
+        new_episode,
         g,
         a,
         cr,
@@ -428,7 +430,7 @@ class Recurrence(torch.jit.ScriptModule):
                     loss = F.binary_cross_entropy(
                         torch.clamp(c, 0.0, 1.0), next_subtask[t], reduction="none"
                     )
-                return c, loss, probs
+                return c * (1 - new_episode.unsqueeze(1)), loss, probs
 
             # cr
             cr, cr_loss, cr_probs = phi_update(subtask_param=r)
