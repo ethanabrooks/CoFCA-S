@@ -432,14 +432,23 @@ class Recurrence(torch.jit.ScriptModule):
                 ).dist
             sample_new(A[t], a_dist)
 
-            # a[:] = 'wsadeq'.index(input('act:'))
+            # A[t, :] = "wsadeq".index(input("act:"))
 
             def phi_update(subtask_param):
                 debug_obs = obs[t, j, :, k, l].squeeze(1)
-                task_sections = torch.split(
+                interaction, count, obj = task_sections = torch.split(
                     subtask_param, tuple(self.subtask_nvec), dim=-1
                 )
-                parts = (debug_obs, self.a_one_hots[A[t]]) + task_sections
+                a_one_hot = self.a_one_hots[A[t]]
+                parts = (debug_obs, a_one_hot) + task_sections
+                correct_object = (obj * debug_obs[:, : self.subtask_nvec[2]]).sum(
+                    -1, keepdim=True
+                )
+                correct_action = interaction[:, :1] + (
+                    interaction[:, 1:] * a_one_hot[t, 4:]
+                ).sum(-1, keepdim=True)
+                truth = correct_action * correct_object  # TODO
+
                 if self.multiplicative_interaction:
                     return self.f(parts)
                 outer_produce_obs = 1
@@ -462,7 +471,8 @@ class Recurrence(torch.jit.ScriptModule):
                     loss = F.binary_cross_entropy(
                         torch.clamp(c, 0.0, 1.0), next_subtask[t], reduction="none"
                     )
-                return c, loss, probs
+                # return c, loss, probs
+                return truth, loss, probs  # TODO
 
             # cr
             cr, cr_loss, cr_probs = phi_update(subtask_param=r)

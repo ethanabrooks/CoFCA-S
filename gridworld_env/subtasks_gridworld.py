@@ -273,14 +273,7 @@ class SubtasksGridWorld(gym.Env):
         objects = self.object_one_hots[objects_desc]
         agent = self.layer_one_hots[np.ravel_multi_index(self.pos, self.desc.shape)]
 
-        obs = np.dstack(
-            [
-                np.expand_dims(obstacles, 2),
-                objects,
-                np.expand_dims(agent, 2),
-                # np.dstack([obstacles, agent]),
-            ]
-        ).transpose(2, 0, 1)
+        obs = np.dstack([objects, np.dstack([obstacles, agent])]).transpose(2, 0, 1)
 
         return Obs(
             base=obs,
