@@ -8,7 +8,7 @@ from ppo.agent import Agent
 from ppo.subtasks.wrappers import Actions
 from ppo.utils import broadcast3d
 
-Obs = namedtuple("Obs", "base subtask subtasks")
+Obs = namedtuple("Obs", "base subtask subtasks cr cg")
 
 
 class Teacher(Agent):
@@ -18,6 +18,8 @@ class Teacher(Agent):
             base=obs_spaces.base,
             subtask=obs_spaces.subtask,
             subtasks=obs_spaces.subtasks,
+            cr=obs_spaces.next_subtask,
+            cg=obs_spaces.next_subtask,
         )
         _, h, w = self.obs_shape = self.obs_spaces.base.shape
         self.action_spaces = Actions(**action_space.spaces)
@@ -37,9 +39,7 @@ class Teacher(Agent):
         )  # one-hot subtask
 
     def preprocess_obs(self, inputs):
-        sections = self.obs_sections + [inputs.size(1) - sum(self.obs_sections)]
-        n = inputs.size(0)
-        inputs = Obs(*torch.split(inputs, sections, dim=1)[:3])
+        n = inputs.base.size(0)
         obs = inputs.base.view(n, *self.obs_shape)
         subtask_idx = inputs.subtask.long().flatten()
         subtasks = inputs.subtasks.view(n, *self.obs_spaces.subtasks.shape)
@@ -51,13 +51,15 @@ class Teacher(Agent):
         return torch.cat([obs, g_broad], dim=1)
 
     def forward(self, inputs, *args, action=None, **kwargs):
+        sections = self.obs_sections + [inputs.size(1) - sum(self.obs_sections)]
+        inputs = Obs(*torch.split(inputs, sections, dim=1)[:-1])
         if action is not None:
             action = action[:, :1]
         act = super().forward(
             self.preprocess_obs(inputs), action=action, *args, **kwargs
         )
         x = torch.zeros_like(act.action)
-        actions = Actions(a=act.action, g=x, cg=x, cr=x)
+        actions = Actions(a=act.action, g=x, cg=inputs.cg.long(), cr=inputs.cr.long())
         return act._replace(action=torch.cat(actions, dim=-1))
 
     def get_value(self, inputs, rnn_hxs, masks):

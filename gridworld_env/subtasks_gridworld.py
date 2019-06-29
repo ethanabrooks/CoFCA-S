@@ -8,10 +8,10 @@ from gym.envs.registration import EnvSpec
 from gym.spaces import Box
 from gym.utils import seeding
 import numpy as np
-from rl_utils import cartesian_product
 import six
 
 from ppo.utils import set_index
+from rl_utils import cartesian_product
 
 Subtask = namedtuple("Subtask", "interaction count object")
 Obs = namedtuple("Obs", "base subtask subtasks next_subtask")
@@ -257,8 +257,6 @@ class SubtasksGridWorld(gym.Env):
         self.count = self.subtask.count
         self.last_terminal = False
         self.last_action = None
-        self.iterate = False
-        self.next_subtask = False
         return self.get_observation()
 
     def get_observation(self):
@@ -296,21 +294,8 @@ class SubtasksGridWorld(gym.Env):
         return [seed]
 
     def step(self, a):
-
-        # iterate
-        t = False
-        r = -0.1
-        if self.iterate:
-            if self.count == 0 or self.count is None:
-                self.subtask_idx = self.get_next_subtask()
-                if self.subtask is None:
-                    r = 1
-                    t = True
-                else:
-                    self.count = self.subtask.count
-            else:
-                self.count -= 1
-
+        self.last_action = a
+        self.next_subtask = False
         # act
         n_transitions = len(self.transitions)
         if a < n_transitions:
@@ -324,28 +309,36 @@ class SubtasksGridWorld(gym.Env):
         pos = tuple(self.pos)
         touching = pos in self.objects
 
-        # set iterate
-        self.iterate = False
-        if touching and not t:
+        t = False
+        r = -0.1
+        if touching:
+            iterate = False
             object_type = self.objects[pos]
             interaction = self.interactions[self.subtask.interaction]
             if "visit" == interaction:
-                self.iterate = object_type == self.subtask.object
+                iterate = object_type == self.subtask.object
             if a >= n_transitions:
                 if a - n_transitions == 0:  # pick up
                     del self.objects[pos]
                     if "pick-up" == interaction:
-                        self.iterate = (
-                            object_type == self.subtask.object
-                        )  # picked up object
+                        iterate = object_type == self.subtask.object  # picked up object
                 elif a - n_transitions == 1:  # transform
                     self.objects[pos] = len(self.object_types)
                     if "transform" == interaction:
-                        self.iterate = object_type == self.subtask.object
+                        iterate = object_type == self.subtask.object
 
-        self.last_action = a
+            if iterate:
+                if self.count == 0:
+                    self.subtask_idx = self.get_next_subtask()
+                    if self.subtask is None:
+                        r = 1
+                        t = True
+                    else:
+                        self.count = self.subtask.count
+                else:
+                    self.count -= 1
+
         self.last_terminal = t
-        self.next_subtask = self.iterate and self.count == 0
         return self.get_observation(), r, t, {}
 
     def get_next_subtask(self):
