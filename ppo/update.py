@@ -11,17 +11,17 @@ from ppo.storage import Batch, RolloutStorage
 
 class PPO:
     def __init__(
-            self,
-            agent,
-            clip_param,
-            ppo_epoch,
-            batch_size,
-            value_loss_coef,
-            learning_rate=None,
-            eps=None,
-            max_grad_norm=None,
-            use_clipped_value_loss=True,
-            aux_loss_only=False,
+        self,
+        agent,
+        clip_param,
+        ppo_epoch,
+        batch_size,
+        value_loss_coef,
+        learning_rate=None,
+        eps=None,
+        max_grad_norm=None,
+        use_clipped_value_loss=True,
+        aux_loss_only=False,
     ):
 
         self.aux_loss_only = aux_loss_only
@@ -48,9 +48,13 @@ class PPO:
 
         for e in range(self.ppo_epoch):
             if self.agent.is_recurrent:
-                data_generator = rollouts.recurrent_generator(advantages, self.num_mini_batch)
+                data_generator = rollouts.recurrent_generator(
+                    advantages, self.num_mini_batch
+                )
             else:
-                data_generator = rollouts.feed_forward_generator(advantages, self.num_mini_batch)
+                data_generator = rollouts.feed_forward_generator(
+                    advantages, self.num_mini_batch
+                )
 
             sample: Batch
             for sample in data_generator:
@@ -59,7 +63,8 @@ class PPO:
                     inputs=sample.obs,
                     rnn_hxs=sample.recurrent_hidden_states,
                     masks=sample.masks,
-                    action=sample.actions)
+                    action=sample.actions,
+                )
                 values = act.value
                 action_log_probs = act.action_log_probs
                 loss = act.aux_loss
@@ -69,20 +74,24 @@ class PPO:
                 if not self.aux_loss_only:
                     ratio = torch.exp(action_log_probs - sample.old_action_log_probs)
                     surr1 = ratio * sample.adv
-                    surr2 = torch.clamp(ratio, 1.0 - self.clip_param,
-                                        1.0 + self.clip_param) * sample.adv
+                    surr2 = (
+                        torch.clamp(ratio, 1.0 - self.clip_param, 1.0 + self.clip_param)
+                        * sample.adv
+                    )
                     action_loss = -torch.min(surr1, surr2).mean()
                     logger.update(action_loss=action_loss)
                     loss += action_loss
 
                 if self.use_clipped_value_loss:
 
-                    value_pred_clipped = sample.value_preds + \
-                                         (values - sample.value_preds).clamp(
-                                             -self.clip_param, self.clip_param)
+                    value_pred_clipped = sample.value_preds + (
+                        values - sample.value_preds
+                    ).clamp(-self.clip_param, self.clip_param)
                     value_losses = (values - sample.ret).pow(2)
                     value_losses_clipped = (value_pred_clipped - sample.ret).pow(2)
-                    value_loss = .5 * torch.max(value_losses, value_losses_clipped).mean()
+                    value_loss = (
+                        0.5 * torch.max(value_losses, value_losses_clipped).mean()
+                    )
                 else:
                     value_loss = 0.5 * F.mse_loss(sample.ret, values)
                 logger.update(value_loss=value_loss)
@@ -95,7 +104,7 @@ class PPO:
                 self.optimizer.step()
 
                 # noinspection PyTypeChecker
-                logger.update(n=1.)
+                logger.update(n=1.0)
 
-        n = logger.pop('n')
+        n = logger.pop("n")
         return {k: v.mean().item() / n for k, v in logger.items()}

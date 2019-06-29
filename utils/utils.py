@@ -24,9 +24,9 @@ def one_hot(idx, num_entries):
 def horz_stack_images(*images, spacing=5, background_color=(0, 0, 0)):
     # assert that all shapes have the same siz
     if len(set([tuple(image.shape) for image in images])) != 1:
-        raise Exception('All images must have same shape')
+        raise Exception("All images must have same shape")
     if images[0].shape[2] != len(background_color):
-        raise Exception('Depth of background color must be the same as depth of image.')
+        raise Exception("Depth of background color must be the same as depth of image.")
     height = images[0].shape[0]
     width = images[0].shape[1]
     depth = images[0].shape[2]
@@ -35,21 +35,23 @@ def horz_stack_images(*images, spacing=5, background_color=(0, 0, 0)):
     canvas *= bg_color
     width_pos = 0
     for image in images:
-        canvas[:, width_pos:width_pos + width, :] = image
-        width_pos += (width + spacing)
+        canvas[:, width_pos : width_pos + width, :] = image
+        width_pos += width + spacing
     return canvas
 
 
 def component(function):
     def wrapper(*args, **kwargs):
-        reuse = kwargs.get('reuse', None)
-        name = kwargs['name']
-        if 'reuse' in kwargs:
-            del kwargs['reuse']
-        del kwargs['name']
+        reuse = kwargs.get("reuse", None)
+        name = kwargs["name"]
+        if "reuse" in kwargs:
+            del kwargs["reuse"]
+        del kwargs["name"]
         with tf.variable_scope(name, reuse=reuse):
             out = function(*args, **kwargs)
-            variables = tf.get_variable_scope().get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
+            variables = tf.get_variable_scope().get_collection(
+                tf.GraphKeys.TRAINABLE_VARIABLES
+            )
             return out, variables
 
     return wrapper
@@ -119,7 +121,7 @@ def get_space_attrs(space: gym.Space, attr: str):
         return {k: get_space_attrs(v, attr) for k, v in space.spaces.items()}
     elif isinstance(space, gym.spaces.Tuple):
         return [get_space_attrs(s, attr) for s in space.spaces]
-    raise RuntimeError(f'{space} does not have attribute {attr}.')
+    raise RuntimeError(f"{space} does not have attribute {attr}.")
 
 
 def get_env_attr(env: gym.Env, attr: str):
@@ -233,7 +235,8 @@ def softmax(X, theta=1.0, axis=None):
     p = y / ax_sum
 
     # flatten if X was 1D
-    if len(X.shape) == 1: p = p.flatten()
+    if len(X.shape) == 1:
+        p = p.flatten()
 
     return p
 
@@ -241,7 +244,7 @@ def softmax(X, theta=1.0, axis=None):
 Obs = Any
 
 
-class Step(namedtuple('Step', 's o1 a r o2 t')):
+class Step(namedtuple("Step", "s o1 a r o2 t")):
     def replace(self, **kwargs):
         return super()._replace(**kwargs)
 
@@ -252,7 +255,7 @@ ArrayLike = Union[np.ndarray, list]
 def parse_double(ctx, param, string):
     if string is None:
         return
-    a, b = map(float, string.split(','))
+    a, b = map(float, string.split(","))
     return a, b
 
 
@@ -271,7 +274,11 @@ def space_to_size(space: gym.Space):
 
 def parametric_relu(_x):
     alphas = tf.get_variable(
-        'alpha', _x.get_shape()[-1], initializer=tf.constant_initializer(0.0), dtype=tf.float32)
+        "alpha",
+        _x.get_shape()[-1],
+        initializer=tf.constant_initializer(0.0),
+        dtype=tf.float32,
+    )
     pos = tf.nn.relu(_x)
     neg = alphas * (_x - abs(_x)) * 0.5
     return pos + neg

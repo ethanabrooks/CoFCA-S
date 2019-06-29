@@ -9,9 +9,9 @@ import time
 
 def _serve_forever(port, queue):
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-        sock.bind(('', port))
+        sock.bind(("", port))
         while True:
-            data, return_address = sock.recvfrom(2**3)
+            data, return_address = sock.recvfrom(2 ** 3)
             response = pickle.dumps(queue.get())
             sock.sendto(response, return_address)
 
@@ -28,8 +28,8 @@ class Server:
             time.sleep(1e-100)  # Why does this work? Don't know.
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     port = int(sys.argv[1])
     server = Server(port)
     while True:
-        server.serve(input('Enter message:'))
+        server.serve(input("Enter message:"))

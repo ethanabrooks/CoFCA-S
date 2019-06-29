@@ -12,7 +12,8 @@ try:
 except ImportError as e:
     raise error.DependencyNotInstalled(
         "{}. (HINT: you need to install mujoco_py, and also perform the setup "
-        "instructions here: https://github.com/openai/mujoco-py/.)".format(e))
+        "instructions here: https://github.com/openai/mujoco-py/.)".format(e)
+    )
 
 DEFAULT_SIZE = 500
 
@@ -36,8 +37,8 @@ class MujocoEnv(gym.Env, ABC):
         self._viewers = {}
 
         self.metadata = {
-            'render.modes': ['human', 'rgb_array', 'depth_array'],
-            'video.frames_per_second': int(np.round(1.0 / self.dt))
+            "render.modes": ["human", "rgb_array", "depth_array"],
+            "video.frames_per_second": int(np.round(1.0 / self.dt)),
         }
 
         bounds = self.model.actuator_ctrlrange.copy()
@@ -84,10 +85,11 @@ class MujocoEnv(gym.Env, ABC):
         return self.reset_model()
 
     def set_state(self, qpos, qvel):
-        assert qpos.shape == (self.model.nq, ) and qvel.shape == (self.model.nv, )
+        assert qpos.shape == (self.model.nq,) and qvel.shape == (self.model.nv,)
         old_state = self.sim.get_state()
-        new_state = mujoco_py.MjSimState(old_state.time, qpos, qvel, old_state.act,
-                                         old_state.udd_state)
+        new_state = mujoco_py.MjSimState(
+            old_state.time, qpos, qvel, old_state.act, old_state.udd_state
+        )
         self.sim.set_state(new_state)
         self.sim.forward()
 
@@ -100,21 +102,21 @@ class MujocoEnv(gym.Env, ABC):
         for _ in range(n_frames):
             self.sim.step()
 
-    def render(self, mode='human', width=DEFAULT_SIZE, height=DEFAULT_SIZE):
-        if mode == 'rgb_array':
+    def render(self, mode="human", width=DEFAULT_SIZE, height=DEFAULT_SIZE):
+        if mode == "rgb_array":
             self._get_viewer(mode).render(width, height)
             # window size used for old mujoco-py:
             data = self._get_viewer(mode).read_pixels(width, height, depth=False)
             # original image is upside-down, so flip it
             return data[::-1, :, :]
-        elif mode == 'depth_array':
+        elif mode == "depth_array":
             self._get_viewer(mode).render(width, height)
             # window size used for old mujoco-py:
             # Extract depth part of the read_pixels() tuple
             data = self._get_viewer(mode).read_pixels(width, height, depth=True)[1]
             # original image is upside-down, so flip it
             return data[::-1, :]
-        elif mode == 'human':
+        elif mode == "human":
             self._get_viewer(mode).render()
 
     def close(self):
@@ -126,9 +128,9 @@ class MujocoEnv(gym.Env, ABC):
     def _get_viewer(self, mode):
         self.viewer = self._viewers.get(mode)
         if self.viewer is None:
-            if mode == 'human':
+            if mode == "human":
                 self.viewer = mujoco_py.MjViewer(self.sim)
-            elif mode == 'rgb_array' or mode == 'depth_array':
+            elif mode == "rgb_array" or mode == "depth_array":
                 self.viewer = mujoco_py.MjRenderContextOffscreen(self.sim, -1)
 
             self.viewer_setup()

@@ -13,11 +13,11 @@ from torch.nn import functional as F
 
 
 def get_render_func(venv):
-    if hasattr(venv, 'envs'):
+    if hasattr(venv, "envs"):
         return venv.envs[0].render
-    elif hasattr(venv, 'venv'):
+    elif hasattr(venv, "venv"):
         return get_render_func(venv.venv)
-    elif hasattr(venv, 'env'):
+    elif hasattr(venv, "env"):
         return get_render_func(venv.env)
 
     return None
@@ -65,7 +65,9 @@ def get_index(array, idxs):
 
 def get_n_gpu():
     nvidia_smi = subprocess.check_output(
-        'nvidia-smi --format=csv --query-gpu=memory.free'.split(), universal_newlines=True)
+        "nvidia-smi --format=csv --query-gpu=memory.free".split(),
+        universal_newlines=True,
+    )
     return len(list(csv.reader(StringIO(nvidia_smi)))) - 1
 
 
@@ -75,9 +77,13 @@ def get_random_gpu():
 
 def get_freer_gpu():
     nvidia_smi = subprocess.check_output(
-        'nvidia-smi --format=csv --query-gpu=memory.free'.split(), universal_newlines=True)
+        "nvidia-smi --format=csv --query-gpu=memory.free".split(),
+        universal_newlines=True,
+    )
     free_memory = [
-        float(x[0].split()[0]) for i, x in enumerate(csv.reader(StringIO(nvidia_smi))) if i > 0
+        float(x[0].split()[0])
+        for i, x in enumerate(csv.reader(StringIO(nvidia_smi)))
+        if i > 0
     ]
     return int(np.argmax(free_memory))
 
@@ -85,8 +91,12 @@ def get_freer_gpu():
 def init_(network, nonlinearity=None):
     if nonlinearity is None:
         return init(network, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0))
-    return init(network, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0),
-                nn.init.calculate_gain(nonlinearity))
+    return init(
+        network,
+        nn.init.orthogonal_,
+        lambda x: nn.init.constant_(x, 0),
+        nn.init.calculate_gain(nonlinearity),
+    )
 
 
 def broadcast3d(inputs, shape):

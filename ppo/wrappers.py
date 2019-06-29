@@ -2,11 +2,11 @@ import gym
 from gym import spaces
 from gym.spaces import Box
 import numpy as np
-from rl_utils import onehot
 import torch
 
 from common.vec_env import VecEnvWrapper
 from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
+from rl_utils import onehot
 
 
 # Can be used to test recurrent policies for Reacher-v2
@@ -22,8 +22,10 @@ class AddTimestep(gym.ObservationWrapper):
         super(AddTimestep, self).__init__(env)
         self.observation_space = Box(
             self.observation_space.low[0],
-            self.observation_space.high[0], [self.observation_space.shape[0] + 1],
-            dtype=self.observation_space.dtype)
+            self.observation_space.high[0],
+            [self.observation_space.shape[0] + 1],
+            dtype=self.observation_space.dtype,
+        )
 
     def observation(self, observation):
         return np.concatenate((observation, [self.env._elapsed_steps]))
@@ -35,8 +37,10 @@ class TransposeImage(gym.ObservationWrapper):
         obs_shape = self.observation_space.shape
         self.observation_space = Box(
             self.observation_space.low[0, 0, 0],
-            self.observation_space.high[0, 0, 0], [obs_shape[2], obs_shape[1], obs_shape[0]],
-            dtype=self.observation_space.dtype)
+            self.observation_space.high[0, 0, 0],
+            [obs_shape[2], obs_shape[1], obs_shape[0]],
+            dtype=self.observation_space.dtype,
+        )
 
     def observation(self, observation):
         return observation.transpose(2, 0, 1)
@@ -46,11 +50,13 @@ class VecPyTorch(VecEnvWrapper):
     def __init__(self, venv):
         """Return only every `skip`-th frame"""
         super(VecPyTorch, self).__init__(venv)
-        self.device = 'cpu'
+        self.device = "cpu"
         # TODO: Fix data types
 
     @staticmethod
     def extract_numpy(obs):
+        if isinstance(obs, dict):
+            return np.hstack([x.reshape(x.shape[0], -1) for x in obs.values()])
         if not isinstance(obs, (list, tuple)):
             return obs
         assert len(obs) == 1
@@ -58,8 +64,7 @@ class VecPyTorch(VecEnvWrapper):
 
     def reset(self):
         obs = self.extract_numpy(self.venv.reset())
-        obs = torch.from_numpy(obs).float().to(self.device)
-        return obs
+        return torch.from_numpy(obs).float().to(self.device)
 
     def step_async(self, actions):
         actions = actions.squeeze(1).cpu().numpy()
@@ -86,8 +91,11 @@ class VecNormalize(VecNormalize_):
         if self.ob_rms:
             if self.training:
                 self.ob_rms.update(obs)
-            obs = np.clip((obs - self.ob_rms.mean) / np.sqrt(self.ob_rms.var + self.epsilon),
-                          -self.clipob, self.clipob)
+            obs = np.clip(
+                (obs - self.ob_rms.mean) / np.sqrt(self.ob_rms.var + self.epsilon),
+                -self.clipob,
+                self.clipob,
+            )
             return obs
         else:
             return obs
@@ -110,25 +118,26 @@ class VecPyTorchFrameStack(VecEnvWrapper):
         low = np.repeat(wos.low, self.nstack, axis=0)
         high = np.repeat(wos.high, self.nstack, axis=0)
 
-        self.stacked_obs = torch.zeros((venv.num_envs, ) + low.shape)
+        self.stacked_obs = torch.zeros((venv.num_envs,) + low.shape)
 
-        observation_space = gym.spaces.Box(low=low, high=high, dtype=venv.observation_space.dtype)
+        observation_space = gym.spaces.Box(
+            low=low, high=high, dtype=venv.observation_space.dtype
+        )
         VecEnvWrapper.__init__(self, venv, observation_space=observation_space)
 
     def step_wait(self):
         obs, rews, news, infos = self.venv.step_wait()
-        self.stacked_obs[:, :-self.shape_dim0] = \
-            self.stacked_obs[:, self.shape_dim0:]
+        self.stacked_obs[:, : -self.shape_dim0] = self.stacked_obs[:, self.shape_dim0 :]
         for (i, new) in enumerate(news):
             if new:
                 self.stacked_obs[i] = 0
-        self.stacked_obs[:, -self.shape_dim0:] = obs
+        self.stacked_obs[:, -self.shape_dim0 :] = obs
         return self.stacked_obs, rews, news, infos
 
     def reset(self):
         obs = self.venv.reset()
         self.stacked_obs = torch.zeros(self.stacked_obs.shape)
-        self.stacked_obs[:, -self.shape_dim0:] = obs
+        self.stacked_obs[:, -self.shape_dim0 :] = obs
         return self.stacked_obs
 
     def close(self):
@@ -150,7 +159,9 @@ class OneHotWrapper(gym.Wrapper):
 
             def one_hots():
                 nvec = observation_space.nvec
-                for o, n in zip(obs.reshape(len(obs), -1).T, nvec.reshape(len(nvec), -1).T):
+                for o, n in zip(
+                    obs.reshape(len(obs), -1).T, nvec.reshape(len(nvec), -1).T
+                ):
                     yield onehot(o, n)
 
             return np.concatenate(list(one_hots()), axis=-1)
@@ -159,7 +170,7 @@ class OneHotWrapper(gym.Wrapper):
 def get_vec_normalize(venv):
     if isinstance(venv, VecNormalize):
         return venv
-    elif hasattr(venv, 'venv'):
+    elif hasattr(venv, "venv"):
         return get_vec_normalize(venv.venv)
 
     return None

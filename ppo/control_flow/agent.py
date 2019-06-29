@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from ppo.control_flow.wrappers import Obs
+from gridworld_env.control_flow_gridworld import Obs
 from ppo.layers import Flatten, Reshape
 import ppo.subtasks.agent
 from ppo.subtasks.teacher import g123_to_binary
@@ -19,25 +19,28 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
     def __init__(self, hidden_size, **kwargs):
         super().__init__(hidden_size=hidden_size, **kwargs)
         self.obs_sections = Obs(*[int(np.prod(s.shape)) for s in self.obs_spaces])
-        self.register_buffer('branch_one_hots', torch.eye(self.n_subtasks))
+        self.register_buffer("branch_one_hots", torch.eye(self.n_subtasks))
         num_object_types = int(self.obs_spaces.subtasks.nvec[0, 2])
-        self.register_buffer('condition_one_hots',
-                             torch.eye(num_object_types + 1))  # +1 for determinism
-        self.register_buffer('rows', torch.arange(self.n_subtasks).unsqueeze(-1).float())
+        self.register_buffer("condition_one_hots", torch.eye(num_object_types))
+        self.register_buffer(
+            "rows", torch.arange(self.n_subtasks).unsqueeze(-1).float()
+        )
+        self.n_conditions = self.obs_spaces.conditions.shape[0]
 
-        in_channels = (
-            self.obs_shape[0] *  # observation
-            (num_object_types + 1))  # condition tensor d
+        d, h, w = self.obs_shape
         self.phi_shift = nn.Sequential(
-            Reshape(-1, in_channels, *self.obs_shape[-2:]),
-            init_(nn.Conv2d(in_channels, hidden_size, kernel_size=1, stride=1)),
+            Reshape(-1, num_object_types * d, h, w),
+            # init_(nn.Linear(in_size, 1), 'sigmoid'),
+            # Reshape(-1, in_channels, *self.obs_shape[-2:]),
+            init_(
+                nn.Conv2d(num_object_types * d, hidden_size, kernel_size=1, stride=1)
+            ),
             nn.MaxPool2d(kernel_size=self.obs_shape[-2:], stride=1),
             Flatten(),
-            init_(nn.Linear(hidden_size, 1), 'sigmoid'),
+            init_(nn.Linear(hidden_size, 1), "sigmoid"),
             nn.Sigmoid(),
             Reshape(-1, 1, 1),
         )
-        self.n_conditions = self.obs_spaces.conditions.shape[0]
         self.obs_shapes = Obs(
             base=self.obs_spaces.base.shape,
             subtask=[1],
@@ -57,14 +60,18 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
 
     def register_agent_dummy_values(self):
         self.register_buffer(
-            'agent_dummy_values',
+            "agent_dummy_values",
             torch.zeros(
                 1,
-                sum([
-                    self.obs_sections.subtasks,
-                    self.obs_sections.control,
-                    self.obs_sections.next_subtask,
-                ])))
+                sum(
+                    [
+                        self.obs_sections.subtasks,
+                        self.obs_sections.control,
+                        self.obs_sections.next_subtask,
+                    ]
+                ),
+            ),
+        )
 
     def forward(self, inputs, hx):
         assert hx is not None
@@ -73,12 +80,16 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
         # detach actions
         # noinspection PyProtectedMember
         n_actions = len(Actions._fields)
-        inputs, *actions = torch.split(inputs.detach(), [D - n_actions] + [1] * n_actions, dim=2)
+        inputs, *actions = torch.split(
+            inputs.detach(), [D - n_actions] + [1] * n_actions, dim=2
+        )
         actions = Actions(*actions)
 
         # parse non-action inputs
         inputs = torch.split(inputs, self.obs_sections, dim=2)
-        inputs = Obs(*[x.view(T, N, *shape) for x, shape in zip(inputs, self.obs_shapes)])
+        inputs = Obs(
+            *[x.view(T, N, *shape) for x, shape in zip(inputs, self.obs_shapes)]
+        )
 
         # build M
         subtasks = torch.split(inputs.subtasks, 1, dim=-1)
@@ -93,7 +104,7 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
         control = inputs.control[0]
         rows = self.rows.expand_as(control)
         # point terminal branches back at themselves TODO: is this right?
-        control = inputs.control[0].where(control != self.n_subtasks, rows)
+        control = inputs.control[0].where(control < self.n_subtasks, rows)
         false_path, true_path = torch.split(control, 1, dim=-1)
         true_path = self.branch_one_hots[true_path.squeeze(-1).long()]
         false_path = self.branch_one_hots[false_path.squeeze(-1).long()]
@@ -106,22 +117,24 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
         for x in hx:
             x.squeeze_(0)
         if torch.any(new_episode):
-            p[new_episode, 0] = 1.  # initialize pointer to first subtask
+            p[new_episode, 0] = 1.0  # initialize pointer to first subtask
             r[new_episode] = M[new_episode, 0]  # initialize r to first subtask
             # initialize g to first subtask
-            hx.g[new_episode] = 0.
+            hx.g[new_episode] = 0.0
 
         def update_attention(p, t):
-            o = inputs.base[t].unsqueeze(2)
-            c = (p.unsqueeze(1) @ conditions).view(N, 1, -1, 1, 1)
-            pred = self.phi_shift(o * c)  # TODO
-            # pred = inputs.pred[t].view(N, 1, 1)
+            c = (p.unsqueeze(1) @ conditions).squeeze(1)
+            phi_in = c.view(N, conditions.size(2), 1, 1, 1) * inputs.base[t].unsqueeze(
+                1
+            )
+            pred = self.phi_shift(phi_in)  # TODO
             trans = pred * true_path + (1 - pred) * false_path
             return (p.unsqueeze(1) @ trans).squeeze(1)
 
         return self.pack(
             self.inner_loop(
-                a=hx.a,
+                cr=hx.cr,
+                cg=hx.cg,
                 g=hx.g,
                 M=M,
                 M123=M123,
@@ -133,4 +146,6 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
                 p=p,
                 r=r,
                 actions=actions,
-                update_attention=update_attention))
+                update_attention=update_attention,
+            )
+        )

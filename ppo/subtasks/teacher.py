@@ -5,37 +5,36 @@ import torch
 from torch.nn import functional as F
 
 from ppo.agent import Agent
-import ppo.control_flow
-import ppo.subtasks
 from ppo.subtasks.wrappers import Actions
 from ppo.utils import broadcast3d
 
-Obs = namedtuple('Obs', 'base subtask subtasks')
+Obs = namedtuple("Obs", "base subtask subtasks")
 
 
 class Teacher(Agent):
     def __init__(self, obs_spaces, action_space, **kwargs):
         # noinspection PyProtectedMember
-        for f1, f2, f3 in zip(
-                Obs._fields,
-                ppo.control_flow.Obs._fields,
-                ppo.subtasks.Obs._fields,
-        ):
-            assert f1 == f2 == f3
-        self.obs_spaces = Obs(*obs_spaces[:3])
+        self.obs_spaces = Obs(
+            base=obs_spaces.base,
+            subtask=obs_spaces.subtask,
+            subtasks=obs_spaces.subtasks,
+        )
         _, h, w = self.obs_shape = self.obs_spaces.base.shape
-        self.action_spaces = Actions(*action_space.spaces)
+        self.action_spaces = Actions(**action_space.spaces)
         self.obs_sections = [int(np.prod(s.shape)) for s in self.obs_spaces]
         self.subtask_nvec = obs_spaces.subtasks.nvec[0]
-        super().__init__(obs_shape=(self.d, h, w), action_space=self.action_spaces.a, **kwargs)
+        super().__init__(
+            obs_shape=(self.d, h, w), action_space=self.action_spaces.a, **kwargs
+        )
 
         for i, d in enumerate(self.subtask_nvec):
-            self.register_buffer(f'part{i}_one_hot', torch.eye(int(d)))
+            self.register_buffer(f"part{i}_one_hot", torch.eye(int(d)))
 
     @property
     def d(self):
-        return (self.obs_spaces.base.shape[0] +  # base observation channels
-                int(self.subtask_nvec.sum()))  # one-hot subtask
+        return self.obs_spaces.base.shape[0] + int(  # base observation channels
+            self.subtask_nvec.sum()
+        )  # one-hot subtask
 
     def preprocess_obs(self, inputs):
         sections = self.obs_sections + [inputs.size(1) - sum(self.obs_sections)]
@@ -54,7 +53,9 @@ class Teacher(Agent):
     def forward(self, inputs, *args, action=None, **kwargs):
         if action is not None:
             action = action[:, :1]
-        act = super().forward(self.preprocess_obs(inputs), action=action, *args, **kwargs)
+        act = super().forward(
+            self.preprocess_obs(inputs), action=action, *args, **kwargs
+        )
         x = torch.zeros_like(act.action)
         actions = Actions(a=act.action, g=x, cg=x, cr=x)
         return act._replace(action=torch.cat(actions, dim=-1))

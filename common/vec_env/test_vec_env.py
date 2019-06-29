@@ -21,7 +21,7 @@ def assert_envs_equal(env1, env2, num_steps):
     assert env1.num_envs == env2.num_envs
     assert env1.action_space.shape == env2.action_space.shape
     assert env1.action_space.dtype == env2.action_space.dtype
-    joint_shape = (env1.num_envs, ) + env1.action_space.shape
+    joint_shape = (env1.num_envs,) + env1.action_space.shape
 
     try:
         obs1, obs2 = env1.reset(), env2.reset()
@@ -31,7 +31,9 @@ def assert_envs_equal(env1, env2, num_steps):
         np.random.seed(1337)
         for _ in range(num_steps):
             actions = np.array(
-                np.random.randint(0, 0x100, size=joint_shape), dtype=env1.action_space.dtype)
+                np.random.randint(0, 0x100, size=joint_shape),
+                dtype=env1.action_space.dtype,
+            )
             for env in [env1, env2]:
                 env.step_async(actions)
             outs1 = env1.step_wait()
@@ -45,8 +47,8 @@ def assert_envs_equal(env1, env2, num_steps):
         env2.close()
 
 
-@pytest.mark.parametrize('klass', (ShmemVecEnv, SubprocVecEnv))
-@pytest.mark.parametrize('dtype', ('uint8', 'float32'))
+@pytest.mark.parametrize("klass", (ShmemVecEnv, SubprocVecEnv))
+@pytest.mark.parametrize("dtype", ("uint8", "float32"))
 def test_vec_env(klass, dtype):  # pylint: disable=R0914
     """
     Test that a vectorized environment is equivalent to
@@ -92,7 +94,7 @@ class SimpleEnv(gym.Env):
         self._cur_step += 1
         done = self._cur_step >= self._max_steps
         reward = self._cur_step / self._max_steps
-        return self._cur_obs, reward, done, {'foo': 'bar' + str(reward)}
+        return self._cur_obs, reward, done, {"foo": "bar" + str(reward)}
 
     def reset(self):
         self._cur_obs = self._start_obs

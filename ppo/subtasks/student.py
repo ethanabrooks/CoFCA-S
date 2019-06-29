@@ -18,11 +18,14 @@ class Student(Teacher):
         self.embeddings = nn.EmbeddingBag(int(subtask_nvec.sum()), embedding_dim)
 
         self.register_buffer(
-            'actions',
-            torch.cartesian_prod(torch.arange(n_types), torch.arange(max_count)).long())
+            "actions",
+            torch.cartesian_prod(torch.arange(n_types), torch.arange(max_count)).long(),
+        )
         # TODO: deal with visit when max count > 1
-        self.register_buffer('objects', torch.arange(n_objects).long().unsqueeze(1))
-        self.register_buffer('subtask_space', torch.tensor(subtask_nvec.astype(np.int64)))
+        self.register_buffer("objects", torch.arange(n_objects).long().unsqueeze(1))
+        self.register_buffer(
+            "subtask_space", torch.tensor(subtask_nvec.astype(np.int64))
+        )
 
     @property
     def d(self):
@@ -34,7 +37,8 @@ class Student(Teacher):
         n = obs.size(0)
         obs = obs.view(n, *self.obs_shape).unsqueeze(1)
         embedding = self.embeddings(g123.cumsum(dim=-1).long()).view(
-            n, self.embedding_dim, 1, 1, 1)
+            n, self.embedding_dim, 1, 1, 1
+        )
         return (obs * embedding).view(n, self.d, *self.obs_shape[-2:])
 
     def forward(self, inputs, *args, action=None, **kwargs):
@@ -47,7 +51,9 @@ class Student(Teacher):
             exclude = exclude.view(n, 1, -1, options.shape[1])
             m, d = options.shape
             # noinspection PyTypeChecker
-            excluded = torch.any(torch.all(exclude == options.view(1, m, 1, d), dim=-1), dim=-1)
+            excluded = torch.any(
+                torch.all(exclude == options.view(1, m, 1, d), dim=-1), dim=-1
+            )
 
             def sample():
                 for e in excluded:
@@ -56,12 +62,18 @@ class Student(Teacher):
 
             return torch.stack(list(sample()))
 
-        action2 = sample_analogy_counterparts(self.actions, exclude=action1.unsqueeze(1))
-        object2 = sample_analogy_counterparts(self.objects, exclude=object1.unsqueeze(1))
+        action2 = sample_analogy_counterparts(
+            self.actions, exclude=action1.unsqueeze(1)
+        )
+        object2 = sample_analogy_counterparts(
+            self.objects, exclude=object1.unsqueeze(1)
+        )
         action3 = sample_analogy_counterparts(
-            self.actions, exclude=torch.stack([action1, action2], dim=1))
+            self.actions, exclude=torch.stack([action1, action2], dim=1)
+        )
         object3 = sample_analogy_counterparts(
-            self.actions, exclude=torch.stack([object1, object2], dim=1))
+            self.actions, exclude=torch.stack([object1, object2], dim=1)
+        )
 
         def embed(*values):
             return self.embeddings(torch.cat(values, dim=-1).cumsum(dim=-1))
@@ -76,8 +88,10 @@ class Student(Teacher):
         sim_loss = 0
         dis_loss = 0
         dif_loss = 0
-        for a, b, c, d in [[embedding1, embedding2, embedding3, embedding4],
-                           [embedding1, embedding3, embedding2, embedding4]]:
+        for a, b, c, d in [
+            [embedding1, embedding2, embedding3, embedding4],
+            [embedding1, embedding3, embedding2, embedding4],
+        ]:
             """
             a-b 1-2 2-4
             | | | | | |
@@ -85,7 +99,8 @@ class Student(Teacher):
             """
             sim_loss += F.mse_loss(a - b, c - d)  # a:b::c:d
             dif_loss += -torch.clamp(
-                torch.norm(a - b, dim=-1), max=self.tau_diff).mean()  # increase the side
+                torch.norm(a - b, dim=-1), max=self.tau_diff
+            ).mean()  # increase the side
 
         for a, b, c, d in [
             [embedding1, embedding2, embedding5, embedding4],
@@ -96,5 +111,9 @@ class Student(Teacher):
         analogy_loss = sim_loss + dis_loss + dif_loss
         act = super().forward(inputs, *args, action=action, **kwargs)
         act.log.update(
-            sim_loss=sim_loss, dis_loss=dis_loss, dif_loss=dif_loss, analogy_loss=analogy_loss)
+            sim_loss=sim_loss,
+            dis_loss=dis_loss,
+            dif_loss=dif_loss,
+            analogy_loss=analogy_loss,
+        )
         return act._replace(aux_loss=act.aux_loss + self.xi * analogy_loss)

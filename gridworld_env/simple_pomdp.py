@@ -11,7 +11,7 @@ def int_to_bin_array(n: int):
 
 
 class SimplePOMDP(gym.Env):
-    max_episode_steps = int(os.environ.get('MAX_EPISODE_STEPS', 2))
+    max_episode_steps = int(os.environ.get("MAX_EPISODE_STEPS", 2))
 
     def __init__(self):
         super().__init__()
@@ -19,7 +19,7 @@ class SimplePOMDP(gym.Env):
         self.turn = 0
         self.n_actions = 3
         self.action_space = spaces.Discrete(self.n_actions)
-        self.observation_space = spaces.Box(low=0, high=1, shape=(2, ))
+        self.observation_space = spaces.Box(low=0, high=1, shape=(2,))
 
     def step(self, action):
         s = int_to_bin_array(self.n_actions)
@@ -41,26 +41,26 @@ class SimplePOMDP(gym.Env):
         self.turn = 0
         return self.truth
 
-    def render(self, mode='human'):
+    def render(self, mode="human"):
         pass
 
 
 def main():
     # noinspection PyUnresolvedReferences
-    env = gym.make('POMDP-v0')
+    env = gym.make("POMDP-v0")
     env.seed(1)
     s = env.reset()
     while True:
-        print('obs:', s)
-        action = int(input('act:'))
+        print("obs:", s)
+        action = int(input("act:"))
         s, r, t, _ = env.step(action)
         if t:
-            print('obs:', s)
-            print('reward:', r)
-            print('resetting')
+            print("obs:", s)
+            print("reward:", r)
+            print("resetting")
             s = env.reset()
             print()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

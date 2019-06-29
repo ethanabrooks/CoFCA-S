@@ -7,14 +7,14 @@ import numpy as np
 
 class AbstractGridWorld(gym.Env, ABC):
     def __init__(
-            self,
-            text_map: Iterable[Iterable[str]],
-            terminal: Container[str],
-            reward: Dict[str, float],
-            transitions: List[np.ndarray] = None,
-            probabilities: List[np.ndarray] = None,
-            start: Iterable[str] = '',
-            blocked: Container[str] = '',
+        self,
+        text_map: Iterable[Iterable[str]],
+        terminal: Container[str],
+        reward: Dict[str, float],
+        transitions: List[np.ndarray] = None,
+        probabilities: List[np.ndarray] = None,
+        start: Iterable[str] = "",
+        blocked: Container[str] = "",
     ):
 
         if transitions is None:
