@@ -441,13 +441,13 @@ class Recurrence(torch.jit.ScriptModule):
                 )
                 a_one_hot = self.a_one_hots[A[t]]
                 parts = (debug_obs, a_one_hot) + task_sections
-                correct_object = (obj * debug_obs[:, : self.subtask_nvec[2]]).sum(
-                    -1, keepdim=True
-                )
-                correct_action = interaction[:, :1] + (
-                    interaction[:, 1:] * a_one_hot[:, 4:]
-                ).sum(-1, keepdim=True)
-                truth = correct_action * correct_object  # TODO
+                # correct_object = (obj * debug_obs[:, : self.subtask_nvec[2]]).sum(
+                # -1, keepdim=True
+                # )
+                # correct_action = interaction[:, :1] + (
+                # interaction[:, 1:] * a_one_hot[:, 4:]
+                # ).sum(-1, keepdim=True)
+                # truth = (correct_action * correct_object).detach()
 
                 if self.multiplicative_interaction:
                     return self.f(parts)
@@ -471,8 +471,7 @@ class Recurrence(torch.jit.ScriptModule):
                     loss = F.binary_cross_entropy(
                         torch.clamp(c, 0.0, 1.0), next_subtask[t], reduction="none"
                     )
-                # return c, loss, probs
-                return truth.detach(), loss, probs  # TODO
+                return c, loss, probs
 
             # cr
             cr, cr_loss, cr_probs = phi_update(subtask_param=r)
