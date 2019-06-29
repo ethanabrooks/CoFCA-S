@@ -445,7 +445,7 @@ class Recurrence(torch.jit.ScriptModule):
                     -1, keepdim=True
                 )
                 correct_action = interaction[:, :1] + (
-                    interaction[:, 1:] * a_one_hot[t, 4:]
+                    interaction[:, 1:] * a_one_hot[:, 4:]
                 ).sum(-1, keepdim=True)
                 truth = correct_action * correct_object  # TODO
 
@@ -471,7 +471,8 @@ class Recurrence(torch.jit.ScriptModule):
                     loss = F.binary_cross_entropy(
                         torch.clamp(c, 0.0, 1.0), next_subtask[t], reduction="none"
                     )
-                return c, loss, probs
+                # return c, loss, probs
+                return truth.detach(), loss, probs  # TODO
 
             # cr
             cr, cr_loss, cr_probs = phi_update(subtask_param=r)

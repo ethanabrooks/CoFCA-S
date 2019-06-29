@@ -13,21 +13,21 @@ class DebugWrapper(gym.Wrapper):
         super().__init__(env)
         self.last_guess = None
         self.last_reward = None
-        action_spaces = Actions(*env.action_space.spaces)
+        action_spaces = Actions(**env.action_space.spaces)
         for x in action_spaces:
             assert isinstance(x, Discrete)
         self.action_sections = len(action_spaces)
 
     def step(self, action):
-        s, _, t, i = super().step(action)
         actions = Actions(*[x.item() for x in np.split(action, self.action_sections)])
-        guess = int(actions.g)
         truth = int(self.env.unwrapped.subtask_idx)
+        guess = int(actions.g)
         r = float(np.all(guess == truth)) - 1
-        if r < 0:
-            import ipdb
+        # if r < 0:
+        # import ipdb
 
-            ipdb.set_trace()
+        # ipdb.set_trace()
+        s, _, t, i = super().step(action)
         self.last_guess = guess
         self.last_reward = r
         return s, r, t, i
