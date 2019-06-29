@@ -205,9 +205,7 @@ class Recurrence(torch.jit.ScriptModule):
         else:
             self.phi_update = trace(
                 lambda in_size: init_(nn.Linear(in_size, 2), "sigmoid"),
-                in_size=(
-                    hidden_size * action_spaces.a.n * int(self.subtask_nvec.prod())
-                ),
+                in_size=(d * action_spaces.a.n * int(self.subtask_nvec.prod())),
             )
 
         for i, x in enumerate(self.subtask_nvec):
@@ -443,18 +441,19 @@ class Recurrence(torch.jit.ScriptModule):
             # A[t, :] = "wsadeq".index(input("act:"))
 
             def phi_update(subtask_param):
+                debug_obs = obs[t, j, :, k, l].squeeze(1)
                 interaction, count, obj = task_sections = torch.split(
                     subtask_param, tuple(self.subtask_nvec), dim=-1
                 )
                 a_one_hot = self.a_one_hots[A[t]]
-                parts = (obs[t], a_one_hot) + task_sections
-                # correct_object = (obj * debug_obs[:, : self.subtask_nvec[2]]).sum(
-                # -1, keepdim=True
-                # )
-                # correct_action = interaction[:, :1] + (
-                # interaction[:, 1:] * a_one_hot[:, 4:]
-                # ).sum(-1, keepdim=True)
-                # truth = (correct_action * correct_object).detach()
+                correct_object = (obj * debug_obs[:, : self.subtask_nvec[2]]).sum(
+                    -1, keepdim=True
+                )
+                correct_action = interaction[:, :1] + (
+                    interaction[:, 1:] * a_one_hot[:, 4:]
+                ).sum(-1, keepdim=True)
+                truth = (correct_action * correct_object).detach()
+                parts = (debug_obs, a_one_hot, interaction, obj, count)
 
                 if self.multiplicative_interaction:
                     c_logits = self.phi_update(parts)
@@ -479,7 +478,8 @@ class Recurrence(torch.jit.ScriptModule):
                     loss = F.binary_cross_entropy(
                         torch.clamp(c, 0.0, 1.0), next_subtask[t], reduction="none"
                     )
-                return c, loss, probs
+                # return c, loss, probs
+                return truth, loss, probs  # TODO
 
             # cr
             cr, cr_loss, cr_probs = phi_update(subtask_param=r)
