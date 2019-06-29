@@ -13,6 +13,7 @@ from ppo.utils import set_index
 from rl_utils import cartesian_product
 
 Subtask = namedtuple('Subtask', 'interaction count object')
+Obs = namedtuple('Obs', 'base subtask subtasks next_subtask')
 
 
 def get_task_space(interactions, max_task_count, object_types, n_subtasks):
@@ -61,6 +62,8 @@ class SubtasksGridWorld(gym.Env):
 
         # set on initialize
         self.initialized = False
+        self.iterate = False
+        self.next_subtask = False
         self.obstacles_one_hot = np.zeros(self.desc.shape, dtype=bool)
         self.open_spaces = None
         self.obstacles = None
@@ -99,24 +102,28 @@ class SubtasksGridWorld(gym.Env):
         self.pos = None
         self.last_terminal = False
         self.last_action = None
-        self.next_subtask = False
 
         h, w = self.desc.shape
-        self.observation_space = spaces.Tuple([
-            spaces.MultiDiscrete(
-                np.array([
-                    1 +  # obstacles
-                    1 +  # ice
-                    1 +  # agent
-                    len(object_types),
-                    h,
-                    w
-                ])),
-            get_task_space(interactions=self.interactions,
-                           max_task_count=self.max_task_count,
-                           object_types=object_types,
-                           n_subtasks=n_subtasks)
-        ])
+
+        self.observation_space = spaces.Dict(
+            Obs(
+                base=spaces.Box(
+                    0,
+                    1,
+                    shape=(
+                        1 +  # obstacles
+                        1 +  # ice
+                        1 +  # agent
+                        len(object_types),
+                        h,
+                        w)),
+                subtask=spaces.Discrete(n_subtasks),
+                subtasks=spaces.MultiDiscrete(
+                    np.tile(
+                        np.array([len(interactions), max_task_count,
+                                  len(object_types)]), (n_subtasks, 1))),
+                next_subtask=spaces.Discrete(2),
+            )._asdict())
         self.action_space = spaces.Discrete(len(self.transitions) + 2)
         world = self
 
@@ -271,7 +278,10 @@ class SubtasksGridWorld(gym.Env):
         ]).transpose(2, 0, 1)
 
         # noinspection PyTypeChecker
-        return obs, self.subtasks
+        return Obs(base=obs,
+                   subtask=self.subtask_idx,
+                   subtasks=self.subtasks,
+                   next_subtask=self.next_subtask)._asdict()
 
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)

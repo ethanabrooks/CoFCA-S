@@ -2,11 +2,13 @@
 from collections import namedtuple
 from typing import Generator
 
+import gym
 from gym import spaces
+import numpy as np
 import torch
 from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
 
-from common.vec_env.util import buffer_shape
+from common.vec_env.util import space_shape
 
 
 def _flatten_helper(T, N, _tensor):
@@ -16,6 +18,13 @@ def _flatten_helper(T, N, _tensor):
 Batch = namedtuple(
     'Batch', 'obs recurrent_hidden_states actions value_preds ret '
     'masks old_action_log_probs adv tasks importance_weighting')
+
+
+def buffer_shape(space: gym.Space):
+    shape = space_shape(space)
+    if isinstance(shape, dict):
+        shape = int(sum(np.prod(s) for s in shape.values())),  # concatenate
+    return shape
 
 
 class RolloutStorage(object):

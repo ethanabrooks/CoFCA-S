@@ -9,12 +9,13 @@ from rl_utils import hierarchical_parse_args
 import torch
 
 import gridworld_env
+import gridworld_env.control_flow_gridworld
 from gridworld_env.control_flow_gridworld import ControlFlowGridWorld
+import gridworld_env.subtasks_gridworld
 from gridworld_env.subtasks_gridworld import SubtasksGridWorld
 import ppo
 from ppo.arguments import build_parser, get_args
 import ppo.control_flow.agent
-import ppo.control_flow.wrappers
 import ppo.subtasks.agent
 import ppo.subtasks.student
 import ppo.subtasks.teacher
@@ -49,10 +50,9 @@ def cli():
 def get_spaces(envs, control_flow):
     obs_spaces = envs.observation_space.spaces
     if control_flow:
-        obs_spaces = ppo.control_flow.Obs(*obs_spaces)
+        return gridworld_env.control_flow_gridworld.Obs(**obs_spaces)
     else:
-        obs_spaces = ppo.subtasks.Obs(*obs_spaces)
-    return obs_spaces
+        return gridworld_env.subtasks_gridworld.Obs(**obs_spaces)
 
 
 def make_subtasks_env(env_id, **kwargs):
@@ -62,9 +62,10 @@ def make_subtasks_env(env_id, **kwargs):
             for k, v in _kwargs.items():
                 print(f'{k:20}{v}')
         if control_flow:
-            env = ppo.control_flow.Wrapper(ControlFlowGridWorld(**_kwargs))
+            env = ControlFlowGridWorld(**_kwargs)
         else:
-            env = ppo.subtasks.Wrapper(SubtasksGridWorld(**_kwargs))
+            env = SubtasksGridWorld(**_kwargs)
+        env = ppo.subtasks.Wrapper(env)
         if debug:
             env = ppo.subtasks.DebugWrapper(env)
         env.seed(seed + rank)

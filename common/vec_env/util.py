@@ -70,7 +70,7 @@ def obs_space_info(obs_space):
     dtypes = {}
     for key, space in subspaces.items():
         keys.append(key)
-        shape = buffer_shape(space)
+        shape = space_shape(space)
         shapes[key] = shape
         dtypes[key] = space.dtype
     return keys, shapes, dtypes
