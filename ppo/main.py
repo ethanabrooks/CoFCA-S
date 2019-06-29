@@ -35,13 +35,12 @@ def add_env_args(parser):
     env_parser = parser.add_argument_group('env_args')
     env_parser.add_argument('--min-objects', type=int, required=True)
     env_parser.add_argument('--debug', action='store_true')
-    env_parser.add_argument(
-        '--eval-subtask',
-        dest='eval_subtasks',
-        default=[],
-        type=int,
-        nargs=3,
-        action='append')
+    env_parser.add_argument('--eval-subtask',
+                            dest='eval_subtasks',
+                            default=[],
+                            type=int,
+                            nargs=3,
+                            action='append')
 
 
 def cli():
@@ -99,18 +98,18 @@ def train_lower_level_cli(student):
         class TrainSkill(Train):
             @staticmethod
             def make_env(add_timestep, **make_env_args):
-                return make_subtasks_env(
-                    **env_args,
-                    **make_env_args,
-                    **task_args,
-                    max_episode_steps=kwargs['max_episode_steps'],
-                    control_flow=control_flow)
+                return make_subtasks_env(**env_args,
+                                         **make_env_args,
+                                         **task_args,
+                                         max_episode_steps=kwargs['max_episode_steps'],
+                                         control_flow=control_flow)
 
             @staticmethod
             def build_agent(envs, **agent_args):
                 obs_spaces = get_spaces(envs, control_flow)
-                agent_args = dict(
-                    obs_spaces=obs_spaces, action_space=envs.action_space, **agent_args)
+                agent_args = dict(obs_spaces=obs_spaces,
+                                  action_space=envs.action_space,
+                                  **agent_args)
                 if student:
                     return ppo.subtasks.Student(**agent_args, **student_args)
                 else:
@@ -147,22 +146,20 @@ def metacontroller_cli():
         class TrainSubtasks(Train):
             @staticmethod
             def make_env(**_kwargs):
-                return make_subtasks_env(
-                    **env_args,
-                    **_kwargs,
-                    **task_args,
-                    max_episode_steps=kwargs['max_episode_steps'],
-                    control_flow=control_flow)
+                return make_subtasks_env(**env_args,
+                                         **_kwargs,
+                                         **task_args,
+                                         max_episode_steps=kwargs['max_episode_steps'],
+                                         control_flow=control_flow)
 
             # noinspection PyMethodOverriding
             def build_agent(self, envs, **agent_args):
                 agent = None
                 obs_spaces = get_spaces(envs, control_flow)
                 if agent_load_path:
-                    agent = ppo.subtasks.Teacher(
-                        obs_spaces=obs_spaces,
-                        action_space=envs.action_space,
-                        **agent_args)
+                    agent = ppo.subtasks.Teacher(obs_spaces=obs_spaces,
+                                                 action_space=envs.action_space,
+                                                 **agent_args)
 
                     state_dict = torch.load(agent_load_path, map_location=self.device)
                     state_dict['agent'].update(
@@ -181,11 +178,10 @@ def metacontroller_cli():
                     for k, v in subtasks_args.items()
                 }
 
-                metacontroller_kwargs = dict(
-                    obs_spaces=obs_spaces,
-                    action_space=envs.action_space,
-                    agent=agent,
-                    **_subtasks_args)
+                metacontroller_kwargs = dict(obs_spaces=obs_spaces,
+                                             action_space=envs.action_space,
+                                             agent=agent,
+                                             **_subtasks_args)
                 if control_flow:
                     return ppo.control_flow.Agent(**metacontroller_kwargs)
                 else:

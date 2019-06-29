@@ -30,11 +30,10 @@ class Agent(nn.Module):
         elif len(obs_shape) == 3:
             self.base = CNNBase(*obs_shape, recurrent=recurrent, hidden_size=hidden_size)
         elif len(obs_shape) == 1:
-            self.base = MLPBase(
-                obs_shape[0],
-                recurrent=recurrent,
-                hidden_size=hidden_size,
-                **network_args)
+            self.base = MLPBase(obs_shape[0],
+                                recurrent=recurrent,
+                                hidden_size=hidden_size,
+                                **network_args)
         else:
             raise NotImplementedError
 
@@ -70,14 +69,13 @@ class Agent(nn.Module):
 
         action_log_probs = dist.log_probs(action)
         entropy = dist.entropy().mean()
-        return AgentValues(
-            value=value,
-            action=action,
-            action_log_probs=action_log_probs,
-            aux_loss=-self.entropy_coef * entropy,
-            dist=dist,
-            rnn_hxs=rnn_hxs,
-            log=dict(entropy=entropy))
+        return AgentValues(value=value,
+                           action=action,
+                           action_log_probs=action_log_probs,
+                           aux_loss=-self.entropy_coef * entropy,
+                           dist=dist,
+                           rnn_hxs=rnn_hxs,
+                           log=dict(entropy=entropy))
 
     def get_value(self, inputs, rnn_hxs, masks):
         value, _, _ = self.base(inputs, rnn_hxs, masks)
@@ -176,8 +174,8 @@ class LogicModule(nn.Module):
         super().__init__()
         self._hidden_size = hidden_size
         self.similarity_measure = similarity_measure
-        init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
-                               constant_(x, 0), nn.init.calculate_gain('relu'))
+        init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0),
+                               nn.init.calculate_gain('relu'))
         self.conv = init_(nn.Conv2d(d, hidden_size, kernel_size=3, stride=1, padding=1))
 
         self.mlp = nn.Sequential(nn.ReLU(), Flatten(),
@@ -228,20 +226,20 @@ class LogicBase(NNBase):
         self.input_shape = h, w, d
         self.similarity_measure = similarity_measure
 
-        super(LogicBase, self).__init__(
-            recurrent=True, recurrent_input_size=h * w, hidden_size=hidden_size)
+        super(LogicBase, self).__init__(recurrent=True,
+                                        recurrent_input_size=h * w,
+                                        hidden_size=hidden_size)
         self._recurrent_hidden_state_size = h * w
 
-        init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
-                               constant_(x, 0), nn.init.calculate_gain('relu'))
+        init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0),
+                               nn.init.calculate_gain('relu'))
         self.critic_linear = init_(nn.Linear(hidden_size, 1))
         self.train()
 
     def build_recurrent_module(self, input_size, hidden_size):
-        return LogicModule(
-            *self.input_shape,
-            hidden_size=hidden_size,
-            similarity_measure=self.similarity_measure)
+        return LogicModule(*self.input_shape,
+                           hidden_size=hidden_size,
+                           similarity_measure=self.similarity_measure)
 
     @property
     def recurrent_hidden_state_size(self):
@@ -256,8 +254,8 @@ class CNNBase(NNBase):
     def __init__(self, d, h, w, hidden_size, recurrent=False):
         super(CNNBase, self).__init__(recurrent, hidden_size, hidden_size)
 
-        init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
-                               constant_(x, 0), nn.init.calculate_gain('relu'))
+        init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0),
+                               nn.init.calculate_gain('relu'))
 
         self.main = nn.Sequential(
             init_(nn.Conv2d(d, hidden_size, kernel_size=3, stride=1, padding=1)),
@@ -300,18 +298,16 @@ class MLPBase(NNBase):
         self.critic = nn.Sequential()
         for i in range(num_layers):
             in_features = num_inputs if i == 0 else hidden_size
-            self.actor.add_module(
-                name=f'fc{i}',
-                module=nn.Sequential(
-                    init_(nn.Linear(in_features, hidden_size)),
-                    activation,
-                ))
-            self.critic.add_module(
-                name=f'fc{i}',
-                module=nn.Sequential(
-                    init_(nn.Linear(in_features, hidden_size)),
-                    activation,
-                ))
+            self.actor.add_module(name=f'fc{i}',
+                                  module=nn.Sequential(
+                                      init_(nn.Linear(in_features, hidden_size)),
+                                      activation,
+                                  ))
+            self.critic.add_module(name=f'fc{i}',
+                                   module=nn.Sequential(
+                                       init_(nn.Linear(in_features, hidden_size)),
+                                       activation,
+                                   ))
 
         self.critic_linear = init_(nn.Linear(hidden_size, 1))
 

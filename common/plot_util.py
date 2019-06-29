@@ -28,16 +28,14 @@ def smooth(y, radius, mode='two_sided', valid_only=False):
         return np.ones_like(y) * y.mean()
     elif mode == 'two_sided':
         convkernel = np.ones(2 * radius + 1)
-        out = np.convolve(
-            y, convkernel, mode='same') / np.convolve(
-                np.ones_like(y), convkernel, mode='same')
+        out = np.convolve(y, convkernel, mode='same') / np.convolve(
+            np.ones_like(y), convkernel, mode='same')
         if valid_only:
             out[:radius] = out[-radius:] = np.nan
     elif mode == 'causal':
         convkernel = np.ones(radius)
-        out = np.convolve(
-            y, convkernel, mode='full') / np.convolve(
-                np.ones_like(y), convkernel, mode='full')
+        out = np.convolve(y, convkernel, mode='full') / np.convolve(
+            np.ones_like(y), convkernel, mode='full')
         out = out[:-radius + 1]
         if valid_only:
             out[:radius] = np.nan
@@ -163,10 +161,20 @@ def symmetric_ema(xolds,
             count_ys  - array of EMA of y counts at each point of the new x grid
 
     '''
-    xs, ys1, count_ys1 = one_sided_ema(
-        xolds, yolds, low, high, n, decay_steps, low_counts_threshold=0)
-    _, ys2, count_ys2 = one_sided_ema(
-        -xolds[::-1], yolds[::-1], -high, -low, n, decay_steps, low_counts_threshold=0)
+    xs, ys1, count_ys1 = one_sided_ema(xolds,
+                                       yolds,
+                                       low,
+                                       high,
+                                       n,
+                                       decay_steps,
+                                       low_counts_threshold=0)
+    _, ys2, count_ys2 = one_sided_ema(-xolds[::-1],
+                                      yolds[::-1],
+                                      -high,
+                                      -low,
+                                      n,
+                                      decay_steps,
+                                      low_counts_threshold=0)
     ys2 = ys2[::-1]
     count_ys2 = count_ys2[::-1]
     count_ys = count_ys1 + count_ys2
@@ -369,8 +377,12 @@ def plot_results(
                 gresults[group].append((x, y))
             else:
                 if resample:
-                    x, y, counts = symmetric_ema(
-                        x, y, x[0], x[-1], resample, decay_steps=smooth_step)
+                    x, y, counts = symmetric_ema(x,
+                                                 y,
+                                                 x[0],
+                                                 x[-1],
+                                                 resample,
+                                                 decay_steps=smooth_step)
                 l, = ax.plot(x, y, color=COLORS[groups.index(group) % len(COLORS)])
                 g2l[group] = l
         if average_group:
@@ -392,8 +404,12 @@ def plot_results(
                     ys = []
                     for (x, y) in xys:
                         ys.append(
-                            symmetric_ema(
-                                x, y, low, high, resample, decay_steps=smooth_step)[1])
+                            symmetric_ema(x,
+                                          y,
+                                          low,
+                                          high,
+                                          resample,
+                                          decay_steps=smooth_step)[1])
                 else:
                     assert allequal([x[:minxlen] for x in origxs]),\
                         'If you want to average unevenly sampled data, set resample=<number of samples you want>'
@@ -405,20 +421,25 @@ def plot_results(
                 l, = axarr[isplit][0].plot(usex, ymean, color=color)
                 g2l[group] = l
                 if shaded_err:
-                    ax.fill_between(
-                        usex, ymean - ystderr, ymean + ystderr, color=color, alpha=.4)
+                    ax.fill_between(usex,
+                                    ymean - ystderr,
+                                    ymean + ystderr,
+                                    color=color,
+                                    alpha=.4)
                 if shaded_std:
-                    ax.fill_between(
-                        usex, ymean - ystd, ymean + ystd, color=color, alpha=.2)
+                    ax.fill_between(usex,
+                                    ymean - ystd,
+                                    ymean + ystd,
+                                    color=color,
+                                    alpha=.2)
 
         # https://matplotlib.org/users/legend_guide.html
         plt.tight_layout()
         if any(g2l.keys()):
-            ax.legend(
-                g2l.values(),
-                ['%s (%i)' % (g, g2c[g]) for g in g2l] if average_group else g2l.keys(),
-                loc=2 if legend_outside else None,
-                bbox_to_anchor=(1, 1) if legend_outside else None)
+            ax.legend(g2l.values(), ['%s (%i)' % (g, g2c[g])
+                                     for g in g2l] if average_group else g2l.keys(),
+                      loc=2 if legend_outside else None,
+                      bbox_to_anchor=(1, 1) if legend_outside else None)
         ax.set_title(sk)
     return f, axarr
 
@@ -441,10 +462,18 @@ def test_smooth():
     yclean = np.sin(xs)
     ys = yclean + .1 * np.random.randn(yclean.size)
     xup, yup, _ = symmetric_ema(xs, ys, xs.min(), xs.max(), nup, decay_steps=nup / ndown)
-    xdown, ydown, _ = symmetric_ema(
-        xs, ys, xs.min(), xs.max(), ndown, decay_steps=ndown / ndown)
-    xsame, ysame, _ = symmetric_ema(
-        xs, ys, xs.min(), xs.max(), norig, decay_steps=norig / ndown)
+    xdown, ydown, _ = symmetric_ema(xs,
+                                    ys,
+                                    xs.min(),
+                                    xs.max(),
+                                    ndown,
+                                    decay_steps=ndown / ndown)
+    xsame, ysame, _ = symmetric_ema(xs,
+                                    ys,
+                                    xs.min(),
+                                    xs.max(),
+                                    norig,
+                                    decay_steps=norig / ndown)
     plt.plot(xs, ys, label='orig', marker='x')
     plt.plot(xup, yup, label='up', marker='x')
     plt.plot(xdown, ydown, label='down', marker='x')

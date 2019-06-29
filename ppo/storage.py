@@ -107,8 +107,9 @@ class RolloutStorage(object):
         mini_batch_size = total_batch_size // batch_size
 
         random_sampler = SubsetRandomSampler(range(total_batch_size))
-        sampler = BatchSampler(
-            sampler=random_sampler, batch_size=mini_batch_size, drop_last=False)
+        sampler = BatchSampler(sampler=random_sampler,
+                               batch_size=mini_batch_size,
+                               drop_last=False)
         assert len(sampler) == batch_size
         for indices in sampler:
             assert len(indices) == mini_batch_size
@@ -124,17 +125,16 @@ class RolloutStorage(object):
         masks_batch = self.masks[:-1].view(-1, 1)[indices]
         old_action_log_probs_batch = self.action_log_probs.view(-1, 1)[indices]
         adv_targ = advantages.view(-1, 1)[indices]
-        batch = Batch(
-            obs=obs_batch,
-            recurrent_hidden_states=recurrent_hidden_states_batch,
-            actions=actions_batch,
-            value_preds=value_preds_batch,
-            ret=return_batch,
-            masks=masks_batch,
-            old_action_log_probs=old_action_log_probs_batch,
-            adv=adv_targ,
-            tasks=None,
-            importance_weighting=None)
+        batch = Batch(obs=obs_batch,
+                      recurrent_hidden_states=recurrent_hidden_states_batch,
+                      actions=actions_batch,
+                      value_preds=value_preds_batch,
+                      ret=return_batch,
+                      masks=masks_batch,
+                      old_action_log_probs=old_action_log_probs_batch,
+                      adv=adv_targ,
+                      tasks=None,
+                      importance_weighting=None)
         return batch
 
     def recurrent_generator(self, advantages, num_mini_batch) -> \
@@ -191,14 +191,13 @@ class RolloutStorage(object):
             old_action_log_probs_batch = _flatten_helper(T, N, old_action_log_probs_batch)
             adv_targ = _flatten_helper(T, N, adv_targ)
 
-            yield Batch(
-                obs=obs_batch,
-                recurrent_hidden_states=recurrent_hidden_states_batch,
-                actions=actions_batch,
-                value_preds=value_preds_batch,
-                ret=return_batch,
-                masks=masks_batch,
-                old_action_log_probs=old_action_log_probs_batch,
-                adv=adv_targ,
-                tasks=None,
-                importance_weighting=None)
+            yield Batch(obs=obs_batch,
+                        recurrent_hidden_states=recurrent_hidden_states_batch,
+                        actions=actions_batch,
+                        value_preds=value_preds_batch,
+                        ret=return_batch,
+                        masks=masks_batch,
+                        old_action_log_probs=old_action_log_probs_batch,
+                        adv=adv_targ,
+                        tasks=None,
+                        importance_weighting=None)

@@ -72,8 +72,8 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
         # detach actions
         # noinspection PyProtectedMember
         n_actions = len(Actions._fields)
-        inputs, *actions = torch.split(
-            inputs.detach(), [D - n_actions] + [1] * n_actions, dim=2)
+        inputs, *actions = torch.split(inputs.detach(), [D - n_actions] + [1] * n_actions,
+                                       dim=2)
         actions = Actions(*actions)
 
         # parse non-action inputs
@@ -119,18 +119,17 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
             return (p.unsqueeze(1) @ trans).squeeze(1)
 
         return self.pack(
-            self.inner_loop(
-                cr=hx.cr,
-                cg=hx.cg,
-                g=hx.g,
-                M=M,
-                M123=M123,
-                N=N,
-                T=T,
-                float_subtask=hx.subtask,
-                next_subtask=inputs.next_subtask,
-                obs=inputs.base,
-                p=p,
-                r=r,
-                actions=actions,
-                update_attention=update_attention))
+            self.inner_loop(cr=hx.cr,
+                            cg=hx.cg,
+                            g=hx.g,
+                            M=M,
+                            M123=M123,
+                            N=N,
+                            T=T,
+                            float_subtask=hx.subtask,
+                            next_subtask=inputs.next_subtask,
+                            obs=inputs.base,
+                            p=p,
+                            r=r,
+                            actions=actions,
+                            update_attention=update_attention))

@@ -90,8 +90,9 @@ class SegmentTree(object):
 
 class SumSegmentTree(SegmentTree):
     def __init__(self, capacity):
-        super(SumSegmentTree, self).__init__(
-            capacity=capacity, operation=operator.add, neutral_element=0.0)
+        super(SumSegmentTree, self).__init__(capacity=capacity,
+                                             operation=operator.add,
+                                             neutral_element=0.0)
 
     def sum(self, start=0, end=None):
         """Returns arr[start] + ... + arr[end]"""
@@ -128,8 +129,9 @@ class SumSegmentTree(SegmentTree):
 
 class MinSegmentTree(SegmentTree):
     def __init__(self, capacity):
-        super(MinSegmentTree, self).__init__(
-            capacity=capacity, operation=min, neutral_element=float('inf'))
+        super(MinSegmentTree, self).__init__(capacity=capacity,
+                                             operation=min,
+                                             neutral_element=float('inf'))
 
     def min(self, start=0, end=None):
         """Returns min(arr[start], ...,  arr[end])"""

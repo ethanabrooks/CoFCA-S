@@ -14,8 +14,9 @@ from hsr.env import get_xml_filepath
 
 
 def add_env_args(parser):
-    parser.add_argument(
-        '--image-dims', type=parse_vector(length=2, delim=','), default='800,800')
+    parser.add_argument('--image-dims',
+                        type=parse_vector(length=2, delim=','),
+                        default='800,800')
     parser.add_argument('--block-space', type=parse_space(dim=4))
     parser.add_argument('--min-lift-height', type=float, default=None)
     parser.add_argument('--obs-type', type=str, default=None)
@@ -57,12 +58,11 @@ def env_wrapper(func):
         site_size = ' '.join([str(geofence)] * 3)
         path = Path('worldbody', 'body[@name="goal"]', 'site[@name="goal"]', 'size')
         set_xml += [XMLSetter(path=f'./{path}', value=site_size)]
-        with mutate_xml(
-                changes=set_xml,
-                dofs=use_dof,
-                n_blocks=n_blocks,
-                goal_space=goal_space,
-                xml_filepath=xml_filepath) as temp_path:
+        with mutate_xml(changes=set_xml,
+                        dofs=use_dof,
+                        n_blocks=n_blocks,
+                        goal_space=goal_space,
+                        xml_filepath=xml_filepath) as temp_path:
             env_args.update(
                 geofence=geofence,
                 xml_file=temp_path,
@@ -105,19 +105,17 @@ def mutate_xml(changes: List[XMLSetter], dofs: List[str], goal_space: Box, n_blo
                 name = f'block{i}'
 
                 body = ET.SubElement(worldbody, 'body', attrib=dict(name=name, pos=pos))
-                ET.SubElement(
-                    body,
-                    'geom',
-                    attrib=dict(
-                        name=name,
-                        type='box',
-                        mass='1',
-                        size=".05 .025 .017",
-                        rgba=rgba[i],
-                        condim='6',
-                        solimp="0.99 0.99 "
-                        "0.01",
-                        solref='0.01 1'))
+                ET.SubElement(body,
+                              'geom',
+                              attrib=dict(name=name,
+                                          type='box',
+                                          mass='1',
+                                          size=".05 .025 .017",
+                                          rgba=rgba[i],
+                                          condim='6',
+                                          solimp="0.99 0.99 "
+                                          "0.01",
+                                          solref='0.01 1'))
                 ET.SubElement(body, 'freejoint', attrib=dict(name=f'block{i}joint'))
 
         for change in changes:

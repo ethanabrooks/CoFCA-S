@@ -23,8 +23,9 @@ class Teacher(Agent):
         self.action_spaces = Actions(**action_space.spaces)
         self.obs_sections = [int(np.prod(s.shape)) for s in self.obs_spaces]
         self.subtask_nvec = obs_spaces.subtasks.nvec[0]
-        super().__init__(
-            obs_shape=(self.d, h, w), action_space=self.action_spaces.a, **kwargs)
+        super().__init__(obs_shape=(self.d, h, w),
+                         action_space=self.action_spaces.a,
+                         **kwargs)
 
         for i, d in enumerate(self.subtask_nvec):
             self.register_buffer(f'part{i}_one_hot', torch.eye(int(d)))

@@ -141,8 +141,9 @@ class SubtasksGridWorld(gym.Env):
         h, w = self.desc.shape
         choices = cartesian_product(np.arange(h), np.arange(w))
         choices = choices[np.all(choices % 2 != 0, axis=-1)]
-        randoms = self.np_random.choice(
-            len(choices), replace=False, size=self.n_obstacles)
+        randoms = self.np_random.choice(len(choices),
+                                        replace=False,
+                                        size=self.n_obstacles)
         self.obstacles = choices[randoms]
         self.obstacles_one_hot[:] = 0
         set_index(self.obstacles_one_hot, self.obstacles, True)
@@ -152,8 +153,8 @@ class SubtasksGridWorld(gym.Env):
         self.randomize_obstacles()
         h, w = self.desc.shape
         ij = cartesian_product(np.arange(h), np.arange(w))
-        self.open_spaces = ij[np.logical_not(
-            np.all(np.isin(ij, self.obstacles), axis=-1))]
+        self.open_spaces = ij[np.logical_not(np.all(np.isin(ij, self.obstacles),
+                                                    axis=-1))]
         self.initialized = True
 
     @property
@@ -226,8 +227,9 @@ class SubtasksGridWorld(gym.Env):
             self.subtasks = list(self.subtasks_generator())
         types = list(self.get_required_objects(self.subtasks))
         n_random = max(len(types), self.min_objects)
-        random_types = self.np_random.choice(
-            len(self.object_types), replace=True, size=n_random - len(types))
+        random_types = self.np_random.choice(len(self.object_types),
+                                             replace=True,
+                                             size=n_random - len(types))
         types = np.concatenate([random_types, types])
         self.np_random.shuffle(types)
 
@@ -267,11 +269,10 @@ class SubtasksGridWorld(gym.Env):
         ]
 
         # noinspection PyTypeChecker
-        return Obs(
-            base=np.vstack(obs),
-            subtask=self.subtask_idx,
-            subtasks=self.subtasks,
-            next_subtask=self.next_subtask)._asdict()
+        return Obs(base=np.vstack(obs),
+                   subtask=self.subtask_idx,
+                   subtasks=self.subtasks,
+                   next_subtask=self.next_subtask)._asdict()
 
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)

@@ -119,11 +119,10 @@ class GridWorld(AbstractGridWorld, DiscreteEnv):
 
                 if np.all(np.isin(new_char, self.blocked)):
                     new_coord = coord
-                yield Transition(
-                    probability=probability,
-                    new_state=self.encode(*new_coord),
-                    reward=self.reward.get(new_char, 0),
-                    terminal=new_char in self.terminal)
+                yield Transition(probability=probability,
+                                 new_state=self.encode(*new_coord),
+                                 reward=self.reward.get(new_char, 0),
+                                 terminal=new_char in self.terminal)
 
         return dict(get_state_transitions())
 
