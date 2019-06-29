@@ -89,8 +89,8 @@ class SubtasksGridWorld(gym.Env):
         def encode_task():
             for string in task:
                 subtask = Subtask(*re.split('[\s\\\]+', string))
-                yield (list(self.interactions).index(subtask.interaction),
-                       int(subtask.count), list(self.object_types).index(subtask.object))
+                yield (list(self.interactions).index(subtask.interaction), int(subtask.count),
+                       list(self.object_types).index(subtask.object))
 
         # set on reset:
         if task:
@@ -150,8 +150,7 @@ class SubtasksGridWorld(gym.Env):
         h, w = self.desc.shape
         choices = cartesian_product(np.arange(h), np.arange(w))
         choices = choices[np.all(choices % 2 != 0, axis=-1)]
-        randoms = self.np_random.choice(
-            len(choices), replace=False, size=self.n_obstacles)
+        randoms = self.np_random.choice(len(choices), replace=False, size=self.n_obstacles)
         self.obstacles = choices[randoms]
         self.obstacles_one_hot[:] = 0
         set_index(self.obstacles_one_hot, self.obstacles, True)
@@ -161,8 +160,7 @@ class SubtasksGridWorld(gym.Env):
         self.randomize_obstacles()
         h, w = self.desc.shape
         ij = cartesian_product(np.arange(h), np.arange(w))
-        self.open_spaces = ij[np.logical_not(
-            np.all(np.isin(ij, self.obstacles), axis=-1))]
+        self.open_spaces = ij[np.logical_not(np.all(np.isin(ij, self.obstacles), axis=-1))]
         self.initialized = True
 
     @property
@@ -254,6 +252,13 @@ class SubtasksGridWorld(gym.Env):
         self.iterate = False
         self.next_subtask = False
         return self.get_observation()
+
+    def objects_one_hot(self):
+        h, w, = self.desc.shape
+        objects_one_hot = np.zeros((1 + len(self.object_types), h, w), dtype=bool)
+        idx = [(v, ) + k for k, v in self.objects.items()]
+        set_index(objects_one_hot, idx, True)
+        return objects_one_hot
 
     def get_observation(self):
         agent_one_hot = np.zeros_like(self.desc, dtype=bool)

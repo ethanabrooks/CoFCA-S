@@ -35,8 +35,7 @@ class RunningMeanStd(object):
 
         self.mean = tf.to_float(self._sum / self._count)
         self.std = tf.sqrt(
-            tf.maximum(
-                tf.to_float(self._sumsq / self._count) - tf.square(self.mean), 1e-2))
+            tf.maximum(tf.to_float(self._sumsq / self._count) - tf.square(self.mean), 1e-2))
 
         newsum = tf.placeholder(shape=self.shape, dtype=tf.float64, name='sum')
         newsumsq = tf.placeholder(shape=self.shape, dtype=tf.float64, name='var')

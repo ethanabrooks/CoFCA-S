@@ -25,8 +25,8 @@ RecurrentState = namedtuple(
 
 # noinspection PyMissingConstructor
 class Agent(ppo.agent.Agent, NNBase):
-    def __init__(self, obs_spaces, action_space, hidden_size, entropy_coef, hard_update,
-                 agent, **kwargs):
+    def __init__(self, obs_spaces, action_space, hidden_size, entropy_coef, hard_update, agent,
+                 **kwargs):
         nn.Module.__init__(self)
         self.hard_update = hard_update
         self.entropy_coef = entropy_coef
@@ -56,8 +56,7 @@ class Agent(ppo.agent.Agent, NNBase):
         if action is not None:
             actions = Actions(*torch.split(action, [1] * len(self.action_spaces), dim=-1))
 
-        all_hxs, last_hx = self._forward_gru(
-            inputs.view(n, -1), rnn_hxs, masks, actions=actions)
+        all_hxs, last_hx = self._forward_gru(inputs.view(n, -1), rnn_hxs, masks, actions=actions)
         rm = self.recurrent_module
         hx = RecurrentState(*rm.parse_hidden(all_hxs))
 
@@ -79,8 +78,7 @@ class Agent(ppo.agent.Agent, NNBase):
                 g=FixedCategorical(hx.g_probs),
             )
 
-        log_probs = sum(
-            dist.log_probs(a) for dist, a in zip(dists, actions) if dist is not None)
+        log_probs = sum(dist.log_probs(a) for dist, a in zip(dists, actions) if dist is not None)
         entropies = sum(dist.entropy() for dist in dists if dist is not None)
         aux_loss = -self.entropy_coef * entropies.mean()
         log = {k: v for k, v in hx._asdict().items() if k.endswith('_loss')}
@@ -123,8 +121,8 @@ def sample_new(x, dist):
 class Recurrence(torch.jit.ScriptModule):
     __constants__ = ['input_sections', 'subtask_space', 'state_sizes', 'recurrent']
 
-    def __init__(self, obs_spaces, action_spaces, hidden_size, recurrent, hard_update,
-                 agent, multiplicative_interaction):
+    def __init__(self, obs_spaces, action_spaces, hidden_size, recurrent, hard_update, agent,
+                 multiplicative_interaction):
         super().__init__()
         self.hard_update = hard_update
         self.multiplicative_interaction = multiplicative_interaction
@@ -182,8 +180,7 @@ class Recurrence(torch.jit.ScriptModule):
             self.register_buffer(f'part{i}_one_hot', torch.eye(int(x)))
         self.register_buffer('a_one_hots', torch.eye(int(action_spaces.a.n)))
         self.register_buffer('g_one_hots', torch.eye(action_spaces.g.n))
-        self.register_buffer('subtask_space',
-                             torch.tensor(self.subtask_nvec.astype(np.int64)))
+        self.register_buffer('subtask_space', torch.tensor(self.subtask_nvec.astype(np.int64)))
 
         state_sizes = RecurrentState(
             a=1,
@@ -250,8 +247,7 @@ class Recurrence(torch.jit.ScriptModule):
                     if grad is None:
                         print(f'{k} has no grad wrt {name}')
                     else:
-                        print(f'mean grad ({v.mean().item()}) of {k} wrt {name}:',
-                              grad.mean())
+                        print(f'mean grad ({v.mean().item()}) of {k} wrt {name}:', grad.mean())
                         if torch.isnan(grad.mean()):
                             import ipdb
                             ipdb.set_trace()
@@ -264,8 +260,7 @@ class Recurrence(torch.jit.ScriptModule):
         # detach actions
         # noinspection PyProtectedMember
         n_actions = len(Actions._fields)
-        inputs, *actions = torch.split(
-            inputs.detach(), [D - n_actions] + [1] * n_actions, dim=2)
+        inputs, *actions = torch.split(inputs.detach(), [D - n_actions] + [1] * n_actions, dim=2)
         actions = Actions(*actions)
 
         # parse non-action inputs
@@ -340,8 +335,8 @@ class Recurrence(torch.jit.ScriptModule):
         hx = torch.cat(preprocessed, dim=-1)
         return hx, hx[-1]
 
-    def inner_loop(self, a, g, M, M123, N, T, float_subtask, next_subtask, obs, p, r,
-                   actions, update_attention):
+    def inner_loop(self, a, g, M, M123, N, T, float_subtask, next_subtask, obs, p, r, actions,
+                   update_attention):
         # combine past and present actions (sampled values)
         A = torch.cat([a.unsqueeze(0), actions.a], dim=0).long().squeeze(2)
         G = torch.cat([g.unsqueeze(0), actions.g], dim=0).long().squeeze(2)
@@ -354,8 +349,7 @@ class Recurrence(torch.jit.ScriptModule):
 
             def phi_update(subtask_param):
                 debug_obs = obs[t, j, :, k, l].squeeze(1)
-                task_sections = torch.split(
-                    subtask_param, tuple(self.subtask_nvec), dim=-1)
+                task_sections = torch.split(subtask_param, tuple(self.subtask_nvec), dim=-1)
                 parts = (debug_obs, self.a_one_hots[A[t]]) + task_sections
                 if self.multiplicative_interaction:
                     return self.f(parts)

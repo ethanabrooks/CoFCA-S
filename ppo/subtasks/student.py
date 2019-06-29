@@ -47,8 +47,7 @@ class Student(Teacher):
             exclude = exclude.view(n, 1, -1, options.shape[1])
             m, d = options.shape
             # noinspection PyTypeChecker
-            excluded = torch.any(
-                torch.all(exclude == options.view(1, m, 1, d), dim=-1), dim=-1)
+            excluded = torch.any(torch.all(exclude == options.view(1, m, 1, d), dim=-1), dim=-1)
 
             def sample():
                 for e in excluded:
@@ -97,8 +96,5 @@ class Student(Teacher):
         analogy_loss = sim_loss + dis_loss + dif_loss
         act = super().forward(inputs, *args, action=action, **kwargs)
         act.log.update(
-            sim_loss=sim_loss,
-            dis_loss=dis_loss,
-            dif_loss=dif_loss,
-            analogy_loss=analogy_loss)
+            sim_loss=sim_loss, dis_loss=dis_loss, dif_loss=dif_loss, analogy_loss=analogy_loss)
         return act._replace(aux_loss=act.aux_loss + self.xi * analogy_loss)

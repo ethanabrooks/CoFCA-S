@@ -9,38 +9,26 @@ Obs = namedtuple('Obs', 'base subtask subtasks conditions control next_subtask p
 
 
 class ControlFlowGridWorld(SubtasksGridWorld):
-    def __init__(self, *args, n_subtasks, force_branching=False, **kwargs):
-        super().__init__(*args, n_subtasks=n_subtasks + 1, **kwargs)
-        self.passing_objects = None
-        self.failing_objects = None
-        self.pred = None
-        self.force_branching = force_branching
-        if force_branching:
-            assert n_subtasks % 2 == 0
-
+    def __init__(self, *args, single_condition=True, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.single_condition = single_condition
         self.conditions = None
         self.control = None
-        self.required_objects = None
-        obs_spaces = self.observation_space.spaces
-        obs_spaces.update(
-            conditions=spaces.MultiDiscrete(
-                np.array([len(self.object_types)]).repeat(self.n_subtasks)),
-            pred=spaces.Discrete(2),
-            control=spaces.MultiDiscrete(
-                np.tile(
-                    np.array([[self.n_subtasks]]),
-                    [
-                        self.n_subtasks,
-                        2  # binary conditions
-                    ])))
-        self.observation_space = spaces.Dict(Obs(**obs_spaces)._asdict())
-        self.pred = None
-
-    def render_current_subtask(self):
-        if self.subtask_idx == 0:
-            print('none')
-        else:
-            super().render_current_subtask()
+        obs_space, subtasks_space = self.observation_space.spaces
+        self.observation_space = spaces.Tuple(
+            Obs(
+                base=obs_space,
+                subtasks=spaces.MultiDiscrete(
+                    np.tile(subtasks_space.nvec[:1], [self.n_subtasks + 1, 1])),
+                conditions=spaces.MultiDiscrete(
+                    np.array([len(self.object_types)]).repeat(self.n_subtasks + 1)),
+                control=spaces.MultiDiscrete(
+                    np.tile(
+                        np.array([[self.n_subtasks + 1]]),
+                        [
+                            self.n_subtasks + 1,
+                            2  # binary conditions
+                        ]))))
 
     def render_task(self):
         def helper(i, indent):
@@ -71,51 +59,13 @@ class ControlFlowGridWorld(SubtasksGridWorld):
         print(helper(i=0, indent=''))
 
     def get_observation(self):
-        obs = super().get_observation()
-        obs.update(
-            control=self.control,
-            conditions=self.conditions,
-            pred=self.evaluate_condition())
-        return Obs(**obs)._asdict()
+        obs, task = super().get_observation()
+        return Obs(base=obs, subtasks=task, control=self.control, conditions=self.conditions)
 
     def subtasks_generator(self):
-        choices = self.np_random.choice(len(self.possible_subtasks), size=self.n_subtasks)
-        subtasks = [self.Subtask(*self.possible_subtasks[i]) for i in choices]
-        i = 0
-        encountered = Counter(passing=[], failing=[], subtasks=[])
-        while i < self.n_subtasks:
-            condition = self.conditions[i]
-            passing = condition in self.required_objects
-            branching = self.control[i, 0] != self.control[i, 1]
-            encountered.update(passing=[condition if branching and passing else None])
-            encountered.update(failing=[condition if branching and not passing else None])
-            i = self.control[i, int(passing)]
-            encountered.update(subtasks=[i])
-
-        self.required_objects = list(
-            set(o for o in encountered['passing'] if o is not None))
-        available = [x for x in self.required_objects]
-
-        for i, subtask in enumerate(subtasks):
-            if i in encountered['subtasks']:
-                obj = subtask.object
-                to_be_removed = subtask.interaction in {1, 2}
-                if obj not in available:
-                    if (not to_be_removed and obj in encountered['failing']) or (
-                            to_be_removed and obj in encountered['failing'][:i + 1]):
-
-                        # choose a different object
-                        obj = self.np_random.choice(self.required_objects)
-                        subtasks[i] = subtask._replace(object=obj)
-
-                    # add object to map
-                    self.required_objects += [obj]
-                    available += [obj]
-
-                if to_be_removed:
-                    available.remove(obj)
-
-        yield from subtasks
+        choices = self.np_random.choice(len(self.possible_subtasks), size=self.n_subtasks + 1)
+        for subtask in self.possible_subtasks[choices]:
+            yield self.Subtask(*subtask)
 
     def reset(self):
         def get_control():
@@ -124,13 +74,13 @@ class ControlFlowGridWorld(SubtasksGridWorld):
                 if self.force_branching or self.np_random.rand() < .7:
                     yield j, j + 1
                 else:
-                    yield j, j
+                    yield self.np_random.randint(
+                        i,
+                        self.n_subtasks + (i > 0),  # prevent termination on first turn
+                        size=2)
 
-        self.control = 1 + np.minimum(np.array(list(get_control())), self.n_subtasks)
-        passing = self.np_random.choice(2, size=self.n_subtasks)
-        self.conditions = self.np_random.choice(
-            len(self.object_types), size=self.n_subtasks)
-        self.required_objects = self.conditions[passing]
+        self.control = 1 + np.array(list(get_control()))
+        self.conditions = self.np_random.choice(len(self.object_types), size=n)
         self.subtask_idx = 0
         self.count = None
         self.iterate = True
@@ -146,7 +96,12 @@ class ControlFlowGridWorld(SubtasksGridWorld):
         return self.conditions[self.subtask_idx] in self.objects.values()
 
     def get_required_objects(self, _):
-        yield from self.required_objects
+        required_objects = list(super().get_required_objects(self.subtasks))
+        yield from required_objects
+        # for condition in self.conditions:
+        # if condition not in required_objects:
+        # if self.np_random.rand() < .5:
+        # yield condition
 
 
 def main(seed, n_subtasks):

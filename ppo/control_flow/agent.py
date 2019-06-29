@@ -23,6 +23,7 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
         num_object_types = int(self.obs_spaces.subtasks.nvec[0, 2])
         self.register_buffer('condition_one_hots',
                              torch.eye(num_object_types + 1))  # +1 for determinism
+        self.register_buffer('rows', torch.arange(self.n_subtasks).unsqueeze(-1).float())
 
         in_channels = (
             self.obs_shape[0] *  # observation
@@ -71,8 +72,7 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
         # detach actions
         # noinspection PyProtectedMember
         n_actions = len(Actions._fields)
-        inputs, *actions = torch.split(
-            inputs.detach(), [D - n_actions] + [1] * n_actions, dim=2)
+        inputs, *actions = torch.split(inputs.detach(), [D - n_actions] + [1] * n_actions, dim=2)
         actions = Actions(*actions)
 
         # parse non-action inputs
@@ -89,10 +89,10 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
 
         # build C
         conditions = self.condition_one_hots[inputs.conditions[0].long()]
-        rows = torch.arange(self.n_subtasks).unsqueeze(-1).expand_as(inputs.control[0])
+        control = inputs.control[0]
+        rows = self.rows.expand_as(control)
         # point terminal branches back at themselves TODO: is this right?
-        control = inputs.control[0].where(inputs.control[0] != self.n_subtasks,
-                                          rows.float())
+        control = inputs.control[0].where(control != self.n_subtasks, rows)
         false_path, true_path = torch.split(control, 1, dim=-1)
         true_path = self.branch_one_hots[true_path.squeeze(-1).long()]
         false_path = self.branch_one_hots[false_path.squeeze(-1).long()]

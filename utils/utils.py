@@ -49,8 +49,7 @@ def component(function):
         del kwargs['name']
         with tf.variable_scope(name, reuse=reuse):
             out = function(*args, **kwargs)
-            variables = tf.get_variable_scope().get_collection(
-                tf.GraphKeys.TRAINABLE_VARIABLES)
+            variables = tf.get_variable_scope().get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
             return out, variables
 
     return wrapper
@@ -272,10 +271,7 @@ def space_to_size(space: gym.Space):
 
 def parametric_relu(_x):
     alphas = tf.get_variable(
-        'alpha',
-        _x.get_shape()[-1],
-        initializer=tf.constant_initializer(0.0),
-        dtype=tf.float32)
+        'alpha', _x.get_shape()[-1], initializer=tf.constant_initializer(0.0), dtype=tf.float32)
     pos = tf.nn.relu(_x)
     neg = alphas * (_x - abs(_x)) * 0.5
     return pos + neg

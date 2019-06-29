@@ -19,8 +19,7 @@ class RunningMeanStd(object):
             self.mean, self.var, self.count, batch_mean, batch_var, batch_count)
 
 
-def update_mean_var_count_from_moments(mean, var, count, batch_mean, batch_var,
-                                       batch_count):
+def update_mean_var_count_from_moments(mean, var, count, batch_mean, batch_var, batch_count):
     delta = batch_mean - mean
     tot_count = count + batch_count
 

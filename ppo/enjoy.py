@@ -26,10 +26,7 @@ parser.add_argument(
     default='./trained_models/',
     help='directory to save agent logs (default: ./trained_models/)')
 parser.add_argument(
-    '--add-timestep',
-    action='store_true',
-    default=False,
-    help='add timestep to observations')
+    '--add-timestep', action='store_true', default=False, help='add timestep to observations')
 parser.add_argument(
     '--non-det',
     action='store_true',
@@ -40,13 +37,7 @@ args = parser.parse_args()
 args.det = not args.non_det
 
 env = make_vec_envs(
-    args.env_name,
-    args.seed + 1000,
-    1,
-    None,
-    args.add_timestep,
-    env_args=env_args,
-    device='cpu')
+    args.env_name, args.seed + 1000, 1, None, args.add_timestep, env_args=env_args, device='cpu')
 
 # Get a render function
 render_func = get_render_func(env)

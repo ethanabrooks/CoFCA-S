@@ -36,12 +36,7 @@ def add_env_args(parser):
     env_parser.add_argument('--min-objects', type=int, required=True)
     env_parser.add_argument('--debug', action='store_true')
     env_parser.add_argument(
-        '--eval-subtask',
-        dest='eval_subtasks',
-        default=[],
-        type=int,
-        nargs=3,
-        action='append')
+        '--eval-subtask', dest='eval_subtasks', default=[], type=int, nargs=3, action='append')
 
 
 def cli():
@@ -78,8 +73,7 @@ def make_subtasks_env(env_id, **kwargs):
     kwargs.update(add_timestep=None)
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
     return helper(**ChainMap(
-        kwargs,
-        gridworld_args))  # combines kwargs and gridworld_args with preference for kwargs
+        kwargs, gridworld_args))  # combines kwargs and gridworld_args with preference for kwargs
 
 
 def train_lower_level_cli(student):
@@ -142,8 +136,8 @@ def metacontroller_cli():
     subtasks_parser.add_argument('--hard-update', action='store_true')
     subtasks_parser.add_argument('--multiplicative-interaction', action='store_true')
 
-    def train(env_id, task_args, ppo_args, agent_load_path, subtasks_args, env_args,
-              control_flow, **kwargs):
+    def train(env_id, task_args, ppo_args, agent_load_path, subtasks_args, env_args, control_flow,
+              **kwargs):
         class TrainSubtasks(Train):
             @staticmethod
             def make_env(**_kwargs):
@@ -160,9 +154,7 @@ def metacontroller_cli():
                 obs_spaces = get_spaces(envs, control_flow)
                 if agent_load_path:
                     agent = ppo.subtasks.Teacher(
-                        obs_spaces=obs_spaces,
-                        action_space=envs.action_space,
-                        **agent_args)
+                        obs_spaces=obs_spaces, action_space=envs.action_space, **agent_args)
 
                     state_dict = torch.load(agent_load_path, map_location=self.device)
                     state_dict['agent'].update(
@@ -176,10 +168,7 @@ def metacontroller_cli():
                         envs.venv.load_state_dict(state_dict['vec_normalize'])
                     print(f'Loaded teacher parameters from {agent_load_path}.')
 
-                _subtasks_args = {
-                    k.replace('subtasks_', ''): v
-                    for k, v in subtasks_args.items()
-                }
+                _subtasks_args = {k.replace('subtasks_', ''): v for k, v in subtasks_args.items()}
 
                 metacontroller_kwargs = dict(
                     obs_spaces=obs_spaces,

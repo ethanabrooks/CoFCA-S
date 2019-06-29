@@ -152,8 +152,7 @@ class Train:
                                                   rollouts.recurrent_hidden_states[-1],
                                                   rollouts.masks[-1]).detach()
 
-            rollouts.compute_returns(
-                next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau)
+            rollouts.compute_returns(next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau)
             train_results = ppo.update(rollouts)
             rollouts.after_update()
 
@@ -161,16 +160,12 @@ class Train:
                     time.time() - last_save >= save_interval:
                 last_save = time.time()
                 modules = dict(
-                    optimizer=ppo.optimizer,
-                    agent=self.agent)  # type: Dict[str, torch.nn.Module]
+                    optimizer=ppo.optimizer, agent=self.agent)  # type: Dict[str, torch.nn.Module]
 
                 if isinstance(envs.venv, VecNormalize):
                     modules.update(vec_normalize=envs.venv)
 
-                state_dict = {
-                    name: module.state_dict()
-                    for name, module in modules.items()
-                }
+                state_dict = {name: module.state_dict() for name, module in modules.items()}
                 save_path = Path(save_dir, 'checkpoint.pt')
                 torch.save(dict(step=j, **state_dict), save_path)
 
@@ -214,10 +209,8 @@ class Train:
 
                 obs = eval_envs.reset()
                 eval_recurrent_hidden_states = torch.zeros(
-                    num_processes,
-                    self.agent.recurrent_hidden_state_size,
-                    device=self.device)
-                eval_masks = torch.zeros(num_processes, 1, device=self.device)
+                    num_processes, self.agent.recurrent_hidden_state_size, device=device)
+                eval_masks = torch.zeros(num_processes, 1, device=device)
                 eval_counter = Counter()
 
                 eval_values = self.run_epoch(
@@ -255,8 +248,7 @@ class Train:
         episode_counter = Counter(rewards=[], time_steps=[], success=[])
         for step in range(num_steps):
             with torch.no_grad():
-                act = self.agent(
-                    inputs=obs, rnn_hxs=rnn_hxs, masks=masks)  # type: AgentValues
+                act = self.agent(inputs=obs, rnn_hxs=rnn_hxs, masks=masks)  # type: AgentValues
 
             # Observe reward and next obs
             obs, reward, done, infos = envs.step(act.action)
@@ -273,8 +265,7 @@ class Train:
             counter['time_step'][done] = 0
 
             # If done then clean the history of observations.
-            masks = torch.tensor(
-                1 - done, dtype=torch.float32, device=obs.device).unsqueeze(1)
+            masks = torch.tensor(1 - done, dtype=torch.float32, device=obs.device).unsqueeze(1)
             rnn_hxs = act.rnn_hxs
             if rollouts is not None:
                 rollouts.insert(
@@ -300,8 +291,8 @@ class Train:
         else:
             env = gym.make(env_id)
 
-        is_atari = hasattr(gym.envs, 'atari') and isinstance(
-            env.unwrapped, gym.envs.atari.atari_env.AtariEnv)
+        is_atari = hasattr(gym.envs, 'atari') and isinstance(env.unwrapped,
+                                                             gym.envs.atari.atari_env.AtariEnv)
         if isinstance(env.unwrapped, SubtasksGridWorld):
             env = Wrapper(env)
 
@@ -336,10 +327,7 @@ class Train:
                       num_frame_stack=None,
                       **kwargs):
 
-        envs = [
-            functools.partial(self.make_env, rank=i, **kwargs)
-            for i in range(num_processes)
-        ]
+        envs = [functools.partial(self.make_env, rank=i, **kwargs) for i in range(num_processes)]
 
         if len(envs) == 1 or sys.platform == 'darwin' or synchronous:
             envs = DummyVecEnv(envs, render=render)

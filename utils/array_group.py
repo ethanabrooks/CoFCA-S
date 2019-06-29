@@ -48,10 +48,7 @@ def xnor(check: Callable, *vals: X):
     return all(map(check, vals)) or not any(map(check, vals))
 
 
-def zip_op(op: Callable[[X, X], list],
-           x: X,
-           y: X,
-           reduce_op: Callable[[Iterable[X]], X] = None):
+def zip_op(op: Callable[[X, X], list], x: X, y: X, reduce_op: Callable[[Iterable[X]], X] = None):
     assert xnor(np.isscalar, [x, y])
     assert xnor(lambda z: isinstance(z, np.ndarray), [x, y])
     if isinstance(x, np.ndarray) or np.isscalar(x):

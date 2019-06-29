@@ -83,15 +83,12 @@ def one_sided_ema(xolds,
     low = xolds[0] if low is None else low
     high = xolds[-1] if high is None else high
 
-    assert xolds[
-        0] <= low, 'low = {} < xolds[0] = {} - extrapolation not permitted!'.format(
-            low, xolds[0])
-    assert xolds[
-        -1] >= high, 'high = {} > xolds[-1] = {}  - extrapolation not permitted!'.format(
-            high, xolds[-1])
-    assert len(xolds) == len(
-        yolds), 'length of xolds ({}) and yolds ({}) do not match!'.format(
-            len(xolds), len(yolds))
+    assert xolds[0] <= low, 'low = {} < xolds[0] = {} - extrapolation not permitted!'.format(
+        low, xolds[0])
+    assert xolds[-1] >= high, 'high = {} > xolds[-1] = {}  - extrapolation not permitted!'.format(
+        high, xolds[-1])
+    assert len(xolds) == len(yolds), 'length of xolds ({}) and yolds ({}) do not match!'.format(
+        len(xolds), len(yolds))
 
     xolds = xolds.astype('float64')
     yolds = yolds.astype('float64')
@@ -179,10 +176,7 @@ Result = namedtuple('Result', 'monitor progress dirname metadata')
 Result.__new__.__defaults__ = (None, ) * len(Result._fields)
 
 
-def load_results(root_dir_or_dirs,
-                 enable_progress=True,
-                 enable_monitor=True,
-                 verbose=False):
+def load_results(root_dir_or_dirs, enable_progress=True, enable_monitor=True, verbose=False):
     '''
     load summaries of runs from a list of directories (including subdirectories)
     Arguments:
@@ -239,15 +233,13 @@ def load_results(root_dir_or_dirs,
 
                 if enable_monitor:
                     try:
-                        result['monitor'] = pandas.DataFrame(
-                            monitor.load_results(dirname))
+                        result['monitor'] = pandas.DataFrame(monitor.load_results(dirname))
                     except monitor.LoadMonitorResultsError:
                         print('skipping %s: no monitor files' % dirname)
                     except Exception as e:
                         print('exception loading monitor file in %s: %s' % (dirname, e))
 
-                if result.get('monitor') is not None or result.get(
-                        'progress') is not None:
+                if result.get('monitor') is not None or result.get('progress') is not None:
                     allresults.append(Result(**result))
                     if verbose:
                         print('successfully loaded %s' % dirname)
@@ -257,9 +249,9 @@ def load_results(root_dir_or_dirs,
 
 
 COLORS = [
-    'blue', 'green', 'red', 'cyan', 'magenta', 'yellow', 'black', 'purple', 'pink',
-    'brown', 'orange', 'teal', 'lightblue', 'lime', 'lavender', 'turquoise', 'darkgreen',
-    'tan', 'salmon', 'gold', 'darkred', 'darkblue'
+    'blue', 'green', 'red', 'cyan', 'magenta', 'yellow', 'black', 'purple', 'pink', 'brown',
+    'orange', 'teal', 'lightblue', 'lime', 'lavender', 'turquoise', 'darkgreen', 'tan', 'salmon',
+    'gold', 'darkred', 'darkblue'
 ]
 
 
@@ -392,8 +384,7 @@ def plot_results(
                     ys = []
                     for (x, y) in xys:
                         ys.append(
-                            symmetric_ema(
-                                x, y, low, high, resample, decay_steps=smooth_step)[1])
+                            symmetric_ema(x, y, low, high, resample, decay_steps=smooth_step)[1])
                 else:
                     assert allequal([x[:minxlen] for x in origxs]),\
                         'If you want to average unevenly sampled data, set resample=<number of samples you want>'
@@ -405,11 +396,9 @@ def plot_results(
                 l, = axarr[isplit][0].plot(usex, ymean, color=color)
                 g2l[group] = l
                 if shaded_err:
-                    ax.fill_between(
-                        usex, ymean - ystderr, ymean + ystderr, color=color, alpha=.4)
+                    ax.fill_between(usex, ymean - ystderr, ymean + ystderr, color=color, alpha=.4)
                 if shaded_std:
-                    ax.fill_between(
-                        usex, ymean - ystd, ymean + ystd, color=color, alpha=.2)
+                    ax.fill_between(usex, ymean - ystd, ymean + ystd, color=color, alpha=.2)
 
         # https://matplotlib.org/users/legend_guide.html
         plt.tight_layout()
@@ -441,10 +430,8 @@ def test_smooth():
     yclean = np.sin(xs)
     ys = yclean + .1 * np.random.randn(yclean.size)
     xup, yup, _ = symmetric_ema(xs, ys, xs.min(), xs.max(), nup, decay_steps=nup / ndown)
-    xdown, ydown, _ = symmetric_ema(
-        xs, ys, xs.min(), xs.max(), ndown, decay_steps=ndown / ndown)
-    xsame, ysame, _ = symmetric_ema(
-        xs, ys, xs.min(), xs.max(), norig, decay_steps=norig / ndown)
+    xdown, ydown, _ = symmetric_ema(xs, ys, xs.min(), xs.max(), ndown, decay_steps=ndown / ndown)
+    xsame, ysame, _ = symmetric_ema(xs, ys, xs.min(), xs.max(), norig, decay_steps=norig / ndown)
     plt.plot(xs, ys, label='orig', marker='x')
     plt.plot(xup, yup, label='up', marker='x')
     plt.plot(xdown, ydown, label='down', marker='x')

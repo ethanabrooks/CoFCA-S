@@ -185,8 +185,7 @@ class GridWorld(AbstractGridWorld, DiscreteEnv):
                     self._reward_matrix[s1, a] = trans.reward
                     if trans.terminal:
                         for a in range(self.nA):
-                            self._transition_matrix[trans.new_state, a, trans.
-                                                    new_state] = 1
+                            self._transition_matrix[trans.new_state, a, trans.new_state] = 1
                             self._reward_matrix[trans.new_state, a] = 0
                             assert not np.any(self._transition_matrix > 1)
 

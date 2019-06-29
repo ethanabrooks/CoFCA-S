@@ -68,7 +68,6 @@ class ReplayBuffer:
 
     def extend(self, x: X):
         if self.buffer is None:
-            self.buffer = ArrayGroup.shape_like(
-                x=ArrayGroup(x)[0], pre_shape=(self.maxlen, ))
+            self.buffer = ArrayGroup.shape_like(x=ArrayGroup(x)[0], pre_shape=(self.maxlen, ))
 
         self.append(x)

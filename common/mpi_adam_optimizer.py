@@ -11,8 +11,7 @@ class MpiAdamOptimizer(tf.train.AdamOptimizer):
         tf.train.AdamOptimizer.__init__(self, **kwargs)
 
     def compute_gradients(self, loss, var_list, **kwargs):
-        grads_and_vars = tf.train.AdamOptimizer.compute_gradients(
-            self, loss, var_list, **kwargs)
+        grads_and_vars = tf.train.AdamOptimizer.compute_gradients(self, loss, var_list, **kwargs)
         grads_and_vars = [(g, v) for g, v in grads_and_vars if g is not None]
         flat_grad = tf.concat([tf.reshape(g, (-1, )) for g, v in grads_and_vars], axis=0)
         shapes = [v.shape.as_list() for g, v in grads_and_vars]
