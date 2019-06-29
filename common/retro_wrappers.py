@@ -72,11 +72,10 @@ class PartialFrameStack(gym.Wrapper):
         gym.Wrapper.__init__(self, env)
         shp = env.observation_space.shape
         self.channel = channel
-        self.observation_space = gym.spaces.Box(
-            low=0,
-            high=255,
-            shape=(shp[0], shp[1], shp[2] + k - 1),
-            dtype=env.observation_space.dtype)
+        self.observation_space = gym.spaces.Box(low=0,
+                                                high=255,
+                                                shape=(shp[0], shp[1], shp[2] + k - 1),
+                                                dtype=env.observation_space.dtype)
         self.k = k
         self.frames = deque([], maxlen=k)
         shp = env.observation_space.shape
@@ -110,8 +109,10 @@ class Downsample(gym.ObservationWrapper):
         gym.ObservationWrapper.__init__(self, env)
         (oldh, oldw, oldc) = env.observation_space.shape
         newshape = (oldh // ratio, oldw // ratio, oldc)
-        self.observation_space = spaces.Box(
-            low=0, high=255, shape=newshape, dtype=np.uint8)
+        self.observation_space = spaces.Box(low=0,
+                                            high=255,
+                                            shape=newshape,
+                                            dtype=np.uint8)
 
     def observation(self, frame):
         height, width, _ = self.observation_space.shape
@@ -128,8 +129,10 @@ class Rgb2gray(gym.ObservationWrapper):
         """
         gym.ObservationWrapper.__init__(self, env)
         (oldh, oldw, _oldc) = env.observation_space.shape
-        self.observation_space = spaces.Box(
-            low=0, high=255, shape=(oldh, oldw, 1), dtype=np.uint8)
+        self.observation_space = spaces.Box(low=0,
+                                            high=255,
+                                            shape=(oldh, oldw, 1),
+                                            dtype=np.uint8)
 
     def observation(self, frame):
         frame = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
@@ -157,8 +160,9 @@ class AppendTimeout(gym.Wrapper):
     def __init__(self, env):
         gym.Wrapper.__init__(self, env)
         self.action_space = env.action_space
-        self.timeout_space = gym.spaces.Box(
-            low=np.array([0.0]), high=np.array([1.0]), dtype=np.float32)
+        self.timeout_space = gym.spaces.Box(low=np.array([0.0]),
+                                            high=np.array([1.0]),
+                                            dtype=np.float32)
         self.original_os = env.observation_space
         if isinstance(self.original_os, gym.spaces.Dict):
             import copy

@@ -82,19 +82,17 @@ def mutate_xml(changes: List[XMLSetter], dofs: List[str], goal_space: Box, n_blo
                 name = f'block{i}'
 
                 body = ET.SubElement(worldbody, 'body', attrib=dict(name=name, pos=pos))
-                ET.SubElement(
-                    body,
-                    'geom',
-                    attrib=dict(
-                        name=name,
-                        type='box',
-                        mass='1',
-                        size=".05 .025 .017",
-                        rgba=rgba[i],
-                        condim='6',
-                        solimp="0.99 0.99 "
-                        "0.01",
-                        solref='0.01 1'))
+                ET.SubElement(body,
+                              'geom',
+                              attrib=dict(name=name,
+                                          type='box',
+                                          mass='1',
+                                          size=".05 .025 .017",
+                                          rgba=rgba[i],
+                                          condim='6',
+                                          solimp="0.99 0.99 "
+                                          "0.01",
+                                          solref='0.01 1'))
                 ET.SubElement(body, 'freejoint', attrib=dict(name=f'block{i}joint'))
 
         for change in changes:

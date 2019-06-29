@@ -38,12 +38,11 @@ class Wrapper(ppo.subtasks.Wrapper):
 
     def wrap_observation(self, observation):
         obs = gridworld_env.control_flow_gridworld.Obs(*observation)
-        obs = Obs(
-            base=obs.base,
-            subtasks=obs.subtasks,
-            conditions=obs.conditions,
-            control=obs.control,
-            subtask=[self.env.unwrapped.subtask_idx],
-            next_subtask=[self.env.unwrapped.next_subtask])
+        obs = Obs(base=obs.base,
+                  subtasks=obs.subtasks,
+                  conditions=obs.conditions,
+                  control=obs.control,
+                  subtask=[self.env.unwrapped.subtask_idx],
+                  next_subtask=[self.env.unwrapped.next_subtask])
         # print([np.shape(x) for x in obs])
         return np.concatenate([np.array(list(x)).flatten() for x in obs])

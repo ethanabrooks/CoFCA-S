@@ -30,9 +30,8 @@ def assert_envs_equal(env1, env2, num_steps):
         assert np.allclose(obs1, obs2)
         np.random.seed(1337)
         for _ in range(num_steps):
-            actions = np.array(
-                np.random.randint(0, 0x100, size=joint_shape),
-                dtype=env1.action_space.dtype)
+            actions = np.array(np.random.randint(0, 0x100, size=joint_shape),
+                               dtype=env1.action_space.dtype)
             for env in [env1, env2]:
                 env.step_async(actions)
             outs1 = env1.step_wait()

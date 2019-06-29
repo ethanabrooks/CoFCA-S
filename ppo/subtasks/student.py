@@ -47,8 +47,8 @@ class Student(Teacher):
             exclude = exclude.view(n, 1, -1, options.shape[1])
             m, d = options.shape
             # noinspection PyTypeChecker
-            excluded = torch.any(
-                torch.all(exclude == options.view(1, m, 1, d), dim=-1), dim=-1)
+            excluded = torch.any(torch.all(exclude == options.view(1, m, 1, d), dim=-1),
+                                 dim=-1)
 
             def sample():
                 for e in excluded:
@@ -59,10 +59,12 @@ class Student(Teacher):
 
         action2 = sample_analogy_counterparts(self.actions, exclude=action1.unsqueeze(1))
         object2 = sample_analogy_counterparts(self.objects, exclude=object1.unsqueeze(1))
-        action3 = sample_analogy_counterparts(
-            self.actions, exclude=torch.stack([action1, action2], dim=1))
-        object3 = sample_analogy_counterparts(
-            self.actions, exclude=torch.stack([object1, object2], dim=1))
+        action3 = sample_analogy_counterparts(self.actions,
+                                              exclude=torch.stack([action1, action2],
+                                                                  dim=1))
+        object3 = sample_analogy_counterparts(self.actions,
+                                              exclude=torch.stack([object1, object2],
+                                                                  dim=1))
 
         def embed(*values):
             return self.embeddings(torch.cat(values, dim=-1).cumsum(dim=-1))
@@ -85,8 +87,8 @@ class Student(Teacher):
             c-d 3-4 1-3
             """
             sim_loss += F.mse_loss(a - b, c - d)  # a:b::c:d
-            dif_loss += -torch.clamp(
-                torch.norm(a - b, dim=-1), max=self.tau_diff).mean()  # increase the side
+            dif_loss += -torch.clamp(torch.norm(a - b, dim=-1),
+                                     max=self.tau_diff).mean()  # increase the side
 
         for a, b, c, d in [
             [embedding1, embedding2, embedding5, embedding4],
@@ -96,9 +98,8 @@ class Student(Teacher):
 
         analogy_loss = sim_loss + dis_loss + dif_loss
         act = super().forward(inputs, *args, action=action, **kwargs)
-        act.log.update(
-            sim_loss=sim_loss,
-            dis_loss=dis_loss,
-            dif_loss=dif_loss,
-            analogy_loss=analogy_loss)
+        act.log.update(sim_loss=sim_loss,
+                       dis_loss=dis_loss,
+                       dif_loss=dif_loss,
+                       analogy_loss=analogy_loss)
         return act._replace(aux_loss=act.aux_loss + self.xi * analogy_loss)

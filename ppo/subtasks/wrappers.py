@@ -74,11 +74,10 @@ class Wrapper(gym.Wrapper):
         obs, *_ = observation
         _, h, w = obs.shape
         env = self.env.unwrapped
-        observation = Obs(
-            base=obs,
-            subtask=env.subtask_idx,
-            subtasks=env.subtasks,
-            next_subtask=env.next_subtask)
+        observation = Obs(base=obs,
+                          subtask=env.subtask_idx,
+                          subtasks=env.subtasks,
+                          next_subtask=env.next_subtask)
         # for obs, space in zip(observation, self.observation_space.spaces):
         # assert space.contains(np.array(obs))
         return np.concatenate([np.array(x).flatten() for x in observation])

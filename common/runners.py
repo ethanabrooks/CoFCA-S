@@ -9,9 +9,8 @@ class AbstractEnvRunner(ABC):
         self.model = model
         self.nenv = nenv = env.num_envs if hasattr(env, 'num_envs') else 1
         self.batch_ob_shape = (nenv * nsteps, ) + env.observation_space.shape
-        self.obs = np.zeros(
-            (nenv, ) + env.observation_space.shape,
-            dtype=env.observation_space.dtype.name)
+        self.obs = np.zeros((nenv, ) + env.observation_space.shape,
+                            dtype=env.observation_space.dtype.name)
         self.obs[:] = env.reset()
         self.nsteps = nsteps
         self.states = model.initial_state

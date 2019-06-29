@@ -33,16 +33,15 @@ def fmt_item(x, l):
     return " " * (l - len(rep)) + rep
 
 
-color2num = dict(
-    gray=30,
-    red=31,
-    green=32,
-    yellow=33,
-    blue=34,
-    magenta=35,
-    cyan=36,
-    white=37,
-    crimson=38)
+color2num = dict(gray=30,
+                 red=31,
+                 green=32,
+                 yellow=33,
+                 blue=34,
+                 magenta=35,
+                 cyan=36,
+                 white=37,
+                 crimson=38)
 
 
 def colorize(string, color='green', bold=False, highlight=False):
@@ -90,6 +89,5 @@ def timed(msg):
     yield
     MESSAGE_DEPTH -= 1
     print(
-        colorize(
-            '\t' * MESSAGE_DEPTH + "done in %.3f seconds" % (time.time() - tstart),
-            color='magenta'))
+        colorize('\t' * MESSAGE_DEPTH + "done in %.3f seconds" % (time.time() - tstart),
+                 color='magenta'))

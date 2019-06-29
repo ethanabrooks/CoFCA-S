@@ -12,41 +12,35 @@ from ppo.wrappers import get_vec_normalize
 
 parser = argparse.ArgumentParser(description='RL')
 parser.add_argument('--seed', type=int, default=1, help='random seed (default: 1)')
-parser.add_argument(
-    '--log-interval',
-    type=int,
-    default=10,
-    help='log interval, one log per n updates (default: 10)')
-parser.add_argument(
-    '--env-name',
-    default='PongNoFrameskip-v4',
-    help='environment to train on (default: PongNoFrameskip-v4)')
-parser.add_argument(
-    '--load-dir',
-    default='./trained_models/',
-    help='directory to save agent logs (default: ./trained_models/)')
-parser.add_argument(
-    '--add-timestep',
-    action='store_true',
-    default=False,
-    help='add timestep to observations')
-parser.add_argument(
-    '--non-det',
-    action='store_true',
-    default=False,
-    help='whether to use a non-deterministic policy')
+parser.add_argument('--log-interval',
+                    type=int,
+                    default=10,
+                    help='log interval, one log per n updates (default: 10)')
+parser.add_argument('--env-name',
+                    default='PongNoFrameskip-v4',
+                    help='environment to train on (default: PongNoFrameskip-v4)')
+parser.add_argument('--load-dir',
+                    default='./trained_models/',
+                    help='directory to save agent logs (default: ./trained_models/)')
+parser.add_argument('--add-timestep',
+                    action='store_true',
+                    default=False,
+                    help='add timestep to observations')
+parser.add_argument('--non-det',
+                    action='store_true',
+                    default=False,
+                    help='whether to use a non-deterministic policy')
 args = parser.parse_args()
 
 args.det = not args.non_det
 
-env = make_vec_envs(
-    args.env_name,
-    args.seed + 1000,
-    1,
-    None,
-    args.add_timestep,
-    env_args=env_args,
-    device='cpu')
+env = make_vec_envs(args.env_name,
+                    args.seed + 1000,
+                    1,
+                    None,
+                    args.add_timestep,
+                    env_args=env_args,
+                    device='cpu')
 
 # Get a render function
 render_func = get_render_func(env)

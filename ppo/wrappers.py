@@ -20,10 +20,10 @@ class MaskGoal(gym.ObservationWrapper):
 class AddTimestep(gym.ObservationWrapper):
     def __init__(self, env=None):
         super(AddTimestep, self).__init__(env)
-        self.observation_space = Box(
-            self.observation_space.low[0],
-            self.observation_space.high[0], [self.observation_space.shape[0] + 1],
-            dtype=self.observation_space.dtype)
+        self.observation_space = Box(self.observation_space.low[0],
+                                     self.observation_space.high[0],
+                                     [self.observation_space.shape[0] + 1],
+                                     dtype=self.observation_space.dtype)
 
     def observation(self, observation):
         return np.concatenate((observation, [self.env._elapsed_steps]))
@@ -33,11 +33,10 @@ class TransposeImage(gym.ObservationWrapper):
     def __init__(self, env=None):
         super(TransposeImage, self).__init__(env)
         obs_shape = self.observation_space.shape
-        self.observation_space = Box(
-            self.observation_space.low[0, 0, 0],
-            self.observation_space.high[0, 0, 0],
-            [obs_shape[2], obs_shape[1], obs_shape[0]],
-            dtype=self.observation_space.dtype)
+        self.observation_space = Box(self.observation_space.low[0, 0, 0],
+                                     self.observation_space.high[0, 0, 0],
+                                     [obs_shape[2], obs_shape[1], obs_shape[0]],
+                                     dtype=self.observation_space.dtype)
 
     def observation(self, observation):
         return observation.transpose(2, 0, 1)
@@ -114,8 +113,9 @@ class VecPyTorchFrameStack(VecEnvWrapper):
 
         self.stacked_obs = torch.zeros((venv.num_envs, ) + low.shape)
 
-        observation_space = gym.spaces.Box(
-            low=low, high=high, dtype=venv.observation_space.dtype)
+        observation_space = gym.spaces.Box(low=low,
+                                           high=high,
+                                           dtype=venv.observation_space.dtype)
         VecEnvWrapper.__init__(self, venv, observation_space=observation_space)
 
     def step_wait(self):

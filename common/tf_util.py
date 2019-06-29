@@ -20,8 +20,8 @@ def switch(condition, then_expression, else_expression):
         else_expression: TensorFlow operation.
     """
     x_shape = copy.copy(then_expression.get_shape())
-    x = tf.cond(
-        tf.cast(condition, 'bool'), lambda: then_expression, lambda: else_expression)
+    x = tf.cond(tf.cast(condition,
+                        'bool'), lambda: then_expression, lambda: else_expression)
     x.set_shape(x_shape)
     return x
 
@@ -67,10 +67,9 @@ def make_session(config=None, num_cpu=None, make_default=False, graph=None):
     if num_cpu is None:
         num_cpu = int(os.getenv('RCALL_NUM_CPU', multiprocessing.cpu_count()))
     if config is None:
-        config = tf.ConfigProto(
-            allow_soft_placement=True,
-            inter_op_parallelism_threads=num_cpu,
-            intra_op_parallelism_threads=num_cpu)
+        config = tf.ConfigProto(allow_soft_placement=True,
+                                inter_op_parallelism_threads=num_cpu,
+                                intra_op_parallelism_threads=num_cpu)
         config.gpu_options.allow_growth = True
 
     if make_default:
@@ -143,23 +142,21 @@ def conv2d(x,
         # initialize weights with random weights
         w_bound = np.sqrt(6. / (fan_in + fan_out))
 
-        w = tf.get_variable(
-            "W",
-            filter_shape,
-            dtype,
-            tf.random_uniform_initializer(-w_bound, w_bound),
-            collections=collections)
-        b = tf.get_variable(
-            "b", [1, 1, 1, num_filters],
-            initializer=tf.zeros_initializer(),
-            collections=collections)
+        w = tf.get_variable("W",
+                            filter_shape,
+                            dtype,
+                            tf.random_uniform_initializer(-w_bound, w_bound),
+                            collections=collections)
+        b = tf.get_variable("b", [1, 1, 1, num_filters],
+                            initializer=tf.zeros_initializer(),
+                            collections=collections)
 
         if summary_tag is not None:
-            tf.summary.image(
-                summary_tag,
-                tf.transpose(
-                    tf.reshape(w, [filter_size[0], filter_size[1], -1, 1]), [2, 0, 1, 3]),
-                max_images=10)
+            tf.summary.image(summary_tag,
+                             tf.transpose(
+                                 tf.reshape(w, [filter_size[0], filter_size[1], -1, 1]),
+                                 [2, 0, 1, 3]),
+                             max_images=10)
 
         return tf.nn.conv2d(x, w, stride_shape, pad) + b
 
@@ -208,8 +205,8 @@ def function(inputs, outputs, updates=None, givens=None):
         return _Function(inputs, outputs, updates, givens=givens)
     elif isinstance(outputs, (dict, collections.OrderedDict)):
         f = _Function(inputs, outputs.values(), updates, givens=givens)
-        return lambda *args, **kwargs: type(outputs)(zip(
-            outputs.keys(), f(*args, **kwargs)))
+        return lambda *args, **kwargs: type(outputs)(zip(outputs.keys(), f(
+            *args, **kwargs)))
     else:
         f = _Function(inputs, [outputs], updates, givens=givens)
         return lambda *args, **kwargs: f(*args, **kwargs)[0]
@@ -270,12 +267,11 @@ def flatgrad(loss, var_list, clip_norm=None):
     grads = tf.gradients(loss, var_list)
     if clip_norm is not None:
         grads = [tf.clip_by_norm(grad, clip_norm=clip_norm) for grad in grads]
-    return tf.concat(
-        axis=0,
-        values=[
-            tf.reshape(grad if grad is not None else tf.zeros_like(v), [numel(v)])
-            for (v, grad) in zip(var_list, grads)
-        ])
+    return tf.concat(axis=0,
+                     values=[
+                         tf.reshape(grad if grad is not None else tf.zeros_like(v),
+                                    [numel(v)]) for (v, grad) in zip(var_list, grads)
+                     ])
 
 
 class SetFromFlat(object):
@@ -349,8 +345,8 @@ def display_var_info(vars):
         count_params += v_params
         if "/b:" in name or "/bias" in name:
             continue  # Wx+b, bias is not interesting to look at => count params, but not print
-        logger.info("   %s%s %i params %s" % (name, " " * (55 - len(name)), v_params,
-                                              str(v.shape)))
+        logger.info("   %s%s %i params %s" % (name, " " *
+                                              (55 - len(name)), v_params, str(v.shape)))
 
     logger.info("Total model parameters: %0.2f million" % (count_params * 1e-6))
 

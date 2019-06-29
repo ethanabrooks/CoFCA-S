@@ -53,10 +53,9 @@ class ShmemVecEnv(VecEnv):
         for env_fn, obs_buf in zip(env_fns, self.obs_bufs):
             wrapped_fn = CloudpickleWrapper(env_fn)
             parent_pipe, child_pipe = Pipe()
-            proc = Process(
-                target=_subproc_worker,
-                args=(child_pipe, parent_pipe, wrapped_fn, obs_buf, self.obs_shapes,
-                      self.obs_dtypes, self.obs_keys))
+            proc = Process(target=_subproc_worker,
+                           args=(child_pipe, parent_pipe, wrapped_fn, obs_buf,
+                                 self.obs_shapes, self.obs_dtypes, self.obs_keys))
             proc.daemon = True
             self.procs.append(proc)
             self.parent_pipes.append(parent_pipe)

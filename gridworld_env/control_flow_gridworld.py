@@ -72,10 +72,9 @@ class ControlFlowGridWorld(SubtasksGridWorld):
 
     def get_observation(self):
         obs = super().get_observation()
-        obs.update(
-            control=self.control,
-            conditions=self.conditions,
-            pred=self.evaluate_condition())
+        obs.update(control=self.control,
+                   conditions=self.conditions,
+                   pred=self.evaluate_condition())
         return Obs(**obs)._asdict()
 
     def subtasks_generator(self):
@@ -128,8 +127,8 @@ class ControlFlowGridWorld(SubtasksGridWorld):
 
         self.control = 1 + np.minimum(np.array(list(get_control())), self.n_subtasks)
         passing = self.np_random.choice(2, size=self.n_subtasks)
-        self.conditions = self.np_random.choice(
-            len(self.object_types), size=self.n_subtasks)
+        self.conditions = self.np_random.choice(len(self.object_types),
+                                                size=self.n_subtasks)
         self.required_objects = self.conditions[passing]
         self.subtask_idx = 0
         self.count = None

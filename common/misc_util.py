@@ -179,8 +179,11 @@ def boolean_flag(parser, name, default=False, help=None):
         help string for the flag
     """
     dest = name.replace('-', '_')
-    parser.add_argument(
-        "--" + name, action="store_true", default=default, dest=dest, help=help)
+    parser.add_argument("--" + name,
+                        action="store_true",
+                        default=default,
+                        dest=dest,
+                        help=help)
     parser.add_argument("--no-" + name, action="store_false", dest=dest)
 
 
@@ -238,8 +241,8 @@ def relatively_safe_pickle_dump(obj, path, compression=False):
         with tempfile.NamedTemporaryFile() as uncompressed_file:
             pickle.dump(obj, uncompressed_file)
             uncompressed_file.file.flush()
-            with zipfile.ZipFile(
-                    temp_storage, "w", compression=zipfile.ZIP_DEFLATED) as myzip:
+            with zipfile.ZipFile(temp_storage, "w",
+                                 compression=zipfile.ZIP_DEFLATED) as myzip:
                 myzip.write(uncompressed_file.name, "data")
     else:
         with open(temp_storage, "wb") as f:

@@ -78,15 +78,14 @@ class Train:
 
         torch.set_num_threads(1)
 
-        envs = self.make_vec_envs(
-            env_id=env_id,
-            seed=seed,
-            num_processes=num_processes,
-            gamma=(gamma if normalize else None),
-            add_timestep=add_timestep,
-            render=render,
-            synchronous=True if render else synchronous,
-            evaluation=False)
+        envs = self.make_vec_envs(env_id=env_id,
+                                  seed=seed,
+                                  num_processes=num_processes,
+                                  gamma=(gamma if normalize else None),
+                                  add_timestep=add_timestep,
+                                  render=render,
+                                  synchronous=True if render else synchronous,
+                                  evaluation=False)
 
         self.agent = self.build_agent(envs, **agent_args)
         rollouts = RolloutStorage(
@@ -136,31 +135,31 @@ class Train:
                 log_progress = tqdm(total=log_interval, desc='log ')
             if eval_interval and j % eval_interval == 0:
                 eval_progress = tqdm(total=eval_interval, desc='eval')
-            epoch_counter = self.run_epoch(
-                obs=rollouts.obs[0],
-                rnn_hxs=rollouts.recurrent_hidden_states[0],
-                masks=rollouts.masks[0],
-                envs=envs,
-                num_steps=num_steps,
-                rollouts=rollouts,
-                counter=counter)
+            epoch_counter = self.run_epoch(obs=rollouts.obs[0],
+                                           rnn_hxs=rollouts.recurrent_hidden_states[0],
+                                           masks=rollouts.masks[0],
+                                           envs=envs,
+                                           num_steps=num_steps,
+                                           rollouts=rollouts,
+                                           counter=counter)
 
             with torch.no_grad():
                 next_value = self.agent.get_value(rollouts.obs[-1],
                                                   rollouts.recurrent_hidden_states[-1],
                                                   rollouts.masks[-1]).detach()
 
-            rollouts.compute_returns(
-                next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau)
+            rollouts.compute_returns(next_value=next_value,
+                                     use_gae=use_gae,
+                                     gamma=gamma,
+                                     tau=tau)
             train_results = ppo.update(rollouts)
             rollouts.after_update()
 
             if save_dir and save_interval and \
                     time.time() - last_save >= save_interval:
                 last_save = time.time()
-                modules = dict(
-                    optimizer=ppo.optimizer,
-                    agent=self.agent)  # type: Dict[str, torch.nn.Module]
+                modules = dict(optimizer=ppo.optimizer,
+                               agent=self.agent)  # type: Dict[str, torch.nn.Module]
 
                 if isinstance(envs.venv, VecNormalize):
                     modules.update(vec_normalize=envs.venv)
@@ -216,15 +215,14 @@ class Train:
                 eval_masks = torch.zeros(num_processes, 1, device=device)
                 eval_counter = Counter()
 
-                eval_values = self.run_epoch(
-                    envs=eval_envs,
-                    obs=obs,
-                    rnn_hxs=eval_recurrent_hidden_states,
-                    masks=eval_masks,
-                    num_steps=max(num_steps, max_episode_steps)
-                    if max_episode_steps else num_steps,
-                    rollouts=None,
-                    counter=eval_counter)
+                eval_values = self.run_epoch(envs=eval_envs,
+                                             obs=obs,
+                                             rnn_hxs=eval_recurrent_hidden_states,
+                                             masks=eval_masks,
+                                             num_steps=max(num_steps, max_episode_steps)
+                                             if max_episode_steps else num_steps,
+                                             rollouts=None,
+                                             counter=eval_counter)
 
                 eval_envs.close()
 
@@ -251,8 +249,8 @@ class Train:
         episode_counter = Counter(rewards=[], time_steps=[], success=[])
         for step in range(num_steps):
             with torch.no_grad():
-                act = self.agent(
-                    inputs=obs, rnn_hxs=rnn_hxs, masks=masks)  # type: AgentValues
+                act = self.agent(inputs=obs, rnn_hxs=rnn_hxs,
+                                 masks=masks)  # type: AgentValues
 
             # Observe reward and next obs
             obs, reward, done, infos = envs.step(act.action)
@@ -269,18 +267,17 @@ class Train:
             counter['time_step'][done] = 0
 
             # If done then clean the history of observations.
-            masks = torch.tensor(
-                1 - done, dtype=torch.float32, device=obs.device).unsqueeze(1)
+            masks = torch.tensor(1 - done, dtype=torch.float32,
+                                 device=obs.device).unsqueeze(1)
             rnn_hxs = act.rnn_hxs
             if rollouts is not None:
-                rollouts.insert(
-                    obs=obs,
-                    recurrent_hidden_states=act.rnn_hxs,
-                    actions=act.action,
-                    action_log_probs=act.action_log_probs,
-                    values=act.value,
-                    rewards=reward,
-                    masks=masks)
+                rollouts.insert(obs=obs,
+                                recurrent_hidden_states=act.rnn_hxs,
+                                actions=act.action,
+                                action_log_probs=act.action_log_probs,
+                                values=act.value,
+                                rewards=reward,
+                                masks=masks)
 
         return episode_counter
 
