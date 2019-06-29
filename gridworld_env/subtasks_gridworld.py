@@ -129,6 +129,11 @@ class SubtasksGridWorld(gym.Env):
                 return string
 
         self.Subtask = _Subtask
+        self.object_one_hots = np.vstack([
+            np.eye(1 + len(self.object_types)),
+            np.zeros((1, 1 + len(self.object_types)))
+        ])
+        self.layer_one_hots = np.eye(h * w).reshape(-1, h, w)
 
     @property
     def subtask(self):
@@ -182,10 +187,8 @@ class SubtasksGridWorld(gym.Env):
         # noinspection PyTypeChecker
         desc = self.desc.copy()
         desc[self.obstacles_one_hot] = '#'
-        positions = self.objects_one_hot()
-        types = np.append(self.object_types, 'ice')
-        for pos, obj in zip(positions, types):
-            desc[pos] = obj[0]
+        for pos, obj in self.objects.items():
+            desc[pos] = self.object_types[obj][0]
         desc[tuple(self.pos)] = '*'
 
         for row in desc:
@@ -341,4 +344,3 @@ if __name__ == '__main__':
     env = gym.make('4x4SubtasksGridWorld-v0')
     actions = 'wsadeq'
     gridworld_env.keyboard_control.run(env, actions=actions)
-Obs = namedtuple('Obs', 'base subtask subtasks next_subtask')
