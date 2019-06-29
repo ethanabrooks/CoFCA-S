@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from ppo.control_flow.wrappers import Obs
+from gridworld_env.control_flow_gridworld import Obs
 from ppo.layers import Flatten, Reshape
 import ppo.subtasks.agent
 from ppo.subtasks.teacher import g123_to_binary
@@ -21,23 +21,26 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
         self.obs_sections = Obs(*[int(np.prod(s.shape)) for s in self.obs_spaces])
         self.register_buffer("branch_one_hots", torch.eye(self.n_subtasks))
         num_object_types = int(self.obs_spaces.subtasks.nvec[0, 2])
+        self.register_buffer("condition_one_hots", torch.eye(num_object_types))
         self.register_buffer(
-            "condition_one_hots", torch.eye(num_object_types + 1)
-        )  # +1 for determinism
+            "rows", torch.arange(self.n_subtasks).unsqueeze(-1).float()
+        )
+        self.n_conditions = self.obs_spaces.conditions.shape[0]
 
-        in_channels = self.obs_shape[0] * (  # observation
-            num_object_types + 1
-        )  # condition tensor d
+        d, h, w = self.obs_shape
         self.phi_shift = nn.Sequential(
-            Reshape(-1, in_channels, *self.obs_shape[-2:]),
-            init_(nn.Conv2d(in_channels, hidden_size, kernel_size=1, stride=1)),
+            Reshape(-1, num_object_types * d, h, w),
+            # init_(nn.Linear(in_size, 1), 'sigmoid'),
+            # Reshape(-1, in_channels, *self.obs_shape[-2:]),
+            init_(
+                nn.Conv2d(num_object_types * d, hidden_size, kernel_size=1, stride=1)
+            ),
             nn.MaxPool2d(kernel_size=self.obs_shape[-2:], stride=1),
             Flatten(),
             init_(nn.Linear(hidden_size, 1), "sigmoid"),
             nn.Sigmoid(),
             Reshape(-1, 1, 1),
         )
-        self.n_conditions = self.obs_spaces.conditions.shape[0]
         self.obs_shapes = Obs(
             base=self.obs_spaces.base.shape,
             subtask=[1],
@@ -45,6 +48,7 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
             conditions=self.obs_spaces.conditions.nvec.shape,
             control=self.obs_spaces.control.nvec.shape,
             next_subtask=[1],
+            pred=[1],
         )
 
     @property
@@ -97,11 +101,10 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
 
         # build C
         conditions = self.condition_one_hots[inputs.conditions[0].long()]
-        rows = torch.arange(self.n_subtasks).unsqueeze(-1).expand_as(inputs.control[0])
+        control = inputs.control[0]
+        rows = self.rows.expand_as(control)
         # point terminal branches back at themselves TODO: is this right?
-        control = inputs.control[0].where(
-            inputs.control[0] != self.n_subtasks, rows.float()
-        )
+        control = inputs.control[0].where(control < self.n_subtasks, rows)
         false_path, true_path = torch.split(control, 1, dim=-1)
         true_path = self.branch_one_hots[true_path.squeeze(-1).long()]
         false_path = self.branch_one_hots[false_path.squeeze(-1).long()]
@@ -120,15 +123,18 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
             hx.g[new_episode] = 0.0
 
         def update_attention(p, t):
-            o = inputs.base[t].unsqueeze(2)
-            c = (p.unsqueeze(1) @ conditions).view(N, 1, -1, 1, 1)
-            pred = self.phi_shift(o * c)
+            c = (p.unsqueeze(1) @ conditions).squeeze(1)
+            phi_in = c.view(N, conditions.size(2), 1, 1, 1) * inputs.base[t].unsqueeze(
+                1
+            )
+            pred = self.phi_shift(phi_in)  # TODO
             trans = pred * true_path + (1 - pred) * false_path
-            return (trans @ p.unsqueeze(-1)).squeeze(-1)
+            return (p.unsqueeze(1) @ trans).squeeze(1)
 
         return self.pack(
             self.inner_loop(
-                a=hx.a,
+                cr=hx.cr,
+                cg=hx.cg,
                 g=hx.g,
                 M=M,
                 M123=M123,
