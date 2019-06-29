@@ -5,6 +5,7 @@ import re
 import gym
 from gym import spaces
 from gym.envs.registration import EnvSpec
+from gym.spaces import Box
 from gym.utils import seeding
 import numpy as np
 from rl_utils import cartesian_product
@@ -62,6 +63,8 @@ class SubtasksGridWorld(gym.Env):
 
         # set on initialize
         self.initialized = False
+        self.iterate = False
+        self.next_subtask = False
         self.obstacles_one_hot = np.zeros(self.desc.shape, dtype=bool)
         self.open_spaces = None
         self.obstacles = None
@@ -170,8 +173,9 @@ class SubtasksGridWorld(gym.Env):
             print('*************')
         else:
             print('subtask:')
-            print(self.subtask)
-        print('remaining:', self.count + 1)
+            self.render_current_subtask()
+        if self.count is not None:
+            print('remaining:', self.count + 1)
         print('action:', end=' ')
         if self.last_action is not None:
             print(self.transition_strings[self.last_action])
@@ -192,6 +196,9 @@ class SubtasksGridWorld(gym.Env):
             print(''.join(row), end='')
             print(six.u('\x1b[49m\x1b[39m'))
         # time.sleep(4 * sleep_time if self.last_terminal else sleep_time)
+
+    def render_current_subtask(self):
+        print(f'{self.subtask_idx}:{self.subtask}')
 
     def render_task(self):
         for line in self.subtasks:
@@ -238,9 +245,11 @@ class SubtasksGridWorld(gym.Env):
         self.objects = {tuple(p): t for p, t in zip(objects_pos, types)}
 
         self.subtask_idx = 0
-        self.count = self.subtask.count
+        self.count = 0
         self.last_terminal = False
         self.last_action = None
+        self.iterate = False
+        self.next_subtask = False
         return self.get_observation()
 
     def objects_one_hot(self):
