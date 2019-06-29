@@ -5,8 +5,6 @@ import torch
 from torch.nn import functional as F
 
 from ppo.agent import Agent
-import ppo.control_flow
-import ppo.subtasks
 from ppo.subtasks.wrappers import Actions
 from ppo.utils import broadcast3d
 
@@ -22,7 +20,7 @@ class Teacher(Agent):
             subtasks=obs_spaces.subtasks,
         )
         _, h, w = self.obs_shape = self.obs_spaces.base.shape
-        self.action_spaces = Actions(*action_space.spaces)
+        self.action_spaces = Actions(**action_space.spaces)
         print("teacher", self.obs_spaces)
         self.obs_sections = [int(np.prod(s.shape)) for s in self.obs_spaces]
         self.subtask_nvec = obs_spaces.subtasks.nvec[0]

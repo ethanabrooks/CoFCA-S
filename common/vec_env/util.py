@@ -44,9 +44,9 @@ def space_shape(space: gym.Space):
 
 def buffer_shape(space: gym.Space):
     shape = space_shape(space)
-    if not all(isinstance(d, int) for d in shape):
+    if isinstance(shape, dict):
         # print('buffer shape', shape)
-        shape = (int(sum(np.prod(s) for s in shape)),)  # concatenate
+        shape = (int(sum(np.prod(s) for s in shape.values())),)  # concatenate
     return shape
 
 

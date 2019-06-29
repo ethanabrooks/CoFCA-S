@@ -9,6 +9,7 @@ from rl_utils import hierarchical_parse_args
 import torch
 
 import gridworld_env
+import gridworld_env.subtasks_gridworld
 from gridworld_env.control_flow_gridworld import ControlFlowGridWorld
 from gridworld_env.subtasks_gridworld import SubtasksGridWorld
 import ppo
@@ -51,9 +52,9 @@ def cli():
 def get_spaces(envs, control_flow):
     obs_spaces = envs.observation_space.spaces
     if control_flow:
-        obs_spaces = ppo.control_flow.Obs(*obs_spaces)
+        obs_spaces = ppo.control_flow.Obs(**obs_spaces)
     else:
-        obs_spaces = ppo.subtasks.Obs(*obs_spaces)
+        obs_spaces = gridworld_env.subtasks_gridworld.Obs(**obs_spaces)
     return obs_spaces
 
 
