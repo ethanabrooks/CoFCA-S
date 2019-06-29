@@ -253,34 +253,37 @@ class SubtasksGridWorld(gym.Env):
         self.objects = {tuple(p): t for p, t in zip(objects_pos, types)}
 
         self.subtask_idx = 0
-        self.count = 0
+        self.count = self.subtask.count
         self.last_terminal = False
         self.last_action = None
-        self.iterate = False
-        self.next_subtask = False
         return self.get_observation()
-
-    def objects_one_hot(self):
-        # TODO refactor
-        h, w, = self.desc.shape
-        objects_one_hot = np.zeros((1 + len(self.object_types), h, w), dtype=bool)
-        idx = [(v,) + k for k, v in self.objects.items()]
-        set_index(objects_one_hot, idx, True)
-        return objects_one_hot
 
     def get_observation(self):
         agent_one_hot = np.zeros_like(self.desc, dtype=bool)
         set_index(agent_one_hot, self.pos, True)
 
-        obs = [
-            np.expand_dims(self.obstacles_one_hot, 0),
-            self.objects_one_hot(),
-            np.expand_dims(agent_one_hot, 0),
-        ]
+        objects_desc = np.full(self.desc.shape, -1)
+        for k, v in self.objects.items():
+            objects_desc[k] = v
+
+        obstacles = self.layer_one_hots[
+            np.ravel_multi_index(self.obstacles.T, self.desc.shape)
+        ].sum(0)
+        objects = self.object_one_hots[objects_desc]
+        agent = self.layer_one_hots[np.ravel_multi_index(self.pos, self.desc.shape)]
+
+        obs = np.dstack(
+            [
+                np.expand_dims(obstacles, 2),
+                objects,
+                np.expand_dims(agent, 2),
+                # np.dstack([obstacles, agent]),
+            ]
+        ).transpose(2, 0, 1)
 
         # noinspection PyTypeChecker
-        return Obs(
-            base=np.vstack(obs),
+        observation = Obs(
+            base=obs,
             subtask=self.subtask_idx,
             subtasks=self.subtasks,
             next_subtask=self.next_subtask,
