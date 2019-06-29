@@ -5,10 +5,10 @@ import torch
 from torch.nn import functional as F
 
 from ppo.agent import Agent
-from ppo.subtasks.wrappers import Actions
-from ppo.utils import broadcast3d
 import ppo.control_flow
 import ppo.subtasks
+from ppo.subtasks.wrappers import Actions
+from ppo.utils import broadcast3d
 
 Obs = namedtuple('Obs', 'base subtask subtasks')
 
@@ -29,9 +29,7 @@ class Teacher(Agent):
         self.obs_sections = [int(np.prod(s.shape)) for s in self.obs_spaces]
         self.subtask_nvec = obs_spaces.subtasks.nvec[0]
         super().__init__(
-            obs_shape=(self.d, h, w),
-            action_space=self.action_spaces.a,
-            **kwargs)
+            obs_shape=(self.d, h, w), action_space=self.action_spaces.a, **kwargs)
 
         for i, d in enumerate(self.subtask_nvec):
             self.register_buffer(f'part{i}_one_hot', torch.eye(int(d)))
@@ -42,9 +40,7 @@ class Teacher(Agent):
                 int(self.subtask_nvec.sum()))  # one-hot subtask
 
     def preprocess_obs(self, inputs):
-        sections = self.obs_sections + [
-            inputs.size(1) - sum(self.obs_sections)
-        ]
+        sections = self.obs_sections + [inputs.size(1) - sum(self.obs_sections)]
         n = inputs.size(0)
         inputs = Obs(*torch.split(inputs, sections, dim=1)[:3])
         obs = inputs.base.view(n, *self.obs_shape)
@@ -60,8 +56,7 @@ class Teacher(Agent):
     def forward(self, inputs, *args, action=None, **kwargs):
         if action is not None:
             action = action[:, :1]
-        act = super().forward(
-            self.preprocess_obs(inputs), action=action, *args, **kwargs)
+        act = super().forward(self.preprocess_obs(inputs), action=action, *args, **kwargs)
         x = torch.zeros_like(act.action)
         actions = Actions(a=act.action, g=x, cg=x, cr=x)
         return act._replace(action=torch.cat(actions, dim=-1))
@@ -77,5 +72,4 @@ def g_binary_to_123(g_binary, subtask_space):
 
 
 def g123_to_binary(g123, one_hots):
-    return torch.cat([one_hot[g.long()] for one_hot, g in zip(one_hots, g123)],
-                     dim=-1)
+    return torch.cat([one_hot[g.long()] for one_hot, g in zip(one_hots, g123)], dim=-1)

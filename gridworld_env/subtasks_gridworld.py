@@ -87,8 +87,7 @@ class SubtasksGridWorld(gym.Env):
             for string in task:
                 subtask = Subtask(*re.split('[\s\\\]+', string))
                 yield (list(self.interactions).index(subtask.interaction),
-                       int(subtask.count),
-                       list(self.object_types).index(subtask.object))
+                       int(subtask.count), list(self.object_types).index(subtask.object))
 
         # set on reset:
         if task:
@@ -204,8 +203,7 @@ class SubtasksGridWorld(gym.Env):
         for _ in range(self.n_subtasks):
             possible_subtasks = self.possible_subtasks
             if last_subtask is not None:
-                subset = np.any(
-                    self.possible_subtasks != last_subtask, axis=-1)
+                subset = np.any(self.possible_subtasks != last_subtask, axis=-1)
                 possible_subtasks = possible_subtasks[subset]
             choice = self.np_random.choice(len(possible_subtasks))
             last_subtask = possible_subtasks[choice]
@@ -247,8 +245,7 @@ class SubtasksGridWorld(gym.Env):
 
     def objects_one_hot(self):
         h, w, = self.desc.shape
-        objects_one_hot = np.zeros((1 + len(self.object_types), h, w),
-                                   dtype=bool)
+        objects_one_hot = np.zeros((1 + len(self.object_types), h, w), dtype=bool)
         idx = [(v, ) + k for k, v in self.objects.items()]
         set_index(objects_one_hot, idx, True)
         return objects_one_hot
@@ -328,7 +325,6 @@ if __name__ == '__main__':
     import gym
     import gridworld_env.keyboard_control
     import gridworld_env.random_walk
-    from ppo.subtasks.wrappers import Wrapper
 
     env = gym.make('4x4SubtasksGridWorld-v0')
     actions = 'wsadeq'

@@ -68,8 +68,8 @@ def get_git_commit(cwd=None):
 
 
 def get_git_commit_message(cwd=None):
-    return subprocess.check_output(
-        ['git', 'show', '-s', '--format=%B', 'HEAD'], cwd=cwd).decode('utf8')
+    return subprocess.check_output(['git', 'show', '-s', '--format=%B', 'HEAD'],
+                                   cwd=cwd).decode('utf8')
 
 
 def ccap(cmd, dry=False, env=None, **kwargs):
@@ -91,6 +91,5 @@ def timed(msg):
     MESSAGE_DEPTH -= 1
     print(
         colorize(
-            '\t' * MESSAGE_DEPTH +
-            "done in %.3f seconds" % (time.time() - tstart),
+            '\t' * MESSAGE_DEPTH + "done in %.3f seconds" % (time.time() - tstart),
             color='magenta'))

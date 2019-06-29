@@ -23,8 +23,7 @@ class DummyVecEnv(VecEnv):
         self._render = render
         self.envs = [fn() for fn in env_fns]
         env = self.envs[0]
-        VecEnv.__init__(self, len(env_fns), env.observation_space,
-                        env.action_space)
+        VecEnv.__init__(self, len(env_fns), env.observation_space, env.action_space)
         obs_space = env.observation_space
         self.keys, shapes, dtypes = obs_space_info(obs_space)
 
@@ -59,8 +58,8 @@ class DummyVecEnv(VecEnv):
             if isinstance(self.envs[e].action_space, spaces.Discrete):
                 action = int(action)
 
-            obs, self.buf_rews[e], self.buf_dones[e], self.buf_infos[
-                e] = self.envs[e].step(action)
+            obs, self.buf_rews[e], self.buf_dones[e], self.buf_infos[e] = self.envs[
+                e].step(action)
 
             if self.buf_dones[e]:
                 if e == 0 and self._render:
@@ -70,8 +69,8 @@ class DummyVecEnv(VecEnv):
             self._save_obs(e, obs)
         if self._render:
             self.render()
-        return (self._obs_from_buf(), np.copy(self.buf_rews),
-                np.copy(self.buf_dones), self.buf_infos.copy())
+        return (self._obs_from_buf(), np.copy(self.buf_rews), np.copy(self.buf_dones),
+                self.buf_infos.copy())
 
     def reset(self):
         for e in range(self.num_envs):

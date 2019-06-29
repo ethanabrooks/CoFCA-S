@@ -22,8 +22,7 @@ class AddTimestep(gym.ObservationWrapper):
         super(AddTimestep, self).__init__(env)
         self.observation_space = Box(
             self.observation_space.low[0],
-            self.observation_space.high[0],
-            [self.observation_space.shape[0] + 1],
+            self.observation_space.high[0], [self.observation_space.shape[0] + 1],
             dtype=self.observation_space.dtype)
 
     def observation(self, observation):
@@ -88,9 +87,9 @@ class VecNormalize(VecNormalize_):
         if self.ob_rms:
             if self.training:
                 self.ob_rms.update(obs)
-            obs = np.clip((obs - self.ob_rms.mean) /
-                          np.sqrt(self.ob_rms.var + self.epsilon),
-                          -self.clipob, self.clipob)
+            obs = np.clip(
+                (obs - self.ob_rms.mean) / np.sqrt(self.ob_rms.var + self.epsilon),
+                -self.clipob, self.clipob)
             return obs
         else:
             return obs

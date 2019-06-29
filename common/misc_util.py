@@ -24,10 +24,8 @@ def unpack(seq, sizes):
     """
     seq = list(seq)
     it = iter(seq)
-    assert sum(
-        1 if s is None else s
-        for s in sizes) == len(seq), "Trying to unpack %s into %s" % (seq,
-                                                                      sizes)
+    assert sum(1 if s is None else s
+               for s in sizes) == len(seq), "Trying to unpack %s into %s" % (seq, sizes)
     for size in sizes:
         if size is None:
             yield it.__next__()
@@ -159,8 +157,7 @@ class RunningAvg(object):
         if self._value is None:
             self._value = new_val
         else:
-            self._value = self._gamma * self._value + (
-                1.0 - self._gamma) * new_val
+            self._value = self._gamma * self._value + (1.0 - self._gamma) * new_val
 
     def __float__(self):
         """Get the current estimate"""
@@ -183,11 +180,7 @@ def boolean_flag(parser, name, default=False, help=None):
     """
     dest = name.replace('-', '_')
     parser.add_argument(
-        "--" + name,
-        action="store_true",
-        default=default,
-        dest=dest,
-        help=help)
+        "--" + name, action="store_true", default=default, dest=dest, help=help)
     parser.add_argument("--no-" + name, action="store_false", dest=dest)
 
 
@@ -246,8 +239,7 @@ def relatively_safe_pickle_dump(obj, path, compression=False):
             pickle.dump(obj, uncompressed_file)
             uncompressed_file.file.flush()
             with zipfile.ZipFile(
-                    temp_storage, "w",
-                    compression=zipfile.ZIP_DEFLATED) as myzip:
+                    temp_storage, "w", compression=zipfile.ZIP_DEFLATED) as myzip:
                 myzip.write(uncompressed_file.name, "data")
     else:
         with open(temp_storage, "wb") as f:
@@ -272,8 +264,7 @@ def pickle_load(path, compression=False):
     """
 
     if compression:
-        with zipfile.ZipFile(
-                path, "r", compression=zipfile.ZIP_DEFLATED) as myzip:
+        with zipfile.ZipFile(path, "r", compression=zipfile.ZIP_DEFLATED) as myzip:
             with myzip.open("data") as f:
                 return pickle.load(f)
     else:

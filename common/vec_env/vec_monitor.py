@@ -1,7 +1,8 @@
 import time
 
-from baselines.bench.monitor import ResultsWriter
 import numpy as np
+
+from baselines.bench.monitor import ResultsWriter
 
 # local
 from . import VecEnvWrapper
@@ -13,8 +14,7 @@ class VecMonitor(VecEnvWrapper):
         self.eprets = None
         self.eplens = None
         self.tstart = time.time()
-        self.results_writer = ResultsWriter(
-            filename, header={'t_start': self.tstart})
+        self.results_writer = ResultsWriter(filename, header={'t_start': self.tstart})
 
     def reset(self):
         obs = self.venv.reset()
@@ -31,11 +31,7 @@ class VecMonitor(VecEnvWrapper):
                 zip(dones, self.eprets, self.eplens, infos)):
             info = info.copy()
             if done:
-                epinfo = {
-                    'r': ret,
-                    'l': eplen,
-                    't': round(time.time() - self.tstart, 6)
-                }
+                epinfo = {'r': ret, 'l': eplen, 't': round(time.time() - self.tstart, 6)}
                 info['episode'] = epinfo
                 self.eprets[i] = 0
                 self.eplens[i] = 0

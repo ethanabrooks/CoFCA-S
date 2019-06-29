@@ -8,8 +8,7 @@ import numpy as np
 import gridworld_env.control_flow_gridworld
 import ppo.subtasks.wrappers
 
-Obs = namedtuple('Obs',
-                 'base subtask subtasks conditions control next_subtask')
+Obs = namedtuple('Obs', 'base subtask subtasks conditions control next_subtask')
 
 
 class Wrapper(ppo.subtasks.Wrapper):

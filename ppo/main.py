@@ -57,8 +57,7 @@ def get_spaces(envs, control_flow):
 
 
 def make_subtasks_env(env_id, **kwargs):
-    def helper(seed, rank, control_flow, max_episode_steps, class_, debug,
-               **_kwargs):
+    def helper(seed, rank, control_flow, max_episode_steps, class_, debug, **_kwargs):
         if rank == 1:
             print('Environment args:')
             for k, v in _kwargs.items():
@@ -77,9 +76,9 @@ def make_subtasks_env(env_id, **kwargs):
     gridworld_args = gridworld_env.get_args(env_id)
     kwargs.update(add_timestep=None)
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
-    return helper(
-        **ChainMap(kwargs, gridworld_args)
-    )  # combines kwargs and gridworld_args with preference for kwargs
+    return helper(**ChainMap(
+        kwargs,
+        gridworld_args))  # combines kwargs and gridworld_args with preference for kwargs
 
 
 def train_lower_level_cli(student):
@@ -110,9 +109,7 @@ def train_lower_level_cli(student):
             def build_agent(envs, **agent_args):
                 obs_spaces = get_spaces(envs, control_flow)
                 agent_args = dict(
-                    obs_spaces=obs_spaces,
-                    action_space=envs.action_space,
-                    **agent_args)
+                    obs_spaces=obs_spaces, action_space=envs.action_space, **agent_args)
                 if student:
                     return ppo.subtasks.Student(**agent_args, **student_args)
                 else:
@@ -138,17 +135,14 @@ def metacontroller_cli():
     add_task_args(parser)
     add_env_args(parser)
     subtasks_parser = parser.add_argument_group('subtasks_args')
-    subtasks_parser.add_argument(
-        '--subtasks-hidden-size', type=int, required=True)
-    subtasks_parser.add_argument(
-        '--subtasks-entropy-coef', type=float, required=True)
+    subtasks_parser.add_argument('--subtasks-hidden-size', type=int, required=True)
+    subtasks_parser.add_argument('--subtasks-entropy-coef', type=float, required=True)
     subtasks_parser.add_argument('--subtasks-recurrent', action='store_true')
     subtasks_parser.add_argument('--hard-update', action='store_true')
-    subtasks_parser.add_argument(
-        '--multiplicative-interaction', action='store_true')
+    subtasks_parser.add_argument('--multiplicative-interaction', action='store_true')
 
-    def train(env_id, task_args, ppo_args, agent_load_path, subtasks_args,
-              env_args, control_flow, **kwargs):
+    def train(env_id, task_args, ppo_args, agent_load_path, subtasks_args, env_args,
+              control_flow, **kwargs):
         class TrainSubtasks(Train):
             @staticmethod
             def make_env(**_kwargs):

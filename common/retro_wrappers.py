@@ -2,6 +2,7 @@
 import gym
 import numpy as np
 
+# local
 from .atari_wrappers import *
 
 
@@ -52,8 +53,7 @@ class StochasticFrameSkip(gym.Wrapper):
             elif i == 1:
                 self.curac = ac
             if self.supports_want_render and i < self.n - 1:
-                ob, rew, done, info = self.env.step(
-                    self.curac, want_render=False)
+                ob, rew, done, info = self.env.step(self.curac, want_render=False)
             else:
                 ob, rew, done, info = self.env.step(self.curac)
             totrew += rew
@@ -96,8 +96,7 @@ class PartialFrameStack(gym.Wrapper):
     def _get_ob(self):
         assert len(self.frames) == self.k
         return np.concatenate([
-            frame
-            if i == self.k - 1 else frame[:, :, self.channel:self.channel + 1]
+            frame if i == self.k - 1 else frame[:, :, self.channel:self.channel + 1]
             for (i, frame) in enumerate(self.frames)
         ],
                               axis=2)
@@ -116,8 +115,7 @@ class Downsample(gym.ObservationWrapper):
 
     def observation(self, frame):
         height, width, _ = self.observation_space.shape
-        frame = cv2.resize(
-            frame, (width, height), interpolation=cv2.INTER_AREA)
+        frame = cv2.resize(frame, (width, height), interpolation=cv2.INTER_AREA)
         if frame.ndim == 2:
             frame = frame[:, :, None]
         return frame
@@ -178,9 +176,8 @@ class AppendTimeout(gym.Wrapper):
             self.dict_mode = False
         self.ac_count = None
         while 1:
-            if not hasattr(
-                    env, "_max_episode_steps"
-            ):  # Looking for TimeLimit wrapper that has this field
+            if not hasattr(env, "_max_episode_steps"
+                           ):  # Looking for TimeLimit wrapper that has this field
                 env = env.env
                 continue
             break
@@ -208,11 +205,7 @@ class StartDoingRandomActionsWrapper(gym.Wrapper):
     Warning: can eat info dicts, not good if you depend on them
     """
 
-    def __init__(self,
-                 env,
-                 max_random_steps,
-                 on_startup=True,
-                 every_episode=False):
+    def __init__(self, env, max_random_steps, on_startup=True, every_episode=False):
         gym.Wrapper.__init__(self, env)
         self.on_startup = on_startup
         self.every_episode = every_episode
@@ -226,8 +219,7 @@ class StartDoingRandomActionsWrapper(gym.Wrapper):
         n = np.random.randint(self.random_steps)
         #print("running for random %i frames" % n)
         for _ in range(n):
-            self.last_obs, _, done, _ = self.env.step(
-                self.env.action_space.sample())
+            self.last_obs, _, done, _ = self.env.step(self.env.action_space.sample())
             if done: self.last_obs = self.env.reset()
 
     def reset(self):
@@ -272,11 +264,10 @@ class SonicDiscretizer(gym.ActionWrapper):
     def __init__(self, env):
         super(SonicDiscretizer, self).__init__(env)
         buttons = [
-            "B", "A", "MODE", "START", "UP", "DOWN", "LEFT", "RIGHT", "C", "Y",
-            "X", "Z"
+            "B", "A", "MODE", "START", "UP", "DOWN", "LEFT", "RIGHT", "C", "Y", "X", "Z"
         ]
-        actions = [['LEFT'], ['RIGHT'], ['LEFT', 'DOWN'], ['RIGHT', 'DOWN'],
-                   ['DOWN'], ['DOWN', 'B'], ['B']]
+        actions = [['LEFT'], ['RIGHT'], ['LEFT', 'DOWN'], ['RIGHT', 'DOWN'], ['DOWN'],
+                   ['DOWN', 'B'], ['B']]
         self._actions = []
         for action in actions:
             arr = np.array([False] * 12)

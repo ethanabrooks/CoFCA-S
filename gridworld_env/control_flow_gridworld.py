@@ -19,11 +19,9 @@ class ControlFlowGridWorld(SubtasksGridWorld):
             Obs(
                 base=obs_space,
                 subtasks=spaces.MultiDiscrete(
-                    np.tile(subtasks_space.nvec[:1],
-                            [self.n_subtasks + 1, 1])),
+                    np.tile(subtasks_space.nvec[:1], [self.n_subtasks + 1, 1])),
                 conditions=spaces.MultiDiscrete(
-                    np.array([len(
-                        self.object_types)]).repeat(self.n_subtasks + 1)),
+                    np.array([len(self.object_types)]).repeat(self.n_subtasks + 1)),
                 control=spaces.MultiDiscrete(
                     np.tile(
                         np.array([[self.n_subtasks + 1]]),
@@ -60,10 +58,7 @@ class ControlFlowGridWorld(SubtasksGridWorld):
     def get_observation(self):
         obs, task = super().get_observation()
         return Obs(
-            base=obs,
-            subtasks=task,
-            control=self.control,
-            conditions=self.conditions)
+            base=obs, subtasks=task, control=self.control, conditions=self.conditions)
 
     def subtasks_generator(self):
         choices = self.np_random.choice(
@@ -85,8 +80,7 @@ class ControlFlowGridWorld(SubtasksGridWorld):
                 else:
                     yield self.np_random.randint(
                         i,
-                        self.n_subtasks +
-                        (i > 0),  # prevent termination on first turn
+                        self.n_subtasks + (i > 0),  # prevent termination on first turn
                         size=2)
 
         self.control = 1 + np.array(list(get_control()))

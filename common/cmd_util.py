@@ -4,11 +4,11 @@ Helpers for scripts like run_atari.py.
 
 import os
 
-from baselines import logger
-from baselines.bench import Monitor
 import gym
 from gym.wrappers import FlattenDictWrapper
 
+from baselines import logger
+from baselines.bench import Monitor
 from common import retro_wrappers, set_global_seeds
 from common.atari_wrappers import make_atari, wrap_deepmind
 from common.vec_env.dummy_vec_env import DummyVecEnv
@@ -49,8 +49,7 @@ def make_vec_env(env_id,
 
     set_global_seeds(seed)
     if num_env > 1:
-        return SubprocVecEnv(
-            [make_thunk(i + start_index) for i in range(num_env)])
+        return SubprocVecEnv([make_thunk(i + start_index) for i in range(num_env)])
     else:
         return DummyVecEnv([make_thunk(start_index)])
 
@@ -78,8 +77,7 @@ def make_env(env_id,
     else:
         env = gym.make(env_id)
 
-    if flatten_dict_observations and isinstance(env.observation_space,
-                                                gym.spaces.Dict):
+    if flatten_dict_observations and isinstance(env.observation_space, gym.spaces.Dict):
         keys = env.observation_space.spaces.keys()
         env = gym.wrappers.FlattenDictWrapper(env, dict_keys=list(keys))
 
@@ -139,8 +137,7 @@ def arg_parser():
     Create an empty argparse.ArgumentParser.
     """
     import argparse
-    return argparse.ArgumentParser(
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    return argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
 
 def atari_arg_parser():
@@ -161,8 +158,7 @@ def common_arg_parser():
     Create an argparse.ArgumentParser for run_mujoco.py.
     """
     parser = arg_parser()
-    parser.add_argument(
-        '--env', help='environment ID', type=str, default='Reacher-v2')
+    parser.add_argument('--env', help='environment ID', type=str, default='Reacher-v2')
     parser.add_argument('--seed', help='RNG seed', type=int, default=None)
     parser.add_argument('--alg', help='Algorithm', type=str, default='ppo2')
     parser.add_argument('--num_timesteps', type=float, default=1e6),
@@ -186,10 +182,7 @@ def common_arg_parser():
         default=1.0,
         type=float)
     parser.add_argument(
-        '--save_path',
-        help='Path to save trained model to',
-        default=None,
-        type=str)
+        '--save_path', help='Path to save trained model to', default=None, type=str)
     parser.add_argument(
         '--save_video_interval',
         help='Save video every x steps (0 = disabled)',
@@ -209,8 +202,7 @@ def robotics_arg_parser():
     Create an argparse.ArgumentParser for run_mujoco.py.
     """
     parser = arg_parser()
-    parser.add_argument(
-        '--env', help='environment ID', type=str, default='FetchReach-v0')
+    parser.add_argument('--env', help='environment ID', type=str, default='FetchReach-v0')
     parser.add_argument('--seed', help='RNG seed', type=int, default=None)
     parser.add_argument('--num-timesteps', type=int, default=int(1e6))
     return parser
