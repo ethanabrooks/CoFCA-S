@@ -13,6 +13,7 @@ from ppo.utils import set_index
 from rl_utils import cartesian_product
 
 Subtask = namedtuple('Subtask', 'interaction count object')
+Obs = namedtuple('Obs', 'base subtask subtasks next_subtask')
 
 
 def get_task_space(interactions, max_task_count, object_types, n_subtasks):
@@ -61,6 +62,8 @@ class SubtasksGridWorld(gym.Env):
 
         # set on initialize
         self.initialized = False
+        self.iterate = False
+        self.next_subtask = False
         self.obstacles_one_hot = np.zeros(self.desc.shape, dtype=bool)
         self.open_spaces = None
         self.obstacles = None
@@ -99,7 +102,6 @@ class SubtasksGridWorld(gym.Env):
         self.pos = None
         self.last_terminal = False
         self.last_action = None
-        self.next_subtask = False
 
         h, w = self.desc.shape
         self.observation_space = spaces.Tuple([

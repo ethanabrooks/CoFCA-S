@@ -51,6 +51,8 @@ class VecPyTorch(VecEnvWrapper):
 
     @staticmethod
     def extract_numpy(obs):
+        if isinstance(obs, dict):
+            return np.hstack([x.reshape(x.shape[0], -1) for x in obs.values()])
         if not isinstance(obs, (list, tuple)):
             return obs
         assert len(obs) == 1
@@ -58,8 +60,7 @@ class VecPyTorch(VecEnvWrapper):
 
     def reset(self):
         obs = self.extract_numpy(self.venv.reset())
-        obs = torch.from_numpy(obs).float().to(self.device)
-        return obs
+        return torch.from_numpy(obs).float().to(self.device)
 
     def step_async(self, actions):
         actions = actions.squeeze(1).cpu().numpy()

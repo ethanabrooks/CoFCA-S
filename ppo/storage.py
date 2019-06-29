@@ -2,6 +2,7 @@
 from collections import namedtuple
 from typing import Generator
 
+import gym
 from gym import spaces
 import torch
 from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler

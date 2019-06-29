@@ -46,7 +46,7 @@ class Wrapper(gym.Wrapper):
         self.subtasks_space = subtasks_space
         self.observation_space = spaces.Tuple(
             Obs(
-                base=Box(0, 1, shape=obs_space.nvec),
+                base=spaces.Box(0, 1, shape=obs_space.nvec),
                 subtask=spaces.Discrete(subtasks_space.nvec.shape[0]),
                 subtasks=subtasks_space,
                 next_subtask=spaces.Discrete(2),

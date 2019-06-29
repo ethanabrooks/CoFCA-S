@@ -16,13 +16,11 @@ Obs = namedtuple('Obs', 'base subtask subtasks')
 class Teacher(Agent):
     def __init__(self, obs_spaces, action_space, **kwargs):
         # noinspection PyProtectedMember
-        for f1, f2, f3 in zip(
-                Obs._fields,
-                ppo.control_flow.Obs._fields,
-                ppo.subtasks.Obs._fields,
-        ):
-            assert f1 == f2 == f3
-        self.obs_spaces = Obs(*obs_spaces[:3])
+        self.obs_spaces = Obs(
+            base=obs_spaces.base,
+            subtask=obs_spaces.subtask,
+            subtasks=obs_spaces.subtasks,
+        )
         _, h, w = self.obs_shape = self.obs_spaces.base.shape
         self.action_spaces = Actions(*action_space.spaces)
         print('teacher', self.obs_spaces)
