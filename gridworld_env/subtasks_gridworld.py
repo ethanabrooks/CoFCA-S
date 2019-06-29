@@ -324,8 +324,6 @@ class SubtasksGridWorld(gym.Env):
         pos = tuple(self.pos)
         touching = pos in self.objects
 
-        obs = self.get_observation()
-
         # set iterate
         self.iterate = False
         if touching and not t:
@@ -348,7 +346,7 @@ class SubtasksGridWorld(gym.Env):
         self.last_action = a
         self.last_terminal = t
         self.next_subtask = self.iterate and self.count == 0
-        return obs, r, t, {}
+        return self.get_observation(), r, t, {}
 
     def get_next_subtask(self):
         return self.subtask_idx + 1
