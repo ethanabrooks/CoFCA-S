@@ -3,8 +3,8 @@ from collections import namedtuple
 from typing import Generator
 
 import gym
-import numpy as np
 from gym import spaces
+import numpy as np
 import torch
 from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
 
@@ -27,6 +27,13 @@ def buffer_shape(space: gym.Space):
     if isinstance(shape, dict):
         # print('buffer shape', shape)
         shape = (int(sum(np.prod(s) for s in shape.values())),)  # concatenate
+    return shape
+
+
+def buffer_shape(space: gym.Space):
+    shape = space_shape(space)
+    if isinstance(shape, dict):
+        shape = int(sum(np.prod(s) for s in shape.values())),  # concatenate
     return shape
 
 

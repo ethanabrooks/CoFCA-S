@@ -12,6 +12,11 @@ from rl_utils import cartesian_product
 import six
 
 from ppo.utils import set_index
+from rl_utils import cartesian_product
+
+Subtask = namedtuple('Subtask', 'interaction count object')
+Obs = namedtuple('Obs', 'base subtask subtasks next_subtask')
+
 
 Subtask = namedtuple("Subtask", "interaction count object")
 Obs = namedtuple("Obs", "base subtask subtasks next_subtask")
@@ -104,27 +109,23 @@ class SubtasksGridWorld(gym.Env):
 
         self.observation_space = spaces.Dict(
             Obs(
-                base=Box(
+                base=spaces.Box(
                     0,
                     1,
                     shape=(
-                        1 + 1 + 1 + len(object_types),  # obstacles  # ice  # agent
+                        1 +  # obstacles
+                        1 +  # ice
+                        1 +  # agent
+                        len(object_types),
                         h,
-                        w,
-                    ),
-                ),
+                        w)),
                 subtask=spaces.Discrete(n_subtasks),
                 subtasks=spaces.MultiDiscrete(
                     np.tile(
-                        np.array(
-                            [len(interactions), max_task_count, len(object_types)]
-                        ),
-                        (n_subtasks, 1),
-                    )
-                ),
+                        np.array([len(interactions), max_task_count,
+                                  len(object_types)]), (n_subtasks, 1))),
                 next_subtask=spaces.Discrete(2),
-            )._asdict()
-        )
+            )._asdict())
         self.action_space = spaces.Discrete(len(self.transitions) + 2)
         world = self
 
@@ -275,21 +276,18 @@ class SubtasksGridWorld(gym.Env):
         objects = self.object_one_hots[objects_desc]
         agent = self.layer_one_hots[np.ravel_multi_index(self.pos, self.desc.shape)]
 
-        obs = np.dstack(
-            [
-                np.expand_dims(obstacles, 2),
-                objects,
-                np.expand_dims(agent, 2),
-                # np.dstack([obstacles, agent]),
-            ]
-        ).transpose(2, 0, 1)
+        obs = np.dstack([
+            np.expand_dims(obstacles, 2),
+            objects,
+            np.expand_dims(agent, 2),
+            # np.dstack([obstacles, agent]),
+        ]).transpose(2, 0, 1)
 
-        return Obs(
-            base=obs,
-            subtask=[self.subtask_idx],
-            subtasks=np.array([self.subtasks]),
-            next_subtask=[self.next_subtask],
-        )._asdict()
+        # noinspection PyTypeChecker
+        return Obs(base=obs,
+                   subtask=self.subtask_idx,
+                   subtasks=self.subtasks,
+                   next_subtask=self.next_subtask)._asdict()
 
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)
