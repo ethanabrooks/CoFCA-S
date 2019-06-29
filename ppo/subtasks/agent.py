@@ -331,6 +331,8 @@ class Recurrence(torch.jit.ScriptModule):
             self.inner_loop(
                 a=hx.a,
                 g=hx.g,
+                cr=hx.cr,
+                cg=hx.cg,
                 M=M,
                 M123=M123,
                 N=N,
@@ -372,8 +374,10 @@ class Recurrence(torch.jit.ScriptModule):
 
     def inner_loop(
         self,
-        a,
         g,
+        a,
+        cr,
+        cg,
         M,
         M123,
         N,
@@ -457,6 +461,8 @@ class Recurrence(torch.jit.ScriptModule):
                         base=obs[t].view(N, -1),
                         subtask=g.float().view(N, -1),
                         subtasks=M123.view(N, -1),
+                        cr=cr,
+                        cg=cg,
                     ),
                     dim=1,
                 )
