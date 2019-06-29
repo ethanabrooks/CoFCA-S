@@ -172,6 +172,12 @@ class Recurrence(torch.jit.ScriptModule):
             Flatten(),
         )
 
+        self.conv2 = nn.Sequential(
+            init_(nn.Conv2d(d, hidden_size, kernel_size=1, stride=1, padding=1)),
+            nn.MaxPool2d(kernel_size=self.obs_shape[-2:], stride=1),
+            Flatten(),
+        )
+
         input_size = h * w * hidden_size  # conv output
         if isinstance(action_spaces.a, Discrete):
             num_outputs = action_spaces.a.n
@@ -187,7 +193,7 @@ class Recurrence(torch.jit.ScriptModule):
         if multiplicative_interaction:
             self.phi_update = nn.Sequential(
                 Parallel(
-                    init_(nn.Linear(d, hidden_size)),  # obs
+                    init_(nn.Linear(hidden_size, hidden_size)),  # obs
                     init_(nn.Linear(action_spaces.a.n, hidden_size)),  # action
                     *[
                         init_(nn.Linear(i, hidden_size)) for i in self.subtask_nvec
@@ -199,7 +205,9 @@ class Recurrence(torch.jit.ScriptModule):
         else:
             self.phi_update = trace(
                 lambda in_size: init_(nn.Linear(in_size, 2), "sigmoid"),
-                in_size=(d * action_spaces.a.n * int(self.subtask_nvec.prod())),
+                in_size=(
+                    hidden_size * action_spaces.a.n * int(self.subtask_nvec.prod())
+                ),
             )
 
         for i, x in enumerate(self.subtask_nvec):
@@ -432,6 +440,8 @@ class Recurrence(torch.jit.ScriptModule):
                 ).dist
             sample_new(A[t], a_dist)
 
+            h = self.conv2(obs[t])
+
             # A[t, :] = "wsadeq".index(input("act:"))
 
             def phi_update(subtask_param):
@@ -440,7 +450,7 @@ class Recurrence(torch.jit.ScriptModule):
                     subtask_param, tuple(self.subtask_nvec), dim=-1
                 )
                 a_one_hot = self.a_one_hots[A[t]]
-                parts = (debug_obs, a_one_hot) + task_sections
+                parts = (h, a_one_hot) + task_sections
                 # correct_object = (obj * debug_obs[:, : self.subtask_nvec[2]]).sum(
                 # -1, keepdim=True
                 # )
