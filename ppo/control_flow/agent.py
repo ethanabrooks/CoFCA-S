@@ -19,10 +19,12 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
     def __init__(self, hidden_size, **kwargs):
         super().__init__(hidden_size=hidden_size, **kwargs)
         self.obs_sections = Obs(*[int(np.prod(s.shape)) for s in self.obs_spaces])
-        self.register_buffer('branch_one_hots', torch.eye(self.n_subtasks))
+        self.register_buffer("branch_one_hots", torch.eye(self.n_subtasks))
         num_object_types = int(self.obs_spaces.subtasks.nvec[0, 2])
-        self.register_buffer('condition_one_hots', torch.eye(num_object_types))
-        self.register_buffer('rows', torch.arange(self.n_subtasks).unsqueeze(-1).float())
+        self.register_buffer("condition_one_hots", torch.eye(num_object_types))
+        self.register_buffer(
+            "rows", torch.arange(self.n_subtasks).unsqueeze(-1).float()
+        )
         self.n_conditions = self.obs_spaces.conditions.shape[0]
 
         d, h, w = self.obs_shape
@@ -30,10 +32,12 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
             Reshape(-1, num_object_types * d, h, w),
             # init_(nn.Linear(in_size, 1), 'sigmoid'),
             # Reshape(-1, in_channels, *self.obs_shape[-2:]),
-            init_(nn.Conv2d(num_object_types * d, hidden_size, kernel_size=1, stride=1)),
+            init_(
+                nn.Conv2d(num_object_types * d, hidden_size, kernel_size=1, stride=1)
+            ),
             nn.MaxPool2d(kernel_size=self.obs_shape[-2:], stride=1),
             Flatten(),
-            init_(nn.Linear(hidden_size, 1), 'sigmoid'),
+            init_(nn.Linear(hidden_size, 1), "sigmoid"),
             nn.Sigmoid(),
             Reshape(-1, 1, 1),
         )
@@ -56,14 +60,18 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
 
     def register_agent_dummy_values(self):
         self.register_buffer(
-            'agent_dummy_values',
+            "agent_dummy_values",
             torch.zeros(
                 1,
-                sum([
-                    self.obs_sections.subtasks,
-                    self.obs_sections.control,
-                    self.obs_sections.next_subtask,
-                ])))
+                sum(
+                    [
+                        self.obs_sections.subtasks,
+                        self.obs_sections.control,
+                        self.obs_sections.next_subtask,
+                    ]
+                ),
+            ),
+        )
 
     def forward(self, inputs, hx):
         assert hx is not None
@@ -72,13 +80,16 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
         # detach actions
         # noinspection PyProtectedMember
         n_actions = len(Actions._fields)
-        inputs, *actions = torch.split(inputs.detach(), [D - n_actions] + [1] * n_actions,
-                                       dim=2)
+        inputs, *actions = torch.split(
+            inputs.detach(), [D - n_actions] + [1] * n_actions, dim=2
+        )
         actions = Actions(*actions)
 
         # parse non-action inputs
         inputs = torch.split(inputs, self.obs_sections, dim=2)
-        inputs = Obs(*[x.view(T, N, *shape) for x, shape in zip(inputs, self.obs_shapes)])
+        inputs = Obs(
+            *[x.view(T, N, *shape) for x, shape in zip(inputs, self.obs_shapes)]
+        )
 
         # build M
         subtasks = torch.split(inputs.subtasks, 1, dim=-1)
@@ -106,30 +117,35 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
         for x in hx:
             x.squeeze_(0)
         if torch.any(new_episode):
-            p[new_episode, 0] = 1.  # initialize pointer to first subtask
+            p[new_episode, 0] = 1.0  # initialize pointer to first subtask
             r[new_episode] = M[new_episode, 0]  # initialize r to first subtask
             # initialize g to first subtask
-            hx.g[new_episode] = 0.
+            hx.g[new_episode] = 0.0
 
         def update_attention(p, t):
             c = (p.unsqueeze(1) @ conditions).squeeze(1)
-            phi_in = c.view(N, conditions.size(2), 1, 1, 1) * inputs.base[t].unsqueeze(1)
+            phi_in = c.view(N, conditions.size(2), 1, 1, 1) * inputs.base[t].unsqueeze(
+                1
+            )
             pred = self.phi_shift(phi_in)  # TODO
             trans = pred * true_path + (1 - pred) * false_path
             return (p.unsqueeze(1) @ trans).squeeze(1)
 
         return self.pack(
-            self.inner_loop(cr=hx.cr,
-                            cg=hx.cg,
-                            g=hx.g,
-                            M=M,
-                            M123=M123,
-                            N=N,
-                            T=T,
-                            float_subtask=hx.subtask,
-                            next_subtask=inputs.next_subtask,
-                            obs=inputs.base,
-                            p=p,
-                            r=r,
-                            actions=actions,
-                            update_attention=update_attention))
+            self.inner_loop(
+                cr=hx.cr,
+                cg=hx.cg,
+                g=hx.g,
+                M=M,
+                M123=M123,
+                N=N,
+                T=T,
+                float_subtask=hx.subtask,
+                next_subtask=inputs.next_subtask,
+                obs=inputs.base,
+                p=p,
+                r=r,
+                actions=actions,
+                update_attention=update_attention,
+            )
+        )

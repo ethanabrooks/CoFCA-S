@@ -36,9 +36,9 @@ def space_shape(space: gym.Space):
     if isinstance(space, gym.spaces.MultiDiscrete):
         return space.nvec.shape
     if isinstance(space, gym.spaces.Discrete):
-        return 1,
+        return (1,)
     if isinstance(space, gym.spaces.MultiBinary):
-        return space.n,
+        return (space.n,)
     raise NotImplementedError
 
 

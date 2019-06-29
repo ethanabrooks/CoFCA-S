@@ -12,25 +12,25 @@ def worker(remote, parent_remote, env_fn_wrapper):
     try:
         while True:
             cmd, data = remote.recv()
-            if cmd == 'step':
+            if cmd == "step":
                 ob, reward, done, info = env.step(data)
                 if done:
                     ob = env.reset()
                 remote.send((ob, reward, done, info))
-            elif cmd == 'reset':
+            elif cmd == "reset":
                 ob = env.reset()
                 remote.send(ob)
-            elif cmd == 'render':
-                remote.send(env.render(mode='rgb_array'))
-            elif cmd == 'close':
+            elif cmd == "render":
+                remote.send(env.render(mode="rgb_array"))
+            elif cmd == "close":
                 remote.close()
                 break
-            elif cmd == 'get_spaces':
+            elif cmd == "get_spaces":
                 remote.send((env.observation_space, env.action_space))
             else:
                 raise NotImplementedError
     except KeyboardInterrupt:
-        print('SubprocVecEnv worker: got KeyboardInterrupt')
+        print("SubprocVecEnv worker: got KeyboardInterrupt")
     finally:
         env.close()
 
@@ -52,17 +52,22 @@ class SubprocVecEnv(VecEnv):
         nenvs = len(env_fns)
         self.remotes, self.work_remotes = zip(*[Pipe() for _ in range(nenvs)])
         self.ps = [
-            Process(target=worker, args=(work_remote, remote, CloudpickleWrapper(env_fn)))
-            for (work_remote, remote,
-                 env_fn) in zip(self.work_remotes, self.remotes, env_fns)
+            Process(
+                target=worker, args=(work_remote, remote, CloudpickleWrapper(env_fn))
+            )
+            for (work_remote, remote, env_fn) in zip(
+                self.work_remotes, self.remotes, env_fns
+            )
         ]
         for p in self.ps:
-            p.daemon = True  # if the main process crashes, we should not cause things to hang
+            p.daemon = (
+                True
+            )  # if the main process crashes, we should not cause things to hang
             p.start()
         for remote in self.work_remotes:
             remote.close()
 
-        self.remotes[0].send(('get_spaces', None))
+        self.remotes[0].send(("get_spaces", None))
         observation_space, action_space = self.remotes[0].recv()
         self.viewer = None
         self.specs = [f().spec for f in env_fns]
@@ -71,7 +76,7 @@ class SubprocVecEnv(VecEnv):
     def step_async(self, actions):
         self._assert_not_closed()
         for remote, action in zip(self.remotes, actions):
-            remote.send(('step', action))
+            remote.send(("step", action))
         self.waiting = True
 
     def step_wait(self):
@@ -84,7 +89,7 @@ class SubprocVecEnv(VecEnv):
     def reset(self):
         self._assert_not_closed()
         for remote in self.remotes:
-            remote.send(('reset', None))
+            remote.send(("reset", None))
         return _flatten_obs([remote.recv() for remote in self.remotes])
 
     def close_extras(self):
@@ -93,19 +98,21 @@ class SubprocVecEnv(VecEnv):
             for remote in self.remotes:
                 remote.recv()
         for remote in self.remotes:
-            remote.send(('close', None))
+            remote.send(("close", None))
         for p in self.ps:
             p.join()
 
     def get_images(self):
         self._assert_not_closed()
         for pipe in self.remotes:
-            pipe.send(('render', None))
+            pipe.send(("render", None))
         imgs = [pipe.recv() for pipe in self.remotes]
         return imgs
 
     def _assert_not_closed(self):
-        assert not self.closed, "Trying to operate on a SubprocVecEnv after calling close()"
+        assert (
+            not self.closed
+        ), "Trying to operate on a SubprocVecEnv after calling close()"
 
 
 def _flatten_obs(obs):
@@ -114,6 +121,7 @@ def _flatten_obs(obs):
 
     if isinstance(obs[0], dict):
         import collections
+
         assert isinstance(obs, collections.OrderedDict)
         keys = obs[0].keys()
         return {k: np.stack([o[k] for o in obs]) for k in keys}

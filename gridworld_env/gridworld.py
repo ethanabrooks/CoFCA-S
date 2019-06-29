@@ -13,19 +13,19 @@ from six import StringIO
 from gridworld_env.abstract_gridworld import AbstractGridWorld
 from gridworld_env.discrete import DiscreteEnv
 
-Transition = namedtuple('Transition', 'probability new_state reward terminal')
+Transition = namedtuple("Transition", "probability new_state reward terminal")
 
 
 class GridWorld(AbstractGridWorld, DiscreteEnv):
     def __init__(
-            self,
-            text_map: Iterable[Iterable[str]],
-            terminal: Container[str],
-            reward: Dict[str, float],
-            transitions: List[np.ndarray] = None,
-            probabilities: List[np.ndarray] = None,
-            start: Iterable[str] = '',
-            blocked: Container[str] = '',
+        self,
+        text_map: Iterable[Iterable[str]],
+        terminal: Container[str],
+        reward: Dict[str, float],
+        transitions: List[np.ndarray] = None,
+        probabilities: List[np.ndarray] = None,
+        start: Iterable[str] = "",
+        blocked: Container[str] = "",
     ):
 
         if transitions is None:
@@ -69,7 +69,7 @@ class GridWorld(AbstractGridWorld, DiscreteEnv):
 
     @property
     def transition_strings(self):
-        return '🛑👉👇👈👆'
+        return "🛑👉👇👈👆"
 
     def assign(self, **assignments):
         new_desc = self.original_desc.copy()
@@ -107,8 +107,9 @@ class GridWorld(AbstractGridWorld, DiscreteEnv):
 
         def get_transition_tuples_from(state, action):
             coord = self.decode(state)
-            for transition, probability in zip(self.transitions[action],
-                                               self.probabilities[action]):
+            for transition, probability in zip(
+                self.transitions[action], self.probabilities[action]
+            ):
 
                 new_coord = np.clip(
                     np.array(coord) + transition,
@@ -119,10 +120,12 @@ class GridWorld(AbstractGridWorld, DiscreteEnv):
 
                 if np.all(np.isin(new_char, self.blocked)):
                     new_coord = coord
-                yield Transition(probability=probability,
-                                 new_state=self.encode(*new_coord),
-                                 reward=self.reward.get(new_char, 0),
-                                 terminal=new_char in self.terminal)
+                yield Transition(
+                    probability=probability,
+                    new_state=self.encode(*new_coord),
+                    reward=self.reward.get(new_char, 0),
+                    terminal=new_char in self.terminal,
+                )
 
         return dict(get_state_transitions())
 
@@ -140,30 +143,30 @@ class GridWorld(AbstractGridWorld, DiscreteEnv):
         return super().reset()
 
     def render_map(self, mode):
-        outfile = StringIO() if mode == 'ansi' else sys.stdout
+        outfile = StringIO() if mode == "ansi" else sys.stdout
         out = self.desc.copy().tolist()
         i, j = self.decode(self.s)
 
-        out[i][j] = utils.colorize(out[i][j], 'blue', highlight=True)
+        out[i][j] = utils.colorize(out[i][j], "blue", highlight=True)
 
-        print('#' * (len(out[0]) + 2))
+        print("#" * (len(out[0]) + 2))
         for row in out:
-            print('#' + "".join(row) + '#')
-        print('#' * (len(out[0]) + 2))
+            print("#" + "".join(row) + "#")
+        print("#" * (len(out[0]) + 2))
         # No need to return anything for human
-        if mode != 'human':
+        if mode != "human":
             return outfile
         out[i][j] = self.desc[i, j]  # TODO: delete?
 
-    def render(self, mode='human'):
+    def render(self, mode="human"):
         if self.last_transition is not None:
             idx = np.all(self.transition_array == self.last_transition, axis=1)
             transition_string = self.transition_strings[idx]
-            print('transition:', transition_string.item())
+            print("transition:", transition_string.item())
         if self.last_action is not None:
-            print('action:', self.transition_strings[self.last_action].item())
+            print("action:", self.transition_strings[self.last_action].item())
         if self.last_reward is not None:
-            print('Reward:', self.last_reward)
+            print("Reward:", self.last_reward)
 
         self.render_map(mode)
 
@@ -184,8 +187,9 @@ class GridWorld(AbstractGridWorld, DiscreteEnv):
                     self._reward_matrix[s1, a] = trans.reward
                     if trans.terminal:
                         for a in range(self.nA):
-                            self._transition_matrix[trans.new_state, a, trans.
-                                                    new_state] = 1
+                            self._transition_matrix[
+                                trans.new_state, a, trans.new_state
+                            ] = 1
                             self._reward_matrix[trans.new_state, a] = 0
                             assert not np.any(self._transition_matrix > 1)
 
@@ -202,8 +206,8 @@ class GridWorld(AbstractGridWorld, DiscreteEnv):
         return self._reward_matrix
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import gym
     from gridworld_env.random_walk import run
 
-    run(gym.make('BookGridGridWorld-v0'))
+    run(gym.make("BookGridGridWorld-v0"))

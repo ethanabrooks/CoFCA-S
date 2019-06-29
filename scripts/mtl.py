@@ -27,7 +27,7 @@ def frank_wolfe_solver(gradients, iterations):
     return alphas
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     gradients = torch.tensor([[-4, 1], [2, 1]]).float()
     alphas = frank_wolfe_solver(gradients, 3)
     print(alphas @ gradients)

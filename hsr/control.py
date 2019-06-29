@@ -49,16 +49,16 @@ class ControlHSREnv(HSREnv):
     def control_agent(self):
         action = np.zeros(space_to_size(self.action_space))
         action_scale = np.ones_like(action)
-        action_scale[[0, 1]] = .1
+        action_scale[[0, 1]] = 0.1
         action[3] = 100
         if self.viewer and self.viewer.moving:
-            print('delta =', self.viewer.delta)
+            print("delta =", self.viewer.delta)
         if self.viewer and self.viewer.moving and self.viewer.delta:
             action[self.viewer.active_joint] = self.viewer.delta
             # if self.sim.model.joint_names[self.viewer.active_joint] == 'l_proximal_joint':
             #     if action[self.sim.model.get_]
-            print('delta =', self.viewer.delta)
-            print('action =', action)
+            print("delta =", self.viewer.delta)
+            print("action =", action)
 
         s, r, t, i = self.step(action * action_scale)
         return t
@@ -77,7 +77,7 @@ def main(max_episode_steps, env_args):
         done = env.control_agent()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     add_hsr_args(parser)
     hsr.util.env_wrapper(main)(**hierarchical_parse_args(parser))

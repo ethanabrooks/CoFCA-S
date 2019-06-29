@@ -17,7 +17,7 @@ class TimeLimit(gym.Wrapper):
         self._elapsed_steps += 1
         if self._elapsed_steps >= self._max_episode_steps:
             done = True
-            info['TimeLimit.truncated'] = True
+            info["TimeLimit.truncated"] = True
         return observation, reward, done, info
 
     def reset(self, **kwargs):
@@ -57,7 +57,8 @@ class StochasticFrameSkip(gym.Wrapper):
             else:
                 ob, rew, done, info = self.env.step(self.curac)
             totrew += rew
-            if done: break
+            if done:
+                break
         return ob, totrew, done, info
 
     def seed(self, s):
@@ -72,10 +73,12 @@ class PartialFrameStack(gym.Wrapper):
         gym.Wrapper.__init__(self, env)
         shp = env.observation_space.shape
         self.channel = channel
-        self.observation_space = gym.spaces.Box(low=0,
-                                                high=255,
-                                                shape=(shp[0], shp[1], shp[2] + k - 1),
-                                                dtype=env.observation_space.dtype)
+        self.observation_space = gym.spaces.Box(
+            low=0,
+            high=255,
+            shape=(shp[0], shp[1], shp[2] + k - 1),
+            dtype=env.observation_space.dtype,
+        )
         self.k = k
         self.frames = deque([], maxlen=k)
         shp = env.observation_space.shape
@@ -94,11 +97,15 @@ class PartialFrameStack(gym.Wrapper):
 
     def _get_ob(self):
         assert len(self.frames) == self.k
-        return np.concatenate([
-            frame if i == self.k - 1 else frame[:, :, self.channel:self.channel + 1]
-            for (i, frame) in enumerate(self.frames)
-        ],
-                              axis=2)
+        return np.concatenate(
+            [
+                frame
+                if i == self.k - 1
+                else frame[:, :, self.channel : self.channel + 1]
+                for (i, frame) in enumerate(self.frames)
+            ],
+            axis=2,
+        )
 
 
 class Downsample(gym.ObservationWrapper):
@@ -109,10 +116,9 @@ class Downsample(gym.ObservationWrapper):
         gym.ObservationWrapper.__init__(self, env)
         (oldh, oldw, oldc) = env.observation_space.shape
         newshape = (oldh // ratio, oldw // ratio, oldc)
-        self.observation_space = spaces.Box(low=0,
-                                            high=255,
-                                            shape=newshape,
-                                            dtype=np.uint8)
+        self.observation_space = spaces.Box(
+            low=0, high=255, shape=newshape, dtype=np.uint8
+        )
 
     def observation(self, frame):
         height, width, _ = self.observation_space.shape
@@ -129,10 +135,9 @@ class Rgb2gray(gym.ObservationWrapper):
         """
         gym.ObservationWrapper.__init__(self, env)
         (oldh, oldw, _oldc) = env.observation_space.shape
-        self.observation_space = spaces.Box(low=0,
-                                            high=255,
-                                            shape=(oldh, oldw, 1),
-                                            dtype=np.uint8)
+        self.observation_space = spaces.Box(
+            low=0, high=255, shape=(oldh, oldw, 1), dtype=np.uint8
+        )
 
     def observation(self, frame):
         frame = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
@@ -160,28 +165,30 @@ class AppendTimeout(gym.Wrapper):
     def __init__(self, env):
         gym.Wrapper.__init__(self, env)
         self.action_space = env.action_space
-        self.timeout_space = gym.spaces.Box(low=np.array([0.0]),
-                                            high=np.array([1.0]),
-                                            dtype=np.float32)
+        self.timeout_space = gym.spaces.Box(
+            low=np.array([0.0]), high=np.array([1.0]), dtype=np.float32
+        )
         self.original_os = env.observation_space
         if isinstance(self.original_os, gym.spaces.Dict):
             import copy
+
             ordered_dict = copy.deepcopy(self.original_os.spaces)
-            ordered_dict['value_estimation_timeout'] = self.timeout_space
+            ordered_dict["value_estimation_timeout"] = self.timeout_space
             self.observation_space = gym.spaces.Dict(ordered_dict)
             self.dict_mode = True
         else:
-            self.observation_space = gym.spaces.Dict({
-                'original':
-                self.original_os,
-                'value_estimation_timeout':
-                self.timeout_space
-            })
+            self.observation_space = gym.spaces.Dict(
+                {
+                    "original": self.original_os,
+                    "value_estimation_timeout": self.timeout_space,
+                }
+            )
             self.dict_mode = False
         self.ac_count = None
         while 1:
-            if not hasattr(env, "_max_episode_steps"
-                           ):  # Looking for TimeLimit wrapper that has this field
+            if not hasattr(
+                env, "_max_episode_steps"
+            ):  # Looking for TimeLimit wrapper that has this field
                 env = env.env
                 continue
             break
@@ -199,9 +206,9 @@ class AppendTimeout(gym.Wrapper):
     def _process(self, ob):
         fracmissing = 1 - self.ac_count / self.timeout
         if self.dict_mode:
-            ob['value_estimation_timeout'] = fracmissing
+            ob["value_estimation_timeout"] = fracmissing
         else:
-            return {'original': ob, 'value_estimation_timeout': fracmissing}
+            return {"original": ob, "value_estimation_timeout": fracmissing}
 
 
 class StartDoingRandomActionsWrapper(gym.Wrapper):
@@ -221,10 +228,11 @@ class StartDoingRandomActionsWrapper(gym.Wrapper):
     def some_random_steps(self):
         self.last_obs = self.env.reset()
         n = np.random.randint(self.random_steps)
-        #print("running for random %i frames" % n)
+        # print("running for random %i frames" % n)
         for _ in range(n):
             self.last_obs, _, done, _ = self.env.step(self.env.action_space.sample())
-            if done: self.last_obs = self.env.reset()
+            if done:
+                self.last_obs = self.env.reset()
 
     def reset(self):
         return self.last_obs
@@ -240,6 +248,7 @@ class StartDoingRandomActionsWrapper(gym.Wrapper):
 
 def make_retro(*, game, state, max_episode_steps, **kwargs):
     import retro
+
     env = retro.make(game, state, **kwargs)
     env = StochasticFrameSkip(env, n=4, stickprob=0.25)
     if max_episode_steps is not None:
@@ -268,10 +277,28 @@ class SonicDiscretizer(gym.ActionWrapper):
     def __init__(self, env):
         super(SonicDiscretizer, self).__init__(env)
         buttons = [
-            "B", "A", "MODE", "START", "UP", "DOWN", "LEFT", "RIGHT", "C", "Y", "X", "Z"
+            "B",
+            "A",
+            "MODE",
+            "START",
+            "UP",
+            "DOWN",
+            "LEFT",
+            "RIGHT",
+            "C",
+            "Y",
+            "X",
+            "Z",
         ]
-        actions = [['LEFT'], ['RIGHT'], ['LEFT', 'DOWN'], ['RIGHT', 'DOWN'], ['DOWN'],
-                   ['DOWN', 'B'], ['B']]
+        actions = [
+            ["LEFT"],
+            ["RIGHT"],
+            ["LEFT", "DOWN"],
+            ["RIGHT", "DOWN"],
+            ["DOWN"],
+            ["DOWN", "B"],
+            ["B"],
+        ]
         self._actions = []
         for action in actions:
             arr = np.array([False] * 12)

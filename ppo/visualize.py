@@ -12,9 +12,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.signal import medfilt
 
-matplotlib.use('Agg')
-plt.switch_backend('agg')
-matplotlib.rcParams.update({'font.size': 8})
+matplotlib.use("Agg")
+plt.switch_backend("agg")
+matplotlib.rcParams.update({"font.size": 8})
 
 
 def smooth_reward_curve(x, y):
@@ -22,8 +22,9 @@ def smooth_reward_curve(x, y):
     halfwidth = min(31, int(np.ceil(len(x) / 30)))
     k = halfwidth
     xsmoo = x[k:-k]
-    ysmoo = np.convolve(y, np.ones(2 * k + 1), mode='valid') / \
-        np.convolve(np.ones_like(y), np.ones(2 * k + 1), mode='valid')
+    ysmoo = np.convolve(y, np.ones(2 * k + 1), mode="valid") / np.convolve(
+        np.ones_like(y), np.ones(2 * k + 1), mode="valid"
+    )
     downsample = max(int(np.floor(len(xsmoo) / 1e3)), 1)
     return xsmoo[::downsample], ysmoo[::downsample]
 
@@ -44,8 +45,7 @@ def fix_point(x, y, interval):
             pointer += 1
 
         if pointer + 1 < len(x):
-            alpha = (y[pointer + 1] - y[pointer]) / \
-                (x[pointer + 1] - x[pointer])
+            alpha = (y[pointer + 1] - y[pointer]) / (x[pointer + 1] - x[pointer])
             tmpy = y[pointer] + alpha * (tmpx - x[pointer])
             fx.append(tmpx)
             fy.append(tmpy)
@@ -55,14 +55,14 @@ def fix_point(x, y, interval):
 
 def load_data(indir, smooth, bin_size):
     datas = []
-    infiles = glob.glob(os.path.join(indir, '*.monitor.csv'))
+    infiles = glob.glob(os.path.join(indir, "*.monitor.csv"))
 
     for inf in infiles:
-        with open(inf, 'r') as f:
+        with open(inf, "r") as f:
             f.readline()
             f.readline()
             for line in f:
-                tmp = line.split(',')
+                tmp = line.split(",")
                 t_time = float(tmp[2])
                 tmp = [t_time, int(tmp[1]), float(tmp[0])]
                 datas.append(tmp)
@@ -90,16 +90,16 @@ def load_data(indir, smooth, bin_size):
 
 
 color_defaults = [
-    '#1f77b4',  # muted blue
-    '#ff7f0e',  # safety orange
-    '#2ca02c',  # cooked asparagus green
-    '#d62728',  # brick red
-    '#9467bd',  # muted purple
-    '#8c564b',  # chestnut brown
-    '#e377c2',  # raspberry yogurt pink
-    '#7f7f7f',  # middle gray
-    '#bcbd22',  # curry yellow-green
-    '#17becf'  # blue-teal
+    "#1f77b4",  # muted blue
+    "#ff7f0e",  # safety orange
+    "#2ca02c",  # cooked asparagus green
+    "#d62728",  # brick red
+    "#9467bd",  # muted purple
+    "#8c564b",  # chestnut brown
+    "#e377c2",  # raspberry yogurt pink
+    "#7f7f7f",  # middle gray
+    "#bcbd22",  # curry yellow-green
+    "#17becf",  # blue-teal
 ]
 
 
@@ -117,16 +117,16 @@ def visdom_plot(viz, win, folder, game, name, num_steps, bin_size=100, smooth=1)
     plt.xticks(ticks, tick_names)
     plt.xlim(0, num_steps * 1.01)
 
-    plt.xlabel('Number of Timesteps')
-    plt.ylabel('Rewards')
+    plt.xlabel("Number of Timesteps")
+    plt.ylabel("Rewards")
 
     plt.title(game)
     plt.legend(loc=4)
     plt.show()
     plt.draw()
 
-    image = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8, sep='')
-    image = image.reshape(fig.canvas.get_width_height()[::-1] + (3, ))
+    image = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8, sep="")
+    image = image.reshape(fig.canvas.get_width_height()[::-1] + (3,))
     plt.close(fig)
 
     # Show it in visdom
@@ -136,5 +136,6 @@ def visdom_plot(viz, win, folder, game, name, num_steps, bin_size=100, smooth=1)
 
 if __name__ == "__main__":
     from visdom import Visdom
+
     viz = Visdom()
-    visdom_plot(viz, None, '/tmp/gym/', 'BreakOut', 'a2c', bin_size=100, smooth=1)
+    visdom_plot(viz, None, "/tmp/gym/", "BreakOut", "a2c", bin_size=100, smooth=1)
