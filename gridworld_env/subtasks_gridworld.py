@@ -250,13 +250,6 @@ class SubtasksGridWorld(gym.Env):
         self.last_action = None
         return self.get_observation()
 
-    def objects_one_hot(self):
-        h, w, = self.desc.shape
-        objects_one_hot = np.zeros((1 + len(self.object_types), h, w), dtype=bool)
-        idx = [(v, ) + k for k, v in self.objects.items()]
-        set_index(objects_one_hot, idx, True)
-        return objects_one_hot
-
     def get_observation(self):
         agent_one_hot = np.zeros_like(self.desc, dtype=bool)
         set_index(agent_one_hot, self.pos, True)
@@ -276,13 +269,6 @@ class SubtasksGridWorld(gym.Env):
             np.expand_dims(agent, 2),
             # np.dstack([obstacles, agent]),
         ]).transpose(2, 0, 1)
-
-        obs2 = np.vstack([
-            np.expand_dims(self.obstacles_one_hot, 0),
-            self.objects_one_hot(),
-            np.expand_dims(agent_one_hot, 0)
-        ])
-        assert np.all(obs == obs2)
 
         # noinspection PyTypeChecker
         return obs, self.subtasks
