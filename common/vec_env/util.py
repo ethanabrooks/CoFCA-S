@@ -36,9 +36,9 @@ def space_shape(space: gym.Space):
     if isinstance(space, gym.spaces.MultiDiscrete):
         return space.nvec.shape
     if isinstance(space, gym.spaces.Discrete):
-        return 1,
+        return (1,)
     if isinstance(space, gym.spaces.MultiBinary):
-        return space.n,
+        return (space.n,)
     raise NotImplementedError
 
 
@@ -46,7 +46,7 @@ def buffer_shape(space: gym.Space):
     shape = space_shape(space)
     if not all(isinstance(d, int) for d in shape):
         # print('buffer shape', shape)
-        shape = int(sum(np.prod(s) for s in shape)),  # concatenate
+        shape = (int(sum(np.prod(s) for s in shape)),)  # concatenate
     return shape
 
 

@@ -28,10 +28,11 @@ class VecVideoRecorder(VecEnvWrapper):
         self.video_recorder = None
 
         self.directory = os.path.abspath(directory)
-        if not os.path.exists(self.directory): os.mkdir(self.directory)
+        if not os.path.exists(self.directory):
+            os.mkdir(self.directory)
 
         self.file_prefix = "vecenv"
-        self.file_infix = '{}'.format(os.getpid())
+        self.file_infix = "{}".format(os.getpid())
         self.step_id = 0
         self.video_length = video_length
 
@@ -50,10 +51,13 @@ class VecVideoRecorder(VecEnvWrapper):
 
         base_path = os.path.join(
             self.directory,
-            '{}.video.{}.video{:06}'.format(self.file_prefix, self.file_infix,
-                                            self.step_id))
+            "{}.video.{}.video{:06}".format(
+                self.file_prefix, self.file_infix, self.step_id
+            ),
+        )
         self.video_recorder = video_recorder.VideoRecorder(
-            env=self.venv, base_path=base_path, metadata={'step_id': self.step_id})
+            env=self.venv, base_path=base_path, metadata={"step_id": self.step_id}
+        )
 
         self.video_recorder.capture_frame()
         self.recorded_frames = 1

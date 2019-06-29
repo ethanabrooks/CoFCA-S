@@ -5,8 +5,8 @@ from gym import spaces
 from gym.spaces import Box, Discrete
 import numpy as np
 
-Actions = namedtuple('Actions', 'a cr cg g')
-Obs = namedtuple('Obs', 'base subtask subtasks next_subtask')
+Actions = namedtuple("Actions", "a cr cg g")
+Obs = namedtuple("Obs", "base subtask subtasks next_subtask")
 
 
 class DebugWrapper(gym.Wrapper):
@@ -29,12 +29,12 @@ class DebugWrapper(gym.Wrapper):
         self.last_reward = r
         return s, r, t, i
 
-    def render(self, mode='human'):
-        print('########################################')
+    def render(self, mode="human"):
+        print("########################################")
         super().render(sleep_time=0)
-        print('guess', self.last_guess)
-        print('truth', self.env.unwrapped.subtask_idx)
-        print('reward', self.last_reward)
+        print("guess", self.last_guess)
+        print("truth", self.env.unwrapped.subtask_idx)
+        print("reward", self.last_reward)
         # input('pause')
 
 
@@ -50,14 +50,16 @@ class Wrapper(gym.Wrapper):
                 subtask=spaces.Discrete(subtasks_space.nvec.shape[0]),
                 subtasks=subtasks_space,
                 next_subtask=spaces.Discrete(2),
-            ))
+            )
+        )
         self.action_space = spaces.Tuple(
             Actions(
                 a=env.action_space,
                 g=spaces.Discrete(env.n_subtasks),
                 cg=spaces.Discrete(2),
                 cr=spaces.Discrete(2),
-            ))
+            )
+        )
         self.last_g = None
 
     def step(self, action):
@@ -74,23 +76,25 @@ class Wrapper(gym.Wrapper):
         obs, *_ = observation
         _, h, w = obs.shape
         env = self.env.unwrapped
-        observation = Obs(base=obs,
-                          subtask=env.subtask_idx,
-                          subtasks=env.subtasks,
-                          next_subtask=env.next_subtask)
+        observation = Obs(
+            base=obs,
+            subtask=env.subtask_idx,
+            subtasks=env.subtasks,
+            next_subtask=env.next_subtask,
+        )
         # for obs, space in zip(observation, self.observation_space.spaces):
         # assert space.contains(np.array(obs))
         return np.concatenate([np.array(x).flatten() for x in observation])
 
-    def render(self, mode='human', **kwargs):
+    def render(self, mode="human", **kwargs):
         super().render(mode=mode)
         if self.last_g is not None:
             env = self.env.unwrapped
             g_type, g_count, g_obj = tuple(env.subtasks[self.last_g])
             print(
-                'Assigned subtask:',
+                "Assigned subtask:",
                 env.interactions[g_type],
                 g_count + 1,
                 env.object_types[g_obj],
             )
-        input('paused')
+        input("paused")

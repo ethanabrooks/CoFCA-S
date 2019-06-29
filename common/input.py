@@ -3,8 +3,8 @@ import numpy as np
 import tensorflow as tf
 
 
-def observation_placeholder(ob_space, batch_size=None, name='Ob'):
-    '''
+def observation_placeholder(ob_space, batch_size=None, name="Ob"):
+    """
     Create placeholder to feed observations into of the size appropriate to the observation space
 
     Parameters:
@@ -20,30 +20,33 @@ def observation_placeholder(ob_space, batch_size=None, name='Ob'):
     -------
 
     tensorflow placeholder tensor
-    '''
+    """
 
-    assert isinstance(ob_space, Discrete) or isinstance(ob_space, Box) or isinstance(ob_space, MultiDiscrete), \
-        'Can only deal with Discrete and Box observation spaces for now'
+    assert (
+        isinstance(ob_space, Discrete)
+        or isinstance(ob_space, Box)
+        or isinstance(ob_space, MultiDiscrete)
+    ), "Can only deal with Discrete and Box observation spaces for now"
 
     dtype = ob_space.dtype
     if dtype == np.int8:
         dtype = np.uint8
 
-    return tf.placeholder(shape=(batch_size, ) + ob_space.shape, dtype=dtype, name=name)
+    return tf.placeholder(shape=(batch_size,) + ob_space.shape, dtype=dtype, name=name)
 
 
-def observation_input(ob_space, batch_size=None, name='Ob'):
-    '''
+def observation_input(ob_space, batch_size=None, name="Ob"):
+    """
     Create placeholder to feed observations into of the size appropriate to the observation space, and add input
     encoder of the appropriate type.
-    '''
+    """
 
     placeholder = observation_placeholder(ob_space, batch_size, name)
     return placeholder, encode_observation(ob_space, placeholder)
 
 
 def encode_observation(ob_space, placeholder):
-    '''
+    """
     Encode input in the way that is appropriate to the observation space
 
     Parameters:
@@ -52,7 +55,7 @@ def encode_observation(ob_space, placeholder):
     ob_space: gym.Space             observation space
 
     placeholder: tf.placeholder     observation input placeholder
-    '''
+    """
     if isinstance(ob_space, Discrete):
         return tf.to_float(tf.one_hot(placeholder, ob_space.n))
     elif isinstance(ob_space, Box):

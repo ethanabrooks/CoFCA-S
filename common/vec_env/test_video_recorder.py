@@ -16,10 +16,10 @@ from .subproc_vec_env import SubprocVecEnv
 from .vec_video_recorder import VecVideoRecorder
 
 
-@pytest.mark.parametrize('klass', (DummyVecEnv, ShmemVecEnv, SubprocVecEnv))
-@pytest.mark.parametrize('num_envs', (1, 4))
-@pytest.mark.parametrize('video_length', (10, 100))
-@pytest.mark.parametrize('video_interval', (1, 50))
+@pytest.mark.parametrize("klass", (DummyVecEnv, ShmemVecEnv, SubprocVecEnv))
+@pytest.mark.parametrize("num_envs", (1, 4))
+@pytest.mark.parametrize("video_length", (10, 100))
+@pytest.mark.parametrize("video_interval", (1, 50))
 def test_video_recorder(klass, num_envs, video_length, video_interval):
     """
     Wrap an existing VecEnv with VevVideoRecorder,
@@ -28,17 +28,19 @@ def test_video_recorder(klass, num_envs, video_length, video_interval):
     """
 
     def make_fn():
-        env = gym.make('PongNoFrameskip-v4')
+        env = gym.make("PongNoFrameskip-v4")
         return env
 
     fns = [make_fn for _ in range(num_envs)]
     env = klass(fns)
 
     with tempfile.TemporaryDirectory() as video_path:
-        env = VecVideoRecorder(env,
-                               video_path,
-                               record_video_trigger=lambda x: x % video_interval == 0,
-                               video_length=video_length)
+        env = VecVideoRecorder(
+            env,
+            video_path,
+            record_video_trigger=lambda x: x % video_interval == 0,
+            video_length=video_length,
+        )
 
         env.reset()
         for _ in range(video_interval + video_length + 1):

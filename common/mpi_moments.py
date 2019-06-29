@@ -7,7 +7,8 @@ from common import zipsame
 def mpi_mean(x, axis=0, comm=None, keepdims=False):
     x = np.asarray(x)
     assert x.ndim > 0
-    if comm is None: comm = MPI.COMM_WORLD
+    if comm is None:
+        comm = MPI.COMM_WORLD
     xsum = x.sum(axis=axis, keepdims=keepdims)
     n = xsum.size
     localsum = np.zeros(n + 1, x.dtype)
@@ -27,7 +28,7 @@ def mpi_moments(x, axis=0, comm=None, keepdims=False):
     assert count1 == count
     std = np.sqrt(meansqdiff)
     if not keepdims:
-        newshape = mean.shape[:axis] + mean.shape[axis + 1:]
+        newshape = mean.shape[:axis] + mean.shape[axis + 1 :]
         mean = mean.reshape(newshape)
         std = std.reshape(newshape)
     return mean, std, count
@@ -35,10 +36,17 @@ def mpi_moments(x, axis=0, comm=None, keepdims=False):
 
 def test_runningmeanstd():
     import subprocess
-    subprocess.check_call([
-        'mpirun', '-np', '3', 'python', '-c',
-        'from common.mpi_moments import _helper_runningmeanstd; _helper_runningmeanstd()'
-    ])
+
+    subprocess.check_call(
+        [
+            "mpirun",
+            "-np",
+            "3",
+            "python",
+            "-c",
+            "from common.mpi_moments import _helper_runningmeanstd; _helper_runningmeanstd()",
+        ]
+    )
 
 
 def _helper_runningmeanstd():
