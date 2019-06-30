@@ -23,10 +23,9 @@ class DebugWrapper(gym.Wrapper):
         truth = int(self.env.unwrapped.subtask_idx)
         guess = int(actions.g)
         r = float(np.all(guess == truth)) - 1
-        if r < 0:
-            import ipdb
-
-            ipdb.set_trace()
+        # if r < 0:
+        # import ipdb
+        # ipdb.set_trace()
         s, _, t, i = super().step(action)
         self.last_guess = guess
         self.last_reward = r
