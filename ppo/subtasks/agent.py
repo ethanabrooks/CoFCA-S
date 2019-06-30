@@ -159,13 +159,7 @@ class Recurrence(torch.jit.ScriptModule):
         self.conv = nn.Sequential(
             Concat(dim=1),
             init_(
-                nn.Conv2d(
-                    d + int(self.subtask_nvec.sum()),
-                    hidden_size,
-                    kernel_size=3,  # TODO: kernel_size=1
-                    stride=1,
-                    padding=1,
-                ),
+                nn.Conv2d(d + int(self.subtask_nvec.sum()), hidden_size, kernel_size=1),
                 "relu",
             ),
             nn.ReLU(),
