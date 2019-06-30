@@ -21,13 +21,7 @@ from ppo.storage import RolloutStorage
 from ppo.subtasks.wrappers import Wrapper
 from ppo.update import PPO
 from ppo.utils import get_n_gpu, get_random_gpu
-from ppo.wrappers import (
-    AddTimestep,
-    TransposeImage,
-    VecNormalize,
-    VecPyTorch,
-    VecPyTorchFrameStack,
-)
+from ppo.wrappers import AddTimestep, TransposeImage, VecNormalize, VecPyTorch, VecPyTorchFrameStack
 
 try:
     import dm_control2gym
@@ -132,6 +126,19 @@ class Train:
         counter = Counter()
         start = time.time()
         last_save = start
+
+        last_save = time.time()
+        modules = dict(
+            optimizer=ppo.optimizer, agent=self.agent
+        )  # type: Dict[str, torch.nn.Module]
+
+        if isinstance(envs.venv, VecNormalize):
+            modules.update(vec_normalize=envs.venv)
+
+        state_dict = {name: module.state_dict() for name, module in modules.items()}
+        torch.save(dict(step=0, **state_dict), "checkpoints/initial.pt")
+
+        exit()
 
         if load_path:
             state_dict = torch.load(load_path, map_location=self.device)
