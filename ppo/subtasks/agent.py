@@ -182,14 +182,14 @@ class Recurrence(torch.jit.ScriptModule):
             self.phi_update = nn.Sequential(
                 Parallel(
                     # self.conv2,  # obs
-                    init_(nn.Linear(d, 2)),
-                    init_(nn.Linear(action_spaces.a.n, 2)),  # action
+                    init_(nn.Linear(d, 10)),
+                    init_(nn.Linear(action_spaces.a.n, 10)),  # action
                     *[
-                        init_(nn.Linear(i, 2)) for i in self.subtask_nvec
+                        init_(nn.Linear(i, 10)) for i in self.subtask_nvec
                     ],  # subtask parameter
                 ),
                 Product(),
-                # init_(nn.Linear(hidden_size, 2), "sigmoid"),
+                init_(nn.Linear(10, 2), "sigmoid"),
             )
         else:
             self.phi_update = trace(
