@@ -133,6 +133,7 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
 
         return self.pack(
             self.inner_loop(
+                a=hx.a,
                 cr=hx.cr,
                 cg=hx.cg,
                 g=hx.g,
