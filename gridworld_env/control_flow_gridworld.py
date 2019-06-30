@@ -86,11 +86,16 @@ class ControlFlowGridWorld(SubtasksGridWorld):
         )
         subtasks = [self.Subtask(*self.possible_subtasks[i]) for i in choices]
         i = 0
+        print(self.object_types)
         encountered = Counter(passing=[], failing=[], subtasks=[])
         while i < self.n_subtasks:
+            print("subtask", i, subtasks[i])
             condition = self.conditions[i]
             passing = condition in self.required_objects
             branching = self.control[i, 0] != self.control[i, 1]
+            if branching:
+                print("condition", condition)
+                print("passing", passing)
             encountered.update(passing=[condition if branching and passing else None])
             encountered.update(
                 failing=[condition if branching and not passing else None]
@@ -105,41 +110,41 @@ class ControlFlowGridWorld(SubtasksGridWorld):
             set(o for o in encountered["passing"] if o is not None)
         )
         available = [x for x in self.required_objects]
-        # print("encountered", encountered)
-        # print("self.required", self.required_objects)
+        print("encountered", encountered)
+        print("self.required", self.required_objects)
 
         for i, subtask in enumerate(subtasks):
             if i in encountered["subtasks"]:
                 obj = subtask.object
-                # print(i, "object", obj)
+                print(i, "object", obj)
                 to_be_removed = subtask.interaction in {1, 2}
                 if obj not in available:
-                    # print(f"{obj} not in available {available}")
-                    # print(f"to_be_removed", to_be_removed)
+                    print(f"{obj} not in available {available}")
+                    print(f"to_be_removed", to_be_removed)
                     if not to_be_removed and obj in failing:
-                        # print("object is not to_be_removed and it is in failing")
+                        print("object is not to_be_removed and it is in failing")
                         obj = self.np_random.choice(non_failing)
                         subtasks[i] = subtask._replace(object=obj)
-                        # print("replaced with", obj)
-                    past_failing = failing[: i + 1]
-                    # print(f"past_failing", past_failing)
+                        print("replaced with", obj)
+                    past_failing = failing[-i + 1 :]
+                    print(f"past_failing", past_failing)
                     if to_be_removed and obj in past_failing:
-                        # print("object is to_be_removed but it is in past failing")
+                        print("object is to_be_removed but it is in past failing")
                         obj = self.np_random.choice(
                             list(set(object_types) - set(past_failing))
                         )
                         subtasks[i] = subtask._replace(object=obj)
-                        # print("replaced with", obj)
+                        print("replaced with", obj)
 
-                    # print(f"self.required", self.required_objects, "+", obj)
-                    # print(f"available", available, "+", obj)
+                    print(f"self.required", self.required_objects, "+", obj)
+                    print(f"available", available, "+", obj)
                     # add object to map
                     self.required_objects += [obj]
                     available += [obj]
 
                 if to_be_removed:
                     available.remove(obj)
-                    # print(f"available", available)
+                    print(f"available", available)
 
         yield from subtasks
 
