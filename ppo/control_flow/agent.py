@@ -29,7 +29,7 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
 
         d, h, w = self.obs_shape
         self.phi_shift = nn.Sequential(
-            init_(nn.Linear(num_object_types * h * w, 1)),
+            init_(nn.Linear(num_object_types * h * w, 1), "sigmoid"),
             # Reshape(-1, num_object_types * d, h, w),
             # init_(nn.Linear(in_size, 1), 'sigmoid'),
             # Reshape(-1, in_channels, *self.obs_shape[-2:]),
@@ -39,7 +39,7 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
             # nn.MaxPool2d(kernel_size=self.obs_shape[-2:], stride=1),
             # Flatten(),
             # init_(nn.Linear(hidden_size, 1), "sigmoid"),
-            # nn.Sigmoid(),
+            nn.Sigmoid(),
             # Reshape(-1, 1, 1),
         )
         self.obs_shapes = Obs(
