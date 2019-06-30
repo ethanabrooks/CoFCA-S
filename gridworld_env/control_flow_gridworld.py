@@ -9,34 +9,43 @@ Obs = namedtuple("Obs", "base subtask subtasks conditions control next_subtask p
 
 
 class ControlFlowGridWorld(SubtasksGridWorld):
-    def __init__(self, *args, n_subtasks, single_condition=False, **kwargs):
+    def __init__(self, *args, n_subtasks, force_branching=False, **kwargs):
         super().__init__(*args, n_subtasks=n_subtasks, **kwargs)
-        self.single_condition = single_condition
-        if single_condition:
-            assert n_subtasks == 2
+        self.passing_objects = None
+        self.failing_objects = None
+        self.pred = None
+        self.force_branching = force_branching
+        if force_branching:
+            assert n_subtasks % 2 == 0
 
         self.conditions = None
         self.control = None
         self.required_objects = None
-        obs_spaces = self.observation_space.spaces
-        obs_spaces.update(
-            conditions=spaces.MultiDiscrete(
-                np.array([len(self.object_types)]).repeat(self.n_subtasks)
-            ),
-            pred=spaces.Discrete(2),
-            control=spaces.MultiDiscrete(
-                np.tile(
-                    np.array([[self.n_subtasks]]),
-                    [self.n_subtasks, 2],  # binary conditions
-                )
-            ),
-        )
-        self.observation_space = spaces.Dict(Obs(**obs_spaces)._asdict())
-        self.pred = None
+        obs_space, subtasks_space = self.observation_space.spaces
+        self.observation_space = spaces.Tuple(
+            Obs(
+                base=obs_space,
+                subtasks=spaces.MultiDiscrete(
+                    np.tile(subtasks_space.nvec[:1], [self.n_subtasks + 1, 1])),
+                conditions=spaces.MultiDiscrete(
+                    np.array([len(self.object_types)]).repeat(self.n_subtasks + 1)),
+                control=spaces.MultiDiscrete(
+                    np.tile(
+                        np.array([[self.n_subtasks + 1]]),
+                        [
+                            self.n_subtasks + 1,
+                            2  # binary conditions
+                        ]))))
+
+    def set_pred(self):
+        try:
+            self.pred = self.evaluate_condition()
+        except IndexError:
+            pass
 
     def render_current_subtask(self):
         if self.subtask_idx == 0:
-            print("none")
+            print('none')
         else:
             super().render_current_subtask()
 
@@ -48,12 +57,12 @@ class ControlFlowGridWorld(SubtasksGridWorld):
             def develop_branch(j, add_indent):
                 new_indent = indent + add_indent
                 if j == 0:
-                    subtask = f""
+                    subtask = f''
                 else:
                     try:
-                        subtask = f"{j}:{self.subtasks[j]}"
+                        subtask = f'{j}:{self.subtasks[j]}'
                     except IndexError:
-                        return f"{new_indent}terminate"
+                        return f'{new_indent}terminate'
                 return f"{new_indent}{subtask}\n{helper(j, new_indent)}"
 
             if pos == neg:
@@ -78,37 +87,40 @@ class ControlFlowGridWorld(SubtasksGridWorld):
         return Obs(**obs)._asdict()
 
     def subtasks_generator(self):
-        choices = self.np_random.choice(
-            len(self.possible_subtasks), size=self.n_subtasks
-        )
+        choices = self.np_random.choice(len(self.possible_subtasks), size=self.n_subtasks + 1)
         subtasks = [self.Subtask(*self.possible_subtasks[i]) for i in choices]
         i = 0
-        encountered = Counter(passing=[], failing=[], subtasks=[])
-        while i < self.n_subtasks:
-            condition = self.conditions[i]
-            passing = condition in self.required_objects
+        encountered_passing = []
+        encountered_failing = []
+        encountered_subtasks = []
+        encountered_idxs = []
+        while True:
+            passing = self.conditions[i] in self.required_objects
             branching = self.control[i, 0] != self.control[i, 1]
-            encountered.update(passing=[condition if branching and passing else None])
-            encountered.update(
-                failing=[condition if branching and not passing else None]
-            )
+            encountered_passing += [self.conditions[i] if branching and passing else None]
+            encountered_failing += [self.conditions[i] if branching and not passing else None]
             i = self.control[i, int(passing)]
-            encountered.update(subtasks=[i])
+            if i > self.n_subtasks:
+                break
+            encountered_subtasks += [subtasks[i]]
+            encountered_idxs += [i]
 
-        self.required_objects = list(
-            set(o for o in encountered["passing"] if o is not None)
-        )
+        self.required_objects = list(set(o for o in encountered_passing if o is not None))
         available = [x for x in self.required_objects]
 
+        print(self.object_types)
+        print('encountered_failing', encountered_failing)
+        print('encountered_idxs', encountered_idxs)
         for i, subtask in enumerate(subtasks):
-            if i in encountered["subtasks"]:
+            if i in encountered_idxs:
                 obj = subtask.object
                 to_be_removed = subtask.interaction in {1, 2}
+                print('available', available)
                 if obj not in available:
-                    if (not to_be_removed and obj in encountered["failing"]) or (
-                        to_be_removed and obj in encountered["failing"][: i + 1]
-                    ):
-
+                    print('subtask', subtask)
+                    print('encountered_failing[:i + 1]', encountered_failing[:i + 1])
+                    if (not to_be_removed and obj in encountered_failing) or (
+                            to_be_removed and obj in encountered_failing[:i + 1]):
                         # choose a different object
                         obj = self.np_random.choice(self.required_objects)
                         subtasks[i] = subtask._replace(object=obj)
@@ -116,37 +128,49 @@ class ControlFlowGridWorld(SubtasksGridWorld):
                     # add object to map
                     self.required_objects += [obj]
                     available += [obj]
+                    print('required', self.required_objects)
+                    print('available', available)
 
                 if to_be_removed:
                     available.remove(obj)
+                    print('available', available)
 
         yield from subtasks
 
     def reset(self):
+        n = self.n_subtasks + 1
+
         def get_control():
-            for i in range(self.n_subtasks):
+            for i in range(n):
                 j = 2 * i
-                if self.force_branching or self.np_random.rand() < 0.7:
+                if self.force_branching or self.np_random.rand() < .7:
                     yield j, j + 1
                 else:
-                    yield self.np_random.randint(
-                        i,
-                        self.n_subtasks + (i > 0),  # prevent termination on first turn
-                        size=2)
+                    yield j, j
 
         self.control = 1 + np.minimum(np.array(list(get_control())), self.n_subtasks)
-        passing = self.np_random.choice(2, size=self.n_subtasks)
-        self.conditions = self.np_random.choice(
-            len(self.object_types), size=self.n_subtasks
-        )
-        self.required_objects = self.conditions[passing]
+
+        object_types = np.arange(len(self.object_types))
+        self.np_random.shuffle(object_types)
+        object_types = object_types.reshape(-1, 2)  # TODO: what if not % 2?
+        conditions_idxs = self.np_random.choice(len(object_types), size=n)
+        branching = (self.control[:, 0] != self.control[:, 1])
+        passing = self.np_random.choice(2, size=n)
+        self.conditions = object_types[conditions_idxs, passing]
+        self.failing_conditions = self.conditions[branching * (1 - passing).astype(bool)]
+        self.required_objects = list(object_types[:, 1])
+
+        o = super().reset()
         self.subtask_idx = 0
+        self.count = None
+        self.iterate = True
+        self.next_subtask = True
         self.pred = self.evaluate_condition()
-        self.subtask_idx = self.get_next_subtask()
-        self.count = self.subtask.count
         return o._replace(conditions=self.conditions, control=self.control)
 
     def get_next_subtask(self):
+        if self.subtask_idx > self.n_subtasks:
+            return None
         resolution = self.evaluate_condition()
         return self.control[self.subtask_idx, int(resolution)]
 
@@ -155,18 +179,13 @@ class ControlFlowGridWorld(SubtasksGridWorld):
         return object_type in self.objects.values()
 
     def get_required_objects(self, _):
-        required_objects = list(super().get_required_objects(self.subtasks))
-        yield from required_objects
-        # for condition in self.conditions:
-        # if condition not in required_objects:
-        # if self.np_random.rand() < .5:
-        # yield condition
+        yield from self.required_objects
 
 
 def main(seed, n_subtasks):
-    kwargs = gridworld_env.get_args("4x4SubtasksGridWorld-v0")
-    del kwargs["class_"]
-    del kwargs["max_episode_steps"]
+    kwargs = gridworld_env.get_args('4x4SubtasksGridWorld-v0')
+    del kwargs['class_']
+    del kwargs['max_episode_steps']
     kwargs.update(n_subtasks=n_subtasks, max_task_count=1)
     env = ControlFlowGridWorld(**kwargs, evaluation=False, eval_subtasks=[])
     actions = "wsadeq"

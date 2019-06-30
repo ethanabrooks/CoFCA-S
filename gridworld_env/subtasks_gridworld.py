@@ -180,11 +180,11 @@ class SubtasksGridWorld(gym.Env):
             print("Task Complete")
             print("*************")
         else:
-            print("subtask:")
+            print('subtask:')
             self.render_current_subtask()
         if self.count is not None:
-            print("remaining:", self.count + 1)
-        print("action:", end=" ")
+            print('remaining:', self.count + 1)
+        print('action:', end=' ')
         if self.last_action is not None:
             print(self.transition_strings[self.last_action])
         else:
@@ -204,7 +204,7 @@ class SubtasksGridWorld(gym.Env):
         # time.sleep(4 * sleep_time if self.last_terminal else sleep_time)
 
     def render_current_subtask(self):
-        print(f"{self.subtask_idx}:{self.subtask}")
+        print(f'{self.subtask_idx}:{self.subtask}')
 
     def render_task(self):
         for line in self.subtasks:
@@ -256,6 +256,14 @@ class SubtasksGridWorld(gym.Env):
         self.iterate = False
         self.next_subtask = False
         return self.get_observation()
+
+    def objects_one_hot(self):
+        #TODO refactor
+        h, w, = self.desc.shape
+        objects_one_hot = np.zeros((1 + len(self.object_types), h, w), dtype=bool)
+        idx = [(v, ) + k for k, v in self.objects.items()]
+        set_index(objects_one_hot, idx, True)
+        return objects_one_hot
 
     def get_observation(self):
         agent_one_hot = np.zeros_like(self.desc, dtype=bool)
@@ -317,7 +325,9 @@ class SubtasksGridWorld(gym.Env):
         pos = tuple(self.pos)
         touching = pos in self.objects
 
-        # set iterate
+        obs = self.get_observation()
+        self.set_pred()
+
         self.iterate = False
         if touching and not t:
             object_type = self.objects[pos]
@@ -339,10 +349,13 @@ class SubtasksGridWorld(gym.Env):
         self.last_action = a
         self.last_terminal = t
         self.next_subtask = self.iterate and self.count == 0
-        return self.get_observation(), r, t, {}
+        return obs, r, t, {}
 
     def get_next_subtask(self):
         return self.subtask_idx + 1
+
+    def set_pred(self):
+        pass
 
 
 if __name__ == "__main__":

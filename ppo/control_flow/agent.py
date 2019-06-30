@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from gridworld_env.control_flow_gridworld import Obs
 from ppo.layers import Flatten, Reshape
@@ -21,10 +22,8 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
         self.obs_sections = Obs(*[int(np.prod(s.shape)) for s in self.obs_spaces])
         self.register_buffer("branch_one_hots", torch.eye(self.n_subtasks))
         num_object_types = int(self.obs_spaces.subtasks.nvec[0, 2])
-        self.register_buffer("condition_one_hots", torch.eye(num_object_types))
-        self.register_buffer(
-            "rows", torch.arange(self.n_subtasks).unsqueeze(-1).float()
-        )
+        self.register_buffer('condition_one_hots', torch.eye(num_object_types))
+        self.register_buffer('rows', torch.arange(self.n_subtasks).unsqueeze(-1).float())
         self.n_conditions = self.obs_spaces.conditions.shape[0]
 
         d, h, w = self.obs_shape
@@ -32,9 +31,7 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
             Reshape(-1, num_object_types * d, h, w),
             # init_(nn.Linear(in_size, 1), 'sigmoid'),
             # Reshape(-1, in_channels, *self.obs_shape[-2:]),
-            init_(
-                nn.Conv2d(num_object_types * d, hidden_size, kernel_size=1, stride=1)
-            ),
+            init_(nn.Conv2d(num_object_types * d, hidden_size, kernel_size=1, stride=1)),
             nn.MaxPool2d(kernel_size=self.obs_shape[-2:], stride=1),
             Flatten(),
             init_(nn.Linear(hidden_size, 1), "sigmoid"),
@@ -124,9 +121,7 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
 
         def update_attention(p, t):
             c = (p.unsqueeze(1) @ conditions).squeeze(1)
-            phi_in = c.view(N, conditions.size(2), 1, 1, 1) * inputs.base[t].unsqueeze(
-                1
-            )
+            phi_in = c.view(N, conditions.size(2), 1, 1, 1) * inputs.base[t].unsqueeze(1)
             pred = self.phi_shift(phi_in)  # TODO
             trans = pred * true_path + (1 - pred) * false_path
             return (p.unsqueeze(1) @ trans).squeeze(1)

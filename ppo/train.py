@@ -80,16 +80,17 @@ class Train:
             torch.backends.cudnn.benchmark = False
             torch.backends.cudnn.deterministic = True
 
-        self.device = "cpu"
+        device = 'cpu'
         if cuda:
             device_num = get_random_gpu()
             if run_id:
-                match = re.search("\d+$", run_id)
+                match = re.search('\d+$', run_id)
                 if match:
                     device_num = int(match.group()) % get_n_gpu()
 
-            self.device = torch.device("cuda", device_num)
-        print("Using device", self.device)
+            device = torch.device('cuda', device_num)
+        print('Using device', device)
+        self.device = device
 
         writer = None
         if log_dir:
@@ -122,10 +123,10 @@ class Train:
 
         if cuda:
             tick = time.time()
-            envs.to(self.device)
-            self.agent.to(self.device)
-            rollouts.to(self.device)
-            print("Values copied to GPU in", time.time() - tick, "seconds")
+            envs.to(device)
+            self.agent.to(device)
+            rollouts.to(device)
+            print('Values copied to GPU in', time.time() - tick, 'seconds')
 
         ppo = PPO(agent=self.agent, batch_size=batch_size, **ppo_args)
 
@@ -134,10 +135,10 @@ class Train:
         last_save = start
 
         if load_path:
-            state_dict = torch.load(load_path, map_location=self.device)
-            self.agent.load_state_dict(state_dict["agent"])
-            ppo.optimizer.load_state_dict(state_dict["optimizer"])
-            start = state_dict.get("step", -1) + 1
+            state_dict = torch.load(load_path, map_location=device)
+            self.agent.load_state_dict(state_dict['agent'])
+            ppo.optimizer.load_state_dict(state_dict['optimizer'])
+            start = state_dict.get('step', -1) + 1
             if isinstance(envs.venv, VecNormalize):
                 envs.venv.load_state_dict(state_dict["vec_normalize"])
             print(f"Loaded parameters from {load_path}.")
