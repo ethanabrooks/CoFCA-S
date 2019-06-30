@@ -22,8 +22,6 @@ class DebugWrapper(gym.Wrapper):
         actions = Actions(*[x.item() for x in np.split(action, self.action_sections)])
         truth = int(self.env.unwrapped.subtask_idx)
         guess = int(actions.g)
-        print("guess", guess)
-        print("truth", truth)
         r = 0
         if self.env.unwrapped.subtask is not None and guess != truth:
             r = -1

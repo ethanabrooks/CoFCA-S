@@ -280,8 +280,6 @@ class SubtasksGridWorld(gym.Env):
                 # np.dstack([obstacles, agent]),
             ]
         ).transpose(2, 0, 1)
-        print("objects_desc", objects_desc)
-        print("objects one hot", objects.transpose(2, 0, 1))
 
         return Obs(
             base=obs,
@@ -296,9 +294,7 @@ class SubtasksGridWorld(gym.Env):
 
     def iterate(self):
         if self.count == 0:
-            print("subtask_idx before", self.subtask_idx)
             self.subtask_idx = self.get_next_subtask()
-            print("subtask_idx after", self.subtask_idx)
         else:
             self.count -= 1
 
@@ -342,7 +338,7 @@ class SubtasksGridWorld(gym.Env):
 
         self.last_terminal = t = self.subtask is None
         if t:
-            r = 1.
+            r = 1.0
         return obs, r, t, {}
 
     def get_next_subtask(self):
