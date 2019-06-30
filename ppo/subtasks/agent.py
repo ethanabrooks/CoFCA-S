@@ -166,12 +166,6 @@ class Recurrence(torch.jit.ScriptModule):
             Flatten(),
         )
 
-        self.conv2 = nn.Sequential(
-            init_(nn.Conv2d(d, hidden_size, kernel_size=1)),
-            nn.MaxPool2d(kernel_size=self.obs_shape[-2:], stride=1),
-            Flatten(),
-        )
-
         input_size = h * w * hidden_size  # conv output
         if isinstance(action_spaces.a, Discrete):
             num_outputs = action_spaces.a.n
@@ -200,9 +194,7 @@ class Recurrence(torch.jit.ScriptModule):
         else:
             self.phi_update = trace(
                 lambda in_size: init_(nn.Linear(in_size, 2), "sigmoid"),
-                in_size=(
-                    hidden_size * action_spaces.a.n * int(self.subtask_nvec.prod())
-                ),
+                in_size=(d * action_spaces.a.n * int(self.subtask_nvec.prod())),
             )
 
         for i, x in enumerate(self.subtask_nvec):
@@ -331,6 +323,7 @@ class Recurrence(torch.jit.ScriptModule):
 
         return self.pack(
             self.inner_loop(
+                a=hx.a,
                 g=hx.g,
                 cr=hx.cr,
                 cg=hx.cg,
@@ -401,45 +394,9 @@ class Recurrence(torch.jit.ScriptModule):
             agent_layer = obs[t, :, 6, :, :].long()
             j, k, l = torch.split(agent_layer.nonzero(), 1, dim=-1)
 
-            # p
-            p2 = update_attention(p, t)
-            p = interp(p, p2, cr)
-
-            # r
-            r = (p.unsqueeze(1) @ M).squeeze(1)
-
-            # g
-            old_g = self.g_one_hots[G[t - 1]]
-            g_dist = FixedCategorical(probs=torch.clamp(interp(old_g, p, cg), 0.0, 1.0))
-            sample_new(G[t], g_dist)
-
-            # a
-            g = G[t]
-            g_binary = M[torch.arange(N), g]
-            conv_out = self.conv((obs[t], broadcast3d(g_binary, self.obs_shape[1:])))
-            if self.agent is None:
-                a_dist = self.actor(conv_out)
-            else:
-                a_dist = self.agent(
-                    torch.cat(
-                        ppo.subtasks.teacher.Obs(
-                            base=obs[t].view(N, -1),
-                            subtask=g.float().view(N, -1),
-                            subtasks=M123.view(N, -1),
-                            cr=cr,
-                            cg=cg,
-                        ),
-                        dim=1,
-                    ),
-                    rnn_hxs=None,
-                    masks=None,
-                ).dist
-            sample_new(A[t], a_dist)
-
-            # A[t, :] = "wsadeq".index(input("act:"))
-
             def phi_update(subtask_param):
-                interaction, count, obj = task_sections = torch.split(
+                debug_obs = obs[t, j, :, k, l].squeeze(1)
+                task_sections = torch.split(
                     subtask_param, tuple(self.subtask_nvec), dim=-1
                 )
                 parts = (debug_obs, self.a_one_hots[A[t - 1]]) + task_sections

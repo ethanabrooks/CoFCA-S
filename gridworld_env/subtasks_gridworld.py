@@ -273,7 +273,14 @@ class SubtasksGridWorld(gym.Env):
         objects = self.object_one_hots[objects_desc]
         agent = self.layer_one_hots[np.ravel_multi_index(self.pos, self.desc.shape)]
 
-        obs = np.dstack([objects, np.dstack([obstacles, agent])]).transpose(2, 0, 1)
+        obs = np.dstack(
+            [
+                np.expand_dims(obstacles, 2),
+                objects,
+                np.expand_dims(agent, 2),
+                # np.dstack([obstacles, agent]),
+            ]
+        ).transpose(2, 0, 1)
 
         return Obs(
             base=obs,
@@ -301,6 +308,8 @@ class SubtasksGridWorld(gym.Env):
             self.pos = np.clip(pos, a_min, a_max).astype(int)
         pos = tuple(self.pos)
         touching = pos in self.objects
+
+        obs = self.get_observation()
 
         t = False
         r = -0.1
@@ -332,7 +341,7 @@ class SubtasksGridWorld(gym.Env):
                     self.count -= 1
 
         self.last_terminal = t
-        return self.get_observation(), r, t, {}
+        return obs, r, t, {}
 
     def get_next_subtask(self):
         return self.subtask_idx + 1
