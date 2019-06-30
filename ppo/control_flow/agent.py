@@ -29,17 +29,18 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
 
         d, h, w = self.obs_shape
         self.phi_shift = nn.Sequential(
-            Reshape(-1, num_object_types * d, h, w),
+            init_(nn.Linear(num_object_types * h * w, 1)),
+            # Reshape(-1, num_object_types * d, h, w),
             # init_(nn.Linear(in_size, 1), 'sigmoid'),
             # Reshape(-1, in_channels, *self.obs_shape[-2:]),
-            init_(
-                nn.Conv2d(num_object_types * d, hidden_size, kernel_size=1, stride=1)
-            ),
-            nn.MaxPool2d(kernel_size=self.obs_shape[-2:], stride=1),
-            Flatten(),
-            init_(nn.Linear(hidden_size, 1), "sigmoid"),
-            nn.Sigmoid(),
-            Reshape(-1, 1, 1),
+            # init_(
+            # nn.Conv2d(num_object_types * d, hidden_size, kernel_size=1, stride=1)
+            # ),
+            # nn.MaxPool2d(kernel_size=self.obs_shape[-2:], stride=1),
+            # Flatten(),
+            # init_(nn.Linear(hidden_size, 1), "sigmoid"),
+            # nn.Sigmoid(),
+            # Reshape(-1, 1, 1),
         )
         self.obs_shapes = Obs(
             base=self.obs_spaces.base.shape,
@@ -124,15 +125,19 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
 
         def update_attention(p, t):
             c = (p.unsqueeze(1) @ conditions).squeeze(1)
-            phi_in = c.view(N, conditions.size(2), 1, 1, 1) * inputs.base[t].unsqueeze(
-                1
-            )
-            pred = self.phi_shift(phi_in)  # TODO
+            # phi_in = c.view(N, conditions.size(2), 1, 1, 1) * inputs.base[t].unsqueeze(
+            # 1
+            # )
+            phi_in = (inputs.base[t, :, 2:-1] * c).view(N, -1)  # TODO
+            # truth = torch.any(phi_in > 0, dim=-1).float().view(N, 1, 1)
+            pred = self.phi_shift(phi_in)
+            # pred = truth
             trans = pred * true_path + (1 - pred) * false_path
             return (p.unsqueeze(1) @ trans).squeeze(1)
 
         return self.pack(
             self.inner_loop(
+                a=hx.a,
                 cr=hx.cr,
                 cg=hx.cg,
                 g=hx.g,
