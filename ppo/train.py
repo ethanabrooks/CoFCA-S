@@ -261,7 +261,7 @@ class Train:
 
             # Observe reward and next obs
             obs, reward, done, infos = envs.step(act.action)
-            if done.item() and reward.numpy().item() < 0:
+            if np.any(done * reward.numpy() < 0):
                 import ipdb
 
                 ipdb.set_trace()
