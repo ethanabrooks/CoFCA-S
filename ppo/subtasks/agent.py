@@ -323,6 +323,7 @@ class Recurrence(torch.jit.ScriptModule):
 
         return self.pack(
             self.inner_loop(
+                new_episode=new_episode,
                 a=hx.a,
                 g=hx.g,
                 cr=hx.cr,
@@ -368,6 +369,7 @@ class Recurrence(torch.jit.ScriptModule):
 
     def inner_loop(
         self,
+        new_episode,
         g,
         a,
         cr,
@@ -406,10 +408,14 @@ class Recurrence(torch.jit.ScriptModule):
                 column1 = interaction[:, :1]
                 column2 = interaction[:, 1:] * a_one_hot[:, 4:]
                 correct_action = torch.cat([column1, column2], dim=-1)
-                truth = (
-                    correct_action.sum(-1, keepdim=True)
-                    * correct_object.sum(-1, keepdim=True)
-                ).detach()
+                truth = torch.clamp(
+                    (
+                        correct_action.sum(-1, keepdim=True)
+                        * correct_object.sum(-1, keepdim=True)
+                    ).detach()
+                    + (new_episode.unsqueeze(-1).float()),
+                    max=1,
+                )
                 if self.multiplicative_interaction:
                     c_logits = self.phi_update(parts)
                 else:

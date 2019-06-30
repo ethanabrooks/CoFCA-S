@@ -54,7 +54,6 @@ class SubtasksGridWorld(gym.Env):
 
         # set on initialize
         self.initialized = False
-        self.iterate = False
         self.next_subtask = False
         self.obstacles_one_hot = np.zeros(self.desc.shape, dtype=bool)
         self.open_spaces = None
@@ -281,6 +280,8 @@ class SubtasksGridWorld(gym.Env):
                 # np.dstack([obstacles, agent]),
             ]
         ).transpose(2, 0, 1)
+        print("objects_desc", objects_desc)
+        print("objects one hot", objects.transpose(2, 0, 1))
 
         return Obs(
             base=obs,
@@ -292,6 +293,14 @@ class SubtasksGridWorld(gym.Env):
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)
         return [seed]
+
+    def iterate(self):
+        if self.count == 0:
+            print("subtask_idx before", self.subtask_idx)
+            self.subtask_idx = self.get_next_subtask()
+            print("subtask_idx after", self.subtask_idx)
+        else:
+            self.count -= 1
 
     def step(self, a):
         self.last_action = a
@@ -314,33 +323,26 @@ class SubtasksGridWorld(gym.Env):
         t = False
         r = -0.1
         if touching:
-            iterate = False
             object_type = self.objects[pos]
             interaction = self.interactions[self.subtask.interaction]
-            if "visit" == interaction:
-                iterate = object_type == self.subtask.object
+            if "visit" == interaction and object_type == self.subtask.object:
+                self.iterate()
             if a >= n_transitions:
                 if a - n_transitions == 0:  # pick up
+                    if "pick-up" == interaction and object_type == self.subtask.object:
+                        self.iterate()
                     del self.objects[pos]
-                    if "pick-up" == interaction:
-                        iterate = object_type == self.subtask.object  # picked up object
                 elif a - n_transitions == 1:  # transform
+                    if (
+                        "transform" == interaction
+                        and object_type == self.subtask.object
+                    ):
+                        self.iterate()
                     self.objects[pos] = len(self.object_types)
-                    if "transform" == interaction:
-                        iterate = object_type == self.subtask.object
 
-            if iterate:
-                if self.count == 0:
-                    self.subtask_idx = self.get_next_subtask()
-                    if self.subtask is None:
-                        r = 1
-                        t = True
-                    else:
-                        self.count = self.subtask.count
-                else:
-                    self.count -= 1
-
-        self.last_terminal = t
+        self.last_terminal = t = self.subtask is None
+        if t:
+            r = 1.
         return obs, r, t, {}
 
     def get_next_subtask(self):
