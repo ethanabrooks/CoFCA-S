@@ -202,9 +202,7 @@ def metacontroller_cli():
                 if control_flow:
                     return ppo.control_flow.Agent(**metacontroller_kwargs)
                 else:
-                    x = ppo.subtasks.Agent(**metacontroller_kwargs)
-                    torch.save(dict(step=0, **x.state_dict()), "checkpoints/initial.pt")
-                    exit()
+                    return ppo.subtasks.Agent(**metacontroller_kwargs)
 
         # ppo_args.update(aux_loss_only=True)
         TrainSubtasks(env_id=env_id, ppo_args=ppo_args, **kwargs)
