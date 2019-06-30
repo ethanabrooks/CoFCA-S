@@ -1,6 +1,6 @@
 from collections import namedtuple
-from pprint import pprint
 from pathlib import Path
+from pprint import pprint
 
 from gym.spaces import Box, Discrete
 import numpy as np
@@ -473,8 +473,7 @@ class Recurrence(torch.jit.ScriptModule):
                 a_dist = self.agent(agent_inputs, rnn_hxs=None, masks=None).dist
             sample_new(A[t], a_dist)
             # a[:] = 'wsadeq'.index(input('act:'))
-
-            x = RecurrentState(
+            state = RecurrentState(
                 cg=cg,
                 cr=cr,
                 cg_loss=cg_loss,
@@ -491,9 +490,21 @@ class Recurrence(torch.jit.ScriptModule):
                 subtask=float_subtask,
                 v=self.critic(conv_out),
             )
+
+            x = dict(
+                state=state,
+                obs=ppo.subtasks.teacher.Obs(
+                    base=obs[t].view(N, -1),
+                    subtask=g.float().view(N, -1),
+                    subtasks=M123.view(N, -1),
+                    cr=cr,
+                    cg=cg,
+                ),
+                conv=self.conv.state_dict(),
+            )
             path = Path("/tmp/ppo")
             n = len(list(path.iterdir()))
-            pprint(x)
+
             with Path(path, str(n)).open("wb") as f:
                 torch.save(x, f)
-            yield x
+            yield state
