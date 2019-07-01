@@ -138,6 +138,7 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
             ).view(N, -1)
             truth = torch.any(phi_in > 0, dim=-1).float().view(N, 1, 1)
             # pred = self.phi_shift((inputs.base[t], c))
+            pred = truth
             trans = pred * true_path + (1 - pred) * false_path
             return (p.unsqueeze(1) @ trans).squeeze(1)
 
