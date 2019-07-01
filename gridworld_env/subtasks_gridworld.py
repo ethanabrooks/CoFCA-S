@@ -285,9 +285,12 @@ class SubtasksGridWorld(gym.Env):
 
         yield from subtasks
 
-    def get_required_objects(self, task):
-        for subtask in task:
-            yield from [subtask.object] * (subtask.count + 1)
+    # def get_required_objects(self, task):
+    #     for subtask in task:
+    #         yield from [subtask.object] * (subtask.count + 1)
+
+    def get_required_objects(self, _):
+        yield from self.required_objects
 
     def reset(self):
         # TODO >>>>>
