@@ -14,7 +14,7 @@ from ppo.utils import set_index
 from rl_utils import cartesian_product
 
 Subtask = namedtuple("Subtask", "interaction count object")
-Obs = namedtuple("Obs", "base subtask subtasks next_subtask conditions control pred")
+Obs = namedtuple("Obs", "base subtask subtasks conditions control next_subtask pred")
 
 
 class SubtasksGridWorld(gym.Env):
@@ -294,9 +294,16 @@ class SubtasksGridWorld(gym.Env):
 
     def reset(self):
         # TODO >>>>>
-        self.control = np.stack(
-            [1 + np.arange(self.n_subtasks), 1 + np.arange(self.n_subtasks)], axis=1
-        )
+        def get_control():
+            for i in range(self.n_subtasks):
+                # j = 2 * i
+                j = i
+                # if self.force_branching or self.np_random.rand() < 0.7:
+                # yield j, j + 1
+                # else:
+                yield j, j
+
+        self.control = 1 + np.minimum(np.array(list(get_control())), self.n_subtasks)
         n_object_types = self.np_random.randint(1, len(self.object_types))
         object_types = np.arange(len(self.object_types))
         existing = self.np_random.choice(object_types, size=n_object_types)
@@ -306,6 +313,8 @@ class SubtasksGridWorld(gym.Env):
         passing = self.np_random.choice(existing, size=n_passing)
         failing = self.np_random.choice(non_existing, size=n_failing)
         self.conditions = np.concatenate([passing, failing])
+        self.np_random.shuffle(self.conditions)
+        self.required_objects = passing
         # TODO <<<<<
         if not self.initialized:
             self.initialize()
