@@ -494,7 +494,7 @@ class Recurrence(torch.jit.ScriptModule):
             cg, cg_probs = phi_update(subtask_param=g_binary)
 
             # p
-            p2 = update_attention(p, t)
+            p2 = _update_attention(p, t)
             p = interp(p, p2, cr)
 
             # r
