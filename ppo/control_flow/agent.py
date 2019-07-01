@@ -82,9 +82,7 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
             truth = torch.any(phi_in > 0, dim=-1).float().view(N, 1, 1)
             pred = truth
             trans = pred * true_path + (1 - pred) * false_path
-            p2 = (p.unsqueeze(1) @ trans).squeeze(1)
-            p2[:, -1] += 1 - p2.sum(dim=-1)
-            return p2
+            return (p.unsqueeze(1) @ trans).squeeze(1)
 
         kwargs.update(update_attention=update_attention)
         yield from super().inner_loop(inputs=inputs, **kwargs)
