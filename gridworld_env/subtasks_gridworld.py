@@ -295,6 +295,7 @@ class SubtasksGridWorld(gym.Env):
     def iterate(self):
         if self.count == 0:
             self.subtask_idx = self.get_next_subtask()
+            self.next_subtask = True
         else:
             self.count -= 1
 
