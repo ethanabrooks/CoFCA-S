@@ -2,11 +2,9 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from gridworld_env.control_flow_gridworld import Obs
-from ppo.layers import Flatten, Parallel, Product, Reshape
 import ppo.subtasks.agent
-from ppo.subtasks.teacher import g123_to_binary
-from ppo.subtasks.wrappers import Actions
+from gridworld_env.control_flow_gridworld import Obs
+from ppo.layers import Parallel, Product, Reshape
 from ppo.utils import init_
 
 

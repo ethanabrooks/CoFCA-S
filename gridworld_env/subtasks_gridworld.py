@@ -14,7 +14,7 @@ from ppo.utils import set_index
 from rl_utils import cartesian_product
 
 Subtask = namedtuple("Subtask", "interaction count object")
-Obs = namedtuple("Obs", "base subtask subtasks next_subtask")
+Obs = namedtuple("Obs", "base subtask subtasks next_subtask conditions control pred")
 
 
 class SubtasksGridWorld(gym.Env):
@@ -122,6 +122,16 @@ class SubtasksGridWorld(gym.Env):
                     )
                 ),
                 next_subtask=spaces.Discrete(2),
+                conditions=spaces.MultiDiscrete(
+                    np.array([len(self.object_types)]).repeat(self.n_subtasks)
+                ),
+                pred=spaces.Discrete(2),
+                control=spaces.MultiDiscrete(
+                    np.tile(
+                        np.array([[self.n_subtasks]]),
+                        [self.n_subtasks, 2],  # binary conditions
+                    )
+                ),
             )._asdict()
         )
         self.action_space = spaces.Discrete(len(self.transitions) + 2)
@@ -286,6 +296,11 @@ class SubtasksGridWorld(gym.Env):
             subtask=[self.subtask_idx],
             subtasks=np.array([self.subtasks]),
             next_subtask=[self.next_subtask],
+            conditions=np.ones(self.n_subtasks),
+            control=np.stack(
+                [1 + np.arange(self.n_subtasks), 1 + np.arange(self.n_subtasks)], axis=1
+            ),
+            pred=[True],
         )._asdict()
 
     def seed(self, seed=None):
