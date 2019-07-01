@@ -38,7 +38,9 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
             Reshape(-1, num_object_types * d, h, w),
             # init_(nn.Linear(num_object_types * d * h * w, 1), "sigmoid"),
             # Reshape(-1, in_channels, *self.obs_shape[-2:]),
-            init_(nn.Conv2d(num_object_types * d, 1, kernel_size=1, stride=1)),
+            init_(
+                nn.Conv2d(num_object_types * d, 1, kernel_size=1, stride=1), "sigmoid"
+            ),
             nn.MaxPool2d(kernel_size=self.obs_shape[-2:], stride=1),
             Flatten(),
             # init_(nn.Linear(hidden_size, 1), "sigmoid"),
