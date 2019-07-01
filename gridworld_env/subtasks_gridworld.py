@@ -1,4 +1,4 @@
-from collections import namedtuple, Counter
+from collections import Counter, namedtuple
 import itertools
 import re
 
