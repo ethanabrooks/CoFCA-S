@@ -434,8 +434,14 @@ class Recurrence(torch.jit.ScriptModule):
         false_path = self.branch_one_hots[false_path.squeeze(-1).long()]
 
         def update_attention(p, t):
-            # p2 = F.pad(p, [1, 0])[:, :-1]
-            p2 = (p.unsqueeze(1) @ true_path).squeeze(1)
+            c = (p.unsqueeze(1) @ conditions).squeeze(1)
+            phi_in = (
+                inputs.base[t, :, 1:-2] * c.view(N, conditions.size(2), 1, 1)
+            ).view(N, -1)
+            truth = torch.any(phi_in > 0, dim=-1).float().view(N, 1, 1)
+            pred = truth
+            trans = pred * true_path + (1 - pred) * false_path
+            p2 = (p.unsqueeze(1) @ trans).squeeze(1)
             p2[:, -1] += 1 - p2.sum(dim=-1)
             return p2
 
