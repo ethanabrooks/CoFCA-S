@@ -355,12 +355,6 @@ class Recurrence(torch.jit.ScriptModule):
             # initialize g to first subtask
             hx.g[new_episode] = 0.0
 
-        def update_attention(p, t):
-            # p2 = F.pad(p, [1, 0])[:, :-1]
-            p2 = (p.unsqueeze(1) @ self.trans.unsqueeze(0)).squeeze(1)
-            p2[:, -1] += 1 - p2.sum(dim=-1)
-            return p2
-
         return self.pack(
             self.inner_loop(
                 inputs=inputs,
@@ -378,7 +372,7 @@ class Recurrence(torch.jit.ScriptModule):
                 p=p,
                 r=r,
                 actions=actions,
-                update_attention=update_attention,
+                update_attention=None,
             )
         )
 
@@ -438,6 +432,12 @@ class Recurrence(torch.jit.ScriptModule):
         false_path, true_path = torch.split(control, 1, dim=-1)
         true_path = self.branch_one_hots[true_path.squeeze(-1).long()]
         false_path = self.branch_one_hots[false_path.squeeze(-1).long()]
+
+        def update_attention(p, t):
+            # p2 = F.pad(p, [1, 0])[:, :-1]
+            p2 = (p.unsqueeze(1) @ true_path[0].unsqueeze(0)).squeeze(1)
+            p2[:, -1] += 1 - p2.sum(dim=-1)
+            return p2
 
         def _update_attention(p, t):
             c = (p.unsqueeze(1) @ conditions).squeeze(1)
