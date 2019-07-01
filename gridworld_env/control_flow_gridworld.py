@@ -9,34 +9,34 @@ Obs = namedtuple("Obs", "base subtask subtasks conditions control next_subtask p
 
 
 class ControlFlowGridWorld(SubtasksGridWorld):
-    #   def __init__(self, *args, n_subtasks, force_branching=False, **kwargs):
-    #       super().__init__(*args, n_subtasks=n_subtasks + 1, **kwargs)
-    #       self.passing_objects = None
-    #       self.failing_objects = None
-    #       self.pred = None
-    #       self.force_branching = force_branching
-    #       if force_branching:
-    #           assert n_subtasks % 2 == 0
+    def __init__(self, *args, n_subtasks, force_branching=False, **kwargs):
+        super().__init__(*args, n_subtasks=n_subtasks + 1, **kwargs)
+        self.passing_objects = None
+        self.failing_objects = None
+        self.pred = None
+        self.force_branching = force_branching
+        if force_branching:
+            assert n_subtasks % 2 == 0
 
-    #       self.conditions = None
-    #       self.control = None
-    #       self.required_objects = None
-    #       # self.observation_space = spaces.Dict(
-    #       # Obs(
-    #       # **self.observation_space.spaces,
-    #       # conditions=spaces.MultiDiscrete(
-    #       # np.array([len(self.object_types)]).repeat(self.n_subtasks)
-    #       # ),
-    #       # pred=spaces.Discrete(2),
-    #       # control=spaces.MultiDiscrete(
-    #       # np.tile(
-    #       # np.array([[self.n_subtasks]]),
-    #       # [self.n_subtasks, 2],  # binary conditions
-    #       # )
-    #       # ),
-    #       # )._asdict()
-    #       # )
-    #       self.pred = None
+        self.conditions = None
+        self.control = None
+        self.required_objects = None
+        # self.observation_space = spaces.Dict(
+        # Obs(
+        # **self.observation_space.spaces,
+        # conditions=spaces.MultiDiscrete(
+        # np.array([len(self.object_types)]).repeat(self.n_subtasks)
+        # ),
+        # pred=spaces.Discrete(2),
+        # control=spaces.MultiDiscrete(
+        # np.tile(
+        # np.array([[self.n_subtasks]]),
+        # [self.n_subtasks, 2],  # binary conditions
+        # )
+        # ),
+        # )._asdict()
+        # )
+        self.pred = None
 
     def render_current_subtask(self):
         if self.subtask_idx == 0:
@@ -72,14 +72,14 @@ class ControlFlowGridWorld(SubtasksGridWorld):
 
         print(helper(i=0, indent=""))
 
-        # def get_observation(self):
-        #     obs = super().get_observation()
-        #     obs.update(
-        #         control=self.control,
-        #         conditions=self.conditions,
-        #         pred=self.evaluate_condition(),
-        #     )
-        #     return Obs(**obs)._asdict()
+    # def get_observation(self):
+    #     obs = super().get_observation()
+    #     obs.update(
+    #         control=self.control,
+    #         conditions=self.conditions,
+    #         pred=self.evaluate_condition(),
+    #     )
+    #     return Obs(**obs)._asdict()
 
     def subtasks_generator(self):
         choices = self.np_random.choice(
