@@ -150,33 +150,6 @@ class SubtasksGridWorld(gym.Env):
         )
         self.layer_one_hots = np.eye(h * w).reshape(-1, h, w)
 
-        # TODO >>>>>>>>>>
-
-        self.passing_objects = None
-        self.failing_objects = None
-        self.pred = None
-
-        self.conditions = None
-        self.control = None
-        self.required_objects = None
-        # self.observation_space = spaces.Dict(
-        # Obs(
-        # **self.observation_space.spaces,
-        # conditions=spaces.MultiDiscrete(
-        # np.array([len(self.object_types)]).repeat(self.n_subtasks)
-        # ),
-        # pred=spaces.Discrete(2),
-        # control=spaces.MultiDiscrete(
-        # np.tile(
-        # np.array([[self.n_subtasks]]),
-        # [self.n_subtasks, 2],  # binary conditions
-        # )
-        # ),
-        # )._asdict()
-        # )
-        self.pred = None
-        # TODO <<<<<<<<
-
     @property
     def subtask(self):
         try:
@@ -343,7 +316,11 @@ class SubtasksGridWorld(gym.Env):
         self.count = 0
         self.last_terminal = False
         self.last_action = None
-        return self.get_observation()
+        o = self.get_observation()
+        self.subtask_idx = 0
+        self.subtask_idx = self.get_next_subtask()
+        self.count = self.subtask.count
+        return o
 
     def objects_one_hot(self):
         #TODO refactor

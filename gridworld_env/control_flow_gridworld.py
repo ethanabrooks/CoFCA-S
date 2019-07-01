@@ -72,112 +72,104 @@ class ControlFlowGridWorld(SubtasksGridWorld):
 
         print(helper(i=0, indent=""))
 
-    # def get_observation(self):
-    #     obs = super().get_observation()
-    #     obs.update(
-    #         control=self.control,
-    #         conditions=self.conditions,
-    #         pred=self.evaluate_condition(),
-    #     )
-    #     return Obs(**obs)._asdict()
 
-    def subtasks_generator(self):
-        choices = self.np_random.choice(len(self.possible_subtasks), size=self.n_subtasks + 1)
-        subtasks = [self.Subtask(*self.possible_subtasks[i]) for i in choices]
-        i = 0
-        encountered_passing = []
-        encountered_failing = []
-        encountered_subtasks = []
-        encountered_idxs = []
-        while True:
-            passing = self.conditions[i] in self.required_objects
-            branching = self.control[i, 0] != self.control[i, 1]
-            encountered.update(passing=[condition if branching and passing else None])
-            encountered.update(
-                failing=[condition if branching and not passing else None]
-            )
-            encountered.update(subtasks=[i])
-            i = self.control[i, int(passing)]
-
-        failing = encountered["failing"]
-        object_types = np.arange(len(self.object_types))
-        non_failing = list(set(object_types) - set(failing))
-        self.required_objects = list(
-            set(o for o in encountered["passing"] if o is not None)
-        )
-        available = [x for x in self.required_objects]
-
-        print(self.object_types)
-        print('encountered_failing', encountered_failing)
-        print('encountered_idxs', encountered_idxs)
-        for i, subtask in enumerate(subtasks):
-            if i in encountered_idxs:
-                obj = subtask.object
-                to_be_removed = subtask.interaction in {1, 2}
-                print('available', available)
-                if obj not in available:
-                    if not to_be_removed and obj in failing:
-                        obj = self.np_random.choice(non_failing)
-                        subtasks[i] = subtask._replace(object=obj)
-                    past_failing = failing[-i + 1 :]
-                    if to_be_removed and obj in past_failing:
-                        obj = self.np_random.choice(
-                            list(set(object_types) - set(past_failing))
-                        )
-                        subtasks[i] = subtask._replace(object=obj)
-
-                    # add object to map
-                    self.required_objects += [obj]
-                    available += [obj]
-                    print('required', self.required_objects)
-                    print('available', available)
-
-                if to_be_removed:
-                    available.remove(obj)
-                    print('available', available)
-
-        yield from subtasks
-
-    def reset(self):
-        n = self.n_subtasks + 1
-
-        def get_control():
-            for i in range(self.n_subtasks):
-                j = i
-                # if self.force_branching or self.np_random.rand() < 0.7:
-                # yield j, j + 1
-                # else:
-                yield j, j
-
-        self.control = 1 + np.minimum(np.array(list(get_control())), self.n_subtasks)
-        n_object_types = self.np_random.randint(1, len(self.object_types))
-        object_types = np.arange(len(self.object_types))
-        existing = self.np_random.choice(object_types, size=n_object_types)
-        non_existing = np.array(list(set(object_types) - set(existing)))
-        n_passing = self.np_random.choice(self.n_subtasks)
-        n_failing = self.n_subtasks - n_passing
-        passing = self.np_random.choice(existing, size=n_passing)
-        failing = self.np_random.choice(non_existing, size=n_failing)
-        self.conditions = np.concatenate([passing, failing])
-        self.np_random.shuffle(self.conditions)
-        self.required_objects = passing
-        return super().reset()
-        # self.subtask_idx = 0 self.subtask_idx = self.get_next_subtask()
-        # self.count = self.subtask.count
-        # return self.get_observation()
-
-    def get_next_subtask(self):
-        if self.subtask_idx > self.n_subtasks:
-            return None
-        resolution = self.evaluate_condition()
-        return self.control[self.subtask_idx, int(resolution)]
-
-    def evaluate_condition(self):
-        object_type = self.conditions[self.subtask_idx]
-        return object_type in self.objects.values()
-
-    def get_required_objects(self, _):
-        yield from self.required_objects
+#
+#     def get_observation(self):
+#         obs = super().get_observation()
+#         obs.update(
+#             control=self.control,
+#             conditions=self.conditions,
+#             pred=self.evaluate_condition(),
+#         )
+#         return Obs(**obs)._asdict()
+#
+#     def subtasks_generator(self):
+#         choices = self.np_random.choice(
+#             len(self.possible_subtasks), size=self.n_subtasks
+#         )
+#         subtasks = [self.Subtask(*self.possible_subtasks[i]) for i in choices]
+#         i = 0
+#         encountered = Counter(passing=[], failing=[], subtasks=[])
+#         while i < self.n_subtasks:
+#             condition = self.conditions[i]
+#             passing = condition in self.required_objects
+#             branching = self.control[i, 0] != self.control[i, 1]
+#             encountered.update(passing=[condition if branching and passing else None])
+#             encountered.update(
+#                 failing=[condition if branching and not passing else None]
+#             )
+#             encountered.update(subtasks=[i])
+#             i = self.control[i, int(passing)]
+#
+#         failing = encountered["failing"]
+#         object_types = np.arange(len(self.object_types))
+#         non_failing = list(set(object_types) - set(failing))
+#         self.required_objects = list(
+#             set(o for o in encountered["passing"] if o is not None)
+#         )
+#         available = [x for x in self.required_objects]
+#
+#         for i, subtask in enumerate(subtasks):
+#             if i in encountered["subtasks"]:
+#                 obj = subtask.object
+#                 to_be_removed = subtask.interaction in {1, 2}
+#                 if obj not in available:
+#                     if not to_be_removed and obj in failing:
+#                         obj = self.np_random.choice(non_failing)
+#                         subtasks[i] = subtask._replace(object=obj)
+#                     past_failing = failing[-i + 1 :]
+#                     if to_be_removed and obj in past_failing:
+#                         obj = self.np_random.choice(
+#                             list(set(object_types) - set(past_failing))
+#                         )
+#                         subtasks[i] = subtask._replace(object=obj)
+#
+#                     # add object to map
+#                     self.required_objects += [obj]
+#                     available += [obj]
+#
+#                 if to_be_removed:
+#                     available.remove(obj)
+#
+#         yield from subtasks
+#
+#     def reset(self):
+#         def get_control():
+#             for i in range(self.n_subtasks):
+#                 j = 2 * i
+#                 # if self.force_branching or self.np_random.rand() < 0.7:
+#                 # yield j, j + 1
+#                 # else:
+#                 yield j, j
+#
+#         self.control = 1 + np.minimum(np.array(list(get_control())), self.n_subtasks)
+#         n_object_types = self.np_random.randint(1, len(self.object_types))
+#         object_types = np.arange(len(self.object_types))
+#         existing = self.np_random.choice(object_types, size=n_object_types)
+#         non_existing = np.array(list(set(object_types) - set(existing)))
+#         n_passing = self.np_random.choice(self.n_subtasks)
+#         n_failing = self.n_subtasks - n_passing
+#         passing = self.np_random.choice(existing, size=n_passing)
+#         failing = self.np_random.choice(non_existing, size=n_failing)
+#         self.conditions = np.concatenate([passing, failing])
+#         self.np_random.shuffle(self.conditions)
+#         self.required_objects = passing
+#         super().reset()
+#         self.subtask_idx = 0
+#         self.subtask_idx = self.get_next_subtask()
+#         self.count = self.subtask.count
+#         return self.get_observation()
+#
+#     def get_next_subtask(self):
+#         if self.subtask_idx > self.n_subtasks:
+#             return None
+#         return self.control[self.subtask_idx, int(self.evaluate_condition())]
+#
+#     def evaluate_condition(self):
+#         return self.conditions[self.subtask_idx] in self.objects.values()
+#
+#     def get_required_objects(self, _):
+#         yield from self.required_objects
 
 
 def main(seed, n_subtasks):
