@@ -31,11 +31,12 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
         self.phi_shift = nn.Sequential(
             # Reshape(-1, num_object_types * d, h, w),
             Parallel(
-                Reshape(-1, num_object_types, h, w), Reshape(-1, num_object_types, 1, 1)
+                nn.Sequential(Reshape(-1, 1, num_object_types, h, w)),
+                nn.Sequential(Reshape(-1, num_object_types, 1, 1, 1)),
             ),
             Product(),
-            Reshape(-1, num_object_types * h * w),
-            init_(nn.Linear(num_object_types * h * w, 1), "sigmoid"),
+            Reshape(-1, num_object_types ** 2 * h * w),
+            init_(nn.Linear(num_object_types ** 2 * h * w, 1), "sigmoid"),
             # Reshape(-1, in_channels, *self.obs_shape[-2:]),
             # init_(
             # nn.Conv2d(num_object_types * d, hidden_size, kernel_size=1, stride=1)
