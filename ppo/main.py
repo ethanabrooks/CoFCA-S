@@ -63,10 +63,10 @@ def make_subtasks_env(env_id, **kwargs):
             print("Environment args:")
             for k, v in _kwargs.items():
                 print(f"{k:20}{v}")
-        if control_flow:
-            env = ControlFlowGridWorld(**_kwargs)
-        else:
-            env = SubtasksGridWorld(**_kwargs)
+        # if control_flow:
+        env = ControlFlowGridWorld(**_kwargs)
+        # else:
+        # env = SubtasksGridWorld(**_kwargs)
         env = ppo.subtasks.Wrapper(env)
         if debug:
             env = ppo.subtasks.DebugWrapper(env)

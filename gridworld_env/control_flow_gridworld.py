@@ -21,21 +21,21 @@ class ControlFlowGridWorld(SubtasksGridWorld):
         self.conditions = None
         self.control = None
         self.required_objects = None
-        self.observation_space = spaces.Dict(
-            Obs(
-                **self.observation_space.spaces,
-                conditions=spaces.MultiDiscrete(
-                    np.array([len(self.object_types)]).repeat(self.n_subtasks)
-                ),
-                pred=spaces.Discrete(2),
-                control=spaces.MultiDiscrete(
-                    np.tile(
-                        np.array([[self.n_subtasks]]),
-                        [self.n_subtasks, 2],  # binary conditions
-                    )
-                ),
-            )._asdict()
-        )
+        # self.observation_space = spaces.Dict(
+        # Obs(
+        # **self.observation_space.spaces,
+        # conditions=spaces.MultiDiscrete(
+        # np.array([len(self.object_types)]).repeat(self.n_subtasks)
+        # ),
+        # pred=spaces.Discrete(2),
+        # control=spaces.MultiDiscrete(
+        # np.tile(
+        # np.array([[self.n_subtasks]]),
+        # [self.n_subtasks, 2],  # binary conditions
+        # )
+        # ),
+        # )._asdict()
+        # )
         self.pred = None
 
     def render_current_subtask(self):
@@ -135,10 +135,10 @@ class ControlFlowGridWorld(SubtasksGridWorld):
         def get_control():
             for i in range(self.n_subtasks):
                 j = 2 * i
-                if self.force_branching or self.np_random.rand() < 0.7:
-                    yield j, j + 1
-                else:
-                    yield j, j
+                # if self.force_branching or self.np_random.rand() < 0.7:
+                # yield j, j + 1
+                # else:
+                yield j, j
 
         self.control = 1 + np.minimum(np.array(list(get_control())), self.n_subtasks)
         n_object_types = self.np_random.randint(1, len(self.object_types))
