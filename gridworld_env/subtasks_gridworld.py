@@ -369,7 +369,11 @@ class SubtasksGridWorld(gym.Env):
         self.count = self.subtask.count
         self.last_terminal = False
         self.last_action = None
-        return self.get_observation()
+        o = self.get_observation()
+        self.subtask_idx = 0
+        self.subtask_idx = self.get_next_subtask()
+        self.count = self.subtask.count
+        return o
 
     def get_observation(self):
         agent_one_hot = np.zeros_like(self.desc, dtype=bool)
