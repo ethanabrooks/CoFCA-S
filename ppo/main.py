@@ -6,7 +6,6 @@ from collections import ChainMap
 from pathlib import Path
 
 from gym.wrappers import TimeLimit
-from rl_utils import hierarchical_parse_args
 import torch
 
 import gridworld_env
@@ -22,6 +21,7 @@ import ppo.subtasks.student
 import ppo.subtasks.teacher
 from ppo.train import Train
 from ppo.wrappers import VecNormalize
+from rl_utils import hierarchical_parse_args
 
 
 def add_task_args(parser):
@@ -201,10 +201,10 @@ def metacontroller_cli():
                     agent=agent,
                     **_subtasks_args,
                 )
-                if control_flow:
-                    return ppo.control_flow.Agent(**metacontroller_kwargs)
-                else:
-                    return ppo.subtasks.Agent(**metacontroller_kwargs)
+                # if control_flow:
+                return ppo.control_flow.Agent(**metacontroller_kwargs)
+                # else:
+                #     return ppo.subtasks.Agent(**metacontroller_kwargs)
 
         # ppo_args.update(aux_loss_only=True)
         TrainSubtasks(env_id=env_id, ppo_args=ppo_args, **kwargs)

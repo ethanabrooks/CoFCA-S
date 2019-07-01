@@ -3,9 +3,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-import ppo.subtasks.agent
 from gridworld_env.control_flow_gridworld import Obs
 from ppo.layers import Parallel, Product, Reshape
+import ppo.subtasks.agent
 from ppo.utils import init_
 
 
@@ -54,30 +54,11 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
             pred=[1],
         )
 
-    @property
-    def n_subtasks(self):
-        return self.obs_spaces.subtasks.nvec.shape[0]
+    # def get_obs_sections(self):
+    # return Obs(*[int(np.prod(s.shape)) for s in self.obs_spaces])
 
-    def get_obs_sections(self):
-        return Obs(*[int(np.prod(s.shape)) for s in self.obs_spaces])
-
-    def register_agent_dummy_values(self):
-        self.register_buffer(
-            "agent_dummy_values",
-            torch.zeros(
-                1,
-                sum(
-                    [
-                        self.obs_sections.subtasks,
-                        self.obs_sections.control,
-                        self.obs_sections.next_subtask,
-                    ]
-                ),
-            ),
-        )
-
-    def parse_inputs(self, inputs):
-        return Obs(*torch.split(inputs, self.obs_sections, dim=2))
+    # def parse_inputs(self, inputs):
+    # return Obs(*torch.split(inputs, self.obs_sections, dim=2))
 
     def inner_loop(self, inputs, **kwargs):
         N = inputs.base.size(1)
@@ -94,17 +75,13 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
 
         def update_attention(p, t):
             c = (p.unsqueeze(1) @ conditions).squeeze(1)
-            phi_in = c.view(N, conditions.size(2), 1, 1, 1) * inputs.base[t].unsqueeze(
-                1
-            )
             phi_in = (
                 inputs.base[t, :, 1:-2] * c.view(N, conditions.size(2), 1, 1)
             ).view(N, -1)
             truth = torch.any(phi_in > 0, dim=-1).float().view(N, 1, 1)
-            # pred = self.phi_shift((inputs.base[t], c))
             pred = truth
             trans = pred * true_path + (1 - pred) * false_path
-            return (p.unsqueeze(1) @ trans).squeeze(1).detach()
+            return (p.unsqueeze(1) @ trans).squeeze(1)
 
         kwargs.update(update_attention=update_attention)
         yield from super().inner_loop(inputs=inputs, **kwargs)

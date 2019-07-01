@@ -13,7 +13,7 @@ from gridworld_env.subtasks_gridworld import Obs
 import ppo
 from ppo.agent import AgentValues, NNBase
 from ppo.distributions import Categorical, DiagGaussian, FixedCategorical
-from ppo.layers import Concat, Flatten, Parallel, Product
+from ppo.layers import Concat, Flatten, Parallel, Product, Reshape
 import ppo.subtasks.teacher
 from ppo.subtasks.teacher import Teacher, g123_to_binary, g_binary_to_123
 from ppo.subtasks.wrappers import Actions
@@ -202,6 +202,11 @@ class Recurrence(torch.jit.ScriptModule):
             "subtask_space", torch.tensor(self.subtask_nvec.astype(np.int64))
         )
 
+        trans = F.pad(torch.eye(self.n_subtasks), [1, 0])[:, :-1]
+        trans[-1, -1] = 1
+
+        self.register_buffer("trans", trans)
+
         state_sizes = RecurrentState(
             a=1,
             cg=1,
@@ -218,13 +223,6 @@ class Recurrence(torch.jit.ScriptModule):
             subtask=1,
         )
         self.state_sizes = RecurrentState(*map(int, state_sizes))
-        self.register_agent_dummy_values()
-
-    def register_agent_dummy_values(self):
-        self.register_buffer(
-            "agent_dummy_values",
-            torch.zeros(1, self.obs_sections.subtasks + self.obs_sections.next_subtask),
-        )
 
     @property
     def n_subtasks(self):
@@ -319,11 +317,6 @@ class Recurrence(torch.jit.ScriptModule):
             # initialize g to first subtask
             hx.g[new_episode] = 0.0
 
-        def update_attention(p, t):
-            p2 = F.pad(p, [1, 0])[:, :-1]
-            p2[:, -1] += 1 - p2.sum(dim=-1)
-            return p2
-
         return self.pack(
             self.inner_loop(
                 inputs=inputs,
@@ -341,7 +334,7 @@ class Recurrence(torch.jit.ScriptModule):
                 p=p,
                 r=r,
                 actions=actions,
-                update_attention=update_attention,
+                update_attention=None,
             )
         )
 

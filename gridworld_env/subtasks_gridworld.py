@@ -1,4 +1,4 @@
-from collections import namedtuple
+from collections import Counter, namedtuple
 import itertools
 import re
 
@@ -14,7 +14,7 @@ from ppo.utils import set_index
 from rl_utils import cartesian_product
 
 Subtask = namedtuple("Subtask", "interaction count object")
-Obs = namedtuple("Obs", "base subtask subtasks next_subtask conditions control pred")
+Obs = namedtuple("Obs", "base subtask subtasks conditions control next_subtask pred")
 
 
 class SubtasksGridWorld(gym.Env):
@@ -150,6 +150,33 @@ class SubtasksGridWorld(gym.Env):
         )
         self.layer_one_hots = np.eye(h * w).reshape(-1, h, w)
 
+        # TODO >>>>>>>>>>
+
+        self.passing_objects = None
+        self.failing_objects = None
+        self.pred = None
+
+        self.conditions = None
+        self.control = None
+        self.required_objects = None
+        # self.observation_space = spaces.Dict(
+        # Obs(
+        # **self.observation_space.spaces,
+        # conditions=spaces.MultiDiscrete(
+        # np.array([len(self.object_types)]).repeat(self.n_subtasks)
+        # ),
+        # pred=spaces.Discrete(2),
+        # control=spaces.MultiDiscrete(
+        # np.tile(
+        # np.array([[self.n_subtasks]]),
+        # [self.n_subtasks, 2],  # binary conditions
+        # )
+        # ),
+        # )._asdict()
+        # )
+        self.pred = None
+        # TODO <<<<<<<<
+
     @property
     def subtask(self):
         try:
@@ -221,20 +248,73 @@ class SubtasksGridWorld(gym.Env):
             print(line)
         print()
 
-    def subtasks_generator(self):
-        last_subtask = None
-        for _ in range(self.n_subtasks):
-            possible_subtasks = self.possible_subtasks
-            if last_subtask is not None:
-                subset = np.any(self.possible_subtasks != last_subtask, axis=-1)
-                possible_subtasks = possible_subtasks[subset]
-            choice = self.np_random.choice(len(possible_subtasks))
-            last_subtask = possible_subtasks[choice]
-            yield self.Subtask(*last_subtask)
+    # def subtasks_generator(self):
+    #     last_subtask = None
+    #     for _ in range(self.n_subtasks):
+    #         possible_subtasks = self.possible_subtasks
+    #         if last_subtask is not None:
+    #             subset = np.any(self.possible_subtasks != last_subtask, axis=-1)
+    #             possible_subtasks = possible_subtasks[subset]
+    #         choice = self.np_random.choice(len(possible_subtasks))
+    #         last_subtask = possible_subtasks[choice]
+    #         yield self.Subtask(*last_subtask)
 
-    def get_required_objects(self, task):
-        for subtask in task:
-            yield from [subtask.object] * (subtask.count + 1)
+    def subtasks_generator(self):
+        choices = self.np_random.choice(
+            len(self.possible_subtasks), size=self.n_subtasks
+        )
+        subtasks = [self.Subtask(*self.possible_subtasks[i]) for i in choices]
+        i = 0
+        encountered = Counter(passing=[], failing=[], subtasks=[])
+        while i < self.n_subtasks:
+            condition = self.conditions[i]
+            passing = True  # condition in self.required_objects # TODO
+            branching = self.control[i, 0] != self.control[i, 1]
+            encountered.update(passing=[condition if branching and passing else None])
+            encountered.update(
+                failing=[condition if branching and not passing else None]
+            )
+            encountered.update(subtasks=[i])
+            i = self.control[i, int(passing)]
+
+        failing = encountered["failing"]
+        object_types = np.arange(len(self.object_types))
+        non_failing = list(set(object_types) - set(failing))
+        self.required_objects = list(
+            set(o for o in encountered["passing"] if o is not None)
+        )
+        available = [x for x in self.required_objects]
+
+        for i, subtask in enumerate(subtasks):
+            if i in encountered["subtasks"]:
+                obj = subtask.object
+                to_be_removed = subtask.interaction in {1, 2}
+                if obj not in available:
+                    if not to_be_removed and obj in failing:
+                        obj = self.np_random.choice(non_failing)
+                        subtasks[i] = subtask._replace(object=obj)
+                    past_failing = failing[-i + 1 :]
+                    if to_be_removed and obj in past_failing:
+                        obj = self.np_random.choice(
+                            list(set(object_types) - set(past_failing))
+                        )
+                        subtasks[i] = subtask._replace(object=obj)
+
+                    # add object to map
+                    self.required_objects += [obj]
+                    available += [obj]
+
+                if to_be_removed:
+                    available.remove(obj)
+
+        yield from subtasks
+
+    # def get_required_objects(self, task):
+    #     for subtask in task:
+    #         yield from [subtask.object] * (subtask.count + 1)
+
+    def get_required_objects(self, _):
+        yield from self.required_objects
 
     def reset(self):
         if not self.initialized:
@@ -299,10 +379,8 @@ class SubtasksGridWorld(gym.Env):
             subtask=[self.subtask_idx],
             subtasks=np.array([self.subtasks]),
             next_subtask=[self.next_subtask],
-            conditions=np.ones(self.n_subtasks),
-            control=np.stack(
-                [1 + np.arange(self.n_subtasks), 1 + np.arange(self.n_subtasks)], axis=1
-            ),
+            conditions=self.conditions,
+            control=self.control,
             pred=[True],
         )._asdict()
 
@@ -360,8 +438,16 @@ class SubtasksGridWorld(gym.Env):
             r = 1.0
         return obs, r, t, {}
 
+    def evaluate_condition(self):
+        return self.conditions[self.subtask_idx] in self.objects.values()
+
     def get_next_subtask(self):
-        return self.subtask_idx + 1
+        if self.subtask_idx > self.n_subtasks:
+            return None
+        return self.control[self.subtask_idx, int(self.evaluate_condition())]
+
+    # def get_next_subtask(self):
+    #     return self.subtask_idx + 1
 
     def set_pred(self):
         pass
