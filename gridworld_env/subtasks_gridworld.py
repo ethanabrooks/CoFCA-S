@@ -419,8 +419,16 @@ class SubtasksGridWorld(gym.Env):
             r = 1.0
         return obs, r, t, {}
 
+    def evaluate_condition(self):
+        return self.conditions[self.subtask_idx] in self.objects.values()
+
     def get_next_subtask(self):
-        return self.subtask_idx + 1
+        if self.subtask_idx > self.n_subtasks:
+            return None
+        return self.control[self.subtask_idx, int(self.evaluate_condition())]
+
+    # def get_next_subtask(self):
+    #     return self.subtask_idx + 1
 
 
 if __name__ == "__main__":
