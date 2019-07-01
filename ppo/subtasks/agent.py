@@ -191,10 +191,7 @@ class Recurrence(torch.jit.ScriptModule):
                 init_(nn.Linear(hidden_size, 2), "sigmoid"),
             )
         else:
-            self.phi_update = trace(
-                lambda in_size: init_(nn.Linear(in_size, 2), "sigmoid"),
-                in_size=(d * action_spaces.a.n * int(self.subtask_nvec.prod())),
-            )
+            self.phi_update = nn.Sequential(Product())
 
         for i, x in enumerate(self.subtask_nvec):
             self.register_buffer(f"part{i}_one_hot", torch.eye(int(x)))
@@ -423,15 +420,27 @@ class Recurrence(torch.jit.ScriptModule):
                                 part.unsqueeze_(i2 + 1)
                         outer_product_obs = outer_product_obs * part
 
-                    c_logits = self.phi_update(outer_product_obs.view(N, -1))
+                        c = (
+                            self.phi_update(
+                                (
+                                    correct_action.sum(-1, keepdim=True),
+                                    correct_object.sum(-1, keepdim=True),
+                                )
+                            )
+                            + new_episode.unsqueeze(-1).float()
+                        ).detach().clamp(max=1)
                 if self.hard_update:
                     c_dist = FixedCategorical(logits=c_logits)
                     c = actions.c[t]
                     sample_new(c, c_dist)
                     probs = c_dist.probs
-                else:
-                    c = torch.sigmoid(c_logits[:, :1])
-                    probs = torch.zeros_like(c_logits)  # dummy value
+                # else:
+                # c = torch.sigmoid(c_logits[:, :1])
+                if not torch.all(c == truth):
+                    import ipdb
+
+                    ipdb.set_trace()
+                probs = torch.zeros(N, 2, device=c.device)  # dummy value
                 return c, probs
 
             # cr
