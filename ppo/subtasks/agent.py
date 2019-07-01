@@ -398,10 +398,12 @@ class Recurrence(torch.jit.ScriptModule):
                 parts = (debug_obs, self.a_one_hots[A[t - 1]]) + task_sections
                 a_one_hot = self.a_one_hots[A[t - 1]]
                 interaction, count, obj = task_sections
-                correct_object = obj * debug_obs[:, 1 : 1 + self.subtask_nvec[2]]
+                correct_object = (
+                    obj * debug_obs[:, 1 : 1 + self.subtask_nvec[2]]
+                ).detach()
                 column1 = interaction[:, :1]
                 column2 = interaction[:, 1:] * a_one_hot[:, 4:]
-                correct_action = torch.cat([column1, column2], dim=-1)
+                correct_action = torch.cat([column1, column2], dim=-1).detach()
                 truth = torch.clamp(
                     (
                         correct_action.sum(-1, keepdim=True)
@@ -420,15 +422,13 @@ class Recurrence(torch.jit.ScriptModule):
                                 part.unsqueeze_(i2 + 1)
                         outer_product_obs = outer_product_obs * part
 
-                        c = (
-                            self.phi_update(
-                                (
-                                    correct_action.sum(-1, keepdim=True),
-                                    correct_object.sum(-1, keepdim=True),
-                                )
+                        c = self.phi_update(
+                            (
+                                correct_action.sum(-1, keepdim=True),
+                                correct_object.sum(-1, keepdim=True),
                             )
-                            + new_episode.unsqueeze(-1).float()
-                        ).detach().clamp(max=1)
+                        )
+                        c = c + (1.0 - c) * new_episode.unsqueeze(-1).float()
                 if self.hard_update:
                     c_dist = FixedCategorical(logits=c_logits)
                     c = actions.c[t]
