@@ -38,41 +38,41 @@ class ControlFlowGridWorld(SubtasksGridWorld):
         # )
         self.pred = None
 
+    def render_current_subtask(self):
+        if self.subtask_idx == 0:
+            print("none")
+        else:
+            super().render_current_subtask()
 
-#
-#     def render_current_subtask(self):
-#         if self.subtask_idx == 0:
-#             print("none")
-#         else:
-#             super().render_current_subtask()
-#
-#     def render_task(self):
-#         def helper(i, indent):
-#             neg, pos = self.control[i]
-#             condition = self.conditions[i]
-#
-#             def develop_branch(j, add_indent):
-#                 new_indent = indent + add_indent
-#                 if j == 0:
-#                     subtask = f""
-#                 else:
-#                     try:
-#                         subtask = f"{j}:{self.subtasks[j]}"
-#                     except IndexError:
-#                         return f"{new_indent}terminate"
-#                 return f"{new_indent}{subtask}\n{helper(j, new_indent)}"
-#
-#             if pos == neg:
-#                 return f"{develop_branch(pos, '')}"
-#             else:
-#                 return f"""\
-# {indent}if {self.object_types[condition]}:
-# {develop_branch(pos, '    ')}
-# {indent}else:
-# {develop_branch(neg, '    ')}
-# """
-#
-#         print(helper(i=0, indent=""))
+    def render_task(self):
+        def helper(i, indent):
+            neg, pos = self.control[i]
+            condition = self.conditions[i]
+
+            def develop_branch(j, add_indent):
+                new_indent = indent + add_indent
+                if j == 0:
+                    subtask = f""
+                else:
+                    try:
+                        subtask = f"{j}:{self.subtasks[j]}"
+                    except IndexError:
+                        return f"{new_indent}terminate"
+                return f"{new_indent}{subtask}\n{helper(j, new_indent)}"
+
+            if pos == neg:
+                return f"{develop_branch(pos, '')}"
+            else:
+                return f"""\
+{indent}if {self.object_types[condition]}:
+{develop_branch(pos, '    ')}
+{indent}else:
+{develop_branch(neg, '    ')}
+"""
+
+        print(helper(i=0, indent=""))
+
+
 #
 #     def get_observation(self):
 #         obs = super().get_observation()
