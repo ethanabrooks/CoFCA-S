@@ -294,7 +294,15 @@ class SubtasksGridWorld(gym.Env):
         self.control = np.stack(
             [1 + np.arange(self.n_subtasks), 1 + np.arange(self.n_subtasks)], axis=1
         )
-        self.conditions = np.ones(self.n_subtasks)
+        n_object_types = self.np_random.randint(1, len(self.object_types))
+        object_types = np.arange(len(self.object_types))
+        existing = self.np_random.choice(object_types, size=n_object_types)
+        non_existing = np.array(list(set(object_types) - set(existing)))
+        n_passing = self.np_random.choice(self.n_subtasks)
+        n_failing = self.n_subtasks - n_passing
+        passing = self.np_random.choice(existing, size=n_passing)
+        failing = self.np_random.choice(non_existing, size=n_failing)
+        self.conditions = np.concatenate([passing, failing])
         # TODO <<<<<
         if not self.initialized:
             self.initialize()
