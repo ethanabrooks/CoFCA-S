@@ -199,10 +199,10 @@ def metacontroller_cli():
                     agent=agent,
                     **_subtasks_args,
                 )
-                if control_flow:
-                    return ppo.control_flow.Agent(**metacontroller_kwargs)
-                else:
-                    return ppo.subtasks.Agent(**metacontroller_kwargs)
+                # if control_flow:
+                return ppo.control_flow.Agent(**metacontroller_kwargs)
+                # else:
+                #     return ppo.subtasks.Agent(**metacontroller_kwargs)
 
         # ppo_args.update(aux_loss_only=True)
         TrainSubtasks(env_id=env_id, ppo_args=ppo_args, **kwargs)
