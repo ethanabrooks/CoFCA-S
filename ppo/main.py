@@ -63,10 +63,10 @@ def make_subtasks_env(env_id, **kwargs):
             print("Environment args:")
             for k, v in _kwargs.items():
                 print(f"{k:20}{v}")
-        # if control_flow:
-        env = ControlFlowGridWorld(**_kwargs)
-        # else:
-        # env = SubtasksGridWorld(**_kwargs)
+        if control_flow:
+            env = ControlFlowGridWorld(**_kwargs)
+        else:
+            env = SubtasksGridWorld(**_kwargs)
         env = ppo.subtasks.Wrapper(env)
         if debug:
             env = ppo.subtasks.DebugWrapper(env)
@@ -199,10 +199,10 @@ def metacontroller_cli():
                     agent=agent,
                     **_subtasks_args,
                 )
-                # if control_flow:  TODO
-                return ppo.control_flow.Agent(**metacontroller_kwargs)
-                # else:
-                # return ppo.subtasks.Agent(**metacontroller_kwargs)
+                if control_flow:
+                    return ppo.control_flow.Agent(**metacontroller_kwargs)
+                else:
+                    return ppo.subtasks.Agent(**metacontroller_kwargs)
 
         # ppo_args.update(aux_loss_only=True)
         TrainSubtasks(env_id=env_id, ppo_args=ppo_args, **kwargs)
