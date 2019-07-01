@@ -422,13 +422,15 @@ class Recurrence(torch.jit.ScriptModule):
                                 part.unsqueeze_(i2 + 1)
                         outer_product_obs = outer_product_obs * part
 
-                        c = self.phi_update(
-                            (
-                                correct_action.sum(-1, keepdim=True),
-                                correct_object.sum(-1, keepdim=True),
+                        c = (
+                            self.phi_update(
+                                (
+                                    correct_action.sum(-1, keepdim=True),
+                                    correct_object.sum(-1, keepdim=True),
+                                )
                             )
-                        )
-                        c = c + (1.0 - c) * new_episode.unsqueeze(-1).float()
+                            + new_episode.unsqueeze(-1).float()
+                        ).detach().clamp(max=1)
                 if self.hard_update:
                     c_dist = FixedCategorical(logits=c_logits)
                     c = actions.c[t]
