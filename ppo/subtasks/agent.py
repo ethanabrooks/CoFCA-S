@@ -274,6 +274,9 @@ class Recurrence(torch.jit.ScriptModule):
 
                             ipdb.set_trace()
 
+    def parse_inputs(self, inputs):
+        return Obs(*torch.split(inputs, self.obs_sections, dim=2))
+
     # @torch.jit.script_method
     def forward(self, inputs, hx):
         assert hx is not None
@@ -288,7 +291,7 @@ class Recurrence(torch.jit.ScriptModule):
         actions = Actions(*actions)
 
         # parse non-action inputs
-        inputs = Obs(*torch.split(inputs, self.obs_sections, dim=2))
+        inputs = self.parse_inputs(inputs)
         obs = inputs.base.view(T, N, *self.obs_shape)
         task = inputs.subtasks.view(T, N, self.n_subtasks, self.subtask_nvec.size)
 
@@ -320,6 +323,7 @@ class Recurrence(torch.jit.ScriptModule):
 
         return self.pack(
             self.inner_loop(
+                inputs=inputs,
                 a=hx.a,
                 g=hx.g,
                 cr=hx.cr,
@@ -380,6 +384,7 @@ class Recurrence(torch.jit.ScriptModule):
         r,
         actions,
         update_attention,
+        inputs,
     ):
         # combine past and present actions (sampled values)
         A = torch.cat([actions.a, a.unsqueeze(0)], dim=0).long().squeeze(2)
