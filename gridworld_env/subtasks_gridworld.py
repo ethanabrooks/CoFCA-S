@@ -14,7 +14,7 @@ from ppo.utils import set_index
 from rl_utils import cartesian_product
 
 Subtask = namedtuple("Subtask", "interaction count object")
-Obs = namedtuple("Obs", "base subtask subtasks next_subtask")
+Obs = namedtuple("Obs", "base subtask subtasks next_subtask conditions control pred")
 
 
 class SubtasksGridWorld(gym.Env):
@@ -119,7 +119,18 @@ class SubtasksGridWorld(gym.Env):
                         np.array([len(interactions), max_task_count,
                                   len(object_types)]), (n_subtasks, 1))),
                 next_subtask=spaces.Discrete(2),
-            )._asdict())
+                conditions=spaces.MultiDiscrete(
+                    np.array([len(self.object_types)]).repeat(self.n_subtasks)
+                ),
+                pred=spaces.Discrete(2),
+                control=spaces.MultiDiscrete(
+                    np.tile(
+                        np.array([[self.n_subtasks]]),
+                        [self.n_subtasks, 2],  # binary conditions
+                    )
+                ),
+            )._asdict()
+        )
         self.action_space = spaces.Discrete(len(self.transitions) + 2)
         world = self
 
@@ -283,11 +294,17 @@ class SubtasksGridWorld(gym.Env):
             # np.dstack([obstacles, agent]),
         ]).transpose(2, 0, 1)
 
-        # noinspection PyTypeChecker
-        return Obs(base=obs,
-                   subtask=self.subtask_idx,
-                   subtasks=self.subtasks,
-                   next_subtask=self.next_subtask)._asdict()
+        return Obs(
+            base=obs,
+            subtask=[self.subtask_idx],
+            subtasks=np.array([self.subtasks]),
+            next_subtask=[self.next_subtask],
+            conditions=np.ones(self.n_subtasks),
+            control=np.stack(
+                [1 + np.arange(self.n_subtasks), 1 + np.arange(self.n_subtasks)], axis=1
+            ),
+            pred=[True],
+        )._asdict()
 
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)
@@ -296,6 +313,7 @@ class SubtasksGridWorld(gym.Env):
     def iterate(self):
         if self.count == 0:
             self.subtask_idx = self.get_next_subtask()
+            self.next_subtask = True
         else:
             self.count -= 1
 

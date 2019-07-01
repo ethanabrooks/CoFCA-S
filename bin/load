@@ -4,5 +4,5 @@ set -e
 cmd=$(runs lookup command $1 --porcelain)
 cmd=$(echo $cmd \
   | sed 's/log-dir=\("\{0,1\}\)\([^ "]*\)\("\{0,1\}\)/load-path=\1\2\/checkpoint.pt\3/')
-echo "$cmd $2"
-eval "$cmd $2"
+echo "$cmd ${@:2}"
+eval "$cmd ${@:2}"
