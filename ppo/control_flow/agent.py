@@ -144,7 +144,6 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
 
         return self.pack(
             self.inner_loop(
-                new_episode=new_episode.unsqueeze(1).float(),
                 a=hx.a,
                 cr=hx.cr,
                 cg=hx.cg,
