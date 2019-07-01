@@ -11,7 +11,7 @@ from gridworld_env.subtasks_gridworld import Obs
 import ppo
 from ppo.agent import AgentValues, NNBase
 from ppo.distributions import Categorical, DiagGaussian, FixedCategorical
-from ppo.layers import Concat, Flatten, Parallel, Product
+from ppo.layers import Concat, Flatten, Parallel, Product, Reshape
 import ppo.subtasks.teacher
 from ppo.subtasks.teacher import Teacher, g123_to_binary, g_binary_to_123
 from ppo.subtasks.wrappers import Actions
@@ -220,6 +220,38 @@ class Recurrence(torch.jit.ScriptModule):
             subtask=1,
         )
         self.state_sizes = RecurrentState(*map(int, state_sizes))
+
+        # TODO>>>>>>
+        self.obs_sections = Obs(*[int(np.prod(s.shape)) for s in self.obs_spaces])
+        self.register_buffer("branch_one_hots", torch.eye(self.n_subtasks))
+        num_object_types = int(self.obs_spaces.subtasks.nvec[0, 2])
+        self.register_buffer("condition_one_hots", torch.eye(num_object_types))
+        self.register_buffer(
+            "rows", torch.arange(self.n_subtasks).unsqueeze(-1).float()
+        )
+        self.n_conditions = self.obs_spaces.conditions.shape[0]
+
+        d, h, w = self.obs_shape
+        self.phi_shift = nn.Sequential(
+            # Reshape(-1, num_object_types * d, h, w),
+            Parallel(
+                nn.Sequential(Reshape(-1, 1, d, h, w)),
+                nn.Sequential(Reshape(-1, num_object_types, 1, 1, 1)),
+            ),
+            Product(),
+            Reshape(-1, num_object_types * d * h * w),
+            init_(nn.Linear(num_object_types * d * h * w, 1), "sigmoid"),
+            # Reshape(-1, in_channels, *self.obs_shape[-2:]),
+            # init_(
+            # nn.Conv2d(num_object_types * d, hidden_size, kernel_size=1, stride=1)
+            # ),
+            # nn.MaxPool2d(kernel_size=self.obs_shape[-2:], stride=1),
+            # Flatten(),
+            # init_(nn.Linear(hidden_size, 1), "sigmoid"),
+            nn.Sigmoid(),
+            Reshape(-1, 1, 1),
+        )
+        # TODO<<<<<<<
 
     @property
     def n_subtasks(self):
