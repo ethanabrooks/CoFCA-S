@@ -1,9 +1,9 @@
 from collections import namedtuple
 
 import gym
-import numpy as np
 from gym import spaces
 from gym.spaces import Discrete
+import numpy as np
 
 Actions = namedtuple("Actions", "a cr cg g")
 
@@ -22,11 +22,9 @@ class DebugWrapper(gym.Wrapper):
         actions = Actions(*[x.item() for x in np.split(action, self.action_sections)])
         truth = int(self.env.unwrapped.subtask_idx)
         guess = int(actions.g)
-        r = float(np.all(guess == truth)) - 1
-        # if r < 0:
-        # import ipdb
-
-        # ipdb.set_trace()
+        r = 0
+        if self.env.unwrapped.subtask is not None and guess != truth:
+            r = -1
         s, _, t, i = super().step(action)
         self.last_guess = guess
         self.last_reward = r
