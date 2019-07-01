@@ -134,7 +134,7 @@ class ControlFlowGridWorld(SubtasksGridWorld):
     def reset(self):
         def get_control():
             for i in range(self.n_subtasks):
-                j = 2 * i
+                j = i
                 # if self.force_branching or self.np_random.rand() < 0.7:
                 # yield j, j + 1
                 # else:
