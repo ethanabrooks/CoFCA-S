@@ -55,11 +55,11 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
             pred=[1],
         )
 
-    # def get_obs_sections(self):
-    # return Obs(*[int(np.prod(s.shape)) for s in self.obs_spaces])
+    def get_obs_sections(self):
+        return Obs(*[int(np.prod(s.shape)) for s in self.obs_spaces])
 
-    # def parse_inputs(self, inputs):
-    # return Obs(*torch.split(inputs, self.obs_sections, dim=2))
+    def parse_inputs(self, inputs):
+        return Obs(*torch.split(inputs, self.obs_sections, dim=2))
 
     def inner_loop(self, inputs, **kwargs):
         N = inputs.base.size(1)
