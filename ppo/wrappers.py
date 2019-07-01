@@ -88,14 +88,11 @@ class SubtasksWrapper(gym.Wrapper):
                 (x.size, h, w),
             )
 
-        subtask_binary = np.concatenate(
-            [one_hot[g] for one_hot, g in zip(self.g_one_hots, env.subtask)])
-        subtask = broadcast3d(subtask_binary)
-        # subtask = broadcast3d(env.subtask)
+        subtask123 = broadcast3d(env.subtask)
         task_spec = broadcast3d(env.task)
         next_subtask = np.full((1, h, w), env.next_subtask)
 
-        obs_parts = [obs, subtask, task_spec, next_subtask]
+        obs_parts = [obs, subtask123, task_spec, next_subtask]
         stack = np.vstack(obs_parts)
         # print('obs', obs.shape)
         # print('interaction', interaction_one_hot.shape)

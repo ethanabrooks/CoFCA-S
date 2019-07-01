@@ -42,6 +42,13 @@ def space_shape(space: gym.Space):
     raise NotImplementedError
 
 
+def buffer_shape(space: gym.Space):
+    shape = space_shape(space)
+    if not all(isinstance(d, int) for d in shape):
+        shape = 26, 4, 4  # TODO
+    return shape
+
+
 def obs_space_info(obs_space):
     """
     Get dict-structured information about a gym.Space.
