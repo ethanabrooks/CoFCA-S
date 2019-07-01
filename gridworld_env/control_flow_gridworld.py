@@ -9,19 +9,18 @@ Obs = namedtuple("Obs", "base subtask subtasks conditions control next_subtask p
 
 
 class ControlFlowGridWorld(SubtasksGridWorld):
-    #   def __init__(self, *args, n_subtasks, force_branching=False, **kwargs):
-    #       super().__init__(*args, n_subtasks=n_subtasks + 1, **kwargs)
-    #       self.passing_objects = None
-    #       self.failing_objects = None
-    #       self.pred = None
-    #       self.force_branching = force_branching
-    #       if force_branching:
-    #           assert n_subtasks % 2 == 0
+    def __init__(self, *args, n_subtasks, force_branching=False, **kwargs):
+        super().__init__(*args, n_subtasks=n_subtasks, **kwargs)
+        self.pred = None
+        self.force_branching = force_branching
+        if force_branching:
+            assert n_subtasks % 2 == 0
 
-    #       self.conditions = None
-    #       self.control = None
-    #       self.required_objects = None
-    #       # self.observation_space = spaces.Dict(
+        self.conditions = None
+        self.control = None
+        self.required_objects = None
+        # self.observation_space = spaces.Dict(
+
     #       # Obs(
     #       # **self.observation_space.spaces,
     #       # conditions=spaces.MultiDiscrete(
@@ -36,7 +35,6 @@ class ControlFlowGridWorld(SubtasksGridWorld):
     #       # ),
     #       # )._asdict()
     #       # )
-    #       self.pred = None
 
     def render_current_subtask(self):
         if self.subtask_idx == 0:
