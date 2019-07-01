@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 
 from gridworld_env.control_flow_gridworld import Obs
-from ppo.layers import Flatten, Reshape
+from ppo.layers import Flatten, Parallel, Product, Reshape
 import ppo.subtasks.agent
 from ppo.subtasks.teacher import g123_to_binary
 from ppo.subtasks.wrappers import Actions
@@ -30,6 +30,11 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
         d, h, w = self.obs_shape
         self.phi_shift = nn.Sequential(
             # Reshape(-1, num_object_types * d, h, w),
+            Parallel(
+                Reshape(-1, num_object_types, h, w), Reshape(-1, num_object_types, 1, 1)
+            ),
+            Product(),
+            Reshape(-1, num_object_types * h * w),
             init_(nn.Linear(num_object_types * h * w, 1), "sigmoid"),
             # Reshape(-1, in_channels, *self.obs_shape[-2:]),
             # init_(
@@ -131,7 +136,7 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
                 inputs.base[t, :, 1:-2] * c.view(N, conditions.size(2), 1, 1)
             ).view(N, -1)
             # truth = torch.any(phi_in > 0, dim=-1).float().view(N, 1, 1)
-            pred = self.phi_shift(phi_in)
+            pred = self.phi_shift((inputs.base[t, :, 1:-2], c))
             trans = pred * true_path + (1 - pred) * false_path
             return (p.unsqueeze(1) @ trans).squeeze(1)
 
