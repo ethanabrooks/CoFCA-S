@@ -18,8 +18,7 @@ from ppo.subtasks.wrappers import Actions
 from ppo.utils import broadcast3d, init_, interp, trace
 
 RecurrentState = namedtuple(
-    "RecurrentState",
-    "a cg cr r p g a_probs cg_probs cr_probs g_probs v g_loss cr_loss cg_loss subtask",
+    "RecurrentState", "a cg cr r p g a_probs cg_probs cr_probs g_probs v g_loss subtask"
 )
 
 
@@ -218,8 +217,6 @@ class Recurrence(torch.jit.ScriptModule):
             g_probs=self.n_subtasks,
             v=1,
             g_loss=1,
-            cr_loss=1,
-            cg_loss=1,
             subtask=1,
         )
         self.state_sizes = RecurrentState(*map(int, state_sizes))
@@ -416,21 +413,17 @@ class Recurrence(torch.jit.ScriptModule):
                     c = actions.c[t]
                     sample_new(c, c_dist)
                     probs = c_dist.probs
-                    loss = -c_dist.log_probs(next_subtask[t])
                 else:
                     c = torch.sigmoid(c_logits[:, :1])
                     probs = torch.zeros_like(c_logits)  # dummy value
-                    loss = F.binary_cross_entropy(
-                        torch.clamp(c, 0.0, 1.0), next_subtask[t], reduction="none"
-                    )
-                return c, loss, probs
+                return c, probs
 
             # cr
-            cr, cr_loss, cr_probs = phi_update(subtask_param=r)
+            cr, cr_probs = phi_update(subtask_param=r)
 
             # cg
             g_binary = M[torch.arange(N), G[t - 1]]
-            cg, cg_loss, cg_probs = phi_update(subtask_param=g_binary)
+            cg, cg_probs = phi_update(subtask_param=g_binary)
 
             # p
             p2 = update_attention(p, t)
@@ -468,8 +461,6 @@ class Recurrence(torch.jit.ScriptModule):
             yield RecurrentState(
                 cg=cg,
                 cr=cr,
-                cg_loss=cg_loss,
-                cr_loss=cr_loss,
                 cg_probs=cg_probs,
                 cr_probs=cr_probs,
                 p=p,
