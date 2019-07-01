@@ -204,6 +204,11 @@ class Recurrence(torch.jit.ScriptModule):
             "subtask_space", torch.tensor(self.subtask_nvec.astype(np.int64))
         )
 
+        trans = F.pad(torch.eye(self.n_subtasks), [1, 0])[:, :-1]
+        trans[-1, -1] = 1
+
+        self.register_buffer("trans", trans)
+
         state_sizes = RecurrentState(
             a=1,
             cg=1,
@@ -351,7 +356,8 @@ class Recurrence(torch.jit.ScriptModule):
             hx.g[new_episode] = 0.0
 
         def update_attention(p, t):
-            p2 = F.pad(p, [1, 0])[:, :-1]
+            # p2 = F.pad(p, [1, 0])[:, :-1]
+            p2 = (p.unsqueeze(1) @ self.trans.unsqueeze(0)).squeeze(1)
             p2[:, -1] += 1 - p2.sum(dim=-1)
             return p2
 
