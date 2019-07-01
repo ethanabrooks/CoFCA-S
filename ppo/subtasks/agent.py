@@ -442,7 +442,7 @@ class Recurrence(torch.jit.ScriptModule):
             pred = truth
             trans = pred * true_path + (1 - pred) * false_path
             p2 = (p.unsqueeze(1) @ trans).squeeze(1)
-            p2[:, -1] += 1 - p2.sum(dim=-1)
+            # p2[:, -1] += 1 - p2.sum(dim=-1)
             return p2
 
         def _update_attention(p, t):
