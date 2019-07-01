@@ -106,5 +106,5 @@ class PPO:
                 # noinspection PyTypeChecker
                 logger.update(n=1.0)
 
-        n = logger.pop("n")
+        n = logger.pop("n", 0)
         return {k: v.mean().item() / n for k, v in logger.items()}

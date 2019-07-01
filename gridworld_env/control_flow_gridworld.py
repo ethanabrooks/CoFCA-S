@@ -97,15 +97,19 @@ class ControlFlowGridWorld(SubtasksGridWorld):
         while True:
             passing = self.conditions[i] in self.required_objects
             branching = self.control[i, 0] != self.control[i, 1]
-            encountered_passing += [self.conditions[i] if branching and passing else None]
-            encountered_failing += [self.conditions[i] if branching and not passing else None]
+            encountered.update(passing=[condition if branching and passing else None])
+            encountered.update(
+                failing=[condition if branching and not passing else None]
+            )
+            encountered.update(subtasks=[i])
             i = self.control[i, int(passing)]
-            if i > self.n_subtasks:
-                break
-            encountered_subtasks += [subtasks[i]]
-            encountered_idxs += [i]
 
-        self.required_objects = list(set(o for o in encountered_passing if o is not None))
+        failing = encountered["failing"]
+        object_types = np.arange(len(self.object_types))
+        non_failing = list(set(object_types) - set(failing))
+        self.required_objects = list(
+            set(o for o in encountered["passing"] if o is not None)
+        )
         available = [x for x in self.required_objects]
 
         print(self.object_types)
@@ -117,12 +121,14 @@ class ControlFlowGridWorld(SubtasksGridWorld):
                 to_be_removed = subtask.interaction in {1, 2}
                 print('available', available)
                 if obj not in available:
-                    print('subtask', subtask)
-                    print('encountered_failing[:i + 1]', encountered_failing[:i + 1])
-                    if (not to_be_removed and obj in encountered_failing) or (
-                            to_be_removed and obj in encountered_failing[:i + 1]):
-                        # choose a different object
-                        obj = self.np_random.choice(self.required_objects)
+                    if not to_be_removed and obj in failing:
+                        obj = self.np_random.choice(non_failing)
+                        subtasks[i] = subtask._replace(object=obj)
+                    past_failing = failing[-i + 1 :]
+                    if to_be_removed and obj in past_failing:
+                        obj = self.np_random.choice(
+                            list(set(object_types) - set(past_failing))
+                        )
                         subtasks[i] = subtask._replace(object=obj)
 
                     # add object to map
@@ -149,24 +155,22 @@ class ControlFlowGridWorld(SubtasksGridWorld):
                     yield j, j
 
         self.control = 1 + np.minimum(np.array(list(get_control())), self.n_subtasks)
-
+        n_object_types = self.np_random.randint(1, len(self.object_types))
         object_types = np.arange(len(self.object_types))
-        self.np_random.shuffle(object_types)
-        object_types = object_types.reshape(-1, 2)  # TODO: what if not % 2?
-        conditions_idxs = self.np_random.choice(len(object_types), size=n)
-        branching = (self.control[:, 0] != self.control[:, 1])
-        passing = self.np_random.choice(2, size=n)
-        self.conditions = object_types[conditions_idxs, passing]
-        self.failing_conditions = self.conditions[branching * (1 - passing).astype(bool)]
-        self.required_objects = list(object_types[:, 1])
-
-        o = super().reset()
+        existing = self.np_random.choice(object_types, size=n_object_types)
+        non_existing = np.array(list(set(object_types) - set(existing)))
+        n_passing = self.np_random.choice(self.n_subtasks)
+        n_failing = self.n_subtasks - n_passing
+        passing = self.np_random.choice(existing, size=n_passing)
+        failing = self.np_random.choice(non_existing, size=n_failing)
+        self.conditions = np.concatenate([passing, failing])
+        self.np_random.shuffle(self.conditions)
+        self.required_objects = passing
+        super().reset()
         self.subtask_idx = 0
-        self.count = None
-        self.iterate = True
-        self.next_subtask = True
-        self.pred = self.evaluate_condition()
-        return o._replace(conditions=self.conditions, control=self.control)
+        self.subtask_idx = self.get_next_subtask()
+        self.count = self.subtask.count
+        return self.get_observation()
 
     def get_next_subtask(self):
         if self.subtask_idx > self.n_subtasks:

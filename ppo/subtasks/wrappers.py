@@ -1,9 +1,9 @@
 from collections import namedtuple
 
 import gym
-import numpy as np
 from gym import spaces
-from gym.spaces import Box, Discrete
+from gym.spaces import Discrete
+import numpy as np
 
 Actions = namedtuple('Actions', 'a cr cg g')
 
@@ -21,19 +21,12 @@ class DebugWrapper(gym.Wrapper):
 
     def step(self, action):
         actions = Actions(*[x.item() for x in np.split(action, self.action_sections)])
-        s, _, t, i = super().step(action)
+        truth = int(self.env.unwrapped.subtask_idx)
         guess = int(actions.g)
-        env = self.env.unwrapped
-        truth = int(env.subtask_idx)
-        if truth > env.n_subtasks:  # truth is out of bounds
-            truth = self.truth  # keep truth at old value
-
-        r = float(np.all(guess == truth)) - 1
-        # if r < 0:
-        #     import ipdb
-        #     ipdb.set_trace()
-
-        self.truth = truth
+        r = 0
+        if self.env.unwrapped.subtask is not None and guess != truth:
+            r = -1
+        s, _, t, i = super().step(action)
         self.last_guess = guess
         self.last_reward = r
         return s, r, t, i
@@ -41,11 +34,9 @@ class DebugWrapper(gym.Wrapper):
     def render(self, mode="human"):
         print("########################################")
         super().render(sleep_time=0)
-        print('guess', self.last_guess)
-        print('truth', self.env.unwrapped.subtask_idx)
-        print('$$$$$$$$$$$$$$')
-        print('$ reward', self.last_reward, '$')
-        print('$$$$$$$$$$$$$$')
+        # print("guess", self.last_guess)
+        # print("truth", self.env.unwrapped.subtask_idx)
+        print("reward", self.last_reward)
         # input('pause')
 
 
