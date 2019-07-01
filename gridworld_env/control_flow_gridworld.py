@@ -21,20 +21,21 @@ class ControlFlowGridWorld(SubtasksGridWorld):
         self.conditions = None
         self.control = None
         self.required_objects = None
-        obs_spaces = self.observation_space.spaces
-        obs_spaces.update(
-            conditions=spaces.MultiDiscrete(
-                np.array([len(self.object_types)]).repeat(self.n_subtasks)
-            ),
-            pred=spaces.Discrete(2),
-            control=spaces.MultiDiscrete(
-                np.tile(
-                    np.array([[self.n_subtasks]]),
-                    [self.n_subtasks, 2],  # binary conditions
-                )
-            ),
+        self.observation_space = spaces.Dict(
+            Obs(
+                **self.observation_space.spaces,
+                conditions=spaces.MultiDiscrete(
+                    np.array([len(self.object_types)]).repeat(self.n_subtasks)
+                ),
+                pred=spaces.Discrete(2),
+                control=spaces.MultiDiscrete(
+                    np.tile(
+                        np.array([[self.n_subtasks]]),
+                        [self.n_subtasks, 2],  # binary conditions
+                    )
+                ),
+            )._asdict()
         )
-        self.observation_space = spaces.Dict(Obs(**obs_spaces)._asdict())
         self.pred = None
 
     def render_current_subtask(self):
