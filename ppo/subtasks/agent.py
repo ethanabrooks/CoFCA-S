@@ -220,13 +220,6 @@ class Recurrence(torch.jit.ScriptModule):
             subtask=1,
         )
         self.state_sizes = RecurrentState(*map(int, state_sizes))
-        self.register_agent_dummy_values()
-
-    def register_agent_dummy_values(self):
-        self.register_buffer(
-            "agent_dummy_values",
-            torch.zeros(1, self.obs_sections.subtasks + self.obs_sections.next_subtask),
-        )
 
     @property
     def n_subtasks(self):
@@ -386,6 +379,7 @@ class Recurrence(torch.jit.ScriptModule):
         update_attention,
         inputs,
     ):
+
         # combine past and present actions (sampled values)
         A = torch.cat([actions.a, a.unsqueeze(0)], dim=0).long().squeeze(2)
         G = torch.cat([actions.g, g.unsqueeze(0)], dim=0).long().squeeze(2)

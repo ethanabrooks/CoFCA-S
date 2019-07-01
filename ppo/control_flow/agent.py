@@ -55,27 +55,8 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
             pred=[1],
         )
 
-    @property
-    def n_subtasks(self):
-        return self.obs_spaces.subtasks.nvec.shape[0]
-
     def get_obs_sections(self):
         return Obs(*[int(np.prod(s.shape)) for s in self.obs_spaces])
-
-    def register_agent_dummy_values(self):
-        self.register_buffer(
-            "agent_dummy_values",
-            torch.zeros(
-                1,
-                sum(
-                    [
-                        self.obs_sections.subtasks,
-                        self.obs_sections.control,
-                        self.obs_sections.next_subtask,
-                    ]
-                ),
-            ),
-        )
 
     def parse_inputs(self, inputs):
         return Obs(*torch.split(inputs, self.obs_sections, dim=2))
