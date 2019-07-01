@@ -251,6 +251,15 @@ class Recurrence(torch.jit.ScriptModule):
             nn.Sigmoid(),
             Reshape(-1, 1, 1),
         )
+        self.obs_shapes = Obs(
+            base=self.obs_spaces.base.shape,
+            subtask=[1],
+            subtasks=self.obs_spaces.subtasks.nvec.shape,
+            conditions=self.obs_spaces.conditions.nvec.shape,
+            control=self.obs_spaces.control.nvec.shape,
+            next_subtask=[1],
+            pred=[1],
+        )
         # TODO<<<<<<<
 
     @property
