@@ -140,7 +140,7 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
             # pred = self.phi_shift((inputs.base[t], c))
             pred = truth
             trans = pred * true_path + (1 - pred) * false_path
-            return (p.unsqueeze(1) @ trans).squeeze(1)
+            return (p.unsqueeze(1) @ trans).squeeze(1).detach()
 
         return self.pack(
             self.inner_loop(
