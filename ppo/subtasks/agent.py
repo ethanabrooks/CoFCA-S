@@ -473,8 +473,6 @@ class Recurrence(torch.jit.ScriptModule):
                         base=obs[t].view(N, -1),
                         subtask=g.float().view(N, -1),
                         subtasks=M123.view(N, -1),
-                        cr=cr,
-                        cg=cg,
                     ),
                     dim=1,
                 )
