@@ -155,19 +155,25 @@ class Recurrence(torch.jit.ScriptModule):
         d, h, w = self.obs_shape = obs_spaces.base.shape
         self.obs_sections = self.get_obs_sections()
 
-        self.conv0 = nn.Sequential(
-            init_(nn.Conv2d(d, hidden_size, kernel_size=1), "relu"),
-            nn.ReLU(),
+        self.f = nn.Sequential(
             nn.MaxPool2d(kernel_size=self.obs_shape[-2:], stride=1),
             Flatten(),
             init_(nn.Linear(hidden_size, d), "relu"),
             nn.ReLU(),
         )
 
-        self.conv = nn.Sequential(
+        self.conv1 = nn.Sequential(
+            init_(nn.Conv2d(d, hidden_size, kernel_size=1), "relu"), nn.ReLU()
+        )
+
+        self.conv2 = nn.Sequential(
             Concat(dim=1),
             init_(
-                nn.Conv2d(d + int(self.subtask_nvec.sum()), hidden_size, kernel_size=1),
+                nn.Conv2d(
+                    hidden_size + int(self.subtask_nvec.sum()),
+                    hidden_size,
+                    kernel_size=1,
+                ),
                 "relu",
             ),
             nn.ReLU(),
@@ -396,10 +402,10 @@ class Recurrence(torch.jit.ScriptModule):
 
             agent_layer = obs[t, :, 6, :, :].long()
             j, k, l = torch.split(agent_layer.nonzero(), 1, dim=-1)
-            obs_part = self.conv0(obs[t])
+            h = self.conv1(obs[t])
+            obs_part = self.f(h)
 
             def phi_update(subtask_param):
-                debug_obs = obs[t, j, :, k, l].squeeze(1)
                 task_sections = torch.split(
                     subtask_param, tuple(self.subtask_nvec), dim=-1
                 )
@@ -457,7 +463,7 @@ class Recurrence(torch.jit.ScriptModule):
             # a
             g = G[t]
             g_binary = M[torch.arange(N), g]
-            conv_out = self.conv((obs[t], broadcast3d(g_binary, self.obs_shape[1:])))
+            conv_out = self.conv2((h, broadcast3d(g_binary, self.obs_shape[1:])))
             if self.agent is None:
                 a_dist = self.actor(conv_out)
             else:
