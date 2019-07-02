@@ -43,29 +43,31 @@ class ControlFlowGridWorld(SubtasksGridWorld):
 
     def render_task(self):
         def helper(i, indent):
+            try:
+                subtask = f"{i}:{self.subtasks[i]}"
+            except IndexError:
+                return f"{indent}terminate"
             neg, pos = self.control[i]
             condition = self.conditions[i]
 
-            def develop_branch(j, add_indent):
-                new_indent = indent + add_indent
-                if j == 0:
-                    subtask = f""
-                else:
-                    try:
-                        subtask = f"{j}:{self.subtasks[j]}"
-                    except IndexError:
-                        return f"{new_indent}terminate"
-                return f"{new_indent}{subtask}\n{helper(j, new_indent)}"
+            # def develop_branch(j, add_indent):
+            # new_indent = indent + add_indent
+            # try:
+            # subtask = f"{j}:{self.subtasks[j]}"
+            # except IndexError:
+            # return f"{new_indent}terminate"
+            # return f"{new_indent}{subtask}\n{helper(j, new_indent)}"
 
             if pos == neg:
-                return f"{develop_branch(pos, '')}"
+                if_condition = helper(pos, indent)
             else:
-                return f"""\
+                if_condition = f"""\
 {indent}if {self.object_types[condition]}:
-{develop_branch(pos, '    ')}
+{helper(pos, indent + '    ')}
 {indent}else:
-{develop_branch(neg, '    ')}
+{helper(neg, indent + '    ')}
 """
+            return f"{indent}{subtask}\n{if_condition}"
 
         print(helper(i=0, indent=""))
 
@@ -137,7 +139,7 @@ class ControlFlowGridWorld(SubtasksGridWorld):
                 else:
                     yield j, j
 
-        self.control = 1 + np.minimum(np.array(list(get_control())), self.n_subtasks)
+        self.control = np.minimum(1 + np.array(list(get_control())), self.n_subtasks)
         n_object_types = self.np_random.randint(1, len(self.object_types))
         object_types = np.arange(len(self.object_types))
         existing = self.np_random.choice(object_types, size=n_object_types)
