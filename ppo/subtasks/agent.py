@@ -11,7 +11,7 @@ from gridworld_env.subtasks_gridworld import Obs
 import ppo
 from ppo.agent import AgentValues, NNBase
 from ppo.distributions import Categorical, DiagGaussian, FixedCategorical
-from ppo.layers import Concat, Flatten, Parallel, Product, Reshape
+from ppo.layers import Concat, Flatten, Parallel, Product, Reshape, Sum
 import ppo.subtasks.teacher
 from ppo.subtasks.teacher import Teacher, g123_to_binary, g_binary_to_123
 from ppo.subtasks.wrappers import Actions
@@ -155,7 +155,20 @@ class Recurrence(torch.jit.ScriptModule):
         d, h, w = self.obs_shape = obs_spaces.base.shape
         self.obs_sections = self.get_obs_sections()
 
-        self.conv = nn.Sequential(
+        self.conv1 = nn.Sequential(
+            Parallel(
+                Reshape(d, h * w),
+                nn.Sequential(
+                    init_(nn.Conv2d(d, 1, kernel_size=1)),
+                    Reshape(1, h * w),  # TODO
+                    nn.Softmax(dim=-1),
+                ),
+            ),
+            Product(),
+            Sum(dim=-1),
+        )
+
+        self.conv2 = nn.Sequential(
             Concat(dim=1),
             init_(
                 nn.Conv2d(d + int(self.subtask_nvec.sum()), hidden_size, kernel_size=1),
@@ -178,10 +191,11 @@ class Recurrence(torch.jit.ScriptModule):
         self.critic = init_(nn.Linear(input_size, 1))
 
         if multiplicative_interaction:
+            raise NotImplementedError
             self.phi_update = nn.Sequential(
                 Parallel(
                     # self.conv2,  # obs
-                    init_(nn.Linear(d, hidden_size)),
+                    self.conv1,
                     init_(nn.Linear(action_spaces.a.n, hidden_size)),  # action
                     *[
                         init_(nn.Linear(i, hidden_size)) for i in self.subtask_nvec
@@ -447,7 +461,7 @@ class Recurrence(torch.jit.ScriptModule):
             # a
             g = G[t]
             g_binary = M[torch.arange(N), g]
-            conv_out = self.conv((obs[t], broadcast3d(g_binary, self.obs_shape[1:])))
+            conv_out = self.conv2((obs[t], broadcast3d(g_binary, self.obs_shape[1:])))
             if self.agent is None:
                 a_dist = self.actor(conv_out)
             else:
