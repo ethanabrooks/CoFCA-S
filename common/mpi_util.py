@@ -59,7 +59,7 @@ def get_local_rank_size(comm):
         0, 1, 2, ..., N-1,
     where N is the number of processes on this machine.
 
-    Useful if you want to assign one gpu per machine
+    Useful flat_control_flow you want to assign one gpu per machine
     """
     this_node = platform.node()
     ranks_nodes = comm.allgather((comm.Get_rank(), this_node))

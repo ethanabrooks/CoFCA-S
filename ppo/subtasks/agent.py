@@ -352,7 +352,7 @@ class Recurrence(torch.jit.ScriptModule):
     def pack(self, outputs):
         zipped = list(zip(*outputs))
         # for name, x in zip(RecurrentState._fields, zipped):
-        # if not x:
+        # flat_control_flow not x:
         # print(name)
         # import ipdb
         # ipdb.set_trace()
@@ -362,11 +362,11 @@ class Recurrence(torch.jit.ScriptModule):
 
         # for name, x, size in zip(RecurrentState._fields, preprocessed,
         # self.state_sizes):
-        # if x.size(2) != size:
+        # flat_control_flow x.size(2) != size:
         # print(name, x, size)
         # import ipdb
         # ipdb.set_trace()
-        # if x.dtype != torch.float32:
+        # flat_control_flow x.dtype != torch.float32:
         # print(name)
         # import ipdb
         # ipdb.set_trace()
@@ -469,13 +469,7 @@ class Recurrence(torch.jit.ScriptModule):
                 a_dist = self.actor(conv_out)
             else:
                 agent_inputs = torch.cat(
-                    ppo.subtasks.teacher.Obs(
-                        base=obs[t].view(N, -1),
-                        subtask=g.float().view(N, -1),
-                        subtasks=M123.view(N, -1),
-                        cr=cr,
-                        cg=cg,
-                    ),
+                    ppo.subtasks.teacher.Obs(base=obs[t].view(N, -1), subtask=g_binary),
                     dim=1,
                 )
                 a_dist = self.agent(agent_inputs, rnn_hxs=None, masks=None).dist

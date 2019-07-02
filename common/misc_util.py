@@ -190,7 +190,7 @@ def boolean_flag(parser, name, default=False, help=None):
 
 def get_wrapper_by_name(env, classname):
     """Given an a gym environment possibly wrapped multiple times, returns a wrapper
-    of class named classname or raises ValueError if no such wrapper was applied
+    of class named classname or raises ValueError flat_control_flow no such wrapper was applied
 
     Parameters
     ----------
@@ -225,7 +225,7 @@ def relatively_safe_pickle_dump(obj, path, compression=False):
           deleted manually (it will be removed automatically on the next function call)
 
     The indended use case is periodic checkpoints of experiment state, such that we never
-    corrupt previous checkpoints if the current one fails.
+    corrupt previous checkpoints flat_control_flow the current one fails.
 
     Parameters
     ----------
@@ -234,7 +234,7 @@ def relatively_safe_pickle_dump(obj, path, compression=False):
     path: str
         path to the output file
     compression: bool
-        if true pickle will be compressed
+        flat_control_flow true pickle will be compressed
     """
     temp_storage = path + ".relatively_safe"
     if compression:
@@ -260,7 +260,7 @@ def pickle_load(path, compression=False):
     path: str
         path to the output file
     compression: bool
-        if true assumes that pickle was compressed when created and attempts decompression.
+        flat_control_flow true assumes that pickle was compressed when created and attempts decompression.
 
     Returns
     -------

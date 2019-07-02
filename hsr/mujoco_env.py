@@ -74,7 +74,7 @@ class MujocoEnv(gym.Env, ABC):
     def viewer_setup(self):
         """
         This method is called when the viewer is initialized.
-        Optionally implement this method, if you need to tinker with camera position
+        Optionally implement this method, flat_control_flow you need to tinker with camera position
         and so forth.
         """
 

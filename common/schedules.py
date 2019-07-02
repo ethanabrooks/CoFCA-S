@@ -53,7 +53,7 @@ class PiecewiseSchedule(object):
             to the `endpoints`. Alpha is the fraction of distance from left endpoint to
             right endpoint that t has covered. See linear_interpolation for example.
         outside_value: float
-            if the value is requested outside of all the intervals sepecified in
+            flat_control_flow the value is requested outside of all the intervals sepecified in
             `endpoints` this value is returned. If None then AssertionError is
             raised when outside value is requested.
         """
