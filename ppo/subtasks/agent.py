@@ -193,18 +193,6 @@ class Recurrence(torch.jit.ScriptModule):
 
         if multiplicative_interaction:
             raise NotImplementedError
-            self.phi_update = nn.Sequential(
-                Parallel(
-                    # self.conv2,  # obs
-                    self.conv1,
-                    init_(nn.Linear(action_spaces.a.n, hidden_size)),  # action
-                    *[
-                        init_(nn.Linear(i, hidden_size)) for i in self.subtask_nvec
-                    ],  # subtask parameter
-                ),
-                Product(),
-                init_(nn.Linear(hidden_size, 2), "sigmoid"),
-            )
         else:
             self.phi_update = trace(
                 lambda in_size: init_(nn.Linear(in_size, 2), "sigmoid"),
@@ -399,13 +387,13 @@ class Recurrence(torch.jit.ScriptModule):
         for t in range(T):
             subtask = float_subtask.long()
             float_subtask += next_subtask[t]
+            obs_part = self.conv1(obs[t])
 
             # agent_layer = obs[t, :, 6, :, :].long()
             # j, k, l = torch.split(agent_layer.nonzero(), 1, dim=-1)
 
             def phi_update(subtask_param):
                 # obs_part = obs[t, j, :, k, l].squeeze(1)
-                obs_part = self.conv1(obs[t])
                 task_sections = torch.split(
                     subtask_param, tuple(self.subtask_nvec), dim=-1
                 )
@@ -420,7 +408,7 @@ class Recurrence(torch.jit.ScriptModule):
                 # correct_action.sum(-1, keepdim=True)
                 # * correct_object.sum(-1, keepdim=True)
                 # ).detach()
-                parts = (obs_part, self.a_one_hots[A[t - 1]]) + task_sections
+                parts = (obs_part.clone(), self.a_one_hots[A[t - 1]]) + task_sections
                 if self.multiplicative_interaction:
                     c_logits = self.phi_update(parts)
                 else:
