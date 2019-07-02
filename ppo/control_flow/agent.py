@@ -42,6 +42,7 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
                 )
             ),
             nn.MaxPool2d(kernel_size=self.obs_shape[-2:], stride=1),
+            nn.ReLU(),
             Flatten(),
             init_(nn.Linear(hidden_size // 2, 1), "sigmoid"),
             nn.Sigmoid(),
