@@ -156,7 +156,7 @@ class Recurrence(torch.jit.ScriptModule):
         self.obs_sections = self.get_obs_sections()
 
         self.f = nn.Sequential(
-            nn.MaxPool2d(kernel_size=self.obs_shape[-2:], stride=1),
+            nn.LPPool2d(norm_type=2, kernel_size=self.obs_shape[-2:], stride=1),
             Flatten(),
             nn.ReLU(),
         )
