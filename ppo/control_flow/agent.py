@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 
 from gridworld_env.control_flow_gridworld import Obs
-from ppo.layers import Parallel, Product, Reshape
+from ppo.layers import Flatten, Parallel, Product, Reshape
 import ppo.subtasks.agent
 from ppo.utils import init_
 
@@ -33,15 +33,15 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
                 nn.Sequential(Reshape(-1, num_object_types, 1, 1, 1)),
             ),
             Product(),
-            Reshape(-1, num_object_types * d * h * w),
-            init_(nn.Linear(num_object_types * d * h * w, 1), "sigmoid"),
-            # Reshape(-1, in_channels, *self.obs_shape[-2:]),
-            # init_(
-            # nn.Conv2d(num_object_types * d, hidden_size, kernel_size=1, stride=1)
-            # ),
-            # nn.MaxPool2d(kernel_size=self.obs_shape[-2:], stride=1),
-            # Flatten(),
-            # init_(nn.Linear(hidden_size, 1), "sigmoid"),
+            # Reshape(-1, num_object_types * d * h * w),
+            # init_(nn.Linear(num_object_types * d * h * w, 1), "sigmoid"),
+            Reshape(-1, d * num_object_types, *self.obs_shape[-2:]),
+            init_(
+                nn.Conv2d(num_object_types * d, hidden_size, kernel_size=1, stride=1)
+            ),
+            nn.MaxPool2d(kernel_size=self.obs_shape[-2:], stride=1),
+            Flatten(),
+            init_(nn.Linear(hidden_size, 1), "sigmoid"),
             nn.Sigmoid(),
             Reshape(-1, 1, 1),
         )
