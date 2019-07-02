@@ -153,7 +153,15 @@ class Recurrence(torch.jit.ScriptModule):
         d, h, w = self.obs_shape = obs_spaces.base.shape
         self.obs_sections = self.get_obs_sections()
 
-        self.conv = nn.Sequential(
+        self.conv1 = nn.Sequential(
+            init_(
+                nn.Conv2d(d, 1, kernel_size=self.obs_shape[-2:], stride=1), "sigmoid"
+            ),
+            Flatten(),
+            nn.Sigmoid(),
+        )
+
+        self.conv2 = nn.Sequential(
             Concat(dim=1),
             init_(
                 nn.Conv2d(d + int(self.subtask_nvec.sum()), hidden_size, kernel_size=1),
@@ -180,7 +188,7 @@ class Recurrence(torch.jit.ScriptModule):
             self.phi_update = nn.Sequential(
                 Parallel(
                     # self.conv2,  # obs
-                    init_(nn.Linear(d, hidden_size)),
+                    self.conv1,
                     init_(nn.Linear(action_spaces.a.n, hidden_size)),  # action
                     *[
                         init_(nn.Linear(i, hidden_size)) for i in self.subtask_nvec
@@ -293,7 +301,7 @@ class Recurrence(torch.jit.ScriptModule):
 
         # parse non-action inputs
         inputs = self.parse_inputs(inputs)
-        obs = inputs.base.view(T, N, *self.obs_shape)
+        inputs = inputs._replace(base=inputs.base.view(T, N, *self.obs_shape))
         task = inputs.subtasks.view(T, N, self.n_subtasks, self.subtask_nvec.size)
 
         # build memory
@@ -330,7 +338,6 @@ class Recurrence(torch.jit.ScriptModule):
                 T=T,
                 float_subtask=hx.subtask,
                 next_subtask=inputs.next_subtask,
-                obs=obs,
                 p=p,
                 r=r,
                 actions=actions,
@@ -376,7 +383,6 @@ class Recurrence(torch.jit.ScriptModule):
         T,
         float_subtask,
         next_subtask,
-        obs,
         p,
         r,
         actions,
@@ -384,6 +390,7 @@ class Recurrence(torch.jit.ScriptModule):
         inputs,
     ):
         # combine past and present actions (sampled values)
+        obs = inputs.base
         A = torch.cat([actions.a, a.unsqueeze(0)], dim=0).long().squeeze(2)
         G = torch.cat([actions.g, g.unsqueeze(0)], dim=0).long().squeeze(2)
         for t in range(T):
@@ -398,6 +405,17 @@ class Recurrence(torch.jit.ScriptModule):
                 task_sections = torch.split(
                     subtask_param, tuple(self.subtask_nvec), dim=-1
                 )
+                # parts = (debug_obs, self.a_one_hots[A[t - 1]]) + task_sections
+                # a_one_hot = self.a_one_hots[A[t - 1]]
+                # interaction, count, obj = task_sections
+                # correct_object = obj * debug_obs[:, 1 : 1 + self.subtask_nvec[2]]
+                # column1 = interaction[:, :1]
+                # column2 = interaction[:, 1:] * a_one_hot[:, 4:]
+                # correct_action = torch.cat([column1, column2], dim=-1)
+                # truth = (
+                # correct_action.sum(-1, keepdim=True)
+                # * correct_object.sum(-1, keepdim=True)
+                # ).detach()
                 parts = (debug_obs, self.a_one_hots[A[t - 1]]) + task_sections
                 a_one_hot = self.a_one_hots[A[t - 1]]
                 interaction, count, obj = task_sections
@@ -456,7 +474,7 @@ class Recurrence(torch.jit.ScriptModule):
             # a
             g = G[t]
             g_binary = M[torch.arange(N), g]
-            conv_out = self.conv((obs[t], broadcast3d(g_binary, self.obs_shape[1:])))
+            conv_out = self.conv2((obs[t], broadcast3d(g_binary, self.obs_shape[1:])))
             if self.agent is None:
                 a_dist = self.actor(conv_out)
             else:
