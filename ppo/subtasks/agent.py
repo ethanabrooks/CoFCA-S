@@ -155,29 +155,18 @@ class Recurrence(torch.jit.ScriptModule):
         d, h, w = self.obs_shape = obs_spaces.base.shape
         self.obs_sections = self.get_obs_sections()
 
-        self.f = nn.Sequential(
-            nn.LPPool2d(norm_type=2, kernel_size=self.obs_shape[-2:], stride=1),
-            Flatten(),
-            nn.ReLU(),
-        )
-        if not self.multiplicative_interaction:
-            self.f.add_module(
-                "linear to d",
-                nn.Sequential(init_(nn.Linear(hidden_size, d), "relu"), nn.ReLU()),
-            )
-
         self.conv1 = nn.Sequential(
-            init_(nn.Conv2d(d, hidden_size, kernel_size=1), "relu"), nn.ReLU()
+            init_(
+                nn.Conv2d(d, 1, kernel_size=self.obs_shape[-2:], stride=1), "sigmoid"
+            ),
+            Flatten(),
+            nn.Sigmoid(),
         )
 
         self.conv2 = nn.Sequential(
             Concat(dim=1),
             init_(
-                nn.Conv2d(
-                    hidden_size + int(self.subtask_nvec.sum()),
-                    hidden_size,
-                    kernel_size=1,
-                ),
+                nn.Conv2d(d + int(self.subtask_nvec.sum()), hidden_size, kernel_size=1),
                 "relu",
             ),
             nn.ReLU(),
@@ -200,7 +189,7 @@ class Recurrence(torch.jit.ScriptModule):
             self.phi_update = nn.Sequential(
                 Parallel(
                     # self.conv2,  # obs
-                    self.f,
+                    self.conv1,
                     init_(nn.Linear(action_spaces.a.n, hidden_size)),  # action
                     *[
                         init_(nn.Linear(i, hidden_size)) for i in self.subtask_nvec
@@ -403,12 +392,16 @@ class Recurrence(torch.jit.ScriptModule):
         for t in range(T):
             subtask = float_subtask.long()
             float_subtask += next_subtask[t]
-            h = self.conv1(obs[t])
+
+            agent_layer = obs[t, :, 6, :, :].long()
+            j, k, l = torch.split(agent_layer.nonzero(), 1, dim=-1)
 
             def phi_update(subtask_param):
+                debug_obs = obs[t, j, :, k, l].squeeze(1)
                 task_sections = torch.split(
                     subtask_param, tuple(self.subtask_nvec), dim=-1
                 )
+                # parts = (debug_obs, self.a_one_hots[A[t - 1]]) + task_sections
                 # a_one_hot = self.a_one_hots[A[t - 1]]
                 # interaction, count, obj = task_sections
                 # correct_object = obj * debug_obs[:, 1 : 1 + self.subtask_nvec[2]]
@@ -419,11 +412,10 @@ class Recurrence(torch.jit.ScriptModule):
                 # correct_action.sum(-1, keepdim=True)
                 # * correct_object.sum(-1, keepdim=True)
                 # ).detach()
+                parts = (debug_obs, self.a_one_hots[A[t - 1]]) + task_sections
                 if self.multiplicative_interaction:
-                    parts = (h.clone(), self.a_one_hots[A[t - 1]]) + task_sections
                     c_logits = self.phi_update(parts)
                 else:
-                    parts = (self.f(h), self.a_one_hots[A[t - 1]]) + task_sections
                     outer_product_obs = 1
                     for i1, part in enumerate(parts):
                         for i2 in range(len(parts)):
@@ -464,7 +456,7 @@ class Recurrence(torch.jit.ScriptModule):
             # a
             g = G[t]
             g_binary = M[torch.arange(N), g]
-            conv_out = self.conv2((h, broadcast3d(g_binary, self.obs_shape[1:])))
+            conv_out = self.conv2((obs[t], broadcast3d(g_binary, self.obs_shape[1:])))
             if self.agent is None:
                 a_dist = self.actor(conv_out)
             else:
