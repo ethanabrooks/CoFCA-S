@@ -81,10 +81,10 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
             # c = conditions[
             # torch.arange(N, device=c.device), inputs.subtask[t].long().flatten()
             # ]
-            phi_in = (
-                inputs.base[t, :, 1:-2] * c.view(N, conditions.size(2), 1, 1)
-            ).view(N, -1)
-            truth = torch.any(phi_in > 0, dim=-1).float().view(N, 1, 1)
+            # phi_in = (
+            # inputs.base[t, :, 1:-2] * c.view(N, conditions.size(2), 1, 1)
+            # ).view(N, -1)
+            # truth = torch.any(phi_in > 0, dim=-1).float().view(N, 1, 1)
             phi_in = c.view(N, conditions.size(2), 1, 1, 1) * inputs.base[t].unsqueeze(
                 1
             )
