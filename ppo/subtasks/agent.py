@@ -11,7 +11,7 @@ from gridworld_env.subtasks_gridworld import Obs
 import ppo
 from ppo.agent import AgentValues, NNBase
 from ppo.distributions import Categorical, DiagGaussian, FixedCategorical
-from ppo.layers import Concat, Flatten, Parallel, Product, Reshape, Sum, ShallowCopy
+from ppo.layers import Concat, Flatten, Parallel, Product, Reshape, ShallowCopy, Sum
 import ppo.subtasks.teacher
 from ppo.subtasks.teacher import Teacher, g123_to_binary, g_binary_to_123
 from ppo.subtasks.wrappers import Actions
@@ -468,15 +468,12 @@ class Recurrence(torch.jit.ScriptModule):
             if self.agent is None:
                 a_dist = self.actor(conv_out)
             else:
-                agent_inputs = torch.cat(
-                    ppo.subtasks.teacher.Obs(
-                        base=obs[t].view(N, -1),
-                        subtask=g.float().view(N, -1),
-                        subtasks=M123.view(N, -1),
-                        cr=cr,
-                        cg=cg,
-                    ),
-                    dim=1,
+                agent_inputs = ppo.subtasks.teacher.Obs(
+                    base=obs[t].view(N, -1),
+                    subtask=g_binary,
+                    subtasks=M123.view(N, -1),
+                    cr=cr,
+                    cg=cg,
                 )
                 a_dist = self.agent(agent_inputs, rnn_hxs=None, masks=None).dist
             sample_new(A[t], a_dist)

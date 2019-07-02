@@ -40,20 +40,19 @@ class Teacher(Agent):
         )  # one-hot subtask
 
     def preprocess_obs(self, inputs):
-        n = inputs.base.size(0)
-        obs = inputs.base.view(n, *self.obs_shape)
-        subtask_idx = inputs.subtask.long().flatten()
-        subtasks = inputs.subtasks.view(n, *self.obs_spaces.subtasks.shape)
-        g123 = subtasks[torch.arange(n), subtask_idx]
-        g123 = [x.flatten() for x in torch.split(g123, 1, dim=-1)]
-        one_hots = [self.part0_one_hot, self.part1_one_hot, self.part2_one_hot]
-        g_binary = g123_to_binary(g123, one_hots)
+        # n = inputs.base.size(0)
+        # obs = inputs.base.view(n, *self.obs_shape)
+        # subtask_idx = inputs.subtask.long().flatten()
+        # subtasks = inputs.subtasks.view(n, *self.obs_spaces.subtasks.shape)
+        # g123 = subtasks[torch.arange(n), subtask_idx]
+        # g123 = [x.flatten() for x in torch.split(g123, 1, dim=-1)]
+        # one_hots = [self.part0_one_hot, self.part1_one_hot, self.part2_one_hot]
+        g_binary = inputs.subtask
         g_broad = broadcast3d(g_binary, self.obs_shape[-2:])
+        obs = inputs.base.view(inputs.base.size(0), *self.obs_shape)
         return torch.cat([obs, g_broad], dim=1)
 
     def forward(self, inputs, *args, action=None, **kwargs):
-        sections = self.obs_sections + [inputs.size(1) - sum(self.obs_sections)]
-        inputs = Obs(*torch.split(inputs, sections, dim=1)[:-1])
         if action is not None:
             action = action[:, :1]
         act = super().forward(
