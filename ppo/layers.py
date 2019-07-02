@@ -46,7 +46,7 @@ class Reshape(torch.jit.ScriptModule):
         self.shape = shape
 
     def forward(self, inputs):
-        return inputs.view(*self.shape)
+        return inputs.view(inputs.size(0), *self.shape)
 
 
 class Broadcast3d(torch.jit.ScriptModule):
