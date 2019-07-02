@@ -11,7 +11,7 @@ from gridworld_env.subtasks_gridworld import Obs
 import ppo
 from ppo.agent import AgentValues, NNBase
 from ppo.distributions import Categorical, DiagGaussian, FixedCategorical
-from ppo.layers import Concat, Flatten, Parallel, Product, Reshape, Sum
+from ppo.layers import Concat, Flatten, Parallel, Product, Reshape, Sum, ShallowCopy
 import ppo.subtasks.teacher
 from ppo.subtasks.teacher import Teacher, g123_to_binary, g_binary_to_123
 from ppo.subtasks.wrappers import Actions
