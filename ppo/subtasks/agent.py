@@ -155,6 +155,15 @@ class Recurrence(torch.jit.ScriptModule):
         d, h, w = self.obs_shape = obs_spaces.base.shape
         self.obs_sections = self.get_obs_sections()
 
+        self.conv0 = nn.Sequential(
+            init_(nn.Conv2d(d, hidden_size, kernel_size=1), "relu"),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=self.obs_shape[-2:], stride=1),
+            Flatten(),
+            init_(nn.Linear(hidden_size, d), "relu"),
+            nn.ReLU(),
+        )
+
         self.conv = nn.Sequential(
             Concat(dim=1),
             init_(
@@ -387,13 +396,14 @@ class Recurrence(torch.jit.ScriptModule):
 
             agent_layer = obs[t, :, 6, :, :].long()
             j, k, l = torch.split(agent_layer.nonzero(), 1, dim=-1)
+            obs_part = self.conv0(obs[t])
 
             def phi_update(subtask_param):
                 debug_obs = obs[t, j, :, k, l].squeeze(1)
                 task_sections = torch.split(
                     subtask_param, tuple(self.subtask_nvec), dim=-1
                 )
-                parts = (debug_obs, self.a_one_hots[A[t - 1]]) + task_sections
+                parts = (obs_part.clone(), self.a_one_hots[A[t - 1]]) + task_sections
                 # a_one_hot = self.a_one_hots[A[t - 1]]
                 # interaction, count, obj = task_sections
                 # correct_object = obj * debug_obs[:, 1 : 1 + self.subtask_nvec[2]]
