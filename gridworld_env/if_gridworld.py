@@ -31,8 +31,6 @@ class IfGridWorld(ControlFlowGridWorld):
                     yield np.append(np.zeros(3), condition)
 
         obs.update(subtasks=np.vstack(get_subtasks()))
-        print("if obs")
-        print(obs["subtasks"])
         return obs
 
     def get_control(self):
