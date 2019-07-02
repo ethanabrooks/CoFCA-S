@@ -80,6 +80,7 @@ class ControlFlowGridWorld(SubtasksGridWorld):
         )
         return Obs(**obs)._asdict()
 
+    # noinspection PyTypeChecker
     def subtasks_generator(self):
         choices = self.np_random.choice(
             len(self.possible_subtasks), size=self.n_subtasks
