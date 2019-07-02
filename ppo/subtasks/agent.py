@@ -469,11 +469,7 @@ class Recurrence(torch.jit.ScriptModule):
                 a_dist = self.actor(conv_out)
             else:
                 agent_inputs = ppo.subtasks.teacher.Obs(
-                    base=obs[t].view(N, -1),
-                    subtask=g_binary,
-                    subtasks=M123.view(N, -1),
-                    cr=cr,
-                    cg=cg,
+                    base=obs[t].view(N, -1), subtask=g_binary
                 )
                 a_dist = self.agent(agent_inputs, rnn_hxs=None, masks=None).dist
             sample_new(A[t], a_dist)

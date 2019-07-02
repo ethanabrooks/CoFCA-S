@@ -3,29 +3,26 @@ from collections import namedtuple
 from gym import spaces
 import numpy as np
 import torch
+from gym.spaces import MultiDiscrete
 from torch.nn import functional as F
 
 from ppo.agent import Agent
 from ppo.subtasks.wrappers import Actions
 from ppo.utils import broadcast3d
 
-Obs = namedtuple("Obs", "base subtask subtasks cr cg")
+Obs = namedtuple("Obs", "base subtask")
 
 
 class Teacher(Agent):
     def __init__(self, obs_spaces, action_space, **kwargs):
         # noinspection PyProtectedMember
+        self.subtask_nvec = obs_spaces.subtasks.nvec[0]
         self.obs_spaces = Obs(
-            base=obs_spaces.base,
-            subtask=obs_spaces.subtask,
-            subtasks=obs_spaces.subtasks,
-            cr=obs_spaces.next_subtask,
-            cg=obs_spaces.next_subtask,
+            base=obs_spaces.base, subtask=MultiDiscrete(self.subtask_nvec)
         )
         _, h, w = self.obs_shape = self.obs_spaces.base.shape
         self.action_spaces = Actions(**action_space.spaces)
         self.obs_sections = [int(np.prod(s.shape)) for s in self.obs_spaces]
-        self.subtask_nvec = obs_spaces.subtasks.nvec[0]
         super().__init__(
             obs_shape=(self.d, h, w), action_space=self.action_spaces.a, **kwargs
         )
@@ -40,13 +37,6 @@ class Teacher(Agent):
         )  # one-hot subtask
 
     def preprocess_obs(self, inputs):
-        # n = inputs.base.size(0)
-        # obs = inputs.base.view(n, *self.obs_shape)
-        # subtask_idx = inputs.subtask.long().flatten()
-        # subtasks = inputs.subtasks.view(n, *self.obs_spaces.subtasks.shape)
-        # g123 = subtasks[torch.arange(n), subtask_idx]
-        # g123 = [x.flatten() for x in torch.split(g123, 1, dim=-1)]
-        # one_hots = [self.part0_one_hot, self.part1_one_hot, self.part2_one_hot]
         g_binary = inputs.subtask
         g_broad = broadcast3d(g_binary, self.obs_shape[-2:])
         obs = inputs.base.view(inputs.base.size(0), *self.obs_shape)
@@ -59,7 +49,7 @@ class Teacher(Agent):
             self.preprocess_obs(inputs), action=action, *args, **kwargs
         )
         x = torch.zeros_like(act.action)
-        actions = Actions(a=act.action, g=x, cg=inputs.cg.long(), cr=inputs.cr.long())
+        actions = Actions(a=act.action, g=x, cg=x, cr=x)
         return act._replace(action=torch.cat(actions, dim=-1))
 
     def get_value(self, inputs, rnn_hxs, masks):
