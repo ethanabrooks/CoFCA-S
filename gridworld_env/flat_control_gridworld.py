@@ -31,8 +31,6 @@ class FlatControlFlowGridWorld(ControlFlowGridWorld):
                     yield np.append(np.zeros(3), condition)
 
         obs.update(subtasks=np.vstack(get_subtasks()))
-        print("control")
-        print(self.control)
         return obs
 
     def get_control(self):
