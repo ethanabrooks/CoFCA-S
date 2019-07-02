@@ -17,14 +17,13 @@ class Teacher(Agent):
     def __init__(self, obs_spaces, action_space, **kwargs):
         # noinspection PyProtectedMember
         self.subtask_nvec = obs_spaces.subtasks.nvec[0]
-        self.obs_spaces = Obs(
-            base=obs_spaces.base, subtask=MultiDiscrete(self.subtask_nvec)
-        )
-        _, h, w = self.obs_shape = self.obs_spaces.base.shape
-        self.action_spaces = Actions(**action_space.spaces)
+        self.obs_spaces = obs_spaces
         self.obs_sections = [int(np.prod(s.shape)) for s in self.obs_spaces]
+        _, h, w = self.obs_shape = self.obs_spaces.base.shape
         super().__init__(
-            obs_shape=(self.d, h, w), action_space=self.action_spaces.a, **kwargs
+            obs_shape=(self.d, h, w),
+            action_space=Actions(**action_space.spaces).a,
+            **kwargs,
         )
 
         for i, d in enumerate(self.subtask_nvec):
@@ -37,8 +36,22 @@ class Teacher(Agent):
         )  # one-hot subtask
 
     def preprocess_obs(self, inputs):
-        g_binary = inputs.subtask
-        g_broad = broadcast3d(g_binary, self.obs_shape[-2:])
+        if not isinstance(inputs, Obs):
+            n = inputs.size(0)
+            inputs = torch.split(inputs, self.obs_sections, dim=-1)
+            inputs = {
+                k: x.view(n, *s.shape)
+                for (k, s), x in zip(self.obs_spaces._asdict().items(), inputs)
+            }
+            g123 = inputs["subtasks"][torch.arange(n), inputs["subtask"].long()]
+            g123 = torch.split(g123, 1, dim=-1)
+            g123 = [x.flatten() for x in g123]
+            g_binary = g123_to_binary(
+                g123, [self.part0_one_hot, self.part1_one_hot, self.part2_one_hot]
+            )
+            inputs = Obs(base=inputs["base"], subtask=g_binary)
+
+        g_broad = broadcast3d(inputs.subtask, self.obs_shape[-2:])
         obs = inputs.base.view(inputs.base.size(0), *self.obs_shape)
         return torch.cat([obs, g_broad], dim=1)
 
