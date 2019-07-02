@@ -34,9 +34,9 @@ class PolicyWithValue(object):
 
         latent          latent state from which policy distribution parameters should be inferred
 
-        vf_latent       latent state from which value function should be inferred (flat_control_flow None, then latent is used)
+        vf_latent       latent state from which value function should be inferred (if None, then latent is used)
 
-        sess            tensorflow session to run calculations in (flat_control_flow None, default session is used)
+        sess            tensorflow session to run calculations in (if None, default session is used)
 
         **tensors       tensorflow tensors for additional attributes such as state or mask
 

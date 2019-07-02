@@ -63,7 +63,7 @@ class SubprocVecEnv(VecEnv):
         for p in self.ps:
             p.daemon = (
                 True
-            )  # flat_control_flow the main process crashes, we should not cause things to hang
+            )  # if the main process crashes, we should not cause things to hang
             p.start()
         for remote in self.work_remotes:
             remote.close()

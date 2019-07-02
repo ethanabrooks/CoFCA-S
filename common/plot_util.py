@@ -184,19 +184,19 @@ def load_results(
     load summaries of runs from a list of directories (including subdirectories)
     Arguments:
 
-    enable_progress: bool - flat_control_flow True, will attempt to load data from progress.csv files (data saved by logger). Default: True
+    enable_progress: bool - if True, will attempt to load data from progress.csv files (data saved by logger). Default: True
 
-    enable_monitor: bool - flat_control_flow True, will attempt to load data from monitor.csv files (data saved by Monitor environment wrapper). Default: True
+    enable_monitor: bool - if True, will attempt to load data from monitor.csv files (data saved by Monitor environment wrapper). Default: True
 
-    verbose: bool - flat_control_flow True, will print out list of directories from which the data is loaded. Default: False
+    verbose: bool - if True, will print out list of directories from which the data is loaded. Default: False
 
 
     Returns:
     List of Result objects with the following fields:
          - dirname - path to the directory data was loaded from
          - metadata - run metadata (such as command-line arguments and anything else in metadata.json file
-         - monitor - flat_control_flow enable_monitor is True, this field contains pandas dataframe with loaded monitor.csv file (or aggregate of all *.monitor.csv files in the directory)
-         - progress - flat_control_flow enable_progress is True, this field contains pandas dataframe with loaded progress.csv file
+         - monitor - if enable_monitor is True, this field contains pandas dataframe with loaded monitor.csv file (or aggregate of all *.monitor.csv files in the directory)
+         - progress - if enable_progress is True, this field contains pandas dataframe with loaded progress.csv file
     """
     import re
 
@@ -217,7 +217,7 @@ def load_results(
             ).intersection(files) or any(
                 [f for f in files if monitor_re.match(f)]
             ):  # also match monitor files like 0.1.monitor.csv
-                # used to be uncommented, which means do not go deeper than current directory flat_control_flow any of the data files
+                # used to be uncommented, which means do not go deeper than current directory if any of the data files
                 # are found
                 # dirs[:] = []
                 result = {"dirname": dirname}
@@ -330,28 +330,28 @@ def plot_results(
 
     group_fn: function Result -> hashable   - function that converts results objects into keys to group curves by.
                                               That is, the results r for which group_fn(r) is the same will be put into the same group.
-                                              Curves in the same group have the same color (flat_control_flow average_group is False), or averaged over
-                                              (flat_control_flow average_group is True). The default value is the same as default value for split_fn
+                                              Curves in the same group have the same color (if average_group is False), or averaged over
+                                              (if average_group is True). The default value is the same as default value for split_fn
 
-    average_group: bool                     - flat_control_flow True, will average the curves in the same group and plot the mean. Enables resampling
-                                              (flat_control_flow resample = 0, will use 512 steps)
+    average_group: bool                     - if True, will average the curves in the same group and plot the mean. Enables resampling
+                                              (if resample = 0, will use 512 steps)
 
-    shaded_std: bool                        - flat_control_flow True (default), the shaded region corresponding to standard deviation of the group of curves will be
-                                              shown (only applicable flat_control_flow average_group = True)
+    shaded_std: bool                        - if True (default), the shaded region corresponding to standard deviation of the group of curves will be
+                                              shown (only applicable if average_group = True)
 
-    shaded_err: bool                        - flat_control_flow True (default), the shaded region corresponding to error in mean estimate of the group of curves
+    shaded_err: bool                        - if True (default), the shaded region corresponding to error in mean estimate of the group of curves
                                               (that is, standard deviation divided by square root of number of curves) will be
-                                              shown (only applicable flat_control_flow average_group = True)
+                                              shown (only applicable if average_group = True)
 
     figsize: tuple or None                  - size of the resulting figure (including sub-panels). By default, width is 6 and height is 6 times number of
                                               sub-panels.
 
 
-    legend_outside: bool                    - flat_control_flow True, will place the legend outside of the sub-panels.
+    legend_outside: bool                    - if True, will place the legend outside of the sub-panels.
 
-    resample: int                           - flat_control_flow not zero, size of the uniform grid in x direction to resample onto. Resampling is performed via symmetric
+    resample: int                           - if not zero, size of the uniform grid in x direction to resample onto. Resampling is performed via symmetric
                                               EMA smoothing (see the docstring for symmetric_ema).
-                                              Default is zero (no resampling). Note that flat_control_flow average_group is True, resampling is necessary; in that case, default
+                                              Default is zero (no resampling). Note that if average_group is True, resampling is necessary; in that case, default
                                               value is 512.
 
     smooth_step: float                      - when resampling (i.e. when resample > 0 or average_group is True), use this EMA decay parameter (in units of the new grid step).

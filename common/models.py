@@ -126,7 +126,7 @@ def lstm(nlstm=128, layer_norm=False):
 
     nlstm: int          LSTM hidden state size
 
-    layer_norm: bool    flat_control_flow True, layer-normalized version of LSTM is used
+    layer_norm: bool    if True, layer-normalized version of LSTM is used
 
     Returns:
     -------

@@ -104,7 +104,7 @@ class DummyVecEnv(VecEnv):
 
     def render(self, mode="human"):
         return self.envs[0].render(mode=mode)
-        # flat_control_flow self.num_envs == 1:
+        # if self.num_envs == 1:
         #     return self.envs[0].render(mode=mode)
         # else:
         #     return super().render(mode=mode)

@@ -61,7 +61,7 @@ class VecEnv(ABC):
         with the given actions.
         Call step_wait() to get the results of the step.
 
-        You should not call this flat_control_flow a step_async run is
+        You should not call this if a step_async run is
         already pending.
         """
 

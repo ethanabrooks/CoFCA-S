@@ -57,7 +57,7 @@ if __name__ == "__main__":
     #     env.render()
     #     print('reward', r)
     #     time.sleep(.5)
-    #     flat_control_flow t:
+    #     if t:
     #         print('reset')
     #         time.sleep(1)
     #         env.reset()
