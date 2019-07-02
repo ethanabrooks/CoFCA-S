@@ -125,16 +125,19 @@ class ControlFlowGridWorld(SubtasksGridWorld):
 
         yield from subtasks
 
-    def reset(self):
-        def get_control():
-            for i in range(self.n_subtasks):
-                j = 2 * i
-                if self.force_branching or self.np_random.rand() < 0.7:
-                    yield j, j + 1
-                else:
-                    yield j, j
+    def get_control(self):
+        for i in range(self.n_subtasks):
+            j = 2 * i
+            if self.force_branching or self.np_random.rand() < 0.7:
+                yield j, j + 1
+            else:
+                yield j, j
 
-        self.control = 1 + np.minimum(np.array(list(get_control())), self.n_subtasks)
+    def reset(self):
+
+        self.control = 1 + np.minimum(
+            np.array(list(self.get_control())), self.n_subtasks
+        )
         passing = self.np_random.choice(2, size=self.n_subtasks)
         self.conditions = self.np_random.choice(
             len(self.object_types), size=self.n_subtasks
