@@ -156,6 +156,7 @@ class Recurrence(torch.jit.ScriptModule):
         self.obs_sections = self.get_obs_sections()
 
         self.conv1 = nn.Sequential(
+            ShallowCopy(2),
             Parallel(
                 Reshape(d, h * w),
                 nn.Sequential(
@@ -404,7 +405,7 @@ class Recurrence(torch.jit.ScriptModule):
 
             def phi_update(subtask_param):
                 # obs_part = obs[t, j, :, k, l].squeeze(1)
-                obs_part = self.conv1((obs[t], obs[t]))
+                obs_part = self.conv1(obs[t])
                 task_sections = torch.split(
                     subtask_param, tuple(self.subtask_nvec), dim=-1
                 )
