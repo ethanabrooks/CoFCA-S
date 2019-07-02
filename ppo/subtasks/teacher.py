@@ -1,8 +1,8 @@
 from collections import namedtuple
 
+from gym import spaces
 import numpy as np
 import torch
-from gym import spaces
 from torch.nn import functional as F
 
 from ppo.agent import Agent
@@ -54,6 +54,13 @@ class Teacher(Agent):
                 for x, (k, s) in zip(inputs, self.original_obs_spaces._asdict().items())
             }
             g123 = inputs["subtasks"][torch.arange(n), inputs["subtask"].long()]
+            print("Teacher")
+            print("subtasks")
+            print(inputs["subtasks"])
+            print("subtask")
+            print(inputs["subtask"])
+            print("g123")
+            print(g123)
             g123 = [x.flatten() for x in torch.split(g123, 1, dim=-1)]
             one_hots = [self.part0_one_hot, self.part1_one_hot, self.part2_one_hot]
             inputs = Obs(base=inputs["base"], subtask=g123_to_binary(g123, one_hots))
