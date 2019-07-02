@@ -36,9 +36,6 @@ class ControlFlowGridWorld(SubtasksGridWorld):
         )
 
     def render_current_subtask(self):
-        # flat_control_flow self.subtask_idx == 0:
-        # print("none")
-        # else:
         super().render_current_subtask()
 
     def render_task(self):
@@ -80,6 +77,7 @@ class ControlFlowGridWorld(SubtasksGridWorld):
         )
         return Obs(**obs)._asdict()
 
+    # noinspection PyTypeChecker
     def subtasks_generator(self):
         choices = self.np_random.choice(
             len(self.possible_subtasks), size=self.n_subtasks

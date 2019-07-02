@@ -469,11 +469,7 @@ class Recurrence(torch.jit.ScriptModule):
                 a_dist = self.actor(conv_out)
             else:
                 agent_inputs = torch.cat(
-                    ppo.subtasks.teacher.Obs(
-                        base=obs[t].view(N, -1),
-                        subtask=g.float().view(N, -1),
-                        subtasks=M123.view(N, -1),
-                    ),
+                    ppo.subtasks.teacher.Obs(base=obs[t].view(N, -1), subtask=g_binary),
                     dim=1,
                 )
                 a_dist = self.agent(agent_inputs, rnn_hxs=None, masks=None).dist
