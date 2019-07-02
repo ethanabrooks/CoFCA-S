@@ -290,7 +290,7 @@ class Recurrence(torch.jit.ScriptModule):
 
         # parse non-action inputs
         inputs = self.parse_inputs(inputs)
-        obs = inputs.base.view(T, N, *self.obs_shape)
+        inputs = inputs._replace(base=inputs.base.view(T, N, *self.obs_shape))
         task = inputs.subtasks.view(T, N, self.n_subtasks, self.subtask_nvec.size)
 
         # build memory
@@ -327,7 +327,6 @@ class Recurrence(torch.jit.ScriptModule):
                 T=T,
                 float_subtask=hx.subtask,
                 next_subtask=inputs.next_subtask,
-                obs=obs,
                 p=p,
                 r=r,
                 actions=actions,
@@ -372,7 +371,6 @@ class Recurrence(torch.jit.ScriptModule):
         T,
         float_subtask,
         next_subtask,
-        obs,
         p,
         r,
         actions,
@@ -380,6 +378,7 @@ class Recurrence(torch.jit.ScriptModule):
         inputs,
     ):
         # combine past and present actions (sampled values)
+        obs = inputs.base
         A = torch.cat([actions.a, a.unsqueeze(0)], dim=0).long().squeeze(2)
         G = torch.cat([actions.g, g.unsqueeze(0)], dim=0).long().squeeze(2)
         for t in range(T):
