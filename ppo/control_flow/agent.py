@@ -75,7 +75,11 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
         false_path = self.branch_one_hots[false_path.squeeze(-1).long()]
 
         def update_attention(p, t):
+            x = inputs
             c = (p.unsqueeze(1) @ conditions).squeeze(1)
+            c = conditions[
+                torch.arange(N, device=c.device), inputs.subtask[t].long().flatten()
+            ]  # TODO
             phi_in = (
                 inputs.base[t, :, 1:-2] * c.view(N, conditions.size(2), 1, 1)
             ).view(N, -1)
