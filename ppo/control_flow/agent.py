@@ -36,17 +36,19 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
             init_(
                 nn.Conv2d(num_object_types * d, hidden_size, kernel_size=1, stride=1)
             ),
+            # attention {
             ShallowCopy(2),
             Parallel(
                 Reshape(hidden_size, h * w),
                 nn.Sequential(
                     init_(nn.Conv2d(hidden_size, 1, kernel_size=1)),
-                    Reshape(1, h * w),  # TODO
+                    Reshape(1, h * w),
                     nn.Softmax(dim=-1),
                 ),
             ),
             Product(),
             Sum(dim=-1),
+            # }
             nn.ReLU(),
             Flatten(),
             init_(nn.Linear(hidden_size, 1), "sigmoid"),
