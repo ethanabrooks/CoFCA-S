@@ -158,9 +158,13 @@ class Recurrence(torch.jit.ScriptModule):
         self.f = nn.Sequential(
             nn.MaxPool2d(kernel_size=self.obs_shape[-2:], stride=1),
             Flatten(),
-            init_(nn.Linear(hidden_size, d), "relu"),
             nn.ReLU(),
         )
+        if not self.multiplicative_interaction:
+            self.f.add_module(
+                "linear to d",
+                nn.Sequential(init_(nn.Linear(hidden_size, d), "relu"), nn.ReLU()),
+            )
 
         self.conv1 = nn.Sequential(
             init_(nn.Conv2d(d, hidden_size, kernel_size=1), "relu"), nn.ReLU()
@@ -196,7 +200,7 @@ class Recurrence(torch.jit.ScriptModule):
             self.phi_update = nn.Sequential(
                 Parallel(
                     # self.conv2,  # obs
-                    init_(nn.Linear(d, hidden_size)),
+                    self.f,
                     init_(nn.Linear(action_spaces.a.n, hidden_size)),  # action
                     *[
                         init_(nn.Linear(i, hidden_size)) for i in self.subtask_nvec
@@ -399,17 +403,12 @@ class Recurrence(torch.jit.ScriptModule):
         for t in range(T):
             subtask = float_subtask.long()
             float_subtask += next_subtask[t]
-
-            agent_layer = obs[t, :, 6, :, :].long()
-            j, k, l = torch.split(agent_layer.nonzero(), 1, dim=-1)
             h = self.conv1(obs[t])
-            obs_part = self.f(h)
 
             def phi_update(subtask_param):
                 task_sections = torch.split(
                     subtask_param, tuple(self.subtask_nvec), dim=-1
                 )
-                parts = (obs_part.clone(), self.a_one_hots[A[t - 1]]) + task_sections
                 # a_one_hot = self.a_one_hots[A[t - 1]]
                 # interaction, count, obj = task_sections
                 # correct_object = obj * debug_obs[:, 1 : 1 + self.subtask_nvec[2]]
@@ -421,8 +420,10 @@ class Recurrence(torch.jit.ScriptModule):
                 # * correct_object.sum(-1, keepdim=True)
                 # ).detach()
                 if self.multiplicative_interaction:
+                    parts = (h.clone(), self.a_one_hots[A[t - 1]]) + task_sections
                     c_logits = self.phi_update(parts)
                 else:
+                    parts = (self.f(h), self.a_one_hots[A[t - 1]]) + task_sections
                     outer_product_obs = 1
                     for i1, part in enumerate(parts):
                         for i2 in range(len(parts)):
