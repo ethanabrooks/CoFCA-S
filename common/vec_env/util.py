@@ -18,7 +18,7 @@ def copy_obs_dict(obs):
 
 def dict_to_obs(obs_dict):
     """
-    Convert an observation dict into a raw array if the
+    Convert an observation dict into a raw array flat_control_flow the
     original observation space was not a Dict space.
     """
     if set(obs_dict.keys()) == {None}:

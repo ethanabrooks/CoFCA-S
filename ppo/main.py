@@ -199,7 +199,7 @@ def metacontroller_cli():
                     agent=agent,
                     **_subtasks_args,
                 )
-                # if control_flow:
+                # flat_control_flow control_flow:
                 return ppo.control_flow.Agent(**metacontroller_kwargs)
                 # else:
                 #     return ppo.subtasks.Agent(**metacontroller_kwargs)

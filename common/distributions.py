@@ -447,7 +447,7 @@ def test_probtypes():
 
 def validate_probtype(probtype, pdparam):
     N = 100000
-    # Check to see if mean negative log likelihood == differential entropy
+    # Check to see flat_control_flow mean negative log likelihood == differential entropy
     Mval = np.repeat(pdparam[None, :], N, axis=0)
     M = probtype.param_placeholder([N])
     X = probtype.sample_placeholder([N])
@@ -461,7 +461,7 @@ def validate_probtype(probtype, pdparam):
     entval = calcent(Mval).mean()  # pylint: disable=E1101
     assert np.abs(entval - entval_ll) < 3 * entval_ll_stderr  # within 3 sigmas
 
-    # Check to see if kldiv[p,q] = - ent[p] - E_p[log q]
+    # Check to see flat_control_flow kldiv[p,q] = - ent[p] - E_p[log q]
     M2 = probtype.param_placeholder([N])
     pd2 = probtype.pdfromflat(M2)
     q = pdparam + np.random.randn(pdparam.size) * 0.1

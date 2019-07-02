@@ -220,7 +220,7 @@ class Train:
                 eval_envs.to(self.device)
 
                 # vec_norm = get_vec_normalize(eval_envs)
-                # if vec_norm is not None:
+                # flat_control_flow vec_norm is not None:
                 #     vec_norm.eval()
                 #     vec_norm.ob_rms = get_vec_normalize(envs).ob_rms
 

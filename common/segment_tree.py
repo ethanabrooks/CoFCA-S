@@ -105,7 +105,7 @@ class SumSegmentTree(SegmentTree):
         """Find the highest index `i` in the array such that
             sum(arr[0] + arr[1] + ... + arr[i - i]) <= prefixsum
 
-        if array values are probabilities, this function
+        flat_control_flow array values are probabilities, this function
         allows to sample indexes according to the discrete
         probability efficiently.
 

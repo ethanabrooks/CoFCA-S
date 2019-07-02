@@ -55,8 +55,8 @@ class ControlHSREnv(HSREnv):
             print("delta =", self.viewer.delta)
         if self.viewer and self.viewer.moving and self.viewer.delta:
             action[self.viewer.active_joint] = self.viewer.delta
-            # if self.sim.model.joint_names[self.viewer.active_joint] == 'l_proximal_joint':
-            #     if action[self.sim.model.get_]
+            # flat_control_flow self.sim.model.joint_names[self.viewer.active_joint] == 'l_proximal_joint':
+            #     flat_control_flow action[self.sim.model.get_]
             print("delta =", self.viewer.delta)
             print("action =", action)
 

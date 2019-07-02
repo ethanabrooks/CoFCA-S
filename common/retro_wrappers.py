@@ -213,7 +213,7 @@ class AppendTimeout(gym.Wrapper):
 
 class StartDoingRandomActionsWrapper(gym.Wrapper):
     """
-    Warning: can eat info dicts, not good if you depend on them
+    Warning: can eat info dicts, not good flat_control_flow you depend on them
     """
 
     def __init__(self, env, max_random_steps, on_startup=True, every_episode=False):
@@ -330,7 +330,7 @@ class AllowBacktracking(gym.Wrapper):
     """
     Use deltas in max(X) as the reward, rather than deltas
     in X. This way, agents are not discouraged too heavily
-    from exploring backwards if there is no way to advance
+    from exploring backwards flat_control_flow there is no way to advance
     head-on in the level.
     """
 

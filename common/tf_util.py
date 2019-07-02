@@ -456,7 +456,7 @@ def load_variables(load_path, variables=None, sess=None):
 # ================================================================
 def adjust_shape(placeholder, data):
     """
-    adjust shape of the data to the shape of the placeholder if possible.
+    adjust shape of the data to the shape of the placeholder flat_control_flow possible.
     If shape is incompatible, AssertionError is thrown
 
     Parameters:
@@ -485,7 +485,7 @@ def adjust_shape(placeholder, data):
 
 
 def _check_shape(placeholder_shape, data_shape):
-    """ check if two shapes are compatible (i.e. differ only by dimensions of size 1, or by the batch dimension)"""
+    """ check flat_control_flow two shapes are compatible (i.e. differ only by dimensions of size 1, or by the batch dimension)"""
 
     return True
     squeezed_placeholder_shape = _squeeze_shape(placeholder_shape)

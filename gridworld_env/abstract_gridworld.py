@@ -22,7 +22,7 @@ class AbstractGridWorld(gym.Env, ABC):
 
         # because every action technically corresponds to a _list_ of transitions (to
         # permit for stochasticity, we add an additional level to the nested list
-        # if necessary
+        # flat_control_flow necessary
         transitions = [t if isinstance(t[0], list) else [t] for t in transitions]
 
         if probabilities is None:

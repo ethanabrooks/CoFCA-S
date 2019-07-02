@@ -352,7 +352,7 @@ class Recurrence(torch.jit.ScriptModule):
     def pack(self, outputs):
         zipped = list(zip(*outputs))
         # for name, x in zip(RecurrentState._fields, zipped):
-        # if not x:
+        # flat_control_flow not x:
         # print(name)
         # import ipdb
         # ipdb.set_trace()
@@ -362,11 +362,11 @@ class Recurrence(torch.jit.ScriptModule):
 
         # for name, x, size in zip(RecurrentState._fields, preprocessed,
         # self.state_sizes):
-        # if x.size(2) != size:
+        # flat_control_flow x.size(2) != size:
         # print(name, x, size)
         # import ipdb
         # ipdb.set_trace()
-        # if x.dtype != torch.float32:
+        # flat_control_flow x.dtype != torch.float32:
         # print(name)
         # import ipdb
         # ipdb.set_trace()

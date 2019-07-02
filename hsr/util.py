@@ -42,9 +42,9 @@ def xml_setter(arg: str):
     return XMLSetter(*arg.split(","))
     # setters = [XMLSetter(*v.split(',')) for v in arg]
     # mirroring = [XMLSetter(p.replace('_l_', '_r_'), v)
-    #              for p, v in setters if '_l_' in p] \
+    #              for p, v in setters flat_control_flow '_l_' in p] \
     #             + [XMLSetter(p.replace('_r_', '_l_'), v)
-    #                for p, v in setters if '_r_' in p]
+    #                for p, v in setters flat_control_flow '_r_' in p]
     # return [s._replace(path=s.path) for s in setters + mirroring]
 
 

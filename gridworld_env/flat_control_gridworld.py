@@ -4,7 +4,7 @@ from gym import spaces
 from gridworld_env.control_flow_gridworld import ControlFlowGridWorld
 
 
-class IfGridWorld(ControlFlowGridWorld):
+class FlatControlFlowGridWorld(ControlFlowGridWorld):
     def __init__(self, *args, n_subtasks, **kwargs):
         super().__init__(*args, n_subtasks=n_subtasks, **kwargs)
         subtasks_nvec = self.observation_space.spaces["subtasks"].nvec
@@ -46,7 +46,7 @@ def main(seed, n_subtasks):
     del kwargs["class_"]
     del kwargs["max_episode_steps"]
     kwargs.update(n_subtasks=n_subtasks, max_task_count=1)
-    env = IfGridWorld(**kwargs, evaluation=False, eval_subtasks=[])
+    env = FlatControlFlowGridWorld(**kwargs, evaluation=False, eval_subtasks=[])
     actions = "wsadeq"
     gridworld_env.keyboard_control.run(env, actions=actions, seed=seed)
 
