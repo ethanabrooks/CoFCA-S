@@ -432,7 +432,7 @@ class Recurrence(torch.jit.ScriptModule):
                 else:
                     c = torch.sigmoid(c_logits[:, :1])
                     probs = torch.zeros_like(c_logits)  # dummy value
-                return c, probs
+                return c * (1 - new_episode) + new_episode, probs
 
             # cr
             cr, cr_probs = phi_update(subtask_param=r)
