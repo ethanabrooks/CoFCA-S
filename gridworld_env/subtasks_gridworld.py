@@ -204,7 +204,7 @@ class SubtasksGridWorld(gym.Env):
             print(six.u(f"\x1b[47m\x1b[30m"), end="")
             print("".join(row), end="")
             print(six.u("\x1b[49m\x1b[39m"))
-        time.sleep(4 * sleep_time if self.last_terminal else sleep_time)
+        # time.sleep(4 * sleep_time if self.last_terminal else sleep_time)
 
     def render_current_subtask(self):
         print(f"{self.subtask_idx}:{self.subtask}")
