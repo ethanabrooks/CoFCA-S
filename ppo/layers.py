@@ -31,6 +31,15 @@ class Sum(nn.Module):
         return torch.sum(x, **self.kwargs)
 
 
+class ShallowCopy(nn.Module):
+    def __init__(self, n: int):
+        self.n = n
+        super().__init__()
+
+    def forward(self, x):
+        return (x,) * self.n
+
+
 class Concat(torch.jit.ScriptModule):
     def __init__(self, **kwargs):
         self.kwargs = kwargs
