@@ -42,7 +42,7 @@ class DebugWrapper(gym.Wrapper):
         print("guess", self.guess)
         print("truth", self.truth)
         print("reward", self.last_reward)
-        input("pause")
+        # input("pause")
 
 
 class Wrapper(gym.Wrapper):
