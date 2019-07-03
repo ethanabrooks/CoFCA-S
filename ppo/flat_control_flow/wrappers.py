@@ -15,8 +15,6 @@ class Wrapper(ppo.subtasks.Wrapper):
         g_type, g_count, g_obj, condition = tuple(env.lines[self.last_g])
         print("Assigned subtask:")
         if condition:
-            print("lines", env.lines)
-            print("condition", condition)
             print("if", self.object_types[condition - 1])
         else:
             print(

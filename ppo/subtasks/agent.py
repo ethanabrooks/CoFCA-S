@@ -424,8 +424,6 @@ class Recurrence(torch.jit.ScriptModule):
                     correct_action.sum(-1, keepdim=True)
                     * correct_object.sum(-1, keepdim=True)
                 ).detach() * conditions[:, :1] + (1 - conditions[:, :1])
-
-                print("c truth", truth)
                 # TODO }
                 parts = (obs_part, self.a_one_hots[A[t - 1]]) + task_sections
                 if self.multiplicative_interaction:
