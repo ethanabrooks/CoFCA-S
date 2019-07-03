@@ -35,12 +35,6 @@ class ControlFlowGridWorld(SubtasksGridWorld):
             )._asdict()
         )
 
-    def render_current_subtask(self):
-        # if self.subtask_idx == 0:
-        # print("none")
-        # else:
-        super().render_current_subtask()
-
     def render_task(self):
         def helper(i, indent):
             try:
@@ -140,7 +134,6 @@ class ControlFlowGridWorld(SubtasksGridWorld):
                 yield j, j
 
     def reset(self):
-
         self.control = np.minimum(
             1 + np.array(list(self.get_control())), self.n_subtasks
         )

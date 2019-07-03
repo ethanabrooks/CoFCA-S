@@ -20,14 +20,14 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
             obs_spaces=obs_spaces._replace(subtasks=obs_spaces.lines),
             **kwargs,
         )
-        true_path = F.pad(torch.eye(self.n_subtasks), [1, 0])[:, :-1]
+        true_path = F.pad(torch.eye(self.n_subtasks - 1), [1, 0, 0, 1])
         true_path[:, -1] += 1 - true_path.sum(-1)
         self.register_buffer("true_path", true_path)
-        false_path = F.pad(torch.eye(self.n_subtasks), [2, 0])[:, :-2]
+        false_path = F.pad(torch.eye(self.n_subtasks - 2), [2, 0, 0, 2])
         false_path[:, -1] += 1 - false_path.sum(-1)
         self.register_buffer("false_path", false_path)
         self.register_buffer(
-            f"part3_one_hot", torch.eye(int(self.obs_spaces.lines.nvec[0, 3]))
+            f"part3_one_hot", torch.eye(int(self.obs_spaces.lines.nvec[0, -1]))
         )
         self.size_agent_subtask = int(self.obs_spaces.subtasks.nvec[0, :-1].sum())
 
@@ -44,10 +44,31 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
 
     def inner_loop(self, M, inputs, **kwargs):
         def update_attention(p, t):
+            N = p.size(0)
+            i = self.obs_spaces.subtasks.nvec[0, -1]
             r = (p.unsqueeze(1) @ M).squeeze(1)
-            pred = self.phi_shift((inputs.base[t], r))  # TODO
+            conditions = r[:, -i:].view(N, i, 1, 1)
+            not_branching = conditions[:, 0:1]
+            conditions = conditions[:, 1:]
+            obs = inputs.base[t, :, 1:-2]
+            # print("obs", obs[0])
+            print("p", p)
+            print("not branching", not_branching[0])
+            print("conditions", conditions[0])
+            truth = (
+                ((not_branching + conditions * obs) > 0)
+                .view(N, 1, 1, -1)
+                .any(dim=-1)
+                .float()
+            )
+            # pred = self.phi_shift((inputs.base[t], r))
+            pred = truth  # TODO
             trans = pred * self.true_path + (1 - pred) * self.false_path
-            return (p.unsqueeze(1) @ trans).squeeze(1)
+            print("trans")
+            print(trans)
+            x = (p.unsqueeze(1) @ trans).squeeze(1)
+            print("p2", x)
+            return x
 
         kwargs.update(update_attention=update_attention)
         yield from ppo.subtasks.agent.Recurrence.inner_loop(
