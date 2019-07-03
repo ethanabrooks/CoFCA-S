@@ -267,12 +267,12 @@ class Train:
             counter["time_step"] += np.ones_like(done)
             episode_rewards = counter["reward"][done]
             episode_counter["rewards"] += list(episode_rewards)
-            successes = reward.numpy()[done]
+            successes = reward.numpy()[done] >= 0
             if not np.all(successes):
                 import ipdb
 
                 ipdb.set_trace()
-            episode_counter["success"] += list(successes > 0)
+            episode_counter["success"] += list(successes)
 
             # if self.success_reward is not None:
             # episode_counter["success"] += list(
