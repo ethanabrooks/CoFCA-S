@@ -304,6 +304,27 @@ class SubtasksGridWorld(gym.Env):
         self.next_subtask = False
         # act
         n_transitions = len(self.transitions)
+        pos = tuple(self.pos)
+        touching = pos in self.objects
+
+        if touching:
+            object_type = self.objects[pos]
+            interaction = self.interactions[self.subtask.interaction]
+            if "visit" == interaction and object_type == self.subtask.object:
+                self.iterate()
+            if a >= n_transitions:
+                if a - n_transitions == 0:  # pick up
+                    del self.objects[pos]
+                    if "pick-up" == interaction and object_type == self.subtask.object:
+                        self.iterate()
+                elif a - n_transitions == 1:  # transform
+                    self.objects[pos] = len(self.object_types)
+                    if (
+                        "transform" == interaction
+                        and object_type == self.subtask.object
+                    ):
+                        self.iterate()
+
         if a < n_transitions:
             # move
             pos = self.pos + self.transitions[a]
@@ -312,35 +333,10 @@ class SubtasksGridWorld(gym.Env):
             a_min = np.zeros(2)
             a_max = np.array(self.desc.shape) - 1
             self.pos = np.clip(pos, a_min, a_max).astype(int)
-        pos = tuple(self.pos)
-        touching = pos in self.objects
-
-        obs = self.get_observation()
-
-        t = False
-        r = -0.1
-        if touching:
-            object_type = self.objects[pos]
-            interaction = self.interactions[self.subtask.interaction]
-            if "visit" == interaction and object_type == self.subtask.object:
-                self.iterate()
-            if a >= n_transitions:
-                if a - n_transitions == 0:  # pick up
-                    if "pick-up" == interaction and object_type == self.subtask.object:
-                        self.iterate()
-                    del self.objects[pos]
-                elif a - n_transitions == 1:  # transform
-                    if (
-                        "transform" == interaction
-                        and object_type == self.subtask.object
-                    ):
-                        self.iterate()
-                    self.objects[pos] = len(self.object_types)
 
         self.last_terminal = t = self.subtask is None
-        if t:
-            r = 1.0
-        return obs, r, t, {}
+        r = 1.0 if t else -1
+        return self.get_observation(), r, t, {}
 
     def evaluate_condition(self):
         return self.conditions[self.subtask_idx] in self.objects.values()
