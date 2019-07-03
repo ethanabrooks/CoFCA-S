@@ -1,5 +1,5 @@
-import itertools
 from collections import namedtuple
+import itertools
 
 from gym.spaces import Box, Discrete
 import numpy as np
@@ -14,7 +14,7 @@ from ppo.agent import AgentValues, NNBase
 from ppo.distributions import Categorical, DiagGaussian, FixedCategorical
 from ppo.layers import Concat, Flatten, Parallel, Product, Reshape, ShallowCopy, Sum
 import ppo.subtasks.teacher
-from ppo.subtasks.teacher import Teacher, g_discrete_to_binary, g_binary_to_discrete
+from ppo.subtasks.teacher import Teacher, g_binary_to_discrete, g_discrete_to_binary
 from ppo.subtasks.wrappers import Actions
 from ppo.utils import broadcast3d, init_, interp, trace
 
@@ -423,7 +423,7 @@ class Recurrence(torch.jit.ScriptModule):
                 truth = (
                     correct_action.sum(-1, keepdim=True)
                     * correct_object.sum(-1, keepdim=True)
-                ).detach() * conditions[:, 0] + (1 - conditions[:, 0])
+                ).detach() * conditions[:, :1] + (1 - conditions[:, :1])
 
                 print("c truth", truth)
                 # TODO }
