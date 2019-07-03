@@ -47,7 +47,7 @@ class FlatControlFlowGridWorld(ControlFlowGridWorld):
             subtask=obs["subtask"],
             next_subtask=obs["next_subtask"],
             subtasks=obs["subtasks"],
-            lines=np.vstack(get_lines()),
+            lines=np.vstack(list(get_lines())),
         )
         # for (k, s), o in zip(self.observation_space.spaces.items(), obs):
         #     assert s.contains(o)

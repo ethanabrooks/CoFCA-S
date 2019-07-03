@@ -46,7 +46,7 @@ class Teacher(Agent):
             g123 = inputs["subtasks"][torch.arange(n), inputs["subtask"].long()]
             g123 = torch.split(g123, 1, dim=-1)
             g123 = [x.flatten() for x in g123]
-            g_binary = g123_to_binary(
+            g_binary = g_discrete_to_binary(
                 g123, [self.part0_one_hot, self.part1_one_hot, self.part2_one_hot]
             )
             inputs = Obs(base=inputs["base"], subtask=g_binary)
@@ -69,11 +69,13 @@ class Teacher(Agent):
         return super().get_value(self.preprocess_obs(inputs), rnn_hxs, masks)
 
 
-def g_binary_to_123(g_binary, subtask_space):
+def g_binary_to_discrete(g_binary, subtask_space):
     g123 = g_binary.nonzero()[:, 1:].view(-1, 3)
     g123 -= F.pad(torch.cumsum(subtask_space, dim=0)[:2], [1, 0])
     return g123
 
 
-def g123_to_binary(g123, one_hots):
-    return torch.cat([one_hot[g.long()] for one_hot, g in zip(one_hots, g123)], dim=-1)
+def g_discrete_to_binary(g_discrete, one_hots):
+    return torch.cat(
+        [one_hot[g.long()] for one_hot, g in zip(one_hots, g_discrete)], dim=-1
+    )
