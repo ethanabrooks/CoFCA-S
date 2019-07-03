@@ -28,9 +28,9 @@ class DebugWrapper(gym.Wrapper):
         r = 0
         if self.env.unwrapped.subtask is not None and self.guess != self.truth:
             r = -1
-            import ipdb
+            # import ipdb
 
-            ipdb.set_trace()
+            # ipdb.set_trace()
 
         s, _, t, i = super().step(action)
         self.last_reward = r
