@@ -198,9 +198,9 @@ class Recurrence(torch.jit.ScriptModule):
                 init_(nn.Linear(hidden_size, 2), "sigmoid"),
             )
         else:
-            self.phi_update = trace(lambda in_size: init_(nn.Linear(in_size, 2), 'sigmoid'),
-                                    in_size=(d * action_spaces.a.n *
-                                             int(self.subtask_nvec.prod())))
+            self.phi_update = nn.Sequential(
+                Product(), init_(nn.Linear(1, 1), "sigmoid"), nn.Sigmoid()
+            )
 
         for i, x in enumerate(self.subtask_nvec):
             self.register_buffer(f"part{i}_one_hot", torch.eye(int(x)))
@@ -419,10 +419,12 @@ class Recurrence(torch.jit.ScriptModule):
                 parts = (debug_obs, self.a_one_hots[A[t - 1]]) + task_sections
                 a_one_hot = self.a_one_hots[A[t - 1]]
                 interaction, count, obj = task_sections
-                correct_object = obj * debug_obs[:, 1 : 1 + self.subtask_nvec[2]]
+                correct_object = (
+                    obj * debug_obs[:, 1 : 1 + self.subtask_nvec[2]]
+                ).detach()
                 column1 = interaction[:, :1]
                 column2 = interaction[:, 1:] * a_one_hot[:, 4:]
-                correct_action = torch.cat([column1, column2], dim=-1)
+                correct_action = torch.cat([column1, column2], dim=-1).detach()
                 truth = torch.clamp(
                     (
                         correct_action.sum(-1, keepdim=True)
@@ -441,16 +443,28 @@ class Recurrence(torch.jit.ScriptModule):
                                 part.unsqueeze_(i2 + 1)
                         outer_product_obs = outer_product_obs * part
 
-                    c_logits = self.phi_update(outer_product_obs.view(N, -1))
+                        c = (
+                            (
+                                self.phi_update(
+                                    (
+                                        correct_action.sum(-1, keepdim=True),
+                                        correct_object.sum(-1, keepdim=True),
+                                    )
+                                )
+                                + new_episode.unsqueeze(-1).float()
+                            )
+                            .detach()
+                            .clamp(max=1)
+                        )
                 if self.hard_update:
                     c_dist = FixedCategorical(logits=c_logits)
                     c = actions.c[t]
                     sample_new(c, c_dist)
                     probs = c_dist.probs
-                else:
-                    c = torch.sigmoid(c_logits[:, :1])
-                    probs = torch.zeros_like(c_logits)  # dummy value
-                return c * (1 - new_episode) + new_episode, probs
+                # else:
+                # c = torch.sigmoid(c_logits[:, :1])
+                probs = torch.zeros(N, 2, device=c.device)  # dummy value
+                return c, probs
 
             # cr
             cr, cr_probs = phi_update(subtask_param=r)
