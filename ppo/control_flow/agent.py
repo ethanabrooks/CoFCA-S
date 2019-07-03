@@ -3,10 +3,8 @@ import torch
 import torch.nn as nn
 
 from gridworld_env.control_flow_gridworld import Obs
-from ppo.layers import Flatten, Parallel, Product, Reshape
+from ppo.layers import Flatten, Parallel, Product, Reshape, ShallowCopy, Sum
 import ppo.subtasks.agent
-from ppo.subtasks.teacher import g123_to_binary
-from ppo.subtasks.wrappers import Actions
 from ppo.utils import init_
 
 
@@ -18,147 +16,75 @@ class Agent(ppo.subtasks.Agent):
 class Recurrence(ppo.subtasks.agent.Recurrence):
     def __init__(self, hidden_size, **kwargs):
         super().__init__(hidden_size=hidden_size, **kwargs)
-        self.obs_sections = Obs(*[int(np.prod(s.shape)) for s in self.obs_spaces])
+        self.obs_sections = [int(np.prod(s.shape)) for s in self.obs_spaces]
         self.register_buffer("branch_one_hots", torch.eye(self.n_subtasks))
-        num_object_types = int(self.obs_spaces.subtasks.nvec[0, 2])
-        self.register_buffer("condition_one_hots", torch.eye(num_object_types))
+        self.register_buffer("condition_one_hots", torch.eye(self.condition_size))
         self.register_buffer(
             "rows", torch.arange(self.n_subtasks).unsqueeze(-1).float()
         )
-        self.n_conditions = self.obs_spaces.conditions.shape[0]
 
         d, h, w = self.obs_shape
         self.phi_shift = nn.Sequential(
-            # Reshape(-1, num_object_types * d, h, w),
             Parallel(
-                nn.Sequential(Reshape(-1, 1, d, h, w)),
-                nn.Sequential(Reshape(-1, num_object_types, 1, 1, 1)),
+                nn.Sequential(Reshape(1, d, h, w)),
+                nn.Sequential(Reshape(self.condition_size, 1, 1, 1)),
             ),
             Product(),
-            Reshape(-1, num_object_types * d * h * w),
-            init_(nn.Linear(num_object_types * d * h * w, 1), "sigmoid"),
-            # Reshape(-1, in_channels, *self.obs_shape[-2:]),
-            # init_(
-            # nn.Conv2d(num_object_types * d, hidden_size, kernel_size=1, stride=1)
-            # ),
-            # nn.MaxPool2d(kernel_size=self.obs_shape[-2:], stride=1),
-            # Flatten(),
-            # init_(nn.Linear(hidden_size, 1), "sigmoid"),
+            Reshape(d * self.condition_size, *self.obs_shape[-2:]),
+            init_(
+                nn.Conv2d(self.condition_size * d, hidden_size, kernel_size=1, stride=1)
+            ),
+            # attention {
+            ShallowCopy(2),
+            Parallel(
+                Reshape(hidden_size, h * w),
+                nn.Sequential(
+                    init_(nn.Conv2d(hidden_size, 1, kernel_size=1)),
+                    Reshape(1, h * w),
+                    nn.Softmax(dim=-1),
+                ),
+            ),
+            Product(),
+            Sum(dim=-1),
+            # }
+            nn.ReLU(),
+            Flatten(),
+            init_(nn.Linear(hidden_size, 1), "sigmoid"),
             nn.Sigmoid(),
-            Reshape(-1, 1, 1),
-        )
-        self.obs_shapes = Obs(
-            base=self.obs_spaces.base.shape,
-            subtask=[1],
-            subtasks=self.obs_spaces.subtasks.nvec.shape,
-            conditions=self.obs_spaces.conditions.nvec.shape,
-            control=self.obs_spaces.control.nvec.shape,
-            next_subtask=[1],
-            pred=[1],
+            Reshape(1, 1),
         )
 
     @property
-    def n_subtasks(self):
-        return self.obs_spaces.subtasks.nvec.shape[0]
+    def condition_size(self):
+        return int(self.obs_spaces.subtasks.nvec[0, 2])
 
-    def get_obs_sections(self):
-        return Obs(*[int(np.prod(s.shape)) for s in self.obs_spaces])
+    def parse_inputs(self, inputs):
+        return Obs(*torch.split(inputs, self.obs_sections, dim=2))
 
-    def register_agent_dummy_values(self):
-        self.register_buffer(
-            "agent_dummy_values",
-            torch.zeros(
-                1,
-                sum(
-                    [
-                        self.obs_sections.subtasks,
-                        self.obs_sections.control,
-                        self.obs_sections.next_subtask,
-                    ]
-                ),
-            ),
-        )
-
-    def forward(self, inputs, hx):
-        assert hx is not None
-        T, N, D = inputs.shape
-
-        # detach actions
-        # noinspection PyProtectedMember
-        n_actions = len(Actions._fields)
-        inputs, *actions = torch.split(
-            inputs.detach(), [D - n_actions] + [1] * n_actions, dim=2
-        )
-        actions = Actions(*actions)
-
-        # parse non-action inputs
-        inputs = torch.split(inputs, self.obs_sections, dim=2)
-        inputs = Obs(
-            *[x.view(T, N, *shape) for x, shape in zip(inputs, self.obs_shapes)]
-        )
-
-        # build M
-        subtasks = torch.split(inputs.subtasks, 1, dim=-1)
-        interaction, count, obj = [x[0, :, :, 0] for x in subtasks]
-        M123 = torch.stack([interaction, count, obj], dim=-1)
-        one_hots = [self.part0_one_hot, self.part1_one_hot, self.part2_one_hot]
-        g123 = (interaction, count, obj)
-        M = g123_to_binary(g123, one_hots)
+    def inner_loop(self, inputs, **kwargs):
+        N = inputs.base.size(1)
 
         # build C
         conditions = self.condition_one_hots[inputs.conditions[0].long()]
-        control = inputs.control[0]
+        control = inputs.control[0].view(N, *self.obs_spaces.control.nvec.shape)
         rows = self.rows.expand_as(control)
-        # point terminal branches back at themselves TODO: is this right?
-        control = inputs.control[0].where(control < self.n_subtasks, rows)
+        control = control.where(control < self.n_subtasks, rows)
         false_path, true_path = torch.split(control, 1, dim=-1)
         true_path = self.branch_one_hots[true_path.squeeze(-1).long()]
         false_path = self.branch_one_hots[false_path.squeeze(-1).long()]
 
-        # parse hidden
-        new_episode = torch.all(hx.squeeze(0) == 0, dim=-1)
-        hx = self.parse_hidden(hx)
-        p = hx.p
-        r = hx.r
-        for x in hx:
-            x.squeeze_(0)
-        if torch.any(new_episode):
-            p[new_episode, 0] = 1.0  # initialize pointer to first subtask
-            r[new_episode] = M[new_episode, 0]  # initialize r to first subtask
-            # initialize g to first subtask
-            hx.g[new_episode] = 0.0
-
         def update_attention(p, t):
+            # c = conditions[
+            # torch.arange(N, device=c.device), inputs.subtask[t].long().flatten()
+            # ]
+            # phi_in = (
+            # inputs.base[t, :, 1:-2] * c.view(N, conditions.size(2), 1, 1)
+            # ).view(N, -1)
+            # truth = torch.any(phi_in > 0, dim=-1).float().view(N, 1, 1)
             c = (p.unsqueeze(1) @ conditions).squeeze(1)
-            phi_in = c.view(N, conditions.size(2), 1, 1, 1) * inputs.base[t].unsqueeze(
-                1
-            )
-            phi_in = (
-                inputs.base[t, :, 1:-2] * c.view(N, conditions.size(2), 1, 1)
-            ).view(N, -1)
-            truth = torch.any(phi_in > 0, dim=-1).float().view(N, 1, 1)
-            # pred = self.phi_shift((inputs.base[t], c))
-            pred = truth
+            pred = self.phi_shift((inputs.base[t], c))
             trans = pred * true_path + (1 - pred) * false_path
             return (p.unsqueeze(1) @ trans).squeeze(1)
 
-        return self.pack(
-            self.inner_loop(
-                new_episode=new_episode.unsqueeze(1).float(),
-                a=hx.a,
-                cr=hx.cr,
-                cg=hx.cg,
-                g=hx.g,
-                M=M,
-                M123=M123,
-                N=N,
-                T=T,
-                float_subtask=hx.subtask,
-                next_subtask=inputs.next_subtask,
-                obs=inputs.base,
-                p=p,
-                r=r,
-                actions=actions,
-                update_attention=update_attention,
-            )
-        )
+        kwargs.update(update_attention=update_attention)
+        yield from super().inner_loop(inputs=inputs, **kwargs)

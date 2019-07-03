@@ -1,4 +1,4 @@
-from collections import namedtuple
+from collections import Counter, namedtuple
 import itertools
 import re
 
@@ -283,9 +283,9 @@ class SubtasksGridWorld(gym.Env):
 
         return Obs(
             base=obs,
-            subtask=[self.subtask_idx],
+            subtask=self.subtask_idx,
             subtasks=np.array([self.subtasks]),
-            next_subtask=[self.next_subtask],
+            next_subtask=self.next_subtask,
         )._asdict()
 
     def seed(self, seed=None):
@@ -329,6 +329,8 @@ class SubtasksGridWorld(gym.Env):
                     if "pick-up" == interaction and object_type == self.subtask.object:
                         self.iterate()
                     del self.objects[pos]
+                    if "pick-up" == interaction and object_type == self.subtask.object:
+                        self.iterate()
                 elif a - n_transitions == 1:  # transform
                     if (
                         "transform" == interaction
@@ -336,11 +338,19 @@ class SubtasksGridWorld(gym.Env):
                     ):
                         self.iterate()
                     self.objects[pos] = len(self.object_types)
+                    if (
+                        "transform" == interaction
+                        and object_type == self.subtask.object
+                    ):
+                        self.iterate()
 
         self.last_terminal = t = self.subtask is None
         if t:
             r = 1.0
         return obs, r, t, {}
+
+    def evaluate_condition(self):
+        return self.conditions[self.subtask_idx] in self.objects.values()
 
     def get_next_subtask(self):
         return self.subtask_idx + 1

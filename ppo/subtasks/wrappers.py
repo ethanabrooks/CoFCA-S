@@ -25,7 +25,6 @@ class DebugWrapper(gym.Wrapper):
         r = 0
         if self.env.unwrapped.subtask is not None and guess != truth:
             r = -1
-        r = -np.abs(self.env.unwrapped.next_subtask - actions.cr)
         s, _, t, i = super().step(action)
         self.last_guess = guess
         self.last_reward = r
@@ -62,12 +61,16 @@ class Wrapper(gym.Wrapper):
     def render(self, mode="human", **kwargs):
         super().render(mode=mode)
         if self.last_g is not None:
-            env = self.env.unwrapped
-            g_type, g_count, g_obj = tuple(env.subtasks[self.last_g])
-            print(
-                "Assigned subtask:",
-                env.interactions[g_type],
-                g_count + 1,
-                env.object_types[g_obj],
-            )
-        input("paused")
+            self.render_assigned_subtask()
+        # input("paused")
+
+    def render_assigned_subtask(self):
+        env = self.env.unwrapped
+        g_type, g_count, g_obj = tuple(env.subtasks[self.last_g])
+        print(
+            "Assigned subtask:",
+            self.last_g,
+            env.interactions[g_type],
+            g_count + 1,
+            env.object_types[g_obj],
+        )
