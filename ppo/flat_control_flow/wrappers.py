@@ -17,7 +17,7 @@ class Wrapper(ppo.subtasks.Wrapper):
         if condition:
             print("lines", env.lines)
             print("condition", condition)
-            print("if", self.object_types[condition - 1])
+            print("if", env.object_types[condition - 1])
         else:
             print(
                 self.last_g,
