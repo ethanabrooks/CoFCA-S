@@ -79,10 +79,7 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
             phi_in = (
                 inputs.base[t, :, 1:-2] * c.view(N, conditions.size(2), 1, 1)
             ).view(N, -1)
-            print("obs", inputs.base[t, :, 1:-2])
-            print("condition", c)
             truth = torch.any(phi_in > 0, dim=-1).float().view(N, 1, 1)
-            print("truth", truth)
             pred = truth
             # c = (p.unsqueeze(1) @ conditions).squeeze(1)
             # pred = self.phi_shift((inputs.base[t], c))
