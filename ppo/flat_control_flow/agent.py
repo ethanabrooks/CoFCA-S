@@ -60,11 +60,7 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
             pred = self.phi_shift((inputs.base[t], r))
             # pred = truth  # TODO
             trans = pred * self.true_path + (1 - pred) * self.false_path
-            print("trans")
-            print(trans)
-            x = (p.unsqueeze(1) @ trans).squeeze(1)
-            print("p2", x)
-            return x
+            return (p.unsqueeze(1) @ trans).squeeze(1)
 
         kwargs.update(update_attention=update_attention)
         yield from ppo.subtasks.agent.Recurrence.inner_loop(

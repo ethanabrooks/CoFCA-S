@@ -13,10 +13,7 @@ class Wrapper(ppo.subtasks.Wrapper):
     def render_assigned_subtask(self):
         env = self.env.unwrapped
         g_type, g_count, g_obj, condition = tuple(env.lines[self.last_g])
-        print("Assigned subtask:")
         if condition:
-            print("lines", env.lines)
-            print("condition", condition)
             print("if", env.object_types[condition - 1])
         else:
             print(
