@@ -326,16 +326,16 @@ class SubtasksGridWorld(gym.Env):
                 self.iterate()
             if a >= n_transitions:
                 if a - n_transitions == 0:  # pick up
-                    del self.objects[pos]
                     if "pick-up" == interaction and object_type == self.subtask.object:
                         self.iterate()
+                    del self.objects[pos]
                 elif a - n_transitions == 1:  # transform
-                    self.objects[pos] = len(self.object_types)
                     if (
                         "transform" == interaction
                         and object_type == self.subtask.object
                     ):
                         self.iterate()
+                    self.objects[pos] = len(self.object_types)
 
         self.last_terminal = t = self.subtask is None
         if t:

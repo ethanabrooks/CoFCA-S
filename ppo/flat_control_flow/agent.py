@@ -51,6 +51,10 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
             not_branching = conditions[:, 0:1]
             conditions = conditions[:, 1:]
             obs = inputs.base[t, :, 1:-2]
+            # print("obs", obs[0])
+            print("p", p)
+            print("not branching", not_branching[0])
+            print("conditions", conditions[0])
             truth = (
                 ((not_branching + conditions * obs) > 0)
                 .view(N, 1, 1, -1)
@@ -60,7 +64,11 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
             # pred = self.phi_shift((inputs.base[t], r))
             pred = truth  # TODO
             trans = pred * self.true_path + (1 - pred) * self.false_path
-            return (p.unsqueeze(1) @ trans).squeeze(1)
+            print("trans")
+            print(trans)
+            x = (p.unsqueeze(1) @ trans).squeeze(1)
+            print("p2", x)
+            return x
 
         kwargs.update(update_attention=update_attention)
         yield from ppo.subtasks.agent.Recurrence.inner_loop(

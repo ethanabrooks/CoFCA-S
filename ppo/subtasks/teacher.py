@@ -51,6 +51,8 @@ class Teacher(Agent):
             )
             inputs = Obs(base=inputs["base"], subtask=g_binary)
 
+        print("Teacher subtask")
+        print(inputs.subtask)
         g_broad = broadcast3d(inputs.subtask, self.obs_shape[-2:])
         obs = inputs.base.view(inputs.base.size(0), *self.obs_shape)
         return torch.cat([obs, g_broad], dim=1)
