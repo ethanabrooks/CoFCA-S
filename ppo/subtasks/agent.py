@@ -423,7 +423,7 @@ class Recurrence(torch.jit.ScriptModule):
                 truth = (
                     correct_action.sum(-1, keepdim=True)
                     * correct_object.sum(-1, keepdim=True)
-                ).detach() * conditions[:, 0] + (1 - conditions[:, 0])
+                ).detach() * conditions[:, :1] + (1 - conditions[:, :1])
 
                 print("c truth", truth)
                 # TODO }

@@ -62,7 +62,7 @@ class Wrapper(gym.Wrapper):
         super().render(mode=mode)
         if self.last_g is not None:
             self.render_assigned_subtask()
-        input("paused")
+        # input("paused")
 
     def render_assigned_subtask(self):
         env = self.env.unwrapped
