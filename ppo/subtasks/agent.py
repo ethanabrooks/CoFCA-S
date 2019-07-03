@@ -380,7 +380,6 @@ class Recurrence(torch.jit.ScriptModule):
 
     def inner_loop(
         self,
-        new_episode,
         g,
         a,
         cr,

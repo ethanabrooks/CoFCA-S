@@ -33,8 +33,8 @@ class DebugWrapper(gym.Wrapper):
     def render(self, mode="human"):
         print("########################################")
         super().render(sleep_time=0)
-        # print("guess", self.last_guess)
-        # print("truth", self.env.unwrapped.subtask_idx)
+        print("guess", self.last_guess)
+        print("truth", self.env.unwrapped.subtask_idx)
         print("reward", self.last_reward)
         # input('pause')
 
