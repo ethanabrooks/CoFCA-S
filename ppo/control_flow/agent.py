@@ -53,7 +53,6 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
             nn.Sigmoid(),
             Reshape(1, 1),
         )
-        self.size_agent_subtask = int(self.obs_spaces.subtasks.nvec[0, :-1].sum())
 
     @property
     def condition_size(self):
@@ -61,9 +60,6 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
 
     def parse_inputs(self, inputs):
         return Obs(*torch.split(inputs, self.obs_sections, dim=2))
-
-    def get_agent_subtask(self, M, g):
-        return M[torch.arange(M.size(0)), g, : self.size_agent_subtask]
 
     def inner_loop(self, inputs, **kwargs):
         N = inputs.base.size(1)

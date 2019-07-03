@@ -29,10 +29,14 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
         self.register_buffer(
             f"part3_one_hot", torch.eye(int(self.obs_spaces.lines.nvec[0, 3]))
         )
+        self.size_agent_subtask = int(self.obs_spaces.subtasks.nvec[0, :-1].sum())
 
     def parse_inputs(self, inputs):
         obs = Obs(*torch.split(inputs, self.original_obs_sections, dim=2))
         return obs._replace(subtasks=obs.lines)
+
+    def get_agent_subtask(self, M, g):
+        return M[torch.arange(M.size(0)), g, : self.size_agent_subtask]
 
     @property
     def condition_size(self):
