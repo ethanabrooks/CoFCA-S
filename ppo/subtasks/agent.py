@@ -412,19 +412,19 @@ class Recurrence(torch.jit.ScriptModule):
                 task_sections = torch.split(
                     subtask_param, tuple(self.subtask_nvec), dim=-1
                 )
-                # TODO {
-                debug_obs = obs[t, j, :, k, l].squeeze(1)
-                a_one_hot = self.a_one_hots[A[t - 1]]
-                interaction, count, obj, conditions = task_sections
-                correct_object = obj * debug_obs[:, 1 : 1 + self.subtask_nvec[2]]
-                column1 = interaction[:, :1]
-                column2 = interaction[:, 1:] * a_one_hot[:, 4:]
-                correct_action = torch.cat([column1, column2], dim=-1)
-                truth = (
-                    correct_action.sum(-1, keepdim=True)
-                    * correct_object.sum(-1, keepdim=True)
-                ).detach() * conditions[:, :1] + (1 - conditions[:, :1])
-                # TODO }
+                # # TODO {
+                # debug_obs = obs[t, j, :, k, l].squeeze(1)
+                # a_one_hot = self.a_one_hots[A[t - 1]]
+                # interaction, count, obj, conditions = task_sections
+                # correct_object = obj * debug_obs[:, 1 : 1 + self.subtask_nvec[2]]
+                # column1 = interaction[:, :1]
+                # column2 = interaction[:, 1:] * a_one_hot[:, 4:]
+                # correct_action = torch.cat([column1, column2], dim=-1)
+                # truth = (
+                # correct_action.sum(-1, keepdim=True)
+                # * correct_object.sum(-1, keepdim=True)
+                # ).detach() * conditions[:, :1] + (1 - conditions[:, :1])
+                # # TODO }
                 parts = (obs_part, self.a_one_hots[A[t - 1]]) + task_sections
                 if self.multiplicative_interaction:
                     c_logits = self.phi_update(parts)
@@ -445,7 +445,7 @@ class Recurrence(torch.jit.ScriptModule):
                 else:
                     c = torch.sigmoid(c_logits[:, :1])
                     probs = torch.zeros_like(c_logits)  # dummy value
-                return truth, probs  # TODO
+                return c, probs
 
             # cr
             cr, cr_probs = phi_update(subtask_param=r)
