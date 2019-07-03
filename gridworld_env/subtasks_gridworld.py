@@ -292,13 +292,6 @@ class SubtasksGridWorld(gym.Env):
         self.np_random, seed = seeding.np_random(seed)
         return [seed]
 
-    def iterate(self):
-        if self.count == 0:
-            self.subtask_idx = self.get_next_subtask()
-            self.next_subtask = True
-        else:
-            self.count -= 1
-
     def step(self, a):
         self.last_action = a
         self.next_subtask = False
@@ -308,22 +301,31 @@ class SubtasksGridWorld(gym.Env):
         touching = pos in self.objects
 
         if touching:
+            iterate = False
             object_type = self.objects[pos]
             interaction = self.interactions[self.subtask.interaction]
             if "visit" == interaction and object_type == self.subtask.object:
-                self.iterate()
+                iterate = True
             if a >= n_transitions:
                 if a - n_transitions == 0:  # pick up
                     del self.objects[pos]
                     if "pick-up" == interaction and object_type == self.subtask.object:
-                        self.iterate()
+                        iterate = True
                 elif a - n_transitions == 1:  # transform
+                    print("removing transformed object:", self.objects[pos])
                     self.objects[pos] = len(self.object_types)
                     if (
                         "transform" == interaction
                         and object_type == self.subtask.object
                     ):
-                        self.iterate()
+                        iterate = True
+            if iterate:
+                if self.count == 0:
+                    print("objects", self.objects)
+                    self.subtask_idx = self.get_next_subtask()
+                    self.next_subtask = True
+                else:
+                    self.count -= 1
 
         if a < n_transitions:
             # move

@@ -153,10 +153,23 @@ class ControlFlowGridWorld(SubtasksGridWorld):
     def get_next_subtask(self):
         if self.subtask_idx > self.n_subtasks:
             return None
-        return self.control[self.subtask_idx, int(self.evaluate_condition())]
+        pred = self.evaluate_condition()
+        x = self.control[self.subtask_idx, int(pred)]
+        print("former subtask_idx:", self.subtask_idx)
+        print("new_subtask idx:", x)
+        print("control:", self.control)
+        return x
 
     def evaluate_condition(self):
+        print("self.conditions")
+        print(self.conditions)
+        print("idx", self.subtask_idx)
         self.pred = self.conditions[self.subtask_idx] in self.objects.values()
+        print(
+            self.conditions[self.subtask_idx],
+            "is in" if self.pred else "is not in",
+            self.objects.values(),
+        )
         return self.pred
 
     def get_required_objects(self, _):

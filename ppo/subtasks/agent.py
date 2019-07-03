@@ -416,7 +416,10 @@ class Recurrence(torch.jit.ScriptModule):
 
             # p
             p2 = update_attention(p, t)
+            print("p before", p)
             p = interp(p, p2, cr)
+            print("p after", p)
+            print("cr for p", cr)
 
             # r
             r = (p.unsqueeze(1) @ M).squeeze(1)
@@ -438,6 +441,7 @@ class Recurrence(torch.jit.ScriptModule):
                 )
                 a_dist = self.agent(agent_inputs, rnn_hxs=None, masks=None).dist
             sample_new(A[t], a_dist)
+            print("A[t]", A[t])
             # a[:] = 'wsadeq'.index(input('act:'))
 
             def phi_update(subtask_param):
@@ -457,6 +461,7 @@ class Recurrence(torch.jit.ScriptModule):
                     correct_action.sum(-1, keepdim=True)
                     * correct_object.sum(-1, keepdim=True)
                 ).detach()
+                print("true c", truth)
                 # * conditions[:, :1] + (1 - conditions[:, :1])
                 # TODO }
                 parts = (obs_part, self.a_one_hots[A[t]]) + task_sections
