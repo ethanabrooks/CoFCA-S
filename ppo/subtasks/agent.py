@@ -492,7 +492,7 @@ class Recurrence(torch.jit.ScriptModule):
             # a[:] = 'wsadeq'.index(input('act:'))
 
             debug_dist = self.phi_update(torch.ones_like(cr))
-            debug_g = debug_dist.sample()
+            sample_new(G[t], debug_dist)
 
             yield RecurrentState(
                 cg=cg,
@@ -501,7 +501,7 @@ class Recurrence(torch.jit.ScriptModule):
                 cr_probs=cr_probs,
                 p=p,
                 r=r,
-                g=debug_g,  #  G[t],
+                g=G[t],
                 g_probs=debug_dist.probs,  # g_dist.probs,
                 g_loss=torch.zeros_like(G[t]),  # -g_dist.log_probs(subtask),
                 a=A[t],
