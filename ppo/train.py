@@ -203,6 +203,7 @@ class Train:
                         mean = np.mean(v)
                         if not np.isnan(mean):
                             writer.add_scalar(k, np.mean(v), total_num_steps)
+                print("Wrote logs")
 
             log_progress.update()
 
