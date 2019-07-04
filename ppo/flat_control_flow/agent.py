@@ -1,10 +1,10 @@
+import numpy as np
 import torch
 import torch.nn.functional as F
-import ppo.subtasks
 
-import ppo.control_flow
 from gridworld_env.flat_control_gridworld import Obs
-import numpy as np
+import ppo.control_flow
+import ppo.subtasks
 
 
 class Agent(ppo.control_flow.Agent):
