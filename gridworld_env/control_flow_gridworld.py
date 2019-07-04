@@ -35,12 +35,6 @@ class ControlFlowGridWorld(SubtasksGridWorld):
             )._asdict()
         )
 
-    def render_current_subtask(self):
-        # if self.subtask_idx == 0:
-        # print("none")
-        # else:
-        super().render_current_subtask()
-
     def render_task(self):
         def helper(i, indent):
             try:
