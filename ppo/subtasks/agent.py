@@ -208,10 +208,11 @@ class Recurrence(torch.jit.ScriptModule):
                 init_(nn.Linear(hidden_size, 2), "sigmoid"),
             )
         else:
-            self.phi_update = trace(
-                lambda in_size: init_(nn.Linear(in_size, 2), "sigmoid"),
-                in_size=(d * action_spaces.a.n * int(self.subtask_nvec.prod())),
-            )
+            self.phi_update = Categorical(1, 2)
+            # self.phi_update = trace(
+            # lambda in_size: init_(nn.Linear(in_size, 2), "sigmoid"),
+            # in_size=(d * action_spaces.a.n * int(self.subtask_nvec.prod())),
+            # )
 
         for i, x in enumerate(self.subtask_nvec):
             self.register_buffer(f"part{i}_one_hot", torch.eye(int(x)))
@@ -451,15 +452,16 @@ class Recurrence(torch.jit.ScriptModule):
                                 part.unsqueeze_(i2 + 1)
                         outer_product_obs = outer_product_obs * part
 
-                    c_logits = self.phi_update(outer_product_obs.view(N, -1))
+                    # c_logits = self.phi_update(outer_product_obs.view(N, -1))
                 if self.hard_update:
                     c_dist = FixedCategorical(logits=c_logits)
                     c = actions.c[t]
                     sample_new(c, c_dist)
                     probs = c_dist.probs
                 else:
-                    c = torch.sigmoid(c_logits[:, :1])
-                    probs = torch.zeros_like(c_logits)  # dummy value
+                    # c = torch.sigmoid(c_logits[:, :1])
+                    # probs = c_logits  # dummy value
+                    probs = truth.expand(1, 2)
                 return truth, probs  # TODO
 
             # cg
@@ -489,6 +491,9 @@ class Recurrence(torch.jit.ScriptModule):
             sample_new(A[t], a_dist)
             # a[:] = 'wsadeq'.index(input('act:'))
 
+            debug_dist = self.phi_update(torch.ones_like(cr))
+            debug_g = debug_dist.sample()
+
             yield RecurrentState(
                 cg=cg,
                 cr=cr,
@@ -496,8 +501,8 @@ class Recurrence(torch.jit.ScriptModule):
                 cr_probs=cr_probs,
                 p=p,
                 r=r,
-                g=G[t],
-                g_probs=g_dist.probs,
+                g=debug_g,  #  G[t],
+                g_probs=debug_dist.probs,  # g_dist.probs,
                 g_loss=torch.zeros_like(G[t]),  # -g_dist.log_probs(subtask),
                 a=A[t],
                 a_probs=a_dist.probs,
