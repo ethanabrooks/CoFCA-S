@@ -236,7 +236,7 @@ class Recurrence(torch.jit.ScriptModule):
             a_probs=action_spaces.a.n,
             cg_probs=2,
             cr_probs=2,
-            g_probs=self.n_subtasks,
+            g_probs=2,  # self.n_subtasks,
             v=1,
             g_loss=1,
             subtask=1,
@@ -421,25 +421,6 @@ class Recurrence(torch.jit.ScriptModule):
             # r
             r = (p.unsqueeze(1) @ M).squeeze(1)
 
-            # g
-            old_g = self.g_one_hots[G[t - 1]]
-            g_dist = FixedCategorical(probs=torch.clamp(interp(old_g, p, cg), 0.0, 1.0))
-            sample_new(G[t], g_dist)
-
-            # a
-            g = G[t]
-            g_binary = M[torch.arange(N), g]
-            conv_out = self.conv2((obs[t], broadcast3d(g_binary, self.obs_shape[1:])))
-            if self.agent is None:
-                a_dist = self.actor(conv_out)
-            else:
-                agent_inputs = ppo.subtasks.teacher.Obs(
-                    base=obs[t].view(N, -1), subtask=self.get_agent_subtask(M, g)
-                )
-                a_dist = self.agent(agent_inputs, rnn_hxs=None, masks=None).dist
-            sample_new(A[t], a_dist)
-            # a[:] = 'wsadeq'.index(input('act:'))
-
             def phi_update(subtask_param):
                 obs_part = self.conv1(obs[t])
                 task_sections = torch.split(
@@ -488,6 +469,26 @@ class Recurrence(torch.jit.ScriptModule):
             # cr
             cr, cr_probs = phi_update(subtask_param=r)
 
+            # g
+            old_g = self.g_one_hots[G[t - 1]]
+            # g_dist = FixedCategorical(probs=torch.clamp(interp(old_g, p, cg), 0.0, 1.0))
+            g_dist = FixedCategorical(probs=torch.cat([cr, (1 - cr)], dim=1))
+            sample_new(G[t], g_dist)
+
+            # a
+            g = G[t]
+            g_binary = M[torch.arange(N), g]
+            conv_out = self.conv2((obs[t], broadcast3d(g_binary, self.obs_shape[1:])))
+            if self.agent is None:
+                a_dist = self.actor(conv_out)
+            else:
+                agent_inputs = ppo.subtasks.teacher.Obs(
+                    base=obs[t].view(N, -1), subtask=self.get_agent_subtask(M, g)
+                )
+                a_dist = self.agent(agent_inputs, rnn_hxs=None, masks=None).dist
+            sample_new(A[t], a_dist)
+            # a[:] = 'wsadeq'.index(input('act:'))
+
             yield RecurrentState(
                 cg=cg,
                 cr=cr,
@@ -497,7 +498,7 @@ class Recurrence(torch.jit.ScriptModule):
                 r=r,
                 g=G[t],
                 g_probs=g_dist.probs,
-                g_loss=-g_dist.log_probs(subtask),
+                g_loss=torch.zeros_like(G[t]),  # -g_dist.log_probs(subtask),
                 a=A[t],
                 a_probs=a_dist.probs,
                 subtask=float_subtask,
