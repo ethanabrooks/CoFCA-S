@@ -70,8 +70,11 @@ class Agent(ppo.agent.Agent, NNBase):
         rm = self.recurrent_module
         hx = RecurrentState(*rm.parse_hidden(all_hxs))
 
+        g_dist = rm.phi_update(torch.ones_like(hx.cr))
+
         if action is None:
-            actions = Actions(a=hx.a, cg=hx.cg, cr=hx.cr, g=hx.g)
+            actions = Actions(a=hx.a, cg=hx.cg, cr=hx.cr, g=g_dist.sample().float())
+            # g=hx.g)
 
         if self.hard_update:
             dists = Actions(
@@ -85,7 +88,8 @@ class Agent(ppo.agent.Agent, NNBase):
                 a=None if self.agent else FixedCategorical(hx.a_probs),
                 cg=None,
                 cr=None,
-                g=FixedCategorical(hx.g_probs),
+                g=g_dist
+                # g=FixedCategorical(hx.g_probs),
             )
 
         log_probs = sum(
@@ -491,9 +495,6 @@ class Recurrence(torch.jit.ScriptModule):
             sample_new(A[t], a_dist)
             # a[:] = 'wsadeq'.index(input('act:'))
 
-            debug_dist = self.phi_update(torch.ones_like(cr))
-            sample_new(G[t], debug_dist)
-
             yield RecurrentState(
                 cg=cg,
                 cr=cr,
@@ -502,8 +503,8 @@ class Recurrence(torch.jit.ScriptModule):
                 p=p,
                 r=r,
                 g=G[t],
-                g_probs=debug_dist.probs,  # g_dist.probs,
-                g_loss=torch.zeros_like(G[t]),  # -g_dist.log_probs(subtask),
+                g_probs=g_dist.probs,
+                g_loss=torch.zeros_like(subtask),  # -g_dist.log_probs(subtask),
                 a=A[t],
                 a_probs=a_dist.probs,
                 subtask=float_subtask,
