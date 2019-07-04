@@ -1,4 +1,5 @@
 from collections import namedtuple
+import itertools
 
 from gym.spaces import Box, Discrete
 import numpy as np
@@ -13,9 +14,9 @@ from gridworld_env.subtasks_gridworld import Obs
 import ppo
 from ppo.agent import AgentValues, NNBase
 from ppo.distributions import Categorical, DiagGaussian, FixedCategorical
-from ppo.layers import Concat, Flatten, Parallel, Product, Reshape, Sum, ShallowCopy
+from ppo.layers import Concat, Flatten, Parallel, Product, Reshape, ShallowCopy, Sum
 import ppo.subtasks.teacher
-from ppo.subtasks.teacher import Teacher, g123_to_binary, g_binary_to_123
+from ppo.subtasks.teacher import Teacher, g_binary_to_discrete, g_discrete_to_binary
 from ppo.subtasks.wrappers import Actions
 from ppo.utils import broadcast3d, init_, interp, trace
 
@@ -149,9 +150,10 @@ class Recurrence(torch.jit.ScriptModule):
         self.agent = agent
         self.recurrent = recurrent
         self.obs_spaces = obs_spaces
+        self.n_subtasks = self.obs_spaces.subtasks.nvec.shape[0]
         self.subtask_nvec = self.obs_spaces.subtasks.nvec[0]
         d, h, w = self.obs_shape = obs_spaces.base.shape
-        self.obs_sections = self.get_obs_sections()
+        self.obs_sections = [int(np.prod(s.shape)) for s in self.obs_spaces]
 
         self.conv1 = nn.Sequential(
             ShallowCopy(2),
@@ -239,20 +241,13 @@ class Recurrence(torch.jit.ScriptModule):
         )
         self.state_sizes = RecurrentState(*map(int, state_sizes))
 
-    @property
-    def n_subtasks(self):
-        return self.obs_spaces.subtasks.nvec.shape[0]
-
-    def get_obs_sections(self):
-        return Obs(*[int(np.prod(s.shape)) for s in self.obs_spaces])
-
     # @torch.jit.script_method
     def parse_hidden(self, hx):
         return RecurrentState(*torch.split(hx, self.state_sizes, dim=-1))
 
     # @torch.jit.script_method
     def g_binary_to_int(self, g_binary):
-        g123 = g_binary_to_123(g_binary, self.subtask_nvec)
+        g123 = g_binary_to_discrete(g_binary, self.subtask_nvec)
         g123[:, :-1] *= self.subtask_nvec[1:]  # g1 * x2, g2 * x3
         g123[:, 0] *= self.subtask_nvec[2]  # g1 * x3
         return g123.sum(dim=-1)
@@ -309,15 +304,16 @@ class Recurrence(torch.jit.ScriptModule):
         # parse non-action inputs
         inputs = self.parse_inputs(inputs)
         inputs = inputs._replace(base=inputs.base.view(T, N, *self.obs_shape))
-        task = inputs.subtasks.view(T, N, self.n_subtasks, self.subtask_nvec.size)
 
         # build memory
+        task = inputs.subtasks.view(
+            *inputs.subtasks.shape[:2], self.n_subtasks, self.subtask_nvec.size
+        )
         task = torch.split(task, 1, dim=-1)
-        interaction, count, obj = [x[0, :, :, 0] for x in task]
-        M123 = torch.stack([interaction, count, obj], dim=-1)
-        one_hots = [self.part0_one_hot, self.part1_one_hot, self.part2_one_hot]
-        g123 = [interaction, count, obj]
-        M = g123_to_binary(g123, one_hots)
+        g_discrete = [x[0, :, :, 0] for x in task]
+        M_discrete = torch.stack(g_discrete, dim=-1)
+
+        M = g_discrete_to_binary(g_discrete, self.g_discrete_one_hots)
 
         # parse hidden
         new_episode = torch.all(hx.squeeze(0) == 0, dim=-1)
@@ -340,7 +336,7 @@ class Recurrence(torch.jit.ScriptModule):
                 cr=hx.cr,
                 cg=hx.cg,
                 M=M,
-                M123=M123,
+                M_discrete=M_discrete,
                 N=N,
                 T=T,
                 float_subtask=hx.subtask,
@@ -351,6 +347,14 @@ class Recurrence(torch.jit.ScriptModule):
                 update_attention=None,
             )
         )
+
+    @property
+    def g_discrete_one_hots(self):
+        for i in itertools.count():
+            try:
+                yield getattr(self, f"part{i}_one_hot")
+            except AttributeError:
+                break
 
     def pack(self, outputs):
         zipped = list(zip(*outputs))
@@ -379,13 +383,12 @@ class Recurrence(torch.jit.ScriptModule):
 
     def inner_loop(
         self,
-        new_episode,
         g,
         a,
         cr,
         cg,
         M,
-        M123,
+        M_discrete,
         N,
         T,
         float_subtask,
@@ -404,18 +407,18 @@ class Recurrence(torch.jit.ScriptModule):
             subtask = float_subtask.long()
             float_subtask += next_subtask[t]
 
-            # agent_layer = obs[t, :, 6, :, :].long()
-            # j, k, l = torch.split(agent_layer.nonzero(), 1, dim=-1)
+            agent_layer = obs[t, :, 6, :, :].long()
+            j, k, l = torch.split(agent_layer.nonzero(), 1, dim=-1)
 
             def phi_update(subtask_param):
-                # obs_part = obs[t, j, :, k, l].squeeze(1)
                 obs_part = self.conv1(obs[t])
                 task_sections = torch.split(
                     subtask_param, tuple(self.subtask_nvec), dim=-1
                 )
-                # parts = (debug_obs, self.a_one_hots[A[t - 1]]) + task_sections
+                # # TODO {
+                # debug_obs = obs[t, j, :, k, l].squeeze(1)
                 # a_one_hot = self.a_one_hots[A[t - 1]]
-                # interaction, count, obj = task_sections
+                # interaction, count, obj, conditions = task_sections
                 # correct_object = obj * debug_obs[:, 1 : 1 + self.subtask_nvec[2]]
                 # column1 = interaction[:, :1]
                 # column2 = interaction[:, 1:] * a_one_hot[:, 4:]
@@ -423,7 +426,8 @@ class Recurrence(torch.jit.ScriptModule):
                 # truth = (
                 # correct_action.sum(-1, keepdim=True)
                 # * correct_object.sum(-1, keepdim=True)
-                # ).detach()
+                # ).detach() * conditions[:, :1] + (1 - conditions[:, :1])
+                # # TODO }
                 parts = (obs_part, self.a_one_hots[A[t - 1]]) + task_sections
                 if self.multiplicative_interaction:
                     c_logits = self.phi_update(parts)
@@ -484,9 +488,8 @@ class Recurrence(torch.jit.ScriptModule):
             if self.agent is None:
                 a_dist = self.actor(conv_out)
             else:
-                agent_inputs = torch.cat(
-                    ppo.subtasks.teacher.Obs(base=obs[t].view(N, -1), subtask=g_binary),
-                    dim=1,
+                agent_inputs = ppo.subtasks.teacher.Obs(
+                    base=obs[t].view(N, -1), subtask=self.get_agent_subtask(M, g)
                 )
                 a_dist = self.agent(agent_inputs, rnn_hxs=None, masks=None).dist
             sample_new(A[t], a_dist)
@@ -507,3 +510,6 @@ class Recurrence(torch.jit.ScriptModule):
                 subtask=float_subtask,
                 v=self.critic(conv_out),
             )
+
+    def get_agent_subtask(self, M, g):
+        return M[torch.arange(M.size(0)), g]

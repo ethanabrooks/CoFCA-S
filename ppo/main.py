@@ -1,7 +1,3 @@
-# stdlib
-# this is as test
-
-# noinspection PyUnresolvedReferences
 from collections import ChainMap
 from pathlib import Path
 
@@ -16,7 +12,8 @@ from gridworld_env.flat_control_gridworld import FlatControlFlowGridWorld
 from gridworld_env.subtasks_gridworld import SubtasksGridWorld
 import ppo
 from ppo.arguments import build_parser, get_args
-import ppo.control_flow.agent
+import ppo.control_flow
+import ppo.flat_control_flow
 import ppo.subtasks.agent
 import ppo.subtasks.student
 import ppo.subtasks.teacher
@@ -68,12 +65,11 @@ def make_subtasks_env(env_id, **kwargs):
             for k, v in _kwargs.items():
                 print(f"{k:20}{v}")
         if task_type == "control-flow":
-            env = ControlFlowGridWorld(**_kwargs)
+            env = ppo.subtasks.Wrapper(ControlFlowGridWorld(**_kwargs))
         elif task_type == "flat-control-flow":
-            env = FlatControlFlowGridWorld(**_kwargs)
+            env = ppo.flat_control_flow.Wrapper(FlatControlFlowGridWorld(**_kwargs))
         else:
-            env = SubtasksGridWorld(**_kwargs)
-        env = ppo.subtasks.Wrapper(env)
+            env = ppo.subtasks.Wrapper(SubtasksGridWorld(**_kwargs))
         if debug:
             env = ppo.subtasks.DebugWrapper(env)
         env.seed(seed + rank)
@@ -222,4 +218,4 @@ def metacontroller_cli():
 
 
 if __name__ == "__main__":
-    teacher_cli()
+    metacontroller_cli()

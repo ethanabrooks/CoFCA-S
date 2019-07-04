@@ -13,6 +13,7 @@ class FlatControlFlowGridWorld(ControlFlowGridWorld):
         super().__init__(*args, n_subtasks=n_subtasks, **kwargs)
         obs_spaces = self.observation_space.spaces
         subtask_nvec = obs_spaces["subtasks"].nvec[0]
+        self.lines = None
         self.observation_space.spaces = Obs(
             base=obs_spaces["base"],
             subtask=obs_spaces["subtask"],
@@ -24,7 +25,7 @@ class FlatControlFlowGridWorld(ControlFlowGridWorld):
                         subtask_nvec,
                         [0, 1],
                         "constant",
-                        constant_values=len(self.object_types),
+                        constant_values=1 + len(self.object_types),
                     ),
                     (self.n_subtasks + self.n_subtasks // 2, 1),
                 )
@@ -38,16 +39,17 @@ class FlatControlFlowGridWorld(ControlFlowGridWorld):
             for subtask, (pos, neg), condition in zip(
                 self.subtasks, self.control, self.conditions
             ):
-                yield np.append(subtask, 0)
+                yield subtask + (0,)
                 if pos != neg:
-                    yield np.append(np.zeros(3), condition)
+                    yield (0, 0, 0, condition + 1)
 
+        self.lines = np.vstack(list(get_lines()))
         obs = Obs(
             base=obs["base"],
             subtask=obs["subtask"],
             next_subtask=obs["next_subtask"],
             subtasks=obs["subtasks"],
-            lines=np.vstack(get_lines()),
+            lines=self.lines,
         )
         # for (k, s), o in zip(self.observation_space.spaces.items(), obs):
         #     assert s.contains(o)
@@ -56,7 +58,7 @@ class FlatControlFlowGridWorld(ControlFlowGridWorld):
     def get_control(self):
         for i in range(self.n_subtasks):
             if i % 2 == 0:
-                yield i, i + 1
+                yield i + 1, i
             else:
                 yield i, i
 
