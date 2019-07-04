@@ -1,5 +1,5 @@
-import itertools
 from collections import namedtuple
+import itertools
 
 from gym.spaces import Box, Discrete
 import numpy as np
@@ -14,7 +14,7 @@ from ppo.agent import AgentValues, NNBase
 from ppo.distributions import Categorical, DiagGaussian, FixedCategorical
 from ppo.layers import Concat, Flatten, Parallel, Product, Reshape, ShallowCopy, Sum
 import ppo.subtasks.teacher
-from ppo.subtasks.teacher import Teacher, g_discrete_to_binary, g_binary_to_discrete
+from ppo.subtasks.teacher import Teacher, g_binary_to_discrete, g_discrete_to_binary
 from ppo.subtasks.wrappers import Actions
 from ppo.utils import broadcast3d, init_, interp, trace
 
@@ -325,6 +325,11 @@ class Recurrence(torch.jit.ScriptModule):
             # initialize g to first subtask
             hx.g[new_episode] = 0.0
 
+        def update_attention(p, t):
+            p2 = F.pad(p, [1, 0])[:, :-1]
+            p2[:, -1] += 1 - p2.sum(dim=-1)
+            return p2
+
         return self.pack(
             self.inner_loop(
                 inputs=inputs,
@@ -341,7 +346,7 @@ class Recurrence(torch.jit.ScriptModule):
                 p=p,
                 r=r,
                 actions=actions,
-                update_attention=None,
+                update_attention=update_attention,
             )
         )
 
