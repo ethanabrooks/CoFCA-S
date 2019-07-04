@@ -51,6 +51,7 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
             # not_branching = conditions[:, 0:1]
             # conditions = conditions[:, 1:]
             # obs = inputs.base[t, :, 1:-2]
+            # print("obs", obs[0])
             # truth = (
             #     ((not_branching + conditions * obs) > 0)
             #     .view(N, 1, 1, -1)

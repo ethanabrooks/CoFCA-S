@@ -14,7 +14,7 @@ class Wrapper(ppo.subtasks.Wrapper):
         env = self.env.unwrapped
         g_type, g_count, g_obj, condition = tuple(env.lines[self.last_g])
         if condition:
-            print("if", env.object_types[condition - 1])
+            print("if", self.object_types[condition - 1])
         else:
             print(
                 self.last_g,
