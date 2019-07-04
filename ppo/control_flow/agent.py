@@ -68,25 +68,16 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
         conditions = self.condition_one_hots[inputs.conditions[0].long()]
         control = inputs.control[0].view(N, *self.obs_spaces.control.nvec.shape)
         rows = self.rows.expand_as(control)
-        # point terminal branches back at themselves TODO: is this right?
         control = control.where(control < self.n_subtasks, rows)
         false_path, true_path = torch.split(control, 1, dim=-1)
         true_path = self.branch_one_hots[true_path.squeeze(-1).long()]
         false_path = self.branch_one_hots[false_path.squeeze(-1).long()]
 
         def update_attention(p, t):
-            c = (p.unsqueeze(1) @ conditions).squeeze(1)
-            # c = conditions[
-            # torch.arange(N, device=c.device), inputs.subtask[t].long().flatten()
-            # ]
-            # phi_in = (
-            # inputs.base[t, :, 1:-2] * c.view(N, conditions.size(2), 1, 1)
-            # ).view(N, -1)
-            # truth = torch.any(phi_in > 0, dim=-1).float().view(N, 1, 1)
-            # phi_in = c.view(N, conditions.size(2), 1, 1, 1) * inputs.base[t].unsqueeze(
-            #     1
-            # )
-            pred = self.phi_shift((inputs.base[t], c))  # TODO
+            # c = (p.unsqueeze(1) @ conditions).squeeze(1)
+            # phi_in = inputs.base[t, :, 1:-2] * c.view(N, conditions.size(2), 1, 1)
+            # truth = torch.any(phi_in.view(N, -1) > 0, dim=-1).float().view(N, 1, 1)
+            pred = self.phi_shift((inputs.base[t], c))
             trans = pred * true_path + (1 - pred) * false_path
             return (p.unsqueeze(1) @ trans).squeeze(1)
 
