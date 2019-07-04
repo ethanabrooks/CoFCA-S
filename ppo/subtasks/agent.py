@@ -479,7 +479,7 @@ class Recurrence(torch.jit.ScriptModule):
                 else:
                     c = torch.sigmoid(c_logits[:, :1])
                     probs = torch.zeros_like(c_logits)  # dummy value
-                return c, probs  # TODO
+                return truth, probs  # TODO
 
             # cg
             g_binary = M[torch.arange(N), G[t]]
@@ -495,7 +495,7 @@ class Recurrence(torch.jit.ScriptModule):
                 cr_probs=cr_probs,
                 p=p,
                 r=r,
-                g=cr,
+                g=G[t],
                 g_probs=g_dist.probs,
                 g_loss=-g_dist.log_probs(subtask),
                 a=A[t],
