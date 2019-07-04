@@ -22,6 +22,24 @@ class Flatten(nn.Module):
         return x.view(x.size(0), -1)
 
 
+class Sum(nn.Module):
+    def __init__(self, **kwargs):
+        self.kwargs = kwargs
+        super().__init__()
+
+    def forward(self, x):
+        return torch.sum(x, **self.kwargs)
+
+
+class ShallowCopy(nn.Module):
+    def __init__(self, n: int):
+        self.n = n
+        super().__init__()
+
+    def forward(self, x):
+        return (x,) * self.n
+
+
 class Concat(torch.jit.ScriptModule):
     def __init__(self, **kwargs):
         self.kwargs = kwargs
@@ -37,7 +55,7 @@ class Reshape(torch.jit.ScriptModule):
         self.shape = shape
 
     def forward(self, inputs):
-        return inputs.view(*self.shape)
+        return inputs.view(inputs.size(0), *self.shape)
 
 
 class Broadcast3d(torch.jit.ScriptModule):

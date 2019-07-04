@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from gridworld_env.control_flow_gridworld import Obs
-from ppo.layers import Flatten, Parallel, Product, Reshape
+from ppo.layers import Flatten, Parallel, Product, Reshape, ShallowCopy, Sum
 import ppo.subtasks.agent
 from ppo.utils import init_
 
@@ -27,20 +27,32 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
         d, h, w = self.obs_shape
         self.phi_shift = nn.Sequential(
             Parallel(
-                nn.Sequential(Reshape(-1, 1, d, h, w)),
-                nn.Sequential(Reshape(-1, num_object_types, 1, 1, 1)),
+                nn.Sequential(Reshape(1, d, h, w)),
+                nn.Sequential(Reshape(num_object_types, 1, 1, 1)),
             ),
             Product(),
-            Reshape(-1, d * num_object_types, *self.obs_shape[-2:]),
+            Reshape(d * num_object_types, *self.obs_shape[-2:]),
             init_(
                 nn.Conv2d(num_object_types * d, hidden_size, kernel_size=1, stride=1)
             ),
-            nn.MaxPool2d(kernel_size=self.obs_shape[-2:], stride=1),
+            # attention {
+            ShallowCopy(2),
+            Parallel(
+                Reshape(hidden_size, h * w),
+                nn.Sequential(
+                    init_(nn.Conv2d(hidden_size, 1, kernel_size=1)),
+                    Reshape(1, h * w),
+                    nn.Softmax(dim=-1),
+                ),
+            ),
+            Product(),
+            Sum(dim=-1),
+            # }
             nn.ReLU(),
             Flatten(),
             init_(nn.Linear(hidden_size, 1), "sigmoid"),
             nn.Sigmoid(),
-            Reshape(-1, 1, 1),
+            Reshape(1, 1),
         )
         self.obs_shapes = Obs(
             base=self.obs_spaces.base.shape,
@@ -72,7 +84,6 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
         false_path = self.branch_one_hots[false_path.squeeze(-1).long()]
 
         def update_attention(p, t):
-            x = inputs
             c = (p.unsqueeze(1) @ conditions).squeeze(1)
             # c = conditions[
             # torch.arange(N, device=c.device), inputs.subtask[t].long().flatten()
@@ -81,35 +92,12 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
             # inputs.base[t, :, 1:-2] * c.view(N, conditions.size(2), 1, 1)
             # ).view(N, -1)
             # truth = torch.any(phi_in > 0, dim=-1).float().view(N, 1, 1)
-            phi_in = c.view(N, conditions.size(2), 1, 1, 1) * inputs.base[t].unsqueeze(
-                1
-            )
-            phi_in = (
-                inputs.base[t, :, 1:-2] * c.view(N, conditions.size(2), 1, 1)
-            ).view(N, -1)
-            truth = torch.any(phi_in > 0, dim=-1).float().view(N, 1, 1)
-            # pred = self.phi_shift((inputs.base[t], c))
-            pred = truth
+            # phi_in = c.view(N, conditions.size(2), 1, 1, 1) * inputs.base[t].unsqueeze(
+            #     1
+            # )
+            pred = self.phi_shift((inputs.base[t], c))  # TODO
             trans = pred * true_path + (1 - pred) * false_path
             return (p.unsqueeze(1) @ trans).squeeze(1)
 
-        return self.pack(
-            self.inner_loop(
-                new_episode=new_episode.unsqueeze(1).float(),
-                a=hx.a,
-                cr=hx.cr,
-                cg=hx.cg,
-                g=hx.g,
-                M=M,
-                M123=M123,
-                N=N,
-                T=T,
-                float_subtask=hx.subtask,
-                next_subtask=inputs.next_subtask,
-                obs=inputs.base,
-                p=p,
-                r=r,
-                actions=actions,
-                update_attention=update_attention,
-            )
-        )
+        kwargs.update(update_attention=update_attention)
+        yield from super().inner_loop(inputs=inputs, **kwargs)

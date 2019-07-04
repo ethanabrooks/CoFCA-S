@@ -36,36 +36,35 @@ class ControlFlowGridWorld(SubtasksGridWorld):
         )
 
     def render_current_subtask(self):
-        # if self.subtask_idx == 0:
-        # print("none")
-        # else:
         super().render_current_subtask()
 
     def render_task(self):
         def helper(i, indent):
+            try:
+                subtask = f"{i}:{self.subtasks[i]}"
+            except IndexError:
+                return f"{indent}terminate"
             neg, pos = self.control[i]
             condition = self.conditions[i]
 
-            def develop_branch(j, add_indent):
-                new_indent = indent + add_indent
-                if j == 0:
-                    subtask = f''
-                else:
-                    try:
-                        subtask = f'{j}:{self.subtasks[j]}'
-                    except IndexError:
-                        return f'{new_indent}terminate'
-                return f"{new_indent}{subtask}\n{helper(j, new_indent)}"
+            # def develop_branch(j, add_indent):
+            # new_indent = indent + add_indent
+            # try:
+            # subtask = f"{j}:{self.subtasks[j]}"
+            # except IndexError:
+            # return f"{new_indent}terminate"
+            # return f"{new_indent}{subtask}\n{helper(j, new_indent)}"
 
             if pos == neg:
-                return f"{develop_branch(pos, '')}"
+                if_condition = helper(pos, indent)
             else:
-                return f"""\
+                if_condition = f"""\
 {indent}if {self.object_types[condition]}:
-{develop_branch(pos, '    ')}
+{helper(pos, indent + '    ')}
 {indent}else:
-{develop_branch(neg, '    ')}
+{helper(neg, indent + '    ')}
 """
+            return f"{indent}{subtask}\n{if_condition}"
 
         print(helper(i=0, indent=""))
 
@@ -78,6 +77,7 @@ class ControlFlowGridWorld(SubtasksGridWorld):
         )
         return Obs(**obs)._asdict()
 
+    # noinspection PyTypeChecker
     def subtasks_generator(self):
         choices = self.np_random.choice(
             len(self.possible_subtasks), size=self.n_subtasks
@@ -128,16 +128,19 @@ class ControlFlowGridWorld(SubtasksGridWorld):
 
         yield from subtasks
 
-    def reset(self):
-        def get_control():
-            for i in range(self.n_subtasks):
-                j = 2 * i
-                if self.force_branching or self.np_random.rand() < 0.7:
-                    yield j, j + 1
-                else:
-                    yield j, j
+    def get_control(self):
+        for i in range(self.n_subtasks):
+            j = 2 * i
+            if self.force_branching or self.np_random.rand() < 0.7:
+                yield j, j + 1
+            else:
+                yield j, j
 
-        self.control = 1 + np.minimum(np.array(list(get_control())), self.n_subtasks)
+    def reset(self):
+
+        self.control = np.minimum(
+            1 + np.array(list(self.get_control())), self.n_subtasks
+        )
         n_object_types = self.np_random.randint(1, len(self.object_types))
         object_types = np.arange(len(self.object_types))
         existing = self.np_random.choice(object_types, size=n_object_types)
