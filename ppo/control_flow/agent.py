@@ -25,31 +25,32 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
 
         d, h, w = self.obs_shape
         self.phi_shift = nn.Sequential(
-            Parallel(
-                nn.Sequential(Reshape(1, d, h, w)),
-                nn.Sequential(Reshape(self.condition_size, 1, 1, 1)),
-            ),
-            Product(),
-            Reshape(d * self.condition_size, *self.obs_shape[-2:]),
-            init_(
-                nn.Conv2d(self.condition_size * d, hidden_size, kernel_size=1, stride=1)
-            ),
-            # attention {
-            ShallowCopy(2),
-            Parallel(
-                Reshape(hidden_size, h * w),
-                nn.Sequential(
-                    init_(nn.Conv2d(hidden_size, 1, kernel_size=1)),
-                    Reshape(1, h * w),
-                    nn.Softmax(dim=-1),
-                ),
-            ),
-            Product(),
-            Sum(dim=-1),
-            # }
-            nn.ReLU(),
-            Flatten(),
-            init_(nn.Linear(hidden_size, 1), "sigmoid"),
+            init_(nn.Linear(1, 1), "sigmoid"),
+            # Parallel(
+            # nn.Sequential(Reshape(1, d, h, w)),
+            # nn.Sequential(Reshape(self.condition_size, 1, 1, 1)),
+            # ),
+            # Product(),
+            # Reshape(d * self.condition_size, *self.obs_shape[-2:]),
+            # init_(
+            # nn.Conv2d(self.condition_size * d, hidden_size, kernel_size=1, stride=1)
+            # ),
+            # # attention {
+            # ShallowCopy(2),
+            # Parallel(
+            # Reshape(hidden_size, h * w),
+            # nn.Sequential(
+            # init_(nn.Conv2d(hidden_size, 1, kernel_size=1)),
+            # Reshape(1, h * w),
+            # nn.Softmax(dim=-1),
+            # ),
+            # ),
+            # Product(),
+            # Sum(dim=-1),
+            # # }
+            # nn.ReLU(),
+            # Flatten(),
+            # init_(nn.Linear(hidden_size, 1), "sigmoid"),
             nn.Sigmoid(),
             Reshape(1, 1),
         )
@@ -74,12 +75,12 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
         false_path = self.branch_one_hots[false_path.squeeze(-1).long()]
 
         def update_attention(p, t):
-            # c = (p.unsqueeze(1) @ conditions).squeeze(1)
-            # phi_in = inputs.base[t, :, 1:-2] * c.view(N, conditions.size(2), 1, 1)
-            # truth = torch.any(phi_in.view(N, -1) > 0, dim=-1).float().view(N, 1, 1)
-            # pred = truth
             c = (p.unsqueeze(1) @ conditions).squeeze(1)
-            pred = self.phi_shift((inputs.base[t], c))
+            phi_in = inputs.base[t, :, 1:-2] * c.view(N, conditions.size(2), 1, 1)
+            truth = torch.any(phi_in.view(N, -1) > 0, dim=-1).float().view(N, 1, 1)
+            pred = self.phi_shift(truth)
+            # c = (p.unsqueeze(1) @ conditions).squeeze(1)
+            # pred = self.phi_shift((inputs.base[t], c))
             trans = pred * true_path + (1 - pred) * false_path
             return (p.unsqueeze(1) @ trans).squeeze(1)
 
