@@ -297,17 +297,6 @@ class SubtasksGridWorld(gym.Env):
         self.next_subtask = False
         # act
         n_transitions = len(self.transitions)
-
-        if a < n_transitions:
-            # move
-            pos = self.pos + self.transitions[a]
-            if any(np.all(self.obstacles == pos, axis=-1)):
-                pos = self.pos
-            a_min = np.zeros(2)
-            a_max = np.array(self.desc.shape) - 1
-            self.pos = np.clip(pos, a_min, a_max).astype(int)
-
-        obs = self.get_observation()
         pos = tuple(self.pos)
         touching = pos in self.objects
 
@@ -336,9 +325,18 @@ class SubtasksGridWorld(gym.Env):
                 else:
                     self.count -= 1
 
+        if a < n_transitions:
+            # move
+            pos = self.pos + self.transitions[a]
+            if any(np.all(self.obstacles == pos, axis=-1)):
+                pos = self.pos
+            a_min = np.zeros(2)
+            a_max = np.array(self.desc.shape) - 1
+            self.pos = np.clip(pos, a_min, a_max).astype(int)
+
         self.last_terminal = t = self.subtask is None
         r = 1.0 if t else -1
-        return obs, r, t, {}
+        return self.get_observation(), r, t, {}
 
     def evaluate_condition(self):
         return self.conditions[self.subtask_idx] in self.objects.values()
