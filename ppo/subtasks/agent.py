@@ -479,7 +479,7 @@ class Recurrence(torch.jit.ScriptModule):
                 else:
                     c = torch.sigmoid(c_logits[:, :1])
                     probs = torch.zeros_like(c_logits)  # dummy value
-                return torch.ones_like(c), probs  # TODO
+                return c, probs
 
             # cr
             cr, cr_probs = phi_update(subtask_param=r)
