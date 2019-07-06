@@ -411,8 +411,8 @@ class Recurrence(torch.jit.ScriptModule):
                 float_subtask + next_subtask[t], max=self.n_subtasks - 1
             )
 
-            # agent_layer = obs[t, :, 6, :, :].long()
-            # j, k, l = torch.split(agent_layer.nonzero(), 1, dim=-1)
+            agent_layer = obs[t, :, 6, :, :].long()
+            j, k, l = torch.split(agent_layer.nonzero(), 1, dim=-1)
 
             # p
             p2 = update_attention(p, t)
@@ -461,7 +461,7 @@ class Recurrence(torch.jit.ScriptModule):
                 # ).detach()
                 # * conditions[:, :1] + (1 - conditions[:, :1])
                 # TODO }
-                parts = (obs_part, self.a_one_hots[A[t - 1]]) + task_sections
+                parts = (obs_part, self.a_one_hots[A[t]]) + task_sections
                 if self.multiplicative_interaction:
                     c_logits = self.phi_update(parts)
                 else:
@@ -487,7 +487,7 @@ class Recurrence(torch.jit.ScriptModule):
             cr, cr_probs = phi_update(subtask_param=r)
 
             # cg
-            g_binary = M[torch.arange(N), G[t - 1]]
+            g_binary = M[torch.arange(N), G[t]]
             cg, cg_probs = phi_update(subtask_param=g_binary)
 
             yield RecurrentState(
