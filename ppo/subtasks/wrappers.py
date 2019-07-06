@@ -23,7 +23,7 @@ class DebugWrapper(gym.Wrapper):
         actions = Actions(*[x.item() for x in np.split(action, self.action_sections)])
         self.truth = int(self.env.unwrapped.subtask_idx)
         self.guess = int(actions.g)
-        r = self.guess - min(self.env.unwrapped.n_subtasks + 1, self.time_steps)
+        r = self.guess - min(self.env.unwrapped.n_subtasks - 1, self.time_steps)
         self.time_steps += 1
         # print("truth", truth)
         # print("guess", guess)
@@ -44,7 +44,7 @@ class DebugWrapper(gym.Wrapper):
         print("guess", self.guess)
         print("truth", self.truth)
         print("reward", self.last_reward)
-        # input("pause")
+        input("pause")
 
 
 class Wrapper(gym.Wrapper):
