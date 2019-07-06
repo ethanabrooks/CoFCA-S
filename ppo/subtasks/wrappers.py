@@ -11,7 +11,8 @@ Actions = namedtuple('Actions', 'a cr cg g')
 class DebugWrapper(gym.Wrapper):
     def __init__(self, env):
         super().__init__(env)
-        self.last_guess = None
+        self.guess = 0
+        self.truth = 0
         self.last_reward = None
         action_spaces = Actions(**env.action_space.spaces)
         for x in action_spaces:
@@ -21,23 +22,31 @@ class DebugWrapper(gym.Wrapper):
 
     def step(self, action):
         actions = Actions(*[x.item() for x in np.split(action, self.action_sections)])
-        truth = int(self.env.unwrapped.subtask_idx)
-        guess = int(actions.g)
-        r = 0
-        if self.env.unwrapped.subtask is not None and guess != truth:
-            r = -1
+        self.truth = int(self.env.unwrapped.subtask_idx)
+        self.guess = int(actions.g)
+        # r = -self.guess
+        self.time_steps += 1
+        # print("truth", truth)
+        # print("guess", guess)
+        # r = 0
+        # if self.env.unwrapped.subtask is not None and self.guess != self.truth:
+        # r = -0.1
+        r = -self.guess
         s, _, t, i = super().step(action)
-        self.last_guess = guess
         self.last_reward = r
         return s, r, t, i
+
+    def reset(self):
+        self.time_steps = 0
+        return super().reset()
 
     def render(self, mode="human"):
         print("########################################")
         super().render(sleep_time=0)
-        print("guess", self.last_guess)
-        print("truth", self.env.unwrapped.subtask_idx)
+        print("guess", self.guess)
+        print("truth", self.truth)
         print("reward", self.last_reward)
-        # input('pause')
+        input("pause")
 
 
 class Wrapper(gym.Wrapper):

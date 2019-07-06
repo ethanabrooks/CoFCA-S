@@ -67,11 +67,7 @@ class ControlFlowGridWorld(SubtasksGridWorld):
 
     def get_observation(self):
         obs = super().get_observation()
-        obs.update(
-            control=self.control,
-            conditions=self.conditions,
-            pred=self.evaluate_condition(),
-        )
+        obs.update(control=self.control, conditions=self.conditions, pred=self.pred)
         return Obs(**obs)._asdict()
 
     # noinspection PyTypeChecker
@@ -148,6 +144,7 @@ class ControlFlowGridWorld(SubtasksGridWorld):
         self.conditions = np.concatenate([passing, failing])
         self.np_random.shuffle(self.conditions)
         self.required_objects = passing
+        self.pred = False
         return super().reset()
         # self.subtask_idx = 0 self.subtask_idx = self.get_next_subtask()
         # self.count = self.subtask.count
@@ -159,7 +156,8 @@ class ControlFlowGridWorld(SubtasksGridWorld):
         return self.control[self.subtask_idx, int(self.evaluate_condition())]
 
     def evaluate_condition(self):
-        return self.conditions[self.subtask_idx] in self.objects.values()
+        self.pred = self.conditions[self.subtask_idx] in self.objects.values()
+        return self.pred
 
     def get_required_objects(self, _):
         yield from self.required_objects
