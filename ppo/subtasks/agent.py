@@ -453,13 +453,6 @@ class Recurrence(torch.jit.ScriptModule):
                     probs = torch.zeros_like(c_logits)  # dummy value
                 return c, probs
 
-            # cr
-            cr, cr_probs = phi_update(subtask_param=r)
-
-            # cg
-            g_binary = M[torch.arange(N), G[t - 1]]
-            cg, cg_probs = phi_update(subtask_param=g_binary)
-
             # p
             p2 = update_attention(p, t)
             p = interp(p, p2, cr)
@@ -485,6 +478,13 @@ class Recurrence(torch.jit.ScriptModule):
                 a_dist = self.agent(agent_inputs, rnn_hxs=None, masks=None).dist
             sample_new(A[t], a_dist)
             # a[:] = 'wsadeq'.index(input('act:'))
+
+            # cr
+            cr, cr_probs = phi_update(subtask_param=r)
+
+            # cg
+            g_binary = M[torch.arange(N), G[t - 1]]
+            cg, cg_probs = phi_update(subtask_param=g_binary)
 
             yield RecurrentState(
                 cg=cg,
