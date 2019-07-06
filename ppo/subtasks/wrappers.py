@@ -25,11 +25,9 @@ class DebugWrapper(gym.Wrapper):
         self.guess = int(actions.g)
         # print("truth", truth)
         # print("guess", guess)
-        # r = 0
-        # if self.env.unwrapped.subtask is not None and self.guess != self.truth:
-        # r = -1
-        r = self.guess - self.n_subtasks + 1
-
+        r = 0
+        if self.env.unwrapped.subtask is not None and self.guess != self.truth:
+            r = -0.1
         s, _, t, i = super().step(action)
         self.last_reward = r
         return s, r, t, i
