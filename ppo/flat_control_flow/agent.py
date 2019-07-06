@@ -1,10 +1,10 @@
+import numpy as np
 import torch
 import torch.nn.functional as F
-import ppo.subtasks
 
-import ppo.control_flow
 from gridworld_env.flat_control_gridworld import Obs
-import numpy as np
+import ppo.control_flow
+import ppo.subtasks
 
 
 class Agent(ppo.control_flow.Agent):
@@ -45,20 +45,20 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
     def inner_loop(self, M, inputs, **kwargs):
         def update_attention(p, t):
             r = (p.unsqueeze(1) @ M).squeeze(1)
-            # N = p.size(0)
-            # i = self.obs_spaces.subtasks.nvec[0, -1]
-            # conditions = r[:, -i:].view(N, i, 1, 1)
-            # not_branching = conditions[:, 0:1]
-            # conditions = conditions[:, 1:]
-            # obs = inputs.base[t, :, 1:-2]
-            # truth = (
-            #     ((not_branching + conditions * obs) > 0)
-            #     .view(N, 1, 1, -1)
-            #     .any(dim=-1)
-            #     .float()
-            # )
-            pred = self.phi_shift((inputs.base[t], r))
-            # pred = truth  # TODO
+            N = p.size(0)
+            i = self.obs_spaces.subtasks.nvec[0, -1]
+            conditions = r[:, -i:].view(N, i, 1, 1)
+            not_branching = conditions[:, 0:1]
+            conditions = conditions[:, 1:]
+            obs = inputs.base[t, :, 1:-2]
+            truth = (
+                ((not_branching + conditions * obs) > 0)
+                .view(N, 1, 1, -1)
+                .any(dim=-1)
+                .float()
+            )
+            # pred = self.phi_shift((inputs.base[t], r))
+            pred = truth  # TODO
             trans = pred * self.true_path + (1 - pred) * self.false_path
             return (p.unsqueeze(1) @ trans).squeeze(1)
 
