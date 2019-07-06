@@ -40,11 +40,10 @@ class DebugWrapper(gym.Wrapper):
 
     def render(self, mode="human"):
         print("########################################")
-        super().render(sleep_time=0)
         print("guess", self.guess)
         print("truth", self.truth)
         print("reward", self.last_reward)
-        input("pause")
+        super().render(sleep_time=0)
 
 
 class Wrapper(gym.Wrapper):
