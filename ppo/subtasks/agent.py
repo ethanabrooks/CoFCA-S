@@ -407,7 +407,9 @@ class Recurrence(torch.jit.ScriptModule):
         G = torch.cat([actions.g, g.unsqueeze(0)], dim=0).long().squeeze(2)
         for t in range(T):
             subtask = float_subtask.long()
-            float_subtask += next_subtask[t]
+            float_subtask = torch.clamp(
+                float_subtask + next_subtask[t], max=self.n_subtasks - 1
+            )
 
             # agent_layer = obs[t, :, 6, :, :].long()
             # j, k, l = torch.split(agent_layer.nonzero(), 1, dim=-1)
