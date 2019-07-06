@@ -18,14 +18,14 @@ class DebugWrapper(gym.Wrapper):
             i = 0
             for line in self.env.unwrapped.lines:
                 if line[-1] > 0:
-                    yield i
-                else:
                     yield i + 1
+                else:
+                    yield i
                 i += 1
 
         self.truth = int(self.env.unwrapped.subtask_idx)
         self.guess = list(lines_to_subtask())[int(actions.g)]
-        print("debug_wrapper", list(lines_to_subtask()))
+        print("debug_wrapper lines_to_subtask", list(lines_to_subtask()))
         print("debug_wrapper subtasks", self.env.unwrapped.subtasks)
         print("debug_wrapper lines", self.env.unwrapped.lines)
         # r = -self.guess
@@ -34,6 +34,9 @@ class DebugWrapper(gym.Wrapper):
         r = 0
         if self.env.unwrapped.subtask is not None and self.guess != self.truth:
             r = -0.1
+            import ipdb
+
+            ipdb.set_trace()
 
         s, _, t, i = super().step(action)
         self.last_reward = r
