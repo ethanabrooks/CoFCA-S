@@ -335,7 +335,7 @@ class SubtasksGridWorld(gym.Env):
             self.pos = np.clip(pos, a_min, a_max).astype(int)
 
         self.last_terminal = t = self.subtask is None
-        r = 1.0 if t else -1
+        r = 1.0 if t else -0.1
         return self.get_observation(), r, t, {}
 
     def evaluate_condition(self):
