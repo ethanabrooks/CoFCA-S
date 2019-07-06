@@ -237,7 +237,7 @@ class Recurrence(torch.jit.ScriptModule):
             a_probs=action_spaces.a.n,
             cg_probs=2,
             cr_probs=2,
-            g_probs=2,  # self.n_subtasks,
+            g_probs=self.n_subtasks,
             v=1,
             g_loss=1,
             subtask=1,
@@ -424,9 +424,7 @@ class Recurrence(torch.jit.ScriptModule):
 
             # g
             old_g = self.g_one_hots[G[t - 1]]
-            # g_dist = FixedCategorical(probs=torch.clamp(interp(old_g, p, cg), 0.0, 1.0))
-
-            g_dist = FixedCategorical(torch.cat([cr, (1 - cr)], dim=1))
+            g_dist = FixedCategorical(probs=torch.clamp(interp(old_g, p, cg), 0.0, 1.0))
             sample_new(G[t], g_dist)
 
             # a
@@ -483,7 +481,7 @@ class Recurrence(torch.jit.ScriptModule):
                 else:
                     c = torch.sigmoid(c_logits[:, :1])
                     probs = torch.zeros_like(c_logits)  # dummy value
-                return c, probs
+                return truth, probs  # TODO
 
             # cr
             cr, cr_probs = phi_update(subtask_param=r)
@@ -501,7 +499,7 @@ class Recurrence(torch.jit.ScriptModule):
                 r=r,
                 g=G[t],
                 g_probs=g_dist.probs,
-                g_loss=torch.zeros_like(subtask),  # -g_dist.log_probs(subtask), TODO
+                g_loss=-g_dist.log_probs(subtask),
                 a=A[t],
                 a_probs=a_dist.probs,
                 subtask=float_subtask,
