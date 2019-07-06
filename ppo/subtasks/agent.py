@@ -208,11 +208,10 @@ class Recurrence(torch.jit.ScriptModule):
                 init_(nn.Linear(hidden_size, 2), "sigmoid"),
             )
         else:
-            self.phi_update = Categorical(1, 2)
-            # self.phi_update = trace(
-            # lambda in_size: init_(nn.Linear(in_size, 2), "sigmoid"),
-            # in_size=(d * action_spaces.a.n * int(self.subtask_nvec.prod())),
-            # )
+            self.phi_update = trace(
+                lambda in_size: init_(nn.Linear(in_size, 2), "sigmoid"),
+                in_size=(d * action_spaces.a.n * int(self.subtask_nvec.prod())),
+            )
 
         for i, x in enumerate(self.subtask_nvec):
             self.register_buffer(f"part{i}_one_hot", torch.eye(int(x)))
@@ -237,7 +236,7 @@ class Recurrence(torch.jit.ScriptModule):
             a_probs=action_spaces.a.n,
             cg_probs=2,
             cr_probs=2,
-            g_probs=2,  # self.n_subtasks,
+            g_probs=self.n_subtasks,
             v=1,
             g_loss=1,
             subtask=1,
@@ -408,19 +407,10 @@ class Recurrence(torch.jit.ScriptModule):
         G = torch.cat([actions.g, g.unsqueeze(0)], dim=0).long().squeeze(2)
         for t in range(T):
             subtask = float_subtask.long()
-            float_subtask = torch.clamp(
-                float_subtask + next_subtask[t], max=self.n_subtasks - 1
-            )
+            float_subtask += next_subtask[t]
 
-            agent_layer = obs[t, :, 6, :, :].long()
-            j, k, l = torch.split(agent_layer.nonzero(), 1, dim=-1)
-
-            # p
-            p2 = update_attention(p, t)
-            p = interp(p, p2, cr)
-
-            # r
-            r = (p.unsqueeze(1) @ M).squeeze(1)
+            # agent_layer = obs[t, :, 6, :, :].long()
+            # j, k, l = torch.split(agent_layer.nonzero(), 1, dim=-1)
 
             def phi_update(subtask_param):
                 obs_part = self.conv1(obs[t])
@@ -452,29 +442,34 @@ class Recurrence(torch.jit.ScriptModule):
                                 part.unsqueeze_(i2 + 1)
                         outer_product_obs = outer_product_obs * part
 
-                    # c_logits = self.phi_update(outer_product_obs.view(N, -1))
+                    c_logits = self.phi_update(outer_product_obs.view(N, -1))
                 if self.hard_update:
                     c_dist = FixedCategorical(logits=c_logits)
                     c = actions.c[t]
                     sample_new(c, c_dist)
                     probs = c_dist.probs
                 else:
-                    # c = torch.sigmoid(c_logits[:, :1])
-                    # probs = c_logits  # dummy value
-                    probs = truth.expand(1, 2)
-                return truth, probs  # TODO
-
-            # cg
-            g_binary = M[torch.arange(N), G[t]]
-            cg, cg_probs = phi_update(subtask_param=g_binary)
+                    c = torch.sigmoid(c_logits[:, :1])
+                    probs = torch.zeros_like(c_logits)  # dummy value
+                return c, probs
 
             # cr
             cr, cr_probs = phi_update(subtask_param=r)
 
+            # cg
+            g_binary = M[torch.arange(N), G[t - 1]]
+            cg, cg_probs = phi_update(subtask_param=g_binary)
+
+            # p
+            p2 = update_attention(p, t)
+            p = interp(p, p2, cr)
+
+            # r
+            r = (p.unsqueeze(1) @ M).squeeze(1)
+
             # g
             old_g = self.g_one_hots[G[t - 1]]
-            # g_dist = FixedCategorical(probs=torch.clamp(interp(old_g, p, cg), 0.0, 1.0))
-            g_dist = FixedCategorical(probs=torch.cat([cr, (1 - cr)], dim=1))
+            g_dist = FixedCategorical(probs=torch.clamp(interp(old_g, p, cg), 0.0, 1.0))
             sample_new(G[t], g_dist)
 
             # a
@@ -491,9 +486,6 @@ class Recurrence(torch.jit.ScriptModule):
             sample_new(A[t], a_dist)
             # a[:] = 'wsadeq'.index(input('act:'))
 
-            g_dist = self.phi_update(torch.ones_like(cr))
-            sample_new(G[t], g_dist)
-
             yield RecurrentState(
                 cg=cg,
                 cr=cr,
@@ -503,7 +495,7 @@ class Recurrence(torch.jit.ScriptModule):
                 r=r,
                 g=G[t],
                 g_probs=g_dist.probs,
-                g_loss=torch.zeros_like(subtask),  # -g_dist.log_probs(subtask),
+                g_loss=-g_dist.log_probs(subtask),
                 a=A[t],
                 a_probs=a_dist.probs,
                 subtask=float_subtask,
