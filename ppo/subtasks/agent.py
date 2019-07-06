@@ -414,6 +414,32 @@ class Recurrence(torch.jit.ScriptModule):
             # agent_layer = obs[t, :, 6, :, :].long()
             # j, k, l = torch.split(agent_layer.nonzero(), 1, dim=-1)
 
+            # p
+            p2 = update_attention(p, t)
+            p = interp(p, p2, cr)
+
+            # r
+            r = (p.unsqueeze(1) @ M).squeeze(1)
+
+            # g
+            old_g = self.g_one_hots[G[t - 1]]
+            g_dist = FixedCategorical(probs=torch.clamp(interp(old_g, p, cg), 0.0, 1.0))
+            sample_new(G[t], g_dist)
+
+            # a
+            g = G[t]
+            g_binary = M[torch.arange(N), g]
+            conv_out = self.conv2((obs[t], broadcast3d(g_binary, self.obs_shape[1:])))
+            if self.agent is None:
+                a_dist = self.actor(conv_out)
+            else:
+                agent_inputs = ppo.subtasks.teacher.Obs(
+                    base=obs[t].view(N, -1), subtask=self.get_agent_subtask(M, g)
+                )
+                a_dist = self.agent(agent_inputs, rnn_hxs=None, masks=None).dist
+            sample_new(A[t], a_dist)
+            # a[:] = 'wsadeq'.index(input('act:'))
+
             def phi_update(subtask_param):
                 obs_part = self.conv1(obs[t])
                 task_sections = torch.split(
@@ -454,32 +480,6 @@ class Recurrence(torch.jit.ScriptModule):
                     c = torch.sigmoid(c_logits[:, :1])
                     probs = torch.zeros_like(c_logits)  # dummy value
                 return c, probs
-
-            # p
-            p2 = update_attention(p, t)
-            p = interp(p, p2, cr)
-
-            # r
-            r = (p.unsqueeze(1) @ M).squeeze(1)
-
-            # g
-            old_g = self.g_one_hots[G[t - 1]]
-            g_dist = FixedCategorical(probs=torch.clamp(interp(old_g, p, cg), 0.0, 1.0))
-            sample_new(G[t], g_dist)
-
-            # a
-            g = G[t]
-            g_binary = M[torch.arange(N), g]
-            conv_out = self.conv2((obs[t], broadcast3d(g_binary, self.obs_shape[1:])))
-            if self.agent is None:
-                a_dist = self.actor(conv_out)
-            else:
-                agent_inputs = ppo.subtasks.teacher.Obs(
-                    base=obs[t].view(N, -1), subtask=self.get_agent_subtask(M, g)
-                )
-                a_dist = self.agent(agent_inputs, rnn_hxs=None, masks=None).dist
-            sample_new(A[t], a_dist)
-            # a[:] = 'wsadeq'.index(input('act:'))
 
             # cr
             cr, cr_probs = phi_update(subtask_param=r)
