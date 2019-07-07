@@ -273,10 +273,6 @@ class Train:
                 episode_counter["success"] += list(
                     episode_rewards >= self.success_reward
                 )
-                # if np.any(episode_rewards < self.success_reward):
-                #    import ipdb
-
-                #    ipdb.set_trace()
 
             episode_counter["time_steps"] += list(counter["time_step"][done])
             counter["reward"][done] = 0
