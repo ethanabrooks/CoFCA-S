@@ -26,9 +26,6 @@ class DebugWrapper(ppo.subtasks.DebugWrapper):
         r = 0
         if None not in (env.subtask, self.subtask) and self.subtask != self.truth:
             r = -0.1
-            import ipdb
-
-            ipdb.set_trace()
         s, _, t, i = gym.Wrapper.step(self, action)
         self.last_reward = r
         return s, r, t, i
