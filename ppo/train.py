@@ -62,6 +62,8 @@ class Train:
     ):
         if render_eval and not render:
             eval_interval = 1
+        if render:
+            ppo_args.update(ppo_epoch=0)
         self.success_reward = success_reward
         save_dir = save_dir or log_dir
 
@@ -271,6 +273,11 @@ class Train:
                 episode_counter["success"] += list(
                     episode_rewards >= self.success_reward
                 )
+                # if np.any(episode_rewards < self.success_reward):
+                # import ipdb
+
+                # ipdb.set_trace()
+
             episode_counter["time_steps"] += list(counter["time_step"][done])
             counter["reward"][done] = 0
             counter["time_step"][done] = 0
