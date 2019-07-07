@@ -19,15 +19,23 @@ class DebugWrapper(ppo.subtasks.DebugWrapper):
                     yield i
                     i += 1
                 else:
-                    yield i + 1
+                    yield None
 
-        self.guess = list(lines_to_subtasks())[int(actions.g)]
+        self.line = int(actions.g)
+        self.subtask = list(lines_to_subtasks())[self.line]
         r = 0
-        if env.subtask is not None and self.guess != self.truth:
+        if None not in (env.subtask, self.subtask) and self.subtask != self.truth:
             r = -0.1
+            import ipdb
+
+            ipdb.set_trace()
         s, _, t, i = gym.Wrapper.step(self, action)
         self.last_reward = r
         return s, r, t, i
+
+    def render(self, mode="human"):
+        print("line", self.line)
+        super().render()
 
 
 class Wrapper(ppo.subtasks.Wrapper):
@@ -36,6 +44,8 @@ class Wrapper(ppo.subtasks.Wrapper):
         self.action_space.spaces.update(
             g=spaces.Discrete(len(env.observation_space.spaces["lines"].nvec))
         )
+        self.line = None
+        self.subtask = None
 
     def render_assigned_subtask(self):
         env = self.env.unwrapped
@@ -44,7 +54,7 @@ class Wrapper(ppo.subtasks.Wrapper):
             print("if", env.object_types[condition - 1])
         else:
             print(
-                self.last_g,
+                f"{self.last_g}:",
                 env.interactions[g_type],
                 g_count + 1,
                 env.object_types[g_obj],
