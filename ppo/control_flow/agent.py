@@ -75,7 +75,7 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
 
         def update_attention(p, t):
             c = (p.unsqueeze(1) @ conditions).squeeze(1)
-            phi_in = inputs.base[t, :, 1:-2] * c.view(N, conditions.size(2), 1, 1)
+            # phi_in = inputs.base[t, :, 1:-2] * c.view(N, conditions.size(2), 1, 1)
             # truth = torch.max(phi_in.view(N, -1), dim=-1).values.float().view(N, 1, 1)
             # print("inputs.base[t, :, 1:-2]", inputs.base[t, :, 1:-2])
             # print("c", c)

@@ -471,7 +471,6 @@ class Recurrence(torch.jit.ScriptModule):
                         outer_product_obs = outer_product_obs * part
 
                     c_logits = self.phi_update(outer_product_obs.view(N, -1))
-                    # c_logits = self.phi_update(truth)
                 if self.hard_update:
                     c_dist = FixedCategorical(logits=c_logits)
                     c = actions.c[t]
