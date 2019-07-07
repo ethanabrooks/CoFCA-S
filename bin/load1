@@ -1,0 +1,6 @@
+#!/usr/bin/env zsh
+cd "$HOME/ppo/bin/"
+cmd="$(./lookup-command.zsh "$@" | ./log-to-load.zsh | ./single-process.zsh)"
+cd -
+echo "$cmd\n"
+eval "$cmd"
