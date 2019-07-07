@@ -263,25 +263,6 @@ class Recurrence(torch.jit.ScriptModule):
         g3 = x4 % x3
         return g1, g2, g3
 
-    def check_grad(self, **kwargs):
-        for k, v in kwargs.items():
-            if v.grad_fn is not None:
-                grads = torch.autograd.grad(
-                    v.mean(), self.parameters(), retain_graph=True, allow_unused=True
-                )
-                for (name, _), grad in zip(self.named_parameters(), grads):
-                    if grad is None:
-                        print(f"{k} has no grad wrt {name}")
-                    else:
-                        print(
-                            f"mean grad ({v.mean().item()}) of {k} wrt {name}:",
-                            grad.mean(),
-                        )
-                        if torch.isnan(grad.mean()):
-                            import ipdb
-
-                            ipdb.set_trace()
-
     def parse_inputs(self, inputs):
         return Obs(*torch.split(inputs, self.obs_sections, dim=2))
 
@@ -360,26 +341,8 @@ class Recurrence(torch.jit.ScriptModule):
 
     def pack(self, outputs):
         zipped = list(zip(*outputs))
-        # for name, x in zip(RecurrentState._fields, zipped):
-        # if not x:
-        # print(name)
-        # import ipdb
-        # ipdb.set_trace()
-
         stacked = [torch.stack(x) for x in zipped]
         preprocessed = [x.float().view(*x.shape[:2], -1) for x in stacked]
-
-        # for name, x, size in zip(RecurrentState._fields, preprocessed,
-        # self.state_sizes):
-        # if x.size(2) != size:
-        # print(name, x, size)
-        # import ipdb
-        # ipdb.set_trace()
-        # if x.dtype != torch.float32:
-        # print(name)
-        # import ipdb
-        # ipdb.set_trace()
-
         hx = torch.cat(preprocessed, dim=-1)
         return hx, hx[-1]
 
@@ -446,18 +409,17 @@ class Recurrence(torch.jit.ScriptModule):
                     subtask_param, tuple(self.subtask_nvec), dim=-1
                 )
                 # # NOTE {
-                # debug_obs = obs[t, j, :, k, l].squeeze(1)
-                # a_one_hot = self.a_one_hots[A[t]]
-                # interaction, count, obj = task_sections
-                # correct_object = obj * debug_obs[:, 1 : 1 + self.subtask_nvec[2]]
-                # column1 = interaction[:, :1]
-                # column2 = interaction[:, 1:] * a_one_hot[:, 4:]
-                # correct_action = torch.cat([column1, column2], dim=-1)
-                # truth = (
-                # correct_action.sum(-1, keepdim=True)
-                # * correct_object.sum(-1, keepdim=True)
-                # ).detach()
-                # * conditions[:, :1] + (1 - conditions[:, :1])
+                debug_obs = obs[t, j, :, k, l].squeeze(1)
+                a_one_hot = self.a_one_hots[A[t]]
+                interaction, count, obj, conditions = task_sections
+                correct_object = obj * debug_obs[:, 1 : 1 + self.subtask_nvec[2]]
+                column1 = interaction[:, :1]
+                column2 = interaction[:, 1:] * a_one_hot[:, 4:]
+                correct_action = torch.cat([column1, column2], dim=-1)
+                truth = (
+                    correct_action.sum(-1, keepdim=True)
+                    * correct_object.sum(-1, keepdim=True)
+                ).detach() * conditions[:, :1] + (1 - conditions[:, :1])
                 # NOTE }
                 parts = (obs_part, self.a_one_hots[A[t]]) + task_sections
                 if self.multiplicative_interaction:
@@ -479,7 +441,7 @@ class Recurrence(torch.jit.ScriptModule):
                 else:
                     c = torch.sigmoid(c_logits[:, :1])
                     probs = torch.zeros_like(c_logits)  # dummy value
-                return c, probs
+                return truth, probs
 
             # cr
             cr, cr_probs = phi_update(subtask_param=r)

@@ -7,8 +7,8 @@ import torch
 import gridworld_env
 import gridworld_env.control_flow_gridworld
 from gridworld_env.control_flow_gridworld import ControlFlowGridWorld
-import gridworld_env.subtasks_gridworld
 from gridworld_env.flat_control_gridworld import FlatControlFlowGridWorld
+import gridworld_env.subtasks_gridworld
 from gridworld_env.subtasks_gridworld import SubtasksGridWorld
 import ppo
 from ppo.arguments import build_parser, get_args
