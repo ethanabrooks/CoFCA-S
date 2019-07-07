@@ -1,6 +1,33 @@
+import gym
 from gym import spaces
+import numpy as np
 
 import ppo.subtasks
+from ppo.subtasks import Actions
+
+
+class DebugWrapper(ppo.subtasks.DebugWrapper):
+    def step(self, action):
+        actions = Actions(*[x.item() for x in np.split(action, self.action_sections)])
+        env = self.env.unwrapped
+        self.truth = int(env.subtask_idx)
+
+        def lines_to_subtasks():
+            i = 0
+            for line in env.lines:
+                if line[-1] == 0:
+                    yield i
+                    i += 1
+                else:
+                    yield i + 1
+
+        self.guess = list(lines_to_subtasks())[int(actions.g)]
+        r = 0
+        if env.subtask is not None and self.guess != self.truth:
+            r = -0.1
+        s, _, t, i = gym.Wrapper.step(self, action)
+        self.last_reward = r
+        return s, r, t, i
 
 
 class Wrapper(ppo.subtasks.Wrapper):

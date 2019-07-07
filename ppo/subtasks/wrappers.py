@@ -24,7 +24,6 @@ class DebugWrapper(gym.Wrapper):
         self.truth = int(self.env.unwrapped.subtask_idx)
         self.guess = int(actions.g)
         # r = -self.guess
-        self.time_steps += 1
         # print("truth", truth)
         # print("guess", guess)
         r = 0
@@ -33,10 +32,6 @@ class DebugWrapper(gym.Wrapper):
         s, _, t, i = super().step(action)
         self.last_reward = r
         return s, r, t, i
-
-    def reset(self):
-        self.time_steps = 0
-        return super().reset()
 
     def render(self, mode="human"):
         print("########################################")
