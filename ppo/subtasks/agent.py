@@ -323,8 +323,7 @@ class Recurrence(torch.jit.ScriptModule):
                 M_discrete=M_discrete,
                 N=N,
                 T=T,
-                float_subtask=hx.subtask,
-                next_subtask=inputs.next_subtask,
+                subtask=inputs.subtask,
                 p=p,
                 r=r,
                 actions=actions,
@@ -342,8 +341,30 @@ class Recurrence(torch.jit.ScriptModule):
 
     def pack(self, outputs):
         zipped = list(zip(*outputs))
+        # for name, x in zip(RecurrentState._fields, zipped):
+        #    if not x:
+        #        print(name)
+        #        import ipdb
+
+        #        ipdb.set_trace()
+
         stacked = [torch.stack(x) for x in zipped]
         preprocessed = [x.float().view(*x.shape[:2], -1) for x in stacked]
+
+        # for name, x, size in zip(
+        #    RecurrentState._fields, preprocessed, self.state_sizes
+        # ):
+        #    if x.size(2) != size:
+        #        print(name, x, size)
+        #        import ipdb
+
+        #        ipdb.set_trace()
+        #    if x.dtype != torch.float32:
+        #        print(name)
+        #        import ipdb
+
+        #        ipdb.set_trace()
+
         hx = torch.cat(preprocessed, dim=-1)
         return hx, hx[-1]
 
@@ -357,23 +378,19 @@ class Recurrence(torch.jit.ScriptModule):
         M_discrete,
         N,
         T,
-        float_subtask,
-        next_subtask,
+        subtask,
         p,
         r,
         actions,
         update_attention,
         inputs,
     ):
+        subtask = subtask.long().view(T, N)
         # combine past and present actions (sampled values)
         obs = inputs.base
         A = torch.cat([actions.a, a.unsqueeze(0)], dim=0).long().squeeze(2)
         G = torch.cat([actions.g, g.unsqueeze(0)], dim=0).long().squeeze(2)
         for t in range(T):
-            subtask = float_subtask.long()
-            float_subtask = torch.clamp(
-                float_subtask + next_subtask[t], max=self.n_subtasks - 1
-            )
 
             agent_layer = obs[t, :, 6, :, :].long()
             j, k, l = torch.split(agent_layer.nonzero(), 1, dim=-1)
@@ -443,13 +460,15 @@ class Recurrence(torch.jit.ScriptModule):
                 else:
                     c = torch.sigmoid(c_logits[:, :1])
                     probs = torch.zeros_like(c_logits)  # dummy value
-                return truth, probs
+                return c, probs
 
             # cr
-            cr, cr_probs = phi_update(subtask_param=r)
+            # cr, cr_probs = phi_update(subtask_param=r)
 
             # cg
-            g_binary = M[torch.arange(N), G[t]]
+            # g_binary = M[torch.arange(N), G[t]]
+            g_binary = M[torch.arange(N), subtask[t]]  # TODO
+            cr, cr_probs = phi_update(subtask_param=g_binary)  # TODO
             cg, cg_probs = phi_update(subtask_param=g_binary)
 
             yield RecurrentState(
@@ -461,12 +480,9 @@ class Recurrence(torch.jit.ScriptModule):
                 r=r,
                 g=G[t],
                 g_probs=g_dist.probs,
-                g_loss=-g_dist.log_probs(subtask),
+                g_loss=-g_dist.log_probs(subtask[t]),
                 a=A[t],
                 a_probs=a_dist.probs,
-                subtask=float_subtask,
+                subtask=subtask[t],
                 v=self.critic(conv_out),
             )
-
-    def get_agent_subtask(self, M, g):
-        return M[torch.arange(M.size(0)), g]
