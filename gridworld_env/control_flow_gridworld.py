@@ -94,11 +94,9 @@ class ControlFlowGridWorld(SubtasksGridWorld):
         available = Counter(self.required_objects)
         for l in encountered.values():
             l.reverse()
-        print("encountered", encountered)
 
         for t, subtask_idx in enumerate(encountered["subtasks"]):
             subtask = subtasks[subtask_idx]
-            print("### SUBTASK", subtask_idx, subtask)
             obj = subtask.object
             to_be_removed = self.interactions[subtask.interaction] in {
                 "pick-up",
@@ -106,21 +104,17 @@ class ControlFlowGridWorld(SubtasksGridWorld):
             }
 
             def available_now():
-                print("available", available)
                 if to_be_removed:
                     required_for_future = Counter(set(encountered["passing"][t:]))
-                    print("required_for_future", required_for_future)
                     return available - required_for_future
                 else:
                     return available
 
             while not available_now()[obj]:
-                print("available_now()", available_now())
                 if to_be_removed:
                     prohibited = Counter(encountered["failing"][:t])
                 else:
                     prohibited = Counter(encountered["failing"])
-                print("prohibited", prohibited)
                 if obj in prohibited:
                     obj = self.np_random.choice(list(object_types - prohibited))
                     subtasks[subtask_idx] = subtask._replace(object=obj)
@@ -128,14 +122,8 @@ class ControlFlowGridWorld(SubtasksGridWorld):
                     available[obj] += 1
                     self.required_objects += [obj]
 
-            print("available after loop ")
-            print(available)
-            print("to_be_removed", to_be_removed)
             if to_be_removed:
                 available[obj] -= 1
-                print("available after removal ")
-                print(available)
-            print()
 
         yield from subtasks
 
