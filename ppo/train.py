@@ -62,6 +62,8 @@ class Train:
     ):
         if render_eval and not render:
             eval_interval = 1
+        if render:
+            ppo_args.update(ppo_epoch=0)
         self.success_reward = success_reward
         save_dir = save_dir or log_dir
 
