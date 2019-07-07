@@ -460,15 +460,17 @@ class Recurrence(torch.jit.ScriptModule):
                 else:
                     c = torch.sigmoid(c_logits[:, :1])
                     probs = torch.zeros_like(c_logits)  # dummy value
+                # print("c", truth)
+                # print("correct_object", correct_object)
+                # print("correct_action", correct_action)
+                # print("conditions", conditions)
                 return truth, probs
 
             # cr
-            # cr, cr_probs = phi_update(subtask_param=r)
+            cr, cr_probs = phi_update(subtask_param=r)
 
             # cg
-            # g_binary = M[torch.arange(N), G[t]]
-            g_binary = M[torch.arange(N), subtask[t]]  # TODO
-            cr, cr_probs = phi_update(subtask_param=g_binary)  # TODO
+            g_binary = M[torch.arange(N), G[t]]
             cg, cg_probs = phi_update(subtask_param=g_binary)
 
             yield RecurrentState(
