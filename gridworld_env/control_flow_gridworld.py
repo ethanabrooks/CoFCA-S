@@ -152,9 +152,6 @@ class ControlFlowGridWorld(SubtasksGridWorld):
         self.required_objects = passing
         self.pred = False
         return super().reset()
-        # self.subtask_idx = 0 self.subtask_idx = self.get_next_subtask()
-        # self.count = self.subtask.count
-        # return self.get_observation()
 
     def get_next_subtask(self):
         if self.subtask_idx > self.n_subtasks:
