@@ -53,11 +53,6 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
             truth = condition[:, 0] + (
                 ((condition[:, 1:] * obs) > 0).view(N, 1, 1, -1).any(dim=-1).float()
             )
-            print("condition[0]", condition[:, 0].view(N, 1))
-            print("condition[1:]", condition[:, 1:].view(N, -1))
-            print("obs", obs)
-            print("p", p)
-            print("M", M)
             # pred = self.phi_shift((inputs.base[t], r))
             pred = truth  # TODO
             trans = pred * self.true_path + (1 - pred) * self.false_path
