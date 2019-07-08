@@ -4,8 +4,8 @@ import torch.nn.functional as F
 
 from gridworld_env.flat_control_gridworld import Obs
 import ppo.control_flow
-import ppo.subtasks
 from ppo.distributions import FixedCategorical
+import ppo.subtasks
 
 
 class Agent(ppo.control_flow.Agent):
@@ -42,6 +42,10 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
     def get_a_dist(self, conv_out, g_binary, obs):
         probs = super().get_a_dist(conv_out, g_binary, obs).probs
         no_op = g_binary[:, -self.condition_size]
+        if torch.any(no_op > 0):
+            import ipdb
+
+            ipdb.set_trace()
 
         # if no-op, zero out other actions
         probs[:, :-1] *= no_op

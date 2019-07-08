@@ -124,7 +124,9 @@ class SubtasksGridWorld(gym.Env):
                 next_subtask=spaces.Discrete(2),
             )._asdict()
         )
-        self.action_space = spaces.Discrete(len(self.transitions) + 2)
+        self.action_space = spaces.Discrete(
+            len(self.transitions) + 3
+        )  # +3: pick-up, transform, and no-op
         world = self
 
         class _Subtask(Subtask):

@@ -1,7 +1,7 @@
 from collections import namedtuple
 
-import numpy as np
 from gym import spaces
+import numpy as np
 
 from gridworld_env.control_flow_gridworld import ControlFlowGridWorld
 
@@ -31,7 +31,6 @@ class FlatControlFlowGridWorld(ControlFlowGridWorld):
                 )
             ),
         )._asdict()
-        self.action_space = spaces.Discrete(self.action_space.n + 1)  # +1 for no-op
 
     def step(self, a):
         if a == self.action_space.n - 1:
