@@ -469,7 +469,7 @@ class Recurrence(torch.jit.ScriptModule):
                 # print("correct_object", correct_object)
                 # print("correct_action", correct_action)
                 # print("conditions", conditions)
-                return c, probs
+                return truth, probs
 
             # cr
             cr, cr_probs = phi_update(subtask_param=r)
