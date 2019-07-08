@@ -30,6 +30,9 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
         self.register_buffer(
             f"part3_one_hot", torch.eye(int(self.obs_spaces.lines.nvec[0, -1]))
         )
+        no_op_probs = torch.zeros(1, self.actor.linear.out_features)
+        no_op_probs[:, -1] = 1
+        self.register_buffer("no_op_probs", no_op_probs)
         self.size_agent_subtask = int(self.obs_spaces.subtasks.nvec[0, :-1].sum())
 
     def parse_inputs(self, inputs):
@@ -43,10 +46,11 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
         op = g_binary[:, -self.condition_size]
         no_op = 1 - op
 
-        # if no-op, zero out other actions
-        probs[:, :-1] *= op
-        probs[:, -1] = no_op
-        return FixedCategorical(probs=F.normalize(probs, p=1))
+        return FixedCategorical(
+            # if subtask is a control-flow statement, force no-op
+            probs=op * probs
+            + no_op * self.no_op_probs.expand(op.size(0), -1)
+        )
 
     @property
     def condition_size(self):
