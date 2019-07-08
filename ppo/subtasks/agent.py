@@ -445,7 +445,8 @@ class Recurrence(torch.jit.ScriptModule):
                 # NOTE }
                 parts = (obs_part, self.a_one_hots[A[t]]) + task_sections
                 if self.multiplicative_interaction:
-                    c_logits = self.phi_update(parts)
+                    # c_logits = self.phi_update(parts)
+                    c_logits = self.phi_update(truth)  # TODO
                 else:
                     outer_product_obs = 1
                     for i1, part in enumerate(parts):
@@ -468,7 +469,7 @@ class Recurrence(torch.jit.ScriptModule):
                 # print("correct_object", correct_object)
                 # print("correct_action", correct_action)
                 # print("conditions", conditions)
-                return truth, probs
+                return c, probs
 
             # cr
             cr, cr_probs = phi_update(subtask_param=r)
