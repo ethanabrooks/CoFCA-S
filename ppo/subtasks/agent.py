@@ -426,6 +426,8 @@ class Recurrence(torch.jit.ScriptModule):
             # a[:] = 'wsadeq'.index(input('act:'))
 
             def phi_update(subtask_param):
+                subtask_param = M[torch.arange(N), inputs.subtask[t].long().flatten()]
+
                 obs_part = self.conv1(obs[t])
                 task_sections = torch.split(
                     subtask_param, tuple(self.subtask_nvec), dim=-1
@@ -465,10 +467,6 @@ class Recurrence(torch.jit.ScriptModule):
                 else:
                     c = torch.sigmoid(c_logits[:, :1])
                     probs = torch.zeros_like(c_logits)  # dummy value
-                # print("c", truth)
-                # print("correct_object", correct_object)
-                # print("correct_action", correct_action)
-                # print("conditions", conditions)
                 return c, probs
 
             # cr
