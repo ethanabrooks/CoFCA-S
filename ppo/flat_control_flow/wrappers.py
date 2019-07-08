@@ -32,11 +32,6 @@ class DebugWrapper(ppo.subtasks.DebugWrapper):
         line = self.guess = int(actions.g)
         subtask = list(lines_to_subtasks())[line]
         r = 0
-        print("subtask", subtask)
-        print("line", line)
-        print("self.guess", self.guess)
-        print("subtask", subtask)
-        print("self.truth", self.truth)
 
         if (subtask is not None and subtask != self.truth) or (
             subtask is None and not self.completed_subtask
@@ -45,7 +40,6 @@ class DebugWrapper(ppo.subtasks.DebugWrapper):
 
             # ipdb.set_trace()
             r = -0.1
-        print("reward", r)
         subtask_before = env.subtask_idx
         s, _, t, i = gym.Wrapper.step(self, action)
         subtask_after = env.subtask_idx
