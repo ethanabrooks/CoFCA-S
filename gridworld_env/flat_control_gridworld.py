@@ -1,7 +1,7 @@
 from collections import namedtuple
 
-import numpy as np
 from gym import spaces
+import numpy as np
 
 from gridworld_env.control_flow_gridworld import ControlFlowGridWorld
 
