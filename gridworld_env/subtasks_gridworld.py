@@ -175,7 +175,7 @@ class SubtasksGridWorld(gym.Env):
 
     @property
     def transition_strings(self):
-        return np.array(list("👆👇👈👉pt"))
+        return np.array(list("👆👇👈👉ptn"))
 
     def render(self, mode="human", sleep_time=0.5):
         print("task:")
@@ -297,6 +297,9 @@ class SubtasksGridWorld(gym.Env):
     def step(self, a):
         self.last_action = a
         self.next_subtask = False
+        if a == self.action_space.n - 1:
+            return self.get_observation(), -0.1, False, {}
+
         # act
         n_transitions = len(self.transitions)
         pos = tuple(self.pos)

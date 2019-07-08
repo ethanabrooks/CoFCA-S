@@ -436,7 +436,7 @@ class Recurrence(torch.jit.ScriptModule):
                 interaction, count, obj, conditions = task_sections
                 correct_object = obj * debug_obs[:, 1 : 1 + self.subtask_nvec[2]]
                 column1 = interaction[:, :1]
-                column2 = interaction[:, 1:] * a_one_hot[:, 4:]
+                column2 = interaction[:, 1:] * a_one_hot[:, 4:-1]
                 correct_action = torch.cat([column1, column2], dim=-1)
                 truth = (
                     correct_action.sum(-1, keepdim=True)

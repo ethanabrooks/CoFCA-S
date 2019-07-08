@@ -32,11 +32,6 @@ class FlatControlFlowGridWorld(ControlFlowGridWorld):
             ),
         )._asdict()
 
-    def step(self, a):
-        if a == self.action_space.n - 1:
-            return self.get_observation(), -0.1, False, {}  # no-op
-        return super().step(a)
-
     def get_observation(self):
         obs = super().get_observation()
 

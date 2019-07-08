@@ -38,22 +38,19 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
 
     def get_a_dist(self, conv_out, g_binary, obs):
         probs = (
-            super().get_a_dist(conv_out, g_binary[:, -self.condition_size], obs).probs
+            super().get_a_dist(conv_out, g_binary[:, : -self.condition_size], obs).probs
         )
-        no_op = g_binary[:, -self.condition_size]
-        if torch.any(no_op > 0):
-            import ipdb
-
-            ipdb.set_trace()
+        op = g_binary[:, -self.condition_size]
+        no_op = 1 - op
 
         # if no-op, zero out other actions
-        probs[:, :-1] *= no_op
+        probs[:, :-1] *= op
         probs[:, -1] = no_op
-        return FixedCategorical(probs=probs)
+        return FixedCategorical(probs=F.normalize(probs, p=1))
 
     @property
     def condition_size(self):
-        return int(self.obs_spaces.lines.nvec[0].sum())
+        return int(self.obs_spaces.lines.nvec[0, -1])
 
     def inner_loop(self, M, inputs, **kwargs):
         def update_attention(p, t):
