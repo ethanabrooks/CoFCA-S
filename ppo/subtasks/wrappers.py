@@ -37,11 +37,11 @@ class DebugWrapper(gym.Wrapper):
         return s, r, t, i
 
     def render(self, mode="human"):
-        print("########################################")
         print("guess", self.guess)
         print("truth", self.truth)
         print("reward", self.last_reward)
         super().render(sleep_time=0)
+        print("########################################")
 
 
 class Wrapper(gym.Wrapper):

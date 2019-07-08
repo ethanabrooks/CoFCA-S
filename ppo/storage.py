@@ -3,8 +3,8 @@ from collections import namedtuple
 from typing import Generator
 
 import gym
-import numpy as np
 from gym import spaces
+import numpy as np
 import torch
 from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
 
