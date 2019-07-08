@@ -36,11 +36,10 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
         obs = Obs(*torch.split(inputs, self.original_obs_sections, dim=2))
         return obs._replace(subtasks=obs.lines)
 
-    def get_agent_subtask(self, M, g):
-        return M[torch.arange(M.size(0)), g, : self.size_agent_subtask]
-
     def get_a_dist(self, conv_out, g_binary, obs):
-        probs = super().get_a_dist(conv_out, g_binary, obs).probs
+        probs = (
+            super().get_a_dist(conv_out, g_binary[:, -self.condition_size], obs).probs
+        )
         no_op = g_binary[:, -self.condition_size]
         if torch.any(no_op > 0):
             import ipdb
