@@ -21,13 +21,7 @@ from ppo.storage import RolloutStorage
 from ppo.subtasks.wrappers import Wrapper
 from ppo.update import PPO
 from ppo.utils import get_n_gpu, get_random_gpu
-from ppo.wrappers import (
-    AddTimestep,
-    TransposeImage,
-    VecNormalize,
-    VecPyTorch,
-    VecPyTorchFrameStack,
-)
+from ppo.wrappers import AddTimestep, TransposeImage, VecNormalize, VecPyTorch, VecPyTorchFrameStack
 
 try:
     import dm_control2gym
@@ -68,6 +62,8 @@ class Train:
     ):
         if render_eval and not render:
             eval_interval = 1
+        if render:
+            ppo_args.update(ppo_epoch=0)
         self.success_reward = success_reward
         save_dir = save_dir or log_dir
 
@@ -274,12 +270,15 @@ class Train:
             counter["time_step"] += np.ones_like(done)
             episode_rewards = counter["reward"][done]
             episode_counter["rewards"] += list(episode_rewards)
-            episode_counter["success"] += list(reward.numpy()[done] > 0)
+            if self.success_reward is not None:
+                episode_counter["success"] += list(
+                    episode_rewards >= self.success_reward
+                )
+                # if np.any(episode_rewards < self.success_reward):
+                # import ipdb
 
-            # if self.success_reward is not None:
-            # episode_counter["success"] += list(
-            # episode_rewards >= self.success_reward
-            # )
+                # ipdb.set_trace()
+
             episode_counter["time_steps"] += list(counter["time_step"][done])
             counter["reward"][done] = 0
             counter["time_step"][done] = 0

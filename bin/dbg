@@ -1,10 +1,6 @@
 #!/usr/bin/env zsh
-set -e
-if [[ "$1" =~ '[0-9]+' && "$1" = $MATCH ]]; then
-  cmd="wtf ppo/main ${@:(($1 + 2))}"
-else
-  cmd="$@"
-fi
-cmd=$(echo $cmd | sed 's/--log-dir=[^ ]*//')
-echo "$cmd"
+cd "$HOME/ppo/bin/"
+cmd=$(./wtf.zsh "$@" | ./remove-log.zsh)
+cd -
+echo "\n$cmd"
 eval "$cmd"

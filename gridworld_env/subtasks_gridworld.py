@@ -121,7 +121,9 @@ class SubtasksGridWorld(gym.Env):
                 next_subtask=spaces.Discrete(2),
             )._asdict()
         )
-        self.action_space = spaces.Discrete(len(self.transitions) + 2)
+        self.action_space = spaces.Discrete(
+            len(self.transitions) + 3
+        )  # +3: pick-up, transform, and no-op
         world = self
 
         class _Subtask(Subtask):
@@ -170,7 +172,7 @@ class SubtasksGridWorld(gym.Env):
 
     @property
     def transition_strings(self):
-        return np.array(list("👆👇👈👉pt"))
+        return np.array(list("👆👇👈👉ptn"))
 
     def render(self, mode="human", sleep_time=0.5):
         print("task:")
@@ -302,6 +304,9 @@ class SubtasksGridWorld(gym.Env):
     def step(self, a):
         self.last_action = a
         self.next_subtask = False
+        if a == self.action_space.n - 1:
+            return self.get_observation(), -0.1, False, {}
+
         # act
         n_transitions = len(self.transitions)
         pos = tuple(self.pos)
@@ -342,7 +347,7 @@ class SubtasksGridWorld(gym.Env):
             self.pos = np.clip(pos, a_min, a_max).astype(int)
 
         self.last_terminal = t = self.subtask is None
-        r = 1.0 if t else -1
+        r = 1.0 if t else -0.1
         return self.get_observation(), r, t, {}
 
     def evaluate_condition(self):

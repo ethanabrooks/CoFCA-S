@@ -16,9 +16,11 @@ setup(
     packages=find_packages(),
     scripts=[
         "bin/load",
+        "bin/load1",
         "bin/new-run",
         "bin/from-json",
         "bin/dbg",
+        "bin/dbg1",
         "bin/show-best",
         "bin/reproduce",
     ],

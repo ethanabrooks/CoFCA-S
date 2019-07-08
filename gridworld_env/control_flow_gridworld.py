@@ -89,35 +89,41 @@ class ControlFlowGridWorld(SubtasksGridWorld):
             encountered.update(subtasks=[i])
             i = self.control[i, int(passing)]
 
-        failing = encountered["failing"]
-        object_types = np.arange(len(self.object_types))
-        non_failing = list(set(object_types) - set(failing))
-        self.required_objects = list(
-            set(o for o in encountered["passing"] if o is not None)
-        )
-        available = [x for x in self.required_objects]
+        object_types = Counter(range(len(self.object_types)))
+        self.required_objects = list(set(encountered["passing"]) - {None})
+        available = Counter(self.required_objects)
+        for l in encountered.values():
+            l.reverse()
 
-        for i, subtask in enumerate(subtasks):
-            if i in encountered["subtasks"]:
-                obj = subtask.object
-                to_be_removed = subtask.interaction in {1, 2}
-                if obj not in available:
-                    if not to_be_removed and obj in failing:
-                        obj = self.np_random.choice(non_failing)
-                        subtasks[i] = subtask._replace(object=obj)
-                    past_failing = failing[-i + 1 :]
-                    if to_be_removed and obj in past_failing:
-                        obj = self.np_random.choice(
-                            list(set(object_types) - set(past_failing))
-                        )
-                        subtasks[i] = subtask._replace(object=obj)
+        for t, subtask_idx in enumerate(encountered["subtasks"]):
+            subtask = subtasks[subtask_idx]
+            obj = subtask.object
+            to_be_removed = self.interactions[subtask.interaction] in {
+                "pick-up",
+                "transform",
+            }
 
-                    # add object to map
-                    self.required_objects += [obj]
-                    available += [obj]
-
+            def available_now():
                 if to_be_removed:
-                    available.remove(obj)
+                    required_for_future = Counter(set(encountered["passing"][t:]))
+                    return available - required_for_future
+                else:
+                    return available
+
+            while not available_now()[obj]:
+                if to_be_removed:
+                    prohibited = Counter(encountered["failing"][:t])
+                else:
+                    prohibited = Counter(encountered["failing"])
+                if obj in prohibited:
+                    obj = self.np_random.choice(list(object_types - prohibited))
+                    subtasks[subtask_idx] = subtask._replace(object=obj)
+                else:
+                    available[obj] += 1
+                    self.required_objects += [obj]
+
+            if to_be_removed:
+                available[obj] -= 1
 
         yield from subtasks
 
@@ -146,9 +152,6 @@ class ControlFlowGridWorld(SubtasksGridWorld):
         self.required_objects = passing
         self.pred = False
         return super().reset()
-        # self.subtask_idx = 0 self.subtask_idx = self.get_next_subtask()
-        # self.count = self.subtask.count
-        # return self.get_observation()
 
     def get_next_subtask(self):
         if self.subtask_idx > self.n_subtasks:
