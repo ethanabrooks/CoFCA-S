@@ -24,7 +24,9 @@ class DebugWrapper(ppo.subtasks.DebugWrapper):
         line = int(actions.g)
         subtask = list(lines_to_subtasks())[line]
         r = 0
-        if None not in (env.subtask, subtask) and subtask != self.truth:
+        if (subtask is None and line == self.guess) or (  # >1 turn on control-flow line
+            subtask is not None and subtask != self.truth  # wrong subtask line
+        ):
             # import ipdb
 
             # ipdb.set_trace()
@@ -40,8 +42,6 @@ class Wrapper(ppo.subtasks.Wrapper):
         self.action_space.spaces.update(
             g=spaces.Discrete(len(env.observation_space.spaces["lines"].nvec))
         )
-        self.line = None
-        self.subtask = None
 
     def render_assigned_subtask(self):
         env = self.env.unwrapped
