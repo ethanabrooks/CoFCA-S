@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from gridworld_env.flat_control_gridworld import Obs
 import ppo.control_flow
 import ppo.subtasks
+from ppo.distributions import FixedCategorical
 
 
 class Agent(ppo.control_flow.Agent):
@@ -37,6 +38,15 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
 
     def get_agent_subtask(self, M, g):
         return M[torch.arange(M.size(0)), g, : self.size_agent_subtask]
+
+    def get_a_dist(self, conv_out, g_binary, obs):
+        probs = super().get_a_dist(conv_out, g_binary, obs).probs
+        no_op = g_binary[:, -self.condition_size]
+
+        # if no-op, zero out other actions
+        probs[:, :-1] *= no_op
+        probs[:, -1] = no_op
+        return FixedCategorical(probs=probs)
 
     @property
     def condition_size(self):

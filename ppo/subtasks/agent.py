@@ -368,6 +368,16 @@ class Recurrence(torch.jit.ScriptModule):
         hx = torch.cat(preprocessed, dim=-1)
         return hx, hx[-1]
 
+    def get_a_dist(self, conv_out, g_binary, obs):
+        N = obs.size(0)
+        if self.agent is None:
+            return self.actor(conv_out)
+        else:
+            agent_inputs = ppo.subtasks.teacher.Obs(
+                base=obs.view(N, -1), subtask=g_binary
+            )
+            return self.agent(agent_inputs, rnn_hxs=None, masks=None).dist
+
     def inner_loop(
         self,
         g,
@@ -411,13 +421,7 @@ class Recurrence(torch.jit.ScriptModule):
             g = G[t]
             g_binary = M[torch.arange(N), g]
             conv_out = self.conv2((obs[t], broadcast3d(g_binary, self.obs_shape[1:])))
-            if self.agent is None:
-                a_dist = self.actor(conv_out)
-            else:
-                agent_inputs = ppo.subtasks.teacher.Obs(
-                    base=obs[t].view(N, -1), subtask=self.get_agent_subtask(M, g)
-                )
-                a_dist = self.agent(agent_inputs, rnn_hxs=None, masks=None).dist
+            a_dist = self.get_a_dist(conv_out, g_binary, obs[t])
             sample_new(A[t], a_dist)
             # a[:] = 'wsadeq'.index(input('act:'))
 
