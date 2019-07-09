@@ -47,11 +47,9 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
         no_op = 1 - op
 
         return FixedCategorical(
-            probs
-            # TODO
             # if subtask is a control-flow statement, force no-op
-            # probs=op * probs
-            # + no_op * self.no_op_probs.expand(op.size(0), -1)
+            probs=op * probs
+            + no_op * self.no_op_probs.expand(op.size(0), -1)
         )
 
     def inner_loop(self, M, inputs, **kwargs):
