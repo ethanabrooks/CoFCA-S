@@ -1,9 +1,10 @@
-from collections import OrderedDict, namedtuple
+from collections import namedtuple
 
 from gym import spaces
 import numpy as np
 
 from gridworld_env.control_flow_gridworld import ControlFlowGridWorld
+
 
 Obs = namedtuple(
     "Obs", "base subtask subtasks conditions control next_subtask pred lines"
@@ -11,7 +12,7 @@ Obs = namedtuple(
 
 
 def filter_for_obs(d):
-    return OrderedDict({k: v for k, v in d.items() if k in Obs._fields})
+    return {k: v for k, v in d.items() if k in Obs._fields}
 
 
 class FlatControlFlowGridWorld(ControlFlowGridWorld):

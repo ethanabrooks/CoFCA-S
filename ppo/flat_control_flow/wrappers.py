@@ -51,9 +51,9 @@ class DebugWrapper(ppo.subtasks.DebugWrapper):
 class Wrapper(ppo.subtasks.Wrapper):
     def __init__(self, env):
         super().__init__(env)
-        self.action_space.spaces.update(
-            g=spaces.Discrete(len(env.observation_space.spaces["lines"].nvec))
-        )
+        # self.action_space.spaces.update(
+        #     g=spaces.Discrete(len(env.observation_space.spaces["lines"].nvec))
+        # )
 
     def render_assigned_subtask(self):
         env = self.env.unwrapped
