@@ -81,7 +81,9 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
             # print("c", c)
             # pred = truth
             pred = self.phi_shift((inputs.base[t], c))
-            trans = pred * true_path + (1 - pred) * false_path
+            trans = pred * self.true_path + (1 - pred) * self.false_path
+            # print("trans")
+            # print(trans.round())
             return (p.unsqueeze(1) @ trans).squeeze(1)
 
         kwargs.update(update_attention=update_attention)
