@@ -39,18 +39,18 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
         obs = Obs(*torch.split(inputs, self.original_obs_sections, dim=2))
         return obs._replace(subtasks=obs.lines)
 
-    # def get_a_dist(self, conv_out, g_binary, obs):
-    #     probs = (
-    #         super().get_a_dist(conv_out, g_binary[:, : -self.condition_size], obs).probs
-    #     )
-    #     op = g_binary[:, -self.condition_size]
-    #     no_op = 1 - op
-    #
-    #     return FixedCategorical(
-    #         # if subtask is a control-flow statement, force no-op
-    #         probs=op * probs
-    #         + no_op * self.no_op_probs.expand(op.size(0), -1)
-    #     )
+    def get_a_dist(self, conv_out, g_binary, obs):
+        probs = (
+            super().get_a_dist(conv_out, g_binary[:, : -self.condition_size], obs).probs
+        )
+        op = g_binary[:, -self.condition_size].unsqueeze(1)
+        no_op = 1 - op
+
+        return FixedCategorical(
+            # if subtask is a control-flow statement, force no-op
+            probs=op * probs
+            + no_op * self.no_op_probs.expand(op.size(0), -1)
+        )
 
     def inner_loop(self, M, inputs, **kwargs):
         #     def update_attention(p, t):
