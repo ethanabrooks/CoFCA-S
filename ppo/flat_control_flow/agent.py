@@ -15,10 +15,10 @@ class Agent(ppo.control_flow.Agent):
 
 class Recurrence(ppo.control_flow.agent.Recurrence):
     def __init__(self, hidden_size, obs_spaces, **kwargs):
-        # self.original_obs_sections = [int(np.prod(s.shape)) for s in obs_spaces]
+        self.original_obs_sections = [int(np.prod(s.shape)) for s in obs_spaces]
         super().__init__(
             hidden_size=hidden_size,
-            obs_spaces=obs_spaces,  # ._replace(subtasks=obs_spaces.lines),
+            obs_spaces=obs_spaces._replace(subtasks=obs_spaces.lines),
             **kwargs,
         )
         true_path = F.pad(torch.eye(self.n_subtasks - 1), [1, 0, 0, 1])
@@ -36,7 +36,7 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
         self.size_agent_subtask = int(self.obs_spaces.subtasks.nvec[0, :-1].sum())
 
     def parse_inputs(self, inputs):
-        obs = Obs(*torch.split(inputs, self.obs_sections, dim=2))
+        obs = Obs(*torch.split(inputs, self.original_obs_sections, dim=2))
         return obs._replace(subtasks=obs.lines)
 
     # def get_a_dist(self, conv_out, g_binary, obs):
