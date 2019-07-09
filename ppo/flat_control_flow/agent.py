@@ -21,19 +21,19 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
             obs_spaces=obs_spaces,  # ._replace(subtasks=obs_spaces.lines),
             **kwargs,
         )
-        # true_path = F.pad(torch.eye(self.n_subtasks - 1), [1, 0, 0, 1])
-        # true_path[:, -1] += 1 - true_path.sum(-1)
-        # self.register_buffer("true_path", true_path)
-        # false_path = F.pad(torch.eye(self.n_subtasks - 2), [2, 0, 0, 2])
-        # false_path[:, -1] += 1 - false_path.sum(-1)
-        # self.register_buffer("false_path", false_path)
-        # self.register_buffer(
-        #     f"part3_one_hot", torch.eye(int(self.obs_spaces.lines.nvec[0, -1]))
-        # )
-        # no_op_probs = torch.zeros(1, self.actor.linear.out_features)
-        # no_op_probs[:, -1] = 1
-        # self.register_buffer("no_op_probs", no_op_probs)
-        # self.size_agent_subtask = int(self.obs_spaces.subtasks.nvec[0, :-1].sum())
+        true_path = F.pad(torch.eye(self.n_subtasks - 1), [1, 0, 0, 1])
+        true_path[:, -1] += 1 - true_path.sum(-1)
+        self.register_buffer("true_path", true_path)
+        false_path = F.pad(torch.eye(self.n_subtasks - 2), [2, 0, 0, 2])
+        false_path[:, -1] += 1 - false_path.sum(-1)
+        self.register_buffer("false_path", false_path)
+        self.register_buffer(
+            f"part3_one_hot", torch.eye(int(self.obs_spaces.lines.nvec[0, -1]))
+        )
+        no_op_probs = torch.zeros(1, self.actor.linear.out_features)
+        no_op_probs[:, -1] = 1
+        self.register_buffer("no_op_probs", no_op_probs)
+        self.size_agent_subtask = int(self.obs_spaces.subtasks.nvec[0, :-1].sum())
 
     def parse_inputs(self, inputs):
         return Obs(*torch.split(inputs, self.obs_sections, dim=2))
