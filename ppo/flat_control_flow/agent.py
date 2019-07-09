@@ -53,27 +53,21 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
     #         + no_op * self.no_op_probs.expand(op.size(0), -1)
     #     )
 
-    # @property
-    # def condition_size(self):
-    #     return int(self.obs_spaces.lines.nvec[0, -1])
-
-    # def inner_loop(self, M, inputs, **kwargs):
-    #     def update_attention(p, t):
-    #         # r = (p.unsqueeze(1) @ M).squeeze(1)
-    #         r = (p.unsqueeze(1) @ M).squeeze(1)
-    #         N = p.size(0)
-    #         i = self.obs_spaces.subtasks.nvec[0, -1]
-    #         condition = r[:, -i:].view(N, i, 1, 1)
-    #         obs = inputs.base[t, :, 1:-2]
-    #         truth = condition[:, 0] + (
-    #             ((condition[:, 1:] * obs) > 0).view(N, 1, 1, -1).any(dim=-1).float()
-    #         )
-    #         # pred = self.phi_shift((inputs.base[t], r))
-    #         pred = truth  # TODO
-    #         trans = pred * self.true_path + (1 - pred) * self.false_path
-    #         return (p.unsqueeze(1) @ trans).squeeze(1)
-    #
-    #     kwargs.update(update_attention=update_attention)
-    #     yield from ppo.subtasks.agent.Recurrence.inner_loop(
-    #         self, inputs=inputs, M=M, **kwargs
-    #     )
+    def inner_loop(self, M, inputs, **kwargs):
+        #     def update_attention(p, t):
+        #         # r = (p.unsqueeze(1) @ M).squeeze(1)
+        #         r = (p.unsqueeze(1) @ M).squeeze(1)
+        #         N = p.size(0)
+        #         i = self.obs_spaces.subtasks.nvec[0, -1]
+        #         condition = r[:, -i:].view(N, i, 1, 1)
+        #         obs = inputs.base[t, :, 1:-2]
+        #         truth = condition[:, 0] + (
+        #             ((condition[:, 1:] * obs) > 0).view(N, 1, 1, -1).any(dim=-1).float()
+        #         )
+        #         # pred = self.phi_shift((inputs.base[t], r))
+        #         pred = truth  # TODO
+        #         trans = pred * self.true_path + (1 - pred) * self.false_path
+        #         return (p.unsqueeze(1) @ trans).squeeze(1)
+        #
+        #     kwargs.update(update_attention=update_attention)
+        yield from super().inner_loop(inputs=inputs, M=M, **kwargs)
