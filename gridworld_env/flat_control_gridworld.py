@@ -58,10 +58,12 @@ class FlatControlFlowGridWorld(ControlFlowGridWorld):
 
     def get_control(self):
         for i in range(self.n_subtasks):
-            if i % 2 == 0:
+            if i % 3 == 0:
                 yield i + 1, i
+            elif i % 3 == 1:
+                yield i + 2, i + 2
             else:
-                yield i, i
+                yield i + 1, i + 1
 
 
 def main(seed, n_subtasks):
