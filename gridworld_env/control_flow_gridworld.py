@@ -19,20 +19,19 @@ class ControlFlowGridWorld(SubtasksGridWorld):
         self.conditions = None
         self.control = None
         self.required_objects = None
-        self.observation_space = spaces.Dict(
-            Obs(
-                **self.observation_space.spaces,
-                conditions=spaces.MultiDiscrete(
-                    np.array([len(self.object_types)]).repeat(self.n_subtasks)
-                ),
-                pred=spaces.Discrete(2),
-                control=spaces.MultiDiscrete(
-                    np.tile(
-                        np.array([[self.n_subtasks]]),
-                        [self.n_subtasks, 2],  # binary conditions
-                    )
-                ),
-            )._asdict()
+        subtask_nvec = self.observation_space.spaces["subtasks"].nvec[0]
+        self.observation_space.spaces.update(
+            subtask=spaces.Discrete(self.observation_space.spaces["subtask"].n + 1),
+            conditions=spaces.MultiDiscrete(
+                np.array([len(self.object_types)]).repeat(self.n_subtasks)
+            ),
+            pred=spaces.Discrete(2),
+            control=spaces.MultiDiscrete(
+                np.tile(
+                    np.array([[1 + self.n_subtasks]]),
+                    [self.n_subtasks, 2],  # binary conditions
+                )
+            ),
         )
 
     def render_task(self):
@@ -130,7 +129,7 @@ class ControlFlowGridWorld(SubtasksGridWorld):
     def get_control(self):
         for i in range(self.n_subtasks):
             j = 2 * i
-            if self.force_branching or self.np_random.rand() < 0.7:
+            if self.np_random.rand() < 0.7:
                 yield j, j + 1
             else:
                 yield j, j
