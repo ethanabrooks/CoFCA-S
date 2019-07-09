@@ -129,11 +129,20 @@ class ControlFlowGridWorld(SubtasksGridWorld):
 
     def get_control(self):
         for i in range(self.n_subtasks):
-            j = 2 * i
-            if self.force_branching or self.np_random.rand() < 0.7:
-                yield j, j + 1
+            if i % 3 == 0:
+                yield i + 1, i
+            elif i % 3 == 1:
+                yield i + 2, i + 2
             else:
-                yield j, j
+                yield i + 1, i + 1
+
+    # def get_control(self):
+    #    for i in range(self.n_subtasks):
+    #        j = 2 * i
+    #        if self.force_branching or self.np_random.rand() < 0.7:
+    #            yield j, j + 1
+    #        else:
+    #            yield j, j
 
     def reset(self):
         self.control = np.minimum(
