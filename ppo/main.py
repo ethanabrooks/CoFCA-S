@@ -51,8 +51,7 @@ def cli():
 def get_spaces(envs, task_type):
     obs_spaces = envs.observation_space.spaces
     if task_type == "control-flow":
-        # return gridworld_env.control_flow_gridworld.Obs(**obs_spaces)
-        return gridworld_env.flat_control_gridworld.Obs(**obs_spaces)  # TODO
+        return gridworld_env.control_flow_gridworld.Obs(**obs_spaces)
     elif task_type == "flat-control-flow":
         return gridworld_env.flat_control_gridworld.Obs(**obs_spaces)
     else:
@@ -68,8 +67,7 @@ def make_subtasks_env(env_id, **kwargs):
         if task_type == "control-flow":
             env = ppo.subtasks.Wrapper(ControlFlowGridWorld(**_kwargs))
         elif task_type == "flat-control-flow":
-            # env = ppo.flat_control_flow.Wrapper(FlatControlFlowGridWorld(**_kwargs))
-            env = ppo.subtasks.Wrapper(FlatControlFlowGridWorld(**_kwargs))  # TODO
+            env = ppo.flat_control_flow.Wrapper(FlatControlFlowGridWorld(**_kwargs))
         else:
             env = ppo.subtasks.Wrapper(SubtasksGridWorld(**_kwargs))
         if debug:

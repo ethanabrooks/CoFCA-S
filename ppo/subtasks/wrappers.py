@@ -22,7 +22,7 @@ class DebugWrapper(gym.Wrapper):
     def step(self, action):
         actions = Actions(*[x.item() for x in np.split(action, self.action_sections)])
         self.truth = int(self.env.unwrapped.subtask_idx)
-        self.guess = list(lines_to_subtask())[int(actions.g)]
+        self.guess = int(actions.g)
         # r = -self.guess
         # print("truth", truth)
         # print("guess", guess)
