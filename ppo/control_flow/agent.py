@@ -56,7 +56,7 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
 
     @property
     def condition_size(self):
-        return int(self.obs_spaces.subtasks.nvec[0, 2])
+        return int(self.obs_spaces.subtasks.nvec[0, -1])
 
     def parse_inputs(self, inputs):
         return Obs(*torch.split(inputs, self.obs_sections, dim=2))
