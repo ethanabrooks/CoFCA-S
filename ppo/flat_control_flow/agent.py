@@ -36,9 +36,8 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
         self.size_agent_subtask = int(self.obs_spaces.subtasks.nvec[0, :-1].sum())
 
     def parse_inputs(self, inputs):
-        return Obs(*torch.split(inputs, self.obs_sections, dim=2))
-
-    # return obs._replace(subtasks=obs.lines)
+        obs = Obs(*torch.split(inputs, self.obs_sections, dim=2))
+        return obs._replace(subtasks=obs.lines)
 
     # def get_a_dist(self, conv_out, g_binary, obs):
     #     probs = (
