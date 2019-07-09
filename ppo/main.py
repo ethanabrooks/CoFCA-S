@@ -66,8 +66,7 @@ def make_subtasks_env(env_id, **kwargs):
             for k, v in _kwargs.items():
                 print(f"{k:20}{v}")
         if task_type == "control-flow":
-            env = ppo.subtasks.Wrapper(FlatControlFlowGridWorld(**_kwargs))  # TODO
-            # env = ppo.subtasks.Wrapper(ControlFlowGridWorld(**_kwargs))
+            env = ppo.subtasks.Wrapper(ControlFlowGridWorld(**_kwargs))
         elif task_type == "flat-control-flow":
             # env = ppo.flat_control_flow.Wrapper(FlatControlFlowGridWorld(**_kwargs))
             env = ppo.subtasks.Wrapper(FlatControlFlowGridWorld(**_kwargs))  # TODO
