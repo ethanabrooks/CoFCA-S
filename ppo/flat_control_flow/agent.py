@@ -15,7 +15,7 @@ class Agent(ppo.control_flow.Agent):
 
 class Recurrence(ppo.control_flow.agent.Recurrence):
     def __init__(self, hidden_size, obs_spaces, **kwargs):
-        self.original_obs_sections = [int(np.prod(s.shape)) for s in obs_spaces]
+        # self.original_obs_sections = [int(np.prod(s.shape)) for s in obs_spaces]
         super().__init__(
             hidden_size=hidden_size,
             obs_spaces=obs_spaces,  # ._replace(subtasks=obs_spaces.lines),
@@ -36,8 +36,9 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
         # self.size_agent_subtask = int(self.obs_spaces.subtasks.nvec[0, :-1].sum())
 
     def parse_inputs(self, inputs):
-        return Obs(*torch.split(inputs, self.original_obs_sections, dim=2))
-        # return obs._replace(subtasks=obs.lines)
+        return Obs(*torch.split(inputs, self.obs_sections, dim=2))
+
+    # return obs._replace(subtasks=obs.lines)
 
     # def get_a_dist(self, conv_out, g_binary, obs):
     #     probs = (
@@ -52,9 +53,9 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
     #         + no_op * self.no_op_probs.expand(op.size(0), -1)
     #     )
 
-    @property
-    def condition_size(self):
-        return int(self.obs_spaces.lines.nvec[0, -1])
+    # @property
+    # def condition_size(self):
+    #     return int(self.obs_spaces.lines.nvec[0, -1])
 
     # def inner_loop(self, M, inputs, **kwargs):
     #     def update_attention(p, t):
