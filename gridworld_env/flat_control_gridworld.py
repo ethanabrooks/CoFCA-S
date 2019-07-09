@@ -23,9 +23,6 @@ class FlatControlFlowGridWorld(ControlFlowGridWorld):
         # noinspection PyProtectedMember
         n_subtasks = self.n_subtasks + self.n_subtasks // 2
         self.observation_space.spaces.update(
-            conditions=spaces.MultiDiscrete(
-                self.observation_space.spaces["conditions"].nvec[0].repeat(n_subtasks)
-            ),
             lines=spaces.MultiDiscrete(
                 np.tile(
                     np.pad(
@@ -36,7 +33,7 @@ class FlatControlFlowGridWorld(ControlFlowGridWorld):
                     ),
                     (n_subtasks, 1),
                 )
-            ),
+            )
         )
         self.observation_space.spaces = Obs(
             **filter_for_obs(self.observation_space.spaces)
@@ -49,15 +46,12 @@ class FlatControlFlowGridWorld(ControlFlowGridWorld):
             for subtask, (pos, neg), condition in zip(
                 self.subtasks, self.control, self.conditions
             ):
-                yield subtask + (0,), condition
+                yield subtask + (0,)
                 if pos != neg:
-                    yield (0, 0, 0, condition + 1), condition
+                    yield (0, 0, 0, condition + 1)
 
-        lines, conditions = zip(*get_lines())
-        self.lines = np.vstack(list(lines))
-        self.conditions = np.array(list(conditions))
-        # self.lines = np.vstack(list(get_lines()))
-        obs.update(conditions=self.conditions, lines=self.lines)
+        self.lines = np.vstack(list(get_lines()))
+        obs.update(lines=self.lines)
         for (k, s) in self.observation_space.spaces.items():
             assert s.contains(obs[k])
         return OrderedDict(filter_for_obs(obs))
