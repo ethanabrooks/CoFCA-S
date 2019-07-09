@@ -24,12 +24,12 @@ class FlatControlFlowGridWorld(ControlFlowGridWorld):
         self.observation_space.spaces.update(
             lines=spaces.MultiDiscrete(
                 np.tile(
-                    # np.pad(
-                    subtask_nvec,
-                    # [0, 1],
-                    # "constant",
-                    # constant_values=1 + len(self.object_types),
-                    # ),
+                    np.pad(
+                        subtask_nvec,
+                        [0, 1],
+                        "constant",
+                        constant_values=1 + len(self.object_types),
+                    ),
                     (self.n_subtasks, 1),  # + self.n_subtasks // 2, 1), TODO
                 )
             )
@@ -45,8 +45,8 @@ class FlatControlFlowGridWorld(ControlFlowGridWorld):
             for subtask, (pos, neg), condition in zip(
                 self.subtasks, self.control, self.conditions
             ):
-                yield subtask  # + (0,) TODO
-                # if pos != neg:
+                yield subtask + (0,)
+                # if pos != neg:  TODO
                 #     yield (0, 0, 0, condition + 1)
 
         self.lines = np.vstack(list(get_lines()))
