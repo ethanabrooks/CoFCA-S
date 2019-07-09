@@ -5,7 +5,9 @@ import numpy as np
 
 from gridworld_env import SubtasksGridWorld
 
-Obs = namedtuple("Obs", "base subtask subtasks conditions control next_subtask pred")
+Obs = namedtuple(
+    "Obs", "base subtask subtasks conditions control next_subtask pred lines"
+)
 
 
 class ControlFlowGridWorld(SubtasksGridWorld):
@@ -19,20 +21,30 @@ class ControlFlowGridWorld(SubtasksGridWorld):
         self.conditions = None
         self.control = None
         self.required_objects = None
-        self.observation_space = spaces.Dict(
-            Obs(
-                **self.observation_space.spaces,
-                conditions=spaces.MultiDiscrete(
-                    np.array([len(self.object_types)]).repeat(self.n_subtasks)
-                ),
-                pred=spaces.Discrete(2),
-                control=spaces.MultiDiscrete(
-                    np.tile(
-                        np.array([[self.n_subtasks]]),
-                        [self.n_subtasks, 2],  # binary conditions
-                    )
-                ),
-            )._asdict()
+        subtask_nvec = self.observation_space.spaces["subtasks"].nvec[0]
+        self.observation_space.spaces.update(
+            subtask=spaces.Discrete(self.observation_space.spaces["subtask"].n + 1),
+            conditions=spaces.MultiDiscrete(
+                np.array([len(self.object_types)]).repeat(self.n_subtasks)
+            ),
+            pred=spaces.Discrete(2),
+            control=spaces.MultiDiscrete(
+                np.tile(
+                    np.array([[1 + self.n_subtasks]]),
+                    [self.n_subtasks, 2],  # binary conditions
+                )
+            ),
+            lines=spaces.MultiDiscrete(
+                np.tile(
+                    np.pad(
+                        subtask_nvec,
+                        [0, 1],
+                        "constant",
+                        constant_values=1 + len(self.object_types),
+                    ),
+                    (self.n_subtasks + self.n_subtasks // 2, 1),
+                )
+            ),
         )
 
     def render_task(self):
@@ -67,7 +79,23 @@ class ControlFlowGridWorld(SubtasksGridWorld):
 
     def get_observation(self):
         obs = super().get_observation()
-        obs.update(control=self.control, conditions=self.conditions, pred=self.pred)
+
+        def get_lines():
+            for subtask, (pos, neg), condition in zip(
+                self.subtasks, self.control, self.conditions
+            ):
+                yield subtask + (0,)
+                if pos != neg:
+                    yield (0, 0, 0, condition + 1)
+
+        self.lines = np.vstack(list(get_lines()))
+
+        obs.update(
+            control=self.control,
+            conditions=self.conditions,
+            pred=self.pred,
+            lines=self.lines,
+        )
         return Obs(**obs)._asdict()
 
     # noinspection PyTypeChecker
