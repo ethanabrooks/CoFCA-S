@@ -51,7 +51,8 @@ def cli():
 def get_spaces(envs, task_type):
     obs_spaces = envs.observation_space.spaces
     if task_type == "control-flow":
-        return gridworld_env.control_flow_gridworld.Obs(**obs_spaces)
+        # return gridworld_env.control_flow_gridworld.Obs(**obs_spaces)
+        return gridworld_env.flat_control_gridworld.Obs(**obs_spaces)  # TODO
     elif task_type == "flat-control-flow":
         return gridworld_env.flat_control_gridworld.Obs(**obs_spaces)
     else:

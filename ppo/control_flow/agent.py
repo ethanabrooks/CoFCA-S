@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from gridworld_env.control_flow_gridworld import Obs
+from gridworld_env.flat_control_gridworld import Obs
 from ppo.layers import Flatten, Parallel, Product, Reshape, ShallowCopy, Sum
 import ppo.subtasks.agent
 from ppo.utils import init_
