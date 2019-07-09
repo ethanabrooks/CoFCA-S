@@ -11,6 +11,10 @@ Obs = namedtuple(
 )
 
 
+def filter_for_obs(d):
+    return {k: v for k, v in d.items() if k in Obs._fields}
+
+
 class FlatControlFlowGridWorld(ControlFlowGridWorld):
     def __init__(self, *args, n_subtasks, **kwargs):
         super().__init__(*args, n_subtasks=n_subtasks, **kwargs)
@@ -31,6 +35,9 @@ class FlatControlFlowGridWorld(ControlFlowGridWorld):
                 )
             )
         )
+        self.observation_space.spaces = Obs(
+            **filter_for_obs(self.observation_space.spaces)
+        )._asdict()
         # self.observation_space.spaces = Obs(
         #     base=obs_spaces["base"],
         #     subtask=obs_spaces["subtask"],
@@ -71,8 +78,8 @@ class FlatControlFlowGridWorld(ControlFlowGridWorld):
         # )
         for (k, s) in self.observation_space.spaces.items():
             assert s.contains(obs[k])
-        return obs
-        # return obs._asdict()
+        # return filter_for_obs(obs)
+        return Obs(**filter_for_obs(obs))._asdict()
 
     def get_control(self):
         for i in range(self.n_subtasks):
