@@ -1,10 +1,9 @@
-from collections import namedtuple
+from collections import OrderedDict, namedtuple
 
 from gym import spaces
 import numpy as np
 
 from gridworld_env.control_flow_gridworld import ControlFlowGridWorld
-
 
 Obs = namedtuple(
     "Obs", "base subtask subtasks conditions control next_subtask pred lines"
@@ -25,13 +24,13 @@ class FlatControlFlowGridWorld(ControlFlowGridWorld):
         self.observation_space.spaces.update(
             lines=spaces.MultiDiscrete(
                 np.tile(
-                    np.pad(
-                        subtask_nvec,
-                        [0, 1],
-                        "constant",
-                        constant_values=1 + len(self.object_types),
-                    ),
-                    (self.n_subtasks + self.n_subtasks // 2, 1),
+                    # np.pad(
+                    subtask_nvec,
+                    # [0, 1],
+                    # "constant",
+                    # constant_values=1 + len(self.object_types),
+                    # ),
+                    (self.n_subtasks, 1),  # + self.n_subtasks // 2, 1), TODO
                 )
             )
         )
@@ -46,15 +45,15 @@ class FlatControlFlowGridWorld(ControlFlowGridWorld):
             for subtask, (pos, neg), condition in zip(
                 self.subtasks, self.control, self.conditions
             ):
-                yield subtask + (0,)
-                if pos != neg:
-                    yield (0, 0, 0, condition + 1)
+                yield subtask  # + (0,) TODO
+                # if pos != neg:
+                #     yield (0, 0, 0, condition + 1)
 
         self.lines = np.vstack(list(get_lines()))
         obs.update(lines=self.lines)
         for (k, s) in self.observation_space.spaces.items():
             assert s.contains(obs[k])
-        return filter_for_obs(obs)
+        return OrderedDict(filter_for_obs(obs))
 
     def get_control(self):
         for i in range(self.n_subtasks):
