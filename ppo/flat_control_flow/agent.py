@@ -57,11 +57,11 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
 
     def build_phi_shift(self, d, h, hidden_size, w):
         return nn.Sequential(
-            # Parallel(
-            #     nn.Sequential(Reshape(1, d, h, w)),
-            #     nn.Sequential(Reshape(self.condition_size, 1, 1, 1)),
-            # ),
-            # Product(),
+            Parallel(
+                nn.Sequential(Reshape(1, d, h, w)),
+                nn.Sequential(Reshape(self.condition_size, 1, 1, 1)),
+            ),
+            Product(),
             # Reshape(d * self.condition_size, *self.obs_shape[-2:]),
             # init_(
             #     nn.Conv2d(self.condition_size * d, hidden_size, kernel_size=1, stride=1)
@@ -81,7 +81,7 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
             # # }
             # nn.ReLU(),
             # Flatten(),
-            init_(nn.Linear(1, 1), "sigmoid"),
+            init_(nn.Linear(1 + h * w * (self.condition_size - 1), 1), "sigmoid"),
             nn.Sigmoid(),
             Reshape(1, 1),
         )
@@ -94,12 +94,14 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
             N = p.size(0)
             i = self.obs_spaces.subtasks.nvec[0, -1]
             condition = r[:, -i:].view(N, i, 1, 1)
-            is_subtask = condition[:, 0]
-            pred = ((condition[:, 1:] * obs) > 0).view(N, 1, 1, -1).any(dim=-1).float()
+            is_subtask = condition[:, 0].view(N, -1)
+            pred = ((condition[:, 1:] * obs) > 0).view(N, -1).float()
+            # pred = ((condition[:, 1:] * obs) > 0).view(N, 1, 1, -1).any(dim=-1).float()
             # pred = self.phi_shift((inputs.base[t], r[:, -self.condition_size :]))
-            take_two_steps = (1 - is_subtask) * (1 - pred)
-            truth = 1 - take_two_steps
-            pred = self.phi_shift(truth)  # TODO
+            # take_two_steps = (1 - is_subtask) * (1 - pred)
+            # truth = 1 - take_two_steps
+            phi_in = torch.cat([is_subtask, pred], dim=-1)
+            pred = self.phi_shift(phi_in)  # TODO
             trans = pred * self.true_path + (1 - pred) * self.false_path
             x = (p.unsqueeze(1) @ trans).squeeze(1)
             # if torch.any(x < 0):
