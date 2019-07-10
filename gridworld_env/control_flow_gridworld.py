@@ -19,7 +19,6 @@ class ControlFlowGridWorld(SubtasksGridWorld):
         self.conditions = None
         self.control = None
         self.required_objects = None
-        subtask_nvec = self.observation_space.spaces["subtasks"].nvec[0]
         self.observation_space.spaces.update(
             subtask=spaces.Discrete(self.observation_space.spaces["subtask"].n + 1),
             conditions=spaces.MultiDiscrete(
@@ -34,7 +33,7 @@ class ControlFlowGridWorld(SubtasksGridWorld):
             ),
         )
 
-    def render_task(self):
+    def task_string(self):
         def helper(i, indent):
             try:
                 subtask = f"{i}:{self.subtasks[i]}"
@@ -62,7 +61,7 @@ class ControlFlowGridWorld(SubtasksGridWorld):
 """
             return f"{indent}{subtask}\n{if_condition}"
 
-        print(helper(i=0, indent=""))
+        return helper(i=0, indent="")
 
     def get_observation(self):
         obs = super().get_observation()
