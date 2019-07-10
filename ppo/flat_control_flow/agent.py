@@ -56,19 +56,14 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
         def update_attention(p, t):
             # r = (p.unsqueeze(1) @ M).squeeze(1)
             r = (p.unsqueeze(1) @ M).squeeze(1)
-            N = p.size(0)
-            i = self.obs_spaces.subtasks.nvec[0, -1]
-            condition = r[:, -i:].view(N, i, 1, 1)
-            obs = inputs.base[t, :, 1:-2]
-            is_subtask = condition[:, 0]
-            pred = ((condition[:, 1:] * obs) > 0).view(N, 1, 1, -1).any(dim=-1).float()
-            take_two_steps = (1 - is_subtask) * (1 - pred)
-            truth = 1 - take_two_steps  # pred = self.phi_shift((inputs.base[t], r))
-            pred = truth  # TODO
-            # if torch.any(pred < 0):
-            # import ipdb
-
-            # ipdb.set_trace()
+            # N = p.size(0)
+            # i = self.obs_spaces.subtasks.nvec[0, -1]
+            # condition = r[:, -i:].view(N, i, 1, 1)
+            # obs = inputs.base[t, :, 1:-2]
+            # truth = condition[:, 0] + (
+            #     ((condition[:, 1:] * obs) > 0).view(N, 1, 1, -1).any(dim=-1).float()
+            # )
+            pred = self.phi_shift((inputs.base[t], r[:, -self.condition_size :]))
             trans = pred * self.true_path + (1 - pred) * self.false_path
             x = (p.unsqueeze(1) @ trans).squeeze(1)
             # if torch.any(x < 0):
