@@ -1,11 +1,14 @@
 import numpy as np
 import torch
 import torch.nn.functional as F
+import torch.nn as nn
 
 from gridworld_env.flat_control_gridworld import Obs
 import ppo.control_flow
 from ppo.distributions import FixedCategorical
 import ppo.subtasks
+from ppo.layers import Parallel, Reshape, Product, ShallowCopy, Sum, Flatten
+from ppo.utils import init_
 
 
 class Agent(ppo.control_flow.Agent):
@@ -50,6 +53,37 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
             # if subtask is a control-flow statement, force no-op
             probs=op * probs
             + no_op * self.no_op_probs.expand(op.size(0), -1)
+        )
+
+    def build_phi_shift(self, d, h, hidden_size, w):
+        return nn.Sequential(
+            Parallel(
+                nn.Sequential(Reshape(1, d, h, w)),
+                nn.Sequential(Reshape(self.condition_size, 1, 1, 1)),
+            ),
+            Product(),
+            # Reshape(d * self.condition_size, *self.obs_shape[-2:]),
+            # init_(
+            #     nn.Conv2d(self.condition_size * d, hidden_size, kernel_size=1, stride=1)
+            # ),
+            # # attention {
+            # ShallowCopy(2),
+            # Parallel(
+            #     Reshape(hidden_size, h * w),
+            #     nn.Sequential(
+            #         init_(nn.Conv2d(hidden_size, 1, kernel_size=1)),
+            #         Reshape(1, h * w),
+            #         nn.Softmax(dim=-1),
+            #     ),
+            # ),
+            # Product(),
+            # Sum(dim=-1),
+            # # }
+            # nn.ReLU(),
+            # Flatten(),
+            init_(nn.Linear(1 + h * w * (self.condition_size - 1), 1), "sigmoid"),
+            nn.Sigmoid(),
+            Reshape(1, 1),
         )
 
     def inner_loop(self, M, inputs, **kwargs):
