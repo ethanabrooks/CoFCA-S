@@ -16,7 +16,7 @@ def filter_for_obs(d):
 
 class FlatControlFlowGridWorld(ControlFlowGridWorld):
     def __init__(self, *args, n_subtasks, **kwargs):
-        super().__init__(*args, n_subtasks=n_subtasks, **kwargs)
+        super().__init__(*args, n_subtasks=n_subtasks, passing_prob=1 / 3, **kwargs)
         obs_spaces = self.observation_space.spaces
         subtask_nvec = obs_spaces["subtasks"].nvec[0]
         self.lines = None
@@ -64,6 +64,31 @@ class FlatControlFlowGridWorld(ControlFlowGridWorld):
                 yield i + 2, i + 2
             else:
                 yield i + 1, i + 1
+
+    def choose_subtasks(self):
+        irreversible_interactions = [
+            j for j, i in enumerate(self.interactions) if i in ("pick-up", "transform")
+        ]
+        passing, failing = irreversible_interactions
+        conditional_object = self.np_random.choice(len(self.object_types))
+        for i in range(self.n_subtasks):
+            self.np_random.shuffle(irreversible_interactions)
+            if i % 3 == 0:
+                j = self.np_random.choice(len(self.possible_subtasks))
+                yield self.Subtask(*self.possible_subtasks[j])
+            if i % 3 == 1:
+                yield self.Subtask(
+                    interaction=passing, count=0, object=conditional_object
+                )
+            if i % 3 == 2:
+                yield self.Subtask(
+                    interaction=failing, count=0, object=conditional_object
+                )
+
+        choices = self.np_random.choice(
+            len(self.possible_subtasks), size=self.n_subtasks
+        )
+        return [self.Subtask(*self.possible_subtasks[i]) for i in choices]
 
 
 def main(seed, n_subtasks):

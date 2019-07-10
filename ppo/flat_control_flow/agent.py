@@ -1,10 +1,12 @@
 import numpy as np
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 
 from gridworld_env.flat_control_gridworld import Obs
 import ppo.control_flow
 from ppo.distributions import FixedCategorical
+from ppo.layers import Parallel
 import ppo.subtasks
 
 
@@ -21,12 +23,12 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
             obs_spaces=obs_spaces._replace(subtasks=obs_spaces.lines),
             **kwargs,
         )
-        true_path = F.pad(torch.eye(self.n_subtasks - 1), [1, 0, 0, 1])
-        true_path[:, -1] += 1 - true_path.sum(-1)
-        self.register_buffer("true_path", true_path)
-        false_path = F.pad(torch.eye(self.n_subtasks - 2), [2, 0, 0, 2])
-        false_path[:, -1] += 1 - false_path.sum(-1)
-        self.register_buffer("false_path", false_path)
+        one_step = F.pad(torch.eye(self.n_subtasks - 1), [1, 0, 0, 1])
+        one_step[:, -1] += 1 - one_step.sum(-1)
+        self.register_buffer("one_step", one_step.unsqueeze(0))
+        two_steps = F.pad(torch.eye(self.n_subtasks - 2), [2, 0, 0, 2])
+        two_steps[:, -1] += 1 - two_steps.sum(-1)
+        self.register_buffer("two_steps", two_steps.unsqueeze(0))
         self.register_buffer(
             f"part3_one_hot", torch.eye(int(self.obs_spaces.lines.nvec[0, -1]))
         )
@@ -64,13 +66,11 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
             #     ((condition[:, 1:] * obs) > 0).view(N, 1, 1, -1).any(dim=-1).float()
             # )
             pred = self.phi_shift((inputs.base[t], r[:, -self.condition_size :]))
-            trans = pred * self.true_path + (1 - pred) * self.false_path
-            x = (p.unsqueeze(1) @ trans).squeeze(1)
-            # if torch.any(x < 0):
-            # import ipdb
-
-            # ipdb.set_trace()
-            return x
+            is_subtask = r[:, -self.condition_size].view(-1, 1, 1)
+            take_two_steps = (1 - is_subtask) * (1 - pred)
+            take_one_step = 1 - take_two_steps
+            trans = take_one_step * self.one_step + take_two_steps * self.two_steps
+            return (p.unsqueeze(1) @ trans).squeeze(1)
 
         kwargs.update(update_attention=update_attention)
         yield from ppo.subtasks.Recurrence.inner_loop(
