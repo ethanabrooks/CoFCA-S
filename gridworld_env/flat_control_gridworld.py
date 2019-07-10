@@ -22,7 +22,7 @@ class FlatControlFlowGridWorld(ControlFlowGridWorld):
         subtask_nvec = obs_spaces["subtasks"].nvec[0]
         self.lines = None
         # noinspection PyProtectedMember
-        n_subtasks = self.n_subtasks + self.n_subtasks // 2 - 1
+        self.n_lines = self.n_subtasks + self.n_subtasks // 2 - 1
         self.observation_space.spaces.update(
             lines=spaces.MultiDiscrete(
                 np.tile(
@@ -32,18 +32,21 @@ class FlatControlFlowGridWorld(ControlFlowGridWorld):
                         "constant",
                         constant_values=1 + len(self.object_types),
                     ),
-                    (n_subtasks, 1),
+                    (self.n_lines, 1),
                 )
             )
         )
         self.observation_space.spaces = Obs(
             **filter_for_obs(self.observation_space.spaces)
         )._asdict()
+        self.branching_episode = None
 
     def task_string(self):
         return "\n".join(super().task_string().split("\n")[1:])
 
     def reset(self):
+        # self.branching_episode = self.np_random.rand() < 0.5
+        self.branching_episode = True
         o = super().reset()
         self.subtask_idx = self.get_next_subtask()
         return o
@@ -64,7 +67,9 @@ class FlatControlFlowGridWorld(ControlFlowGridWorld):
                 if pos != neg:
                     yield (0, 0, 0, condition + 1)
 
-        self.lines = np.vstack(list(get_lines())[1:])
+        lines = np.vstack(list(get_lines())[1:])
+        self.lines = np.pad(lines, [(0, self.n_lines - len(lines)), (0, 0)], "constant")
+
         obs.update(lines=self.lines)
         for (k, s) in self.observation_space.spaces.items():
             assert s.contains(obs[k])
@@ -73,13 +78,22 @@ class FlatControlFlowGridWorld(ControlFlowGridWorld):
     def get_control(self):
         for i in range(self.n_subtasks):
             if i % 3 == 0:
-                yield i + 1, i
+                if self.branching_episode:
+                    yield i + 1, i
+                else:
+                    yield i, i
             elif i % 3 == 1:
-                yield i + 2, i + 2
-            else:
-                yield i + 1, i + 1
+                if self.branching_episode:
+                    yield i + 2, i + 2  # terminate
+                else:
+                    yield i, i
+            elif i % 3 == 2:
+                yield i + 1, i + 1  # terminate
 
     def choose_subtasks(self):
+        if not self.branching_episode:
+            yield from super().choose_subtasks()
+            return
         irreversible_interactions = [
             j for j, i in enumerate(self.interactions) if i in ("pick-up", "transform")
         ]
@@ -98,11 +112,6 @@ class FlatControlFlowGridWorld(ControlFlowGridWorld):
                 yield self.Subtask(
                     interaction=failing, count=0, object=conditional_object
                 )
-
-        choices = self.np_random.choice(
-            len(self.possible_subtasks), size=self.n_subtasks
-        )
-        return [self.Subtask(*self.possible_subtasks[i]) for i in choices]
 
 
 def main(seed, n_subtasks):
