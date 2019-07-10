@@ -65,10 +65,10 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
             condition = r[:, -i:].view(N, i, 1, 1)
             obs = inputs.base[t, :, 1:-2]
             is_subtask = condition[:, 0]
-            pred = ((condition[:, 1:] * obs) > 0).view(N, 1, 1, -1).any(dim=-1).float()
+            # pred = ((condition[:, 1:] * obs) > 0).view(N, 1, 1, -1).any(dim=-1).float()
+            pred = self.phi_shift((inputs.base[t], r[:, -self.condition_size :]))
             take_two_steps = (1 - is_subtask) * (1 - pred)
             take_one_step = 1 - take_two_steps
-            # pred = self.phi_shift((inputs.base[t], r))
             trans = take_one_step * self.one_step + take_two_steps * self.two_steps
             return (p.unsqueeze(1) @ trans).squeeze(1)
 
