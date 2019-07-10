@@ -265,7 +265,8 @@ class Train:
             obs, reward, done, infos = envs.step(act.action)
 
             for d in infos:
-                episode_counter.update(**d)
+                for k, v in d.items():
+                    episode_counter.update({k: float(v) / num_steps / len(infos)})
 
             # track rewards
             counter["reward"] += reward.numpy()
