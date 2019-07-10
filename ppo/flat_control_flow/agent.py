@@ -2,12 +2,14 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.nn as nn
 
 from gridworld_env.flat_control_gridworld import Obs
 import ppo.control_flow
 from ppo.distributions import FixedCategorical
-from ppo.layers import Parallel
+from ppo.layers import Flatten, Parallel, Product, Reshape, ShallowCopy, Sum
 import ppo.subtasks
+from ppo.utils import init_
 
 
 class Agent(ppo.control_flow.Agent):
@@ -58,15 +60,13 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
         def update_attention(p, t):
             # r = (p.unsqueeze(1) @ M).squeeze(1)
             r = (p.unsqueeze(1) @ M).squeeze(1)
-            # N = p.size(0)
-            # i = self.obs_spaces.subtasks.nvec[0, -1]
-            # condition = r[:, -i:].view(N, i, 1, 1)
-            # obs = inputs.base[t, :, 1:-2]
-            # truth = condition[:, 0] + (
-            #     ((condition[:, 1:] * obs) > 0).view(N, 1, 1, -1).any(dim=-1).float()
-            # )
+            N = p.size(0)
+            i = self.obs_spaces.subtasks.nvec[0, -1]
+            condition = r[:, -i:].view(N, i, 1, 1)
+            obs = inputs.base[t, :, 1:-2]
+            is_subtask = condition[:, 0]
+            # pred = ((condition[:, 1:] * obs) > 0).view(N, 1, 1, -1).any(dim=-1).float()
             pred = self.phi_shift((inputs.base[t], r[:, -self.condition_size :]))
-            is_subtask = r[:, -self.condition_size].view(-1, 1, 1)
             take_two_steps = (1 - is_subtask) * (1 - pred)
             take_one_step = 1 - take_two_steps
             trans = take_one_step * self.one_step + take_two_steps * self.two_steps

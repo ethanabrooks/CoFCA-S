@@ -16,12 +16,12 @@ def filter_for_obs(d):
 
 class FlatControlFlowGridWorld(ControlFlowGridWorld):
     def __init__(self, *args, n_subtasks, **kwargs):
-        super().__init__(*args, n_subtasks=n_subtasks, passing_prob=1 / 3, **kwargs)
+        super().__init__(*args, n_subtasks=n_subtasks, **kwargs)
         obs_spaces = self.observation_space.spaces
         subtask_nvec = obs_spaces["subtasks"].nvec[0]
         self.lines = None
         # noinspection PyProtectedMember
-        n_subtasks = self.n_subtasks + self.n_subtasks // 2
+        n_subtasks = self.n_subtasks + self.n_subtasks // 2 - 1
         self.observation_space.spaces.update(
             lines=spaces.MultiDiscrete(
                 np.tile(
@@ -39,6 +39,14 @@ class FlatControlFlowGridWorld(ControlFlowGridWorld):
             **filter_for_obs(self.observation_space.spaces)
         )._asdict()
 
+    def task_string(self):
+        return "\n".join(super().task_string().split("\n")[1:])
+
+    def reset(self):
+        o = super().reset()
+        self.subtask_idx = self.get_next_subtask()
+        return o
+
     def get_observation(self):
         obs = super().get_observation()
 
@@ -50,7 +58,7 @@ class FlatControlFlowGridWorld(ControlFlowGridWorld):
                 if pos != neg:
                     yield (0, 0, 0, condition + 1)
 
-        self.lines = np.vstack(list(get_lines()))
+        self.lines = np.vstack(list(get_lines())[1:])
         obs.update(lines=self.lines)
         for (k, s) in self.observation_space.spaces.items():
             assert s.contains(obs[k])
