@@ -16,7 +16,8 @@ def filter_for_obs(d):
 
 class FlatControlFlowGridWorld(ControlFlowGridWorld):
     def __init__(self, *args, n_subtasks, **kwargs):
-        super().__init__(*args, n_subtasks=n_subtasks, **kwargs)
+        n_subtasks += 1
+        super().__init__(*args, n_subtasks=n_subtasks, passing_prob=0, **kwargs)
         obs_spaces = self.observation_space.spaces
         subtask_nvec = obs_spaces["subtasks"].nvec[0]
         self.lines = None
@@ -69,9 +70,9 @@ class FlatControlFlowGridWorld(ControlFlowGridWorld):
             if i % 3 == 0:
                 yield i + 1, i
             elif i % 3 == 1:
-                yield i + 2, i + 2
-            else:
-                yield i + 1, i + 1
+                yield i + 2, i + 2  # terminate
+            elif i % 3 == 2:
+                yield i + 1, i + 1  # terminate
 
     def choose_subtasks(self):
         irreversible_interactions = [
