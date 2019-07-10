@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from gridworld_env.flat_control_gridworld import Obs
+from gridworld_env.control_flow_gridworld import Obs
 from ppo.layers import Flatten, Parallel, Product, Reshape, ShallowCopy, Sum
 import ppo.subtasks.agent
 from ppo.utils import init_
@@ -84,7 +84,7 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
             # print("c", c)
             # pred = truth
             pred = self.phi_shift((inputs.base[t], c))
-            trans = pred * self.true_path + (1 - pred) * self.false_path
+            trans = pred * true_path + (1 - pred) * false_path
             # print("trans")
             # print(trans.round())
             return (p.unsqueeze(1) @ trans).squeeze(1)
