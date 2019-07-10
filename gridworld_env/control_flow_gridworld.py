@@ -9,8 +9,11 @@ Obs = namedtuple("Obs", "base subtask subtasks conditions control next_subtask p
 
 
 class ControlFlowGridWorld(SubtasksGridWorld):
-    def __init__(self, *args, n_subtasks, force_branching=False, **kwargs):
+    def __init__(
+        self, *args, n_subtasks, force_branching=False, passing_prob=0.5, **kwargs
+    ):
         super().__init__(*args, n_subtasks=n_subtasks, **kwargs)
+        self.passing_prob = passing_prob
         self.pred = None
         self.force_branching = force_branching
         if force_branching:
@@ -19,7 +22,6 @@ class ControlFlowGridWorld(SubtasksGridWorld):
         self.conditions = None
         self.control = None
         self.required_objects = None
-        subtask_nvec = self.observation_space.spaces["subtasks"].nvec[0]
         self.observation_space.spaces.update(
             subtask=spaces.Discrete(self.observation_space.spaces["subtask"].n + 1),
             conditions=spaces.MultiDiscrete(
@@ -69,12 +71,16 @@ class ControlFlowGridWorld(SubtasksGridWorld):
         obs.update(control=self.control, conditions=self.conditions, pred=self.pred)
         return Obs(**obs)._asdict()
 
-    # noinspection PyTypeChecker
-    def subtasks_generator(self):
+    def choose_subtasks(self):
         choices = self.np_random.choice(
             len(self.possible_subtasks), size=self.n_subtasks
         )
-        subtasks = [self.Subtask(*self.possible_subtasks[i]) for i in choices]
+        for i in choices:
+            yield self.Subtask(*self.possible_subtasks[i])
+
+    # noinspection PyTypeChecker
+    def subtasks_generator(self):
+        subtasks = list(self.choose_subtasks())
         i = 0
         encountered = Counter(passing=[], failing=[], subtasks=[])
         while i < self.n_subtasks:
@@ -138,14 +144,16 @@ class ControlFlowGridWorld(SubtasksGridWorld):
         self.control = np.minimum(
             1 + np.array(list(self.get_control())), self.n_subtasks
         )
-        n_object_types = self.np_random.randint(1, len(self.object_types))
         object_types = np.arange(len(self.object_types))
-        existing = self.np_random.choice(object_types, size=n_object_types)
+        existing = self.np_random.choice(
+            object_types, size=len(self.object_types) // 2, replace=False
+        )
         non_existing = np.array(list(set(object_types) - set(existing)))
-        n_passing = self.np_random.choice(self.n_subtasks)
-        n_failing = self.n_subtasks - n_passing
+        n_passing = self.np_random.choice(
+            2, p=[self.passing_prob, 1 - self.passing_prob], size=self.n_subtasks
+        ).sum()
         passing = self.np_random.choice(existing, size=n_passing)
-        failing = self.np_random.choice(non_existing, size=n_failing)
+        failing = self.np_random.choice(non_existing, size=self.n_subtasks - n_passing)
         self.conditions = np.concatenate([passing, failing])
         self.np_random.shuffle(self.conditions)
         self.required_objects = passing
