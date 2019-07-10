@@ -16,7 +16,7 @@ def filter_for_obs(d):
 
 class FlatControlFlowGridWorld(ControlFlowGridWorld):
     def __init__(self, *args, n_subtasks, **kwargs):
-        super().__init__(*args, n_subtasks=n_subtasks, passing_prob=1 / 3, **kwargs)
+        super().__init__(*args, n_subtasks=n_subtasks, **kwargs)
         obs_spaces = self.observation_space.spaces
         subtask_nvec = obs_spaces["subtasks"].nvec[0]
         self.lines = None
