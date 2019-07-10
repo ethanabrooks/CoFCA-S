@@ -47,6 +47,11 @@ class FlatControlFlowGridWorld(ControlFlowGridWorld):
         self.subtask_idx = self.get_next_subtask()
         return o
 
+    def step(self, action):
+        s, r, t, i = super().step(action)
+        i.update(passing=self.passing)
+        return s, r, t, i
+
     def get_observation(self):
         obs = super().get_observation()
 
