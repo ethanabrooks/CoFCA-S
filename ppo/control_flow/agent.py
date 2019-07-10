@@ -25,7 +25,10 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
         )
 
         d, h, w = self.obs_shape
-        self.phi_shift = nn.Sequential(
+        self.phi_shift = self.build_phi_shift(d, h, hidden_size, w)
+
+    def build_phi_shift(self, d, h, hidden_size, w):
+        return nn.Sequential(
             Parallel(
                 nn.Sequential(Reshape(1, d, h, w)),
                 nn.Sequential(Reshape(self.condition_size, 1, 1, 1)),
@@ -57,7 +60,7 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
 
     @property
     def condition_size(self):
-        return int(self.obs_spaces.subtasks.nvec[0, 2])
+        return int(self.obs_spaces.subtasks.nvec[0, -1])
 
     def parse_inputs(self, inputs):
         return Obs(*torch.split(inputs, self.obs_sections, dim=2))
@@ -82,7 +85,9 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
             # print("c", c)
             # pred = truth
             pred = self.phi_shift((inputs.base[t], c))
-            trans = pred * true_path + (1 - pred) * false_path
+            trans = pred * self.true_path + (1 - pred) * self.false_path
+            # print("trans")
+            # print(trans.round())
             return (p.unsqueeze(1) @ trans).squeeze(1)
 
         kwargs.update(update_attention=update_attention)

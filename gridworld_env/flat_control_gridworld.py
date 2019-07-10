@@ -21,16 +21,17 @@ class FlatControlFlowGridWorld(ControlFlowGridWorld):
         subtask_nvec = obs_spaces["subtasks"].nvec[0]
         self.lines = None
         # noinspection PyProtectedMember
+        n_subtasks = self.n_subtasks + self.n_subtasks // 2
         self.observation_space.spaces.update(
             lines=spaces.MultiDiscrete(
                 np.tile(
-                    # np.pad(
-                    subtask_nvec,
-                    # [0, 1],
-                    # "constant",
-                    # constant_values=1 + len(self.object_types),
-                    # ),
-                    (self.n_subtasks, 1),  # + self.n_subtasks // 2, 1), TODO
+                    np.pad(
+                        subtask_nvec,
+                        [0, 1],
+                        "constant",
+                        constant_values=1 + len(self.object_types),
+                    ),
+                    (n_subtasks, 1),
                 )
             )
         )
