@@ -21,13 +21,7 @@ from ppo.storage import RolloutStorage
 from ppo.subtasks.wrappers import Wrapper
 from ppo.update import PPO
 from ppo.utils import get_n_gpu, get_random_gpu
-from ppo.wrappers import (
-    AddTimestep,
-    TransposeImage,
-    VecNormalize,
-    VecPyTorch,
-    VecPyTorchFrameStack,
-)
+from ppo.wrappers import AddTimestep, TransposeImage, VecNormalize, VecPyTorch, VecPyTorchFrameStack
 
 try:
     import dm_control2gym
@@ -269,6 +263,10 @@ class Train:
 
             # Observe reward and next obs
             obs, reward, done, infos = envs.step(act.action)
+
+            for d in infos:
+                for k, v in d.items():
+                    episode_counter.update({k: float(v) / num_steps / len(infos)})
 
             # track rewards
             counter["reward"] += reward.numpy()

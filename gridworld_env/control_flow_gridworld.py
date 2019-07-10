@@ -156,6 +156,7 @@ class ControlFlowGridWorld(SubtasksGridWorld):
         failing = self.np_random.choice(non_existing, size=self.n_subtasks - n_passing)
         self.conditions = np.concatenate([passing, failing])
         self.np_random.shuffle(self.conditions)
+        self.passing = self.conditions[0] in passing
         self.required_objects = passing
         self.pred = False
         return super().reset()
