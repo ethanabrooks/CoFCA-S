@@ -24,10 +24,7 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
         )
 
         d, h, w = self.obs_shape
-        self.phi_shift = self.build_phi_shift(d, h, hidden_size, w)
-
-    def build_phi_shift(self, d, h, hidden_size, w):
-        return nn.Sequential(
+        self.phi_shift = nn.Sequential(
             Parallel(
                 nn.Sequential(Reshape(1, d, h, w)),
                 nn.Sequential(Reshape(self.condition_size, 1, 1, 1)),
