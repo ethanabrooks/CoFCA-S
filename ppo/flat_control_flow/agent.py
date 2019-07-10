@@ -1,13 +1,15 @@
 import numpy as np
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn as nn
 
 from gridworld_env.flat_control_gridworld import Obs
 import ppo.control_flow
 from ppo.distributions import FixedCategorical
+from ppo.layers import Flatten, Parallel, Product, Reshape, ShallowCopy, Sum
 import ppo.subtasks
-from ppo.layers import Parallel
+from ppo.utils import init_
 
 
 class Agent(ppo.control_flow.Agent):
@@ -25,10 +27,10 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
         )
         one_step = F.pad(torch.eye(self.n_subtasks - 1), [1, 0, 0, 1])
         one_step[:, -1] += 1 - one_step.sum(-1)
-        self.register_buffer("one_step", one_step)
+        self.register_buffer("one_step", one_step.unsqueeze(0))
         two_steps = F.pad(torch.eye(self.n_subtasks - 2), [2, 0, 0, 2])
         two_steps[:, -1] += 1 - two_steps.sum(-1)
-        self.register_buffer("two_steps", two_steps)
+        self.register_buffer("two_steps", two_steps.unsqueeze(0))
         self.register_buffer(
             f"part3_one_hot", torch.eye(int(self.obs_spaces.lines.nvec[0, -1]))
         )
@@ -58,17 +60,15 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
         def update_attention(p, t):
             # r = (p.unsqueeze(1) @ M).squeeze(1)
             r = (p.unsqueeze(1) @ M).squeeze(1)
-            # N = p.size(0)
-            # i = self.obs_spaces.subtasks.nvec[0, -1]
-            # condition = r[:, -i:].view(N, i, 1, 1)
-            # obs = inputs.base[t, :, 1:-2]
-            # truth = condition[:, 0] + (
-            #     ((condition[:, 1:] * obs) > 0).view(N, 1, 1, -1).any(dim=-1).float()
-            # )
-            pred = self.phi_shift((inputs.base[t], r[:, -self.condition_size :]))
-            is_subtask = r[:, -self.condition_size]
+            N = p.size(0)
+            i = self.obs_spaces.subtasks.nvec[0, -1]
+            condition = r[:, -i:].view(N, i, 1, 1)
+            obs = inputs.base[t, :, 1:-2]
+            is_subtask = condition[:, 0]
+            pred = ((condition[:, 1:] * obs) > 0).view(N, 1, 1, -1).any(dim=-1).float()
             take_two_steps = (1 - is_subtask) * (1 - pred)
             take_one_step = 1 - take_two_steps
+            # pred = self.phi_shift((inputs.base[t], r))
             trans = take_one_step * self.one_step + take_two_steps * self.two_steps
             return (p.unsqueeze(1) @ trans).squeeze(1)
 

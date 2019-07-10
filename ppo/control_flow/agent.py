@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from gridworld_env.flat_control_gridworld import Obs
+from gridworld_env.control_flow_gridworld import Obs
 from ppo.layers import Flatten, Parallel, Product, Reshape, ShallowCopy, Sum
 import ppo.subtasks.agent
 from ppo.utils import init_
@@ -24,7 +24,10 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
         )
 
         d, h, w = self.obs_shape
-        self.phi_shift = nn.Sequential(
+        self.phi_shift = self.build_phi_shift(d, h, hidden_size, w)
+
+    def build_phi_shift(self, d, h, hidden_size, w):
+        return nn.Sequential(
             Parallel(
                 nn.Sequential(Reshape(1, d, h, w)),
                 nn.Sequential(Reshape(self.condition_size, 1, 1, 1)),
@@ -75,13 +78,13 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
 
         def update_attention(p, t):
             c = (p.unsqueeze(1) @ conditions).squeeze(1)
-            # phi_in = inputs.base[t, :, 1:-2] * c.view(N, conditions.size(2), 1, 1)
-            # truth = torch.max(phi_in.view(N, -1), dim=-1).values.float().view(N, 1, 1)
+            phi_in = inputs.base[t, :, 1:-2] * c.view(N, conditions.size(2), 1, 1)
+            truth = torch.max(phi_in.view(N, -1), dim=-1).values.float().view(N, 1, 1)
             # print("inputs.base[t, :, 1:-2]", inputs.base[t, :, 1:-2])
             # print("c", c)
-            # pred = truth
-            pred = self.phi_shift((inputs.base[t], c))
-            trans = pred * self.true_path + (1 - pred) * self.false_path
+            pred = truth
+            # pred = self.phi_shift((inputs.base[t], c))
+            trans = pred * true_path + (1 - pred) * false_path
             # print("trans")
             # print(trans.round())
             return (p.unsqueeze(1) @ trans).squeeze(1)

@@ -64,7 +64,7 @@ class ControlFlowGridWorld(SubtasksGridWorld):
 """
             return f"{indent}{subtask}\n{if_condition}"
 
-        print(helper(i=0, indent=""))
+        return helper(i=0, indent="")
 
     def get_observation(self):
         obs = super().get_observation()
