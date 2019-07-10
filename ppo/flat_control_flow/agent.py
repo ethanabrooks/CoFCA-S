@@ -37,6 +37,12 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
         no_op_probs[:, -1] = 1
         self.register_buffer("no_op_probs", no_op_probs)
         self.size_agent_subtask = int(self.obs_spaces.subtasks.nvec[0, :-1].sum())
+        self.phi_shift2 = nn.Sequential(
+            init_(nn.Linear(self.condition_size, 1), "sigmoid"),
+            nn.Sigmoid(),
+            Reshape(1, 1),
+        )
+        self.agent_input_size = int(self.obs_spaces.subtasks.nvec[0, :-1].sum())
 
     def parse_inputs(self, inputs):
         obs = Obs(*torch.split(inputs, self.original_obs_sections, dim=2))
@@ -44,9 +50,11 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
 
     def get_a_dist(self, conv_out, g_binary, obs):
         probs = (
-            super().get_a_dist(conv_out, g_binary[:, : -self.condition_size], obs).probs
+            super()
+            .get_a_dist(conv_out, g_binary[:, : self.agent_input_size], obs)
+            .probs
         )
-        op = g_binary[:, -self.condition_size].unsqueeze(1)
+        op = g_binary[:, self.agent_input_size].unsqueeze(1)
         no_op = 1 - op
 
         return FixedCategorical(
