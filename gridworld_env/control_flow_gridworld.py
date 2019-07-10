@@ -36,7 +36,7 @@ class ControlFlowGridWorld(SubtasksGridWorld):
             ),
         )
 
-    def render_task(self):
+    def task_string(self):
         def helper(i, indent):
             try:
                 subtask = f"{i}:{self.subtasks[i]}"

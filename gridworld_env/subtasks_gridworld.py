@@ -179,7 +179,7 @@ class SubtasksGridWorld(gym.Env):
 
     def render(self, mode="human", sleep_time=0.5):
         print("task:")
-        self.render_task()
+        print(self.task_string())
         if self.subtask is None:
             print("*************")
             print("Task Complete")
@@ -211,10 +211,8 @@ class SubtasksGridWorld(gym.Env):
     def render_current_subtask(self):
         print(f"{self.subtask_idx}:{self.subtask}")
 
-    def render_task(self):
-        for line in self.subtasks:
-            print(line)
-        print()
+    def task_string(self):
+        return "\n".join(self.subtasks)
 
     def subtasks_generator(self):
         last_subtask = None
