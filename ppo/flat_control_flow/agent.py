@@ -63,6 +63,10 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
             + no_op * self.no_op_probs.expand(op.size(0), -1)
         )
 
+    @property
+    def condition_size(self):
+        return int(self.obs_spaces.subtasks.nvec[0].sum())
+
     def inner_loop(self, M, inputs, **kwargs):
         def update_attention(p, t):
             # r = (p.unsqueeze(1) @ M).squeeze(1)
@@ -73,7 +77,7 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
             obs = inputs.base[t, :, 1:-2]
             is_subtask = condition[:, 0]
             # pred = ((condition[:, 1:] * obs) > 0).view(N, 1, 1, -1).any(dim=-1).float()
-            pred = self.phi_shift((inputs.base[t], r[:, -self.condition_size :]))
+            pred = self.phi_shift((inputs.base[t], r))
             take_two_steps = (1 - is_subtask) * (1 - pred)
             take_one_step = 1 - take_two_steps
             trans = take_one_step * self.one_step + take_two_steps * self.two_steps
