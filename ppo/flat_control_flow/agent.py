@@ -99,7 +99,8 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
             pred = ((condition[:, 1:] * obs) > 0).view(N, 1, 1, -1).any(dim=-1).float()
             take_two_steps = (1 - is_subtask) * (1 - pred)
             truth = 1 - take_two_steps  # pred = self.phi_shift((inputs.base[t], r))
-            pred = self.phi_shift(truth)  # TODO
+            pred = truth
+            # pred = self.phi_shift(truth)  # TODO
             # if torch.any(pred < 0):
             # import ipdb
 
