@@ -38,6 +38,7 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
         no_op_probs[:, -1] = 1
         self.register_buffer("no_op_probs", no_op_probs)
         self.size_agent_subtask = int(self.obs_spaces.subtasks.nvec[0, :-1].sum())
+        self.phi_shift2 = nn.Sequential(init_(nn.Linear(1, 1), "sigmoid"), nn.Sigmoid())
 
     def parse_inputs(self, inputs):
         obs = Obs(*torch.split(inputs, self.original_obs_sections, dim=2))
@@ -65,8 +66,10 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
             condition = r[:, -i:].view(N, i, 1, 1)
             obs = inputs.base[t, :, 1:-2]
             is_subtask = condition[:, 0]
-            # pred = ((condition[:, 1:] * obs) > 0).view(N, 1, 1, -1).any(dim=-1).float()
-            pred = self.phi_shift((inputs.base[t], r[:, -self.condition_size :]))
+            is_subtask = self.phi_shift2(is_subtask)
+
+            pred = ((condition[:, 1:] * obs) > 0).view(N, 1, 1, -1).any(dim=-1).float()
+            # pred = self.phi_shift((inputs.base[t], r[:, -self.condition_size :]))
             take_two_steps = (1 - is_subtask) * (1 - pred)
             take_one_step = 1 - take_two_steps
             trans = take_one_step * self.one_step + take_two_steps * self.two_steps
