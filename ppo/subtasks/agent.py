@@ -297,6 +297,44 @@ class Recurrence(torch.jit.ScriptModule):
             p2[:, -1] += 1 - p2.sum(dim=-1)
             return p2
 
+        def gating_function(subtask_param, obs, action):
+            task_sections = torch.split(subtask_param, tuple(self.subtask_nvec), dim=-1)
+            # NOTE {
+            # debug_obs = obs[t, j, :, k, l].squeeze(1)
+            # a_one_hot = self.a_one_hots[A[t]]
+            # interaction, count, obj, condition = task_sections
+            # correct_object = obj * debug_obs[:, 1 : 1 + self.subtask_nvec[2]]
+            # column1 = interaction[:, :1]
+            # column2 = interaction[:, 1:] * a_one_hot[:, 4:-1]
+            # correct_action = torch.cat([column1, column2], dim=-1)
+            # truth = (
+            #     correct_action.sum(-1, keepdim=True)
+            #     * correct_object.sum(-1, keepdim=True)
+            # ).detach()  # * condition[:, :1] + (1 - condition[:, :1])
+            # NOTE }
+            is_subtask = torch.sigmoid(self.f(subtask_param))
+            parts = (self.conv1(obs), self.a_one_hots[action]) + task_sections
+            outer_product_obs = 1
+            for i1, part in enumerate(parts):
+                for i2 in range(len(parts)):
+                    if i1 != i2:
+                        part.unsqueeze_(i2 + 1)
+                outer_product_obs = outer_product_obs * part
+
+            c_logits = self.phi_update(outer_product_obs.view(N, -1)) * is_subtask + (
+                1 - is_subtask
+            )
+            if self.hard_update:
+                raise NotImplementedError
+                # c_dist = FixedCategorical(logits=c_logits)
+                # c = actions.c[t]
+                # sample_new(c, c_dist)
+                # probs = c_dist.probs
+            else:
+                c = torch.sigmoid(c_logits[:, :1])
+                probs = torch.zeros_like(c_logits)  # dummy value
+            return c, probs
+
         return self.pack(
             self.inner_loop(
                 inputs=inputs,
@@ -313,6 +351,7 @@ class Recurrence(torch.jit.ScriptModule):
                 r=r,
                 actions=actions,
                 update_attention=update_attention,
+                gating_function=gating_function,
             )
         )
 
@@ -378,6 +417,7 @@ class Recurrence(torch.jit.ScriptModule):
         r,
         actions,
         update_attention,
+        gating_function,
         inputs,
     ):
         subtask = subtask.long().view(T, N)
@@ -387,8 +427,8 @@ class Recurrence(torch.jit.ScriptModule):
         G = torch.cat([actions.g, g.unsqueeze(0)], dim=0).long().squeeze(2)
         for t in range(T):
 
-            agent_layer = obs[t, :, 6, :, :].long()
-            j, k, l = torch.split(agent_layer.nonzero(), 1, dim=-1)
+            # agent_layer = obs[t, :, 6, :, :].long()
+            # j, k, l = torch.split(agent_layer.nonzero(), 1, dim=-1)
 
             # p
             p2 = update_attention(p, t)
@@ -410,52 +450,12 @@ class Recurrence(torch.jit.ScriptModule):
             sample_new(A[t], a_dist)
             # a[:] = 'wsadeq'.index(input('act:'))
 
-            def phi_update(subtask_param):
-                obs_part = self.conv1(obs[t])
-                task_sections = torch.split(
-                    subtask_param, tuple(self.subtask_nvec), dim=-1
-                )
-                # NOTE {
-                debug_obs = obs[t, j, :, k, l].squeeze(1)
-                a_one_hot = self.a_one_hots[A[t]]
-                interaction, count, obj, condition = task_sections
-                correct_object = obj * debug_obs[:, 1 : 1 + self.subtask_nvec[2]]
-                column1 = interaction[:, :1]
-                column2 = interaction[:, 1:] * a_one_hot[:, 4:-1]
-                correct_action = torch.cat([column1, column2], dim=-1)
-                truth = (
-                    correct_action.sum(-1, keepdim=True)
-                    * correct_object.sum(-1, keepdim=True)
-                ).detach()  # * condition[:, :1] + (1 - condition[:, :1])
-                # NOTE }
-                is_subtask = self.f(subtask_param)
-                parts = (obs_part, self.a_one_hots[A[t]]) + task_sections
-                outer_product_obs = 1
-                for i1, part in enumerate(parts):
-                    for i2 in range(len(parts)):
-                        if i1 != i2:
-                            part.unsqueeze_(i2 + 1)
-                    outer_product_obs = outer_product_obs * part
-
-                c_logits = self.phi_update(
-                    outer_product_obs.view(N, -1)
-                ) * is_subtask + (1 - is_subtask)
-                if self.hard_update:
-                    c_dist = FixedCategorical(logits=c_logits)
-                    c = actions.c[t]
-                    sample_new(c, c_dist)
-                    probs = c_dist.probs
-                else:
-                    c = torch.sigmoid(c_logits[:, :1])
-                    probs = torch.zeros_like(c_logits)  # dummy value
-                return c, probs
-
             # cr
-            cr, cr_probs = phi_update(subtask_param=r)
+            cr, cr_probs = gating_function(subtask_param=r, obs=obs[t], action=A[t])
 
             # cg
-            g_binary = M[torch.arange(N), G[t]]
-            cg, cg_probs = phi_update(subtask_param=g_binary)
+            g = M[torch.arange(N), G[t]]
+            cg, cg_probs = gating_function(subtask_param=g, obs=obs[t], action=A[t])
 
             yield RecurrentState(
                 cg=cg,

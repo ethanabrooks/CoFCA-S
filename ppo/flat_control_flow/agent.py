@@ -38,7 +38,9 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
         self.register_buffer("no_op_probs", no_op_probs)
         self.size_agent_subtask = int(self.obs_spaces.subtasks.nvec[0, :-1].sum())
         self.f = nn.Sequential(
-            init_(nn.Linear(self.condition_size, 1), "sigmoid"), Reshape(1)
+            init_(nn.Linear(self.condition_size, 1), "sigmoid"),
+            Reshape(1),
+            # nn.Sigmoid(),
         )
         self.agent_input_size = int(self.obs_spaces.subtasks.nvec[0, :-1].sum())
 
@@ -65,7 +67,7 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
     def condition_size(self):
         return int(self.obs_spaces.subtasks.nvec[0].sum())
 
-    def inner_loop(self, M, inputs, **kwargs):
+    def inner_loop(self, M, inputs, gating_function, **kwargs):
         i = self.obs_spaces.subtasks.nvec[0, -1]
 
         def update_attention(p, t):
@@ -83,9 +85,14 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
             trans = take_one_step * self.one_step + take_two_steps * self.two_steps
             return (p.unsqueeze(1) @ trans).squeeze(1)
 
+        def _gating_function(subtask_param, **_kwargs):
+            c, probs = gating_function(subtask_param, **_kwargs)
+            c2 = self.f(subtask_param)
+            return c + c2 - c * c2
+
         kwargs.update(update_attention=update_attention)
         is_subtask = M[:, :, -i].unsqueeze(-1)
         M[:, :, :-i] *= is_subtask
         yield from ppo.subtasks.Recurrence.inner_loop(
-            self, inputs=inputs, M=M, **kwargs
+            self, gating_function=gating_function, inputs=inputs, M=M, **kwargs
         )
