@@ -25,6 +25,11 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
 
         d, h, w = self.obs_shape
         self.phi_shift = nn.Sequential(
+            Parallel(
+                nn.Sequential(Reshape(1, 4, 4, 4)), nn.Sequential(Reshape(4, 1, 1, 1))
+            ),
+            Product(),
+            Reshape(4 * 4 * 4 * 4),
             # Parallel(
             # nn.Sequential(Reshape(1, d, h, w)),
             # nn.Sequential(Reshape(self.condition_size, 1, 1, 1)),
@@ -50,7 +55,7 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
             # nn.ReLU(),
             # Flatten(),
             # init_(nn.Linear(hidden_size, 1), "sigmoid"),
-            init_(nn.Linear(1, 1), "sigmoid"),
+            init_(nn.Linear(4 * 4 * 4 * 4, 1), "sigmoid"),
             # nn.Sigmoid(),
             Reshape(1, 1),
         )
