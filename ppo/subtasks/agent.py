@@ -195,7 +195,7 @@ class Recurrence(torch.jit.ScriptModule):
 
         self.phi_update = trace(
             lambda in_size: init_(nn.Linear(in_size, 2), "sigmoid"),
-            in_size=1,
+            in_size=1
             # in_size=(d * action_spaces.a.n * int(self.subtask_nvec.prod())),
         )
         self.phi_update2 = init_(nn.Linear(int(self.subtask_nvec.sum()), 1), "sigmoid")
