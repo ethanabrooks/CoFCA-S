@@ -2,11 +2,11 @@ import gym
 from gym import spaces
 from gym.spaces import Box
 import numpy as np
-from rl_utils import onehot
 import torch
 
 from common.vec_env import VecEnvWrapper
 from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
+from rl_utils import onehot
 
 
 # Can be used to test recurrent policies for Reacher-v2
@@ -56,6 +56,9 @@ class VecPyTorch(VecEnvWrapper):
     @staticmethod
     def extract_numpy(obs):
         if isinstance(obs, dict):
+            # print("VecPyTorch")
+            # for k, x in obs.items():
+            #     print(k, x.shape)
             return np.hstack([x.reshape(x.shape[0], -1) for x in obs.values()])
         if not isinstance(obs, (list, tuple)):
             return obs

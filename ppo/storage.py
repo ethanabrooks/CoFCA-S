@@ -25,6 +25,7 @@ Batch = namedtuple(
 def buffer_shape(space: gym.Space):
     shape = space_shape(space)
     if isinstance(shape, dict):
+        # print('buffer shape', shape)
         shape = (int(sum(np.prod(s) for s in shape.values())),)  # concatenate
     return shape
 

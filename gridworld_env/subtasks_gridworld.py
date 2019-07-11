@@ -1,4 +1,4 @@
-from collections import namedtuple
+from collections import Counter, namedtuple
 import itertools
 import re
 
@@ -8,10 +8,10 @@ from gym.envs.registration import EnvSpec
 from gym.spaces import Box
 from gym.utils import seeding
 import numpy as np
-from rl_utils import cartesian_product
 import six
 
 from ppo.utils import set_index
+from rl_utils import cartesian_product
 
 Subtask = namedtuple("Subtask", "interaction count object")
 Obs = namedtuple("Obs", "base subtask subtasks next_subtask")
@@ -54,7 +54,6 @@ class SubtasksGridWorld(gym.Env):
 
         # set on initialize
         self.initialized = False
-        self.iterate = False
         self.next_subtask = False
         self.obstacles_one_hot = np.zeros(self.desc.shape, dtype=bool)
         self.open_spaces = None
@@ -125,7 +124,9 @@ class SubtasksGridWorld(gym.Env):
                 next_subtask=spaces.Discrete(2),
             )._asdict()
         )
-        self.action_space = spaces.Discrete(len(self.transitions) + 2)
+        self.action_space = spaces.Discrete(
+            len(self.transitions) + 3
+        )  # +3: pick-up, transform, and no-op
         world = self
 
         class _Subtask(Subtask):
@@ -174,11 +175,11 @@ class SubtasksGridWorld(gym.Env):
 
     @property
     def transition_strings(self):
-        return np.array(list("👆👇👈👉pt"))
+        return np.array(list("👆👇👈👉ptn"))
 
     def render(self, mode="human", sleep_time=0.5):
         print("task:")
-        self.render_task()
+        print(self.task_string())
         if self.subtask is None:
             print("*************")
             print("Task Complete")
@@ -198,7 +199,7 @@ class SubtasksGridWorld(gym.Env):
         desc = self.desc.copy()
         desc[self.obstacles_one_hot] = "#"
         for pos, obj in self.objects.items():
-            desc[pos] = self.object_types[obj][0]
+            desc[pos] = np.append(self.object_types, "i")[obj][0]
         desc[tuple(self.pos)] = "*"
 
         for row in desc:
@@ -210,10 +211,8 @@ class SubtasksGridWorld(gym.Env):
     def render_current_subtask(self):
         print(f"{self.subtask_idx}:{self.subtask}")
 
-    def render_task(self):
-        for line in self.subtasks:
-            print(line)
-        print()
+    def task_string(self):
+        return "\n".join(self.subtasks)
 
     def subtasks_generator(self):
         last_subtask = None
@@ -284,9 +283,9 @@ class SubtasksGridWorld(gym.Env):
 
         return Obs(
             base=obs,
-            subtask=[self.subtask_idx],
+            subtask=self.subtask_idx,
             subtasks=np.array([self.subtasks]),
-            next_subtask=[self.next_subtask],
+            next_subtask=self.next_subtask,
         )._asdict()
 
     def seed(self, seed=None):
@@ -294,23 +293,41 @@ class SubtasksGridWorld(gym.Env):
         return [seed]
 
     def step(self, a):
-
-        # iterate
-        t = False
-        r = -0.1
-        if self.iterate:
-            if self.count == 0 or self.count is None:
-                self.subtask_idx = self.get_next_subtask()
-                if self.subtask is None:
-                    r = 1
-                    t = True
-                else:
-                    self.count = self.subtask.count
-            else:
-                self.count -= 1
+        self.last_action = a
+        self.next_subtask = False
+        if a == self.action_space.n - 1:
+            return self.get_observation(), -0.1, False, {}
 
         # act
         n_transitions = len(self.transitions)
+        pos = tuple(self.pos)
+        touching = pos in self.objects
+
+        if touching:
+            iterate = False
+            object_type = self.objects[pos]
+            interaction = self.interactions[self.subtask.interaction]
+            if "visit" == interaction and object_type == self.subtask.object:
+                iterate = True
+            if a >= n_transitions:
+                if a - n_transitions == 0:  # pick up
+                    del self.objects[pos]
+                    if "pick-up" == interaction and object_type == self.subtask.object:
+                        iterate = True
+                elif a - n_transitions == 1:  # transform
+                    self.objects[pos] = len(self.object_types)
+                    if (
+                        "transform" == interaction
+                        and object_type == self.subtask.object
+                    ):
+                        iterate = True
+            if iterate:
+                if self.count == 0:
+                    self.subtask_idx = self.get_next_subtask()
+                    self.next_subtask = True
+                else:
+                    self.count -= 1
+
         if a < n_transitions:
             # move
             pos = self.pos + self.transitions[a]
@@ -319,32 +336,13 @@ class SubtasksGridWorld(gym.Env):
             a_min = np.zeros(2)
             a_max = np.array(self.desc.shape) - 1
             self.pos = np.clip(pos, a_min, a_max).astype(int)
-        pos = tuple(self.pos)
-        touching = pos in self.objects
 
-        # set iterate
-        self.iterate = False
-        if touching and not t:
-            object_type = self.objects[pos]
-            interaction = self.interactions[self.subtask.interaction]
-            if "visit" == interaction:
-                self.iterate = object_type == self.subtask.object
-            if a >= n_transitions:
-                if a - n_transitions == 0:  # pick up
-                    del self.objects[pos]
-                    if "pick-up" == interaction:
-                        self.iterate = (
-                            object_type == self.subtask.object
-                        )  # picked up object
-                elif a - n_transitions == 1:  # transform
-                    self.objects[pos] = len(self.object_types)
-                    if "transform" == interaction:
-                        self.iterate = object_type == self.subtask.object
-
-        self.last_action = a
-        self.last_terminal = t
-        self.next_subtask = self.iterate and self.count == 0
+        self.last_terminal = t = self.subtask is None
+        r = 1.0 if t else -0.1
         return self.get_observation(), r, t, {}
+
+    def evaluate_condition(self):
+        return self.conditions[self.subtask_idx] in self.objects.values()
 
     def get_next_subtask(self):
         return self.subtask_idx + 1

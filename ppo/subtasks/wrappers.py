@@ -11,9 +11,10 @@ Actions = namedtuple("Actions", "a cr cg g")
 class DebugWrapper(gym.Wrapper):
     def __init__(self, env):
         super().__init__(env)
-        self.last_guess = None
+        self.guess = 0
+        self.truth = 0
         self.last_reward = None
-        action_spaces = Actions(*env.action_space.spaces)
+        action_spaces = Actions(**env.action_space.spaces)
         for x in action_spaces:
             assert isinstance(x, Discrete)
         self.action_sections = len(action_spaces)
@@ -21,32 +22,26 @@ class DebugWrapper(gym.Wrapper):
 
     def step(self, action):
         actions = Actions(*[x.item() for x in np.split(action, self.action_sections)])
+        self.truth = int(self.env.unwrapped.subtask_idx)
+        self.guess = int(actions.g)
+        # print("truth", truth)
+        # print("guess", guess)
+        r = 0
+        if self.env.unwrapped.subtask is not None and self.guess != self.truth:
+            r = -0.1
+            import ipdb
+
+            ipdb.set_trace()
         s, _, t, i = super().step(action)
-        guess = int(actions.g)
-        env = self.env.unwrapped
-        truth = int(env.subtask_idx)
-        if truth > env.n_subtasks:  # truth is out of bounds
-            truth = self.truth  # keep truth at old value
-
-        r = float(np.all(guess == truth)) - 1
-        # if r < 0:
-        #     import ipdb
-        #     ipdb.set_trace()
-
-        self.truth = truth
-        self.last_guess = guess
         self.last_reward = r
         return s, r, t, i
 
     def render(self, mode="human"):
-        print("########################################")
+        print("guess", self.guess)
+        print("truth", self.truth)
+        print("reward", self.last_reward)
         super().render(sleep_time=0)
-        print("guess", self.last_guess)
-        print("truth", self.env.unwrapped.subtask_idx)
-        print("$$$$$$$$$$$$$$")
-        print("$ reward", self.last_reward, "$")
-        print("$$$$$$$$$$$$$$")
-        # input('pause')
+        print("########################################")
 
 
 class Wrapper(gym.Wrapper):
@@ -71,7 +66,16 @@ class Wrapper(gym.Wrapper):
     def render(self, mode="human", **kwargs):
         super().render(mode=mode)
         if self.last_g is not None:
-            env = self.env.unwrapped
-            subtask = env.subtasks[self.last_g]
-            print("Assigned subtask:", f"{self.last_g}:{subtask}")
+            self.render_assigned_subtask()
         input("paused")
+
+    def render_assigned_subtask(self):
+        env = self.env.unwrapped
+        g_type, g_count, g_obj = tuple(env.subtasks[self.last_g])
+        print(
+            "Assigned subtask:",
+            self.last_g,
+            env.interactions[g_type],
+            g_count + 1,
+            env.object_types[g_obj],
+        )
