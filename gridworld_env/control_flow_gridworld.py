@@ -150,7 +150,7 @@ class ControlFlowGridWorld(SubtasksGridWorld):
         )
         non_existing = np.array(list(set(object_types) - set(existing)))
         n_passing = self.np_random.choice(
-            2, p=[self.passing_prob, 1 - self.passing_prob], size=self.n_subtasks
+            2, p=[1 - self.passing_prob, self.passing_prob], size=self.n_subtasks
         ).sum()
         passing = self.np_random.choice(existing, size=n_passing)
         failing = self.np_random.choice(non_existing, size=self.n_subtasks - n_passing)
