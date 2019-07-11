@@ -47,7 +47,7 @@ class FlatControlFlowGridWorld(ControlFlowGridWorld):
     def reset(self):
         one_step_episode = self.np_random.rand() < 0.5
         if one_step_episode:
-            self.branching_episode = True  # self.np_random.rand() < 0.5
+            self.branching_episode = False  # self.np_random.rand() < 0.5
 
             # agent has to take one step when either
             if self.branching_episode:
