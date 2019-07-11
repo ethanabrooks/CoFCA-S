@@ -193,25 +193,11 @@ class Recurrence(torch.jit.ScriptModule):
 
         self.critic = init_(nn.Linear(input_size, 1))
 
-        if multiplicative_interaction:
-            raise NotImplementedError
-            self.phi_update = nn.Sequential(
-                Parallel(
-                    # self.conv2,  # obs
-                    self.conv1,
-                    init_(nn.Linear(action_spaces.a.n, hidden_size)),  # action
-                    *[
-                        init_(nn.Linear(i, hidden_size)) for i in self.subtask_nvec
-                    ],  # subtask parameter
-                ),
-                Product(),
-                init_(nn.Linear(hidden_size, 2), "sigmoid"),
-            )
-        else:
-            self.phi_update = trace(
-                lambda in_size: init_(nn.Linear(in_size, 2), "sigmoid"),
-                in_size=(d * action_spaces.a.n * int(self.subtask_nvec.prod())),
-            )
+        self.phi_update = trace(
+            lambda in_size: init_(nn.Linear(in_size, 2), "sigmoid"),
+            in_size=(d * action_spaces.a.n * int(self.subtask_nvec.prod())),
+        )
+        self.phi_update2 = init_(nn.Linear(int(self.subtask_nvec.sum()), 1), "sigmoid")
 
         for i, x in enumerate(self.subtask_nvec):
             self.register_buffer(f"part{i}_one_hot", torch.eye(int(x)))
@@ -432,7 +418,7 @@ class Recurrence(torch.jit.ScriptModule):
                 # NOTE {
                 # debug_obs = obs[t, j, :, k, l].squeeze(1)
                 # a_one_hot = self.a_one_hots[A[t]]
-                interaction, count, obj, conditions = task_sections
+                # interaction, count, obj, conditions = task_sections
                 # correct_object = obj * debug_obs[:, 1 : 1 + self.subtask_nvec[2]]
                 # column1 = interaction[:, :1]
                 # column2 = interaction[:, 1:] * a_one_hot[:, 4:-1]
@@ -442,21 +428,18 @@ class Recurrence(torch.jit.ScriptModule):
                 # * correct_object.sum(-1, keepdim=True)
                 # ).detach() * conditions[:, :1] + (1 - conditions[:, :1])
                 # NOTE }
-                is_subtask = conditions[:, :1].clone()
+                is_subtask = self.phi_update2(subtask_param)
                 parts = (obs_part, self.a_one_hots[A[t]]) + task_sections
-                if self.multiplicative_interaction:
-                    c_logits = self.phi_update(parts)
-                else:
-                    outer_product_obs = 1
-                    for i1, part in enumerate(parts):
-                        for i2 in range(len(parts)):
-                            if i1 != i2:
-                                part.unsqueeze_(i2 + 1)
-                        outer_product_obs = outer_product_obs * part
+                outer_product_obs = 1
+                for i1, part in enumerate(parts):
+                    for i2 in range(len(parts)):
+                        if i1 != i2:
+                            part.unsqueeze_(i2 + 1)
+                    outer_product_obs = outer_product_obs * part
 
-                    c_logits = self.phi_update(
-                        outer_product_obs.view(N, -1)
-                    ) * is_subtask + (1 - is_subtask)
+                c_logits = self.phi_update(
+                    outer_product_obs.view(N, -1)
+                ) * is_subtask + (1 - is_subtask)
                 if self.hard_update:
                     c_dist = FixedCategorical(logits=c_logits)
                     c = actions.c[t]
