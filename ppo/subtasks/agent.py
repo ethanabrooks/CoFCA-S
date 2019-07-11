@@ -195,7 +195,8 @@ class Recurrence(torch.jit.ScriptModule):
 
         self.phi_update = trace(
             lambda in_size: init_(nn.Linear(in_size, 2), "sigmoid"),
-            in_size=(d * action_spaces.a.n * int(self.subtask_nvec.prod())),
+            in_size=1,
+            # in_size=(d * action_spaces.a.n * int(self.subtask_nvec.prod())),
         )
         self.phi_update2 = init_(nn.Linear(int(self.subtask_nvec.sum()), 1), "sigmoid")
 
@@ -416,17 +417,17 @@ class Recurrence(torch.jit.ScriptModule):
                     subtask_param, tuple(self.subtask_nvec), dim=-1
                 )
                 # NOTE {
-                # debug_obs = obs[t, j, :, k, l].squeeze(1)
-                # a_one_hot = self.a_one_hots[A[t]]
-                # interaction, count, obj, conditions = task_sections
-                # correct_object = obj * debug_obs[:, 1 : 1 + self.subtask_nvec[2]]
-                # column1 = interaction[:, :1]
-                # column2 = interaction[:, 1:] * a_one_hot[:, 4:-1]
-                # correct_action = torch.cat([column1, column2], dim=-1)
-                # truth = (
-                # correct_action.sum(-1, keepdim=True)
-                # * correct_object.sum(-1, keepdim=True)
-                # ).detach() * conditions[:, :1] + (1 - conditions[:, :1])
+                debug_obs = obs[t, j, :, k, l].squeeze(1)
+                a_one_hot = self.a_one_hots[A[t]]
+                interaction, count, obj, conditions = task_sections
+                correct_object = obj * debug_obs[:, 1 : 1 + self.subtask_nvec[2]]
+                column1 = interaction[:, :1]
+                column2 = interaction[:, 1:] * a_one_hot[:, 4:-1]
+                correct_action = torch.cat([column1, column2], dim=-1)
+                truth = (
+                    correct_action.sum(-1, keepdim=True)
+                    * correct_object.sum(-1, keepdim=True)
+                ).detach() * conditions[:, :1] + (1 - conditions[:, :1])
                 # NOTE }
                 is_subtask = self.phi_update2(subtask_param)
                 parts = (obs_part, self.a_one_hots[A[t]]) + task_sections
@@ -437,9 +438,8 @@ class Recurrence(torch.jit.ScriptModule):
                             part.unsqueeze_(i2 + 1)
                     outer_product_obs = outer_product_obs * part
 
-                c_logits = self.phi_update(
-                    outer_product_obs.view(N, -1)
-                ) * is_subtask + (1 - is_subtask)
+                # c_logits = self.phi_update( outer_product_obs.view(N, -1)) * is_subtask + (1 - is_subtask)
+                c_logits = self.phi_update(truth) * is_subtask + (1 - is_subtask)
                 if self.hard_update:
                     c_dist = FixedCategorical(logits=c_logits)
                     c = actions.c[t]
