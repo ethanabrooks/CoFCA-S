@@ -195,8 +195,7 @@ class Recurrence(torch.jit.ScriptModule):
 
         self.phi_update = trace(
             lambda in_size: init_(nn.Linear(in_size, 2), "sigmoid"),
-            in_size=1,
-            # in_size=(d * action_spaces.a.n * int(self.subtask_nvec.prod())),
+            in_size=(d * action_spaces.a.n * int(self.subtask_nvec.prod())),
         )
         self.phi_update2 = init_(nn.Linear(int(self.subtask_nvec.sum()), 1), "sigmoid")
 
@@ -438,8 +437,9 @@ class Recurrence(torch.jit.ScriptModule):
                             part.unsqueeze_(i2 + 1)
                     outer_product_obs = outer_product_obs * part
 
-                # c_logits = self.phi_update( outer_product_obs.view(N, -1)) * is_subtask + (1 - is_subtask)
-                c_logits = self.phi_update(truth) * is_subtask + (1 - is_subtask)
+                c_logits = self.phi_update(
+                    outer_product_obs.view(N, -1)
+                ) * is_subtask + (1 - is_subtask)
                 if self.hard_update:
                     c_dist = FixedCategorical(logits=c_logits)
                     c = actions.c[t]
