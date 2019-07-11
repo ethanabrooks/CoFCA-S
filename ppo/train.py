@@ -271,6 +271,10 @@ class Train:
             # Observe reward and next obs
             obs, reward, done, infos = envs.step(act.action)
 
+            for d in infos:
+                for k, v in d.items():
+                    episode_counter.update({k: float(v) / num_steps / len(infos)})
+
             # track rewards
             counter["reward"] += reward.numpy()
             counter["time_step"] += np.ones_like(done)

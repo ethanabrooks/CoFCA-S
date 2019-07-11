@@ -2,7 +2,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.nn as nn
 
 from gridworld_env.flat_control_gridworld import Obs
 import ppo.control_flow
@@ -66,7 +65,7 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
 
     @property
     def condition_size(self):
-        return int(self.obs_spaces.subtasks.nvec[0, :-1].sum())
+        return int(self.obs_spaces.subtasks.nvec[0].sum())
 
     def inner_loop(self, M, inputs, **kwargs):
         def update_attention(p, t):
@@ -77,10 +76,9 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
             condition = r[:, -i:].view(N, i, 1, 1)
             obs = inputs.base[t, :, 1:-2]
             is_subtask = condition[:, 0]
-            # is_subtask = self.phi_shift2(r)
-
+            is_subtask = self.phi_shift2(r)
             # pred = ((condition[:, 1:] * obs) > 0).view(N, 1, 1, -1).any(dim=-1).float()
-            pred = self.phi_shift((inputs.base[t], r[:, -self.condition_size :]))
+            pred = self.phi_shift((inputs.base[t], r))
             take_two_steps = (1 - is_subtask) * (1 - pred)
             take_one_step = 1 - take_two_steps
             trans = take_one_step * self.one_step + take_two_steps * self.two_steps

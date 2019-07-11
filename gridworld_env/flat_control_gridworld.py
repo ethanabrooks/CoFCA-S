@@ -17,7 +17,7 @@ def filter_for_obs(d):
 class FlatControlFlowGridWorld(ControlFlowGridWorld):
     def __init__(self, *args, n_subtasks, **kwargs):
         n_subtasks += 1
-        super().__init__(*args, n_subtasks=n_subtasks, passing_prob=0.5, **kwargs)
+        super().__init__(*args, n_subtasks=n_subtasks, passing_prob=0, **kwargs)
         obs_spaces = self.observation_space.spaces
         subtask_nvec = obs_spaces["subtasks"].nvec[0]
         self.lines = None
@@ -45,11 +45,16 @@ class FlatControlFlowGridWorld(ControlFlowGridWorld):
         return "\n".join(super().task_string().split("\n")[1:])
 
     def reset(self):
-        # self.branching_episode = self.np_random.rand() < 0.5
-        self.branching_episode = True
+        self.branching_episode = self.np_random.rand() < 0.5
+        # self.branching_episode = True
         o = super().reset()
         self.subtask_idx = self.get_next_subtask()
         return o
+
+    def step(self, action):
+        s, r, t, i = super().step(action)
+        i.update(passing=self.passing)
+        return s, r, t, i
 
     def get_observation(self):
         obs = super().get_observation()
@@ -61,6 +66,9 @@ class FlatControlFlowGridWorld(ControlFlowGridWorld):
                 yield subtask  # + (0,) TODO
                 # if pos != neg:
                 #     yield (0, 0, 0, condition + 1)
+
+        lines = np.vstack(list(get_lines())[1:])
+        self.lines = np.pad(lines, [(0, self.n_lines - len(lines)), (0, 0)], "constant")
 
         lines = np.vstack(list(get_lines())[1:])
         self.lines = np.pad(lines, [(0, self.n_lines - len(lines)), (0, 0)], "constant")
