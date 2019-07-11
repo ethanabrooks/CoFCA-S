@@ -66,13 +66,14 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
         return int(self.obs_spaces.subtasks.nvec[0].sum())
 
     def inner_loop(self, M, inputs, **kwargs):
+        i = self.obs_spaces.subtasks.nvec[0, -1]
+
         def update_attention(p, t):
             # r = (p.unsqueeze(1) @ M).squeeze(1)
             r = (p.unsqueeze(1) @ M).squeeze(1)
-            N = p.size(0)
-            i = self.obs_spaces.subtasks.nvec[0, -1]
-            condition = r[:, -i:].view(N, i, 1, 1)
-            obs = inputs.base[t, :, 1:-2]
+            # N = p.size(0)
+            # condition = r[:, -i:].view(N, i, 1, 1)
+            # obs = inputs.base[t, :, 1:-2]
             # is_subtask = condition[:, 0]
             is_subtask = self.f(r).unsqueeze(-1)
             # pred = ((condition[:, 1:] * obs) > 0).view(N, 1, 1, -1).any(dim=-1).float()
@@ -83,6 +84,8 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
             return (p.unsqueeze(1) @ trans).squeeze(1)
 
         kwargs.update(update_attention=update_attention)
+        is_subtask = M[:, :, -i].unsqueeze(-1)
+        M[:, :, :-i] *= is_subtask
         yield from ppo.subtasks.Recurrence.inner_loop(
             self, inputs=inputs, M=M, **kwargs
         )
