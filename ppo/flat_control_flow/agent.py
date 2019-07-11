@@ -40,7 +40,7 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
         self.f = nn.Sequential(
             init_(nn.Linear(self.condition_size, 1), "sigmoid"),
             Reshape(1),
-            # nn.Sigmoid(),
+            nn.Sigmoid(),
         )
         self.agent_input_size = int(self.obs_spaces.subtasks.nvec[0, :-1].sum())
 
@@ -77,18 +77,17 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
             # condition = r[:, -i:].view(N, i, 1, 1)
             # obs = inputs.base[t, :, 1:-2]
             # is_subtask = condition[:, 0]
-            is_subtask = torch.sigmoid(self.f(r).unsqueeze(-1))
+            is_subtask = self.f(r).unsqueeze(-1)
             # pred = ((condition[:, 1:] * obs) > 0).view(N, 1, 1, -1).any(dim=-1).float()
-            pred = self.phi_shift((inputs.base[t], r))
-            take_one_step = torch.sigmoid(pred)
-            take_two_steps = 1 - take_one_step
-            trans = take_one_step * self.one_step + take_two_steps * self.two_steps
+            condition_passes = self.phi_shift((inputs.base[t], r))
+            condition_fails = 1 - condition_passes
+            trans = condition_passes * self.one_step + condition_fails * self.two_steps
             trans = is_subtask * self.one_step + (1 - is_subtask) * trans
             return (p.unsqueeze(1) @ trans).squeeze(1)
 
         def _gating_function(subtask_param, **_kwargs):
             c, probs = gating_function(subtask_param, **_kwargs)
-            c2 = torch.sigmoid(self.f(subtask_param))
+            c2 = self.f(subtask_param)
             return c + c2 - c * c2, probs
 
         kwargs.update(update_attention=update_attention)
