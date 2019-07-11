@@ -50,7 +50,7 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
             nn.ReLU(),
             Flatten(),
             init_(nn.Linear(hidden_size, 1), "sigmoid"),
-            nn.Sigmoid(),
+            # nn.Sigmoid(),
             Reshape(1, 1),
         )
 
@@ -76,11 +76,11 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
         def update_attention(p, t):
             c = (p.unsqueeze(1) @ conditions).squeeze(1)
             phi_in = inputs.base[t, :, 1:-2] * c.view(N, conditions.size(2), 1, 1)
-            truth = torch.max(phi_in.view(N, -1), dim=-1).values.float().view(N, 1, 1)
+            # truth = torch.max(phi_in.view(N, -1), dim=-1).values.float().view(N, 1, 1)
             # print("inputs.base[t, :, 1:-2]", inputs.base[t, :, 1:-2])
             # print("c", c)
-            pred = truth
-            # pred = self.phi_shift((inputs.base[t], c))
+            # pred = truth
+            pred = self.phi_shift((inputs.base[t], c))
             trans = pred * true_path + (1 - pred) * false_path
             # print("trans")
             # print(trans.round())
