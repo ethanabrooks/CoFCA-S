@@ -38,9 +38,7 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
         self.register_buffer("no_op_probs", no_op_probs)
         self.size_agent_subtask = int(self.obs_spaces.subtasks.nvec[0, :-1].sum())
         self.f = nn.Sequential(
-            init_(nn.Linear(1, 1), "sigmoid"),
-            Reshape(1)
-            # init_(nn.Linear(self.condition_size, 1), "sigmoid"), Reshape(1, 1)
+            init_(nn.Linear(self.condition_size, 1), "sigmoid"), Reshape(1)
         )
         self.agent_input_size = int(self.obs_spaces.subtasks.nvec[0, :-1].sum())
 
@@ -76,7 +74,7 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
             condition = r[:, -i:].view(N, i, 1, 1)
             obs = inputs.base[t, :, 1:-2]
             # is_subtask = condition[:, 0]
-            is_subtask = self.f(condition[:, :1]).unsqueeze(-1)
+            is_subtask = self.f(r).unsqueeze(-1)
             # pred = ((condition[:, 1:] * obs) > 0).view(N, 1, 1, -1).any(dim=-1).float()
             pred = self.phi_shift((inputs.base[t], r))
             take_one_step = torch.sigmoid(is_subtask + pred)

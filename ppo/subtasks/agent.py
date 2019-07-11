@@ -429,7 +429,7 @@ class Recurrence(torch.jit.ScriptModule):
                     * correct_object.sum(-1, keepdim=True)
                 ).detach()  # * condition[:, :1] + (1 - condition[:, :1])
                 # NOTE }
-                is_subtask = self.f(condition[:, :1].clone())
+                is_subtask = self.f(subtask_param)
                 parts = (obs_part, self.a_one_hots[A[t]]) + task_sections
                 outer_product_obs = 1
                 for i1, part in enumerate(parts):
