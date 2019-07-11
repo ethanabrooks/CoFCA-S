@@ -427,9 +427,9 @@ class Recurrence(torch.jit.ScriptModule):
                 truth = (
                     correct_action.sum(-1, keepdim=True)
                     * correct_object.sum(-1, keepdim=True)
-                ).detach() * conditions[:, :1] + (1 - conditions[:, :1])
+                ).detach()  # * conditions[:, :1] + (1 - conditions[:, :1])
                 # NOTE }
-                is_subtask = self.phi_update2(subtask_param)
+                is_subtask = conditions[:, :1]
                 parts = (obs_part, self.a_one_hots[A[t]]) + task_sections
                 outer_product_obs = 1
                 for i1, part in enumerate(parts):
