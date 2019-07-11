@@ -286,11 +286,10 @@ class Recurrence(torch.jit.ScriptModule):
         r = hx.r
         for x in hx:
             x.squeeze_(0)
-        if torch.any(new_episode):
-            p[new_episode, 0] = 1.0  # initialize pointer to first subtask
-            r[new_episode] = M[new_episode, 0]  # initialize r to first subtask
-            # initialize g to first subtask
-            hx.g[new_episode] = 0.0
+        p[new_episode, 0] = 1.0  # initialize pointer to first subtask
+        r[new_episode] = M[new_episode, 0]  # initialize r to first subtask
+        # initialize g to first subtask
+        hx.g[new_episode] = 0.0
 
         def update_attention(p, t):
             p2 = F.pad(p, [1, 0])[:, :-1]
