@@ -18,7 +18,6 @@ class DebugWrapper(gym.Wrapper):
         for x in action_spaces:
             assert isinstance(x, Discrete)
         self.action_sections = len(action_spaces)
-        self.truth = None
 
     def step(self, action):
         actions = Actions(*[x.item() for x in np.split(action, self.action_sections)])

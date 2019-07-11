@@ -69,8 +69,7 @@ def make_subtasks_env(env_id, **kwargs):
         elif task_type == "flat-control-flow":
             env = ppo.flat_control_flow.Wrapper(FlatControlFlowGridWorld(**_kwargs))
         else:
-            env = SubtasksGridWorld(**_kwargs)
-        env = ppo.subtasks.Wrapper(env)
+            env = ppo.subtasks.Wrapper(SubtasksGridWorld(**_kwargs))
         if debug:
             if task_type == "flat-control-flow":
                 env = ppo.flat_control_flow.DebugWrapper(env)

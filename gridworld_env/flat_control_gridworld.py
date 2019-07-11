@@ -1,28 +1,46 @@
-from collections import OrderedDict, namedtuple
+from collections import Counter, OrderedDict, namedtuple
+from enum import Enum
 
 from gym import spaces
 import numpy as np
 
-from gridworld_env.control_flow_gridworld import ControlFlowGridWorld
+from dataclasses import dataclass
+from gridworld_env import SubtasksGridWorld
 
-Obs = namedtuple(
-    "Obs", "base subtask subtasks conditions control next_subtask pred lines"
-)
+Obs = namedtuple("Obs", "base subtask lines")
+
+
+@dataclass
+class If:
+    obj: int
+
+    def __str__(self):
+        return f"if {self.obj}:"
+
+
+class Else:
+    def __str__(self):
+        return "else:"
+
+
+class EndIf:
+    def __str__(self):
+        return "endif"
 
 
 def filter_for_obs(d):
     return {k: v for k, v in d.items() if k in Obs._fields}
 
 
-class FlatControlFlowGridWorld(ControlFlowGridWorld):
-    def __init__(self, *args, n_subtasks, **kwargs):
-        n_subtasks += 1
-        super().__init__(*args, n_subtasks=n_subtasks, **kwargs)
+class FlatControlFlowGridWorld(SubtasksGridWorld):
+    def __init__(self, *args, n_iterations, **kwargs):
+        self.n_iterations = n_iterations
+        super().__init__(*args, **kwargs)
         obs_spaces = self.observation_space.spaces
         subtask_nvec = obs_spaces["subtasks"].nvec[0]
+        self.n_lines = 5 * n_iterations
         self.lines = None
         # noinspection PyProtectedMember
-        self.n_lines = self.n_subtasks + self.n_subtasks // 2 - 1
         self.observation_space.spaces.update(
             lines=spaces.MultiDiscrete(
                 np.tile(
@@ -39,35 +57,123 @@ class FlatControlFlowGridWorld(ControlFlowGridWorld):
         self.observation_space.spaces = Obs(
             **filter_for_obs(self.observation_space.spaces)
         )._asdict()
-        self.branching_episode = None
 
     def task_string(self):
-        return "\n".join(super().task_string().split("\n")[1:])
+        lines_iter = iter(self.lines)
+
+        def helper(indent):
+            line = next(lines_iter)
+            if isinstance(line, If):
+                yield f"{indent}{line}"
+                yield from helper(indent + "    ")
+            elif isinstance(line, Else):
+                yield f"{indent.rstrip('    ')}{line}"
+                yield from helper(indent)
+            elif isinstance(line, EndIf):
+                indent = indent.rstrip("    ")
+                yield f"{indent}{line}"
+                yield from helper(indent)
+
+        return "\n".join(helper(""))
+
+    def get_observation(self):
+        obs = super().get_observation()
+        obs.update(lines=self.lines)
+        return Obs(**filter_for_obs(obs))._asdict()
 
     def reset(self):
-        one_step_episode = self.np_random.rand() < 0.5
-        if one_step_episode:
-            self.branching_episode = self.np_random.rand() < 0.5
+        interactions = list(range(len(self.interactions)))
+        irreversible_interactions = [
+            j for j, i in enumerate(self.interactions) if i in ("pick-up", "transform")
+        ]
 
-            # agent has to take one step when either
-            if self.branching_episode:
-                # encontering a passing condition
-                self.passing_prob = 1
-            else:
-                # or a subtask
-                self.passing_prob = 0.5
-        else:
-            # agent has to take two steps when encountering a failed condition
-            self.branching_episode = True
-            self.passing_prob = 0
-        o = super().reset()
-        self.subtask_idx = self.get_next_subtask()
-        return o
+        object_types = np.arange(len(self.object_types))
+        non_existing = [self.np_random.choice(object_types)]
+        existing = list(set(object_types) - set(non_existing))
+        task_counter = Counter(lines=[], required=[], available=[])
 
-    def step(self, action):
-        s, r, t, i = super().step(action)
-        i.update(passing=self.passing)
-        return s, r, t, i
+        # noinspection PyTypeChecker
+        def generate_task(i):
+            if i == 0:
+                return
+            one_step = self.np_random.rand() < 0.5
+            subtask_obj = self.np_random.choice(existing)
+            if subtask_obj not in task_counter["available"]:
+                task_counter.update(required=[subtask_obj])
+            self.np_random.shuffle(irreversible_interactions)
+            passing_interaction, failing_interaction = (
+                irreversible_interactions
+                if i == 1
+                else self.np_random.choice(interactions, size=2)
+            )
+            if one_step:
+                branching = self.np_random.rand() < 0.5
+                if branching:
+                    condition_obj = self.np_random.choice(existing)
+                    if condition_obj not in task_counter["available"]:
+                        task_counter.update(
+                            available=[condition_obj], required=[condition_obj]
+                        )
+                    task_counter.update(
+                        lines=[
+                            If(condition_obj),
+                            self.Subtask(
+                                interaction=passing_interaction,
+                                count=0,
+                                object=subtask_obj,
+                            ),
+                        ]
+                    )
+
+                    # recurse
+                    generate_task(i - 1)
+
+                    task_counter.update(
+                        lines=[
+                            Else,
+                            self.Subtask(
+                                interaction=failing_interaction,
+                                count=0,
+                                object=subtask_obj,
+                            ),
+                        ]
+                    )
+                else:  # not branching but still one-step
+                    subtask_interaction = self.np_random.choice(interactions)
+                    if subtask_interaction not in irreversible_interactions:
+                        task_counter.update(available=[subtask_obj])
+
+                    task_counter.update(
+                        lines=[
+                            self.Subtask(
+                                interaction=subtask_interaction,
+                                count=0,
+                                object=subtask_obj,
+                            )
+                        ]
+                    )
+            else:  # two-step
+                task_counter.update(
+                    lines=[
+                        If(self.np_random.choice(non_existing)),
+                        self.Subtask(
+                            interaction=failing_interaction, count=0, object=subtask_obj
+                        ),
+                        Else,
+                        self.Subtask(
+                            interaction=passing_interaction, count=0, object=subtask_obj
+                        ),
+                        EndIf,
+                    ]
+                )
+
+                # recurse
+                generate_task(i - 1)
+
+        generate_task(self.n_iterations)
+        self.required_objects = task_counter["required"]
+        self.lines = task_counter["lines"]
+        return super().reset()
 
     def get_observation(self):
         obs = super().get_observation()
