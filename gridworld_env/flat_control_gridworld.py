@@ -45,8 +45,7 @@ class FlatControlFlowGridWorld(ControlFlowGridWorld):
         return "\n".join(super().task_string().split("\n")[1:])
 
     def reset(self):
-        # self.branching_episode = self.np_random.rand() < 0.5
-        self.branching_episode = True
+        self.branching_episode = self.np_random.rand() < 0.5
         o = super().reset()
         self.subtask_idx = self.get_next_subtask()
         return o
