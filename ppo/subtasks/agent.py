@@ -312,7 +312,6 @@ class Recurrence(torch.jit.ScriptModule):
             #     * correct_object.sum(-1, keepdim=True)
             # ).detach()  # * condition[:, :1] + (1 - condition[:, :1])
             # NOTE }
-            is_subtask = torch.sigmoid(self.f(subtask_param))
             parts = (self.conv1(obs), self.a_one_hots[action]) + task_sections
             outer_product_obs = 1
             for i1, part in enumerate(parts):
@@ -321,9 +320,7 @@ class Recurrence(torch.jit.ScriptModule):
                         part.unsqueeze_(i2 + 1)
                 outer_product_obs = outer_product_obs * part
 
-            c_logits = self.phi_update(outer_product_obs.view(N, -1)) * is_subtask + (
-                1 - is_subtask
-            )
+            c_logits = self.phi_update(outer_product_obs.view(N, -1))
             if self.hard_update:
                 raise NotImplementedError
                 # c_dist = FixedCategorical(logits=c_logits)
