@@ -75,9 +75,8 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
             obs = inputs.base[t, :, 1:-2]
             # is_subtask = self.phi_shift2(r)
             is_subtask = condition[:, 0]
-            pred = ((condition[:, 1:] * obs) > 0).view(N, 1, 1, -1).any(dim=-1).float()
-            # pred = self.phi_shift((inputs.base[t], r))
-            pred = self.phi_shift(pred)
+            # pred = ((condition[:, 1:] * obs) > 0).view(N, 1, 1, -1).any(dim=-1).float()
+            pred = self.phi_shift((inputs.base[t], r))
             take_one_step = torch.sigmoid(is_subtask + pred)
             take_two_steps = 1 - take_one_step
             trans = take_one_step * self.one_step + take_two_steps * self.two_steps
