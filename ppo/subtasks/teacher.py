@@ -16,7 +16,7 @@ Obs = namedtuple("Obs", "base subtask")
 class Teacher(Agent):
     def __init__(self, obs_spaces, action_space, **kwargs):
         # noinspection PyProtectedMember
-        self.subtask_nvec = obs_spaces.subtasks.nvec[0]
+        self.subtask_nvec = obs_spaces.subtasks.nvec[0, :3]
         self.obs_spaces = obs_spaces
         self.obs_sections = [int(np.prod(s.shape)) for s in self.obs_spaces]
         _, h, w = self.obs_shape = self.obs_spaces.base.shape

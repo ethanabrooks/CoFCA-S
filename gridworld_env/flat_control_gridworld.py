@@ -106,7 +106,6 @@ class FlatControlFlowGridWorld(SubtasksGridWorld):
             )
             if one_step:
                 branching = self.np_random.rand() < 0.5
-                print("branching", branching)
                 if branching:
                     condition_obj = self.np_random.choice(existing)
                     self.lines += [
@@ -130,7 +129,6 @@ class FlatControlFlowGridWorld(SubtasksGridWorld):
                         interaction=failing_interaction, count=0, object=subtask_obj
                     ),
                 ]
-            print("one-step", one_step)
 
         available = []
         self.required_objects = []
@@ -147,8 +145,6 @@ class FlatControlFlowGridWorld(SubtasksGridWorld):
                     if line.interaction not in irreversible_interactions:
                         available += [line.object]
 
-        for l in self.lines:
-            print(str(l))
         return super().reset()
 
     def get_required_objects(self, _):
