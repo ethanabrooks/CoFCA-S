@@ -52,7 +52,7 @@ class Wrapper(ppo.subtasks.Wrapper):
     def __init__(self, env):
         super().__init__(env)
         self.action_space.spaces.update(
-            g=spaces.Discrete(len(env.observation_space.spaces["lines"].nvec))
+            g=spaces.Discrete(len(env.observation_space.spaces["subtasks"].nvec))
         )
 
     def render_assigned_subtask(self):
