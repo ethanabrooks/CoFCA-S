@@ -1,9 +1,9 @@
 from collections import namedtuple
 
 from gym import spaces
+from gym.spaces import MultiDiscrete
 import numpy as np
 import torch
-from gym.spaces import MultiDiscrete
 from torch.nn import functional as F
 
 from ppo.agent import Agent

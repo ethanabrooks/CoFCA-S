@@ -20,6 +20,7 @@ from ppo.agent import Agent, AgentValues  # noqa
 from ppo.storage import RolloutStorage
 from ppo.subtasks.wrappers import Wrapper
 from ppo.update import PPO
+from ppo.utils import get_n_gpu, get_random_gpu
 from ppo.wrappers import (
     AddTimestep,
     TransposeImage,
@@ -27,7 +28,6 @@ from ppo.wrappers import (
     VecPyTorch,
     VecPyTorchFrameStack,
 )
-from ppo.utils import get_n_gpu, get_random_gpu
 
 try:
     import dm_control2gym
