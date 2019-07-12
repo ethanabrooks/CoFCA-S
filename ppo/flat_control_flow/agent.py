@@ -77,22 +77,23 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
             # condition = r[:, -i:].view(N, i, 1, 1)
             # obs = inputs.base[t, :, 1:-2]
             # is_subtask = condition[:, 0]
-            is_subtask = self.f(r).unsqueeze(-1)
+            is_control_flow = self.f(r).unsqueeze(-1)
+            is_subtask = 1 - is_control_flow
             # pred = ((condition[:, 1:] * obs) > 0).view(N, 1, 1, -1).any(dim=-1).float()
             condition_passes = self.phi_shift((inputs.base[t], r))
             condition_fails = 1 - condition_passes
             trans = condition_passes * self.one_step + condition_fails * self.two_steps
-            trans = is_subtask * self.one_step + (1 - is_subtask) * trans
+            trans = is_subtask * self.one_step + is_control_flow * trans
             return (p.unsqueeze(1) @ trans).squeeze(1)
 
-        def _gating_function(subtask_param, **_kwargs):
-            c, probs = gating_function(subtask_param, **_kwargs)
-            c2 = self.f(subtask_param)
-            return c + c2 - c * c2, probs
+        # def _gating_function(subtask_param, **_kwargs):
+        # c, probs = gating_function(subtask_param, **_kwargs)
+        # c2 = self.f(subtask_param)
+        # return c + c2 - c * c2, probs
 
         kwargs.update(update_attention=update_attention)
         is_subtask = M[:, :, -i].unsqueeze(-1)
         M[:, :, :-i] *= is_subtask
         yield from ppo.subtasks.Recurrence.inner_loop(
-            self, gating_function=_gating_function, inputs=inputs, M=M, **kwargs
+            self, gating_function=gating_function, inputs=inputs, M=M, **kwargs
         )
