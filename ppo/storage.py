@@ -37,6 +37,13 @@ def buffer_shape(space: gym.Space):
     return shape
 
 
+def buffer_shape(space: gym.Space):
+    shape = space_shape(space)
+    if isinstance(shape, dict):
+        shape = int(sum(np.prod(s) for s in shape.values())),  # concatenate
+    return shape
+
+
 class RolloutStorage(object):
     def __init__(
         self,

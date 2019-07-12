@@ -8,10 +8,10 @@ from gym.envs.registration import EnvSpec
 from gym.spaces import Box
 from gym.utils import seeding
 import numpy as np
+from rl_utils import cartesian_product
 import six
 
 from ppo.utils import set_index
-from rl_utils import cartesian_product
 
 Subtask = namedtuple("Subtask", "interaction count object")
 Obs = namedtuple("Obs", "base subtask subtasks next_subtask")
@@ -354,9 +354,6 @@ class SubtasksGridWorld(gym.Env):
     def get_next_subtask(self):
         return self.subtask_idx + 1
 
-    def set_pred(self):
-        pass
-
 
 if __name__ == "__main__":
     import gym
@@ -366,3 +363,4 @@ if __name__ == "__main__":
     env = gym.make("4x4SubtasksGridWorld-v0")
     actions = "wsadeq"
     gridworld_env.keyboard_control.run(env, actions=actions)
+Obs = namedtuple('Obs', 'base subtask subtasks next_subtask')

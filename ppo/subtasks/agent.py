@@ -42,12 +42,13 @@ class Agent(ppo.agent.Agent, NNBase):
         self.entropy_coef = entropy_coef
         self.action_spaces = Actions(**action_space.spaces)
         self.obs_spaces = obs_spaces
-        self.recurrent_module = self.build_recurrent_module(agent=agent,
-                                                            hard_update=hard_update,
-                                                            hidden_size=hidden_size,
-                                                            obs_spaces=self.obs_spaces,
-                                                            action_spaces=self.action_spaces,
-                                                            **kwargs)
+        self.recurrent_module = self.build_recurrent_module(
+            agent=agent,
+            hard_update=hard_update,
+            hidden_size=hidden_size,
+            obs_spaces=self.obs_spaces,
+            action_spaces=self.action_spaces,
+            **kwargs)
         self.agent = agent
 
     # noinspection PyMethodOverriding
@@ -95,13 +96,14 @@ class Agent(ppo.agent.Agent, NNBase):
         aux_loss = -self.entropy_coef * entropies.mean()
         log = {k: v for k, v in hx._asdict().items() if k.endswith("_loss")}
 
-        return AgentValues(value=hx.v,
-                           action=torch.cat(actions, dim=-1),
-                           action_log_probs=log_probs,
-                           aux_loss=aux_loss,
-                           rnn_hxs=torch.cat(hx, dim=-1),
-                           dist=None,
-                           log=log)
+        return AgentValues(
+            value=hx.v,
+            action=torch.cat(actions, dim=-1),
+            action_log_probs=log_probs,
+            aux_loss=aux_loss,
+            rnn_hxs=torch.cat(hx, dim=-1),
+            dist=None,
+            log=log)
 
     def get_value(self, inputs, rnn_hxs, masks):
         n = inputs.size(0)

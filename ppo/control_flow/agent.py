@@ -1,7 +1,6 @@
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from gridworld_env.control_flow_gridworld import Obs
 from ppo.layers import Flatten, Parallel, Product, Reshape, ShallowCopy, Sum

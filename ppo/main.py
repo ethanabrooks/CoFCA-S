@@ -55,7 +55,7 @@ def get_spaces(envs, task_type):
     elif task_type == "flat-control-flow":
         return gridworld_env.flat_control_gridworld.Obs(**obs_spaces)
     else:
-        return ppo.subtasks.Obs(*obs_spaces)
+        return gridworld_env.subtasks_gridworld.Obs(**obs_spaces)
 
 
 def make_subtasks_env(env_id, **kwargs):
@@ -69,7 +69,8 @@ def make_subtasks_env(env_id, **kwargs):
         elif task_type == "flat-control-flow":
             env = ppo.flat_control_flow.Wrapper(FlatControlFlowGridWorld(**_kwargs))
         else:
-            env = ppo.subtasks.Wrapper(SubtasksGridWorld(**_kwargs))
+            env = SubtasksGridWorld(**_kwargs)
+        env = ppo.subtasks.Wrapper(env)
         if debug:
             if task_type == "flat-control-flow":
                 env = ppo.flat_control_flow.DebugWrapper(env)
@@ -184,8 +185,7 @@ def metacontroller_cli():
                         **agent_args,
                     )
 
-                    state_dict = torch.load(
-                        agent_load_path, map_location=self.device)
+                    state_dict = torch.load(agent_load_path, map_location=self.device)
                     state_dict['agent'].update(
                         part0_one_hot=agent.part0_one_hot,
                         part1_one_hot=agent.part1_one_hot,

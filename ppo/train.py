@@ -356,7 +356,10 @@ class Train:
         self, num_processes, gamma, render, synchronous, num_frame_stack=None, **kwargs
     ):
 
-        envs = [functools.partial(self.make_env, rank=i, **kwargs) for i in range(num_processes)]
+        envs = [
+            functools.partial(self.make_env, rank=i, **kwargs)
+            for i in range(num_processes)
+        ]
 
         if len(envs) == 1 or sys.platform == "darwin" or synchronous:
             envs = DummyVecEnv(envs, render=render)
