@@ -425,23 +425,17 @@ class Recurrence(torch.jit.ScriptModule):
 
             # agent_layer = obs[t, :, 6, :, :].long()
             # j, k, l = torch.split(agent_layer.nonzero(), 1, dim=-1)
-            r = (p.unsqueeze(1) @ M).squeeze(1)
-            g = M[torch.arange(N), G[t - 1]]
-            is_control_flow_r = self.f(r)
-            is_control_flow_g = self.f(g)
 
             # p
             p2 = update_attention(p, t)
-            _p = interp(p, p2, cr)
-            p = interp(_p, p2, is_control_flow_r)
+            p = interp(p, p2, cr)
 
             # r
             r = (p.unsqueeze(1) @ M).squeeze(1)
 
             # g
             old_g = self.g_one_hots[G[t - 1]]
-            _probs = interp(old_g, p, cg)
-            probs = interp(_probs, p, is_control_flow_g)
+            probs = interp(old_g, p, cg)
             g_dist = FixedCategorical(probs=torch.clamp(probs, 0.0, 1.0))
             sample_new(G[t], g_dist)
 
