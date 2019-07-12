@@ -89,11 +89,11 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
         def _gating_function(subtask_param, **_kwargs):
             c, probs = gating_function(subtask_param, **_kwargs)
             is_control_flow = self.f(subtask_param)
-            return c + c2 - c * c2, probs
+            return c + is_control_flow - c * is_control_flow, probs
 
         kwargs.update(update_attention=update_attention)
         is_subtask = M[:, :, -i].unsqueeze(-1)
         M[:, :, :-i] *= is_subtask
         yield from ppo.subtasks.Recurrence.inner_loop(
-            self, gating_function=gating_function, inputs=inputs, M=M, **kwargs
+            self, gating_function=_gating_function, inputs=inputs, M=M, **kwargs
         )
