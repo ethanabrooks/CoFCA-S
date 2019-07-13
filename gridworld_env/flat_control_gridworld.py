@@ -1,9 +1,9 @@
 from collections import Counter, OrderedDict, namedtuple
-from dataclasses import dataclass
 
 from gym import spaces
 import numpy as np
 
+from dataclasses import dataclass
 import gridworld_env
 from gridworld_env import SubtasksGridWorld
 
@@ -290,11 +290,15 @@ class FlatControlFlowGridWorld(SubtasksGridWorld):
         yield from subtasks
 
     @property
-    def _subtask(self):
+    def subtask(self):
         try:
             return self.lines[self._subtask_idx]
         except IndexError:
             return
+
+    @property
+    def _subtask(self):
+        return super().subtask
 
     def get_next_subtask(self):
         if self.subtask_idx is None:
