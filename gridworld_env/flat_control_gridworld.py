@@ -126,11 +126,21 @@ class FlatControlFlowGridWorld(SubtasksGridWorld):
             for subtask, (pos, neg), condition in zip(
                 self.subtasks, self.control, self.conditions
             ):
-                yield subtask + (0,)
+                yield subtask
                 if pos != neg:
-                    yield (0, 0, 0, condition + 1)
+                    yield self.If(condition)
 
-        lines = np.vstack(list(get_lines())[1:])
+        def pack():
+            for line in self.lines:
+                if isinstance(line, self.Subtask):
+                    yield line + (0,)
+                elif isinstance(line, self.If):
+                    yield (0, 0, 0) + (line.obj,)
+                else:
+                    raise NotImplementedError
+
+        self.lines = list(get_lines())[1:]
+        lines = np.vstack(list(pack()))
         self.lines = np.pad(lines, [(0, self.n_lines - len(lines)), (0, 0)], "constant")
         o = super().reset()
         self.subtask_idx = self.get_next_subtask()
