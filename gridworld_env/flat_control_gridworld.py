@@ -5,8 +5,10 @@ from gym import spaces
 import numpy as np
 
 from dataclasses import dataclass
+import gridworld_env
 from gridworld_env import SubtasksGridWorld
 from gridworld_env.control_flow_gridworld import ControlFlowGridWorld
+import ppo.control_flow
 
 Obs = namedtuple(
     "Obs", "base subtask subtasks conditions control next_subtask pred lines"
@@ -145,7 +147,9 @@ class FlatControlFlowGridWorld(ControlFlowGridWorld):
         return s, r, t, i
 
     def get_observation(self):
-        obs = super().get_observation()
+        obs = SubtasksGridWorld.get_observation(self)
+        obs.update(control=self.control, conditions=self.conditions, pred=self.pred)
+        obs = gridworld_env.control_flow_gridworld.Obs(**obs)._asdict()
 
         def get_lines():
             for subtask, (pos, neg), condition in zip(
