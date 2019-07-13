@@ -126,12 +126,11 @@ class FlatControlFlowGridWorld(SubtasksGridWorld):
             for subtask, (pos, neg), condition in zip(
                 self.subtasks, self.control, self.conditions
             ):
-                yield subtask + (0,)
+                yield subtask
                 if pos != neg:
-                    yield (0, 0, 0, condition + 1)
+                    yield self.If(condition)
 
-        lines = np.vstack(list(get_lines())[1:])
-        self.lines = np.pad(lines, [(0, self.n_lines - len(lines)), (0, 0)], "constant")
+        self.lines = list(get_lines())[1:]
         o = super().reset()
         self.subtask_idx = self.get_next_subtask()
         return o
@@ -143,7 +142,20 @@ class FlatControlFlowGridWorld(SubtasksGridWorld):
 
     def get_observation(self):
         obs = super().get_observation()
-        obs.update(lines=self.lines)
+
+        def get_lines():
+            for line in self.lines:
+                if isinstance(line, self.Subtask):
+                    yield line + (0,)
+                elif isinstance(line, self.If):
+                    yield (0, 0, 0) + (line.obj,)
+                else:
+                    raise NotImplementedError
+
+        lines = np.pad(
+            list(get_lines()), [(0, self.n_lines - len(self.lines)), (0, 0)], "constant"
+        )
+        obs.update(lines=lines)
         for (k, s) in self.observation_space.spaces.items():
             assert s.contains(obs[k])
         return OrderedDict(filter_for_obs(obs))
