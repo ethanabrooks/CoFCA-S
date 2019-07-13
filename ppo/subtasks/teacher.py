@@ -1,7 +1,5 @@
 from collections import namedtuple
 
-from gym import spaces
-from gym.spaces import MultiDiscrete
 import numpy as np
 import torch
 from torch.nn import functional as F
@@ -14,9 +12,9 @@ Obs = namedtuple("Obs", "base subtask")
 
 
 class Teacher(Agent):
-    def __init__(self, obs_spaces, action_spaces, **kwargs):
+    def __init__(self, obs_spaces: Obs, action_spaces, **kwargs):
         # noinspection PyProtectedMember
-        self.subtask_nvec = obs_spaces.subtasks.nvec[0, :3]
+        self.subtask_nvec = obs_spaces.subtask.nvec
         self.obs_spaces = obs_spaces
         self.obs_sections = [int(np.prod(s.shape)) for s in self.obs_spaces]
         _, h, w = self.obs_shape = self.obs_spaces.base.shape

@@ -1,8 +1,10 @@
+from gym.spaces import MultiDiscrete
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+import gridworld_env
 from gridworld_env.flat_control_gridworld import Obs
 import ppo.control_flow
 from ppo.distributions import FixedCategorical
@@ -15,15 +17,21 @@ class Agent(ppo.subtasks.Agent):
     def build_recurrent_module(self, **kwargs):
         return Recurrence(**kwargs)
 
+    @property
+    def obs_spaces(self):
+        spaces = self.obs_space.spaces
+        return gridworld_env.subtasks_gridworld.Obs(
+            base=spaces["base"],
+            subtask=spaces["subtask"],
+            next_subtask=spaces["next_subtask"],
+            subtasks=MultiDiscrete(spaces["lines"].nvec[:, :3]),
+        )
+
 
 class Recurrence(ppo.subtasks.agent.Recurrence):
     def __init__(self, hidden_size, obs_spaces, **kwargs):
         self.original_obs_sections = [int(np.prod(s.shape)) for s in obs_spaces]
-        super().__init__(
-            hidden_size=hidden_size,
-            obs_spaces=obs_spaces._replace(subtasks=obs_spaces.lines),
-            **kwargs,
-        )
+        super().__init__(hidden_size=hidden_size, obs_spaces=obs_spaces, **kwargs)
 
         d, h, w = self.obs_shape
         h_size = d * self.condition_size

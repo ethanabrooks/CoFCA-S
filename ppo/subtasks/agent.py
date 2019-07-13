@@ -1,13 +1,14 @@
 from collections import namedtuple
 import itertools
 
-from gym.spaces import Box, Discrete
+from gym.spaces import Box, Discrete, MultiDiscrete
 import numpy as np
 import torch
 from torch import nn as nn
 import torch.jit
 from torch.nn import functional as F
 
+import gridworld_env
 from gridworld_env.subtasks_gridworld import Obs
 import ppo
 from ppo.agent import AgentValues, NNBase
@@ -27,7 +28,7 @@ RecurrentState = namedtuple(
 class Agent(ppo.agent.Agent, NNBase):
     def __init__(
         self,
-        obs_spaces,
+        obs_space,
         action_space,
         hidden_size,
         entropy_coef,
@@ -37,18 +38,13 @@ class Agent(ppo.agent.Agent, NNBase):
         **kwargs,
     ):
         nn.Module.__init__(self)
+        self.obs_space = obs_space
         self.hard_update = hard_update
         self.entropy_coef = entropy_coef
         self.action_spaces = Actions(**action_space.spaces)
-        self.obs_spaces = obs_spaces
         agent = None
         if agent_load_path is not None:
-            agent = self.load_agent(
-                agent_load_path=agent_load_path,
-                obs_spaces=obs_spaces,
-                action_spaces=self.action_spaces,
-                **agent_args,
-            )
+            agent = self.load_agent(agent_load_path=agent_load_path, **agent_args)
         self.recurrent_module = self.build_recurrent_module(
             agent=agent,
             hard_update=hard_update,
@@ -59,7 +55,14 @@ class Agent(ppo.agent.Agent, NNBase):
         )
 
     def load_agent(self, agent_load_path, device, **agent_args):
-        agent = ppo.subtasks.Teacher(**agent_args)
+        agent = ppo.subtasks.Teacher(
+            **agent_args,
+            obs_spaces=ppo.subtasks.teacher.Obs(
+                base=self.obs_spaces.base,
+                subtask=MultiDiscrete(self.obs_spaces.subtasks.nvec[0]),
+            ),
+            action_spaces=self.action_spaces,
+        )
 
         state_dict = torch.load(agent_load_path, map_location=device)
         assert "vec_normalize" not in state_dict, "oy"
@@ -105,7 +108,7 @@ class Agent(ppo.agent.Agent, NNBase):
         else:
             dists = Actions(
                 a=None
-                if rm.agent  # use pretrained agent so don't train
+                if rm.agent  # use pre-trained agent so don't train
                 else FixedCategorical(hx.a_probs),
                 cg=None,
                 cr=None,
@@ -140,6 +143,10 @@ class Agent(ppo.agent.Agent, NNBase):
         else:
             y = torch.cat([x] + list(actions), dim=-1)
         return super()._forward_gru(y, hxs, masks)
+
+    @property
+    def obs_spaces(self):
+        return Obs(**self.obs_space.spaces)
 
     @property
     def recurrent_hidden_state_size(self):

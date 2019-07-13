@@ -168,9 +168,8 @@ def metacontroller_cli():
 
             # noinspection PyMethodOverriding
             def build_agent(self, envs, **agent_args):
-                obs_spaces = get_spaces(envs, task_type)
                 metacontroller_kwargs = dict(
-                    obs_spaces=obs_spaces,
+                    obs_space=envs.observation_space,
                     action_space=envs.action_space,
                     agent_args=agent_args,
                     **{k.replace("subtasks_", ""): v for k, v in subtasks_args.items()},
