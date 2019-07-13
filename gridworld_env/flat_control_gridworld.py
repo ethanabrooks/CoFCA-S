@@ -48,7 +48,7 @@ class FlatControlFlowGridWorld(ControlFlowGridWorld):
                     ),
                     (self.n_lines, 1),
                 )
-            )
+            ),
         )
         self.observation_space.spaces = Obs(
             **filter_for_obs(self.observation_space.spaces)
