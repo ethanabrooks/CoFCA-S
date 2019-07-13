@@ -1,9 +1,9 @@
 from collections import Counter, OrderedDict, namedtuple
+from dataclasses import dataclass
 
 from gym import spaces
 import numpy as np
 
-from dataclasses import dataclass
 import gridworld_env
 from gridworld_env import SubtasksGridWorld
 
@@ -130,17 +130,7 @@ class FlatControlFlowGridWorld(SubtasksGridWorld):
                 if pos != neg:
                     yield self.If(condition)
 
-        def pack(lines):
-            for line in lines:
-                if isinstance(line, self.Subtask):
-                    yield line + (0,)
-                elif isinstance(line, self.If):
-                    yield (0, 0, 0) + (line.obj + 1,)
-                else:
-                    raise NotImplementedError
-
-        lines = np.vstack(list(pack(get_lines()))[1:])
-        self.lines = np.pad(lines, [(0, self.n_lines - len(lines)), (0, 0)], "constant")
+        self.lines = list(get_lines())[1:]
         o = super().reset()
         self.subtask_idx = self.get_next_subtask()
         return o
@@ -152,7 +142,20 @@ class FlatControlFlowGridWorld(SubtasksGridWorld):
 
     def get_observation(self):
         obs = super().get_observation()
-        obs.update(lines=self.lines)
+
+        def get_lines():
+            for line in self.lines:
+                if isinstance(line, self.Subtask):
+                    yield line + (0,)
+                elif isinstance(line, self.If):
+                    yield (0, 0, 0) + (1 + line.obj,)
+                else:
+                    raise NotImplementedError
+
+        lines = np.pad(
+            list(get_lines()), [(0, self.n_lines - len(self.lines)), (0, 0)], "constant"
+        )
+        obs.update(lines=lines)
         for (k, s) in self.observation_space.spaces.items():
             assert s.contains(obs[k])
         return OrderedDict(filter_for_obs(obs))
@@ -259,6 +262,23 @@ class FlatControlFlowGridWorld(SubtasksGridWorld):
         if self.subtask_idx > self.n_subtasks:
             return None
         return self.control[self.subtask_idx, int(self.evaluate_condition())]
+
+    def get_next_subtask2(self):
+        if self.subtask_idx is None:
+            i = 0
+        else:
+            i = self.subtask_idx + 1
+        while True:
+            if i >= len(self.lines):
+                return i
+            line = self.lines[i]
+            if isinstance(line, self.Subtask):
+                return i
+            elif isinstance(line, self.If):
+                if line.obj in self.objects.values():
+                    i += 1
+                else:
+                    i += 2
 
     def evaluate_condition(self):
         self.pred = self.conditions[self.subtask_idx] in self.objects.values()
