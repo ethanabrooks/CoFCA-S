@@ -24,12 +24,6 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
             obs_spaces=obs_spaces._replace(subtasks=obs_spaces.lines),
             **kwargs,
         )
-        self.obs_sections = [int(np.prod(s.shape)) for s in self.obs_spaces]
-        self.register_buffer("branch_one_hots", torch.eye(self.n_subtasks))
-        self.register_buffer("condition_one_hots", torch.eye(self.condition_size))
-        self.register_buffer(
-            "rows", torch.arange(self.n_subtasks).unsqueeze(-1).float()
-        )
 
         d, h, w = self.obs_shape
         h_size = d * self.condition_size
