@@ -70,10 +70,14 @@ class FlatControlFlowGridWorld(SubtasksGridWorld):
         self.If = If
 
     def task_string(self):
+        print("object_types")
+        print(self.object_types)
         print("conditions")
         print(self.conditions)
         print("control")
         print(self.control)
+        print("one-step", self.one_step)
+        print("branching", self.branching)
 
         def helper(i, indent):
             try:
@@ -120,6 +124,21 @@ class FlatControlFlowGridWorld(SubtasksGridWorld):
     #
     #     return "\n".join(helper())
 
+    def get_control(self):
+        for i in range(self.n_subtasks):
+            if i % 3 == 0:
+                if not self.one_step or self.branching:
+                    yield i + 1, i
+                else:
+                    yield i, i
+            elif i % 3 == 1:
+                if self.one_step and self.branching:
+                    yield i + 1, i + 1  # terminate
+                else:
+                    yield i, i
+            elif i % 3 == 2:
+                yield i + 1, i + 1  # terminate
+
     def reset(self):
         self._subtask_idx = None
         one_step_episode = self.np_random.rand() < 0.5
@@ -138,6 +157,9 @@ class FlatControlFlowGridWorld(SubtasksGridWorld):
             self.branching_episode = True
             self.passing_prob = 0
 
+        self.one_step = self.np_random.rand() < 0.5
+        self.branching = self.np_random.rand() < 0.5
+
         self.control = np.minimum(
             1 + np.array(list(self.get_control())), self.n_subtasks
         )
@@ -153,8 +175,17 @@ class FlatControlFlowGridWorld(SubtasksGridWorld):
         failing = self.np_random.choice(non_existing, size=self.n_subtasks - n_passing)
         self.conditions = np.concatenate([passing, failing])
         self.np_random.shuffle(self.conditions)
+        self.required_objects = []
+        if self.one_step:
+            if self.branching:
+                self.conditions[0] = self.np_random.choice(existing)
+                self.required_objects = [self.conditions[0]]
+            else:
+                self.conditions[0] = self.np_random.choice(non_existing)
+        else:
+            self.conditions[0] = self.np_random.choice(non_existing)
         self.passing = self.conditions[0] in passing
-        self.required_objects = passing
+
         self.pred = False
         self.subtasks = list(self.subtasks_generator())
 
@@ -167,6 +198,8 @@ class FlatControlFlowGridWorld(SubtasksGridWorld):
                     yield self.If(condition)
 
         self.lines = list(get_lines())[1:]
+        if self.branching and self.one_step:
+            self.lines = self.lines[:-1]
         o = super().reset()
         self.subtask_idx = self.get_next_subtask()
         return o
@@ -195,18 +228,6 @@ class FlatControlFlowGridWorld(SubtasksGridWorld):
         for (k, s) in self.observation_space.spaces.items():
             assert s.contains(obs[k])
         return OrderedDict(filter_for_obs(obs))
-
-    def get_control(self):
-        for i in range(self.n_subtasks):
-            if i % 3 == 0:
-                if self.branching_episode:
-                    yield i + 1, i
-                else:
-                    yield i, i
-            elif i % 3 == 1:
-                yield i, i
-            elif i % 3 == 2:
-                yield i + 1, i + 1  # terminate
 
     def choose_subtasks(self):
         if not self.branching_episode:
@@ -274,7 +295,7 @@ class FlatControlFlowGridWorld(SubtasksGridWorld):
 
             while not available_now()[obj]:
                 if to_be_removed:
-                    prohibited = Counter(encountered["failing"][:t])
+                    prohibited = Counter(encountered["failing"][: t + 1])
                 else:
                     prohibited = Counter(encountered["failing"])
                 if obj in prohibited:
