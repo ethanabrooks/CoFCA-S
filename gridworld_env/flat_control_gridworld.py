@@ -1,9 +1,9 @@
 from collections import Counter, OrderedDict, namedtuple
-from dataclasses import dataclass
 
 from gym import spaces
 import numpy as np
 
+from dataclasses import dataclass
 import gridworld_env
 from gridworld_env import SubtasksGridWorld
 
@@ -86,6 +86,7 @@ class FlatControlFlowGridWorld(SubtasksGridWorld):
         return "\n".join(helper())
 
     def reset(self):
+        self._subtask_idx = None
         one_step_episode = self.np_random.rand() < 0.5
         if one_step_episode:
             self.branching_episode = self.np_random.rand() < 0.5
@@ -263,11 +264,11 @@ class FlatControlFlowGridWorld(SubtasksGridWorld):
             return None
         return self.control[self.subtask_idx, int(self.evaluate_condition())]
 
-    def get_next_subtask2(self):
-        if self.subtask_idx is None:
+    def _get_next_subtask(self):
+        if self._subtask_idx is None:
             i = 0
         else:
-            i = self.subtask_idx + 1
+            i = self._subtask_idx + 1
         while True:
             if i >= len(self.lines):
                 return i
