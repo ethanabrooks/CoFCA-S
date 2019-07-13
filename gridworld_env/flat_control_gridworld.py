@@ -65,7 +65,20 @@ class FlatControlFlowGridWorld(ControlFlowGridWorld):
         self.If = If
 
     def task_string(self):
-        return "\n".join(super().task_string().split("\n")[1:])
+        lines = iter(self.lines)
+
+        def helper():
+            while True:
+                line = next(lines, None)
+                if line is None:
+                    return
+                if isinstance(line, self.Subtask):
+                    yield str(line)
+                elif isinstance(line, self.If):
+                    yield str(line)
+                    yield f"    {next(lines)}"
+
+        return "\n".join(helper())
 
     def reset(self):
         one_step_episode = self.np_random.rand() < 0.5
