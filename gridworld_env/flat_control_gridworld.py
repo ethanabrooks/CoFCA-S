@@ -70,20 +70,55 @@ class FlatControlFlowGridWorld(SubtasksGridWorld):
         self.If = If
 
     def task_string(self):
-        lines = iter(self.lines)
+        print("conditions")
+        print(self.conditions)
+        print("control")
+        print(self.control)
 
-        def helper():
-            while True:
-                line = next(lines, None)
-                if line is None:
-                    return
-                if isinstance(line, self.Subtask):
-                    yield str(line)
-                elif isinstance(line, self.If):
-                    yield str(line)
-                    yield f"    {next(lines)}"
+        def helper(i, indent):
+            try:
+                subtask = f"{i}:{self.subtasks[i]}"
+            except IndexError:
+                return f"{indent}terminate"
+            neg, pos = self.control[i]
+            condition = self.conditions[i]
 
-        return "\n".join(helper())
+            # def develop_branch(j, add_indent):
+            # new_indent = indent + add_indent
+            # try:
+            # subtask = f"{j}:{self.subtasks[j]}"
+            # except IndexError:
+            # return f"{new_indent}terminate"
+            # return f"{new_indent}{subtask}\n{helper(j, new_indent)}"
+
+            if pos == neg:
+                if_condition = helper(pos, indent)
+            else:
+                if_condition = f"""\
+{indent}if {self.object_types[condition]}:
+{helper(pos, indent + '    ')}
+{indent}else:
+{helper(neg, indent + '    ')}
+"""
+            return f"{indent}{subtask}\n{if_condition}"
+
+        return helper(i=0, indent="")
+
+    # def task_string(self):
+    #     lines = iter(self.lines)
+    #
+    #     def helper():
+    #         while True:
+    #             line = next(lines, None)
+    #             if line is None:
+    #                 return
+    #             if isinstance(line, self.Subtask):
+    #                 yield str(line)
+    #             elif isinstance(line, self.If):
+    #                 yield str(line)
+    #                 yield f"    {next(lines)}"
+    #
+    #     return "\n".join(helper())
 
     def reset(self):
         self._subtask_idx = None
@@ -169,10 +204,7 @@ class FlatControlFlowGridWorld(SubtasksGridWorld):
                 else:
                     yield i, i
             elif i % 3 == 1:
-                if self.branching_episode:
-                    yield i + 2, i + 2  # terminate
-                else:
-                    yield i, i
+                yield i, i
             elif i % 3 == 2:
                 yield i + 1, i + 1  # terminate
 
@@ -256,6 +288,13 @@ class FlatControlFlowGridWorld(SubtasksGridWorld):
                 available[obj] -= 1
 
         yield from subtasks
+
+    @property
+    def _subtask(self):
+        try:
+            return self.lines[self._subtask_idx]
+        except IndexError:
+            return
 
     def get_next_subtask(self):
         if self.subtask_idx is None:

@@ -291,7 +291,7 @@ class SubtasksGridWorld(gym.Env):
         if a == self.action_space.n - 1:
             return self.get_observation(), -0.1, False, {}
 
-        if self.subtask != self.lines[self._subtask_idx]:
+        if self.subtask != self._subtask:
             import ipdb
 
             ipdb.set_trace()
@@ -326,6 +326,11 @@ class SubtasksGridWorld(gym.Env):
                     self.next_subtask = True
                 else:
                     self.count -= 1
+
+        if self.subtask != self._subtask:
+            import ipdb
+
+            ipdb.set_trace()
 
         if a < n_transitions:
             # move
