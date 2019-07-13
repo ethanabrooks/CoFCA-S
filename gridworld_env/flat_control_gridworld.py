@@ -120,17 +120,7 @@ class FlatControlFlowGridWorld(SubtasksGridWorld):
         self.passing = self.conditions[0] in passing
         self.required_objects = passing
         self.pred = False
-        o = super().reset()
-        self.subtask_idx = self.get_next_subtask()
-        return o
-
-    def step(self, action):
-        s, r, t, i = super().step(action)
-        i.update(passing=self.passing)
-        return s, r, t, i
-
-    def get_observation(self):
-        obs = super().get_observation()
+        self.subtasks = list(self.subtasks_generator())
 
         def get_lines():
             for subtask, (pos, neg), condition in zip(
@@ -142,7 +132,17 @@ class FlatControlFlowGridWorld(SubtasksGridWorld):
 
         lines = np.vstack(list(get_lines())[1:])
         self.lines = np.pad(lines, [(0, self.n_lines - len(lines)), (0, 0)], "constant")
+        o = super().reset()
+        self.subtask_idx = self.get_next_subtask()
+        return o
 
+    def step(self, action):
+        s, r, t, i = super().step(action)
+        i.update(passing=self.passing)
+        return s, r, t, i
+
+    def get_observation(self):
+        obs = super().get_observation()
         obs.update(lines=self.lines)
         for (k, s) in self.observation_space.spaces.items():
             assert s.contains(obs[k])
