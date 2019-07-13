@@ -65,6 +65,8 @@ class Train:
             eval_interval = 1
         if render:
             ppo_args.update(ppo_epoch=0)
+            num_processes = 1
+            cuda = False
         self.success_reward = success_reward
         save_dir = save_dir or log_dir
 
