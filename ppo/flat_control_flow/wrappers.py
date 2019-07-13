@@ -57,13 +57,17 @@ class Wrapper(ppo.subtasks.Wrapper):
 
     def render_assigned_subtask(self):
         env = self.env.unwrapped
-        g_type, g_count, g_obj, condition = tuple(env.lines[self.last_g])
-        if condition:
-            print("if", env.object_types[condition - 1])
+        print("self.last_g", self.last_g)
+        print("lines")
+        for line in env.lines:
+            print(line)
+        print()
+        try:
+            line = env.lines[self.last_g]
+        except IndexError:
+            return
+
+        if isinstance(line, env.If):
+            print("if", env.object_types[line.obj - 1])
         else:
-            print(
-                f"{self.last_g}:",
-                env.interactions[g_type],
-                g_count + 1,
-                env.object_types[g_obj],
-            )
+            print(f"{self.last_g}:{line}")
