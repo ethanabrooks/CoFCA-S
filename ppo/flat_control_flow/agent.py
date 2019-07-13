@@ -14,25 +14,22 @@ from ppo.utils import init_
 
 
 class Agent(ppo.subtasks.Agent):
+    def load_agent(self, obs_spaces, **agent_args):
+        return super().load_agent(
+            obs_spaces=obs_spaces._replace(
+                subtask=MultiDiscrete(obs_spaces.subtask.nvec[:3])
+            ),
+            **agent_args,
+        )
+
     def build_recurrent_module(self, **kwargs):
         return Recurrence(**kwargs)
-
-    @property
-    def obs_spaces(self):
-        spaces = self.obs_space.spaces
-        return gridworld_env.subtasks_gridworld.Obs(
-            base=spaces["base"],
-            subtask=spaces["subtask"],
-            next_subtask=spaces["next_subtask"],
-            subtasks=MultiDiscrete(spaces["lines"].nvec[:, :3]),
-        )
 
 
 class Recurrence(ppo.subtasks.agent.Recurrence):
     def __init__(self, hidden_size, obs_spaces, **kwargs):
         self.original_obs_sections = [int(np.prod(s.shape)) for s in obs_spaces]
         super().__init__(hidden_size=hidden_size, obs_spaces=obs_spaces, **kwargs)
-
         d, h, w = self.obs_shape
         h_size = d * self.condition_size
         self.phi_shift = nn.Sequential(
@@ -73,7 +70,7 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
         two_steps[:, -1] += 1 - two_steps.sum(-1)
         self.register_buffer("two_steps", two_steps.unsqueeze(0))
         self.register_buffer(
-            f"part3_one_hot", torch.eye(int(self.obs_spaces.lines.nvec[0, -1]))
+            f"part3_one_hot", torch.eye(int(self.obs_spaces.subtasks.nvec[0, -1]))
         )
         no_op_probs = torch.zeros(1, self.actor.linear.out_features)
         no_op_probs[:, -1] = 1
@@ -85,10 +82,6 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
             nn.Sigmoid(),
         )
         self.agent_input_size = int(self.obs_spaces.subtasks.nvec[0, :-1].sum())
-
-    def parse_inputs(self, inputs):
-        obs = Obs(*torch.split(inputs, self.original_obs_sections, dim=2))
-        return obs._replace(subtasks=obs.lines)
 
     def get_a_dist(self, conv_out, g_binary, obs):
         probs = (

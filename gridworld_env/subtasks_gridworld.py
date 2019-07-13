@@ -14,7 +14,7 @@ import six
 from ppo.utils import set_index
 
 Subtask = namedtuple("Subtask", "interaction count object")
-Obs = namedtuple("Obs", "base subtask subtasks next_subtask")
+Obs = namedtuple("Obs", "base subtask subtasks")
 
 
 class SubtasksGridWorld(gym.Env):
@@ -53,7 +53,6 @@ class SubtasksGridWorld(gym.Env):
         self.random_obstacles = random_obstacles
 
         # set on initialize
-        self.next_subtask = False
         self.obstacles_one_hot = np.zeros(self.desc.shape, dtype=bool)
         self.obstacles = None
 
@@ -119,7 +118,6 @@ class SubtasksGridWorld(gym.Env):
                         (n_subtasks, 1),
                     )
                 ),
-                next_subtask=spaces.Discrete(2),
             )._asdict()
         )
         self.action_space = spaces.Discrete(
@@ -274,10 +272,7 @@ class SubtasksGridWorld(gym.Env):
         ).transpose(2, 0, 1)
 
         return Obs(
-            base=obs,
-            subtask=self.subtask_idx,
-            subtasks=np.array([self.subtasks]),
-            next_subtask=self.next_subtask,
+            base=obs, subtask=self.subtask_idx, subtasks=np.array([self.subtasks])
         )._asdict()
 
     def seed(self, seed=None):
@@ -286,7 +281,6 @@ class SubtasksGridWorld(gym.Env):
 
     def step(self, a):
         self.last_action = a
-        self.next_subtask = False
         if a == self.action_space.n - 1:
             return self.get_observation(), -0.1, False, {}
 
@@ -316,7 +310,6 @@ class SubtasksGridWorld(gym.Env):
             if iterate:
                 if self.count == 0:
                     self.subtask_idx = self.get_next_subtask()
-                    self.next_subtask = True
                 else:
                     self.count -= 1
 

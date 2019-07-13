@@ -8,7 +8,6 @@ from torch import nn as nn
 import torch.jit
 from torch.nn import functional as F
 
-import gridworld_env
 from gridworld_env.subtasks_gridworld import Obs
 import ppo
 from ppo.agent import AgentValues, NNBase
@@ -38,31 +37,33 @@ class Agent(ppo.agent.Agent, NNBase):
         **kwargs,
     ):
         nn.Module.__init__(self)
-        self.obs_space = obs_space
         self.hard_update = hard_update
         self.entropy_coef = entropy_coef
         self.action_spaces = Actions(**action_space.spaces)
+        self.obs_space = obs_space
+        obs_spaces = Obs(**self.obs_space.spaces)
         agent = None
         if agent_load_path is not None:
-            agent = self.load_agent(agent_load_path=agent_load_path, **agent_args)
+            agent_obs_spaces = ppo.subtasks.teacher.Obs(
+                base=obs_spaces.base, subtask=MultiDiscrete(obs_spaces.subtasks.nvec[0])
+            )
+            agent = self.load_agent(
+                agent_load_path=agent_load_path,
+                obs_spaces=agent_obs_spaces,
+                action_spaces=self.action_spaces,
+                **agent_args,
+            )
         self.recurrent_module = self.build_recurrent_module(
             agent=agent,
             hard_update=hard_update,
             hidden_size=hidden_size,
-            obs_spaces=self.obs_spaces,
+            obs_spaces=obs_spaces,
             action_spaces=self.action_spaces,
             **kwargs,
         )
 
     def load_agent(self, agent_load_path, device, **agent_args):
-        agent = ppo.subtasks.Teacher(
-            **agent_args,
-            obs_spaces=ppo.subtasks.teacher.Obs(
-                base=self.obs_spaces.base,
-                subtask=MultiDiscrete(self.obs_spaces.subtasks.nvec[0]),
-            ),
-            action_spaces=self.action_spaces,
-        )
+        agent = ppo.subtasks.Teacher(**agent_args)
 
         state_dict = torch.load(agent_load_path, map_location=device)
         assert "vec_normalize" not in state_dict, "oy"
@@ -75,11 +76,8 @@ class Agent(ppo.agent.Agent, NNBase):
         print(f"Loaded teacher parameters from {agent_load_path}.")
         return agent
 
-    # noinspection PyMethodOverriding
-    def build_recurrent_module(self, agent, hard_update, hidden_size, **kwargs):
-        return Recurrence(
-            hidden_size=hidden_size, hard_update=hard_update, agent=agent, **kwargs
-        )
+    def build_recurrent_module(self, **kwargs):
+        return Recurrence(**kwargs)
 
     def forward(self, inputs, rnn_hxs, masks, action=None, deterministic=False):
         n = inputs.size(0)
@@ -143,10 +141,6 @@ class Agent(ppo.agent.Agent, NNBase):
         else:
             y = torch.cat([x] + list(actions), dim=-1)
         return super()._forward_gru(y, hxs, masks)
-
-    @property
-    def obs_spaces(self):
-        return Obs(**self.obs_space.spaces)
 
     @property
     def recurrent_hidden_state_size(self):

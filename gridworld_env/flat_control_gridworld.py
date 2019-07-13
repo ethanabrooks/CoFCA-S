@@ -6,8 +6,7 @@ import numpy as np
 from dataclasses import dataclass
 import gridworld_env
 from gridworld_env import SubtasksGridWorld
-
-Obs = namedtuple("Obs", "base subtask subtasks next_subtask lines")
+from gridworld_env.subtasks_gridworld import Obs
 
 
 class Else:
@@ -18,10 +17,6 @@ class Else:
 class EndIf:
     def __str__(self):
         return "endif"
-
-
-def filter_for_obs(d):
-    return {k: v for k, v in d.items() if k in Obs._fields}
 
 
 class FlatControlFlowGridWorld(SubtasksGridWorld):
@@ -43,7 +38,7 @@ class FlatControlFlowGridWorld(SubtasksGridWorld):
         self.n_lines = self.n_subtasks + self.n_subtasks // 2 - 1
         self.observation_space.spaces.update(
             subtask=spaces.Discrete(self.observation_space.spaces["subtask"].n + 1),
-            lines=spaces.MultiDiscrete(
+            subtasks=spaces.MultiDiscrete(
                 np.tile(
                     np.pad(
                         subtask_nvec,
@@ -55,9 +50,6 @@ class FlatControlFlowGridWorld(SubtasksGridWorld):
                 )
             ),
         )
-        self.observation_space.spaces = Obs(
-            **filter_for_obs(self.observation_space.spaces)
-        )._asdict()
         world = self
 
         @dataclass
@@ -201,10 +193,10 @@ class FlatControlFlowGridWorld(SubtasksGridWorld):
         lines = np.pad(
             list(get_lines()), [(0, self.n_lines - len(self.lines)), (0, 0)], "constant"
         )
-        obs.update(lines=lines)
+        obs.update(subtasks=lines)
         for (k, s) in self.observation_space.spaces.items():
             assert s.contains(obs[k])
-        return OrderedDict(filter_for_obs(obs))
+        return OrderedDict(obs)
 
     def choose_subtasks(self):
         if not self.branching:
