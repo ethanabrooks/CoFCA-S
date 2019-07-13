@@ -132,33 +132,14 @@ class FlatControlFlowGridWorld(SubtasksGridWorld):
                 else:
                     yield i, i
             elif i % 3 == 1:
-                if self.one_step and self.branching:
-                    yield i + 1, i + 1  # terminate
-                else:
-                    yield i, i
+                yield i, i
             elif i % 3 == 2:
                 yield i + 1, i + 1  # terminate
 
     def reset(self):
         self._subtask_idx = None
-        one_step_episode = self.np_random.rand() < 0.5
-        if one_step_episode:
-            self.branching_episode = self.np_random.rand() < 0.5
-
-            # agent has to take one step when either
-            if self.branching_episode:
-                # encontering a passing condition
-                self.passing_prob = 1
-            else:
-                # or a subtask
-                self.passing_prob = 0.5
-        else:
-            # agent has to take two steps when encountering a failed condition
-            self.branching_episode = True
-            self.passing_prob = 0
-
-        self.one_step = self.np_random.rand() < 0.5
-        self.branching = self.np_random.rand() < 0.5
+        self.one_step = self.np_random.rand() < 0
+        self.branching = self.np_random.rand() < 0
 
         self.control = np.minimum(
             1 + np.array(list(self.get_control())), self.n_subtasks
@@ -198,8 +179,6 @@ class FlatControlFlowGridWorld(SubtasksGridWorld):
                     yield self.If(condition)
 
         self.lines = list(get_lines())[1:]
-        if self.branching and self.one_step:
-            self.lines = self.lines[:-1]
         o = super().reset()
         self.subtask_idx = self.get_next_subtask()
         return o
@@ -230,7 +209,7 @@ class FlatControlFlowGridWorld(SubtasksGridWorld):
         return OrderedDict(filter_for_obs(obs))
 
     def choose_subtasks(self):
-        if not self.branching_episode:
+        if not self.branching:
             choices = self.np_random.choice(
                 len(self.possible_subtasks), size=self.n_subtasks
             )
