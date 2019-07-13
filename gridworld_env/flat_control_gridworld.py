@@ -258,10 +258,20 @@ class FlatControlFlowGridWorld(SubtasksGridWorld):
 
     def get_next_subtask(self):
         if self.subtask_idx is None:
-            return 0
-        if self.subtask_idx > self.n_subtasks:
-            return None
-        return self.control[self.subtask_idx, int(self.evaluate_condition())]
+            i = 0
+        else:
+            i = self.subtask_idx + 1
+        while True:
+            if i >= len(self.lines):
+                return i
+            line = self.lines[i]
+            if isinstance(line, self.Subtask):
+                return i
+            elif isinstance(line, self.If):
+                if line.obj in self.objects.values():
+                    i += 1
+                else:
+                    i += 2
 
     def evaluate_condition(self):
         self.pred = self.conditions[self.subtask_idx] in self.objects.values()
