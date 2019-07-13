@@ -51,17 +51,12 @@ class DebugWrapper(ppo.subtasks.DebugWrapper):
 class Wrapper(ppo.subtasks.Wrapper):
     def render_assigned_subtask(self):
         env = self.env.unwrapped
-        print("self.last_g", self.last_g)
-        print("lines")
-        for line in env.lines:
-            print(line)
-        print()
         try:
-            line = env.lines[self.last_g]
+            line = env.subtasks[self.last_g]
         except IndexError:
             return
 
         if isinstance(line, env.If):
-            print("if", env.object_types[line.obj - 1])
+            print("if", env.object_types[line.object - 1])
         else:
             print(f"{self.last_g}:{line}")

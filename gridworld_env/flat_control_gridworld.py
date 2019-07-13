@@ -1,9 +1,9 @@
 from collections import Counter, OrderedDict, namedtuple
+from dataclasses import dataclass
 
 from gym import spaces
 import numpy as np
 
-from dataclasses import dataclass
 import gridworld_env
 from gridworld_env import SubtasksGridWorld
 from gridworld_env.subtasks_gridworld import Obs
@@ -58,45 +58,6 @@ class FlatControlFlowGridWorld(SubtasksGridWorld):
                 return f"if {world.object_types[self.object]}:"
 
         self.If = If
-
-    #     def task_string(self):
-    #         # print("object_types")
-    #         # print(self.object_types)
-    #         # print("conditions")
-    #         # print(self.conditions)
-    #         # print("control")
-    #         # print(self.control)
-    #         # print("one-step", self.one_step)
-    #         # print("branching", self.branching)
-    #
-    #         def helper(i, indent):
-    #             try:
-    #                 subtask = f"{i}:{self.subtasks[i]}"
-    #             except IndexError:
-    #                 return f"{indent}terminate"
-    #             neg, pos = self.control[i]
-    #             condition = self.conditions[i]
-    #
-    #             # def develop_branch(j, add_indent):
-    #             # new_indent = indent + add_indent
-    #             # try:
-    #             # subtask = f"{j}:{self.subtasks[j]}"
-    #             # except IndexError:
-    #             # return f"{new_indent}terminate"
-    #             # return f"{new_indent}{subtask}\n{helper(j, new_indent)}"
-    #
-    #             if pos == neg:
-    #                 if_condition = helper(pos, indent)
-    #             else:
-    #                 if_condition = f"""\
-    # {indent}if {self.object_types[condition]}:
-    # {helper(pos, indent + '    ')}
-    # {indent}else:
-    # {helper(neg, indent + '    ')}
-    # """
-    #             return f"{indent}{subtask}\n{if_condition}"
-    #
-    #         return helper(i=0, indent="")
 
     def task_string(self):
         lines = iter(self.subtasks)
