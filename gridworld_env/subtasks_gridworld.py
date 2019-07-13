@@ -17,7 +17,7 @@ Subtask = namedtuple("Subtask", "interaction count object")
 Obs = namedtuple("Obs", "base subtask subtasks")
 
 
-class SubtasksGridWorld(gym.Env):
+class SubtasksGridworld(gym.Env):
     def __init__(
         self,
         text_map,

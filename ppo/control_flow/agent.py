@@ -1,28 +1,33 @@
+from gym.spaces import MultiDiscrete
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
-from gridworld_env.control_flow_gridworld import Obs
+from ppo.distributions import FixedCategorical
 from ppo.layers import Flatten, Parallel, Product, Reshape, ShallowCopy, Sum
-import ppo.subtasks.agent
+import ppo.matrix_control_flow
+import ppo.subtasks
 from ppo.utils import init_
 
 
 class Agent(ppo.subtasks.Agent):
+    def load_agent(self, obs_spaces, **agent_args):
+        return super().load_agent(
+            obs_spaces=obs_spaces._replace(
+                subtask=MultiDiscrete(obs_spaces.subtask.nvec[:3])
+            ),
+            **agent_args,
+        )
+
     def build_recurrent_module(self, **kwargs):
         return Recurrence(**kwargs)
 
 
 class Recurrence(ppo.subtasks.agent.Recurrence):
-    def __init__(self, hidden_size, **kwargs):
-        super().__init__(hidden_size=hidden_size, **kwargs)
-        self.obs_sections = [int(np.prod(s.shape)) for s in self.obs_spaces]
-        self.register_buffer("branch_one_hots", torch.eye(self.n_subtasks))
-        self.register_buffer("condition_one_hots", torch.eye(self.condition_size))
-        self.register_buffer(
-            "rows", torch.arange(self.n_subtasks).unsqueeze(-1).float()
-        )
-
+    def __init__(self, hidden_size, obs_spaces, **kwargs):
+        self.original_obs_sections = [int(np.prod(s.shape)) for s in obs_spaces]
+        super().__init__(hidden_size=hidden_size, obs_spaces=obs_spaces, **kwargs)
         d, h, w = self.obs_shape
         h_size = d * self.condition_size
         self.phi_shift = nn.Sequential(
@@ -56,37 +61,72 @@ class Recurrence(ppo.subtasks.agent.Recurrence):
             Reshape(1, 1),
         )
 
+        one_step = F.pad(torch.eye(self.n_subtasks - 1), [1, 0, 0, 1])
+        one_step[:, -1] += 1 - one_step.sum(-1)
+        self.register_buffer("one_step", one_step.unsqueeze(0))
+        two_steps = F.pad(torch.eye(self.n_subtasks - 2), [2, 0, 0, 2])
+        two_steps[:, -1] += 1 - two_steps.sum(-1)
+        self.register_buffer("two_steps", two_steps.unsqueeze(0))
+        self.register_buffer(
+            f"part3_one_hot", torch.eye(int(self.obs_spaces.subtasks.nvec[0, -1]))
+        )
+        no_op_probs = torch.zeros(1, self.actor.linear.out_features)
+        no_op_probs[:, -1] = 1
+        self.register_buffer("no_op_probs", no_op_probs)
+        self.size_agent_subtask = int(self.obs_spaces.subtasks.nvec[0, :-1].sum())
+        self.f = nn.Sequential(
+            init_(nn.Linear(self.condition_size, 1), "sigmoid"),
+            Reshape(1),
+            nn.Sigmoid(),
+        )
+        self.agent_input_size = int(self.obs_spaces.subtasks.nvec[0, :-1].sum())
+
+    def get_a_dist(self, conv_out, g_binary, obs):
+        probs = (
+            super()
+            .get_a_dist(conv_out, g_binary[:, : self.agent_input_size], obs)
+            .probs
+        )
+        op = g_binary[:, self.agent_input_size].unsqueeze(1)
+        no_op = 1 - op
+
+        return FixedCategorical(
+            # if subtask is a control-flow statement, force no-op
+            probs=op * probs
+            + no_op * self.no_op_probs.expand(op.size(0), -1)
+        )
+
     @property
     def condition_size(self):
-        return int(self.obs_spaces.subtasks.nvec[0, -1])
+        return int(self.obs_spaces.subtasks.nvec[0].sum())
 
-    def parse_inputs(self, inputs):
-        return Obs(*torch.split(inputs, self.obs_sections, dim=2))
-
-    def inner_loop(self, inputs, **kwargs):
-        N = inputs.base.size(1)
-
-        # build C
-        conditions = self.condition_one_hots[inputs.conditions[0].long()]
-        control = inputs.control[0].view(N, *self.obs_spaces.control.nvec.shape)
-        rows = self.rows.expand_as(control)
-        control = control.where(control < self.n_subtasks, rows)
-        false_path, true_path = torch.split(control, 1, dim=-1)
-        true_path = self.branch_one_hots[true_path.squeeze(-1).long()]
-        false_path = self.branch_one_hots[false_path.squeeze(-1).long()]
+    def inner_loop(self, M, inputs, gating_function, **kwargs):
+        i = self.obs_spaces.subtasks.nvec[0, -1]
 
         def update_attention(p, t):
-            c = (p.unsqueeze(1) @ conditions).squeeze(1)
-            phi_in = inputs.base[t, :, 1:-2] * c.view(N, conditions.size(2), 1, 1)
-            # truth = torch.max(phi_in.view(N, -1), dim=-1).values.float().view(N, 1, 1)
-            # print("inputs.base[t, :, 1:-2]", inputs.base[t, :, 1:-2])
-            # print("c", c)
-            # pred = truth
-            pred = self.phi_shift((inputs.base[t], c))
-            trans = pred * true_path + (1 - pred) * false_path
-            # print("trans")
-            # print(trans.round())
+            # r = (p.unsqueeze(1) @ M).squeeze(1)
+            r = (p.unsqueeze(1) @ M).squeeze(1)
+            # N = p.size(0)
+            # condition = r[:, -i:].view(N, i, 1, 1)
+            # obs = inputs.base[t, :, 1:-2]
+            # is_subtask = condition[:, 0]
+            is_control_flow = self.f(r).unsqueeze(-1)
+            is_subtask = 1 - is_control_flow
+            # pred = ((condition[:, 1:] * obs) > 0).view(N, 1, 1, -1).any(dim=-1).float()
+            condition_passes = self.phi_shift((inputs.base[t], r))
+            condition_fails = 1 - condition_passes
+            trans = condition_passes * self.one_step + condition_fails * self.two_steps
+            trans = is_subtask * self.one_step + is_control_flow * trans
             return (p.unsqueeze(1) @ trans).squeeze(1)
 
+        def _gating_function(subtask_param, **_kwargs):
+            c, probs = gating_function(subtask_param, **_kwargs)
+            is_control_flow = self.f(subtask_param)
+            return c + is_control_flow - c * is_control_flow, probs
+
         kwargs.update(update_attention=update_attention)
-        yield from super().inner_loop(inputs=inputs, **kwargs)
+        is_subtask = M[:, :, -i].unsqueeze(-1)
+        M[:, :, :-i] *= is_subtask
+        yield from ppo.subtasks.Recurrence.inner_loop(
+            self, gating_function=_gating_function, inputs=inputs, M=M, **kwargs
+        )
