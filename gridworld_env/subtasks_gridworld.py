@@ -245,7 +245,6 @@ class SubtasksGridWorld(gym.Env):
 
         self.subtask_idx = None
         self.subtask_idx = self.get_next_subtask()
-        self._subtask_idx = self._get_next_subtask()
         self.count = self.subtask.count
         self.last_terminal = False
         self.last_action = None
@@ -291,11 +290,6 @@ class SubtasksGridWorld(gym.Env):
         if a == self.action_space.n - 1:
             return self.get_observation(), -0.1, False, {}
 
-        if self.subtask != self.lines[self._subtask_idx]:
-            import ipdb
-
-            ipdb.set_trace()
-
         # act
         n_transitions = len(self.transitions)
         pos = tuple(self.pos)
@@ -322,7 +316,6 @@ class SubtasksGridWorld(gym.Env):
             if iterate:
                 if self.count == 0:
                     self.subtask_idx = self.get_next_subtask()
-                    self._subtask_idx = self._get_next_subtask()
                     self.next_subtask = True
                 else:
                     self.count -= 1
