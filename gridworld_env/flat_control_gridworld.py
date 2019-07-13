@@ -144,14 +144,10 @@ class FlatControlFlowGridWorld(SubtasksGridWorld):
 
     def subtasks_generator(self):
         interactions = list(range(len(self.interactions)))
-        one_step = False
 
         # noinspection PyTypeChecker
         for i in range(self.n_encountered):
-            if not one_step and i == self.n_encountered - 1:
-                one_step = True
-            else:
-                one_step = self.np_random.rand() < 0.5
+            one_step = self.np_random.rand() < 0.5 or i == self.n_encountered - 1
             subtask_obj = self.np_random.choice(self.existing)
             self.np_random.shuffle(self.irreversible_interactions)
             passing_interaction, failing_interaction = (
