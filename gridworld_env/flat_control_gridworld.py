@@ -116,7 +116,26 @@ class FlatControlFlowGridWorld(ControlFlowGridWorld):
             # agent has to take two steps when encountering a failed condition
             self.branching_episode = True
             self.passing_prob = 0
-        o = super().reset()
+
+        self.control = np.minimum(
+            1 + np.array(list(self.get_control())), self.n_subtasks
+        )
+        object_types = np.arange(len(self.object_types))
+        existing = self.np_random.choice(
+            object_types, size=len(self.object_types) // 2, replace=False
+        )
+        non_existing = np.array(list(set(object_types) - set(existing)))
+        n_passing = self.np_random.choice(
+            2, p=[1 - self.passing_prob, self.passing_prob], size=self.n_subtasks
+        ).sum()
+        passing = self.np_random.choice(existing, size=n_passing)
+        failing = self.np_random.choice(non_existing, size=self.n_subtasks - n_passing)
+        self.conditions = np.concatenate([passing, failing])
+        self.np_random.shuffle(self.conditions)
+        self.passing = self.conditions[0] in passing
+        self.required_objects = passing
+        self.pred = False
+        o = SubtasksGridWorld.reset(self)
         self.subtask_idx = self.get_next_subtask()
         return o
 
