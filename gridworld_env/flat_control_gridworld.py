@@ -1,9 +1,9 @@
 from collections import Counter, OrderedDict, namedtuple
+from dataclasses import dataclass
 
 from gym import spaces
 import numpy as np
 
-from dataclasses import dataclass
 import gridworld_env
 from gridworld_env import SubtasksGridWorld
 
