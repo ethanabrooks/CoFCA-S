@@ -1,10 +1,10 @@
 from collections import Counter, OrderedDict, namedtuple
-from dataclasses import dataclass
 from enum import Enum
 
 from gym import spaces
 import numpy as np
 
+from dataclasses import dataclass
 from gridworld_env import SubtasksGridWorld
 from gridworld_env.control_flow_gridworld import ControlFlowGridWorld
 
@@ -30,7 +30,27 @@ def filter_for_obs(d):
 class FlatControlFlowGridWorld(ControlFlowGridWorld):
     def __init__(self, *args, n_subtasks, **kwargs):
         n_subtasks += 1
-        super().__init__(*args, n_subtasks=n_subtasks, **kwargs)
+        SubtasksGridWorld.__init__(self, *args, n_subtasks=n_subtasks, **kwargs)
+        self.passing_prob = 0.5
+        self.pred = None
+        self.force_branching = False
+
+        self.conditions = None
+        self.control = None
+        self.required_objects = None
+        self.observation_space.spaces.update(
+            subtask=spaces.Discrete(self.observation_space.spaces["subtask"].n + 1),
+            conditions=spaces.MultiDiscrete(
+                np.array([len(self.object_types)]).repeat(self.n_subtasks)
+            ),
+            pred=spaces.Discrete(2),
+            control=spaces.MultiDiscrete(
+                np.tile(
+                    np.array([[1 + self.n_subtasks]]),
+                    [self.n_subtasks, 2],  # binary conditions
+                )
+            ),
+        )
         obs_spaces = self.observation_space.spaces
         subtask_nvec = obs_spaces["subtasks"].nvec[0]
         self.lines = None
@@ -48,7 +68,7 @@ class FlatControlFlowGridWorld(ControlFlowGridWorld):
                     ),
                     (self.n_lines, 1),
                 )
-            ),
+            )
         )
         self.observation_space.spaces = Obs(
             **filter_for_obs(self.observation_space.spaces)
