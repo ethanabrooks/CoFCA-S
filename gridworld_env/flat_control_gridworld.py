@@ -1,10 +1,10 @@
 from collections import Counter, OrderedDict, namedtuple
+from dataclasses import dataclass
 from enum import Enum
 
 from gym import spaces
 import numpy as np
 
-from dataclasses import dataclass
 from gridworld_env import SubtasksGridWorld
 from gridworld_env.control_flow_gridworld import ControlFlowGridWorld
 
@@ -29,17 +29,15 @@ def filter_for_obs(d):
 
 class FlatControlFlowGridWorld(ControlFlowGridWorld):
     def __init__(self, *args, n_subtasks, **kwargs):
-        self.n_lines = 2 * n_subtasks
-        # kwargs.update(n_subtasks=self.n_lines)
+        n_subtasks += 1
         super().__init__(*args, n_subtasks=n_subtasks, **kwargs)
-        self.n_subtasks = n_subtasks
         obs_spaces = self.observation_space.spaces
         subtask_nvec = obs_spaces["subtasks"].nvec[0]
         self.lines = None
         self.required_objects = None
         # noinspection PyProtectedMember
+        self.n_lines = self.n_subtasks + self.n_subtasks // 2 - 1
         self.observation_space.spaces.update(
-            subtask=spaces.Discrete(self.n_lines + 1),
             lines=spaces.MultiDiscrete(
                 np.tile(
                     np.pad(
