@@ -137,7 +137,7 @@ class FlatControlFlowGridWorld(SubtasksGridWorld):
                 yield i + 1, i + 1  # terminate
 
     def reset(self):
-        self._subtask_idx = None
+        self.subtask_idx = None
         self.one_step = self.np_random.rand() < 0.5
         self.branching = self.np_random.rand() < 0.5
 
@@ -179,9 +179,7 @@ class FlatControlFlowGridWorld(SubtasksGridWorld):
                     yield self.If(condition)
 
         self.lines = list(get_lines())[1:]
-        o = super().reset()
-        self.subtask_idx = self.get_next_subtask()
-        return o
+        return super().reset()
 
     def step(self, action):
         s, r, t, i = super().step(action)
@@ -292,26 +290,15 @@ class FlatControlFlowGridWorld(SubtasksGridWorld):
     @property
     def subtask(self):
         try:
-            return self.lines[self._subtask_idx]
+            return self.lines[self.subtask_idx]
         except IndexError:
             return
 
-    @property
-    def _subtask(self):
-        return super().subtask
-
     def get_next_subtask(self):
         if self.subtask_idx is None:
-            return 0
-        if self.subtask_idx > self.n_subtasks:
-            return None
-        return self.control[self.subtask_idx, int(self.evaluate_condition())]
-
-    def _get_next_subtask(self):
-        if self._subtask_idx is None:
             i = 0
         else:
-            i = self._subtask_idx + 1
+            i = self.subtask_idx + 1
         while True:
             if i >= len(self.lines):
                 return i
