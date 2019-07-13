@@ -32,7 +32,8 @@ class Agent(ppo.agent.Agent, NNBase):
         hidden_size,
         entropy_coef,
         hard_update,
-        agent,
+        agent_load_path,
+        agent_args,
         **kwargs,
     ):
         nn.Module.__init__(self)
@@ -40,6 +41,14 @@ class Agent(ppo.agent.Agent, NNBase):
         self.entropy_coef = entropy_coef
         self.action_spaces = Actions(**action_space.spaces)
         self.obs_spaces = obs_spaces
+        agent = None
+        if agent_load_path is not None:
+            agent = self.load_agent(
+                agent_load_path=agent_load_path,
+                obs_spaces=obs_spaces,
+                action_spaces=self.action_spaces,
+                **agent_args,
+            )
         self.recurrent_module = self.build_recurrent_module(
             agent=agent,
             hard_update=hard_update,
@@ -48,7 +57,20 @@ class Agent(ppo.agent.Agent, NNBase):
             action_spaces=self.action_spaces,
             **kwargs,
         )
-        self.agent = agent
+
+    def load_agent(self, agent_load_path, device, **agent_args):
+        agent = ppo.subtasks.Teacher(**agent_args)
+
+        state_dict = torch.load(agent_load_path, map_location=device)
+        assert "vec_normalize" not in state_dict, "oy"
+        state_dict["agent"].update(
+            part0_one_hot=agent.part0_one_hot,
+            part1_one_hot=agent.part1_one_hot,
+            part2_one_hot=agent.part2_one_hot,
+        )
+        agent.load_state_dict(state_dict["agent"])
+        print(f"Loaded teacher parameters from {agent_load_path}.")
+        return agent
 
     # noinspection PyMethodOverriding
     def build_recurrent_module(self, agent, hard_update, hidden_size, **kwargs):
@@ -82,7 +104,9 @@ class Agent(ppo.agent.Agent, NNBase):
             )
         else:
             dists = Actions(
-                a=None if self.agent else FixedCategorical(hx.a_probs),
+                a=None
+                if rm.agent  # use pretrained agent so don't train
+                else FixedCategorical(hx.a_probs),
                 cg=None,
                 cr=None,
                 g=FixedCategorical(hx.g_probs),

@@ -141,11 +141,11 @@ def student_cli():
 
 def metacontroller_cli():
     parser = build_parser()
-    parser.add_argument("--agent-load-path", type=Path)
     parser.add_argument("--task-type", choices=["control-flow", "flat-control-flow"])
     add_task_args(parser)
     add_env_args(parser)
     subtasks_parser = parser.add_argument_group("subtasks_args")
+    subtasks_parser.add_argument("--agent-load-path", type=Path)
     subtasks_parser.add_argument("--subtasks-hidden-size", type=int, required=True)
     subtasks_parser.add_argument("--subtasks-entropy-coef", type=float, required=True)
     subtasks_parser.add_argument("--subtasks-recurrent", action="store_true")
@@ -153,14 +153,7 @@ def metacontroller_cli():
     subtasks_parser.add_argument("--multiplicative-interaction", action="store_true")
 
     def train(
-        env_id,
-        task_args,
-        ppo_args,
-        agent_load_path,
-        subtasks_args,
-        env_args,
-        task_type,
-        **kwargs,
+        env_id, task_args, ppo_args, subtasks_args, env_args, task_type, **kwargs
     ):
         class TrainSubtasks(Train):
             @staticmethod
@@ -175,36 +168,12 @@ def metacontroller_cli():
 
             # noinspection PyMethodOverriding
             def build_agent(self, envs, **agent_args):
-                agent = None
                 obs_spaces = get_spaces(envs, task_type)
-                if agent_load_path:
-                    agent = ppo.subtasks.Teacher(
-                        obs_spaces=obs_spaces,
-                        action_space=envs.action_space,
-                        **agent_args,
-                    )
-
-                    state_dict = torch.load(agent_load_path, map_location=self.device)
-                    state_dict["agent"].update(
-                        part0_one_hot=agent.part0_one_hot,
-                        part1_one_hot=agent.part1_one_hot,
-                        part2_one_hot=agent.part2_one_hot,
-                    )
-                    agent.load_state_dict(state_dict["agent"])
-                    if isinstance(envs.venv, VecNormalize):
-                        # noinspection PyUnresolvedReferences
-                        envs.venv.load_state_dict(state_dict["vec_normalize"])
-                    print(f"Loaded teacher parameters from {agent_load_path}.")
-
-                _subtasks_args = {
-                    k.replace("subtasks_", ""): v for k, v in subtasks_args.items()
-                }
-
                 metacontroller_kwargs = dict(
                     obs_spaces=obs_spaces,
                     action_space=envs.action_space,
-                    agent=agent,
-                    **_subtasks_args,
+                    agent_args=agent_args,
+                    **{k.replace("subtasks_", ""): v for k, v in subtasks_args.items()},
                 )
                 if task_type == "control-flow":
                     return ppo.control_flow.Agent(**metacontroller_kwargs)
