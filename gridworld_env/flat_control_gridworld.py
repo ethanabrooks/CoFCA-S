@@ -1,5 +1,4 @@
 from collections import Counter, OrderedDict, namedtuple
-from enum import Enum
 
 from gym import spaces
 import numpy as np
@@ -7,8 +6,6 @@ import numpy as np
 from dataclasses import dataclass
 import gridworld_env
 from gridworld_env import SubtasksGridWorld
-from gridworld_env.control_flow_gridworld import ControlFlowGridWorld
-import ppo.control_flow
 
 Obs = namedtuple("Obs", "base subtask subtasks next_subtask lines")
 
@@ -27,10 +24,10 @@ def filter_for_obs(d):
     return {k: v for k, v in d.items() if k in Obs._fields}
 
 
-class FlatControlFlowGridWorld(ControlFlowGridWorld):
+class FlatControlFlowGridWorld(SubtasksGridWorld):
     def __init__(self, *args, n_subtasks, **kwargs):
         n_subtasks += 1
-        SubtasksGridWorld.__init__(self, *args, n_subtasks=n_subtasks, **kwargs)
+        super().__init__(*args, n_subtasks=n_subtasks, **kwargs)
         self.passing_prob = 0.5
         self.pred = None
         self.force_branching = False
@@ -123,7 +120,7 @@ class FlatControlFlowGridWorld(ControlFlowGridWorld):
         self.passing = self.conditions[0] in passing
         self.required_objects = passing
         self.pred = False
-        o = SubtasksGridWorld.reset(self)
+        o = super().reset()
         self.subtask_idx = self.get_next_subtask()
         return o
 
@@ -133,7 +130,7 @@ class FlatControlFlowGridWorld(ControlFlowGridWorld):
         return s, r, t, i
 
     def get_observation(self):
-        obs = SubtasksGridWorld.get_observation(self)
+        obs = super().get_observation()
 
         def get_lines():
             for subtask, (pos, neg), condition in zip(
