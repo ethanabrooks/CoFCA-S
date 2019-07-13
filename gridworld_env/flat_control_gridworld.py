@@ -10,9 +10,7 @@ from gridworld_env import SubtasksGridWorld
 from gridworld_env.control_flow_gridworld import ControlFlowGridWorld
 import ppo.control_flow
 
-Obs = namedtuple(
-    "Obs", "base subtask subtasks conditions control next_subtask pred lines"
-)
+Obs = namedtuple("Obs", "base subtask subtasks next_subtask lines")
 
 
 class Else:
@@ -40,19 +38,6 @@ class FlatControlFlowGridWorld(ControlFlowGridWorld):
         self.conditions = None
         self.control = None
         self.required_objects = None
-        self.observation_space.spaces.update(
-            subtask=spaces.Discrete(self.observation_space.spaces["subtask"].n + 1),
-            conditions=spaces.MultiDiscrete(
-                np.array([len(self.object_types)]).repeat(self.n_subtasks)
-            ),
-            pred=spaces.Discrete(2),
-            control=spaces.MultiDiscrete(
-                np.tile(
-                    np.array([[1 + self.n_subtasks]]),
-                    [self.n_subtasks, 2],  # binary conditions
-                )
-            ),
-        )
         obs_spaces = self.observation_space.spaces
         subtask_nvec = obs_spaces["subtasks"].nvec[0]
         self.lines = None
@@ -60,6 +45,7 @@ class FlatControlFlowGridWorld(ControlFlowGridWorld):
         # noinspection PyProtectedMember
         self.n_lines = self.n_subtasks + self.n_subtasks // 2 - 1
         self.observation_space.spaces.update(
+            subtask=spaces.Discrete(self.observation_space.spaces["subtask"].n + 1),
             lines=spaces.MultiDiscrete(
                 np.tile(
                     np.pad(
@@ -70,7 +56,7 @@ class FlatControlFlowGridWorld(ControlFlowGridWorld):
                     ),
                     (self.n_lines, 1),
                 )
-            )
+            ),
         )
         self.observation_space.spaces = Obs(
             **filter_for_obs(self.observation_space.spaces)
@@ -148,8 +134,6 @@ class FlatControlFlowGridWorld(ControlFlowGridWorld):
 
     def get_observation(self):
         obs = SubtasksGridWorld.get_observation(self)
-        obs.update(control=self.control, conditions=self.conditions, pred=self.pred)
-        obs = gridworld_env.control_flow_gridworld.Obs(**obs)._asdict()
 
         def get_lines():
             for subtask, (pos, neg), condition in zip(
