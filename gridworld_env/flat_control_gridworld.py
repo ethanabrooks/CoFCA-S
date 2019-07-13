@@ -209,6 +209,74 @@ class FlatControlFlowGridWorld(ControlFlowGridWorld):
                     interaction=failing, count=0, object=conditional_object
                 )
 
+    # noinspection PyTypeChecker
+    def subtasks_generator(self):
+        subtasks = list(self.choose_subtasks())
+        i = 0
+        encountered = Counter(passing=[], failing=[], subtasks=[])
+        while i < self.n_subtasks:
+            condition = self.conditions[i]
+            passing = condition in self.required_objects
+            branching = self.control[i, 0] != self.control[i, 1]
+            encountered.update(passing=[condition if branching and passing else None])
+            encountered.update(
+                failing=[condition if branching and not passing else None]
+            )
+            encountered.update(subtasks=[i])
+            i = self.control[i, int(passing)]
+
+        object_types = Counter(range(len(self.object_types)))
+        self.required_objects = list(set(encountered["passing"]) - {None})
+        available = Counter(self.required_objects)
+        for l in encountered.values():
+            l.reverse()
+
+        for t, subtask_idx in enumerate(encountered["subtasks"]):
+            subtask = subtasks[subtask_idx]
+            obj = subtask.object
+            to_be_removed = self.interactions[subtask.interaction] in {
+                "pick-up",
+                "transform",
+            }
+
+            def available_now():
+                if to_be_removed:
+                    required_for_future = Counter(set(encountered["passing"][t:]))
+                    return available - required_for_future
+                else:
+                    return available
+
+            while not available_now()[obj]:
+                if to_be_removed:
+                    prohibited = Counter(encountered["failing"][:t])
+                else:
+                    prohibited = Counter(encountered["failing"])
+                if obj in prohibited:
+                    obj = self.np_random.choice(list(object_types - prohibited))
+                    subtasks[subtask_idx] = subtask._replace(object=obj)
+                else:
+                    available[obj] += 1
+                    self.required_objects += [obj]
+
+            if to_be_removed:
+                available[obj] -= 1
+
+        yield from subtasks
+
+    def get_next_subtask(self):
+        if self.subtask_idx is None:
+            return 0
+        if self.subtask_idx > self.n_subtasks:
+            return None
+        return self.control[self.subtask_idx, int(self.evaluate_condition())]
+
+    def evaluate_condition(self):
+        self.pred = self.conditions[self.subtask_idx] in self.objects.values()
+        return self.pred
+
+    def get_required_objects(self, _):
+        yield from self.required_objects
+
 
 def main(seed, n_subtasks):
     kwargs = gridworld_env.get_args("4x4SubtasksGridWorld-v0")
