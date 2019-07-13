@@ -220,9 +220,8 @@ class SubtasksGridWorld(gym.Env):
         if self.random_obstacles:
             self.randomize_obstacles()
 
-        # TODO
-        # if self.random_task:
-        #     self.subtasks = list(self.subtasks_generator())
+        if self.random_task:
+            self.subtasks = list(self.subtasks_generator())
         types = list(self.get_required_objects(self.subtasks))
         n_random = max(len(types), self.min_objects)
         random_types = self.np_random.choice(
