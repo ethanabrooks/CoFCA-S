@@ -184,7 +184,11 @@ class FlatControlFlowGridWorld(ControlFlowGridWorld):
 
     def choose_subtasks(self):
         if not self.branching_episode:
-            yield from super().choose_subtasks()
+            choices = self.np_random.choice(
+                len(self.possible_subtasks), size=self.n_subtasks
+            )
+            for i in choices:
+                yield self.Subtask(*self.possible_subtasks[i])
             return
         irreversible_interactions = [
             j for j, i in enumerate(self.interactions) if i in ("pick-up", "transform")
