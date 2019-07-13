@@ -53,10 +53,8 @@ class SubtasksGridWorld(gym.Env):
         self.random_obstacles = random_obstacles
 
         # set on initialize
-        self.initialized = False
         self.next_subtask = False
         self.obstacles_one_hot = np.zeros(self.desc.shape, dtype=bool)
-        self.open_spaces = None
         self.obstacles = None
 
         self.possible_subtasks = np.array(
@@ -161,15 +159,6 @@ class SubtasksGridWorld(gym.Env):
         set_index(self.obstacles_one_hot, self.obstacles, True)
         self.obstacles = np.array(list(self.obstacles))
 
-    def initialize(self):
-        self.randomize_obstacles()
-        h, w = self.desc.shape
-        ij = cartesian_product(np.arange(h), np.arange(w))
-        self.open_spaces = ij[
-            np.logical_not(np.all(np.isin(ij, self.obstacles), axis=-1))
-        ]
-        self.initialized = True
-
     @property
     def transition_strings(self):
         return np.array(list("👆👇👈👉ptn"))
@@ -178,9 +167,9 @@ class SubtasksGridWorld(gym.Env):
         print("task:")
         print(self.task_string())
         if self.subtask is None:
-            print("*************")
-            print("Task Complete")
-            print("*************")
+            print("***********************************************************")
+            print("                       Task Complete                       ")
+            print("***********************************************************")
         else:
             print('subtask:')
             self.render_current_subtask()
@@ -227,9 +216,7 @@ class SubtasksGridWorld(gym.Env):
             yield from [subtask.object] * (subtask.count + 1)
 
     def reset(self):
-        if not self.initialized:
-            self.initialize()
-        elif self.random_obstacles:
+        if self.random_obstacles:
             self.randomize_obstacles()
 
         if self.random_task:
@@ -242,10 +229,13 @@ class SubtasksGridWorld(gym.Env):
         types = np.concatenate([random_types, types])
         self.np_random.shuffle(types)
 
+        h, w = self.desc.shape
+        ij = cartesian_product(np.arange(h), np.arange(w))
+        open_spaces = ij[np.logical_not(np.all(np.isin(ij, self.obstacles), axis=-1))]
         randoms = self.np_random.choice(
-            len(self.open_spaces), replace=False, size=n_random + 1  # + 1 for agent
+            len(open_spaces), replace=False, size=n_random + 1  # + 1 for agent
         )
-        *objects_pos, self.pos = self.open_spaces[randoms]
+        *objects_pos, self.pos = open_spaces[randoms]
 
         self.objects = {tuple(p): t for p, t in zip(objects_pos, types)}
 
@@ -347,9 +337,6 @@ class SubtasksGridWorld(gym.Env):
         self.last_terminal = t = self.subtask is None
         r = 1.0 if t else -0.1
         return self.get_observation(), r, t, {}
-
-    def evaluate_condition(self):
-        return self.conditions[self.subtask_idx] in self.objects.values()
 
     def get_next_subtask(self):
         return self.subtask_idx + 1

@@ -1,13 +1,26 @@
-from collections import OrderedDict, namedtuple
+from collections import Counter, OrderedDict, namedtuple
+from dataclasses import dataclass
+from enum import Enum
 
 from gym import spaces
 import numpy as np
 
+from gridworld_env import SubtasksGridWorld
 from gridworld_env.control_flow_gridworld import ControlFlowGridWorld
 
 Obs = namedtuple(
     "Obs", "base subtask subtasks conditions control next_subtask pred lines"
 )
+
+
+class Else:
+    def __str__(self):
+        return "else:"
+
+
+class EndIf:
+    def __str__(self):
+        return "endif"
 
 
 def filter_for_obs(d):
@@ -17,10 +30,11 @@ def filter_for_obs(d):
 class FlatControlFlowGridWorld(ControlFlowGridWorld):
     def __init__(self, *args, n_subtasks, **kwargs):
         n_subtasks += 1
-        super().__init__(*args, n_subtasks=n_subtasks, passing_prob=0.5, **kwargs)
+        super().__init__(*args, n_subtasks=n_subtasks, **kwargs)
         obs_spaces = self.observation_space.spaces
         subtask_nvec = obs_spaces["subtasks"].nvec[0]
         self.lines = None
+        self.required_objects = None
         # noinspection PyProtectedMember
         self.n_lines = self.n_subtasks + self.n_subtasks // 2 - 1
         self.observation_space.spaces.update(
@@ -39,14 +53,36 @@ class FlatControlFlowGridWorld(ControlFlowGridWorld):
         self.observation_space.spaces = Obs(
             **filter_for_obs(self.observation_space.spaces)
         )._asdict()
-        self.branching_episode = None
+        world = self
+
+        @dataclass
+        class If:
+            obj: int
+
+            def __str__(self):
+                return f"if {world.object_types[self.obj]}:"
+
+        self.If = If
 
     def task_string(self):
         return "\n".join(super().task_string().split("\n")[1:])
 
     def reset(self):
-        # self.branching_episode = self.np_random.rand() < 0.5
-        self.branching_episode = True
+        one_step_episode = self.np_random.rand() < 0.5
+        if one_step_episode:
+            self.branching_episode = self.np_random.rand() < 0.5
+
+            # agent has to take one step when either
+            if self.branching_episode:
+                # encontering a passing condition
+                self.passing_prob = 1
+            else:
+                # or a subtask
+                self.passing_prob = 0.5
+        else:
+            # agent has to take two steps when encountering a failed condition
+            self.branching_episode = True
+            self.passing_prob = 0
         o = super().reset()
         self.subtask_idx = self.get_next_subtask()
         return o

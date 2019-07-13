@@ -16,7 +16,7 @@ class Agent(ppo.control_flow.Agent):
         return Recurrence(**kwargs)
 
 
-class Recurrence(ppo.control_flow.agent.Recurrence):
+class Recurrence(ppo.subtasks.agent.Recurrence):
     def __init__(self, hidden_size, obs_spaces, **kwargs):
         self.original_obs_sections = [int(np.prod(s.shape)) for s in obs_spaces]
         super().__init__(
@@ -37,12 +37,44 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
         no_op_probs[:, -1] = 1
         self.register_buffer("no_op_probs", no_op_probs)
         self.size_agent_subtask = int(self.obs_spaces.subtasks.nvec[0, :-1].sum())
-        self.phi_shift2 = nn.Sequential(
+        self.f = nn.Sequential(
             init_(nn.Linear(self.condition_size, 1), "sigmoid"),
+            Reshape(1),
+            nn.Sigmoid(),
+        )
+        self.agent_input_size = int(self.obs_spaces.subtasks.nvec[0, :-1].sum())
+        d, h, w = self.obs_shape
+        h_size = d * self.condition_size
+        self.phi_shift = nn.Sequential(
+            Parallel(
+                nn.Sequential(Reshape(1, d, h, w)),
+                nn.Sequential(Reshape(self.condition_size, 1, 1, 1)),
+            ),
+            Product(),
+            Reshape(d * self.condition_size, *self.obs_shape[-2:]),
+            # init_(
+            # nn.Conv2d(self.condition_size * d, hidden_size, kernel_size=1, stride=1)
+            # ),
+            # attention {
+            ShallowCopy(2),
+            Parallel(
+                Reshape(h_size, h * w),
+                nn.Sequential(
+                    init_(nn.Conv2d(h_size, 1, kernel_size=1)),
+                    Reshape(1, h * w),
+                    nn.Softmax(dim=-1),
+                ),
+            ),
+            Product(),
+            Sum(dim=-1),
+            # }
+            nn.ReLU(),
+            Flatten(),
+            init_(nn.Linear(h_size, 1), "sigmoid"),
+            # init_(nn.Linear(d * self.condition_size * 4 * 4, 1), "sigmoid"),
             nn.Sigmoid(),
             Reshape(1, 1),
         )
-        self.agent_input_size = int(self.obs_spaces.subtasks.nvec[0, :-1].sum())
 
     def parse_inputs(self, inputs):
         obs = Obs(*torch.split(inputs, self.original_obs_sections, dim=2))
@@ -67,23 +99,33 @@ class Recurrence(ppo.control_flow.agent.Recurrence):
     def condition_size(self):
         return int(self.obs_spaces.subtasks.nvec[0].sum())
 
-    def inner_loop(self, M, inputs, **kwargs):
+    def inner_loop(self, M, inputs, gating_function, **kwargs):
+        i = self.obs_spaces.subtasks.nvec[0, -1]
+
         def update_attention(p, t):
             # r = (p.unsqueeze(1) @ M).squeeze(1)
             r = (p.unsqueeze(1) @ M).squeeze(1)
-            N = p.size(0)
-            i = self.obs_spaces.subtasks.nvec[0, -1]
-            condition = r[:, -i:].view(N, i, 1, 1)
-            obs = inputs.base[t, :, 1:-2]
-            is_subtask = condition[:, 0]
+            # N = p.size(0)
+            # condition = r[:, -i:].view(N, i, 1, 1)
+            # obs = inputs.base[t, :, 1:-2]
+            # is_subtask = condition[:, 0]
+            is_control_flow = self.f(r).unsqueeze(-1)
+            is_subtask = 1 - is_control_flow
             # pred = ((condition[:, 1:] * obs) > 0).view(N, 1, 1, -1).any(dim=-1).float()
-            pred = self.phi_shift((inputs.base[t], r))
-            take_two_steps = (1 - is_subtask) * (1 - pred)
-            take_one_step = 1 - take_two_steps
-            trans = take_one_step * self.one_step + take_two_steps * self.two_steps
+            condition_passes = self.phi_shift((inputs.base[t], r))
+            condition_fails = 1 - condition_passes
+            trans = condition_passes * self.one_step + condition_fails * self.two_steps
+            trans = is_subtask * self.one_step + is_control_flow * trans
             return (p.unsqueeze(1) @ trans).squeeze(1)
 
+        def _gating_function(subtask_param, **_kwargs):
+            c, probs = gating_function(subtask_param, **_kwargs)
+            is_control_flow = self.f(subtask_param)
+            return c + is_control_flow - c * is_control_flow, probs
+
         kwargs.update(update_attention=update_attention)
+        is_subtask = M[:, :, -i].unsqueeze(-1)
+        M[:, :, :-i] *= is_subtask
         yield from ppo.subtasks.Recurrence.inner_loop(
-            self, inputs=inputs, M=M, **kwargs
+            self, gating_function=_gating_function, inputs=inputs, M=M, **kwargs
         )
