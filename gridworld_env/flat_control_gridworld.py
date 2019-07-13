@@ -138,8 +138,8 @@ class FlatControlFlowGridWorld(SubtasksGridWorld):
 
     def reset(self):
         self._subtask_idx = None
-        self.one_step = self.np_random.rand() < 0
-        self.branching = self.np_random.rand() < 0
+        self.one_step = self.np_random.rand() < 0.5
+        self.branching = self.np_random.rand() < 0.5
 
         self.control = np.minimum(
             1 + np.array(list(self.get_control())), self.n_subtasks
