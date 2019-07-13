@@ -198,7 +198,50 @@ class FlatControlFlowGridWorld(SubtasksGridWorld):
             assert s.contains(obs[k])
         return OrderedDict(obs)
 
-    def choose_subtasks(self):
+    def subtasks_generator(self):
+        interactions = list(range(len(self.interactions)))
+        self.irreversible_interactions = irreversible_interactions = [
+            j for j, i in enumerate(self.interactions) if i in ("pick-up", "transform")
+        ]
+
+        object_types = np.arange(len(self.object_types))
+        non_existing = [self.np_random.choice(object_types)]
+        self.existing = existing = list(set(object_types) - set(non_existing))
+        self.lines = []
+        one_step = False
+
+        # noinspection PyTypeChecker
+        for i in range(self.n_subtasks):
+            if not one_step and i == self.n_subtasks - 1:
+                one_step = True
+            else:
+                one_step = self.np_random.rand() < 0.5
+            subtask_obj = self.np_random.choice(existing)
+            self.np_random.shuffle(irreversible_interactions)
+            passing_interaction, failing_interaction = (
+                irreversible_interactions
+                if i == 1
+                else self.np_random.choice(interactions, size=2)
+            )
+            if one_step:
+                branching = self.np_random.rand() < 0.5
+                if branching:
+                    condition_obj = self.np_random.choice(existing)
+                    yield self.If(condition_obj)
+                    yield self.Subtask(
+                        interaction=passing_interaction, count=0, object=subtask_obj
+                    )
+
+                else:  # not branching but still one-step
+                    subtask_interaction = self.np_random.choice(interactions)
+                    yield self.Subtask(
+                        interaction=subtask_interaction, count=0, object=subtask_obj
+                    )
+            else:  # two-step
+                yield self.If(self.np_random.choice(non_existing))
+                yield self.Subtask(
+                    interaction=failing_interaction, count=0, object=subtask_obj
+                )
         if not self.branching:
             choices = self.np_random.choice(
                 len(self.possible_subtasks), size=self.n_subtasks
@@ -206,78 +249,21 @@ class FlatControlFlowGridWorld(SubtasksGridWorld):
             for i in choices:
                 yield self.Subtask(*self.possible_subtasks[i])
             return
-        irreversible_interactions = [
-            j for j, i in enumerate(self.interactions) if i in ("pick-up", "transform")
-        ]
-        passing, failing = irreversible_interactions
-        conditional_object = self.np_random.choice(len(self.object_types))
-        for i in range(self.n_subtasks):
-            self.np_random.shuffle(irreversible_interactions)
-            if i % 3 == 0:
-                j = self.np_random.choice(len(self.possible_subtasks))
-                yield self.Subtask(*self.possible_subtasks[j])
-            if i % 3 == 1:
-                yield self.Subtask(
-                    interaction=passing, count=0, object=conditional_object
-                )
-            if i % 3 == 2:
-                yield self.Subtask(
-                    interaction=failing, count=0, object=conditional_object
-                )
 
-    # noinspection PyTypeChecker
-    def subtasks_generator(self):
-        subtasks = list(self.choose_subtasks())
-        i = 0
-        encountered = Counter(passing=[], failing=[], subtasks=[])
-        while i < self.n_subtasks:
-            condition = self.conditions[i]
-            passing = condition in self.required_objects
-            branching = self.control[i, 0] != self.control[i, 1]
-            encountered.update(passing=[condition if branching and passing else None])
-            encountered.update(
-                failing=[condition if branching and not passing else None]
-            )
-            encountered.update(subtasks=[i])
-            i = self.control[i, int(passing)]
-
-        object_types = Counter(range(len(self.object_types)))
-        self.required_objects = list(set(encountered["passing"]) - {None})
-        available = Counter(self.required_objects)
-        for l in encountered.values():
-            l.reverse()
-
-        for t, subtask_idx in enumerate(encountered["subtasks"]):
-            subtask = subtasks[subtask_idx]
-            obj = subtask.object
-            to_be_removed = self.interactions[subtask.interaction] in {
-                "pick-up",
-                "transform",
-            }
-
-            def available_now():
-                if to_be_removed:
-                    required_for_future = Counter(set(encountered["passing"][t:]))
-                    return available - required_for_future
-                else:
-                    return available
-
-            while not available_now()[obj]:
-                if to_be_removed:
-                    prohibited = Counter(encountered["failing"][: t + 1])
-                else:
-                    prohibited = Counter(encountered["failing"])
-                if obj in prohibited:
-                    obj = self.np_random.choice(list(object_types - prohibited))
-                    subtasks[subtask_idx] = subtask._replace(object=obj)
-                else:
-                    available[obj] += 1
-                    self.required_objects += [obj]
-
-            if to_be_removed:
-                available[obj] -= 1
-
-        yield from subtasks
+    def get_required_objects(self, subtasks):
+        available = []
+        passing = True
+        for line in subtasks:
+            if isinstance(line, self.If):
+                passing = line.obj in self.existing
+                if passing and line.obj not in available:
+                    available += [line.obj]
+                    yield line.obj
+            if passing and isinstance(line, self.Subtask):
+                if line.object not in available:
+                    self.required_objects += [line.object]
+                    if line.interaction not in self.irreversible_interactions:
+                        yield line.object
 
     @property
     def subtask(self):
@@ -306,9 +292,6 @@ class FlatControlFlowGridWorld(SubtasksGridWorld):
     def evaluate_condition(self):
         self.pred = self.conditions[self.subtask_idx] in self.objects.values()
         return self.pred
-
-    def get_required_objects(self, _):
-        yield from self.required_objects
 
 
 def main(seed, n_subtasks):
