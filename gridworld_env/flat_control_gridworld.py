@@ -257,16 +257,14 @@ class FlatControlFlowGridWorld(SubtasksGridWorld):
 
         yield from subtasks
 
-    @property
-    def subtask(self):
-        if self.subtask_idx >= len(self.lines):
-            return None
-
-        subtask = self.lines[self.subtask_idx]
-        assert isinstance(subtask, self.Subtask)
-        return subtask
-
     def get_next_subtask(self):
+        if self.subtask_idx is None:
+            return 0
+        if self.subtask_idx > self.n_subtasks:
+            return None
+        return self.control[self.subtask_idx, int(self.evaluate_condition())]
+
+    def _get_next_subtask(self):
         if self._subtask_idx is None:
             i = 0
         else:
