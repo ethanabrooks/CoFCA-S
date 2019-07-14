@@ -5,6 +5,7 @@ import torch.nn as nn
 from gridworld_env.matrix_control_flow_gridworld import Obs
 from ppo.layers import Flatten, Parallel, Product, Reshape, ShallowCopy, Sum
 import ppo.subtasks.agent
+import ppo.subtasks.recurrence
 from ppo.utils import init_
 
 
@@ -13,7 +14,7 @@ class Agent(ppo.subtasks.Agent):
         return Recurrence(**kwargs)
 
 
-class Recurrence(ppo.subtasks.agent.Recurrence):
+class Recurrence(ppo.subtasks.recurrence.Recurrence):
     def __init__(self, hidden_size, **kwargs):
         super().__init__(hidden_size=hidden_size, **kwargs)
         self.obs_sections = [int(np.prod(s.shape)) for s in self.obs_spaces]

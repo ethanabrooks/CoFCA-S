@@ -1,4 +1,4 @@
-from collections import OrderedDict
+from collections import OrderedDict, namedtuple
 
 from gym import spaces
 import numpy as np
@@ -6,6 +6,9 @@ import numpy as np
 from dataclasses import dataclass
 import gridworld_env
 from gridworld_env import SubtasksGridworld
+
+line_types = "If Else EndIf While EndWhile Subtask".split()
+LineTypes = namedtuple("LineTypes", line_types, defaults=list(range(len(line_types))))
 
 
 class Else:
@@ -29,18 +32,19 @@ class ControlFlowGridworld(SubtasksGridworld):
         self.required_objects = None
         obs_spaces = self.observation_space.spaces
         subtask_nvec = obs_spaces["subtasks"].nvec
-        self.required_objects = None
+        subtask_nvec = np.pad(
+            subtask_nvec, [(0, 0), (0, 1)], "constant", len(LineTypes._fields)
+        )
+        subtask_nvec = np.pad(
+            subtask_nvec, [(0, 0), (0, 1)], "constant", len(self.object_types) + 2
+        )  # +2 for not-a-condition and previous-condition-evaluation
+
         # noinspection PyProtectedMember
         self.observation_space.spaces.update(
-            subtask=spaces.Discrete(self.observation_space.spaces["subtask"].n + 1),
-            subtasks=spaces.MultiDiscrete(
-                np.pad(
-                    subtask_nvec,
-                    [(0, 0), (0, 1)],
-                    "constant",
-                    constant_values=1 + len(self.object_types),
-                )
-            ),
+            subtask=spaces.Discrete(
+                self.observation_space.spaces["subtask"].n + 1
+            ),  # +1 for terminating subtasks
+            subtasks=spaces.MultiDiscrete(subtask_nvec),
         )
         self.non_existing = None
         self.existing = None
@@ -116,6 +120,7 @@ class ControlFlowGridworld(SubtasksGridworld):
                 control_flow = self.np_random.choice([None, "if", "while"])
                 if control_flow == "if":
                     condition_obj = self.np_random.choice(self.existing)
+                    # noinspection PyArgumentList
                     yield self.If(condition_obj)
                     yield self.Subtask(
                         interaction=passing_interaction, count=0, object=subtask_obj
@@ -127,6 +132,7 @@ class ControlFlowGridworld(SubtasksGridworld):
                         interaction=subtask_interaction, count=0, object=subtask_obj
                     )
             else:  # two-step
+                # noinspection PyArgumentList
                 yield self.If(self.np_random.choice(self.non_existing))
                 yield self.Subtask(
                     interaction=failing_interaction, count=0, object=subtask_obj
