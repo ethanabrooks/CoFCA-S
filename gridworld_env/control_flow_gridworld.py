@@ -25,12 +25,7 @@ class ControlFlowGridworld(SubtasksGridworld):
         self.irreversible_interactions = [
             j for j, i in enumerate(self.interactions) if i in ("pick-up", "transform")
         ]
-        self.passing_prob = 0.5
-        self.pred = None
-        self.force_branching = False
 
-        self.conditions = None
-        self.control = None
         self.required_objects = None
         obs_spaces = self.observation_space.spaces
         subtask_nvec = obs_spaces["subtasks"].nvec
@@ -47,6 +42,8 @@ class ControlFlowGridworld(SubtasksGridworld):
                 )
             ),
         )
+        self.non_existing = None
+        self.existing = None
         world = self
 
         @dataclass
@@ -116,8 +113,8 @@ class ControlFlowGridworld(SubtasksGridworld):
                 else self.np_random.choice(interactions, size=2)
             )
             if one_step:
-                branching = self.np_random.rand() < 0.5
-                if branching:
+                control_flow = self.np_random.choice([None, "if", "while"])
+                if control_flow == "if":
                     condition_obj = self.np_random.choice(self.existing)
                     yield self.If(condition_obj)
                     yield self.Subtask(
@@ -170,10 +167,6 @@ class ControlFlowGridworld(SubtasksGridworld):
                     i += 1
                 else:
                     i += 2
-
-    def evaluate_condition(self):
-        self.pred = self.conditions[self.subtask_idx] in self.objects.values()
-        return self.pred
 
 
 def main(seed, n_subtasks):
