@@ -6,7 +6,7 @@ from gym.envs import register
 from gridworld_env.gridworld import GridWorld
 from gridworld_env.random_gridworld import RandomGridWorld
 from gridworld_env.simple_pomdp import SimplePOMDP
-from gridworld_env.subtasks_gridworld import SubtasksGridWorld  # noqa
+from gridworld_env.subtasks_gridworld import SubtasksGridworld  # noqa
 
 SUFFIX = "GridWorld-v0"
 JSON_PATH = Path(__file__).parent.joinpath("json")
@@ -14,7 +14,7 @@ JSON_PATH = Path(__file__).parent.joinpath("json")
 
 def register_from_string(env_id, class_=None, **kwargs):
     if class_ == "SubtasksGridWorld":
-        class_ = SubtasksGridWorld
+        class_ = SubtasksGridworld
     elif "random" in kwargs:
         class_ = RandomGridWorld
     else:

@@ -1,179 +1,340 @@
-from collections import Counter, namedtuple
+import abc
+from collections import OrderedDict, namedtuple
+import copy
 
 from gym import spaces
 import numpy as np
 
-from gridworld_env import SubtasksGridWorld
+from dataclasses import dataclass
+import gridworld_env
+from gridworld_env import SubtasksGridworld
 
-Obs = namedtuple("Obs", "base subtask subtasks conditions control next_subtask pred")
+LineTypes = namedtuple(
+    "LineTypes", "Subtask If Else EndIf While EndWhile", defaults=list(range(6))
+)
+
+L = LineTypes()
 
 
-class ControlFlowGridWorld(SubtasksGridWorld):
-    def __init__(
-        self, *args, n_subtasks, force_branching=False, passing_prob=0.5, **kwargs
-    ):
+class Line(abc.ABC):
+    @abc.abstractmethod
+    def to_tuple(self):
+        raise NotImplementedError
+
+    def replace_object(self, obj):
+        return self
+
+
+class Else(Line):
+    def __str__(self):
+        return "else:"
+
+    def to_tuple(self):
+        return 0, 0, 0, L.Else, 0
+
+
+class EndIf(Line):
+    def __str__(self):
+        return "endif"
+
+    def to_tuple(self):
+        return 0, 0, 0, L.EndIf, 0
+
+
+class EndWhile(Line):
+    def __str__(self):
+        return "endwhile"
+
+    def to_tuple(self):
+        return 0, 0, 0, L.EndWhile, 0
+
+
+class ControlFlowGridworld(SubtasksGridworld):
+    def __init__(self, *args, n_subtasks, **kwargs):
+        self.n_encountered = n_subtasks
         super().__init__(*args, n_subtasks=n_subtasks, **kwargs)
-        self.passing_prob = passing_prob
-        self.pred = None
-        self.force_branching = force_branching
-        if force_branching:
-            assert n_subtasks % 2 == 0
+        self.irreversible_interactions = [
+            j for j, i in enumerate(self.interactions) if i in ("pick-up", "transform")
+        ]
 
-        self.conditions = None
-        self.control = None
         self.required_objects = None
-        self.observation_space.spaces.update(
-            subtask=spaces.Discrete(self.observation_space.spaces["subtask"].n + 1),
-            conditions=spaces.MultiDiscrete(
-                np.array([len(self.object_types)]).repeat(self.n_subtasks)
-            ),
-            pred=spaces.Discrete(2),
-            control=spaces.MultiDiscrete(
-                np.tile(
-                    np.array([[1 + self.n_subtasks]]),
-                    [self.n_subtasks, 2],  # binary conditions
-                )
-            ),
+        obs_spaces = self.observation_space.spaces
+        subtask_nvec = obs_spaces["subtasks"].nvec
+        subtask_nvec = np.pad(
+            subtask_nvec,
+            [(0, 0), (0, 1)],
+            "constant",
+            constant_values=len(LineTypes._fields),
+        )
+        subtask_nvec = np.pad(
+            subtask_nvec,
+            [(0, 0), (0, 1)],
+            "constant",
+            constant_values=len(self.object_types) + 1,  # +1 for not-a-condition
         )
 
+        # noinspection PyProtectedMember
+        self.observation_space.spaces.update(
+            subtask=spaces.Discrete(
+                self.observation_space.spaces["subtask"].n + 1
+            ),  # +1 for terminating control_flow
+            subtasks=spaces.MultiDiscrete(subtask_nvec),
+        )
+        self.non_existing = None
+        self.existing = None
+        self.last_condition = None
+        self.last_condition_passed = None
+
+        world = self
+        # noinspection PyArgumentList
+
+        class Subtask(self.Subtask, Line):
+            def to_tuple(self):
+                return self + (L.Subtask, 0)
+
+            def replace_object(self, obj):
+                return self._replace(object=obj)
+
+        self.Subtask = Subtask
+
+        @dataclass
+        class If(Line):
+            object: int
+
+            def __str__(self):
+                return f"if {world.object_types[self.object]}:"
+
+            def to_tuple(self):
+                return 0, 0, 0, L.If, 1 + self.object
+
+            def replace_object(self, obj):
+                return If(obj)
+
+        self.If = If
+
+        @dataclass
+        class While(Line):
+            object: int
+
+            def __str__(self):
+                return f"while {world.object_types[self.object]}:"
+
+            def to_tuple(self):
+                return 0, 0, 0, L.While, 1 + self.object
+
+            def replace_object(self, obj):
+                return While(obj)
+
+        self.While = While
+
     def task_string(self):
-        def helper(i, indent):
-            try:
-                subtask = f"{i}:{self.subtasks[i]}"
-            except IndexError:
-                return f"{indent}terminate"
-            neg, pos = self.control[i]
-            condition = self.conditions[i]
+        def helper():
+            indent = ""
+            for subtask in self.subtasks:
+                if isinstance(subtask, (self.If, self.While, self.If)):
+                    yield str(subtask)
+                    indent = "    "
+                elif isinstance(subtask, (EndIf, EndWhile)):
+                    yield str(subtask)
+                    indent = ""
+                elif isinstance(subtask, Else):
+                    yield str(subtask)
+                else:
+                    yield f"{indent}{subtask}"
 
-            # def develop_branch(j, add_indent):
-            # new_indent = indent + add_indent
-            # try:
-            # subtask = f"{j}:{self.subtasks[j]}"
-            # except IndexError:
-            # return f"{new_indent}terminate"
-            # return f"{new_indent}{subtask}\n{helper(j, new_indent)}"
-
-            if pos == neg:
-                if_condition = helper(pos, indent)
-            else:
-                if_condition = f"""\
-{indent}if {self.object_types[condition]}:
-{helper(pos, indent + '    ')}
-{indent}else:
-{helper(neg, indent + '    ')}
-"""
-            return f"{indent}{subtask}\n{if_condition}"
-
-        return helper(i=0, indent="")
+        return "\n".join(helper())
 
     def get_observation(self):
         obs = super().get_observation()
-        obs.update(control=self.control, conditions=self.conditions, pred=self.pred)
-        return Obs(**obs)._asdict()
-
-    def choose_subtasks(self):
-        choices = self.np_random.choice(
-            len(self.possible_subtasks), size=self.n_subtasks
+        subtasks = np.pad(
+            [s.to_tuple() for s in self.subtasks],
+            [(0, self.n_subtasks - len(self.subtasks)), (0, 0)],
+            "constant",
         )
-        for i in choices:
-            yield self.Subtask(*self.possible_subtasks[i])
+        obs.update(subtasks=subtasks)
+        for (k, s) in self.observation_space.spaces.items():
+            assert s.contains(obs[k])
+        return OrderedDict(obs)
 
-    # noinspection PyTypeChecker
     def subtasks_generator(self):
-        subtasks = list(self.choose_subtasks())
-        i = 0
-        encountered = Counter(passing=[], failing=[], subtasks=[])
-        while i < self.n_subtasks:
-            condition = self.conditions[i]
-            passing = condition in self.required_objects
-            branching = self.control[i, 0] != self.control[i, 1]
-            encountered.update(passing=[condition if branching and passing else None])
-            encountered.update(
-                failing=[condition if branching and not passing else None]
-            )
-            encountered.update(subtasks=[i])
-            i = self.control[i, int(passing)]
-
-        object_types = Counter(range(len(self.object_types)))
-        self.required_objects = list(set(encountered["passing"]) - {None})
-        available = Counter(self.required_objects)
-        for l in encountered.values():
-            l.reverse()
-
-        for t, subtask_idx in enumerate(encountered["subtasks"]):
-            subtask = subtasks[subtask_idx]
-            obj = subtask.object
-            to_be_removed = self.interactions[subtask.interaction] in {
-                "pick-up",
-                "transform",
-            }
-
-            def available_now():
-                if to_be_removed:
-                    required_for_future = Counter(set(encountered["passing"][t:]))
-                    return available - required_for_future
+        active_control = None
+        line_type = None
+        interactions = list(range(len(self.interactions)))
+        # noinspection PyTypeChecker
+        for i in range(self.n_encountered):
+            try:
+                failing = not active_control.object
+            except AttributeError:
+                failing = False
+            if line_type in [self.While, self.If, Else]:
+                # must follow condition with subtask
+                line_type = self.Subtask
+            elif i == self.n_encountered - 1 or (
+                i == self.n_encountered - 2 and failing
+            ):
+                # Terminate all active controls
+                if isinstance(active_control, (self.If, Else)):
+                    line_type = EndIf
+                elif isinstance(active_control, self.While):
+                    line_type = EndWhile
                 else:
-                    return available
+                    assert active_control is None
+                    line_type = self.Subtask
 
-            while not available_now()[obj]:
-                if to_be_removed:
-                    prohibited = Counter(encountered["failing"][:t])
-                else:
-                    prohibited = Counter(encountered["failing"])
-                if obj in prohibited:
-                    obj = self.np_random.choice(list(object_types - prohibited))
-                    subtasks[subtask_idx] = subtask._replace(object=obj)
-                else:
-                    available[obj] += 1
-                    self.required_objects += [obj]
-
-            if to_be_removed:
-                available[obj] -= 1
-
-        yield from subtasks
-
-    def get_control(self):
-        for i in range(self.n_subtasks):
-            j = 2 * i
-            if self.np_random.rand() < 0.7:
-                yield j, j + 1
             else:
-                yield j, j
+                # No need to terminate controls. No preceding condition
+                line_types = {
+                    self.If: [self.Subtask, EndIf],
+                    Else: [self.Subtask, EndIf],
+                    self.While: [self.Subtask, EndWhile],
+                }
+                defaults = [self.Subtask]
+                if i <= self.n_encountered - 3:
+                    # need at least 3 lines left for Else and While
+                    line_types[self.If] += [Else]
+                    defaults += [self.While, self.If]
+                line_type = self.np_random.choice(
+                    line_types.get(type(active_control), defaults)
+                )
 
-    def reset(self):
-        self.control = np.minimum(
-            1 + np.array(list(self.get_control())), self.n_subtasks
-        )
-        object_types = np.arange(len(self.object_types))
-        existing = self.np_random.choice(
-            object_types, size=len(self.object_types) // 2, replace=False
-        )
-        non_existing = np.array(list(set(object_types) - set(existing)))
-        n_passing = self.np_random.choice(
-            2, p=[1 - self.passing_prob, self.passing_prob], size=self.n_subtasks
-        ).sum()
-        passing = self.np_random.choice(existing, size=n_passing)
-        failing = self.np_random.choice(non_existing, size=self.n_subtasks - n_passing)
-        self.conditions = np.concatenate([passing, failing])
-        self.np_random.shuffle(self.conditions)
-        self.passing = self.conditions[0] in passing
-        self.required_objects = passing
-        self.pred = False
-        return super().reset()
+            # instantiate lines
+            if line_type in (self.If, self.While):
+                active_control = line_type(None)
+                yield active_control
+            elif line_type is Else:
+                active_control = Else()
+                yield Else()
+            elif line_type in (EndIf, EndWhile):
+                active_control = None
+                yield line_type()
+
+            elif line_type is self.Subtask:
+                yield self.Subtask(
+                    interaction=self.np_random.choice(
+                        self.irreversible_interactions
+                        if active_control
+                        else interactions
+                    ),
+                    count=0,
+                    object=None,
+                )
+            else:
+                raise RuntimeError
+
+    def get_required_objects(self, subtasks):
+        available = []
+        i = 0
+        while_obj = None
+        non_existing = {self.np_random.choice(len(self.object_types))}
+        object_types = list(range(len(self.object_types)))
+        n_executed = 0
+
+        while i < len(self.subtasks):
+            try:
+                line = self.subtasks[i]
+                existing = list(set(object_types) - non_existing)
+                if isinstance(line, (self.If, self.While)):
+                    passing = self.np_random.rand() < 0.5
+                    obj = self.np_random.choice(
+                        existing if passing else list(non_existing)
+                    )
+                    self.subtasks[i] = line.replace_object(obj)
+                    if obj not in available:
+                        available += [obj]
+                        yield obj
+                    if isinstance(line, self.While):
+                        while_obj = obj
+                elif isinstance(line, EndWhile):
+                    passing = (
+                        self.np_random.rand() < 0.5
+                        and n_executed < self.n_subtasks // 2
+                    )
+                    if passing:
+                        assert while_obj not in available
+                        if while_obj not in available:
+                            available += [while_obj]
+                            yield while_obj
+                    else:
+                        non_existing.add(while_obj)
+                        while_obj = None
+
+                elif isinstance(line, self.Subtask):
+                    n_executed += 1
+                    obj = (
+                        self.np_random.choice(existing)
+                        if while_obj is None
+                        else while_obj
+                    )
+                    self.subtasks[i] = line.replace_object(obj)
+                    if obj not in available:
+                        available.append(obj)
+                        yield obj
+                    if line.interaction in self.irreversible_interactions:
+                        available.remove(obj)
+
+                i = self.get_next_idx(i, existing=available)
+            except KeyboardInterrupt:
+                import ipdb
+
+                ipdb.set_trace()
+
+        condition = None
+        for i in range(self.n_subtasks):
+            line = self.subtasks[i]
+            if isinstance(line, (self.If, self.While)):
+                condition = line.object
+
+            try:
+                if line.object is None:
+                    assert isinstance(line, self.Subtask), (
+                        "Since nesting is not allowed, all control flow statements "
+                        "must get executed."
+                    )
+                    assert (
+                        condition is not None
+                    ), "All subtask lines outside of control flow statements must get executed."
+                    self.subtasks[i] = line._replace(object=condition)
+                    # We always condition object inside control flow statements because it ensures that
+                    # 1. while-loops terminate
+                    # 2. mis-evaluation of the control-flow condition will result in task failure
+            except AttributeError:
+                pass
 
     def get_next_subtask(self):
         if self.subtask_idx is None:
-            return 0
-        if self.subtask_idx > self.n_subtasks:
-            return None
-        return self.control[self.subtask_idx, int(self.evaluate_condition())]
+            i = 0
+        else:
+            i = self.subtask_idx + 1
+        while i < len(self.subtasks) and not isinstance(self.subtasks[i], self.Subtask):
+            i = self.get_next_idx(i, existing=self.objects.values())
+        return i
 
-    def evaluate_condition(self):
-        self.pred = self.conditions[self.subtask_idx] in self.objects.values()
-        return self.pred
+    def get_next_idx(self, i, existing):
+        line = self.subtasks[i]
+        if isinstance(line, (self.If, self.While)):
+            self.last_condition = line.object
+            self.last_condition_passed = line.object in existing
+            if self.last_condition_passed:
+                i += 1
+            else:
+                while not isinstance(self.subtasks[i], (EndWhile, Else, EndIf)):
+                    i += 1
+        elif isinstance(line, Else):
+            if self.last_condition_passed:
+                while not isinstance(self.subtasks[i], EndIf):
+                    i += 1
+            else:
+                i += 1
 
-    def get_required_objects(self, _):
-        yield from self.required_objects
+        elif isinstance(line, EndWhile):
+            if self.last_condition in existing:
+                while not isinstance(self.subtasks[i], self.While):
+                    i -= 1
+            i += 1
+        else:
+            i += 1
+
+        return i
 
 
 def main(seed, n_subtasks):
@@ -181,7 +342,7 @@ def main(seed, n_subtasks):
     del kwargs['class_']
     del kwargs['max_episode_steps']
     kwargs.update(n_subtasks=n_subtasks, max_task_count=1)
-    env = ControlFlowGridWorld(**kwargs, evaluation=False, eval_subtasks=[])
+    env = ControlFlowGridworld(**kwargs, evaluation=False, eval_subtasks=[])
     actions = "wsadeq"
     gridworld_env.keyboard_control.run(env, actions=actions, seed=seed)
 
@@ -191,6 +352,6 @@ if __name__ == "__main__":
     import gridworld_env.keyboard_control
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--seed", type=int)
-    parser.add_argument("--n-subtasks", type=int)
+    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--n-subtasks", type=int, default=5)
     main(**vars(parser.parse_args()))

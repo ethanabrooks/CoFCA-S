@@ -3,23 +3,18 @@ from pathlib import Path
 
 from gym.wrappers import TimeLimit
 from rl_utils import hierarchical_parse_args
-import torch
 
 import gridworld_env
-import gridworld_env.control_flow_gridworld
-from gridworld_env.control_flow_gridworld import ControlFlowGridWorld
-from gridworld_env.flat_control_gridworld import FlatControlFlowGridWorld
+from gridworld_env.control_flow_gridworld import ControlFlowGridworld
+import gridworld_env.matrix_control_flow_gridworld
 import gridworld_env.subtasks_gridworld
-from gridworld_env.subtasks_gridworld import SubtasksGridWorld
 import ppo
 from ppo.arguments import build_parser, get_args
-import ppo.control_flow
-import ppo.flat_control_flow
-import ppo.subtasks.agent
-import ppo.subtasks.student
-import ppo.subtasks.teacher
+import ppo.control_flow.agent
+import ppo.control_flow.analogy_learner
+import ppo.control_flow.lower_level
+import ppo.matrix_control_flow
 from ppo.train import Train
-from ppo.wrappers import VecNormalize
 
 
 def add_task_args(parser):
@@ -48,34 +43,15 @@ def cli():
     Train(**get_args())
 
 
-def get_spaces(envs, task_type):
-    obs_spaces = envs.observation_space.spaces
-    if task_type == "control-flow":
-        return gridworld_env.control_flow_gridworld.Obs(**obs_spaces)
-    elif task_type == "flat-control-flow":
-        return gridworld_env.flat_control_gridworld.Obs(**obs_spaces)
-    else:
-        return gridworld_env.subtasks_gridworld.Obs(**obs_spaces)
-
-
 def make_subtasks_env(env_id, **kwargs):
-    def helper(seed, rank, task_type, max_episode_steps, class_, debug, **_kwargs):
+    def helper(seed, rank, max_episode_steps, class_, debug, **_kwargs):
         if rank == 1:
             print("Environment args:")
             for k, v in _kwargs.items():
                 print(f"{k:20}{v}")
-        if task_type == "control-flow":
-            env = ppo.subtasks.Wrapper(ControlFlowGridWorld(**_kwargs))
-        elif task_type == "flat-control-flow":
-            env = ppo.flat_control_flow.Wrapper(FlatControlFlowGridWorld(**_kwargs))
-        else:
-            env = SubtasksGridWorld(**_kwargs)
-        env = ppo.subtasks.Wrapper(env)
+        env = ppo.control_flow.Wrapper(ControlFlowGridworld(**_kwargs))
         if debug:
-            if task_type == "flat-control-flow":
-                env = ppo.flat_control_flow.DebugWrapper(env)
-            else:
-                env = ppo.subtasks.DebugWrapper(env)
+            env = ppo.control_flow.DebugWrapper(env)
         env.seed(seed + rank)
         if max_episode_steps is not None:
             env = TimeLimit(env, max_episode_steps=int(max_episode_steps))
@@ -83,7 +59,7 @@ def make_subtasks_env(env_id, **kwargs):
 
     gridworld_args = gridworld_env.get_args(env_id)
     kwargs.update(add_timestep=None)
-    kwargs = {k: v for k, v in kwargs.items() if (v is not None or k is "task_type")}
+    kwargs = {k: v for k, v in kwargs.items() if v is not None}
     chain_map = ChainMap(kwargs, gridworld_args)
 
     return helper(
@@ -93,7 +69,6 @@ def make_subtasks_env(env_id, **kwargs):
 
 def train_lower_level_cli(student):
     parser = build_parser()
-    parser.add_argument("--task-type", choices=["control-flow", "flat-control-flow"])
     add_task_args(parser)
     add_env_args(parser)
     if student:
@@ -104,7 +79,7 @@ def train_lower_level_cli(student):
         student_parser.add_argument("--xi", type=float, required=True)
     kwargs = hierarchical_parse_args(parser)
 
-    def train(task_args, env_args, task_type, student_args=None, **_kwargs):
+    def train(task_args, env_args, student_args=None, **_kwargs):
         class TrainSkill(Train):
             @staticmethod
             def make_env(add_timestep, **make_env_args):
@@ -113,19 +88,19 @@ def train_lower_level_cli(student):
                     **make_env_args,
                     **task_args,
                     max_episode_steps=kwargs["max_episode_steps"],
-                    task_type=task_type,
                 )
 
             @staticmethod
             def build_agent(envs, **agent_args):
-                obs_spaces = get_spaces(envs, task_type)
                 agent_args = dict(
-                    obs_spaces=obs_spaces, action_space=envs.action_space, **agent_args
+                    obs_spaces=envs.obs_spaces,
+                    action_space=envs.action_space,
+                    **agent_args,
                 )
                 if student:
-                    return ppo.subtasks.Student(**agent_args, **student_args)
+                    return ppo.control_flow.AnalogyLearner(**agent_args, **student_args)
                 else:
-                    return ppo.subtasks.Teacher(**agent_args)
+                    return ppo.control_flow.LowerLevel(**agent_args)
 
         TrainSkill(**_kwargs)
 
@@ -142,27 +117,21 @@ def student_cli():
 
 def metacontroller_cli():
     parser = build_parser()
-    parser.add_argument("--agent-load-path", type=Path)
-    parser.add_argument("--task-type", choices=["control-flow", "flat-control-flow"])
     add_task_args(parser)
     add_env_args(parser)
     subtasks_parser = parser.add_argument_group("subtasks_args")
-    subtasks_parser.add_argument("--subtasks-hidden-size", type=int, required=True)
-    subtasks_parser.add_argument("--subtasks-entropy-coef", type=float, required=True)
-    subtasks_parser.add_argument("--subtasks-recurrent", action="store_true")
+    subtasks_parser.add_argument("--agent-load-path", type=Path)
+    subtasks_parser.add_argument(
+        "--metacontroller-hidden-size", type=int, required=True
+    )
+    subtasks_parser.add_argument(
+        "--metacontroller-entropy-coef", type=float, required=True
+    )
+    subtasks_parser.add_argument("--metacontroller-recurrent", action="store_true")
     subtasks_parser.add_argument("--hard-update", action="store_true")
     subtasks_parser.add_argument("--multiplicative-interaction", action="store_true")
 
-    def train(
-        env_id,
-        task_args,
-        ppo_args,
-        agent_load_path,
-        subtasks_args,
-        env_args,
-        task_type,
-        **kwargs,
-    ):
+    def train(env_id, task_args, ppo_args, subtasks_args, env_args, **kwargs):
         class TrainSubtasks(Train):
             @staticmethod
             def make_env(**_kwargs):
@@ -171,48 +140,20 @@ def metacontroller_cli():
                     **_kwargs,
                     **task_args,
                     max_episode_steps=kwargs["max_episode_steps"],
-                    task_type=task_type,
                 )
 
             # noinspection PyMethodOverriding
             def build_agent(self, envs, **agent_args):
-                agent = None
-                obs_spaces = get_spaces(envs, task_type)
-                if agent_load_path:
-                    agent = ppo.subtasks.Teacher(
-                        obs_spaces=obs_spaces,
-                        action_space=envs.action_space,
-                        **agent_args,
-                    )
-
-                    state_dict = torch.load(agent_load_path, map_location=self.device)
-                    state_dict['agent'].update(
-                        part0_one_hot=agent.part0_one_hot,
-                        part1_one_hot=agent.part1_one_hot,
-                        part2_one_hot=agent.part2_one_hot,
-                    )
-                    agent.load_state_dict(state_dict["agent"])
-                    if isinstance(envs.venv, VecNormalize):
-                        # noinspection PyUnresolvedReferences
-                        envs.venv.load_state_dict(state_dict["vec_normalize"])
-                    print(f"Loaded teacher parameters from {agent_load_path}.")
-
-                _subtasks_args = {
-                    k.replace("subtasks_", ""): v for k, v in subtasks_args.items()
-                }
-
                 metacontroller_kwargs = dict(
-                    obs_spaces=obs_spaces,
+                    obs_space=envs.observation_space,
                     action_space=envs.action_space,
-                    agent=agent,
-                    **_subtasks_args,
+                    agent_args=agent_args,
+                    **{
+                        k.replace("metacontroller_", ""): v
+                        for k, v in subtasks_args.items()
+                    },
                 )
-                if task_type == "control-flow":
-                    return ppo.control_flow.Agent(**metacontroller_kwargs)
-                elif task_type == "flat-control-flow":
-                    return ppo.flat_control_flow.Agent(**metacontroller_kwargs)
-                else:
-                    return ppo.subtasks.Agent(**metacontroller_kwargs)
+                return ppo.control_flow.Agent(**metacontroller_kwargs)
 
         # ppo_args.update(aux_loss_only=True)
         TrainSubtasks(env_id=env_id, ppo_args=ppo_args, **kwargs)
