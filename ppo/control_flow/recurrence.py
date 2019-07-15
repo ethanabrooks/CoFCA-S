@@ -11,8 +11,9 @@ from torch.nn import functional as F
 from gridworld_env.control_flow_gridworld import LineTypes
 from gridworld_env.subtasks_gridworld import Obs
 import ppo
-from ppo.control_flow import Actions, LowerLevel
-from ppo.control_flow.lower_level import g_binary_to_discrete, g_discrete_to_binary
+from ppo.control_flow.lower_level import (LowerLevel, g_binary_to_discrete,
+                                          g_discrete_to_binary)
+from ppo.control_flow.wrappers import Actions
 from ppo.distributions import Categorical, DiagGaussian, FixedCategorical
 from ppo.layers import Concat, Flatten, Parallel, Product, Reshape, ShallowCopy, Sum
 from ppo.utils import broadcast3d, init_, interp, trace
@@ -53,7 +54,8 @@ class Recurrence(torch.jit.ScriptModule):
         self.subtask_nvec = self.obs_spaces.subtasks.nvec[0]
         d, h, w = self.obs_shape = obs_spaces.base.shape
         self.obs_sections = [int(np.prod(s.shape)) for s in self.obs_spaces]
-
+        self.line_size = int(self.subtask_nvec.sum())
+        # networks
         self.conv1 = nn.Sequential(
             ShallowCopy(2),
             Parallel(
@@ -70,12 +72,33 @@ class Recurrence(torch.jit.ScriptModule):
 
         self.conv2 = nn.Sequential(
             Concat(dim=1),
-            init_(
-                nn.Conv2d(d + int(self.subtask_nvec.sum()), hidden_size, kernel_size=1),
-                "relu",
-            ),
+            init_(nn.Conv2d(d + self.line_size, hidden_size, kernel_size=1), "relu"),
             nn.ReLU(),
             Flatten(),
+        )
+
+        P_size = self.line_size + 1  # +1 for previous evaluation of condition
+
+        self.xi = nn.Sequential(
+            Parallel(
+                nn.Sequential(Reshape(1, d, h, w)),
+                nn.Sequential(Reshape(P_size, 1, 1, 1)),
+            ),
+            Product(),
+            Reshape(d * P_size, *self.obs_shape[-2:]),
+            init_(nn.Conv2d(P_size * d, 1, kernel_size=1), "sigmoid"),
+            nn.Sigmoid(),  # TODO: try on both sides of pool
+            nn.LPPool2d(2, kernel_size=(h, w)),
+            Reshape(1),
+        )
+
+        self.phi = trace(
+            lambda in_size: init_(nn.Linear(in_size, 2), "sigmoid"),
+            in_size=(d * action_spaces.a.n * int(self.subtask_nvec.prod())),
+        )
+
+        self.zeta = nn.Sequential(
+            init_(nn.Linear(self.line_size, len(LineTypes._fields))), nn.Softmax()
         )
 
         input_size = h * w * hidden_size  # conv output
@@ -90,12 +113,7 @@ class Recurrence(torch.jit.ScriptModule):
 
         self.critic = init_(nn.Linear(input_size, 1))
 
-        self.phi = trace(
-            lambda in_size: init_(nn.Linear(in_size, 2), "sigmoid"),
-            in_size=(d * action_spaces.a.n * int(self.subtask_nvec.prod())),
-        )
-        self.phi_update2 = init_(nn.Linear(int(self.subtask_nvec.sum()), 1), "sigmoid")
-
+        # buffers
         for i, x in enumerate(self.subtask_nvec):
             self.register_buffer(f"part{i}_one_hot", torch.eye(int(x)))
         self.register_buffer("a_one_hots", torch.eye(int(action_spaces.a.n)))
@@ -104,16 +122,11 @@ class Recurrence(torch.jit.ScriptModule):
             "subtask_space", torch.tensor(self.subtask_nvec.astype(np.int64))
         )
 
-        trans = F.pad(torch.eye(self.n_subtasks), [1, 0])[:, :-1]
-        trans[-1, -1] = 1
-
-        self.register_buffer("trans", trans)
-
         state_sizes = RecurrentState(
             a=1,
             cg=1,
             cr=1,
-            r=int(self.subtask_nvec.sum()),
+            r=self.line_size,
             p=self.n_subtasks,
             g=1,
             a_probs=action_spaces.a.n,
@@ -123,67 +136,19 @@ class Recurrence(torch.jit.ScriptModule):
             v=1,
             g_loss=1,
             subtask=1,
-            P=self.obs_spaces.subtasks.nvec[0, -1]
-            + 1,  # +1 for previous evaluation of condition
+            P=P_size,
         )
         self.state_sizes = RecurrentState(*map(int, state_sizes))
-
-        self.line_size = int(self.obs_spaces.subtasks.nvec[0].sum())
-        h_size = d * self.line_size
-
-        self.xi = nn.Sequential(
-            Parallel(
-                nn.Sequential(Reshape(1, d, h, w)),
-                nn.Sequential(Reshape(self.line_size, 1, 1, 1)),
-            ),
-            Product(),
-            Reshape(d * self.line_size, *self.obs_shape[-2:]),
-            # init_(
-            # nn.Conv2d(self.condition_size * d, hidden_size, kernel_size=1, stride=1)
-            # ),
-            # attention {
-            ShallowCopy(2),
-            Parallel(
-                Reshape(h_size, h * w),
-                nn.Sequential(
-                    init_(nn.Conv2d(h_size, 1, kernel_size=1)),
-                    Reshape(1, h * w),
-                    nn.Softmax(dim=-1),
-                ),
-            ),
-            Product(),
-            Sum(dim=-1),
-            # }
-            nn.ReLU(),
-            Flatten(),
-            init_(nn.Linear(h_size, 1), "sigmoid"),
-            # init_(nn.Linear(d * self.condition_size * 4 * 4, 1), "sigmoid"),
-            nn.Sigmoid(),
-            Reshape(1, 1),
-        )
 
         # buffers
         one_step = F.pad(torch.eye(self.n_subtasks - 1), [1, 0, 0, 1])
         one_step[:, -1] += 1 - one_step.sum(-1)
         self.register_buffer("one_step", one_step.unsqueeze(0))
-        self.register_buffer(
-            f"part3_one_hot", torch.eye(int(self.obs_spaces.subtasks.nvec[0, -1]))
-        )
         no_op_probs = torch.zeros(1, self.actor.linear.out_features)
         no_op_probs[:, -1] = 1
         self.register_buffer("no_op_probs", no_op_probs)
-        self.register_buffer("last_line", torch.eye(self.obs_spaces.nvec[0].sum()))
-
-        self.size_agent_subtask = int(self.obs_spaces.subtasks.nvec[0, :-1].sum())
-        self.agent_input_size = int(self.obs_spaces.subtasks.nvec[0, :-1].sum())
-        self.zeta = nn.Sequential(
-            init_(nn.Linear(self.line_size, len(LineTypes._fields))), nn.Softmax()
-        )
-        self.state_sizes = RecurrentState(
-            **self.state_sizes._asdict(),
-            P=self.obs_spaces.subtasks.nvec[0, -1]
-            + 1,  # +1 for previous evaluation of condition
-        )
+        self.register_buffer("last_line", torch.eye(self.line_size))
+        self.agent_input_size = int(self.subtask_nvec[:-1].sum())
 
     # @torch.jit.script_method
     def parse_hidden(self, hx):
@@ -205,7 +170,6 @@ class Recurrence(torch.jit.ScriptModule):
         g3 = x4 % x3
         return g1, g2, g3
 
-    @property
     def g_discrete_one_hots(self):
         for i in itertools.count():
             try:
@@ -251,7 +215,7 @@ class Recurrence(torch.jit.ScriptModule):
         g_discrete = [x[0, :, :, 0] for x in task]
         M_discrete = torch.stack(g_discrete, dim=-1)
 
-        M = g_discrete_to_binary(g_discrete, self.g_discrete_one_hots)
+        M = g_discrete_to_binary(g_discrete, self.g_discrete_one_hots())
 
         # parse hidden
         new_episode = torch.all(hx.squeeze(0) == 0, dim=-1)
@@ -282,10 +246,7 @@ class Recurrence(torch.jit.ScriptModule):
 
     def inner_loop(self, hx, M, M_discrete, N, T, subtask, p, r, actions, inputs):
         subtask = subtask.long().view(T, N)
-        M_zeta = self.zeta(M).transpose().unsqueeze(-1)
-        is_line = torch.any(M > 0, dim=-1).float()
-        non_line = 1 - is_line
-        last_line = self.last_line[is_line.sum(-1)]
+        M_zeta = self.zeta(M)
 
         # NOTE {
         # TODO: truth
@@ -299,28 +260,30 @@ class Recurrence(torch.jit.ScriptModule):
         for t in range(T):
 
             # e
-            e = (p.unsqueeze(1) @ M_zeta).squeeze(1)
-            eP = e[L.If, L.While].sum(-1, keepdim=True)
-            er = eP / e[L.If, L.Else, L.While, L.EndWhile].sum(-1, keepdim=True)
+            e = (p.unsqueeze(1) @ M_zeta).permute(2, 0, 1)
+            eP = e[[L.If, L.While]].sum(0)
+            er = eP / e[[L.If, L.Else, L.While, L.EndWhile]].sum(0)
 
             # l
             # NOTE {
             # TODO: truth
             # NOTE }
-            l = self.xi((inputs.base[t], interp(hx.P, hx.r, er)))
+            r = F.pad(hx.r, [0, 1])
+            l = self.xi((inputs.base[t], interp(hx.P, r, er)))
 
             # P
             P = (
                 e[L.If] * F.pad(l, [0, self.line_size])  # record evaluation
-                + e[L.While] * F.pad(r, [1, 0])  # record condition
+                + e[L.While] * r  # record condition
                 + (1 - e[L.If] - e[L.While]) * hx.P  # keep the same
             )
 
             def scan(*idxs, u, it):
                 p = []
+                omega = M_zeta[:, :, idxs].sum(-1) * u
                 for i in it:
-                    p.append((1 - sum(p) * M_zeta[idxs].sum(-1) * u))
-                return p
+                    p.append((1 - sum(p) * omega[:, i]))
+                return torch.stack(p, dim=-1)
 
             # cr
             cr = e[L.Subtask] * hx.cr + (1 - e[L.Subtask])
@@ -343,14 +306,12 @@ class Recurrence(torch.jit.ScriptModule):
             )
             p_step = (p.unsqueeze(1) @ self.one_step).squeeze(1)
             p = (
-                e[L.If, L.While, L.Else].sum(-1)  # conditions
+                e[[L.If, L.While, L.Else]].sum(0)  # conditions
                 * (l * p_step + (1 - l) * p_forward)
                 + e[L.EndWhile] * (l * p_backward + (1 - l) * p_step)
                 + e[L.EndIf] * p_step
                 + e[L.Subtask] * (cr * p_step + (1 - cr) * hx.p)
             )
-            overflow_attention = torch.sum(non_line * p, dim=-1)
-            p = is_line * p + overflow_attention * last_line
 
             # r
             r = (p.unsqueeze(1) @ M).squeeze(1)

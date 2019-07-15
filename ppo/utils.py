@@ -103,19 +103,6 @@ def broadcast3d(inputs, shape):
     return inputs.view(*inputs.shape, 1, 1).expand(*inputs.shape, *shape)
 
 
-@torch.jit.script
-def batch_conv1d(inputs, weights):
-    outputs = []
-    # one convolution per instance
-    n = inputs.shape[0]
-    for i in range(n):
-        x = inputs[i]
-        w = weights[i]
-        outputs.append(F.conv1d(x.reshape(1, 1, -1), w.reshape(1, 1, -1), padding=1))
-    return torch.cat(outputs)
-
-
-@torch.jit.script
 def interp(x1, x2, c):
     return c * x2 + (1 - c) * x1
 

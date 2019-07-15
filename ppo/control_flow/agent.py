@@ -7,9 +7,8 @@ from torch.nn import functional as F
 from gridworld_env.subtasks_gridworld import Obs
 import ppo
 from ppo.agent import AgentValues, NNBase
-from ppo.control_flow import Recurrence
 import ppo.control_flow.lower_level
-from ppo.control_flow.recurrence import RecurrentState
+from ppo.control_flow.recurrence import Recurrence, RecurrentState
 from ppo.control_flow.wrappers import Actions
 from ppo.distributions import FixedCategorical
 
@@ -35,13 +34,15 @@ class Agent(ppo.agent.Agent, NNBase):
         obs_spaces = Obs(**self.obs_space.spaces)
         agent = None
         if agent_load_path is not None:
-            agent_obs_spaces = ppo.control_flow.lower_level.Obs(
-                base=obs_spaces.base, subtask=MultiDiscrete(obs_spaces.subtasks.nvec[0])
-            )
             agent = self.load_agent(
                 agent_load_path=agent_load_path,
-                obs_spaces=agent_obs_spaces,
                 action_spaces=self.action_spaces,
+                obs_spaces=(
+                    ppo.control_flow.lower_level.Obs(
+                        base=obs_spaces.base,
+                        subtask=MultiDiscrete(obs_spaces.subtasks.nvec[0, :3]),
+                    )
+                ),
                 **agent_args,
             )
         self.recurrent_module = self.build_recurrent_module(
@@ -58,11 +59,11 @@ class Agent(ppo.agent.Agent, NNBase):
 
         state_dict = torch.load(agent_load_path, map_location=device)
         assert "vec_normalize" not in state_dict, "oy"
-        state_dict["agent"].update(
-            part0_one_hot=agent.part0_one_hot,
-            part1_one_hot=agent.part1_one_hot,
-            part2_one_hot=agent.part2_one_hot,
-        )
+        # state_dict["agent"].update(
+        #     part0_one_hot=agent.part0_one_hot,
+        #     part1_one_hot=agent.part1_one_hot,
+        #     part2_one_hot=agent.part2_one_hot,
+        # )
         agent.load_state_dict(state_dict["agent"])
         print(f"Loaded teacher parameters from {agent_load_path}.")
         return agent
