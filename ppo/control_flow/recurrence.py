@@ -11,11 +11,8 @@ from torch.nn import functional as F
 from gridworld_env.control_flow_gridworld import LineTypes
 from gridworld_env.subtasks_gridworld import Obs
 import ppo
-from ppo.control_flow.lower_level import (
-    LowerLevel,
-    g_binary_to_discrete,
-    g_discrete_to_binary,
-)
+from ppo.control_flow.lower_level import (LowerLevel, g_binary_to_discrete,
+                                          g_discrete_to_binary)
 from ppo.control_flow.wrappers import Actions
 from ppo.distributions import Categorical, DiagGaussian, FixedCategorical
 from ppo.layers import Concat, Flatten, Parallel, Product, Reshape, ShallowCopy, Sum
@@ -183,16 +180,6 @@ class Recurrence(torch.jit.ScriptModule):
     def parse_inputs(self, inputs):
         return Obs(*torch.split(inputs, self.obs_sections, dim=2))
 
-    def get_a_dist(self, conv_out, g_binary, obs):
-        N = obs.size(0)
-        if self.agent is None:
-            return self.actor(conv_out)
-        else:
-            agent_inputs = ppo.control_flow.lower_level.Obs(
-                base=obs.view(N, -1), subtask=g_binary
-            )
-            return self.agent(agent_inputs, rnn_hxs=None, masks=None).dist
-
     # @torch.jit.script_method
     def forward(self, inputs, hx):
         assert hx is not None
@@ -253,8 +240,8 @@ class Recurrence(torch.jit.ScriptModule):
 
         # NOTE {
         M_zeta = M[:, :, -self.subtask_nvec[-2:].sum() : -self.subtask_nvec[-1]]
-        # print("M_zeta")
-        # print(M_zeta)
+        print("M_zeta")
+        print(M_zeta)
         # NOTE }
         L = LineTypes()
 
@@ -264,37 +251,44 @@ class Recurrence(torch.jit.ScriptModule):
         G = torch.cat([actions.g, hx.g.unsqueeze(0)], dim=0).long().squeeze(2)
         for t in range(T):
 
+            def safediv(x, y):
+                return x / (y + 1e-7)
+
             # e
             e = (p.unsqueeze(1) @ M_zeta).permute(2, 0, 1)
-            eP = e[[L.If, L.While]].sum(0)
-            er = eP / e[[L.If, L.Else, L.While, L.EndWhile]].sum(0)
+            er = safediv(
+                e[[L.If, L.While]].sum(0),
+                (e[[L.If, L.Else, L.While, L.EndWhile]]).sum(0),
+            )
 
             # l
-            r = F.pad(hx.r, [0, 1])
-            l = self.xi((inputs.base[t], interp(hx.P, r, er)))
-            # print("l")
-            # print(l)
+            r = F.pad(hx.r, [1, 0])
+            _r = interp(hx.P, r, er)
+            l = self.xi((inputs.base[t], _r))
+            eP = safediv(
+                e[[L.Else]].sum(0), (e[[L.If, L.Else, L.While, L.EndWhile]]).sum(0)
+            )
             # NOTE {
-            c = hx.r[:, 1 - self.subtask_nvec[-1] :]
+            c = torch.split(_r[:, 1:], list(self.subtask_nvec), dim=-1)[-1][:, 1:]
+            prev = _r[:, 0]
+            print("_r", _r)
+            print("inputs", inputs.base[t, :, 1:-2])
+            print("condition", c)
+            print("eP", eP)
+            print("prev", prev)
             phi_in = inputs.base[t, :, 1:-2] * c.view(N, -1, 1, 1)
-            l = torch.max(phi_in.view(N, -1), dim=-1).values.float().view(N, 1)
+            l = eP * prev + (1 - eP) * torch.max(
+                phi_in.view(N, -1), dim=-1
+            ).values.float().view(N, 1)
+            print("l", l)
             # NOTE }
 
             # P
             P = (
-                e[L.If] * F.pad(l, [0, self.line_size])  # record evaluation
+                e[L.If] * F.pad(1 - l, [0, self.line_size])  # record evaluation
                 + e[L.While] * r  # record condition
                 + (1 - e[L.If] - e[L.While]) * hx.P  # keep the same
             )
-
-            def scan(*idxs, u, it):
-                p = []
-                omega = M_zeta[:, :, idxs].sum(-1) * u
-                *it, last = it
-                for i in it:
-                    p.append((1 - sum(p)) * omega[:, i])
-                p.append(1 - sum(p))
-                return torch.stack(p, dim=-1)
 
             # cr
             cr = e[L.Subtask] * hx.cr + (1 - e[L.Subtask])
@@ -302,23 +296,30 @@ class Recurrence(torch.jit.ScriptModule):
             # cg
             cg = e[L.Subtask] * hx.cg + (1 - e[L.Subtask])
 
+            def scan(*idxs, cumsum, it):
+                p = []
+                omega = M_zeta[:, :, idxs].sum(-1) * cumsum
+                *it, last = it
+                for i in it:
+                    p.append((1 - sum(p)) * omega[:, i])
+                p.append(1 - sum(p))
+                return torch.stack(p, dim=-1)
+
             # p
             p_forward = scan(
                 L.EndIf,
                 L.Else,
                 L.EndWhile,
-                u=torch.cumsum(hx.p, dim=-1),
+                cumsum=torch.cumsum(hx.p, dim=-1),
                 it=range(M.size(1)),
             )
-            # print("p_forward")
-            # print(p_forward)
+            print("p_forward", p_forward)
             p_backward = scan(
                 L.While,
-                u=torch.cumsum(hx.p.flip(-1), dim=-1).flip(-1),
+                cumsum=torch.cumsum(hx.p.flip(-1), dim=-1).flip(-1),
                 it=range(M.size(1) - 1, -1, -1),
-            )
-            # print("p_backward")
-            # print(p_backward)
+            ).flip(-1)
+            print("p_backward", p_backward)
             p_step = (p.unsqueeze(1) @ self.one_step).squeeze(1)
             p = (
                 e[[L.If, L.While, L.Else]].sum(0)  # conditions
@@ -327,6 +328,15 @@ class Recurrence(torch.jit.ScriptModule):
                 + e[L.EndIf] * p_step
                 + e[L.Subtask] * (cr * p_step + (1 - cr) * hx.p)
             )
+            print("cr", cr)
+            print("e[L.Subtask]", e[L.Subtask])
+            print("e[L.EndWhile]", e[L.EndWhile])
+            print("e[L.EndIf]", e[L.EndIf])
+            print("e[L.If]", e[L.If])
+            print("e[L.While]", e[L.While])
+            print("e[L.Else]", e[L.Else])
+            print("p_step", p_step.round())
+            print("p", p.round())
 
             # r
             r = (p.unsqueeze(1) @ M).squeeze(1)
@@ -348,6 +358,7 @@ class Recurrence(torch.jit.ScriptModule):
                     base=obs[t].view(N, -1),
                     subtask=g_binary[:, : self.agent_subtask_size],
                 )
+                print("agent subtask", agent_inputs.subtask)
                 probs = self.agent(agent_inputs, rnn_hxs=None, masks=None).dist.probs
             op = g_binary[:, self.agent_subtask_size].unsqueeze(1)
             no_op = 1 - op
@@ -363,21 +374,6 @@ class Recurrence(torch.jit.ScriptModule):
                 task_sections = torch.split(
                     subtask_param, tuple(self.subtask_nvec), dim=-1
                 )
-                # NOTE {
-                # agent_layer = obs[t, :, 6, :, :].long()
-                # j, k, l = torch.split(agent_layer.nonzero(), 1, dim=-1)
-                # debug_obs = obs[t, j, :, k, l].squeeze(1)
-                # a_one_hot = self.a_one_hots[A[t]]
-                # interaction, count, obj, condition = task_sections
-                # correct_object = obj * debug_obs[:, 1 : 1 + self.subtask_nvec[2]]
-                # column1 = interaction[:, :1]
-                # column2 = interaction[:, 1:] * a_one_hot[:, 4:-1]
-                # correct_action = torch.cat([column1, column2], dim=-1)
-                # truth = (
-                #     correct_action.sum(-1, keepdim=True)
-                #     * correct_object.sum(-1, keepdim=True)
-                # ).detach()  # * condition[:, :1] + (1 - condition[:, :1])
-                # NOTE }
                 parts = (self.conv1(obs[t]), self.a_one_hots[A[t]]) + task_sections
                 outer_product_obs = 1
                 for i1, part in enumerate(parts):
@@ -396,6 +392,26 @@ class Recurrence(torch.jit.ScriptModule):
                 else:
                     c = torch.sigmoid(c_logits[:, :1])
                     probs = torch.zeros_like(c_logits)  # dummy value
+
+                # NOTE {
+                _task_sections = torch.split(
+                    subtask_param, tuple(self.subtask_nvec), dim=-1
+                )
+                interaction, count, obj, _, condition = _task_sections
+                agent_layer = obs[t, :, 6, :, :].long()
+                j, k, l = torch.split(agent_layer.nonzero(), 1, dim=-1)
+                debug_obs = obs[t, j, :, k, l].squeeze(1)
+                a_one_hot = self.a_one_hots[A[t]]
+                correct_object = obj * debug_obs[:, 1 : 1 + self.subtask_nvec[2]]
+                column1 = interaction[:, :1]
+                column2 = interaction[:, 1:] * a_one_hot[:, 4:-1]
+                correct_action = torch.cat([column1, column2], dim=-1)
+                c = (
+                    correct_action.sum(-1, keepdim=True)
+                    * correct_object.sum(-1, keepdim=True)
+                ).detach()  # * condition[:, :1] + (1 - condition[:, :1])
+                print("c", c)
+                # NOTE }
                 return c, probs
 
             # cr

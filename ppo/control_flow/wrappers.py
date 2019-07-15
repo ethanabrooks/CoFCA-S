@@ -70,11 +70,4 @@ class Wrapper(gym.Wrapper):
 
     def render_assigned_subtask(self):
         env = self.env.unwrapped
-        g_type, g_count, g_obj = tuple(env.subtasks[self.last_g])
-        print(
-            "Assigned subtask:",
-            self.last_g,
-            env.interactions[g_type],
-            g_count + 1,
-            env.object_types[g_obj],
-        )
+        print("Assigned subtask:", self.last_g, env.subtasks[self.last_g])

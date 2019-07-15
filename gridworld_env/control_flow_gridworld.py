@@ -10,7 +10,7 @@ import gridworld_env
 from gridworld_env import SubtasksGridworld
 
 LineTypes = namedtuple(
-    "LineTypes", "If Else EndIf While EndWhile Subtask", defaults=list(range(6))
+    "LineTypes", "Subtask If Else EndIf While EndWhile", defaults=list(range(6))
 )
 
 L = LineTypes()
@@ -49,7 +49,7 @@ class EndWhile(Line):
 class ControlFlowGridworld(SubtasksGridworld):
     def __init__(self, *args, n_subtasks, **kwargs):
         self.n_encountered = n_subtasks
-        super().__init__(*args, n_subtasks=n_subtasks * 2, **kwargs)
+        super().__init__(*args, n_subtasks=n_subtasks, **kwargs)
         self.irreversible_interactions = [
             j for j, i in enumerate(self.interactions) if i in ("pick-up", "transform")
         ]
@@ -87,7 +87,7 @@ class ControlFlowGridworld(SubtasksGridworld):
 
         class Subtask(self.Subtask, Line):
             def to_tuple(self):
-                return self + (0, 0)
+                return self + (L.Subtask, 0)
 
         self.Subtask = Subtask
 
@@ -99,7 +99,7 @@ class ControlFlowGridworld(SubtasksGridworld):
                 return f"if {world.object_types[self.object]}:"
 
             def to_tuple(self):
-                return 0, 0, 0, L.If, self.object
+                return 0, 0, 0, L.If, 1 + self.object
 
         self.If = If
 
@@ -111,7 +111,7 @@ class ControlFlowGridworld(SubtasksGridworld):
                 return f"while {world.object_types[self.object]}:"
 
             def to_tuple(self):
-                return 0, 0, 0, L.While, self.object
+                return 0, 0, 0, L.While, 1 + self.object
 
         self.While = While
 
@@ -258,7 +258,10 @@ class ControlFlowGridworld(SubtasksGridworld):
             i = self.get_next_idx(i, existing=available)
 
     def get_next_subtask(self):
-        i = (self.subtask_idx or 0) + 1
+        if self.subtask_idx is None:
+            i = 0
+        else:
+            i = self.subtask_idx + 1
         while i < len(self.subtasks) and not isinstance(self.subtasks[i], self.Subtask):
             i = self.get_next_idx(i, existing=self.objects.values())
         return i
