@@ -105,6 +105,10 @@ class Recurrence(torch.jit.ScriptModule):
         # NOTE {
         self.phi_debug = nn.Sequential(init_(nn.Linear(1, 1), "sigmoid"), nn.Sigmoid())
         self.xi_debug = nn.Sequential(init_(nn.Linear(1, 1), "sigmoid"), nn.Sigmoid())
+        self.zeta_debug = nn.Sequential(
+            init_(nn.Linear(len(LineTypes._fields), len(LineTypes._fields))),
+            nn.Softmax(-1),
+        )
         # NOTE }
 
         input_size = h * w * hidden_size  # conv output
@@ -254,7 +258,8 @@ class Recurrence(torch.jit.ScriptModule):
         M_zeta = self.zeta(M)
 
         # NOTE {
-        M_zeta = M[:, :, -self.subtask_nvec[-2:].sum() : -self.subtask_nvec[-1]]
+        truth = M[:, :, -self.subtask_nvec[-2:].sum() : -self.subtask_nvec[-1]]
+        M_zeta = self.zeta_debug(truth)
         # NOTE }
         L = LineTypes()
 
