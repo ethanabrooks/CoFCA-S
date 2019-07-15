@@ -135,9 +135,10 @@ class ControlFlowGridworld(SubtasksGridworld):
                     yield f"{i}:{indent}{subtask}"
                 else:
                     yield f"{i}:{subtask}"
-                indent = (
-                    "    " if isinstance(subtask, (self.If, Else, self.While)) else ""
-                )
+                if isinstance(subtask, (self.If, Else, self.While)):
+                    indent = "    "
+                if isinstance(subtask, (EndIf, EndWhile)):
+                    indent = ""
 
         return "\n".join(helper())
 
