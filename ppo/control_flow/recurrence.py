@@ -271,7 +271,7 @@ class Recurrence(torch.jit.ScriptModule):
             )
             # NOTE {
             c = torch.split(_r[:, 1:], list(self.subtask_nvec), dim=-1)[-1][:, 1:]
-            prev = _r[:, 0]
+            prev = _r[:, :1]
             phi_in = inputs.base[t, :, 1:-2] * c.view(N, -1, 1, 1)
             l = eP * prev + (1 - eP) * torch.max(
                 phi_in.view(N, -1), dim=-1
