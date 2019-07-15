@@ -249,7 +249,6 @@ class ControlFlowGridworld(SubtasksGridworld):
                         self.np_random.rand() < 0.5
                         and n_executed < self.n_subtasks // 2
                     )
-                    print("n_executed", n_executed)
                     if passing:
                         assert while_obj not in available
                         if while_obj not in available:
@@ -257,12 +256,10 @@ class ControlFlowGridworld(SubtasksGridworld):
                             yield while_obj
                     else:
                         non_existing.add(while_obj)
-                        print("non_existing", non_existing)
                         while_obj = None
 
                 elif isinstance(line, self.Subtask):
                     n_executed += 1
-                    print("existing", existing)
                     obj = (
                         self.np_random.choice(existing)
                         if while_obj is None
@@ -275,8 +272,6 @@ class ControlFlowGridworld(SubtasksGridworld):
                     if line.interaction in self.irreversible_interactions:
                         available.remove(obj)
 
-                print("i", i)
-                print("available", available)
                 i = self.get_next_idx(i, existing=available)
             except KeyboardInterrupt:
                 import ipdb

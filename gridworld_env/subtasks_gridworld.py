@@ -306,7 +306,6 @@ class SubtasksGridworld(gym.Env):
                         iterate = True
                 elif a - n_transitions == 1:  # transform
                     self.objects[pos] = len(self.object_types)
-                    print("standing on", self.object_types[object_type])
                     if (
                         "transform" == interaction
                         and object_type == self.subtask.object
