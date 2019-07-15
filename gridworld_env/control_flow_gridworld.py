@@ -130,17 +130,14 @@ class ControlFlowGridworld(SubtasksGridworld):
     def task_string(self):
         def helper():
             indent = ""
-            for subtask in self.subtasks:
-                if isinstance(subtask, (self.If, self.While, self.If)):
-                    yield str(subtask)
-                    indent = "    "
-                elif isinstance(subtask, (EndIf, EndWhile)):
-                    yield str(subtask)
-                    indent = ""
-                elif isinstance(subtask, Else):
-                    yield str(subtask)
+            for i, subtask in enumerate(self.subtasks):
+                if isinstance(subtask, self.Subtask):
+                    yield f"{i}:{indent}{subtask}"
                 else:
-                    yield f"{indent}{subtask}"
+                    yield f"{i}:{subtask}"
+                indent = (
+                    "    " if isinstance(subtask, (self.If, Else, self.While)) else ""
+                )
 
         return "\n".join(helper())
 
