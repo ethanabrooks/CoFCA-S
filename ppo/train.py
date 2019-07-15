@@ -18,11 +18,16 @@ from common.vec_env.subproc_vec_env import SubprocVecEnv
 from gridworld_env import SubtasksGridworld
 from ppo.agent import Agent, AgentValues  # noqa
 from ppo.storage import RolloutStorage
-from ppo.subtasks.wrappers import Wrapper
+from ppo.control_flow.wrappers import Wrapper
 from ppo.update import PPO
 from ppo.utils import get_n_gpu, get_random_gpu
-from ppo.wrappers import (AddTimestep, TransposeImage, VecNormalize, VecPyTorch,
-                          VecPyTorchFrameStack)
+from ppo.wrappers import (
+    AddTimestep,
+    TransposeImage,
+    VecNormalize,
+    VecPyTorch,
+    VecPyTorchFrameStack,
+)
 
 try:
     import dm_control2gym

@@ -12,11 +12,11 @@ import gridworld_env.subtasks_gridworld
 from gridworld_env.subtasks_gridworld import SubtasksGridworld
 import ppo
 from ppo.arguments import build_parser, get_args
-import ppo.control_flow
+import ppo.control_flow.agent
+import ppo.control_flow.analogy_learner
+import ppo.control_flow.lower_level
 import ppo.matrix_control_flow
-import ppo.subtasks.agent
-import ppo.subtasks.student
-import ppo.subtasks.teacher
+import ppo.old_control_flow
 from ppo.train import Train
 
 
@@ -25,7 +25,7 @@ def add_task_args(parser):
     task_parser.add_argument("--interactions", nargs="*")
     task_parser.add_argument("--max-task-count", type=int, required=True)
     task_parser.add_argument("--object-types", nargs="*")
-    task_parser.add_argument("--n-subtasks", type=int, required=True)
+    task_parser.add_argument("--n-control_flow", type=int, required=True)
 
 
 def add_env_args(parser):
@@ -53,14 +53,14 @@ def make_subtasks_env(env_id, **kwargs):
             for k, v in _kwargs.items():
                 print(f"{k:20}{v}")
         if control_flow:
-            env = ppo.control_flow.Wrapper(ControlFlowGridworld(**_kwargs))
+            env = ppo.old_control_flow.Wrapper(ControlFlowGridworld(**_kwargs))
         else:
-            env = ppo.subtasks.Wrapper(SubtasksGridworld(**_kwargs))
+            env = ppo.control_flow.Wrapper(SubtasksGridworld(**_kwargs))
         if debug:
             if control_flow:
-                env = ppo.control_flow.DebugWrapper(env)
+                env = ppo.old_control_flow.DebugWrapper(env)
             else:
-                env = ppo.subtasks.DebugWrapper(env)
+                env = ppo.control_flow.DebugWrapper(env)
         env.seed(seed + rank)
         if max_episode_steps is not None:
             env = TimeLimit(env, max_episode_steps=int(max_episode_steps))
@@ -109,9 +109,9 @@ def train_lower_level_cli(student):
                     **agent_args,
                 )
                 if student:
-                    return ppo.subtasks.Student(**agent_args, **student_args)
+                    return ppo.control_flow.AnalogyLearner(**agent_args, **student_args)
                 else:
-                    return ppo.subtasks.Teacher(**agent_args)
+                    return ppo.control_flow.LowerLevel(**agent_args)
 
         TrainSkill(**_kwargs)
 
@@ -133,9 +133,11 @@ def metacontroller_cli():
     add_env_args(parser)
     subtasks_parser = parser.add_argument_group("subtasks_args")
     subtasks_parser.add_argument("--agent-load-path", type=Path)
-    subtasks_parser.add_argument("--subtasks-hidden-size", type=int, required=True)
-    subtasks_parser.add_argument("--subtasks-entropy-coef", type=float, required=True)
-    subtasks_parser.add_argument("--subtasks-recurrent", action="store_true")
+    subtasks_parser.add_argument("--control_flow-hidden-size", type=int, required=True)
+    subtasks_parser.add_argument(
+        "--control_flow-entropy-coef", type=float, required=True
+    )
+    subtasks_parser.add_argument("--control_flow-recurrent", action="store_true")
     subtasks_parser.add_argument("--hard-update", action="store_true")
     subtasks_parser.add_argument("--multiplicative-interaction", action="store_true")
 
@@ -162,9 +164,9 @@ def metacontroller_cli():
                     **{k.replace("subtasks_", ""): v for k, v in subtasks_args.items()},
                 )
                 if control_flow:
-                    return ppo.control_flow.Agent(**metacontroller_kwargs)
+                    return ppo.old_control_flow.Agent(**metacontroller_kwargs)
                 else:
-                    return ppo.subtasks.Agent(**metacontroller_kwargs)
+                    return ppo.control_flow.Agent(**metacontroller_kwargs)
 
         # ppo_args.update(aux_loss_only=True)
         TrainSubtasks(env_id=env_id, ppo_args=ppo_args, **kwargs)

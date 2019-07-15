@@ -5,7 +5,9 @@ import numpy as np
 
 from gridworld_env import SubtasksGridworld
 
-Obs = namedtuple("Obs", "base subtask subtasks conditions control next_subtask pred")
+Obs = namedtuple(
+    "Obs", "base subtask control_flow conditions control next_subtask pred"
+)
 
 
 class MatrixControlFlowGridworld(SubtasksGridworld):
@@ -48,7 +50,7 @@ class MatrixControlFlowGridworld(SubtasksGridworld):
             # def develop_branch(j, add_indent):
             # new_indent = indent + add_indent
             # try:
-            # subtask = f"{j}:{self.subtasks[j]}"
+            # subtask = f"{j}:{self.control_flow[j]}"
             # except IndexError:
             # return f"{new_indent}terminate"
             # return f"{new_indent}{subtask}\n{helper(j, new_indent)}"
@@ -100,7 +102,7 @@ class MatrixControlFlowGridworld(SubtasksGridworld):
         for l in encountered.values():
             l.reverse()
 
-        for t, subtask_idx in enumerate(encountered["subtasks"]):
+        for t, subtask_idx in enumerate(encountered["control_flow"]):
             subtask = subtasks[subtask_idx]
             obj = subtask.object
             to_be_removed = self.interactions[subtask.interaction] in {
@@ -192,5 +194,5 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", type=int)
-    parser.add_argument("--n-subtasks", type=int)
+    parser.add_argument("--n-control_flow", type=int)
     main(**vars(parser.parse_args()))

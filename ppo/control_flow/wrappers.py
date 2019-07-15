@@ -1,56 +1,80 @@
+from collections import namedtuple
+
 import gym
 from gym import spaces
+from gym.spaces import Discrete
 import numpy as np
 
-import ppo.subtasks
-from ppo.subtasks import Actions
+Actions = namedtuple("Actions", "a cr cg g")
 
 
-class DebugWrapper(ppo.subtasks.DebugWrapper):
+class DebugWrapper(gym.Wrapper):
     def __init__(self, env):
         super().__init__(env)
-        self.completed_subtask = False
-
-    def reset(self):
-        self.completed_subtask = False
-        return super().reset()
+        self.guess = 0
+        self.truth = 0
+        self.last_reward = None
+        action_spaces = Actions(**env.action_space.spaces)
+        for x in action_spaces:
+            assert isinstance(x, Discrete)
+        self.action_sections = len(action_spaces)
 
     def step(self, action):
         actions = Actions(*[x.item() for x in np.split(action, self.action_sections)])
-        env = self.env.unwrapped
-        self.truth = int(env.subtask_idx)
-
-        def lines_to_subtasks():
-            i = 0
-            for line in env.lines:
-                if line[-1] == 0:
-                    yield i
-                    i += 1
-                else:
-                    yield None
-
-        line = self.guess = int(actions.g)
-        subtask = list(lines_to_subtasks())[line]
+        self.truth = int(self.env.unwrapped.subtask_idx)
+        self.guess = int(actions.g)
+        # print("truth", truth)
+        # print("guess", guess)
         r = 0
-
-        if (subtask is not None and subtask != self.truth) or (
-            subtask is None and not self.completed_subtask
-        ):  # wrong subtask line
-            # import ipdb
-
-            # ipdb.set_trace()
+        if self.env.unwrapped.subtask is not None and self.guess != self.truth:
             r = -0.1
-        subtask_before = env.subtask_idx
-        s, _, t, i = gym.Wrapper.step(self, action)
-        subtask_after = env.subtask_idx
-        self.completed_subtask = subtask_before != subtask_after
+            import ipdb
+
+            ipdb.set_trace()
+        s, _, t, i = super().step(action)
         self.last_reward = r
         return s, r, t, i
 
+    def render(self, mode="human"):
+        print("guess", self.guess)
+        print("truth", self.truth)
+        print("reward", self.last_reward)
+        super().render(sleep_time=0)
+        print("########################################")
 
-class Wrapper(ppo.subtasks.Wrapper):
+
+class Wrapper(gym.Wrapper):
+    def __init__(self, env):
+        super().__init__(env)
+        self.action_space = spaces.Dict(
+            Actions(
+                a=env.action_space,
+                g=spaces.Discrete(env.n_subtasks),
+                cg=spaces.Discrete(2),
+                cr=spaces.Discrete(2),
+            )._asdict()
+        )
+        self.last_g = None
+
+    def step(self, action):
+        actions = Actions(*np.split(action, len(self.action_space.spaces)))
+        action = int(actions.a)
+        self.last_g = int(actions.g)
+        return super().step(action)
+
+    def render(self, mode="human", **kwargs):
+        super().render(mode=mode)
+        if self.last_g is not None:
+            self.render_assigned_subtask()
+        input("paused")
+
     def render_assigned_subtask(self):
-        try:
-            print(f"{self.last_g}:{self.env.unwrapped.subtasks[self.last_g]}")
-        except IndexError:
-            return
+        env = self.env.unwrapped
+        g_type, g_count, g_obj = tuple(env.subtasks[self.last_g])
+        print(
+            "Assigned subtask:",
+            self.last_g,
+            env.interactions[g_type],
+            g_count + 1,
+            env.object_types[g_obj],
+        )

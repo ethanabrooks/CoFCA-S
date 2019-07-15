@@ -3,10 +3,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ppo.subtasks.teacher import Teacher
+from ppo.control_flow.lower_level import LowerLevel
 
 
-class Student(Teacher):
+class AnalogyLearner(LowerLevel):
     def __init__(self, obs_spaces, embedding_dim, tau_diss, tau_diff, xi, **kwargs):
         self.xi = xi
         self.tau_diss = tau_diss

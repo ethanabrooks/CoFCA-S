@@ -5,13 +5,13 @@ import torch
 from torch.nn import functional as F
 
 from ppo.agent import Agent
-from ppo.subtasks.wrappers import Actions
+from ppo.control_flow.wrappers import Actions
 from ppo.utils import broadcast3d
 
 Obs = namedtuple("Obs", "base subtask")
 
 
-class Teacher(Agent):
+class LowerLevel(Agent):
     def __init__(self, obs_spaces: Obs, action_spaces, **kwargs):
         # noinspection PyProtectedMember
         self.subtask_nvec = obs_spaces.subtask.nvec
@@ -39,7 +39,7 @@ class Teacher(Agent):
                 k: x.view(n, *s.shape)
                 for (k, s), x in zip(self.obs_spaces._asdict().items(), inputs)
             }
-            g123 = inputs["subtasks"][torch.arange(n), inputs["subtask"].long()]
+            g123 = inputs["control_flow"][torch.arange(n), inputs["subtask"].long()]
             g123 = torch.split(g123, 1, dim=-1)
             g123 = [x.flatten() for x in g123]
             g_binary = g_discrete_to_binary(

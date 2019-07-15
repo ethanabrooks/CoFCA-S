@@ -270,9 +270,7 @@ class SubtasksGridworld(gym.Env):
             ]
         ).transpose(2, 0, 1)
 
-        return Obs(
-            base=obs, subtask=self.subtask_idx, subtasks=np.array([self.subtasks])
-        )._asdict()
+        return Obs(base=obs, subtask=self.subtask_idx, subtasks=self.subtasks)._asdict()
 
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)

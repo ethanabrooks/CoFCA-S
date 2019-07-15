@@ -11,10 +11,10 @@ from torch.nn import functional as F
 from gridworld_env.control_flow_gridworld import LineTypes
 from gridworld_env.subtasks_gridworld import Obs
 import ppo
+from ppo.control_flow import Actions, LowerLevel
+from ppo.control_flow.lower_level import g_binary_to_discrete, g_discrete_to_binary
 from ppo.distributions import Categorical, DiagGaussian, FixedCategorical
 from ppo.layers import Concat, Flatten, Parallel, Product, Reshape, ShallowCopy, Sum
-from ppo.subtasks import Actions, Teacher
-from ppo.subtasks.teacher import g_binary_to_discrete, g_discrete_to_binary
 from ppo.utils import broadcast3d, init_, interp, trace
 
 RecurrentState = namedtuple(
@@ -45,7 +45,7 @@ class Recurrence(torch.jit.ScriptModule):
         self.hard_update = hard_update
         self.multiplicative_interaction = multiplicative_interaction
         if agent:
-            assert isinstance(agent, Teacher)
+            assert isinstance(agent, LowerLevel)
         self.agent = agent
         self.recurrent = recurrent
         self.obs_spaces = obs_spaces
@@ -221,7 +221,7 @@ class Recurrence(torch.jit.ScriptModule):
         if self.agent is None:
             return self.actor(conv_out)
         else:
-            agent_inputs = ppo.subtasks.teacher.Obs(
+            agent_inputs = ppo.control_flow.lower_level.Obs(
                 base=obs.view(N, -1), subtask=g_binary
             )
             return self.agent(agent_inputs, rnn_hxs=None, masks=None).dist
@@ -322,6 +322,12 @@ class Recurrence(torch.jit.ScriptModule):
                     p.append((1 - sum(p) * M_zeta[idxs].sum(-1) * u))
                 return p
 
+            # cr
+            cr = e[L.Subtask] * hx.cr + (1 - e[L.Subtask])
+
+            # cg
+            cg = e[L.Subtask] * hx.cg + (1 - e[L.Subtask])
+
             # p
             p_forward = scan(
                 L.EndIf,
@@ -341,7 +347,7 @@ class Recurrence(torch.jit.ScriptModule):
                 * (l * p_step + (1 - l) * p_forward)
                 + e[L.EndWhile] * (l * p_backward + (1 - l) * p_step)
                 + e[L.EndIf] * p_step
-                + e[L.Subtask] * (hx.cr * p_step + (1 - hx.cr) * hx.p)
+                + e[L.Subtask] * (cr * p_step + (1 - cr) * hx.p)
             )
             overflow_attention = torch.sum(non_line * p, dim=-1)
             p = is_line * p + overflow_attention * last_line
@@ -351,7 +357,7 @@ class Recurrence(torch.jit.ScriptModule):
 
             # g
             old_g = self.g_one_hots[G[t - 1]]
-            probs = interp(old_g, p, hx.cg)
+            probs = interp(old_g, p, cg)
             g_dist = FixedCategorical(probs=torch.clamp(probs, 0.0, 1.0))
             sample_new(G[t], g_dist)
 
