@@ -170,7 +170,7 @@ class ControlFlowGridworld(SubtasksGridworld):
                 line_type = self.Subtask
             else:
                 available_lines = {
-                    self.If: [],  # [self.Subtask, EndIf],
+                    self.If: [self.Subtask, EndIf],
                     Else: [self.Subtask, EndIf],
                     self.While: [self.Subtask, EndWhile],
                 }
@@ -178,7 +178,7 @@ class ControlFlowGridworld(SubtasksGridworld):
                     available_lines[self.If].append(Else)
                 line_type = self.np_random.choice(
                     available_lines.get(
-                        type(active_control), [self.If]  # , self.While, self.Subtask]
+                        type(active_control), [self.If, self.While, self.Subtask]
                     )
                 )
 

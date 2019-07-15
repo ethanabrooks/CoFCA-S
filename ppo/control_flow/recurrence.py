@@ -11,8 +11,11 @@ from torch.nn import functional as F
 from gridworld_env.control_flow_gridworld import LineTypes
 from gridworld_env.subtasks_gridworld import Obs
 import ppo
-from ppo.control_flow.lower_level import (LowerLevel, g_binary_to_discrete,
-                                          g_discrete_to_binary)
+from ppo.control_flow.lower_level import (
+    LowerLevel,
+    g_binary_to_discrete,
+    g_discrete_to_binary,
+)
 from ppo.control_flow.wrappers import Actions
 from ppo.distributions import Categorical, DiagGaussian, FixedCategorical
 from ppo.layers import Concat, Flatten, Parallel, Product, Reshape, ShallowCopy, Sum
