@@ -11,8 +11,11 @@ from torch.nn import functional as F
 from gridworld_env.control_flow_gridworld import LineTypes
 from gridworld_env.subtasks_gridworld import Obs
 import ppo
-from ppo.control_flow.lower_level import (LowerLevel, g_binary_to_discrete,
-                                          g_discrete_to_binary)
+from ppo.control_flow.lower_level import (
+    LowerLevel,
+    g_binary_to_discrete,
+    g_discrete_to_binary,
+)
 from ppo.control_flow.wrappers import Actions
 from ppo.distributions import Categorical, DiagGaussian, FixedCategorical
 from ppo.layers import Concat, Flatten, Parallel, Product, Reshape, ShallowCopy, Sum
@@ -249,7 +252,9 @@ class Recurrence(torch.jit.ScriptModule):
         M_zeta = self.zeta(M)
 
         # NOTE {
-        # TODO: truth
+        M_zeta = M[:, :, -self.subtask_nvec[-2:].sum() : -self.subtask_nvec[-1]]
+        # print("M_zeta")
+        # print(M_zeta)
         # NOTE }
         L = LineTypes()
 
@@ -265,11 +270,15 @@ class Recurrence(torch.jit.ScriptModule):
             er = eP / e[[L.If, L.Else, L.While, L.EndWhile]].sum(0)
 
             # l
-            # NOTE {
-            # TODO: truth
-            # NOTE }
             r = F.pad(hx.r, [0, 1])
             l = self.xi((inputs.base[t], interp(hx.P, r, er)))
+            # print("l")
+            # print(l)
+            # NOTE {
+            c = hx.r[:, 1 - self.subtask_nvec[-1] :]
+            phi_in = inputs.base[t, :, 1:-2] * c.view(N, -1, 1, 1)
+            l = torch.max(phi_in.view(N, -1), dim=-1).values.float().view(N, 1)
+            # NOTE }
 
             # P
             P = (
@@ -301,11 +310,15 @@ class Recurrence(torch.jit.ScriptModule):
                 u=torch.cumsum(hx.p, dim=-1),
                 it=range(M.size(1)),
             )
+            # print("p_forward")
+            # print(p_forward)
             p_backward = scan(
                 L.While,
                 u=torch.cumsum(hx.p.flip(-1), dim=-1).flip(-1),
                 it=range(M.size(1) - 1, -1, -1),
             )
+            # print("p_backward")
+            # print(p_backward)
             p_step = (p.unsqueeze(1) @ self.one_step).squeeze(1)
             p = (
                 e[[L.If, L.While, L.Else]].sum(0)  # conditions
