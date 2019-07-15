@@ -253,7 +253,7 @@ class Recurrence(torch.jit.ScriptModule):
         for t in range(T):
 
             def safediv(x, y):
-                return x / (y + 1e-7)
+                return x / torch.clamp(y, min=1e-5)
 
             # e
             e = (p.unsqueeze(1) @ M_zeta).permute(2, 0, 1)
@@ -277,6 +277,12 @@ class Recurrence(torch.jit.ScriptModule):
                 phi_in.view(N, -1), dim=-1
             ).values.float().view(N, 1)
             # NOTE }
+            if not (
+                torch.all(torch.abs(l - 0) < 1e-5) or torch.all(torch.abs(l - 1) < 1e-5)
+            ):
+                import ipdb
+
+                ipdb.set_trace()
 
             # P
             P = (
@@ -324,6 +330,9 @@ class Recurrence(torch.jit.ScriptModule):
                 + e[L.EndIf] * p_step
                 + e[L.Subtask] * (cr * p_step + (1 - cr) * hx.p)
             )
+            p = p / p.sum(-1, keepdim=True)
+            print("e[L.EndWhile]", e[L.EndWhile])
+            print("l", l)
 
             # r
             r = (p.unsqueeze(1) @ M).squeeze(1)
