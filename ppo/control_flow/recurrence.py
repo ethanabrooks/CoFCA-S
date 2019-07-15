@@ -32,6 +32,10 @@ def sample_new(x, dist):
     x[new] = dist.sample()[new].flatten()
 
 
+def roll(x):
+    return F.pad(x, [1, 0])[:, :-1]
+
+
 class Recurrence(torch.jit.ScriptModule):
     __constants__ = ["input_sections", "subtask_space", "state_sizes", "recurrent"]
 
@@ -94,16 +98,19 @@ class Recurrence(torch.jit.ScriptModule):
             nn.Sigmoid(),  # TODO: try on both sides of pool
             Reshape(1),
         )
-
         self.phi = trace(
             lambda in_size: init_(nn.Linear(in_size, 2), "sigmoid"),
             in_size=(d * action_spaces.a.n * int(self.subtask_nvec.prod())),
         )
-        self.phi_debug = nn.Sequential(init_(nn.Linear(1, 1), "sigmoid"), nn.Sigmoid())
 
         self.zeta = nn.Sequential(
             init_(nn.Linear(self.line_size, len(LineTypes._fields))), nn.Softmax(-1)
         )
+
+        # NOTE {
+        self.phi_debug = nn.Sequential(init_(nn.Linear(1, 1), "sigmoid"), nn.Sigmoid())
+        self.xi_debug = nn.Sequential(init_(nn.Linear(1, 1), "sigmoid"), nn.Sigmoid())
+        # NOTE }
 
         input_size = h * w * hidden_size  # conv output
         if isinstance(action_spaces.a, Discrete):
@@ -279,6 +286,7 @@ class Recurrence(torch.jit.ScriptModule):
             l = eP * prev + (1 - eP) * torch.max(
                 phi_in.view(N, -1), dim=-1
             ).values.float().view(N, 1)
+            l = self.xi_debug(l)
             # NOTE }
 
             # P
@@ -293,9 +301,6 @@ class Recurrence(torch.jit.ScriptModule):
 
             # cg
             cg = e[L.Subtask] * hx.cg + (1 - e[L.Subtask])
-
-            def roll(x):
-                return F.pad(x, [1, 0])[:, :-1]
 
             def scan(*idxs, cumsum, it):
                 p = []
