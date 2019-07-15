@@ -80,16 +80,14 @@ class Recurrence(torch.jit.ScriptModule):
             Flatten(),
         )
 
-        P_size = self.line_size + 1  # +1 for previous evaluation of condition
-
         self.xi = nn.Sequential(
             Parallel(
                 nn.Sequential(Reshape(1, d, h, w)),
-                nn.Sequential(Reshape(P_size, 1, 1, 1)),
+                nn.Sequential(Reshape(self.line_size, 1, 1, 1)),
             ),
             Product(),
-            Reshape(d * P_size, *self.obs_shape[-2:]),
-            init_(nn.Conv2d(P_size * d, 1, kernel_size=1), "sigmoid"),
+            Reshape(d * self.line_size, *self.obs_shape[-2:]),
+            init_(nn.Conv2d(self.line_size * d, 1, kernel_size=1), "sigmoid"),
             nn.LPPool2d(2, kernel_size=(h, w)),
             nn.Sigmoid(),  # TODO: try on both sides of pool
             Reshape(1),
@@ -139,7 +137,7 @@ class Recurrence(torch.jit.ScriptModule):
             v=1,
             g_loss=1,
             subtask=1,
-            P=P_size,
+            P=self.line_size + 1,  # TODO
             last_condition=self.line_size,
             last_eval=1,
         )
@@ -274,18 +272,19 @@ class Recurrence(torch.jit.ScriptModule):
 
             # l
             r = F.pad(hx.r, [1, 0])
-            _r = interp(hx.P, r, er)
+            _r = interp(hx.last_condition, hx.r, er)
             l = self.xi((inputs.base[t], _r))
             eP = safediv(
                 e[[L.Else]].sum(0), (e[[L.If, L.Else, L.While, L.EndWhile]]).sum(0)
             )
             # NOTE {
-            c = torch.split(_r[:, 1:], list(self.subtask_nvec), dim=-1)[-1][:, 1:]
-            prev = _r[:, :1]
+            c = torch.split(_r, list(self.subtask_nvec), dim=-1)[-1][:, 1:]
+            prev = hx.last_eval
             phi_in = inputs.base[t, :, 1:-2] * c.view(N, -1, 1, 1)
-            l = eP * prev + (1 - eP) * torch.max(
+            truth = eP * prev + (1 - eP) * torch.max(
                 phi_in.view(N, -1), dim=-1
             ).values.float().view(N, 1)
+            l = truth
             # NOTE }
             if not (
                 torch.all(torch.abs(l - 0) < 1e-5) or torch.all(torch.abs(l - 1) < 1e-5)
@@ -411,10 +410,11 @@ class Recurrence(torch.jit.ScriptModule):
                 column1 = interaction[:, :1]
                 column2 = interaction[:, 1:] * a_one_hot[:, 4:-1]
                 correct_action = torch.cat([column1, column2], dim=-1)
-                c = (
+                truth = (
                     correct_action.sum(-1, keepdim=True)
                     * correct_object.sum(-1, keepdim=True)
                 ).detach()  # * condition[:, :1] + (1 - condition[:, :1])
+                c = truth
                 # NOTE }
                 return c, probs
 
