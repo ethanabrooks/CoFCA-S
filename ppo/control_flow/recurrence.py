@@ -99,6 +99,7 @@ class Recurrence(torch.jit.ScriptModule):
             lambda in_size: init_(nn.Linear(in_size, 2), "sigmoid"),
             in_size=(d * action_spaces.a.n * int(self.subtask_nvec.prod())),
         )
+        self.phi_debug = nn.Sequential(init_(nn.Linear(1, 1), "sigmoid"), nn.Sigmoid())
 
         self.zeta = nn.Sequential(
             init_(nn.Linear(self.line_size, len(LineTypes._fields))), nn.Softmax(-1)
@@ -257,6 +258,8 @@ class Recurrence(torch.jit.ScriptModule):
 
             # e
             e = (p.unsqueeze(1) @ M_zeta).permute(2, 0, 1)
+            assert torch.all(torch.abs(e.sum(0) - 1) < 1e-6)
+
             er = safediv(
                 e[[L.If, L.While]].sum(0),
                 (e[[L.If, L.Else, L.While, L.EndWhile]]).sum(0),
@@ -324,6 +327,8 @@ class Recurrence(torch.jit.ScriptModule):
                 + e[L.EndIf] * p_step
                 + e[L.Subtask] * (cr * p_step + (1 - cr) * hx.p)
             )
+            assert torch.all(torch.abs(p.sum(-1) - 1) < 1e-6)
+            p = p / p.sum(-1, keepdim=True)
 
             # r
             r = (p.unsqueeze(1) @ M).squeeze(1)
@@ -395,7 +400,9 @@ class Recurrence(torch.jit.ScriptModule):
                 c = (
                     correct_action.sum(-1, keepdim=True)
                     * correct_object.sum(-1, keepdim=True)
-                ).detach()  # * condition[:, :1] + (1 - condition[:, :1])
+                ).detach()
+                c = self.phi_debug(c)
+                assert torch.all(0 <= c) and torch.all(c <= 1)
                 # NOTE }
                 return c, probs
 
