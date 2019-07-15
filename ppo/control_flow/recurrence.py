@@ -11,11 +11,8 @@ from torch.nn import functional as F
 from gridworld_env.control_flow_gridworld import LineTypes
 from gridworld_env.subtasks_gridworld import Obs
 import ppo
-from ppo.control_flow.lower_level import (
-    LowerLevel,
-    g_binary_to_discrete,
-    g_discrete_to_binary,
-)
+from ppo.control_flow.lower_level import (LowerLevel, g_binary_to_discrete,
+                                          g_discrete_to_binary)
 from ppo.control_flow.wrappers import Actions
 from ppo.distributions import Categorical, DiagGaussian, FixedCategorical
 from ppo.layers import Concat, Flatten, Parallel, Product, Reshape, ShallowCopy, Sum
@@ -272,9 +269,6 @@ class Recurrence(torch.jit.ScriptModule):
             # NOTE {
             c = torch.split(_r[:, 1:], list(self.subtask_nvec), dim=-1)[-1][:, 1:]
             prev = _r[:, 0]
-            print("condition", c)
-            print("eP", eP)
-            print("prev", prev)
             phi_in = inputs.base[t, :, 1:-2] * c.view(N, -1, 1, 1)
             l = eP * prev + (1 - eP) * torch.max(
                 phi_in.view(N, -1), dim=-1
@@ -295,9 +289,15 @@ class Recurrence(torch.jit.ScriptModule):
             # cg
             cg = e[L.Subtask] * hx.cg + (1 - e[L.Subtask])
 
+            def roll(x):
+                return F.pad(x, [1, 0])[:, :-1]
+
             def scan(*idxs, cumsum, it):
                 p = []
                 omega = M_zeta[:, :, idxs].sum(-1) * cumsum
+                print("M_zeta", M_zeta[:, :, idxs].sum(-1))
+                print("cumsum", cumsum)
+                print("omega", omega)
                 *it, last = it
                 for i in it:
                     p.append((1 - sum(p)) * omega[:, i])
@@ -305,17 +305,18 @@ class Recurrence(torch.jit.ScriptModule):
                 return torch.stack(p, dim=-1)
 
             # p
+            print("hx.p", hx.p)
             p_forward = scan(
                 L.EndIf,
                 L.Else,
                 L.EndWhile,
-                cumsum=torch.cumsum(hx.p, dim=-1),
+                cumsum=roll(torch.cumsum(hx.p, dim=-1)),
                 it=range(M.size(1)),
             )
             print("p_forward", p_forward)
             p_backward = scan(
                 L.While,
-                cumsum=torch.cumsum(hx.p.flip(-1), dim=-1).flip(-1),
+                cumsum=roll(torch.cumsum(hx.p.flip(-1), dim=-1)).flip(-1),
                 it=range(M.size(1) - 1, -1, -1),
             ).flip(-1)
             print("p_backward", p_backward)
@@ -327,15 +328,12 @@ class Recurrence(torch.jit.ScriptModule):
                 + e[L.EndIf] * p_step
                 + e[L.Subtask] * (cr * p_step + (1 - cr) * hx.p)
             )
-            print("cr", cr)
             print("e[L.Subtask]", e[L.Subtask])
             print("e[L.EndWhile]", e[L.EndWhile])
             print("e[L.EndIf]", e[L.EndIf])
             print("e[L.If]", e[L.If])
             print("e[L.While]", e[L.While])
             print("e[L.Else]", e[L.Else])
-            print("p_step", p_step.round())
-            print("p", p.round())
 
             # r
             r = (p.unsqueeze(1) @ M).squeeze(1)

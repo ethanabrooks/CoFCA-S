@@ -152,31 +152,33 @@ class ControlFlowGridworld(SubtasksGridworld):
         line_type = None
         # noinspection PyTypeChecker
         for i in range(self.n_encountered):
-            if i == self.n_encountered - 1:
-                line_type = self.Subtask
-            elif i == self.n_encountered - 2:
+            try:
+                failing = active_control.object not in existing
+            except AttributeError:
+                failing = False
+            if i == self.n_encountered - 1 or (i == self.n_encountered - 2 and failing):
                 # must terminate control blocks on last line
-                lines = {self.If: EndIf, Else: EndIf, self.While: EndWhile}
-                line_type = lines.get(type(active_control), self.Subtask)
-            elif i == self.n_encountered - 3:
-                # cannot start new control block with only 2 lines left
-                if isinstance(active_control, self.If):
-                    line_type = self.np_random.choice([self.Subtask, EndIf])
+                if isinstance(active_control, (self.If, Else)):
+                    line_type = EndIf
+                elif isinstance(active_control, self.While):
+                    line_type = EndWhile
                 else:
+                    assert active_control is None
                     line_type = self.Subtask
             elif line_type in [self.While, self.If, Else]:
                 # must follow condition with subtask
                 line_type = self.Subtask
             else:
-                assert i < self.n_encountered - 3
                 available_lines = {
-                    self.If: [self.Subtask, Else, EndIf],
-                    EndWhile: [self.Subtask, EndIf],
+                    self.If: [],  # [self.Subtask, EndIf],
+                    Else: [self.Subtask, EndIf],
                     self.While: [self.Subtask, EndWhile],
                 }
+                if i < self.n_encountered - 2:
+                    available_lines[self.If].append(Else)
                 line_type = self.np_random.choice(
                     available_lines.get(
-                        type(active_control), [self.If, self.While, self.Subtask]
+                        type(active_control), [self.If]  # , self.While, self.Subtask]
                     )
                 )
 
@@ -278,13 +280,12 @@ class ControlFlowGridworld(SubtasksGridworld):
                     i += 1
         elif isinstance(line, Else):
             if self.last_condition_passed:
-                while not isinstance(line, EndIf):
+                while not isinstance(self.subtasks[i], EndIf):
                     i += 1
             else:
                 i += 1
 
         elif isinstance(line, EndWhile):
-            print("is", self.last_condition, "in", existing)
             if self.last_condition in existing:
                 while not isinstance(self.subtasks[i], self.While):
                     i -= 1
