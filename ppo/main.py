@@ -129,7 +129,6 @@ def metacontroller_cli():
     )
     subtasks_parser.add_argument("--metacontroller-recurrent", action="store_true")
     subtasks_parser.add_argument("--hard-update", action="store_true")
-    subtasks_parser.add_argument("--multiplicative-interaction", action="store_true")
 
     def train(env_id, task_args, ppo_args, subtasks_args, env_args, **kwargs):
         class TrainSubtasks(Train):

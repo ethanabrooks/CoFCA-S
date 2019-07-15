@@ -33,21 +33,13 @@ def sample_new(x, dist):
 
 
 class Recurrence(torch.jit.ScriptModule):
-    __constants__ = ["input_sections", "subtask_space", "state_sizes", "recurrent"]
+    __constants__ = ["input_sections", "state_sizes", "recurrent"]
 
     def __init__(
-        self,
-        obs_spaces,
-        action_spaces,
-        hidden_size,
-        recurrent,
-        hard_update,
-        agent,
-        multiplicative_interaction,
+        self, obs_spaces, action_spaces, hidden_size, recurrent, hard_update, agent
     ):
         super().__init__()
         self.hard_update = hard_update
-        self.multiplicative_interaction = multiplicative_interaction
         if agent:
             assert isinstance(agent, LowerLevel)
         self.agent = agent
@@ -58,6 +50,8 @@ class Recurrence(torch.jit.ScriptModule):
         d, h, w = self.obs_shape = obs_spaces.base.shape
         self.obs_sections = [int(np.prod(s.shape)) for s in self.obs_spaces]
         self.line_size = int(self.subtask_nvec.sum())
+        self.agent_subtask_size = int(self.subtask_nvec[:-2].sum())
+
         # networks
         self.conv1 = nn.Sequential(
             ShallowCopy(2),
@@ -123,15 +117,6 @@ class Recurrence(torch.jit.ScriptModule):
 
         self.critic = init_(nn.Linear(input_size, 1))
 
-        # buffers
-        for i, x in enumerate(self.subtask_nvec):
-            self.register_buffer(f"part{i}_one_hot", torch.eye(int(x)))
-        self.register_buffer("a_one_hots", torch.eye(int(action_spaces.a.n)))
-        self.register_buffer("g_one_hots", torch.eye(action_spaces.g.n))
-        self.register_buffer(
-            "subtask_space", torch.tensor(self.subtask_nvec.astype(np.int64))
-        )
-
         state_sizes = RecurrentState(
             a=1,
             cg=1,
@@ -152,14 +137,16 @@ class Recurrence(torch.jit.ScriptModule):
         self.state_sizes = RecurrentState(*map(int, state_sizes))
 
         # buffers
+        for i, x in enumerate(self.subtask_nvec):
+            self.register_buffer(f"part{i}_one_hot", torch.eye(int(x)))
+        self.register_buffer("a_one_hots", torch.eye(int(action_spaces.a.n)))
+        self.register_buffer("g_one_hots", torch.eye(action_spaces.g.n))
         one_step = F.pad(torch.eye(self.n_subtasks - 1), [1, 0, 0, 1])
         one_step[:, -1] += 1 - one_step.sum(-1)
         self.register_buffer("one_step", one_step.unsqueeze(0))
         no_op_probs = torch.zeros(1, self.actor.linear.out_features)
         no_op_probs[:, -1] = 1
         self.register_buffer("no_op_probs", no_op_probs)
-        self.register_buffer("last_line", torch.eye(self.line_size))
-        self.agent_subtask_size = int(self.subtask_nvec[:-2].sum())
 
     # @torch.jit.script_method
     def parse_hidden(self, hx):
@@ -259,7 +246,8 @@ class Recurrence(torch.jit.ScriptModule):
 
         # NOTE {
         truth = M[:, :, -self.subtask_nvec[-2:].sum() : -self.subtask_nvec[-1]]
-        M_zeta = self.zeta_debug(truth)
+        # M_zeta = self.zeta_debug(truth)
+        M_zeta = truth
         # NOTE }
         L = LineTypes()
 
@@ -286,6 +274,7 @@ class Recurrence(torch.jit.ScriptModule):
             phi_in = inputs.base[t, :, 1:-2] * c.view(N, -1, 1, 1)
             truth = torch.max(phi_in.view(N, -1), dim=-1).values.float().view(N, 1)
             l = self.xi_debug(truth)
+            l = truth
             # NOTE }
 
             l = interp(l, 1 - hx.last_eval, eLastEval)
@@ -407,6 +396,7 @@ class Recurrence(torch.jit.ScriptModule):
                     * correct_object.sum(-1, keepdim=True)
                 ).detach()  # * condition[:, :1] + (1 - condition[:, :1])
                 c = self.phi_debug(truth)
+                c = truth
                 # NOTE }
                 return c, probs
 
