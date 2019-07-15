@@ -23,7 +23,7 @@ from ppo.utils import broadcast3d, init_, interp, trace
 
 RecurrentState = namedtuple(
     "RecurrentState",
-    "a cg cr r p g a_probs cg_probs cr_probs g_probs v g_loss subtask P last_condition last_eval",
+    "a cg cr r p g a_probs cg_probs cr_probs g_probs v g_loss subtask last_condition last_eval",
 )
 
 
@@ -137,7 +137,6 @@ class Recurrence(torch.jit.ScriptModule):
             v=1,
             g_loss=1,
             subtask=1,
-            P=self.line_size + 1,  # TODO
             last_condition=self.line_size,
             last_eval=1,
         )
@@ -293,12 +292,7 @@ class Recurrence(torch.jit.ScriptModule):
 
                 ipdb.set_trace()
 
-            # P
-            P = (
-                e[L.If] * F.pad(1 - l, [0, self.line_size])  # record evaluation
-                + e[L.While] * r  # record condition
-                + (1 - e[L.If] - e[L.While]) * hx.P  # keep the same
-            )
+            # control memory
             last_eval = interp(hx.last_eval, (1 - l), e[L.If])
             last_condition = interp(hx.last_condition, hx.r, e[L.While])
 
@@ -439,7 +433,6 @@ class Recurrence(torch.jit.ScriptModule):
                 a_probs=a_dist.probs,
                 subtask=subtask[t],
                 v=self.critic(conv_out),
-                P=P,
                 last_condition=last_condition,
                 last_eval=last_eval,
             )
