@@ -167,20 +167,17 @@ class SubtasksGridworld(gym.Env):
     def render(self, mode="human", sleep_time=0.5):
         print("task:")
         print(self.task_string())
-        if self.subtask is None:
-            print("***********************************************************")
-            print("                       Task Complete                       ")
-            print("***********************************************************")
-        else:
+        if self.subtask is not None:
             print("subtask:")
             self.render_current_subtask()
-        if self.count is not None:
-            print("remaining:", self.count + 1)
+        # if self.count is not None:
+        # print("remaining:", self.count + 1)
         print("action:", end=" ")
         if self.last_action is not None:
             print(self.transition_strings[self.last_action])
         else:
             print("reset")
+        print("objects", self.objects)
 
         # noinspection PyTypeChecker
         desc = self.desc.copy()
@@ -194,6 +191,16 @@ class SubtasksGridworld(gym.Env):
             print("".join(row), end="")
             print(six.u("\x1b[49m\x1b[39m"))
         # time.sleep(4 * sleep_time if self.last_terminal else sleep_time)
+        if self.subtask is None:
+            print(
+                "***********************************************************************************"
+            )
+            print(
+                "                                   Task Complete                                   "
+            )
+            print(
+                "***********************************************************************************"
+            )
 
     def render_current_subtask(self):
         print(f"{self.subtask_idx}:{self.subtask}")
@@ -299,6 +306,7 @@ class SubtasksGridworld(gym.Env):
                         iterate = True
                 elif a - n_transitions == 1:  # transform
                     self.objects[pos] = len(self.object_types)
+                    print("standing on", self.object_types[object_type])
                     if (
                         "transform" == interaction
                         and object_type == self.subtask.object

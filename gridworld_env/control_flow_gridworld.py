@@ -21,6 +21,9 @@ class Line(abc.ABC):
     def to_tuple(self):
         raise NotImplementedError
 
+    def replace_object(self, obj):
+        return self
+
 
 class Else(Line):
     def __str__(self):
@@ -89,6 +92,9 @@ class ControlFlowGridworld(SubtasksGridworld):
             def to_tuple(self):
                 return self + (L.Subtask, 0)
 
+            def replace_object(self, obj):
+                return self._replace(object=obj)
+
         self.Subtask = Subtask
 
         @dataclass
@@ -101,6 +107,9 @@ class ControlFlowGridworld(SubtasksGridworld):
             def to_tuple(self):
                 return 0, 0, 0, L.If, 1 + self.object
 
+            def replace_object(self, obj):
+                return If(obj)
+
         self.If = If
 
         @dataclass
@@ -112,6 +121,9 @@ class ControlFlowGridworld(SubtasksGridworld):
 
             def to_tuple(self):
                 return 0, 0, 0, L.While, 1 + self.object
+
+            def replace_object(self, obj):
+                return While(obj)
 
         self.While = While
 
@@ -145,19 +157,22 @@ class ControlFlowGridworld(SubtasksGridworld):
         return OrderedDict(obs)
 
     def subtasks_generator(self):
-        object_types = np.arange(len(self.object_types))
-        self.non_existing = non_existing = [self.np_random.choice(object_types)]
-        self.existing = existing = list(set(object_types) - set(non_existing))
         active_control = None
         line_type = None
+        interactions = list(range(len(self.interactions)))
         # noinspection PyTypeChecker
         for i in range(self.n_encountered):
             try:
-                failing = active_control.object not in existing
+                failing = not active_control.object
             except AttributeError:
                 failing = False
-            if i == self.n_encountered - 1 or (i == self.n_encountered - 2 and failing):
-                # must terminate control blocks on last line
+            if line_type in [self.While, self.If, Else]:
+                # must follow condition with subtask
+                line_type = self.Subtask
+            elif i == self.n_encountered - 1 or (
+                i == self.n_encountered - 2 and failing
+            ):
+                # Terminate all active controls
                 if isinstance(active_control, (self.If, Else)):
                     line_type = EndIf
                 elif isinstance(active_control, self.While):
@@ -165,99 +180,130 @@ class ControlFlowGridworld(SubtasksGridworld):
                 else:
                     assert active_control is None
                     line_type = self.Subtask
-            elif line_type in [self.While, self.If, Else]:
-                # must follow condition with subtask
-                line_type = self.Subtask
+
             else:
-                available_lines = {
+                # No need to terminate controls. No preceding condition
+                line_types = {
                     self.If: [self.Subtask, EndIf],
                     Else: [self.Subtask, EndIf],
                     self.While: [self.Subtask, EndWhile],
                 }
-                if i < self.n_encountered - 2:
-                    available_lines[self.If].append(Else)
+                defaults = [self.Subtask]
+                if i <= self.n_encountered - 3:
+                    # need at least 3 lines left for Else and While
+                    line_types[self.If] += [Else]
+                    defaults += [self.While, self.If]
                 line_type = self.np_random.choice(
-                    available_lines.get(
-                        type(active_control), [self.If, self.While, self.Subtask]
-                    )
+                    line_types.get(type(active_control), defaults)
                 )
 
+            # instantiate lines
             if line_type in (self.If, self.While):
-                passing = self.np_random.rand() < 0.5
-                if line_type is self.While and len(existing) <= 1:
-                    passing = False
-                active_control = line_type(
-                    object=self.np_random.choice(
-                        existing
-                        if (passing or active_control is None)
-                        else non_existing
-                    )
-                )
+                active_control = line_type(None)
                 yield active_control
             elif line_type is Else:
                 active_control = Else()
                 yield Else()
             elif line_type in (EndIf, EndWhile):
-                if line_type is EndWhile and active_control.object in existing:
-                    existing.remove(active_control.object)
                 active_control = None
                 yield line_type()
 
             elif line_type is self.Subtask:
-                if isinstance(active_control, self.While):
-                    yield self.Subtask(
-                        interaction=self.np_random.choice(
-                            self.irreversible_interactions
-                        ),
-                        count=0,
-                        object=active_control.object,
-                    )
-                else:
-                    yield self.Subtask(
-                        interaction=self.np_random.choice(len(self.interactions)),
-                        count=0,
-                        object=self.np_random.choice(existing),
-                    )
+                yield self.Subtask(
+                    interaction=self.np_random.choice(
+                        self.irreversible_interactions
+                        if active_control
+                        else interactions
+                    ),
+                    count=0,
+                    object=None,
+                )
             else:
                 raise RuntimeError
 
     def get_required_objects(self, subtasks):
         available = []
         i = 0
-        executed = True
-        loop_count = None
-        condition = None
+        while_obj = None
+        non_existing = {self.np_random.choice(len(self.object_types))}
+        object_types = list(range(len(self.object_types)))
+        n_executed = 0
 
         while i < len(self.subtasks):
+            try:
+                line = self.subtasks[i]
+                existing = list(set(object_types) - non_existing)
+                if isinstance(line, (self.If, self.While)):
+                    passing = self.np_random.rand() < 0.5
+                    obj = self.np_random.choice(
+                        existing if passing else list(non_existing)
+                    )
+                    self.subtasks[i] = line.replace_object(obj)
+                    if obj not in available:
+                        available += [obj]
+                        yield obj
+                    if isinstance(line, self.While):
+                        while_obj = obj
+                elif isinstance(line, EndWhile):
+                    passing = (
+                        self.np_random.rand() < 0.5
+                        and n_executed < self.n_subtasks // 2
+                    )
+                    print("n_executed", n_executed)
+                    if passing:
+                        assert while_obj not in available
+                        if while_obj not in available:
+                            available += [while_obj]
+                            yield while_obj
+                    else:
+                        non_existing.add(while_obj)
+                        print("non_existing", non_existing)
+                        while_obj = None
+
+                elif isinstance(line, self.Subtask):
+                    n_executed += 1
+                    print("existing", existing)
+                    obj = (
+                        self.np_random.choice(existing)
+                        if while_obj is None
+                        else while_obj
+                    )
+                    self.subtasks[i] = line.replace_object(obj)
+                    if obj not in available:
+                        available.append(obj)
+                        yield obj
+                    if line.interaction in self.irreversible_interactions:
+                        available.remove(obj)
+
+                print("i", i)
+                print("available", available)
+                i = self.get_next_idx(i, existing=available)
+            except KeyboardInterrupt:
+                import ipdb
+
+                ipdb.set_trace()
+
+        condition = None
+        for i in range(self.n_subtasks):
             line = self.subtasks[i]
             if isinstance(line, (self.If, self.While)):
                 condition = line.object
-                executed = line.object in self.existing
-                if executed and line.object not in available:
-                    available += [line.object]
-                    yield line.object
-                if isinstance(line, self.While):
-                    loop_count = self.np_random.randint(1, 3)
-            elif isinstance(line, self.Subtask):
-                if executed:
-                    if line.object not in available:
-                        yield line.object
-                        available.append(line.object)
-                    if line.interaction in self.irreversible_interactions:
-                        available.remove(line.object)
-            elif isinstance(line, Else):
-                executed = not executed
-            elif isinstance(line, EndIf):
-                executed = True
-            elif isinstance(line, EndWhile):
-                executed = True
-                if loop_count > 0:
-                    if condition not in available:
-                        available += [condition]
-                        yield condition
-                    loop_count -= 1
 
-            i = self.get_next_idx(i, existing=available)
+            try:
+                if line.object is None:
+                    assert isinstance(line, self.Subtask), (
+                        "Since nesting is not allowed, all control flow statements "
+                        "must get executed."
+                    )
+                    assert (
+                        condition is not None
+                    ), "All subtask lines outside of control flow statements must get executed."
+                    self.subtasks[i] = line._replace(object=condition)
+                    # We always condition object inside control flow statements because it ensures that
+                    # 1. while-loops terminate
+                    # 2. mis-evaluation of the control-flow condition will result in task failure
+            except AttributeError:
+                pass
 
     def get_next_subtask(self):
         if self.subtask_idx is None:

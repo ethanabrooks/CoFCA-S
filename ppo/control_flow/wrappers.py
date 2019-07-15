@@ -63,9 +63,9 @@ class Wrapper(gym.Wrapper):
         return super().step(action)
 
     def render(self, mode="human", **kwargs):
-        super().render(mode=mode)
         if self.last_g is not None:
             self.render_assigned_subtask()
+        super().render(mode=mode)
         input("paused")
 
     def render_assigned_subtask(self):
