@@ -237,7 +237,7 @@ class ControlFlowGridworld(SubtasksGridworld):
                         existing if passing else list(non_existing)
                     )
                     self.subtasks[i] = line.replace_object(obj)
-                    if obj not in available:
+                    if passing and obj not in available:
                         available += [obj]
                         yield obj
                     if isinstance(line, self.While):
