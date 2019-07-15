@@ -9,7 +9,7 @@ import torch.jit
 from torch.nn import functional as F
 
 from gridworld_env.control_flow_gridworld import LineTypes
-from gridworld_env.subtasks_gridworld import Obs
+from gridworld_env.subtasks_gridworld import Inputs
 import ppo
 from ppo.control_flow.lower_level import (
     LowerLevel,
@@ -181,7 +181,7 @@ class Recurrence(torch.jit.ScriptModule):
                 break
 
     def parse_inputs(self, inputs):
-        return Obs(*torch.split(inputs, self.obs_sections, dim=2))
+        return Inputs(*torch.split(inputs, self.obs_sections, dim=2))
 
     # @torch.jit.script_method
     def forward(self, inputs, hx):
@@ -228,16 +228,24 @@ class Recurrence(torch.jit.ScriptModule):
                 hx=hx,
                 M=M,
                 M_discrete=M_discrete,
-                N=N,
-                T=T,
                 subtask=inputs.subtask,
-                p=p,
-                r=r,
                 actions=actions,
             )
         )
 
-    def inner_loop(self, hx, M, M_discrete, N, T, subtask, p, r, actions, inputs):
+    def inner_loop(
+        self,
+        hx: RecurrentState,
+        actions: Actions,
+        inputs: Inputs,
+        M,
+        M_discrete,
+        subtask,
+    ):
+
+        T, N, *_ = inputs.base.shape
+        p = hx.p
+
         subtask = subtask.long().view(T, N)
         M_zeta = self.zeta(M)
 
@@ -331,8 +339,6 @@ class Recurrence(torch.jit.ScriptModule):
                 + e[L.Subtask] * (cr * p_step + (1 - cr) * hx.p)
             )
             p = p / p.sum(-1, keepdim=True)
-            print("e[L.EndWhile]", e[L.EndWhile])
-            print("l", l)
 
             # r
             r = (p.unsqueeze(1) @ M).squeeze(1)

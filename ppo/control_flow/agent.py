@@ -4,7 +4,7 @@ from torch import nn as nn
 import torch.jit
 from torch.nn import functional as F
 
-from gridworld_env.subtasks_gridworld import Obs
+from gridworld_env.subtasks_gridworld import Inputs
 import ppo
 from ppo.agent import AgentValues, NNBase
 import ppo.control_flow.lower_level
@@ -31,7 +31,7 @@ class Agent(ppo.agent.Agent, NNBase):
         self.entropy_coef = entropy_coef
         self.action_spaces = Actions(**action_space.spaces)
         self.obs_space = obs_space
-        obs_spaces = Obs(**self.obs_space.spaces)
+        obs_spaces = Inputs(**self.obs_space.spaces)
         agent = None
         if agent_load_path is not None:
             agent = self.load_agent(
