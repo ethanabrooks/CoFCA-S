@@ -273,7 +273,6 @@ class Recurrence(torch.jit.ScriptModule):
             l = eP * prev + (1 - eP) * torch.max(
                 phi_in.view(N, -1), dim=-1
             ).values.float().view(N, 1)
-            print("l", l)
             # NOTE }
 
             # P
@@ -295,9 +294,6 @@ class Recurrence(torch.jit.ScriptModule):
             def scan(*idxs, cumsum, it):
                 p = []
                 omega = M_zeta[:, :, idxs].sum(-1) * cumsum
-                print("M_zeta", M_zeta[:, :, idxs].sum(-1))
-                print("cumsum", cumsum)
-                print("omega", omega)
                 *it, last = it
                 for i in it:
                     p.append((1 - sum(p)) * omega[:, i])
@@ -305,7 +301,6 @@ class Recurrence(torch.jit.ScriptModule):
                 return torch.stack(p, dim=-1)
 
             # p
-            print("hx.p", hx.p)
             p_forward = scan(
                 L.EndIf,
                 L.Else,
@@ -313,13 +308,11 @@ class Recurrence(torch.jit.ScriptModule):
                 cumsum=roll(torch.cumsum(hx.p, dim=-1)),
                 it=range(M.size(1)),
             )
-            print("p_forward", p_forward)
             p_backward = scan(
                 L.While,
                 cumsum=roll(torch.cumsum(hx.p.flip(-1), dim=-1)).flip(-1),
                 it=range(M.size(1) - 1, -1, -1),
             ).flip(-1)
-            print("p_backward", p_backward)
             p_step = (p.unsqueeze(1) @ self.one_step).squeeze(1)
             p = (
                 e[[L.If, L.While, L.Else]].sum(0)  # conditions
@@ -328,12 +321,6 @@ class Recurrence(torch.jit.ScriptModule):
                 + e[L.EndIf] * p_step
                 + e[L.Subtask] * (cr * p_step + (1 - cr) * hx.p)
             )
-            print("e[L.Subtask]", e[L.Subtask])
-            print("e[L.EndWhile]", e[L.EndWhile])
-            print("e[L.EndIf]", e[L.EndIf])
-            print("e[L.If]", e[L.If])
-            print("e[L.While]", e[L.While])
-            print("e[L.Else]", e[L.Else])
 
             # r
             r = (p.unsqueeze(1) @ M).squeeze(1)
@@ -355,7 +342,6 @@ class Recurrence(torch.jit.ScriptModule):
                     base=obs[t].view(N, -1),
                     subtask=g_binary[:, : self.agent_subtask_size],
                 )
-                print("agent subtask", agent_inputs.subtask)
                 probs = self.agent(agent_inputs, rnn_hxs=None, masks=None).dist.probs
             op = g_binary[:, self.agent_subtask_size].unsqueeze(1)
             no_op = 1 - op
@@ -407,7 +393,6 @@ class Recurrence(torch.jit.ScriptModule):
                     correct_action.sum(-1, keepdim=True)
                     * correct_object.sum(-1, keepdim=True)
                 ).detach()  # * condition[:, :1] + (1 - condition[:, :1])
-                print("c", c)
                 # NOTE }
                 return c, probs
 
