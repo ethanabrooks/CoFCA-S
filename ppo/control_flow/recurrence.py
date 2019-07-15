@@ -87,8 +87,8 @@ class Recurrence(torch.jit.ScriptModule):
             Product(),
             Reshape(d * P_size, *self.obs_shape[-2:]),
             init_(nn.Conv2d(P_size * d, 1, kernel_size=1), "sigmoid"),
-            nn.Sigmoid(),  # TODO: try on both sides of pool
             nn.LPPool2d(2, kernel_size=(h, w)),
+            nn.Sigmoid(),  # TODO: try on both sides of pool
             Reshape(1),
         )
 
@@ -98,7 +98,7 @@ class Recurrence(torch.jit.ScriptModule):
         )
 
         self.zeta = nn.Sequential(
-            init_(nn.Linear(self.line_size, len(LineTypes._fields))), nn.Softmax()
+            init_(nn.Linear(self.line_size, len(LineTypes._fields))), nn.Softmax(-1)
         )
 
         input_size = h * w * hidden_size  # conv output
@@ -148,7 +148,7 @@ class Recurrence(torch.jit.ScriptModule):
         no_op_probs[:, -1] = 1
         self.register_buffer("no_op_probs", no_op_probs)
         self.register_buffer("last_line", torch.eye(self.line_size))
-        self.agent_input_size = int(self.subtask_nvec[:-1].sum())
+        self.agent_subtask_size = int(self.subtask_nvec[:-2].sum())
 
     # @torch.jit.script_method
     def parse_hidden(self, hx):
@@ -281,8 +281,10 @@ class Recurrence(torch.jit.ScriptModule):
             def scan(*idxs, u, it):
                 p = []
                 omega = M_zeta[:, :, idxs].sum(-1) * u
+                *it, last = it
                 for i in it:
-                    p.append((1 - sum(p) * omega[:, i]))
+                    p.append((1 - sum(p)) * omega[:, i])
+                p.append(1 - sum(p))
                 return torch.stack(p, dim=-1)
 
             # cr
@@ -326,12 +328,15 @@ class Recurrence(torch.jit.ScriptModule):
             g = G[t]
             g_binary = M[torch.arange(N), g]
             conv_out = self.conv2((obs[t], broadcast3d(g_binary, self.obs_shape[1:])))
-            probs = (
-                super()
-                .get_a_dist(conv_out, g_binary[:, : self.agent_input_size], obs)
-                .probs
-            )
-            op = g_binary[:, self.agent_input_size].unsqueeze(1)
+            if self.agent is None:
+                probs = self.actor(conv_out).dist.probs
+            else:
+                agent_inputs = ppo.control_flow.lower_level.Obs(
+                    base=obs[t].view(N, -1),
+                    subtask=g_binary[:, : self.agent_subtask_size],
+                )
+                probs = self.agent(agent_inputs, rnn_hxs=None, masks=None).dist.probs
+            op = g_binary[:, self.agent_subtask_size].unsqueeze(1)
             no_op = 1 - op
             a_dist = FixedCategorical(
                 # if subtask is a control-flow statement, force no-op

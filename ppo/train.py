@@ -21,8 +21,13 @@ from ppo.control_flow.wrappers import Wrapper
 from ppo.storage import RolloutStorage
 from ppo.update import PPO
 from ppo.utils import get_n_gpu, get_random_gpu
-from ppo.wrappers import (AddTimestep, TransposeImage, VecNormalize, VecPyTorch,
-                          VecPyTorchFrameStack)
+from ppo.wrappers import (
+    AddTimestep,
+    TransposeImage,
+    VecNormalize,
+    VecPyTorch,
+    VecPyTorchFrameStack,
+)
 
 try:
     import dm_control2gym
