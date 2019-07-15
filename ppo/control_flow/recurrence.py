@@ -32,6 +32,10 @@ def sample_new(x, dist):
     x[new] = dist.sample()[new].flatten()
 
 
+def round(x, dec):
+    return torch.round(x * 10 ** dec) / 10 ** dec
+
+
 class Recurrence(torch.jit.ScriptModule):
     __constants__ = ["input_sections", "state_sizes", "recurrent"]
 
