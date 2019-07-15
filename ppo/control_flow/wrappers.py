@@ -70,4 +70,4 @@ class Wrapper(gym.Wrapper):
 
     def render_assigned_subtask(self):
         env = self.env.unwrapped
-        print("Assigned subtask:", self.last_g, env.subtasks[self.last_g])
+        print("❯❯ Assigned subtask:", self.last_g, env.subtasks[self.last_g])

@@ -102,6 +102,11 @@ class Recurrence(torch.jit.ScriptModule):
             init_(nn.Linear(self.line_size, len(LineTypes._fields))), nn.Softmax(-1)
         )
 
+        # NOTE {
+        self.phi_debug = nn.Sequential(init_(nn.Linear(1, 1), "sigmoid"), nn.Sigmoid())
+        self.xi_debug = nn.Sequential(init_(nn.Linear(1, 1), "sigmoid"), nn.Sigmoid())
+        # NOTE }
+
         input_size = h * w * hidden_size  # conv output
         if isinstance(action_spaces.a, Discrete):
             num_outputs = action_spaces.a.n
@@ -396,7 +401,7 @@ class Recurrence(torch.jit.ScriptModule):
                     correct_action.sum(-1, keepdim=True)
                     * correct_object.sum(-1, keepdim=True)
                 ).detach()  # * condition[:, :1] + (1 - condition[:, :1])
-                c = truth
+                c = self.phi_debug(truth)
                 # NOTE }
                 return c, probs
 
