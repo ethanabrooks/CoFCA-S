@@ -11,8 +11,11 @@ from torch.nn import functional as F
 from gridworld_env.control_flow_gridworld import LineTypes
 from gridworld_env.subtasks_gridworld import Obs
 import ppo
-from ppo.control_flow.lower_level import (LowerLevel, g_binary_to_discrete,
-                                          g_discrete_to_binary)
+from ppo.control_flow.lower_level import (
+    LowerLevel,
+    g_binary_to_discrete,
+    g_discrete_to_binary,
+)
 from ppo.control_flow.wrappers import Actions
 from ppo.distributions import Categorical, DiagGaussian, FixedCategorical
 from ppo.layers import Concat, Flatten, Parallel, Product, Reshape, ShallowCopy, Sum
@@ -240,8 +243,6 @@ class Recurrence(torch.jit.ScriptModule):
 
         # NOTE {
         M_zeta = M[:, :, -self.subtask_nvec[-2:].sum() : -self.subtask_nvec[-1]]
-        print("M_zeta")
-        print(M_zeta)
         # NOTE }
         L = LineTypes()
 
@@ -271,8 +272,6 @@ class Recurrence(torch.jit.ScriptModule):
             # NOTE {
             c = torch.split(_r[:, 1:], list(self.subtask_nvec), dim=-1)[-1][:, 1:]
             prev = _r[:, 0]
-            print("_r", _r)
-            print("inputs", inputs.base[t, :, 1:-2])
             print("condition", c)
             print("eP", eP)
             print("prev", prev)
