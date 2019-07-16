@@ -278,7 +278,7 @@ class Recurrence(torch.jit.ScriptModule):
             phi_in = inputs.base[t, :, 1:-2] * c.view(N, -1, 1, 1)
             truth = torch.max(phi_in.view(N, -1), dim=-1).values.float().view(N, 1)
             l = self.xi_debug(truth)
-            l = truth
+            # l = truth
             # NOTE }
 
             l = interp(l, 1 - hx.last_eval, eLastEval)
