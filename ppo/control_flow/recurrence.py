@@ -249,9 +249,11 @@ class Recurrence(torch.jit.ScriptModule):
         M_zeta = self.zeta(M)
 
         # NOTE {
-        truth = M[:, :, -self.subtask_nvec[-2:].sum() : -self.subtask_nvec[-1]]
-        M_zeta = self.zeta_debug(truth)
-        M_zeta = truth
+        debug_in = M[:, :, -self.subtask_nvec[-2:].sum() : -self.subtask_nvec[-1]]
+        # M_zeta = self.zeta_debug(debug_in)
+        truth = debug_in.argmax(-1)
+        z = truth
+        M_zeta = self.z_one_hots[z]
         # print("M_zeta", round(M_zeta, 4))
         # print("truth", truth)
         # NOTE }
