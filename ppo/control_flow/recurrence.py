@@ -210,19 +210,19 @@ class Recurrence(torch.jit.ScriptModule):
         )
         task = torch.split(task, 1, dim=-1)
         g_discrete = [x[0, :, :, 0] for x in task]
-        M_discrete = torch.stack(g_discrete, dim=-1)
+        M_discrete = torch.stack(
+            g_discrete, dim=-1
+        )  # TODO: quicker to store in RecurrentState?
 
         M = g_discrete_to_binary(g_discrete, self.g_discrete_one_hots())
 
         # parse hidden
         new_episode = torch.all(hx.squeeze(0) == 0, dim=-1)
         hx = self.parse_hidden(hx)
-        p = hx.p
-        r = hx.r
         for x in hx:
             x.squeeze_(0)
-        p[new_episode, 0] = 1.0  # initialize pointer to first subtask
-        r[new_episode] = M[new_episode, 0]  # initialize r to first subtask
+        hx.p[new_episode, 0] = 1.0  # initialize pointer to first subtask
+        hx.r[new_episode] = M[new_episode, 0]  # initialize r to first subtask
         # initialize g to first subtask
         hx.g[new_episode] = 0.0
 
@@ -442,6 +442,11 @@ class Recurrence(torch.jit.ScriptModule):
                 last_condition=last_condition,
                 last_eval=last_eval,
             )
+
+    @staticmethod
+    def sample_new(x, dist):
+        new = x < 0
+        x[new] = dist.sample()[new].flatten()
 
     def pack(self, outputs):
         zipped = list(zip(*outputs))
