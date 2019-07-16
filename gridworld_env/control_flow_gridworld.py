@@ -251,6 +251,10 @@ class ControlFlowGridworld(SubtasksGridworld):
                 existing = list(set(object_types) - non_existing)
                 if isinstance(line, (self.If, self.While)):
                     passing = self.np_random.rand() < 0.5
+                    # TODO
+                    if isinstance(line, self.While):
+                        passing = True
+                    # TODO
                     obj = self.np_random.choice(
                         existing if passing else list(non_existing)
                     )
