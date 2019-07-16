@@ -27,11 +27,6 @@ RecurrentState = namedtuple(
 )
 
 
-def sample_new(x, dist):
-    new = x < 0
-    x[new] = dist.sample()[new].flatten()
-
-
 def round(x, dec):
     return torch.round(x * 10 ** dec) / 10 ** dec
 
@@ -348,7 +343,7 @@ class Recurrence(torch.jit.ScriptModule):
             old_g = self.g_one_hots[G[t - 1]]
             probs = interp(old_g, p, cg)
             g_dist = FixedCategorical(probs=torch.clamp(probs, 0.0, 1.0))
-            sample_new(G[t], g_dist)
+            self.sample_new(G[t], g_dist)
 
             # a
             g = G[t]
@@ -369,7 +364,8 @@ class Recurrence(torch.jit.ScriptModule):
                 probs=op * probs
                 + no_op * self.no_op_probs.expand(op.size(0), -1)
             )
-            sample_new(A[t], a_dist)
+            self.sample_new(A[t], a_dist)
+
             # a[:] = 'wsadeq'.index(input('act:'))
 
             def gating_function(subtask_param):
@@ -389,7 +385,7 @@ class Recurrence(torch.jit.ScriptModule):
                     raise NotImplementedError
                     # c_dist = FixedCategorical(logits=c_logits)
                     # c = actions.c[t]
-                    # sample_new(c, c_dist)
+                    # self.sample_new(c, c_dist)
                     # probs = c_dist.probs
                 else:
                     c = torch.sigmoid(c_logits[:, :1])
