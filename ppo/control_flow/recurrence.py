@@ -338,8 +338,8 @@ class Recurrence(torch.jit.ScriptModule):
             last_line = is_line.sum(-1).long() - 1
             p = p + (1 - p.sum(-1, keepdim=True)) * self.p_one_hot[last_line]
 
-            # print("eSubtask cr p_step", round(e[L.Subtask] * (cr * p_step), 2))
-            # print("eSubtask (1-cr) hx.p", round(e[L.Subtask] * ((1 - cr) * hx.p), 2))
+            # print("eSubtask cr p_step", round(e[L.Subtask] * (hx.cr * p_step), 2))
+            # print("eSubtask (1-cr) hx.p", round(e[L.Subtask] * ((1 - hx.cr) * hx.p), 2))
             # print(
             # "p - eSubtask (cr p_step + (1 - cr) hx.p)",
             # round(p - e[L.Subtask] * (hx.cr * p_step + (1 - hx.cr) * hx.p), 2),
