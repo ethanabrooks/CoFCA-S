@@ -219,8 +219,8 @@ class Recurrence(torch.jit.ScriptModule):
         ]
         # M_zeta = self.zeta_debug(debug_in)
         truth = FixedCategorical(probs=debug_in)
-        # M_zeta_dist = self.zeta_debug(debug_in)
-        M_zeta_dist = truth
+        M_zeta_dist = self.zeta_debug(debug_in)
+        # M_zeta_dist = truth
         z = actions.z[
             0, new_episode
         ].long()  # use time-step 0; z fixed throughout episode
