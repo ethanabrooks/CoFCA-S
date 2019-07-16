@@ -214,16 +214,12 @@ class Recurrence(torch.jit.ScriptModule):
         new_episode = torch.all(hx.squeeze(0) == 0, dim=-1)
 
         # NOTE {
-        debug_in = M[
-            new_episode, :, -self.subtask_nvec[-2:].sum() : -self.subtask_nvec[-1]
-        ]
+        debug_in = M[:, :, -self.subtask_nvec[-2:].sum() : -self.subtask_nvec[-1]]
         # M_zeta = self.zeta_debug(debug_in)
         truth = FixedCategorical(probs=debug_in)
         M_zeta_dist = self.zeta_debug(debug_in)
         # M_zeta_dist = truth
-        z = actions.z[
-            0, new_episode
-        ].long()  # use time-step 0; z fixed throughout episode
+        z = actions.z[0].long()  # use time-step 0; z fixed throughout episode
         self.sample_new(z, M_zeta_dist)
         # NOTE }
 
@@ -234,10 +230,10 @@ class Recurrence(torch.jit.ScriptModule):
         hx.r[new_episode] = M[new_episode, 0]  # initialize r to first subtask
         # initialize g to first subtask
         hx.g[new_episode] = 0.0
-        hx.z[new_episode] = z.float()
+        hx.z[new_episode] = z[new_episode].float()
         hx.z_probs[new_episode] = M_zeta_dist.probs.view(
             -1, self.n_subtasks * len(LineTypes._fields)
-        )
+        )[new_episode]
 
         return self.pack(
             self.inner_loop(
