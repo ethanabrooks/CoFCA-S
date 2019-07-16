@@ -417,7 +417,7 @@ class Recurrence(torch.jit.ScriptModule):
                     * correct_object.sum(-1, keepdim=True)
                 ).detach()  # * condition[:, :1] + (1 - condition[:, :1])
                 c = self.phi_debug(truth)
-                c = truth
+                # c = truth
                 # print("c", round(c, 4))
                 # NOTE }
                 return c, probs
