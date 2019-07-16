@@ -104,7 +104,9 @@ class Recurrence(torch.jit.ScriptModule):
         self.phi_debug = nn.Sequential(init_(nn.Linear(1, 1), "sigmoid"), nn.Sigmoid())
         self.xi_debug = nn.Sequential(init_(nn.Linear(1, 1), "sigmoid"), nn.Sigmoid())
         self.zeta_debug = nn.Sequential(
-            init_(nn.Linear(len(LineTypes._fields), len(LineTypes._fields))),
+            init_(nn.Linear(len(LineTypes._fields), len(LineTypes._fields) ** 2)),
+            nn.Dropout(),
+            init_(nn.Linear(len(LineTypes._fields) ** 2, len(LineTypes._fields))),
             nn.Softmax(-1),
         )
         # NOTE }
@@ -252,8 +254,11 @@ class Recurrence(torch.jit.ScriptModule):
         truth = M[:, :, -self.subtask_nvec[-2:].sum() : -self.subtask_nvec[-1]]
         M_zeta = self.zeta_debug(truth)
         # M_zeta = truth
+        # print("M_zeta", round(M_zeta, 4))
+        # print("truth", truth)
         # NOTE }
         L = LineTypes()
+        # print(L)
 
         # combine past and present actions (sampled values)
         obs = inputs.base
@@ -278,6 +283,7 @@ class Recurrence(torch.jit.ScriptModule):
             phi_in = inputs.base[t, :, 1:-2] * c.view(N, -1, 1, 1)
             truth = torch.max(phi_in.view(N, -1), dim=-1).values.float().view(N, 1)
             l = self.xi_debug(truth)
+            # print("l", round(l, 4))
             # l = truth
             # NOTE }
 
@@ -400,6 +406,7 @@ class Recurrence(torch.jit.ScriptModule):
                     * correct_object.sum(-1, keepdim=True)
                 ).detach()  # * condition[:, :1] + (1 - condition[:, :1])
                 c = self.phi_debug(truth)
+                # print("c", round(c, 4))
                 # c = truth
                 # NOTE }
                 return c, probs
