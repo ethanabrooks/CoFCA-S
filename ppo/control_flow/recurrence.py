@@ -214,10 +214,14 @@ class Recurrence(torch.jit.ScriptModule):
         new_episode = torch.all(hx.squeeze(0) == 0, dim=-1)
 
         # NOTE {
-        debug_in = M[:, :, -self.subtask_nvec[-2:].sum() : -self.subtask_nvec[-1]]
+        debug_in = M[
+            new_episode, :, -self.subtask_nvec[-2:].sum() : -self.subtask_nvec[-1]
+        ]
         # M_zeta = self.zeta_debug(debug_in)
-        truth = debug_in.argmax(-1).float()[new_episode]
-        z = truth
+        truth = FixedCategorical(probs=debug_in)
+        M_zeta_dist = self.zeta_debug(debug_in)
+        M_zeta_dist = truth
+        z = M_zeta_dist.sample().squeeze(-1).float()
         # NOTE }
 
         hx = self.parse_hidden(hx)
