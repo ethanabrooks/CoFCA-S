@@ -232,6 +232,9 @@ class Recurrence(torch.jit.ScriptModule):
         # initialize g to first subtask
         hx.g[new_episode] = 0.0
         hx.z[new_episode] = z
+        hx.z_probs[new_episode] = M_zeta_dist.probs.view(
+            -1, self.n_subtasks * len(LineTypes._fields)
+        )
 
         return self.pack(
             self.inner_loop(
