@@ -23,13 +23,8 @@ from ppo.utils import broadcast3d, init_, interp, trace
 
 RecurrentState = namedtuple(
     "RecurrentState",
-    "a cg cr r p g a_probs cg_probs cr_probs g_probs v g_loss subtask last_condition last_eval",
+    "a g cr cg z a_probs g_probs cr_probs cg_probs z_probs p r last_condition last_eval v",
 )
-
-
-def sample_new(x, dist):
-    new = x < 0
-    x[new] = dist.sample()[new].flatten()
 
 
 def round(x, dec):
@@ -55,6 +50,9 @@ class Recurrence(torch.jit.ScriptModule):
         self.obs_sections = [int(np.prod(s.shape)) for s in self.obs_spaces]
         self.line_size = int(self.subtask_nvec.sum())
         self.agent_subtask_size = int(self.subtask_nvec[:-2].sum())
+        self.size_actions = [
+            1 if isinstance(s, Discrete) else s.nvec.size for s in action_spaces
+        ]
 
         # networks
         self.conv1 = nn.Sequential(
@@ -103,12 +101,13 @@ class Recurrence(torch.jit.ScriptModule):
         # NOTE {
         self.phi_debug = nn.Sequential(init_(nn.Linear(1, 1), "sigmoid"), nn.Sigmoid())
         self.xi_debug = nn.Sequential(init_(nn.Linear(1, 1), "sigmoid"), nn.Sigmoid())
-        self.zeta_debug = nn.Sequential(
-            init_(nn.Linear(len(LineTypes._fields), hidden_size)),
-            nn.Dropout(),
-            init_(nn.Linear(hidden_size, len(LineTypes._fields))),
-            nn.Softmax(-1),
-        )
+        self.zeta_debug = Categorical(len(LineTypes._fields), len(LineTypes._fields))
+        # self.zeta_debug = nn.Sequential(
+        #     init_(nn.Linear(len(LineTypes._fields), hidden_size)),
+        #     nn.Dropout(),
+        #     init_(nn.Linear(hidden_size, len(LineTypes._fields))),
+        #     nn.Softmax(-1),
+        # )
         # NOTE }
 
         input_size = h * w * hidden_size  # conv output
@@ -125,18 +124,18 @@ class Recurrence(torch.jit.ScriptModule):
 
         state_sizes = RecurrentState(
             a=1,
+            g=1,
             cg=1,
             cr=1,
-            r=self.line_size,
-            p=self.n_subtasks,
-            g=1,
+            z=self.n_subtasks,
             a_probs=action_spaces.a.n,
+            g_probs=self.n_subtasks,
             cg_probs=2,
             cr_probs=2,
-            g_probs=self.n_subtasks,
+            z_probs=self.n_subtasks * len(LineTypes._fields),
+            r=self.line_size,
+            p=self.n_subtasks,
             v=1,
-            g_loss=1,
-            subtask=1,
             last_condition=self.line_size,
             last_eval=1,
         )
@@ -147,6 +146,7 @@ class Recurrence(torch.jit.ScriptModule):
             self.register_buffer(f"part{i}_one_hot", torch.eye(int(x)))
         self.register_buffer("a_one_hots", torch.eye(int(action_spaces.a.n)))
         self.register_buffer("g_one_hots", torch.eye(action_spaces.g.n))
+        self.register_buffer("z_one_hots", torch.eye(len(LineTypes._fields)))
         one_step = F.pad(torch.eye(self.n_subtasks - 1), [1, 0, 0, 1])
         one_step[:, -1] += 1 - one_step.sum(-1)
         self.register_buffer("one_step", one_step.unsqueeze(0))
@@ -191,9 +191,8 @@ class Recurrence(torch.jit.ScriptModule):
 
         # detach actions
         # noinspection PyProtectedMember
-        n_actions = len(Actions._fields)
         inputs, *actions = torch.split(
-            inputs.detach(), [D - n_actions] + [1] * n_actions, dim=2
+            inputs.detach(), [D - sum(self.size_actions)] + self.size_actions, dim=2
         )
         actions = Actions(*actions)
 
@@ -207,21 +206,38 @@ class Recurrence(torch.jit.ScriptModule):
         )
         task = torch.split(task, 1, dim=-1)
         g_discrete = [x[0, :, :, 0] for x in task]
-        M_discrete = torch.stack(g_discrete, dim=-1)
+        M_discrete = torch.stack(
+            g_discrete, dim=-1
+        )  # TODO: quicker to store in RecurrentState?
 
         M = g_discrete_to_binary(g_discrete, self.g_discrete_one_hots())
 
         # parse hidden
         new_episode = torch.all(hx.squeeze(0) == 0, dim=-1)
         hx = self.parse_hidden(hx)
-        p = hx.p
-        r = hx.r
         for x in hx:
             x.squeeze_(0)
-        p[new_episode, 0] = 1.0  # initialize pointer to first subtask
-        r[new_episode] = M[new_episode, 0]  # initialize r to first subtask
+        hx.p[new_episode, 0] = 1.0  # initialize pointer to first subtask
+        hx.r[new_episode] = M[new_episode, 0]  # initialize r to first subtask
         # initialize g to first subtask
         hx.g[new_episode] = 0.0
+
+        # NOTE {
+        L = LineTypes()
+        debug_in = M[:, :, -self.subtask_nvec[-2:].sum() : -self.subtask_nvec[-1]]
+        truth = FixedCategorical(probs=debug_in.float())
+        # M_zeta_dist = truth
+        # print("truth", truth)
+        # NOTE }
+        M_zeta_dist = self.zeta_debug(debug_in[new_episode])
+        # M_zeta_dist = truth
+
+        z = actions.z[
+            0, new_episode
+        ].long()  # use time-step 0; z fixed throughout episode
+        self.sample_new(z, M_zeta_dist)
+        hx.z[new_episode] = z.float()
+        hx.z_probs[new_episode] = M_zeta_dist.probs.view(-1, self.n_subtasks * len(L))
 
         return self.pack(
             self.inner_loop(
@@ -248,23 +264,19 @@ class Recurrence(torch.jit.ScriptModule):
         p = hx.p
 
         subtask = subtask.long().view(T, N)
-        M_zeta = self.zeta(M)
-
-        # NOTE {
-        truth = M[:, :, -self.subtask_nvec[-2:].sum() : -self.subtask_nvec[-1]]
-        M_zeta = self.zeta_debug(truth)
-        # M_zeta = truth
-        # print("M_zeta", round(M_zeta, 4))
-        # print("truth", truth)
-        # NOTE }
-        L = LineTypes()
-        # print(L)
+        # M_zeta = self.zeta(M)
 
         # combine past and present actions (sampled values)
         obs = inputs.base
         A = torch.cat([actions.a, hx.a.unsqueeze(0)], dim=0).long().squeeze(2)
         G = torch.cat([actions.g, hx.g.unsqueeze(0)], dim=0).long().squeeze(2)
+        M_zeta = self.z_one_hots[hx.z.long()]
+
         for t in range(T):
+
+            L = LineTypes()
+
+            # print(L)
 
             def safediv(x, y):
                 return x / torch.clamp(y, min=1e-5)
@@ -341,7 +353,7 @@ class Recurrence(torch.jit.ScriptModule):
             old_g = self.g_one_hots[G[t - 1]]
             probs = interp(old_g, p, cg)
             g_dist = FixedCategorical(probs=torch.clamp(probs, 0.0, 1.0))
-            sample_new(G[t], g_dist)
+            self.sample_new(G[t], g_dist)
 
             # a
             g = G[t]
@@ -354,7 +366,9 @@ class Recurrence(torch.jit.ScriptModule):
                     base=obs[t].view(N, -1),
                     subtask=g_binary[:, : self.agent_subtask_size],
                 )
-                probs = self.agent(agent_inputs, rnn_hxs=None, masks=None).dist.probs
+                probs = self.agent(
+                    agent_inputs, z=hx.z.long(), rnn_hxs=None, masks=None
+                ).dist.probs
             op = g_binary[:, self.agent_subtask_size].unsqueeze(1)
             no_op = 1 - op
             a_dist = FixedCategorical(
@@ -362,7 +376,8 @@ class Recurrence(torch.jit.ScriptModule):
                 probs=op * probs
                 + no_op * self.no_op_probs.expand(op.size(0), -1)
             )
-            sample_new(A[t], a_dist)
+            self.sample_new(A[t], a_dist)
+
             # a[:] = 'wsadeq'.index(input('act:'))
 
             def gating_function(subtask_param):
@@ -382,7 +397,7 @@ class Recurrence(torch.jit.ScriptModule):
                     raise NotImplementedError
                     # c_dist = FixedCategorical(logits=c_logits)
                     # c = actions.c[t]
-                    # sample_new(c, c_dist)
+                    # self.sample_new(c, c_dist)
                     # probs = c_dist.probs
                 else:
                     c = torch.sigmoid(c_logits[:, :1])
@@ -427,14 +442,19 @@ class Recurrence(torch.jit.ScriptModule):
                 r=r,
                 g=G[t],
                 g_probs=g_dist.probs,
-                g_loss=-g_dist.log_probs(subtask[t]),
                 a=A[t],
                 a_probs=a_dist.probs,
-                subtask=subtask[t],
                 v=self.critic(conv_out),
                 last_condition=last_condition,
                 last_eval=last_eval,
+                z=hx.z,
+                z_probs=hx.z_probs,
             )
+
+    @staticmethod
+    def sample_new(x, dist):
+        new = x < 0
+        x[new] = dist.sample()[new].flatten()
 
     def pack(self, outputs):
         zipped = list(zip(*outputs))
