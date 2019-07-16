@@ -221,32 +221,28 @@ class ControlFlowGridworld(SubtasksGridworld):
 
     def subtasks_generator(self):
         self.np_random.shuffle(self.irreversible_interactions)
-        yield self.If(None)
+        # yield self.If(None)
+        # yield self.Subtask(
+        # interaction=self.irreversible_interactions[0], count=0, object=None
+        # )
+        # yield Else()
+        # yield self.Subtask(
+        # interaction=self.irreversible_interactions[1], count=0, object=None
+        # )
+        # yield EndIf()
+        # yield self.Subtask(
+        # interaction=self.np_random.choice(len(self.interactions)),
+        # count=0,
+        # object=None,
+        # )
+        yield self.While(None)
         yield self.Subtask(
             interaction=self.irreversible_interactions[0], count=0, object=None
         )
-        yield Else()
+        yield EndWhile()
         yield self.Subtask(
             interaction=self.irreversible_interactions[1], count=0, object=None
         )
-        yield EndIf()
-        yield self.Subtask(
-            interaction=self.np_random.choice(len(self.interactions)),
-            count=0,
-            object=None,
-        )
-        # yield self.While(None)
-        # yield self.Subtask(
-        #     interaction=self.np_random.choice(self.irreversible_interactions),
-        #     count=0,
-        #     object=None,
-        # )
-        # yield EndWhile()
-        # yield self.Subtask(
-        #     interaction=self.np_random.choice(self.irreversible_interactions),
-        #     count=0,
-        #     object=None,
-        # )
 
     def get_required_objects(self, subtasks):
         available = []
