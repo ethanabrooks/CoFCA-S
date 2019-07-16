@@ -210,9 +210,15 @@ class Recurrence(torch.jit.ScriptModule):
         )  # TODO: quicker to store in RecurrentState?
 
         M = g_discrete_to_binary(g_discrete, self.g_discrete_one_hots())
-
-        # parse hidden
         new_episode = torch.all(hx.squeeze(0) == 0, dim=-1)
+
+        # NOTE {
+        debug_in = M[:, :, -self.subtask_nvec[-2:].sum() : -self.subtask_nvec[-1]]
+        # M_zeta = self.zeta_debug(debug_in)
+        truth = debug_in.argmax(-1).float()[new_episode]
+        z = truth
+        # NOTE }
+
         hx = self.parse_hidden(hx)
         for x in hx:
             x.squeeze_(0)
@@ -220,6 +226,7 @@ class Recurrence(torch.jit.ScriptModule):
         hx.r[new_episode] = M[new_episode, 0]  # initialize r to first subtask
         # initialize g to first subtask
         hx.g[new_episode] = 0.0
+        hx.z[new_episode] = z
 
         return self.pack(
             self.inner_loop(
@@ -248,15 +255,8 @@ class Recurrence(torch.jit.ScriptModule):
         subtask = subtask.long().view(T, N)
         M_zeta = self.zeta(M)
 
-        # NOTE {
-        debug_in = M[:, :, -self.subtask_nvec[-2:].sum() : -self.subtask_nvec[-1]]
-        # M_zeta = self.zeta_debug(debug_in)
-        truth = debug_in.argmax(-1)
-        z = truth
-        M_zeta = self.z_one_hots[z]
         # print("M_zeta", round(M_zeta, 4))
         # print("truth", truth)
-        # NOTE }
         L = LineTypes()
         # print(L)
 
@@ -264,6 +264,7 @@ class Recurrence(torch.jit.ScriptModule):
         obs = inputs.base
         A = torch.cat([actions.a, hx.a.unsqueeze(0)], dim=0).long().squeeze(2)
         G = torch.cat([actions.g, hx.g.unsqueeze(0)], dim=0).long().squeeze(2)
+        M_zeta = self.z_one_hots[hx.z.long()]
         for t in range(T):
 
             L = LineTypes()
