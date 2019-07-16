@@ -199,7 +199,7 @@ class Recurrence(torch.jit.ScriptModule):
         task = inputs.subtasks.view(
             *inputs.subtasks.shape[:2], self.n_subtasks, self.subtask_nvec.size
         )[0]
-        last_line = torch.any(task > 0, dim=-1).sum(-1) - 1
+        is_line = torch.any(task > 0, dim=-1).float()
         task = torch.split(task, 1, dim=-1)
         g_discrete = [x[:, :, 0] for x in task]
         M_discrete = torch.stack(
@@ -239,7 +239,7 @@ class Recurrence(torch.jit.ScriptModule):
                 M_discrete=M_discrete,
                 subtask=inputs.subtask,
                 actions=actions,
-                last_line=last_line,
+                is_line=is_line,
             )
         )
 
@@ -251,7 +251,7 @@ class Recurrence(torch.jit.ScriptModule):
         M,
         M_discrete,
         subtask,
-        last_line,
+        is_line,
     ):
 
         T, N, *_ = inputs.base.shape
@@ -332,7 +332,12 @@ class Recurrence(torch.jit.ScriptModule):
                 + e[L.EndIf] * p_step
                 + e[L.Subtask] * (hx.cr * p_step + (1 - hx.cr) * hx.p)
             )
+            p = is_line * p / p.sum(-1, keepdim=True)  # zero out non-lines
+
+            # concentrate non-allocated attention on last line
+            last_line = is_line.sum(-1).long() - 1
             p = p + (1 - p.sum(-1, keepdim=True)) * self.p_one_hot[last_line]
+
             # print("eSubtask cr p_step", round(e[L.Subtask] * (cr * p_step), 2))
             # print("eSubtask (1-cr) hx.p", round(e[L.Subtask] * ((1 - cr) * hx.p), 2))
             # print(
@@ -343,7 +348,6 @@ class Recurrence(torch.jit.ScriptModule):
             # print("e[L.EndWhile]", e[L.EndWhile])
             # print("e[L.EndIf]", e[L.EndIf])
             # print("e[L.Subtask]", e[L.Subtask])
-            p = p / p.sum(-1, keepdim=True)
 
             # r
             r = (p.unsqueeze(1) @ M).squeeze(1)
