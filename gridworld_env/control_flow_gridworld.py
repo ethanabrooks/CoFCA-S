@@ -302,7 +302,7 @@ class ControlFlowGridworld(SubtasksGridworld):
                 ipdb.set_trace()
 
         condition = None
-        for i in range(self.n_subtasks):
+        for i in range(len(subtasks)):
             line = self.subtasks[i]
             if isinstance(line, (self.If, self.While)):
                 condition = line.object

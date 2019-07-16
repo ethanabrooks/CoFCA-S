@@ -147,6 +147,7 @@ class Recurrence(torch.jit.ScriptModule):
         no_op_probs = torch.zeros(1, self.actor.linear.out_features)
         no_op_probs[:, -1] = 1
         self.register_buffer("no_op_probs", no_op_probs)
+        self.register_buffer("p_one_hot", torch.eye(self.n_subtasks))
 
     # @torch.jit.script_method
     def parse_hidden(self, hx):
@@ -197,9 +198,10 @@ class Recurrence(torch.jit.ScriptModule):
         # build memory
         task = inputs.subtasks.view(
             *inputs.subtasks.shape[:2], self.n_subtasks, self.subtask_nvec.size
-        )
+        )[0]
+        last_line = torch.any(task > 0, dim=-1).sum(-1) - 1
         task = torch.split(task, 1, dim=-1)
-        g_discrete = [x[0, :, :, 0] for x in task]
+        g_discrete = [x[:, :, 0] for x in task]
         M_discrete = torch.stack(
             g_discrete, dim=-1
         )  # TODO: quicker to store in RecurrentState?
@@ -237,6 +239,7 @@ class Recurrence(torch.jit.ScriptModule):
                 M_discrete=M_discrete,
                 subtask=inputs.subtask,
                 actions=actions,
+                last_line=last_line,
             )
         )
 
@@ -248,6 +251,7 @@ class Recurrence(torch.jit.ScriptModule):
         M,
         M_discrete,
         subtask,
+        last_line,
     ):
 
         T, N, *_ = inputs.base.shape
@@ -328,6 +332,7 @@ class Recurrence(torch.jit.ScriptModule):
                 + e[L.EndIf] * p_step
                 + e[L.Subtask] * (hx.cr * p_step + (1 - hx.cr) * hx.p)
             )
+            p = p + (1 - p.sum(-1, keepdim=True)) * self.p_one_hot[last_line]
             # print("eSubtask cr p_step", round(e[L.Subtask] * (cr * p_step), 2))
             # print("eSubtask (1-cr) hx.p", round(e[L.Subtask] * ((1 - cr) * hx.p), 2))
             # print(
