@@ -55,6 +55,9 @@ class Recurrence(torch.jit.ScriptModule):
         self.obs_sections = [int(np.prod(s.shape)) for s in self.obs_spaces]
         self.line_size = int(self.subtask_nvec.sum())
         self.agent_subtask_size = int(self.subtask_nvec[:-2].sum())
+        self.size_actions = [
+            1 if isinstance(s, Discrete) else s.nvec.size for s in action_spaces
+        ]
 
         # networks
         self.conv1 = nn.Sequential(
@@ -147,6 +150,7 @@ class Recurrence(torch.jit.ScriptModule):
             self.register_buffer(f"part{i}_one_hot", torch.eye(int(x)))
         self.register_buffer("a_one_hots", torch.eye(int(action_spaces.a.n)))
         self.register_buffer("g_one_hots", torch.eye(action_spaces.g.n))
+        self.register_buffer("z_one_hots", torch.eye(len(LineTypes._fields)))
         one_step = F.pad(torch.eye(self.n_subtasks - 1), [1, 0, 0, 1])
         one_step[:, -1] += 1 - one_step.sum(-1)
         self.register_buffer("one_step", one_step.unsqueeze(0))
@@ -265,6 +269,10 @@ class Recurrence(torch.jit.ScriptModule):
         A = torch.cat([actions.a, hx.a.unsqueeze(0)], dim=0).long().squeeze(2)
         G = torch.cat([actions.g, hx.g.unsqueeze(0)], dim=0).long().squeeze(2)
         for t in range(T):
+
+            L = LineTypes()
+
+            # print(L)
 
             def safediv(x, y):
                 return x / torch.clamp(y, min=1e-5)

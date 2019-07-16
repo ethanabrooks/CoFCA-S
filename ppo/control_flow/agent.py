@@ -4,6 +4,7 @@ from torch import nn as nn
 import torch.jit
 from torch.nn import functional as F
 
+from gridworld_env.control_flow_gridworld import LineTypes
 from gridworld_env.subtasks_gridworld import Inputs
 import ppo
 from ppo.agent import AgentValues, NNBase
@@ -32,6 +33,7 @@ class Agent(ppo.agent.Agent, NNBase):
         self.action_spaces = Actions(**action_space.spaces)
         self.obs_space = obs_space
         obs_spaces = Inputs(**self.obs_space.spaces)
+        self.n_subtasks = len(obs_spaces.subtasks.nvec)
         agent = None
         if agent_load_path is not None:
             agent = self.load_agent(
@@ -72,17 +74,17 @@ class Agent(ppo.agent.Agent, NNBase):
         return Recurrence(**kwargs)
 
     def forward(self, inputs, rnn_hxs, masks, action=None, deterministic=False):
-        n = inputs.size(0)
+        N = inputs.size(0)
         actions = None
+        rm = self.recurrent_module
         if action is not None:
             actions = Actions(
                 *torch.split(action, [1] * len(self.action_spaces), dim=-1)
             )
 
         all_hxs, last_hx = self._forward_gru(
-            inputs.view(n, -1), rnn_hxs, masks, actions=actions
+            inputs.view(N, -1), rnn_hxs, masks, actions=actions
         )
-        rm = self.recurrent_module
         hx = RecurrentState(*rm.parse_hidden(all_hxs))
 
         if action is None:
@@ -110,7 +112,6 @@ class Agent(ppo.agent.Agent, NNBase):
         )
         entropies = sum(dist.entropy() for dist in dists if dist is not None)
         aux_loss = -self.entropy_coef * entropies.mean()
-        log = {k: v for k, v in hx._asdict().items() if k.endswith("_loss")}
 
         return AgentValues(
             value=hx.v,
@@ -119,7 +120,7 @@ class Agent(ppo.agent.Agent, NNBase):
             aux_loss=aux_loss,
             rnn_hxs=torch.cat(hx, dim=-1),
             dist=None,
-            log=log,
+            log={},
         )
 
     def get_value(self, inputs, rnn_hxs, masks):
