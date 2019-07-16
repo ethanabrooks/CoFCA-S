@@ -320,7 +320,7 @@ class Recurrence(torch.jit.ScriptModule):
                 it=range(M.size(1) - 1, -1, -1),
             ).flip(-1)
             p_step = (p.unsqueeze(1) @ self.one_step).squeeze(1)
-            # print("cr before update", round(cr, 2))
+            # print("cr before update", round(hx.cr, 2))
             p = (
                 e[[L.If, L.While, L.Else]].sum(0)  # conditions
                 * (l * p_step + (1 - l) * p_forward)
@@ -328,11 +328,11 @@ class Recurrence(torch.jit.ScriptModule):
                 + e[L.EndIf] * p_step
                 + e[L.Subtask] * (hx.cr * p_step + (1 - hx.cr) * hx.p)
             )
-            # print("eSubtask cr p_step", round(e[L.Subtask] * (cr * p_step), 2))
-            # print("eSubtask (1-cr) hx.p", round(e[L.Subtask] * ((1 - cr) * hx.p), 2))
+            # print("eSubtask cr p_step", round(e[L.Subtask] * (hx.cr * p_step), 2))
+            # print("eSubtask (1-cr) hx.p", round(e[L.Subtask] * ((1 - hx.cr) * hx.p), 2))
             # print(
             # "p - eSubtask (cr p_step + (1 - cr) hx.p)",
-            # round(p - e[L.Subtask] * (cr * p_step + (1 - cr) * hx.p), 2),
+            # round(p - e[L.Subtask] * (hx.cr * p_step + (1 - hx.cr) * hx.p), 2),
             # )
             # print("e[[L.If, L.While, L.Else]]", e[[L.If, L.While, L.Else]].sum(0))
             # print("e[L.EndWhile]", e[L.EndWhile])

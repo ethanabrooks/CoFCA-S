@@ -220,6 +220,7 @@ class ControlFlowGridworld(SubtasksGridworld):
     #             raise RuntimeError
 
     def subtasks_generator(self):
+        assert self.n_subtasks == 6
         self.np_random.shuffle(self.irreversible_interactions)
         yield self.If(None)
         yield self.Subtask(
@@ -251,7 +252,7 @@ class ControlFlowGridworld(SubtasksGridworld):
     def get_required_objects(self, subtasks):
         available = []
         i = 0
-        while_obj = None
+        condition = None
         non_existing = {self.np_random.choice(len(self.object_types))}
         object_types = list(range(len(self.object_types)))
         n_executed = 0
@@ -269,28 +270,27 @@ class ControlFlowGridworld(SubtasksGridworld):
                     if passing and obj not in available:
                         available += [obj]
                         yield obj
-                    if isinstance(line, self.While):
-                        while_obj = obj
+                    condition = obj
                 elif isinstance(line, EndWhile):
                     passing = (
                         self.np_random.rand() < 0.5
                         and n_executed < self.n_subtasks // 2
                     )
                     if passing:
-                        assert while_obj not in available
-                        if while_obj not in available:
-                            available += [while_obj]
-                            yield while_obj
+                        assert condition not in available
+                        if condition not in available:
+                            available += [condition]
+                            yield condition
                     else:
-                        non_existing.add(while_obj)
-                        while_obj = None
+                        non_existing.add(condition)
+                        condition = None
 
                 elif isinstance(line, self.Subtask):
                     n_executed += 1
                     obj = (
                         self.np_random.choice(existing)
-                        if while_obj is None
-                        else while_obj
+                        if condition is None
+                        else condition
                     )
                     self.subtasks[i] = line.replace_object(obj)
                     if obj not in available:
