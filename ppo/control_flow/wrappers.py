@@ -5,6 +5,8 @@ from gym import spaces
 from gym.spaces import Discrete
 import numpy as np
 
+from common.vec_env.util import space_shape
+
 Actions = namedtuple("Actions", "a cr cg g")
 
 
@@ -54,10 +56,13 @@ class Wrapper(gym.Wrapper):
                 cr=spaces.Discrete(2),
             )._asdict()
         )
+        self.action_sections = np.cumsum(
+            [s for s, in space_shape(self.action_space).values()]
+        )[:-1]
         self.last_g = None
 
     def step(self, action):
-        actions = Actions(*np.split(action, len(self.action_space.spaces)))
+        actions = Actions(*np.split(action, self.action_sections))
         action = int(actions.a)
         self.last_g = int(actions.g)
         return super().step(action)
