@@ -154,6 +154,7 @@ class ControlFlowGridworld(SubtasksGridworld):
             assert s.contains(obs[k])
         return OrderedDict(obs)
 
+    """
     def subtasks_generator(self):
         active_control = None
         line_type = None
@@ -218,6 +219,23 @@ class ControlFlowGridworld(SubtasksGridworld):
                 )
             else:
                 raise RuntimeError
+    """
+
+    def subtasks_generator(self):
+        yield self.If(None)
+        yield self.Subtask(
+            interaction=self.np_random.choice(self.irreversible_interactions),
+            count=0,
+            object=None,
+        )
+        yield EndIf()
+        yield self.While(None)
+        yield self.Subtask(
+            interaction=self.np_random.choice(self.irreversible_interactions),
+            count=0,
+            object=None,
+        )
+        yield EndWhile()
 
     def get_required_objects(self, subtasks):
         available = []
