@@ -5,7 +5,10 @@ from gym import spaces
 from gym.spaces import Discrete
 import numpy as np
 
-Actions = namedtuple("Actions", "a cr cg g")
+from common.vec_env.util import space_shape
+from gridworld_env.control_flow_gridworld import LineTypes
+
+Actions = namedtuple("Actions", "a cr cg g z")
 
 
 class DebugWrapper(gym.Wrapper):
@@ -52,12 +55,16 @@ class Wrapper(gym.Wrapper):
                 g=spaces.Discrete(env.n_subtasks),
                 cg=spaces.Discrete(2),
                 cr=spaces.Discrete(2),
+                z=spaces.MultiDiscrete(np.full(env.n_subtasks, len(LineTypes._fields))),
             )._asdict()
         )
+        self.action_sections = np.cumsum(
+            [s for s, in space_shape(self.action_space).values()]
+        )[:-1]
         self.last_g = None
 
     def step(self, action):
-        actions = Actions(*np.split(action, len(self.action_space.spaces)))
+        actions = Actions(*np.split(action, self.action_sections))
         action = int(actions.a)
         self.last_g = int(actions.g)
         return super().step(action)

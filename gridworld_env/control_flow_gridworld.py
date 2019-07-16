@@ -220,17 +220,14 @@ class ControlFlowGridworld(SubtasksGridworld):
     #             raise RuntimeError
 
     def subtasks_generator(self):
+        self.np_random.shuffle(self.irreversible_interactions)
         yield self.If(None)
         yield self.Subtask(
-            interaction=self.np_random.choice(self.irreversible_interactions),
-            count=0,
-            object=None,
+            interaction=self.irreversible_interactions[0], count=0, object=None
         )
         yield Else()
         yield self.Subtask(
-            interaction=self.np_random.choice(self.irreversible_interactions),
-            count=0,
-            object=None,
+            interaction=self.irreversible_interactions[1], count=0, object=None
         )
         yield EndIf()
         yield self.Subtask(
@@ -265,10 +262,6 @@ class ControlFlowGridworld(SubtasksGridworld):
                 existing = list(set(object_types) - non_existing)
                 if isinstance(line, (self.If, self.While)):
                     passing = self.np_random.rand() < 0.5
-                    # TODO
-                    if isinstance(line, self.While):
-                        passing = True
-                    # TODO
                     obj = self.np_random.choice(
                         existing if passing else list(non_existing)
                     )
