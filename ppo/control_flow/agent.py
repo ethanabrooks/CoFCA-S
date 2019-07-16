@@ -78,9 +78,7 @@ class Agent(ppo.agent.Agent, NNBase):
         actions = None
         rm = self.recurrent_module
         if action is not None:
-            actions = Actions(
-                *torch.split(action, [1] * len(self.action_spaces), dim=-1)
-            )
+            actions = Actions(*torch.split(action, rm.size_actions, dim=-1))
 
         all_hxs, last_hx = self._forward_gru(
             inputs.view(N, -1), rnn_hxs, masks, actions=actions
@@ -130,7 +128,7 @@ class Agent(ppo.agent.Agent, NNBase):
 
     def _forward_gru(self, x, hxs, masks, actions=None):
         if actions is None:
-            y = F.pad(x, [0, len(Actions._fields)], "constant", -1)
+            y = F.pad(x, [0, sum(self.recurrent_module.size_actions)], "constant", -1)
         else:
             y = torch.cat([x] + list(actions), dim=-1)
         return super()._forward_gru(y, hxs, masks)

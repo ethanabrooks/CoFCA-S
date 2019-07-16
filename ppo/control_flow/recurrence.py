@@ -195,9 +195,8 @@ class Recurrence(torch.jit.ScriptModule):
 
         # detach actions
         # noinspection PyProtectedMember
-        n_actions = len(Actions._fields)
         inputs, *actions = torch.split(
-            inputs.detach(), [D - n_actions] + [1] * n_actions, dim=2
+            inputs.detach(), [D - sum(self.size_actions)] + self.size_actions, dim=2
         )
         actions = Actions(*actions)
 
