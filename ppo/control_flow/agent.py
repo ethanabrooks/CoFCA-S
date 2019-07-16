@@ -110,6 +110,10 @@ class Agent(ppo.agent.Agent, NNBase):
         log_probs = sum(
             dist.log_probs(a) for dist, a in zip(dists, actions) if dist is not None
         )
+        z_dist = FixedCategorical(
+            hx.z_probs.view(N, self.n_subtasks, len(LineTypes._fields))
+        )
+        log_probs = log_probs + z_dist.log_probs(actions.z).sum(1)
         entropies = sum(dist.entropy() for dist in dists if dist is not None)
         aux_loss = -self.entropy_coef * entropies.mean()
 
