@@ -251,7 +251,7 @@ class Recurrence(torch.jit.ScriptModule):
         # NOTE {
         truth = M[:, :, -self.subtask_nvec[-2:].sum() : -self.subtask_nvec[-1]]
         M_zeta = self.zeta_debug(truth)
-        M_zeta = truth
+        # M_zeta = truth
         # NOTE }
         L = LineTypes()
 
