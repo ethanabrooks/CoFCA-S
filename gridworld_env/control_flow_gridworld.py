@@ -256,52 +256,42 @@ class ControlFlowGridworld(SubtasksGridworld):
         n_executed = 0
 
         while i < len(self.subtasks):
-            try:
-                line = self.subtasks[i]
-                existing = list(set(object_types) - non_existing)
-                if isinstance(line, (self.If, self.While)):
-                    passing = self.np_random.rand() < 0.5
-                    obj = self.np_random.choice(
-                        existing if passing else list(non_existing)
-                    )
-                    self.subtasks[i] = line.replace_object(obj)
-                    if passing and obj not in available:
-                        available += [obj]
-                        yield obj
-                    condition = obj
-                elif isinstance(line, EndWhile):
-                    passing = (
-                        self.np_random.rand() < 0.5
-                        and n_executed < self.n_subtasks // 2
-                    )
-                    if passing:
-                        assert condition not in available
-                        if condition not in available:
-                            available += [condition]
-                            yield condition
-                    else:
-                        non_existing.add(condition)
-                        condition = None
+            line = self.subtasks[i]
+            existing = list(set(object_types) - non_existing)
+            if isinstance(line, (self.If, self.While)):
+                passing = self.np_random.rand() < 0.5
+                obj = self.np_random.choice(existing if passing else list(non_existing))
+                self.subtasks[i] = line.replace_object(obj)
+                if passing and obj not in available:
+                    available += [obj]
+                    yield obj
+                condition = obj
+            elif isinstance(line, EndWhile):
+                passing = (
+                    self.np_random.rand() < 0.5 and n_executed < self.n_subtasks // 2
+                )
+                if passing:
+                    assert condition not in available
+                    if condition not in available:
+                        available += [condition]
+                        yield condition
+                else:
+                    non_existing.add(condition)
+                    condition = None
 
-                elif isinstance(line, self.Subtask):
-                    n_executed += 1
-                    obj = (
-                        self.np_random.choice(existing)
-                        if condition is None
-                        else condition
-                    )
-                    self.subtasks[i] = line.replace_object(obj)
-                    if obj not in available:
-                        available.append(obj)
-                        yield obj
-                    if line.interaction in self.irreversible_interactions:
-                        available.remove(obj)
+            elif isinstance(line, self.Subtask):
+                n_executed += 1
+                obj = (
+                    self.np_random.choice(existing) if condition is None else condition
+                )
+                self.subtasks[i] = line.replace_object(obj)
+                if obj not in available:
+                    available.append(obj)
+                    yield obj
+                if line.interaction in self.irreversible_interactions:
+                    available.remove(obj)
 
-                i = self.get_next_idx(i, existing=available)
-            except KeyboardInterrupt:
-                import ipdb
-
-                ipdb.set_trace()
+            i = self.get_next_idx(i, existing=available)
 
         condition = None
         for i in range(len(subtasks)):
