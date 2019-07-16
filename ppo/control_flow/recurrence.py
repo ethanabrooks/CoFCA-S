@@ -260,19 +260,12 @@ class Recurrence(torch.jit.ScriptModule):
         T, N, *_ = inputs.base.shape
         p = hx.p
 
-        subtask = subtask.long().view(T, N)
-        M_zeta = self.zeta(M)
-
-        # print("M_zeta", round(M_zeta, 4))
-        # print("truth", truth)
-        L = LineTypes()
-        # print(L)
-
         # combine past and present actions (sampled values)
         obs = inputs.base
         A = torch.cat([actions.a, hx.a.unsqueeze(0)], dim=0).long().squeeze(2)
         G = torch.cat([actions.g, hx.g.unsqueeze(0)], dim=0).long().squeeze(2)
         M_zeta = self.z_one_hots[hx.z.long()]
+
         for t in range(T):
 
             L = LineTypes()
