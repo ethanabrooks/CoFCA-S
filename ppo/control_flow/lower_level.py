@@ -51,14 +51,14 @@ class LowerLevel(Agent):
         obs = inputs.base.view(inputs.base.size(0), *self.obs_shape)
         return torch.cat([obs, g_broad], dim=1)
 
-    def forward(self, inputs, *args, action=None, **kwargs):
+    def forward(self, inputs, z, *args, action=None, **kwargs):
         if action is not None:
             action = action[:, :1]
         act = super().forward(
             self.preprocess_obs(inputs), action=action, *args, **kwargs
         )
         x = torch.zeros_like(act.action)
-        actions = Actions(a=act.action, g=x, cg=x, cr=x)
+        actions = Actions(a=act.action, g=x, cg=x, cr=x, z=z)
         return act._replace(action=torch.cat(actions, dim=-1))
 
     def get_value(self, inputs, rnn_hxs, masks):

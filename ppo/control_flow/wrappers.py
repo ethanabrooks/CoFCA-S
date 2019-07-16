@@ -6,8 +6,9 @@ from gym.spaces import Discrete
 import numpy as np
 
 from common.vec_env.util import space_shape
+from gridworld_env.control_flow_gridworld import LineTypes
 
-Actions = namedtuple("Actions", "a cr cg g")
+Actions = namedtuple("Actions", "a cr cg g z")
 
 
 class DebugWrapper(gym.Wrapper):
@@ -54,6 +55,7 @@ class Wrapper(gym.Wrapper):
                 g=spaces.Discrete(env.n_subtasks),
                 cg=spaces.Discrete(2),
                 cr=spaces.Discrete(2),
+                z=spaces.MultiDiscrete(np.full(env.n_subtasks, len(LineTypes._fields))),
             )._asdict()
         )
         self.action_sections = np.cumsum(

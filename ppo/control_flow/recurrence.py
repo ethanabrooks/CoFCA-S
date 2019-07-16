@@ -356,7 +356,9 @@ class Recurrence(torch.jit.ScriptModule):
                     base=obs[t].view(N, -1),
                     subtask=g_binary[:, : self.agent_subtask_size],
                 )
-                probs = self.agent(agent_inputs, rnn_hxs=None, masks=None).dist.probs
+                probs = self.agent(
+                    agent_inputs, z=hx.z.long(), rnn_hxs=None, masks=None
+                ).dist.probs
             op = g_binary[:, self.agent_subtask_size].unsqueeze(1)
             no_op = 1 - op
             a_dist = FixedCategorical(
