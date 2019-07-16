@@ -251,7 +251,7 @@ class Recurrence(torch.jit.ScriptModule):
         # NOTE {
         truth = M[:, :, -self.subtask_nvec[-2:].sum() : -self.subtask_nvec[-1]]
         M_zeta = self.zeta_debug(truth)
-        # M_zeta = truth
+        M_zeta = truth
         # NOTE }
         L = LineTypes()
 
@@ -278,7 +278,7 @@ class Recurrence(torch.jit.ScriptModule):
             phi_in = inputs.base[t, :, 1:-2] * c.view(N, -1, 1, 1)
             truth = torch.max(phi_in.view(N, -1), dim=-1).values.float().view(N, 1)
             l = self.xi_debug(truth)
-            # l = truth
+            l = truth
             # NOTE }
 
             l = interp(l, 1 - hx.last_eval, eLastEval)
@@ -400,7 +400,7 @@ class Recurrence(torch.jit.ScriptModule):
                     * correct_object.sum(-1, keepdim=True)
                 ).detach()  # * condition[:, :1] + (1 - condition[:, :1])
                 c = self.phi_debug(truth)
-                # c = truth
+                c = truth
                 # NOTE }
                 return c, probs
 
