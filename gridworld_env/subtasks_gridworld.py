@@ -245,6 +245,8 @@ class SubtasksGridworld(gym.Env):
 
         self.subtask_idx = None
         self.subtask_idx = self.get_next_subtask()
+        if self.subtask is None:
+            return self.reset()
         self.count = self.subtask.count
         self.last_terminal = False
         self.last_action = None
