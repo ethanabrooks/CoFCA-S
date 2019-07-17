@@ -9,7 +9,7 @@ from dataclasses import dataclass
 import gridworld_env
 from gridworld_env import SubtasksGridworld
 
-Inputs = namedtuple("Obs", "base subtask subtasks ignore")
+Obs = namedtuple("Obs", "base subtask subtasks ignore")
 LineTypes = namedtuple(
     "LineTypes", "Subtask If Else EndIf While EndWhile", defaults=list(range(6))
 )

@@ -9,7 +9,7 @@ import torch.jit
 from torch.nn import functional as F
 
 from gridworld_env.control_flow_gridworld import LineTypes
-from gridworld_env.control_flow_gridworld import Inputs
+from gridworld_env.control_flow_gridworld import Obs
 import ppo
 from ppo.control_flow.lower_level import (
     LowerLevel,
@@ -183,7 +183,7 @@ class Recurrence(torch.jit.ScriptModule):
                 break
 
     def parse_inputs(self, inputs):
-        return Inputs(*torch.split(inputs, self.obs_sections, dim=2))
+        return Obs(*torch.split(inputs, self.obs_sections, dim=2))
 
     # @torch.jit.script_method
     def forward(self, inputs, hx):
@@ -248,13 +248,7 @@ class Recurrence(torch.jit.ScriptModule):
         )
 
     def inner_loop(
-        self,
-        hx: RecurrentState,
-        actions: Actions,
-        inputs: Inputs,
-        M,
-        M_discrete,
-        subtask,
+        self, hx: RecurrentState, actions: Actions, inputs: Obs, M, M_discrete, subtask
     ):
 
         T, N, *_ = inputs.base.shape
