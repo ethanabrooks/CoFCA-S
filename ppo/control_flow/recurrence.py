@@ -1,6 +1,7 @@
 DEBUG = False
 from collections import namedtuple
 import itertools
+import functools
 
 from gym.spaces import Box, Discrete
 import numpy as np
@@ -317,44 +318,23 @@ class Recurrence(torch.jit.ScriptModule):
                 return torch.stack(p, dim=-1)
 
             # p
-            # scan_forward = functools.partial(
-            #     scan, cumsum=roll(torch.cumsum(hx.p, dim=-1)), it=range(M.size(1))
-            # )
-            # scan_backward = functools.partial(
-            #     scan,
-            #     cumsum=roll(torch.cumsum(hx.p.flip(-1), dim=-1)).flip(-1),
-            #     it=range(M.size(1) - 1, -1, -1),
-            # )
-            # p_step = (p.unsqueeze(1) @ self.one_step).squeeze(1)
-            # debug("cr before update", round(hx.cr, 2))
-            # p = (
-            #     e[L.If] * interp(scan_forward(L.Else, L.EndIf), p_step, l)
-            #     + e[L.Else] * interp(scan_forward(L.EndIf), p_step, l)
-            #     + e[L.EndIf] * p_step
-            #     + e[L.While] * interp(scan_forward(L.EndWhile), p_step, l)
-            #     + e[L.EndWhile] * interp(scan_backward(L.While), p_step, l)
-            #     + e[L.Subtask] * interp(hx.p, p_step, hx.cr)
-            # )
-            p_forward = scan(
-                L.EndIf,
-                L.Else,
-                L.EndWhile,
-                cumsum=roll(torch.cumsum(hx.p, dim=-1)),
-                it=range(M.size(1)),
+            scan_forward = functools.partial(
+                scan, cumsum=roll(torch.cumsum(hx.p, dim=-1)), it=range(M.size(1))
             )
-            p_backward = scan(
-                L.While,
+            scan_backward = functools.partial(
+                scan,
                 cumsum=roll(torch.cumsum(hx.p.flip(-1), dim=-1)).flip(-1),
                 it=range(M.size(1) - 1, -1, -1),
-            ).flip(-1)
+            )
             p_step = (p.unsqueeze(1) @ self.one_step).squeeze(1)
             debug("cr before update", round(hx.cr, 2))
             p = (
-                e[[L.If, L.While, L.Else]].sum(0)  # conditions
-                * (l * p_step + (1 - l) * p_forward)
-                + e[L.EndWhile] * (l * p_backward + (1 - l) * p_step)
+                e[L.If] * interp(scan_forward(L.Else, L.EndIf), p_step, l)
+                + e[L.Else] * interp(scan_forward(L.EndIf), p_step, l)
                 + e[L.EndIf] * p_step
-                + e[L.Subtask] * (hx.cr * p_step + (1 - hx.cr) * hx.p)
+                + e[L.While] * interp(scan_forward(L.EndWhile), p_step, l)
+                + e[L.EndWhile] * interp(scan_backward(L.While), p_step, l)
+                + e[L.Subtask] * interp(hx.p, p_step, hx.cr)
             )
             is_line = 1 - inputs.ignore[0]
             p = is_line * p / p.sum(-1, keepdim=True)  # zero out non-lines
