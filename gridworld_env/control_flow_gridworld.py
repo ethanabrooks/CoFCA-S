@@ -245,18 +245,22 @@ class ControlFlowGridworld(SubtasksGridworld):
             yield self.Subtask(
                 interaction=self.irreversible_interactions[0], count=0, object=None
             )
+            yield self.Subtask(
+                interaction=self.irreversible_interactions[0], count=0, object=None
+            )
             yield Else()
             yield self.Subtask(
                 interaction=self.irreversible_interactions[1], count=0, object=None
             )
+            yield self.Subtask(
+                interaction=self.irreversible_interactions[1], count=0, object=None
+            )
             yield EndIf()
-            yield self.If(None)
             yield self.Subtask(
                 interaction=self.np_random.choice(len(self.interactions)),
                 count=0,
                 object=None,
             )
-            yield EndIf()
         else:
             yield self.While(None)
             yield self.Subtask(

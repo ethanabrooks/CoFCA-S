@@ -281,10 +281,18 @@ class Recurrence(torch.jit.ScriptModule):
             l = self.xi((inputs.base[t], condition))
             # NOTE {
             c = torch.split(condition, list(self.subtask_nvec), dim=-1)[-1][:, 1:]
+            last_condition = torch.split(
+                hx.last_condition, list(self.subtask_nvec), dim=-1
+            )[-1][:, 1:]
+            hx_r = torch.split(hx.r, list(self.subtask_nvec), dim=-1)[-1][:, 1:]
+            debug("last_condition", last_condition)
+            debug("r", hx_r)
+            debug("er", er)
             debug("l condition", c)
             phi_in = inputs.base[t, :, 1:-2] * c.view(N, -1, 1, 1)
             truth = torch.max(phi_in.view(N, -1), dim=-1).values.float().view(N, 1)
             l = self.xi_debug(truth)
+            debug("l truth", round(truth, 4))
             debug("l", round(l, 4))
             debug("p before update", round(p, 2))
             # l = truth
@@ -309,6 +317,24 @@ class Recurrence(torch.jit.ScriptModule):
                 return torch.stack(p, dim=-1)
 
             # p
+            # scan_forward = functools.partial(
+            #     scan, cumsum=roll(torch.cumsum(hx.p, dim=-1)), it=range(M.size(1))
+            # )
+            # scan_backward = functools.partial(
+            #     scan,
+            #     cumsum=roll(torch.cumsum(hx.p.flip(-1), dim=-1)).flip(-1),
+            #     it=range(M.size(1) - 1, -1, -1),
+            # )
+            # p_step = (p.unsqueeze(1) @ self.one_step).squeeze(1)
+            # debug("cr before update", round(hx.cr, 2))
+            # p = (
+            #     e[L.If] * interp(scan_forward(L.Else, L.EndIf), p_step, l)
+            #     + e[L.Else] * interp(scan_forward(L.EndIf), p_step, l)
+            #     + e[L.EndIf] * p_step
+            #     + e[L.While] * interp(scan_forward(L.EndWhile), p_step, l)
+            #     + e[L.EndWhile] * interp(scan_backward(L.While), p_step, l)
+            #     + e[L.Subtask] * interp(hx.p, p_step, hx.cr)
+            # )
             p_forward = scan(
                 L.EndIf,
                 L.Else,
