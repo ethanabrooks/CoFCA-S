@@ -9,7 +9,7 @@ import torch.jit
 from torch.nn import functional as F
 
 from gridworld_env.control_flow_gridworld import LineTypes
-from gridworld_env.subtasks_gridworld import Inputs
+from gridworld_env.control_flow_gridworld import Obs
 import ppo
 from ppo.control_flow.lower_level import (
     LowerLevel,
@@ -25,6 +25,12 @@ RecurrentState = namedtuple(
     "RecurrentState",
     "a g cr cg z a_probs g_probs cr_probs cg_probs z_probs p r last_condition last_eval v",
 )
+DEBUG = False
+
+
+def debug(*args, **kwargs):
+    if DEBUG:
+        print(*args, **kwargs)
 
 
 def round(x, dec):
@@ -177,7 +183,7 @@ class Recurrence(torch.jit.ScriptModule):
                 break
 
     def parse_inputs(self, inputs):
-        return Inputs(*torch.split(inputs, self.obs_sections, dim=2))
+        return Obs(*torch.split(inputs, self.obs_sections, dim=2))
 
     # @torch.jit.script_method
     def forward(self, inputs, hx):
@@ -199,7 +205,6 @@ class Recurrence(torch.jit.ScriptModule):
         task = inputs.subtasks.view(
             *inputs.subtasks.shape[:2], self.n_subtasks, self.subtask_nvec.size
         )[0]
-        is_line = torch.any(task > 0, dim=-1).float()
         task = torch.split(task, 1, dim=-1)
         g_discrete = [x[:, :, 0] for x in task]
         M_discrete = torch.stack(
@@ -239,19 +244,11 @@ class Recurrence(torch.jit.ScriptModule):
                 M_discrete=M_discrete,
                 subtask=inputs.subtask,
                 actions=actions,
-                is_line=is_line,
             )
         )
 
     def inner_loop(
-        self,
-        hx: RecurrentState,
-        actions: Actions,
-        inputs: Inputs,
-        M,
-        M_discrete,
-        subtask,
-        is_line,
+        self, hx: RecurrentState, actions: Actions, inputs: Obs, M, M_discrete, subtask
     ):
 
         T, N, *_ = inputs.base.shape
@@ -265,10 +262,10 @@ class Recurrence(torch.jit.ScriptModule):
         M_zeta = self.z_one_hots[hx.z.long()]
 
         for t in range(T):
-            # print(L)
-            # print("M_zeta")
-            # for _z in hx.z[0]:
-            # print(L._fields[int(_z)])
+            debug(L)
+            debug("M_zeta")
+            for _z in hx.z[0]:
+                debug(L._fields[int(_z)])
 
             def safediv(x, y):
                 return x / torch.clamp(y, min=1e-5)
@@ -284,11 +281,12 @@ class Recurrence(torch.jit.ScriptModule):
             l = self.xi((inputs.base[t], condition))
             # NOTE {
             c = torch.split(condition, list(self.subtask_nvec), dim=-1)[-1][:, 1:]
+            debug("l condition", c)
             phi_in = inputs.base[t, :, 1:-2] * c.view(N, -1, 1, 1)
             truth = torch.max(phi_in.view(N, -1), dim=-1).values.float().view(N, 1)
             l = self.xi_debug(truth)
-            # print("l", round(l, 4))
-            # print("p before update", round(p, 2))
+            debug("l", round(l, 4))
+            debug("p before update", round(p, 2))
             # l = truth
             # NOTE }
 
@@ -324,7 +322,7 @@ class Recurrence(torch.jit.ScriptModule):
                 it=range(M.size(1) - 1, -1, -1),
             ).flip(-1)
             p_step = (p.unsqueeze(1) @ self.one_step).squeeze(1)
-            # print("cr before update", round(hx.cr, 2))
+            debug("cr before update", round(hx.cr, 2))
             p = (
                 e[[L.If, L.While, L.Else]].sum(0)  # conditions
                 * (l * p_step + (1 - l) * p_forward)
@@ -332,22 +330,17 @@ class Recurrence(torch.jit.ScriptModule):
                 + e[L.EndIf] * p_step
                 + e[L.Subtask] * (hx.cr * p_step + (1 - hx.cr) * hx.p)
             )
+            is_line = 1 - inputs.ignore[0]
             p = is_line * p / p.sum(-1, keepdim=True)  # zero out non-lines
 
             # concentrate non-allocated attention on last line
             last_line = is_line.sum(-1).long() - 1
             p = p + (1 - p.sum(-1, keepdim=True)) * self.p_one_hot[last_line]
 
-            # print("eSubtask cr p_step", round(e[L.Subtask] * (hx.cr * p_step), 2))
-            # print("eSubtask (1-cr) hx.p", round(e[L.Subtask] * ((1 - hx.cr) * hx.p), 2))
-            # print(
-            # "p - eSubtask (cr p_step + (1 - cr) hx.p)",
-            # round(p - e[L.Subtask] * (hx.cr * p_step + (1 - hx.cr) * hx.p), 2),
-            # )
-            # print("e[[L.If, L.While, L.Else]]", e[[L.If, L.While, L.Else]].sum(0))
-            # print("e[L.EndWhile]", e[L.EndWhile])
-            # print("e[L.EndIf]", e[L.EndIf])
-            # print("e[L.Subtask]", e[L.Subtask])
+            debug("e[[L.If, L.While, L.Else]]", e[[L.If, L.While, L.Else]].sum(0))
+            debug("e[L.EndWhile]", e[L.EndWhile])
+            debug("e[L.EndIf]", e[L.EndIf])
+            debug("e[L.Subtask]", e[L.Subtask])
 
             # r
             r = (p.unsqueeze(1) @ M).squeeze(1)
@@ -383,7 +376,7 @@ class Recurrence(torch.jit.ScriptModule):
             self.sample_new(A[t], a_dist)
 
             # a[:] = 'wsadeq'.index(input('act:'))
-            # print("p after update", round(p, 2))
+            debug("p after update", round(p, 2))
 
             def gating_function(subtask_param):
                 task_sections = torch.split(
@@ -427,7 +420,7 @@ class Recurrence(torch.jit.ScriptModule):
                 ).detach()  # * condition[:, :1] + (1 - condition[:, :1])
                 c = self.phi_debug(truth)
                 # c = truth
-                # print("c", round(c, 4))
+                debug("c", round(c, 4))
                 # NOTE }
                 return c, probs
 
