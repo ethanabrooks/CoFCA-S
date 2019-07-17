@@ -281,10 +281,18 @@ class Recurrence(torch.jit.ScriptModule):
             l = self.xi((inputs.base[t], condition))
             # NOTE {
             c = torch.split(condition, list(self.subtask_nvec), dim=-1)[-1][:, 1:]
+            last_condition = torch.split(
+                hx.last_condition, list(self.subtask_nvec), dim=-1
+            )[-1][:, 1:]
+            hx_r = torch.split(hx.r, list(self.subtask_nvec), dim=-1)[-1][:, 1:]
+            debug("last_condition", last_condition)
+            debug("r", hx_r)
+            debug("er", er)
             debug("l condition", c)
             phi_in = inputs.base[t, :, 1:-2] * c.view(N, -1, 1, 1)
             truth = torch.max(phi_in.view(N, -1), dim=-1).values.float().view(N, 1)
             l = self.xi_debug(truth)
+            debug("l truth", round(truth, 4))
             debug("l", round(l, 4))
             debug("p before update", round(p, 2))
             # l = truth
