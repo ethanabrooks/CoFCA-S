@@ -148,7 +148,6 @@ class ControlFlowGridworld(SubtasksGridworld):
             [s.to_tuple() for s in self.subtasks],
             [(0, self.n_subtasks - len(self.subtasks)), (0, 0)],
             "constant",
-            constant_value=-1,
         )
         obs.update(subtasks=subtasks)
         for (k, s) in self.observation_space.spaces.items():

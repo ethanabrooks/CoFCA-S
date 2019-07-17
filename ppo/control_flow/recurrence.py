@@ -199,7 +199,7 @@ class Recurrence(torch.jit.ScriptModule):
         task = inputs.subtasks.view(
             *inputs.subtasks.shape[:2], self.n_subtasks, self.subtask_nvec.size
         )[0]
-        is_line = torch.any(task >= 0, dim=-1).float()
+        is_line = torch.any(task > 0, dim=-1).float()
         task = torch.split(task, 1, dim=-1)
         g_discrete = [x[:, :, 0] for x in task]
         M_discrete = torch.stack(
