@@ -4,8 +4,7 @@ from torch import nn as nn
 import torch.jit
 from torch.nn import functional as F
 
-from gridworld_env.control_flow_gridworld import LineTypes
-from gridworld_env.subtasks_gridworld import Inputs
+from gridworld_env.control_flow_gridworld import LineTypes, Inputs
 import ppo
 from ppo.agent import AgentValues, NNBase
 import ppo.control_flow.lower_level

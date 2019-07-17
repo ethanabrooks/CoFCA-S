@@ -9,7 +9,7 @@ import torch.jit
 from torch.nn import functional as F
 
 from gridworld_env.control_flow_gridworld import LineTypes
-from gridworld_env.subtasks_gridworld import Inputs
+from gridworld_env.control_flow_gridworld import Inputs
 import ppo
 from ppo.control_flow.lower_level import (
     LowerLevel,
@@ -205,7 +205,6 @@ class Recurrence(torch.jit.ScriptModule):
         task = inputs.subtasks.view(
             *inputs.subtasks.shape[:2], self.n_subtasks, self.subtask_nvec.size
         )[0]
-        is_line = torch.any(task > 0, dim=-1).float()
         task = torch.split(task, 1, dim=-1)
         g_discrete = [x[:, :, 0] for x in task]
         M_discrete = torch.stack(
@@ -245,7 +244,6 @@ class Recurrence(torch.jit.ScriptModule):
                 M_discrete=M_discrete,
                 subtask=inputs.subtask,
                 actions=actions,
-                is_line=is_line,
             )
         )
 
@@ -257,7 +255,6 @@ class Recurrence(torch.jit.ScriptModule):
         M,
         M_discrete,
         subtask,
-        is_line,
     ):
 
         T, N, *_ = inputs.base.shape
@@ -339,6 +336,7 @@ class Recurrence(torch.jit.ScriptModule):
                 + e[L.EndIf] * p_step
                 + e[L.Subtask] * (hx.cr * p_step + (1 - hx.cr) * hx.p)
             )
+            is_line = 1 - inputs.ignore[0]
             p = is_line * p / p.sum(-1, keepdim=True)  # zero out non-lines
 
             # concentrate non-allocated attention on last line

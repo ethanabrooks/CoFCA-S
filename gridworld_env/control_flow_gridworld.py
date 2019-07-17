@@ -9,6 +9,7 @@ from dataclasses import dataclass
 import gridworld_env
 from gridworld_env import SubtasksGridworld
 
+Inputs = namedtuple("Obs", "base subtask subtasks ignore")
 LineTypes = namedtuple(
     "LineTypes", "Subtask If Else EndIf While EndWhile", defaults=list(range(6))
 )
@@ -79,6 +80,7 @@ class ControlFlowGridworld(SubtasksGridworld):
                 self.observation_space.spaces["subtask"].n + 1
             ),  # +1 for terminating control_flow
             subtasks=spaces.MultiDiscrete(subtask_nvec),
+            ignore=spaces.MultiBinary(self.n_subtasks),
         )
         self.non_existing = None
         self.existing = None
@@ -149,7 +151,8 @@ class ControlFlowGridworld(SubtasksGridworld):
             [(0, self.n_subtasks - len(self.subtasks)), (0, 0)],
             "constant",
         )
-        obs.update(subtasks=subtasks)
+        idxs = np.arange(self.n_subtasks)
+        obs.update(subtasks=subtasks, ignore=idxs >= len(self.subtasks))
         for (k, s) in self.observation_space.spaces.items():
             assert s.contains(obs[k])
         return OrderedDict(obs)
