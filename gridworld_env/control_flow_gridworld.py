@@ -257,7 +257,9 @@ class ControlFlowGridworld(SubtasksGridworld):
             )
             yield EndIf()
             yield self.Subtask(
-                interaction=list(self.interactions).index("visit"), count=0, object=None
+                interaction=self.np_random.choice(len(self.interactions)),
+                count=0,
+                object=None,
             )
         else:
             yield self.While(None)
