@@ -335,12 +335,15 @@ class Recurrence(torch.jit.ScriptModule):
             #     + e[L.EndWhile] * interp(scan_backward(L.While), p_step, l)
             #     + e[L.Subtask] * interp(hx.p, p_step, hx.cr)
             # )
-            p_forward = scan(
+            p_forward1 = scan(
                 L.EndIf,
                 L.Else,
                 L.EndWhile,
                 cumsum=roll(torch.cumsum(hx.p, dim=-1)),
                 it=range(M.size(1)),
+            )
+            p_forward2 = scan(
+                L.EndIf, cumsum=roll(torch.cumsum(hx.p, dim=-1)), it=range(M.size(1))
             )
             p_backward = scan(
                 L.While,
@@ -350,8 +353,9 @@ class Recurrence(torch.jit.ScriptModule):
             p_step = (p.unsqueeze(1) @ self.one_step).squeeze(1)
             debug("cr before update", round(hx.cr, 2))
             p = (
-                e[[L.If, L.While, L.Else]].sum(0)  # conditions
-                * (l * p_step + (1 - l) * p_forward)
+                e[[L.If, L.While]].sum(0)  # conditions
+                * (l * p_step + (1 - l) * p_forward1)
+                + e[L.Else] * (l * p_step + (1 - l) * p_forward2)
                 + e[L.EndWhile] * (l * p_backward + (1 - l) * p_step)
                 + e[L.EndIf] * p_step
                 + e[L.Subtask] * (hx.cr * p_step + (1 - hx.cr) * hx.p)
