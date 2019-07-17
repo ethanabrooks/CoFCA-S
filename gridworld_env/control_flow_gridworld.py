@@ -300,6 +300,8 @@ class ControlFlowGridworld(SubtasksGridworld):
                 else:
                     non_existing.add(existing)
                     existing = self.np_random.choice(list(object_types - non_existing))
+            elif isinstance(line, EndIf):
+                existing = self.np_random.choice(list(object_types - non_existing))
             elif isinstance(line, self.Subtask):
                 n_loops += 1
                 self.subtasks[i] = line.replace_object(existing)
