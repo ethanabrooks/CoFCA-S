@@ -253,80 +253,78 @@ class ControlFlowGridworld(SubtasksGridworld):
     def get_required_objects(self, subtasks):
         available = []
         i = 0
-        condition = None
+        control_obj = None
         non_existing = {self.np_random.choice(len(self.object_types))}
         object_types = list(range(len(self.object_types)))
         n_executed = 0
 
         while i < len(self.subtasks):
-            try:
-                line = self.subtasks[i]
-                existing = list(set(object_types) - non_existing)
-                if isinstance(line, (self.If, self.While)):
-                    passing = self.np_random.rand() < 0.5
-                    obj = self.np_random.choice(
-                        existing if passing else list(non_existing)
-                    )
-                    self.subtasks[i] = line.replace_object(obj)
-                    if passing and obj not in available:
-                        available += [obj]
-                        yield obj
-                    condition = obj
-                elif isinstance(line, EndWhile):
-                    passing = (
-                        self.np_random.rand() < 0.5
-                        and n_executed < self.n_subtasks // 2
-                    )
-                    if passing:
-                        assert condition not in available
-                        if condition not in available:
-                            available += [condition]
-                            yield condition
-                    else:
-                        non_existing.add(condition)
-                        condition = None
+            line = self.subtasks[i]
+            existing = list(set(object_types) - non_existing)
+            if isinstance(line, (self.If, self.While)):
+                passing = self.np_random.rand() < 0.5
+                obj = self.np_random.choice(existing if passing else list(non_existing))
+                self.subtasks[i] = line.replace_object(obj)
+                if passing and obj not in available:
+                    available += [obj]
+                    yield obj
+                if isinstance(line, self.While):
+                    control_obj = obj
+                else:
+                    control_obj = self.np_random.choice(existing)
+            elif isinstance(line, EndWhile):
+                passing = (
+                    self.np_random.rand() < 0.5 and n_executed < self.n_subtasks // 2
+                )
+                if passing:
+                    assert control_obj not in available
+                    if control_obj not in available:
+                        available += [control_obj]
+                        yield control_obj
+                else:
+                    non_existing.add(control_obj)
+                    control_obj = None
+            elif isinstance(line, EndIf):
+                control_obj = None
 
-                elif isinstance(line, self.Subtask):
-                    n_executed += 1
-                    obj = (
-                        self.np_random.choice(existing)
-                        if condition is None
-                        else condition
-                    )
-                    self.subtasks[i] = line.replace_object(obj)
-                    if obj not in available:
-                        available.append(obj)
-                        yield obj
-                    if line.interaction in self.irreversible_interactions:
-                        available.remove(obj)
+            elif isinstance(line, self.Subtask):
+                n_executed += 1
+                obj = (
+                    self.np_random.choice(existing)
+                    if control_obj is None
+                    else control_obj
+                )
+                self.subtasks[i] = line.replace_object(obj)
+                if obj not in available:
+                    available.append(obj)
+                    yield obj
+                if line.interaction in self.irreversible_interactions:
+                    available.remove(obj)
 
-                i = self.get_next_idx(i, existing=available)
-            except KeyboardInterrupt:
-                import ipdb
+            i = self.get_next_idx(i, existing=available)
 
-                ipdb.set_trace()
-
-        condition = None
+        control_obj = None
+        if_index = None
         for i in range(len(subtasks)):
             line = self.subtasks[i]
-            if isinstance(line, (self.If, self.While)):
-                condition = line.object
-
-            try:
-                if line.object is None:
-                    assert isinstance(line, self.Subtask), (
-                        "Since nesting is not allowed, all control flow statements "
-                        "must get executed."
-                    )
-                    assert (
-                        condition is not None
-                    ), "All subtask lines outside of control flow statements must get executed."
-                    self.subtasks[i] = line._replace(object=condition)
-                    # We always condition object inside control flow statements because it ensures that
-                    # 1. while-loops terminate
-                    # 2. mis-evaluation of the control-flow condition will result in task failure
-            except AttributeError:
-                pass
+            if isinstance(line, self.While):
+                control_obj = line.object
+            elif isinstance(line, self.If):
+                if_index = i
+            elif isinstance(line, (EndIf, EndWhile)):
+                control_obj = None
+                if_index = None
+            elif isinstance(line, self.Subtask):
+                if if_index is not None:  # inside if
+                    if control_obj is None:
+                        if line.object is None:
+                            # if statement fails
+                            else_idx = self.get_next_idx(if_index, existing)
+                            control_obj = self.subtasks[else_idx + 1].object
+                        else:
+                            control_obj = line.object
+                if control_obj is not None:
+                    self.subtasks[i] = line._replace(object=control_obj)
 
     def get_next_subtask(self):
         if self.subtask_idx is None:
