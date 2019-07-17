@@ -1,3 +1,4 @@
+DEBUG = False
 from collections import namedtuple
 import itertools
 
@@ -25,7 +26,6 @@ RecurrentState = namedtuple(
     "RecurrentState",
     "a g cr cg z a_probs g_probs cr_probs cg_probs z_probs p r last_condition last_eval v",
 )
-DEBUG = False
 
 
 def debug(*args, **kwargs):
