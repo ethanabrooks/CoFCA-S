@@ -17,7 +17,7 @@ LineTypes = namedtuple(
 
 L = LineTypes()
 
-TaskTypes = Enum("TaskTypes", "subtasks if_if if_else while_subtask general")
+TaskTypes = Enum("TaskTypes", "Subtasks If Else While General")
 
 
 class Line(abc.ABC):
@@ -178,7 +178,7 @@ class ControlFlowGridworld(SubtasksGridworld):
 
     def subtasks_generator(self):
         self.np_random.shuffle(self.irreversible_interactions)
-        if self.task_type is TaskTypes.general:
+        if self.task_type is TaskTypes.General:
             active_control = None
             line_type = None
             interactions = list(range(len(self.interactions)))
@@ -242,7 +242,7 @@ class ControlFlowGridworld(SubtasksGridworld):
                     )
                 else:
                     raise RuntimeError
-        elif self.task_type is TaskTypes.subtasks:
+        elif self.task_type is TaskTypes.Subtasks:
             assert self.n_subtasks == 6
             yield self.Subtask(
                 interaction=self.np_random.choice(
@@ -259,7 +259,7 @@ class ControlFlowGridworld(SubtasksGridworld):
                     len(self.interactions), count=0, object=None
                 )
             )
-        elif self.task_type is TaskTypes.if_if:
+        elif self.task_type is TaskTypes.If:
             yield self.If(None)
             yield self.Subtask(
                 interaction=self.irreversible_interactions[0], count=0, object=None
@@ -270,7 +270,7 @@ class ControlFlowGridworld(SubtasksGridworld):
                 interaction=self.irreversible_interactions[1], count=0, object=None
             )
             yield EndIf()
-        elif self.task_type is TaskTypes.if_else:
+        elif self.task_type is TaskTypes.Else:
             yield self.If(None)
             yield self.Subtask(
                 interaction=self.irreversible_interactions[0], count=0, object=None
@@ -283,7 +283,7 @@ class ControlFlowGridworld(SubtasksGridworld):
             yield self.Subtask(
                 interaction=self.irreversible_interactions[0], count=0, object=None
             )
-        elif self.task_type is TaskTypes.while_subtask:
+        elif self.task_type is TaskTypes.While:
             yield self.While(None)
             yield self.subtask(
                 interaction=self.irreversible_interactions[0], count=0, object=None
