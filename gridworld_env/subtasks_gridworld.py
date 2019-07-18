@@ -169,8 +169,7 @@ class SubtasksGridworld(gym.Env):
         print("task:")
         print(self.task_string())
         if self.subtask is not None:
-            print("subtask:")
-            self.render_current_subtask()
+            print(f"❯❯ Active subtask: {self.subtask_idx}:{self.subtask}")
         # if self.count is not None:
         # print("remaining:", self.count + 1)
         print("action:", end=" ")
@@ -202,9 +201,6 @@ class SubtasksGridworld(gym.Env):
             print(
                 "***********************************************************************************"
             )
-
-    def render_current_subtask(self):
-        print(f'{self.subtask_idx}:{self.subtask}')
 
     def task_string(self):
         return "\n".join(self.subtasks)
@@ -248,8 +244,11 @@ class SubtasksGridworld(gym.Env):
 
         self.objects = {tuple(p): t for p, t in zip(objects_pos, types)}
 
-        self.subtask_idx = 0
-        self.count = 0
+        self.subtask_idx = None
+        self.subtask_idx = self.get_next_subtask()
+        if self.subtask is None:
+            return self.reset()
+        self.count = self.subtask.count
         self.last_terminal = False
         self.last_action = None
         o = self.get_observation()

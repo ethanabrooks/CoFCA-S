@@ -9,6 +9,7 @@ from dataclasses import dataclass
 import gridworld_env
 from gridworld_env import SubtasksGridworld
 
+Obs = namedtuple("Obs", "base subtask subtasks ignore")
 LineTypes = namedtuple(
     "LineTypes", "Subtask If Else EndIf While EndWhile", defaults=list(range(6))
 )
@@ -49,8 +50,23 @@ class EndWhile(Line):
         return 0, 0, 0, L.EndWhile, 0
 
 
+WHILE_PASSING_PROBS = [
+    None,  # 0
+    1,  # 1
+    0.791288,  # 2
+    0.745606,  # 3
+    0.729545,  # 4
+    0.722634,  # 5
+    0.719304,  # 6
+    0.717579,  # 7
+    0.716641,  # 8
+    0.716111,  # 9
+]
+
+
 class ControlFlowGridworld(SubtasksGridworld):
     def __init__(self, *args, n_subtasks, **kwargs):
+        self.max_loops = 3
         self.n_encountered = n_subtasks
         super().__init__(*args, n_subtasks=n_subtasks, **kwargs)
         self.irreversible_interactions = [
@@ -79,6 +95,7 @@ class ControlFlowGridworld(SubtasksGridworld):
                 self.observation_space.spaces["subtask"].n + 1
             ),  # +1 for terminating control_flow
             subtasks=spaces.MultiDiscrete(subtask_nvec),
+            ignore=spaces.MultiBinary(self.n_subtasks),
         )
         self.non_existing = None
         self.existing = None
@@ -130,17 +147,15 @@ class ControlFlowGridworld(SubtasksGridworld):
     def task_string(self):
         def helper():
             indent = ""
-            for subtask in self.subtasks:
-                if isinstance(subtask, (self.If, self.While, self.If)):
-                    yield str(subtask)
-                    indent = "    "
-                elif isinstance(subtask, (EndIf, EndWhile)):
-                    yield str(subtask)
-                    indent = ""
-                elif isinstance(subtask, Else):
-                    yield str(subtask)
+            for i, subtask in enumerate(self.subtasks):
+                if isinstance(subtask, self.Subtask):
+                    yield f"{i}:{indent}{subtask}"
                 else:
-                    yield f"{indent}{subtask}"
+                    yield f"{i}:{subtask}"
+                if isinstance(subtask, (self.If, Else, self.While)):
+                    indent = "    "
+                if isinstance(subtask, (EndIf, EndWhile)):
+                    indent = ""
 
         return "\n".join(helper())
 
@@ -151,154 +166,164 @@ class ControlFlowGridworld(SubtasksGridworld):
             [(0, self.n_subtasks - len(self.subtasks)), (0, 0)],
             "constant",
         )
-        obs.update(subtasks=subtasks)
+        idxs = np.arange(self.n_subtasks)
+        obs.update(subtasks=subtasks, ignore=idxs >= len(self.subtasks))
         for (k, s) in self.observation_space.spaces.items():
             assert s.contains(obs[k])
         return OrderedDict(obs)
 
+    # def subtasks_generator(self):
+    #     active_control = None
+    #     line_type = None
+    #     interactions = list(range(len(self.interactions)))
+    #     # noinspection PyTypeChecker
+    #     for i in range(self.n_encountered):
+    #         try:
+    #             failing = not active_control.object
+    #         except AttributeError:
+    #             failing = False
+    #         if line_type in [self.While, self.If, Else]:
+    #             # must follow condition with subtask
+    #             line_type = self.Subtask
+    #         elif i == self.n_encountered - 1 or (
+    #             i == self.n_encountered - 2 and failing
+    #         ):
+    #             # Terminate all active controls
+    #             if isinstance(active_control, (self.If, Else)):
+    #                 line_type = EndIf
+    #             elif isinstance(active_control, self.While):
+    #                 line_type = EndWhile
+    #             else:
+    #                 assert active_control is None
+    #                 line_type = self.Subtask
+    #
+    #         else:
+    #             # No need to terminate controls. No preceding condition
+    #             line_types = {
+    #                 self.If: [self.Subtask, EndIf],
+    #                 Else: [self.Subtask, EndIf],
+    #                 self.While: [self.Subtask, EndWhile],
+    #             }
+    #             defaults = [self.Subtask]
+    #             if i <= self.n_encountered - 3:
+    #                 # need at least 3 lines left for Else and While
+    #                 line_types[self.If] += [Else]
+    #                 defaults += [self.While, self.If]
+    #             line_type = self.np_random.choice(
+    #                 line_types.get(type(active_control), defaults)
+    #             )
+    #
+    #         # instantiate lines
+    #         if line_type in (self.If, self.While):
+    #             active_control = line_type(None)
+    #             yield active_control
+    #         elif line_type is Else:
+    #             active_control = Else()
+    #             yield Else()
+    #         elif line_type in (EndIf, EndWhile):
+    #             active_control = None
+    #             yield line_type()
+    #
+    #         elif line_type is self.Subtask:
+    #             yield self.Subtask(
+    #                 interaction=self.np_random.choice(
+    #                     self.irreversible_interactions
+    #                     if active_control
+    #                     else interactions
+    #                 ),
+    #                 count=0,
+    #                 object=None,
+    #             )
+    #         else:
+    #             raise RuntimeError
+
     def subtasks_generator(self):
-        active_control = None
-        line_type = None
-        interactions = list(range(len(self.interactions)))
-        # noinspection PyTypeChecker
-        for i in range(self.n_encountered):
-            try:
-                failing = not active_control.object
-            except AttributeError:
-                failing = False
-            if line_type in [self.While, self.If, Else]:
-                # must follow condition with subtask
-                line_type = self.Subtask
-            elif i == self.n_encountered - 1 or (
-                i == self.n_encountered - 2 and failing
-            ):
-                # Terminate all active controls
-                if isinstance(active_control, (self.If, Else)):
-                    line_type = EndIf
-                elif isinstance(active_control, self.While):
-                    line_type = EndWhile
-                else:
-                    assert active_control is None
-                    line_type = self.Subtask
-
-            else:
-                # No need to terminate controls. No preceding condition
-                line_types = {
-                    self.If: [self.Subtask, EndIf],
-                    Else: [self.Subtask, EndIf],
-                    self.While: [self.Subtask, EndWhile],
-                }
-                defaults = [self.Subtask]
-                if i <= self.n_encountered - 3:
-                    # need at least 3 lines left for Else and While
-                    line_types[self.If] += [Else]
-                    defaults += [self.While, self.If]
-                line_type = self.np_random.choice(
-                    line_types.get(type(active_control), defaults)
-                )
-
-            # instantiate lines
-            if line_type in (self.If, self.While):
-                active_control = line_type(None)
-                yield active_control
-            elif line_type is Else:
-                active_control = Else()
-                yield Else()
-            elif line_type in (EndIf, EndWhile):
-                active_control = None
-                yield line_type()
-
-            elif line_type is self.Subtask:
-                yield self.Subtask(
-                    interaction=self.np_random.choice(
-                        self.irreversible_interactions
-                        if active_control
-                        else interactions
-                    ),
-                    count=0,
-                    object=None,
-                )
-            else:
-                raise RuntimeError
+        assert self.n_subtasks == 9
+        self.np_random.shuffle(self.irreversible_interactions)
+        if self.np_random.rand() < 1:  # TODO
+            yield self.If(None)
+            yield self.Subtask(
+                interaction=self.irreversible_interactions[0], count=0, object=None
+            )
+            yield self.Subtask(
+                interaction=self.irreversible_interactions[0], count=0, object=None
+            )
+            yield Else()
+            yield self.Subtask(
+                interaction=self.irreversible_interactions[1], count=0, object=None
+            )
+            yield self.Subtask(
+                interaction=self.irreversible_interactions[1], count=0, object=None
+            )
+            yield EndIf()
+            yield self.Subtask(
+                interaction=self.np_random.choice(len(self.interactions)),
+                count=0,
+                object=None,
+            )
+            yield self.Subtask(
+                interaction=self.np_random.choice(len(self.interactions)),
+                count=0,
+                object=None,
+            )
+        else:
+            yield self.While(None)
+            yield self.Subtask(
+                interaction=self.irreversible_interactions[0], count=0, object=None
+            )
+            yield EndWhile()
 
     def get_required_objects(self, subtasks):
         available = []
         i = 0
-        while_obj = None
-        non_existing = {self.np_random.choice(len(self.object_types))}
-        object_types = list(range(len(self.object_types)))
-        n_executed = 0
-
+        existing, non_existing = self.np_random.choice(
+            len(self.object_types), size=2, replace=False
+        )
+        non_existing = {non_existing}
+        object_types = {i for i, _ in enumerate(self.object_types)}
+        n_loops = 0
         while i < len(self.subtasks):
-            try:
-                line = self.subtasks[i]
-                existing = list(set(object_types) - non_existing)
-                if isinstance(line, (self.If, self.While)):
-                    passing = self.np_random.rand() < 0.5
-                    obj = self.np_random.choice(
-                        existing if passing else list(non_existing)
-                    )
-                    self.subtasks[i] = line.replace_object(obj)
+            line = self.subtasks[i]
+            if isinstance(line, (self.If, self.While)):
+                passing = self.np_random.rand() < (
+                    WHILE_PASSING_PROBS[self.max_loops]
+                    if isinstance(line, self.While)
+                    else 0.5
+                )
+                if passing:
+                    obj = existing
                     if obj not in available:
                         available += [obj]
                         yield obj
-                    if isinstance(line, self.While):
-                        while_obj = obj
-                elif isinstance(line, EndWhile):
-                    passing = (
-                        self.np_random.rand() < 0.5
-                        and n_executed < self.n_subtasks // 2
-                    )
-                    if passing:
-                        assert while_obj not in available
-                        if while_obj not in available:
-                            available += [while_obj]
-                            yield while_obj
-                    else:
-                        non_existing.add(while_obj)
-                        while_obj = None
+                else:
+                    obj = self.np_random.choice(list(non_existing))
 
-                elif isinstance(line, self.Subtask):
-                    n_executed += 1
-                    obj = (
-                        self.np_random.choice(existing)
-                        if while_obj is None
-                        else while_obj
-                    )
-                    self.subtasks[i] = line.replace_object(obj)
-                    if obj not in available:
-                        available.append(obj)
-                        yield obj
-                    if line.interaction in self.irreversible_interactions:
-                        available.remove(obj)
+                self.subtasks[i] = line.replace_object(obj)
+            elif isinstance(line, EndWhile):
+                n_loops += 1
+                passing = self.np_random.rand() < 0.5 and n_loops < self.max_loops
+                if passing:
+                    assert existing not in available
+                    available += [existing]
+                    yield existing
+                else:
+                    non_existing.add(existing)
+                    existing = self.np_random.choice(list(object_types - non_existing))
+            elif isinstance(line, self.Subtask):
+                n_loops += 1
+                self.subtasks[i] = line.replace_object(existing)
+                if existing not in available:
+                    available.append(existing)
+                    yield existing
+                if line.interaction in self.irreversible_interactions:
+                    available.remove(existing)
 
-                i = self.get_next_idx(i, existing=available)
-            except KeyboardInterrupt:
-                import ipdb
+            i = self.get_next_idx(i, existing=available)
 
-                ipdb.set_trace()
-
-        condition = None
-        for i in range(self.n_subtasks):
+        for i in range(len(subtasks)):
             line = self.subtasks[i]
-            if isinstance(line, (self.If, self.While)):
-                condition = line.object
-
-            try:
-                if line.object is None:
-                    assert isinstance(line, self.Subtask), (
-                        "Since nesting is not allowed, all control flow statements "
-                        "must get executed."
-                    )
-                    assert (
-                        condition is not None
-                    ), "All subtask lines outside of control flow statements must get executed."
-                    self.subtasks[i] = line._replace(object=condition)
-                    # We always condition object inside control flow statements because it ensures that
-                    # 1. while-loops terminate
-                    # 2. mis-evaluation of the control-flow condition will result in task failure
-            except AttributeError:
-                pass
+            if isinstance(line, self.Subtask) and line.object is None:
+                self.subtasks[i] = line._replace(object=existing)
 
     def get_next_subtask(self):
         if self.subtask_idx is None:
