@@ -338,10 +338,11 @@ class Recurrence(torch.jit.ScriptModule):
             p_step = (p.unsqueeze(1) @ self.one_step).squeeze(1)
             debug("cr before update", round(hx.cr, 2))
             p = (
-                e[[L.If, L.While, L.Else]].sum(0)  # conditions
-                * interp(scan_forward(L.EndIf, L.Else, L.EndWhile), p_step, l)
-                + e[L.EndWhile] * interp(p_step, scan_backward(L.While), l)
+                e[[L.If, L.Else]].sum(0)  # conditions
+                * interp(scan_forward(L.EndIf, L.Else), p_step, l)
                 + e[L.EndIf] * p_step
+                + e[L.While] * interp(scan_forward(L.EndWhile), p_step, l)
+                + e[L.EndWhile] * interp(p_step, scan_backward(L.While), l)
                 + e[L.Subtask] * interp(hx.p, p_step, hx.cr)
             )
             is_line = 1 - inputs.ignore[0]
