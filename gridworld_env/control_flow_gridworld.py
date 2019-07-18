@@ -178,6 +178,7 @@ class ControlFlowGridworld(SubtasksGridworld):
 
     def subtasks_generator(self):
         self.np_random.shuffle(self.irreversible_interactions)
+        assert self.n_subtasks >= 8
         if self.task_type is TaskTypes.General:
             active_control = None
             line_type = None
@@ -243,7 +244,6 @@ class ControlFlowGridworld(SubtasksGridworld):
                 else:
                     raise RuntimeError
         elif self.task_type is TaskTypes.Subtasks:
-            assert self.n_subtasks == 6
             yield self.Subtask(
                 interaction=self.np_random.choice(
                     len(self.interactions), count=0, object=None
