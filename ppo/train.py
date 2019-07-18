@@ -88,7 +88,7 @@ class Train:
         if cuda:
             device_num = get_random_gpu()
             if run_id:
-                match = re.search('\d+$', run_id)
+                match = re.search("\d+$", run_id)
                 if match:
                     device_num = int(match.group()) % get_n_gpu()
 

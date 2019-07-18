@@ -363,9 +363,9 @@ class ControlFlowGridworld(SubtasksGridworld):
 
 
 def main(seed, n_subtasks):
-    kwargs = gridworld_env.get_args('4x4SubtasksGridWorld-v0')
-    del kwargs['class_']
-    del kwargs['max_episode_steps']
+    kwargs = gridworld_env.get_args("4x4SubtasksGridWorld-v0")
+    del kwargs["class_"]
+    del kwargs["max_episode_steps"]
     kwargs.update(n_subtasks=n_subtasks, max_task_count=1)
     env = ControlFlowGridworld(**kwargs, evaluation=False, eval_subtasks=[])
     actions = "wsadeq"

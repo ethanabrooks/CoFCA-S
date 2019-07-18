@@ -104,12 +104,11 @@ class SubtasksGridworld(gym.Env):
                     0,
                     1,
                     shape=(
-                        1 +  # obstacles
-                        1 +  # ice
-                        1 +  # agent
-                        len(object_types),
+                        1 + 1 + 1 + len(object_types),  # obstacles  # ice  # agent
                         h,
-                        w)),
+                        w,
+                    ),
+                ),
                 subtask=spaces.Discrete(n_subtasks),
                 subtasks=spaces.MultiDiscrete(
                     np.tile(
@@ -257,14 +256,6 @@ class SubtasksGridworld(gym.Env):
         self.count = self.subtask.count
         return o
 
-    def objects_one_hot(self):
-        #TODO refactor
-        h, w, = self.desc.shape
-        objects_one_hot = np.zeros((1 + len(self.object_types), h, w), dtype=bool)
-        idx = [(v, ) + k for k, v in self.objects.items()]
-        set_index(objects_one_hot, idx, True)
-        return objects_one_hot
-
     def get_observation(self):
         agent_one_hot = np.zeros_like(self.desc, dtype=bool)
         set_index(agent_one_hot, self.pos, True)
@@ -351,4 +342,3 @@ if __name__ == "__main__":
     env = gym.make("4x4SubtasksGridWorld-v0")
     actions = "wsadeq"
     gridworld_env.keyboard_control.run(env, actions=actions)
-Obs = namedtuple('Obs', 'base subtask subtasks next_subtask')
