@@ -238,28 +238,26 @@ class ControlFlowGridworld(SubtasksGridworld):
     #             raise RuntimeError
 
     def subtasks_generator(self):
-        assert self.n_subtasks == 8
+        assert self.n_subtasks == 4
         self.np_random.shuffle(self.irreversible_interactions)
         if self.np_random.rand() < 1:  # TODO
             yield self.If(None)
             yield self.Subtask(
                 interaction=self.irreversible_interactions[0], count=0, object=None
             )
-            yield self.Subtask(
-                interaction=self.irreversible_interactions[0], count=0, object=None
-            )
-            yield Else()
-            yield self.Subtask(
-                interaction=self.irreversible_interactions[1], count=0, object=None
-            )
-            yield self.Subtask(
-                interaction=self.irreversible_interactions[1], count=0, object=None
-            )
+            # yield self.Subtask(
+            #     interaction=self.irreversible_interactions[0], count=0, object=None
+            # )
+            # yield Else()
+            # yield self.Subtask(
+            #     interaction=self.irreversible_interactions[1], count=0, object=None
+            # )
+            # yield self.Subtask(
+            #     interaction=self.irreversible_interactions[1], count=0, object=None
+            # )
             yield EndIf()
             yield self.Subtask(
-                interaction=self.np_random.choice(len(self.interactions)),
-                count=0,
-                object=None,
+                interaction=self.irreversible_interactions[1], count=0, object=None
             )
         else:
             yield self.While(None)
