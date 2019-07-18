@@ -28,10 +28,9 @@ class Agent(ppo.agent.Agent, NNBase):
         **kwargs,
     ):
         nn.Module.__init__(self)
+        self.z_entropy_coef = z_entropy_coef
         self.hard_update = hard_update
-        self.entropy_coefs = Actions(
-            a=None, cg=None, cr=None, g=g_entropy_coef, z=z_entropy_coef
-        )
+        self.entropy_coefs = Actions(a=None, cg=None, cr=None, g=g_entropy_coef)
         self.action_spaces = Actions(**action_space.spaces)
         self.obs_space = obs_space
         obs_spaces = Obs(**self.obs_space.spaces)
@@ -88,7 +87,7 @@ class Agent(ppo.agent.Agent, NNBase):
         hx = RecurrentState(*rm.parse_hidden(all_hxs))
 
         if action is None:
-            actions = Actions(a=hx.a, cg=hx.cg, cr=hx.cr, g=hx.g, z=hx.z)
+            actions = Actions(a=hx.a, cg=hx.cg, cr=hx.cr, g=hx.g)
 
         if self.hard_update:
             dists = Actions(
@@ -96,7 +95,6 @@ class Agent(ppo.agent.Agent, NNBase):
                 cg=FixedCategorical(hx.cg_probs),
                 cr=FixedCategorical(hx.cr_probs),
                 g=FixedCategorical(hx.g_probs),
-                z=None,
             )
         else:
             dists = Actions(
@@ -106,9 +104,9 @@ class Agent(ppo.agent.Agent, NNBase):
                 cg=None,
                 cr=None,
                 g=FixedCategorical(hx.g_probs),
-                z=FixedCategorical(
-                    hx.z_probs.view(N, self.n_subtasks, len(LineTypes._fields))
-                ),
+                # z=FixedCategorical(
+                # hx.z_probs.view(N, self.n_subtasks, len(LineTypes._fields))
+                # ),
             )
 
         log_probs = sum(
@@ -117,10 +115,16 @@ class Agent(ppo.agent.Agent, NNBase):
             if dist is not None
         )
         # log_probs = log_probs + z_dist.log_probs(actions.z).sum(1)
-        entropies = sum(
-            c * dist.entropy().view(N, -1)
-            for c, dist in zip(self.entropy_coefs, dists)
-            if dist is not None
+        entropies = (
+            sum(
+                c * dist.entropy().view(N, -1)
+                for c, dist in zip(self.entropy_coefs, dists)
+                if dist is not None
+            )
+            + self.z_entropy_coef
+            * FixedCategorical(
+                hx.z_probs.view(N, self.n_subtasks, len(LineTypes._fields))
+            ).entropy()
         )
         aux_loss = -entropies.mean()
 
