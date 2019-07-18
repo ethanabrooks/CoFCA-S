@@ -1,6 +1,5 @@
-import functools
-
 DEBUG = False
+import functools
 from collections import namedtuple
 import itertools
 
@@ -268,8 +267,10 @@ class Recurrence(torch.jit.ScriptModule):
         for t in range(T):
             debug(L)
             debug("M_zeta")
-            for _z in hx.z[0]:
-                debug(L._fields[int(_z)])
+            for _z in M_zeta[0]:
+                debug(_z)
+            for _z in M_zeta[0]:
+                debug(L._fields[int(_z.argmax())])
 
             def safediv(x, y):
                 return x / torch.clamp(y, min=1e-5)
