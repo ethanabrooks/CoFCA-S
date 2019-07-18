@@ -50,8 +50,23 @@ class EndWhile(Line):
         return 0, 0, 0, L.EndWhile, 0
 
 
+WHILE_PASSING_PROBS = [
+    None,  # 0
+    1,  # 1
+    0.791288,  # 2
+    0.745606,  # 3
+    0.729545,  # 4
+    0.722634,  # 5
+    0.719304,  # 6
+    0.717579,  # 7
+    0.716641,  # 8
+    0.716111,  # 9
+]
+
+
 class ControlFlowGridworld(SubtasksGridworld):
     def __init__(self, *args, n_subtasks, **kwargs):
+        self.max_loops = 3
         self.n_encountered = n_subtasks
         super().__init__(*args, n_subtasks=n_subtasks, **kwargs)
         self.irreversible_interactions = [
@@ -158,173 +173,98 @@ class ControlFlowGridworld(SubtasksGridworld):
         return OrderedDict(obs)
 
     def subtasks_generator(self):
-        active_control = None
-        line_type = None
-        interactions = list(range(len(self.interactions)))
-        # noinspection PyTypeChecker
-        for i in range(self.n_encountered):
-            try:
-                failing = not active_control.object
-            except AttributeError:
-                failing = False
-            if line_type in [self.While, self.If, Else]:
-                # must follow condition with subtask
-                line_type = self.Subtask
-            elif i == self.n_encountered - 1 or (
-                i == self.n_encountered - 2 and failing
-            ):
-                # Terminate all active controls
-                if isinstance(active_control, (self.If, Else)):
-                    line_type = EndIf
-                elif isinstance(active_control, self.While):
-                    line_type = EndWhile
-                else:
-                    assert active_control is None
-                    line_type = self.Subtask
-
-            else:
-                # No need to terminate controls. No preceding condition
-                line_types = {
-                    self.If: [self.Subtask, EndIf],
-                    Else: [self.Subtask, EndIf],
-                    self.While: [self.Subtask, EndWhile],
-                }
-                defaults = [self.Subtask]
-                if i <= self.n_encountered - 3:
-                    # need at least 3 lines left for Else and While
-                    line_types[self.If] += [Else]
-                    defaults += [self.While, self.If]
-                line_type = self.np_random.choice(
-                    line_types.get(type(active_control), defaults)
-                )
-
-            # instantiate lines
-            if line_type in (self.If, self.While):
-                active_control = line_type(None)
-                yield active_control
-            elif line_type is Else:
-                active_control = Else()
-                yield Else()
-            elif line_type in (EndIf, EndWhile):
-                active_control = None
-                yield line_type()
-
-            elif line_type is self.Subtask:
-                yield self.Subtask(
-                    interaction=self.np_random.choice(
-                        self.irreversible_interactions
-                        if active_control
-                        else interactions
-                    ),
-                    count=0,
-                    object=None,
-                )
-            else:
-                raise RuntimeError
-
-    # def subtasks_generator(self):
-    #     assert self.n_subtasks == 6
-    #     self.np_random.shuffle(self.irreversible_interactions)
-    #     if self.np_random.rand() < 1:  # TODO
-    #         yield self.If(None)
-    #         yield self.Subtask(
-    #             interaction=self.irreversible_interactions[0], count=0, object=None
-    #         )
-    #         yield Else()
-    #         yield self.Subtask(
-    #             interaction=self.irreversible_interactions[1], count=0, object=None
-    #         )
-    #         yield EndIf()
-    #         yield self.Subtask(
-    #             interaction=self.np_random.choice(len(self.interactions)),
-    #             count=0,
-    #             object=None,
-    #         )
-    #     else:
-    #         yield self.While(None)
-    #         yield self.Subtask(
-    #             interaction=self.irreversible_interactions[0], count=0, object=None
-    #         )
-    #         yield EndWhile()
-    #         yield self.Subtask(
-    #             interaction=self.irreversible_interactions[1], count=0, object=None
-    #         )
+        assert self.n_subtasks == 5
+        self.np_random.shuffle(self.irreversible_interactions)
+        if self.np_random.rand() < 0.5:
+            yield self.If(None)
+            yield self.Subtask(
+                interaction=self.irreversible_interactions[0], count=0, object=None
+            )
+            # yield self.Subtask(
+            #     interaction=self.irreversible_interactions[0], count=0, object=None
+            # )
+            # yield Else()
+            # yield self.Subtask(
+            #     interaction=self.irreversible_interactions[1], count=0, object=None
+            # )
+            # yield self.Subtask(
+            #     interaction=self.irreversible_interactions[1], count=0, object=None
+            # )
+            yield EndIf()
+            yield self.Subtask(
+                interaction=self.irreversible_interactions[1], count=0, object=None
+            )
+            yield self.Subtask(
+                interaction=self.irreversible_interactions[0], count=0, object=None
+            )
+        else:
+            yield self.If(None)
+            yield self.Subtask(
+                interaction=self.irreversible_interactions[0], count=0, object=None
+            )
+            yield Else()
+            yield self.Subtask(
+                interaction=self.irreversible_interactions[1], count=0, object=None
+            )
+            yield EndIf()
+        # else:
+        #     yield self.While(None)
+        #     yield self.Subtask(
+        #         interaction=self.irreversible_interactions[0], count=0, object=None
+        #     )
+        #     yield EndWhile()
 
     def get_required_objects(self, subtasks):
         available = []
         i = 0
-        control_obj = None
-        non_existing = {self.np_random.choice(len(self.object_types))}
-        object_types = list(range(len(self.object_types)))
-        n_executed = 0
-
+        existing, non_existing = self.np_random.choice(
+            len(self.object_types), size=2, replace=False
+        )
+        non_existing = {non_existing}
+        object_types = {i for i, _ in enumerate(self.object_types)}
+        n_loops = 0
         while i < len(self.subtasks):
             line = self.subtasks[i]
-            existing = list(set(object_types) - non_existing)
             if isinstance(line, (self.If, self.While)):
-                passing = self.np_random.rand() < 0.5
-                obj = self.np_random.choice(existing if passing else list(non_existing))
-                self.subtasks[i] = line.replace_object(obj)
-                if passing and obj not in available:
-                    available += [obj]
-                    yield obj
-                if isinstance(line, self.While):
-                    control_obj = obj
-                else:
-                    control_obj = self.np_random.choice(existing)
-            elif isinstance(line, EndWhile):
-                passing = (
-                    self.np_random.rand() < 0.5 and n_executed < self.n_subtasks // 2
+                passing = self.np_random.rand() < (
+                    WHILE_PASSING_PROBS[self.max_loops]
+                    if isinstance(line, self.While)
+                    else 0.5
                 )
                 if passing:
-                    assert control_obj not in available
-                    if control_obj not in available:
-                        available += [control_obj]
-                        yield control_obj
+                    obj = existing
+                    if obj not in available:
+                        available += [obj]
+                        yield obj
                 else:
-                    non_existing.add(control_obj)
-                    control_obj = None
-            elif isinstance(line, EndIf):
-                control_obj = None
+                    obj = self.np_random.choice(list(non_existing))
 
-            elif isinstance(line, self.Subtask):
-                n_executed += 1
-                obj = (
-                    self.np_random.choice(existing)
-                    if control_obj is None
-                    else control_obj
-                )
                 self.subtasks[i] = line.replace_object(obj)
-                if obj not in available:
-                    available.append(obj)
-                    yield obj
+            elif isinstance(line, EndWhile):
+                n_loops += 1
+                passing = self.np_random.rand() < 0.5 and n_loops < self.max_loops
+                if passing:
+                    assert existing not in available
+                    available += [existing]
+                    yield existing
+                else:
+                    non_existing.add(existing)
+                    existing = self.np_random.choice(list(object_types - non_existing))
+            elif isinstance(line, self.Subtask):
+                n_loops += 1
+                self.subtasks[i] = line.replace_object(existing)
+                if existing not in available:
+                    available.append(existing)
+                    yield existing
                 if line.interaction in self.irreversible_interactions:
-                    available.remove(obj)
+                    available.remove(existing)
 
             i = self.get_next_idx(i, existing=available)
 
-        control_obj = None
-        if_index = None
         for i in range(len(subtasks)):
             line = self.subtasks[i]
-            if isinstance(line, self.While):
-                control_obj = line.object
-            elif isinstance(line, self.If):
-                if_index = i
-            elif isinstance(line, (EndIf, EndWhile)):
-                control_obj = None
-                if_index = None
-            elif isinstance(line, self.Subtask):
-                if if_index is not None:  # inside if
-                    if control_obj is None:
-                        if line.object is None:
-                            # if statement fails
-                            else_idx = self.get_next_idx(if_index, existing)
-                            control_obj = self.subtasks[else_idx + 1].object
-                        else:
-                            control_obj = line.object
-                if control_obj is not None:
-                    self.subtasks[i] = line._replace(object=control_obj)
+            if isinstance(line, self.Subtask) and line.object is None:
+                self.subtasks[i] = line._replace(object=existing)
 
     def get_next_subtask(self):
         if self.subtask_idx is None:
