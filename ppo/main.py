@@ -124,9 +124,8 @@ def metacontroller_cli():
     subtasks_parser.add_argument(
         "--metacontroller-hidden-size", type=int, required=True
     )
-    subtasks_parser.add_argument(
-        "--metacontroller-entropy-coef", type=float, required=True
-    )
+    subtasks_parser.add_argument("--g-entropy-coef", type=float, required=True)
+    subtasks_parser.add_argument("--z-entropy-coef", type=float, required=True)
     subtasks_parser.add_argument("--metacontroller-recurrent", action="store_true")
     subtasks_parser.add_argument("--hard-update", action="store_true")
 

@@ -4,8 +4,7 @@ from torch import nn as nn
 import torch.jit
 from torch.nn import functional as F
 
-from gridworld_env.control_flow_gridworld import LineTypes
-from gridworld_env.subtasks_gridworld import Inputs
+from gridworld_env.control_flow_gridworld import LineTypes, Obs
 import ppo
 from ppo.agent import AgentValues, NNBase
 import ppo.control_flow.lower_level
@@ -21,7 +20,8 @@ class Agent(ppo.agent.Agent, NNBase):
         obs_space,
         action_space,
         hidden_size,
-        entropy_coef,
+        g_entropy_coef,
+        z_entropy_coef,
         hard_update,
         agent_load_path,
         agent_args,
@@ -29,10 +29,12 @@ class Agent(ppo.agent.Agent, NNBase):
     ):
         nn.Module.__init__(self)
         self.hard_update = hard_update
-        self.entropy_coef = entropy_coef
+        self.entropy_coefs = Actions(
+            a=None, cg=None, cr=None, g=g_entropy_coef, z=z_entropy_coef
+        )
         self.action_spaces = Actions(**action_space.spaces)
         self.obs_space = obs_space
-        obs_spaces = Inputs(**self.obs_space.spaces)
+        obs_spaces = Obs(**self.obs_space.spaces)
         self.n_subtasks = len(obs_spaces.subtasks.nvec)
         agent = None
         if agent_load_path is not None:
@@ -104,18 +106,23 @@ class Agent(ppo.agent.Agent, NNBase):
                 cg=None,
                 cr=None,
                 g=FixedCategorical(hx.g_probs),
-                z=None,
+                z=FixedCategorical(
+                    hx.z_probs.view(N, self.n_subtasks, len(LineTypes._fields))
+                ),
             )
 
         log_probs = sum(
-            dist.log_probs(a) for dist, a in zip(dists, actions) if dist is not None
+            dist.log_probs(a).view(N, -1, 1).sum(1)
+            for dist, a in zip(dists, actions)
+            if dist is not None
         )
-        z_dist = FixedCategorical(
-            hx.z_probs.view(N, self.n_subtasks, len(LineTypes._fields))
+        # log_probs = log_probs + z_dist.log_probs(actions.z).sum(1)
+        entropies = sum(
+            c * dist.entropy().view(N, -1)
+            for c, dist in zip(self.entropy_coefs, dists)
+            if dist is not None
         )
-        log_probs = log_probs + z_dist.log_probs(actions.z).sum(1)
-        entropies = sum(dist.entropy() for dist in dists if dist is not None)
-        aux_loss = -self.entropy_coef * entropies.mean()
+        aux_loss = -entropies.mean()
 
         return AgentValues(
             value=hx.v,

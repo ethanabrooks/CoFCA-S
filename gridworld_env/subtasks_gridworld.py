@@ -14,7 +14,7 @@ import six
 from ppo.utils import set_index
 
 Subtask = namedtuple("Subtask", "interaction count object")
-Inputs = namedtuple("Obs", "base subtask subtasks")
+Obs = namedtuple("Obs", "base subtask subtasks")
 
 
 class SubtasksGridworld(gym.Env):
@@ -99,7 +99,7 @@ class SubtasksGridworld(gym.Env):
         h, w = self.desc.shape
 
         self.observation_space = spaces.Dict(
-            Inputs(
+            Obs(
                 base=Box(
                     0,
                     1,
@@ -245,6 +245,8 @@ class SubtasksGridworld(gym.Env):
 
         self.subtask_idx = None
         self.subtask_idx = self.get_next_subtask()
+        if self.subtask is None:
+            return self.reset()
         self.count = self.subtask.count
         self.last_terminal = False
         self.last_action = None
@@ -273,9 +275,7 @@ class SubtasksGridworld(gym.Env):
             ]
         ).transpose(2, 0, 1)
 
-        return Inputs(
-            base=obs, subtask=self.subtask_idx, subtasks=self.subtasks
-        )._asdict()
+        return Obs(base=obs, subtask=self.subtask_idx, subtasks=self.subtasks)._asdict()
 
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)
