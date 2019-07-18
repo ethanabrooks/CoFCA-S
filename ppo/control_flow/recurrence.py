@@ -322,14 +322,6 @@ class Recurrence(torch.jit.ScriptModule):
                 return torch.stack(p, dim=-1)
 
             # p
-            # p = (
-            #     e[L.If] * interp(scan_forward(L.Else, L.EndIf), p_step, l)
-            #     + e[L.Else] * interp(scan_forward(L.EndIf), p_step, l)
-            #     + e[L.EndIf] * p_step
-            #     + e[L.While] * interp(scan_forward(L.EndWhile), p_step, l)
-            #     + e[L.EndWhile] * interp(scan_backward(L.While), p_step, l)
-            #     + e[L.Subtask] * interp(hx.p, p_step, hx.cr)
-            # )
             scan_forward = functools.partial(
                 scan, cumsum=roll(torch.cumsum(hx.p, dim=-1)), it=range(M.size(1))
             )
@@ -341,8 +333,8 @@ class Recurrence(torch.jit.ScriptModule):
             p_step = (p.unsqueeze(1) @ self.one_step).squeeze(1)
             debug("cr before update", round(hx.cr, 2))
             p = (
-                e[[L.If, L.Else]].sum(0)  # conditions
-                * interp(scan_forward(L.EndIf, L.Else), p_step, l)
+                e[L.If] * interp(scan_forward(L.EndIf, L.Else), p_step, l)
+                + e[L.Else] * interp(scan_forward(L.EndIf), p_step, l)
                 + e[L.EndIf] * p_step
                 + e[L.While] * interp(scan_forward(L.EndWhile), p_step, l)
                 + e[L.EndWhile] * interp(p_step, scan_backward(L.While), l)
