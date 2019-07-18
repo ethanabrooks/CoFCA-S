@@ -277,12 +277,15 @@ class Recurrence(torch.jit.ScriptModule):
 
             # e
             e = (p.unsqueeze(1) @ M_zeta).permute(2, 0, 1)
-            eCondition = (e[[L.If, L.Else, L.While, L.EndWhile]]).sum(0)
-            er = safediv(e[[L.If, L.While]].sum(0), eCondition)
-            eLastEval = safediv(e[L.Else], eCondition)
+            # eCondition = (e[[L.If, L.Else, L.While, L.EndWhile]]).sum(0)
+            # er = safediv(e[[L.If, L.While]].sum(0), eCondition)
+            # eLastEval = safediv(e[L.Else], eCondition)
+
+            # condition
+            eWhile = safediv(e[L.EndWhile], e[[L.If, L.While, L.EndWhile]].sum(0))
+            condition = interp(hx.r, hx.last_condition, eWhile)
 
             # l
-            condition = interp(hx.last_condition, hx.r, er)
             l = self.xi((inputs.base[t], condition))
             # NOTE {
             c = torch.split(condition, list(self.subtask_nvec), dim=-1)[-1][:, 1:]
@@ -292,7 +295,6 @@ class Recurrence(torch.jit.ScriptModule):
             hx_r = torch.split(hx.r, list(self.subtask_nvec), dim=-1)[-1][:, 1:]
             debug("last_condition", last_condition)
             debug("r", hx_r)
-            debug("er", er)
             debug("l condition", c)
             phi_in = inputs.base[t, :, 1:-2] * c.view(N, -1, 1, 1)
             truth = torch.max(phi_in.view(N, -1), dim=-1).values.float().view(N, 1)
@@ -303,11 +305,16 @@ class Recurrence(torch.jit.ScriptModule):
             # l = truth
             # NOTE }
 
-            l = interp(l, 1 - hx.last_eval, eLastEval)
-
             # control memory
             last_eval = interp(hx.last_eval, l, e[L.If])
             last_condition = interp(hx.last_condition, hx.r, e[L.While])
+
+            # l'
+            l = interp(
+                l,
+                1 - hx.last_eval,
+                safediv(e[L.Else], e[[L.If, L.Else, L.While, L.EndWhile]].sum(0)),
+            )
 
             def roll(x):
                 return F.pad(x, [1, 0])[:, :-1]
