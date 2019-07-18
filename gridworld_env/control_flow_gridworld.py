@@ -259,6 +259,9 @@ class ControlFlowGridworld(SubtasksGridworld):
             yield self.Subtask(
                 interaction=self.irreversible_interactions[1], count=0, object=None
             )
+            yield self.Subtask(
+                interaction=self.irreversible_interactions[0], count=0, object=None
+            )
         else:
             yield self.While(None)
             yield self.Subtask(
