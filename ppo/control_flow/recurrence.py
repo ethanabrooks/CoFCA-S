@@ -354,9 +354,11 @@ class Recurrence(torch.jit.ScriptModule):
             last_line = is_line.sum(-1).long() - 1
             p = p + (1 - p.sum(-1, keepdim=True)) * self.p_one_hot[last_line]
 
-            debug("e[[L.If, L.While, L.Else]]", e[[L.If, L.While, L.Else]].sum(0))
-            debug("e[L.EndWhile]", e[L.EndWhile])
+            debug("e[L.If]", e[L.If])
+            debug("e[L.Else]", e[L.Else])
             debug("e[L.EndIf]", e[L.EndIf])
+            debug("e[L.While]", e[L.While])
+            debug("e[L.EndWhile]", e[L.EndWhile])
             debug("e[L.Subtask]", e[L.Subtask])
 
             # r
