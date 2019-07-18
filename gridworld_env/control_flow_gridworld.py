@@ -240,37 +240,52 @@ class ControlFlowGridworld(SubtasksGridworld):
     def subtasks_generator(self):
         assert self.n_subtasks == 6
         self.np_random.shuffle(self.irreversible_interactions)
-        if self.np_random.rand() < 1:  # TODO
-            yield self.If(None)
-            yield self.Subtask(
-                interaction=self.irreversible_interactions[0], count=0, object=None
-            )
-            # yield self.Subtask(
-            #     interaction=self.irreversible_interactions[0], count=0, object=None
-            # )
-            # yield Else()
-            # yield self.Subtask(
-            #     interaction=self.irreversible_interactions[1], count=0, object=None
-            # )
-            # yield self.Subtask(
-            #     interaction=self.irreversible_interactions[1], count=0, object=None
-            # )
-            yield EndIf()
-            yield self.If(None)
-            yield self.Subtask(
-                interaction=self.irreversible_interactions[1], count=0, object=None
-            )
-            yield EndIf()
-        else:
-            yield self.If(None)
-            yield self.Subtask(
-                interaction=self.irreversible_interactions[0], count=0, object=None
-            )
-            yield Else()
-            yield self.Subtask(
-                interaction=self.irreversible_interactions[1], count=0, object=None
-            )
-            yield EndIf()
+        yield self.Subtask(
+            interaction=self.np_random.choice(len(self.interactions)),
+            count=0,
+            object=None,
+        )
+        yield self.Subtask(
+            interaction=self.np_random.choice(len(self.interactions)),
+            count=0,
+            object=None,
+        )
+        yield self.Subtask(
+            interaction=self.np_random.choice(len(self.interactions)),
+            count=0,
+            object=None,
+        )
+        # if self.np_random.rand() < 1:  # TODO
+        #    yield self.If(None)
+        #    yield self.Subtask(
+        #        interaction=self.irreversible_interactions[0], count=0, object=None
+        #    )
+        #    # yield self.Subtask(
+        #    #     interaction=self.irreversible_interactions[0], count=0, object=None
+        #    # )
+        #    # yield Else()
+        #    # yield self.Subtask(
+        #    #     interaction=self.irreversible_interactions[1], count=0, object=None
+        #    # )
+        #    # yield self.Subtask(
+        #    #     interaction=self.irreversible_interactions[1], count=0, object=None
+        #    # )
+        #    yield EndIf()
+        #    yield self.If(None)
+        #    yield self.Subtask(
+        #        interaction=self.irreversible_interactions[1], count=0, object=None
+        #    )
+        #    yield EndIf()
+        # else:
+        #    yield self.If(None)
+        #    yield self.Subtask(
+        #        interaction=self.irreversible_interactions[0], count=0, object=None
+        #    )
+        #    yield Else()
+        #    yield self.Subtask(
+        #        interaction=self.irreversible_interactions[1], count=0, object=None
+        #    )
+        #    yield EndIf()
         # else:
         #     yield self.While(None)
         #     yield self.Subtask(
