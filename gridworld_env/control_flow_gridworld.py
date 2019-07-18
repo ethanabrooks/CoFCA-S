@@ -245,19 +245,19 @@ class ControlFlowGridworld(SubtasksGridworld):
                     raise RuntimeError
         elif self.task_type is TaskTypes.Subtasks:
             yield self.Subtask(
-                interaction=self.np_random.choice(
-                    len(self.interactions), count=0, object=None
-                )
+                interaction=self.np_random.choice(len(self.interactions)),
+                count=0,
+                object=None,
             )
             yield self.Subtask(
-                interaction=self.np_random.choice(
-                    len(self.interactions), count=0, object=None
-                )
+                interaction=self.np_random.choice(len(self.interactions)),
+                count=0,
+                object=None,
             )
             yield self.Subtask(
-                interaction=self.np_random.choice(
-                    len(self.interactions), count=0, object=None
-                )
+                interaction=self.np_random.choice(len(self.interactions)),
+                count=0,
+                object=None,
             )
         elif self.task_type is TaskTypes.If:
             yield self.If(None)
