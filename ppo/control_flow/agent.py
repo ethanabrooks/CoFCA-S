@@ -106,18 +106,19 @@ class Agent(ppo.agent.Agent, NNBase):
                 cg=None,
                 cr=None,
                 g=FixedCategorical(hx.g_probs),
-                z=None,
+                z=FixedCategorical(
+                    hx.z_probs.view(N, self.n_subtasks, len(LineTypes._fields))
+                ),
             )
 
         log_probs = sum(
-            dist.log_probs(a) for dist, a in zip(dists, actions) if dist is not None
+            dist.log_probs(a).view(N, -1, 1).sum(1)
+            for dist, a in zip(dists, actions)
+            if dist is not None
         )
-        z_dist = FixedCategorical(
-            hx.z_probs.view(N, self.n_subtasks, len(LineTypes._fields))
-        )
-        log_probs = log_probs + z_dist.log_probs(actions.z).sum(1)
+        # log_probs = log_probs + z_dist.log_probs(actions.z).sum(1)
         entropies = sum(
-            c * dist.entropy()
+            c * dist.entropy().view(N, -1)
             for c, dist in zip(self.entropy_coefs, dists)
             if dist is not None
         )
