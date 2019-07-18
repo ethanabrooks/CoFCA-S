@@ -20,7 +20,8 @@ class Agent(ppo.agent.Agent, NNBase):
         obs_space,
         action_space,
         hidden_size,
-        entropy_coef,
+        g_entropy_coef,
+        z_entropy_coef,
         hard_update,
         agent_load_path,
         agent_args,
@@ -28,7 +29,9 @@ class Agent(ppo.agent.Agent, NNBase):
     ):
         nn.Module.__init__(self)
         self.hard_update = hard_update
-        self.entropy_coef = entropy_coef
+        self.entropy_coefs = Actions(
+            a=None, cg=None, cr=None, g=g_entropy_coef, z=z_entropy_coef
+        )
         self.action_spaces = Actions(**action_space.spaces)
         self.obs_space = obs_space
         obs_spaces = Obs(**self.obs_space.spaces)
@@ -113,8 +116,12 @@ class Agent(ppo.agent.Agent, NNBase):
             hx.z_probs.view(N, self.n_subtasks, len(LineTypes._fields))
         )
         log_probs = log_probs + z_dist.log_probs(actions.z).sum(1)
-        entropies = sum(dist.entropy() for dist in dists if dist is not None)
-        aux_loss = -self.entropy_coef * entropies.mean()
+        entropies = sum(
+            c * dist.entropy()
+            for c, dist in zip(self.entropy_coefs, dists)
+            if dist is not None
+        )
+        aux_loss = -entropies.mean()
 
         return AgentValues(
             value=hx.v,
