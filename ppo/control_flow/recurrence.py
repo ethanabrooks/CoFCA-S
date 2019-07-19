@@ -476,12 +476,14 @@ class Recurrence(torch.jit.ScriptModule):
 
     @staticmethod
     def sample_new(x, dist):
-        if torch.any(torch.isnan(x)):
+        y = x.clone().detach().cpu()
+        new = x < 0
+        try:
+            x[new] = dist.sample()[new].flatten()
+        except RuntimeError:
             import ipdb
 
             ipdb.set_trace()
-        new = x < 0
-        x[new] = dist.sample()[new].flatten()
 
     def pack(self, outputs):
         zipped = list(zip(*outputs))
