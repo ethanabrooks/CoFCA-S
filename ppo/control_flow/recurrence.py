@@ -306,11 +306,16 @@ class Recurrence(torch.jit.ScriptModule):
             # l = truth
             # NOTE }
 
-            l = interp(l, 1 - hx.last_eval, eLastEval)
-
             # control memory
             last_eval = interp(hx.last_eval, l, e[L.If])
             last_condition = interp(hx.last_condition, hx.r, e[L.While])
+
+            # l'
+            l = interp(
+                l,
+                1 - hx.last_eval,
+                safediv(e[L.Else], e[[L.If, L.Else, L.While, L.EndWhile]].sum(0)),
+            )
 
             def roll(x):
                 return F.pad(x, [1, 0])[:, :-1]
