@@ -355,26 +355,51 @@ class Recurrence(torch.jit.ScriptModule):
             )
             p_step = (p.unsqueeze(1) @ self.one_step).squeeze(1)
             self.print("cr before update", round(hx.cr, 2))
-            p = (
-                # e[[L.If, L.While, L.Else]].sum(0)  # conditions
-                # * interp(scan_forward(L.EndIf, L.Else, L.EndWhile), p_step, l)
-                e[L.If] * interp(scan_forward(L.Else, L.EndIf), p_step, l)
-                + e[L.Else] * interp(scan_forward(L.EndIf), p_step, l)
-                + e[L.While] * interp(scan_forward(L.EndWhile), p_step, l)
-                + e[L.EndWhile] * interp(p_step, scan_backward(L.While).flip(-1), l)
-                + e[L.EndIf] * p_step
-                + e[L.Subtask] * interp(hx.p, p_step, hx.cr)
-            )
-            is_line = 1 - inputs.ignore[0]
-            p = is_line * p / p.sum(-1, keepdim=True)  # zero out non-lines
-            if not torch.all(torch.abs(p.sum(-1) - 1) < 1e-4):
+            pIf = interp(scan_forward(L.Else, L.EndIf), p_step, l)
+            pElse = interp(scan_forward(L.EndIf), p_step, l)
+            pWhile = interp(scan_forward(L.EndWhile), p_step, l)
+            pEndWhile = interp(p_step, scan_backward(L.While).flip(-1), l)
+            pSubtask = interp(hx.p, p_step, hx.cr)
+            if not torch.all(aeq(pIf.sum(-1), 1)):
                 import ipdb
 
                 ipdb.set_trace()
+            if not torch.all(aeq(pElse.sum(-1), 1)):
+                import ipdb
+
+                ipdb.set_trace()
+            if not torch.all(aeq(pWhile.sum(-1), 1)):
+                import ipdb
+
+                ipdb.set_trace()
+            if not torch.all(aeq(pEndWhile.sum(-1), 1)):
+                import ipdb
+
+                ipdb.set_trace()
+            if not torch.all(aeq(pSubtask.sum(-1), 1)):
+                import ipdb
+
+                ipdb.set_trace()
+            p = (
+                # e[[L.If, L.While, L.Else]].sum(0)  # conditions
+                # * interp(scan_forward(L.EndIf, L.Else, L.EndWhile), p_step, l)
+                e[L.If] * pIf
+                + e[L.Else] * pElse
+                + e[L.While] * pWhile
+                + e[L.EndWhile] * pEndWhile
+                + e[L.EndIf] * p_step
+                + e[L.Subtask] * pSubtask
+            )
+            is_line = 1 - inputs.ignore[0]
+            p = is_line * p / p.sum(-1, keepdim=True)  # zero out non-lines
 
             # concentrate non-allocated attention on last line
             last_line = is_line.sum(-1).long() - 1
             p = p + (1 - p.sum(-1, keepdim=True)) * self.p_one_hot[last_line]
+            if not torch.all(aeq(p.sum(-1), 1)):
+                import ipdb
+
+                ipdb.set_trace()
 
             self.print("e[L.If]", e[L.If])
             self.print("e[L.Else]", e[L.Else])
