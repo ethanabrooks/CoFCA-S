@@ -335,7 +335,7 @@ class ControlFlowGridworld(SubtasksGridworld):
                 n_loops += 1
                 passing = self.np_random.rand() < 0.5 and n_loops < self.max_loops
                 if passing:
-                    assert existing not in available
+                    # assert existing not in available
                     available += [existing]
                     yield existing
                 else:
