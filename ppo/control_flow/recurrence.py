@@ -286,10 +286,7 @@ class Recurrence(torch.jit.ScriptModule):
             condition = interp(
                 hx.r,
                 hx.last_condition,
-                safediv(
-                    e[[L.EndWhile, L.Else]].sum(0),
-                    (e[[L.If, L.Else, L.While, L.EndWhile]]).sum(0),
-                ),
+                safediv(e[L.EndWhile], (e[[L.If, L.While, L.EndWhile]]).sum(0)),
             )
             l = self.xi((inputs.base[t], condition))
             # NOTE {
