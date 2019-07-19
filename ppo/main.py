@@ -5,7 +5,7 @@ from gym.wrappers import TimeLimit
 from rl_utils import hierarchical_parse_args
 
 import gridworld_env
-from gridworld_env.control_flow_gridworld import ControlFlowGridworld
+from gridworld_env.control_flow_gridworld import ControlFlowGridworld, TaskTypes
 import gridworld_env.matrix_control_flow_gridworld
 import gridworld_env.subtasks_gridworld
 import ppo
@@ -28,6 +28,8 @@ def add_task_args(parser):
 def add_env_args(parser):
     env_parser = parser.add_argument_group("env_args")
     env_parser.add_argument("--min-objects", type=int, required=True)
+    env_parser.add_argument("--task-type", choices=[t.name for t in TaskTypes])
+    env_parser.add_argument("--max-loops", type=int)
     env_parser.add_argument(
         "--eval-subtask",
         dest="eval_subtasks",

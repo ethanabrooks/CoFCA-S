@@ -1,6 +1,7 @@
 import abc
 from collections import OrderedDict, namedtuple
 import copy
+from enum import Enum
 
 from gym import spaces
 import numpy as np
@@ -15,6 +16,8 @@ LineTypes = namedtuple(
 )
 
 L = LineTypes()
+
+TaskTypes = Enum("TaskTypes", "Subtasks If Else While General")
 
 
 class Line(abc.ABC):
@@ -65,8 +68,9 @@ WHILE_PASSING_PROBS = [
 
 
 class ControlFlowGridworld(SubtasksGridworld):
-    def __init__(self, *args, n_subtasks, **kwargs):
-        self.max_loops = 3
+    def __init__(self, *args, n_subtasks, task_type, max_loops, **kwargs):
+        self.task_type = TaskTypes[task_type]
+        self.max_loops = max_loops
         self.n_encountered = n_subtasks
         super().__init__(*args, n_subtasks=n_subtasks, **kwargs)
         self.irreversible_interactions = [
