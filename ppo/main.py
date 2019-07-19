@@ -28,7 +28,7 @@ def add_task_args(parser):
 def add_env_args(parser):
     env_parser = parser.add_argument_group("env_args")
     env_parser.add_argument("--min-objects", type=int, required=True)
-    env_parser.add_argument("--task-type", choices=[t.name for t in TaskTypes])
+    env_parser.add_argument("--task-type", type=lambda s: TaskTypes[s], default="Auto")
     env_parser.add_argument("--max-loops", type=int)
     env_parser.add_argument(
         "--eval-subtask",
