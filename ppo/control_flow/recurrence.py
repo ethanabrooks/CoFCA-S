@@ -347,10 +347,10 @@ class Recurrence(torch.jit.ScriptModule):
             self.print("cr before update", round(hx.cr, 2))
             p = (
                 e[[L.If, L.While, L.Else]].sum(0)  # conditions
-                * (l * p_step + (1 - l) * p_forward)
-                + e[L.EndWhile] * (l * p_backward + (1 - l) * p_step)
+                * interp(p_forward, p_step, l)
+                + e[L.EndWhile] * interp(p_step, p_backward, l)
                 + e[L.EndIf] * p_step
-                + e[L.Subtask] * (hx.cr * p_step + (1 - hx.cr) * hx.p)
+                + e[L.Subtask] * interp(hx.p, p_step, hx.cr)
             )
             is_line = 1 - inputs.ignore[0]
             p = is_line * p / p.sum(-1, keepdim=True)  # zero out non-lines
