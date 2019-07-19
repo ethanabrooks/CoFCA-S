@@ -88,7 +88,7 @@ class Wrapper(gym.Wrapper):
         if self.last_g is not None:
             self.render_assigned_subtask()
         super().render(mode=mode)
-        if self.env._past_limit():
+        if self.env._elapsed_steps == self.env._max_episode_steps:
             print(
                 RED
                 + "***********************************************************************************"
