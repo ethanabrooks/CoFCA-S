@@ -290,6 +290,12 @@ class Recurrence(torch.jit.ScriptModule):
             l = self.xi((inputs.base[t], condition))
             # NOTE {
             c = torch.split(condition, list(self.subtask_nvec), dim=-1)[-1][:, 1:]
+            last_condition = torch.split(
+                hx.last_condition, list(self.subtask_nvec), dim=-1
+            )[-1][:, 1:]
+            hx_r = torch.split(hx.r, list(self.subtask_nvec), dim=-1)[-1][:, 1:]
+            self.print("last_condition", last_condition)
+            self.print("r", hx_r)
             self.print("l condition", c)
             phi_in = inputs.base[t, :, 1:-2] * c.view(N, -1, 1, 1)
             truth = torch.max(phi_in.view(N, -1), dim=-1).values.float().view(N, 1)
@@ -319,24 +325,20 @@ class Recurrence(torch.jit.ScriptModule):
                 return torch.stack(p, dim=-1)
 
             # p
-            p_forward = scan(
-                L.EndIf,
-                L.Else,
-                L.EndWhile,
-                cumsum=roll(torch.cumsum(hx.p, dim=-1)),
-                it=range(M.size(1)),
+            scan_forward = functools.partial(
+                scan, cumsum=roll(torch.cumsum(hx.p, dim=-1)), it=range(M.size(1))
             )
-            p_backward = scan(
-                L.While,
+            scan_backward = functools.partial(
+                scan,
                 cumsum=roll(torch.cumsum(hx.p.flip(-1), dim=-1)).flip(-1),
                 it=range(M.size(1) - 1, -1, -1),
-            ).flip(-1)
+            )
             p_step = (p.unsqueeze(1) @ self.one_step).squeeze(1)
             self.print("cr before update", round(hx.cr, 2))
             p = (
                 e[[L.If, L.While, L.Else]].sum(0)  # conditions
-                * (l * p_step + (1 - l) * p_forward)
-                + e[L.EndWhile] * (l * p_backward + (1 - l) * p_step)
+                * (l * p_step + (1 - l) * scan_forward(L.EndIf, L.Else, L.EndWhile))
+                + e[L.EndWhile] * (l * scan_backward(L.While) + (1 - l) * p_step)
                 + e[L.EndIf] * p_step
                 + e[L.Subtask] * (hx.cr * p_step + (1 - hx.cr) * hx.p)
             )
