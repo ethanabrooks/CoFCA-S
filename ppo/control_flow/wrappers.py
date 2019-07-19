@@ -52,10 +52,12 @@ class Wrapper(gym.Wrapper):
         self.action_space = spaces.Dict(
             Actions(
                 a=env.action_space,
-                g=spaces.Discrete(env.n_subtasks),
+                g=spaces.Discrete(env.unwrapped.n_subtasks),
                 cg=spaces.Discrete(2),
                 cr=spaces.Discrete(2),
-                z=spaces.MultiDiscrete(np.full(env.n_subtasks, len(LineTypes._fields))),
+                z=spaces.MultiDiscrete(
+                    np.full(env.unwrapped.n_subtasks, len(LineTypes._fields))
+                ),
             )._asdict()
         )
         self.action_sections = np.cumsum(
