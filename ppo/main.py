@@ -28,7 +28,6 @@ def add_task_args(parser):
 def add_env_args(parser):
     env_parser = parser.add_argument_group("env_args")
     env_parser.add_argument("--min-objects", type=int, required=True)
-    env_parser.add_argument("--debug", action="store_true")
     env_parser.add_argument("--task-type", choices=[t.name for t in TaskTypes])
     env_parser.add_argument(
         "--eval-subtask",
@@ -45,7 +44,7 @@ def cli():
 
 
 def make_subtasks_env(env_id, **kwargs):
-    def helper(seed, rank, max_episode_steps, class_, debug, **_kwargs):
+    def helper(seed, rank, max_episode_steps, class_, **_kwargs):
         if rank == 1:
             print("Environment args:")
             for k, v in _kwargs.items():
@@ -56,8 +55,8 @@ def make_subtasks_env(env_id, **kwargs):
                 max_episode_steps=int(max_episode_steps),
             )
         )
-        if debug:
-            env = ppo.control_flow.DebugWrapper(env)
+        # if debug:
+        #     env = ppo.control_flow.DebugWrapper(env)
         env.seed(seed + rank)
         return env
 
@@ -132,6 +131,7 @@ def metacontroller_cli():
     subtasks_parser.add_argument("--z-entropy-coef", type=float, required=True)
     subtasks_parser.add_argument("--metacontroller-recurrent", action="store_true")
     subtasks_parser.add_argument("--hard-update", action="store_true")
+    subtasks_parser.add_argument("--debug", action="store_true")
 
     def train(env_id, task_args, ppo_args, subtasks_args, env_args, **kwargs):
         class TrainSubtasks(Train):
