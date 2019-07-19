@@ -7,6 +7,7 @@ import numpy as np
 
 from common.vec_env.util import space_shape
 from gridworld_env.control_flow_gridworld import LineTypes
+from ppo.utils import RED, RESET
 
 Actions = namedtuple("Actions", "a cr cg g z")
 
@@ -75,6 +76,18 @@ class Wrapper(gym.Wrapper):
         if self.last_g is not None:
             self.render_assigned_subtask()
         super().render(mode=mode)
+        if self.env._past_limit():
+            print(
+                RED
+                + "***********************************************************************************"
+            )
+            print(
+                "                                   Task Failed                                   "
+            )
+            print(
+                "***********************************************************************************"
+                + RESET
+            )
         input("paused")
 
     def render_assigned_subtask(self):
