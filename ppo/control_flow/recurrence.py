@@ -268,6 +268,9 @@ class Recurrence(torch.jit.ScriptModule):
         G = torch.cat([actions.g, hx.g.unsqueeze(0)], dim=0).long().squeeze(2)
         M_zeta = self.z_one_hots[hx.z.long()]
 
+        def aeq(a, b):
+            return torch.abs(a - b) < 1e-4
+
         for t in range(T):
             self.print(L)
             self.print("M_zeta")
@@ -303,6 +306,11 @@ class Recurrence(torch.jit.ScriptModule):
             phi_in = inputs.base[t, :, 1:-2] * c.view(N, -1, 1, 1)
             truth = torch.max(phi_in.view(N, -1), dim=-1).values.float().view(N, 1)
             l = self.xi_debug(truth)
+            if torch.any(l < 0) or torch.any(l > 1):
+                import ipdb
+
+                ipdb.set_trace()
+
             self.print("l truth", round(truth, 4))
             self.print("l", round(l, 4))
             self.print("p before update", round(p, 2))
@@ -319,6 +327,10 @@ class Recurrence(torch.jit.ScriptModule):
                 1 - hx.last_eval,
                 safediv(e[L.Else], e[[L.If, L.Else, L.While, L.EndWhile]].sum(0)),
             )
+            if torch.any(l < 0) or torch.any(l > 1):
+                import ipdb
+
+                ipdb.set_trace()
 
             def roll(x):
                 return F.pad(x, [1, 0])[:, :-1]
@@ -343,9 +355,6 @@ class Recurrence(torch.jit.ScriptModule):
             )
             p_step = (p.unsqueeze(1) @ self.one_step).squeeze(1)
             self.print("cr before update", round(hx.cr, 2))
-            _p1 = hx.p.clone().detach().cpu()
-            _l = l.clone().detach().cpu()
-            _l = l.clone().detach().cpu()
             p = (
                 # e[[L.If, L.While, L.Else]].sum(0)  # conditions
                 # * interp(scan_forward(L.EndIf, L.Else, L.EndWhile), p_step, l)
@@ -356,10 +365,12 @@ class Recurrence(torch.jit.ScriptModule):
                 + e[L.EndIf] * p_step
                 + e[L.Subtask] * interp(hx.p, p_step, hx.cr)
             )
-            _p2 = p.clone().detach().cpu()
-            _e = e.clone().detach().cpu()
             is_line = 1 - inputs.ignore[0]
             p = is_line * p / p.sum(-1, keepdim=True)  # zero out non-lines
+            if not torch.all(torch.abs(p.sum(-1) - 1) < 1e-4):
+                import ipdb
+
+                ipdb.set_trace()
 
             # concentrate non-allocated attention on last line
             last_line = is_line.sum(-1).long() - 1
