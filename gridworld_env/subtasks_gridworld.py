@@ -11,7 +11,7 @@ import numpy as np
 from rl_utils import cartesian_product
 import six
 
-from ppo.utils import set_index
+from ppo.utils import set_index, GREEN, RESET
 
 Subtask = namedtuple("Subtask", "interaction count object")
 Obs = namedtuple("Obs", "base subtask subtasks")
@@ -192,13 +192,15 @@ class SubtasksGridworld(gym.Env):
         # time.sleep(4 * sleep_time if self.last_terminal else sleep_time)
         if self.subtask is None:
             print(
-                "***********************************************************************************"
+                GREEN
+                + "***********************************************************************************"
             )
             print(
                 "                                   Task Complete                                   "
             )
             print(
                 "***********************************************************************************"
+                + RESET
             )
 
     def task_string(self):
