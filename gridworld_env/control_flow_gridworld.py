@@ -68,9 +68,9 @@ WHILE_PASSING_PROBS = [
 
 
 class ControlFlowGridworld(SubtasksGridworld):
-    def __init__(self, *args, n_subtasks, task_type, **kwargs):
+    def __init__(self, *args, n_subtasks, task_type, max_loops, **kwargs):
         self.task_type = TaskTypes[task_type]
-        self.max_loops = 3
+        self.max_loops = max_loops
         self.n_encountered = n_subtasks
         super().__init__(*args, n_subtasks=n_subtasks, **kwargs)
         self.irreversible_interactions = [
