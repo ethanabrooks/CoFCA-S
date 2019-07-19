@@ -476,6 +476,10 @@ class Recurrence(torch.jit.ScriptModule):
 
     @staticmethod
     def sample_new(x, dist):
+        if torch.any(torch.isnan(x)):
+            import ipdb
+
+            ipdb.set_trace()
         new = x < 0
         x[new] = dist.sample()[new].flatten()
 
