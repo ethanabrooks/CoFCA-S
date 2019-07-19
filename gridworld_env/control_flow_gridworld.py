@@ -291,9 +291,12 @@ class ControlFlowGridworld(SubtasksGridworld):
             yield self.Subtask(
                 interaction=self.irreversible_interactions[0], count=0, object=None
             )
-            yield EndWhile()
             yield self.Subtask(
                 interaction=self.irreversible_interactions[1], count=0, object=None
+            )
+            yield EndWhile()
+            yield self.Subtask(
+                interaction=self.irreversible_interactions[0], count=0, object=None
             )
 
     def get_required_objects(self, subtasks):
