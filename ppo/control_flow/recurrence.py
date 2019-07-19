@@ -390,12 +390,24 @@ class Recurrence(torch.jit.ScriptModule):
                 + e[L.EndIf] * p_step
                 + e[L.Subtask] * pSubtask
             )
+            if torch.any(p < 0) or torch.any(p > 1):
+                import ipdb
+
+                ipdb.set_trace()
             is_line = 1 - inputs.ignore[0]
             p = is_line * p / p.sum(-1, keepdim=True)  # zero out non-lines
+            if torch.any(p < 0) or torch.any(p > 1):
+                import ipdb
+
+                ipdb.set_trace()
 
             # concentrate non-allocated attention on last line
             last_line = is_line.sum(-1).long() - 1
             p = p + (1 - p.sum(-1, keepdim=True)) * self.p_one_hot[last_line]
+            if torch.any(p < 0) or torch.any(p > 1):
+                import ipdb
+
+                ipdb.set_trace()
             if not torch.all(aeq(p.sum(-1), 1)):
                 import ipdb
 
