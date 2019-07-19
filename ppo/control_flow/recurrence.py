@@ -319,6 +319,14 @@ class Recurrence(torch.jit.ScriptModule):
                 return torch.stack(p, dim=-1)
 
             # p
+            scan_forward = functools.partial(
+                scan, cumsum=roll(torch.cumsum(hx.p, dim=-1)), it=range(M.size(1))
+            )
+            scan_backward = functools.partial(
+                scan,
+                cumsum=roll(torch.cumsum(hx.p.flip(-1), dim=-1)).flip(-1),
+                it=range(M.size(1) - 1, -1, -1),
+            )
             p_forward = scan(
                 L.EndIf,
                 L.Else,
