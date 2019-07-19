@@ -288,7 +288,7 @@ class ControlFlowGridworld(SubtasksGridworld):
             )
         elif self.task_type is TaskTypes.While:
             yield self.While(None)
-            yield self.subtask(
+            yield self.Subtask(
                 interaction=self.irreversible_interactions[0], count=0, object=None
             )
             yield EndWhile()
