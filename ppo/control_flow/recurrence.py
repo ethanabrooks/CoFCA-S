@@ -343,6 +343,9 @@ class Recurrence(torch.jit.ScriptModule):
             )
             p_step = (p.unsqueeze(1) @ self.one_step).squeeze(1)
             self.print("cr before update", round(hx.cr, 2))
+            _p1 = hx.p.clone().detach().cpu()
+            _l = l.clone().detach().cpu()
+            _l = l.clone().detach().cpu()
             p = (
                 # e[[L.If, L.While, L.Else]].sum(0)  # conditions
                 # * interp(scan_forward(L.EndIf, L.Else, L.EndWhile), p_step, l)
@@ -353,6 +356,8 @@ class Recurrence(torch.jit.ScriptModule):
                 + e[L.EndIf] * p_step
                 + e[L.Subtask] * interp(hx.p, p_step, hx.cr)
             )
+            _p2 = p.clone().detach().cpu()
+            _e = e.clone().detach().cpu()
             is_line = 1 - inputs.ignore[0]
             p = is_line * p / p.sum(-1, keepdim=True)  # zero out non-lines
 
@@ -476,7 +481,7 @@ class Recurrence(torch.jit.ScriptModule):
 
     @staticmethod
     def sample_new(x, dist):
-        y = x.clone().detach().cpu()
+        probs = dist.probs.clone().detach().cpu()
         new = x < 0
         try:
             x[new] = dist.sample()[new].flatten()
