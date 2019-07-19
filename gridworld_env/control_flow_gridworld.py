@@ -287,11 +287,6 @@ class ControlFlowGridworld(SubtasksGridworld):
                 interaction=self.irreversible_interactions[1], count=0, object=None
             )
         elif self.task_type is TaskTypes.While:
-            yield self.Subtask(
-                interaction=self.np_random.choice(len(self.interactions)),
-                count=0,
-                object=None,
-            )
             yield self.While(None)
             yield self.Subtask(
                 interaction=self.irreversible_interactions[0], count=0, object=None
