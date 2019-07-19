@@ -282,12 +282,12 @@ class Recurrence(torch.jit.ScriptModule):
             # e
             e = (p.unsqueeze(1) @ M_zeta).permute(2, 0, 1)
 
-            # l
+            # condition
             condition = interp(
-                hx.last_condition,
                 hx.r,
+                hx.last_condition,
                 safediv(
-                    e[[L.If, L.While]].sum(0),
+                    e[[L.EndWhile, L.Else]].sum(0),
                     (e[[L.If, L.Else, L.While, L.EndWhile]]).sum(0),
                 ),
             )
