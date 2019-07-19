@@ -306,10 +306,6 @@ class Recurrence(torch.jit.ScriptModule):
             phi_in = inputs.base[t, :, 1:-2] * c.view(N, -1, 1, 1)
             truth = torch.max(phi_in.view(N, -1), dim=-1).values.float().view(N, 1)
             l = self.xi_debug(truth)
-            if torch.any(l < 0) or torch.any(l > 1):
-                import ipdb
-
-                ipdb.set_trace()
 
             self.print("l truth", round(truth, 4))
             self.print("l", round(l, 4))
@@ -327,10 +323,6 @@ class Recurrence(torch.jit.ScriptModule):
                 1 - hx.last_eval,
                 safediv(e[L.Else], e[[L.If, L.Else, L.While, L.EndWhile]].sum(0)),
             )
-            if torch.any(l < 0) or torch.any(l > 1):
-                import ipdb
-
-                ipdb.set_trace()
 
             def roll(x):
                 return F.pad(x, [1, 0])[:, :-1]
@@ -360,26 +352,6 @@ class Recurrence(torch.jit.ScriptModule):
             pWhile = interp(scan_forward(L.EndWhile), p_step, l)
             pEndWhile = interp(p_step, scan_backward(L.While).flip(-1), l)
             pSubtask = interp(hx.p, p_step, hx.cr)
-            if not torch.all(aeq(pIf.sum(-1), 1)):
-                import ipdb
-
-                ipdb.set_trace()
-            if not torch.all(aeq(pElse.sum(-1), 1)):
-                import ipdb
-
-                ipdb.set_trace()
-            if not torch.all(aeq(pWhile.sum(-1), 1)):
-                import ipdb
-
-                ipdb.set_trace()
-            if not torch.all(aeq(pEndWhile.sum(-1), 1)):
-                import ipdb
-
-                ipdb.set_trace()
-            if not torch.all(aeq(pSubtask.sum(-1), 1)):
-                import ipdb
-
-                ipdb.set_trace()
             p = (
                 # e[[L.If, L.While, L.Else]].sum(0)  # conditions
                 # * interp(scan_forward(L.EndIf, L.Else, L.EndWhile), p_step, l)
@@ -390,28 +362,13 @@ class Recurrence(torch.jit.ScriptModule):
                 + e[L.EndIf] * p_step
                 + e[L.Subtask] * pSubtask
             )
-            if torch.any(p < 0) or torch.any(p > 1):
-                import ipdb
-
-                ipdb.set_trace()
             is_line = 1 - inputs.ignore[0]
+            p = torch.clamp(p, 0.0, 1.0)
             p = is_line * p / p.sum(-1, keepdim=True)  # zero out non-lines
-            if torch.any(p < 0) or torch.any(p > 1):
-                import ipdb
-
-                ipdb.set_trace()
 
             # concentrate non-allocated attention on last line
             last_line = is_line.sum(-1).long() - 1
             p = p + (1 - p.sum(-1, keepdim=True)) * self.p_one_hot[last_line]
-            if torch.any(p < 0) or torch.any(p > 1):
-                import ipdb
-
-                ipdb.set_trace()
-            if not torch.all(aeq(p.sum(-1), 1)):
-                import ipdb
-
-                ipdb.set_trace()
 
             self.print("e[L.If]", e[L.If])
             self.print("e[L.Else]", e[L.Else])
@@ -531,12 +488,7 @@ class Recurrence(torch.jit.ScriptModule):
     def sample_new(x, dist):
         probs = dist.probs.clone().detach().cpu()
         new = x < 0
-        try:
-            x[new] = dist.sample()[new].flatten()
-        except RuntimeError:
-            import ipdb
-
-            ipdb.set_trace()
+        x[new] = dist.sample()[new].flatten()
 
     def pack(self, outputs):
         zipped = list(zip(*outputs))
