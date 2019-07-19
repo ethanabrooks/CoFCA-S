@@ -1,11 +1,10 @@
 #!/usr/bin/env zsh
-runs kill --active
-cmd=$(runs reproduce "${@:2}")
-eval "$cmd"
-for arg in "$@"; do
-  if [[ $arg =~ '--path=(\S+)' ]] then
-    echo "tb $1 $match[1] "
-    tb $1 $match[1] 
-    tmux attach -t "$match[1]/0"
-  fi
-done
+
+if [[ "$1" =~ '[0-9]+' && "$1" = $MATCH ]]; then
+  query=(${@:2})
+  port="$1"
+else
+  query=($@)
+fi
+cmd=$(runs reproduce $query --porcelain | sed 's/runs new//' | sed '1d')
+eval "new-run $1 $cmd"
