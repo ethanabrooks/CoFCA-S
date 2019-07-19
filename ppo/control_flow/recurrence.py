@@ -327,13 +327,7 @@ class Recurrence(torch.jit.ScriptModule):
                 cumsum=roll(torch.cumsum(hx.p.flip(-1), dim=-1)).flip(-1),
                 it=range(M.size(1) - 1, -1, -1),
             )
-            p_forward = scan(
-                L.EndIf,
-                L.Else,
-                L.EndWhile,
-                cumsum=roll(torch.cumsum(hx.p, dim=-1)),
-                it=range(M.size(1)),
-            )
+            p_forward = scan_forward(L.EndIf, L.Else, L.EndWhile)
             p_backward = scan(
                 L.While,
                 cumsum=roll(torch.cumsum(hx.p.flip(-1), dim=-1)).flip(-1),
