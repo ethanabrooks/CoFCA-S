@@ -341,14 +341,12 @@ class Recurrence(torch.jit.ScriptModule):
                 cumsum=roll(torch.cumsum(hx.p.flip(-1), dim=-1)).flip(-1),
                 it=range(M.size(1) - 1, -1, -1),
             )
-            p_forward = scan_forward(L.EndIf, L.Else, L.EndWhile)
-            p_backward = scan_backward(L.While).flip(-1)
             p_step = (p.unsqueeze(1) @ self.one_step).squeeze(1)
             self.print("cr before update", round(hx.cr, 2))
             p = (
                 e[[L.If, L.While, L.Else]].sum(0)  # conditions
-                * interp(p_forward, p_step, l)
-                + e[L.EndWhile] * interp(p_step, p_backward, l)
+                * interp(scan_forward(L.EndIf, L.Else, L.EndWhile), p_step, l)
+                + e[L.EndWhile] * interp(p_step, scan_backward(L.While).flip(-1), l)
                 + e[L.EndIf] * p_step
                 + e[L.Subtask] * interp(hx.p, p_step, hx.cr)
             )
