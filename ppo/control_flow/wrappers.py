@@ -68,8 +68,8 @@ class Wrapper(gym.Wrapper):
         self.last_g = None
 
         self.auto_curriculum = self.env.unwrapped.task_type = TaskTypes.Auto
-        self.task_type_idxs = iter(range(1, 4))  # TODO: all tasks
-        self.task_type_idx = None
+        self.task_types = (t for t in TaskTypes if t is not TaskTypes.Auto)
+        self.task_type = None
 
     def step(self, action):
         actions = Actions(*np.split(action, self.action_sections))
@@ -81,17 +81,17 @@ class Wrapper(gym.Wrapper):
         elif t and r < 0:
             self.consecutive_successes = 0
         i.update(
-            task_type_idx=self.task_type_idx,
+            task_type_idx=self.task_type.value,
             consecutive_successes=self.consecutive_successes,
         )
         return s, r, t, i
 
     def reset(self):
         if self.auto_curriculum and (
-            self.task_type_idx is None or self.consecutive_successes >= 100
+            self.task_type is None or self.consecutive_successes >= 100
         ):
-            self.task_type_idx = next(self.task_type_idxs)
-            self.env.unwrapped.task_type = TaskTypes(self.task_type_idx)
+            self.task_type = next(self.task_types)
+            self.env.unwrapped.task_type = self.task_type
         return super().reset()
 
     def render(self, mode="human", **kwargs):
