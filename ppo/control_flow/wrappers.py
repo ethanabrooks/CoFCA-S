@@ -6,7 +6,8 @@ from gym.spaces import Discrete
 import numpy as np
 
 from common.vec_env.util import space_shape
-from gridworld_env.control_flow_gridworld import LineTypes
+from gridworld_env.control_flow_gridworld import LineTypes, TaskTypes
+from ppo.utils import RED, RESET
 
 Actions = namedtuple("Actions", "a cr cg g z")
 
@@ -49,30 +50,56 @@ class DebugWrapper(gym.Wrapper):
 class Wrapper(gym.Wrapper):
     def __init__(self, env):
         super().__init__(env)
+        self.consecutive_successes = 0
         self.action_space = spaces.Dict(
             Actions(
                 a=env.action_space,
-                g=spaces.Discrete(env.n_subtasks),
+                g=spaces.Discrete(env.unwrapped.n_subtasks),
                 cg=spaces.Discrete(2),
                 cr=spaces.Discrete(2),
-                z=spaces.MultiDiscrete(np.full(env.n_subtasks, len(LineTypes._fields))),
+                z=spaces.MultiDiscrete(
+                    np.full(env.unwrapped.n_subtasks, len(LineTypes._fields))
+                ),
             )._asdict()
         )
         self.action_sections = np.cumsum(
             [s for s, in space_shape(self.action_space).values()]
         )[:-1]
         self.last_g = None
+        self.task_types = iter(TaskTypes)
 
     def step(self, action):
         actions = Actions(*np.split(action, self.action_sections))
         action = int(actions.a)
         self.last_g = int(actions.g)
-        return super().step(action)
+        s, r, t, i = super().step(action)
+        if r == 1:
+            self.consecutive_successes += 1
+        elif t and r < 0:
+            self.consecutive_successes = 0
+        return s, r, t, dict(**i, consecutive_successes=self.consecutive_successes)
+
+    def reset(self):
+        # if self.consecutive_successes >= 20:
+        #     self.env.unwrapped.task_type = next(self.task_types)
+        return super().reset()
 
     def render(self, mode="human", **kwargs):
         if self.last_g is not None:
             self.render_assigned_subtask()
         super().render(mode=mode)
+        if self.env._elapsed_steps == self.env._max_episode_steps:
+            print(
+                RED
+                + "***********************************************************************************"
+            )
+            print(
+                "                                   Task Failed                                   "
+            )
+            print(
+                "***********************************************************************************"
+                + RESET
+            )
         input("paused")
 
     def render_assigned_subtask(self):
