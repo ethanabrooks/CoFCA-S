@@ -6,7 +6,7 @@ from gym.spaces import Discrete
 import numpy as np
 
 from common.vec_env.util import space_shape
-from gridworld_env.control_flow_gridworld import LineTypes
+from gridworld_env.control_flow_gridworld import LineTypes, TaskTypes
 from ppo.utils import RED, RESET
 
 Actions = namedtuple("Actions", "a cr cg g z")
@@ -50,6 +50,7 @@ class DebugWrapper(gym.Wrapper):
 class Wrapper(gym.Wrapper):
     def __init__(self, env):
         super().__init__(env)
+        self.consecutive_successes = 0
         self.action_space = spaces.Dict(
             Actions(
                 a=env.action_space,
@@ -65,12 +66,23 @@ class Wrapper(gym.Wrapper):
             [s for s, in space_shape(self.action_space).values()]
         )[:-1]
         self.last_g = None
+        self.task_types = iter(TaskTypes)
 
     def step(self, action):
         actions = Actions(*np.split(action, self.action_sections))
         action = int(actions.a)
         self.last_g = int(actions.g)
-        return super().step(action)
+        s, r, t, i = super().step(action)
+        if r == 1:
+            self.consecutive_successes += 1
+        elif t and r < 0:
+            self.consecutive_successes = 0
+        return s, r, t, dict(**i, consecutive_successes=self.consecutive_successes)
+
+    def reset(self):
+        # if self.consecutive_successes >= 20:
+        #     self.env.unwrapped.task_type = next(self.task_types)
+        return super().reset()
 
     def render(self, mode="human", **kwargs):
         if self.last_g is not None:
