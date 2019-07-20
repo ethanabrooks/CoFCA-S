@@ -68,7 +68,7 @@ class Wrapper(gym.Wrapper):
         self.last_g = None
 
         self.auto_curriculum = self.env.unwrapped.task_type = TaskTypes.Auto
-        self.task_types = iter([TaskTypes.Subtasks])
+        self.task_types = (t for t in TaskTypes if t is not TaskTypes.Auto)
         self.task_type = None
 
     def step(self, action):
