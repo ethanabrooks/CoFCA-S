@@ -90,7 +90,7 @@ class Wrapper(gym.Wrapper):
         if self.auto_curriculum and (
             self.task_type is None or self.consecutive_successes >= 500
         ):
-            self.task_type = next(self.task_types)
+            self.task_type = next(self.task_types, TaskTypes.General)
             self.env.unwrapped.task_type = self.task_type
         return super().reset()
 
