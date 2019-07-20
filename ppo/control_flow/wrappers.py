@@ -67,7 +67,7 @@ class Wrapper(gym.Wrapper):
         )[:-1]
         self.last_g = None
 
-        self.auto_curriculum = self.env.unwrapped.task_type = TaskTypes.Auto
+        self.auto_curriculum = self.env.unwrapped.task_type is TaskTypes.Auto
         self.task_types = (t for t in TaskTypes if t is not TaskTypes.Auto)
         self.task_type = None
 
