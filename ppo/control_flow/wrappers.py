@@ -69,6 +69,7 @@ class Wrapper(gym.Wrapper):
 
         self.auto_curriculum = self.env.unwrapped.task_type is TaskTypes.Auto
         self.task_types = (t for t in TaskTypes if t is not TaskTypes.Auto)
+        next(self.task_types)
         self.task_type = None
         if self.auto_curriculum:
             self.increment_curriculum()
