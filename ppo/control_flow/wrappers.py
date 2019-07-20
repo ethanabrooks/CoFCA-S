@@ -81,7 +81,7 @@ class Wrapper(gym.Wrapper):
         elif t and r < 0:
             self.consecutive_successes = 0
         i.update(
-            task_type_idx=self.task_type.value,
+            task_type_idx=self.env.unwrapped.task_type.value,
             consecutive_successes=self.consecutive_successes,
         )
         return s, r, t, i
