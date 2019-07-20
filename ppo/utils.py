@@ -9,7 +9,6 @@ import torch
 from torch import nn as nn
 import torch.jit
 import torch.nn as nn
-from torch.nn import functional as F
 
 
 def get_render_func(venv):

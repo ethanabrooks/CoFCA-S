@@ -193,10 +193,9 @@ class Train:
 
             total_num_steps = (j + 1) * num_processes * num_steps
 
-            mean_success_rate = np.mean(epoch_counter["successes"])
+            mean_success_rate = np.mean(epoch_counter["success"])
             if target_success_rate and mean_success_rate > target_success_rate:
-                print("Finished training with success rate of", mean_success_rate)
-                return
+                envs.increment_curriculum()
 
             if j % log_interval == 0 and writer is not None:
                 end = time.time()

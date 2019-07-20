@@ -28,6 +28,8 @@ def worker(remote, parent_remote, env_fn_wrapper):
                 break
             elif cmd == "get_spaces":
                 remote.send((env.observation_space, env.action_space))
+            elif cmd == "increment_curriculum":
+                env.increment_curriculum()
             else:
                 raise NotImplementedError
     except KeyboardInterrupt:
@@ -114,6 +116,10 @@ class SubprocVecEnv(VecEnv):
         assert (
             not self.closed
         ), "Trying to operate on a SubprocVecEnv after calling close()"
+
+    def increment_curriculum(self):
+        for remote in self.remotes:
+            remote.send(("increment_curriculum", None))
 
 
 def _flatten_obs(obs):

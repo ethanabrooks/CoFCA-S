@@ -102,6 +102,10 @@ class DummyVecEnv(VecEnv):
     def get_images(self):
         return [env.render(mode="rgb_array") for env in self.envs]
 
+    def increment_curriculum(self):
+        for env in self.envs:
+            env.increment_curriculum()
+
     def render(self, mode="human"):
         return self.envs[0].render(mode=mode)
         # if self.num_envs == 1:

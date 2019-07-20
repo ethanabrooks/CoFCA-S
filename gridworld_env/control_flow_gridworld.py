@@ -1,6 +1,5 @@
 import abc
 from collections import OrderedDict, namedtuple
-import copy
 from enum import Enum
 
 from gym import spaces
