@@ -9,7 +9,7 @@ from common.vec_env.util import space_shape
 from gridworld_env.control_flow_gridworld import LineTypes, TaskTypes
 from ppo.utils import RED, RESET
 
-Actions = namedtuple("Actions", "a cr cg g")
+Actions = namedtuple("Actions", "a cr cg g z")
 
 
 class DebugWrapper(gym.Wrapper):
@@ -67,6 +67,10 @@ class Wrapper(gym.Wrapper):
         )[:-1]
         self.last_g = None
         self.task_types = iter(TaskTypes)
+
+        self.auto_curriculum = self.env.unwrapped.task_type is TaskTypes.Auto
+        self.task_types = (t for t in TaskTypes if t is not TaskTypes.Auto)
+        self.task_type = None
 
     def step(self, action):
         actions = Actions(*np.split(action, self.action_sections))

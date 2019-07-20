@@ -28,7 +28,6 @@ class Agent(ppo.agent.Agent, NNBase):
         **kwargs,
     ):
         nn.Module.__init__(self)
-        self.z_entropy_coef = z_entropy_coef
         self.hard_update = hard_update
         self.entropy_coefs = Actions(
             a=None, cg=None, cr=None, g=g_entropy_coef, z=z_entropy_coef
@@ -89,7 +88,7 @@ class Agent(ppo.agent.Agent, NNBase):
         hx = RecurrentState(*rm.parse_hidden(all_hxs))
 
         if action is None:
-            actions = Actions(a=hx.a, cg=hx.cg, cr=hx.cr, g=hx.g)
+            actions = Actions(a=hx.a, cg=hx.cg, cr=hx.cr, g=hx.g, z=hx.z)
 
         if self.hard_update:
             dists = Actions(
@@ -97,6 +96,7 @@ class Agent(ppo.agent.Agent, NNBase):
                 cg=FixedCategorical(hx.cg_probs),
                 cr=FixedCategorical(hx.cr_probs),
                 g=FixedCategorical(hx.g_probs),
+                z=None,
             )
         else:
             dists = Actions(
