@@ -70,7 +70,10 @@ class Wrapper(gym.Wrapper):
 
         self.auto_curriculum = self.env.unwrapped.task_type is TaskTypes.Auto
         self.task_types = (t for t in TaskTypes if t is not TaskTypes.Auto)
+        next(self.task_types)
         self.task_type = None
+        if self.auto_curriculum:
+            self.increment_curriculum()
 
     def step(self, action):
         actions = Actions(*np.split(action, self.action_sections))
@@ -82,11 +85,6 @@ class Wrapper(gym.Wrapper):
         elif t and r < 0:
             self.consecutive_successes = 0
         return s, r, t, dict(**i, consecutive_successes=self.consecutive_successes)
-
-    def reset(self):
-        # if self.consecutive_successes >= 20:
-        #     self.env.unwrapped.task_type = next(self.task_types)
-        return super().reset()
 
     def render(self, mode="human", **kwargs):
         if self.last_g is not None:
@@ -110,3 +108,7 @@ class Wrapper(gym.Wrapper):
         env = self.env.unwrapped
         if self.last_g < len(env.subtasks):
             print("❯❯ Assigned subtask:", self.last_g, env.subtasks[self.last_g])
+
+    def increment_curriculum(self):
+        self.task_type = next(self.task_types, TaskTypes.General)
+        self.env.unwrapped.task_type = self.task_type
