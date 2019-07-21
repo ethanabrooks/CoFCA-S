@@ -103,9 +103,7 @@ class Recurrence(torch.jit.ScriptModule):
             in_size=(d * action_spaces.a.n * int(self.subtask_nvec.prod())),
         )
 
-        self.zeta = nn.Sequential(
-            init_(nn.Linear(self.line_size, len(LineTypes._fields))), nn.Softmax(-1)
-        )
+        self.zeta = Categorical(self.line_size, len(LineTypes._fields))
 
         # NOTE {
         self.phi_debug = nn.Sequential(init_(nn.Linear(1, 1), "sigmoid"), nn.Sigmoid())
@@ -225,7 +223,8 @@ class Recurrence(torch.jit.ScriptModule):
         debug_in = M[:, :, -self.subtask_nvec[-2:].sum() : -self.subtask_nvec[-1]]
         # M_zeta = self.zeta_debug(debug_in)
         truth = FixedCategorical(probs=debug_in)
-        M_zeta_dist = self.zeta_debug(debug_in)
+        # M_zeta_dist = self.zeta_debug(debug_in)
+        M_zeta_dist = self.zeta(M)
         # M_zeta_dist = truth
         z = actions.z[0].long()  # use time-step 0; z fixed throughout episode
         self.sample_new(z, M_zeta_dist)
