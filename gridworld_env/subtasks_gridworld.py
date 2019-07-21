@@ -233,7 +233,7 @@ class SubtasksGridworld(gym.Env):
         open_spaces = ij[np.logical_not(np.all(np.isin(ij, self.obstacles), axis=-1))]
 
         types = list(self.get_required_objects(self.subtasks))
-        n_random = np.clip(len(types), self.min_objects, len(open_spaces))
+        n_random = np.clip(len(types), self.min_objects, len(open_spaces) - 1)
         random_types = self.np_random.choice(
             len(self.object_types), replace=True, size=n_random - len(types)
         )

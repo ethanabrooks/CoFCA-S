@@ -179,6 +179,7 @@ class ControlFlowGridworld(SubtasksGridworld):
         self.np_random.shuffle(self.irreversible_interactions)
         assert self.n_subtasks >= 8
         if self.task_type is TaskTypes.General:
+            self.max_loops = min(self.max_loops, 2)
             active_control = None
             line_type = None
             interactions = list(range(len(self.interactions)))
