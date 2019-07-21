@@ -136,6 +136,7 @@ class Train:
         counter = Counter()
         start = time.time()
         last_save = start
+        curriculum_idx = 0
 
         if load_path:
             state_dict = torch.load(load_path, map_location=device)
@@ -196,12 +197,19 @@ class Train:
             mean_success_rate = np.mean(epoch_counter["success"])
             if target_success_rate and mean_success_rate > target_success_rate:
                 envs.increment_curriculum()
+                curriculum_idx += 1
 
             if j % log_interval == 0 and writer is not None:
                 end = time.time()
                 fps = total_num_steps / (end - start)
                 log_values = dict(fps=fps, **epoch_counter, **train_results)
                 if writer:
+                    writer.add_scalar(
+                        "cumulative_success",
+                        curriculum_idx + mean_success_rate,
+                        total_num_steps,
+                    )
+
                     for k, v in log_values.items():
                         mean = np.mean(v)
                         if not np.isnan(mean):
