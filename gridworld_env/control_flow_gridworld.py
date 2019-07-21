@@ -16,7 +16,7 @@ LineTypes = namedtuple(
 
 L = LineTypes()
 
-TaskTypes = Enum("TaskTypes", "Subtasks If While Else General Auto")
+TaskTypes = Enum("TaskTypes", "Subtasks If Else While General Auto")
 
 
 class Line(abc.ABC):
