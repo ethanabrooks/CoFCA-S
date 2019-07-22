@@ -197,8 +197,12 @@ class Train:
             total_num_steps = (j + 1) * num_processes * num_steps
 
             mean_success_rate = np.mean(epoch_counter["success"])
+            if mean_success_rate > 0.9:
+                print("mean_success_rate", mmean_success_rate)
+                print("target_success_rate", target_success_rate)
             if target_success_rate and mean_success_rate > target_success_rate:
                 target_success_rate = next(target_success_rates, None)
+                print("incrementing target_success_rate:", target_success_rate)
                 envs.increment_curriculum()
                 curriculum_idx += 1
 
