@@ -484,7 +484,6 @@ class Recurrence(torch.jit.ScriptModule):
 
     @staticmethod
     def sample_new(x, dist):
-        probs = dist.probs.clone().detach().cpu()
         new = x < 0
         x[new] = dist.sample()[new].flatten()
 
