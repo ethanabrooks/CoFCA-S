@@ -1,4 +1,4 @@
-from collections import Counter, namedtuple
+from collections import namedtuple
 import itertools
 import re
 
@@ -11,7 +11,7 @@ import numpy as np
 from rl_utils import cartesian_product
 import six
 
-from ppo.utils import set_index
+from ppo.utils import set_index, GREEN, RESET
 
 Subtask = namedtuple("Subtask", "interaction count object")
 Obs = namedtuple("Obs", "base subtask subtasks")
@@ -192,13 +192,15 @@ class SubtasksGridworld(gym.Env):
         # time.sleep(4 * sleep_time if self.last_terminal else sleep_time)
         if self.subtask is None:
             print(
-                "***********************************************************************************"
+                GREEN
+                + "***********************************************************************************"
             )
             print(
                 "                                   Task Complete                                   "
             )
             print(
                 "***********************************************************************************"
+                + RESET
             )
 
     def task_string(self):
@@ -225,17 +227,19 @@ class SubtasksGridworld(gym.Env):
 
         if self.random_task:
             self.subtasks = list(self.subtasks_generator())
+
+        h, w = self.desc.shape
+        ij = cartesian_product(np.arange(h), np.arange(w))
+        open_spaces = ij[np.logical_not(np.all(np.isin(ij, self.obstacles), axis=-1))]
+
         types = list(self.get_required_objects(self.subtasks))
-        n_random = max(len(types), self.min_objects)
+        n_random = np.clip(len(types), self.min_objects, len(open_spaces) - 1)
         random_types = self.np_random.choice(
             len(self.object_types), replace=True, size=n_random - len(types)
         )
         types = np.concatenate([random_types, types])
         self.np_random.shuffle(types)
 
-        h, w = self.desc.shape
-        ij = cartesian_product(np.arange(h), np.arange(w))
-        open_spaces = ij[np.logical_not(np.all(np.isin(ij, self.obstacles), axis=-1))]
         randoms = self.np_random.choice(
             len(open_spaces), replace=False, size=n_random + 1  # + 1 for agent
         )

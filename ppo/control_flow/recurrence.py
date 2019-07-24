@@ -1,4 +1,3 @@
-DEBUG = False
 import functools
 from collections import namedtuple
 import itertools
@@ -29,11 +28,6 @@ RecurrentState = namedtuple(
 )
 
 
-def debug(*args, **kwargs):
-    if DEBUG:
-        print(*args, **kwargs)
-
-
 def round(x, dec):
     return torch.round(x * 10 ** dec) / 10 ** dec
 
@@ -42,9 +36,17 @@ class Recurrence(torch.jit.ScriptModule):
     __constants__ = ["input_sections", "state_sizes", "recurrent"]
 
     def __init__(
-        self, obs_spaces, action_spaces, hidden_size, recurrent, hard_update, agent
+        self,
+        obs_spaces,
+        action_spaces,
+        hidden_size,
+        recurrent,
+        hard_update,
+        agent,
+        debug,
     ):
         super().__init__()
+        self.debug = debug
         self.hard_update = hard_update
         if agent:
             assert isinstance(agent, LowerLevel)
@@ -108,11 +110,7 @@ class Recurrence(torch.jit.ScriptModule):
         # NOTE {
         self.phi_debug = nn.Sequential(init_(nn.Linear(1, 1), "sigmoid"), nn.Sigmoid())
         self.xi_debug = nn.Sequential(init_(nn.Linear(1, 1), "sigmoid"), nn.Sigmoid())
-        self.zeta_debug = nn.Sequential(
-            init_(nn.Linear(len(LineTypes._fields), len(LineTypes._fields))),
-            nn.Softmax(-1),
-        )
-        # self.zeta_debug = Categorical(len(LineTypes._fields), len(LineTypes._fields))
+        self.zeta_debug = Categorical(len(LineTypes._fields), len(LineTypes._fields))
         # NOTE }
 
         input_size = h * w * hidden_size  # conv output
@@ -132,7 +130,7 @@ class Recurrence(torch.jit.ScriptModule):
             g=1,
             cg=1,
             cr=1,
-            z=self.n_subtasks * len(LineTypes._fields),
+            z=self.n_subtasks,
             a_probs=action_spaces.a.n,
             g_probs=self.n_subtasks,
             cg_probs=2,
@@ -159,6 +157,10 @@ class Recurrence(torch.jit.ScriptModule):
         no_op_probs[:, -1] = 1
         self.register_buffer("no_op_probs", no_op_probs)
         self.register_buffer("p_one_hot", torch.eye(self.n_subtasks))
+
+    def print(self, *args, **kwargs):
+        if self.debug:
+            print(*args, **kwargs)
 
     # @torch.jit.script_method
     def parse_hidden(self, hx):
@@ -221,11 +223,12 @@ class Recurrence(torch.jit.ScriptModule):
 
         # NOTE {
         debug_in = M[:, :, -self.subtask_nvec[-2:].sum() : -self.subtask_nvec[-1]]
-        # truth = debug_in
-        z = self.zeta_debug(debug_in)
+        # M_zeta = self.zeta_debug(debug_in)
+        truth = FixedCategorical(probs=debug_in)
+        M_zeta_dist = self.zeta_debug(debug_in)
         # M_zeta_dist = truth
-        # z = actions.z[0].long()  # use time-step 0; z fixed throughout episode
-        # self.sample_new(z, M_zeta_dist)
+        z = actions.z[0].long()  # use time-step 0; z fixed throughout episode
+        self.sample_new(z, M_zeta_dist)
         # NOTE }
 
         hx = self.parse_hidden(hx)
@@ -235,8 +238,10 @@ class Recurrence(torch.jit.ScriptModule):
         hx.r[new_episode] = M[new_episode, 0]  # initialize r to first subtask
         # initialize g to first subtask
         hx.g[new_episode] = 0.0
-        hx.z[new_episode] = z.view(N, -1)[new_episode]
-        hx.z_probs[new_episode] = z.view(N, -1)[new_episode]
+        hx.z[new_episode] = z[new_episode].float()
+        hx.z_probs[new_episode] = M_zeta_dist.probs.view(
+            -1, self.n_subtasks * len(LineTypes._fields)
+        )[new_episode]
 
         return self.pack(
             self.inner_loop(
@@ -261,28 +266,33 @@ class Recurrence(torch.jit.ScriptModule):
         obs = inputs.base
         A = torch.cat([actions.a, hx.a.unsqueeze(0)], dim=0).long().squeeze(2)
         G = torch.cat([actions.g, hx.g.unsqueeze(0)], dim=0).long().squeeze(2)
-        M_zeta = hx.z.view(*M.shape[:2], len(L))
-        # M_zeta = self.z_one_hots[hx.z.long()]
+        M_zeta = self.z_one_hots[hx.z.long()]
+
+        def aeq(a, b):
+            return torch.abs(a - b) < 1e-4
 
         for t in range(T):
-            debug(L)
-            debug("M_zeta")
+            self.print(L)
+            self.print("M_zeta")
             for _z in M_zeta[0]:
-                debug(_z)
+                self.print(_z)
             for _z in M_zeta[0]:
-                debug(L._fields[int(_z.argmax())])
+                self.print(L._fields[int(_z.argmax())])
 
             def safediv(x, y):
                 return x / torch.clamp(y, min=1e-5)
 
             # e
             e = (p.unsqueeze(1) @ M_zeta).permute(2, 0, 1)
-            eCondition = (e[[L.If, L.Else, L.While, L.EndWhile]]).sum(0)
-            er = safediv(e[[L.If, L.While]].sum(0), eCondition)
-            eLastEval = safediv(e[L.Else], eCondition)
+
+            # condition
+            condition = interp(
+                hx.r,
+                hx.last_condition,
+                safediv(e[L.EndWhile], e[[L.If, L.While, L.EndWhile]].sum(0)),
+            )
 
             # l
-            condition = interp(hx.last_condition, hx.r, er)
             l = self.xi((inputs.base[t], condition))
             # NOTE {
             c = torch.split(condition, list(self.subtask_nvec), dim=-1)[-1][:, 1:]
@@ -290,24 +300,29 @@ class Recurrence(torch.jit.ScriptModule):
                 hx.last_condition, list(self.subtask_nvec), dim=-1
             )[-1][:, 1:]
             hx_r = torch.split(hx.r, list(self.subtask_nvec), dim=-1)[-1][:, 1:]
-            debug("last_condition", last_condition)
-            debug("r", hx_r)
-            debug("er", er)
-            debug("l condition", c)
+            self.print("last_condition", last_condition)
+            self.print("r", hx_r)
+            self.print("l condition", c)
             phi_in = inputs.base[t, :, 1:-2] * c.view(N, -1, 1, 1)
             truth = torch.max(phi_in.view(N, -1), dim=-1).values.float().view(N, 1)
             l = self.xi_debug(truth)
-            debug("l truth", round(truth, 4))
-            debug("l", round(l, 4))
-            debug("p before update", round(p, 2))
+
+            self.print("l truth", round(truth, 4))
+            self.print("l", round(l, 4))
+            self.print("p before update", round(p, 2))
             # l = truth
             # NOTE }
-
-            l = interp(l, 1 - hx.last_eval, eLastEval)
 
             # control memory
             last_eval = interp(hx.last_eval, l, e[L.If])
             last_condition = interp(hx.last_condition, hx.r, e[L.While])
+
+            # l'
+            l = interp(
+                l,
+                1 - hx.last_eval,
+                safediv(e[L.Else], e[[L.If, L.Else, L.While, L.EndWhile]].sum(0)),
+            )
 
             def roll(x):
                 return F.pad(x, [1, 0])[:, :-1]
@@ -331,26 +346,36 @@ class Recurrence(torch.jit.ScriptModule):
                 it=range(M.size(1) - 1, -1, -1),
             )
             p_step = (p.unsqueeze(1) @ self.one_step).squeeze(1)
-            debug("cr before update", round(hx.cr, 2))
+            self.print("cr before update", round(hx.cr, 2))
+            pIf = interp(scan_forward(L.Else, L.EndIf), p_step, l)
+            pElse = interp(scan_forward(L.EndIf), p_step, l)
+            pWhile = interp(scan_forward(L.EndWhile), p_step, l)
+            pEndWhile = interp(p_step, scan_backward(L.While).flip(-1), l)
+            pSubtask = interp(hx.p, p_step, hx.cr)
             p = (
-                e[L.If] * interp(scan_forward(L.EndIf, L.Else), p_step, l)
-                + e[L.Else] * interp(scan_forward(L.EndIf), p_step, l)
+                # e[[L.If, L.While, L.Else]].sum(0)  # conditions
+                # * interp(scan_forward(L.EndIf, L.Else, L.EndWhile), p_step, l)
+                e[L.If] * pIf
+                + e[L.Else] * pElse
+                + e[L.While] * pWhile
+                + e[L.EndWhile] * pEndWhile
                 + e[L.EndIf] * p_step
-                + e[L.While] * interp(scan_forward(L.EndWhile), p_step, l)
-                + e[L.EndWhile] * interp(p_step, scan_backward(L.While), l)
-                + e[L.Subtask] * interp(hx.p, p_step, hx.cr)
+                + e[L.Subtask] * pSubtask
             )
             is_line = 1 - inputs.ignore[0]
+            p = torch.clamp(p, 0.0, 1.0)
             p = is_line * p / p.sum(-1, keepdim=True)  # zero out non-lines
 
             # concentrate non-allocated attention on last line
             last_line = is_line.sum(-1).long() - 1
             p = p + (1 - p.sum(-1, keepdim=True)) * self.p_one_hot[last_line]
 
-            debug("e[[L.If, L.While, L.Else]]", e[[L.If, L.While, L.Else]].sum(0))
-            debug("e[L.EndWhile]", e[L.EndWhile])
-            debug("e[L.EndIf]", e[L.EndIf])
-            debug("e[L.Subtask]", e[L.Subtask])
+            self.print("e[L.If]", e[L.If])
+            self.print("e[L.Else]", e[L.Else])
+            self.print("e[L.EndIf]", e[L.EndIf])
+            self.print("e[L.While]", e[L.While])
+            self.print("e[L.EndWhile]", e[L.EndWhile])
+            self.print("e[L.Subtask]", e[L.Subtask])
 
             # r
             r = (p.unsqueeze(1) @ M).squeeze(1)
@@ -386,7 +411,7 @@ class Recurrence(torch.jit.ScriptModule):
             self.sample_new(A[t], a_dist)
 
             # a[:] = 'wsadeq'.index(input('act:'))
-            debug("p after update", round(p, 2))
+            self.print("p after update", round(p, 2))
 
             def gating_function(subtask_param):
                 task_sections = torch.split(
@@ -430,7 +455,7 @@ class Recurrence(torch.jit.ScriptModule):
                 ).detach()  # * condition[:, :1] + (1 - condition[:, :1])
                 c = self.phi_debug(truth)
                 # c = truth
-                debug("c", round(c, 4))
+                self.print("c", round(c, 4))
                 # NOTE }
                 return c, probs
 
@@ -461,6 +486,7 @@ class Recurrence(torch.jit.ScriptModule):
 
     @staticmethod
     def sample_new(x, dist):
+        probs = dist.probs.clone().detach().cpu()
         new = x < 0
         x[new] = dist.sample()[new].flatten()
 

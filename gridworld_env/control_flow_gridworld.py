@@ -1,6 +1,6 @@
 import abc
 from collections import OrderedDict, namedtuple
-import copy
+from enum import Enum
 
 from gym import spaces
 import numpy as np
@@ -15,6 +15,8 @@ LineTypes = namedtuple(
 )
 
 L = LineTypes()
+
+TaskTypes = Enum("TaskTypes", "Subtasks If Else While General Auto")
 
 
 class Line(abc.ABC):
@@ -65,8 +67,9 @@ WHILE_PASSING_PROBS = [
 
 
 class ControlFlowGridworld(SubtasksGridworld):
-    def __init__(self, *args, n_subtasks, **kwargs):
-        self.max_loops = 3
+    def __init__(self, *args, n_subtasks, task_type, max_loops, **kwargs):
+        self.task_type = task_type
+        self.max_loops = max_loops
         self.n_encountered = n_subtasks
         super().__init__(*args, n_subtasks=n_subtasks, **kwargs)
         self.irreversible_interactions = [
@@ -173,31 +176,101 @@ class ControlFlowGridworld(SubtasksGridworld):
         return OrderedDict(obs)
 
     def subtasks_generator(self):
-        assert self.n_subtasks == 5
         self.np_random.shuffle(self.irreversible_interactions)
-        if self.np_random.rand() < 0.5:
+        assert self.n_subtasks >= 8
+        if self.task_type is TaskTypes.General:
+            self.max_loops = min(self.max_loops, 2)
+            active_control = None
+            line_type = None
+            interactions = list(range(len(self.interactions)))
+            # noinspection PyTypeChecker
+            for i in range(self.n_encountered):
+                try:
+                    failing = not active_control.object
+                except AttributeError:
+                    failing = False
+                if line_type in [self.While, self.If, Else]:
+                    # must follow condition with subtask
+                    line_type = self.Subtask
+                elif i == self.n_encountered - 1 or (
+                    i == self.n_encountered - 2 and failing
+                ):
+                    # Terminate all active controls
+                    if isinstance(active_control, (self.If, Else)):
+                        line_type = EndIf
+                    elif isinstance(active_control, self.While):
+                        line_type = EndWhile
+                    else:
+                        assert active_control is None
+                        line_type = self.Subtask
+
+                else:
+                    # No need to terminate controls. No preceding condition
+                    line_types = {
+                        self.If: [self.Subtask, EndIf],
+                        Else: [self.Subtask, EndIf],
+                        self.While: [self.Subtask, EndWhile],
+                    }
+                    defaults = [self.Subtask]
+                    if i <= self.n_encountered - 3:
+                        # need at least 3 lines left for Else and While
+                        line_types[self.If] += [Else]
+                        defaults += [self.While, self.If]
+                    line_type = self.np_random.choice(
+                        line_types.get(type(active_control), defaults)
+                    )
+
+                # instantiate lines
+                if line_type in (self.If, self.While):
+                    active_control = line_type(None)
+                    yield active_control
+                elif line_type is Else:
+                    active_control = Else()
+                    yield Else()
+                elif line_type in (EndIf, EndWhile):
+                    active_control = None
+                    yield line_type()
+
+                elif line_type is self.Subtask:
+                    yield self.Subtask(
+                        interaction=self.np_random.choice(
+                            self.irreversible_interactions
+                            if active_control
+                            else interactions
+                        ),
+                        count=0,
+                        object=None,
+                    )
+                else:
+                    raise RuntimeError
+        elif self.task_type is TaskTypes.Subtasks:
+            yield self.Subtask(
+                interaction=self.np_random.choice(len(self.interactions)),
+                count=0,
+                object=None,
+            )
+            yield self.Subtask(
+                interaction=self.np_random.choice(len(self.interactions)),
+                count=0,
+                object=None,
+            )
+            yield self.Subtask(
+                interaction=self.np_random.choice(len(self.interactions)),
+                count=0,
+                object=None,
+            )
+        elif self.task_type is TaskTypes.If:
             yield self.If(None)
             yield self.Subtask(
                 interaction=self.irreversible_interactions[0], count=0, object=None
             )
-            # yield self.Subtask(
-            #     interaction=self.irreversible_interactions[0], count=0, object=None
-            # )
-            # yield Else()
-            # yield self.Subtask(
-            #     interaction=self.irreversible_interactions[1], count=0, object=None
-            # )
-            # yield self.Subtask(
-            #     interaction=self.irreversible_interactions[1], count=0, object=None
-            # )
             yield EndIf()
+            yield self.If(None)
             yield self.Subtask(
                 interaction=self.irreversible_interactions[1], count=0, object=None
             )
-            yield self.Subtask(
-                interaction=self.irreversible_interactions[0], count=0, object=None
-            )
-        else:
+            yield EndIf()
+        elif self.task_type is TaskTypes.Else:
             yield self.If(None)
             yield self.Subtask(
                 interaction=self.irreversible_interactions[0], count=0, object=None
@@ -207,12 +280,30 @@ class ControlFlowGridworld(SubtasksGridworld):
                 interaction=self.irreversible_interactions[1], count=0, object=None
             )
             yield EndIf()
-        # else:
-        #     yield self.While(None)
-        #     yield self.Subtask(
-        #         interaction=self.irreversible_interactions[0], count=0, object=None
-        #     )
-        #     yield EndWhile()
+            yield self.Subtask(
+                interaction=self.irreversible_interactions[0], count=0, object=None
+            )
+            yield self.Subtask(
+                interaction=self.irreversible_interactions[1], count=0, object=None
+            )
+        elif self.task_type is TaskTypes.While:
+            yield self.While(None)
+            yield self.Subtask(
+                interaction=self.irreversible_interactions[0], count=0, object=None
+            )
+            yield EndWhile()
+
+            # yield self.While(None)
+            # yield self.Subtask(
+            # interaction=self.irreversible_interactions[0], count=0, object=None
+            # )
+            # yield self.Subtask(
+            # interaction=self.irreversible_interactions[1], count=0, object=None
+            # )
+            # yield EndWhile()
+            # yield self.Subtask(
+            # interaction=self.irreversible_interactions[0], count=0, object=None
+            # )
 
     def get_required_objects(self, subtasks):
         available = []
@@ -244,12 +335,13 @@ class ControlFlowGridworld(SubtasksGridworld):
                 n_loops += 1
                 passing = self.np_random.rand() < 0.5 and n_loops < self.max_loops
                 if passing:
-                    assert existing not in available
+                    # assert existing not in available
                     available += [existing]
                     yield existing
                 else:
                     non_existing.add(existing)
-                    existing = self.np_random.choice(list(object_types - non_existing))
+                    choices = object_types - non_existing
+                    existing = self.np_random.choice(list(choices or object_types))
             elif isinstance(line, self.Subtask):
                 n_loops += 1
                 self.subtasks[i] = line.replace_object(existing)

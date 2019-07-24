@@ -5,7 +5,7 @@ from gym.wrappers import TimeLimit
 from rl_utils import hierarchical_parse_args
 
 import gridworld_env
-from gridworld_env.control_flow_gridworld import ControlFlowGridworld
+from gridworld_env.control_flow_gridworld import ControlFlowGridworld, TaskTypes
 import gridworld_env.matrix_control_flow_gridworld
 import gridworld_env.subtasks_gridworld
 import ppo
@@ -28,7 +28,8 @@ def add_task_args(parser):
 def add_env_args(parser):
     env_parser = parser.add_argument_group("env_args")
     env_parser.add_argument("--min-objects", type=int, required=True)
-    env_parser.add_argument("--debug", action="store_true")
+    env_parser.add_argument("--task-type", type=lambda s: TaskTypes[s], default="Auto")
+    env_parser.add_argument("--max-loops", type=int)
     env_parser.add_argument(
         "--eval-subtask",
         dest="eval_subtasks",
@@ -44,17 +45,20 @@ def cli():
 
 
 def make_subtasks_env(env_id, **kwargs):
-    def helper(seed, rank, max_episode_steps, class_, debug, **_kwargs):
+    def helper(seed, rank, max_episode_steps, class_, **_kwargs):
         if rank == 1:
             print("Environment args:")
             for k, v in _kwargs.items():
                 print(f"{k:20}{v}")
-        env = ppo.control_flow.Wrapper(ControlFlowGridworld(**_kwargs))
-        if debug:
-            env = ppo.control_flow.DebugWrapper(env)
+        env = ppo.control_flow.Wrapper(
+            TimeLimit(
+                ControlFlowGridworld(**_kwargs),
+                max_episode_steps=int(max_episode_steps),
+            )
+        )
+        # if debug:
+        #     env = ppo.control_flow.DebugWrapper(env)
         env.seed(seed + rank)
-        if max_episode_steps is not None:
-            env = TimeLimit(env, max_episode_steps=int(max_episode_steps))
         return env
 
     gridworld_args = gridworld_env.get_args(env_id)
@@ -128,6 +132,7 @@ def metacontroller_cli():
     subtasks_parser.add_argument("--z-entropy-coef", type=float, required=True)
     subtasks_parser.add_argument("--metacontroller-recurrent", action="store_true")
     subtasks_parser.add_argument("--hard-update", action="store_true")
+    subtasks_parser.add_argument("--debug", action="store_true")
 
     def train(env_id, task_args, ppo_args, subtasks_args, env_args, **kwargs):
         class TrainSubtasks(Train):

@@ -9,7 +9,6 @@ import torch
 from torch import nn as nn
 import torch.jit
 import torch.nn as nn
-from torch.nn import functional as F
 
 
 def get_render_func(venv):
@@ -114,3 +113,12 @@ def log_prob(i, probs):
 
 def trace(module_fn, in_size):
     return torch.jit.trace(module_fn(in_size), example_inputs=torch.rand(1, in_size))
+
+
+RED = "\033[1;31m"
+BLUE = "\033[1;34m"
+CYAN = "\033[1;36m"
+GREEN = "\033[0;32m"
+RESET = "\033[0;0m"
+BOLD = "\033[;1m"
+REVERSE = "\033[;7m"
