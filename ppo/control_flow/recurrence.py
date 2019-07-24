@@ -225,6 +225,8 @@ class Recurrence(torch.jit.ScriptModule):
         truth = FixedCategorical(probs=debug_in)
         # M_zeta_dist = self.zeta_debug(debug_in)
         M_zeta_dist = self.zeta(M)
+        self.print("M_zeta_dist.probs")
+        self.print(round(M_zeta_dist.probs, 2))
         # M_zeta_dist = truth
         z = actions.z[0].long()  # use time-step 0; z fixed throughout episode
         self.sample_new(z, M_zeta_dist)
@@ -274,8 +276,6 @@ class Recurrence(torch.jit.ScriptModule):
             self.print(L)
             self.print("M_zeta")
             for _z in M_zeta[0]:
-                self.print(_z)
-            for _z in M_zeta[0]:
                 self.print(L._fields[int(_z.argmax())])
 
             def safediv(x, y):
@@ -293,6 +293,7 @@ class Recurrence(torch.jit.ScriptModule):
 
             # l
             l = self.xi((inputs.base[t], condition))
+            self.print("l", round(l, 4))
             # NOTE {
             # c = torch.split(condition, list(self.subtask_nvec), dim=-1)[-1][:, 1:]
             # last_condition = torch.split(
@@ -307,8 +308,6 @@ class Recurrence(torch.jit.ScriptModule):
             # l = self.xi_debug(truth)
 
             # self.print("l truth", round(truth, 4))
-            # self.print("l", round(l, 4))
-            # self.print("p before update", round(p, 2))
             # l = truth
             # NOTE }
 
@@ -351,6 +350,7 @@ class Recurrence(torch.jit.ScriptModule):
             pWhile = interp(scan_forward(L.EndWhile), p_step, l)
             pEndWhile = interp(p_step, scan_backward(L.While).flip(-1), l)
             pSubtask = interp(hx.p, p_step, hx.cr)
+            self.print("p before update", round(p, 2))
             p = (
                 # e[[L.If, L.While, L.Else]].sum(0)  # conditions
                 # * interp(scan_forward(L.EndIf, L.Else, L.EndWhile), p_step, l)
