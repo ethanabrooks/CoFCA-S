@@ -223,7 +223,8 @@ class Recurrence(torch.jit.ScriptModule):
         debug_in = M[:, :, -self.subtask_nvec[-2:].sum() : -self.subtask_nvec[-1]]
         # M_zeta = self.zeta_debug(debug_in)
         truth = FixedCategorical(probs=debug_in)
-        M_zeta_dist = self.zeta_debug(debug_in)
+        # M_zeta_dist = self.zeta_debug(debug_in)
+        M_zeta_dist = self.zeta(M)
         # M_zeta_dist = truth
         z = actions.z[0].long()  # use time-step 0; z fixed throughout episode
         self.sample_new(z, M_zeta_dist)
@@ -293,21 +294,21 @@ class Recurrence(torch.jit.ScriptModule):
             # l
             l = self.xi((inputs.base[t], condition))
             # NOTE {
-            c = torch.split(condition, list(self.subtask_nvec), dim=-1)[-1][:, 1:]
-            last_condition = torch.split(
-                hx.last_condition, list(self.subtask_nvec), dim=-1
-            )[-1][:, 1:]
-            hx_r = torch.split(hx.r, list(self.subtask_nvec), dim=-1)[-1][:, 1:]
-            self.print("last_condition", last_condition)
-            self.print("r", hx_r)
-            self.print("l condition", c)
-            phi_in = inputs.base[t, :, 1:-2] * c.view(N, -1, 1, 1)
-            truth = torch.max(phi_in.view(N, -1), dim=-1).values.float().view(N, 1)
-            l = self.xi_debug(truth)
+            # c = torch.split(condition, list(self.subtask_nvec), dim=-1)[-1][:, 1:]
+            # last_condition = torch.split(
+            # hx.last_condition, list(self.subtask_nvec), dim=-1
+            # )[-1][:, 1:]
+            # hx_r = torch.split(hx.r, list(self.subtask_nvec), dim=-1)[-1][:, 1:]
+            # self.print("last_condition", last_condition)
+            # self.print("r", hx_r)
+            # self.print("l condition", c)
+            # phi_in = inputs.base[t, :, 1:-2] * c.view(N, -1, 1, 1)
+            # truth = torch.max(phi_in.view(N, -1), dim=-1).values.float().view(N, 1)
+            # l = self.xi_debug(truth)
 
-            self.print("l truth", round(truth, 4))
-            self.print("l", round(l, 4))
-            self.print("p before update", round(p, 2))
+            # self.print("l truth", round(truth, 4))
+            # self.print("l", round(l, 4))
+            # self.print("p before update", round(p, 2))
             # l = truth
             # NOTE }
 
@@ -435,25 +436,25 @@ class Recurrence(torch.jit.ScriptModule):
                     probs = torch.zeros_like(c_logits)  # dummy value
 
                 # NOTE {
-                _task_sections = torch.split(
-                    subtask_param, tuple(self.subtask_nvec), dim=-1
-                )
-                interaction, count, obj, _, condition = _task_sections
-                agent_layer = obs[t, :, 6, :, :].long()
-                j, k, l = torch.split(agent_layer.nonzero(), 1, dim=-1)
-                debug_obs = obs[t, j, :, k, l].squeeze(1)
-                a_one_hot = self.a_one_hots[A[t]]
-                correct_object = obj * debug_obs[:, 1 : 1 + self.subtask_nvec[2]]
-                column1 = interaction[:, :1]
-                column2 = interaction[:, 1:] * a_one_hot[:, 4:-1]
-                correct_action = torch.cat([column1, column2], dim=-1)
-                truth = (
-                    correct_action.sum(-1, keepdim=True)
-                    * correct_object.sum(-1, keepdim=True)
-                ).detach()  # * condition[:, :1] + (1 - condition[:, :1])
-                c = self.phi_debug(truth)
-                # c = truth
-                self.print("c", round(c, 4))
+                # _task_sections = torch.split(
+                # subtask_param, tuple(self.subtask_nvec), dim=-1
+                # )
+                # interaction, count, obj, _, condition = _task_sections
+                # agent_layer = obs[t, :, 6, :, :].long()
+                # j, k, l = torch.split(agent_layer.nonzero(), 1, dim=-1)
+                # debug_obs = obs[t, j, :, k, l].squeeze(1)
+                # a_one_hot = self.a_one_hots[A[t]]
+                # correct_object = obj * debug_obs[:, 1 : 1 + self.subtask_nvec[2]]
+                # column1 = interaction[:, :1]
+                # column2 = interaction[:, 1:] * a_one_hot[:, 4:-1]
+                # correct_action = torch.cat([column1, column2], dim=-1)
+                # truth = (
+                # correct_action.sum(-1, keepdim=True)
+                # * correct_object.sum(-1, keepdim=True)
+                # ).detach()  # * condition[:, :1] + (1 - condition[:, :1])
+                # c = self.phi_debug(truth)
+                # # c = truth
+                # self.print("c", round(c, 4))
                 # NOTE }
                 return c, probs
 
