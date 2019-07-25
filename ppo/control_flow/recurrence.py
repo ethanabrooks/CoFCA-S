@@ -371,10 +371,10 @@ class Recurrence(torch.jit.ScriptModule):
             self.print("l condition", c)
             phi_in = inputs.base[t, :, 1:-2] * c.view(N, -1, 1, 1)
             truth = torch.max(phi_in.view(N, -1), dim=-1).values.float().view(N, 1)
-            # l = self.xi_debug(truth)
+            l = self.xi_debug(truth)
 
             # self.print("l truth", round(truth, 4))
-            l = truth
+            # l = truth
             # NOTE }
 
             # control memory
