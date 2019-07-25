@@ -101,8 +101,9 @@ class Recurrence(torch.jit.ScriptModule):
                 Product(),
                 Reshape(d * self.line_size, *self.obs_shape[-2:]),
                 init_(nn.Conv2d(self.line_size * d, 1, kernel_size=1), "sigmoid"),
-                nn.LPPool2d(2, kernel_size=(h, w)),
                 nn.Sigmoid(),  # TODO: try on both sides of pool
+                nn.LPPool2d(2, kernel_size=(h, w)),
+                Times((h * w) ** (-0.5)),
                 Reshape(1),
             )
         elif xi_architecture == "Max":
