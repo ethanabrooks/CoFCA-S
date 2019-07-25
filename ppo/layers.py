@@ -22,6 +22,12 @@ class Flatten(nn.Module):
         return x.view(x.size(0), -1)
 
 
+class Print(nn.Module):
+    def forward(self, x):
+        print(round(x, 2))
+        return x
+
+
 class Sum(nn.Module):
     def __init__(self, **kwargs):
         self.kwargs = kwargs
