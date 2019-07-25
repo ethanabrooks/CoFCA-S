@@ -102,7 +102,6 @@ class Recurrence(torch.jit.ScriptModule):
                 Reshape(d * self.line_size, *self.obs_shape[-2:]),
                 init_(nn.Conv2d(self.line_size * d, 1, kernel_size=1), "sigmoid"),
                 nn.Sigmoid(),  # TODO: try on both sides of pool
-                Print(),
                 nn.LPPool2d(2, kernel_size=(h, w)),
                 Times((h * w) ** (-0.5)),
                 Reshape(1),
@@ -128,7 +127,6 @@ class Recurrence(torch.jit.ScriptModule):
                 Product(),
                 Reshape(d * self.line_size, *self.obs_shape[-2:]),
                 init_(nn.Conv2d(self.line_size * d, 1, kernel_size=1), "sigmoid"),
-                Print(),
                 nn.MaxPool2d(kernel_size=(h, w)),
                 nn.Sigmoid(),
                 Reshape(1),
@@ -363,20 +361,20 @@ class Recurrence(torch.jit.ScriptModule):
             l = self.xi((inputs.base[t], condition))
             self.print("l", round(l, 4))
             # NOTE {
-            # c = torch.split(condition, list(self.subtask_nvec), dim=-1)[-1][:, 1:]
-            # last_condition = torch.split(
-            # hx.last_condition, list(self.subtask_nvec), dim=-1
-            # )[-1][:, 1:]
-            # hx_r = torch.split(hx.r, list(self.subtask_nvec), dim=-1)[-1][:, 1:]
-            # self.print("last_condition", last_condition)
-            # self.print("r", hx_r)
-            # self.print("l condition", c)
-            # phi_in = inputs.base[t, :, 1:-2] * c.view(N, -1, 1, 1)
-            # truth = torch.max(phi_in.view(N, -1), dim=-1).values.float().view(N, 1)
+            c = torch.split(condition, list(self.subtask_nvec), dim=-1)[-1][:, 1:]
+            last_condition = torch.split(
+                hx.last_condition, list(self.subtask_nvec), dim=-1
+            )[-1][:, 1:]
+            hx_r = torch.split(hx.r, list(self.subtask_nvec), dim=-1)[-1][:, 1:]
+            self.print("last_condition", last_condition)
+            self.print("r", hx_r)
+            self.print("l condition", c)
+            phi_in = inputs.base[t, :, 1:-2] * c.view(N, -1, 1, 1)
+            truth = torch.max(phi_in.view(N, -1), dim=-1).values.float().view(N, 1)
             # l = self.xi_debug(truth)
 
             # self.print("l truth", round(truth, 4))
-            # l = truth
+            l = truth
             # NOTE }
 
             # control memory
