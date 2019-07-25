@@ -140,7 +140,12 @@ class Train:
 
         if load_path:
             state_dict = torch.load(load_path, map_location=device)
-            self.agent.load_state_dict(state_dict["agent"])
+            agent_dict = self.agent.state_dict()
+            agent_dict.update(
+                {k: v for k, v in state_dict["agent"].items() if "xi" not in k}
+            )
+            self.agent.load_state_dict(agent_dict)
+            # self.agent.load_state_dict(state_dict["agent"])
             ppo.optimizer.load_state_dict(state_dict["optimizer"])
             start = state_dict.get("step", -1) + 1
             if isinstance(envs.venv, VecNormalize):
