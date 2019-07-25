@@ -94,4 +94,4 @@ class Times(torch.jit.ScriptModule):
         self.x = x
 
     def forward(self, inputs):
-        return x * inputs
+        return self.x * inputs
