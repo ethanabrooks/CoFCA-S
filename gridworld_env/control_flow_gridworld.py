@@ -264,10 +264,13 @@ class ControlFlowGridworld(SubtasksGridworld):
             yield self.Subtask(
                 interaction=self.irreversible_interactions[0], count=0, object=None
             )
+            yield self.Subtask(
+                interaction=self.irreversible_interactions[1], count=0, object=None
+            )
             yield EndIf()
             yield self.If(None)
             yield self.Subtask(
-                interaction=self.irreversible_interactions[1], count=0, object=None
+                interaction=self.irreversible_interactions[0], count=0, object=None
             )
             yield EndIf()
         elif self.task_type is TaskTypes.Else:
