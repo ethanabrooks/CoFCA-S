@@ -5,7 +5,7 @@ import torch
 from torch import nn as nn
 import torch.jit
 
-from ppo.utils import broadcast3d
+from ppo.utils import broadcast3d, round
 
 
 class CumSum(torch.jit.ScriptModule):
@@ -86,3 +86,12 @@ class Parallel(torch.jit.ScriptModule):
 
     def forward(self, inputs):
         return tuple([m(x) for m, x in zip(self.module_list, inputs)])
+
+
+class Times(torch.jit.ScriptModule):
+    def __init__(self, x):
+        super().__init__()
+        self.x = x
+
+    def forward(self, inputs):
+        return x * inputs

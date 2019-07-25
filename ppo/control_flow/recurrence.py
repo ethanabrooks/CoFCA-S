@@ -19,17 +19,23 @@ from ppo.control_flow.lower_level import (
 )
 from ppo.control_flow.wrappers import Actions
 from ppo.distributions import Categorical, DiagGaussian, FixedCategorical
-from ppo.layers import Concat, Flatten, Parallel, Product, Reshape, ShallowCopy, Sum
-from ppo.utils import broadcast3d, init_, interp, trace
+from ppo.layers import (
+    Concat,
+    Flatten,
+    Parallel,
+    Product,
+    Reshape,
+    ShallowCopy,
+    Sum,
+    Print,
+    Times,
+)
+from ppo.utils import broadcast3d, init_, interp, trace, round
 
 RecurrentState = namedtuple(
     "RecurrentState",
     "a g cr cg z a_probs g_probs cr_probs cg_probs z_probs p r last_condition last_eval v",
 )
-
-
-def round(x, dec):
-    return torch.round(x * 10 ** dec) / 10 ** dec
 
 
 class Recurrence(torch.jit.ScriptModule):
