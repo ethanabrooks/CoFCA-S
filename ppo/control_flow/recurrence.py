@@ -177,15 +177,17 @@ class Recurrence(torch.jit.ScriptModule):
         self.phi_debug = nn.Sequential(init_(nn.Linear(1, 1), "sigmoid"), nn.Sigmoid())
         self.xi_debug = nn.Sequential(
             Parallel(
-                nn.Sequential(Reshape(d - 3, h, w)),
-                nn.Sequential(Reshape(self.subtask_nvec[-1] - 1, 1, 1)),
+                nn.Sequential(Reshape(1, d - 3, h, w)),
+                nn.Sequential(Reshape(self.subtask_nvec[-1] - 1, 1, 1, 1)),
             ),
             Product(),
+            Reshape(-1, h, w),
+            nn.Conv2d((self.subtask_nvec[-1] - 1) * (d - 3), 1, kernel_size=1),
             Reshape(1, -1),
             nn.MaxPool1d(kernel_size=((d - 3) * h * w))
             if xi_architecture == "Max"
             else nn.LPPool1d(2, kernel_size=((d - 3) * h * w)),
-            init_(nn.Linear(1, 1), "sigmoid"),
+            # init_(nn.Linear(1, 1), "sigmoid"),
             nn.Sigmoid(),
             Reshape(1),
         )
