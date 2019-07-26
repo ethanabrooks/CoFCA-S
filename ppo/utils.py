@@ -11,6 +11,10 @@ import torch.jit
 import torch.nn as nn
 
 
+def round(x, dec):
+    return torch.round(x * 10 ** dec) / 10 ** dec
+
+
 def get_render_func(venv):
     if hasattr(venv, "envs"):
         return venv.envs[0].render
