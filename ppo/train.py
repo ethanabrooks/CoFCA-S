@@ -144,7 +144,8 @@ class Train:
             state_dict = torch.load(load_path, map_location=device)
             agent_dict = self.agent.state_dict()
             agent_dict.update(
-                {k: v for k, v in state_dict["agent"].items() if "xi" not in k}
+                {k: v for k, v in state_dict["agent"].items()}
+                # if "xi" not in k}
             )
             self.agent.load_state_dict(agent_dict)
             # self.agent.load_state_dict(state_dict["agent"])
