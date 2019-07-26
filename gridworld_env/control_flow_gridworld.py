@@ -321,11 +321,12 @@ class ControlFlowGridworld(SubtasksGridworld):
         while i < len(self.subtasks):
             line = self.subtasks[i]
             if isinstance(line, (self.If, self.While)):
-                passing = self.np_random.rand() < (
-                    WHILE_PASSING_PROBS[self.max_loops]
-                    if isinstance(line, self.While)
-                    else 0.5
-                )
+                # passing = self.np_random.rand() < (
+                # WHILE_PASSING_PROBS[self.max_loops]
+                # if isinstance(line, self.While)
+                # else 0.5
+                # )
+                passing = 0
                 if passing:
                     obj = existing
                     if obj not in available:
