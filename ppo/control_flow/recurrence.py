@@ -136,31 +136,36 @@ class Recurrence(torch.jit.ScriptModule):
         elif xi_architecture == "LPPool2dProject":
             self.xi = nn.Sequential(
                 Parallel(
-                    Reshape(1, d, h, w),
                     nn.Sequential(
-                        Reshape(self.line_size, 1, 1, 1),
-                        nn.Conv2d(self.line_size, self.subtask_nvec[-1], kernel_size=1),
+                        init_(nn.Conv2d(d, hidden_size, kernel_size=1)),
+                        Reshape(hidden_size, h, w),
+                    ),
+                    nn.Sequential(
+                        init_(nn.Linear(self.line_size, hidden_size)),
+                        Reshape(hidden_size, 1, 1),
                     ),
                 ),
                 Product(),
-                Reshape(d * self.subtask_nvec[-1], *self.obs_shape[-2:]),
-                init_(nn.Conv2d(self.line_size * d, 1, kernel_size=1), "sigmoid"),
+                init_(nn.Conv2d(hidden_size, 1, kernel_size=1), "sigmoid"),
+                nn.Sigmoid(),
                 nn.LPPool2d(2, kernel_size=(h, w)),
-                nn.Sigmoid(),  # TODO: try on both sides of pool
+                Times((h * w) ** (-0.5)),
                 Reshape(1),
             )
         elif xi_architecture == "MaxProject":
             self.xi = nn.Sequential(
                 Parallel(
-                    Reshape(1, d, h, w),
                     nn.Sequential(
-                        Reshape(self.line_size, 1, 1, 1),
-                        nn.Conv2d(self.line_size, self.subtask_nvec[-1], kernel_size=1),
+                        init_(nn.Conv2d(d, hidden_size, kernel_size=1)),
+                        Reshape(hidden_size, h, w),
+                    ),
+                    nn.Sequential(
+                        init_(nn.Linear(self.line_size, hidden_size)),
+                        Reshape(hidden_size, 1, 1),
                     ),
                 ),
                 Product(),
-                Reshape(d * self.subtask_nvec[-1], *self.obs_shape[-2:]),
-                init_(nn.Conv2d(self.line_size * d, 1, kernel_size=1), "sigmoid"),
+                init_(nn.Conv2d(hidden_size, 1, kernel_size=1), "sigmoid"),
                 nn.MaxPool2d(kernel_size=(h, w)),
                 nn.Sigmoid(),
                 Reshape(1),
