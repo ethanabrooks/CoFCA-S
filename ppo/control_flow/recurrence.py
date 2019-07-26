@@ -34,7 +34,7 @@ from ppo.utils import broadcast3d, init_, interp, trace, round
 
 RecurrentState = namedtuple(
     "RecurrentState",
-    "a g cr cg z a_probs g_probs cr_probs cg_probs z_probs p r last_condition last_eval v",
+    "a g cr cg z l a_probs g_probs cr_probs cg_probs l_probs z_probs p r last_condition last_eval v",
 )
 
 
@@ -194,11 +194,13 @@ class Recurrence(torch.jit.ScriptModule):
             g=1,
             cg=1,
             cr=1,
+            l=1,
             z=self.n_subtasks,
             a_probs=action_spaces.a.n,
             g_probs=self.n_subtasks,
             cg_probs=2,
             cr_probs=2,
+            l_probs=2,
             z_probs=self.n_subtasks * len(LineTypes._fields),
             r=self.line_size,
             p=self.n_subtasks,
@@ -325,24 +327,25 @@ class Recurrence(torch.jit.ScriptModule):
         self, hx: RecurrentState, actions: Actions, inputs: Obs, M, M_discrete, subtask
     ):
 
-        T, N, *_ = inputs.base.shape
+        _, N, *_ = inputs.base.shape
         p = hx.p
-        L = LineTypes()
+        T = LineTypes()
 
         # combine past and present actions (sampled values)
         obs = inputs.base
         A = torch.cat([actions.a, hx.a.unsqueeze(0)], dim=0).long().squeeze(2)
         G = torch.cat([actions.g, hx.g.unsqueeze(0)], dim=0).long().squeeze(2)
+        L = torch.cat([actions.l, hx.l.unsqueeze(0)], dim=0).long().squeeze(2)
         M_zeta = self.z_one_hots[hx.z.long()]
 
         def aeq(a, b):
             return torch.abs(a - b) < 1e-4
 
-        for t in range(T):
-            self.print(L)
+        for t in range(inputs.base.shape[0]):
+            self.print(T)
             self.print("M_zeta")
             for _z in M_zeta[0]:
-                self.print(L._fields[int(_z.argmax())])
+                self.print(T._fields[int(_z.argmax())])
 
             def safediv(x, y):
                 return x / torch.clamp(y, min=1e-5)
@@ -354,7 +357,7 @@ class Recurrence(torch.jit.ScriptModule):
             condition = interp(
                 hx.r,
                 hx.last_condition,
-                safediv(e[L.EndWhile], e[[L.If, L.While, L.EndWhile]].sum(0)),
+                safediv(e[T.EndWhile], e[[T.If, T.While, T.EndWhile]].sum(0)),
             )
 
             # l
@@ -378,15 +381,17 @@ class Recurrence(torch.jit.ScriptModule):
             # NOTE }
 
             # control memory
-            last_eval = interp(hx.last_eval, l, e[L.If])
-            last_condition = interp(hx.last_condition, hx.r, e[L.While])
+            last_eval = interp(hx.last_eval, l, e[T.If])
+            last_condition = interp(hx.last_condition, hx.r, e[T.While])
 
             # l'
             l = interp(
                 l,
                 1 - hx.last_eval,
-                safediv(e[L.Else], e[[L.If, L.Else, L.While, L.EndWhile]].sum(0)),
+                safediv(e[T.Else], e[[T.If, T.Else, T.While, T.EndWhile]].sum(0)),
             )
+            l_dist = FixedCategorical(probs=torch.cat([1 - l, l], dim=1))
+            self.sample_new(L[t], l_dist)
 
             def roll(x):
                 return F.pad(x, [1, 0])[:, :-1]
@@ -411,21 +416,21 @@ class Recurrence(torch.jit.ScriptModule):
             )
             p_step = (p.unsqueeze(1) @ self.one_step).squeeze(1)
             self.print("cr before update", round(hx.cr, 2))
-            pIf = interp(scan_forward(L.Else, L.EndIf), p_step, l)
-            pElse = interp(scan_forward(L.EndIf), p_step, l)
-            pWhile = interp(scan_forward(L.EndWhile), p_step, l)
-            pEndWhile = interp(p_step, scan_backward(L.While).flip(-1), l)
+            pIf = interp(scan_forward(T.Else, T.EndIf), p_step, l)
+            pElse = interp(scan_forward(T.EndIf), p_step, l)
+            pWhile = interp(scan_forward(T.EndWhile), p_step, l)
+            pEndWhile = interp(p_step, scan_backward(T.While).flip(-1), l)
             pSubtask = interp(hx.p, p_step, hx.cr)
             self.print("p before update", round(p, 2))
             p = (
                 # e[[L.If, L.While, L.Else]].sum(0)  # conditions
                 # * interp(scan_forward(L.EndIf, L.Else, L.EndWhile), p_step, l)
-                e[L.If] * pIf
-                + e[L.Else] * pElse
-                + e[L.While] * pWhile
-                + e[L.EndWhile] * pEndWhile
-                + e[L.EndIf] * p_step
-                + e[L.Subtask] * pSubtask
+                e[T.If] * pIf
+                + e[T.Else] * pElse
+                + e[T.While] * pWhile
+                + e[T.EndWhile] * pEndWhile
+                + e[T.EndIf] * p_step
+                + e[T.Subtask] * pSubtask
             )
             is_line = 1 - inputs.ignore[0]
             p = torch.clamp(p, 0.0, 1.0)
@@ -435,19 +440,19 @@ class Recurrence(torch.jit.ScriptModule):
             last_line = is_line.sum(-1).long() - 1
             p = p + (1 - p.sum(-1, keepdim=True)) * self.p_one_hot[last_line]
 
-            self.print("e[L.If]", e[L.If])
-            self.print("e[L.Else]", e[L.Else])
-            self.print("e[L.EndIf]", e[L.EndIf])
-            self.print("e[L.While]", e[L.While])
-            self.print("e[L.EndWhile]", e[L.EndWhile])
-            self.print("e[L.Subtask]", e[L.Subtask])
+            self.print("e[L.If]", e[T.If])
+            self.print("e[L.Else]", e[T.Else])
+            self.print("e[L.EndIf]", e[T.EndIf])
+            self.print("e[L.While]", e[T.While])
+            self.print("e[L.EndWhile]", e[T.EndWhile])
+            self.print("e[L.Subtask]", e[T.Subtask])
 
             # r
             r = (p.unsqueeze(1) @ M).squeeze(1)
 
             # g
             old_g = self.g_one_hots[G[t - 1]]
-            cg = e[L.Subtask] * hx.cg + (1 - e[L.Subtask])
+            cg = e[T.Subtask] * hx.cg + (1 - e[T.Subtask])
             probs = interp(old_g, p, cg)
             g_dist = FixedCategorical(probs=torch.clamp(probs, 0.0, 1.0))
             self.sample_new(G[t], g_dist)
@@ -491,15 +496,8 @@ class Recurrence(torch.jit.ScriptModule):
                     outer_product_obs = outer_product_obs * part
 
                 c_logits = self.phi(outer_product_obs.view(N, -1))
-                if self.hard_update:
-                    raise NotImplementedError
-                    # c_dist = FixedCategorical(logits=c_logits)
-                    # c = actions.c[t]
-                    # self.sample_new(c, c_dist)
-                    # probs = c_dist.probs
-                else:
-                    c = torch.sigmoid(c_logits[:, :1])
-                    probs = torch.zeros_like(c_logits)  # dummy value
+                c = torch.sigmoid(c_logits[:, :1])
+                probs = torch.zeros_like(c_logits)  # dummy value
 
                 # NOTE {
                 # _task_sections = torch.split(
@@ -536,6 +534,7 @@ class Recurrence(torch.jit.ScriptModule):
                 cr=cr,
                 cg_probs=cg_probs,
                 cr_probs=cr_probs,
+                l=l,
                 p=p,
                 r=r,
                 g=G[t],
@@ -547,6 +546,7 @@ class Recurrence(torch.jit.ScriptModule):
                 last_eval=last_eval,
                 z=hx.z,
                 z_probs=hx.z_probs,
+                l_probs=l_dist.probs,
             )
 
     @staticmethod
