@@ -110,7 +110,7 @@ class Recurrence(torch.jit.ScriptModule):
             self.xi = nn.Sequential(
                 Parallel(
                     nn.Sequential(nn.MaxPool2d(kernel_size=(h, w)), Reshape(1, d)),
-                    nn.Sequential(Reshape(self.line_size, 1, 1, 1)),
+                    Reshape(self.line_size, 1),
                 ),
                 Product(),
                 Reshape(d * self.line_size),
