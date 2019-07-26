@@ -28,13 +28,27 @@ class Print(nn.Module):
         return x
 
 
+class Log(nn.Module):
+    def forward(self, x):
+        return torch.log(x)
+
+
+class Exp(nn.Module):
+    def forward(self, x):
+        return torch.exp(x)
+
+
 class Sum(nn.Module):
     def __init__(self, **kwargs):
+
         self.kwargs = kwargs
         super().__init__()
 
-    def forward(self, x):
-        return torch.sum(x, **self.kwargs)
+    def forward(self, inputs):
+        if isinstance(inputs, (tuple, list)):
+            return sum(inputs)
+        else:
+            return torch.sum(inputs, **self.kwargs)
 
 
 class ShallowCopy(nn.Module):
