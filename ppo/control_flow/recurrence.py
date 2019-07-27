@@ -27,6 +27,7 @@ from ppo.layers import (
     Reshape,
     ShallowCopy,
     Sum,
+    Squash,
     Print,
     Times,
     Plus,
@@ -123,7 +124,9 @@ class Recurrence(torch.jit.ScriptModule):
                 init_(nn.Conv2d(hidden_size, 1, kernel_size=1), "sigmoid"),
             ),
             Sum(dim=1),
-            nn.Sequential(nn.MaxPool2d(kernel_size=(h, w)), nn.Sigmoid()),
+            nn.Sequential(nn.MaxPool2d(kernel_size=(h, w)), nn.Sigmoid())
+            if max_pool
+            else nn.Sequential(nn.LPPool2d(2, kernel_size=(h, w)), Squash()),
             Reshape(1),
         )
 
