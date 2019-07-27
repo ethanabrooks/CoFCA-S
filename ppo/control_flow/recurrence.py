@@ -96,27 +96,25 @@ class Recurrence(torch.jit.ScriptModule):
         )
 
         self.xi = nn.Sequential(
-            Parallel(
-                nn.Sequential(Reshape(1, d - 3, h, w)),
-                nn.Sequential(Reshape(self.subtask_nvec[-1] - 1, 1, 1, 1)),
-            ),
-            Product(),
-            Reshape(-1, h, w),
-            # Times(100 * torch.eye(d - 3).view(1, (d - 3) * (d - 3), 1, 1)),
-            # Plus(-3),
-            init_(
-                nn.Conv2d((d - 3) * (self.subtask_nvec[-1] - 1), 1, kernel_size=1),
-                "sigmoid",
+            nn.Sequential(
+                Parallel(
+                    nn.Sequential(Reshape(1, d - 3, h, w)),
+                    nn.Sequential(Reshape(self.subtask_nvec[-1] - 1, 1, 1, 1)),
+                ),
+                Product(),
+                Reshape(-1, h, w),
+                # Times(100 * torch.eye(d - 3).view(1, (d - 3) * (d - 3), 1, 1)),
+                # Plus(-3),
+                init_(
+                    nn.Conv2d((d - 3) * (self.subtask_nvec[-1] - 1), 1, kernel_size=1),
+                    "sigmoid",
+                ),
             ),
             # Print(),
             Sum(dim=1),
             # Print(),
             # Reshape(-1, h, w),
-            nn.MaxPool2d(kernel_size=(h, w))
-            if xi_architecture == "Max"
-            else nn.LPPool2d(2, kernel_size=(h, w)),
-            # Print(),
-            nn.Sigmoid(),
+            nn.Sequential(nn.MaxPool2d(kernel_size=(h, w)), nn.Sigmoid()),
             # Print(),
             Reshape(1),
         )
