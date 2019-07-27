@@ -114,7 +114,8 @@ class Recurrence(torch.jit.ScriptModule):
                 Parallel(
                     nn.Sequential(init_(nn.Conv2d(d - 3, hidden_size, kernel_size=1))),
                     nn.Sequential(
-                        init_(nn.Linear(self.subtask_nvec[-1] - 1, hidden_size))
+                        init_(nn.Linear(self.subtask_nvec[-1] - 1, hidden_size)),
+                        Reshape(-1, 1, 1),
                     ),
                 ),
                 Product(),
