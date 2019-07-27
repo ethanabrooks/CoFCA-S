@@ -23,8 +23,15 @@ class Flatten(nn.Module):
 
 
 class Print(nn.Module):
+    def __init__(self, f=None):
+        self.f = f
+        super().__init__()
+
     def forward(self, x):
-        print(round(x, 2))
+        if self.f is None:
+            print(x)
+        else:
+            print(self.f(x))
         return x
 
 
@@ -100,6 +107,15 @@ class Parallel(torch.jit.ScriptModule):
 
     def forward(self, inputs):
         return tuple([m(x) for m, x in zip(self.module_list, inputs)])
+
+
+class Plus(torch.jit.ScriptModule):
+    def __init__(self, x):
+        super().__init__()
+        self.x = x
+
+    def forward(self, inputs):
+        return self.x + inputs
 
 
 class Times(torch.jit.ScriptModule):

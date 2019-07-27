@@ -29,6 +29,7 @@ from ppo.layers import (
     Sum,
     Print,
     Times,
+    Plus,
     Exp,
     Log,
 )
@@ -180,21 +181,25 @@ class Recurrence(torch.jit.ScriptModule):
 
         # NOTE {
         self.phi_debug = nn.Sequential(init_(nn.Linear(1, 1), "sigmoid"), nn.Sigmoid())
+        bias = nn.Parameter(torch.tensor(0.0))
         self.xi_debug = nn.Sequential(
             Parallel(
                 nn.Sequential(Reshape(1, d - 3, h, w)),
                 nn.Sequential(Reshape(self.subtask_nvec[-1] - 1, 1, 1, 1)),
             ),
             Product(),
-            Reshape(-1, h, w),
-            init_(
-                nn.Conv2d((d - 3) * (self.subtask_nvec[-1] - 1), 1, kernel_size=1),
-                "sigmoid",
-            ),
-            nn.MaxPool2d(kernel_size=(h, w)),
+            Plus(bias),
+            Times(100 * torch.eye(d - 3).view(1, d - 3, d - 3, 1, 1)),
+            Sum(dim=1),
+            # Reshape(-1, h, w),
+            # init_(
+            # nn.Conv2d((d - 3) * (self.subtask_nvec[-1] - 1), 1, kernel_size=1),
+            # "sigmoid",
+            # ),
+            nn.MaxPool3d(kernel_size=(d - 3, h, w)),
+            nn.Sigmoid(),
             # if xi_architecture == "Max"
             # else nn.LPPool1d(2, kernel_size=((d - 3) * h * w)),
-            nn.Sigmoid(),
             Reshape(1),
         )
         self.zeta_debug = Categorical(len(LineTypes._fields), len(LineTypes._fields))
