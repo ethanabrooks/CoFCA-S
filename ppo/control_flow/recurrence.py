@@ -104,19 +104,25 @@ class Recurrence(torch.jit.ScriptModule):
                 ),
                 Product(),
                 Reshape(-1, h, w),
-                # Times(100 * torch.eye(d - 3).view(1, (d - 3) * (d - 3), 1, 1)),
-                # Plus(-3),
                 init_(
                     nn.Conv2d((d - 3) * (self.subtask_nvec[-1] - 1), 1, kernel_size=1),
                     "sigmoid",
                 ),
+            )
+            if outer_product
+            else nn.Sequential(
+                Parallel(
+                    nn.Sequential(init_(nn.Conv2d(d - 3, hidden_size, kernel_size=1))),
+                    nn.Sequential(
+                        init_(nn.Linear(self.subtask_nvec[-1] - 1, hidden_size))
+                    ),
+                ),
+                Product(),
+                Reshape(-1, h, w),
+                init_(nn.Conv2d(hidden_size, 1, kernel_size=1), "sigmoid"),
             ),
-            # Print(),
             Sum(dim=1),
-            # Print(),
-            # Reshape(-1, h, w),
             nn.Sequential(nn.MaxPool2d(kernel_size=(h, w)), nn.Sigmoid()),
-            # Print(),
             Reshape(1),
         )
 
