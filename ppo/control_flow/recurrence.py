@@ -198,12 +198,12 @@ class Recurrence(torch.jit.ScriptModule):
             Sum(dim=1),
             # Print(),
             # Reshape(-1, h, w),
-            nn.MaxPool2d(kernel_size=(h, w)),
+            nn.MaxPool2d(kernel_size=(h, w))
+            if xi_architecture == "Max"
+            else nn.LPPool2d(2, kernel_size=(h, w)),
             # Print(),
             nn.Sigmoid(),
             # Print(),
-            # if xi_architecture == "Max"
-            # else nn.LPPool1d(2, kernel_size=((d - 3) * h * w)),
             Reshape(1),
         )
         self.zeta_debug = Categorical(len(LineTypes._fields), len(LineTypes._fields))
