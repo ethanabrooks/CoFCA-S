@@ -17,6 +17,12 @@ class CumSum(torch.jit.ScriptModule):
         return torch.cumsum(inputs, **self.kwargs)
 
 
+class Squash(nn.Module):
+    def forward(self, x):
+        y = x ** 3
+        return y / (1 + y.abs())
+
+
 class Flatten(nn.Module):
     def forward(self, x):
         return x.view(x.size(0), -1)
