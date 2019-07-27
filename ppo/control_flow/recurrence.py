@@ -102,73 +102,115 @@ class Recurrence(torch.jit.ScriptModule):
                     nn.Sequential(Reshape(self.line_size, 1, 1, 1)),
                 ),
                 Product(),
-                Reshape(d * self.line_size, *self.obs_shape[-2:]),
-                init_(nn.Conv2d(self.line_size * d, 1, kernel_size=1), "sigmoid"),
-                nn.Sigmoid(),  # TODO: try on both sides of pool
+                Reshape(-1, h, w),
+                # Times(100 * torch.eye(d - 3).view(1, (d - 3) * (d - 3), 1, 1)),
+                # Plus(-3),
+                init_(nn.Conv2d(d * self.line_size, 1, kernel_size=1), "sigmoid"),
+                # Print(),
+                Sum(dim=1),
+                # Print(),
+                # Reshape(-1, h, w),
+                nn.Sigmoid(),
                 nn.LPPool2d(2, kernel_size=(h, w)),
-                Times((h * w) ** (-0.5)),
+                Times((h * w) ** 0.5),
                 Reshape(1),
             )
         elif xi_architecture == "Max":
-            self.xi = nn.Sequential(
-                Parallel(
-                    nn.Sequential(nn.MaxPool2d(kernel_size=(h, w)), Reshape(1, d)),
-                    nn.Sequential(Reshape(self.line_size, 1, 1, 1)),
-                ),
-                Product(),
-                Reshape(d * self.line_size),
-                init_(nn.Linear(d * self.line_size, 1), "sigmoid"),
-                nn.Sigmoid(),
-                Reshape(1),
-            )
-        elif xi_architecture == "ConvMax":
             self.xi = nn.Sequential(
                 Parallel(
                     nn.Sequential(Reshape(1, d, h, w)),
                     nn.Sequential(Reshape(self.line_size, 1, 1, 1)),
                 ),
                 Product(),
-                Reshape(d * self.line_size, *self.obs_shape[-2:]),
-                init_(nn.Conv2d(self.line_size * d, 1, kernel_size=1), "sigmoid"),
+                Reshape(-1, h, w),
+                # Times(100 * torch.eye(d - 3).view(1, (d - 3) * (d - 3), 1, 1)),
+                # Plus(-3),
+                init_(nn.Conv2d(d * self.line_size, 1, kernel_size=1), "sigmoid"),
+                # Print(),
+                Sum(dim=1),
+                # Print(),
+                # Reshape(-1, h, w),
                 nn.MaxPool2d(kernel_size=(h, w)),
                 nn.Sigmoid(),
+                # Print(),
                 Reshape(1),
             )
-        elif xi_architecture == "LPPool2dProject":
+        elif xi_architecture == "LPPool2dMult":
             self.xi = nn.Sequential(
                 Parallel(
                     nn.Sequential(
+                        Reshape(1, d, h, w),
                         init_(nn.Conv2d(d, hidden_size, kernel_size=1)),
-                        Reshape(hidden_size, h, w),
                     ),
                     nn.Sequential(
                         init_(nn.Linear(self.line_size, hidden_size)),
-                        Reshape(hidden_size, 1, 1),
+                        Reshape(hidden_size, 1, 1, 1),
                     ),
                 ),
                 Product(),
-                init_(nn.Conv2d(hidden_size, 1, kernel_size=1), "sigmoid"),
+                Reshape(-1, h, w),
+                # Times(100 * torch.eye(d - 3).view(1, (d - 3) * (d - 3), 1, 1)),
+                # Plus(-3),
+                init_(nn.Conv2d(hidden_size ** 2, 1, kernel_size=1), "sigmoid"),
+                # Print(),
+                Sum(dim=1),
+                # Print(),
+                # Reshape(-1, h, w),
                 nn.Sigmoid(),
                 nn.LPPool2d(2, kernel_size=(h, w)),
-                Times((h * w) ** (-0.5)),
+                Times((h * w) ** 0.5),
                 Reshape(1),
             )
-        elif xi_architecture == "MaxProject":
+        elif xi_architecture == "LPPool2dOuter":
             self.xi = nn.Sequential(
                 Parallel(
                     nn.Sequential(
                         init_(nn.Conv2d(d, hidden_size, kernel_size=1)),
-                        Reshape(hidden_size, h, w),
+                        Reshape(1, hidden_size, h, w),
                     ),
                     nn.Sequential(
                         init_(nn.Linear(self.line_size, hidden_size)),
-                        Reshape(hidden_size, 1, 1),
+                        Reshape(hidden_size, 1, 1, 1),
                     ),
                 ),
                 Product(),
-                init_(nn.Conv2d(hidden_size, 1, kernel_size=1), "sigmoid"),
+                Reshape(-1, h, w),
+                # Times(100 * torch.eye(d - 3).view(1, (d - 3) * (d - 3), 1, 1)),
+                # Plus(-3),
+                init_(nn.Conv2d(hidden_size ** 2, 1, kernel_size=1), "sigmoid"),
+                # Print(),
+                Sum(dim=1),
+                # Print(),
+                # Reshape(-1, h, w),
+                nn.Sigmoid(),
+                nn.LPPool2d(2, kernel_size=(h, w)),
+                Times((h * w) ** 0.5),
+                Reshape(1),
+            )
+        elif xi_architecture == "MaxOuter":
+            self.xi = nn.Sequential(
+                Parallel(
+                    nn.Sequential(
+                        init_(nn.Conv2d(d, hidden_size, kernel_size=1)),
+                        Reshape(1, hidden_size, h, w),
+                    ),
+                    nn.Sequential(
+                        init_(nn.Linear(self.line_size, hidden_size)),
+                        Reshape(hidden_size, 1, 1, 1),
+                    ),
+                ),
+                Product(),
+                Reshape(-1, h, w),
+                # Times(100 * torch.eye(d - 3).view(1, (d - 3) * (d - 3), 1, 1)),
+                # Plus(-3),
+                init_(nn.Conv2d(hidden_size ** 2, 1, kernel_size=1), "sigmoid"),
+                # Print(),
+                Sum(dim=1),
+                # Print(),
+                # Reshape(-1, h, w),
                 nn.MaxPool2d(kernel_size=(h, w)),
                 nn.Sigmoid(),
+                # Print(),
                 Reshape(1),
             )
 
