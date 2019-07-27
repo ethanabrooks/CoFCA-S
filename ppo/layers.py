@@ -109,19 +109,26 @@ class Parallel(torch.jit.ScriptModule):
         return tuple([m(x) for m, x in zip(self.module_list, inputs)])
 
 
+def wrap_parameter(x, requires_grad):
+    if isinstance(x, torch.Tensor):
+        return nn.Parameter(x, requires_grad=requires_grad)
+    else:
+        return x
+
+
 class Plus(torch.jit.ScriptModule):
-    def __init__(self, x):
+    def __init__(self, x, requires_grad=False):
         super().__init__()
-        self.x = x
+        self.x = wrap_parameter(x, requires_grad)
 
     def forward(self, inputs):
         return self.x + inputs
 
 
 class Times(torch.jit.ScriptModule):
-    def __init__(self, x):
+    def __init__(self, x, requires_grad=False):
         super().__init__()
-        self.x = x
+        self.x = wrap_parameter(x, requires_grad)
 
     def forward(self, inputs):
         return self.x * inputs
