@@ -352,12 +352,13 @@ class Recurrence(torch.jit.ScriptModule):
                 1 - hx.last_eval,
                 safediv(e[T.Else], e[[T.If, T.Else, T.While, T.EndWhile]].sum(0)),
             )
+            l_probs = torch.cat([1 - l, l], dim=1)
             if self.hard_update:
-                l_dist = FixedCategorical(probs=torch.cat([1 - l, l], dim=1))
+                l_dist = FixedCategorical(probs=l_probs)
                 self.print("l2", l_dist.probs)
                 self.sample_new(L[t], l_dist)
             else:
-                L[t] = l
+                L[t] = l.squeeze(-1)
 
             def roll(x):
                 return F.pad(x, [1, 0])[:, :-1]
@@ -512,7 +513,7 @@ class Recurrence(torch.jit.ScriptModule):
                 last_eval=last_eval,
                 z=hx.z,
                 z_probs=hx.z_probs,
-                l_probs=l_dist.probs,
+                l_probs=l_probs,
             )
 
     @staticmethod
