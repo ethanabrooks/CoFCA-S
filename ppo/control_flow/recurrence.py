@@ -53,7 +53,8 @@ class Recurrence(torch.jit.ScriptModule):
         hard_update,
         agent,
         debug,
-        xi_architecture,
+        outer_product,
+        max_pool,
     ):
         super().__init__()
         self.debug = debug
@@ -95,74 +96,18 @@ class Recurrence(torch.jit.ScriptModule):
             Flatten(),
         )
 
-        if xi_architecture == "LPPool2d":
-            self.xi = nn.Sequential(
+        self.xi = nn.Sequential(
+            nn.Sequential(
                 Parallel(
                     nn.Sequential(Reshape(1, d, h, w)),
                     nn.Sequential(Reshape(self.line_size, 1, 1, 1)),
                 ),
                 Product(),
                 Reshape(-1, h, w),
-                # Times(100 * torch.eye(d - 3).view(1, (d - 3) * (d - 3), 1, 1)),
-                # Plus(-3),
                 init_(nn.Conv2d(d * self.line_size, 1, kernel_size=1), "sigmoid"),
-                # Print(),
-                Sum(dim=1),
-                # Print(),
-                # Reshape(-1, h, w),
-                nn.Sigmoid(),
-                nn.LPPool2d(2, kernel_size=(h, w)),
-                Times((h * w) ** 0.5),
-                Reshape(1),
             )
-        elif xi_architecture == "Max":
-            self.xi = nn.Sequential(
-                Parallel(
-                    nn.Sequential(Reshape(1, d, h, w)),
-                    nn.Sequential(Reshape(self.line_size, 1, 1, 1)),
-                ),
-                Product(),
-                Reshape(-1, h, w),
-                # Times(100 * torch.eye(d - 3).view(1, (d - 3) * (d - 3), 1, 1)),
-                # Plus(-3),
-                init_(nn.Conv2d(d * self.line_size, 1, kernel_size=1), "sigmoid"),
-                # Print(),
-                Sum(dim=1),
-                # Print(),
-                # Reshape(-1, h, w),
-                nn.MaxPool2d(kernel_size=(h, w)),
-                nn.Sigmoid(),
-                # Print(),
-                Reshape(1),
-            )
-        elif xi_architecture == "LPPool2dMult":
-            self.xi = nn.Sequential(
-                Parallel(
-                    nn.Sequential(
-                        Reshape(1, d, h, w),
-                        init_(nn.Conv2d(d, hidden_size, kernel_size=1)),
-                    ),
-                    nn.Sequential(
-                        init_(nn.Linear(self.line_size, hidden_size)),
-                        Reshape(hidden_size, 1, 1, 1),
-                    ),
-                ),
-                Product(),
-                Reshape(-1, h, w),
-                # Times(100 * torch.eye(d - 3).view(1, (d - 3) * (d - 3), 1, 1)),
-                # Plus(-3),
-                init_(nn.Conv2d(hidden_size ** 2, 1, kernel_size=1), "sigmoid"),
-                # Print(),
-                Sum(dim=1),
-                # Print(),
-                # Reshape(-1, h, w),
-                nn.Sigmoid(),
-                nn.LPPool2d(2, kernel_size=(h, w)),
-                Times((h * w) ** 0.5),
-                Reshape(1),
-            )
-        elif xi_architecture == "LPPool2dOuter":
-            self.xi = nn.Sequential(
+            if outer_product
+            else nn.Sequential(
                 Parallel(
                     nn.Sequential(
                         init_(nn.Conv2d(d, hidden_size, kernel_size=1)),
@@ -175,44 +120,14 @@ class Recurrence(torch.jit.ScriptModule):
                 ),
                 Product(),
                 Reshape(-1, h, w),
-                # Times(100 * torch.eye(d - 3).view(1, (d - 3) * (d - 3), 1, 1)),
-                # Plus(-3),
                 init_(nn.Conv2d(hidden_size ** 2, 1, kernel_size=1), "sigmoid"),
-                # Print(),
-                Sum(dim=1),
-                # Print(),
-                # Reshape(-1, h, w),
-                nn.Sigmoid(),
-                nn.LPPool2d(2, kernel_size=(h, w)),
-                Times((h * w) ** 0.5),
-                Reshape(1),
-            )
-        elif xi_architecture == "MaxOuter":
-            self.xi = nn.Sequential(
-                Parallel(
-                    nn.Sequential(
-                        init_(nn.Conv2d(d, hidden_size, kernel_size=1)),
-                        Reshape(1, hidden_size, h, w),
-                    ),
-                    nn.Sequential(
-                        init_(nn.Linear(self.line_size, hidden_size)),
-                        Reshape(hidden_size, 1, 1, 1),
-                    ),
-                ),
-                Product(),
-                Reshape(-1, h, w),
-                # Times(100 * torch.eye(d - 3).view(1, (d - 3) * (d - 3), 1, 1)),
-                # Plus(-3),
-                init_(nn.Conv2d(hidden_size ** 2, 1, kernel_size=1), "sigmoid"),
-                # Print(),
-                Sum(dim=1),
-                # Print(),
-                # Reshape(-1, h, w),
-                nn.MaxPool2d(kernel_size=(h, w)),
-                nn.Sigmoid(),
-                # Print(),
-                Reshape(1),
-            )
+            ),
+            Sum(dim=1),
+            nn.Sequential(nn.MaxPool2d(kernel_size=(h, w)), nn.Sigmoid())
+            if max_pool
+            else nn.Sequential(nn.LPPool2d(2, kernel_size=(h, w)), nn.Tanh()),
+            Reshape(1),
+        )
 
         self.phi = trace(
             lambda in_size: init_(nn.Linear(in_size, 2), "sigmoid"),
@@ -223,31 +138,7 @@ class Recurrence(torch.jit.ScriptModule):
 
         # NOTE {
         self.phi_debug = nn.Sequential(init_(nn.Linear(1, 1), "sigmoid"), nn.Sigmoid())
-        self.xi_debug = nn.Sequential(
-            Parallel(
-                nn.Sequential(Reshape(1, d - 3, h, w)),
-                nn.Sequential(Reshape(self.subtask_nvec[-1] - 1, 1, 1, 1)),
-            ),
-            Product(),
-            Reshape(-1, h, w),
-            # Times(100 * torch.eye(d - 3).view(1, (d - 3) * (d - 3), 1, 1)),
-            # Plus(-3),
-            init_(
-                nn.Conv2d((d - 3) * (self.subtask_nvec[-1] - 1), 1, kernel_size=1),
-                "sigmoid",
-            ),
-            # Print(),
-            Sum(dim=1),
-            # Print(),
-            # Reshape(-1, h, w),
-            nn.MaxPool2d(kernel_size=(h, w))
-            if xi_architecture == "Max"
-            else nn.LPPool2d(2, kernel_size=(h, w)),
-            # Print(),
-            nn.Sigmoid(),
-            # Print(),
-            Reshape(1),
-        )
+        self.xi_debug = nn.Sequential(init_(nn.Linear(1, 1), "sigmoid"), nn.Sigmoid())
         self.zeta_debug = Categorical(len(LineTypes._fields), len(LineTypes._fields))
         # NOTE }
 
@@ -435,10 +326,10 @@ class Recurrence(torch.jit.ScriptModule):
             )
 
             # l
-            # l = self.xi((inputs.base[t], condition))
+            l = torch.clamp(self.xi((inputs.base[t], condition)), 0.0, 1.0)
             # self.print("l", round(l, 4))
             # NOTE {
-            c = torch.split(condition, list(self.subtask_nvec), dim=-1)[-1][:, 1:]
+            # c = torch.split(condition, list(self.subtask_nvec), dim=-1)[-1][:, 1:]
             # last_condition = torch.split(
             # hx.last_condition, list(self.subtask_nvec), dim=-1
             # )[-1][:, 1:]
@@ -448,8 +339,8 @@ class Recurrence(torch.jit.ScriptModule):
             # self.print("l condition", c)
             # phi_in = inputs.base[t, :, 1:-2] * c.view(N, -1, 1, 1)
             # truth = torch.max(phi_in.view(N, -1), dim=-1).values.float().view(N, 1)
-            l = self.xi_debug((inputs.base[t, :, 1:-2], c))
-            self.print("l1", l)
+            # l = self.xi_debug((inputs.base[t, :, 1:-2], c))
+            # self.print("l1", l)
 
             # self.print("l truth", round(truth, 4))
             # l = truth

@@ -128,16 +128,14 @@ def metacontroller_cli():
     subtasks_parser.add_argument(
         "--metacontroller-hidden-size", type=int, required=True
     )
-    subtasks_parser.add_argument(
-        "--xi-architecture",
-        choices=["MaxProject", "LPPool2dProject", "Max", "ConvMax", "LPPool2d"],
-    )
     subtasks_parser.add_argument("--g-entropy-coef", type=float, required=True)
     subtasks_parser.add_argument("--z-entropy-coef", type=float, required=True)
     subtasks_parser.add_argument("--l-entropy-coef", type=float, required=True)
     subtasks_parser.add_argument("--metacontroller-recurrent", action="store_true")
     subtasks_parser.add_argument("--hard-update", action="store_true")
     subtasks_parser.add_argument("--debug", action="store_true")
+    subtasks_parser.add_argument("--outer-product", action="store_true")
+    subtasks_parser.add_argument("--max-pool", action="store_true")
 
     def train(env_id, task_args, ppo_args, subtasks_args, env_args, **kwargs):
         class TrainSubtasks(Train):
