@@ -100,13 +100,13 @@ class Recurrence(torch.jit.ScriptModule):
         self.xi = nn.Sequential(
             nn.Sequential(
                 Parallel(
-                    nn.Sequential(Reshape(1, d - 3, h, w)),
+                    nn.Sequential(Reshape(1, d, h, w)),
                     nn.Sequential(Reshape(self.subtask_nvec[-1] - 1, 1, 1, 1)),
                 ),
                 Product(),
                 Reshape(-1, h, w),
                 init_(
-                    nn.Conv2d((d - 3) * (self.subtask_nvec[-1] - 1), 1, kernel_size=1),
+                    nn.Conv2d(d * (self.subtask_nvec[-1] - 1), 1, kernel_size=1),
                     "sigmoid",
                 ),
             )
@@ -340,7 +340,7 @@ class Recurrence(torch.jit.ScriptModule):
             # self.print("l condition", c)
             # phi_in = inputs.base[t, :, 1:-2] * c.view(N, -1, 1, 1)
             # truth = torch.max(phi_in.view(N, -1), dim=-1).values.float().view(N, 1)
-            l = self.xi((inputs.base[t, :, 1:-2], c))
+            l = self.xi((inputs.base[t], c))
             self.print("l1", l)
 
             # self.print("l truth", round(truth, 4))
