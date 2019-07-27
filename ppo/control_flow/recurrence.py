@@ -398,6 +398,7 @@ class Recurrence(torch.jit.ScriptModule):
             # phi_in = inputs.base[t, :, 1:-2] * c.view(N, -1, 1, 1)
             # truth = torch.max(phi_in.view(N, -1), dim=-1).values.float().view(N, 1)
             l = self.xi_debug((inputs.base[t, :, 1:-2], c))
+            self.print("l1", l)
 
             # self.print("l truth", round(truth, 4))
             # l = truth
@@ -414,6 +415,7 @@ class Recurrence(torch.jit.ScriptModule):
                 safediv(e[T.Else], e[[T.If, T.Else, T.While, T.EndWhile]].sum(0)),
             )
             l_dist = FixedCategorical(probs=torch.cat([1 - l, l], dim=1))
+            self.print("l2", l_dist.probs)
             self.sample_new(L[t], l_dist)
 
             def roll(x):
