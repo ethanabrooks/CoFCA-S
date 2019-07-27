@@ -327,7 +327,7 @@ class Recurrence(torch.jit.ScriptModule):
             )
 
             # l
-            l = torch.clamp(self.xi((inputs.base[t], condition)), 0.0, 1.0)
+            l = self.xi((inputs.base[t], condition))
             # self.print("l", round(l, 4))
             # NOTE {
             # c = torch.split(condition, list(self.subtask_nvec), dim=-1)[-1][:, 1:]
@@ -340,8 +340,8 @@ class Recurrence(torch.jit.ScriptModule):
             # self.print("l condition", c)
             # phi_in = inputs.base[t, :, 1:-2] * c.view(N, -1, 1, 1)
             # truth = torch.max(phi_in.view(N, -1), dim=-1).values.float().view(N, 1)
-            l = self.xi((inputs.base[t], c))
-            self.print("l1", l)
+            # l = self.xi((inputs.base[t], condition))
+            # self.print("l1", l)
 
             # self.print("l truth", round(truth, 4))
             # l = truth
