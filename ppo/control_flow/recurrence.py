@@ -182,17 +182,18 @@ class Recurrence(torch.jit.ScriptModule):
         self.phi_debug = nn.Sequential(init_(nn.Linear(1, 1), "sigmoid"), nn.Sigmoid())
         self.xi_debug = nn.Sequential(
             Parallel(
-                nn.Sequential(
-                    Reshape(d - 3, h, w), nn.Conv2d(d - 3, d - 3, kernel_size=1)
-                ),
-                nn.Sequential(Reshape(self.subtask_nvec[-1] - 1, 1, 1)),
+                nn.Sequential(Reshape(1, d - 3, h, w)),
+                nn.Sequential(Reshape(self.subtask_nvec[-1] - 1, 1, 1, 1)),
             ),
             Product(),
-            Reshape(1, -1),
-            nn.MaxPool1d(kernel_size=((d - 3) * h * w))
-            if xi_architecture == "Max"
-            else nn.LPPool1d(2, kernel_size=((d - 3) * h * w)),
-            # init_(nn.Linear(1, 1), "sigmoid"),
+            Reshape(-1, h, w),
+            init_(
+                nn.Conv2d((d - 3) * (self.subtask_nvec[-1] - 1), 1, kernel_size=1),
+                "sigmoid",
+            ),
+            nn.MaxPool2d(kernel_size=(h, w)),
+            # if xi_architecture == "Max"
+            # else nn.LPPool1d(2, kernel_size=((d - 3) * h * w)),
             nn.Sigmoid(),
             Reshape(1),
         )
@@ -383,10 +384,10 @@ class Recurrence(torch.jit.ScriptModule):
             )
 
             # l
-            l = self.xi((inputs.base[t], condition))
-            self.print("l", round(l, 4))
+            # l = self.xi((inputs.base[t], condition))
+            # self.print("l", round(l, 4))
             # NOTE {
-            # c = torch.split(condition, list(self.subtask_nvec), dim=-1)[-1][:, 1:]
+            c = torch.split(condition, list(self.subtask_nvec), dim=-1)[-1][:, 1:]
             # last_condition = torch.split(
             # hx.last_condition, list(self.subtask_nvec), dim=-1
             # )[-1][:, 1:]
@@ -396,7 +397,7 @@ class Recurrence(torch.jit.ScriptModule):
             # self.print("l condition", c)
             # phi_in = inputs.base[t, :, 1:-2] * c.view(N, -1, 1, 1)
             # truth = torch.max(phi_in.view(N, -1), dim=-1).values.float().view(N, 1)
-            # l = self.xi_debug((inputs.base[t, :, 1:-2], c))
+            l = self.xi_debug((inputs.base[t, :, 1:-2], c))
 
             # self.print("l truth", round(truth, 4))
             # l = truth
