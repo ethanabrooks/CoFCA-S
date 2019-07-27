@@ -20,7 +20,7 @@ class CumSum(torch.jit.ScriptModule):
 class Squash(nn.Module):
     def forward(self, x):
         y = x ** 3
-        return y / (1 + y.abs())
+        return torch.clamp(y, min=0) / (1 + y.abs())
 
 
 class Flatten(nn.Module):

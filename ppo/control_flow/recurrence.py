@@ -116,13 +116,25 @@ class Recurrence(torch.jit.ScriptModule):
                     nn.Sequential(Reshape(self.line_size, 1, 1, 1)),
                 ),
                 Product(),
-                Reshape(-1, h, w),
-                init_(nn.Conv2d(d * self.line_size, 1, kernel_size=1), "sigmoid"),
+                Times(
+                    100
+                    * (F.pad(torch.eye(4), (1, 2, 15, 0)).view(1, 19, 7, 1, 1) - 0.5)
+                ),
+                # Print(lambda x: x[:, -4:, 1:-2, :, :]),
+                # Plus(-1),
+                # Print(lambda x: x[:, -4:, 1:-2, :, :]),
+                # Squash(),
+                # Print(lambda x: x[:, -4:, 1:-2, :, :]),
+                Reshape(-1, h * w),
+                # init_(nn.Conv2d(d * self.line_size, 1, kernel_size=1), "sigmoid"),
             ),
-            Sum(dim=1),
-            nn.LPPool2d(2, kernel_size=(h, w)),
-            Squash(),
-            Reshape(1),
+            Sum(dim=-1),
+            nn.ReLU(),
+            init_(nn.Linear(d * self.line_size, 1), "sigmoid"),
+            nn.Sigmoid(),
+            # Print(),
+            # nn.LPPool2d(2, kernel_size=(h, w)),
+            # Reshape(1),
         )
 
         self.phi = trace(
@@ -323,7 +335,7 @@ class Recurrence(torch.jit.ScriptModule):
 
             # l
             l = self.xi((inputs.base[t], condition))
-            # self.print("l", round(l, 4))
+            self.print("l", round(l, 4))
             # NOTE {
             # c = torch.split(condition, list(self.subtask_nvec), dim=-1)[-1][:, 1:]
             # last_condition = torch.split(
@@ -335,8 +347,8 @@ class Recurrence(torch.jit.ScriptModule):
             # self.print("l condition", c)
             # phi_in = inputs.base[t, :, 1:-2] * c.view(N, -1, 1, 1)
             # truth = torch.max(phi_in.view(N, -1), dim=-1).values.float().view(N, 1)
-            l = self.xi((inputs.base[t], condition))
-            self.print("l1", l)
+            # l = self.xi((inputs.base[t], condition))
+            # self.print("l1", l)
 
             # self.print("l truth", round(truth, 4))
             # l = truth
