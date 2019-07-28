@@ -54,7 +54,7 @@ class Recurrence(torch.jit.ScriptModule):
         hard_update,
         agent,
         debug,
-        project,
+        activation,
     ):
         super().__init__()
         self.debug = debug
@@ -142,7 +142,7 @@ class Recurrence(torch.jit.ScriptModule):
             # init_(nn.Conv2d(d * self.line_size, hidden_size, kernel_size=1), "sigmoid"),
             # Reshape(hidden_size, h * w),
             Sum(dim=-1),
-            nn.ReLU(),
+            activation,
             # Times(100),
             # Sum(dim=-1, keepdim=True),
         )
