@@ -350,6 +350,7 @@ class Recurrence(torch.jit.ScriptModule):
             # self.print("l truth", round(truth, 4))
             # l = truth
             # NOTE }
+            self.print("xi_in", xi_in)
             l = self.xi(xi_in)
             # self.print("l1", l)
 
@@ -363,6 +364,7 @@ class Recurrence(torch.jit.ScriptModule):
                 1 - hx.last_eval,
                 safediv(e[T.Else], e[[T.If, T.Else, T.While, T.EndWhile]].sum(0)),
             )
+            self.print("l2", l)
             l_probs = torch.cat([1 - l, l], dim=1)
             if self.hard_update:
                 l_dist = FixedCategorical(probs=l_probs)
