@@ -114,7 +114,8 @@ class Recurrence(torch.jit.ScriptModule):
             # Sum(dim=-1),
             init_(nn.Linear(self.line_size * d, 1), "sigmoid"),
             # init_(nn.Linear(1, 1), "sigmoid"),
-            Squash(),
+            nn.Sigmoid(),
+            # Squash(),
             # nn.LPPool2d(2, kernel_size=(h, w)),
             Reshape(1),
         )
