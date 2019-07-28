@@ -102,16 +102,15 @@ class Recurrence(torch.jit.ScriptModule):
                 nn.Sequential(Reshape(self.line_size, 1, 1, 1)),
             ),
             Product(),
-            Times(
-                100 * (F.pad(torch.eye(4), (1, 2, 15, 0)).view(1, 19, 7, 1, 1) - 0.5)
-            ),
-            Reshape(-1, h * w),
-            # init_(nn.Conv2d(d * self.line_size, 1, kernel_size=1), "sigmoid"),
+            # Times(
+            # 100 * (F.pad(torch.eye(4), (1, 2, 15, 0)).view(1, 19, 7, 1, 1) - 0.5)
+            # ),
+            Reshape(self.line_size * d, h, w),
+            init_(nn.Conv2d(d * self.line_size, hidden_size, kernel_size=1), "sigmoid"),
+            Reshape(hidden_size, h * w),
             Sum(dim=-1),
             nn.ReLU(),
-            # Times(100),
-            # Sum(dim=-1),
-            init_(nn.Linear(d * self.line_size, 1), "sigmoid"),
+            init_(nn.Linear(hidden_size, 1), "sigmoid"),
             Squash(),
             # nn.LPPool2d(2, kernel_size=(h, w)),
             Reshape(1),
