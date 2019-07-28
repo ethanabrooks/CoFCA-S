@@ -97,23 +97,23 @@ class Recurrence(torch.jit.ScriptModule):
         )
 
         self.xi = nn.Sequential(
-            Parallel(
-                nn.Sequential(Reshape(1, d, h, w)),
-                nn.Sequential(Reshape(self.line_size, 1, 1, 1)),
-            ),
-            Product(),
-            Times(
-                100 * (F.pad(torch.eye(4), (1, 2, 15, 0)).view(1, 19, 7, 1, 1) - 0.5)
-            ),
-            Reshape(self.line_size * d, h * w),
-            # init_(nn.Conv2d(d * self.line_size, hidden_size, kernel_size=1), "sigmoid"),
-            # Reshape(hidden_size, h * w),
-            Sum(dim=-1),
-            nn.ReLU(),
-            Times(0, requires_grad=True),
-            Sum(dim=-1),
+            # Parallel(
+            #    nn.Sequential(Reshape(1, d, h, w)),
+            #    nn.Sequential(Reshape(self.line_size, 1, 1, 1)),
+            # ),
+            # Product(),
+            # Times(
+            #    100 * (F.pad(torch.eye(4), (1, 2, 15, 0)).view(1, 19, 7, 1, 1) - 0.5)
+            # ),
+            # Reshape(self.line_size * d, h * w),
+            ## init_(nn.Conv2d(d * self.line_size, hidden_size, kernel_size=1), "sigmoid"),
+            ## Reshape(hidden_size, h * w),
+            # Sum(dim=-1),
+            # nn.ReLU(),
+            # Times(1),
+            # Sum(dim=-1),
             # init_(nn.Linear(self.line_size * d, 1), "sigmoid"),
-            # init_(nn.Linear(hidden_size, 1), "sigmoid"),
+            init_(nn.Linear(1, 1), "sigmoid"),
             Squash(),
             # nn.LPPool2d(2, kernel_size=(h, w)),
             Reshape(1),
@@ -128,7 +128,23 @@ class Recurrence(torch.jit.ScriptModule):
 
         # NOTE {
         self.phi_debug = nn.Sequential(init_(nn.Linear(1, 1), "sigmoid"), nn.Sigmoid())
-        self.xi_debug = nn.Sequential(init_(nn.Linear(1, 1), "sigmoid"), nn.Sigmoid())
+        self.xi_debug = nn.Sequential(
+            Parallel(
+                nn.Sequential(Reshape(1, d, h, w)),
+                nn.Sequential(Reshape(self.line_size, 1, 1, 1)),
+            ),
+            Product(),
+            Times(
+                100 * (F.pad(torch.eye(4), (1, 2, 15, 0)).view(1, 19, 7, 1, 1) - 0.5)
+            ),
+            Reshape(self.line_size * d, h * w),
+            # init_(nn.Conv2d(d * self.line_size, hidden_size, kernel_size=1), "sigmoid"),
+            # Reshape(hidden_size, h * w),
+            Sum(dim=-1),
+            nn.ReLU(),
+            Times(100),
+            Sum(dim=-1, keepdim=True),
+        )
         self.zeta_debug = Categorical(len(LineTypes._fields), len(LineTypes._fields))
         # NOTE }
 
@@ -316,8 +332,8 @@ class Recurrence(torch.jit.ScriptModule):
             )
 
             # l
-            l = self.xi((inputs.base[t], condition))
-            self.print("l", round(l, 4))
+            xi_in = self.xi_debug((inputs.base[t], condition)).detach()
+            # self.print("l", round(l, 4))
             # NOTE {
             # c = torch.split(condition, list(self.subtask_nvec), dim=-1)[-1][:, 1:]
             # last_condition = torch.split(
@@ -329,12 +345,12 @@ class Recurrence(torch.jit.ScriptModule):
             # self.print("l condition", c)
             # phi_in = inputs.base[t, :, 1:-2] * c.view(N, -1, 1, 1)
             # truth = torch.max(phi_in.view(N, -1), dim=-1).values.float().view(N, 1)
-            # l = self.xi((inputs.base[t], condition))
-            # self.print("l1", l)
 
             # self.print("l truth", round(truth, 4))
             # l = truth
             # NOTE }
+            l = self.xi(xi_in)
+            # self.print("l1", l)
 
             # control memory
             last_eval = interp(hx.last_eval, l, e[T.If])
