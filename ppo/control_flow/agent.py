@@ -106,7 +106,7 @@ class Agent(ppo.agent.Agent, NNBase):
             z=FixedCategorical(
                 hx.z_probs.view(N, self.n_subtasks, len(LineTypes._fields))
             ),
-            l=FixedCategorical(hx.l_probs),
+            l=FixedCategorical(hx.l_probs) if self.hard_update else None,
         )
 
         log_probs = sum(
