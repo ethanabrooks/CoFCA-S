@@ -97,44 +97,24 @@ class Recurrence(torch.jit.ScriptModule):
         )
 
         self.xi = nn.Sequential(
-            nn.Sequential(
-                Parallel(
-                    nn.Sequential(Reshape(1, d, h, w)),
-                    nn.Sequential(
-                        init_(nn.Linear(self.line_size, hidden_size)),
-                        Reshape(hidden_size, 1, 1, 1),
-                    ),
-                ),
-                Product(),
-                Reshape(-1, h, w),
-                init_(nn.Conv2d(d * hidden_size, 1, kernel_size=1), "sigmoid"),
-            )
-            if project
-            else nn.Sequential(
-                Parallel(
-                    nn.Sequential(Reshape(1, d, h, w)),
-                    nn.Sequential(Reshape(self.line_size, 1, 1, 1)),
-                ),
-                Product(),
-                Times(
-                    100
-                    * (F.pad(torch.eye(4), (1, 2, 15, 0)).view(1, 19, 7, 1, 1) - 0.5)
-                ),
-                # Print(lambda x: x[:, -4:, 1:-2, :, :]),
-                # Plus(-1),
-                # Print(lambda x: x[:, -4:, 1:-2, :, :]),
-                # Squash(),
-                # Print(lambda x: x[:, -4:, 1:-2, :, :]),
-                Reshape(-1, h * w),
-                # init_(nn.Conv2d(d * self.line_size, 1, kernel_size=1), "sigmoid"),
+            Parallel(
+                nn.Sequential(Reshape(1, d, h, w)),
+                nn.Sequential(Reshape(self.line_size, 1, 1, 1)),
             ),
+            Product(),
+            Times(
+                100 * (F.pad(torch.eye(4), (1, 2, 15, 0)).view(1, 19, 7, 1, 1) - 0.5)
+            ),
+            Reshape(-1, h * w),
+            # init_(nn.Conv2d(d * self.line_size, 1, kernel_size=1), "sigmoid"),
             Sum(dim=-1),
             nn.ReLU(),
+            # Times(100),
+            # Sum(dim=-1),
             init_(nn.Linear(d * self.line_size, 1), "sigmoid"),
-            nn.Sigmoid(),
-            # Print(),
+            Squash(),
             # nn.LPPool2d(2, kernel_size=(h, w)),
-            # Reshape(1),
+            Reshape(1),
         )
 
         self.phi = trace(
