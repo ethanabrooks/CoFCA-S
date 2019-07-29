@@ -26,8 +26,8 @@ class DebugWrapper(gym.Wrapper):
     def step(self, action: np.ndarray):
         actions = Actions(*np.split(action, self.action_sections))
         env = self.env.unwrapped
-        self.truth = env.subtask.object in env.objects
-        self.guess = self.actions.l
+        self.truth = env.last_condition_passed
+        self.guess = actions.l
         # print("truth", truth)
         # print("guess", guess)
         r = -abs(float(self.truth) - float(self.guess))
