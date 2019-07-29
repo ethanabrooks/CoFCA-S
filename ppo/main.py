@@ -161,7 +161,9 @@ def metacontroller_cli():
                         for k, v in subtasks_args.items()
                     },
                 )
-                return super().build_agent(envs, **agent_args)
+                return ppo.control_flow.agent.DebugAgent(
+                    device, **metacontroller_kwargs
+                )
                 # return ppo.control_flow.Agent(device, **metacontroller_kwargs)
 
         # ppo_args.update(aux_loss_only=True)

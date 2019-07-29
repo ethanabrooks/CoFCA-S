@@ -13,6 +13,15 @@ from ppo.control_flow.wrappers import Actions
 from ppo.distributions import FixedCategorical
 
 
+class DebugAgent(ppo.agent.Agent):
+    def __init__(
+        self, device, agent_args, obs_space, action_space, l_entropy_coef, **kwargs
+    ):
+        super().__init__(
+            obs_shape=obs_space.shape, action_space=action_space, **agent_args
+        )
+
+
 # noinspection PyMissingConstructor
 class Agent(ppo.agent.Agent, NNBase):
     def __init__(
