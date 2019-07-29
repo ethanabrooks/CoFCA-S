@@ -110,11 +110,9 @@ class Recurrence(torch.jit.ScriptModule):
             ## Reshape(hidden_size, h * w),
             # Sum(dim=-1),
             # nn.ReLU(),
-            Plus(-1),
-            Times(100),
             # Sum(dim=-1),
             # init_(nn.Linear(self.line_size * d, 1), "sigmoid"),
-            init_(nn.Linear(1, 1), "sigmoid"),
+            init_(nn.Linear(self.line_size * d, 1), "sigmoid"),
             nn.Sigmoid(),
             # Squash(),
             # nn.LPPool2d(2, kernel_size=(h, w)),
@@ -144,8 +142,6 @@ class Recurrence(torch.jit.ScriptModule):
             # Reshape(hidden_size, h * w),
             Sum(dim=-1),
             activation,
-            Times(100),
-            Sum(dim=-1, keepdim=True),
         )
         self.zeta_debug = Categorical(len(LineTypes._fields), len(LineTypes._fields))
         # NOTE }
