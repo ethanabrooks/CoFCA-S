@@ -123,11 +123,6 @@ def student_cli():
     train_lower_level_cli(student=True)
 
 
-ACTIVATIONS = dict(
-    selu=nn.SELU(), prelu=nn.PReLU(), leaky=nn.LeakyReLU(), relu=nn.ReLU()
-)
-
-
 def metacontroller_cli():
     parser = build_parser()
     add_task_args(parser)
@@ -156,7 +151,7 @@ def metacontroller_cli():
                 )
 
             # noinspection PyMethodOverriding
-            def build_agent(self, envs, **agent_args):
+            def build_agent(self, envs, device, **agent_args):
                 metacontroller_kwargs = dict(
                     obs_space=envs.observation_space,
                     action_space=envs.action_space,
@@ -166,7 +161,8 @@ def metacontroller_cli():
                         for k, v in subtasks_args.items()
                     },
                 )
-                return ppo.control_flow.Agent(**metacontroller_kwargs)
+                return super().build_agent(envs, **agent_args)
+                # return ppo.control_flow.Agent(device, **metacontroller_kwargs)
 
         # ppo_args.update(aux_loss_only=True)
         TrainSubtasks(env_id=env_id, ppo_args=ppo_args, **kwargs)

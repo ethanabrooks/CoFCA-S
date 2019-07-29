@@ -19,23 +19,31 @@ class DebugWrapper(gym.Wrapper):
         self.truth = 0
         self.last_reward = None
         action_spaces = Actions(**env.action_space.spaces)
-        self.action_sections = np.cumsum(
-            [s for s, in space_shape(self.action_space).values()]
-        )[:-1]
+        sections = [s for s, in space_shape(self.action_space).values()]
+        self.action_sections = np.cumsum(sections)[:-1]
+        self.dummy_action = Actions(*[np.zeros(s) for s in sections])
+        self.observation_space = spaces.Box(low=0, high=1, shape=(1,))
+        self.action_space = spaces.Box(low=0, high=1, shape=(1,))
 
     def step(self, action: np.ndarray):
-        actions = Actions(*np.split(action, self.action_sections))
+        # actions = Actions(*np.split(action, self.action_sections))
         env = self.env.unwrapped
         self.truth = env.last_condition_passed
-        self.guess = actions.l
+        # self.guess = actions.l
+        self.guess = action > 10
         # print("truth", truth)
         # print("guess", guess)
-        r = -abs(float(self.truth) - float(self.guess))
+        r = float(bool(self.truth) == bool(self.guess))
         # if self.env.unwrapped.subtask is not None and self.guess != self.truth:
         # r = -0.1
+        action = np.concatenate(self.dummy_action._replace(l=[action]))
         s, _, t, i = super().step(action)
         self.last_reward = r
-        return s, r, True, i
+        return [self.truth], r, True, i
+
+    def reset(self, **kwargs):
+        super().reset(**kwargs)
+        return [self.env.unwrapped.last_condition_passed]
 
     def render(self, mode="human"):
         print("guess", self.guess)
