@@ -110,9 +110,10 @@ class Recurrence(torch.jit.ScriptModule):
             ## Reshape(hidden_size, h * w),
             # Sum(dim=-1),
             # nn.ReLU(),
+            # Times(1),
             # Sum(dim=-1),
             # init_(nn.Linear(self.line_size * d, 1), "sigmoid"),
-            init_(nn.Linear(self.line_size * d, 1), "sigmoid"),
+            init_(nn.Linear(1, 1), "sigmoid"),
             nn.Sigmoid(),
             # Squash(),
             # nn.LPPool2d(2, kernel_size=(h, w)),
@@ -142,6 +143,8 @@ class Recurrence(torch.jit.ScriptModule):
             # Reshape(hidden_size, h * w),
             Sum(dim=-1),
             activation,
+            Times(100),
+            Sum(dim=-1, keepdim=True),
         )
         self.zeta_debug = Categorical(len(LineTypes._fields), len(LineTypes._fields))
         # NOTE }
@@ -356,11 +359,11 @@ class Recurrence(torch.jit.ScriptModule):
             last_condition = interp(hx.last_condition, hx.r, e[T.While])
 
             # l'
-            l = interp(
-                l,
-                1 - hx.last_eval,
-                safediv(e[T.Else], e[[T.If, T.Else, T.While, T.EndWhile]].sum(0)),
-            )
+            # l = interp(
+            # l,
+            # 1 - hx.last_eval,
+            # safediv(e[T.Else], e[[T.If, T.Else, T.While, T.EndWhile]].sum(0)),
+            # )
             self.print("l2", l)
             l_probs = torch.cat([1 - l, l], dim=1)
             if self.hard_update:
