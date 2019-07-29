@@ -1,4 +1,4 @@
-from gym.spaces import MultiDiscrete
+from gym.spaces import MultiDiscrete, Discrete, Box
 import torch
 from torch import nn as nn
 import torch.jit
@@ -6,20 +6,86 @@ from torch.nn import functional as F
 
 from gridworld_env.control_flow_gridworld import LineTypes, Obs
 import ppo
-from ppo.agent import AgentValues, NNBase
+from ppo.agent import AgentValues, NNBase, CNNBase, MLPBase
 import ppo.control_flow.lower_level
 from ppo.control_flow.recurrence import Recurrence, RecurrentState
 from ppo.control_flow.wrappers import Actions
-from ppo.distributions import FixedCategorical
+from ppo.distributions import FixedCategorical, Categorical, DiagGaussian
 
 
-class DebugAgent(ppo.agent.Agent):
+class DebugAgent(nn.Module):
     def __init__(
         self, device, agent_args, obs_space, action_space, l_entropy_coef, **kwargs
     ):
-        super().__init__(
-            obs_shape=obs_space.shape, action_space=action_space, **agent_args
+        super().__init__()
+        # super().__init__(
+        #     obs_shape=obs_space.shape, action_space=action_space, **agent_args
+        # )
+        obs_shape = obs_space.shape
+        entropy_coef = agent_args["entropy_coef"]
+        recurrent = agent_args["recurrent"]
+        hidden_size = agent_args["hidden_size"]
+        self.entropy_coef = entropy_coef
+        if len(obs_shape) == 3:
+            self.base = CNNBase(
+                *obs_shape, recurrent=recurrent, hidden_size=hidden_size
+            )
+        elif len(obs_shape) == 1:
+            self.base = MLPBase(
+                obs_shape[0],
+                recurrent=recurrent,
+                hidden_size=agent_args["hidden_size"],
+                num_layers=agent_args["num_layers"],
+                activation=agent_args["activation"],
+            )
+        else:
+            raise NotImplementedError
+
+        if isinstance(action_space, Discrete):
+            num_outputs = action_space.n
+            self.dist = Categorical(self.base.output_size, num_outputs)
+        elif isinstance(action_space, Box):
+            num_outputs = action_space.shape[0]
+            self.dist = DiagGaussian(self.base.output_size, num_outputs)
+        else:
+            raise NotImplementedError
+        self.continuous = isinstance(action_space, Box)
+
+    @property
+    def is_recurrent(self):
+        return self.base.is_recurrent
+
+    @property
+    def recurrent_hidden_state_size(self):
+        """Size of rnn_hx."""
+        return self.base.recurrent_hidden_state_size
+
+    def forward(self, inputs, rnn_hxs, masks, deterministic=False, action=None):
+        value, actor_features, rnn_hxs = self.base(inputs, rnn_hxs, masks)
+
+        dist = self.dist(actor_features)
+
+        if action is None:
+            if deterministic:
+                action = dist.mode()
+            else:
+                action = dist.sample()
+
+        action_log_probs = dist.log_probs(action)
+        entropy = dist.entropy().mean()
+        return AgentValues(
+            value=value,
+            action=action,
+            action_log_probs=action_log_probs,
+            aux_loss=-self.entropy_coef * entropy,
+            dist=dist,
+            rnn_hxs=rnn_hxs,
+            log=dict(entropy=entropy),
         )
+
+    def get_value(self, inputs, rnn_hxs, masks):
+        value, _, _ = self.base(inputs, rnn_hxs, masks)
+        return value
 
 
 # noinspection PyMissingConstructor
