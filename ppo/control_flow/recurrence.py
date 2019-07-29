@@ -97,22 +97,23 @@ class Recurrence(torch.jit.ScriptModule):
         )
 
         self.xi = nn.Sequential(
-            # Parallel(
-            #    nn.Sequential(Reshape(1, d, h, w)),
-            #    nn.Sequential(Reshape(self.line_size, 1, 1, 1)),
-            # ),
-            # Product(),
+            Parallel(
+                nn.Sequential(Reshape(1, d, h, w)),
+                nn.Sequential(Reshape(self.line_size, 1, 1, 1)),
+            ),
+            Product(),
             # Times(
             #    100 * (F.pad(torch.eye(4), (1, 2, 15, 0)).view(1, 19, 7, 1, 1) - 0.5)
             # ),
-            # Reshape(self.line_size * d, h * w),
-            ## init_(nn.Conv2d(d * self.line_size, hidden_size, kernel_size=1), "sigmoid"),
-            ## Reshape(hidden_size, h * w),
+            Reshape(self.line_size * d, h, w),
+            init_(nn.Conv2d(d * self.line_size, hidden_size, kernel_size=1), "sigmoid"),
+            activation,
+            init_(nn.Conv2d(hidden_size, 1, kernel_size=1), "sigmoid"),
+            Reshape(h * w),
             # Sum(dim=-1),
-            # nn.ReLU(),
             # Times(1),
             # Sum(dim=-1),
-            init_(nn.Linear(self.line_size * d, 1), "sigmoid"),
+            init_(nn.Linear(h * w, 1), "sigmoid"),
             # init_(nn.Linear(1, 1), "sigmoid"),
             nn.Sigmoid(),
             # Squash(),
@@ -333,7 +334,7 @@ class Recurrence(torch.jit.ScriptModule):
             )
 
             # l
-            xi_in = self.xi_debug((inputs.base[t], condition)).detach()
+            # xi_in = self.xi_debug((inputs.base[t], condition)).detach()
             # self.print("l", round(l, 4))
             # NOTE {
             # c = torch.split(condition, list(self.subtask_nvec), dim=-1)[-1][:, 1:]
@@ -350,8 +351,8 @@ class Recurrence(torch.jit.ScriptModule):
             # self.print("l truth", round(truth, 4))
             # l = truth
             # NOTE }
-            self.print("xi_in", xi_in)
-            l = self.xi(xi_in)
+            # self.print("xi_in", xi_in)
+            l = self.xi((inputs.base[t], condition))
             # self.print("l1", l)
 
             # control memory
