@@ -24,16 +24,20 @@ class DebugWrapper(gym.Wrapper):
         self.observation_space = spaces.Box(low=0, high=1, shape=(1,))
         h, w = env.desc.shape
         self.action_space = spaces.Box(low=0, high=1, shape=(1,))
-        self.observation_space = spaces.Box(low=0, high=1, shape=(h * w,))
+        self.observation_space = spaces.Box(low=0, high=1, shape=(1, h, w))
 
     def get_observation(self):
         env = self.env.unwrapped
         h, w = env.desc.shape
         return np.array(
             [
-                (env.objects.get((i, j), None) == env.last_condition)
-                for i in range(h)
-                for j in range(w)
+                [
+                    [
+                        (env.objects.get((i, j), None) == env.last_condition)
+                        for j in range(w)
+                    ]
+                    for i in range(h)
+                ]
             ]
         )
 
