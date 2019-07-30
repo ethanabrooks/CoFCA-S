@@ -29,14 +29,14 @@ class DebugWrapper(gym.Wrapper):
         h, w = env.desc.shape
         return np.array(
             [  # d
-                float(
+                (
                     any(
                         [  # h
                             any(
                                 [  # w
                                     (
-                                        env.objects.get(env.last_condition, None)
-                                        == (i, j)
+                                        env.objects.get((i, j), None)
+                                        == env.last_condition
                                     )
                                     for j in range(w)
                                 ]
