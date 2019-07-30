@@ -22,29 +22,18 @@ class DebugWrapper(gym.Wrapper):
         self.action_sections = np.cumsum(sections)[:-1]
         self.dummy_action = Actions(*[np.zeros(s) for s in sections])
         self.observation_space = spaces.Box(low=0, high=1, shape=(1,))
+        h, w = env.desc.shape
         self.action_space = spaces.Box(low=0, high=1, shape=(1,))
+        self.observation_space = spaces.Box(low=0, high=1, shape=(h * w,))
 
     def get_observation(self):
         env = self.env.unwrapped
         h, w = env.desc.shape
         return np.array(
-            [  # d
-                (
-                    any(
-                        [  # h
-                            any(
-                                [  # w
-                                    (
-                                        env.objects.get((i, j), None)
-                                        == env.last_condition
-                                    )
-                                    for j in range(w)
-                                ]
-                            )
-                            for i in range(h)
-                        ]
-                    )
-                )
+            [
+                (env.objects.get((i, j), None) == env.last_condition)
+                for i in range(h)
+                for j in range(w)
             ]
         )
 
