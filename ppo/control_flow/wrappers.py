@@ -23,7 +23,7 @@ class DebugWrapper(gym.Wrapper):
         self.dummy_action = Actions(*[np.zeros(s) for s in sections])
         self.observation_space = spaces.Box(low=0, high=1, shape=(1,))
         h, w = env.unwrapped.desc.shape
-        self.action_space = spaces.Box(low=0, high=1, shape=(1,))
+        self.action_space = spaces.Discrete(2)
         self.observation_space = spaces.Box(low=0, high=1, shape=(1, h, w))
 
     def get_observation(self):
@@ -46,7 +46,7 @@ class DebugWrapper(gym.Wrapper):
         env = self.env.unwrapped
         self.truth = env.last_condition_passed
         # self.guess = actions.l
-        self.guess = action > 10
+        self.guess = action
         # print("truth", truth)
         # print("guess", guess)
         r = float(bool(self.truth) == bool(self.guess))
