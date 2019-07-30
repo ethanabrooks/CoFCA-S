@@ -73,7 +73,10 @@ class DebugAgent(nn.Module):
                 *torch.split(action, self.action_sections, dim=-1)
             )._replace(l=l.float())
         else:
-            actions = Actions(a=None, cr=None, cg=None, g=None, z=None, l=action)
+            _action = self.dummy_action.unsqueeze(0).expand(N, -1)
+            actions = Actions(
+                *torch.split(_action, self.action_sections, dim=-1)
+            )._replace(l=action)
         #     actions = Actions(*torch.split(action, self.action_sections, dim=-1))
 
         action_log_probs = dist.log_probs(actions.l)
