@@ -11,6 +11,7 @@ import ppo.control_flow.lower_level
 from ppo.control_flow.recurrence import Recurrence, RecurrentState
 from ppo.control_flow.wrappers import Actions
 from ppo.distributions import FixedCategorical, Categorical, DiagGaussian
+from ppo.layers import Flatten
 from ppo.utils import init, init_normc_
 
 
@@ -27,24 +28,13 @@ class DebugAgent(nn.Module):
         recurrent = agent_args["recurrent"]
         hidden_size = agent_args["hidden_size"]
         self.entropy_coef = entropy_coef
-        if len(obs_shape) == 3:
-            self.base = CNNBase(
-                *obs_shape,
-                recurrent=recurrent,
-                hidden_size=hidden_size,
-                num_layers=agent_args["num_layers"],
-                activation=agent_args["activation"],
-            )
-        elif len(obs_shape) == 1:
-            self.base = DebugBase(
-                obs_shape[0],
-                recurrent=recurrent,
-                hidden_size=agent_args["hidden_size"],
-                num_layers=agent_args["num_layers"],
-                activation=agent_args["activation"],
-            )
-        else:
-            raise NotImplementedError
+        self.base = DebugBase(
+            *obs_shape,
+            recurrent=recurrent,
+            hidden_size=hidden_size,
+            num_layers=agent_args["num_layers"],
+            activation=agent_args["activation"],
+        )
 
         if isinstance(action_space, Discrete):
             num_outputs = action_space.n
@@ -94,46 +84,50 @@ class DebugAgent(nn.Module):
 
 
 class DebugBase(NNBase):
-    def __init__(self, num_inputs, hidden_size, num_layers, recurrent, activation):
-        recurrent_module = nn.GRU if recurrent else None
-        super(DebugBase, self).__init__(recurrent_module, num_inputs, hidden_size)
+    def __init__(self, d, h, w, hidden_size, num_layers, recurrent, activation):
+        super().__init__(recurrent, hidden_size, hidden_size)
 
-        if recurrent:
-            num_inputs = hidden_size
+        init_ = lambda m: init(
+            m,
+            nn.init.orthogonal_,
+            lambda x: nn.init.constant_(x, 0),
+            nn.init.calculate_gain("relu"),
+        )
 
-        init_ = lambda m: init(m, init_normc_, lambda x: nn.init.constant_(x, 0))
+        self.main = nn.Sequential(
+            nn.Sequential(nn.Conv2d(d, hidden_size, kernel_size=1), activation),
+            *[
+                nn.Sequential(
+                    nn.Conv2d(hidden_size, hidden_size, kernel_size=1), activation
+                )
+                for _ in range(num_layers - 1)
+            ],
+            # init_(nn.Conv2d(d, 32, 8, stride=4)), nn.ReLU(),
+            # init_(nn.Conv2d(32, 64, kernel_size=4, stride=2)), nn.ReLU(),
+            # init_(nn.Conv2d(32, 64, kernel_size=4, stride=2)), nn.ReLU(),
+            # init_(nn.Conv2d(64, 32, kernel_size=3, stride=1)),
+            activation,
+            Flatten(),
+            # init_(nn.Linear(32 * 7 * 7, hidden_size)), nn.ReLU())
+            init_(nn.Linear(hidden_size * h * w, hidden_size)),
+            nn.ReLU(),
+        )
 
-        self.actor = nn.Sequential()
-        self.critic = nn.Sequential()
-        for i in range(num_layers):
-            in_features = num_inputs if i == 0 else hidden_size
-            self.actor.add_module(
-                name=f"fc{i}",
-                module=nn.Sequential(
-                    init_(nn.Linear(in_features, hidden_size)), activation
-                ),
-            )
-            self.critic.add_module(
-                name=f"fc{i}",
-                module=nn.Sequential(
-                    init_(nn.Linear(in_features, hidden_size)), activation
-                ),
-            )
+        init_ = lambda m: init(
+            m, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0)
+        )
 
         self.critic_linear = init_(nn.Linear(hidden_size, 1))
 
         self.train()
 
     def forward(self, inputs, rnn_hxs, masks):
-        x = inputs
+        x = self.main(inputs)
 
         if self.is_recurrent:
             x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)
 
-        hidden_critic = self.critic(x)
-        hidden_actor = self.actor(x)
-
-        return self.critic_linear(hidden_critic), hidden_actor, rnn_hxs
+        return self.critic_linear(x), x, rnn_hxs
 
 
 # noinspection PyMissingConstructor

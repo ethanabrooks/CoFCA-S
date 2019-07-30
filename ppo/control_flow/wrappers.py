@@ -22,7 +22,7 @@ class DebugWrapper(gym.Wrapper):
         self.action_sections = np.cumsum(sections)[:-1]
         self.dummy_action = Actions(*[np.zeros(s) for s in sections])
         self.observation_space = spaces.Box(low=0, high=1, shape=(1,))
-        h, w = env.desc.shape
+        h, w = env.unwrapped.desc.shape
         self.action_space = spaces.Box(low=0, high=1, shape=(1,))
         self.observation_space = spaces.Box(low=0, high=1, shape=(1, h, w))
 
