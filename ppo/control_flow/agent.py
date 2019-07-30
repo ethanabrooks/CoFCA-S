@@ -62,21 +62,25 @@ class DebugAgent(nn.Module):
         return self.base.recurrent_hidden_state_size
 
     def forward(self, inputs, rnn_hxs, masks, deterministic=False, action=None):
+        N = inputs.shape[0]
         value, actor_features, rnn_hxs = self.base(inputs, rnn_hxs, masks)
-
         dist = self.dist(actor_features)
 
         if action is None:
-            if deterministic:
-                action = dist.mode()
-            else:
-                action = dist.sample()
+            l = dist.mode() if deterministic else dist.sample()
+            action = self.dummy_action.unsqueeze(0).expand(N, -1)
+            actions = Actions(
+                *torch.split(action, self.action_sections, dim=-1)
+            )._replace(l=l.float())
+        else:
+            actions = Actions(a=None, cr=None, cg=None, g=None, z=None, l=action)
+        #     actions = Actions(*torch.split(action, self.action_sections, dim=-1))
 
-        action_log_probs = dist.log_probs(action)
+        action_log_probs = dist.log_probs(actions.l)
         entropy = dist.entropy().mean()
         return AgentValues(
             value=value,
-            action=action,
+            action=actions.l,
             action_log_probs=action_log_probs,
             aux_loss=-self.entropy_coef * entropy,
             dist=dist,
