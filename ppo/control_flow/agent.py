@@ -73,17 +73,14 @@ class DebugAgent(nn.Module):
                 *torch.split(action, self.action_sections, dim=-1)
             )._replace(l=l.float())
         else:
-            _action = self.dummy_action.unsqueeze(0).expand(N, -1)
-            actions = Actions(
-                *torch.split(_action, self.action_sections, dim=-1)
-            )._replace(l=action)
+            actions = Actions(*torch.split(action, self.action_sections, dim=-1))
         #     actions = Actions(*torch.split(action, self.action_sections, dim=-1))
 
         action_log_probs = dist.log_probs(actions.l)
         entropy = dist.entropy().mean()
         return AgentValues(
             value=value,
-            action=actions.l,
+            action=torch.cat(actions, dim=-1),
             action_log_probs=action_log_probs,
             aux_loss=-self.entropy_coef * entropy,
             dist=dist,
