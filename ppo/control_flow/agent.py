@@ -32,7 +32,7 @@ class DebugAgent(nn.Module):
                 *obs_shape, recurrent=recurrent, hidden_size=hidden_size
             )
         elif len(obs_shape) == 1:
-            self.base = MLPBase(
+            self.base = DebugBase(
                 obs_shape[0],
                 recurrent=recurrent,
                 hidden_size=agent_args["hidden_size"],
@@ -89,10 +89,10 @@ class DebugAgent(nn.Module):
         return value
 
 
-class MLPBase(NNBase):
+class DebugBase(NNBase):
     def __init__(self, num_inputs, hidden_size, num_layers, recurrent, activation):
         recurrent_module = nn.GRU if recurrent else None
-        super(MLPBase, self).__init__(recurrent_module, num_inputs, hidden_size)
+        super(DebugBase, self).__init__(recurrent_module, num_inputs, hidden_size)
 
         if recurrent:
             num_inputs = hidden_size
