@@ -1,9 +1,8 @@
 from collections import namedtuple
 
 import gym
-from gym import spaces
-from gym.spaces import Discrete
 import numpy as np
+from gym import spaces
 
 from common.vec_env.util import space_shape
 from gridworld_env.control_flow_gridworld import LineTypes, TaskTypes
@@ -22,8 +21,25 @@ class DebugWrapper(gym.Wrapper):
         sections = [s for s, in space_shape(self.action_space).values()]
         self.action_sections = np.cumsum(sections)[:-1]
         self.dummy_action = Actions(*[np.zeros(s) for s in sections])
-        self.observation_space = spaces.Box(low=0, high=1, shape=(1,))
+        self.observation_space = spaces.Box(
+            low=0, high=1, shape=(1,) + env.unwrapped.desc.shape
+        )
         self.action_space = spaces.Box(low=0, high=1, shape=(1,))
+
+    def get_observation(self):
+        env = self.env.unwrapped
+        h, w = env.desc.shape
+        return np.array(
+            [  # d
+                [  # h
+                    [  # w
+                        int(env.objects.get(env.last_condition, None) == (i, j))
+                        for j in range(w)
+                    ]
+                    for i in range(h)
+                ]
+            ]
+        )
 
     def step(self, action: np.ndarray):
         # actions = Actions(*np.split(action, self.action_sections))
@@ -39,11 +55,11 @@ class DebugWrapper(gym.Wrapper):
         action = np.concatenate(self.dummy_action._replace(l=[action]))
         s, _, t, i = super().step(action)
         self.last_reward = r
-        return [self.truth], r, True, i
+        return (self.get_observation()), r, True, i
 
     def reset(self, **kwargs):
         super().reset(**kwargs)
-        return [self.env.unwrapped.last_condition_passed]
+        return self.get_observation()
 
     def render(self, mode="human"):
         print("guess", self.guess)
