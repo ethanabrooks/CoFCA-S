@@ -17,13 +17,10 @@ class DebugWrapper(gym.Wrapper):
         self.guess = 0
         self.truth = 0
         self.last_reward = None
-        action_spaces = Actions(**env.action_space.spaces)
         sections = [s for s, in space_shape(self.action_space).values()]
         self.action_sections = np.cumsum(sections)[:-1]
-        self.dummy_action = Actions(*[np.zeros(s) for s in sections])
-        self.observation_space = spaces.Box(low=0, high=1, shape=(1,))
+        self.dummy_action = Actions(*[np.zeros((s)) for s in sections])
         h, w = env.unwrapped.desc.shape
-        self.action_space = spaces.Discrete(2)
         self.observation_space = spaces.Box(low=0, high=1, shape=(1, h, w))
 
     def get_observation(self):
@@ -52,7 +49,9 @@ class DebugWrapper(gym.Wrapper):
         r = float(bool(self.truth) == bool(self.guess))
         # if self.env.unwrapped.subtask is not None and self.guess != self.truth:
         # r = -0.1
-        action = np.concatenate(self.dummy_action._replace(l=[action]))
+        action = np.concatenate(
+            self.dummy_action._replace(l=np.array([action])), axis=-1
+        )
         s, _, t, i = super().step(action)
         self.last_reward = r
         return (self.get_observation()), r, True, i

@@ -4,6 +4,7 @@ from torch import nn as nn
 import torch.jit
 from torch.nn import functional as F
 
+from common.vec_env.util import space_shape
 from gridworld_env.control_flow_gridworld import LineTypes, Obs
 import ppo
 from ppo.agent import AgentValues, NNBase, CNNBase
@@ -12,6 +13,7 @@ from ppo.control_flow.recurrence import Recurrence, RecurrentState
 from ppo.control_flow.wrappers import Actions
 from ppo.distributions import FixedCategorical, Categorical, DiagGaussian
 from ppo.layers import Flatten
+from ppo.storage import buffer_shape
 from ppo.utils import init, init_normc_
 
 
@@ -35,7 +37,11 @@ class DebugAgent(nn.Module):
             num_layers=agent_args["num_layers"],
             activation=agent_args["activation"],
         )
+        self.action_spaces = Actions(**action_space.spaces)
+        self.action_sections = [s for s, in space_shape(action_space).values()]
+        self.register_buffer("dummy_action", torch.zeros(buffer_shape(action_space)))
 
+        action_space = self.action_spaces.l
         if isinstance(action_space, Discrete):
             num_outputs = action_space.n
             self.dist = Categorical(self.base.output_size, num_outputs)
