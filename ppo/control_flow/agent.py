@@ -29,7 +29,11 @@ class DebugAgent(nn.Module):
         self.entropy_coef = entropy_coef
         if len(obs_shape) == 3:
             self.base = CNNBase(
-                *obs_shape, recurrent=recurrent, hidden_size=hidden_size
+                *obs_shape,
+                recurrent=recurrent,
+                hidden_size=hidden_size,
+                num_layers=agent_args["num_layers"],
+                activation=agent_args["activation"],
             )
         elif len(obs_shape) == 1:
             self.base = DebugBase(

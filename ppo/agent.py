@@ -275,7 +275,7 @@ class LogicBase(NNBase):
 
 
 class CNNBase(NNBase):
-    def __init__(self, d, h, w, hidden_size, recurrent=False):
+    def __init__(self, d, h, w, hidden_size, num_layers, activation, recurrent=False):
         super(CNNBase, self).__init__(recurrent, hidden_size, hidden_size)
 
         init_ = lambda m: init(
@@ -286,12 +286,18 @@ class CNNBase(NNBase):
         )
 
         self.main = nn.Sequential(
-            init_(nn.Conv2d(d, hidden_size, kernel_size=3, stride=1, padding=1)),
+            nn.Sequential(nn.Conv2d(d, hidden_size, kernel_size=1), activation),
+            *[
+                nn.Sequential(
+                    nn.Conv2d(hidden_size, hidden_size, kernel_size=1), activation
+                )
+                for _ in range(num_layers - 1)
+            ],
             # init_(nn.Conv2d(d, 32, 8, stride=4)), nn.ReLU(),
             # init_(nn.Conv2d(32, 64, kernel_size=4, stride=2)), nn.ReLU(),
             # init_(nn.Conv2d(32, 64, kernel_size=4, stride=2)), nn.ReLU(),
             # init_(nn.Conv2d(64, 32, kernel_size=3, stride=1)),
-            nn.ReLU(),
+            activation,
             Flatten(),
             # init_(nn.Linear(32 * 7 * 7, hidden_size)), nn.ReLU())
             init_(nn.Linear(hidden_size * h * w, hidden_size)),
