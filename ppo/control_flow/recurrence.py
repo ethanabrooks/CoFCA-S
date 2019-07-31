@@ -1002,12 +1002,12 @@ class DebugBase(nn.Module):
 
             yield RecurrentState(
                 a=A[t],
-                g=hx.g,
+                g=G[t],
                 cr=hx.cr,
                 cg=hx.cg,
                 z=hx.z,
                 a_probs=a_dist.probs,
-                g_probs=hx.g_probs,
+                g_probs=g_dist.probs,
                 cr_probs=hx.cr_probs,
                 cg_probs=hx.cg_probs,
                 z_probs=hx.z_probs,
