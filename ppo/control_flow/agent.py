@@ -87,14 +87,14 @@ class DebugAgent(nn.Module):
 
     def forward(self, inputs, rnn_hxs, masks, deterministic=False, action=None):
         N = inputs.size(0)
-        # rm = self.recurrent_module
+        rm = self.recurrent_module
         hx = self._forward_gru(inputs.view(N, -1), rnn_hxs, masks, action=action)
         # hx = RecurrentState(*rm.parse_hidden(all_hxs))
         actions = Actions(a=hx.a, cg=hx.cg, cr=hx.cr, g=hx.g, z=hx.z, l=hx.l)
         dists = Actions(
-            a=None,
-            # if rm.agent  # use pre-trained agent so don't train
-            # else FixedCategorical(hx.a_probs),
+            a=None
+            if rm.agent  # use pre-trained agent so don't train
+            else FixedCategorical(hx.a_probs),
             cg=None,
             cr=None,
             g=None,
@@ -112,7 +112,6 @@ class DebugAgent(nn.Module):
             for dist, a in zip(dists, actions)
             if dist is not None
         )
-        # log_probs = log_probs + z_dist.log_probs(actions.z).sum(1)
         entropies = Actions(
             *[None if dist is None else dist.entropy().mean() for dist in dists]
         )
