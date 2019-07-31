@@ -1,7 +1,10 @@
+import itertools
+
 from gym.spaces import MultiDiscrete, Discrete, Box
 import numpy as np
 import torch
 from torch import nn as nn
+from ppo.control_flow.lower_level import g_discrete_to_binary
 import torch.jit
 from torch.nn import functional as F
 
@@ -107,7 +110,7 @@ class DebugBase(NNBase):
         )
 
         self.obs_shape = d, h, w = obs_spaces.base.shape
-        condition_size = int(self.subtask_nvec[-1])
+        condition_size = int(self.subtask_nvec.sum())
         self.main = nn.Sequential(
             Parallel(
                 nn.Sequential(Reshape(1, d, h, w)),
@@ -143,7 +146,10 @@ class DebugBase(NNBase):
 
         self.train()
         self.obs_sections = [int(np.prod(s.shape)) for s in obs_spaces]
-        self.register_buffer("condition_one_hot", torch.eye(condition_size))
+
+        self.g_discrete_one_hots = nn.ModuleList(
+            [nn.Embedding.from_pretrained(torch.eye(int(n))) for n in self.subtask_nvec]
+        )
 
     def forward(self, inputs, rnn_hxs, masks):
         N = inputs.shape[0]
@@ -151,11 +157,12 @@ class DebugBase(NNBase):
         d, h, w = self.obs_shape
         inputs = inputs._replace(base=inputs.base.view(N, d, h, w))
         task = inputs.subtasks.view(N, self.n_subtasks, self.subtask_nvec.size)
+        g_discrete = torch.split(task, 1, dim=-1)
+        M = g_discrete_to_binary(g_discrete, self.g_discrete_one_hots.children())
         # subtask_idxs = (
         # inputs.subtask.expand(N, self.subtask_nvec.size).unsqueeze(1).long()
         # )
-        if_conditions = task[:, 0]
-        condition_idxs = if_conditions[:, -1].view(N, 1, 1, 1)
+        if_conditions = M[:, 0]
         # main_in = inputs.base.gather(1, condition_idxs.expand(N, 1, h, w).long())
         x = self.main((inputs.base, if_conditions))
 

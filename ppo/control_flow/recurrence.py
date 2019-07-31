@@ -250,11 +250,9 @@ class Recurrence(torch.jit.ScriptModule):
         task = inputs.subtasks.view(
             *inputs.subtasks.shape[:2], self.n_subtasks, self.subtask_nvec.size
         )[0]
+        M_discrete = task[:, 0]
         task = torch.split(task, 1, dim=-1)
         g_discrete = [x[:, :, 0] for x in task]
-        M_discrete = torch.stack(
-            g_discrete, dim=-1
-        )  # TODO: quicker to store in RecurrentState?
 
         M = g_discrete_to_binary(g_discrete, self.g_discrete_one_hots())
         new_episode = torch.all(hx.squeeze(0) == 0, dim=-1)
