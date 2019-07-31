@@ -129,7 +129,7 @@ class DebugAgent(ppo.agent.Agent, NNBase):
             action_log_probs=log_probs,
             aux_loss=aux_loss,
             dist=None,
-            rnn_hxs=rnn_hxs,
+            rnn_hxs=last_hx,
             log=log,
         )
 
