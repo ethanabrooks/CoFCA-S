@@ -841,6 +841,24 @@ class DebugBase(nn.Module):
             return torch.abs(a - b) < 1e-4
 
         for t in range(inputs.base.shape[0]):
+            self.print(T)
+            self.print("M_zeta")
+            for _z in M_zeta[0]:
+                self.print(T._fields[int(_z.argmax())])
+
+            def safediv(x, y):
+                return x / torch.clamp(y, min=1e-5)
+
+            # e
+            e = (p.unsqueeze(1) @ M_zeta).permute(2, 0, 1)
+
+            # condition
+            condition = interp(
+                hx.r,
+                hx.last_condition,
+                safediv(e[T.EndWhile], e[[T.If, T.While, T.EndWhile]].sum(0)),
+            )
+
             # main_in = inputs.base.gather(1, condition_idxs.expand(N, 1, h, w).long())
             if_conditions = M[:, 0]
             t = 0
