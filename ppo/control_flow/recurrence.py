@@ -622,7 +622,25 @@ class DebugBase(nn.Module):
 
         self.obs_shape = d, h, w = obs_spaces.base.shape
         condition_size = int(self.subtask_nvec.sum())
-        self.main = nn.Sequential(
+
+        self.critic = init_(nn.Linear(hidden_size * h * w, 1))
+
+        self.train()
+        self.obs_sections = [int(np.prod(s.shape)) for s in obs_spaces]
+
+        self.g_discrete_one_hots = nn.ModuleList(
+            [nn.Embedding.from_pretrained(torch.eye(int(n))) for n in self.subtask_nvec]
+        )
+
+        self.dist = Categorical(hidden_size, 2)
+        self.conv2 = nn.Sequential(
+            Concat(dim=1),
+            init_(nn.Conv2d(d + self.line_size, hidden_size, kernel_size=1)),
+            # init_(nn.Conv2d(d + self.line_size, hidden_size, kernel_size=1), "relu"),
+            nn.ReLU(),
+            Flatten(),
+        )
+        self.xi = nn.Sequential(
             Parallel(
                 nn.Sequential(Reshape(1, d, h, w)),
                 nn.Sequential(Reshape(condition_size, 1, 1, 1)),
@@ -655,14 +673,15 @@ class DebugBase(nn.Module):
 
         self.critic_linear = init_(nn.Linear(hidden_size, 1))
 
-        self.train()
-        self.obs_sections = [int(np.prod(s.shape)) for s in obs_spaces]
-
-        self.g_discrete_one_hots = nn.ModuleList(
-            [nn.Embedding.from_pretrained(torch.eye(int(n))) for n in self.subtask_nvec]
-        )
-
-        self.dist = Categorical(hidden_size, 2)
+        input_size = h * w * hidden_size  # conv output
+        if isinstance(action_spaces.a, Discrete):
+            num_outputs = action_spaces.a.n
+            self.actor = Categorical(input_size, num_outputs)
+        elif isinstance(action_spaces.a, Box):
+            num_outputs = action_spaces.a.shape[0]
+            self.actor = DiagGaussian(input_size, num_outputs)
+        else:
+            raise NotImplementedError
 
         state_sizes = RecurrentState(
             a=1,
@@ -684,7 +703,30 @@ class DebugBase(nn.Module):
             last_eval=1,
         )
         self.state_sizes = RecurrentState(*map(int, state_sizes))
+
+        # buffers
         self.register_buffer("dummy_action", torch.zeros(1, sum(self.size_actions)))
+
+        def eye_embedding(n):
+            return nn.Embedding.from_pretrained(torch.eye(int(n)))
+
+        self.g_discrete_one_hots = nn.ModuleList(
+            [eye_embedding(n) for n in self.subtask_nvec]
+        )
+        self.a_one_hots = eye_embedding(action_spaces.a.n)
+        self.g_one_hots = eye_embedding(action_spaces.g.n)
+        self.z_one_hots = eye_embedding(len(LineTypes()))
+        self.p_one_hots = eye_embedding(self.n_subtasks)
+        one_step = F.pad(torch.eye(self.n_subtasks - 1), [1, 0, 0, 1])
+        one_step[:, -1] += 1 - one_step.sum(-1)
+        self.register_buffer("one_step", one_step.unsqueeze(0))
+        no_op_probs = torch.zeros(1, self.actor.linear.out_features)
+        no_op_probs[:, -1] = 1
+        self.register_buffer("no_op_probs", no_op_probs)
+
+    def print(self, *args, **kwargs):
+        if self.debug:
+            print(*args, **kwargs)
 
     def parse_hidden(self, hx):
         return RecurrentState(*torch.split(hx, self.state_sizes, dim=-1))
@@ -747,7 +789,7 @@ class DebugBase(nn.Module):
 
         # main_in = inputs.base.gather(1, condition_idxs.expand(N, 1, h, w).long())
         if_conditions = M[:, 0]
-        x = self.main((inputs.base, if_conditions))
+        x = self.xi((inputs.base, if_conditions))
 
         if self.is_recurrent:
             x, hx = self._forward_gru(x, hx, masks)
