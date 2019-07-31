@@ -730,7 +730,8 @@ class DebugBase(nn.Module):
         return Obs(*torch.split(inputs, self.obs_sections, dim=-1))
 
     def forward(self, inputs, hx, masks, action=None):
-        N, D = inputs.shape
+        inputs = inputs.unsqueeze(0)
+        T, N, D = inputs.shape
 
         # {{{
         # detach actions
@@ -742,18 +743,16 @@ class DebugBase(nn.Module):
 
         # parse non-action inputs
         inputs = self.parse_inputs(inputs)
-        inputs = inputs._replace(base=inputs.base.view(N, *self.obs_shape))
+        inputs = inputs._replace(base=inputs.base.view(T, N, *self.obs_shape))
 
         # build memory
         task = inputs.subtasks.view(
-            *inputs.subtasks.shape[:1], self.n_subtasks, self.subtask_nvec.size  # TODO
-        )
-        # *inputs.subtasks.shape[:2], self.n_subtasks, self.subtask_nvec.size
+            *inputs.subtasks.shape[:2], self.n_subtasks, self.subtask_nvec.size
+        )[0]
         task_columns = torch.split(task, 1, dim=-1)
         g_discrete = [x.squeeze(2) for x in task_columns]
         M = g_discrete_to_binary(g_discrete, self.g_discrete_one_hots.children())
-        new_episode = torch.all(hx == 0, dim=-1)  # TODO
-        # new_episode = torch.all(hx.squeeze(0) == 0, dim=-1)
+        new_episode = torch.all(hx.squeeze(0) == 0, dim=-1)
 
         # NOTE {
         debug_in = M[:, :, -self.subtask_nvec[-2:].sum() : -self.subtask_nvec[-1]]
@@ -764,8 +763,7 @@ class DebugBase(nn.Module):
         # self.print("M_zeta_dist.probs")
         # self.print(round(M_zeta_dist.probs, 2))
         M_zeta_dist = truth
-        z = actions.z.long()  # use time-step 0; z fixed throughout episode
-        # z = actions.z[0].long()  # use time-step 0; z fixed throughout episode
+        z = actions.z[0].long()  # use time-step 0; z fixed throughout episode
         self.sample_new(z, M_zeta_dist)
         # NOTE }
 
@@ -784,7 +782,8 @@ class DebugBase(nn.Module):
 
         # main_in = inputs.base.gather(1, condition_idxs.expand(N, 1, h, w).long())
         if_conditions = M[:, 0]
-        x = self.xi((inputs.base, if_conditions))
+        t = 0
+        x = self.xi((inputs.base[t], if_conditions))
 
         if self.is_recurrent:
             x, hx = self._forward_gru(x, hx, masks)
