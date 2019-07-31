@@ -342,6 +342,47 @@ class DebugBase(nn.Module):
             self.sample_new(L[t], l_dist)
             l = L[t, :1].float()
 
+            # l
+            # xi_in = self.xi_debug((inputs.base[t], condition)).detach()
+            # self.print("l", round(l, 4))
+            # NOTE {
+            # c = torch.split(condition, list(self.subtask_nvec), dim=-1)[-1][:, 1:]
+            # last_condition = torch.split(
+            # hx.last_condition, list(self.subtask_nvec), dim=-1
+            # )[-1][:, 1:]
+            # hx_r = torch.split(hx.r, list(self.subtask_nvec), dim=-1)[-1][:, 1:]
+            # self.print("last_condition", last_condition)
+            # self.print("r", hx_r)
+            # self.print("l condition", c)
+            # phi_in = inputs.base[t, :, 1:-2] * c.view(N, -1, 1, 1)
+            # truth = torch.max(phi_in.view(N, -1), dim=-1).values.float().view(N, 1)
+
+            # self.print("l truth", round(truth, 4))
+            # l = truth
+            # NOTE }
+            # self.print("xi_in", xi_in)
+            # l = self.xi(xi_in)
+            # self.print("l1", l)
+
+            # control memory
+            last_eval = interp(hx.last_eval, l, e[T.If])
+            last_condition = interp(hx.last_condition, hx.r, e[T.While])
+
+            # l'
+            # l = interp(
+            # l,
+            # 1 - hx.last_eval,
+            # safediv(e[T.Else], e[[T.If, T.Else, T.While, T.EndWhile]].sum(0)),
+            # )
+            # self.print("l2", l)
+            # l_probs = torch.cat([1 - l, l], dim=1)
+            # if self.hard_update:
+            #     l_dist = FixedCategorical(probs=l_probs)
+            #     self.print("l2", l_dist.probs)
+            #     self.sample_new(L[t], l_dist)
+            # else:
+            #     L[t] = l.squeeze(-1)
+
             def roll(x):
                 return F.pad(x, [1, 0])[:, :-1]
 
@@ -491,8 +532,8 @@ class DebugBase(nn.Module):
                 a=A[t],
                 a_probs=a_dist.probs,
                 v=self.critic_linear(x),
-                last_condition=hx.last_condition,
-                last_eval=hx.last_eval,
+                last_condition=last_condition,
+                last_eval=last_eval,
                 z=hx.z,
                 z_probs=hx.z_probs,
                 l_probs=l_dist.probs,
