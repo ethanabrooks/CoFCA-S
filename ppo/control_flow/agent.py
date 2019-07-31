@@ -101,9 +101,10 @@ class DebugAgent(nn.Module):
 
     def forward(self, inputs, rnn_hxs, masks, deterministic=False, action=None):
         N = inputs.size(0)
-        value, actor_features, dist, rnn_hxs = self.recurrent_module(
-            inputs, rnn_hxs, masks
+        value, actor_features, probs, rnn_hxs = self.recurrent_module(
+            inputs, rnn_hxs, masks, action=action
         )
+        dist = FixedCategorical(probs=probs)
 
         if action is None:
             l = dist.mode() if deterministic else dist.sample()
