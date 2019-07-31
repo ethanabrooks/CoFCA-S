@@ -298,7 +298,7 @@ class DebugBase(nn.Module):
         #         print(name)
 
         hx = torch.cat(preprocessed, dim=-1)
-        return hx, hx[-1]
+        return hx, hx[-1:]
 
     def inner_loop(
         self, hx: RecurrentState, actions: Actions, inputs: Obs, M, M_discrete, subtask
