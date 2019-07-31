@@ -19,7 +19,6 @@ class DebugWrapper(gym.Wrapper):
         self.last_reward = None
         sections = [s for s, in space_shape(self.action_space).values()]
         self.action_sections = np.cumsum(sections)[:-1]
-        self.dummy_action = Actions(*[np.zeros((s)) for s in sections])
 
     def step(self, action: np.ndarray):
         actions = Actions(*np.split(action, self.action_sections))
@@ -34,7 +33,6 @@ class DebugWrapper(gym.Wrapper):
         # if self.env.unwrapped.subtask is not None and self.guess != self.truth:
         # r = -0.1
         s, r, t, i = super().step(action)
-        t = True  # TODO
         if t:
             r = float(bool(self.truth) == bool(self.guess))
         self.last_reward = r
