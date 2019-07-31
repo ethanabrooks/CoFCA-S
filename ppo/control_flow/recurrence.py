@@ -613,13 +613,6 @@ class DebugBase(nn.Module):
         self.n_subtasks = obs_spaces.subtasks.nvec.shape[0]
         self.subtask_nvec = obs_spaces.subtasks.nvec[0]
 
-        init_ = lambda m: init(
-            m,
-            nn.init.orthogonal_,
-            lambda x: nn.init.constant_(x, 0),
-            nn.init.calculate_gain("relu"),
-        )
-
         self.obs_shape = d, h, w = obs_spaces.base.shape
         condition_size = int(self.subtask_nvec.sum())
 
@@ -635,8 +628,7 @@ class DebugBase(nn.Module):
         self.dist = Categorical(hidden_size, 2)
         self.conv2 = nn.Sequential(
             Concat(dim=1),
-            init_(nn.Conv2d(d + self.line_size, hidden_size, kernel_size=1)),
-            # init_(nn.Conv2d(d + self.line_size, hidden_size, kernel_size=1), "relu"),
+            init_(nn.Conv2d(d + self.line_size, hidden_size, kernel_size=1), "relu"),
             nn.ReLU(),
             Flatten(),
         )
@@ -666,11 +658,6 @@ class DebugBase(nn.Module):
             init_(nn.Linear(hidden_size * h * w, hidden_size)),
             nn.ReLU(),
         )
-
-        init_ = lambda m: init(
-            m, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0)
-        )
-
         self.critic_linear = init_(nn.Linear(hidden_size, 1))
 
         input_size = h * w * hidden_size  # conv output
