@@ -101,19 +101,10 @@ class DebugAgent(nn.Module):
 
     def forward(self, inputs, rnn_hxs, masks, deterministic=False, action=None):
         N = inputs.size(0)
-        value, actor_features, probs, rnn_hxs = self.recurrent_module(
+        value, actions, probs, rnn_hxs = self.recurrent_module(
             inputs, rnn_hxs, masks, action=action
         )
         dist = FixedCategorical(probs=probs)
-
-        if action is None:
-            l = dist.mode() if deterministic else dist.sample()
-            action = self.dummy_action.unsqueeze(0).expand(N, -1)
-            actions = Actions(
-                *torch.split(action, self.action_sections, dim=-1)
-            )._replace(l=l.float())
-        else:
-            actions = Actions(*torch.split(action, self.action_sections, dim=-1))
 
         action_log_probs = dist.log_probs(actions.l)
         entropy = dist.entropy().mean()

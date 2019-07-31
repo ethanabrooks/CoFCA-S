@@ -684,7 +684,17 @@ class DebugBase(nn.Module):
         if self.is_recurrent:
             x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)
 
-        return self.critic_linear(x), x, self.dist(x).probs, rnn_hxs
+        dist = self.dist(x)
+        if action is None:
+            l = dist.sample()
+            action = self.dummy_action.expand(N, -1)
+            actions = Actions(*torch.split(action, self.size_actions, dim=-1))._replace(
+                l=l.float()
+            )
+        else:
+            actions = Actions(*torch.split(action, self.size_actions, dim=-1))
+
+        return self.critic_linear(x), actions, dist.probs, rnn_hxs
 
     @property
     def is_recurrent(self):
