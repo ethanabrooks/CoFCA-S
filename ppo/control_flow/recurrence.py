@@ -9,9 +9,10 @@ from torch import nn as nn
 import torch.jit
 from torch.nn import functional as F
 
-from gridworld_env.control_flow_gridworld import LineTypes
+from gridworld_env.control_flow_gridworld import LineTypes, Obs
 from gridworld_env.control_flow_gridworld import Obs
 import ppo
+from ppo.agent import NNBase
 from ppo.control_flow.lower_level import (
     LowerLevel,
     g_binary_to_discrete,
@@ -34,7 +35,7 @@ from ppo.layers import (
     Exp,
     Log,
 )
-from ppo.utils import broadcast3d, init_, interp, trace, round
+from ppo.utils import broadcast3d, init_, interp, trace, round, init
 
 RecurrentState = namedtuple(
     "RecurrentState",
@@ -560,3 +561,80 @@ class Recurrence(torch.jit.ScriptModule):
 
         hx = torch.cat(preprocessed, dim=-1)
         return hx, hx[-1]
+
+
+class DebugBase(NNBase):
+    def __init__(self, obs_spaces, hidden_size, num_layers, recurrent, activation):
+        super().__init__(recurrent, hidden_size, hidden_size)
+
+        self.n_subtasks = obs_spaces.subtasks.nvec.shape[0]
+        self.subtask_nvec = obs_spaces.subtasks.nvec[0]
+
+        init_ = lambda m: init(
+            m,
+            nn.init.orthogonal_,
+            lambda x: nn.init.constant_(x, 0),
+            nn.init.calculate_gain("relu"),
+        )
+
+        self.obs_shape = d, h, w = obs_spaces.base.shape
+        condition_size = int(self.subtask_nvec.sum())
+        self.main = nn.Sequential(
+            Parallel(
+                nn.Sequential(Reshape(1, d, h, w)),
+                nn.Sequential(Reshape(condition_size, 1, 1, 1)),
+            ),
+            Product(),
+            Reshape(condition_size * d, h, w),
+            nn.Sequential(
+                nn.Conv2d(condition_size * d, hidden_size, kernel_size=1), activation
+            ),
+            *[
+                nn.Sequential(
+                    nn.Conv2d(hidden_size, hidden_size, kernel_size=1), activation
+                )
+                for _ in range(num_layers - 1)
+            ],
+            # init_(nn.Conv2d(d, 32, 8, stride=4)), nn.ReLU(),
+            # init_(nn.Conv2d(32, 64, kernel_size=4, stride=2)), nn.ReLU(),
+            # init_(nn.Conv2d(32, 64, kernel_size=4, stride=2)), nn.ReLU(),
+            # init_(nn.Conv2d(64, 32, kernel_size=3, stride=1)),
+            activation,
+            Flatten(),
+            # init_(nn.Linear(32 * 7 * 7, hidden_size)), nn.ReLU())
+            init_(nn.Linear(hidden_size * h * w, hidden_size)),
+            nn.ReLU(),
+        )
+
+        init_ = lambda m: init(
+            m, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0)
+        )
+
+        self.critic_linear = init_(nn.Linear(hidden_size, 1))
+
+        self.train()
+        self.obs_sections = [int(np.prod(s.shape)) for s in obs_spaces]
+
+        self.g_discrete_one_hots = nn.ModuleList(
+            [nn.Embedding.from_pretrained(torch.eye(int(n))) for n in self.subtask_nvec]
+        )
+
+    def forward(self, inputs, rnn_hxs, masks):
+        N = inputs.shape[0]
+        inputs = Obs(*torch.split(inputs, self.obs_sections, dim=-1))
+        d, h, w = self.obs_shape
+        inputs = inputs._replace(base=inputs.base.view(N, d, h, w))
+        task = inputs.subtasks.view(N, self.n_subtasks, self.subtask_nvec.size)
+        g_discrete = torch.split(task, 1, dim=-1)
+        M = g_discrete_to_binary(g_discrete, self.g_discrete_one_hots.children())
+        # subtask_idxs = (
+        # inputs.subtask.expand(N, self.subtask_nvec.size).unsqueeze(1).long()
+        # )
+        if_conditions = M[:, 0]
+        # main_in = inputs.base.gather(1, condition_idxs.expand(N, 1, h, w).long())
+        x = self.main((inputs.base, if_conditions))
+
+        if self.is_recurrent:
+            x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)
+
+        return self.critic_linear(x), x, rnn_hxs
