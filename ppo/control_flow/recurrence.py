@@ -338,9 +338,9 @@ class DebugBase(nn.Module):
             if_conditions = M[:, 0]
             t = 0
             x = self.xi((inputs.base[t], if_conditions))
-            l_dist = self.dist(x)
-            self.sample_new(L[t], l_dist)
-            l = L[t, :1].float()
+            l = self.dist(x).probs[:, 1:]
+            # self.sample_new(L[t], l_dist)
+            # l = L[t, :1].float()
 
             # l
             # xi_in = self.xi_debug((inputs.base[t], condition)).detach()
@@ -370,18 +370,18 @@ class DebugBase(nn.Module):
 
             # l'
             # l = interp(
-            # l,
-            # 1 - hx.last_eval,
-            # safediv(e[T.Else], e[[T.If, T.Else, T.While, T.EndWhile]].sum(0)),
+            #     l,
+            #     1 - hx.last_eval,
+            #     safediv(e[T.Else], e[[T.If, T.Else, T.While, T.EndWhile]].sum(0)),
             # )
             # self.print("l2", l)
-            # l_probs = torch.cat([1 - l, l], dim=1)
-            # if self.hard_update:
-            #     l_dist = FixedCategorical(probs=l_probs)
-            #     self.print("l2", l_dist.probs)
-            #     self.sample_new(L[t], l_dist)
-            # else:
-            #     L[t] = l.squeeze(-1)
+            l_probs = torch.cat([1 - l, l], dim=1)
+            if self.hard_update:
+                l_dist = FixedCategorical(probs=l_probs)
+                self.print("l2", l_dist.probs)
+                self.sample_new(L[t], l_dist)
+            else:
+                L[t] = l.squeeze(-1)
 
             def roll(x):
                 return F.pad(x, [1, 0])[:, :-1]
