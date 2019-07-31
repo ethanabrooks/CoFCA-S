@@ -29,7 +29,7 @@ from ppo.layers import (
     Sum,
     Times,
 )
-from ppo.utils import broadcast3d, init_, interp, trace, round, init
+from ppo.utils import broadcast3d, init_, interp, trace, round
 
 RecurrentState = namedtuple(
     "RecurrentState",
@@ -86,7 +86,7 @@ class Recurrence(torch.jit.ScriptModule):
 
         self.conv2 = nn.Sequential(
             Concat(dim=1),
-            init_(nn.Conv2d(d + self.line_size, hidden_size, kernel_size=1), "relu"),
+            init_(nn.Conv2d(d + self.line_size, hidden_size, kernel_size=1), nn.ReLU()),
             nn.ReLU(),
             Flatten(),
         )
@@ -108,7 +108,7 @@ class Recurrence(torch.jit.ScriptModule):
             # Times(1),
             # Sum(dim=-1),
             # init_(nn.Linear(self.line_size * d, 1), "sigmoid"),
-            init_(nn.Linear(1, 1), "sigmoid"),
+            init_(nn.Linear(1, 1), nn.Sigmoid()),
             nn.Sigmoid(),
             # Squash(),
             # nn.LPPool2d(2, kernel_size=(h, w)),
@@ -116,14 +116,16 @@ class Recurrence(torch.jit.ScriptModule):
         )
 
         self.phi = trace(
-            lambda in_size: init_(nn.Linear(in_size, 2), "sigmoid"),
+            lambda in_size: init_(nn.Linear(in_size, 2), nn.Sigmoid()),
             in_size=(d * action_spaces.a.n * int(self.subtask_nvec.prod())),
         )
 
         self.zeta = Categorical(self.line_size, len(LineTypes._fields))
 
         # NOTE {
-        self.phi_debug = nn.Sequential(init_(nn.Linear(1, 1), "sigmoid"), nn.Sigmoid())
+        self.phi_debug = nn.Sequential(
+            init_(nn.Linear(1, 1), nn.Sigmoid()), nn.Sigmoid()
+        )
         self.xi_debug = nn.Sequential(
             Parallel(
                 nn.Sequential(Reshape(1, d, h, w)),
@@ -628,7 +630,7 @@ class DebugBase(nn.Module):
         self.dist = Categorical(hidden_size, 2)
         self.conv2 = nn.Sequential(
             Concat(dim=1),
-            init_(nn.Conv2d(d + self.line_size, hidden_size, kernel_size=1), "relu"),
+            init_(nn.Conv2d(d + self.line_size, hidden_size, kernel_size=1), nn.ReLU()),
             nn.ReLU(),
             Flatten(),
         )
@@ -640,11 +642,18 @@ class DebugBase(nn.Module):
             Product(),
             Reshape(condition_size * d, h, w),
             nn.Sequential(
-                nn.Conv2d(condition_size * d, hidden_size, kernel_size=1), activation
+                init_(
+                    nn.Conv2d(condition_size * d, hidden_size, kernel_size=1),
+                    activation,
+                ),
+                activation,
             ),
             *[
                 nn.Sequential(
-                    nn.Conv2d(hidden_size, hidden_size, kernel_size=1), activation
+                    init_(
+                        nn.Conv2d(hidden_size, hidden_size, kernel_size=1), activation
+                    ),
+                    activation,
                 )
                 for _ in range(num_layers - 1)
             ],
@@ -652,10 +661,9 @@ class DebugBase(nn.Module):
             # init_(nn.Conv2d(32, 64, kernel_size=4, stride=2)), nn.ReLU(),
             # init_(nn.Conv2d(32, 64, kernel_size=4, stride=2)), nn.ReLU(),
             # init_(nn.Conv2d(64, 32, kernel_size=3, stride=1)),
-            activation,
             Flatten(),
             # init_(nn.Linear(32 * 7 * 7, hidden_size)), nn.ReLU())
-            init_(nn.Linear(hidden_size * h * w, hidden_size)),
+            init_(nn.Linear(hidden_size * h * w, hidden_size), nn.ReLU()),
             nn.ReLU(),
         )
         self.critic_linear = init_(nn.Linear(hidden_size, 1))
