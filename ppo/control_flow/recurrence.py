@@ -837,9 +837,6 @@ class DebugBase(nn.Module):
         L = torch.cat([actions.l, hx.l.unsqueeze(0)], dim=0).long().squeeze(2)
         M_zeta = self.z_one_hots(hx.z.long())
 
-        def aeq(a, b):
-            return torch.abs(a - b) < 1e-4
-
         for t in range(inputs.base.shape[0]):
             self.print(T)
             self.print("M_zeta")
@@ -863,11 +860,145 @@ class DebugBase(nn.Module):
             if_conditions = M[:, 0]
             t = 0
             x = self.xi((inputs.base[t], if_conditions))
-            L = torch.cat([actions.l, hx.l.unsqueeze(0)], dim=0).long()  # .squeeze(2)
-
             dist = self.dist(x)
             self.sample_new(L[t], dist)
-            #
+            l = L[t, :1].float()
+
+            def roll(x):
+                return F.pad(x, [1, 0])[:, :-1]
+
+            def scan(*idxs, cumsum, it):
+                p = []
+                omega = M_zeta[:, :, idxs].sum(-1) * cumsum
+                *it, last = it
+                for i in it:
+                    p.append((1 - sum(p)) * omega[:, i])
+                p.append(1 - sum(p))
+                return torch.stack(p, dim=-1)
+
+            # p
+            scan_forward = functools.partial(
+                scan, cumsum=roll(torch.cumsum(hx.p, dim=-1)), it=range(M.size(1))
+            )
+            scan_backward = functools.partial(
+                scan,
+                cumsum=roll(torch.cumsum(hx.p.flip(-1), dim=-1)).flip(-1),
+                it=range(M.size(1) - 1, -1, -1),
+            )
+            p_step = (p.unsqueeze(1) @ self.one_step).squeeze(1)
+            self.print("cr before update", round(hx.cr, 2))
+            pIf = interp(scan_forward(T.Else, T.EndIf), p_step, l)
+            pElse = interp(scan_forward(T.EndIf), p_step, l)
+            pWhile = interp(scan_forward(T.EndWhile), p_step, l)
+            pEndWhile = interp(p_step, scan_backward(T.While).flip(-1), l)
+            pSubtask = interp(hx.p, p_step, hx.cr)
+            self.print("p before update", round(p, 2))
+            p = (
+                # e[[L.If, L.While, L.Else]].sum(0)  # conditions
+                # * interp(scan_forward(L.EndIf, L.Else, L.EndWhile), p_step, l)
+                e[T.If] * pIf
+                + e[T.Else] * pElse
+                + e[T.While] * pWhile
+                + e[T.EndWhile] * pEndWhile
+                + e[T.EndIf] * p_step
+                + e[T.Subtask] * pSubtask
+            )
+            is_line = 1 - inputs.ignore[0]
+            p = torch.clamp(p, 0.0, 1.0)
+            p = is_line * p / p.sum(-1, keepdim=True)  # zero out non-lines
+
+            # concentrate non-allocated attention on last line
+            last_line = is_line.sum(-1).long() - 1
+            p = p + (1 - p.sum(-1, keepdim=True)) * self.p_one_hots(last_line)
+
+            self.print("e[L.If]", e[T.If])
+            self.print("e[L.Else]", e[T.Else])
+            self.print("e[L.EndIf]", e[T.EndIf])
+            self.print("e[L.While]", e[T.While])
+            self.print("e[L.EndWhile]", e[T.EndWhile])
+            self.print("e[L.Subtask]", e[T.Subtask])
+
+            # r
+            r = (p.unsqueeze(1) @ M).squeeze(1)
+
+            # g
+            old_g = self.g_one_hots(G[t - 1])
+            cg = e[T.Subtask] * hx.cg + (1 - e[T.Subtask])
+            probs = interp(old_g, p, cg)
+            g_dist = FixedCategorical(probs=torch.clamp(probs, 0.0, 1.0))
+            self.sample_new(G[t], g_dist)
+
+            # a
+            g = G[t]
+            g_binary = M[torch.arange(N), g]
+            conv_out = self.conv2((obs[t], broadcast3d(g_binary, self.obs_shape[1:])))
+            if self.agent is None:
+                probs = self.actor(conv_out).dist.probs
+            else:
+                agent_inputs = ppo.control_flow.lower_level.Obs(
+                    base=obs[t].view(N, -1),
+                    subtask=g_binary[:, : self.agent_subtask_size],
+                )
+                probs = self.agent(
+                    agent_inputs, z=hx.z.long(), rnn_hxs=None, masks=None
+                ).dist.probs
+            op = g_binary[:, self.agent_subtask_size].unsqueeze(1)
+            no_op = 1 - op
+            a_dist = FixedCategorical(
+                # if subtask is a control-flow statement, force no-op
+                probs=op * probs
+                + no_op * self.no_op_probs.expand(op.size(0), -1)
+            )
+            self.sample_new(A[t], a_dist)
+
+            # a[:] = 'wsadeq'.index(input('act:'))
+            self.print("p after update", round(p, 2))
+
+            def gating_function(subtask_param):
+                task_sections = torch.split(
+                    subtask_param, tuple(self.subtask_nvec), dim=-1
+                )
+                parts = (self.conv1(obs[t]), self.a_one_hots(A[t])) + task_sections
+                outer_product_obs = 1
+                for i1, part in enumerate(parts):
+                    for i2 in range(len(parts)):
+                        if i1 != i2:
+                            part.unsqueeze_(i2 + 1)
+                    outer_product_obs = outer_product_obs * part
+
+                c_logits = self.phi(outer_product_obs.view(N, -1))
+                c = torch.sigmoid(c_logits[:, :1])
+                probs = torch.zeros_like(c_logits)  # dummy value
+
+                # NOTE {
+                _task_sections = torch.split(
+                    subtask_param, tuple(self.subtask_nvec), dim=-1
+                )
+                interaction, count, obj, _, condition = _task_sections
+                agent_layer = obs[t, :, 6, :, :].long()
+                j, k, l = torch.split(agent_layer.nonzero(), 1, dim=-1)
+                debug_obs = obs[t, j, :, k, l].squeeze(1)
+                a_one_hot = self.a_one_hots(A[t])
+                correct_object = obj * debug_obs[:, 1 : 1 + self.subtask_nvec[2]]
+                column1 = interaction[:, :1]
+                column2 = interaction[:, 1:] * a_one_hot[:, 4:-1]
+                correct_action = torch.cat([column1, column2], dim=-1)
+                truth = (
+                    correct_action.sum(-1, keepdim=True)
+                    * correct_object.sum(-1, keepdim=True)
+                ).detach()  # * condition[:, :1] + (1 - condition[:, :1])
+                # c = self.phi_debug(truth)
+                c = truth
+                # self.print("c", round(c, 4))
+                # NOTE }
+                return c, probs
+
+            # cr
+            cr, cr_probs = gating_function(subtask_param=r)
+
+            # cg
+            g = M[torch.arange(N), G[t]]
+            cg, cg_probs = gating_function(subtask_param=g)
 
             yield RecurrentState(
                 a=hx.a,
