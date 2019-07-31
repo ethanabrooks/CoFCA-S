@@ -101,8 +101,9 @@ class DebugAgent(nn.Module):
 
     def forward(self, inputs, rnn_hxs, masks, deterministic=False, action=None):
         N = inputs.size(0)
-        value, actor_features, rnn_hxs = self.recurrent_module(inputs, rnn_hxs, masks)
-        dist = self.dist(actor_features)
+        value, actor_features, dist, rnn_hxs = self.recurrent_module(
+            inputs, rnn_hxs, masks
+        )
 
         if action is None:
             l = dist.mode() if deterministic else dist.sample()
@@ -126,7 +127,7 @@ class DebugAgent(nn.Module):
         )
 
     def get_value(self, inputs, rnn_hxs, masks):
-        value, _, _ = self.recurrent_module(inputs, rnn_hxs, masks)
+        value, _, _, _ = self.recurrent_module(inputs, rnn_hxs, masks)
         return value
 
     def _forward_gru(self, x, hxs, masks, actions=None):

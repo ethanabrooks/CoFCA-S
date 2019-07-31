@@ -684,7 +684,7 @@ class DebugBase(nn.Module):
         if self.is_recurrent:
             x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)
 
-        return self.critic_linear(x), x, rnn_hxs
+        return self.critic_linear(x), x, self.dist(x), rnn_hxs
 
     @property
     def is_recurrent(self):
