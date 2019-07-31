@@ -101,13 +101,13 @@ class DebugAgent(nn.Module):
             cg=None,
             cr=None,
             g=None,
-            # g=FixedCategorical(hx.g_probs),
+            # g=FixedCategorical(hx.g_probs), TODO
             z=None,
             # z=FixedCategorical(
             #     hx.z_probs.view(N, self.n_subtasks, len(LineTypes._fields))
-            # ),
+            # ), TODO
             l=FixedCategorical(hx.l_probs),
-            # l=FixedCategorical(hx.l_probs) if self.hard_update else None,
+            # l=FixedCategorical(hx.l_probs) if self.hard_update else None, TODO
         )
 
         log_probs = sum(

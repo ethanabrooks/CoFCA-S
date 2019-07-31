@@ -586,46 +586,13 @@ class DebugBase(nn.Module):
         self.obs_sections = [int(np.prod(s.shape)) for s in self.obs_spaces]
         self.line_size = int(self.subtask_nvec.sum())
         self.agent_subtask_size = int(self.subtask_nvec[:-2].sum())
-        self._hidden_size = hidden_size
-        self._recurrent = recurrent
-
-        if self._recurrent:
-            self.recurrent_module = self.build_recurrent_module(
-                hidden_size, hidden_size
-            )
-            for name, param in self.recurrent_module.named_parameters():
-                print("zeroed out", name)
-                if "bias" in name:
-                    nn.init.constant_(param, 0)
-                elif "weight" in name:
-                    nn.init.orthogonal_(param)
-
-        self.recurrent = recurrent
-        self.obs_spaces = obs_spaces
-        self.n_subtasks = self.obs_spaces.subtasks.nvec.shape[0]
-        self.subtask_nvec = self.obs_spaces.subtasks.nvec[0]
-        d, h, w = self.obs_shape = obs_spaces.base.shape
-        self.obs_sections = [int(np.prod(s.shape)) for s in self.obs_spaces]
-        self.line_size = int(self.subtask_nvec.sum())
-        self.agent_subtask_size = int(self.subtask_nvec[:-2].sum())
         self.size_actions = [
             1 if isinstance(s, Discrete) else s.nvec.size for s in action_spaces
         ]
-
-        self.n_subtasks = obs_spaces.subtasks.nvec.shape[0]
-        self.subtask_nvec = obs_spaces.subtasks.nvec[0]
-
-        self.obs_shape = d, h, w = obs_spaces.base.shape
         condition_size = int(self.subtask_nvec.sum())
 
+        # networks
         self.critic = init_(nn.Linear(hidden_size * h * w, 1))
-
-        self.train()
-        self.obs_sections = [int(np.prod(s.shape)) for s in obs_spaces]
-
-        self.g_discrete_one_hots = nn.ModuleList(
-            [nn.Embedding.from_pretrained(torch.eye(int(n))) for n in self.subtask_nvec]
-        )
 
         self.dist = Categorical(hidden_size, 2)
         self.conv2 = nn.Sequential(
@@ -856,10 +823,6 @@ class DebugBase(nn.Module):
     @property
     def is_recurrent(self):
         return False
-
-    @property
-    def output_size(self):
-        return self._hidden_size
 
     @staticmethod
     def sample_new(x, dist):
