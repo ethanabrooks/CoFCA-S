@@ -860,8 +860,8 @@ class DebugBase(nn.Module):
             if_conditions = M[:, 0]
             t = 0
             x = self.xi((inputs.base[t], if_conditions))
-            dist = self.dist(x)
-            self.sample_new(L[t], dist)
+            l_dist = self.dist(x)
+            self.sample_new(L[t], l_dist)
             l = L[t, :1].float()
 
             def roll(x):
@@ -1017,7 +1017,7 @@ class DebugBase(nn.Module):
                 last_eval=hx.last_eval,
                 v=self.critic_linear(x),
                 l=L[t].float(),
-                l_probs=dist.probs,
+                l_probs=l_dist.probs,
             )
 
     @property
