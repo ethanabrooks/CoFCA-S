@@ -34,7 +34,9 @@ class DebugWrapper(gym.Wrapper):
         # r = -0.1
         s, r, t, i = super().step(action)
         if t:
-            r = 1 if bool(self.truth) == bool(self.guess) else -0.1
+            _r = 1 if bool(self.truth) == bool(self.guess) else -0.1
+            i.update(matching=float(r == _r))
+
         self.last_reward = r
         return s, r, t, i
 
