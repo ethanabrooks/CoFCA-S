@@ -809,7 +809,7 @@ class DebugBase(nn.Module):
         #     if not x:
         #         print(name)
 
-        stacked = [torch.stack(x) for x in zipped]
+        stacked = [torch.stack(x).float() for x in zipped]
         preprocessed = [x.view(*x.shape[:2], -1) for x in stacked]
 
         # for name, x, size in zip(
@@ -826,36 +826,50 @@ class DebugBase(nn.Module):
     def inner_loop(
         self, hx: RecurrentState, actions: Actions, inputs: Obs, M, M_discrete, subtask
     ):
-        t = 0  # TODO
-        # main_in = inputs.base.gather(1, condition_idxs.expand(N, 1, h, w).long())
-        if_conditions = M[:, 0]
-        t = 0
-        x = self.xi((inputs.base[t], if_conditions))
-        L = torch.cat([actions.l, hx.l.unsqueeze(0)], dim=0).long()  # .squeeze(2)
+        _, N, *_ = inputs.base.shape
+        p = hx.p
+        T = LineTypes()
 
-        dist = self.dist(x)
-        self.sample_new(L[t], dist)
-        #
+        # combine past and present actions (sampled values)
+        obs = inputs.base
+        A = torch.cat([actions.a, hx.a.unsqueeze(0)], dim=0).long().squeeze(2)
+        G = torch.cat([actions.g, hx.g.unsqueeze(0)], dim=0).long().squeeze(2)
+        L = torch.cat([actions.l, hx.l.unsqueeze(0)], dim=0).long().squeeze(2)
+        M_zeta = self.z_one_hots(hx.z.long())
 
-        yield RecurrentState(
-            a=hx.a,
-            g=hx.g,
-            cr=hx.cr,
-            cg=hx.cg,
-            z=hx.z,
-            a_probs=hx.a_probs,
-            g_probs=hx.g_probs,
-            cr_probs=hx.cr_probs,
-            cg_probs=hx.cg_probs,
-            z_probs=hx.z_probs,
-            p=hx.p,
-            r=hx.r,
-            last_condition=hx.last_condition,
-            last_eval=hx.last_eval,
-            v=self.critic_linear(x),
-            l=L[t].float(),
-            l_probs=dist.probs,
-        )
+        def aeq(a, b):
+            return torch.abs(a - b) < 1e-4
+
+        for t in range(inputs.base.shape[0]):
+            # main_in = inputs.base.gather(1, condition_idxs.expand(N, 1, h, w).long())
+            if_conditions = M[:, 0]
+            t = 0
+            x = self.xi((inputs.base[t], if_conditions))
+            L = torch.cat([actions.l, hx.l.unsqueeze(0)], dim=0).long()  # .squeeze(2)
+
+            dist = self.dist(x)
+            self.sample_new(L[t], dist)
+            #
+
+            yield RecurrentState(
+                a=hx.a,
+                g=hx.g,
+                cr=hx.cr,
+                cg=hx.cg,
+                z=hx.z,
+                a_probs=hx.a_probs,
+                g_probs=hx.g_probs,
+                cr_probs=hx.cr_probs,
+                cg_probs=hx.cg_probs,
+                z_probs=hx.z_probs,
+                p=hx.p,
+                r=hx.r,
+                last_condition=hx.last_condition,
+                last_eval=hx.last_eval,
+                v=self.critic_linear(x),
+                l=L[t].float(),
+                l_probs=dist.probs,
+            )
 
     @property
     def is_recurrent(self):
