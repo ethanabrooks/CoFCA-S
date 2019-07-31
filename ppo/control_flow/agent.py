@@ -39,7 +39,6 @@ class DebugAgent(nn.Module):
             activation=agent_args["activation"],
         )
         self.action_sections = [s for s, in space_shape(action_space).values()]
-        self.register_buffer("dummy_action", torch.zeros(buffer_shape(action_space)))
 
         action_space = self.action_spaces.l
         if isinstance(action_space, Discrete):
@@ -100,20 +99,49 @@ class DebugAgent(nn.Module):
         return Recurrence(**kwargs)
 
     def forward(self, inputs, rnn_hxs, masks, deterministic=False, action=None):
+        N = inputs.size(0)
         hx = self.recurrent_module(inputs, rnn_hxs, masks, action=action)
         actions = Actions(a=hx.a, cg=hx.cg, cr=hx.cr, g=hx.g, z=hx.z, l=hx.l)
-        dist = FixedCategorical(probs=hx.l_probs)
+        dists = Actions(
+            a=None,
+            # if rm.agent  # use pre-trained agent so don't train
+            # else FixedCategorical(hx.a_probs),
+            cg=None,
+            cr=None,
+            g=None,
+            # g=FixedCategorical(hx.g_probs),
+            z=None,
+            # z=FixedCategorical(
+            #     hx.z_probs.view(N, self.n_subtasks, len(LineTypes._fields))
+            # ),
+            l=FixedCategorical(hx.l_probs),
+            # l=FixedCategorical(hx.l_probs) if self.hard_update else None,
+        )
 
-        action_log_probs = dist.log_probs(hx.l)
-        entropy = dist.entropy().mean()
+        log_probs = sum(
+            dist.log_probs(a).view(N, -1, 1).sum(1)
+            for dist, a in zip(dists, actions)
+            if dist is not None
+        )
+        # log_probs = log_probs + z_dist.log_probs(actions.z).sum(1)
+        entropies = Actions(
+            *[None if dist is None else dist.entropy().mean() for dist in dists]
+        )
+        aux_loss = -sum(
+            c * entropy
+            for c, entropy in zip(self.entropy_coefs, entropies)
+            if entropy is not None
+        )
+        log = {k: v for k, v in entropies._asdict().items() if v is not None}
+
         return AgentValues(
             value=hx.v,
             action=torch.cat(actions, dim=-1),
-            action_log_probs=action_log_probs,
-            aux_loss=-self.entropy_coef * entropy,
-            dist=dist,
+            action_log_probs=log_probs,
+            aux_loss=aux_loss,
+            dist=None,
             rnn_hxs=rnn_hxs,
-            log=dict(entropy=entropy),
+            log=log,
         )
 
     def get_value(self, inputs, rnn_hxs, masks):
