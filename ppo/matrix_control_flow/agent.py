@@ -9,7 +9,7 @@ from ppo.layers import Flatten, Parallel, Product, Reshape, ShallowCopy, Sum
 from ppo.utils import init_
 
 
-class Agent(ppo.control_flow.Agent):
+class Agent(ppo.control_flow.DebugAgent):
     def build_recurrent_module(self, **kwargs):
         return Recurrence(**kwargs)
 
