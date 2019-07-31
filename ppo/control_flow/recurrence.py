@@ -564,8 +564,22 @@ class Recurrence(torch.jit.ScriptModule):
 
 
 class DebugBase(NNBase):
-    def __init__(self, obs_spaces, hidden_size, num_layers, recurrent, activation):
+    def __init__(
+        self, obs_spaces, action_spaces, hidden_size, num_layers, recurrent, activation
+    ):
         super().__init__(recurrent, hidden_size, hidden_size)
+
+        self.recurrent = recurrent
+        self.obs_spaces = obs_spaces
+        self.n_subtasks = self.obs_spaces.subtasks.nvec.shape[0]
+        self.subtask_nvec = self.obs_spaces.subtasks.nvec[0]
+        d, h, w = self.obs_shape = obs_spaces.base.shape
+        self.obs_sections = [int(np.prod(s.shape)) for s in self.obs_spaces]
+        self.line_size = int(self.subtask_nvec.sum())
+        self.agent_subtask_size = int(self.subtask_nvec[:-2].sum())
+        self.size_actions = [
+            1 if isinstance(s, Discrete) else s.nvec.size for s in action_spaces
+        ]
 
         self.n_subtasks = obs_spaces.subtasks.nvec.shape[0]
         self.subtask_nvec = obs_spaces.subtasks.nvec[0]
@@ -618,6 +632,27 @@ class DebugBase(NNBase):
         self.g_discrete_one_hots = nn.ModuleList(
             [nn.Embedding.from_pretrained(torch.eye(int(n))) for n in self.subtask_nvec]
         )
+
+        state_sizes = RecurrentState(
+            a=1,
+            g=1,
+            cg=1,
+            cr=1,
+            l=1,
+            z=self.n_subtasks,
+            a_probs=action_spaces.a.n,
+            g_probs=self.n_subtasks,
+            cg_probs=2,
+            cr_probs=2,
+            l_probs=2,
+            z_probs=self.n_subtasks * len(LineTypes._fields),
+            r=self.line_size,
+            p=self.n_subtasks,
+            v=1,
+            last_condition=self.line_size,
+            last_eval=1,
+        )
+        self.state_sizes = RecurrentState(*map(int, state_sizes))
 
     def forward(self, inputs, rnn_hxs, masks):
         N = inputs.shape[0]

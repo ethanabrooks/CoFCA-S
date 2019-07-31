@@ -24,44 +24,45 @@ class DebugAgent(nn.Module):
         # super().__init__(
         #     obs_shape=obs_space.shape, action_space=action_space, **agent_args
         # )
+
         entropy_coef = agent_args["entropy_coef"]
         recurrent = agent_args["recurrent"]
         hidden_size = agent_args["hidden_size"]
         self.entropy_coef = entropy_coef
-        self.base = DebugBase(
+        self.action_spaces = Actions(**action_space.spaces)
+        self.recurrent_module = DebugBase(
             obs_spaces=Obs(**obs_space.spaces),
+            action_spaces=self.action_spaces,
             recurrent=recurrent,
             hidden_size=hidden_size,
             num_layers=agent_args["num_layers"],
             activation=agent_args["activation"],
         )
-        self.action_spaces = Actions(**action_space.spaces)
         self.action_sections = [s for s, in space_shape(action_space).values()]
         self.register_buffer("dummy_action", torch.zeros(buffer_shape(action_space)))
 
         action_space = self.action_spaces.l
         if isinstance(action_space, Discrete):
             num_outputs = action_space.n
-            self.dist = Categorical(self.base.output_size, num_outputs)
+            self.dist = Categorical(self.recurrent_module.output_size, num_outputs)
         elif isinstance(action_space, Box):
             num_outputs = action_space.shape[0]
-            self.dist = DiagGaussian(self.base.output_size, num_outputs)
+            self.dist = DiagGaussian(self.recurrent_module.output_size, num_outputs)
         else:
             raise NotImplementedError
         self.continuous = isinstance(action_space, Box)
 
     @property
     def is_recurrent(self):
-        return self.base.is_recurrent
+        return False
 
     @property
     def recurrent_hidden_state_size(self):
-        """Size of rnn_hx."""
-        return self.base.recurrent_hidden_state_size
+        return sum(self.recurrent_module.state_sizes)
 
     def forward(self, inputs, rnn_hxs, masks, deterministic=False, action=None):
         N = inputs.size(0)
-        value, actor_features, rnn_hxs = self.base(inputs, rnn_hxs, masks)
+        value, actor_features, rnn_hxs = self.recurrent_module(inputs, rnn_hxs, masks)
         dist = self.dist(actor_features)
 
         if action is None:
@@ -86,7 +87,7 @@ class DebugAgent(nn.Module):
         )
 
     def get_value(self, inputs, rnn_hxs, masks):
-        value, _, _ = self.base(inputs, rnn_hxs, masks)
+        value, _, _ = self.recurrent_module(inputs, rnn_hxs, masks)
         return value
 
 
