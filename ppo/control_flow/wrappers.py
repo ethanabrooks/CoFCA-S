@@ -24,17 +24,26 @@ class DebugWrapper(gym.Wrapper):
     def step(self, action: np.ndarray):
         actions = Actions(*np.split(action, self.action_sections))
         env = self.env.unwrapped
-        self.truth = env.last_condition_passed
         # self.guess = actions.l
-        self.guess = actions.l
-        # print("truth", truth)
-        # print("guess", guess)
-        r = float(bool(self.truth) == bool(self.guess))
+        if self.guess is None:
+            # first step
+            self.truth = env.last_condition_passed
+            self.guess = actions.l
+        # print("truth", self.truth)
+        # print("guess", self.guess)
         # if self.env.unwrapped.subtask is not None and self.guess != self.truth:
         # r = -0.1
-        s, _, t, i = super().step(action)
+        s, r, t, i = super().step(action)
+        t = True  # TODO
+        if t:
+            r = float(bool(self.truth) == bool(self.guess))
         self.last_reward = r
-        return s, r, True, i
+        return s, r, t, i
+
+    def reset(self, **kwargs):
+        self.guess = None
+        self.truth = None
+        return super().reset(**kwargs)
 
     def render(self, mode="human"):
         print("guess", self.guess)
