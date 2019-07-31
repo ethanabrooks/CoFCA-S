@@ -14,7 +14,7 @@ class Agent(ppo.control_flow.DebugAgent):
         return Recurrence(**kwargs)
 
 
-class Recurrence(ppo.control_flow.recurrence.Recurrence):
+class Recurrence(ppo.control_flow.recurrence.DebugBase):
     def __init__(self, hidden_size, **kwargs):
         super().__init__(hidden_size=hidden_size, **kwargs)
         self.obs_sections = [int(np.prod(s.shape)) for s in self.obs_spaces]

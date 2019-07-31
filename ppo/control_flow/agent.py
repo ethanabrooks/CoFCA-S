@@ -1,19 +1,17 @@
-from gym.spaces import MultiDiscrete, Discrete, Box
 import torch
-from torch import nn as nn
-from ppo.control_flow.lower_level import g_discrete_to_binary
 import torch.jit
+from gym.spaces import MultiDiscrete
+from torch import nn as nn
 from torch.nn import functional as F
 
-from common.vec_env.util import space_shape
-from gridworld_env.control_flow_gridworld import LineTypes, Obs
 import ppo
-from ppo.agent import AgentValues, NNBase
 import ppo.control_flow.lower_level
-from ppo.control_flow.recurrence import Recurrence, RecurrentState, DebugBase
+from gridworld_env.control_flow_gridworld import Obs
+from ppo.agent import AgentValues
+from ppo.control_flow.lower_level import g_discrete_to_binary
+from ppo.control_flow.recurrence import RecurrentState, DebugBase
 from ppo.control_flow.wrappers import Actions
-from ppo.distributions import FixedCategorical, Categorical, DiagGaussian
-from ppo.storage import buffer_shape
+from ppo.distributions import FixedCategorical
 
 
 class DebugAgent(nn.Module):
