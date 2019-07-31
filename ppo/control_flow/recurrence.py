@@ -1,17 +1,17 @@
 import functools
-from collections import namedtuple
 import itertools
+from collections import namedtuple
 
-from gym.spaces import Box, Discrete
 import numpy as np
 import torch
-from torch import nn as nn
 import torch.jit
+from gym.spaces import Box, Discrete
+from torch import nn as nn
 from torch.nn import functional as F
 
-from gridworld_env.control_flow_gridworld import LineTypes, Obs
-from gridworld_env.control_flow_gridworld import Obs
 import ppo
+from gridworld_env.control_flow_gridworld import LineTypes
+from gridworld_env.control_flow_gridworld import Obs
 from ppo.agent import NNBase
 from ppo.control_flow.lower_level import (
     LowerLevel,
@@ -28,12 +28,7 @@ from ppo.layers import (
     Reshape,
     ShallowCopy,
     Sum,
-    Squash,
-    Print,
     Times,
-    Plus,
-    Exp,
-    Log,
 )
 from ppo.utils import broadcast3d, init_, interp, trace, round, init
 
@@ -563,11 +558,25 @@ class Recurrence(torch.jit.ScriptModule):
         return hx, hx[-1]
 
 
-class DebugBase(NNBase):
+class DebugBase(nn.Module):
     def __init__(
         self, obs_spaces, action_spaces, hidden_size, num_layers, recurrent, activation
     ):
-        super().__init__(recurrent, hidden_size, hidden_size)
+        # super().__init__(recurrent, hidden_size, hidden_size)
+        super().__init__()
+        self._hidden_size = hidden_size
+        self._recurrent = recurrent
+
+        if self._recurrent:
+            self.recurrent_module = self.build_recurrent_module(
+                hidden_size, hidden_size
+            )
+            for name, param in self.recurrent_module.named_parameters():
+                print("zeroed out", name)
+                if "bias" in name:
+                    nn.init.constant_(param, 0)
+                elif "weight" in name:
+                    nn.init.orthogonal_(param)
 
         self.recurrent = recurrent
         self.obs_spaces = obs_spaces
@@ -673,3 +682,11 @@ class DebugBase(NNBase):
             x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)
 
         return self.critic_linear(x), x, rnn_hxs
+
+    @property
+    def is_recurrent(self):
+        return False
+
+    @property
+    def output_size(self):
+        return self._hidden_size
