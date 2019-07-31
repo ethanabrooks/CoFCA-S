@@ -743,3 +743,8 @@ class DebugBase(nn.Module):
     @property
     def output_size(self):
         return self._hidden_size
+
+    @staticmethod
+    def sample_new(x, dist):
+        new = x < 0
+        x[new] = dist.sample()[new].flatten()
