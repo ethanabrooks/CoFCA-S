@@ -13,7 +13,7 @@ import ppo.control_flow.lower_level
 from ppo.control_flow.recurrence import Recurrence, RecurrentState
 from ppo.control_flow.wrappers import Actions
 from ppo.distributions import FixedCategorical, Categorical, DiagGaussian
-from ppo.layers import Flatten
+from ppo.layers import Flatten, Parallel, Reshape, Product
 from ppo.storage import buffer_shape
 from ppo.utils import init, init_normc_
 
@@ -107,8 +107,17 @@ class DebugBase(NNBase):
         )
 
         self.obs_shape = d, h, w = obs_spaces.base.shape
+        condition_size = int(self.subtask_nvec[-1])
         self.main = nn.Sequential(
-            nn.Sequential(nn.Conv2d(1, hidden_size, kernel_size=1), activation),
+            Parallel(
+                nn.Sequential(Reshape(1, d, h, w)),
+                nn.Sequential(Reshape(condition_size, 1, 1, 1)),
+            ),
+            Product(),
+            Reshape(condition_size * d, h, w),
+            nn.Sequential(
+                nn.Conv2d(condition_size * d, hidden_size, kernel_size=1), activation
+            ),
             *[
                 nn.Sequential(
                     nn.Conv2d(hidden_size, hidden_size, kernel_size=1), activation
@@ -134,6 +143,7 @@ class DebugBase(NNBase):
 
         self.train()
         self.obs_sections = [int(np.prod(s.shape)) for s in obs_spaces]
+        self.register_buffer("condition_one_hot", torch.eye(condition_size))
 
     def forward(self, inputs, rnn_hxs, masks):
         N = inputs.shape[0]
@@ -146,9 +156,8 @@ class DebugBase(NNBase):
         # )
         if_conditions = task[:, 0]
         condition_idxs = if_conditions[:, -1].view(N, 1, 1, 1)
-        main_in = inputs.base.gather(1, condition_idxs.expand(N, 1, h, w).long())
-        print(main_in)
-        x = self.main(main_in)
+        # main_in = inputs.base.gather(1, condition_idxs.expand(N, 1, h, w).long())
+        x = self.main((inputs.base, if_conditions))
 
         if self.is_recurrent:
             x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)
