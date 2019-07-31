@@ -72,8 +72,6 @@ class DebugBase(nn.Module):
         # networks
         self.critic_linear = init_(nn.Linear(hidden_size, 1))
 
-        self.dist = Categorical(hidden_size, 2)
-
         self.conv1 = nn.Sequential(
             ShallowCopy(2),
             Parallel(
@@ -125,6 +123,9 @@ class DebugBase(nn.Module):
             # init_(nn.Linear(32 * 7 * 7, hidden_size)), nn.ReLU())
             init_(nn.Linear(hidden_size * h * w, hidden_size), nn.ReLU()),
             nn.ReLU(),
+        )
+        self.dist = nn.Sequential(
+            init_(nn.Linear(hidden_size, 1), nn.Sigmoid()), nn.Sigmoid()
         )
         self.phi = trace(
             lambda in_size: init_(nn.Linear(in_size, 2), nn.Sigmoid()),
@@ -338,7 +339,7 @@ class DebugBase(nn.Module):
             if_conditions = M[:, 0]
             t = 0
             x = self.xi((inputs.base[t], if_conditions))
-            l = self.dist(x).probs[:, 1:]
+            l = self.dist(x)
             # self.sample_new(L[t], l_dist)
             # l = L[t, :1].float()
 
