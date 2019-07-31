@@ -592,9 +592,24 @@ class DebugBase(nn.Module):
         condition_size = int(self.subtask_nvec.sum())
 
         # networks
-        self.critic = init_(nn.Linear(hidden_size * h * w, 1))
+        self.critic_linear = init_(nn.Linear(hidden_size, 1))
 
         self.dist = Categorical(hidden_size, 2)
+
+        self.conv1 = nn.Sequential(
+            ShallowCopy(2),
+            Parallel(
+                Reshape(d, h * w),
+                nn.Sequential(
+                    init_(nn.Conv2d(d, 1, kernel_size=1)),
+                    Reshape(1, h * w),  # TODO
+                    nn.Softmax(dim=-1),
+                ),
+            ),
+            Product(),
+            Sum(dim=-1),
+        )
+
         self.conv2 = nn.Sequential(
             Concat(dim=1),
             init_(nn.Conv2d(d + self.line_size, hidden_size, kernel_size=1), nn.ReLU()),
@@ -633,7 +648,36 @@ class DebugBase(nn.Module):
             init_(nn.Linear(hidden_size * h * w, hidden_size), nn.ReLU()),
             nn.ReLU(),
         )
-        self.critic_linear = init_(nn.Linear(hidden_size, 1))
+        self.phi = trace(
+            lambda in_size: init_(nn.Linear(in_size, 2), nn.Sigmoid()),
+            in_size=(d * action_spaces.a.n * int(self.subtask_nvec.prod())),
+        )
+
+        self.zeta = Categorical(self.line_size, len(LineTypes._fields))
+
+        # NOTE {
+        self.phi_debug = nn.Sequential(
+            init_(nn.Linear(1, 1), nn.Sigmoid()), nn.Sigmoid()
+        )
+        self.xi_debug = nn.Sequential(
+            Parallel(
+                nn.Sequential(Reshape(1, d, h, w)),
+                nn.Sequential(Reshape(self.line_size, 1, 1, 1)),
+            ),
+            Product(),
+            Times(
+                100 * (F.pad(torch.eye(4), (1, 2, 15, 0)).view(1, 19, 7, 1, 1) - 0.5)
+            ),
+            Reshape(self.line_size * d, h * w),
+            # init_(nn.Conv2d(d * self.line_size, hidden_size, kernel_size=1), "sigmoid"),
+            # Reshape(hidden_size, h * w),
+            Sum(dim=-1),
+            activation,
+            Times(100),
+            Sum(dim=-1, keepdim=True),
+        )
+        self.zeta_debug = Categorical(len(LineTypes._fields), len(LineTypes._fields))
+        # NOTE }
 
         input_size = h * w * hidden_size  # conv output
         if isinstance(action_spaces.a, Discrete):
@@ -644,6 +688,8 @@ class DebugBase(nn.Module):
             self.actor = DiagGaussian(input_size, num_outputs)
         else:
             raise NotImplementedError
+
+        self.critic = init_(nn.Linear(input_size, 1))
 
         state_sizes = RecurrentState(
             a=1,
@@ -666,19 +712,19 @@ class DebugBase(nn.Module):
         )
         self.state_sizes = RecurrentState(*map(int, state_sizes))
 
-        # buffers
-        self.register_buffer("dummy_action", torch.zeros(1, sum(self.size_actions)))
-
+        # embeddings
         def eye_embedding(n):
             return nn.Embedding.from_pretrained(torch.eye(int(n)))
 
         self.g_discrete_one_hots = nn.ModuleList(
             [eye_embedding(n) for n in self.subtask_nvec]
         )
-        self.a_one_hots = eye_embedding(action_spaces.a.n)
+        self.a_one_hots = eye_embedding(n=action_spaces.a.n)
         self.g_one_hots = eye_embedding(action_spaces.g.n)
         self.z_one_hots = eye_embedding(len(LineTypes()))
         self.p_one_hots = eye_embedding(self.n_subtasks)
+
+        # buffers
         one_step = F.pad(torch.eye(self.n_subtasks - 1), [1, 0, 0, 1])
         one_step[:, -1] += 1 - one_step.sum(-1)
         self.register_buffer("one_step", one_step.unsqueeze(0))
@@ -790,15 +836,6 @@ class DebugBase(nn.Module):
         dist = self.dist(x)
         self.sample_new(L[t], dist)
         #
-        # if action is None:
-        #     l = dist.sample()
-        #     action = self.dummy_action.expand(N, -1)
-        #     actions = Actions(*torch.split(action, self.size_actions, dim=-1))._replace(
-        #         l=l.float()
-        #     )
-        # else:
-        #     actions = Actions(*torch.split(action, self.size_actions, dim=-1))
-        #     # actions = Actions(a=hx.a, cg=hx.cg, cr=hx.cr, g=hx.g, z=hx.z, l=hx.l)
 
         yield RecurrentState(
             a=hx.a,
