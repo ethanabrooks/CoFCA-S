@@ -221,8 +221,7 @@ class DebugBase(nn.Module):
     def parse_inputs(self, inputs):
         return Obs(*torch.split(inputs, self.obs_sections, dim=-1))
 
-    def forward(self, inputs, hx, masks, action=None):
-        inputs = inputs.unsqueeze(0)
+    def forward(self, inputs, rnn_hxs):
         T, N, D = inputs.shape
 
         # {{{
@@ -244,7 +243,7 @@ class DebugBase(nn.Module):
         task_columns = torch.split(task, 1, dim=-1)
         g_discrete = [x.squeeze(2) for x in task_columns]
         M = g_discrete_to_binary(g_discrete, self.g_discrete_one_hots.children())
-        new_episode = torch.all(hx == 0, dim=-1)
+        new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
 
         # NOTE {
         debug_in = M[:, :, -self.subtask_nvec[-2:].sum() : -self.subtask_nvec[-1]]
@@ -258,9 +257,9 @@ class DebugBase(nn.Module):
         z = actions.z[0].long()  # use time-step 0; z fixed throughout episode
         self.sample_new(z, M_zeta_dist)
         # NOTE }
-        hx = self.parse_hidden(hx)
-        # for x in hx:
-        #     x.squeeze_(0)
+        hx = self.parse_hidden(rnn_hxs)
+        for x in hx:
+            x.squeeze_(0)
         hx.p[new_episode, 0] = 1.0  # initialize pointer to first subtask
         hx.r[new_episode] = M[new_episode, 0]  # initialize r to first subtask
         # initialize g to first subtask

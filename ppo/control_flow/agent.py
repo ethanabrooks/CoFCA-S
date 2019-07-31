@@ -7,14 +7,14 @@ from torch.nn import functional as F
 import ppo
 import ppo.control_flow.lower_level
 from gridworld_env.control_flow_gridworld import Obs
-from ppo.agent import AgentValues
+from ppo.agent import AgentValues, NNBase
 from ppo.control_flow.lower_level import g_discrete_to_binary
 from ppo.control_flow.recurrence import RecurrentState, DebugBase
 from ppo.control_flow.wrappers import Actions
 from ppo.distributions import FixedCategorical
 
 
-class DebugAgent(nn.Module):
+class DebugAgent(ppo.agent.Agent, NNBase):
     def __init__(
         self,
         obs_space,
@@ -143,8 +143,7 @@ class DebugAgent(nn.Module):
             y = F.pad(x, [0, sum(self.recurrent_module.size_actions)], "constant", -1)
         else:
             y = torch.cat([x, action], dim=-1)
-        return self.recurrent_module(inputs=y, hx=hxs, masks=masks, action=action)
-        # return super()._forward_gru(y, hxs, masks) TODO
+        return super()._forward_gru(y, hxs, masks)
 
     @property
     def recurrent_hidden_state_size(self):
