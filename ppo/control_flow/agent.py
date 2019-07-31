@@ -52,13 +52,22 @@ class DebugAgent(nn.Module):
             raise NotImplementedError
         self.continuous = isinstance(action_space, Box)
 
-    @property
-    def is_recurrent(self):
-        return False
+    def load_agent(self, agent_load_path, device, **agent_args):
+        agent = ppo.control_flow.LowerLevel(**agent_args)
 
-    @property
-    def recurrent_hidden_state_size(self):
-        return sum(self.recurrent_module.state_sizes)
+        state_dict = torch.load(agent_load_path, map_location=device)
+        assert "vec_normalize" not in state_dict, "oy"
+        # state_dict["agent"].update(
+        #     part0_one_hot=agent.part0_one_hot,
+        #     part1_one_hot=agent.part1_one_hot,
+        #     part2_one_hot=agent.part2_one_hot,
+        # )
+        agent.load_state_dict(state_dict["agent"])
+        print(f"Loaded teacher parameters from {agent_load_path}.")
+        return agent
+
+    def build_recurrent_module(self, **kwargs):
+        return Recurrence(**kwargs)
 
     def forward(self, inputs, rnn_hxs, masks, deterministic=False, action=None):
         N = inputs.size(0)
@@ -89,6 +98,21 @@ class DebugAgent(nn.Module):
     def get_value(self, inputs, rnn_hxs, masks):
         value, _, _ = self.recurrent_module(inputs, rnn_hxs, masks)
         return value
+
+    def _forward_gru(self, x, hxs, masks, actions=None):
+        if actions is None:
+            y = F.pad(x, [0, sum(self.recurrent_module.size_actions)], "constant", -1)
+        else:
+            y = torch.cat([x] + list(actions), dim=-1)
+        return super()._forward_gru(y, hxs, masks)
+
+    @property
+    def recurrent_hidden_state_size(self):
+        return sum(self.recurrent_module.state_sizes)
+
+    @property
+    def is_recurrent(self):
+        return False
 
 
 # noinspection PyMissingConstructor
