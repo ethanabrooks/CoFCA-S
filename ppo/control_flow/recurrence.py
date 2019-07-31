@@ -333,10 +333,7 @@ class DebugBase(nn.Module):
                 safediv(e[T.EndWhile], e[[T.If, T.While, T.EndWhile]].sum(0)),
             )
 
-            # main_in = inputs.base.gather(1, condition_idxs.expand(N, 1, h, w).long())
-            if_conditions = M[:, 0]
-            t = 0
-            x = self.xi((inputs.base[t], if_conditions))
+            x = self.xi((inputs.base[t], hx.r))
             l = self.dist(x)
             # self.sample_new(L[t], l_dist)
             # l = L[t, :1].float()
