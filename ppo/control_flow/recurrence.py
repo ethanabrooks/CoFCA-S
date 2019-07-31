@@ -369,11 +369,11 @@ class DebugBase(nn.Module):
             last_condition = interp(hx.last_condition, hx.r, e[T.While])
 
             # l'
-            # l = interp(
-            #     l,
-            #     1 - hx.last_eval,
-            #     safediv(e[T.Else], e[[T.If, T.Else, T.While, T.EndWhile]].sum(0)),
-            # )
+            l = interp(
+                l,
+                1 - hx.last_eval,
+                safediv(e[T.Else], e[[T.If, T.Else, T.While, T.EndWhile]].sum(0)),
+            )
             # self.print("l2", l)
             l_probs = torch.cat([1 - l, l], dim=1)
             if self.hard_update:
