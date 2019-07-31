@@ -377,8 +377,8 @@ class DebugBase(nn.Module):
             )
             # self.print("l2", l)
             l_probs = torch.cat([1 - l, l], dim=1)
+            l_dist = FixedCategorical(probs=l_probs)
             if self.hard_update:
-                l_dist = FixedCategorical(probs=l_probs)
                 self.print("l2", l_dist.probs)
                 self.sample_new(L[t], l_dist)
             else:
