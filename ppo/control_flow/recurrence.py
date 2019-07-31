@@ -1001,12 +1001,12 @@ class DebugBase(nn.Module):
             cg, cg_probs = gating_function(subtask_param=g)
 
             yield RecurrentState(
-                a=hx.a,
+                a=A[t],
                 g=hx.g,
                 cr=hx.cr,
                 cg=hx.cg,
                 z=hx.z,
-                a_probs=hx.a_probs,
+                a_probs=a_dist.probs,
                 g_probs=hx.g_probs,
                 cr_probs=hx.cr_probs,
                 cg_probs=hx.cg_probs,
