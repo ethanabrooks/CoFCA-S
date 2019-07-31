@@ -12,7 +12,6 @@ from torch.nn import functional as F
 import ppo
 from gridworld_env.control_flow_gridworld import LineTypes
 from gridworld_env.control_flow_gridworld import Obs
-from ppo.agent import NNBase
 from ppo.control_flow.lower_level import (
     LowerLevel,
     g_binary_to_discrete,
@@ -716,12 +715,41 @@ class DebugBase(nn.Module):
         task_columns = torch.split(task, 1, dim=-1)
         g_discrete = [x.squeeze(2) for x in task_columns]
         M = g_discrete_to_binary(g_discrete, self.g_discrete_one_hots.children())
-        # subtask_idxs = (
-        # inputs.subtask.expand(N, self.subtask_nvec.size).unsqueeze(1).long()
-        # )
-        if_conditions = M[:, 0]
+        new_episode = torch.all(hx.squeeze(0) == 0, dim=-1)
+
+        # NOTE {
+        debug_in = M[:, :, -self.subtask_nvec[-2:].sum() : -self.subtask_nvec[-1]]
+        # M_zeta = self.zeta_debug(debug_in)
+        truth = FixedCategorical(probs=debug_in)
+        # M_zeta_dist = self.zeta_debug(debug_in)
+        # M_zeta_dist = self.zeta(M)
+        # self.print("M_zeta_dist.probs")
+        # self.print(round(M_zeta_dist.probs, 2))
+        M_zeta_dist = truth
+        z = actions.z.long()  # use time-step 0; z fixed throughout episode
+        # z = actions.z[0].long()  # use time-step 0; z fixed throughout episode
+        self.sample_new(z, M_zeta_dist)
+        # NOTE }
+
+        hx = self.parse_hidden(hx)
+        for x in hx:
+            x.squeeze_(0)
+        hx.p[new_episode, 0] = 1.0  # initialize pointer to first subtask
+        hx.r[new_episode] = M[new_episode, 0]  # initialize r to first subtask
+        # initialize g to first subtask
+        hx.g[new_episode] = 0.0
+        hx.z[new_episode] = z[new_episode].float()
+        hx.z_probs[new_episode] = M_zeta_dist.probs.view(
+            -1, self.n_subtasks * len(LineTypes._fields)
+        )[new_episode]
+        # }}}
+
         # main_in = inputs.base.gather(1, condition_idxs.expand(N, 1, h, w).long())
+        if_conditions = M[:, 0]
         x = self.main((inputs.base, if_conditions))
+
+        if self.is_recurrent:
+            x, hx = self._forward_gru(x, hx, masks)
 
         dist = self.dist(x)
         if action is None:
