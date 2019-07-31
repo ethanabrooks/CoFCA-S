@@ -100,16 +100,14 @@ class DebugAgent(nn.Module):
         return Recurrence(**kwargs)
 
     def forward(self, inputs, rnn_hxs, masks, deterministic=False, action=None):
-        N = inputs.size(0)
-        value, actions, probs, rnn_hxs = self.recurrent_module(
-            inputs, rnn_hxs, masks, action=action
-        )
-        dist = FixedCategorical(probs=probs)
+        hx = self.recurrent_module(inputs, rnn_hxs, masks, action=action)
+        actions = Actions(a=hx.a, cg=hx.cg, cr=hx.cr, g=hx.g, z=hx.z, l=hx.l)
+        dist = FixedCategorical(probs=hx.l_probs)
 
-        action_log_probs = dist.log_probs(actions.l)
+        action_log_probs = dist.log_probs(hx.l)
         entropy = dist.entropy().mean()
         return AgentValues(
-            value=value,
+            value=hx.v,
             action=torch.cat(actions, dim=-1),
             action_log_probs=action_log_probs,
             aux_loss=-self.entropy_coef * entropy,
@@ -119,8 +117,7 @@ class DebugAgent(nn.Module):
         )
 
     def get_value(self, inputs, rnn_hxs, masks):
-        value, _, _, _ = self.recurrent_module(inputs, rnn_hxs, masks)
-        return value
+        return self.recurrent_module(inputs, rnn_hxs, masks).v
 
     def _forward_gru(self, x, hxs, masks, actions=None):
         if actions is None:

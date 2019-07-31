@@ -693,8 +693,27 @@ class DebugBase(nn.Module):
             )
         else:
             actions = Actions(*torch.split(action, self.size_actions, dim=-1))
+            # actions = Actions(a=hx.a, cg=hx.cg, cr=hx.cr, g=hx.g, z=hx.z, l=hx.l)
 
-        return self.critic_linear(x), actions, dist.probs, rnn_hxs
+        return RecurrentState(
+            a=actions.a,
+            g=actions.g,
+            cr=actions.cr,
+            cg=actions.cg,
+            z=actions.z,
+            a_probs=None,
+            g_probs=None,
+            cr_probs=None,
+            cg_probs=None,
+            z_probs=None,
+            p=None,
+            r=None,
+            last_condition=None,
+            last_eval=None,
+            v=self.critic_linear(x),
+            l=actions.l,
+            l_probs=dist.probs,
+        )
 
     @property
     def is_recurrent(self):
