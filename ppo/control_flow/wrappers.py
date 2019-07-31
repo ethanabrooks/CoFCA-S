@@ -20,23 +20,6 @@ class DebugWrapper(gym.Wrapper):
         sections = [s for s, in space_shape(self.action_space).values()]
         self.action_sections = np.cumsum(sections)[:-1]
         self.dummy_action = Actions(*[np.zeros((s)) for s in sections])
-        h, w = env.unwrapped.desc.shape
-        self.observation_space = spaces.Box(low=0, high=1, shape=(1, h, w))
-
-    def get_observation(self):
-        env = self.env.unwrapped
-        h, w = env.desc.shape
-        return np.array(
-            [
-                [
-                    [
-                        (env.objects.get((i, j), None) == env.last_condition)
-                        for j in range(w)
-                    ]
-                    for i in range(h)
-                ]
-            ]
-        )
 
     def step(self, action: np.ndarray):
         actions = Actions(*np.split(action, self.action_sections))
@@ -51,11 +34,7 @@ class DebugWrapper(gym.Wrapper):
         # r = -0.1
         s, _, t, i = super().step(action)
         self.last_reward = r
-        return (self.get_observation()), r, True, i
-
-    def reset(self, **kwargs):
-        super().reset(**kwargs)
-        return self.get_observation()
+        return s, r, True, i
 
     def render(self, mode="human"):
         print("guess", self.guess)

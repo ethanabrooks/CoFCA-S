@@ -1,4 +1,5 @@
 from gym.spaces import MultiDiscrete, Discrete, Box
+import numpy as np
 import torch
 from torch import nn as nn
 import torch.jit
@@ -25,13 +26,12 @@ class DebugAgent(nn.Module):
         # super().__init__(
         #     obs_shape=obs_space.shape, action_space=action_space, **agent_args
         # )
-        obs_shape = obs_space.shape
         entropy_coef = agent_args["entropy_coef"]
         recurrent = agent_args["recurrent"]
         hidden_size = agent_args["hidden_size"]
         self.entropy_coef = entropy_coef
         self.base = DebugBase(
-            *obs_shape,
+            obs_spaces=Obs(**obs_space.spaces),
             recurrent=recurrent,
             hidden_size=hidden_size,
             num_layers=agent_args["num_layers"],
@@ -62,7 +62,7 @@ class DebugAgent(nn.Module):
         return self.base.recurrent_hidden_state_size
 
     def forward(self, inputs, rnn_hxs, masks, deterministic=False, action=None):
-        N = inputs.shape[0]
+        N = inputs.size(0)
         value, actor_features, rnn_hxs = self.base(inputs, rnn_hxs, masks)
         dist = self.dist(actor_features)
 
@@ -74,7 +74,6 @@ class DebugAgent(nn.Module):
             )._replace(l=l.float())
         else:
             actions = Actions(*torch.split(action, self.action_sections, dim=-1))
-        #     actions = Actions(*torch.split(action, self.action_sections, dim=-1))
 
         action_log_probs = dist.log_probs(actions.l)
         entropy = dist.entropy().mean()
@@ -94,8 +93,11 @@ class DebugAgent(nn.Module):
 
 
 class DebugBase(NNBase):
-    def __init__(self, d, h, w, hidden_size, num_layers, recurrent, activation):
+    def __init__(self, obs_spaces, hidden_size, num_layers, recurrent, activation):
         super().__init__(recurrent, hidden_size, hidden_size)
+
+        self.n_subtasks = obs_spaces.subtasks.nvec.shape[0]
+        self.subtask_nvec = obs_spaces.subtasks.nvec[0]
 
         init_ = lambda m: init(
             m,
@@ -104,8 +106,9 @@ class DebugBase(NNBase):
             nn.init.calculate_gain("relu"),
         )
 
+        self.obs_shape = d, h, w = obs_spaces.base.shape
         self.main = nn.Sequential(
-            nn.Sequential(nn.Conv2d(d, hidden_size, kernel_size=1), activation),
+            nn.Sequential(nn.Conv2d(1, hidden_size, kernel_size=1), activation),
             *[
                 nn.Sequential(
                     nn.Conv2d(hidden_size, hidden_size, kernel_size=1), activation
@@ -130,9 +133,22 @@ class DebugBase(NNBase):
         self.critic_linear = init_(nn.Linear(hidden_size, 1))
 
         self.train()
+        self.obs_sections = [int(np.prod(s.shape)) for s in obs_spaces]
 
     def forward(self, inputs, rnn_hxs, masks):
-        x = self.main(inputs)
+        N = inputs.shape[0]
+        inputs = Obs(*torch.split(inputs, self.obs_sections, dim=-1))
+        d, h, w = self.obs_shape
+        inputs = inputs._replace(base=inputs.base.view(N, d, h, w))
+        task = inputs.subtasks.view(N, self.n_subtasks, self.subtask_nvec.size)
+        # subtask_idxs = (
+        # inputs.subtask.expand(N, self.subtask_nvec.size).unsqueeze(1).long()
+        # )
+        if_conditions = task[:, 0]
+        condition_idxs = if_conditions[:, -1].view(N, 1, 1, 1)
+        main_in = inputs.base.gather(1, condition_idxs.expand(N, 1, h, w).long())
+        print(main_in)
+        x = self.main(main_in)
 
         if self.is_recurrent:
             x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)
