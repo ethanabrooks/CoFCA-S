@@ -136,6 +136,7 @@ def metacontroller_cli():
     subtasks_parser.add_argument("--z-entropy-coef", type=float, required=True)
     subtasks_parser.add_argument("--l-entropy-coef", type=float, required=True)
     subtasks_parser.add_argument("--metacontroller-recurrent", action="store_true")
+    subtasks_parser.add_argument("--metacontroller-num-layers", type=int, required=True)
     subtasks_parser.add_argument("--hard-update", action="store_true")
     subtasks_parser.add_argument("--debug", action="store_true")
 
@@ -151,7 +152,7 @@ def metacontroller_cli():
                 )
 
             # noinspection PyMethodOverriding
-            def build_agent(self, envs, device, **agent_args):
+            def build_agent(self, envs, **agent_args):
                 metacontroller_kwargs = dict(
                     obs_space=envs.observation_space,
                     action_space=envs.action_space,
@@ -161,9 +162,7 @@ def metacontroller_cli():
                         for k, v in subtasks_args.items()
                     },
                 )
-                return ppo.control_flow.agent.DebugAgent(
-                    device, **metacontroller_kwargs
-                )
+                return ppo.control_flow.agent.DebugAgent(**metacontroller_kwargs)
                 # return ppo.control_flow.Agent(device, **metacontroller_kwargs)
 
         # ppo_args.update(aux_loss_only=True)

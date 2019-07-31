@@ -18,68 +18,54 @@ from ppo.storage import buffer_shape
 
 class DebugAgent(nn.Module):
     def __init__(
-        self, device, agent_args, obs_space, action_space, l_entropy_coef, **kwargs
+        self,
+        obs_space,
+        action_space,
+        hidden_size,
+        g_entropy_coef,
+        z_entropy_coef,
+        l_entropy_coef,
+        hard_update,
+        agent_load_path,
+        agent_args,
+        **kwargs,
     ):
-        super().__init__()
-        # super().__init__(
-        #     obs_shape=obs_space.shape, action_space=action_space, **agent_args
-        # )
-
-        entropy_coef = agent_args["entropy_coef"]
-        recurrent = agent_args["recurrent"]
-        hidden_size = agent_args["hidden_size"]
-        self.entropy_coef = entropy_coef
-        self.action_spaces = Actions(**action_space.spaces)
-        self.recurrent_module = DebugBase(
-            obs_spaces=Obs(**obs_space.spaces),
-            action_spaces=self.action_spaces,
-            recurrent=recurrent,
-            hidden_size=hidden_size,
-            num_layers=agent_args["num_layers"],
-            activation=agent_args["activation"],
-        )
-        self.action_sections = [s for s, in space_shape(action_space).values()]
-
-        action_space = self.action_spaces.l
-        if isinstance(action_space, Discrete):
-            num_outputs = action_space.n
-            self.dist = Categorical(self.recurrent_module.output_size, num_outputs)
-        elif isinstance(action_space, Box):
-            num_outputs = action_space.shape[0]
-            self.dist = DiagGaussian(self.recurrent_module.output_size, num_outputs)
-        else:
-            raise NotImplementedError
-        self.continuous = isinstance(action_space, Box)
-
-        # self.hard_update = hard_update
+        nn.Module.__init__(self)
+        self.hard_update = hard_update
         self.entropy_coefs = Actions(
-            a=None, cg=None, cr=None, g=None, z=None, l=entropy_coef
+            a=None,
+            cg=None,
+            cr=None,
+            g=g_entropy_coef,
+            z=z_entropy_coef,
+            l=l_entropy_coef,
         )
+        self.action_spaces = Actions(**action_space.spaces)
         self.obs_space = obs_space
         obs_spaces = Obs(**self.obs_space.spaces)
         self.n_subtasks = len(obs_spaces.subtasks.nvec)
         agent = None
-        # if agent_load_path is not None:
-        #     agent = self.load_agent(
-        #         agent_load_path=agent_load_path,
-        #         action_spaces=self.action_spaces,
-        #         obs_spaces=(
-        #             ppo.control_flow.lower_level.Obs(
-        #                 base=obs_spaces.base,
-        #                 subtask=MultiDiscrete(obs_spaces.subtasks.nvec[0, :3]),
-        #             )
-        #         ),
-        #         **agent_args,
-        #     )
-        # self.recurrent_module = self.build_recurrent_module(
-        #     agent=agent,
-        #     hard_update=hard_update,
-        #     hidden_size=hidden_size,
-        #     obs_spaces=obs_spaces,
-        #     action_spaces=self.action_spaces,
-        #     activation=agent_args["activation"],
-        #     **kwargs,
-        # )
+        if agent_load_path is not None:
+            agent = self.load_agent(
+                agent_load_path=agent_load_path,
+                action_spaces=self.action_spaces,
+                obs_spaces=(
+                    ppo.control_flow.lower_level.Obs(
+                        base=obs_spaces.base,
+                        subtask=MultiDiscrete(obs_spaces.subtasks.nvec[0, :3]),
+                    )
+                ),
+                **agent_args,
+            )
+        self.recurrent_module = self.build_recurrent_module(
+            agent=agent,
+            hard_update=hard_update,
+            hidden_size=hidden_size,
+            obs_spaces=obs_spaces,
+            action_spaces=self.action_spaces,
+            activation=agent_args["activation"],
+            **kwargs,
+        )
 
     def load_agent(self, agent_load_path, device, **agent_args):
         agent = ppo.control_flow.LowerLevel(**agent_args)
@@ -96,7 +82,8 @@ class DebugAgent(nn.Module):
         return agent
 
     def build_recurrent_module(self, **kwargs):
-        return Recurrence(**kwargs)
+        return DebugBase(**kwargs)
+        # return Recurrence(**kwargs)
 
     def forward(self, inputs, rnn_hxs, masks, deterministic=False, action=None):
         N = inputs.size(0)

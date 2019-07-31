@@ -560,10 +560,31 @@ class Recurrence(torch.jit.ScriptModule):
 
 class DebugBase(nn.Module):
     def __init__(
-        self, obs_spaces, action_spaces, hidden_size, num_layers, recurrent, activation
+        self,
+        obs_spaces,
+        action_spaces,
+        hidden_size,
+        num_layers,
+        recurrent,
+        hard_update,
+        agent,
+        debug,
+        activation,
     ):
-        # super().__init__(recurrent, hidden_size, hidden_size)
         super().__init__()
+        self.debug = debug
+        self.hard_update = hard_update
+        if agent:
+            assert isinstance(agent, LowerLevel)
+        self.agent = agent
+        self.recurrent = recurrent
+        self.obs_spaces = obs_spaces
+        self.n_subtasks = self.obs_spaces.subtasks.nvec.shape[0]
+        self.subtask_nvec = self.obs_spaces.subtasks.nvec[0]
+        d, h, w = self.obs_shape = obs_spaces.base.shape
+        self.obs_sections = [int(np.prod(s.shape)) for s in self.obs_spaces]
+        self.line_size = int(self.subtask_nvec.sum())
+        self.agent_subtask_size = int(self.subtask_nvec[:-2].sum())
         self._hidden_size = hidden_size
         self._recurrent = recurrent
 
