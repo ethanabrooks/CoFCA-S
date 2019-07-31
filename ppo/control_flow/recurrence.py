@@ -687,13 +687,34 @@ class DebugBase(nn.Module):
         self.state_sizes = RecurrentState(*map(int, state_sizes))
         self.register_buffer("dummy_action", torch.zeros(1, sum(self.size_actions)))
 
-    def forward(self, inputs, rnn_hxs, masks, action=None):
-        N = inputs.shape[0]
-        inputs = Obs(*torch.split(inputs, self.obs_sections, dim=-1))
-        d, h, w = self.obs_shape
-        inputs = inputs._replace(base=inputs.base.view(N, d, h, w))
-        task = inputs.subtasks.view(N, self.n_subtasks, self.subtask_nvec.size)
-        g_discrete = torch.split(task, 1, dim=-1)
+    def parse_hidden(self, hx):
+        return RecurrentState(*torch.split(hx, self.state_sizes, dim=-1))
+
+    def parse_inputs(self, inputs):
+        return Obs(*torch.split(inputs, self.obs_sections, dim=-1))
+
+    def forward(self, inputs, hx, masks, action=None):
+        N, D = inputs.shape
+
+        # {{{
+        # detach actions
+        # noinspection PyProtectedMember
+        inputs, *actions = torch.split(
+            inputs.detach(), [D - sum(self.size_actions)] + self.size_actions, dim=-1
+        )
+        actions = Actions(*actions)
+
+        # parse non-action inputs
+        inputs = self.parse_inputs(inputs)
+        inputs = inputs._replace(base=inputs.base.view(N, *self.obs_shape))
+
+        # build memory
+        task = inputs.subtasks.view(
+            *inputs.subtasks.shape[:1], self.n_subtasks, self.subtask_nvec.size  # TODO
+        )
+        # *inputs.subtasks.shape[:2], self.n_subtasks, self.subtask_nvec.size
+        task_columns = torch.split(task, 1, dim=-1)
+        g_discrete = [x.squeeze(2) for x in task_columns]
         M = g_discrete_to_binary(g_discrete, self.g_discrete_one_hots.children())
         # subtask_idxs = (
         # inputs.subtask.expand(N, self.subtask_nvec.size).unsqueeze(1).long()
@@ -701,9 +722,6 @@ class DebugBase(nn.Module):
         if_conditions = M[:, 0]
         # main_in = inputs.base.gather(1, condition_idxs.expand(N, 1, h, w).long())
         x = self.main((inputs.base, if_conditions))
-
-        if self.is_recurrent:
-            x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)
 
         dist = self.dist(x)
         if action is None:

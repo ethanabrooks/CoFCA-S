@@ -87,7 +87,9 @@ class DebugAgent(nn.Module):
 
     def forward(self, inputs, rnn_hxs, masks, deterministic=False, action=None):
         N = inputs.size(0)
-        hx = self.recurrent_module(inputs, rnn_hxs, masks, action=action)
+        # rm = self.recurrent_module
+        hx = self._forward_gru(inputs.view(N, -1), rnn_hxs, masks, action=action)
+        # hx = RecurrentState(*rm.parse_hidden(all_hxs))
         actions = Actions(a=hx.a, cg=hx.cg, cr=hx.cr, g=hx.g, z=hx.z, l=hx.l)
         dists = Actions(
             a=None,
@@ -132,14 +134,18 @@ class DebugAgent(nn.Module):
         )
 
     def get_value(self, inputs, rnn_hxs, masks):
-        return self.recurrent_module(inputs, rnn_hxs, masks).v
+        n = inputs.size(0)
+        hx = self._forward_gru(inputs.view(n, -1), rnn_hxs, masks)
+        return hx.v
+        # return self.recurrent_module.parse_hidden(all_hxs).v
 
-    def _forward_gru(self, x, hxs, masks, actions=None):
-        if actions is None:
+    def _forward_gru(self, x, hxs, masks, action=None):
+        if action is None:
             y = F.pad(x, [0, sum(self.recurrent_module.size_actions)], "constant", -1)
         else:
-            y = torch.cat([x] + list(actions), dim=-1)
-        return super()._forward_gru(y, hxs, masks)
+            y = torch.cat([x, action], dim=-1)
+        return self.recurrent_module(inputs=y, hx=hxs, masks=masks, action=action)
+        # return super()._forward_gru(y, hxs, masks)
 
     @property
     def recurrent_hidden_state_size(self):
