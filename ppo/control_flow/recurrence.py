@@ -778,44 +778,78 @@ class DebugBase(nn.Module):
         hx.z_probs[new_episode] = M_zeta_dist.probs.view(
             -1, self.n_subtasks * len(LineTypes._fields)
         )[new_episode]
-        # }}}
 
+        return self.pack(
+            self.inner_loop(
+                inputs=inputs,
+                hx=hx,
+                M=M,
+                M_discrete=task,
+                subtask=inputs.subtask,
+                actions=actions,
+            )
+        )
+
+    def pack(self, outputs):
+        zipped = list(zip(*outputs))
+        # for name, x in zip(RecurrentState._fields, zipped):
+        #     if not x:
+        #         print(name)
+
+        stacked = [torch.stack(x) for x in zipped]
+        preprocessed = [x.view(*x.shape[:2], -1) for x in stacked]
+
+        # for name, x, size in zip(
+        #     RecurrentState._fields, preprocessed, self.state_sizes
+        # ):
+        #     if x.size(2) != size:
+        #         print(name, x, size)
+        #     if x.dtype != torch.float32:
+        #         print(name)
+
+        hx = torch.cat(preprocessed, dim=-1)
+        return hx, hx[-1]
+
+    def inner_loop(
+        self, hx: RecurrentState, actions: Actions, inputs: Obs, M, M_discrete, subtask
+    ):
+        t = 0  # TODO
         # main_in = inputs.base.gather(1, condition_idxs.expand(N, 1, h, w).long())
         if_conditions = M[:, 0]
         t = 0
         x = self.xi((inputs.base[t], if_conditions))
-
-        if self.is_recurrent:
-            x, hx = self._forward_gru(x, hx, masks)
+        L = torch.cat([actions.l, hx.l.unsqueeze(0)], dim=0).long()  # .squeeze(2)
 
         dist = self.dist(x)
-        if action is None:
-            l = dist.sample()
-            action = self.dummy_action.expand(N, -1)
-            actions = Actions(*torch.split(action, self.size_actions, dim=-1))._replace(
-                l=l.float()
-            )
-        else:
-            actions = Actions(*torch.split(action, self.size_actions, dim=-1))
-            # actions = Actions(a=hx.a, cg=hx.cg, cr=hx.cr, g=hx.g, z=hx.z, l=hx.l)
+        self.sample_new(L[t], dist)
+        #
+        # if action is None:
+        #     l = dist.sample()
+        #     action = self.dummy_action.expand(N, -1)
+        #     actions = Actions(*torch.split(action, self.size_actions, dim=-1))._replace(
+        #         l=l.float()
+        #     )
+        # else:
+        #     actions = Actions(*torch.split(action, self.size_actions, dim=-1))
+        #     # actions = Actions(a=hx.a, cg=hx.cg, cr=hx.cr, g=hx.g, z=hx.z, l=hx.l)
 
-        return RecurrentState(
-            a=actions.a,
-            g=actions.g,
-            cr=actions.cr,
-            cg=actions.cg,
-            z=actions.z,
-            a_probs=None,
-            g_probs=None,
-            cr_probs=None,
-            cg_probs=None,
-            z_probs=None,
-            p=None,
-            r=None,
-            last_condition=None,
-            last_eval=None,
+        yield RecurrentState(
+            a=hx.a,
+            g=hx.g,
+            cr=hx.cr,
+            cg=hx.cg,
+            z=hx.z,
+            a_probs=hx.a_probs,
+            g_probs=hx.g_probs,
+            cr_probs=hx.cr_probs,
+            cg_probs=hx.cg_probs,
+            z_probs=hx.z_probs,
+            p=hx.p,
+            r=hx.r,
+            last_condition=hx.last_condition,
+            last_eval=hx.last_eval,
             v=self.critic_linear(x),
-            l=actions.l,
+            l=L[t].float(),
             l_probs=dist.probs,
         )
 

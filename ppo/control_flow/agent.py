@@ -88,7 +88,10 @@ class DebugAgent(nn.Module):
     def forward(self, inputs, rnn_hxs, masks, deterministic=False, action=None):
         N = inputs.size(0)
         rm = self.recurrent_module
-        hx = self._forward_gru(inputs.view(N, -1), rnn_hxs, masks, action=action)
+        all_hxs, last_hx = self._forward_gru(
+            inputs.view(N, -1), rnn_hxs, masks, action=action
+        )
+        hx = RecurrentState(*rm.parse_hidden(last_hx))
         # hx = RecurrentState(*rm.parse_hidden(all_hxs))
         actions = Actions(a=hx.a, cg=hx.cg, cr=hx.cr, g=hx.g, z=hx.z, l=hx.l)
         dists = Actions(
@@ -134,9 +137,8 @@ class DebugAgent(nn.Module):
 
     def get_value(self, inputs, rnn_hxs, masks):
         n = inputs.size(0)
-        hx = self._forward_gru(inputs.view(n, -1), rnn_hxs, masks)
-        return hx.v
-        # return self.recurrent_module.parse_hidden(all_hxs).v
+        all_hxs, last_hx = self._forward_gru(inputs.view(n, -1), rnn_hxs, masks)
+        return self.recurrent_module.parse_hidden(last_hx).v
 
     def _forward_gru(self, x, hxs, masks, action=None):
         if action is None:
