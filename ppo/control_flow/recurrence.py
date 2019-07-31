@@ -642,6 +642,8 @@ class DebugBase(nn.Module):
             [nn.Embedding.from_pretrained(torch.eye(int(n))) for n in self.subtask_nvec]
         )
 
+        self.dist = Categorical(hidden_size, 2)
+
         state_sizes = RecurrentState(
             a=1,
             g=1,
@@ -662,8 +664,9 @@ class DebugBase(nn.Module):
             last_eval=1,
         )
         self.state_sizes = RecurrentState(*map(int, state_sizes))
+        self.register_buffer("dummy_action", torch.zeros(1, sum(self.size_actions)))
 
-    def forward(self, inputs, rnn_hxs, masks):
+    def forward(self, inputs, rnn_hxs, masks, action=None):
         N = inputs.shape[0]
         inputs = Obs(*torch.split(inputs, self.obs_sections, dim=-1))
         d, h, w = self.obs_shape

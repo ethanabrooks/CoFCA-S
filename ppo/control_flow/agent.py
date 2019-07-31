@@ -52,6 +52,36 @@ class DebugAgent(nn.Module):
             raise NotImplementedError
         self.continuous = isinstance(action_space, Box)
 
+        # self.hard_update = hard_update
+        self.entropy_coefs = Actions(
+            a=None, cg=None, cr=None, g=None, z=None, l=entropy_coef
+        )
+        self.obs_space = obs_space
+        obs_spaces = Obs(**self.obs_space.spaces)
+        self.n_subtasks = len(obs_spaces.subtasks.nvec)
+        agent = None
+        # if agent_load_path is not None:
+        #     agent = self.load_agent(
+        #         agent_load_path=agent_load_path,
+        #         action_spaces=self.action_spaces,
+        #         obs_spaces=(
+        #             ppo.control_flow.lower_level.Obs(
+        #                 base=obs_spaces.base,
+        #                 subtask=MultiDiscrete(obs_spaces.subtasks.nvec[0, :3]),
+        #             )
+        #         ),
+        #         **agent_args,
+        #     )
+        # self.recurrent_module = self.build_recurrent_module(
+        #     agent=agent,
+        #     hard_update=hard_update,
+        #     hidden_size=hidden_size,
+        #     obs_spaces=obs_spaces,
+        #     action_spaces=self.action_spaces,
+        #     activation=agent_args["activation"],
+        #     **kwargs,
+        # )
+
     def load_agent(self, agent_load_path, device, **agent_args):
         agent = ppo.control_flow.LowerLevel(**agent_args)
 
