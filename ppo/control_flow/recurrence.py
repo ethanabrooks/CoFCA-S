@@ -95,11 +95,35 @@ class Recurrence(torch.jit.ScriptModule):
                 nn.Sequential(Reshape(self.line_size, 1, 1, 1)),
             ),
             Product(),
-            Reshape(d * self.line_size, *self.obs_shape[-2:]),
-            init_(nn.Conv2d(self.line_size * d, 1, kernel_size=1), nn.Sigmoid()),
-            nn.LPPool2d(2, kernel_size=(h, w)),
-            nn.Sigmoid(),  # TODO: try on both sides of pool
-            Reshape(1),
+            Reshape(self.line_size * d, h, w),
+            nn.Sequential(
+                init_(
+                    nn.Conv2d(self.line_size * d, hidden_size, kernel_size=1),
+                    activation,
+                ),
+                activation,
+            ),
+            *[
+                nn.Sequential(
+                    init_(
+                        nn.Conv2d(hidden_size, hidden_size, kernel_size=1), activation
+                    ),
+                    activation,
+                )
+                for _ in range(num_layers - 1)
+            ],
+            # init_(nn.Conv2d(d, 32, 8, stride=4)), nn.ReLU(),
+            # init_(nn.Conv2d(32, 64, kernel_size=4, stride=2)), nn.ReLU(),
+            # init_(nn.Conv2d(32, 64, kernel_size=4, stride=2)), nn.ReLU(),
+            # init_(nn.Conv2d(64, 32, kernel_size=3, stride=1)),
+            Flatten(),
+            # init_(nn.Linear(32 * 7 * 7, hidden_size)), nn.ReLU())
+            init_(nn.Linear(hidden_size * h * w, hidden_size), nn.ReLU()),
+            nn.ReLU(),
+        )
+
+        self.dist = nn.Sequential(
+            init_(nn.Linear(hidden_size, 1), nn.Sigmoid()), nn.Sigmoid()
         )
 
         self.phi = trace(
@@ -301,8 +325,14 @@ class Recurrence(torch.jit.ScriptModule):
                 safediv(e[T.EndWhile], e[[T.If, T.While, T.EndWhile]].sum(0)),
             )
 
+            x = self.xi((inputs.base[t], hx.r))
+            l = self.dist(x)
+            # self.sample_new(L[t], l_dist)
+            # l = L[t, :1].float()
+
             # l
-            l = self.xi((inputs.base[t], condition))
+            # xi_in = self.xi_debug((inputs.base[t], condition)).detach()
+            # self.print("l", round(l, 4))
             # NOTE {
             # c = torch.split(condition, list(self.subtask_nvec), dim=-1)[-1][:, 1:]
             # last_condition = torch.split(
@@ -332,6 +362,12 @@ class Recurrence(torch.jit.ScriptModule):
                 1 - hx.last_eval,
                 safediv(e[T.Else], e[[T.If, T.Else, T.While, T.EndWhile]].sum(0)),
             )
+            # self.print("l2", l)
+            l_probs = torch.cat([1 - l, l], dim=1)
+            l_dist = FixedCategorical(probs=l_probs)
+            self.print("l2", l_dist.probs)
+            self.sample_new(L[t], l_dist)
+            l = L[t].unsqueeze(-1).float()
 
             def roll(x):
                 return F.pad(x, [1, 0])[:, :-1]
@@ -474,6 +510,7 @@ class Recurrence(torch.jit.ScriptModule):
                 cr=cr,
                 cg_probs=cg_probs,
                 cr_probs=cr_probs,
+                l=L[t],
                 p=p,
                 r=r,
                 g=G[t],
@@ -485,8 +522,7 @@ class Recurrence(torch.jit.ScriptModule):
                 last_eval=last_eval,
                 z=hx.z,
                 z_probs=hx.z_probs,
-                l=l,
-                l_probs=hx.cr_probs,  # dummy value
+                l_probs=l_dist.probs,
             )
 
     @property
