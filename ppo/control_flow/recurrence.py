@@ -310,8 +310,6 @@ class Recurrence(torch.jit.ScriptModule):
         truth = FixedCategorical(probs=debug_in)
         # M_zeta_dist = self.zeta_debug(debug_in)
         M_zeta_dist = self.zeta(M)
-        self.print("M_zeta_dist.probs")
-        self.print(round(M_zeta_dist.probs, 2))
         # M_zeta_dist = truth
         z = actions.z[0].long()  # use time-step 0; z fixed throughout episode
         self.sample_new(z, M_zeta_dist)
@@ -381,19 +379,21 @@ class Recurrence(torch.jit.ScriptModule):
             l = self.xi((inputs.base[t], condition))
             self.print("l", round(l, 4))
             # NOTE {
-            c = torch.split(condition, list(self.subtask_nvec), dim=-1)[-1][:, 1:]
-            last_condition = torch.split(
-                hx.last_condition, list(self.subtask_nvec), dim=-1
-            )[-1][:, 1:]
-            hx_r = torch.split(hx.r, list(self.subtask_nvec), dim=-1)[-1][:, 1:]
-            self.print("last_condition", last_condition)
-            self.print("r", hx_r)
-            self.print("l condition", c)
-            phi_in = inputs.base[t, :, 1:-2] * c.view(N, -1, 1, 1)
-            truth = torch.max(phi_in.view(N, -1), dim=-1).values.float().view(N, 1)
-            l = self.xi_debug((inputs.base[t, :, 1:-2], c))
+            # c = torch.split(condition, list(self.subtask_nvec), dim=-1)[-1][:, 1:]
+            # last_condition = torch.split(
+            # hx.last_condition, list(self.subtask_nvec), dim=-1
+            # )[-1][:, 1:]
+            # hx_r = torch.split(hx.r, list(self.subtask_nvec), dim=-1)[-1][:, 1:]
+            # self.print("last_condition", last_condition)
+            # self.print("r", hx_r)
+            # self.print("l condition", c)
+            # phi_in = inputs.base[t, :, 1:-2] * c.view(N, -1, 1, 1)
+            # truth = torch.max(phi_in.view(N, -1), dim=-1).values.float().view(N, 1)
+            # l = self.xi_debug(truth)
 
             # self.print("l truth", round(truth, 4))
+            # self.print("l", round(l, 4))
+            # self.print("p before update", round(p, 2))
             # l = truth
             # NOTE }
 

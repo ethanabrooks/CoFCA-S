@@ -60,12 +60,14 @@ class Train:
         render_eval,
         load_path,
         success_reward,
-        target_success_rate,
+        target_success_rates,
         synchronous,
         batch_size,
         run_id,
         save_dir=None,
     ):
+        target_success_rates = iter(target_success_rates)
+        target_success_rate = next(target_success_rates, None)
         if render_eval and not render:
             eval_interval = 1
         if render:
@@ -204,6 +206,8 @@ class Train:
                 print("mean_success_rate", mean_success_rate)
                 print("target_success_rate", target_success_rate)
             if target_success_rate and mean_success_rate > target_success_rate:
+                target_success_rate = next(target_success_rates, None)
+                print("incrementing target_success_rate:", target_success_rate)
                 envs.increment_curriculum()
                 curriculum_idx += 1
 
