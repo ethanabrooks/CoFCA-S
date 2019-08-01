@@ -9,12 +9,12 @@ from ppo.layers import Flatten, Parallel, Product, Reshape, ShallowCopy, Sum
 from ppo.utils import init_
 
 
-class Agent(ppo.control_flow.DebugAgent):
+class Agent(ppo.control_flow.Agent):
     def build_recurrent_module(self, **kwargs):
         return Recurrence(**kwargs)
 
 
-class Recurrence(ppo.control_flow.recurrence.DebugBase):
+class Recurrence(ppo.control_flow.recurrence.Recurrence):
     def __init__(self, hidden_size, **kwargs):
         super().__init__(hidden_size=hidden_size, **kwargs)
         self.obs_sections = [int(np.prod(s.shape)) for s in self.obs_spaces]

@@ -133,9 +133,10 @@ def metacontroller_cli():
     subtasks_parser.add_argument("--g-entropy-coef", type=float, required=True)
     subtasks_parser.add_argument("--z-entropy-coef", type=float, required=True)
     subtasks_parser.add_argument("--l-entropy-coef", type=float, required=True)
+    subtasks_parser.add_argument("--cr-entropy-coef", type=float, required=True)
+    subtasks_parser.add_argument("--cg-entropy-coef", type=float, required=True)
     subtasks_parser.add_argument("--metacontroller-recurrent", action="store_true")
     subtasks_parser.add_argument("--metacontroller-num-layers", type=int, required=True)
-    subtasks_parser.add_argument("--hard-update", action="store_true")
     subtasks_parser.add_argument("--debug", action="store_true")
 
     def train(env_id, task_args, ppo_args, subtasks_args, env_args, **kwargs):
@@ -160,7 +161,7 @@ def metacontroller_cli():
                         for k, v in subtasks_args.items()
                     },
                 )
-                return ppo.control_flow.agent.DebugAgent(**metacontroller_kwargs)
+                return ppo.control_flow.agent.Agent(**metacontroller_kwargs)
                 # return ppo.control_flow.Agent(device, **metacontroller_kwargs)
 
         # ppo_args.update(aux_loss_only=True)

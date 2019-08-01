@@ -6,15 +6,15 @@ from torch.nn import functional as F
 
 import ppo
 import ppo.control_flow.lower_level
-from gridworld_env.control_flow_gridworld import Obs
+from gridworld_env.control_flow_gridworld import Obs, LineTypes
 from ppo.agent import AgentValues, NNBase
 from ppo.control_flow.lower_level import g_discrete_to_binary
-from ppo.control_flow.recurrence import RecurrentState, DebugBase
+from ppo.control_flow.recurrence import RecurrentState, Recurrence
 from ppo.control_flow.wrappers import Actions
 from ppo.distributions import FixedCategorical
 
 
-class DebugAgent(ppo.agent.Agent, NNBase):
+class Agent(ppo.agent.Agent, NNBase):
     def __init__(
         self,
         obs_space,
@@ -23,17 +23,17 @@ class DebugAgent(ppo.agent.Agent, NNBase):
         g_entropy_coef,
         z_entropy_coef,
         l_entropy_coef,
-        hard_update,
+        cr_entropy_coef,
+        cg_entropy_coef,
         agent_load_path,
         agent_args,
         **kwargs,
     ):
         nn.Module.__init__(self)
-        self.hard_update = hard_update
         self.entropy_coefs = Actions(
             a=None,
-            cg=None,
-            cr=None,
+            cg=cr_entropy_coef,
+            cr=cg_entropy_coef,
             g=g_entropy_coef,
             z=z_entropy_coef,
             l=l_entropy_coef,
@@ -57,7 +57,6 @@ class DebugAgent(ppo.agent.Agent, NNBase):
             )
         self.recurrent_module = self.build_recurrent_module(
             agent=agent,
-            hard_update=hard_update,
             hidden_size=hidden_size,
             obs_spaces=obs_spaces,
             action_spaces=self.action_spaces,
@@ -80,8 +79,7 @@ class DebugAgent(ppo.agent.Agent, NNBase):
         return agent
 
     def build_recurrent_module(self, **kwargs):
-        return DebugBase(**kwargs)
-        # return Recurrence(**kwargs) TODO
+        return Recurrence(**kwargs)
 
     def forward(self, inputs, rnn_hxs, masks, deterministic=False, action=None):
         N = inputs.size(0)
@@ -89,23 +87,20 @@ class DebugAgent(ppo.agent.Agent, NNBase):
         all_hxs, last_hx = self._forward_gru(
             inputs.view(N, -1), rnn_hxs, masks, action=action
         )
-        hx = RecurrentState(*rm.parse_hidden(last_hx))
-        # hx = RecurrentState(*rm.parse_hidden(all_hxs)) # TODO what's the deal here?
+        # hx = RecurrentState(*rm.parse_hidden(last_hx))
+        hx = RecurrentState(*rm.parse_hidden(all_hxs))  # TODO what's the deal here?
         actions = Actions(a=hx.a, cg=hx.cg, cr=hx.cr, g=hx.g, z=hx.z, l=hx.l)
         dists = Actions(
             a=None
             if rm.agent  # use pre-trained agent so don't train
             else FixedCategorical(hx.a_probs),
-            cg=None,
-            cr=None,
-            g=None,
-            # g=FixedCategorical(hx.g_probs), TODO
-            z=None,
-            # z=FixedCategorical(
-            #     hx.z_probs.view(N, self.n_subtasks, len(LineTypes._fields))
-            # ), TODO
+            cg=FixedCategorical(hx.cg_probs),
+            cr=FixedCategorical(hx.cr_probs),
+            g=FixedCategorical(hx.g_probs),
+            z=FixedCategorical(
+                hx.z_probs.view(N, self.n_subtasks, len(LineTypes._fields))
+            ),
             l=FixedCategorical(hx.l_probs),
-            # l=FixedCategorical(hx.l_probs) if self.hard_update else None, TODO
         )
 
         log_probs = sum(
@@ -121,7 +116,9 @@ class DebugAgent(ppo.agent.Agent, NNBase):
             for c, entropy in zip(self.entropy_coefs, entropies)
             if entropy is not None
         )
-        log = {k: v for k, v in entropies._asdict().items() if v is not None}
+        log = {
+            f"{k}_entropy": v for k, v in entropies._asdict().items() if v is not None
+        }
 
         return AgentValues(
             value=hx.v,
@@ -151,4 +148,4 @@ class DebugAgent(ppo.agent.Agent, NNBase):
 
     @property
     def is_recurrent(self):
-        return False  # TODO
+        return True

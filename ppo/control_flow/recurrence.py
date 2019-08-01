@@ -37,7 +37,7 @@ RecurrentState = namedtuple(
 )
 
 
-class DebugBase(nn.Module):
+class Recurrence(nn.Module):
     def __init__(
         self,
         obs_spaces,
@@ -45,14 +45,12 @@ class DebugBase(nn.Module):
         hidden_size,
         num_layers,
         recurrent,
-        hard_update,
         agent,
         debug,
         activation,
     ):
         super().__init__()
         self.debug = debug
-        self.hard_update = hard_update
         if agent:
             assert isinstance(agent, LowerLevel)
         self.agent = agent
@@ -127,10 +125,7 @@ class DebugBase(nn.Module):
         self.dist = nn.Sequential(
             init_(nn.Linear(hidden_size, 1), nn.Sigmoid()), nn.Sigmoid()
         )
-        self.phi = trace(
-            lambda in_size: init_(nn.Linear(in_size, 2), nn.Sigmoid()),
-            in_size=(d * action_spaces.a.n * int(self.subtask_nvec.prod())),
-        )
+        self.phi = Categorical(d * action_spaces.a.n * int(self.subtask_nvec.prod()), 2)
 
         self.zeta = Categorical(self.line_size, len(LineTypes._fields))
 
@@ -250,10 +245,10 @@ class DebugBase(nn.Module):
         # M_zeta = self.zeta_debug(debug_in)
         truth = FixedCategorical(probs=debug_in)
         # M_zeta_dist = self.zeta_debug(debug_in)
-        # M_zeta_dist = self.zeta(M)
+        M_zeta_dist = self.zeta(M)
         # self.print("M_zeta_dist.probs")
         # self.print(round(M_zeta_dist.probs, 2))
-        M_zeta_dist = truth
+        # M_zeta_dist = truth
         z = actions.z[0].long()  # use time-step 0; z fixed throughout episode
         self.sample_new(z, M_zeta_dist)
         # NOTE }
@@ -309,9 +304,15 @@ class DebugBase(nn.Module):
 
         # combine past and present actions (sampled values)
         obs = inputs.base
-        A = torch.cat([actions.a, hx.a.unsqueeze(0)], dim=0).long().squeeze(2)
-        G = torch.cat([actions.g, hx.g.unsqueeze(0)], dim=0).long().squeeze(2)
-        L = torch.cat([actions.l, hx.l.unsqueeze(0)], dim=0).long().squeeze(2)
+
+        def action_vector(current, previous):
+            return torch.cat([current, previous.unsqueeze(0)], dim=0).long().squeeze(2)
+
+        A = action_vector(actions.a, hx.a)
+        G = action_vector(actions.g, hx.g)
+        L = action_vector(actions.l, hx.l)
+        CR = action_vector(actions.cr, hx.cr)
+        CG = action_vector(actions.cg, hx.cg)
         M_zeta = self.z_one_hots(hx.z.long())
 
         for t in range(inputs.base.shape[0]):
@@ -373,11 +374,8 @@ class DebugBase(nn.Module):
             # self.print("l2", l)
             l_probs = torch.cat([1 - l, l], dim=1)
             l_dist = FixedCategorical(probs=l_probs)
-            if self.hard_update:
-                self.print("l2", l_dist.probs)
-                self.sample_new(L[t], l_dist)
-            else:
-                L[t] = l.squeeze(-1)
+            self.print("l2", l_dist.probs)
+            self.sample_new(L[t], l_dist)
             l = L[t].unsqueeze(-1).float()
 
             def roll(x):
@@ -470,7 +468,7 @@ class DebugBase(nn.Module):
             # a[:] = 'wsadeq'.index(input('act:'))
             self.print("p after update", round(p, 2))
 
-            def gating_function(subtask_param):
+            def gating_function(subtask_param, C):
                 task_sections = torch.split(
                     subtask_param, tuple(self.subtask_nvec), dim=-1
                 )
@@ -482,39 +480,38 @@ class DebugBase(nn.Module):
                             part.unsqueeze_(i2 + 1)
                     outer_product_obs = outer_product_obs * part
 
-                c_logits = self.phi(outer_product_obs.view(N, -1))
-                c = torch.sigmoid(c_logits[:, :1])
-                probs = torch.zeros_like(c_logits)  # dummy value
+                c_dist = self.phi(outer_product_obs.view(N, -1))
+                self.sample_new(C[t], c_dist)
 
                 # NOTE {
-                _task_sections = torch.split(
-                    subtask_param, tuple(self.subtask_nvec), dim=-1
-                )
-                interaction, count, obj, _, condition = _task_sections
-                agent_layer = obs[t, :, 6, :, :].long()
-                j, k, l = torch.split(agent_layer.nonzero(), 1, dim=-1)
-                debug_obs = obs[t, j, :, k, l].squeeze(1)
-                a_one_hot = self.a_one_hots(A[t])
-                correct_object = obj * debug_obs[:, 1 : 1 + self.subtask_nvec[2]]
-                column1 = interaction[:, :1]
-                column2 = interaction[:, 1:] * a_one_hot[:, 4:-1]
-                correct_action = torch.cat([column1, column2], dim=-1)
-                truth = (
-                    correct_action.sum(-1, keepdim=True)
-                    * correct_object.sum(-1, keepdim=True)
-                ).detach()  # * condition[:, :1] + (1 - condition[:, :1])
-                # c = self.phi_debug(truth)
-                c = truth
+                # _task_sections = torch.split(
+                #     subtask_param, tuple(self.subtask_nvec), dim=-1
+                # )
+                # interaction, count, obj, _, condition = _task_sections
+                # agent_layer = obs[t, :, 6, :, :].long()
+                # j, k, l = torch.split(agent_layer.nonzero(), 1, dim=-1)
+                # debug_obs = obs[t, j, :, k, l].squeeze(1)
+                # a_one_hot = self.a_one_hots(A[t])
+                # correct_object = obj * debug_obs[:, 1 : 1 + self.subtask_nvec[2]]
+                # column1 = interaction[:, :1]
+                # column2 = interaction[:, 1:] * a_one_hot[:, 4:-1]
+                # correct_action = torch.cat([column1, column2], dim=-1)
+                # truth = (
+                #     correct_action.sum(-1, keepdim=True)
+                #     * correct_object.sum(-1, keepdim=True)
+                # ).detach()  # * condition[:, :1] + (1 - condition[:, :1])
+                # # c = self.phi_debug(truth)
+                # c = truth
                 # self.print("c", round(c, 4))
                 # NOTE }
-                return c, probs
+                return C[t], c_dist.probs
 
             # cr
-            cr, cr_probs = gating_function(subtask_param=r)
+            cr, cr_probs = gating_function(subtask_param=r, C=CR)
 
             # cg
             g = M[torch.arange(N), G[t]]
-            cg, cg_probs = gating_function(subtask_param=g)
+            cg, cg_probs = gating_function(subtask_param=g, C=CG)
 
             yield RecurrentState(
                 cg=cg,
