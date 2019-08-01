@@ -289,7 +289,7 @@ class Recurrence(torch.jit.ScriptModule):
                 self.print(T._fields[int(_z.argmax())])
 
             def safediv(x, y):
-                return x / torch.clamp(y, min=1e-5)
+                return torch.clamp(x / torch.clamp(y, min=1e-5), 0.0, 1.0)
 
             # e
             e = (p.unsqueeze(1) @ M_zeta).permute(2, 0, 1)
