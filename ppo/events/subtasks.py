@@ -1,4 +1,5 @@
 import abc
+import re
 from typing import List
 
 from ppo.events.objects import (
@@ -26,6 +27,9 @@ class Subtask:
     @property
     def reward_delta(self):
         return 1
+
+    def __str__(self):
+        return " ".join(re.findall("[A-Z][^A-Z]*", self.__class__.__name__))
 
 
 class AnswerDoor(Subtask):

@@ -1,3 +1,4 @@
+import re
 from abc import ABC
 from typing import List
 
@@ -5,12 +6,12 @@ import numpy as np
 
 
 class Object:
-    def __init__(self, random: np.random, objects: List, height: int, width: int):
+    def __init__(self, objects: List, height: int, width: int):
         self.width = width
         self.height = height
         self.objects = objects  # type: List[Object]
-        self.np_random = random
         self.pos = None
+        self.activated = False
 
     @property
     def obstacle(self):
@@ -19,10 +20,14 @@ class Object:
     def step(self, action):
         if self.pos is None:
             return
-        pos = self.pos + np.array(action)
-        if pos in [o.pos for o in self.get_objects(self.__class__)]:
+        pos = np.array(self.pos) + np.array(action)
+        if tuple(pos) in [o.pos for o in self.get_objects(self.__class__)]:
             pos = self.pos
-        self.pos = np.clip(pos, np.zeros(2), np.array([self.height, self.width]))
+        self.pos = tuple(
+            np.clip(
+                pos, np.zeros(2, dtype=int), np.array([self.height, self.width]) - 1
+            )
+        )
 
     def reset(self):
         pass
@@ -31,7 +36,9 @@ class Object:
         pass
 
     def other_positions(self):
-        return [tuple(o.pos) for o in self.objects if o is not self]
+        for o in self.objects:
+            if o is not self:
+                yield o.pos
 
     def get_objects(self, types):
         return (o for o in self.objects if isinstance(o, types))
@@ -42,6 +49,12 @@ class Object:
             return next(objects)
         except StopIteration:
             raise RuntimeError("Object of type", types, "not found.")
+
+    def __str__(self):
+        return " ".join(re.findall("[A-Z][^A-Z]*", self.__class__.__name__))
+
+    def icon(self):
+        return str(self)[:1]
 
 
 class Immobile(Object, ABC):
@@ -56,7 +69,7 @@ class RandomPosition(Object, ABC):
             for t in map(tuple, self.candidate_positions())
             if t not in self.other_positions()
         ]
-        choice = self.np_random.choice(len(available))
+        choice = np.random.choice(len(available))
         self.pos = available[choice]
         return super().reset()
 
@@ -74,7 +87,7 @@ class RandomWalking(Object, ABC):
         self.actions = [(0, 1), (1, 0), (0, -1), (-1, 0), (0, 0)]
 
     def step(self, action):
-        choice = self.np_random.choice(len(self.actions))
+        choice = np.random.choice(len(self.actions))
         return super().step(self.actions[choice])
 
 
@@ -84,19 +97,14 @@ class Graspable(Object, ABC):
         self.grasped = False
 
     def interact(self):
-        if self.pos not in self.other_positions():
-            self.grasped = not self.grasped
+        self.grasped = not self.grasped
         super().interact()
 
-    def step(self, action):
-        return super().step(action if self.grasped else np.zeros(2))
+    def set_pos(self, pos):
+        self.pos = pos
 
 
 class Activating(Object, ABC):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.activated = False
-
     def activate(self):
         self.activated = True
 
@@ -108,6 +116,13 @@ class Deactivatable(Activating, ABC):
     def interact(self):
         if self.activated:
             self.deactivate()
+        super().interact()
+
+
+class Activatable(Activating, ABC):
+    def interact(self):
+        if not self.activated:
+            self.activate()
         super().interact()
 
 
@@ -136,7 +151,7 @@ class RandomActivating(Activating, ABC):
 
     def step(self, action):
         if not self.activated:
-            if self.np_random.random() < self.activation_prob:
+            if np.random.random() < self.activation_prob:
                 self.activate()
         return super().step(action)
 
@@ -155,7 +170,15 @@ class Wall(Immobile, RandomPosition, ABC):
 
 
 class Agent(RandomPosition):
-    pass
+    def __init__(self, objects: List, height: int, width: int):
+        super().__init__(objects, height, width)
+        self.grasping = None
+
+    def grasp(self, obj):
+        self.grasping = obj
+
+    def icon(self):
+        return "🤜" if self.grasping else "😀"
 
 
 class Door(Wall, RandomActivating, Deactivatable, Immobile):
@@ -163,30 +186,36 @@ class Door(Wall, RandomActivating, Deactivatable, Immobile):
         self.activated = False
         return super().step(action)
 
+    def icon(self):
+        return "🔔" if self.activated else "🚪"
+
 
 class MouseHole(Wall):
-    pass
+    def icon(self):
+        return "🕳"
 
 
 class Mouse(RandomActivating, RandomWalking, Deactivatable):
     def activate(self):
-        self.pos = self.get_object(MouseHole)
+        self.pos = self.get_object(MouseHole).pos
         super().activate()
 
     def deactivate(self):
         self.pos = None
 
     def step(self, action):
-        if self.np_random.random() < 0.2:
+        if self.pos is not None and np.random.random() < 0.2:
             # step toward hole
-            hole = self.get_object(MouseHole)
-            action = min(
-                self.actions, key=lambda a: np.sum(np.abs(self.pos + a - hole))
-            )
+            hole = self.get_object(MouseHole).pos
+            toward_hole = np.array(hole) - np.array(self.pos)
+            action = min(self.actions, key=lambda a: np.sum(np.abs(a - toward_hole)))
         return super().step(action)
 
+    def icon(self):
+        return "🐁"
 
-class Baby(RandomActivating, RandomWalking, Deactivatable, Graspable):
+
+class Baby(RandomPosition, RandomActivating, RandomWalking, Deactivatable, Graspable):
     def interact(self):
         if self.activated:
             self.deactivate()
@@ -194,8 +223,11 @@ class Baby(RandomActivating, RandomWalking, Deactivatable, Graspable):
             Graspable.interact(self)
         super().interact()
 
+    def icon(self):
+        return "😭" if self.activated else "👶"
 
-class Oven(Object, Activating, Immobile):
+
+class Oven(RandomPosition, Activatable, Immobile):
     def __init__(self, time_to_heat, **kwargs):
         super().__init__(**kwargs)
         self.time_to_heat = time_to_heat
@@ -220,13 +252,18 @@ class Oven(Object, Activating, Immobile):
         self.time_heating = 0
         super().deactivate()
 
+    def icon(self):
+        return "♨️" if self.hot() else "𝌱"
 
-class Refrigerator(Immobile):
-    pass
+
+class Refrigerator(RandomPosition, Immobile):
+    def icon(self):
+        return "❄️"
 
 
-class Table(Immobile):
-    pass
+class Table(RandomPosition, Immobile):
+    def icon(self):
+        return "🍽"
 
 
 class Food(Graspable):
@@ -240,6 +277,9 @@ class Food(Graspable):
         self.cook_time = cook_time
         self.time_cooking = 0
 
+    def icon(self):
+        return "🍳" if self.cooked else "🥚"
+
     def reset(self):
         self.pos = self.refrigerator.pos
         super().reset()
@@ -251,22 +291,36 @@ class Food(Graspable):
             self.time_cooking += 1
 
 
-class Dog(RandomWalking, Graspable):
+class Dog(RandomPosition, RandomWalking, Graspable):
     def interact(self):
         door = self.get_object(Door)
         if self.grasped and self.pos == door.pos:
             self.pos = None
+        super().interact()
+
+    def icon(self):
+        return "🐕"
+
+    # def step(self, action):
+    # import ipdb
+
+    # ipdb.set_trace()
+    # super().step(action)
 
 
-class Cat(RandomWalking, Graspable):
+class Cat(RandomPosition, RandomWalking, Graspable):
     def step(self, action):
         agent = self.get_object(Agent)
+        from_agent = np.array(self.pos) - np.array(agent.pos)
         toward_agent = min(
-            self.actions, key=lambda a: np.sum(np.abs(self.pos + a - agent))
+            self.actions, key=lambda a: np.sum(np.abs(np.array(a) + from_agent))
         )
         actions = list(set(self.actions) - {toward_agent})
-        choice = self.np_random.choice(len(actions))
+        choice = np.random.choice(len(actions))
         return super().step(actions[choice])
+
+    def icon(self):
+        return "🐈"
 
 
 class Mess(Immobile, RandomActivating, Deactivatable):
@@ -276,15 +330,22 @@ class Mess(Immobile, RandomActivating, Deactivatable):
         if dog.pos not in {m.pos for m in messes}:
             self.pos = dog.pos
 
+        super().activate()
+
     def deactivate(self):
         self.pos = None
+        super().deactivate()
+
+    def icon(self):
+        return "💩"
 
 
-class Fire(Immobile, Activating):
-    pass
+class Fire(RandomPosition, Immobile, Activatable):
+    def icon(self):
+        return "🔥" if self.activated else "🜂"
 
 
-class Fly(RandomWalking, RandomActivating, Deactivatable):
+class Fly(RandomPosition, RandomWalking, RandomActivating, Deactivatable):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         try:
@@ -292,8 +353,21 @@ class Fly(RandomWalking, RandomActivating, Deactivatable):
         except RuntimeError:
             self.parent = None
 
+    def deactivate(self):
+        self.pos = None
+        super().deactivate()
+
+    def reset(self):
+        if self.parent is None:
+            self.activate()
+            return super().reset()
+        return Object.reset(self)
+
     def step(self, action):
-        if not self.activated:
-            if self.parent.activated and self.np_random.random() < self.activation_prob:
+        if not self.activated and self.parent is not None:
+            if self.parent.activated and np.random.random() < self.activation_prob:
                 self.activate()
         return super().step(action)
+
+    def icon(self):
+        return "🦟"

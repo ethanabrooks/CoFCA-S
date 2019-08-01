@@ -1,5 +1,6 @@
 import functools
 from collections import namedtuple
+import numpy as np
 
 import gym
 
@@ -26,7 +27,7 @@ from ppo.events.objects import (
 State = namedtuple("State", "objects interactions")
 
 
-class EventsGridworld(gym.Env):
+class Gridworld(gym.Env):
     def __init__(
         self,
         cook_time: int,
@@ -37,29 +38,30 @@ class EventsGridworld(gym.Env):
     ):
         super().__init__()
         self.object_idxs = {}
-        single_object_types = [
-            Agent,
+        self.height = height
+        self.width = width
+        multiple_object_types = [Mess, Fly]
+        object_types = [
             Door,
             MouseHole,
             Mouse,
             Baby,
             Refrigerator,
             Table,
-            Food,
             Oven,
+            Food,
             Dog,
             Cat,
             Mess,
             Fire,
             Mess,
             Fly,
+            Agent,
         ]
-        multiple_object_types = [Mess, Fly]
+        assert object_types[-1] is Agent
         self.objects = []
-        for object_type in single_object_types:
-            kwargs = dict(
-                random=self.np_random, objects=self.objects, height=height, width=width
-            )
+        for object_type in object_types:
+            kwargs = dict(objects=self.objects, height=height, width=width)
             if issubclass(object_type, RandomActivating):
                 kwargs.update(activation_prob=random_activation_prob)
             if object_type is Food:
@@ -72,34 +74,45 @@ class EventsGridworld(gym.Env):
             else:
                 self.objects.append(object_type(**kwargs))
 
-        self.grasping = None
         self.agent = None
         self.last_action = None
         self.transitions = [(0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)]
 
+    def interact(self):
+        if self.agent.grasping is None:
+            for obj in self.objects:
+                if obj.pos == self.agent.pos:
+                    obj.interact()
+                    yield obj
+                    if isinstance(obj, Graspable):
+                        self.agent.grasp(obj)
+        else:
+            self.agent.grasping.interact()
+            self.agent.grasping = None
+
     def step(self, a):
         self.last_action = a
         action = self.transitions[a]
-        interacting = a == 0
-        interactions = []
+        interactions = list(self.interact()) if action == (0, 0) else []
 
         obj: Object
         for obj in self.objects:
             obj.step(action)
-            if interacting and obj.pos == self.agent.pos:
-                interactions.append(obj)
-                obj.interact()
-                if isinstance(obj, Graspable):
-                    if self.grasping is obj:
-                        self.grasping = None
-                    elif self.grasping is None:
-                        self.grasping = obj
+        grasping = self.agent.grasping
+        if grasping:
+            assert isinstance(grasping, Graspable)
+            grasping.set_pos(self.agent.pos)
 
         return State(objects=self.objects, interactions=interactions), 0, False, {}
+
+    def seed(self, seed):
+        np.random.seed(seed)
 
     def reset(self):
         for obj in self.objects:
             obj.reset()
+            if isinstance(obj, Agent):
+                self.agent = obj
         return State(objects=self.objects, interactions=[])
 
     def render(self, mode="human"):
