@@ -67,7 +67,6 @@ class Recurrence(torch.jit.ScriptModule):
         self.size_actions = [
             1 if isinstance(s, Discrete) else s.nvec.size for s in action_spaces
         ]
-        condition_size = int(self.subtask_nvec.sum())
 
         # networks
         self.conv1 = nn.Sequential(
@@ -201,14 +200,10 @@ class Recurrence(torch.jit.ScriptModule):
         task = inputs.subtasks.view(
             *inputs.subtasks.shape[:2], self.n_subtasks, self.subtask_nvec.size
         )[0]
-        task = torch.split(task, 1, dim=-1)
-        g_discrete = [x[:, :, 0] for x in task]
-        M_discrete = torch.stack(
-            g_discrete, dim=-1
-        )  # TODO: quicker to store in RecurrentState?
-
+        task_columns = torch.split(task, 1, dim=-1)
+        g_discrete = [x.squeeze(2) for x in task_columns]
         M = g_discrete_to_binary(g_discrete, self.g_discrete_one_hots.children())
-        new_episode = torch.all(rnn_hxs.squeeze(0) == 0, dim=-1)
+        new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
 
         # NOTE {
         debug_in = M[:, :, -self.subtask_nvec[-2:].sum() : -self.subtask_nvec[-1]]
@@ -222,7 +217,6 @@ class Recurrence(torch.jit.ScriptModule):
         z = actions.z[0].long()  # use time-step 0; z fixed throughout episode
         self.sample_new(z, M_zeta_dist)
         # NOTE }
-
         hx = self.parse_hidden(rnn_hxs)
         for x in hx:
             x.squeeze_(0)
@@ -240,7 +234,7 @@ class Recurrence(torch.jit.ScriptModule):
                 inputs=inputs,
                 hx=hx,
                 M=M,
-                M_discrete=M_discrete,
+                M_discrete=task,
                 subtask=inputs.subtask,
                 actions=actions,
             )
