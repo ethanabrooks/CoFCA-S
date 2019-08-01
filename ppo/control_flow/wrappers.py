@@ -1,15 +1,14 @@
 from collections import namedtuple
 
 import gym
-from gym import spaces
-from gym.spaces import Discrete
 import numpy as np
+from gym import spaces
 
 from common.vec_env.util import space_shape
 from gridworld_env.control_flow_gridworld import LineTypes, TaskTypes
 from ppo.utils import RED, RESET
 
-Actions = namedtuple("Actions", "a cr cg g z")
+Actions = namedtuple("Actions", "a cr cg g z l")
 
 
 class DebugWrapper(gym.Wrapper):
@@ -63,6 +62,7 @@ class Wrapper(gym.Wrapper):
                 g=spaces.Discrete(env.unwrapped.n_subtasks),
                 cg=spaces.Discrete(2),
                 cr=spaces.Discrete(2),
+                l=spaces.Discrete(2),
                 z=spaces.MultiDiscrete(
                     np.full(env.unwrapped.n_subtasks, len(LineTypes._fields))
                 ),

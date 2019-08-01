@@ -133,19 +133,19 @@ class Recurrence(torch.jit.ScriptModule):
             g=1,
             cg=1,
             cr=1,
+            l=1,
             z=self.n_subtasks,
             a_probs=action_spaces.a.n,
             g_probs=self.n_subtasks,
             cg_probs=2,
             cr_probs=2,
+            l_probs=2,
             z_probs=self.n_subtasks * len(LineTypes._fields),
             r=self.line_size,
             p=self.n_subtasks,
             v=1,
             last_condition=self.line_size,
             last_eval=1,
-            l=1,
-            l_probs=2,
         )
         self.state_sizes = RecurrentState(*map(int, state_sizes))
 

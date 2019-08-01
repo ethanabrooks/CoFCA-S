@@ -36,7 +36,7 @@ class Agent(ppo.agent.Agent, NNBase):
             cr=cg_entropy_coef,
             g=g_entropy_coef,
             z=z_entropy_coef,
-            # l=l_entropy_coef,
+            l=l_entropy_coef,
         )
         self.action_spaces = Actions(**action_space.spaces)
         self.obs_space = obs_space
@@ -89,7 +89,7 @@ class Agent(ppo.agent.Agent, NNBase):
         )
         # hx = RecurrentState(*rm.parse_hidden(last_hx))
         hx = RecurrentState(*rm.parse_hidden(all_hxs))  # TODO what's the deal here?
-        actions = Actions(a=hx.a, cg=hx.cg, cr=hx.cr, g=hx.g, z=hx.z)
+        actions = Actions(a=hx.a, cg=hx.cg, cr=hx.cr, g=hx.g, z=hx.z, l=hx.l)
         dists = Actions(
             a=None
             if rm.agent  # use pre-trained agent so don't train
@@ -100,6 +100,7 @@ class Agent(ppo.agent.Agent, NNBase):
             z=FixedCategorical(
                 hx.z_probs.view(N, self.n_subtasks, len(LineTypes._fields))
             ),
+            l=None,  # FixedCategorical(hx.l_probs),
         )
 
         log_probs = sum(
