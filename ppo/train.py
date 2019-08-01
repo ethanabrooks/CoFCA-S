@@ -60,12 +60,14 @@ class Train:
         render_eval,
         load_path,
         success_reward,
-        target_success_rate,
+        target_success_rates,
         synchronous,
         batch_size,
         run_id,
         save_dir=None,
     ):
+        target_success_rates = iter(target_success_rates)
+        target_success_rate = next(target_success_rates, None)
         if render_eval and not render:
             eval_interval = 1
         if render:
@@ -136,10 +138,17 @@ class Train:
         counter = Counter()
         start = time.time()
         last_save = start
+        curriculum_idx = 0
 
         if load_path:
             state_dict = torch.load(load_path, map_location=device)
-            self.agent.load_state_dict(state_dict["agent"])
+            agent_dict = self.agent.state_dict()
+            agent_dict.update(
+                {k: v for k, v in state_dict["agent"].items()}
+                # if "xi" not in k}
+            )
+            self.agent.load_state_dict(agent_dict)
+            # self.agent.load_state_dict(state_dict["agent"])
             ppo.optimizer.load_state_dict(state_dict["optimizer"])
             start = state_dict.get("step", -1) + 1
             if isinstance(envs.venv, VecNormalize):
@@ -194,14 +203,26 @@ class Train:
             total_num_steps = (j + 1) * num_processes * num_steps
 
             mean_success_rate = np.mean(epoch_counter["success"])
+            if mean_success_rate > 0.9:
+                print("mean_success_rate", mean_success_rate)
+                print("target_success_rate", target_success_rate)
             if target_success_rate and mean_success_rate > target_success_rate:
+                target_success_rate = next(target_success_rates, None)
+                print("incrementing target_success_rate:", target_success_rate)
                 envs.increment_curriculum()
+                curriculum_idx += 1
 
             if j % log_interval == 0 and writer is not None:
                 end = time.time()
                 fps = total_num_steps / (end - start)
                 log_values = dict(fps=fps, **epoch_counter, **train_results)
                 if writer:
+                    writer.add_scalar(
+                        "cumulative_success",
+                        curriculum_idx + mean_success_rate,
+                        total_num_steps,
+                    )
+
                     for k, v in log_values.items():
                         mean = np.mean(v)
                         if not np.isnan(mean):

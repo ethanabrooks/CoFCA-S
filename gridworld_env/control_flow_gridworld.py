@@ -179,6 +179,7 @@ class ControlFlowGridworld(SubtasksGridworld):
         self.np_random.shuffle(self.irreversible_interactions)
         assert self.n_subtasks >= 8
         if self.task_type is TaskTypes.General:
+            self.max_loops = min(self.max_loops, 2)
             active_control = None
             line_type = None
             interactions = list(range(len(self.interactions)))
@@ -263,12 +264,16 @@ class ControlFlowGridworld(SubtasksGridworld):
             yield self.Subtask(
                 interaction=self.irreversible_interactions[0], count=0, object=None
             )
+            yield self.Subtask(
+                interaction=self.irreversible_interactions[0], count=0, object=None
+            )
             yield EndIf()
-            yield self.If(None)
             yield self.Subtask(
                 interaction=self.irreversible_interactions[1], count=0, object=None
             )
-            yield EndIf()
+            yield self.Subtask(
+                interaction=self.irreversible_interactions[0], count=0, object=None
+            )
         elif self.task_type is TaskTypes.Else:
             yield self.If(None)
             yield self.Subtask(
