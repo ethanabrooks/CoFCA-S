@@ -85,7 +85,7 @@ class Recurrence(torch.jit.ScriptModule):
 
         self.conv2 = nn.Sequential(
             Concat(dim=1),
-            init_(nn.Conv2d(d + self.line_size, hidden_size, kernel_size=1), "relu"),
+            init_(nn.Conv2d(d + self.line_size, hidden_size, kernel_size=1), nn.ReLU()),
             nn.ReLU(),
             Flatten(),
         )
@@ -97,22 +97,26 @@ class Recurrence(torch.jit.ScriptModule):
             ),
             Product(),
             Reshape(d * self.line_size, *self.obs_shape[-2:]),
-            init_(nn.Conv2d(self.line_size * d, 1, kernel_size=1), "sigmoid"),
+            init_(nn.Conv2d(self.line_size * d, 1, kernel_size=1), nn.Sigmoid()),
             nn.LPPool2d(2, kernel_size=(h, w)),
             nn.Sigmoid(),  # TODO: try on both sides of pool
             Reshape(1),
         )
 
         self.phi = trace(
-            lambda in_size: init_(nn.Linear(in_size, 2), "sigmoid"),
+            lambda in_size: init_(nn.Linear(in_size, 2), nn.Sigmoid()),
             in_size=(d * action_spaces.a.n * int(self.subtask_nvec.prod())),
         )
 
         self.zeta = Categorical(self.line_size, len(LineTypes._fields))
 
         # NOTE {
-        self.phi_debug = nn.Sequential(init_(nn.Linear(1, 1), "sigmoid"), nn.Sigmoid())
-        self.xi_debug = nn.Sequential(init_(nn.Linear(1, 1), "sigmoid"), nn.Sigmoid())
+        self.phi_debug = nn.Sequential(
+            init_(nn.Linear(1, 1), nn.Sigmoid()), nn.Sigmoid()
+        )
+        self.xi_debug = nn.Sequential(
+            init_(nn.Linear(1, 1), nn.Sigmoid()), nn.Sigmoid()
+        )
         self.zeta_debug = Categorical(len(LineTypes._fields), len(LineTypes._fields))
         # NOTE }
 
