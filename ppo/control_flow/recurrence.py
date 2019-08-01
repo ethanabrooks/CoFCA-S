@@ -149,50 +149,32 @@ class Recurrence(torch.jit.ScriptModule):
         )
         self.state_sizes = RecurrentState(*map(int, state_sizes))
 
+        # embeddings
+        def eye_embedding(n):
+            return nn.Embedding.from_pretrained(torch.eye(int(n)))
+
+        self.g_discrete_one_hots = nn.ModuleList(
+            [eye_embedding(n) for n in self.subtask_nvec]
+        )
+        self.a_one_hots = eye_embedding(n=action_spaces.a.n)
+        self.g_one_hots = eye_embedding(action_spaces.g.n)
+        self.z_one_hots = eye_embedding(len(LineTypes()))
+        self.p_one_hots = eye_embedding(self.n_subtasks)
+
         # buffers
-        for i, x in enumerate(self.subtask_nvec):
-            self.register_buffer(f"part{i}_one_hot", torch.eye(int(x)))
-        self.register_buffer("a_one_hots", torch.eye(int(action_spaces.a.n)))
-        self.register_buffer("g_one_hots", torch.eye(action_spaces.g.n))
-        self.register_buffer("z_one_hots", torch.eye(len(LineTypes._fields)))
         one_step = F.pad(torch.eye(self.n_subtasks - 1), [1, 0, 0, 1])
         one_step[:, -1] += 1 - one_step.sum(-1)
         self.register_buffer("one_step", one_step.unsqueeze(0))
         no_op_probs = torch.zeros(1, self.actor.linear.out_features)
         no_op_probs[:, -1] = 1
         self.register_buffer("no_op_probs", no_op_probs)
-        self.register_buffer("p_one_hot", torch.eye(self.n_subtasks))
 
     def print(self, *args, **kwargs):
         if self.debug:
             print(*args, **kwargs)
 
-    # @torch.jit.script_method
     def parse_hidden(self, hx):
         return RecurrentState(*torch.split(hx, self.state_sizes, dim=-1))
-
-    # @torch.jit.script_method
-    def g_binary_to_int(self, g_binary):
-        g123 = g_binary_to_discrete(g_binary, self.subtask_nvec)
-        g123[:, :-1] *= self.subtask_nvec[1:]  # g1 * x2, g2 * x3
-        g123[:, 0] *= self.subtask_nvec[2]  # g1 * x3
-        return g123.sum(dim=-1)
-
-    # @torch.jit.script_method
-    def g_int_to_123(self, g):
-        x1, x2, x3 = self.subtask_nvec.to(g.dtype)
-        g1 = g // (x2 * x3)
-        x4 = g % (x2 * x3)
-        g2 = x4 // x3
-        g3 = x4 % x3
-        return g1, g2, g3
-
-    def g_discrete_one_hots(self):
-        for i in itertools.count():
-            try:
-                yield getattr(self, f"part{i}_one_hot")
-            except AttributeError:
-                break
 
     def parse_inputs(self, inputs):
         return Obs(*torch.split(inputs, self.obs_sections, dim=2))
@@ -223,7 +205,7 @@ class Recurrence(torch.jit.ScriptModule):
             g_discrete, dim=-1
         )  # TODO: quicker to store in RecurrentState?
 
-        M = g_discrete_to_binary(g_discrete, self.g_discrete_one_hots())
+        M = g_discrete_to_binary(g_discrete, self.g_discrete_one_hots.children())
         new_episode = torch.all(hx.squeeze(0) == 0, dim=-1)
 
         # NOTE {
@@ -272,12 +254,16 @@ class Recurrence(torch.jit.ScriptModule):
 
         # combine past and present actions (sampled values)
         obs = inputs.base
-        A = torch.cat([actions.a, hx.a.unsqueeze(0)], dim=0).long().squeeze(2)
-        G = torch.cat([actions.g, hx.g.unsqueeze(0)], dim=0).long().squeeze(2)
-        M_zeta = self.z_one_hots[hx.z.long()]
 
-        def aeq(a, b):
-            return torch.abs(a - b) < 1e-4
+        def action_vector(current, previous):
+            return torch.cat([current, previous.unsqueeze(0)], dim=0).long().squeeze(2)
+
+        A = action_vector(actions.a, hx.a)
+        G = action_vector(actions.g, hx.g)
+        # L = action_vector(actions.l, hx.l)
+        CR = action_vector(actions.cr, hx.cr)
+        CG = action_vector(actions.cg, hx.cg)
+        M_zeta = self.z_one_hots(hx.z.long())
 
         for t in range(T):
             self.print(L)
@@ -376,7 +362,7 @@ class Recurrence(torch.jit.ScriptModule):
 
             # concentrate non-allocated attention on last line
             last_line = is_line.sum(-1).long() - 1
-            p = p + (1 - p.sum(-1, keepdim=True)) * self.p_one_hot[last_line]
+            p = p + (1 - p.sum(-1, keepdim=True)) * self.p_one_hots(last_line)
 
             self.print("e[L.If]", e[L.If])
             self.print("e[L.Else]", e[L.Else])
@@ -389,7 +375,7 @@ class Recurrence(torch.jit.ScriptModule):
             r = (p.unsqueeze(1) @ M).squeeze(1)
 
             # g
-            old_g = self.g_one_hots[G[t - 1]]
+            old_g = self.g_one_hots(G[t - 1])
             cg = e[L.Subtask] * hx.cg + (1 - e[L.Subtask])
             probs = interp(old_g, p, cg)
             g_dist = FixedCategorical(probs=torch.clamp(probs, 0.0, 1.0))
@@ -425,7 +411,7 @@ class Recurrence(torch.jit.ScriptModule):
                 task_sections = torch.split(
                     subtask_param, tuple(self.subtask_nvec), dim=-1
                 )
-                parts = (self.conv1(obs[t]), self.a_one_hots[A[t]]) + task_sections
+                parts = (self.conv1(obs[t]), self.a_one_hots(A[t])) + task_sections
                 outer_product_obs = 1
                 for i1, part in enumerate(parts):
                     for i2 in range(len(parts)):
@@ -445,7 +431,7 @@ class Recurrence(torch.jit.ScriptModule):
                 # agent_layer = obs[t, :, 6, :, :].long()
                 # j, k, l = torch.split(agent_layer.nonzero(), 1, dim=-1)
                 # debug_obs = obs[t, j, :, k, l].squeeze(1)
-                # a_one_hot = self.a_one_hots[A[t]]
+                # a_one_hot = self.a_one_hots(A[t])
                 # correct_object = obj * debug_obs[:, 1 : 1 + self.subtask_nvec[2]]
                 # column1 = interaction[:, :1]
                 # column2 = interaction[:, 1:] * a_one_hot[:, 4:-1]
