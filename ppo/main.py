@@ -14,7 +14,9 @@ import ppo.control_flow.agent
 import ppo.control_flow.analogy_learner
 import ppo.control_flow.lower_level
 import ppo.matrix_control_flow
+from ppo.control_flow import DebugWrapper
 from ppo.train import Train
+import torch.nn as nn
 
 
 def add_task_args(parser):
@@ -119,6 +121,11 @@ def student_cli():
     train_lower_level_cli(student=True)
 
 
+ACTIVATIONS = dict(
+    selu=nn.SELU(), prelu=nn.PReLU(), leaky=nn.LeakyReLU(), relu=nn.ReLU()
+)
+
+
 def metacontroller_cli():
     parser = build_parser()
     add_task_args(parser)
@@ -134,7 +141,6 @@ def metacontroller_cli():
     subtasks_parser.add_argument("--metacontroller-recurrent", action="store_true")
     subtasks_parser.add_argument("--hard-update", action="store_true")
     subtasks_parser.add_argument("--debug", action="store_true")
-    subtasks_parser.add_argument("--project", action="store_true")
 
     def train(env_id, task_args, ppo_args, subtasks_args, env_args, **kwargs):
         class TrainSubtasks(Train):

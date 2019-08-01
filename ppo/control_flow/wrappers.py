@@ -19,12 +19,12 @@ class DebugWrapper(gym.Wrapper):
         self.truth = 0
         self.last_reward = None
         action_spaces = Actions(**env.action_space.spaces)
-        for x in action_spaces:
-            assert isinstance(x, Discrete)
-        self.action_sections = len(action_spaces)
+        self.action_sections = np.cumsum(
+            [s for s, in space_shape(self.action_space).values()]
+        )[:-1]
 
-    def step(self, action):
-        actions = Actions(*[x.item() for x in np.split(action, self.action_sections)])
+    def step(self, action: np.ndarray):
+        actions = Actions(*np.split(action, self.action_sections))
         self.truth = int(self.env.unwrapped.subtask_idx)
         self.guess = int(actions.g)
         # print("truth", truth)
@@ -32,9 +32,6 @@ class DebugWrapper(gym.Wrapper):
         r = 0
         if self.env.unwrapped.subtask is not None and self.guess != self.truth:
             r = -0.1
-            import ipdb
-
-            ipdb.set_trace()
         s, _, t, i = super().step(action)
         self.last_reward = r
         return s, r, t, i

@@ -15,6 +15,12 @@ def round(x, dec):
     return torch.round(x * 10 ** dec) / 10 ** dec
 
 
+def grad(x, y):
+    return torch.autograd.grad(
+        x.mean(), y.parameters() if isinstance(y, nn.Module) else y, retain_graph=True
+    )
+
+
 def get_render_func(venv):
     if hasattr(venv, "envs"):
         return venv.envs[0].render

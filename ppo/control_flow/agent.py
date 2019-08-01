@@ -61,6 +61,7 @@ class Agent(ppo.agent.Agent, NNBase):
             hidden_size=hidden_size,
             obs_spaces=obs_spaces,
             action_spaces=self.action_spaces,
+            activation=agent_args["activation"],
             **kwargs,
         )
 
@@ -106,7 +107,7 @@ class Agent(ppo.agent.Agent, NNBase):
             z=FixedCategorical(
                 hx.z_probs.view(N, self.n_subtasks, len(LineTypes._fields))
             ),
-            l=FixedCategorical(hx.l_probs),
+            l=FixedCategorical(hx.l_probs) if self.hard_update else None,
         )
 
         log_probs = sum(

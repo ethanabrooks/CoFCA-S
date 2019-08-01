@@ -7,8 +7,9 @@ from rl_utils import hierarchical_parse_args
 import torch.nn as nn
 
 
-def parse_activation(string):
-    return dict(relu=nn.ReLU)[string]
+ACTIVATIONS = dict(
+    selu=nn.SELU(), prelu=nn.PReLU(), leaky=nn.LeakyReLU(), relu=nn.ReLU()
+)
 
 
 def build_parser():
@@ -92,7 +93,12 @@ def build_parser():
     agent_parser.add_argument("--recurrent", action="store_true")
     agent_parser.add_argument("--hidden-size", type=int, default=256)
     agent_parser.add_argument("--num-layers", type=int, default=3)
-    agent_parser.add_argument("--activation", type=parse_activation, default=nn.ReLU())
+    agent_parser.add_argument(
+        "--activation",
+        type=lambda x: ACTIVATIONS[x],
+        choices=ACTIVATIONS.values(),
+        default=nn.ReLU(),
+    )
     agent_parser.add_argument(
         "--entropy-coef", type=float, default=0.01, help="entropy term coefficient"
     )
