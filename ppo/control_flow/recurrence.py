@@ -183,7 +183,7 @@ class Recurrence(torch.jit.ScriptModule):
     def parse_inputs(self, inputs):
         return Obs(*torch.split(inputs, self.obs_sections, dim=-1))
 
-    def forward(self, inputs, hx):
+    def forward(self, inputs, rnn_hxs):
         T, N, D = inputs.shape
 
         # detach actions
@@ -208,7 +208,7 @@ class Recurrence(torch.jit.ScriptModule):
         )  # TODO: quicker to store in RecurrentState?
 
         M = g_discrete_to_binary(g_discrete, self.g_discrete_one_hots.children())
-        new_episode = torch.all(hx.squeeze(0) == 0, dim=-1)
+        new_episode = torch.all(rnn_hxs.squeeze(0) == 0, dim=-1)
 
         # NOTE {
         debug_in = M[:, :, -self.subtask_nvec[-2:].sum() : -self.subtask_nvec[-1]]
@@ -223,7 +223,7 @@ class Recurrence(torch.jit.ScriptModule):
         self.sample_new(z, M_zeta_dist)
         # NOTE }
 
-        hx = self.parse_hidden(hx)
+        hx = self.parse_hidden(rnn_hxs)
         for x in hx:
             x.squeeze_(0)
         hx.p[new_episode, 0] = 1.0  # initialize pointer to first subtask
