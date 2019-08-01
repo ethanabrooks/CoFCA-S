@@ -19,25 +19,17 @@ from ppo.control_flow.lower_level import (
 )
 from ppo.control_flow.wrappers import Actions
 from ppo.distributions import Categorical, DiagGaussian, FixedCategorical
-from ppo.layers import (
-    Concat,
-    Flatten,
-    Parallel,
-    Product,
-    Reshape,
-    ShallowCopy,
-    Sum,
-    Print,
-    Times,
-    Exp,
-    Log,
-)
-from ppo.utils import broadcast3d, init_, interp, trace, round
+from ppo.layers import Concat, Flatten, Parallel, Product, Reshape, ShallowCopy, Sum
+from ppo.utils import broadcast3d, init_, interp, trace
 
 RecurrentState = namedtuple(
     "RecurrentState",
-    "a g cr cg z l a_probs g_probs cr_probs cg_probs l_probs z_probs p r last_condition last_eval v",
+    "a g cr cg z a_probs g_probs cr_probs cg_probs z_probs p r last_condition last_eval v",
 )
+
+
+def round(x, dec):
+    return torch.round(x * 10 ** dec) / 10 ** dec
 
 
 class Recurrence(torch.jit.ScriptModule):
@@ -52,7 +44,6 @@ class Recurrence(torch.jit.ScriptModule):
         hard_update,
         agent,
         debug,
-        xi_architecture,
     ):
         super().__init__()
         self.debug = debug
@@ -94,77 +85,18 @@ class Recurrence(torch.jit.ScriptModule):
             Flatten(),
         )
 
-        if xi_architecture == "LPPool2d":
-            self.xi = nn.Sequential(
-                Parallel(
-                    nn.Sequential(Reshape(1, d, h, w)),
-                    nn.Sequential(Reshape(self.line_size, 1, 1, 1)),
-                ),
-                Product(),
-                Reshape(d * self.line_size, *self.obs_shape[-2:]),
-                init_(nn.Conv2d(self.line_size * d, 1, kernel_size=1), "sigmoid"),
-                nn.Sigmoid(),  # TODO: try on both sides of pool
-                nn.LPPool2d(2, kernel_size=(h, w)),
-                Times((h * w) ** (-0.5)),
-                Reshape(1),
-            )
-        elif xi_architecture == "Max":
-            self.xi = nn.Sequential(
-                Parallel(
-                    nn.Sequential(nn.MaxPool2d(kernel_size=(h, w)), Reshape(1, d)),
-                    nn.Sequential(Reshape(self.line_size, 1, 1, 1)),
-                ),
-                Product(),
-                Reshape(d * self.line_size),
-                init_(nn.Linear(d * self.line_size, 1), "sigmoid"),
-                nn.Sigmoid(),
-                Reshape(1),
-            )
-        elif xi_architecture == "ConvMax":
-            self.xi = nn.Sequential(
-                Parallel(
-                    nn.Sequential(Reshape(1, d, h, w)),
-                    nn.Sequential(Reshape(self.line_size, 1, 1, 1)),
-                ),
-                Product(),
-                Reshape(d * self.line_size, *self.obs_shape[-2:]),
-                init_(nn.Conv2d(self.line_size * d, 1, kernel_size=1), "sigmoid"),
-                nn.MaxPool2d(kernel_size=(h, w)),
-                nn.Sigmoid(),
-                Reshape(1),
-            )
-        elif xi_architecture == "LPPool2dProject":
-            self.xi = nn.Sequential(
-                Parallel(
-                    Reshape(1, d, h, w),
-                    nn.Sequential(
-                        Reshape(self.line_size, 1, 1, 1),
-                        nn.Conv2d(self.line_size, self.subtask_nvec[-1], kernel_size=1),
-                    ),
-                ),
-                Product(),
-                Reshape(d * self.subtask_nvec[-1], *self.obs_shape[-2:]),
-                init_(nn.Conv2d(self.line_size * d, 1, kernel_size=1), "sigmoid"),
-                nn.LPPool2d(2, kernel_size=(h, w)),
-                nn.Sigmoid(),  # TODO: try on both sides of pool
-                Reshape(1),
-            )
-        elif xi_architecture == "MaxProject":
-            self.xi = nn.Sequential(
-                Parallel(
-                    Reshape(1, d, h, w),
-                    nn.Sequential(
-                        Reshape(self.line_size, 1, 1, 1),
-                        nn.Conv2d(self.line_size, self.subtask_nvec[-1], kernel_size=1),
-                    ),
-                ),
-                Product(),
-                Reshape(d * self.subtask_nvec[-1], *self.obs_shape[-2:]),
-                init_(nn.Conv2d(self.line_size * d, 1, kernel_size=1), "sigmoid"),
-                nn.MaxPool2d(kernel_size=(h, w)),
-                nn.Sigmoid(),
-                Reshape(1),
-            )
+        self.xi = nn.Sequential(
+            Parallel(
+                nn.Sequential(Reshape(1, d, h, w)),
+                nn.Sequential(Reshape(self.line_size, 1, 1, 1)),
+            ),
+            Product(),
+            Reshape(d * self.line_size, *self.obs_shape[-2:]),
+            init_(nn.Conv2d(self.line_size * d, 1, kernel_size=1), "sigmoid"),
+            nn.LPPool2d(2, kernel_size=(h, w)),
+            nn.Sigmoid(),  # TODO: try on both sides of pool
+            Reshape(1),
+        )
 
         self.phi = trace(
             lambda in_size: init_(nn.Linear(in_size, 2), "sigmoid"),
@@ -175,22 +107,7 @@ class Recurrence(torch.jit.ScriptModule):
 
         # NOTE {
         self.phi_debug = nn.Sequential(init_(nn.Linear(1, 1), "sigmoid"), nn.Sigmoid())
-        self.xi_debug = nn.Sequential(
-            Parallel(
-                nn.Sequential(
-                    Reshape(d - 3, h, w), nn.Conv2d(d - 3, d - 3, kernel_size=1)
-                ),
-                nn.Sequential(Reshape(self.subtask_nvec[-1] - 1, 1, 1)),
-            ),
-            Product(),
-            Reshape(1, -1),
-            nn.MaxPool1d(kernel_size=((d - 3) * h * w))
-            if xi_architecture == "Max"
-            else nn.LPPool1d(2, kernel_size=((d - 3) * h * w)),
-            # init_(nn.Linear(1, 1), "sigmoid"),
-            nn.Sigmoid(),
-            Reshape(1),
-        )
+        self.xi_debug = nn.Sequential(init_(nn.Linear(1, 1), "sigmoid"), nn.Sigmoid())
         self.zeta_debug = Categorical(len(LineTypes._fields), len(LineTypes._fields))
         # NOTE }
 
@@ -211,13 +128,11 @@ class Recurrence(torch.jit.ScriptModule):
             g=1,
             cg=1,
             cr=1,
-            l=1,
             z=self.n_subtasks,
             a_probs=action_spaces.a.n,
             g_probs=self.n_subtasks,
             cg_probs=2,
             cr_probs=2,
-            l_probs=2,
             z_probs=self.n_subtasks * len(LineTypes._fields),
             r=self.line_size,
             p=self.n_subtasks,
@@ -342,25 +257,26 @@ class Recurrence(torch.jit.ScriptModule):
         self, hx: RecurrentState, actions: Actions, inputs: Obs, M, M_discrete, subtask
     ):
 
-        _, N, *_ = inputs.base.shape
+        T, N, *_ = inputs.base.shape
         p = hx.p
-        T = LineTypes()
+        L = LineTypes()
 
         # combine past and present actions (sampled values)
         obs = inputs.base
         A = torch.cat([actions.a, hx.a.unsqueeze(0)], dim=0).long().squeeze(2)
         G = torch.cat([actions.g, hx.g.unsqueeze(0)], dim=0).long().squeeze(2)
-        L = torch.cat([actions.l, hx.l.unsqueeze(0)], dim=0).long().squeeze(2)
         M_zeta = self.z_one_hots[hx.z.long()]
 
         def aeq(a, b):
             return torch.abs(a - b) < 1e-4
 
-        for t in range(inputs.base.shape[0]):
-            self.print(T)
+        for t in range(T):
+            self.print(L)
             self.print("M_zeta")
             for _z in M_zeta[0]:
-                self.print(T._fields[int(_z.argmax())])
+                self.print(_z)
+            for _z in M_zeta[0]:
+                self.print(L._fields[int(_z.argmax())])
 
             def safediv(x, y):
                 return x / torch.clamp(y, min=1e-5)
@@ -372,12 +288,11 @@ class Recurrence(torch.jit.ScriptModule):
             condition = interp(
                 hx.r,
                 hx.last_condition,
-                safediv(e[T.EndWhile], e[[T.If, T.While, T.EndWhile]].sum(0)),
+                safediv(e[L.EndWhile], e[[L.If, L.While, L.EndWhile]].sum(0)),
             )
 
             # l
             l = self.xi((inputs.base[t], condition))
-            self.print("l", round(l, 4))
             # NOTE {
             # c = torch.split(condition, list(self.subtask_nvec), dim=-1)[-1][:, 1:]
             # last_condition = torch.split(
@@ -398,17 +313,15 @@ class Recurrence(torch.jit.ScriptModule):
             # NOTE }
 
             # control memory
-            last_eval = interp(hx.last_eval, l, e[T.If])
-            last_condition = interp(hx.last_condition, hx.r, e[T.While])
+            last_eval = interp(hx.last_eval, l, e[L.If])
+            last_condition = interp(hx.last_condition, hx.r, e[L.While])
 
             # l'
             l = interp(
                 l,
                 1 - hx.last_eval,
-                safediv(e[T.Else], e[[T.If, T.Else, T.While, T.EndWhile]].sum(0)),
+                safediv(e[L.Else], e[[L.If, L.Else, L.While, L.EndWhile]].sum(0)),
             )
-            l_dist = FixedCategorical(probs=torch.cat([1 - l, l], dim=1))
-            self.sample_new(L[t], l_dist)
 
             def roll(x):
                 return F.pad(x, [1, 0])[:, :-1]
@@ -433,21 +346,20 @@ class Recurrence(torch.jit.ScriptModule):
             )
             p_step = (p.unsqueeze(1) @ self.one_step).squeeze(1)
             self.print("cr before update", round(hx.cr, 2))
-            pIf = interp(scan_forward(T.Else, T.EndIf), p_step, l)
-            pElse = interp(scan_forward(T.EndIf), p_step, l)
-            pWhile = interp(scan_forward(T.EndWhile), p_step, l)
-            pEndWhile = interp(p_step, scan_backward(T.While).flip(-1), l)
+            pIf = interp(scan_forward(L.Else, L.EndIf), p_step, l)
+            pElse = interp(scan_forward(L.EndIf), p_step, l)
+            pWhile = interp(scan_forward(L.EndWhile), p_step, l)
+            pEndWhile = interp(p_step, scan_backward(L.While).flip(-1), l)
             pSubtask = interp(hx.p, p_step, hx.cr)
-            self.print("p before update", round(p, 2))
             p = (
                 # e[[L.If, L.While, L.Else]].sum(0)  # conditions
                 # * interp(scan_forward(L.EndIf, L.Else, L.EndWhile), p_step, l)
-                e[T.If] * pIf
-                + e[T.Else] * pElse
-                + e[T.While] * pWhile
-                + e[T.EndWhile] * pEndWhile
-                + e[T.EndIf] * p_step
-                + e[T.Subtask] * pSubtask
+                e[L.If] * pIf
+                + e[L.Else] * pElse
+                + e[L.While] * pWhile
+                + e[L.EndWhile] * pEndWhile
+                + e[L.EndIf] * p_step
+                + e[L.Subtask] * pSubtask
             )
             is_line = 1 - inputs.ignore[0]
             p = torch.clamp(p, 0.0, 1.0)
@@ -457,19 +369,19 @@ class Recurrence(torch.jit.ScriptModule):
             last_line = is_line.sum(-1).long() - 1
             p = p + (1 - p.sum(-1, keepdim=True)) * self.p_one_hot[last_line]
 
-            self.print("e[L.If]", e[T.If])
-            self.print("e[L.Else]", e[T.Else])
-            self.print("e[L.EndIf]", e[T.EndIf])
-            self.print("e[L.While]", e[T.While])
-            self.print("e[L.EndWhile]", e[T.EndWhile])
-            self.print("e[L.Subtask]", e[T.Subtask])
+            self.print("e[L.If]", e[L.If])
+            self.print("e[L.Else]", e[L.Else])
+            self.print("e[L.EndIf]", e[L.EndIf])
+            self.print("e[L.While]", e[L.While])
+            self.print("e[L.EndWhile]", e[L.EndWhile])
+            self.print("e[L.Subtask]", e[L.Subtask])
 
             # r
             r = (p.unsqueeze(1) @ M).squeeze(1)
 
             # g
             old_g = self.g_one_hots[G[t - 1]]
-            cg = e[T.Subtask] * hx.cg + (1 - e[T.Subtask])
+            cg = e[L.Subtask] * hx.cg + (1 - e[L.Subtask])
             probs = interp(old_g, p, cg)
             g_dist = FixedCategorical(probs=torch.clamp(probs, 0.0, 1.0))
             self.sample_new(G[t], g_dist)
@@ -513,8 +425,15 @@ class Recurrence(torch.jit.ScriptModule):
                     outer_product_obs = outer_product_obs * part
 
                 c_logits = self.phi(outer_product_obs.view(N, -1))
-                c = torch.sigmoid(c_logits[:, :1])
-                probs = torch.zeros_like(c_logits)  # dummy value
+                if self.hard_update:
+                    raise NotImplementedError
+                    # c_dist = FixedCategorical(logits=c_logits)
+                    # c = actions.c[t]
+                    # self.sample_new(c, c_dist)
+                    # probs = c_dist.probs
+                else:
+                    c = torch.sigmoid(c_logits[:, :1])
+                    probs = torch.zeros_like(c_logits)  # dummy value
 
                 # NOTE {
                 # _task_sections = torch.split(
@@ -551,7 +470,6 @@ class Recurrence(torch.jit.ScriptModule):
                 cr=cr,
                 cg_probs=cg_probs,
                 cr_probs=cr_probs,
-                l=l,
                 p=p,
                 r=r,
                 g=G[t],
@@ -563,7 +481,6 @@ class Recurrence(torch.jit.ScriptModule):
                 last_eval=last_eval,
                 z=hx.z,
                 z_probs=hx.z_probs,
-                l_probs=l_dist.probs,
             )
 
     @staticmethod
