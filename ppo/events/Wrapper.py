@@ -45,8 +45,8 @@ class Wrapper(gym.Wrapper):
         self.object_one_hots = np.eye(env.height * env.width)
 
     def render(self, mode="human", **kwargs):
-        grid_height = 1
         env = self.env.unwrapped
+        legend = {}
         object_string = defaultdict(str)
         object_count = defaultdict(int)
         for obj in env.objects:
@@ -54,14 +54,14 @@ class Wrapper(gym.Wrapper):
                 string = "{:^3}".format(obj.icon())
                 object_string[obj.pos] += string
                 object_count[obj.pos] += len(string)
+            legend[obj.__class__] = obj
+        for v in legend.values():
+            print("{:<15}".format(f"{v}:"), v.icon())
 
         width = max(max(object_count.values()), 10)
         object_string = {
             k: "{:^{width}}".format(v, width=width) for k, v in object_string.items()
         }
-        grid_width = max(len(s) for s in object_string.values())
-        print(max(object_string.values(), key=lambda x: len(x)))
-        print(grid_width)
 
         for i in range(self.height):
             print("\n" + "-" * self.width * (1 + width))

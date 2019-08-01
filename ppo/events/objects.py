@@ -21,13 +21,21 @@ class Object:
         if self.pos is None:
             return
         pos = np.array(self.pos) + np.array(action)
-        if tuple(pos) in [o.pos for o in self.get_objects(self.__class__)]:
+        if tuple(pos) in [
+            o.pos for o in self.objects if type(o) in self.obstacle_types
+        ]:
             pos = self.pos
         self.pos = tuple(
             np.clip(
                 pos, np.zeros(2, dtype=int), np.array([self.height, self.width]) - 1
             )
         )
+
+    @property
+    def obstacle_types(self):
+        return {
+            o.__class__ for o in self.objects if not isinstance(o, (Agent, MouseHole))
+        }
 
     def reset(self):
         pass
@@ -59,7 +67,7 @@ class Object:
 
 class Immobile(Object, ABC):
     def step(self, action):
-        return super().step(np.zeros(2))
+        return super().step(np.zeros(2, dtype=int))
 
 
 class RandomPosition(Object, ABC):
@@ -180,6 +188,10 @@ class Agent(RandomPosition):
     def icon(self):
         return "🤜" if self.grasping else "😀"
 
+    @property
+    def obstacle_types(self):
+        return {}
+
 
 class Door(Wall, RandomActivating, Deactivatable, Immobile):
     def step(self, action):
@@ -225,6 +237,10 @@ class Baby(RandomPosition, RandomActivating, RandomWalking, Deactivatable, Grasp
 
     def icon(self):
         return "😭" if self.activated else "👶"
+
+    @property
+    def obstacle_types(self):
+        return {o for o in super().obstacle_types if o is not Fire}
 
 
 class Oven(RandomPosition, Activatable, Immobile):
@@ -301,11 +317,9 @@ class Dog(RandomPosition, RandomWalking, Graspable):
     def icon(self):
         return "🐕"
 
-    # def step(self, action):
-    # import ipdb
-
-    # ipdb.set_trace()
-    # super().step(action)
+    @property
+    def obstacle_types(self):
+        return {o for o in super().obstacle_types if o is not Cat}
 
 
 class Cat(RandomPosition, RandomWalking, Graspable):
