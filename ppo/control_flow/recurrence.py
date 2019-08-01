@@ -67,8 +67,9 @@ class Recurrence(torch.jit.ScriptModule):
         self.size_actions = [
             1 if isinstance(s, Discrete) else s.nvec.size for s in action_spaces
         ]
-
         # networks
+        self.critic_linear = init_(nn.Linear(hidden_size, 1))
+
         self.conv1 = nn.Sequential(
             ShallowCopy(2),
             Parallel(
@@ -517,7 +518,7 @@ class Recurrence(torch.jit.ScriptModule):
                 g_probs=g_dist.probs,
                 a=A[t],
                 a_probs=a_dist.probs,
-                v=self.critic(conv_out),
+                v=self.critic_linear(x),
                 last_condition=last_condition,
                 last_eval=last_eval,
                 z=hx.z,
