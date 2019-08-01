@@ -19,7 +19,16 @@ from ppo.control_flow.lower_level import (
 )
 from ppo.control_flow.wrappers import Actions
 from ppo.distributions import Categorical, DiagGaussian, FixedCategorical
-from ppo.layers import Concat, Flatten, Parallel, Product, Reshape, ShallowCopy, Sum
+from ppo.layers import (
+    Concat,
+    Flatten,
+    Parallel,
+    Product,
+    Reshape,
+    ShallowCopy,
+    Sum,
+    Times,
+)
 from ppo.utils import broadcast3d, init_, interp, trace, round
 
 RecurrentState = namedtuple(

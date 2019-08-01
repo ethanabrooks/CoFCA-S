@@ -17,18 +17,51 @@ class CumSum(torch.jit.ScriptModule):
         return torch.cumsum(inputs, **self.kwargs)
 
 
+class Squash(nn.Module):
+    def forward(self, x):
+        y = x ** 3
+        return torch.clamp(y, min=0) / (1 + y.abs())
+
+
 class Flatten(nn.Module):
     def forward(self, x):
         return x.view(x.size(0), -1)
 
 
-class Sum(nn.Module):
-    def __init__(self, **kwargs):
-        self.kwargs = kwargs
+class Print(nn.Module):
+    def __init__(self, f=None):
+        self.f = f
         super().__init__()
 
     def forward(self, x):
-        return torch.sum(x, **self.kwargs)
+        if self.f is None:
+            print(x)
+        else:
+            print(self.f(x))
+        return x
+
+
+class Log(nn.Module):
+    def forward(self, x):
+        return torch.log(x)
+
+
+class Exp(nn.Module):
+    def forward(self, x):
+        return torch.exp(x)
+
+
+class Sum(nn.Module):
+    def __init__(self, **kwargs):
+
+        self.kwargs = kwargs
+        super().__init__()
+
+    def forward(self, inputs):
+        if isinstance(inputs, (tuple, list)):
+            return sum(inputs)
+        else:
+            return torch.sum(inputs, **self.kwargs)
 
 
 class ShallowCopy(nn.Module):
@@ -80,3 +113,28 @@ class Parallel(torch.jit.ScriptModule):
 
     def forward(self, inputs):
         return tuple([m(x) for m, x in zip(self.module_list, inputs)])
+
+
+def wrap_parameter(x, requires_grad):
+    if isinstance(x, torch.Tensor):
+        return nn.Parameter(x, requires_grad=requires_grad)
+    else:
+        return x
+
+
+class Plus(torch.jit.ScriptModule):
+    def __init__(self, x, requires_grad=False):
+        super().__init__()
+        self.x = wrap_parameter(x, requires_grad)
+
+    def forward(self, inputs):
+        return self.x + inputs
+
+
+class Times(torch.jit.ScriptModule):
+    def __init__(self, x, requires_grad=False):
+        super().__init__()
+        self.x = wrap_parameter(x, requires_grad)
+
+    def forward(self, inputs):
+        return self.x * inputs
