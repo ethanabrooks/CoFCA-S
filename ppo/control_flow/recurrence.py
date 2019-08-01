@@ -37,7 +37,9 @@ RecurrentState = namedtuple(
 )
 
 
-class Recurrence(nn.Module):
+class Recurrence(torch.jit.ScriptModule):
+    __constants__ = ["input_sections", "state_sizes", "recurrent"]
+
     def __init__(
         self,
         obs_spaces,
