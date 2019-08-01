@@ -51,7 +51,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             # }
             nn.ReLU(),
             Flatten(),
-            init_(nn.Linear(h_size, 1), "sigmoid"),
+            init_(nn.Linear(h_size, 1), nn.Sigmoid()),
             # init_(nn.Linear(d * self.condition_size * 4 * 4, 1), "sigmoid"),
             nn.Sigmoid(),
             Reshape(1, 1),

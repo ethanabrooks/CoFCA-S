@@ -217,7 +217,6 @@ class Recurrence(nn.Module):
     def forward(self, inputs, rnn_hxs):
         T, N, D = inputs.shape
 
-        # {{{
         # detach actions
         # noinspection PyProtectedMember
         inputs, *actions = torch.split(
@@ -313,9 +312,11 @@ class Recurrence(nn.Module):
         CG = action_vector(actions.cg, hx.cg)
         M_zeta = self.z_one_hots(hx.z.long())
 
-        for t in range(inputs.base.shape[0]):
+        for t in range(inputs.base.size(0)):
             self.print(T)
             self.print("M_zeta")
+            for _z in M_zeta[0]:
+                self.print(_z)
             for _z in M_zeta[0]:
                 self.print(T._fields[int(_z.argmax())])
 
