@@ -35,19 +35,9 @@ def round(x, dec):
 class Recurrence(torch.jit.ScriptModule):
     __constants__ = ["input_sections", "state_sizes", "recurrent"]
 
-    def __init__(
-        self,
-        obs_spaces,
-        action_spaces,
-        hidden_size,
-        recurrent,
-        hard_update,
-        agent,
-        debug,
-    ):
+    def __init__(self, obs_spaces, action_spaces, hidden_size, recurrent, agent, debug):
         super().__init__()
         self.debug = debug
-        self.hard_update = hard_update
         if agent:
             assert isinstance(agent, LowerLevel)
         self.agent = agent
@@ -425,15 +415,8 @@ class Recurrence(torch.jit.ScriptModule):
                     outer_product_obs = outer_product_obs * part
 
                 c_logits = self.phi(outer_product_obs.view(N, -1))
-                if self.hard_update:
-                    raise NotImplementedError
-                    # c_dist = FixedCategorical(logits=c_logits)
-                    # c = actions.c[t]
-                    # self.sample_new(c, c_dist)
-                    # probs = c_dist.probs
-                else:
-                    c = torch.sigmoid(c_logits[:, :1])
-                    probs = torch.zeros_like(c_logits)  # dummy value
+                c = torch.sigmoid(c_logits[:, :1])
+                probs = torch.zeros_like(c_logits)  # dummy value
 
                 # NOTE {
                 # _task_sections = torch.split(

@@ -22,15 +22,21 @@ class Agent(ppo.agent.Agent, NNBase):
         hidden_size,
         g_entropy_coef,
         z_entropy_coef,
-        hard_update,
+        l_entropy_coef,
+        cr_entropy_coef,
+        cg_entropy_coef,
         agent_load_path,
         agent_args,
         **kwargs,
     ):
         nn.Module.__init__(self)
-        self.hard_update = hard_update
         self.entropy_coefs = Actions(
-            a=None, cg=None, cr=None, g=g_entropy_coef, z=z_entropy_coef
+            a=None,
+            cg=cr_entropy_coef,
+            cr=cg_entropy_coef,
+            g=g_entropy_coef,
+            z=z_entropy_coef,
+            # l=l_entropy_coef,
         )
         self.action_spaces = Actions(**action_space.spaces)
         self.obs_space = obs_space
@@ -51,7 +57,6 @@ class Agent(ppo.agent.Agent, NNBase):
             )
         self.recurrent_module = self.build_recurrent_module(
             agent=agent,
-            hard_update=hard_update,
             hidden_size=hidden_size,
             obs_spaces=obs_spaces,
             action_spaces=self.action_spaces,
@@ -90,26 +95,17 @@ class Agent(ppo.agent.Agent, NNBase):
         if action is None:
             actions = Actions(a=hx.a, cg=hx.cg, cr=hx.cr, g=hx.g, z=hx.z)
 
-        if self.hard_update:
-            dists = Actions(
-                a=FixedCategorical(hx.a_probs),
-                cg=FixedCategorical(hx.cg_probs),
-                cr=FixedCategorical(hx.cr_probs),
-                g=FixedCategorical(hx.g_probs),
-                z=None,
-            )
-        else:
-            dists = Actions(
-                a=None
-                if rm.agent  # use pre-trained agent so don't train
-                else FixedCategorical(hx.a_probs),
-                cg=None,
-                cr=None,
-                g=FixedCategorical(hx.g_probs),
-                z=FixedCategorical(
-                    hx.z_probs.view(N, self.n_subtasks, len(LineTypes._fields))
-                ),
-            )
+        dists = Actions(
+            a=None
+            if rm.agent  # use pre-trained agent so don't train
+            else FixedCategorical(hx.a_probs),
+            cg=None,
+            cr=None,
+            g=FixedCategorical(hx.g_probs),
+            z=FixedCategorical(
+                hx.z_probs.view(N, self.n_subtasks, len(LineTypes._fields))
+            ),
+        )
 
         log_probs = sum(
             dist.log_probs(a).view(N, -1, 1).sum(1)
