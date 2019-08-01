@@ -20,7 +20,7 @@ from ppo.control_flow.lower_level import (
 from ppo.control_flow.wrappers import Actions
 from ppo.distributions import Categorical, DiagGaussian, FixedCategorical
 from ppo.layers import Concat, Flatten, Parallel, Product, Reshape, ShallowCopy, Sum
-from ppo.utils import broadcast3d, init_, interp, trace
+from ppo.utils import broadcast3d, init_, interp, trace, round
 
 RecurrentState = namedtuple(
     "RecurrentState",
@@ -28,14 +28,18 @@ RecurrentState = namedtuple(
 )
 
 
-def round(x, dec):
-    return torch.round(x * 10 ** dec) / 10 ** dec
-
-
-class Recurrence(torch.jit.ScriptModule):
-    __constants__ = ["input_sections", "state_sizes", "recurrent"]
-
-    def __init__(self, obs_spaces, action_spaces, hidden_size, recurrent, agent, debug):
+class Recurrence(nn.Module):
+    def __init__(
+        self,
+        obs_spaces,
+        action_spaces,
+        hidden_size,
+        num_layers,
+        recurrent,
+        agent,
+        debug,
+        activation,
+    ):
         super().__init__()
         self.debug = debug
         if agent:
@@ -215,6 +219,8 @@ class Recurrence(torch.jit.ScriptModule):
         truth = FixedCategorical(probs=debug_in)
         # M_zeta_dist = self.zeta_debug(debug_in)
         M_zeta_dist = self.zeta(M)
+        # self.print("M_zeta_dist.probs")
+        # self.print(round(M_zeta_dist.probs, 2))
         # M_zeta_dist = truth
         z = actions.z[0].long()  # use time-step 0; z fixed throughout episode
         self.sample_new(z, M_zeta_dist)

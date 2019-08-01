@@ -60,6 +60,7 @@ class Agent(ppo.agent.Agent, NNBase):
             hidden_size=hidden_size,
             obs_spaces=obs_spaces,
             action_spaces=self.action_spaces,
+            activation=agent_args["activation"],
             **kwargs,
         )
 
