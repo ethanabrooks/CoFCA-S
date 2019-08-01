@@ -125,15 +125,15 @@ class Agent(ppo.agent.Agent, NNBase):
             action=torch.cat(actions, dim=-1),
             action_log_probs=log_probs,
             aux_loss=aux_loss,
-            rnn_hxs=torch.cat(hx, dim=-1),
             dist=None,
-            log={},
+            rnn_hxs=last_hx,
+            log=log,
         )
 
     def get_value(self, inputs, rnn_hxs, masks):
         n = inputs.size(0)
         all_hxs, last_hx = self._forward_gru(inputs.view(n, -1), rnn_hxs, masks)
-        return self.recurrent_module.parse_hidden(all_hxs).v
+        return self.recurrent_module.parse_hidden(last_hx).v
 
     def _forward_gru(self, x, hxs, masks, action=None):
         if action is None:
