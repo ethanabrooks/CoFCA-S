@@ -240,10 +240,29 @@ class Recurrence(torch.jit.ScriptModule):
             )
         )
 
+    def pack(self, outputs):
+        zipped = list(zip(*outputs))
+        # for name, x in zip(RecurrentState._fields, zipped):
+        #     if not x:
+        #         print(name)
+
+        stacked = [torch.stack(x).float() for x in zipped]
+        preprocessed = [x.view(*x.shape[:2], -1) for x in stacked]
+
+        # for name, x, size in zip(
+        #     RecurrentState._fields, preprocessed, self.state_sizes
+        # ):
+        #     if x.size(2) != size:
+        #         print(name, x, size)
+        #     if x.dtype != torch.float32:
+        #         print(name)
+
+        hx = torch.cat(preprocessed, dim=-1)
+        return hx, hx[-1:]
+
     def inner_loop(
         self, hx: RecurrentState, actions: Actions, inputs: Obs, M, M_discrete, subtask
     ):
-
         _, N, *_ = inputs.base.shape
         p = hx.p
         T = LineTypes()
@@ -473,32 +492,3 @@ class Recurrence(torch.jit.ScriptModule):
     def sample_new(x, dist):
         new = x < 0
         x[new] = dist.sample()[new].flatten()
-
-    def pack(self, outputs):
-        zipped = list(zip(*outputs))
-        # for name, x in zip(RecurrentState._fields, zipped):
-        #    if not x:
-        #        print(name)
-        #        import ipdb
-
-        #        ipdb.set_trace()
-
-        stacked = [torch.stack(x) for x in zipped]
-        preprocessed = [x.float().view(*x.shape[:2], -1) for x in stacked]
-
-        # for name, x, size in zip(
-        #    RecurrentState._fields, preprocessed, self.state_sizes
-        # ):
-        #    if x.size(2) != size:
-        #        print(name, x, size)
-        #        import ipdb
-
-        #        ipdb.set_trace()
-        #    if x.dtype != torch.float32:
-        #        print(name)
-        #        import ipdb
-
-        #        ipdb.set_trace()
-
-        hx = torch.cat(preprocessed, dim=-1)
-        return hx, hx[-1]
