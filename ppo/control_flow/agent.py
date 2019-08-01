@@ -94,8 +94,8 @@ class Agent(ppo.agent.Agent, NNBase):
             a=None
             if rm.agent  # use pre-trained agent so don't train
             else FixedCategorical(hx.a_probs),
-            cg=FixedCategorical(hx.cg_probs),
-            cr=FixedCategorical(hx.cr_probs),
+            cg=None,  # FixedCategorical(hx.cg_probs),
+            cr=None,  # FixedCategorical(hx.cr_probs),
             g=FixedCategorical(hx.g_probs),
             z=FixedCategorical(
                 hx.z_probs.view(N, self.n_subtasks, len(LineTypes._fields))

@@ -322,7 +322,7 @@ class Recurrence(nn.Module):
                 self.print(T._fields[int(_z.argmax())])
 
             def safediv(x, y):
-                return x / torch.clamp(y, min=1e-5)
+                return torch.clamp(x / torch.clamp(y, min=1e-5), 0.0, 1.0)
 
             # e
             e = (p.unsqueeze(1) @ M_zeta).permute(2, 0, 1)
@@ -481,7 +481,7 @@ class Recurrence(nn.Module):
                     outer_product_obs = outer_product_obs * part
 
                 c_dist = self.phi(outer_product_obs.view(N, -1))
-                self.sample_new(C[t], c_dist)
+                # self.sample_new(C[t], c_dist)
 
                 # NOTE {
                 # _task_sections = torch.split(
@@ -504,7 +504,7 @@ class Recurrence(nn.Module):
                 # c = truth
                 # self.print("c", round(c, 4))
                 # NOTE }
-                return C[t], c_dist.probs
+                return c_dist.probs[:, 1:], c_dist.probs
 
             # cr
             cr, cr_probs = gating_function(subtask_param=r, C=CR)
