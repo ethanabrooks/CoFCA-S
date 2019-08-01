@@ -52,12 +52,10 @@ def make_subtasks_env(env_id, **kwargs):
             print("Environment args:")
             for k, v in _kwargs.items():
                 print(f"{k:20}{v}")
-        env = ppo.control_flow.DebugWrapper(
-            ppo.control_flow.Wrapper(
-                TimeLimit(
-                    ControlFlowGridworld(**_kwargs),
-                    max_episode_steps=int(max_episode_steps),
-                )
+        env = ppo.control_flow.Wrapper(
+            TimeLimit(
+                ControlFlowGridworld(**_kwargs),
+                max_episode_steps=int(max_episode_steps),
             )
         )
         # if debug:
