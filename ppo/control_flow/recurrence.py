@@ -378,6 +378,7 @@ class DebugBase(nn.Module):
                 self.sample_new(L[t], l_dist)
             else:
                 L[t] = l.squeeze(-1)
+            l = L[t].unsqueeze(-1).float()
 
             def roll(x):
                 return F.pad(x, [1, 0])[:, :-1]
