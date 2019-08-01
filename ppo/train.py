@@ -379,14 +379,14 @@ class Train:
         else:
             envs = SubprocVecEnv(envs)
 
-        if (
-            envs.observation_space.shape
-            and len(envs.observation_space.shape) == 1  # TODO
-        ):
-            if gamma is None:
-                envs = VecNormalize(envs, ret=False)
-            else:
-                envs = VecNormalize(envs, gamma=gamma)
+        # if (
+        # envs.observation_space.shape
+        # and len(envs.observation_space.shape) == 1
+        # ):
+        # if gamma is None:
+        # envs = VecNormalize(envs, ret=False)
+        # else:
+        # envs = VecNormalize(envs, gamma=gamma)
 
         envs = VecPyTorch(envs)
 

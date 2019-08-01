@@ -5,7 +5,7 @@ import torch
 from torch import nn as nn
 import torch.jit
 
-from ppo.utils import broadcast3d
+from ppo.utils import broadcast3d, round
 
 
 class CumSum(torch.jit.ScriptModule):

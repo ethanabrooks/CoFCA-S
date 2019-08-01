@@ -14,7 +14,9 @@ import ppo.control_flow.agent
 import ppo.control_flow.analogy_learner
 import ppo.control_flow.lower_level
 import ppo.matrix_control_flow
+from ppo.control_flow import DebugWrapper
 from ppo.train import Train
+import torch.nn as nn
 
 
 def add_task_args(parser):

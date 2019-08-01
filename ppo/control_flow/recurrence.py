@@ -314,13 +314,13 @@ class Recurrence(torch.jit.ScriptModule):
             # self.print("l condition", c)
             # phi_in = inputs.base[t, :, 1:-2] * c.view(N, -1, 1, 1)
             # truth = torch.max(phi_in.view(N, -1), dim=-1).values.float().view(N, 1)
-            # l = self.xi_debug(truth)
 
             # self.print("l truth", round(truth, 4))
-            # self.print("l", round(l, 4))
-            # self.print("p before update", round(p, 2))
             # l = truth
             # NOTE }
+            # self.print("xi_in", xi_in)
+            # l = self.xi(xi_in)
+            # self.print("l1", l)
 
             # control memory
             last_eval = interp(hx.last_eval, l, e[T.If])
@@ -361,6 +361,7 @@ class Recurrence(torch.jit.ScriptModule):
             pWhile = interp(scan_forward(T.EndWhile), p_step, l)
             pEndWhile = interp(p_step, scan_backward(T.While).flip(-1), l)
             pSubtask = interp(hx.p, p_step, hx.cr)
+            self.print("p before update", round(p, 2))
             p = (
                 # e[[L.If, L.While, L.Else]].sum(0)  # conditions
                 # * interp(scan_forward(L.EndIf, L.Else, L.EndWhile), p_step, l)
@@ -422,7 +423,7 @@ class Recurrence(torch.jit.ScriptModule):
             # a[:] = 'wsadeq'.index(input('act:'))
             self.print("p after update", round(p, 2))
 
-            def gating_function(subtask_param):
+            def gating_function(subtask_param, C):
                 task_sections = torch.split(
                     subtask_param, tuple(self.subtask_nvec), dim=-1
                 )
@@ -452,21 +453,21 @@ class Recurrence(torch.jit.ScriptModule):
                 # column2 = interaction[:, 1:] * a_one_hot[:, 4:-1]
                 # correct_action = torch.cat([column1, column2], dim=-1)
                 # truth = (
-                # correct_action.sum(-1, keepdim=True)
-                # * correct_object.sum(-1, keepdim=True)
+                #     correct_action.sum(-1, keepdim=True)
+                #     * correct_object.sum(-1, keepdim=True)
                 # ).detach()  # * condition[:, :1] + (1 - condition[:, :1])
-                # c = self.phi_debug(truth)
-                # # c = truth
+                # # c = self.phi_debug(truth)
+                # c = truth
                 # self.print("c", round(c, 4))
                 # NOTE }
                 return c, probs
 
             # cr
-            cr, cr_probs = gating_function(subtask_param=r)
+            cr, cr_probs = gating_function(subtask_param=r, C=CR)
 
             # cg
             g = M[torch.arange(N), G[t]]
-            cg, cg_probs = gating_function(subtask_param=g)
+            cg, cg_probs = gating_function(subtask_param=g, C=CG)
 
             yield RecurrentState(
                 cg=cg,
@@ -487,6 +488,10 @@ class Recurrence(torch.jit.ScriptModule):
                 l=l,
                 l_probs=hx.cr_probs,  # dummy value
             )
+
+    @property
+    def is_recurrent(self):
+        return False
 
     @staticmethod
     def sample_new(x, dist):
