@@ -24,7 +24,7 @@ from ppo.utils import broadcast3d, init_, interp, trace, round
 
 RecurrentState = namedtuple(
     "RecurrentState",
-    "a g cr cg z a_probs g_probs cr_probs cg_probs z_probs p r last_condition last_eval v",
+    "a g cr cg z l a_probs g_probs cr_probs cg_probs l_probs z_probs p r last_condition last_eval v",
 )
 
 
@@ -133,6 +133,8 @@ class Recurrence(nn.Module):
             v=1,
             last_condition=self.line_size,
             last_eval=1,
+            l=1,
+            l_probs=2,
         )
         self.state_sizes = RecurrentState(*map(int, state_sizes))
 
@@ -470,6 +472,8 @@ class Recurrence(nn.Module):
                 last_eval=last_eval,
                 z=hx.z,
                 z_probs=hx.z_probs,
+                l=l,
+                l_probs=hx.cr_probs,  # dummy value
             )
 
     @staticmethod
