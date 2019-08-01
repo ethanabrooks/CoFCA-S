@@ -65,8 +65,6 @@ class Recurrence(nn.Module):
         self.size_actions = [
             1 if isinstance(s, Discrete) else s.nvec.size for s in action_spaces
         ]
-        condition_size = int(self.subtask_nvec.sum())
-
         # networks
         self.critic_linear = init_(nn.Linear(hidden_size, 1))
 
@@ -93,13 +91,13 @@ class Recurrence(nn.Module):
         self.xi = nn.Sequential(
             Parallel(
                 nn.Sequential(Reshape(1, d, h, w)),
-                nn.Sequential(Reshape(condition_size, 1, 1, 1)),
+                nn.Sequential(Reshape(self.line_size, 1, 1, 1)),
             ),
             Product(),
-            Reshape(condition_size * d, h, w),
+            Reshape(self.line_size * d, h, w),
             nn.Sequential(
                 init_(
-                    nn.Conv2d(condition_size * d, hidden_size, kernel_size=1),
+                    nn.Conv2d(self.line_size * d, hidden_size, kernel_size=1),
                     activation,
                 ),
                 activation,
