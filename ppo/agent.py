@@ -26,8 +26,6 @@ class Agent(nn.Module):
     ):
         super(Agent, self).__init__()
         self.entropy_coef = entropy_coef
-        if network_args is None:
-            network_args = {}
         if logic:
             self.base = LogicBase(*obs_shape, hidden_size=hidden_size)
         elif len(obs_shape) == 3:

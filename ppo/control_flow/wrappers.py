@@ -1,9 +1,8 @@
 from collections import namedtuple
 
 import gym
-from gym import spaces
-from gym.spaces import Discrete
 import numpy as np
+from gym import spaces
 
 from common.vec_env.util import space_shape
 from gridworld_env.control_flow_gridworld import LineTypes, TaskTypes
@@ -18,26 +17,32 @@ class DebugWrapper(gym.Wrapper):
         self.guess = 0
         self.truth = 0
         self.last_reward = None
-        action_spaces = Actions(**env.action_space.spaces)
-        for x in action_spaces:
-            assert isinstance(x, Discrete)
-        self.action_sections = len(action_spaces)
+        sections = [s for s, in space_shape(self.action_space).values()]
+        self.action_sections = np.cumsum(sections)[:-1]
 
-    def step(self, action):
-        actions = Actions(*[x.item() for x in np.split(action, self.action_sections)])
-        self.truth = int(self.env.unwrapped.subtask_idx)
-        self.guess = int(actions.g)
-        # print("truth", truth)
-        # print("guess", guess)
-        r = 0
-        if self.env.unwrapped.subtask is not None and self.guess != self.truth:
-            r = -0.1
-            import ipdb
-
-            ipdb.set_trace()
-        s, _, t, i = super().step(action)
+    def step(self, action: np.ndarray):
+        actions = Actions(*np.split(action, self.action_sections))
+        env = self.env.unwrapped
+        # self.guess = actions.l
+        if self.guess is None:
+            # first step
+            self.truth = env.last_condition_passed
+            self.guess = actions.l
+        # print("truth", self.truth)
+        # print("guess", self.guess)
+        # if self.env.unwrapped.subtask is not None and self.guess != self.truth:
+        # r = -0.1
+        s, r, t, i = super().step(action)
+        if t:
+            _r = 1 if bool(self.truth) == bool(self.guess) else -0.1
+            i.update(matching=float(_r == r))
         self.last_reward = r
         return s, r, t, i
+
+    def reset(self, **kwargs):
+        self.guess = None
+        self.truth = None
+        return super().reset(**kwargs)
 
     def render(self, mode="human"):
         print("guess", self.guess)

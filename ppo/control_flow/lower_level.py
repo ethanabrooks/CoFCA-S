@@ -72,6 +72,7 @@ def g_binary_to_discrete(g_binary, subtask_space):
 
 
 def g_discrete_to_binary(g_discrete, one_hots):
+    one_hots = list(one_hots)
     return torch.cat(
-        [one_hot[g.long()] for one_hot, g in zip(one_hots, g_discrete)], dim=-1
+        [one_hot(g.long()) for one_hot, g in zip(one_hots, g_discrete)], dim=-1
     )

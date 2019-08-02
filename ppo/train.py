@@ -17,7 +17,6 @@ from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from gridworld_env import SubtasksGridworld
 from ppo.agent import Agent, AgentValues  # noqa
-from ppo.control_flow.wrappers import Wrapper
 from ppo.storage import RolloutStorage
 from ppo.update import PPO
 from ppo.utils import get_n_gpu, get_random_gpu
@@ -142,13 +141,7 @@ class Train:
 
         if load_path:
             state_dict = torch.load(load_path, map_location=device)
-            agent_dict = self.agent.state_dict()
-            agent_dict.update(
-                {k: v for k, v in state_dict["agent"].items()}
-                # if "xi" not in k}
-            )
-            self.agent.load_state_dict(agent_dict)
-            # self.agent.load_state_dict(state_dict["agent"])
+            self.agent.load_state_dict(state_dict["agent"])
             ppo.optimizer.load_state_dict(state_dict["optimizer"])
             start = state_dict.get("step", -1) + 1
             if isinstance(envs.venv, VecNormalize):
@@ -345,8 +338,6 @@ class Train:
         is_atari = hasattr(gym.envs, "atari") and isinstance(
             env.unwrapped, gym.envs.atari.atari_env.AtariEnv
         )
-        if isinstance(env.unwrapped, SubtasksGridworld):
-            env = Wrapper(env)
 
         env.seed(seed + rank)
 
@@ -385,14 +376,14 @@ class Train:
         else:
             envs = SubprocVecEnv(envs)
 
-        if (
-            envs.observation_space.shape
-            and len(envs.observation_space.shape) == 1  # TODO
-        ):
-            if gamma is None:
-                envs = VecNormalize(envs, ret=False)
-            else:
-                envs = VecNormalize(envs, gamma=gamma)
+        # if (
+        # envs.observation_space.shape
+        # and len(envs.observation_space.shape) == 1
+        # ):
+        # if gamma is None:
+        # envs = VecNormalize(envs, ret=False)
+        # else:
+        # envs = VecNormalize(envs, gamma=gamma)
 
         envs = VecPyTorch(envs)
 

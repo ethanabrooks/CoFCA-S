@@ -1,19 +1,19 @@
-from gym.spaces import MultiDiscrete
 import torch
-from torch import nn as nn
 import torch.jit
+from gym.spaces import MultiDiscrete
+from torch import nn as nn
 from torch.nn import functional as F
 
-from gridworld_env.control_flow_gridworld import LineTypes, Obs
 import ppo
-from ppo.agent import AgentValues, NNBase
 import ppo.control_flow.lower_level
-from ppo.control_flow.recurrence import Recurrence, RecurrentState
+from gridworld_env.control_flow_gridworld import Obs, LineTypes
+from ppo.agent import AgentValues, NNBase
+from ppo.control_flow.lower_level import g_discrete_to_binary
+from ppo.control_flow.recurrence import RecurrentState, Recurrence
 from ppo.control_flow.wrappers import Actions
 from ppo.distributions import FixedCategorical
 
 
-# noinspection PyMissingConstructor
 class Agent(ppo.agent.Agent, NNBase):
     def __init__(
         self,
@@ -23,17 +23,17 @@ class Agent(ppo.agent.Agent, NNBase):
         g_entropy_coef,
         z_entropy_coef,
         l_entropy_coef,
-        hard_update,
+        cr_entropy_coef,
+        cg_entropy_coef,
         agent_load_path,
         agent_args,
         **kwargs,
     ):
         nn.Module.__init__(self)
-        self.hard_update = hard_update
         self.entropy_coefs = Actions(
             a=None,
-            cg=None,
-            cr=None,
+            cg=cr_entropy_coef,
+            cr=cg_entropy_coef,
             g=g_entropy_coef,
             z=z_entropy_coef,
             l=l_entropy_coef,
@@ -57,10 +57,10 @@ class Agent(ppo.agent.Agent, NNBase):
             )
         self.recurrent_module = self.build_recurrent_module(
             agent=agent,
-            hard_update=hard_update,
             hidden_size=hidden_size,
             obs_spaces=obs_spaces,
             action_spaces=self.action_spaces,
+            activation=agent_args["activation"],
             **kwargs,
         )
 
@@ -81,32 +81,26 @@ class Agent(ppo.agent.Agent, NNBase):
     def build_recurrent_module(self, **kwargs):
         return Recurrence(**kwargs)
 
-    def forward(self, inputs, rnn_hxs, masks, action=None, deterministic=False):
+    def forward(self, inputs, rnn_hxs, masks, deterministic=False, action=None):
         N = inputs.size(0)
-        actions = None
         rm = self.recurrent_module
-        if action is not None:
-            actions = Actions(*torch.split(action, rm.size_actions, dim=-1))
-
         all_hxs, last_hx = self._forward_gru(
-            inputs.view(N, -1), rnn_hxs, masks, actions=actions
+            inputs.view(N, -1), rnn_hxs, masks, action=action
         )
-        hx = RecurrentState(*rm.parse_hidden(all_hxs))
-
-        if action is None:
-            actions = Actions(a=hx.a, cg=hx.cg, cr=hx.cr, g=hx.g, z=hx.z, l=hx.l)
-
+        # hx = RecurrentState(*rm.parse_hidden(last_hx))
+        hx = RecurrentState(*rm.parse_hidden(all_hxs))  # TODO what's the deal here?
+        actions = Actions(a=hx.a, cg=hx.cg, cr=hx.cr, g=hx.g, z=hx.z, l=hx.l)
         dists = Actions(
             a=None
             if rm.agent  # use pre-trained agent so don't train
             else FixedCategorical(hx.a_probs),
-            cg=None,
-            cr=None,
+            cg=None,  # FixedCategorical(hx.cg_probs),
+            cr=None,  # FixedCategorical(hx.cr_probs),
             g=FixedCategorical(hx.g_probs),
             z=FixedCategorical(
                 hx.z_probs.view(N, self.n_subtasks, len(LineTypes._fields))
             ),
-            l=FixedCategorical(hx.l_probs) if self.hard_update else None,
+            l=FixedCategorical(hx.l_probs),
         )
 
         log_probs = sum(
@@ -114,34 +108,38 @@ class Agent(ppo.agent.Agent, NNBase):
             for dist, a in zip(dists, actions)
             if dist is not None
         )
-        # log_probs = log_probs + z_dist.log_probs(actions.z).sum(1)
-        entropies = sum(
-            c * dist.entropy().view(N, -1)
-            for c, dist in zip(self.entropy_coefs, dists)
-            if dist is not None
+        entropies = Actions(
+            *[None if dist is None else dist.entropy().mean() for dist in dists]
         )
-        aux_loss = -entropies.mean()
+        aux_loss = -sum(
+            c * entropy
+            for c, entropy in zip(self.entropy_coefs, entropies)
+            if entropy is not None
+        )
+        log = {
+            f"{k}_entropy": v for k, v in entropies._asdict().items() if v is not None
+        }
 
         return AgentValues(
             value=hx.v,
             action=torch.cat(actions, dim=-1),
             action_log_probs=log_probs,
             aux_loss=aux_loss,
-            rnn_hxs=torch.cat(hx, dim=-1),
             dist=None,
-            log={},
+            rnn_hxs=last_hx,
+            log=log,
         )
 
     def get_value(self, inputs, rnn_hxs, masks):
         n = inputs.size(0)
         all_hxs, last_hx = self._forward_gru(inputs.view(n, -1), rnn_hxs, masks)
-        return self.recurrent_module.parse_hidden(all_hxs).v
+        return self.recurrent_module.parse_hidden(last_hx).v
 
-    def _forward_gru(self, x, hxs, masks, actions=None):
-        if actions is None:
+    def _forward_gru(self, x, hxs, masks, action=None):
+        if action is None:
             y = F.pad(x, [0, sum(self.recurrent_module.size_actions)], "constant", -1)
         else:
-            y = torch.cat([x] + list(actions), dim=-1)
+            y = torch.cat([x, action], dim=-1)
         return super()._forward_gru(y, hxs, masks)
 
     @property

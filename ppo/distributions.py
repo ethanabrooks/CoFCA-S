@@ -61,9 +61,6 @@ class DiagGaussian(nn.Module):
         action_mean = self.fc_mean(x)
 
         #  An ugly hack for my KFAC implementation.
-        zeros = torch.zeros(action_mean.size())
-        if x.is_cuda:
-            zeros = zeros.cuda()
-
+        zeros = torch.zeros_like(action_mean)
         action_logstd = self.logstd(zeros)
         return FixedNormal(action_mean, action_logstd.exp())

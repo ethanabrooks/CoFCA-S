@@ -5,15 +5,10 @@ from gym.wrappers import TimeLimit
 from rl_utils import hierarchical_parse_args
 
 import gridworld_env
-from gridworld_env.control_flow_gridworld import ControlFlowGridworld, TaskTypes
-import gridworld_env.matrix_control_flow_gridworld
-import gridworld_env.subtasks_gridworld
 import ppo
 from ppo.arguments import build_parser, get_args
-import ppo.control_flow.agent
-import ppo.control_flow.analogy_learner
-import ppo.control_flow.lower_level
-import ppo.matrix_control_flow
+import ppo.events.agent
+from ppo.events.wrapper import Wrapper
 from ppo.train import Train
 
 
@@ -166,5 +161,34 @@ def metacontroller_cli():
     train(**(hierarchical_parse_args(parser)))
 
 
+def events_cli():
+    class _Train(Train):
+        @staticmethod
+        def make_env(**_kwargs):
+            return TimeLimit(
+                max_episode_steps=30,
+                env=Wrapper(
+                    n_active_subtasks=5,
+                    watch_baby_range=2,
+                    avoid_dog_range=2,
+                    door_time_limit=10,
+                    max_time_outside=15,
+                    env=ppo.events.Gridworld(
+                        cook_time=2,
+                        time_to_heat_oven=3,
+                        doorbell_prob=0.05,
+                        mouse_prob=0.2,
+                        baby_prob=0.1,
+                        mess_prob=0.02,
+                        fly_prob=0.005,
+                        height=4,
+                        width=4,
+                    ),
+                ),
+            )
+
+    _Train(**get_args())
+
+
 if __name__ == "__main__":
-    metacontroller_cli()
+    events_cli()
