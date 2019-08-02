@@ -21,7 +21,6 @@ from ppo.events.objects import (
     Mess,
     Fire,
     Fly,
-    RandomActivating,
 )
 
 State = namedtuple("State", "objects interactions")
@@ -32,9 +31,13 @@ class Gridworld(gym.Env):
         self,
         cook_time: int,
         time_to_heat_oven: int,
-        random_activation_prob: float,
         height: int,
         width: int,
+        doorbell_prob: float,
+        mouse_prob: float,
+        baby_prob: float,
+        mess_prob: float,
+        fly_prob: float,
     ):
         super().__init__()
         self.object_idxs = {}
@@ -42,15 +45,15 @@ class Gridworld(gym.Env):
         self.width = width
         multiple_object_types = [Mess, Fly]
         object_types = [
+            Mouse,
+            Dog,
+            Baby,
             Door,
             MouseHole,
-            Mouse,
-            Baby,
             Refrigerator,
             Table,
             Oven,
             Food,
-            Dog,
             Cat,
             Mess,
             Fire,
@@ -58,25 +61,38 @@ class Gridworld(gym.Env):
             Fly,
             Agent,
         ]
-        assert object_types[-1] is Agent
-        self.objects = []
-        for object_type in object_types:
-            kwargs = dict(objects=self.objects, height=height, width=width)
-            if issubclass(object_type, RandomActivating):
-                kwargs.update(activation_prob=random_activation_prob)
-            if object_type is Food:
-                kwargs.update(cook_time=cook_time)
-            if object_type is Oven:
-                kwargs.update(time_to_heat=time_to_heat_oven)
-            if object_type in multiple_object_types:
-                for _ in range(height * width):
-                    self.objects.append(object_type(**kwargs))
-            else:
-                self.objects.append(object_type(**kwargs))
 
+        def make_objects():
+            objects = []
+            for object_type in object_types:
+                kwargs = dict(objects=objects, height=height, width=width)
+                if issubclass(object_type, Door):
+                    kwargs.update(activation_prob=doorbell_prob)
+                if issubclass(object_type, Mouse):
+                    kwargs.update(activation_prob=mouse_prob)
+                if issubclass(object_type, Baby):
+                    kwargs.update(activation_prob=baby_prob)
+                if issubclass(object_type, Mess):
+                    kwargs.update(activation_prob=mess_prob)
+                if issubclass(object_type, Fly):
+                    kwargs.update(activation_prob=fly_prob)
+                if object_type is Food:
+                    kwargs.update(cook_time=cook_time)
+                if object_type is Oven:
+                    kwargs.update(time_to_heat=time_to_heat_oven)
+                if object_type in multiple_object_types:
+                    for _ in range(height * width):
+                        objects += [object_type(**kwargs)]
+                else:
+                    objects += [object_type(**kwargs)]
+            return objects
+
+        self.objects = None
+        self.make_objects = make_objects
         self.agent = None
         self.last_action = None
         self.transitions = [(0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)]
+        self._mess = None
 
     def interact(self):
         if self.agent.grasping is None:
@@ -105,14 +121,12 @@ class Gridworld(gym.Env):
 
         return State(objects=self.objects, interactions=interactions), 0, False, {}
 
-    def seed(self, seed):
+    def seed(self, seed=None):
         np.random.seed(seed)
 
     def reset(self):
-        for obj in self.objects:
-            obj.reset()
-            if isinstance(obj, Agent):
-                self.agent = obj
+        self.objects = self.make_objects()
+        self.agent = next((o for o in self.objects if isinstance(o, Agent)))
         return State(objects=self.objects, interactions=[])
 
     def render(self, mode="human"):

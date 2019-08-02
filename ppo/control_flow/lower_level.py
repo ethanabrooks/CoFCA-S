@@ -57,8 +57,8 @@ class LowerLevel(Agent):
         act = super().forward(
             self.preprocess_obs(inputs), action=action, *args, **kwargs
         )
-        x = torch.zeros_like(act.action)
-        actions = Actions(a=act.action, g=x, cg=x, cr=x, z=z, l=x)
+        x = torch.zeros_like(act.wrap_action)
+        actions = Actions(a=act.wrap_action, g=x, cg=x, cr=x, z=z, l=x)
         return act._replace(action=torch.cat(actions, dim=-1))
 
     def get_value(self, inputs, rnn_hxs, masks):

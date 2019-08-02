@@ -288,7 +288,7 @@ class Train:
                 )  # type: AgentValues
 
             # Observe reward and next obs
-            obs, reward, done, infos = envs.step(act.action)
+            obs, reward, done, infos = envs.step(act.wrap_action)
 
             for d in infos:
                 for k, v in d.items():
@@ -321,7 +321,7 @@ class Train:
                 rollouts.insert(
                     obs=obs,
                     recurrent_hidden_states=act.rnn_hxs,
-                    actions=act.action,
+                    actions=act.wrap_action,
                     action_log_probs=act.action_log_probs,
                     values=act.value,
                     rewards=reward,

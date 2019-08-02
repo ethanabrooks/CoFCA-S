@@ -20,6 +20,8 @@ class Object:
     def step(self, action):
         if self.pos is None:
             return
+
+        action = self.wrap_action(action)
         pos = np.array(self.pos) + np.array(action)
         if tuple(pos) in [
             o.pos for o in self.objects if type(o) in self.obstacle_types
@@ -36,9 +38,6 @@ class Object:
         return {
             o.__class__ for o in self.objects if not isinstance(o, (Agent, MouseHole))
         }
-
-    def reset(self):
-        pass
 
     def interact(self):
         pass
@@ -59,27 +58,35 @@ class Object:
             raise RuntimeError("Object of type", types, "not found.")
 
     def __str__(self):
-        return " ".join(re.findall("[A-Z][^A-Z]*", self.__class__.__name__))
+        return "_".join(re.findall("[A-Z][^A-Z]*", self.__class__.__name__)).lower()
 
     def icon(self):
         return str(self)[:1]
 
+    def wrap_action(self, action):
+        return action
+
 
 class Immobile(Object, ABC):
-    def step(self, action):
-        return super().step(np.zeros(2, dtype=int))
+    def wrap_action(self, action):
+        return np.zeros(2, dtype=int)
 
 
 class RandomPosition(Object, ABC):
-    def reset(self):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.pos = self.random_position()
+
+    def random_position(self):
         available = [
             t
             for t in map(tuple, self.candidate_positions())
             if t not in self.other_positions()
         ]
+        if not available:
+            available = self.candidate_positions()
         choice = np.random.choice(len(available))
-        self.pos = available[choice]
-        return super().reset()
+        return tuple(available[choice])
 
     def candidate_positions(self):
         return (
@@ -94,9 +101,9 @@ class RandomWalking(Object, ABC):
         super().__init__(**kwargs)
         self.actions = [(0, 1), (1, 0), (0, -1), (-1, 0), (0, 0)]
 
-    def step(self, action):
+    def wrap_action(self, action):
         choice = np.random.choice(len(self.actions))
-        return super().step(self.actions[choice])
+        return self.actions[choice] if np.random.random() < 0.7 else (0, 0)
 
 
 class Graspable(Object, ABC):
@@ -159,7 +166,8 @@ class RandomActivating(Activating, ABC):
 
     def step(self, action):
         if not self.activated:
-            if np.random.random() < self.activation_prob:
+            rand = np.random.random()
+            if rand < self.activation_prob:
                 self.activate()
         return super().step(action)
 
@@ -178,8 +186,8 @@ class Wall(Immobile, RandomPosition, ABC):
 
 
 class Agent(RandomPosition):
-    def __init__(self, objects: List, height: int, width: int):
-        super().__init__(objects, height, width)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self.grasping = None
 
     def grasp(self, obj):
@@ -198,6 +206,11 @@ class Door(Wall, RandomActivating, Deactivatable, Immobile):
         self.activated = False
         return super().step(action)
 
+    def interact(self):
+        dog = self.get_object(Dog)
+        if dog.pos is None:
+            dog.pos = self.pos
+
     def icon(self):
         return "🔔" if self.activated else "🚪"
 
@@ -208,20 +221,41 @@ class MouseHole(Wall):
 
 
 class Mouse(RandomActivating, RandomWalking, Deactivatable):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.caught = False
+
     def activate(self):
-        self.pos = self.get_object(MouseHole).pos
-        super().activate()
+        if not self.caught:
+            self.pos = self.get_object(MouseHole).pos
+            super().activate()
 
     def deactivate(self):
         self.pos = None
+        self.caught = True
+        super().deactivate()
+
+    @property
+    def hole(self):
+        return self.get_object(MouseHole)
+
+    def wrap_action(self, action):
+        if self.pos not in (None, self.hole.pos) and np.random.random() < 0.5:
+            # step toward hole
+            from_hole = np.array(self.pos) - np.array(self.hole.pos)
+            action = min(self.actions, key=lambda a: np.sum(np.abs(a + from_hole)))
+        return action
 
     def step(self, action):
-        if self.pos is not None and np.random.random() < 0.2:
-            # step toward hole
-            hole = self.get_object(MouseHole).pos
-            toward_hole = np.array(hole) - np.array(self.pos)
-            action = min(self.actions, key=lambda a: np.sum(np.abs(a - toward_hole)))
+        hole = self.get_object(MouseHole)
+        if self.pos == hole.pos:
+            self.pos = None
+            self.activated = False
         return super().step(action)
+
+    @property
+    def obstacle_types(self):
+        return {}
 
     def icon(self):
         return "🐁"
@@ -282,36 +316,38 @@ class Table(RandomPosition, Immobile):
         return "🍽"
 
 
-class Food(Graspable):
+class Food(Graspable, Activating):
     def __init__(self, cook_time, **kwargs):
         super().__init__(**kwargs)
         # noinspection PyTypeChecker
-        self.oven = self.get_object(Oven)  # type: Oven
         # noinspection PyTypeChecker
-        self.refrigerator = self.get_object(Refrigerator)  # type: Refrigerator
-        self.cooked = False
+        refrigerator = self.get_object(Refrigerator)  # type: Refrigerator
         self.cook_time = cook_time
         self.time_cooking = 0
+        self.pos = refrigerator.pos
 
     def icon(self):
-        return "🍳" if self.cooked else "🥚"
-
-    def reset(self):
-        self.pos = self.refrigerator.pos
-        super().reset()
+        return "🍳" if self.activated else "🥚"
 
     def step(self, action):
+        # noinspection PyTypeChecker
+        oven = self.get_object(Oven)  # type: Oven
         if self.time_cooking == self.cook_time:
-            self.cooked = True
-        if self.pos == self.oven.pos and self.oven.hot():
+            self.activate()
+        if self.pos == oven.pos and oven.hot():
             self.time_cooking += 1
 
 
 class Dog(RandomPosition, RandomWalking, Graspable):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.let_out = False
+
     def interact(self):
         door = self.get_object(Door)
-        if self.grasped and self.pos == door.pos:
+        if self.pos == door.pos and not self.let_out:
             self.pos = None
+            self.let_out = True
         super().interact()
 
     def icon(self):
@@ -324,6 +360,7 @@ class Dog(RandomPosition, RandomWalking, Graspable):
 
 class Cat(RandomPosition, RandomWalking, Graspable):
     def step(self, action):
+        dog = self.get_object(Dog)
         agent = self.get_object(Agent)
         from_agent = np.array(self.pos) - np.array(agent.pos)
         toward_agent = min(
@@ -332,6 +369,10 @@ class Cat(RandomPosition, RandomWalking, Graspable):
         actions = list(set(self.actions) - {toward_agent})
         choice = np.random.choice(len(actions))
         return super().step(actions[choice])
+
+    @property
+    def obstacle_types(self):
+        return {o for o in super().obstacle_types if o is not Dog}
 
     def icon(self):
         return "🐈"
@@ -343,8 +384,7 @@ class Mess(Immobile, RandomActivating, Deactivatable):
         dog = self.get_object(Dog)
         if dog.pos not in {m.pos for m in messes}:
             self.pos = dog.pos
-
-        super().activate()
+            super().activate()
 
     def deactivate(self):
         self.pos = None
@@ -364,24 +404,21 @@ class Fly(RandomPosition, RandomWalking, RandomActivating, Deactivatable):
         super().__init__(**kwargs)
         try:
             self.parent = self.get_object(Fly)
+            self.activated = False
+            self.pos = None
         except RuntimeError:
             self.parent = None
+            self.activated = True
+        assert (self.pos is not None) == self.activated
 
     def deactivate(self):
         self.pos = None
         super().deactivate()
 
-    def reset(self):
-        if self.parent is None:
-            self.activate()
-            return super().reset()
-        return Object.reset(self)
-
-    def step(self, action):
-        if not self.activated and self.parent is not None:
-            if self.parent.activated and np.random.random() < self.activation_prob:
-                self.activate()
-        return super().step(action)
+    def activate(self):
+        if self.parent is not None:
+            self.pos = self.random_position()
+            super().activate()
 
     def icon(self):
         return "🦟"

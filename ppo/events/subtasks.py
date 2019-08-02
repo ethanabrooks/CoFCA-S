@@ -1,5 +1,6 @@
 import abc
 import re
+import numpy as np
 from typing import List
 
 from ppo.events.objects import (
@@ -13,6 +14,7 @@ from ppo.events.objects import (
     Mess,
     Dog,
     Agent,
+    Cat,
 )
 
 
@@ -25,11 +27,13 @@ class Subtask:
         raise NotImplementedError
 
     @property
-    def reward_delta(self):
-        return 1
+    def reward(self):
+        return -0.1
 
     def __str__(self):
-        return " ".join(re.findall("[A-Z][^A-Z]*", self.__class__.__name__))
+        return " ".join(
+            re.findall("[A-Z][^A-Z]*", self.__class__.__name__)
+        ).capitalize()
 
 
 class AnswerDoor(Subtask):
@@ -45,15 +49,24 @@ class AnswerDoor(Subtask):
     def condition(self, *interactions, door: Door, **objects):
         return self.time_since_ring < self.time_limit and door in interactions
 
+    @property
+    def reward(self):
+        return 1
+
 
 class CatchMouse(Subtask):
     def condition(self, *interactions, mouse: Mouse, **objects):
         return mouse in interactions
 
+    @property
+    def reward(self):
+        return 1
+
 
 class ComfortBaby(Subtask):
     def __init__(self):
         self.time_crying = 0
+        super().__init__()
 
     def step(self, *interactions, baby: Baby, **objects):
         if baby.activated:
@@ -62,52 +75,89 @@ class ComfortBaby(Subtask):
             self.time_crying = 0
 
     def condition(self, *interactions, baby: Baby, **objects):
-        return baby in interactions
+        return baby.activated
 
 
 class MakeDinner(Subtask):
-    def condition(self, reward, *interactions, food: Food, table: Table, **objects):
-        return {food, table}.issubset(interactions) and food.cooked
+    def __init__(self):
+        self.made = 0
+        super().__init__()
+
+    def condition(self, *interactions, food: Food, table: Table, **objects):
+        return food.pos == table.pos and food.activated
+
+    @property
+    def reward(self):
+        return 1
 
 
 class MakeFire(Subtask):
-    def condition(self, reward, *interactions, fire: Fire, **objects):
+    def condition(self, *interactions, fire: Fire, **objects):
         return fire.activated
 
     @property
-    def reward_delta(self):
-        return 0.1
+    def reward(self):
+        return 0.01
 
 
 class KillFlies(Subtask):
-    def condition(self, reward, *interactions, flies: List[Fly], **objects):
-        return any(fly in interactions for fly in flies)
+    def condition(self, *interactions, fly: List[Fly], **objects):
+        print([f.pos for f in fly if f.activated])
+        return any(f.activated for f in fly)
 
 
 class CleanMess(Subtask):
-    def condition(self, reward, *interactions, messes: List[Mess], **objects):
-        return any(mess in interactions for mess in messes)
+    def condition(self, *interactions, mess: List[Mess], **objects):
+        return any(m.activated for m in mess)
 
 
 class AvoidDog(Subtask):
     def __init__(self, min_range):
         self.range = min_range
 
-    def condition(self, reward, *interactions, dog: Dog, agent: Agent, **objects):
-        return dog.pos - agent.pos < self.range
+    def condition(self, *interactions, dog: Dog, agent: Agent, **objects):
+        return (
+            dog.pos is not None
+            and np.linalg.norm(np.array(dog.pos) - np.array(agent.pos)) < self.range
+        )
 
-    @property
-    def reward_delta(self):
-        return -0.1
+
+class LetDogIn(Subtask):
+    def __init__(self, max_time_outside):
+        self.max_time_outside = max_time_outside
+        self.time_outside = None
+
+    def step(self, *interactions, dog: Dog, **objects):
+        if dog.pos is None:
+            self.time_outside += 1
+        else:
+            self.time_outside = 0
+
+    def condition(self, *interactions, dog: Dog, agent: Agent, **objects):
+        return self.time_outside > self.max_time_outside
 
 
 class WatchBaby(Subtask):
     def __init__(self, max_range: int):
         self.range = max_range
 
-    def condition(self, reward, *interactions, baby: Baby, agent: Agent, **objects):
-        return baby.pos - agent.pos > self.range
+    def condition(self, *interactions, baby: Baby, agent: Agent, **objects):
+        return np.linalg.norm(np.array(baby.pos) - np.array(agent.pos)) > self.range
+
+
+class KeepBabyOutOfFire(Subtask):
+    def condition(self, *interactions, baby: Baby, fire: Fire, **objects):
+        return fire.activated and baby.pos == fire.pos
 
     @property
-    def reward_delta(self):
-        return -0.1
+    def reward(self):
+        return -2
+
+
+class KeepCatFromDog(Subtask):
+    def condition(self, *interactions, cat: Cat, dog: Dog, **objects):
+        return cat.pos == dog.pos
+
+    @property
+    def reward(self):
+        return -1
