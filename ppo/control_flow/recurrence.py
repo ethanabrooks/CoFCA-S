@@ -1,17 +1,17 @@
 import functools
-import itertools
 from collections import namedtuple
+import itertools
 
+from gym.spaces import Box, Discrete
 import numpy as np
 import torch
-import torch.jit
-from gym.spaces import Box, Discrete
 from torch import nn as nn
+import torch.jit
 from torch.nn import functional as F
 
-import ppo
 from gridworld_env.control_flow_gridworld import LineTypes
 from gridworld_env.control_flow_gridworld import Obs
+import ppo
 from ppo.control_flow.lower_level import (
     LowerLevel,
     g_binary_to_discrete,
@@ -37,7 +37,9 @@ RecurrentState = namedtuple(
 )
 
 
-class Recurrence(nn.Module):
+class Recurrence(torch.jit.ScriptModule):
+    __constants__ = ["input_sections", "state_sizes", "recurrent"]
+
     def __init__(
         self,
         obs_spaces,
@@ -120,10 +122,15 @@ class Recurrence(nn.Module):
             init_(nn.Linear(hidden_size * h * w, hidden_size), nn.ReLU()),
             nn.ReLU(),
         )
+
         self.dist = nn.Sequential(
             init_(nn.Linear(hidden_size, 1), nn.Sigmoid()), nn.Sigmoid()
         )
-        self.phi = Categorical(d * action_spaces.a.n * int(self.subtask_nvec.prod()), 2)
+
+        self.phi = trace(
+            lambda in_size: init_(nn.Linear(in_size, 2), nn.Sigmoid()),
+            in_size=(d * action_spaces.a.n * int(self.subtask_nvec.prod())),
+        )
 
         self.zeta = Categorical(self.line_size, len(LineTypes._fields))
 
@@ -132,21 +139,7 @@ class Recurrence(nn.Module):
             init_(nn.Linear(1, 1), nn.Sigmoid()), nn.Sigmoid()
         )
         self.xi_debug = nn.Sequential(
-            Parallel(
-                nn.Sequential(Reshape(1, d, h, w)),
-                nn.Sequential(Reshape(self.line_size, 1, 1, 1)),
-            ),
-            Product(),
-            Times(
-                100 * (F.pad(torch.eye(4), (1, 2, 15, 0)).view(1, 19, 7, 1, 1) - 0.5)
-            ),
-            Reshape(self.line_size * d, h * w),
-            # init_(nn.Conv2d(d * self.line_size, hidden_size, kernel_size=1), "sigmoid"),
-            # Reshape(hidden_size, h * w),
-            Sum(dim=-1),
-            activation,
-            Times(100),
-            Sum(dim=-1, keepdim=True),
+            init_(nn.Linear(1, 1), nn.Sigmoid()), nn.Sigmoid()
         )
         self.zeta_debug = Categorical(len(LineTypes._fields), len(LineTypes._fields))
         # NOTE }
@@ -479,12 +472,13 @@ class Recurrence(nn.Module):
                             part.unsqueeze_(i2 + 1)
                     outer_product_obs = outer_product_obs * part
 
-                c_dist = self.phi(outer_product_obs.view(N, -1))
-                # self.sample_new(C[t], c_dist)
+                c_logits = self.phi(outer_product_obs.view(N, -1))
+                c = torch.sigmoid(c_logits[:, :1])
+                probs = torch.zeros_like(c_logits)  # dummy value
 
                 # NOTE {
                 # _task_sections = torch.split(
-                #     subtask_param, tuple(self.subtask_nvec), dim=-1
+                # subtask_param, tuple(self.subtask_nvec), dim=-1
                 # )
                 # interaction, count, obj, _, condition = _task_sections
                 # agent_layer = obs[t, :, 6, :, :].long()
@@ -503,7 +497,7 @@ class Recurrence(nn.Module):
                 # c = truth
                 # self.print("c", round(c, 4))
                 # NOTE }
-                return c_dist.probs[:, 1:], c_dist.probs
+                return c, probs
 
             # cr
             cr, cr_probs = gating_function(subtask_param=r, C=CR)

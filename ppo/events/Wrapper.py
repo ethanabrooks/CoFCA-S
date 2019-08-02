@@ -3,6 +3,7 @@ from collections import namedtuple, defaultdict
 import numpy as np
 
 import gym
+from gym import spaces
 from gym.wrappers import TimeLimit
 
 from ppo.events.gridworld import State
@@ -62,6 +63,15 @@ class Wrapper(gym.Wrapper):
         env = env.unwrapped
         self.width, self.height = env.width, env.height
         self.object_one_hots = np.eye(env.height * env.width)
+        self.object_types = {o.__class__ for o in env.make_objects()}
+        base_shape = len(self.object_types), self.height, self.width
+        self.observation_space = spaces.Dict(
+            Obs(
+                base=spaces.Box(low=-np.ones(base_shape), high=np.ones(base_shape)),
+                subtasks=spaces.MultiBinary(len(make_subtasks())),
+            )._asdict()
+        )
+        self.action_space = spaces.Discrete(5)
 
     def render(self, mode="human", **kwargs):
         env = self.env.unwrapped
@@ -127,14 +137,17 @@ class Wrapper(gym.Wrapper):
 
     def observation(self, observation):
         dims = self.height, self.width
-        object_pos = [
-            self.object_one_hots[np.ravel_multi_index(obj.pos, dims)].reshape(dims)
-            * (-1 if obj.activated else 1)
-            for obj in observation.objects
-            if obj.pos is not None
-        ]
-        base = np.stack(object_pos)
-        return Obs(base=base, subtasks=self.active_mask)
+        object_pos = defaultdict(lambda: np.zeros((self.height, self.width)))
+        for obj in observation.objects:
+            if obj.pos is not None:
+                sign = -1 if obj.activated else 1
+                index = np.ravel_multi_index(obj.pos, dims)
+                one_hot = self.object_one_hots[index].reshape(dims)
+                object_pos[obj.__class__] += one_hot * sign
+        base = np.stack([object_pos[k] for k in self.object_types])
+        obs = Obs(base=base, subtasks=self.active_mask)._asdict()
+        assert self.observation_space.contains(obs)
+        return obs
 
 
 if __name__ == "__main__":

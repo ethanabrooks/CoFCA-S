@@ -1,19 +1,19 @@
-import torch
-import torch.jit
 from gym.spaces import MultiDiscrete
+import torch
 from torch import nn as nn
+import torch.jit
 from torch.nn import functional as F
 
+from gridworld_env.control_flow_gridworld import LineTypes, Obs
 import ppo
-import ppo.control_flow.lower_level
-from gridworld_env.control_flow_gridworld import Obs, LineTypes
 from ppo.agent import AgentValues, NNBase
-from ppo.control_flow.lower_level import g_discrete_to_binary
-from ppo.control_flow.recurrence import RecurrentState, Recurrence
+import ppo.control_flow.lower_level
+from ppo.control_flow.recurrence import Recurrence, RecurrentState
 from ppo.control_flow.wrappers import Actions
 from ppo.distributions import FixedCategorical
 
 
+# noinspection PyMissingConstructor
 class Agent(ppo.agent.Agent, NNBase):
     def __init__(
         self,

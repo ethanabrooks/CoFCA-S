@@ -8,6 +8,7 @@ import time
 
 import gym
 import numpy as np
+from gym.wrappers import TimeLimit
 from tensorboardX import SummaryWriter
 import torch
 from tqdm import tqdm
@@ -42,12 +43,10 @@ class Train:
         seed,
         cuda_deterministic,
         cuda,
-        max_episode_steps,
+        time_limit,
         log_dir: Path,
-        env_id,
         gamma,
         normalize,
-        add_timestep,
         save_interval,
         log_interval,
         eval_interval,
@@ -63,6 +62,7 @@ class Train:
         synchronous,
         batch_size,
         run_id,
+        env_args,
         save_dir=None,
     ):
         target_success_rates = iter(target_success_rates)
@@ -103,14 +103,14 @@ class Train:
         torch.set_num_threads(1)
 
         envs = self.make_vec_envs(
-            env_id=env_id,
+            **env_args,
             seed=seed,
-            num_processes=num_processes,
             gamma=(gamma if normalize else None),
-            add_timestep=add_timestep,
             render=render,
             synchronous=True if render else synchronous,
             evaluation=False,
+            num_processes=num_processes,
+            time_limit=time_limit,
         )
 
         self.agent = self.build_agent(envs=envs, device=device, **agent_args)
@@ -225,14 +225,16 @@ class Train:
 
             if eval_interval is not None and j % eval_interval == eval_interval - 1:
                 eval_envs = self.make_vec_envs(
-                    env_id=env_id,
-                    seed=seed + num_processes,
+                    **env_args,
+                    # env_id=env_id,
+                    # time_limit=time_limit,
                     num_processes=num_processes,
+                    # add_timestep=add_timestep,
+                    render=render_eval,
+                    seed=seed + num_processes,
                     gamma=gamma if normalize else None,
-                    add_timestep=add_timestep,
                     evaluation=True,
                     synchronous=True if render_eval else synchronous,
-                    render=render_eval,
                 )
                 eval_envs.to(device)
 
@@ -253,9 +255,7 @@ class Train:
                     obs=obs,
                     rnn_hxs=eval_recurrent_hidden_states,
                     masks=eval_masks,
-                    num_steps=max(num_steps, max_episode_steps)
-                    if max_episode_steps
-                    else num_steps,
+                    num_steps=max(num_steps, time_limit) if time_limit else num_steps,
                     rollouts=None,
                     counter=eval_counter,
                 )
@@ -281,7 +281,7 @@ class Train:
                 )  # type: AgentValues
 
             # Observe reward and next obs
-            obs, reward, done, infos = envs.step(act.wrap_action)
+            obs, reward, done, infos = envs.step(act.action)
 
             for d in infos:
                 for k, v in d.items():
@@ -314,7 +314,7 @@ class Train:
                 rollouts.insert(
                     obs=obs,
                     recurrent_hidden_states=act.rnn_hxs,
-                    actions=act.wrap_action,
+                    actions=act.action,
                     action_log_probs=act.action_log_probs,
                     values=act.value,
                     rewards=reward,
@@ -328,7 +328,7 @@ class Train:
         return Agent(envs.observation_space.shape, envs.action_space, **agent_args)
 
     @staticmethod
-    def make_env(env_id, seed, rank, add_timestep):
+    def make_env(env_id, seed, rank, add_timestep, time_limit):
         if env_id.startswith("dm"):
             _, domain, task = env_id.split(".")
             env = dm_control2gym.make(domain_name=domain, task_name=task)
@@ -360,12 +360,14 @@ class Train:
         if len(obs_shape) == 3 and obs_shape[2] in [1, 3]:
             env = TransposeImage(env)
 
+        if time_limit is not None:
+            env = TimeLimit(env, max_episode_steps=time_limit)
+
         return env
 
     def make_vec_envs(
         self, num_processes, gamma, render, synchronous, num_frame_stack=None, **kwargs
     ):
-
         envs = [
             functools.partial(self.make_env, rank=i, **kwargs)
             for i in range(num_processes)

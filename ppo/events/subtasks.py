@@ -102,7 +102,6 @@ class MakeFire(Subtask):
 
 class KillFlies(Subtask):
     def condition(self, *interactions, fly: List[Fly], **objects):
-        print([f.pos for f in fly if f.activated])
         return any(f.activated for f in fly)
 
 
