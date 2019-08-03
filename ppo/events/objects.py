@@ -37,7 +37,7 @@ class Object:
     @property
     @functools.lru_cache()
     def obstacle_types(self):
-        return {o.__class__ for o in self.objects if not type(o) in (Agent, MouseHole)}
+        return [o.__class__ for o in self.objects if not type(o) in (Agent, MouseHole)]
 
     def interact(self):
         pass
@@ -197,8 +197,9 @@ class Agent(RandomPosition):
         return "🤜" if self.grasping else "😀"
 
     @property
+    @functools.lru_cache()
     def obstacle_types(self):
-        return {}
+        return []
 
 
 class Door(Wall, RandomActivating, Deactivatable, Immobile):
@@ -254,8 +255,9 @@ class Mouse(RandomActivating, RandomWalking, Deactivatable):
         return super().step(action)
 
     @property
+    @functools.lru_cache()
     def obstacle_types(self):
-        return {}
+        return []
 
     def icon(self):
         return "🐁"
@@ -273,8 +275,9 @@ class Baby(RandomPosition, RandomActivating, RandomWalking, Deactivatable, Grasp
         return "😭" if self.activated else "👶"
 
     @property
+    @functools.lru_cache()
     def obstacle_types(self):
-        return {o for o in super().obstacle_types if o is not Fire}
+        return [o for o in super().obstacle_types if o is not Fire]
 
 
 class Oven(RandomPosition, Activatable, Immobile):
@@ -354,8 +357,9 @@ class Dog(RandomPosition, RandomWalking, Graspable):
         return "🐕"
 
     @property
+    @functools.lru_cache()
     def obstacle_types(self):
-        return {o for o in super().obstacle_types if o is not Cat}
+        return [o for o in super().obstacle_types if o is not Cat]
 
 
 class Cat(RandomPosition, RandomWalking, Graspable):
@@ -371,8 +375,9 @@ class Cat(RandomPosition, RandomWalking, Graspable):
         return super().step(actions[choice])
 
     @property
+    @functools.lru_cache()
     def obstacle_types(self):
-        return {o for o in super().obstacle_types if o is not Dog}
+        return [o for o in super().obstacle_types if o is not Dog]
 
     def icon(self):
         return "🐈"
