@@ -111,6 +111,7 @@ class Wrapper(gym.Wrapper):
                     print(0)
             else:
                 print()
+        input("pause")
 
     def reset(self, **kwargs):
         possible_subtasks = self.make_subtasks()
