@@ -83,8 +83,10 @@ class RandomPosition(Object, ABC):
             for t in map(tuple, self.candidate_positions())
             if t not in self.other_positions()
         ]
+        if isinstance(self, Fly):
+            other_objects = [o for o in self.objects if o is not self]
         if not available:
-            available = self.candidate_positions()
+            return None
         choice = np.random.choice(len(available))
         return tuple(available[choice])
 
