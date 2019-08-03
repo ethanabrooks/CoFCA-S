@@ -37,9 +37,7 @@ class Object:
     @property
     @functools.lru_cache()
     def obstacle_types(self):
-        return {
-            o.__class__ for o in self.objects if not isinstance(o, (Agent, MouseHole))
-        }
+        return {o.__class__ for o in self.objects if not type(o) in (Agent, MouseHole)}
 
     def interact(self):
         pass
@@ -49,11 +47,11 @@ class Object:
             if o is not self:
                 yield o.pos
 
-    def get_objects(self, types):
-        return (o for o in self.objects if isinstance(o, types))
+    def get_objects(self, *types):
+        return (o for o in self.objects if type(o) in types)
 
-    def get_object(self, types):
-        objects = (o for o in self.objects if isinstance(o, types))
+    def get_object(self, *types):
+        objects = (o for o in self.objects if type(o) in types)
         try:
             return next(objects)
         except StopIteration:
@@ -85,7 +83,7 @@ class RandomPosition(Object, ABC):
             for t in map(tuple, self.candidate_positions())
             if t not in self.other_positions()
         ]
-        if isinstance(self, Fly):
+        if type(self) is Fly:
             other_objects = [o for o in self.objects if o is not self]
         if not available:
             return None

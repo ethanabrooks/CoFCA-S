@@ -100,8 +100,10 @@ class Gridworld(gym.Env):
                 if obj.pos == self.agent.pos:
                     obj.interact()
                     yield obj
-                    if isinstance(obj, Graspable):
+                    try:
                         self.agent.grasp(obj)
+                    except AttributeError:
+                        pass
         else:
             self.agent.grasping.interact()
             self.agent.grasping = None
@@ -116,8 +118,10 @@ class Gridworld(gym.Env):
             obj.step(action)
         grasping = self.agent.grasping
         if grasping:
-            assert isinstance(grasping, Graspable)
-            grasping.set_pos(self.agent.pos)
+            try:
+                grasping.set_pos(self.agent.pos)
+            except AttributeError:
+                pass
 
         return State(objects=self.objects, interactions=interactions), 0, False, {}
 
@@ -126,7 +130,7 @@ class Gridworld(gym.Env):
 
     def reset(self):
         self.objects = self.make_objects()
-        self.agent = next((o for o in self.objects if isinstance(o, Agent)))
+        self.agent = next((o for o in self.objects if type(o) is Agent))
         return State(objects=self.objects, interactions=[])
 
     def render(self, mode="human"):
