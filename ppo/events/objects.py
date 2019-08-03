@@ -24,9 +24,9 @@ class Object:
 
         action = self.wrap_action(action)
         pos = np.array(self.pos) + np.array(action)
-        if tuple(pos) in [
+        if tuple(pos) in (
             o.pos for o in self.objects if type(o) in self.obstacle_types
-        ]:
+        ):
             pos = self.pos
         self.pos = tuple(
             np.clip(
@@ -83,8 +83,6 @@ class RandomPosition(Object, ABC):
             for t in map(tuple, self.candidate_positions())
             if t not in self.other_positions()
         ]
-        if type(self) is Fly:
-            other_objects = [o for o in self.objects if o is not self]
         if not available:
             return None
         choice = np.random.choice(len(available))
