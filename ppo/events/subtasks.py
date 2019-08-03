@@ -43,15 +43,13 @@ class AnswerDoor(Subtask):
 
     def step(self, *interactions, door: Door, **objects):
         self.time_since_ring += 1
-        if door.activated:  # door bell rings once
+        if door.activated or (  # door bell rings once
+            door in interactions and self.time_since_ring < self.time_limit
+        ):
             self.time_since_ring = 0
 
     def condition(self, *interactions, door: Door, **objects):
-        return self.time_since_ring < self.time_limit and door in interactions
-
-    @property
-    def reward(self):
-        return 1
+        return self.time_since_ring > self.time_limit and door in interactions
 
 
 class CatchMouse(Subtask):

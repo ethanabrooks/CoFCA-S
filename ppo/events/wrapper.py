@@ -43,17 +43,17 @@ class Wrapper(gym.Wrapper):
         def make_subtasks():
             return [
                 AnswerDoor(door_time_limit),
-                CatchMouse(),
-                ComfortBaby(),
-                MakeDinner(),
-                MakeFire(),
-                KillFlies(),
-                CleanMess(),
-                AvoidDog(avoid_dog_range),
-                WatchBaby(watch_baby_range),
-                LetDogIn(max_time_outside),
-                KeepBabyOutOfFire(),
-                KeepCatFromDog(),
+                # CatchMouse(),
+                # ComfortBaby(),
+                # MakeDinner(),
+                # MakeFire(),
+                # KillFlies(),
+                # CleanMess(),
+                # AvoidDog(avoid_dog_range),
+                # WatchBaby(watch_baby_range),
+                # LetDogIn(max_time_outside),
+                # KeepBabyOutOfFire(),
+                # KeepCatFromDog(),
             ]
 
         self.make_subtasks = make_subtasks
@@ -65,12 +65,15 @@ class Wrapper(gym.Wrapper):
         self.object_one_hots = np.eye(env.height * env.width)
         self.object_types = {o.__class__ for o in env.make_objects()}
         base_shape = len(self.object_types), self.height, self.width
-        self.observation_space = spaces.Dict(
-            Obs(
-                base=spaces.Box(low=-np.ones(base_shape), high=np.ones(base_shape)),
-                subtasks=spaces.MultiBinary(len(make_subtasks())),
-            )._asdict()
+        self.observation_space = spaces.Box(
+            low=-np.ones(base_shape), high=np.ones(base_shape)
         )
+        # self.observation_space = spaces.Dict(
+        #     Obs(
+        #         base=self.observation_space,
+        #         subtasks=spaces.MultiBinary(len(make_subtasks())),
+        #     )._asdict()
+        # )
         self.action_space = spaces.Discrete(5)
 
     def render(self, mode="human", **kwargs):
@@ -145,7 +148,8 @@ class Wrapper(gym.Wrapper):
                 one_hot = self.object_one_hots[index].reshape(dims)
                 object_pos[obj.__class__] += one_hot * sign
         base = np.stack([object_pos[k] for k in self.object_types])
-        obs = Obs(base=base, subtasks=self.active_mask)._asdict()
+        # obs = Obs(base=base, subtasks=self.active_mask)._asdict()
+        obs = base
         assert self.observation_space.contains(obs)
         return obs
 

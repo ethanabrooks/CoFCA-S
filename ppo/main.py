@@ -26,12 +26,12 @@ def exp_main(gridworld_args, wrapper_args, **kwargs):
             env.seed(seed + rank)
             return env
 
-        def build_agent(self, envs, recurrent=None, device=None, **agent_args):
-            return ppo.events.Agent(
-                obs_spaces=Obs(**envs.observation_space.spaces),
-                action_size=envs.action_space.n,
-                **agent_args
-            )
+        # def build_agent(self, envs, recurrent=None, device=None, **agent_args):
+        #     return ppo.events.Agent(
+        #         obs_spaces=Obs(**envs.observation_space.spaces),
+        #         action_size=envs.action_space.n,
+        #         **agent_args
+        #     )
 
     _Train(**kwargs)
 
@@ -49,7 +49,7 @@ def exp_cli():
     gridworld_parser.add_argument("--mess-prob", help="", type=float, default=0.02)
     gridworld_parser.add_argument("--fly-prob", help="", type=float, default=0.005)
     wrapper_parser = parser.add_argument_group("wrapper_args")
-    wrapper_parser.add_argument("--n-active-subtasks", help="", type=int, default=5)
+    wrapper_parser.add_argument("--n-active-subtasks", help="", type=int, required=True)
     wrapper_parser.add_argument("--watch-baby-range", help="", type=int, default=2)
     wrapper_parser.add_argument("--avoid-dog-range", help="", type=int, default=2)
     wrapper_parser.add_argument("--door-time-limit", help="", type=int, default=10)
