@@ -1,19 +1,16 @@
-import functools
 from collections import namedtuple
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 from ppo.distributions import Categorical
 from ppo.events.wrapper import Obs
-
-import numpy as np
-
 from ppo.layers import Parallel, Reshape, Product, Flatten
 from ppo.utils import init_
 
-RecurrentState = namedtuple("RecurrentState", "a a_probs v h p")
+RecurrentState = namedtuple("RecurrentState", "a a_probs v s p")
 
 
 class Recurrence(nn.Module):
@@ -34,7 +31,7 @@ class Recurrence(nn.Module):
         self.controller = nn.GRU(n_subtasks, hidden_size)
         self.action_size = 1
         self.state_sizes = RecurrentState(
-            a=1, a_probs=action_size, v=1, h=hidden_size, p=n_subtasks
+            a=1, a_probs=action_size, v=1, s=hidden_size, p=n_subtasks
         )
         self.obs_sections = [int(np.prod(s.shape)) for s in obs_spaces]
         self.f = nn.Sequential(
@@ -119,19 +116,18 @@ class Recurrence(nn.Module):
         for x in hx:
             x.squeeze_(0)
         p = hx.p
-        h = hx.h
         p[new_episode] = p0[new_episode]
         A = torch.cat([actions, hx.a.unsqueeze(0)], dim=0).long().squeeze(2)
         for t in range(T):
             r = p.unsqueeze(1) @ M
             r.squeeze_(1)
             s = self.f((inputs.base[t], r))
-            h = self.controller(s, h)
-            dist = self.actor(h)
+            v = self.critic(s)
+            dist = self.actor(s)
             self.sample_new(A[t], dist)
             a = self.a_one_hots(A[t].flatten().long())
             e = self.psi((s, a)).unsqueeze(1).expand(*M.shape)
-            p += c * F.cosine_similarity(e, M_plus, dim=-1)
-            p -= c * F.cosine_similarity(e, M_minus, dim=-1)
-            v = self.critic(h)  # TODO: build this network
-            yield RecurrentState(a=A[t], a_probs=dist.probs, v=v, h=h, p=p)
+            p = p + c * F.cosine_similarity(e, M_plus, dim=-1)
+            p = p - p * F.cosine_similarity(e, M_minus, dim=-1)
+            p = F.softmax(p, dim=-1)
+            yield RecurrentState(a=A[t], a_probs=dist.probs, v=v, s=s, p=p)
