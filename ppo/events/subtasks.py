@@ -49,7 +49,7 @@ class AnswerDoor(Subtask):
             self.time_since_ring = 0
 
     def condition(self, *interactions, door: Door, **objects):
-        return self.time_since_ring > self.time_limit and door in interactions
+        return self.time_since_ring > self.time_limit
 
 
 class CatchMouse(Subtask):
