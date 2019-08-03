@@ -7,12 +7,15 @@ import numpy as np
 
 
 class Object:
-    def __init__(self, objects: List, height: int, width: int):
+    def __init__(
+        self, objects: List, height: int, width: int, object_types: List[type]
+    ):
         self.width = width
         self.height = height
         self.objects = objects  # type: List[Object]
         self.pos = None
         self.activated = False
+        self.obstacle_types = [t for t in object_types if t not in (Agent, MouseHole)]
 
     @property
     def obstacle(self):
@@ -33,11 +36,6 @@ class Object:
                 pos, np.zeros(2, dtype=int), np.array([self.height, self.width]) - 1
             )
         )
-
-    @property
-    @functools.lru_cache()
-    def obstacle_types(self):
-        return [o.__class__ for o in self.objects if not type(o) in (Agent, MouseHole)]
 
     def interact(self):
         pass
@@ -189,17 +187,13 @@ class Agent(RandomPosition):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.grasping = None
+        self.obstacle_types = []
 
     def grasp(self, obj):
         self.grasping = obj
 
     def icon(self):
         return "🤜" if self.grasping else "😀"
-
-    @property
-    @functools.lru_cache()
-    def obstacle_types(self):
-        return []
 
 
 class Door(Wall, RandomActivating, Deactivatable, Immobile):
@@ -225,6 +219,7 @@ class Mouse(RandomActivating, RandomWalking, Deactivatable):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.caught = False
+        self.obstacle_types = []
 
     def activate(self):
         if not self.caught:
@@ -254,16 +249,15 @@ class Mouse(RandomActivating, RandomWalking, Deactivatable):
             self.activated = False
         return super().step(action)
 
-    @property
-    @functools.lru_cache()
-    def obstacle_types(self):
-        return []
-
     def icon(self):
         return "🐁"
 
 
 class Baby(RandomPosition, RandomActivating, RandomWalking, Deactivatable, Graspable):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.obstacle_types = [o for o in self.obstacle_types if o is not Fire]
+
     def interact(self):
         if self.activated:
             self.deactivate()
@@ -273,11 +267,6 @@ class Baby(RandomPosition, RandomActivating, RandomWalking, Deactivatable, Grasp
 
     def icon(self):
         return "😭" if self.activated else "👶"
-
-    @property
-    @functools.lru_cache()
-    def obstacle_types(self):
-        return [o for o in super().obstacle_types if o is not Fire]
 
 
 class Oven(RandomPosition, Activatable, Immobile):
@@ -345,6 +334,7 @@ class Dog(RandomPosition, RandomWalking, Graspable):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.let_out = False
+        self.obstacle_types = [o for o in self.obstacle_types if o is not Cat]
 
     def interact(self):
         door = self.get_object(Door)
@@ -356,13 +346,13 @@ class Dog(RandomPosition, RandomWalking, Graspable):
     def icon(self):
         return "🐕"
 
-    @property
-    @functools.lru_cache()
-    def obstacle_types(self):
-        return [o for o in super().obstacle_types if o is not Cat]
-
 
 class Cat(RandomPosition, RandomWalking, Graspable):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.let_out = False
+        self.obstacle_types = [o for o in self.obstacle_types if o is not Dog]
+
     def step(self, action):
         agent = self.get_object(Agent)
         from_agent = np.array(self.pos) - np.array(agent.pos)
@@ -372,11 +362,6 @@ class Cat(RandomPosition, RandomWalking, Graspable):
         actions = list(set(self.actions) - {toward_agent})
         choice = np.random.choice(len(actions))
         return super().step(actions[choice])
-
-    @property
-    @functools.lru_cache()
-    def obstacle_types(self):
-        return [o for o in super().obstacle_types if o is not Dog]
 
     def icon(self):
         return "🐈"

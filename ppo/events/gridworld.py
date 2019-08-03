@@ -1,12 +1,10 @@
-import functools
 from collections import namedtuple
-import numpy as np
 
 import gym
+import numpy as np
 
 from ppo.events.objects import (
     Object,
-    Graspable,
     Agent,
     Door,
     MouseHole,
@@ -65,7 +63,12 @@ class Gridworld(gym.Env):
         def make_objects():
             objects = []
             for object_type in object_types:
-                kwargs = dict(objects=objects, height=height, width=width)
+                kwargs = dict(
+                    objects=objects,
+                    object_types=object_types,
+                    height=height,
+                    width=width,
+                )
                 if issubclass(object_type, Door):
                     kwargs.update(activation_prob=doorbell_prob)
                 if issubclass(object_type, Mouse):
