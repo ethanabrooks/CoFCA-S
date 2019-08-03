@@ -124,7 +124,7 @@ class Wrapper(gym.Wrapper):
     def get_rewards(self, s: State):
         object_dict = defaultdict(list)
         for obj in s.objects:
-            k = str(obj)
+            k = type(obj).__name__.lower()
             object_dict[k] += [obj]
         object_dict = {k: v[0] if len(v) == 1 else v for k, v in object_dict.items()}
         subtask: Subtask

@@ -364,7 +364,6 @@ class Dog(RandomPosition, RandomWalking, Graspable):
 
 class Cat(RandomPosition, RandomWalking, Graspable):
     def step(self, action):
-        dog = self.get_object(Dog)
         agent = self.get_object(Agent)
         from_agent = np.array(self.pos) - np.array(agent.pos)
         toward_agent = min(
