@@ -24,13 +24,6 @@ setup(
         "bin/show-best",
         "bin/reproduce",
     ],
-    entry_points=dict(
-        console_scripts=[
-            "ppo=ppo.main:cli",
-            "teacher=ppo.main:teacher_cli",
-            "student=ppo.main:student_cli",
-            "metacontroller=ppo.main:metacontroller_cli",
-        ]
-    ),
+    entry_points=dict(console_scripts=["ppo=ppo.main:cli", "exp=ppo.main:exp_cli"]),
     install_requires=[],
 )
