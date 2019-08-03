@@ -1,5 +1,4 @@
 import functools
-import itertools
 from collections import namedtuple
 
 import numpy as np
@@ -12,23 +11,10 @@ from torch.nn import functional as F
 import ppo
 from gridworld_env.control_flow_gridworld import LineTypes
 from gridworld_env.control_flow_gridworld import Obs
-from ppo.control_flow.lower_level import (
-    LowerLevel,
-    g_binary_to_discrete,
-    g_discrete_to_binary,
-)
+from ppo.control_flow.lower_level import LowerLevel, g_discrete_to_binary
 from ppo.control_flow.wrappers import Actions
 from ppo.distributions import Categorical, DiagGaussian, FixedCategorical
-from ppo.layers import (
-    Concat,
-    Flatten,
-    Parallel,
-    Product,
-    Reshape,
-    ShallowCopy,
-    Sum,
-    Times,
-)
+from ppo.layers import Concat, Flatten, Parallel, Product, Reshape, ShallowCopy, Sum
 from ppo.utils import broadcast3d, init_, interp, trace, round
 
 RecurrentState = namedtuple(
@@ -95,13 +81,10 @@ class Recurrence(nn.Module):
             ),
             Product(),
             Reshape(self.line_size * d, h, w),
-            nn.Sequential(
-                init_(
-                    nn.Conv2d(self.line_size * d, hidden_size, kernel_size=1),
-                    activation,
-                ),
-                activation,
+            init_(
+                nn.Conv2d(self.line_size * d, hidden_size, kernel_size=1), activation
             ),
+            activation,
             *[
                 nn.Sequential(
                     init_(

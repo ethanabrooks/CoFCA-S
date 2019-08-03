@@ -113,7 +113,7 @@ class Train:
             time_limit=time_limit,
         )
 
-        self.agent = self.build_agent(envs=envs, device=device, **agent_args)
+        self.agent = self.build_agent(envs=envs, **agent_args)
         rollouts = RolloutStorage(
             num_steps=num_steps,
             num_processes=num_processes,
