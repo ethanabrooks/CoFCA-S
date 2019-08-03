@@ -1,3 +1,4 @@
+import functools
 import re
 from abc import ABC
 from typing import List
@@ -34,6 +35,7 @@ class Object:
         )
 
     @property
+    @functools.lru_cache()
     def obstacle_types(self):
         return {
             o.__class__ for o in self.objects if not isinstance(o, (Agent, MouseHole))
