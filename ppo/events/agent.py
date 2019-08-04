@@ -5,29 +5,78 @@ from torch.nn import functional as F
 
 from ppo.agent import AgentValues, NNBase
 import ppo.agent
-from ppo.distributions import FixedCategorical
-
+from ppo.distributions import FixedCategorical, Categorical
 
 # noinspection PyMissingConstructor
 from ppo.events.recurrence import Recurrence, RecurrentState
+from ppo.layers import Flatten
+from ppo.utils import init_
 
 
 class Agent(ppo.agent.Agent, NNBase):
-    def __init__(self, entropy_coef, **kwargs):
+    def __init__(
+        self,
+        entropy_coef,
+        hidden_size,
+        obs_spaces,
+        activation,
+        num_layers,
+        action_size,
+        **kwargs
+    ):
         nn.Module.__init__(self)
         self.entropy_coef = entropy_coef
-        self.recurrent_module = self.build_recurrent_module(**kwargs)
+        # self.recurrent_module = self.build_recurrent_module(
+        #     **kwargs,
+        #     obs_spaces=obs_spaces,
+        #     hidden_size=hidden_size,
+        #     activation=activation,
+        #     num_layers=num_layers,
+        # )
+        d, h, w = obs_spaces.shape
+        self.f = nn.Sequential(
+            init_(nn.Conv2d(d, hidden_size, kernel_size=1), activation),
+            activation,
+            nn.Sequential(
+                *[
+                    m
+                    for _ in range(num_layers)
+                    for m in (
+                        init_(
+                            nn.Conv2d(hidden_size, hidden_size, kernel_size=1),
+                            activation,
+                        ),
+                        activation,
+                    )
+                ]
+            ),
+            activation,
+            Flatten(),
+            nn.Linear(hidden_size * h * w, hidden_size),
+        )
+        self.actor = Categorical(hidden_size, action_size)
+        self.critic = init_(nn.Linear(hidden_size, 1))
 
     def build_recurrent_module(self, **kwargs):
         return Recurrence(**kwargs)
 
     def forward(self, inputs, rnn_hxs, masks, deterministic=False, action=None):
         N = inputs.size(0)
-        rm = self.recurrent_module
-        all_hxs, last_hx = self._forward_gru(
-            inputs.view(N, -1), rnn_hxs, masks, action=action
-        )
-        hx = RecurrentState(*rm.parse_hidden(all_hxs))
+
+        # TODO {{{
+        # rm = self.recurrent_module
+        # all_hxs, last_hx = self._forward_gru(
+        #     inputs.view(N, -1), rnn_hxs, masks, action=action
+        # )
+        s = self.f(inputs)
+        dist = self.actor(s)
+        if action is None:
+            action = dist.sample()
+        hx = RecurrentState(a=action, a_probs=dist.probs, v=self.critic(s), s=s, p=None)
+        last_hx = rnn_hxs
+        # hx = RecurrentState(*rm.parse_hidden(all_hxs))
+        # TODO }}}
+
         dist = FixedCategorical(hx.a_probs)
         entropy = dist.entropy().mean()
         return AgentValues(
@@ -39,6 +88,13 @@ class Agent(ppo.agent.Agent, NNBase):
             rnn_hxs=last_hx,
             log=dict(entropy=entropy),
         )
+
+    def dummy_forward(self, s, actions, hx):
+        dist = self.actor(s)
+        if actions is None:
+            action = dist.sample()
+        A = torch.cat([actions, hx.a.unsqueeze(0)], dim=0).long().squeeze(2)
+        self.sample_new(A[0], dist)
 
     def get_value(self, inputs, rnn_hxs, masks):
         n = inputs.size(0)
@@ -54,7 +110,7 @@ class Agent(ppo.agent.Agent, NNBase):
 
     @property
     def recurrent_hidden_state_size(self):
-        return sum(self.recurrent_module.state_sizes)
+        return 0  # TODO sum(self.recurrent_module.state_sizes)
 
     @property
     def is_recurrent(self):
