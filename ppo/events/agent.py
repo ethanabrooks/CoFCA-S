@@ -3,8 +3,8 @@ import torch.jit
 from torch import nn as nn
 from torch.nn import functional as F
 
-import ppo.control_flow.lower_level
 from ppo.agent import AgentValues, NNBase
+import ppo.agent
 from ppo.distributions import FixedCategorical
 
 

@@ -8,8 +8,14 @@ import numpy as np
 
 class Object:
     def __init__(
-        self, objects: List, height: int, width: int, object_types: List[type]
+        self,
+        objects: List,
+        random: np.random,
+        height: int,
+        width: int,
+        object_types: List[type],
     ):
+        self.random = random
         self.width = width
         self.height = height
         self.objects = objects  # type: List[Object]
@@ -83,7 +89,7 @@ class RandomPosition(Object, ABC):
         ]
         if not available:
             return None
-        choice = np.random.choice(len(available))
+        choice = self.random.choice(len(available))
         return tuple(available[choice])
 
     def candidate_positions(self):
@@ -100,8 +106,8 @@ class RandomWalking(Object, ABC):
         self.actions = [(0, 1), (1, 0), (0, -1), (-1, 0), (0, 0)]
 
     def wrap_action(self, action):
-        choice = np.random.choice(len(self.actions))
-        return self.actions[choice] if np.random.random() < 0.7 else (0, 0)
+        choice = self.random.choice(len(self.actions))
+        return self.actions[choice] if self.random.rand() < 0.7 else (0, 0)
 
 
 class Graspable(Object, ABC):
@@ -164,7 +170,7 @@ class RandomActivating(Activating, ABC):
 
     def step(self, action):
         if not self.activated:
-            rand = np.random.random()
+            rand = self.random.rand()
             if rand < self.activation_prob:
                 self.activate()
         return super().step(action)
@@ -236,7 +242,7 @@ class Mouse(RandomActivating, RandomWalking, Deactivatable):
         return self.get_object(MouseHole)
 
     def wrap_action(self, action):
-        if self.pos not in (None, self.hole.pos) and np.random.random() < 0.5:
+        if self.pos not in (None, self.hole.pos) and self.random.rand() < 0.5:
             # step toward hole
             from_hole = np.array(self.pos) - np.array(self.hole.pos)
             action = min(self.actions, key=lambda a: np.sum(np.abs(a + from_hole)))
@@ -360,7 +366,7 @@ class Cat(RandomPosition, RandomWalking, Graspable):
             self.actions, key=lambda a: np.sum(np.abs(np.array(a) + from_agent))
         )
         actions = list(set(self.actions) - {toward_agent})
-        choice = np.random.choice(len(actions))
+        choice = self.random.choice(len(actions))
         return super().step(actions[choice])
 
     def icon(self):
