@@ -1,6 +1,0 @@
-{
-    "text_map": ["rrrggg"],
-    "objects": [["1", "2"]],
-    "max_episode_steps": 12,
-    "class": "LogicGridWorld"
-}
