@@ -63,43 +63,51 @@ class Gridworld(gym.Env):
             Agent,
         ]
 
-        def make_objects():
-            objects = []
-            for object_type in object_types:
-                kwargs = dict(
-                    objects=objects,
-                    object_types=object_types,
-                    height=height,
-                    width=width,
-                    random=self.random,
-                )
-                if issubclass(object_type, Door):
-                    kwargs.update(activation_prob=doorbell_prob)
-                if issubclass(object_type, Mouse):
-                    kwargs.update(activation_prob=mouse_prob)
-                if issubclass(object_type, Baby):
-                    kwargs.update(activation_prob=baby_prob)
-                if issubclass(object_type, Mess):
-                    kwargs.update(activation_prob=mess_prob)
-                if issubclass(object_type, Fly):
-                    kwargs.update(activation_prob=fly_prob)
-                if object_type is Food:
-                    kwargs.update(cook_time=cook_time)
-                if object_type is Oven:
-                    kwargs.update(time_to_heat=time_to_heat_oven)
-                if object_type in multiple_object_types:
-                    for _ in range(height * width):
-                        objects += [object_type(**kwargs)]
-                else:
-                    objects += [object_type(**kwargs)]
-            return objects
-
         self.objects = None
-        self.make_objects = make_objects
         self.agent = None
         self.last_action = None
         self.transitions = [(0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)]
         self._mess = None
+        self.object_types = object_types
+        self.doorbell_prob = doorbell_prob
+        self.mouse_prob = mouse_prob
+        self.baby_prob = baby_prob
+        self.mess_prob = mess_prob
+        self.fly_prob = fly_prob
+        self.cook_time = cook_time
+        self.time_to_heat_oven = time_to_heat_oven
+        self.multiple_object_types = multiple_object_types
+
+    def make_objects(self):
+        objects = []
+        for object_type in self.object_types:
+            kwargs = dict(
+                objects=objects,
+                object_types=self.object_types,
+                height=self.height,
+                width=self.width,
+                random=self.random,
+            )
+            if issubclass(object_type, Door):
+                kwargs.update(activation_prob=self.doorbell_prob)
+            if issubclass(object_type, Mouse):
+                kwargs.update(activation_prob=self.mouse_prob)
+            if issubclass(object_type, Baby):
+                kwargs.update(activation_prob=self.baby_prob)
+            if issubclass(object_type, Mess):
+                kwargs.update(activation_prob=self.mess_prob)
+            if issubclass(object_type, Fly):
+                kwargs.update(activation_prob=self.fly_prob)
+            if object_type is Food:
+                kwargs.update(cook_time=self.cook_time)
+            if object_type is Oven:
+                kwargs.update(time_to_heat=self.time_to_heat_oven)
+            if object_type in self.multiple_object_types:
+                for _ in range(self.height * self.width):
+                    objects += [object_type(**kwargs)]
+            else:
+                objects += [object_type(**kwargs)]
+        return objects
 
     def interact(self):
         if self.agent.grasping is None:
