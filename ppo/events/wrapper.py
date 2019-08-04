@@ -61,9 +61,10 @@ class Wrapper(gym.Wrapper):
         self.active_subtask_idxs = None
         self.rewards = None
         env = env.unwrapped
+        self.random = env.random
         self.width, self.height = env.width, env.height
         self.object_one_hots = np.eye(env.height * env.width)
-        self.object_types = {o.__class__ for o in env.make_objects()}
+        self.object_types = env.object_types
         base_shape = len(self.object_types), self.height, self.width
         subtasks_nvec = len(make_subtasks()) * np.ones(n_active_subtasks)
         self.observation_space = spaces.Dict(
