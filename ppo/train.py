@@ -139,7 +139,7 @@ class Train:
         if compare_path:
             with Path(compare_path, "parameters").open("rb") as f:
                 params = pickle.load(f)
-                for p1, (name, p2) in zip(params, self.agent.named_parameters()):
+                for p1, p2 in zip(params, self.agent.parameters()):
                     if not torch.all(p1 == p2):
                         import ipdb
 
@@ -204,7 +204,7 @@ class Train:
             else:
                 with Path(log_dir, "parameters").open("wb") as f:
                     pickle.dump(list(self.agent.parameters()), f)
-            exit()
+            # exit()
 
             if save_dir and save_interval and time.time() - last_save >= save_interval:
                 last_save = time.time()
