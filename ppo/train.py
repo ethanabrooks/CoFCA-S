@@ -388,7 +388,7 @@ class Train:
         return Agent(envs.observation_space.shape, envs.action_space, **agent_args)
 
     @staticmethod
-    def make_env(env_id, seed, rank, add_timestep, time_limit):
+    def make_env(env_id, seed, rank, add_timestep, time_limit, evaluation):
         if env_id.startswith("dm"):
             _, domain, task = env_id.split(".")
             env = dm_control2gym.make(domain_name=domain, task_name=task)
