@@ -39,7 +39,6 @@ def exp_main(gridworld_args, wrapper_args, **kwargs):
 
 def exp_cli():
     parser = build_parser()
-    parser.add_argument("--compare-path", help="", type=Path)
     gridworld_parser = parser.add_argument_group("gridworld_args")
     gridworld_parser.add_argument("--height", help="", type=int, default=4)
     gridworld_parser.add_argument("--width", help="", type=int, default=4)

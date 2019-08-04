@@ -118,19 +118,6 @@ class Train:
 
         self.agent = self.build_agent(envs=envs, **agent_args)
         self.compare_path = compare_path
-        if compare_path:
-            with Path(compare_path, "parameters").open("rb") as f:
-                params = pickle.load(f)
-                if not all(
-                    torch.all(p1 == p2)
-                    for p1, p2 in zip(params, self.agent.parameters())
-                ):
-                    import ipdb
-
-                    ipdb.set_trace()
-        else:
-            with Path(log_dir, "parameters").open("wb") as f:
-                pickle.dump(list(self.agent.parameters()), f)
         rollouts = RolloutStorage(
             num_steps=num_steps,
             num_processes=num_processes,
@@ -148,6 +135,19 @@ class Train:
             self.agent.to(device)
             rollouts.to(device)
             print("Values copied to GPU in", time.time() - tick, "seconds")
+
+        if compare_path:
+            with Path(compare_path, "parameters").open("rb") as f:
+                params = pickle.load(f)
+                for p1, (name, p2) in zip(params, self.agent.named_parameters()):
+                    if not torch.all(p1 == p2):
+                        import ipdb
+
+                        ipdb.set_trace()
+                        print("fuck")
+        else:
+            with Path(log_dir, "parameters").open("wb") as f:
+                pickle.dump(list(self.agent.parameters()), f)
 
         ppo = PPO(agent=self.agent, batch_size=batch_size, **ppo_args)
 
@@ -195,13 +195,12 @@ class Train:
             if compare_path:
                 with Path(compare_path, "parameters").open("rb") as f:
                     params = pickle.load(f)
-                    if not all(
-                        torch.all(p1 == p2)
-                        for p1, p2 in zip(params, self.agent.parameters())
-                    ):
-                        import ipdb
+                    for p1, (name, p2) in zip(params, self.agent.named_parameters()):
+                        if not torch.all(p1 == p2):
+                            import ipdb
 
-                        ipdb.set_trace()
+                            ipdb.set_trace()
+                            print("fuck")
             else:
                 with Path(log_dir, "parameters").open("wb") as f:
                     pickle.dump(list(self.agent.parameters()), f)

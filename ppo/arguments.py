@@ -20,6 +20,7 @@ def build_parser():
     parser.add_argument(
         "--gamma", type=float, default=0.99, help="discount factor for rewards"
     )
+    parser.add_argument("--compare-path", help="", type=Path)
     parser.add_argument("--normalize", action="store_true")
     parser.add_argument(
         "--use-gae",
