@@ -1,4 +1,5 @@
 from collections import Counter
+import pickle
 import functools
 import itertools
 from pathlib import Path
@@ -63,6 +64,7 @@ class Train:
         batch_size,
         run_id,
         env_args,
+        compare_path,
         save_dir=None,
     ):
         target_success_rates = iter(target_success_rates)
@@ -75,6 +77,7 @@ class Train:
             cuda = False
         self.success_reward = success_reward
         save_dir = save_dir or log_dir
+        self.log_dir = log_dir
 
         torch.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
@@ -114,6 +117,20 @@ class Train:
         )
 
         self.agent = self.build_agent(envs=envs, **agent_args)
+        self.compare_path = compare_path
+        if compare_path:
+            with Path(compare_path, "parameters").open("rb") as f:
+                params = pickle.load(f)
+                if not all(
+                    torch.all(p1 == p2)
+                    for p1, p2 in zip(params, self.agent.parameters())
+                ):
+                    import ipdb
+
+                    ipdb.set_trace()
+        else:
+            with Path(log_dir, "parameters").open("wb") as f:
+                pickle.dump(list(self.agent.parameters()), f)
         rollouts = RolloutStorage(
             num_steps=num_steps,
             num_processes=num_processes,
@@ -175,6 +192,20 @@ class Train:
             )
             train_results = ppo.update(rollouts)
             rollouts.after_update()
+            if compare_path:
+                with Path(compare_path, "parameters").open("rb") as f:
+                    params = pickle.load(f)
+                    if not all(
+                        torch.all(p1 == p2)
+                        for p1, p2 in zip(params, self.agent.parameters())
+                    ):
+                        import ipdb
+
+                        ipdb.set_trace()
+            else:
+                with Path(log_dir, "parameters").open("wb") as f:
+                    pickle.dump(list(self.agent.parameters()), f)
+            exit()
 
             if save_dir and save_interval and time.time() - last_save >= save_interval:
                 last_save = time.time()
@@ -274,6 +305,17 @@ class Train:
     def run_epoch(self, obs, rnn_hxs, masks, envs, num_steps, rollouts, counter):
         # noinspection PyTypeChecker
         episode_counter = Counter(rewards=[], time_steps=[], success=[])
+        if self.compare_path:
+            with Path(self.log_dir, "obs0").open("rb") as f:
+                _obs = pickle.load(f)
+                if not torch.all(obs == _obs):
+                    import ipdb
+
+                    ipdb.set_trace()
+        else:
+            with Path(self.log_dir, "obs0").open("wb") as f:
+                pickle.dump(obs, f)
+
         for step in range(num_steps):
             with torch.no_grad():
                 act = self.agent(
@@ -282,6 +324,25 @@ class Train:
 
             # Observe reward and next obs
             obs, reward, done, infos = envs.step(act.action)
+
+            if self.compare_path:
+                with Path(self.log_dir, str(step)).open("rb") as f:
+                    _obs, _reward, _done = pickle.load(f)
+                    if not torch.all(obs == _obs):
+                        import ipdb
+
+                        ipdb.set_trace()
+                    if not torch.all(reward == _reward):
+                        import ipdb
+
+                        ipdb.set_trace()
+                    if not np.all(done == _done):
+                        import ipdb
+
+                        ipdb.set_trace()
+            else:
+                with Path(self.log_dir, str(step)).open("wb") as f:
+                    pickle.dump((obs, reward, done), f)
 
             for d in infos:
                 for k, v in d.items():
