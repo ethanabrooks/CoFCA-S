@@ -1,2 +1,0 @@
-* network architectures
-* sample `c`
