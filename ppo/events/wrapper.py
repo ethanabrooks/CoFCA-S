@@ -157,7 +157,7 @@ if __name__ == "__main__":
     env = TimeLimit(
         max_episode_steps=30,
         env=Wrapper(
-            n_active_subtasks=5,
+            n_active_subtasks=1,
             watch_baby_range=2,
             avoid_dog_range=2,
             door_time_limit=10,
