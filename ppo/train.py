@@ -63,9 +63,10 @@ class Train:
         batch_size,
         run_id,
         env_args,
-        compare_path,
         save_dir=None,
     ):
+        self.load_path = load_path
+        self.pickle_values = False
         target_success_rates = iter(target_success_rates)
         target_success_rate = next(target_success_rates, None)
         if render_eval and not render:
@@ -116,7 +117,6 @@ class Train:
         )
 
         self.agent = self.build_agent(envs=envs, **agent_args)
-        self.compare_path = compare_path
         rollouts = RolloutStorage(
             num_steps=num_steps,
             num_processes=num_processes,
@@ -137,8 +137,8 @@ class Train:
 
         p0 = list(self.agent.parameters())[0]
 
-        if compare_path:
-            with Path(compare_path, "parameters1").open("rb") as f:
+        if load_path:
+            with load_path.with_name("parameters1").open("rb") as f:
                 params = pickle.load(f)
                 _p0 = params[0]
                 for k, (p1, p2) in enumerate(zip(params, self.agent.parameters())):
@@ -147,9 +147,6 @@ class Train:
 
                         ipdb.set_trace()
                         print("pre-update")
-        else:
-            with Path(log_dir, "parameters1").open("wb") as f:
-                pickle.dump(list(self.agent.parameters()), f)
 
         ppo = PPO(agent=self.agent, batch_size=batch_size, **ppo_args)
 
@@ -166,6 +163,8 @@ class Train:
             if isinstance(envs.venv, VecNormalize):
                 envs.venv.load_state_dict(state_dict["vec_normalize"])
             print(f"Loaded parameters from {load_path}.")
+            with load_path.with_ame("envs").open("wb") as f:
+                envs = pickle.load(f)
 
         for j in itertools.count():
             if j % log_interval == 0:
@@ -194,8 +193,8 @@ class Train:
             )
             train_results = ppo.update(rollouts)
             rollouts.after_update()
-            if compare_path:
-                with Path(compare_path, "parameters2").open("rb") as f:
+            if load_path:
+                with load_path.with_name("parameters2").open("rb") as f:
                     params = pickle.load(f)
                     for k, (p1, p2) in enumerate(zip(params, self.agent.parameters())):
                         if not torch.all(p1 == p2):
@@ -203,11 +202,15 @@ class Train:
 
                             ipdb.set_trace()
                             print("post-update")
-            else:
+            elif self.pickle_values:
                 with Path(log_dir, "parameters2").open("wb") as f:
                     pickle.dump(list(self.agent.parameters()), f)
+                exit()
 
-            if save_dir and save_interval and time.time() - last_save >= save_interval:
+            mean_success_rate = np.mean(epoch_counter["success"])
+            if (
+                save_dir and mean_success_rate > 0.95
+            ):  # save_interval and time.time() - last_save >= save_interval:
                 last_save = time.time()
                 modules = dict(
                     optimizer=ppo.optimizer, agent=self.agent
@@ -223,10 +226,14 @@ class Train:
                 torch.save(dict(step=j, **state_dict), save_path)
 
                 print(f"Saved parameters to {save_path}")
+                self.pickle_values = True
+                with Path(log_dir, "parameters1").open("wb") as f:
+                    pickle.dump(list(self.agent.parameters()), f)
+                with Path(log_dir, "envs").open("wb") as f:
+                    pickle.dump(envs, f)
 
             total_num_steps = (j + 1) * num_processes * num_steps
 
-            mean_success_rate = np.mean(epoch_counter["success"])
             if mean_success_rate > 0.9:
                 print("mean_success_rate", mean_success_rate)
                 print("target_success_rate", target_success_rate)
@@ -305,14 +312,14 @@ class Train:
     def run_epoch(self, obs, rnn_hxs, masks, envs, num_steps, rollouts, counter):
         # noinspection PyTypeChecker
         episode_counter = Counter(rewards=[], time_steps=[], success=[])
-        if self.compare_path:
-            with Path(self.log_dir, "obs0").open("rb") as f:
+        if self.load_path:
+            with self.load_path.with_name("obs0").open("rb") as f:
                 _obs = pickle.load(f)
                 if not torch.all(obs == _obs):
                     import ipdb
 
                     ipdb.set_trace()
-        else:
+        elif self.pickle_values:
             with Path(self.log_dir, "obs0").open("wb") as f:
                 pickle.dump(obs, f)
 
@@ -325,8 +332,8 @@ class Train:
             # Observe reward and next obs
             obs, reward, done, infos = envs.step(act.action)
 
-            if self.compare_path:
-                with Path(self.log_dir, str(step)).open("rb") as f:
+            if self.load_path:
+                with self.load_path.with_name(str(step)).open("rb") as f:
                     _obs, _reward, _done = pickle.load(f)
                     if not torch.all(obs == _obs):
                         import ipdb
@@ -340,7 +347,7 @@ class Train:
                         import ipdb
 
                         ipdb.set_trace()
-            else:
+            elif self.pickle_values:
                 with Path(self.log_dir, str(step)).open("wb") as f:
                     pickle.dump((obs, reward, done), f)
 
