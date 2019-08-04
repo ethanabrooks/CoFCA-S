@@ -1,3 +1,4 @@
+import pickle
 from collections import Counter
 import functools
 import itertools
@@ -148,6 +149,7 @@ class Train:
                 envs.venv.load_state_dict(state_dict["vec_normalize"])
             print(f"Loaded parameters from {load_path}.")
 
+        self.pickle_values = False
         for j in itertools.count():
             if j % log_interval == 0:
                 log_progress = tqdm(total=log_interval, desc="log ")
@@ -176,7 +178,10 @@ class Train:
             train_results = ppo.update(rollouts)
             rollouts.after_update()
 
-            if save_dir and save_interval and time.time() - last_save >= save_interval:
+            mean_success_rate = np.mean(epoch_counter["success"])
+            if (
+                save_dir and mean_success_rate > 0.95
+            ):  # save_interval and time.time() - last_save >= save_interval:
                 last_save = time.time()
                 modules = dict(
                     optimizer=ppo.optimizer, agent=self.agent
@@ -192,10 +197,10 @@ class Train:
                 torch.save(dict(step=j, **state_dict), save_path)
 
                 print(f"Saved parameters to {save_path}")
+                self.pickle_values = True
 
             total_num_steps = (j + 1) * num_processes * num_steps
 
-            mean_success_rate = np.mean(epoch_counter["success"])
             if mean_success_rate > 0.9:
                 print("mean_success_rate", mean_success_rate)
                 print("target_success_rate", target_success_rate)
@@ -271,7 +276,9 @@ class Train:
             if eval_interval:
                 eval_progress.update()
 
-    def run_epoch(self, obs, rnn_hxs, masks, envs, num_steps, rollouts, counter):
+    def run_epoch(
+        self, obs, rnn_hxs, masks, envs, num_steps, rollouts, counter, logdir
+    ):
         # noinspection PyTypeChecker
         episode_counter = Counter(rewards=[], time_steps=[], success=[])
         for step in range(num_steps):
@@ -279,9 +286,15 @@ class Train:
                 act = self.agent(
                     inputs=obs, rnn_hxs=rnn_hxs, masks=masks
                 )  # type: AgentValues
+            if self.pickle_values:
+                with Path(logdir, f"obs.{step}").open("bw") as f:
+                    pickle.dump(obs, f)
 
             # Observe reward and next obs
             obs, reward, done, infos = envs.step(act.action)
+            if self.pickle_values:
+                with Path(logdir, f"{step}").open("bw") as f:
+                    pickle.dump((obs, reward, done), f)
 
             for d in infos:
                 for k, v in d.items():
@@ -320,6 +333,8 @@ class Train:
                     rewards=reward,
                     masks=masks,
                 )
+        if self.pickle_values:
+            exit()
 
         return episode_counter
 
