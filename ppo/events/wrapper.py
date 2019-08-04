@@ -64,7 +64,7 @@ class Wrapper(gym.Wrapper):
         self.random = env.random
         self.width, self.height = env.width, env.height
         self.object_one_hots = np.eye(env.height * env.width)
-        self.object_types = {o.__class__ for o in env.make_objects()}
+        self.object_types = env.object_types
         base_shape = len(self.object_types), self.height, self.width
         self.observation_space = spaces.Box(
             low=-np.ones(base_shape), high=np.ones(base_shape)
