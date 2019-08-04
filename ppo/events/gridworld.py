@@ -112,6 +112,7 @@ class Gridworld(gym.Env):
             self.agent.grasping = None
 
     def step(self, a):
+        a = np.random.choice(5)
         self.last_action = a
         action = self.transitions[a]
         interactions = list(self.interact()) if action == (0, 0) else []
