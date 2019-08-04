@@ -107,7 +107,7 @@ class RandomWalking(Object, ABC):
 
     def wrap_action(self, action):
         choice = self.random.choice(len(self.actions))
-        return self.actions[choice] if self.random.random() < 0.7 else (0, 0)
+        return self.actions[choice] if self.random.rand() < 0.7 else (0, 0)
 
 
 class Graspable(Object, ABC):
@@ -170,7 +170,7 @@ class RandomActivating(Activating, ABC):
 
     def step(self, action):
         if not self.activated:
-            rand = self.random.random()
+            rand = self.random.rand()
             if rand < self.activation_prob:
                 self.activate()
         return super().step(action)
@@ -242,7 +242,7 @@ class Mouse(RandomActivating, RandomWalking, Deactivatable):
         return self.get_object(MouseHole)
 
     def wrap_action(self, action):
-        if self.pos not in (None, self.hole.pos) and self.random.random() < 0.5:
+        if self.pos not in (None, self.hole.pos) and self.random.rand() < 0.5:
             # step toward hole
             from_hole = np.array(self.pos) - np.array(self.hole.pos)
             action = min(self.actions, key=lambda a: np.sum(np.abs(a + from_hole)))
