@@ -206,7 +206,6 @@ class Train:
             else:
                 with Path(log_dir, "parameters2").open("wb") as f:
                     pickle.dump(list(self.agent.parameters()), f)
-            exit()
 
             if save_dir and save_interval and time.time() - last_save >= save_interval:
                 last_save = time.time()
