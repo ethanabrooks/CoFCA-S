@@ -136,9 +136,14 @@ class Train:
             rollouts.to(device)
             print("Values copied to GPU in", time.time() - tick, "seconds")
 
+        p0 = list(self.agent.parameters())[0]
         if compare_path:
             with Path(compare_path, "parameters").open("rb") as f:
                 params = pickle.load(f)
+                _p0 = list(params)[0]
+                import ipdb
+
+                ipdb.set_trace()
                 for p1, p2 in zip(params, self.agent.parameters()):
                     if not torch.all(p1 == p2):
                         import ipdb
@@ -148,6 +153,9 @@ class Train:
         else:
             with Path(log_dir, "parameters").open("wb") as f:
                 pickle.dump(list(self.agent.parameters()), f)
+        import ipdb
+
+        ipdb.set_trace()
 
         ppo = PPO(agent=self.agent, batch_size=batch_size, **ppo_args)
 
