@@ -1,6 +1,8 @@
 from collections import namedtuple
 
 import gym
+from gym.utils import seeding
+
 import numpy as np
 
 from ppo.events.objects import (
@@ -41,6 +43,8 @@ class Gridworld(gym.Env):
         self.object_idxs = {}
         self.height = height
         self.width = width
+        self.random = None
+        self.seed()
         multiple_object_types = [Mess, Fly]
         object_types = [
             Mouse,
@@ -68,6 +72,7 @@ class Gridworld(gym.Env):
                     object_types=object_types,
                     height=height,
                     width=width,
+                    random=self.random,
                 )
                 if issubclass(object_type, Door):
                     kwargs.update(activation_prob=doorbell_prob)
@@ -129,7 +134,8 @@ class Gridworld(gym.Env):
         return State(objects=self.objects, interactions=interactions), 0, False, {}
 
     def seed(self, seed=None):
-        np.random.seed(seed)
+        self.random, seed = seeding.np_random(seed)
+        return [seed]
 
     def reset(self):
         self.objects = self.make_objects()
