@@ -23,15 +23,15 @@ class Recurrence(nn.Module):
         num_layers: int,
     ):
         super().__init__()
-        n_subtasks = obs_spaces.subtasks.n
+        n_active_subtasks = obs_spaces.subtasks.nvec.size
+        n_subtask_values = obs_spaces.subtasks.nvec[0]
         self.obs_shape = d, h, w = obs_spaces.base.shape
-        self.task_embeddings = nn.Embedding(n_subtasks, hidden_size)
+        self.task_embeddings = nn.Embedding(n_subtask_values, hidden_size)
         self.parser_sections = [1, 1] + [hidden_size] * 3
         self.parser = nn.GRU(hidden_size, sum(self.parser_sections))
-        self.controller = nn.GRU(n_subtasks, hidden_size)
         self.action_size = 1
         self.state_sizes = RecurrentState(
-            a=1, a_probs=action_size, v=1, s=hidden_size, p=n_subtasks
+            a=1, a_probs=action_size, v=1, s=hidden_size, p=n_active_subtasks
         )
         self.obs_sections = [int(np.prod(s.shape)) for s in obs_spaces]
         self.f = nn.Sequential(
@@ -63,7 +63,6 @@ class Recurrence(nn.Module):
             Reshape(hidden_size * action_size),
             init_(nn.Linear(hidden_size * action_size, hidden_size)),
         )
-        self.controller = nn.GRUCell(hidden_size, hidden_size)
         self.actor = Categorical(hidden_size, action_size)
         self.critic = init_(nn.Linear(hidden_size, 1))
         self.a_one_hots = nn.Embedding.from_pretrained(torch.eye(action_size))

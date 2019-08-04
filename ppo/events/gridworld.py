@@ -117,7 +117,7 @@ class Gridworld(gym.Env):
 
     def step(self, a):
         self.last_action = a
-        action = self.transitions[a]
+        action = self.transitions[int(a)]
         interactions = list(self.interact()) if action == (0, 0) else []
 
         obj: Object

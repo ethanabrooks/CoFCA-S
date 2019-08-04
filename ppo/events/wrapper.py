@@ -57,8 +57,8 @@ class Wrapper(gym.Wrapper):
             ]
 
         self.make_subtasks = make_subtasks
-        self.active_mask = None
         self.active_subtasks = None
+        self.active_subtask_idxs = None
         self.rewards = None
         env = env.unwrapped
         self.random = env.random
@@ -66,15 +66,16 @@ class Wrapper(gym.Wrapper):
         self.object_one_hots = np.eye(env.height * env.width)
         self.object_types = env.object_types
         base_shape = len(self.object_types), self.height, self.width
+        # subtasks_nvec = len(make_subtasks()) * np.ones(n_active_subtasks)
+        # self.observation_space = spaces.Dict(
+        # Obs(
+        # base=spaces.Box(low=-np.ones(base_shape), high=np.ones(base_shape)),
+        # subtasks=spaces.MultiDiscrete(subtasks_nvec),
+        # )._asdict()
+        # )
         self.observation_space = spaces.Box(
             low=-np.ones(base_shape), high=np.ones(base_shape)
         )
-        # self.observation_space = spaces.Dict(
-        #     Obs(
-        #         base=self.observation_space,
-        #         subtasks=spaces.MultiBinary(len(make_subtasks())),
-        #     )._asdict()
-        # )
         self.action_space = spaces.Discrete(5)
 
     def render(self, mode="human", **kwargs):
@@ -116,11 +117,10 @@ class Wrapper(gym.Wrapper):
 
     def reset(self, **kwargs):
         possible_subtasks = self.make_subtasks()
-        active_subtasks = np.random.choice(
+        self.active_subtask_idxs = np.random.choice(
             len(possible_subtasks), size=self.n_active_subtasks, replace=False
         )
-        self.active_mask = np.isin(np.arange(len(possible_subtasks)), active_subtasks)
-        self.active_subtasks = [possible_subtasks[i] for i in active_subtasks]
+        self.active_subtasks = [possible_subtasks[i] for i in self.active_subtask_idxs]
         return self.observation(super().reset())
 
     def get_rewards(self, s: State):
@@ -162,7 +162,7 @@ if __name__ == "__main__":
     env = TimeLimit(
         max_episode_steps=30,
         env=Wrapper(
-            n_active_subtasks=5,
+            n_active_subtasks=1,
             watch_baby_range=2,
             avoid_dog_range=2,
             door_time_limit=10,
