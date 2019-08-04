@@ -44,9 +44,8 @@ class Gridworld(gym.Env):
         self.height = height
         self.width = width
         self.random = None
-        self.seed()
         multiple_object_types = [Mess, Fly]
-        object_types = [
+        self.object_types = object_types = [
             Mouse,
             Dog,
             Baby,
