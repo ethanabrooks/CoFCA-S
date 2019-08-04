@@ -43,8 +43,8 @@ class Wrapper(gym.Wrapper):
         def make_subtasks():
             return [
                 # AnswerDoor(door_time_limit),
-                # CatchMouse(),
-                ComfortBaby(),
+                CatchMouse(),
+                # ComfortBaby(),
                 # MakeDinner(),
                 # MakeFire(),
                 # KillFlies(),
@@ -57,23 +57,21 @@ class Wrapper(gym.Wrapper):
             ]
 
         self.make_subtasks = make_subtasks
-        self.active_mask = None
         self.active_subtasks = None
+        self.active_subtask_idxs = None
         self.rewards = None
         env = env.unwrapped
         self.width, self.height = env.width, env.height
         self.object_one_hots = np.eye(env.height * env.width)
         self.object_types = {o.__class__ for o in env.make_objects()}
         base_shape = len(self.object_types), self.height, self.width
-        self.observation_space = spaces.Box(
-            low=-np.ones(base_shape), high=np.ones(base_shape)
+        subtasks_nvec = len(make_subtasks()) * np.ones(n_active_subtasks)
+        self.observation_space = spaces.Dict(
+            Obs(
+                base=spaces.Box(low=-np.ones(base_shape), high=np.ones(base_shape)),
+                subtasks=spaces.MultiDiscrete(subtasks_nvec),
+            )._asdict()
         )
-        # self.observation_space = spaces.Dict(
-        #     Obs(
-        #         base=self.observation_space,
-        #         subtasks=spaces.MultiBinary(len(make_subtasks())),
-        #     )._asdict()
-        # )
         self.action_space = spaces.Discrete(5)
 
     def render(self, mode="human", **kwargs):
@@ -115,11 +113,10 @@ class Wrapper(gym.Wrapper):
 
     def reset(self, **kwargs):
         possible_subtasks = self.make_subtasks()
-        active_subtasks = np.random.choice(
+        self.active_subtask_idxs = np.random.choice(
             len(possible_subtasks), size=self.n_active_subtasks, replace=False
         )
-        self.active_mask = np.isin(np.arange(len(possible_subtasks)), active_subtasks)
-        self.active_subtasks = [possible_subtasks[i] for i in active_subtasks]
+        self.active_subtasks = [possible_subtasks[i] for i in self.active_subtask_idxs]
         return self.observation(super().reset())
 
     def get_rewards(self, s: State):
@@ -149,8 +146,7 @@ class Wrapper(gym.Wrapper):
                 one_hot = self.object_one_hots[index].reshape(dims)
                 object_pos[obj.__class__] += one_hot * sign
         base = np.stack([object_pos[k] for k in self.object_types])
-        # obs = Obs(base=base, subtasks=self.active_mask)._asdict()
-        obs = base
+        obs = Obs(base=base, subtasks=self.active_subtask_idxs)._asdict()
         assert self.observation_space.contains(obs)
         return obs
 
