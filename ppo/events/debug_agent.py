@@ -83,14 +83,22 @@ class Recurrence(nn.Module):
         self.critic = init_(nn.Linear(hidden_size, 1))
         self.actor = Categorical(self.output_size, 5)
         self.train()
+        self.action_size = 1
+        self.obs_shape = d, h, w
+
+    @staticmethod
+    def sample_new(x, dist):
+        new = x < 0
+        x[new] = dist.sample()[new].flatten()
+
+    def parse_inputs(self, inputs: torch.Tensor) -> Obs:
+        return Obs(*torch.split(inputs, self.obs_sections, dim=-1))
 
     def forward(self, inputs, rnn_hxs, masks, action=None):
         s = self.f(inputs)
         dist = self.actor(s)
-
         if action is None:
             action = dist.sample()
-
         return RecurrentState(
             a=action, a_probs=dist.probs, v=self.critic(s), s=s, p=None
         )
