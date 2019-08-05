@@ -78,6 +78,11 @@ class Recurrence(nn.Module):
         self.obs_sections = [int(np.prod(s.shape)) for s in obs_spaces]
         self._hidden_size = hidden_size
         self._recurrent = recurrent
+
+        # networks
+        self.task_embeddings = nn.Embedding(obs_spaces.subtasks.nvec[0], hidden_size)
+        self.parser_sections = [1, 1] + [hidden_size] * 3
+        self.parser = nn.GRU(hidden_size, sum(self.parser_sections))
         self.f = nn.Sequential(
             init_(nn.Conv2d(d, hidden_size, kernel_size=1)),
             activation,
@@ -133,13 +138,26 @@ class Recurrence(nn.Module):
         inputs, actions = torch.split(
             inputs.detach(), [D - self.action_size, self.action_size], dim=2
         )
+
         # parse non-action inputs
         inputs = self.parse_inputs(inputs)
         inputs = inputs._replace(base=inputs.base.view(T, N, *self.obs_shape))
 
+        # build memory
+        rnn_inputs = self.task_embeddings(inputs.subtasks[0].long()).transpose(0, 1)
+        X, _ = self.parser(rnn_inputs)
+        c, p0, M, M_minus, M_plus = X.transpose(0, 1).split(
+            self.parser_sections, dim=-1
+        )
+        c.squeeze_(-1)
+        p0.squeeze_(-1)
+
+        new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
         for x in hx:
             x.squeeze_(0)
+        p = hx.p
+        p[new_episode] = p0[new_episode]
         A = torch.cat([actions, hx.a.unsqueeze(0)], dim=0).long().squeeze(2)
         for t in range(T):
             s = self.f(inputs.base[t])
