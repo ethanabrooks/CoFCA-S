@@ -24,7 +24,7 @@ class DebugAgent(nn.Module):
     ):
         super().__init__()
         self.entropy_coef = entropy_coef
-        self.base = CNNBase(
+        self.base = Recurrence(
             *obs_shape, recurrent=recurrent, hidden_size=hidden_size, **network_args
         )
 
@@ -39,13 +39,12 @@ class DebugAgent(nn.Module):
         self.continuous = isinstance(action_space, Box)
 
     @property
-    def is_recurrent(self):
-        return self.base.is_recurrent
+    def recurrent_hidden_state_size(self):
+        return self.base.recurrent_hidden_state_size
 
     @property
-    def recurrent_hidden_state_size(self):
-        """Size of rnn_hx."""
-        return self.base.recurrent_hidden_state_size
+    def is_recurrent(self):
+        return self.base.is_recurrent
 
     def forward(self, inputs, rnn_hxs, masks, deterministic=False, action=None):
         value, actor_features, rnn_hxs = self.base(inputs, rnn_hxs, masks)
@@ -75,21 +74,7 @@ class DebugAgent(nn.Module):
         return value
 
 
-class CNNBase(nn.Module):
-    @property
-    def is_recurrent(self):
-        return self._recurrent
-
-    @property
-    def recurrent_hidden_state_size(self):
-        if self._recurrent:
-            return self._hidden_size
-        return 1
-
-    @property
-    def output_size(self):
-        return self._hidden_size
-
+class Recurrence(nn.Module):
     def _forward_gru(self, x, hxs, masks):
         if x.size(0) == hxs.size(0):
             x, hxs = self.recurrent_module(x.unsqueeze(0), (hxs * masks).unsqueeze(0))
@@ -148,7 +133,7 @@ class CNNBase(nn.Module):
         self._hidden_size = hidden_size
         self._recurrent = recurrent
 
-        self.main = nn.Sequential(
+        self.f = nn.Sequential(
             init_(nn.Conv2d(d, hidden_size, kernel_size=1)),
             activation,
             *[
@@ -160,25 +145,27 @@ class CNNBase(nn.Module):
                 )
                 for _ in range(num_layers)
             ],
-            # init_(nn.Conv2d(d, 32, 8, stride=4)), nn.ReLU(),
-            # init_(nn.Conv2d(32, 64, kernel_size=4, stride=2)), nn.ReLU(),
-            # init_(nn.Conv2d(32, 64, kernel_size=4, stride=2)), nn.ReLU(),
-            # init_(nn.Conv2d(64, 32, kernel_size=3, stride=1)),
             activation,
             Flatten(),
-            # init_(nn.Linear(32 * 7 * 7, hidden_size)), nn.ReLU())
             init_(nn.Linear(hidden_size * h * w, hidden_size)),
             activation,
         )
-
-        self.critic_linear = init_(nn.Linear(hidden_size, 1))
-
+        self.critic = init_(nn.Linear(hidden_size, 1))
         self.train()
 
     def forward(self, inputs, rnn_hxs, masks):
-        x = self.main(inputs)
+        s = self.f(inputs)
+        return self.critic(s), s, rnn_hxs
 
-        if self.is_recurrent:
-            x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)
+    @property
+    def recurrent_hidden_state_size(self):
+        """Size of rnn_hx."""
+        return 1  # TODO
 
-        return self.critic_linear(x), x, rnn_hxs
+    @property
+    def is_recurrent(self):
+        return False  # TODO
+
+    @property
+    def output_size(self):
+        return self._hidden_size

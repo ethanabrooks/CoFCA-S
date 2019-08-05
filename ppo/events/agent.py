@@ -89,13 +89,6 @@ class Agent(ppo.agent.Agent, NNBase):
             log=dict(entropy=entropy),
         )
 
-    def dummy_forward(self, s, actions, hx):
-        dist = self.actor(s)
-        if actions is None:
-            action = dist.sample()
-        A = torch.cat([actions, hx.a.unsqueeze(0)], dim=0).long().squeeze(2)
-        self.sample_new(A[0], dist)
-
     def get_value(self, inputs, rnn_hxs, masks):
         n = inputs.size(0)
         s = self.f(inputs)
