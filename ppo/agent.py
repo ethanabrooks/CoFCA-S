@@ -26,11 +26,11 @@ class Agent(nn.Module):
         super(Agent, self).__init__()
         self.entropy_coef = entropy_coef
         if len(obs_shape) == 3:
-            self.base = CNNBase(
+            self.recurrent_module = CNNBase(
                 *obs_shape, recurrent=recurrent, hidden_size=hidden_size, **network_args
             )
         elif len(obs_shape) == 1:
-            self.base = MLPBase(
+            self.recurrent_module = MLPBase(
                 obs_shape[0],
                 recurrent=recurrent,
                 hidden_size=hidden_size,
@@ -41,25 +41,25 @@ class Agent(nn.Module):
 
         if isinstance(action_space, Discrete):
             num_outputs = action_space.n
-            self.dist = Categorical(self.base.output_size, num_outputs)
+            self.dist = Categorical(self.recurrent_module.output_size, num_outputs)
         elif isinstance(action_space, Box):
             num_outputs = action_space.shape[0]
-            self.dist = DiagGaussian(self.base.output_size, num_outputs)
+            self.dist = DiagGaussian(self.recurrent_module.output_size, num_outputs)
         else:
             raise NotImplementedError
         self.continuous = isinstance(action_space, Box)
 
     @property
     def is_recurrent(self):
-        return self.base.is_recurrent
+        return self.recurrent_module.is_recurrent
 
     @property
     def recurrent_hidden_state_size(self):
         """Size of rnn_hx."""
-        return self.base.recurrent_hidden_state_size
+        return self.recurrent_module.recurrent_hidden_state_size
 
     def forward(self, inputs, rnn_hxs, masks, deterministic=False, action=None):
-        value, actor_features, rnn_hxs = self.base(inputs, rnn_hxs, masks)
+        value, actor_features, rnn_hxs = self.recurrent_module(inputs, rnn_hxs, masks)
 
         dist = self.dist(actor_features)
 
@@ -82,7 +82,7 @@ class Agent(nn.Module):
         )
 
     def get_value(self, inputs, rnn_hxs, masks):
-        value, _, _ = self.base(inputs, rnn_hxs, masks)
+        value, _, _ = self.recurrent_module(inputs, rnn_hxs, masks)
         return value
 
 
