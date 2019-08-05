@@ -27,7 +27,7 @@ class DebugAgent(ppo.agent.Agent, NNBase):
 
     @property
     def is_recurrent(self):
-        return True  # TODO
+        return True
 
     def forward(self, inputs, rnn_hxs, masks, deterministic=False, action=None):
         N = inputs.size(0)
@@ -35,7 +35,7 @@ class DebugAgent(ppo.agent.Agent, NNBase):
             inputs.view(N, -1), rnn_hxs, masks, action=action
         )
         rm = self.recurrent_module
-        hx = RecurrentState(*rm.parse_hidden(last_hx))
+        hx = RecurrentState(*rm.parse_hidden(all_hxs))
         dist = FixedCategorical(hx.a_probs)
         action_log_probs = dist.log_probs(hx.a)
         entropy = dist.entropy().mean()
@@ -50,13 +50,11 @@ class DebugAgent(ppo.agent.Agent, NNBase):
         )
 
     def _forward_gru(self, x, hxs, masks, action=None):
-        x = x.view(1, x.size(0), -1)
         if action is None:
             y = F.pad(x, [0, self.recurrent_module.action_size], "constant", -1)
         else:
-            action.unsqueeze_(0)
             y = torch.cat([x, action.float()], dim=-1)
-        return self.recurrent_module(y, hxs)
+        return super()._forward_gru(y, hxs, masks)
 
     def get_value(self, inputs, rnn_hxs, masks):
         all_hxs, last_hx = self._forward_gru(
@@ -121,9 +119,8 @@ class Recurrence(nn.Module):
                 x = torch.stack(hx).float()
                 yield x.view(*x.shape[:2], -1)
 
-        l = list(pack())
-        hx = torch.cat(l, dim=-1)
-        return hx, hx[-1]  # TODO?
+        hx = torch.cat(list(pack()), dim=-1)
+        return hx, hx[-1:]
 
     def parse_inputs(self, inputs: torch.Tensor) -> Obs:
         return Obs(*torch.split(inputs, self.obs_sections, dim=-1))
@@ -139,12 +136,11 @@ class Recurrence(nn.Module):
         hx = self.parse_hidden(rnn_hxs)
         for x in hx:
             x.squeeze_(0)
-        # inputs = inputs._replace(base=inputs.base.view(T, N, *self.obs_shape))
         inputs = inputs.view(T, N, *self.obs_shape)
+        A = torch.cat([actions, hx.a.unsqueeze(0)], dim=0).long().squeeze(2)
         for t in range(T):
             s = self.f(inputs[t])
             dist = self.actor(s)
-            A = actions.long()
             self.sample_new(A[t], dist)
             yield RecurrentState(
                 a=A[t],
