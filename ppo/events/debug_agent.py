@@ -75,27 +75,7 @@ class DebugAgent(nn.Module):
         return value
 
 
-class NNBase(nn.Module):
-    def __init__(self, recurrent: bool, recurrent_input_size, hidden_size):
-        super(NNBase, self).__init__()
-
-        self._hidden_size = hidden_size
-        self._recurrent = recurrent
-
-        if self._recurrent:
-            self.recurrent_module = self.build_recurrent_module(
-                recurrent_input_size, hidden_size
-            )
-            for name, param in self.recurrent_module.named_parameters():
-                print("zeroed out", name)
-                if "bias" in name:
-                    nn.init.constant_(param, 0)
-                elif "weight" in name:
-                    nn.init.orthogonal_(param)
-
-    def build_recurrent_module(self, input_size, hidden_size):
-        return nn.GRU(input_size, hidden_size)
-
+class CNNBase(nn.Module):
     @property
     def is_recurrent(self):
         return self._recurrent
@@ -163,10 +143,10 @@ class NNBase(nn.Module):
 
         return x, hxs
 
-
-class CNNBase(NNBase):
     def __init__(self, d, h, w, activation, hidden_size, num_layers, recurrent=False):
-        super(CNNBase, self).__init__(recurrent, hidden_size, hidden_size)
+        super().__init__()
+        self._hidden_size = hidden_size
+        self._recurrent = recurrent
 
         self.main = nn.Sequential(
             init_(nn.Conv2d(d, hidden_size, kernel_size=1)),
