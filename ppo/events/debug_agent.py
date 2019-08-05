@@ -101,6 +101,16 @@ class Recurrence(nn.Module):
         new = x < 0
         x[new] = dist.sample()[new].flatten()
 
+    @staticmethod
+    def pack(hxs):
+        def pack():
+            for name, hx in RecurrentState(*zip(*hxs))._asdict().items():
+                x = torch.stack(hx).float()
+                yield x.view(*x.shape[:2], -1)
+
+        hx = torch.cat(list(pack()), dim=-1)
+        return hx, hx[-1:]
+
     def parse_inputs(self, inputs: torch.Tensor) -> Obs:
         return Obs(*torch.split(inputs, self.obs_sections, dim=-1))
 
@@ -110,11 +120,11 @@ class Recurrence(nn.Module):
             inputs.detach(), [D - self.action_size, self.action_size], dim=2
         )
         # inputs = inputs._replace(base=inputs.base.view(T, N, *self.obs_shape))
-        inputs = inputs.view(N, *self.obs_shape)
-        s = self.f(inputs)
-        dist = self.actor(s)
-        A = actions.long()
+        inputs = inputs.view(T, N, *self.obs_shape)
         for t in range(T):
+            s = self.f(inputs[t])
+            dist = self.actor(s)
+            A = actions.long()
             self.sample_new(A[t], dist)
             return RecurrentState(
                 a=A[t], a_probs=dist.probs, v=self.critic(s), s=s, p=None
