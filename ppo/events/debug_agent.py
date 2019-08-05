@@ -95,13 +95,27 @@ class Recurrence(nn.Module):
         return Obs(*torch.split(inputs, self.obs_sections, dim=-1))
 
     def forward(self, inputs, rnn_hxs, masks, action=None):
+        x = inputs.view(1, inputs.size(0), -1)
+        if action is None:
+            y = F.pad(x, [0, self.action_size], "constant", -1)
+        else:
+            action.unsqueeze_(0)
+            y = torch.cat([x, action.float()], dim=-1)
+        inputs = y
+        T, N, D = inputs.shape
+        inputs, actions = torch.split(
+            inputs.detach(), [D - self.action_size, self.action_size], dim=2
+        )
+        # inputs = inputs._replace(base=inputs.base.view(T, N, *self.obs_shape))
+        inputs = inputs.view(N, *self.obs_shape)
         s = self.f(inputs)
         dist = self.actor(s)
-        if action is None:
-            action = dist.sample()
-        return RecurrentState(
-            a=action, a_probs=dist.probs, v=self.critic(s), s=s, p=None
-        )
+        A = actions.long()
+        for t in range(T):
+            self.sample_new(A[t], dist)
+            return RecurrentState(
+                a=A[t], a_probs=dist.probs, v=self.critic(s), s=s, p=None
+            )
 
     @property
     def output_size(self):
