@@ -83,7 +83,10 @@ class Recurrence(nn.Module):
         self.parser_sections = [1, 1] + [hidden_size] * 3
         self.parser = nn.GRU(hidden_size, sum(self.parser_sections))
         self.f = nn.Sequential(
-            init_(nn.Conv2d(d, hidden_size, kernel_size=1)),
+            Parallel(Reshape(1, d, h, w), Reshape(hidden_size, 1, 1, 1)),
+            Product(),
+            Reshape(d * hidden_size, h, w),
+            init_(nn.Conv2d(d * hidden_size, hidden_size, kernel_size=1), activation),
             activation,
             *[
                 nn.Sequential(
@@ -168,7 +171,8 @@ class Recurrence(nn.Module):
         p[new_episode] = p0[new_episode]
         A = torch.cat([actions, hx.a.unsqueeze(0)], dim=0).long().squeeze(2)
         for t in range(T):
-            s = self.f(inputs.base[t])
+            r = (p.unsqueeze(1) @ M).squeeze(1)
+            s = self.f((inputs.base[t], r))
             dist = self.actor(s)
             self.sample_new(A[t], dist)
             a = self.a_one_hots(A[t].flatten().long())
