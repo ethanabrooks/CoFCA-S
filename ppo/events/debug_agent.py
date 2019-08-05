@@ -1,51 +1,29 @@
-import torch
-from gym.spaces import Box, Discrete
 from torch import nn as nn
 
-from ppo.agent import AgentValues
+from ppo.agent import AgentValues, NNBase
 from ppo.distributions import Categorical, FixedCategorical
-from ppo.distributions import DiagGaussian
 from ppo.events.recurrence import RecurrentState
 from ppo.layers import Flatten
 from ppo.utils import init_
 
 
 # noinspection PyMissingConstructor
+import ppo.agent
 
 
-class DebugAgent(nn.Module):
-    def __init__(
-        self,
-        obs_shape,
-        action_space,
-        recurrent,
-        hidden_size,
-        entropy_coef,
-        **network_args,
-    ):
-        super().__init__()
+class DebugAgent(ppo.agent.Agent, NNBase):
+    def __init__(self, obs_shape, action_space, entropy_coef, **network_args):
+        nn.Module.__init__(self)
         self.entropy_coef = entropy_coef
-        self.base = Recurrence(
-            *obs_shape, recurrent=recurrent, hidden_size=hidden_size, **network_args
-        )
-
-        if isinstance(action_space, Discrete):
-            num_outputs = action_space.n
-            self.dist = Categorical(self.base.output_size, num_outputs)
-        elif isinstance(action_space, Box):
-            num_outputs = action_space.shape[0]
-            self.dist = DiagGaussian(self.base.output_size, num_outputs)
-        else:
-            raise NotImplementedError
-        self.continuous = isinstance(action_space, Box)
+        self.base = Recurrence(*obs_shape, **network_args)
 
     @property
     def recurrent_hidden_state_size(self):
-        return self.base.recurrent_hidden_state_size
+        return 1  # TODO
 
     @property
     def is_recurrent(self):
-        return self.base.is_recurrent
+        return True  # TODO
 
     def forward(self, inputs, rnn_hxs, masks, deterministic=False, action=None):
         hx = self.base(inputs, rnn_hxs, masks, action=action)
@@ -102,15 +80,6 @@ class Recurrence(nn.Module):
         return RecurrentState(
             a=action, a_probs=dist.probs, v=self.critic(s), s=s, p=None
         )
-
-    @property
-    def recurrent_hidden_state_size(self):
-        """Size of rnn_hx."""
-        return 1  # TODO
-
-    @property
-    def is_recurrent(self):
-        return False  # TODO
 
     @property
     def output_size(self):
