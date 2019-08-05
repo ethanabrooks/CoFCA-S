@@ -66,12 +66,15 @@ class Wrapper(gym.Wrapper):
         self.object_one_hots = np.eye(env.height * env.width)
         self.object_types = env.object_types
         base_shape = len(self.object_types), self.height, self.width
-        subtasks_nvec = len(make_subtasks()) * np.ones(n_active_subtasks)
-        self.observation_space = spaces.Dict(
-            Obs(
-                base=spaces.Box(low=-np.ones(base_shape), high=np.ones(base_shape)),
-                subtasks=spaces.MultiDiscrete(subtasks_nvec),
-            )._asdict()
+        # subtasks_nvec = len(make_subtasks()) * np.ones(n_active_subtasks)
+        # self.observation_space = spaces.Dict(
+        # Obs(
+        # base=spaces.Box(low=-np.ones(base_shape), high=np.ones(base_shape)),
+        # subtasks=spaces.MultiDiscrete(subtasks_nvec),
+        # )._asdict()
+        # )
+        self.observation_space = spaces.Box(
+            low=-np.ones(base_shape), high=np.ones(base_shape)
         )
         self.action_space = spaces.Discrete(5)
 
@@ -147,7 +150,8 @@ class Wrapper(gym.Wrapper):
                 one_hot = self.object_one_hots[index].reshape(dims)
                 object_pos[obj.__class__] += one_hot * sign
         base = np.stack([object_pos[k] for k in self.object_types])
-        obs = Obs(base=base, subtasks=self.active_subtask_idxs)._asdict()
+        # obs = Obs(base=base, subtasks=self.active_mask)._asdict()
+        obs = base
         assert self.observation_space.contains(obs)
         return obs
 

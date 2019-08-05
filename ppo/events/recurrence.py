@@ -35,11 +35,10 @@ class Recurrence(nn.Module):
         )
         self.obs_sections = [int(np.prod(s.shape)) for s in obs_spaces]
         self.f = nn.Sequential(
-            # Parallel(Reshape(1, d, h, w), Reshape(hidden_size, 1, 1, 1)),
-            # Product(),
-            # Reshape(d * hidden_size, h, w),
-            # init_(nn.Conv2d(d * hidden_size, hidden_size, kernel_size=1), activation),
-            init_(nn.Conv2d(d, hidden_size, kernel_size=1), activation),
+            Parallel(Reshape(1, d, h, w), Reshape(hidden_size, 1, 1, 1)),
+            Product(),
+            Reshape(d * hidden_size, h, w),
+            init_(nn.Conv2d(d * hidden_size, hidden_size, kernel_size=1), activation),
             activation,
             nn.Sequential(
                 *[
@@ -121,8 +120,7 @@ class Recurrence(nn.Module):
         for t in range(T):
             r = p.unsqueeze(1) @ M
             r.squeeze_(1)
-            # s = self.f((inputs.base[t], r))
-            s = self.f((inputs.base[t]))  # TODO
+            s = self.f((inputs.base[t], r))
             v = self.critic(s)
             dist = self.actor(s)
             self.sample_new(A[t], dist)

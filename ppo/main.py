@@ -29,7 +29,8 @@ def exp_main(gridworld_args, wrapper_args, **kwargs):
 
         def build_agent(self, envs, recurrent=None, device=None, **agent_args):
             return ppo.events.Agent(
-                obs_spaces=Obs(**envs.observation_space.spaces),
+                # obs_spaces=Obs(**envs.observation_space.spaces),
+                obs_spaces=envs.observation_space,
                 action_size=envs.action_space.n,
                 **agent_args
             )
