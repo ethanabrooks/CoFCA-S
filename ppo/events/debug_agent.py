@@ -23,7 +23,7 @@ class DebugAgent(ppo.agent.Agent, NNBase):
 
     @property
     def recurrent_hidden_state_size(self):
-        return 1  # TODO
+        return sum(self.recurrent_module.state_sizes)
 
     @property
     def is_recurrent(self):
@@ -31,7 +31,11 @@ class DebugAgent(ppo.agent.Agent, NNBase):
 
     def forward(self, inputs, rnn_hxs, masks, deterministic=False, action=None):
         N = inputs.size(0)
-        hx = self._forward_gru(inputs.view(N, -1), rnn_hxs, masks, action=action)
+        all_hxs, last_hx = self._forward_gru(
+            inputs.view(N, -1), rnn_hxs, masks, action=action
+        )
+        rm = self.recurrent_module
+        hx = RecurrentState(*rm.parse_hidden(last_hx))
         dist = FixedCategorical(hx.a_probs)
         action_log_probs = dist.log_probs(hx.a)
         entropy = dist.entropy().mean()
@@ -55,7 +59,10 @@ class DebugAgent(ppo.agent.Agent, NNBase):
         return self.recurrent_module(y, hxs)
 
     def get_value(self, inputs, rnn_hxs, masks):
-        return self._forward_gru(inputs, rnn_hxs, masks).v
+        all_hxs, last_hx = self._forward_gru(
+            inputs.view(inputs.size(0), -1), rnn_hxs, masks
+        )
+        return self.recurrent_module.parse_hidden(last_hx).v
 
 
 class Recurrence(nn.Module):
@@ -95,11 +102,17 @@ class Recurrence(nn.Module):
         self.train()
         self.action_size = 1
         self.obs_shape = d, h, w
+        self.state_sizes = RecurrentState(
+            a=1, a_probs=action_space.n, v=1, s=hidden_size, p=1  # TODO
+        )
 
     @staticmethod
     def sample_new(x, dist):
         new = x < 0
         x[new] = dist.sample()[new].flatten()
+
+    def forward(self, inputs, hx):
+        return self.pack(self.inner_loop(inputs, rnn_hxs=hx))
 
     @staticmethod
     def pack(hxs):
@@ -108,17 +121,24 @@ class Recurrence(nn.Module):
                 x = torch.stack(hx).float()
                 yield x.view(*x.shape[:2], -1)
 
-        hx = torch.cat(list(pack()), dim=-1)
-        return hx, hx[-1:]
+        l = list(pack())
+        hx = torch.cat(l, dim=-1)
+        return hx, hx[-1]  # TODO?
 
     def parse_inputs(self, inputs: torch.Tensor) -> Obs:
         return Obs(*torch.split(inputs, self.obs_sections, dim=-1))
 
-    def forward(self, inputs, rnn_hxs):
+    def parse_hidden(self, hx: torch.Tensor) -> RecurrentState:
+        return RecurrentState(*torch.split(hx, self.state_sizes, dim=-1))
+
+    def inner_loop(self, inputs, rnn_hxs):
         T, N, D = inputs.shape
         inputs, actions = torch.split(
             inputs.detach(), [D - self.action_size, self.action_size], dim=2
         )
+        hx = self.parse_hidden(rnn_hxs)
+        for x in hx:
+            x.squeeze_(0)
         # inputs = inputs._replace(base=inputs.base.view(T, N, *self.obs_shape))
         inputs = inputs.view(T, N, *self.obs_shape)
         for t in range(T):
@@ -126,8 +146,12 @@ class Recurrence(nn.Module):
             dist = self.actor(s)
             A = actions.long()
             self.sample_new(A[t], dist)
-            return RecurrentState(
-                a=A[t], a_probs=dist.probs, v=self.critic(s), s=s, p=None
+            yield RecurrentState(
+                a=A[t],
+                a_probs=dist.probs,
+                v=self.critic(s),
+                s=s,
+                p=A[t],  # TODO dummy value
             )
 
     @property
