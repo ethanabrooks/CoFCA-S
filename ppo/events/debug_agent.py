@@ -9,7 +9,7 @@ from torch import nn as nn
 from ppo.agent import AgentValues, NNBase
 from ppo.distributions import Categorical, FixedCategorical
 from ppo.events.recurrence import RecurrentState
-from ppo.layers import Flatten
+from ppo.layers import Flatten, Parallel, Reshape, Product
 from ppo.utils import init_
 import torch.nn.functional as F
 
@@ -74,10 +74,9 @@ class Recurrence(nn.Module):
     ):
         super().__init__()
         obs_spaces = Obs(**observation_space.spaces)
-        d, h, w = obs_spaces.base.shape
+        self.obs_shape = d, h, w = obs_spaces.base.shape
         self.obs_sections = [int(np.prod(s.shape)) for s in obs_spaces]
-        self._hidden_size = hidden_size
-        self._recurrent = recurrent
+        self.action_size = 1
 
         # networks
         self.task_embeddings = nn.Embedding(obs_spaces.subtasks.nvec[0], hidden_size)
@@ -100,13 +99,22 @@ class Recurrence(nn.Module):
             init_(nn.Linear(hidden_size * h * w, hidden_size)),
             activation,
         )
+        self.psi = nn.Sequential(
+            Parallel(Reshape(hidden_size, 1), Reshape(1, action_space.n)),
+            Product(),
+            Reshape(hidden_size * action_space.n),
+            init_(nn.Linear(hidden_size * action_space.n, hidden_size)),
+        )
         self.critic = init_(nn.Linear(hidden_size, 1))
-        self.actor = Categorical(self.output_size, 5)
-        self.train()
-        self.action_size = 1
-        self.obs_shape = d, h, w
+        self.actor = Categorical(hidden_size, action_space.n)
+        self.a_one_hots = nn.Embedding.from_pretrained(torch.eye(action_space.n))
+
         self.state_sizes = RecurrentState(
-            a=1, a_probs=action_space.n, v=1, s=hidden_size, p=1  # TODO
+            a=1,
+            a_probs=action_space.n,
+            v=1,
+            s=hidden_size,
+            p=obs_spaces.subtasks.nvec.size,
         )
 
     @staticmethod
@@ -163,14 +171,9 @@ class Recurrence(nn.Module):
             s = self.f(inputs.base[t])
             dist = self.actor(s)
             self.sample_new(A[t], dist)
-            yield RecurrentState(
-                a=A[t],
-                a_probs=dist.probs,
-                v=self.critic(s),
-                s=s,
-                p=A[t],  # TODO dummy value
-            )
-
-    @property
-    def output_size(self):
-        return self._hidden_size
+            a = self.a_one_hots(A[t].flatten().long())
+            e = self.psi((s, a)).unsqueeze(1).expand(*M.shape)
+            p = p + c * F.cosine_similarity(e, M_plus, dim=-1)
+            p = p - p * F.cosine_similarity(e, M_minus, dim=-1)
+            p = F.softmax(p, dim=-1)
+            yield RecurrentState(a=A[t], a_probs=dist.probs, v=self.critic(s), s=s, p=p)
