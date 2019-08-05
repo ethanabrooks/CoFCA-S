@@ -30,7 +30,7 @@ class DebugAgent(ppo.agent.Agent, NNBase):
         return True  # TODO
 
     def forward(self, inputs, rnn_hxs, masks, deterministic=False, action=None):
-        hx = self.recurrent_module(inputs, rnn_hxs, masks, action=action)
+        hx = self._forward_gru(inputs, rnn_hxs, masks, action=action)
         dist = FixedCategorical(hx.a_probs)
         action_log_probs = dist.log_probs(hx.a)
         entropy = dist.entropy().mean()
@@ -44,8 +44,17 @@ class DebugAgent(ppo.agent.Agent, NNBase):
             log=dict(entropy=entropy),
         )
 
+    def _forward_gru(self, x, hxs, masks, action=None):
+        x = x.view(1, x.size(0), -1)
+        if action is None:
+            y = F.pad(x, [0, self.recurrent_module.action_size], "constant", -1)
+        else:
+            action.unsqueeze_(0)
+            y = torch.cat([x, action.float()], dim=-1)
+        return self.recurrent_module(y, hxs, masks)
+
     def get_value(self, inputs, rnn_hxs, masks):
-        return self.recurrent_module(inputs, rnn_hxs, masks).v
+        return self._forward_gru(inputs, rnn_hxs, masks).v
 
 
 class Recurrence(nn.Module):
@@ -94,14 +103,7 @@ class Recurrence(nn.Module):
     def parse_inputs(self, inputs: torch.Tensor) -> Obs:
         return Obs(*torch.split(inputs, self.obs_sections, dim=-1))
 
-    def forward(self, inputs, rnn_hxs, masks, action=None):
-        x = inputs.view(1, inputs.size(0), -1)
-        if action is None:
-            y = F.pad(x, [0, self.action_size], "constant", -1)
-        else:
-            action.unsqueeze_(0)
-            y = torch.cat([x, action.float()], dim=-1)
-        inputs = y
+    def forward(self, inputs, rnn_hxs, masks):
         T, N, D = inputs.shape
         inputs, actions = torch.split(
             inputs.detach(), [D - self.action_size, self.action_size], dim=2
