@@ -30,7 +30,7 @@ def exp_main(gridworld_args, wrapper_args, **kwargs):
 
         def build_agent(self, envs, recurrent=None, device=None, **agent_args):
             return DebugAgent(
-                obs_shape=envs.observation_space.shape,
+                observation_space=envs.observation_space,
                 action_space=envs.action_space,
                 recurrent=False,
                 **agent_args

@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 
 # noinspection PyMissingConstructor
 import ppo.agent
@@ -14,12 +15,10 @@ import torch.nn.functional as F
 
 
 class DebugAgent(ppo.agent.Agent, NNBase):
-    def __init__(self, obs_shape, action_space, entropy_coef, **network_args):
+    def __init__(self, entropy_coef, **network_args):
         nn.Module.__init__(self)
         self.entropy_coef = entropy_coef
-        self.recurrent_module = Recurrence(
-            *obs_shape, action_space=action_space, **network_args
-        )
+        self.recurrent_module = Recurrence(**network_args)
 
     @property
     def recurrent_hidden_state_size(self):
@@ -66,9 +65,7 @@ class DebugAgent(ppo.agent.Agent, NNBase):
 class Recurrence(nn.Module):
     def __init__(
         self,
-        d,
-        h,
-        w,
+        observation_space,
         action_space,
         activation,
         hidden_size,
@@ -76,6 +73,9 @@ class Recurrence(nn.Module):
         recurrent=False,
     ):
         super().__init__()
+        obs_spaces = Obs(**observation_space.spaces)
+        d, h, w = obs_spaces.base.shape
+        self.obs_sections = [int(np.prod(s.shape)) for s in obs_spaces]
         self._hidden_size = hidden_size
         self._recurrent = recurrent
         self.f = nn.Sequential(
@@ -133,13 +133,16 @@ class Recurrence(nn.Module):
         inputs, actions = torch.split(
             inputs.detach(), [D - self.action_size, self.action_size], dim=2
         )
+        # parse non-action inputs
+        inputs = self.parse_inputs(inputs)
+        inputs = inputs._replace(base=inputs.base.view(T, N, *self.obs_shape))
+
         hx = self.parse_hidden(rnn_hxs)
         for x in hx:
             x.squeeze_(0)
-        inputs = inputs.view(T, N, *self.obs_shape)
         A = torch.cat([actions, hx.a.unsqueeze(0)], dim=0).long().squeeze(2)
         for t in range(T):
-            s = self.f(inputs[t])
+            s = self.f(inputs.base[t])
             dist = self.actor(s)
             self.sample_new(A[t], dist)
             yield RecurrentState(
