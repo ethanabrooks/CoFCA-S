@@ -15,7 +15,7 @@ class DebugAgent(ppo.agent.Agent, NNBase):
     def __init__(self, obs_shape, action_space, entropy_coef, **network_args):
         nn.Module.__init__(self)
         self.entropy_coef = entropy_coef
-        self.base = Recurrence(*obs_shape, **network_args)
+        self.recurrent_module = Recurrence(*obs_shape, **network_args)
 
     @property
     def recurrent_hidden_state_size(self):
@@ -26,7 +26,7 @@ class DebugAgent(ppo.agent.Agent, NNBase):
         return True  # TODO
 
     def forward(self, inputs, rnn_hxs, masks, deterministic=False, action=None):
-        hx = self.base(inputs, rnn_hxs, masks, action=action)
+        hx = self.recurrent_module(inputs, rnn_hxs, masks, action=action)
         dist = FixedCategorical(hx.a_probs)
         action_log_probs = dist.log_probs(hx.a)
         entropy = dist.entropy().mean()
@@ -41,7 +41,7 @@ class DebugAgent(ppo.agent.Agent, NNBase):
         )
 
     def get_value(self, inputs, rnn_hxs, masks):
-        return self.base(inputs, rnn_hxs, masks).v
+        return self.recurrent_module(inputs, rnn_hxs, masks).v
 
 
 class Recurrence(nn.Module):
