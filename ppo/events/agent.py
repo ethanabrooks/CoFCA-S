@@ -98,8 +98,10 @@ class Agent(ppo.agent.Agent, NNBase):
 
     def get_value(self, inputs, rnn_hxs, masks):
         n = inputs.size(0)
-        all_hxs, last_hx = self._forward_gru(inputs.view(n, -1), rnn_hxs, masks)
-        return self.recurrent_module.parse_hidden(last_hx).v
+        s = self.f(inputs)
+        return self.critic(s)
+        # all_hxs, last_hx = self._forward_gru(inputs.view(n, -1), rnn_hxs, masks)
+        # return self.recurrent_module.parse_hidden(last_hx).v
 
     def _forward_gru(self, x, hxs, masks, action=None):
         if action is None:
