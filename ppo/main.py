@@ -5,7 +5,7 @@ from pathlib import Path
 import ppo
 import ppo.events.agent
 from ppo.arguments import build_parser, get_args
-from ppo.events.debug_agent import DebugAgent
+from ppo.events.agent import Agent
 from ppo.events.wrapper import Obs
 from ppo.train import Train
 import torch.nn as nn
@@ -29,7 +29,7 @@ def exp_main(gridworld_args, wrapper_args, **kwargs):
             return env
 
         def build_agent(self, envs, recurrent=None, device=None, **agent_args):
-            return DebugAgent(
+            return Agent(
                 observation_space=envs.observation_space,
                 action_space=envs.action_space,
                 recurrent=False,
