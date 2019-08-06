@@ -1,4 +1,5 @@
 import functools
+import re
 from collections import namedtuple, defaultdict
 import numpy as np
 
@@ -36,8 +37,10 @@ class Wrapper(gym.Wrapper):
         door_time_limit: int,
         max_time_outside: int,
         n_active_subtasks: int,
+        check_obs=True,
     ):
         super().__init__(env)
+        self.check_obs = check_obs
         self.n_active_subtasks = n_active_subtasks
 
         def make_subtasks():
@@ -58,7 +61,7 @@ class Wrapper(gym.Wrapper):
 
         self.make_subtasks = make_subtasks
         self.active_subtasks = None
-        self.active_subtask_idxs = None
+        self.subtask_indexes = None
         self.rewards = None
         env = env.unwrapped
         self.random = env.random
@@ -115,10 +118,10 @@ class Wrapper(gym.Wrapper):
 
     def reset(self, **kwargs):
         possible_subtasks = self.make_subtasks()
-        self.active_subtask_idxs = np.random.choice(
+        self.subtask_indexes = np.random.choice(
             len(possible_subtasks), size=self.n_active_subtasks, replace=False
         )
-        self.active_subtasks = [possible_subtasks[i] for i in self.active_subtask_idxs]
+        self.active_subtasks = [possible_subtasks[i] for i in self.subtask_indexes]
         return self.observation(super().reset())
 
     def get_rewards(self, s: State):
@@ -142,10 +145,8 @@ class Wrapper(gym.Wrapper):
         dims = self.height, self.width
         object_pos = defaultdict(lambda: np.zeros((self.height, self.width)))
         grasping = self.env.unwrapped.agent.grasping
-        pos = defaultdict(set)
         for obj in observation.objects:
             if obj.pos is not None:
-                pos[type(obj)].add(obj.pos)
                 index = np.ravel_multi_index(obj.pos, dims)
                 one_hot = self.pos_one_hots[index].reshape(dims)
                 if not obj.activated and not grasping is obj:
@@ -159,15 +160,30 @@ class Wrapper(gym.Wrapper):
                 else:
                     raise RuntimeWarning
 
-                x = c * one_hot
-                if x.any() > 4:
-                    import ipdb
-
-                    ipdb.set_trace()
-                object_pos[type(obj)] = x
+                object_pos[type(obj)] += c * one_hot
         base = np.stack([object_pos[k] for k in self.object_types])
-        obs = Obs(base=base, subtasks=self.active_subtask_idxs)._asdict()
-        assert self.observation_space.contains(obs)
+        obs = Obs(base=base, subtasks=self.subtask_indexes)._asdict()
+        if self.check_obs:
+            assert self.observation_space.contains(obs)
+        return obs
+
+
+class SingleSubtaskWrapper(Wrapper):
+    def __init__(self, subtask, check_obs=True, **kwargs):
+        super().__init__(**kwargs, check_obs=False)
+        self.seed(0)
+
+        self.active_subtasks = [
+            s for s in self.make_subtasks() if type(s).__name__ == subtask
+        ]
+        assert len(self.active_subtasks) == 1
+        self.n_active_subtasks = 1
+        self.observation_space = self.observation_space.spaces["base"]
+
+    def observation(self, observation):
+        obs = super().observation(observation)["base"]
+        if self.check_obs:
+            assert self.observation_space.contains(obs)
         return obs
 
 
