@@ -104,7 +104,7 @@ class Gridworld(gym.Env):
     def interact(self):
         if self.agent.grasping is None:
             for obj in self.objects:
-                if obj.pos == self.agent.pos:
+                if obj.pos == self.agent.pos and obj is not self.agent:
                     obj.interact()
                     yield obj
                     try:

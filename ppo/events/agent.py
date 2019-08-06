@@ -3,14 +3,12 @@ import torch.jit
 from torch import nn as nn
 from torch.nn import functional as F
 
-from ppo.agent import AgentValues, NNBase
 import ppo.agent
-from ppo.distributions import FixedCategorical, Categorical
+from ppo.agent import AgentValues, NNBase
+from ppo.distributions import FixedCategorical
 
 # noinspection PyMissingConstructor
 from ppo.events.recurrence import RecurrentState, Recurrence
-from ppo.layers import Flatten
-from ppo.utils import init_
 
 
 class Agent(ppo.agent.Agent, NNBase):

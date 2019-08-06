@@ -17,13 +17,7 @@ RecurrentState = namedtuple("RecurrentState", "a a_probs v s p")
 
 class Recurrence(nn.Module):
     def __init__(
-        self,
-        observation_space,
-        action_space,
-        activation,
-        hidden_size,
-        num_layers,
-        recurrent=False,
+        self, observation_space, action_space, activation, hidden_size, num_layers
     ):
         super().__init__()
         obs_spaces = Obs(**observation_space.spaces)

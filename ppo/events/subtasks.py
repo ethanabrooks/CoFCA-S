@@ -54,11 +54,7 @@ class AnswerDoor(Subtask):
 
 class CatchMouse(Subtask):
     def condition(self, *interactions, mouse: Mouse, **objects):
-        return mouse in interactions
-
-    @property
-    def reward(self):
-        return 1
+        return mouse.pos is not None
 
 
 class ComfortBaby(Subtask):
@@ -82,20 +78,12 @@ class MakeDinner(Subtask):
         super().__init__()
 
     def condition(self, *interactions, food: Food, table: Table, **objects):
-        return food.pos == table.pos and food.activated
-
-    @property
-    def reward(self):
-        return 1
+        return not (food.pos == table.pos and food.activated)
 
 
 class MakeFire(Subtask):
     def condition(self, *interactions, fire: Fire, **objects):
-        return fire.activated
-
-    @property
-    def reward(self):
-        return 0.01
+        return not fire.activated
 
 
 class KillFlies(Subtask):
@@ -146,15 +134,7 @@ class KeepBabyOutOfFire(Subtask):
     def condition(self, *interactions, baby: Baby, fire: Fire, **objects):
         return fire.activated and baby.pos == fire.pos
 
-    @property
-    def reward(self):
-        return -2
-
 
 class KeepCatFromDog(Subtask):
     def condition(self, *interactions, cat: Cat, dog: Dog, **objects):
         return cat.pos == dog.pos
-
-    @property
-    def reward(self):
-        return -1

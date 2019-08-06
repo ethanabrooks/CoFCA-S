@@ -42,18 +42,18 @@ class Wrapper(gym.Wrapper):
 
         def make_subtasks():
             return [
-                # AnswerDoor(door_time_limit),
+                AnswerDoor(door_time_limit),
                 CatchMouse(),
-                # ComfortBaby(),
-                # MakeDinner(),
-                # MakeFire(),
-                # KillFlies(),
-                # CleanMess(),
-                # AvoidDog(avoid_dog_range),
-                # WatchBaby(watch_baby_range),
-                # LetDogIn(max_time_outside),
-                # KeepBabyOutOfFire(),
-                # KeepCatFromDog(),
+                ComfortBaby(),
+                MakeDinner(),
+                MakeFire(),
+                KillFlies(),
+                CleanMess(),
+                AvoidDog(avoid_dog_range),
+                WatchBaby(watch_baby_range),
+                LetDogIn(max_time_outside),
+                KeepBabyOutOfFire(),
+                KeepCatFromDog(),
             ]
 
         self.make_subtasks = make_subtasks
@@ -63,13 +63,14 @@ class Wrapper(gym.Wrapper):
         env = env.unwrapped
         self.random = env.random
         self.width, self.height = env.width, env.height
-        self.object_one_hots = np.eye(env.height * env.width)
+        self.pos_one_hots = np.eye(env.height * env.width)
         self.object_types = env.object_types
+        self.obj_one_hots = np.eye(len(env.object_types))
         base_shape = len(self.object_types), self.height, self.width
         subtasks_nvec = len(make_subtasks()) * np.ones(n_active_subtasks)
         self.observation_space = spaces.Dict(
             Obs(
-                base=spaces.Box(low=-np.ones(base_shape), high=np.ones(base_shape)),
+                base=spaces.Box(low=np.zeros(base_shape), high=4 * np.ones(base_shape)),
                 subtasks=spaces.MultiDiscrete(subtasks_nvec),
             )._asdict()
         )
@@ -140,12 +141,30 @@ class Wrapper(gym.Wrapper):
     def observation(self, observation):
         dims = self.height, self.width
         object_pos = defaultdict(lambda: np.zeros((self.height, self.width)))
+        grasping = self.env.unwrapped.agent.grasping
+        pos = defaultdict(set)
         for obj in observation.objects:
             if obj.pos is not None:
-                sign = -1 if obj.activated else 1
+                pos[type(obj)].add(obj.pos)
                 index = np.ravel_multi_index(obj.pos, dims)
-                one_hot = self.object_one_hots[index].reshape(dims)
-                object_pos[obj.__class__] += one_hot * sign
+                one_hot = self.pos_one_hots[index].reshape(dims)
+                if not obj.activated and not grasping is obj:
+                    c = 1
+                elif obj.activated and not grasping is obj:
+                    c = 2
+                elif not obj.activated and grasping is obj:
+                    c = 3
+                elif obj.activated and grasping is obj:
+                    c = 4
+                else:
+                    raise RuntimeWarning
+
+                x = c * one_hot
+                if x.any() > 4:
+                    import ipdb
+
+                    ipdb.set_trace()
+                object_pos[type(obj)] = x
         base = np.stack([object_pos[k] for k in self.object_types])
         obs = Obs(base=base, subtasks=self.active_subtask_idxs)._asdict()
         assert self.observation_space.contains(obs)

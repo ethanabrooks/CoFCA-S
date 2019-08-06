@@ -32,16 +32,8 @@ def exp_main(gridworld_args, wrapper_args, **kwargs):
             return Agent(
                 observation_space=envs.observation_space,
                 action_space=envs.action_space,
-                recurrent=False,
                 **agent_args
             )
-
-        #     return ppo.events.Agent(
-        #         # obs_spaces=Obs(**envs.observation_space.spaces),
-        #         obs_spaces=envs.observation_space,
-        #         action_size=envs.action_space.n,
-        #         **agent_args
-        #     )
 
     _Train(**kwargs)
 
