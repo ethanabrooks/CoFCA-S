@@ -176,8 +176,13 @@ class SingleSubtaskWrapper(Wrapper):
         self.active_subtasks = [
             s for s in self.make_subtasks() if type(s).__name__ == subtask
         ]
-        assert len(self.active_subtasks) == 1
         self.n_active_subtasks = 1
+        assert len(self.active_subtasks) == 1
+
+
+class BaseWrapper(SingleSubtaskWrapper):
+    def __init__(self, subtask, **kwargs):
+        super().__init__(subtask, **kwargs)
         self.observation_space = self.observation_space.spaces["base"]
 
     def observation(self, observation):

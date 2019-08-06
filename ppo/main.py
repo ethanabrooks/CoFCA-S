@@ -15,15 +15,20 @@ def cli():
     Train(**get_args())
 
 
-def exp_main(gridworld_args, wrapper_args, subtask, **kwargs):
+def exp_main(gridworld_args, wrapper_args, subtask, base, **kwargs):
     class _Train(Train):
         @staticmethod
         def make_env(time_limit, seed, rank, **kwargs):
             env = ppo.events.Gridworld(**gridworld_args)
             if subtask:
-                env = ppo.events.SingleSubtaskWrapper(
-                    **wrapper_args, env=env, subtask=subtask
-                )
+                if base:
+                    env = ppo.events.BaseWrapper(
+                        **wrapper_args, env=env, subtask=subtask
+                    )
+                else:
+                    env = ppo.events.SingleSubtaskWrapper(
+                        **wrapper_args, env=env, subtask=subtask
+                    )
             else:
                 env = ppo.events.Wrapper(**wrapper_args, env=env)
             env = TimeLimit(max_episode_steps=time_limit, env=env)
@@ -31,7 +36,7 @@ def exp_main(gridworld_args, wrapper_args, subtask, **kwargs):
             return env
 
         def build_agent(self, envs, recurrent=None, device=None, **agent_args):
-            if subtask:
+            if base:
                 return super().build_agent(envs, recurrent=recurrent, **agent_args)
             return Agent(
                 observation_space=envs.observation_space,
@@ -45,6 +50,7 @@ def exp_main(gridworld_args, wrapper_args, subtask, **kwargs):
 def exp_cli():
     parser = build_parser()
     parser.add_argument("--subtask")
+    parser.add_argument("--base", action="store_true")
     gridworld_parser = parser.add_argument_group("gridworld_args")
     gridworld_parser.add_argument("--height", help="", type=int, default=4)
     gridworld_parser.add_argument("--width", help="", type=int, default=4)
