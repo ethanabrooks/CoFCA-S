@@ -167,12 +167,13 @@ class SingleSubtaskWrapper(Wrapper):
     def __init__(self, subtask, check_obs=True, **kwargs):
         super().__init__(**kwargs, check_obs=False)
         self.seed(0)
+        _make_subtasks = self.make_subtasks
 
-        self.active_subtasks = [
-            s for s in self.make_subtasks() if type(s).__name__ == subtask
-        ]
+        def make_subtasks():
+            return [s for s in _make_subtasks() if type(s).__name__ == subtask]
+
+        self.make_subtasks = make_subtasks
         self.n_active_subtasks = 1
-        assert len(self.active_subtasks) == 1
 
 
 class BaseWrapper(SingleSubtaskWrapper):
