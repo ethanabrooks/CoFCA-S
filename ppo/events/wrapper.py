@@ -48,7 +48,7 @@ class Wrapper(gym.Wrapper):
                 AnswerDoor(door_time_limit),
                 CatchMouse(),
                 ComfortBaby(),
-                MakeDinner(),
+                MakeDinner(),  # TODO: failing
                 MakeFire(),
                 KillFlies(),
                 CleanMess(),
