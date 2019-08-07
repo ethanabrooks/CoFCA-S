@@ -32,7 +32,6 @@ def exp_main(gridworld_args, wrapper_args, **kwargs):
             return Agent(
                 observation_space=envs.observation_space,
                 action_space=envs.action_space,
-                recurrent=False,
                 **agent_args
             )
 

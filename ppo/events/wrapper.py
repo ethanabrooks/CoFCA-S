@@ -1,4 +1,5 @@
 import functools
+import re
 from collections import namedtuple, defaultdict
 import numpy as np
 
@@ -36,8 +37,10 @@ class Wrapper(gym.Wrapper):
         door_time_limit: int,
         max_time_outside: int,
         n_active_subtasks: int,
+        check_obs=True,
     ):
         super().__init__(env)
+        self.check_obs = check_obs
         self.n_active_subtasks = n_active_subtasks
 
         def make_subtasks():
@@ -65,6 +68,7 @@ class Wrapper(gym.Wrapper):
         self.width, self.height = env.width, env.height
         self.object_one_hots = np.eye(env.height * env.width)
         self.object_types = env.object_types
+        self.obj_one_hots = np.eye(len(env.object_types))
         base_shape = len(self.object_types), self.height, self.width
         subtasks_nvec = len(make_subtasks()) * np.ones(n_active_subtasks)
         self.observation_space = spaces.Dict(
@@ -148,7 +152,32 @@ class Wrapper(gym.Wrapper):
                 object_pos[obj.__class__] += one_hot * sign
         base = np.stack([object_pos[k] for k in self.object_types])
         obs = Obs(base=base, subtasks=self.active_subtask_idxs)._asdict()
-        assert self.observation_space.contains(obs)
+        if self.check_obs:
+            assert self.observation_space.contains(obs)
+        return obs
+
+
+class SingleSubtaskWrapper(Wrapper):
+    def __init__(self, subtask, check_obs=True, **kwargs):
+        super().__init__(**kwargs, check_obs=False)
+        self.seed(0)
+
+        self.active_subtasks = [
+            s for s in self.make_subtasks() if type(s).__name__ == subtask
+        ]
+        self.n_active_subtasks = 1
+        assert len(self.active_subtasks) == 1
+
+
+class BaseWrapper(SingleSubtaskWrapper):
+    def __init__(self, subtask, **kwargs):
+        super().__init__(subtask, **kwargs)
+        self.observation_space = self.observation_space.spaces["base"]
+
+    def observation(self, observation):
+        obs = super().observation(observation)["base"]
+        if self.check_obs:
+            assert self.observation_space.contains(obs)
         return obs
 
 
