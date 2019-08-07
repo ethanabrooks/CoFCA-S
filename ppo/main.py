@@ -19,16 +19,25 @@ def exp_main(gridworld_args, wrapper_args, subtask, base, **kwargs):
     class _Train(Train):
         @staticmethod
         def make_env(time_limit, seed, rank, **kwargs):
-            env = TimeLimit(
-                max_episode_steps=time_limit,
-                env=ppo.events.Wrapper(
-                    **wrapper_args, env=ppo.events.Gridworld(**gridworld_args)
-                ),
-            )
+            env = ppo.events.Gridworld(**gridworld_args)
+            if subtask:
+                if base:
+                    env = ppo.events.BaseWrapper(
+                        **wrapper_args, env=env, subtask=subtask
+                    )
+                else:
+                    env = ppo.events.SingleSubtaskWrapper(
+                        **wrapper_args, env=env, subtask=subtask
+                    )
+            else:
+                env = ppo.events.Wrapper(**wrapper_args, env=env)
+            env = TimeLimit(max_episode_steps=time_limit, env=env)
             env.seed(seed + rank)
             return env
 
         def build_agent(self, envs, recurrent=None, device=None, **agent_args):
+            if base:
+                return super().build_agent(envs, recurrent=recurrent, **agent_args)
             return Agent(
                 observation_space=envs.observation_space,
                 action_space=envs.action_space,
