@@ -61,12 +61,12 @@ class Wrapper(gym.Wrapper):
 
         self.make_subtasks = make_subtasks
         self.active_subtasks = None
-        self.active_subtask_idxs = None
+        self.subtask_indexes = None
         self.rewards = None
         env = env.unwrapped
         self.random = env.random
         self.width, self.height = env.width, env.height
-        self.object_one_hots = np.eye(env.height * env.width)
+        self.pos_one_hots = np.eye(env.height * env.width)
         self.object_types = env.object_types
         self.obj_one_hots = np.eye(len(env.object_types))
         base_shape = len(self.object_types), self.height, self.width
@@ -118,10 +118,10 @@ class Wrapper(gym.Wrapper):
 
     def reset(self, **kwargs):
         possible_subtasks = self.make_subtasks()
-        self.active_subtask_idxs = np.random.choice(
+        self.subtask_indexes = np.random.choice(
             len(possible_subtasks), size=self.n_active_subtasks, replace=False
         )
-        self.active_subtasks = [possible_subtasks[i] for i in self.active_subtask_idxs]
+        self.active_subtasks = [possible_subtasks[i] for i in self.subtask_indexes]
         return self.observation(super().reset())
 
     def get_rewards(self, s: State):
@@ -144,14 +144,15 @@ class Wrapper(gym.Wrapper):
     def observation(self, observation):
         dims = self.height, self.width
         object_pos = defaultdict(lambda: np.zeros((self.height, self.width)))
+        grasping = self.env.unwrapped.agent.grasping
         for obj in observation.objects:
             if obj.pos is not None:
                 sign = -1 if obj.activated else 1
                 index = np.ravel_multi_index(obj.pos, dims)
-                one_hot = self.object_one_hots[index].reshape(dims)
-                object_pos[obj.__class__] += one_hot * sign
+                one_hot = self.pos_one_hots[index].reshape(dims)
+                object_pos[type(obj)] += one_hot * sign
         base = np.stack([object_pos[k] for k in self.object_types])
-        obs = Obs(base=base, subtasks=self.active_subtask_idxs)._asdict()
+        obs = Obs(base=base, subtasks=self.subtask_indexes)._asdict()
         if self.check_obs:
             assert self.observation_space.contains(obs)
         return obs

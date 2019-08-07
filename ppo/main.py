@@ -15,7 +15,7 @@ def cli():
     Train(**get_args())
 
 
-def exp_main(gridworld_args, wrapper_args, **kwargs):
+def exp_main(gridworld_args, wrapper_args, subtask, base, **kwargs):
     class _Train(Train):
         @staticmethod
         def make_env(time_limit, seed, rank, **kwargs):
@@ -35,18 +35,13 @@ def exp_main(gridworld_args, wrapper_args, **kwargs):
                 **agent_args
             )
 
-        #     return ppo.events.Agent(
-        #         # obs_spaces=Obs(**envs.observation_space.spaces),
-        #         obs_spaces=envs.observation_space,
-        #         action_size=envs.action_space.n,
-        #         **agent_args
-        #     )
-
     _Train(**kwargs)
 
 
 def exp_cli():
     parser = build_parser()
+    parser.add_argument("--subtask")
+    parser.add_argument("--base", action="store_true")
     gridworld_parser = parser.add_argument_group("gridworld_args")
     gridworld_parser.add_argument("--height", help="", type=int, default=4)
     gridworld_parser.add_argument("--width", help="", type=int, default=4)
