@@ -12,7 +12,7 @@ def cli():
     Train(**get_args())
 
 
-def exp_main(gridworld_args, wrapper_args, subtasks, base, **kwargs):
+def exp_main(gridworld_args, wrapper_args, subtasks, base, debug, **kwargs):
     class _Train(Train):
         @staticmethod
         def make_env(time_limit, seed, rank, **kwargs):
@@ -31,6 +31,7 @@ def exp_main(gridworld_args, wrapper_args, subtasks, base, **kwargs):
             return Agent(
                 observation_space=envs.observation_space,
                 action_space=envs.action_space,
+                debug=debug,
                 **agent_args
             )
 
@@ -41,6 +42,7 @@ def exp_cli():
     parser = build_parser()
     parser.add_argument("--subtask", dest="subtasks", action="append")
     parser.add_argument("--base", action="store_true")
+    parser.add_argument("--debug", action="store_true")
     gridworld_parser = parser.add_argument_group("gridworld_args")
     gridworld_parser.add_argument("--height", help="", type=int, default=4)
     gridworld_parser.add_argument("--width", help="", type=int, default=4)

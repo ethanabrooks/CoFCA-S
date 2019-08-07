@@ -17,13 +17,20 @@ RecurrentState = namedtuple("RecurrentState", "a a_probs v s p")
 
 class Recurrence(nn.Module):
     def __init__(
-        self, observation_space, action_space, activation, hidden_size, num_layers
+        self,
+        observation_space,
+        action_space,
+        activation,
+        hidden_size,
+        num_layers,
+        debug,
     ):
         super().__init__()
         obs_spaces = Obs(**observation_space.spaces)
         self.obs_shape = d, h, w = obs_spaces.base.shape
         self.obs_sections = [int(np.prod(s.shape)) for s in obs_spaces]
         self.action_size = 1
+        self.debug = debug
 
         # networks
         self.task_embeddings = nn.Embedding(obs_spaces.subtasks.nvec[0], hidden_size)
@@ -91,6 +98,10 @@ class Recurrence(nn.Module):
     def parse_hidden(self, hx: torch.Tensor) -> RecurrentState:
         return RecurrentState(*torch.split(hx, self.state_sizes, dim=-1))
 
+    def print(self, *args, **kwargs):
+        if self.debug:
+            print(*args, **kwargs)
+
     def inner_loop(self, inputs, rnn_hxs):
         T, N, D = inputs.shape
         inputs, actions = torch.split(
@@ -124,7 +135,15 @@ class Recurrence(nn.Module):
             self.sample_new(A[t], dist)
             a = self.a_one_hots(A[t].flatten().long())
             e = self.psi((s, a)).unsqueeze(1).expand(*M.shape)
+            self.print("c", c)
+            self.print("p1", p)
             p = p + c * F.cosine_similarity(e, M_plus, dim=-1)
-            p = p - p * F.cosine_similarity(e, M_minus, dim=-1)
+            self.print("minus")
+            self.print(-F.cosine_similarity(e, M_plus, dim=-1))
+            self.print("p2", p)
+            self.print("plus")
+            self.print(F.cosine_similarity(e, M_minus, dim=-1))
+            p = p - c * F.cosine_similarity(e, M_minus, dim=-1)
+            self.print("p3", p)
             p = F.softmax(p, dim=-1)
             yield RecurrentState(a=A[t], a_probs=dist.probs, v=self.critic(s), s=s, p=p)
