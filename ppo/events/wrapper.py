@@ -45,18 +45,18 @@ class Wrapper(gym.Wrapper):
 
         def make_subtasks():
             return [
-                # AnswerDoor(door_time_limit),
+                AnswerDoor(door_time_limit),
                 CatchMouse(),
-                # ComfortBaby(),
-                # MakeDinner(),
-                # MakeFire(),
-                # KillFlies(),
-                # CleanMess(),
-                # AvoidDog(avoid_dog_range),
-                # WatchBaby(watch_baby_range),
-                # LetDogIn(max_time_outside),
-                # KeepBabyOutOfFire(),
-                # KeepCatFromDog(),
+                ComfortBaby(),
+                MakeDinner(),
+                MakeFire(),
+                KillFlies(),
+                CleanMess(),
+                AvoidDog(avoid_dog_range),
+                WatchBaby(watch_baby_range),
+                LetDogIn(max_time_outside),
+                KeepBabyOutOfFire(),
+                KeepCatFromDog(),
             ]
 
         self.make_subtasks = make_subtasks
