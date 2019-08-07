@@ -1,6 +1,8 @@
 import functools
 import re
 from collections import namedtuple, defaultdict
+from typing import List
+
 import numpy as np
 
 import gym
@@ -37,6 +39,7 @@ class Wrapper(gym.Wrapper):
         door_time_limit: int,
         max_time_outside: int,
         n_active_subtasks: int,
+        subtasks: List[str],
         check_obs=True,
     ):
         super().__init__(env)
@@ -44,20 +47,23 @@ class Wrapper(gym.Wrapper):
         self.n_active_subtasks = n_active_subtasks
 
         def make_subtasks():
-            return [
-                AnswerDoor(door_time_limit),
-                CatchMouse(),
-                ComfortBaby(),
-                MakeDinner(),  # TODO: failing
-                MakeFire(),
-                KillFlies(),
-                CleanMess(),
-                AvoidDog(avoid_dog_range),
-                WatchBaby(watch_baby_range),
-                LetDogIn(max_time_outside),
-                KeepBabyOutOfFire(),
-                KeepCatFromDog(),
-            ]
+            return filter(
+                lambda s: (type(s).__name__ in subtasks) if subtasks else True,
+                [
+                    AnswerDoor(door_time_limit),
+                    CatchMouse(),
+                    ComfortBaby(),
+                    MakeDinner(),  # TODO: failing
+                    MakeFire(),
+                    KillFlies(),
+                    CleanMess(),
+                    AvoidDog(avoid_dog_range),
+                    WatchBaby(watch_baby_range),
+                    LetDogIn(max_time_outside),
+                    KeepBabyOutOfFire(),
+                    KeepCatFromDog(),
+                ],
+            )
 
         self.make_subtasks = make_subtasks
         self.active_subtasks = None
@@ -70,7 +76,9 @@ class Wrapper(gym.Wrapper):
         self.object_types = env.object_types
         self.obj_one_hots = np.eye(len(env.object_types))
         base_shape = len(self.object_types), self.height, self.width
-        subtasks_nvec = len(make_subtasks()) * np.ones(n_active_subtasks)
+        n_subtasks = len(list(make_subtasks()))
+        subtasks_nvec = n_subtasks * np.ones(n_active_subtasks)
+        assert n_active_subtasks <= n_subtasks
         self.observation_space = spaces.Dict(
             Obs(
                 base=spaces.Box(
@@ -119,7 +127,7 @@ class Wrapper(gym.Wrapper):
         input("pause")
 
     def reset(self, **kwargs):
-        possible_subtasks = self.make_subtasks()
+        possible_subtasks = list(self.make_subtasks())
         self.subtask_indexes = np.random.choice(
             len(possible_subtasks), size=self.n_active_subtasks, replace=False
         )
@@ -163,20 +171,7 @@ class Wrapper(gym.Wrapper):
         return obs
 
 
-class SingleSubtaskWrapper(Wrapper):
-    def __init__(self, subtask, check_obs=True, **kwargs):
-        super().__init__(**kwargs, check_obs=False)
-        self.seed(0)
-        _make_subtasks = self.make_subtasks
-
-        def make_subtasks():
-            return [s for s in _make_subtasks() if type(s).__name__ == subtask]
-
-        self.make_subtasks = make_subtasks
-        self.n_active_subtasks = 1
-
-
-class BaseWrapper(SingleSubtaskWrapper):
+class BaseWrapper(Wrapper):
     def __init__(self, subtask, **kwargs):
         super().__init__(subtask, **kwargs)
         self.observation_space = self.observation_space.spaces["base"]
