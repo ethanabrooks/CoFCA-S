@@ -73,7 +73,9 @@ class Wrapper(gym.Wrapper):
         subtasks_nvec = len(make_subtasks()) * np.ones(n_active_subtasks)
         self.observation_space = spaces.Dict(
             Obs(
-                base=spaces.Box(low=-np.ones(base_shape), high=np.ones(base_shape)),
+                base=spaces.Box(
+                    low=-2 * np.ones(base_shape), high=2 * np.ones(base_shape)
+                ),
                 subtasks=spaces.MultiDiscrete(subtasks_nvec),
             )._asdict()
         )
@@ -147,10 +149,13 @@ class Wrapper(gym.Wrapper):
         grasping = self.env.unwrapped.agent.grasping
         for obj in observation.objects:
             if obj.pos is not None:
-                sign = -1 if obj.activated else 1
                 index = np.ravel_multi_index(obj.pos, dims)
                 one_hot = self.pos_one_hots[index].reshape(dims)
-                object_pos[type(obj)] += one_hot * sign
+                c = -1 if obj.activated else 1
+                if grasping is obj:
+                    c *= 2
+
+                object_pos[type(obj)] += c * one_hot
         base = np.stack([object_pos[k] for k in self.object_types])
         obs = Obs(base=base, subtasks=self.subtask_indexes)._asdict()
         if self.check_obs:
