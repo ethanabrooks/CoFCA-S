@@ -15,6 +15,7 @@ from ppo.events.objects import (
     Dog,
     Agent,
     Cat,
+    Oven,
 )
 
 
@@ -77,8 +78,9 @@ class MakeDinner(Subtask):
         self.made = 0
         super().__init__()
 
-    def condition(self, *interactions, food: Food, table: Table, **objects):
-        return not (food.pos == table.pos and food.activated)
+    def condition(self, *interactions, oven: Oven, table: Table, **objects):
+        # return not (food.pos == table.pos and food.activated)
+        return not oven.activated
 
 
 class MakeFire(Subtask):
