@@ -1,5 +1,3 @@
-import functools
-import re
 from collections import namedtuple, defaultdict
 from typing import List
 
@@ -25,7 +23,7 @@ from ppo.events.subtasks import (
     KeepBabyOutOfFire,
     KeepCatFromDog,
 )
-import ppo.events
+from ppo.utils import RESET, REVERSE
 
 Obs = namedtuple("Obs", "base subtasks")
 
@@ -39,7 +37,7 @@ class Wrapper(gym.Wrapper):
         door_time_limit: int,
         max_time_outside: int,
         n_active_subtasks: int,
-        subtasks: List[str],
+        subtasks: List[str] = None,
         check_obs=True,
     ):
         super().__init__(env)
@@ -87,9 +85,9 @@ class Wrapper(gym.Wrapper):
                 subtasks=spaces.MultiDiscrete(subtasks_nvec),
             )._asdict()
         )
-        self.action_space = spaces.Discrete(5)
+        self.action_space = spaces.Discrete(4 + len(env.object_types))
 
-    def render(self, mode="human", **kwargs):
+    def render(self, mode="human", pause=True, **kwargs):
         env = self.env.unwrapped
         legend = {}
         object_string = defaultdict(str)
@@ -97,9 +95,11 @@ class Wrapper(gym.Wrapper):
         for obj in env.objects:
             if obj.pos is not None:
                 string = "{:^3}".format(obj.icon())
+                if obj.grasped:
+                    string = REVERSE + string + RESET
                 object_string[obj.pos] += string
                 object_count[obj.pos] += len(string)
-            legend[obj.__class__] = obj
+            legend[type(obj)] = obj
         # for v in legend.values():
         #     print("{:<15}".format(f"{v}:"), v.icon())
 
@@ -113,7 +113,6 @@ class Wrapper(gym.Wrapper):
             for j in range(self.width):
                 print(object_string.get((i, j), " " * width), end="|")
         print()
-        print("Grasping", env.agent.grasping)
         for subtask in self.active_subtasks:
             print(subtask, end="")
             if self.rewards is not None:
@@ -124,7 +123,8 @@ class Wrapper(gym.Wrapper):
                     print(0)
             else:
                 print()
-        input("pause")
+        if pause:
+            input("pause")
 
     def reset(self, **kwargs):
         possible_subtasks = list(self.make_subtasks())
@@ -154,13 +154,12 @@ class Wrapper(gym.Wrapper):
     def observation(self, observation):
         dims = self.height, self.width
         object_pos = defaultdict(lambda: np.zeros((self.height, self.width)))
-        grasping = self.env.unwrapped.agent.grasping
         for obj in observation.objects:
             if obj.pos is not None:
                 index = np.ravel_multi_index(obj.pos, dims)
                 one_hot = self.pos_one_hots[index].reshape(dims)
                 c = -1 if obj.activated else 1
-                if grasping is obj:
+                if obj.grasped:
                     c *= 2
 
                 object_pos[type(obj)] += c * one_hot
@@ -184,7 +183,7 @@ class BaseWrapper(Wrapper):
 
 
 if __name__ == "__main__":
-    import gridworld_env.keyboard_control
+    import ppo.events.keyboard_control
 
     env = TimeLimit(
         max_episode_steps=30,
@@ -207,4 +206,4 @@ if __name__ == "__main__":
             ),
         ),
     )
-    gridworld_env.keyboard_control.run(env, actions=" swda", seed=0)
+    ppo.events.keyboard_control.run(env, actions="xswda1234567890", seed=0)

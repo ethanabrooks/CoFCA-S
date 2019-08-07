@@ -44,6 +44,7 @@ class Gridworld(gym.Env):
         self.height = height
         self.width = width
         self.random = None
+        self.grasping = None
         multiple_object_types = [Mess, Fly]
         self.object_types = object_types = [
             Mouse,
@@ -101,24 +102,28 @@ class Gridworld(gym.Env):
         self.transitions = [(0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)]
         self._mess = None
 
-    def interact(self):
-        if self.agent.grasping is None:
-            for obj in self.objects:
-                if obj.pos == self.agent.pos and obj is not self.agent:
+    def interact(self, i):
+        object_type = self.object_types[i]
+        for obj in self.objects:
+            if type(obj) is object_type and obj.pos == self.agent.pos:
+                if self.grasping is None:
                     obj.interact()
-                    yield obj
-                    try:
-                        self.agent.grasp(obj)
-                    except AttributeError:
-                        pass
-        else:
-            self.agent.grasping.interact()
-            self.agent.grasping = None
+                    self.grasping = obj if obj.grasped else None
+                else:
+                    self.grasping.interact()
+                    self.grasping = None
+                yield obj
 
     def step(self, a):
+        a = int(a)
         self.last_action = a
-        action = self.transitions[int(a)]
-        interactions = list(self.interact()) if action == (0, 0) else []
+        n_transitions = len(self.transitions)
+        if a < n_transitions:
+            action = self.transitions[int(a)]
+            interactions = []
+        else:
+            action = (0, 0)
+            interactions = list(self.interact(a - n_transitions))
 
         obj: Object
         for obj in self.objects:
