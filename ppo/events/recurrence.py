@@ -136,7 +136,9 @@ class Recurrence(nn.Module):
             probs = dist.probs * nonzero
             deficit = 1 - probs.sum(-1, keepdim=True)
             probs = probs + F.normalize(nonzero, p=1, dim=-1) * deficit
-            dist = FixedCategorical(probs=probs)
+            dist = FixedCategorical(
+                probs=F.normalize(torch.clamp(probs, 0.0, 1.0), p=1, dim=-1)
+            )
             self.sample_new(A[t], dist)
             a = self.a_one_hots(A[t].flatten().long())
             e = self.psi((s, a)).unsqueeze(1).expand(*M.shape)
