@@ -38,6 +38,7 @@ class Gridworld(gym.Env):
         baby_prob: float,
         mess_prob: float,
         fly_prob: float,
+        toward_cat_prob: float,
     ):
         super().__init__()
         self.object_idxs = {}
@@ -73,16 +74,18 @@ class Gridworld(gym.Env):
                     width=width,
                     random=self.random,
                 )
-                if issubclass(object_type, Door):
+                if object_type is Door:
                     kwargs.update(activation_prob=doorbell_prob)
-                if issubclass(object_type, Mouse):
+                if object_type is Mouse:
                     kwargs.update(activation_prob=mouse_prob)
-                if issubclass(object_type, Baby):
+                if object_type is Baby:
                     kwargs.update(activation_prob=baby_prob)
-                if issubclass(object_type, Mess):
+                if object_type is Mess:
                     kwargs.update(activation_prob=mess_prob)
-                if issubclass(object_type, Fly):
+                if object_type is Fly:
                     kwargs.update(activation_prob=fly_prob)
+                if object_type is Dog:
+                    kwargs.update(toward_cat_prob=toward_cat_prob)
                 if object_type is Food:
                     kwargs.update(cook_time=cook_time)
                 if object_type is Oven:

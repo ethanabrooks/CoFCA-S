@@ -326,9 +326,10 @@ class Food(Graspable, RandomPosition, Immobile, Activating):
 
 
 class Dog(Graspable, RandomPosition, RandomWalking):
-    def __init__(self, **kwargs):
+    def __init__(self, toward_cat_prob, **kwargs):
         super().__init__(**kwargs)
         self.let_out = False
+        self.toward_cat_prob = toward_cat_prob
 
     def interact(self):
         door = self.get_object(Door)
@@ -338,7 +339,7 @@ class Dog(Graspable, RandomPosition, RandomWalking):
         super().interact()
 
     def wrap_action(self, action):
-        if not self.grasped and self.random.rand() < 0.5:
+        if not self.grasped and self.random.rand() < self.toward_cat_prob:
             cat = self.get_object(Cat)
             from_cat = np.array(self.pos) - np.array(cat.pos)
             return min(

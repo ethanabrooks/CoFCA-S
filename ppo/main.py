@@ -54,6 +54,7 @@ def exp_cli():
     gridworld_parser.add_argument("--baby-prob", help="", type=float, default=0.1)
     gridworld_parser.add_argument("--mess-prob", help="", type=float, default=0.02)
     gridworld_parser.add_argument("--fly-prob", help="", type=float, default=0.005)
+    gridworld_parser.add_argument("--toward-cat-prob", help="", type=float, default=0.5)
     wrapper_parser = parser.add_argument_group("wrapper_args")
     wrapper_parser.add_argument("--n-active-subtasks", help="", type=int, required=True)
     wrapper_parser.add_argument("--watch-baby-range", help="", type=int, default=2)
