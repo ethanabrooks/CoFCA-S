@@ -78,9 +78,9 @@ class MakeDinner(Subtask):
         self.made = 0
         super().__init__()
 
-    def condition(self, *interactions, oven: Oven, table: Table, **objects):
+    def condition(self, *interactions, food: Food, table: Table, **objects):
         # return not (food.pos == table.pos and food.activated)
-        return not oven.hot()
+        return not food.activated
 
 
 class MakeFire(Subtask):
