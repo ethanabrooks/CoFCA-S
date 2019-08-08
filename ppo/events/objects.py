@@ -107,7 +107,6 @@ class RandomWalking(Object, ABC):
         self.actions = [(0, 1), (1, 0), (0, -1), (-1, 0), (0, 0)]
 
     def wrap_action(self, action):
-        return (0, 0)
         choice = self.random.choice(len(self.actions))
         return self.actions[choice] if self.random.rand() < 0.7 else (0, 0)
 
