@@ -80,7 +80,7 @@ class MakeDinner(Subtask):
 
     def condition(self, *interactions, oven: Oven, table: Table, **objects):
         # return not (food.pos == table.pos and food.activated)
-        return not oven.activated
+        return not oven.hot()
 
 
 class MakeFire(Subtask):
