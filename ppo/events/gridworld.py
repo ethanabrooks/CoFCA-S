@@ -53,7 +53,6 @@ class Gridworld(gym.Env):
             Baby,
             Door,
             MouseHole,
-            Refrigerator,
             Table,
             Oven,
             Food,

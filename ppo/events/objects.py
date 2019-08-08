@@ -306,15 +306,11 @@ class Table(RandomPosition, Immobile):
         return "🍽"
 
 
-class Food(Graspable, Immobile, Activating):
+class Food(Graspable, RandomPosition, Immobile, Activating):
     def __init__(self, cook_time, **kwargs):
         super().__init__(**kwargs)
-        # noinspection PyTypeChecker
-        # noinspection PyTypeChecker
-        refrigerator = self.get_object(Refrigerator)  # type: Refrigerator
         self.cook_time = cook_time
         self.time_cooking = 0
-        self.pos = refrigerator.pos
 
     def icon(self):
         return "🍳" if self.activated else "🥚"
