@@ -337,6 +337,16 @@ class Dog(Graspable, RandomPosition, RandomWalking):
             self.let_out = True
         super().interact()
 
+    def wrap_action(self, action):
+        if not self.grasped and self.random.rand() < 0.5:
+            cat = self.get_object(Cat)
+            from_cat = np.array(self.pos) - np.array(cat.pos)
+            return min(
+                self.actions, key=lambda a: np.sum(np.abs(np.array(a) + from_cat))
+            )
+        else:
+            return super().wrap_action(action)
+
     def icon(self):
         return "🐕"
 
