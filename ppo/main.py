@@ -18,6 +18,7 @@ def exp_main(gridworld_args, wrapper_args, subtasks, base, debug, **kwargs):
         def make_env(time_limit, seed, rank, **kwargs):
             env = ppo.events.Gridworld(**gridworld_args)
             if base:
+                raise NotImplementedError
                 env = ppo.events.BaseWrapper(**wrapper_args, env=env, subtasks=subtasks)
             else:
                 env = ppo.events.Wrapper(**wrapper_args, env=env, subtasks=subtasks)

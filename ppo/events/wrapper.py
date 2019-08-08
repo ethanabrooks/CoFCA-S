@@ -24,8 +24,9 @@ from ppo.events.subtasks import (
     KeepCatFromDog,
 )
 from ppo.utils import RESET, REVERSE
+from ppo.events.objects import Agent
 
-Obs = namedtuple("Obs", "base subtasks")
+Obs = namedtuple("Obs", "base subtasks interactable")
 
 
 class Wrapper(gym.Wrapper):
@@ -41,6 +42,7 @@ class Wrapper(gym.Wrapper):
         check_obs=True,
     ):
         super().__init__(env)
+        self.agent_index = env.object_types.index(Agent)
         self.check_obs = check_obs
         self.n_active_subtasks = n_active_subtasks
 
@@ -83,9 +85,10 @@ class Wrapper(gym.Wrapper):
                     low=-2 * np.ones(base_shape), high=2 * np.ones(base_shape)
                 ),
                 subtasks=spaces.MultiDiscrete(subtasks_nvec),
+                interactable=spaces.MultiBinary(len(self.object_types)),
             )._asdict()
         )
-        self.action_space = spaces.Discrete(4 + len(env.object_types))
+        self.action_space = spaces.Discrete(5 + len(env.object_types))
 
     def render(self, mode="human", pause=True, **kwargs):
         env = self.env.unwrapped
@@ -154,6 +157,7 @@ class Wrapper(gym.Wrapper):
     def observation(self, observation):
         dims = self.height, self.width
         object_pos = defaultdict(lambda: np.zeros((self.height, self.width)))
+        interactable = np.zeros(len(self.object_types))
         for obj in observation.objects:
             if obj.pos is not None:
                 index = np.ravel_multi_index(obj.pos, dims)
@@ -162,9 +166,15 @@ class Wrapper(gym.Wrapper):
                 if obj.grasped:
                     c *= 2
 
-                object_pos[type(obj)] += c * one_hot
+                t = type(obj)
+                object_pos[t] += c * one_hot
+                env = self.env.unwrapped
+                if obj.pos == env.agent.pos and obj is not env.agent:
+                    interactable[env.object_types.index(t)] = 1
         base = np.stack([object_pos[k] for k in self.object_types])
-        obs = Obs(base=base, subtasks=self.subtask_indexes)._asdict()
+        obs = Obs(
+            base=base, subtasks=self.subtask_indexes, interactable=interactable
+        )._asdict()
         if self.check_obs:
             assert self.observation_space.contains(obs)
         return obs

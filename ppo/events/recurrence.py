@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from torch import nn as nn
 from torch.nn import functional as F
 
-from ppo.distributions import Categorical
+from ppo.distributions import Categorical, FixedCategorical
 from ppo.events.wrapper import Obs
 from ppo.layers import Parallel, Reshape, Product, Flatten
 from ppo.utils import init_
@@ -132,6 +132,11 @@ class Recurrence(nn.Module):
             r = (p.unsqueeze(1) @ M).squeeze(1)
             s = self.f((inputs.base[t], r))
             dist = self.actor(s)
+            nonzero = F.pad(inputs.interactable[t], [5, 0], "constant", 1)
+            probs = dist.probs * nonzero
+            deficit = 1 - probs.sum(-1, keepdim=True)
+            probs = probs + F.normalize(nonzero, p=1, dim=-1) * deficit
+            dist = FixedCategorical(probs=probs)
             self.sample_new(A[t], dist)
             a = self.a_one_hots(A[t].flatten().long())
             e = self.psi((s, a)).unsqueeze(1).expand(*M.shape)

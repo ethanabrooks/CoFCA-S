@@ -47,6 +47,7 @@ class Gridworld(gym.Env):
         self.grasping = None
         multiple_object_types = [Mess, Fly]
         self.object_types = object_types = [
+            Agent,
             Mouse,
             Dog,
             Baby,
@@ -61,7 +62,6 @@ class Gridworld(gym.Env):
             Fire,
             Mess,
             Fly,
-            Agent,
         ]
 
         def make_objects():
