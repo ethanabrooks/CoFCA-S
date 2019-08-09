@@ -134,6 +134,8 @@ class Wrapper(gym.Wrapper):
         self.subtask_indexes = np.random.choice(
             len(possible_subtasks), size=self.n_active_subtasks, replace=False
         )
+        # print(possible_subtasks)
+        # self.subtask_indexes = 3 * np.ones(1, dtype=int)
         self.active_subtasks = [possible_subtasks[i] for i in self.subtask_indexes]
         return self.observation(super().reset())
 
