@@ -52,7 +52,7 @@ def exp_cli():
     gridworld_parser.add_argument("--doorbell-prob", help="", type=float, default=0.05)
     gridworld_parser.add_argument("--mouse-prob", help="", type=float, default=0.2)
     gridworld_parser.add_argument("--baby-prob", help="", type=float, default=0.1)
-    gridworld_parser.add_argument("--mess-prob", help="", type=float, default=0.02)
+    gridworld_parser.add_argument("--mess-prob", help="", type=float, default=0.01)
     gridworld_parser.add_argument("--fly-prob", help="", type=float, default=0.005)
     gridworld_parser.add_argument("--toward-cat-prob", help="", type=float, default=0.5)
     wrapper_parser = parser.add_argument_group("wrapper_args")

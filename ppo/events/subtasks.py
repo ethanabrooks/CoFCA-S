@@ -84,8 +84,8 @@ class MakeDinner(Subtask):
 
 
 class MakeFire(Subtask):
-    def condition(self, *interactions, fire: Fire, **objects):
-        return not fire.activated
+    def condition(self, *interactions, fire: Fire, baby: Baby, **objects):
+        return not fire.activated or (fire.activated and baby.pos == fire.pos)
 
 
 class KillFlies(Subtask):

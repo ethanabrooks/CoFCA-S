@@ -59,8 +59,8 @@ class Wrapper(gym.Wrapper):
                     CleanMess(),
                     AvoidDog(avoid_dog_range),
                     WatchBaby(watch_baby_range),
-                    LetDogIn(max_time_outside),
-                    KeepBabyOutOfFire(),
+                    # LetDogIn(max_time_outside),
+                    # KeepBabyOutOfFire(),
                     KeepCatFromDog(),
                 ],
             )
