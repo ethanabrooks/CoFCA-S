@@ -131,7 +131,7 @@ class Wrapper(gym.Wrapper):
 
     def reset(self, **kwargs):
         possible_subtasks = list(self.make_subtasks())
-        self.subtask_indexes = np.random.choice(
+        self.subtask_indexes = self.random.choice(
             len(possible_subtasks), size=self.n_active_subtasks, replace=False
         )
         # print(possible_subtasks)
@@ -208,6 +208,7 @@ if __name__ == "__main__":
             env=ppo.events.Gridworld(
                 cook_time=2,
                 time_to_heat_oven=3,
+                toward_cat_prob=0.5,
                 doorbell_prob=0.05,
                 mouse_prob=0.2,
                 baby_prob=0.1,
