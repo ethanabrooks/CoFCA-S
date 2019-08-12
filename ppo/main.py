@@ -61,6 +61,7 @@ def exp_cli():
     wrapper_parser.add_argument("--door-time-limit", help="", type=int, default=10)
     wrapper_parser.add_argument("--max-time-outside", help="", type=int, default=15)
     wrapper_parser.add_argument("--subtask", dest="subtasks", action="append")
+    wrapper_parser.add_argument("--held-out", nargs="*")
     exp_main(**hierarchical_parse_args(parser))
 
 

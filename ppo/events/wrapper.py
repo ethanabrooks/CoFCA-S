@@ -40,15 +40,19 @@ class Wrapper(gym.Wrapper):
         n_active_subtasks: int,
         subtasks: List[str] = None,
         check_obs=True,
+        held_out: List[str] = None,
     ):
         super().__init__(env)
         self.agent_index = env.object_types.index(Agent)
         self.check_obs = check_obs
         self.n_active_subtasks = n_active_subtasks
 
+        def subtask_str(subtask):
+            return type(subtask).__name__
+
         def make_subtasks():
             return filter(
-                lambda s: (type(s).__name__ in subtasks) if subtasks else True,
+                lambda s: (subtask_str(s) in subtasks) if subtasks else True,
                 [
                     AnswerDoor(door_time_limit),
                     CatchMouse(),
@@ -76,7 +80,9 @@ class Wrapper(gym.Wrapper):
         self.object_types = env.object_types
         self.obj_one_hots = np.eye(len(env.object_types))
         base_shape = len(self.object_types), self.height, self.width
-        n_subtasks = len(list(make_subtasks()))
+        subtasks = list(map(subtask_str, make_subtasks()))
+        n_subtasks = len(subtasks)
+        self.held_out = {subtasks.index(s) for s in held_out}
         subtasks_nvec = n_subtasks * np.ones(n_active_subtasks)
         assert n_active_subtasks <= n_subtasks
         self.observation_space = spaces.Dict(
@@ -134,6 +140,8 @@ class Wrapper(gym.Wrapper):
         self.subtask_indexes = self.random.choice(
             len(possible_subtasks), size=self.n_active_subtasks, replace=False
         )
+        if set(self.subtask_indexes) == self.held_out:
+            return self.reset(**kwargs)
         # print(possible_subtasks)
         # self.subtask_indexes = 3 * np.ones(1, dtype=int)
         self.active_subtasks = [possible_subtasks[i] for i in self.subtask_indexes]
