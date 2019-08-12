@@ -12,16 +12,16 @@ def cli():
     Train(**get_args())
 
 
-def exp_main(gridworld_args, wrapper_args, subtasks, base, debug, **kwargs):
+def exp_main(gridworld_args, wrapper_args, base, debug, **kwargs):
     class _Train(Train):
         @staticmethod
         def make_env(time_limit, seed, rank, **kwargs):
             env = ppo.events.Gridworld(**gridworld_args)
             if base:
                 raise NotImplementedError
-                env = ppo.events.BaseWrapper(**wrapper_args, env=env, subtasks=subtasks)
+                env = ppo.events.BaseWrapper(**wrapper_args, env=env)
             else:
-                env = ppo.events.Wrapper(**wrapper_args, env=env, subtasks=subtasks)
+                env = ppo.events.Wrapper(**wrapper_args, env=env)
             env = TimeLimit(max_episode_steps=time_limit, env=env)
             env.seed(seed + rank)
             return env
@@ -41,7 +41,6 @@ def exp_main(gridworld_args, wrapper_args, subtasks, base, debug, **kwargs):
 
 def exp_cli():
     parser = build_parser()
-    parser.add_argument("--subtask", dest="subtasks", action="append")
     parser.add_argument("--base", action="store_true")
     parser.add_argument("--debug", action="store_true")
     gridworld_parser = parser.add_argument_group("gridworld_args")
@@ -61,6 +60,7 @@ def exp_cli():
     wrapper_parser.add_argument("--avoid-dog-range", help="", type=int, default=2)
     wrapper_parser.add_argument("--door-time-limit", help="", type=int, default=10)
     wrapper_parser.add_argument("--max-time-outside", help="", type=int, default=15)
+    wrapper_parser.add_argument("--subtask", dest="subtasks", action="append")
     exp_main(**hierarchical_parse_args(parser))
 
 
