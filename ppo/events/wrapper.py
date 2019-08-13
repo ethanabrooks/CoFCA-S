@@ -142,8 +142,9 @@ class Wrapper(gym.Wrapper):
         )
         if set(self.subtask_indexes) == self.held_out:
             return self.reset(**kwargs)
-        # print(possible_subtasks)
-        # self.subtask_indexes = 3 * np.ones(1, dtype=int)
+        # for i, s in enumerate(possible_subtasks):
+        # print(i, s)
+        # self.subtask_indexes = np.array([3, 5])
         self.active_subtasks = [possible_subtasks[i] for i in self.subtask_indexes]
         return self.observation(super().reset())
 
