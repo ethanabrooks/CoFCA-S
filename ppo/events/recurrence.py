@@ -129,6 +129,7 @@ class Recurrence(nn.Module):
         p[new_episode] = p0[new_episode]
         A = torch.cat([actions, hx.a.unsqueeze(0)], dim=0).long().squeeze(2)
         for t in range(T):
+            p = F.softmax(p, dim=-1)
             r = (p.unsqueeze(1) @ M).squeeze(1)
             s = self.f((inputs.base[t], r))
             dist = self.actor(s)
@@ -152,5 +153,4 @@ class Recurrence(nn.Module):
             self.print(F.cosine_similarity(e, M_minus, dim=-1))
             p = p - c * F.cosine_similarity(e, M_minus, dim=-1)
             self.print("p3", p)
-            p = F.softmax(p, dim=-1)
             yield RecurrentState(a=A[t], a_probs=dist.probs, v=self.critic(s), s=s, p=p)
