@@ -1,23 +1,24 @@
-from collections import Counter
-import pickle
 import functools
 import itertools
-from pathlib import Path
 import re
 import sys
 import time
+from collections import Counter
+from pathlib import Path
+from typing import Dict
 
 import gym
 import numpy as np
-from gym.wrappers import TimeLimit
-from tensorboardX import SummaryWriter
 import torch
+from gym.wrappers import TimeLimit
+from ray.tune import Trainable
+from tensorboardX import SummaryWriter
 from tqdm import tqdm
 
 from common.atari_wrappers import wrap_deepmind
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
-from ppo.agent import Agent, AgentValues  # noqa
+from ppo.agent import Agent, AgentValues
 from ppo.storage import RolloutStorage
 from ppo.update import PPO
 from ppo.utils import get_n_gpu, get_random_gpu
@@ -35,7 +36,7 @@ except ImportError:
     pass
 
 
-class Train:
+class Train(Trainable):
     def __init__(
         self,
         num_steps,
@@ -85,7 +86,7 @@ class Train:
             torch.backends.cudnn.benchmark = False
             torch.backends.cudnn.deterministic = True
 
-        device = "cpu"
+        self.device = "cpu"
         if cuda:
             device_num = get_random_gpu()
             if run_id:
@@ -93,8 +94,8 @@ class Train:
                 if match:
                     device_num = int(match.group()) % get_n_gpu()
 
-            device = torch.device("cuda", device_num)
-        print("Using device", device)
+            self.device = torch.device("cuda", device_num)
+        print("Using device", self.device)
 
         writer = None
         if log_dir:
@@ -102,7 +103,7 @@ class Train:
 
         torch.set_num_threads(1)
 
-        envs = self.make_vec_envs(
+        self.envs = self.make_vec_envs(
             **env_args,
             seed=seed,
             gamma=(gamma if normalize else None),
@@ -113,26 +114,26 @@ class Train:
             time_limit=time_limit,
         )
 
-        self.agent = self.build_agent(envs=envs, **agent_args)
+        self.agent = self.build_agent(envs=self.envs, **agent_args)
         rollouts = RolloutStorage(
             num_steps=num_steps,
             num_processes=num_processes,
-            obs_space=envs.observation_space,
-            action_space=envs.action_space,
+            obs_space=self.envs.observation_space,
+            action_space=self.envs.action_space,
             recurrent_hidden_state_size=self.agent.recurrent_hidden_state_size,
         )
 
-        obs = envs.reset()
+        obs = self.envs.reset()
         rollouts.obs[0].copy_(obs)
 
         if cuda:
             tick = time.time()
-            envs.to(device)
-            self.agent.to(device)
-            rollouts.to(device)
+            self.envs.to(self.device)
+            self.agent.to(self.device)
+            rollouts.to(self.device)
             print("Values copied to GPU in", time.time() - tick, "seconds")
 
-        ppo = PPO(agent=self.agent, batch_size=batch_size, **ppo_args)
+        self.ppo = PPO(agent=self.agent, batch_size=batch_size, **ppo_args)
 
         counter = Counter()
         start = time.time()
@@ -140,24 +141,19 @@ class Train:
         curriculum_idx = 0
 
         if load_path:
-            state_dict = torch.load(load_path, map_location=device)
-            self.agent.load_state_dict(state_dict["agent"])
-            ppo.optimizer.load_state_dict(state_dict["optimizer"])
-            start = state_dict.get("step", -1) + 1
-            if isinstance(envs.venv, VecNormalize):
-                envs.venv.load_state_dict(state_dict["vec_normalize"])
-            print(f"Loaded parameters from {load_path}.")
+            self._restore(load_path)
 
-        for j in itertools.count():
-            if j % log_interval == 0:
+        for i in itertools.count():
+            self.i = i
+            if self.i % log_interval == 0:
                 log_progress = tqdm(total=log_interval, desc="log ")
-            if eval_interval and j % eval_interval == 0:
+            if eval_interval and self.i % eval_interval == 0:
                 eval_progress = tqdm(total=eval_interval, desc="eval")
             epoch_counter = self.run_epoch(
                 obs=rollouts.obs[0],
                 rnn_hxs=rollouts.recurrent_hidden_states[0],
                 masks=rollouts.masks[0],
-                envs=envs,
+                envs=self.envs,
                 num_steps=num_steps,
                 rollouts=rollouts,
                 counter=counter,
@@ -173,27 +169,14 @@ class Train:
             rollouts.compute_returns(
                 next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau
             )
-            train_results = ppo.update(rollouts)
+            train_results = self.ppo.update(rollouts)
             rollouts.after_update()
 
             if save_dir and save_interval and time.time() - last_save >= save_interval:
                 last_save = time.time()
-                modules = dict(
-                    optimizer=ppo.optimizer, agent=self.agent
-                )  # type: Dict[str, torch.nn.Module]
+                self._save(save_dir)
 
-                if isinstance(envs.venv, VecNormalize):
-                    modules.update(vec_normalize=envs.venv)
-
-                state_dict = {
-                    name: module.state_dict() for name, module in modules.items()
-                }
-                save_path = Path(save_dir, "checkpoint.pt")
-                torch.save(dict(step=j, **state_dict), save_path)
-
-                print(f"Saved parameters to {save_path}")
-
-            total_num_steps = (j + 1) * num_processes * num_steps
+            total_num_steps = (self.i + 1) * num_processes * num_steps
 
             mean_success_rate = np.mean(epoch_counter["success"])
             if mean_success_rate > 0.9:
@@ -202,10 +185,10 @@ class Train:
             if target_success_rate and mean_success_rate > target_success_rate:
                 target_success_rate = next(target_success_rates, None)
                 print("incrementing target_success_rate:", target_success_rate)
-                envs.increment_curriculum()
+                self.envs.increment_curriculum()
                 curriculum_idx += 1
 
-            if j % log_interval == 0 and writer is not None:
+            if self.i % log_interval == 0 and writer is not None:
                 end = time.time()
                 fps = total_num_steps / (end - start)
                 log_values = dict(fps=fps, **epoch_counter, **train_results)
@@ -223,7 +206,10 @@ class Train:
 
             log_progress.update()
 
-            if eval_interval is not None and j % eval_interval == eval_interval - 1:
+            if (
+                eval_interval is not None
+                and self.i % eval_interval == eval_interval - 1
+            ):
                 eval_envs = self.make_vec_envs(
                     **env_args,
                     # env_id=env_id,
@@ -236,7 +222,7 @@ class Train:
                     evaluation=True,
                     synchronous=True if render_eval else synchronous,
                 )
-                eval_envs.to(device)
+                eval_envs.to(self.device)
 
                 # vec_norm = get_vec_normalize(eval_envs)
                 # if vec_norm is not None:
@@ -245,9 +231,11 @@ class Train:
 
                 obs = eval_envs.reset()
                 eval_recurrent_hidden_states = torch.zeros(
-                    num_processes, self.agent.recurrent_hidden_state_size, device=device
+                    num_processes,
+                    self.agent.recurrent_hidden_state_size,
+                    device=self.device,
                 )
-                eval_masks = torch.zeros(num_processes, 1, device=device)
+                eval_masks = torch.zeros(num_processes, 1, device=self.device)
                 eval_counter = Counter()
 
                 eval_values = self.run_epoch(
@@ -395,3 +383,28 @@ class Train:
         #     envs = VecPyTorchFrameStack(envs, 4, device)
 
         return envs
+
+    def _save(self, checkpoint_dir):
+        modules = dict(
+            optimizer=self.ppo.optimizer, agent=self.agent
+        )  # type: Dict[str, torch.nn.Module]
+        if isinstance(self.envs.venv, VecNormalize):
+            modules.update(vec_normalize=self.envs.venv)
+        state_dict = {name: module.state_dict() for name, module in modules.items()}
+        save_path = Path(checkpoint_dir, "checkpoint.pt")
+        torch.save(dict(step=self.i, **state_dict), save_path)
+        print(f"Saved parameters to {save_path}")
+        return save_path
+
+    def _restore(self, checkpoint):
+        load_path = checkpoint
+        state_dict = torch.load(load_path, map_location=self.device)
+        self.agent.load_state_dict(state_dict["agent"])
+        self.ppo.optimizer.load_state_dict(state_dict["optimizer"])
+        start = state_dict.get("step", -1) + 1
+        if isinstance(self.envs.venv, VecNormalize):
+            self.envs.venv.load_state_dict(state_dict["vec_normalize"])
+        print(f"Loaded parameters from {load_path}.")
+
+    def _train(self):
+        pass
