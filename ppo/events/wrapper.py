@@ -38,11 +38,13 @@ class Wrapper(gym.Wrapper):
         door_time_limit: int,
         max_time_outside: int,
         n_active_subtasks: int,
+        evaluation: bool,
         subtasks: List[str] = None,
         check_obs=True,
-        held_out: List[str] = None,
+        held_out: List[List[str]] = None,
     ):
         super().__init__(env)
+        self.evaluation = evaluation
         self.agent_index = env.object_types.index(Agent)
         self.check_obs = check_obs
         self.n_active_subtasks = n_active_subtasks
@@ -82,7 +84,7 @@ class Wrapper(gym.Wrapper):
         base_shape = len(self.object_types), self.height, self.width
         subtasks = list(map(subtask_str, make_subtasks()))
         n_subtasks = len(subtasks)
-        self.held_out = {subtasks.index(s) for s in held_out}
+        self.held_out = [sorted({subtasks.index(s) for s in task}) for task in held_out]
         subtasks_nvec = n_subtasks * np.ones(n_active_subtasks)
         assert n_active_subtasks <= n_subtasks
         self.observation_space = spaces.Dict(
@@ -137,11 +139,15 @@ class Wrapper(gym.Wrapper):
 
     def reset(self, **kwargs):
         possible_subtasks = list(self.make_subtasks())
-        self.subtask_indexes = self.random.choice(
-            len(possible_subtasks), size=self.n_active_subtasks, replace=False
-        )
-        if set(self.subtask_indexes) == self.held_out:
-            return self.reset(**kwargs)
+        if self.evaluation:
+            self.subtask_indexes = self.held_out[self.random.choice(len(self.held_out))]
+        else:
+            self.subtask_indexes = self.random.choice(
+                len(possible_subtasks), size=self.n_active_subtasks, replace=False
+            )
+            if sorted(self.subtask_indexes) in self.held_out:
+                # if not evaluation and chosen task is held-out
+                return self.reset(**kwargs)
         # for i, s in enumerate(possible_subtasks):
         # print(i, s)
         # self.subtask_indexes = np.array([3, 5])
