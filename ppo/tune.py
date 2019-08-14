@@ -7,9 +7,11 @@ from gym.wrappers import TimeLimit
 from ray.tune import tune, Trainable
 from ray.tune.result import TIME_TOTAL_S
 from ray.tune.schedulers import AsyncHyperBandScheduler
+from rl_utils import hierarchical_parse_args
 
 import ppo.events
 import ppo.train
+from ppo.arguments import get_parser_with_exp_args
 from ppo.events import Agent
 
 
@@ -88,61 +90,46 @@ class Train(ppo.train.Train, Trainable):
         )
 
 
-parser = argparse.ArgumentParser()
-parser.add_argument("--redis-address")
-parser.add_argument("--log-dir")
-parser.add_argument("--run-id")
-parser.add_argument("--debug", action="store_true")
-args = parser.parse_args()
-ray.init(redis_address=args.redis_address, local_mode=args.debug)
+def main(redis_address, debug, log_dir, **config):
+    ray.init(redis_address=redis_address, local_mode=debug)
+
+    config.update(
+        use_gae=ray.tune.choice([True, False]),
+        # ppo_args=dict(clip_param=0.2, value_loss_coef=0.5, eps=1e-5, max_grad_norm=0.5),
+        # agent_args=dict(recurrent=True, activation=nn.ReLU()),
+        num_batch=ray.tune.choice([1, 2]),
+        entropy_coef=ray.tune.uniform(low=0.01, high=0.04),
+        hidden_size=ray.tune.choice([32, 64, 128, 512]),
+        learning_rate=ray.tune.uniform(low=0.0002, high=0.0001),
+        num_layers=ray.tune.choice([0, 1, 2]),
+        num_steps=ray.tune.choice([16, 32, 64]),
+        ppo_epoch=ray.tune.sample_from(
+            lambda spec: int(
+                0.0035 / spec.config.learning_rate * np.random.uniform(low=-2, high=2)
+            )
+        ),
+        seed=ray.tune.choice(list(range(10))),
+    )
+
+    tune.run(
+        Train,
+        config=config,
+        resources_per_trial=dict(cpu=1, gpu=0.5),
+        checkpoint_freq=1,
+        reuse_actors=True,
+        num_samples=1 if debug else 100,
+        local_dir=log_dir,
+        scheduler=AsyncHyperBandScheduler(
+            time_attr=TIME_TOTAL_S,
+            metric="eval_rewards",
+            mode="max",
+            grace_period=3600,
+            max_t=43200,
+        ),
+    )
 
 
-config = dict(
-    num_processes=300,
-    eval_interval=100,
-    time_limit=30,
-    cuda_deterministic=True,
-    cuda=True,
-    gamma=0.99,
-    normalize=False,
-    use_gae=ray.tune.choice([True, False]),
-    tau=0.95,
-    ppo_args=dict(clip_param=0.2, value_loss_coef=0.5, eps=1e-5, max_grad_norm=0.5),
-    agent_args=dict(recurrent=True, activation=nn.ReLU()),
-    render=False,
-    render_eval=False,
-    load_path=None,
-    success_reward=None,
-    synchronous=False,
-    env_args={},
-    log_interval=10,
-    num_batch=ray.tune.choice([1, 2]),
-    entropy_coef=ray.tune.uniform(low=0.01, high=0.04),
-    hidden_size=ray.tune.choice([32, 64, 128, 512]),
-    learning_rate=ray.tune.uniform(low=0.0002, high=0.0001),
-    num_layers=ray.tune.choice([0, 1, 2]),
-    num_steps=ray.tune.choice([16, 32, 64]),
-    ppo_epoch=ray.tune.sample_from(
-        lambda spec: int(
-            0.0035 / spec.config.learning_rate * np.random.uniform(low=-2, high=2)
-        )
-    ),
-    seed=ray.tune.choice(list(range(10))),
-)
-
-tune.run(
-    Train,
-    config=config,
-    resources_per_trial=dict(cpu=1, gpu=0.5),
-    checkpoint_freq=1,
-    reuse_actors=True,
-    num_samples=1 if args.debug else 100,
-    local_dir=args.log_dir,
-    scheduler=AsyncHyperBandScheduler(
-        time_attr=TIME_TOTAL_S,
-        metric="eval_rewards",
-        mode="max",
-        grace_period=3600,
-        max_t=43200,
-    ),
-)
+if __name__ == "__main__":
+    parser = get_parser_with_exp_args()
+    parser.add_argument("--redis-address")
+    main(**hierarchical_parse_args(parser))
