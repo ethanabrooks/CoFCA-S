@@ -49,7 +49,9 @@ def exp_main(gridworld_args, wrapper_args, base, debug, **kwargs):
             ):
                 self._save(self.save_dir)
                 self.last_save = time.time()
-            return super()._train()
+            result = super()._train()
+            self._log_result(result)
+            return result
 
         def get_device(self):
             match = re.search("\d+$", self.run_id)
