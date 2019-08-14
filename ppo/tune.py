@@ -115,10 +115,12 @@ config = dict(
     num_batch=ray.tune.choice([1, 2]),
     entropy_coef=ray.tune.uniform(low=0.01, high=0.04),
     hidden_size=ray.tune.choice([32, 64, 128, 512]),
-    learning_rate=ray.tune.uniform(low=0.0002, high=0.002),
+    learning_rate=ray.tune.uniform(low=0.0002, high=0.0001),
     num_layers=ray.tune.choice([0, 1, 2]),
     num_steps=ray.tune.choice([16, 32, 64]),
-    ppo_epoch=ray.tune.choice([2, 3, 4, 5]),
+    ppo_epoch=ray.tune.sample_from(
+        lambda e: [i + int(0.0035 / e.config["learning_rate"]) for i in range(-2, 2)]
+    ),
     seed=ray.tune.choice(list(range(10))),
 )
 
