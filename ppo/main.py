@@ -1,3 +1,5 @@
+import re
+
 from gym.wrappers import TimeLimit
 from rl_utils import hierarchical_parse_args
 
@@ -6,6 +8,8 @@ import ppo.events.agent
 from ppo.arguments import build_parser, get_args
 from ppo.events.agent import Agent
 from ppo.train import Train
+from ppo.utils import get_random_gpu, get_n_gpu
+import torch
 
 
 def cli():
@@ -14,6 +18,19 @@ def cli():
 
 def exp_main(gridworld_args, wrapper_args, base, debug, **kwargs):
     class _Train(Train):
+        def __init__(self, run_id, **kwargs):
+            self.run_id = run_id
+            self.setup(**kwargs, run_id=run_id)
+
+        def get_device(self):
+            match = re.search("\d+$", self.run_id)
+            if match:
+                device_num = int(match.group()) % get_n_gpu()
+            else:
+                device_num = get_random_gpu()
+
+            return torch.device("cuda", device_num)
+
         @staticmethod
         def make_env(time_limit, seed, rank, evaluation, **kwargs):
             env = ppo.events.Gridworld(**gridworld_args)

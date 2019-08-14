@@ -36,8 +36,9 @@ except ImportError:
     pass
 
 
-class Train(Trainable):
-    def __init__(
+# noinspection PyAttributeOutsideInit
+class Train:
+    def setup(
         self,
         num_steps,
         num_processes,
