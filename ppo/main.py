@@ -24,7 +24,15 @@ def cli():
 
 
 def exp_main(
-    gridworld_args, wrapper_args, base, debug, tune, redis_address, log_dir, **kwargs
+    gridworld_args,
+    wrapper_args,
+    base,
+    debug,
+    tune,
+    redis_address,
+    log_dir,
+    num_samples,
+    **kwargs,
 ):
     class TrainEvents(Train):
         @staticmethod
@@ -123,7 +131,7 @@ def exp_main(
             ),
             checkpoint_freq=1,
             reuse_actors=True,
-            num_samples=1 if debug else 100,
+            num_samples=1 if debug else num_samples,
             local_dir=log_dir,
             scheduler=AsyncHyperBandScheduler(
                 time_attr=TIME_TOTAL_S,
@@ -170,6 +178,7 @@ def exp_cli():
     parser.add_argument("--base", action="store_true")
     parser.add_argument("--debug", action="store_true")
     parser.add_argument("--tune", action="store_true")
+    parser.add_argument("--num-samples", type=int, default=100)
     parser.add_argument("--redis-address")
     gridworld_parser = parser.add_argument_group("gridworld_args")
     gridworld_parser.add_argument("--height", help="", type=int, default=4)
