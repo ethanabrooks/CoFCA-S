@@ -91,8 +91,9 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--redis-address")
 parser.add_argument("--log-dir")
 parser.add_argument("--run-id")
+parser.add_argument("--debug", action="store_true")
 args = parser.parse_args()
-ray.init(redis_address=args.redis_address)
+ray.init(redis_address=args.redis_address, local_mode=args.debug)
 config = dict(
     num_processes=300,
     eval_interval=100,
@@ -130,7 +131,7 @@ tune.run(
     resources_per_trial=dict(cpu=1, gpu=0.5),
     checkpoint_freq=1,
     reuse_actors=True,
-    num_samples=100,
+    num_samples=1 if args.debug else 100,
     local_dir=args.log_dir,
     scheduler=AsyncHyperBandScheduler(
         time_attr=TIME_TOTAL_S,
