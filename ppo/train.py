@@ -117,26 +117,22 @@ class Train:
             num_processes=num_processes,
             time_limit=time_limit,
         )
-        self.envs = self.make_train_envs()
-        self.agent = self.build_agent(envs=self.envs, **agent_args)
+        envs = self.make_train_envs()
+        self.agent = self.build_agent(envs=envs, **agent_args)
         self.num_steps = num_steps
         self.processes = num_processes
         self.rollouts = RolloutStorage(
             num_steps=self.num_steps,
             num_processes=self.processes,
-            obs_space=self.envs.observation_space,
-            action_space=self.envs.action_space,
+            obs_space=envs.observation_space,
+            action_space=envs.action_space,
             recurrent_hidden_state_size=self.agent.recurrent_hidden_state_size,
             use_gae=use_gae,
             gamma=gamma,
             tau=tau,
         )
-        obs = self.envs.reset()
-        self.rollouts.obs[0].copy_(obs)
-
         if cuda:
             tick = time.time()
-            self.envs.to(self.device)
             self.agent.to(self.device)
             self.rollouts.to(self.device)
             print("Values copied to GPU in", time.time() - tick, "seconds")
@@ -166,17 +162,15 @@ class Train:
                 log_progress = tqdm(total=self.interval, desc="log ")
             if self.eval_interval and i % self.eval_interval == 0:
                 eval_progress = tqdm(total=self.eval_interval, desc="eval")
-                self.envs.close()
-                del self.envs
-                self.envs = self.make_train_envs()
-                self.envs.to(self.device)
-                obs = self.envs.reset()
+                envs = self.make_train_envs()
+                envs.to(self.device)
+                obs = envs.reset()
                 self.rollouts.obs[0].copy_(obs)
             epoch_counter = self.run_epoch(
                 obs=self.rollouts.obs[0],
                 rnn_hxs=self.rollouts.recurrent_hidden_states[0],
                 masks=self.rollouts.masks[0],
-                envs=self.envs,
+                envs=envs,
                 num_steps=self.num_steps,
                 counter=self.counter,
             )
@@ -221,10 +215,10 @@ class Train:
                 self.eval_interval is not None
                 and self.i % self.eval_interval == self.eval_interval - 1
             ):
-                self.envs.close()
-                del self.envs
-                self.envs = self.make_eval_envs()
-                self.envs.to(self.device)
+                envs.close()
+                del envs
+                envs = self.make_eval_envs()
+                envs.to(self.device)
 
                 # vec_norm = get_vec_normalize(eval_envs)
                 # if vec_norm is not None:
@@ -240,8 +234,8 @@ class Train:
                 eval_counter = Counter()
 
                 eval_values = self.run_epoch(
-                    envs=self.envs,
-                    obs=self.envs.reset(),
+                    envs=envs,
+                    obs=envs.reset(),
                     rnn_hxs=eval_recurrent_hidden_states,
                     masks=eval_masks,
                     num_steps=max(self.num_steps, self.time_limit)
@@ -388,8 +382,8 @@ class Train:
         modules = dict(
             optimizer=self.ppo.optimizer, agent=self.agent
         )  # type: Dict[str, torch.nn.Module]
-        if isinstance(self.envs.venv, VecNormalize):
-            modules.update(vec_normalize=self.envs.venv)
+        # if isinstance(self.envs.venv, VecNormalize):
+        #     modules.update(vec_normalize=self.envs.venv)
         state_dict = {name: module.state_dict() for name, module in modules.items()}
         save_path = Path(checkpoint_dir, "checkpoint.pt")
         torch.save(dict(step=self.i, **state_dict), save_path)
@@ -402,8 +396,8 @@ class Train:
         self.agent.load_state_dict(state_dict["agent"])
         self.ppo.optimizer.load_state_dict(state_dict["optimizer"])
         start = state_dict.get("step", -1) + 1
-        if isinstance(self.envs.venv, VecNormalize):
-            self.envs.venv.load_state_dict(state_dict["vec_normalize"])
+        # if isinstance(self.envs.venv, VecNormalize):
+        #     self.envs.venv.load_state_dict(state_dict["vec_normalize"])
         print(f"Loaded parameters from {load_path}.")
 
     def _train(self):
