@@ -1,6 +1,3 @@
-* implement and check `imitation`
-* implement `train-metacontroller`/`imitate`
-* bring in embeddings
-* implement analogy loss
-* develop train/test sets
-* get analogies working
+* determine when runs have converged
+* develop evaluation of hold-outs
+* implement baseline

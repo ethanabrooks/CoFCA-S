@@ -52,7 +52,13 @@ class RolloutStorage(object):
         obs_space,
         action_space,
         recurrent_hidden_state_size,
+        use_gae,
+        gamma,
+        tau,
     ):
+        self.use_gae = use_gae
+        self.gamma = gamma
+        self.tau = tau
         self.obs = torch.zeros(num_steps + 1, num_processes, *buffer_shape(obs_space))
 
         self.recurrent_hidden_states = torch.zeros(
@@ -108,23 +114,23 @@ class RolloutStorage(object):
         self.recurrent_hidden_states[0].copy_(self.recurrent_hidden_states[-1])
         self.masks[0].copy_(self.masks[-1])
 
-    def compute_returns(self, next_value, use_gae, gamma, tau):
-        if use_gae:
+    def compute_returns(self, next_value):
+        if self.use_gae:
             self.value_preds[-1] = next_value
             gae = 0
             for step in reversed(range(self.rewards.size(0))):
                 delta = (
                     self.rewards[step]
-                    + gamma * self.value_preds[step + 1] * self.masks[step + 1]
+                    + self.gamma * self.value_preds[step + 1] * self.masks[step + 1]
                     - self.value_preds[step]
                 )
-                gae = delta + gamma * tau * self.masks[step + 1] * gae
+                gae = delta + self.gamma * self.tau * self.masks[step + 1] * gae
                 self.returns[step] = gae + self.value_preds[step]
         else:
             self.returns[-1] = next_value
             for step in reversed(range(self.rewards.size(0))):
                 self.returns[step] = (
-                    self.returns[step + 1] * gamma * self.masks[step + 1]
+                    self.returns[step + 1] * self.gamma * self.masks[step + 1]
                     + self.rewards[step]
                 )
 

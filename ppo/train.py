@@ -1,23 +1,24 @@
-from collections import Counter
 import functools
 import itertools
-from pathlib import Path
 import re
 import sys
 import time
+from collections import Counter
+from pathlib import Path
+from typing import Dict
 
 import gym
 import numpy as np
-from tensorboardX import SummaryWriter
 import torch
+from gym.wrappers import TimeLimit
+from ray.tune import Trainable
+from tensorboardX import SummaryWriter
 from tqdm import tqdm
 
 from common.atari_wrappers import wrap_deepmind
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
-from gridworld_env import SubtasksGridworld
-from ppo.agent import Agent, AgentValues  # noqa
-from ppo.control_flow.wrappers import Wrapper
+from ppo.agent import Agent, AgentValues
 from ppo.storage import RolloutStorage
 from ppo.update import PPO
 from ppo.utils import get_n_gpu, get_random_gpu
@@ -35,20 +36,19 @@ except ImportError:
     pass
 
 
+# noinspection PyAttributeOutsideInit
 class Train:
-    def __init__(
+    def setup(
         self,
         num_steps,
         num_processes,
         seed,
         cuda_deterministic,
         cuda,
-        max_episode_steps,
+        time_limit,
         log_dir: Path,
-        env_id,
         gamma,
         normalize,
-        add_timestep,
         save_interval,
         log_interval,
         eval_interval,
@@ -60,14 +60,12 @@ class Train:
         render_eval,
         load_path,
         success_reward,
-        target_success_rates,
         synchronous,
         batch_size,
         run_id,
+        env_args,
         save_dir=None,
     ):
-        target_success_rates = iter(target_success_rates)
-        target_success_rate = next(target_success_rates, None)
         if render_eval and not render:
             eval_interval = 1
         if render:
@@ -86,199 +84,169 @@ class Train:
             torch.backends.cudnn.benchmark = False
             torch.backends.cudnn.deterministic = True
 
-        device = "cpu"
+        self.device = "cpu"
         if cuda:
-            device_num = get_random_gpu()
-            if run_id:
-                match = re.search("\d+$", run_id)
-                if match:
-                    device_num = int(match.group()) % get_n_gpu()
+            self.device = self.get_device()
+        # print("Using device", self.device)
 
-            device = torch.device("cuda", device_num)
-        print("Using device", device)
-
-        writer = None
+        self.writer = None
         if log_dir:
-            writer = SummaryWriter(logdir=str(log_dir))
+            self.writer = SummaryWriter(logdir=str(log_dir))
 
         torch.set_num_threads(1)
 
-        envs = self.make_vec_envs(
-            env_id=env_id,
-            seed=seed,
+        self.make_eval_envs = lambda: self.make_vec_envs(
+            **env_args,
+            # env_id=env_id,
+            # time_limit=time_limit,
             num_processes=num_processes,
+            # add_timestep=add_timestep,
+            render=render_eval,
+            seed=seed + num_processes,
+            gamma=gamma if normalize else None,
+            evaluation=True,
+            synchronous=True if render_eval else synchronous,
+        )
+        self.make_train_envs = lambda: self.make_vec_envs(
+            **env_args,
+            seed=seed,
             gamma=(gamma if normalize else None),
-            add_timestep=add_timestep,
             render=render,
             synchronous=True if render else synchronous,
             evaluation=False,
-        )
-
-        self.agent = self.build_agent(envs=envs, device=device, **agent_args)
-        rollouts = RolloutStorage(
-            num_steps=num_steps,
             num_processes=num_processes,
-            obs_space=envs.observation_space,
-            action_space=envs.action_space,
-            recurrent_hidden_state_size=self.agent.recurrent_hidden_state_size,
+            time_limit=time_limit,
         )
-
-        obs = envs.reset()
-        rollouts.obs[0].copy_(obs)
+        self.envs = self.make_train_envs()
+        self.agent = self.build_agent(envs=self.envs, **agent_args)
+        self.num_steps = num_steps
+        self.processes = num_processes
+        self.rollouts = RolloutStorage(
+            num_steps=self.num_steps,
+            num_processes=self.processes,
+            obs_space=self.envs.observation_space,
+            action_space=self.envs.action_space,
+            recurrent_hidden_state_size=self.agent.recurrent_hidden_state_size,
+            use_gae=use_gae,
+            gamma=gamma,
+            tau=tau,
+        )
+        obs = self.envs.reset()
+        self.rollouts.obs[0].copy_(obs)
 
         if cuda:
             tick = time.time()
-            envs.to(device)
-            self.agent.to(device)
-            rollouts.to(device)
+            self.envs.to(self.device)
+            self.agent.to(self.device)
+            self.rollouts.to(self.device)
             print("Values copied to GPU in", time.time() - tick, "seconds")
 
-        ppo = PPO(agent=self.agent, batch_size=batch_size, **ppo_args)
-
+        self.ppo = PPO(agent=self.agent, batch_size=batch_size, **ppo_args)
         counter = Counter()
         start = time.time()
         last_save = start
-        curriculum_idx = 0
 
         if load_path:
-            state_dict = torch.load(load_path, map_location=device)
-            agent_dict = self.agent.state_dict()
-            agent_dict.update(
-                {k: v for k, v in state_dict["agent"].items()}
-                # if "xi" not in k}
-            )
-            self.agent.load_state_dict(agent_dict)
-            # self.agent.load_state_dict(state_dict["agent"])
-            ppo.optimizer.load_state_dict(state_dict["optimizer"])
-            start = state_dict.get("step", -1) + 1
-            if isinstance(envs.venv, VecNormalize):
-                envs.venv.load_state_dict(state_dict["vec_normalize"])
-            print(f"Loaded parameters from {load_path}.")
+            self._restore(load_path)
 
-        for j in itertools.count():
-            if j % log_interval == 0:
-                log_progress = tqdm(total=log_interval, desc="log ")
-            if eval_interval and j % eval_interval == 0:
-                eval_progress = tqdm(total=eval_interval, desc="eval")
+        self.interval = log_interval
+        self.eval_interval = eval_interval
+        self.counter = counter
+        self.save_dir = save_dir
+        self.save_interval = save_interval
+        self.time_limit = time_limit
+        self.i = 0
+        self.__train(last_save, start)
+
+    def __train(self, last_save, start):
+        tick = time.time()
+        for i in itertools.count():
+            if i % self.interval == 0:
+                log_progress = tqdm(total=self.interval, desc="log")
+            self._train(last_save, tick, log_progress)
+
+    def _train(self, last_save, tick, log_progress):
+        self.envs.close()
+        del self.envs
+        self.envs = self.make_train_envs()
+        self.envs.to(self.device)
+        obs = self.envs.reset()
+        self.rollouts.obs[0].copy_(obs)
+        for j in tqdm(range(self.eval_interval), desc="eval"):
+            self.i += 1
             epoch_counter = self.run_epoch(
-                obs=rollouts.obs[0],
-                rnn_hxs=rollouts.recurrent_hidden_states[0],
-                masks=rollouts.masks[0],
-                envs=envs,
-                num_steps=num_steps,
-                rollouts=rollouts,
-                counter=counter,
+                obs=self.rollouts.obs[0],
+                rnn_hxs=self.rollouts.recurrent_hidden_states[0],
+                masks=self.rollouts.masks[0],
+                envs=self.envs,
+                num_steps=self.num_steps,
+                counter=self.counter,
             )
-
             with torch.no_grad():
                 next_value = self.agent.get_value(
-                    rollouts.obs[-1],
-                    rollouts.recurrent_hidden_states[-1],
-                    rollouts.masks[-1],
+                    self.rollouts.obs[-1],
+                    self.rollouts.recurrent_hidden_states[-1],
+                    self.rollouts.masks[-1],
                 ).detach()
-
-            rollouts.compute_returns(
-                next_value=next_value, use_gae=use_gae, gamma=gamma, tau=tau
-            )
-            train_results = ppo.update(rollouts)
-            rollouts.after_update()
-
-            if save_dir and save_interval and time.time() - last_save >= save_interval:
+            self.rollouts.compute_returns(next_value=next_value)
+            train_results = self.ppo.update(self.rollouts)
+            self.rollouts.after_update()
+            if (
+                self.save_dir
+                and self.save_interval
+                and time.time() - last_save >= self.save_interval
+            ):
                 last_save = time.time()
-                modules = dict(
-                    optimizer=ppo.optimizer, agent=self.agent
-                )  # type: Dict[str, torch.nn.Module]
-
-                if isinstance(envs.venv, VecNormalize):
-                    modules.update(vec_normalize=envs.venv)
-
-                state_dict = {
-                    name: module.state_dict() for name, module in modules.items()
-                }
-                save_path = Path(save_dir, "checkpoint.pt")
-                torch.save(dict(step=j, **state_dict), save_path)
-
-                print(f"Saved parameters to {save_path}")
-
-            total_num_steps = (j + 1) * num_processes * num_steps
-
-            mean_success_rate = np.mean(epoch_counter["success"])
-            if mean_success_rate > 0.9:
-                print("mean_success_rate", mean_success_rate)
-                print("target_success_rate", target_success_rate)
-            if target_success_rate and mean_success_rate > target_success_rate:
-                target_success_rate = next(target_success_rates, None)
-                print("incrementing target_success_rate:", target_success_rate)
-                envs.increment_curriculum()
-                curriculum_idx += 1
-
-            if j % log_interval == 0 and writer is not None:
-                end = time.time()
-                fps = total_num_steps / (end - start)
+                self._save(self.save_dir)
+            total_num_steps = (self.i + 1) * self.processes * self.num_steps
+            if self.i % self.interval == 0 and self.writer is not None:
+                start = tick
+                tick = time.time()
+                fps = total_num_steps / (tick - start)
                 log_values = dict(fps=fps, **epoch_counter, **train_results)
-                if writer:
-                    writer.add_scalar(
-                        "cumulative_success",
-                        curriculum_idx + mean_success_rate,
-                        total_num_steps,
-                    )
+                if self.writer:
+                    self.writer.add_scalar("cumulative_success", total_num_steps)
 
                     for k, v in log_values.items():
                         mean = np.mean(v)
                         if not np.isnan(mean):
-                            writer.add_scalar(k, np.mean(v), total_num_steps)
-
+                            self.writer.add_scalar(k, np.mean(v), total_num_steps)
             log_progress.update()
+        self.envs.close()
+        del self.envs
+        eval_envs = self.make_eval_envs()
+        eval_envs.to(self.device)
 
-            if eval_interval is not None and j % eval_interval == eval_interval - 1:
-                eval_envs = self.make_vec_envs(
-                    env_id=env_id,
-                    seed=seed + num_processes,
-                    num_processes=num_processes,
-                    gamma=gamma if normalize else None,
-                    add_timestep=add_timestep,
-                    evaluation=True,
-                    synchronous=True if render_eval else synchronous,
-                    render=render_eval,
-                )
-                eval_envs.to(device)
+        # vec_norm = get_vec_normalize(eval_envs)
+        # if vec_norm is not None:
+        #     vec_norm.eval()
+        #     vec_norm.ob_rms = get_vec_normalize(envs).ob_rms
 
-                # vec_norm = get_vec_normalize(eval_envs)
-                # if vec_norm is not None:
-                #     vec_norm.eval()
-                #     vec_norm.ob_rms = get_vec_normalize(envs).ob_rms
+        eval_recurrent_hidden_states = torch.zeros(
+            self.processes, self.agent.recurrent_hidden_state_size, device=self.device
+        )
+        eval_masks = torch.zeros(self.processes, 1, device=self.device)
+        eval_counter = Counter()
 
-                obs = eval_envs.reset()
-                eval_recurrent_hidden_states = torch.zeros(
-                    num_processes, self.agent.recurrent_hidden_state_size, device=device
-                )
-                eval_masks = torch.zeros(num_processes, 1, device=device)
-                eval_counter = Counter()
+        eval_values = self.run_epoch(
+            envs=eval_envs,
+            obs=eval_envs.reset(),
+            rnn_hxs=eval_recurrent_hidden_states,
+            masks=eval_masks,
+            num_steps=max(self.num_steps, self.time_limit)
+            if self.time_limit
+            else self.num_steps,
+            counter=eval_counter,
+        )
+        eval_envs.close()
 
-                eval_values = self.run_epoch(
-                    envs=eval_envs,
-                    obs=obs,
-                    rnn_hxs=eval_recurrent_hidden_states,
-                    masks=eval_masks,
-                    num_steps=max(num_steps, max_episode_steps)
-                    if max_episode_steps
-                    else num_steps,
-                    rollouts=None,
-                    counter=eval_counter,
-                )
+        print("Evaluation outcome:")
+        if self.writer is not None:
+            for k, v in eval_values.items():
+                print(f"eval_{k}", np.mean(v))
+                self.writer.add_scalar(f"eval_{k}", np.mean(v), total_num_steps)
 
-                eval_envs.close()
-
-                print("Evaluation outcome:")
-                if writer is not None:
-                    for k, v in eval_values.items():
-                        print(f"eval_{k}", np.mean(v))
-                        writer.add_scalar(f"eval_{k}", np.mean(v), total_num_steps)
-
-            if eval_interval:
-                eval_progress.update()
-
-    def run_epoch(self, obs, rnn_hxs, masks, envs, num_steps, rollouts, counter):
+    def run_epoch(self, obs, rnn_hxs, masks, envs, num_steps, counter):
         # noinspection PyTypeChecker
         episode_counter = Counter(rewards=[], time_steps=[], success=[])
         for step in range(num_steps):
@@ -317,8 +285,8 @@ class Train:
                 1 - done, dtype=torch.float32, device=obs.device
             ).unsqueeze(1)
             rnn_hxs = act.rnn_hxs
-            if rollouts is not None:
-                rollouts.insert(
+            if self.rollouts is not None:
+                self.rollouts.insert(
                     obs=obs,
                     recurrent_hidden_states=act.rnn_hxs,
                     actions=act.action,
@@ -335,7 +303,7 @@ class Train:
         return Agent(envs.observation_space.shape, envs.action_space, **agent_args)
 
     @staticmethod
-    def make_env(env_id, seed, rank, add_timestep):
+    def make_env(env_id, seed, rank, add_timestep, time_limit, evaluation):
         if env_id.startswith("dm"):
             _, domain, task = env_id.split(".")
             env = dm_control2gym.make(domain_name=domain, task_name=task)
@@ -345,8 +313,6 @@ class Train:
         is_atari = hasattr(gym.envs, "atari") and isinstance(
             env.unwrapped, gym.envs.atari.atari_env.AtariEnv
         )
-        if isinstance(env.unwrapped, SubtasksGridworld):
-            env = Wrapper(env)
 
         env.seed(seed + rank)
 
@@ -369,12 +335,14 @@ class Train:
         if len(obs_shape) == 3 and obs_shape[2] in [1, 3]:
             env = TransposeImage(env)
 
+        if time_limit is not None:
+            env = TimeLimit(env, max_episode_steps=time_limit)
+
         return env
 
     def make_vec_envs(
         self, num_processes, gamma, render, synchronous, num_frame_stack=None, **kwargs
     ):
-
         envs = [
             functools.partial(self.make_env, rank=i, **kwargs)
             for i in range(num_processes)
@@ -385,14 +353,14 @@ class Train:
         else:
             envs = SubprocVecEnv(envs)
 
-        if (
-            envs.observation_space.shape
-            and len(envs.observation_space.shape) == 1  # TODO
-        ):
-            if gamma is None:
-                envs = VecNormalize(envs, ret=False)
-            else:
-                envs = VecNormalize(envs, gamma=gamma)
+        # if (
+        # envs.observation_space.shape
+        # and len(envs.observation_space.shape) == 1
+        # ):
+        # if gamma is None:
+        # envs = VecNormalize(envs, ret=False)
+        # else:
+        # envs = VecNormalize(envs, gamma=gamma)
 
         envs = VecPyTorch(envs)
 
@@ -402,3 +370,25 @@ class Train:
         #     envs = VecPyTorchFrameStack(envs, 4, device)
 
         return envs
+
+    def _save(self, checkpoint_dir):
+        modules = dict(
+            optimizer=self.ppo.optimizer, agent=self.agent
+        )  # type: Dict[str, torch.nn.Module]
+        if isinstance(self.envs.venv, VecNormalize):
+            modules.update(vec_normalize=self.envs.venv)
+        state_dict = {name: module.state_dict() for name, module in modules.items()}
+        save_path = Path(checkpoint_dir, "checkpoint.pt")
+        torch.save(dict(step=self.i, **state_dict), save_path)
+        print(f"Saved parameters to {save_path}")
+        return save_path
+
+    def _restore(self, checkpoint):
+        load_path = checkpoint
+        state_dict = torch.load(load_path, map_location=self.device)
+        self.agent.load_state_dict(state_dict["agent"])
+        self.ppo.optimizer.load_state_dict(state_dict["optimizer"])
+        start = state_dict.get("step", -1) + 1
+        if isinstance(self.envs.venv, VecNormalize):
+            self.envs.venv.load_state_dict(state_dict["vec_normalize"])
+        print(f"Loaded parameters from {load_path}.")

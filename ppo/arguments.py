@@ -63,12 +63,7 @@ def build_parser():
         default=None,
         help="eval interval, one eval per n updates",
     )
-    parser.add_argument(
-        "--env",
-        dest="env_id",
-        default="PongNoFrameskip-v4",
-        help="environment to train on",
-    )
+    parser.add_argument("--time-limit", type=int)
     parser.add_argument("--load-path", type=Path)
     parser.add_argument("--log-dir", type=Path, help="directory to save agent logs")
     parser.add_argument(
@@ -76,20 +71,11 @@ def build_parser():
     )
     parser.add_argument("--synchronous", action="store_true")
     parser.add_argument(
-        "--add-timestep",
-        action="store_true",
-        default=False,
-        help="add timestep to observations",
-    )
-    parser.add_argument(
         "--batch-size", type=int, default=32, help="number of batches for ppo"
     )
     parser.add_argument("--success-reward", type=float)
-    parser.add_argument("--target-success-rates", nargs="*", type=float, default=[])
-    parser.add_argument("--max-episode-steps", type=int)
 
     agent_parser = parser.add_argument_group("agent_args")
-    agent_parser.add_argument("--logic", action="store_true")
     agent_parser.add_argument("--recurrent", action="store_true")
     agent_parser.add_argument("--hidden-size", type=int, default=256)
     agent_parser.add_argument("--num-layers", type=int, default=3)
@@ -122,6 +108,20 @@ def build_parser():
     ppo_parser.add_argument(
         "--max-grad-norm", type=float, default=0.5, help="max norm of gradients"
     )
+    env_parser = parser.add_argument_group("env_args")
+    env_parser.add_argument(
+        "--env",
+        dest="env_id",
+        default="PongNoFrameskip-v4",
+        help="environment to train on",
+    )
+    env_parser.add_argument(
+        "--add-timestep",
+        action="store_true",
+        default=False,
+        help="add timestep to observations",
+    )
+
     return parser
 
 
