@@ -59,7 +59,6 @@ class Train(Trainable):
         render_eval,
         load_path,
         success_reward,
-        target_success_rates,
         synchronous,
         batch_size,
         run_id,
@@ -200,11 +199,6 @@ class Train(Trainable):
                 self._save(self.save_dir)
 
             total_num_steps = (i + 1) * self.processes * self.num_steps
-
-            mean_success_rate = np.mean(epoch_counter["success"])
-            if mean_success_rate > 0.9:
-                print("mean_success_rate", mean_success_rate)
-                print("target_success_rate", self.target_success_rate)
 
             if i % self.interval == 0 and self.writer is not None:
                 end = time.time()
