@@ -4,7 +4,8 @@ import ray
 import torch.nn as nn
 from gym.wrappers import TimeLimit
 from ray.tune import tune, Trainable
-from ray.tune.schedulers import PopulationBasedTraining
+from ray.tune.result import TIME_TOTAL_S
+from ray.tune.schedulers import AsyncHyperBandScheduler
 
 import ppo.events
 import ppo.train
@@ -87,16 +88,6 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--ray-redis-address")
 args = parser.parse_args()
 ray.init(redis_address=args.ray_redis_address)
-hyperparams = dict(
-    num_batch=[1, 2],
-    entropy_coef=ray.tune.uniform(low=0.01, high=0.04),
-    hidden_size=[32, 64, 128, 512],
-    learning_rate=ray.tune.uniform(low=0.0002, high=0.002),
-    num_layers=[0, 1, 2],
-    num_steps=[16, 32, 64],
-    ppo_epoch=[2, 3, 4, 5],
-    seed=list(range(10)),
-)
 config = dict(
     num_processes=300,
     eval_interval=100,
@@ -105,7 +96,7 @@ config = dict(
     cuda=True,
     gamma=0.99,
     normalize=False,
-    use_gae=True,
+    use_gae=ray.tune.choice([True, False]),
     tau=0.95,
     ppo_args=dict(clip_param=0.2, value_loss_coef=0.5, eps=1e-5, max_grad_norm=0.5),
     agent_args=dict(recurrent=True, activation=nn.ReLU()),
@@ -116,19 +107,27 @@ config = dict(
     synchronous=False,
     env_args={},
     log_interval=10,
+    num_batch=ray.tune.choice([1, 2]),
+    entropy_coef=ray.tune.uniform(low=0.01, high=0.04),
+    hidden_size=ray.tune.choice([32, 64, 128, 512]),
+    learning_rate=ray.tune.uniform(low=0.0002, high=0.002),
+    num_layers=ray.tune.choice([0, 1, 2]),
+    num_steps=ray.tune.choice([16, 32, 64]),
+    ppo_epoch=ray.tune.choice([2, 3, 4, 5]),
+    seed=ray.tune.choice(list(range(10))),
 )
-for k, v in hyperparams.items():
-    if type(v) is list:
-        config[k] = ray.tune.choice(v)
-    else:
-        config[k] = v
 
 tune.run(
     Train,
     config=config,
+    resources_per_trial=dict(cpu=1, gpu=0.5),
     checkpoint_freq=1,
     reuse_actors=True,
-    scheduler=PopulationBasedTraining(
-        metric="rewards", mode="max", hyperparam_mutations=hyperparams
+    scheduler=AsyncHyperBandScheduler(
+        time_attr=TIME_TOTAL_S,
+        metric="rewards",
+        mode="max",
+        grace_period=3600,
+        max_t=3600,
     ),
 )
