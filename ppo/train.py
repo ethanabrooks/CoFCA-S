@@ -139,8 +139,6 @@ class Train:
 
         self.ppo = PPO(agent=self.agent, batch_size=batch_size, **ppo_args)
         counter = Counter()
-        start = time.time()
-        last_save = start
 
         if load_path:
             self._restore(load_path)
@@ -153,22 +151,24 @@ class Train:
         self.time_limit = time_limit
         self.i = 0
         envs.close()
+        self.tick = time.time()
+        self.last_save = time.time()  # dummy save
+        self.log_progress = None
         del envs
-        self.__train(last_save, start)
+        self.__train()
 
-    def __train(self, last_save, start):
-        tick = time.time()
+    def __train(self):
         for _ in itertools.count():
-            self._train(last_save, tick)
+            self._train()
 
-    def _train(self, last_save, tick):
+    def _train(self):
         envs = self.make_train_envs()
         envs.to(self.device)
         obs = envs.reset()
         self.rollouts.obs[0].copy_(obs)
         for _ in tqdm(range(self.eval_interval), desc="eval"):
             if self.i % self.interval == 0:
-                log_progress = tqdm(total=self.interval, desc="log ")
+                self.log_progress = tqdm(total=self.interval, desc="log ")
             self.i += 1
             epoch_counter = self.run_epoch(
                 obs=self.rollouts.obs[0],
@@ -193,17 +193,17 @@ class Train:
             if (
                 self.save_dir
                 and self.save_interval
-                and time.time() - last_save >= self.save_interval
+                and (time.time() - self.last_save >= self.save_interval)
             ):
-                last_save = time.time()
                 self._save(self.save_dir)
+                self.last_save = time.time()
 
             total_num_steps = (self.i + 1) * self.processes * self.num_steps
 
             if self.i % self.interval == 0 and self.writer is not None:
-                start = tick
-                tick = time.time()
-                fps = total_num_steps / (tick - start)
+                start = self.tick
+                self.tick = time.time()
+                fps = total_num_steps / (self.tick - start)
                 log_values = dict(fps=fps, **epoch_counter, **train_results)
                 if self.writer:
                     self.writer.add_scalar("cumulative_success", total_num_steps)
@@ -213,7 +213,7 @@ class Train:
                         if not np.isnan(mean):
                             self.writer.add_scalar(k, np.mean(v), total_num_steps)
 
-            log_progress.update()
+            self.log_progress.update()
 
         envs.close()
         del envs
