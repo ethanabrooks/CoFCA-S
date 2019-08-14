@@ -10,6 +10,7 @@ import gym
 import numpy as np
 import torch
 from gym.wrappers import TimeLimit
+from tensorboardX import SummaryWriter
 from tqdm import tqdm
 
 from common.atari_wrappers import wrap_deepmind
@@ -60,6 +61,11 @@ class Train:
             num_processes = 1
             cuda = False
         self.success_reward = success_reward
+
+        if self.logdir:
+            self.writer = SummaryWriter(logdir=self.logdir)
+        else:
+            self.writer = None
 
         torch.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
@@ -174,9 +180,11 @@ class Train:
                 start = self.tick
                 self.tick = time.time()
                 fps = total_num_steps / (self.tick - start)
-                self._log_result(
-                    dict(k_scalar_pairs(fps=fps, **epoch_counter, **train_results))
-                )
+                if self.writer is not None:
+                    for k, v in k_scalar_pairs(
+                        fps=fps, **epoch_counter, **train_results
+                    ):
+                        self.writer.add_scalar(k, np.mean(v), total_num_steps)
 
         envs.close()
         del envs
@@ -352,6 +360,3 @@ class Train:
         # if isinstance(self.envs.venv, VecNormalize):
         #     self.envs.venv.load_state_dict(state_dict["vec_normalize"])
         print(f"Loaded parameters from {load_path}.")
-
-    def _log_result(self, result):
-        pass

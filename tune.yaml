@@ -6,7 +6,7 @@ cluster_name: default
 # The minimum number of workers nodes to launch in addition to the head
 # node. This number should be >= 0.
 # Typically, min_workers == initial_workers == max_workers.
-min_workers: 16
+min_workers: 3
 # The initial number of worker nodes to launch in addition to the head node.
 # Typically, min_workers == initial_workers == max_workers.
 initial_workers: 16
@@ -34,7 +34,9 @@ idle_timeout_minutes: 5
 provider:
     type: local
     head_ip: 141.212.113.173
-    worker_ips: []
+    worker_ips: [
+141.212.113.250
+    ]
 
 # How Ray will authenticate with newly launched nodes.
 auth:
@@ -61,7 +63,7 @@ initialization_commands: []
 
 # List of shell commands to run to set up each nodes.
 setup_commands:
-    - pip install -U ray
+    - cd ~/ppo
 
 # Custom commands that will be run on the head node after common setup.
 head_setup_commands: []

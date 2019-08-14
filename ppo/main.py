@@ -23,35 +23,22 @@ def cli():
 
 def exp_main(gridworld_args, wrapper_args, base, debug, **kwargs):
     class _Train(Train):
-        def __init__(
-            self,
-            run_id,
-            log_dir: Path,
-            save_interval: int,
-            save_dir: Path = None,
-            **kwargs
-        ):
-            if log_dir:
-                self.writer = SummaryWriter(logdir=str(log_dir))
-            else:
-                self.writer = None
+        def __init__(self, run_id, log_dir: Path, save_interval: int, **kwargs):
             self.run_id = run_id
-            self.save_dir = save_dir or log_dir
             self.save_interval = save_interval
+            self.logdir = str(log_dir)
             self.setup(**kwargs)
             self.last_save = time.time()  # dummy save
 
         def _train(self):
             if (
-                self.save_dir
+                self.logdir
                 and self.save_interval
                 and (time.time() - self.last_save >= self.save_interval)
             ):
-                self._save(self.save_dir)
+                self._save(self.logdir)
                 self.last_save = time.time()
-            result = super()._train()
-            self._log_result(result)
-            return result
+            return super()._train()
 
         def get_device(self):
             match = re.search("\d+$", self.run_id)
@@ -85,13 +72,6 @@ def exp_main(gridworld_args, wrapper_args, base, debug, **kwargs):
                 debug=debug,
                 **agent_args
             )
-
-        def _log_result(self, result: dict):
-            if self.writer is None:
-                return
-            total_num_steps = (self.i + 1) * self.processes * self.num_steps
-            for k, v in result.items():
-                self.writer.add_scalar(k, np.mean(v), total_num_steps)
 
     _Train(**kwargs).run()
 
