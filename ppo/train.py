@@ -308,10 +308,28 @@ class Train:
         return env
 
     def make_vec_envs(
-        self, num_processes, gamma, render, synchronous, num_frame_stack=None, **kwargs
+        self,
+        num_processes,
+        gamma,
+        render,
+        synchronous,
+        env_id,
+        add_timestep,
+        seed,
+        evaluation,
+        time_limit,
+        num_frame_stack=None,
     ):
         envs = [
-            functools.partial(self.make_env, rank=i, **kwargs)
+            functools.partial(
+                self.make_env,
+                rank=i,
+                env_id=env_id,
+                add_timestep=add_timestep,
+                seed=seed,
+                evaluation=evaluation,
+                time_limit=time_limit,
+            )
             for i in range(num_processes)
         ]
 

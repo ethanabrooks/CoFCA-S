@@ -17,34 +17,20 @@ from ppo.events import Agent
 
 class Train(ppo.train.Train, Trainable):
     def _setup(self, config):
-        def setup(
-            entropy_coef,
-            hidden_size,
-            learning_rate,
-            num_layers,
-            ppo_epoch,
-            ppo_args,
-            agent_args,
-            **kwargs,
-        ):
+        import ipdb
 
-            self.setup(
-                **kwargs,
-                ppo_args=dict(
-                    learning_rate=learning_rate, ppo_epoch=ppo_epoch, **ppo_args
-                ),
-                agent_args=dict(
-                    entropy_coef=entropy_coef,
-                    hidden_size=hidden_size,
-                    num_layers=num_layers,
-                    **agent_args,
-                ),
-            )
-
-        setup(**config)
+        ipdb.set_trace()
+        self.setup(**config)
 
     @staticmethod
     def make_env(time_limit, seed, rank, evaluation, **kwargs):
+        for k in kwargs:
+            print(f"{k},")
+        for k in kwargs:
+            print(f"{k}={k},")
+        import ipdb
+
+        ipdb.set_trace()
         env = ppo.events.Wrapper(
             n_active_subtasks=2,
             watch_baby_range=2,
@@ -82,6 +68,13 @@ class Train(ppo.train.Train, Trainable):
         return "cuda"
 
     def build_agent(self, envs, recurrent=None, device=None, **agent_args):
+        for k in agent_args:
+            print(f"{k},")
+        for k in agent_args:
+            print(f"{k}={k},")
+        import ipdb
+
+        ipdb.set_trace()
         return Agent(
             observation_space=envs.observation_space,
             action_space=envs.action_space,
