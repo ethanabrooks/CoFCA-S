@@ -1,6 +1,5 @@
 import functools
 import itertools
-import re
 import sys
 import time
 from collections import Counter
@@ -11,8 +10,6 @@ import gym
 import numpy as np
 import torch
 from gym.wrappers import TimeLimit
-from ray.tune import Trainable
-from tensorboardX import SummaryWriter
 from tqdm import tqdm
 
 from common.atari_wrappers import wrap_deepmind
@@ -21,14 +18,8 @@ from common.vec_env.subproc_vec_env import SubprocVecEnv
 from ppo.agent import Agent, AgentValues
 from ppo.storage import RolloutStorage
 from ppo.update import PPO
-from ppo.utils import get_n_gpu, get_random_gpu
-from ppo.wrappers import (
-    AddTimestep,
-    TransposeImage,
-    VecNormalize,
-    VecPyTorch,
-    VecPyTorchFrameStack,
-)
+from ppo.utils import k_scalar_pairs
+from ppo.wrappers import AddTimestep, TransposeImage, VecPyTorch, VecPyTorchFrameStack
 
 try:
     import dm_control2gym
@@ -197,15 +188,9 @@ class Train:
                 start = self.tick
                 self.tick = time.time()
                 fps = total_num_steps / (self.tick - start)
-                log_values = dict(fps=fps, **epoch_counter, **train_results)
-
-                def result():
-                    for k, v in log_values.items():
-                        mean = np.mean(v)
-                        if not np.isnan(mean):
-                            yield k, mean
-
-                self._log_result(dict(result()))
+                self._log_result(
+                    dict(k_scalar_pairs(fps=fps, **epoch_counter, **train_results))
+                )
 
         envs.close()
         del envs
@@ -220,6 +205,7 @@ class Train:
         )
         eval_masks = torch.zeros(self.processes, 1, device=self.device)
         eval_counter = Counter()
+        print("Evaluating....")
         eval_values = self.run_epoch(
             envs=envs,
             obs=envs.reset(),
@@ -230,13 +216,9 @@ class Train:
             else self.num_steps,
             counter=eval_counter,
         )
-        print("Evaluation outcome:")
-        if self.writer is not None:
-            for k, v in eval_values.items():
-                print(f"eval_{k}", np.mean(v))
-                self.writer.add_scalar(f"eval_{k}", np.mean(v), total_num_steps)
         envs.close()
         del envs
+        return dict(k_scalar_pairs(**{f"eval_{k}": v for k, v in eval_values.items()}))
 
     def run_epoch(self, obs, rnn_hxs, masks, envs, num_steps, counter):
         # noinspection PyTypeChecker
