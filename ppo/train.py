@@ -84,14 +84,14 @@ class Train:
             num_processes=num_processes,
             # add_timestep=add_timestep,
             render=render_eval,
-            seed=seed + num_processes,
+            seed=self.i + seed + num_processes,
             gamma=gamma if normalize else None,
             evaluation=True,
             synchronous=True if render_eval else synchronous,
         )
         self.make_train_envs = lambda: self.make_vec_envs(
             **env_args,
-            seed=seed,
+            seed=self.i + seed,
             gamma=(gamma if normalize else None),
             render=render,
             synchronous=True if render else synchronous,
