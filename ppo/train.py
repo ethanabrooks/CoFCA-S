@@ -158,10 +158,10 @@ class Train:
 
     def __train(self, last_save, start):
         tick = time.time()
-        for i in itertools.count():
-            if i % self.interval == 0:
+        for _ in itertools.count():
+            if self.i % self.interval == 0:
                 log_progress = tqdm(total=self.interval, desc="log ")
-            if self.eval_interval and i % self.eval_interval == 0:
+            if self.eval_interval and self.i % self.eval_interval == 0:
                 eval_progress = tqdm(total=self.eval_interval, desc="eval")
                 envs = self.make_train_envs()
                 envs.to(self.device)
