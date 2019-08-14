@@ -131,7 +131,7 @@ tune.run(
     local_dir=args.log_dir,
     scheduler=AsyncHyperBandScheduler(
         time_attr=TIME_TOTAL_S,
-        metric="rewards",
+        metric="eval_rewards",
         mode="max",
         grace_period=3600,
         max_t=3600,
