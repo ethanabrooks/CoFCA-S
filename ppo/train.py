@@ -53,7 +53,9 @@ class Train:
         synchronous,
         num_batch,
         env_args,
+        quiet,
     ):
+        self.quiet = quiet
         if render_eval and not render:
             eval_interval = 1
         if render:
@@ -150,10 +152,12 @@ class Train:
         envs.to(self.device)
         obs = envs.reset()
         self.rollouts.obs[0].copy_(obs)
-        # for _ in tqdm(range(self.eval_interval), desc="eval"):
-        for _ in range(self.eval_interval):
-            # if self.i % self.interval == 0:
-            # self.log_progress = tqdm(total=self.interval, desc="log ")
+        iterator = range(self.eval_interval)
+        if not self.quiet:
+            iterator = tqdm(iterator, desc="eval")
+        for _ in iterator:
+            if self.i % self.log_interval == 0 and not self.quiet:
+                self.log_progress = tqdm(total=self.log_interval, desc="log ")
             self.i += 1
             epoch_counter = self.run_epoch(
                 obs=self.rollouts.obs[0],
@@ -175,7 +179,8 @@ class Train:
             train_results = self.ppo.update(self.rollouts)
             self.rollouts.after_update()
             total_num_steps = (self.i + 1) * self.processes * self.num_steps
-            # self.log_progress.update()
+            if self.log_progress is not None:
+                self.log_progress.update()
             # print(self.i, self.i % self.log_interval)
             if self.i % self.log_interval == 0 and self.writer is not None:
                 # print(f"Writing to {self.logdir}")
@@ -321,7 +326,7 @@ class Train:
         num_frame_stack=None,
     ):
         envs = [
-            functools.partial(
+            functools.partial(  # thunk
                 self.make_env,
                 rank=i,
                 env_id=env_id,
