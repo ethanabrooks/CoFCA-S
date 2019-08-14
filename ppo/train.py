@@ -165,6 +165,12 @@ class Train:
                 log_progress = tqdm(total=self.interval, desc="log ")
             if self.eval_interval and i % self.eval_interval == 0:
                 eval_progress = tqdm(total=self.eval_interval, desc="eval")
+                self.envs.close()
+                del self.envs
+                self.envs = self.make_train_envs()
+                self.envs.to(self.device)
+                obs = self.envs.reset()
+                self.rollouts.obs[0].copy_(obs)
             epoch_counter = self.run_epoch(
                 obs=self.rollouts.obs[0],
                 rnn_hxs=self.rollouts.recurrent_hidden_states[0],
@@ -214,6 +220,8 @@ class Train:
                 self.eval_interval is not None
                 and self.i % self.eval_interval == self.eval_interval - 1
             ):
+                self.envs.close()
+                del self.envs
                 eval_envs = self.make_eval_envs()
                 eval_envs.to(self.device)
 
