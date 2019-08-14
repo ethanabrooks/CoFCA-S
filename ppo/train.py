@@ -131,7 +131,7 @@ class Train:
         if load_path:
             self._restore(load_path)
 
-        self.interval = log_interval
+        self.log_interval = log_interval
         self.eval_interval = eval_interval
         self.counter = counter
         self.time_limit = time_limit
@@ -176,15 +176,14 @@ class Train:
             self.rollouts.after_update()
             total_num_steps = (self.i + 1) * self.processes * self.num_steps
             # self.log_progress.update()
-            if self.i % self.interval == 0:
+            print(self.i % self.log_interval)
+            print(self.writer)
+            if self.i % self.log_interval == 0 and self.writer is not None:
                 start = self.tick
                 self.tick = time.time()
                 fps = total_num_steps / (self.tick - start)
-                if self.writer is not None:
-                    for k, v in k_scalar_pairs(
-                        fps=fps, **epoch_counter, **train_results
-                    ):
-                        self.writer.add_scalar(k, np.mean(v), total_num_steps)
+                for k, v in k_scalar_pairs(fps=fps, **epoch_counter, **train_results):
+                    self.writer.add_scalar(k, np.mean(v), total_num_steps)
 
         envs.close()
         del envs
