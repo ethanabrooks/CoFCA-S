@@ -165,15 +165,15 @@ class Train:
                 log_progress = tqdm(total=self.interval, desc="log")
             if self.eval_interval and i % self.eval_interval == 0:
                 eval_progress = tqdm(total=self.eval_interval, desc="eval")
-                self.envs.close()
-                del self.envs
-                self.envs = self.make_train_envs()
-                self.envs.to(self.device)
-                obs = self.envs.reset()
-                self.rollouts.obs[0].copy_(obs)
             self._train(i, last_save, tick, log_progress, eval_progress)
 
     def _train(self, i, last_save, tick, log_progress, eval_progress):
+        self.envs.close()
+        del self.envs
+        self.envs = self.make_train_envs()
+        self.envs.to(self.device)
+        obs = self.envs.reset()
+        self.rollouts.obs[0].copy_(obs)
         self.i = i
         epoch_counter = self.run_epoch(
             obs=self.rollouts.obs[0],
