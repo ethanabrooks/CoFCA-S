@@ -39,7 +39,6 @@ class Train:
         time_limit,
         gamma,
         normalize,
-        save_interval,
         log_interval,
         eval_interval,
         use_gae,
@@ -53,7 +52,6 @@ class Train:
         synchronous,
         batch_size,
         env_args,
-        save_dir=None,
     ):
         if render_eval and not render:
             eval_interval = 1
@@ -130,13 +128,10 @@ class Train:
         self.interval = log_interval
         self.eval_interval = eval_interval
         self.counter = counter
-        self.save_dir = save_dir
-        self.save_interval = save_interval
         self.time_limit = time_limit
         self.i = 0
         envs.close()
         self.tick = time.time()
-        self.last_save = time.time()  # dummy save
         self.log_progress = None
         del envs
 
@@ -172,17 +167,7 @@ class Train:
             self.rollouts.compute_returns(next_value=next_value)
             train_results = self.ppo.update(self.rollouts)
             self.rollouts.after_update()
-
-            if (
-                self.save_dir
-                and self.save_interval
-                and (time.time() - self.last_save >= self.save_interval)
-            ):
-                self._save(self.save_dir)
-                self.last_save = time.time()
-
             total_num_steps = (self.i + 1) * self.processes * self.num_steps
-
             self.log_progress.update()
             if self.i % self.interval == 0:
                 start = self.tick
@@ -362,7 +347,7 @@ class Train:
         state_dict = torch.load(load_path, map_location=self.device)
         self.agent.load_state_dict(state_dict["agent"])
         self.ppo.optimizer.load_state_dict(state_dict["optimizer"])
-        start = state_dict.get("step", -1) + 1
+        self.i = state_dict.get("step", -1) + 1
         # if isinstance(self.envs.venv, VecNormalize):
         #     self.envs.venv.load_state_dict(state_dict["vec_normalize"])
         print(f"Loaded parameters from {load_path}.")
