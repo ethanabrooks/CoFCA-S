@@ -98,7 +98,7 @@ class Train:
         self.make_eval_envs = lambda: self.make_vec_envs(
             **env_args,
             # env_id=env_id,
-            # time_limit=time_limit,
+            time_limit=time_limit,
             num_processes=num_processes,
             # add_timestep=add_timestep,
             render=render_eval,
@@ -222,8 +222,8 @@ class Train:
             ):
                 self.envs.close()
                 del self.envs
-                eval_envs = self.make_eval_envs()
-                eval_envs.to(self.device)
+                self.envs = self.make_eval_envs()
+                self.envs.to(self.device)
 
                 # vec_norm = get_vec_normalize(eval_envs)
                 # if vec_norm is not None:
@@ -239,8 +239,8 @@ class Train:
                 eval_counter = Counter()
 
                 eval_values = self.run_epoch(
-                    envs=eval_envs,
-                    obs=eval_envs.reset(),
+                    envs=self.envs,
+                    obs=self.envs.reset(),
                     rnn_hxs=eval_recurrent_hidden_states,
                     masks=eval_masks,
                     num_steps=max(self.num_steps, self.time_limit)
@@ -248,8 +248,6 @@ class Train:
                     else self.num_steps,
                     counter=eval_counter,
                 )
-
-                eval_envs.close()
 
                 print("Evaluation outcome:")
                 if self.writer is not None:
