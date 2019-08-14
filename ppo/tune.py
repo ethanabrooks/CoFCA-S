@@ -134,6 +134,6 @@ tune.run(
         metric="eval_rewards",
         mode="max",
         grace_period=3600,
-        max_t=3600,
+        max_t=43200,
     ),
 )
