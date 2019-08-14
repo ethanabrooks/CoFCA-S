@@ -155,12 +155,13 @@ class Train:
         self.save_dir = save_dir
         self.save_interval = save_interval
         self.time_limit = time_limit
+        self.i = 0
         self.__train(last_save, start)
 
     def __train(self, last_save, start):
         tick = time.time()
         for i in itertools.count():
-            self.i = i
+            self.i += 1
             if i % self.interval == 0:
                 log_progress = tqdm(total=self.interval, desc="log ")
             if self.eval_interval and i % self.eval_interval == 0:
