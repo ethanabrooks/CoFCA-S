@@ -85,9 +85,11 @@ class Train(ppo.train.Train, Trainable):
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--ray-redis-address")
+parser.add_argument("--redis-address")
+parser.add_argument("--log-dir")
+parser.add_argument("--run-id")
 args = parser.parse_args()
-ray.init(redis_address=args.ray_redis_address)
+ray.init(redis_address=args.redis_address)
 config = dict(
     num_processes=300,
     eval_interval=100,
@@ -123,6 +125,7 @@ tune.run(
     resources_per_trial=dict(cpu=1, gpu=0.5),
     checkpoint_freq=1,
     reuse_actors=True,
+    local_dir=args.log_dir,
     scheduler=AsyncHyperBandScheduler(
         time_attr=TIME_TOTAL_S,
         metric="rewards",
