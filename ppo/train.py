@@ -86,14 +86,8 @@ class Train:
 
         self.device = "cpu"
         if cuda:
-            device_num = get_random_gpu()
-            if run_id:
-                match = re.search("\d+$", run_id)
-                if match:
-                    device_num = int(match.group()) % get_n_gpu()
-
-            self.device = torch.device("cuda", device_num)
-        print("Using device", self.device)
+            self.device = self.get_device()
+        # print("Using device", self.device)
 
         self.writer = None
         if log_dir:
