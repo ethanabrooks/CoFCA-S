@@ -176,9 +176,9 @@ class Train:
             self.rollouts.after_update()
             total_num_steps = (self.i + 1) * self.processes * self.num_steps
             # self.log_progress.update()
-            print(self.i, self.i % self.log_interval)
+            # print(self.i, self.i % self.log_interval)
             if self.i % self.log_interval == 0 and self.writer is not None:
-                print(f"Writing to {self.logdir}")
+                # print(f"Writing to {self.logdir}")
                 start = self.tick
                 self.tick = time.time()
                 fps = total_num_steps / (self.tick - start)

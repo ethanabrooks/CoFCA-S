@@ -1,4 +1,5 @@
 import argparse
+import numpy as np
 
 import ray
 import torch.nn as nn
@@ -94,6 +95,8 @@ parser.add_argument("--run-id")
 parser.add_argument("--debug", action="store_true")
 args = parser.parse_args()
 ray.init(redis_address=args.redis_address, local_mode=args.debug)
+
+
 config = dict(
     num_processes=300,
     eval_interval=100,
@@ -120,7 +123,9 @@ config = dict(
     num_layers=ray.tune.choice([0, 1, 2]),
     num_steps=ray.tune.choice([16, 32, 64]),
     ppo_epoch=ray.tune.sample_from(
-        lambda e: [i + int(0.0035 / e.config["learning_rate"]) for i in range(-2, 2)]
+        lambda spec: int(
+            0.0035 / spec.config.learning_rate * np.random.uniform(low=-2, high=2)
+        )
     ),
     seed=ray.tune.choice(list(range(10))),
 )

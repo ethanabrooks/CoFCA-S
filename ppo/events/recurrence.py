@@ -35,7 +35,7 @@ class Recurrence(nn.Module):
         # networks
         self.task_embeddings = nn.Embedding(obs_spaces.subtasks.nvec[0], hidden_size)
         self.parser_sections = [1, 1] + [hidden_size] * 3
-        self.parser = nn.GRU(hidden_size, sum(self.parser_sections))
+        self.parser = nn.GRU(int(hidden_size), int(sum(self.parser_sections)))
         self.f = nn.Sequential(
             Parallel(Reshape(1, d, h, w), Reshape(hidden_size, 1, 1, 1)),
             Product(),
