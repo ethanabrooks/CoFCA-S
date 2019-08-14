@@ -75,6 +75,9 @@ class Train(ppo.train.Train, Trainable):
         env.seed(seed + rank)
         return env
 
+    def get_device(self):
+        return "cuda"
+
     def build_agent(self, envs, recurrent=None, device=None, **agent_args):
         return Agent(
             observation_space=envs.observation_space,
@@ -85,11 +88,11 @@ class Train(ppo.train.Train, Trainable):
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--ray-redis-address")
+parser.add_argument("--redis-address")
 parser.add_argument("--log-dir")
 parser.add_argument("--run-id")
 args = parser.parse_args()
-ray.init(redis_address=args.ray_redis_address)
+ray.init(redis_address=args.redis_address)
 config = dict(
     num_processes=300,
     eval_interval=100,
@@ -125,12 +128,12 @@ tune.run(
     resources_per_trial=dict(cpu=1, gpu=0.5),
     checkpoint_freq=1,
     reuse_actors=True,
-    local_dir=args.local_dir,
+    local_dir=args.log_dir,
     scheduler=AsyncHyperBandScheduler(
         time_attr=TIME_TOTAL_S,
-        metric="rewards",
+        metric="eval_rewards",
         mode="max",
         grace_period=3600,
-        max_t=3600,
+        max_t=43200,
     ),
 )

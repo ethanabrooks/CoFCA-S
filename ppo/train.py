@@ -144,9 +144,10 @@ class Train:
         envs.to(self.device)
         obs = envs.reset()
         self.rollouts.obs[0].copy_(obs)
-        for _ in tqdm(range(self.eval_interval), desc="eval"):
-            if self.i % self.interval == 0:
-                self.log_progress = tqdm(total=self.interval, desc="log ")
+        # for _ in tqdm(range(self.eval_interval), desc="eval"):
+        for _ in range(self.eval_interval):
+            # if self.i % self.interval == 0:
+            # self.log_progress = tqdm(total=self.interval, desc="log ")
             self.i += 1
             epoch_counter = self.run_epoch(
                 obs=self.rollouts.obs[0],
@@ -168,7 +169,7 @@ class Train:
             train_results = self.ppo.update(self.rollouts)
             self.rollouts.after_update()
             total_num_steps = (self.i + 1) * self.processes * self.num_steps
-            self.log_progress.update()
+            # self.log_progress.update()
             if self.i % self.interval == 0:
                 start = self.tick
                 self.tick = time.time()
