@@ -251,6 +251,8 @@ class Train:
                     for k, v in eval_values.items():
                         print(f"eval_{k}", np.mean(v))
                         self.writer.add_scalar(f"eval_{k}", np.mean(v), total_num_steps)
+                envs.close()
+                del envs
 
             if self.eval_interval:
                 eval_progress.update()
