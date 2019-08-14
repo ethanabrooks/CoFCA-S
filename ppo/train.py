@@ -163,56 +163,55 @@ class Train:
         for i in itertools.count():
             if i % self.interval == 0:
                 log_progress = tqdm(total=self.interval, desc="log")
-            if self.eval_interval and i % self.eval_interval == 0:
-                eval_progress = tqdm(total=self.eval_interval, desc="eval")
-            self._train(i, last_save, tick, log_progress, eval_progress)
+            self._train(last_save, tick, log_progress)
 
-    def _train(self, i, last_save, tick, log_progress, eval_progress):
+    def _train(self, last_save, tick, log_progress):
         self.envs.close()
         del self.envs
         self.envs = self.make_train_envs()
         self.envs.to(self.device)
         obs = self.envs.reset()
         self.rollouts.obs[0].copy_(obs)
-        self.i += 1
-        epoch_counter = self.run_epoch(
-            obs=self.rollouts.obs[0],
-            rnn_hxs=self.rollouts.recurrent_hidden_states[0],
-            masks=self.rollouts.masks[0],
-            envs=self.envs,
-            num_steps=self.num_steps,
-            counter=self.counter,
-        )
-        with torch.no_grad():
-            next_value = self.agent.get_value(
-                self.rollouts.obs[-1],
-                self.rollouts.recurrent_hidden_states[-1],
-                self.rollouts.masks[-1],
-            ).detach()
-        self.rollouts.compute_returns(next_value=next_value)
-        train_results = self.ppo.update(self.rollouts)
-        self.rollouts.after_update()
-        if (
-            self.save_dir
-            and self.save_interval
-            and time.time() - last_save >= self.save_interval
-        ):
-            last_save = time.time()
-            self._save(self.save_dir)
-        total_num_steps = (self.i + 1) * self.processes * self.num_steps
-        if self.i % self.interval == 0 and self.writer is not None:
-            start = tick
-            tick = time.time()
-            fps = total_num_steps / (tick - start)
-            log_values = dict(fps=fps, **epoch_counter, **train_results)
-            if self.writer:
-                self.writer.add_scalar("cumulative_success", total_num_steps)
+        for j in tqdm(range(self.eval_interval), desc="eval"):
+            self.i += 1
+            epoch_counter = self.run_epoch(
+                obs=self.rollouts.obs[0],
+                rnn_hxs=self.rollouts.recurrent_hidden_states[0],
+                masks=self.rollouts.masks[0],
+                envs=self.envs,
+                num_steps=self.num_steps,
+                counter=self.counter,
+            )
+            with torch.no_grad():
+                next_value = self.agent.get_value(
+                    self.rollouts.obs[-1],
+                    self.rollouts.recurrent_hidden_states[-1],
+                    self.rollouts.masks[-1],
+                ).detach()
+            self.rollouts.compute_returns(next_value=next_value)
+            train_results = self.ppo.update(self.rollouts)
+            self.rollouts.after_update()
+            if (
+                self.save_dir
+                and self.save_interval
+                and time.time() - last_save >= self.save_interval
+            ):
+                last_save = time.time()
+                self._save(self.save_dir)
+            total_num_steps = (self.i + 1) * self.processes * self.num_steps
+            if self.i % self.interval == 0 and self.writer is not None:
+                start = tick
+                tick = time.time()
+                fps = total_num_steps / (tick - start)
+                log_values = dict(fps=fps, **epoch_counter, **train_results)
+                if self.writer:
+                    self.writer.add_scalar("cumulative_success", total_num_steps)
 
-                for k, v in log_values.items():
-                    mean = np.mean(v)
-                    if not np.isnan(mean):
-                        self.writer.add_scalar(k, np.mean(v), total_num_steps)
-        log_progress.update()
+                    for k, v in log_values.items():
+                        mean = np.mean(v)
+                        if not np.isnan(mean):
+                            self.writer.add_scalar(k, np.mean(v), total_num_steps)
+            log_progress.update()
         if (
             self.eval_interval is not None
             and self.i % self.eval_interval == self.eval_interval - 1
