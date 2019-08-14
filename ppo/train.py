@@ -142,7 +142,6 @@ class Train:
             print("Values copied to GPU in", time.time() - tick, "seconds")
 
         self.ppo = PPO(agent=self.agent, batch_size=batch_size, **ppo_args)
-
         counter = Counter()
         start = time.time()
         last_save = start
@@ -159,6 +158,7 @@ class Train:
         self.__train(last_save, start)
 
     def __train(self, last_save, start):
+        tick = time.time()
         for i in itertools.count():
             self.i = i
             if i % self.interval == 0:
@@ -193,11 +193,12 @@ class Train:
                 last_save = time.time()
                 self._save(self.save_dir)
 
-            total_num_steps = (i + 1) * self.processes * self.num_steps
+            total_num_steps = (self.i + 1) * self.processes * self.num_steps
 
-            if i % self.interval == 0 and self.writer is not None:
-                end = time.time()
-                fps = total_num_steps / (end - start)
+            if self.i % self.interval == 0 and self.writer is not None:
+                start = tick
+                tick = time.time()
+                fps = total_num_steps / (tick - start)
                 log_values = dict(fps=fps, **epoch_counter, **train_results)
                 if self.writer:
                     self.writer.add_scalar("cumulative_success", total_num_steps)
@@ -211,7 +212,7 @@ class Train:
 
             if (
                 self.eval_interval is not None
-                and i % self.eval_interval == self.eval_interval - 1
+                and self.i % self.eval_interval == self.eval_interval - 1
             ):
                 eval_envs = self.make_eval_envs()
                 eval_envs.to(self.device)
