@@ -341,7 +341,7 @@ class Train:
         save_path = Path(checkpoint_dir, "checkpoint.pt")
         torch.save(dict(step=self.i, **state_dict), save_path)
         print(f"Saved parameters to {save_path}")
-        return save_path
+        return str(save_path)
 
     def _restore(self, checkpoint):
         load_path = checkpoint
