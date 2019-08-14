@@ -28,7 +28,7 @@ def exp_main(
 ):
     class TrainEvents(Train):
         @staticmethod
-        def make_env(time_limit, seed, rank, evaluation, **kwargs):
+        def make_env(time_limit, seed, rank, evaluation, env_id, add_timestep):
             env = ppo.events.Gridworld(**gridworld_args)
             if base:
                 raise NotImplementedError
@@ -41,13 +41,28 @@ def exp_main(
             env.seed(seed + rank)
             return env
 
-        def build_agent(self, envs, recurrent=None, device=None, **agent_args):
+        def build_agent(
+            self,
+            envs,
+            hidden_size,
+            num_layers,
+            activation,
+            entropy_coef,
+            recurrent=None,
+            device=None,
+        ):
+            agent_args = dict(
+                hidden_size=hidden_size,
+                num_layers=num_layers,
+                activation=activation,
+                entropy_coef=entropy_coef,
+            )
             if base:
                 return super().build_agent(envs, recurrent=recurrent, **agent_args)
             return Agent(
                 observation_space=envs.observation_space,
                 action_space=envs.action_space,
-                debug=debug,
+                debug=False if tune else debug,
                 **agent_args,
             )
 
