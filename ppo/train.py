@@ -50,7 +50,7 @@ class Train:
         load_path,
         success_reward,
         synchronous,
-        batch_size,
+        num_batch,
         env_args,
     ):
         if render_eval and not render:
@@ -119,7 +119,7 @@ class Train:
             self.rollouts.to(self.device)
             print("Values copied to GPU in", time.time() - tick, "seconds")
 
-        self.ppo = PPO(agent=self.agent, batch_size=batch_size, **ppo_args)
+        self.ppo = PPO(agent=self.agent, num_batch=num_batch, **ppo_args)
         counter = Counter()
 
         if load_path:

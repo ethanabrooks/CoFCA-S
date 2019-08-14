@@ -71,7 +71,7 @@ def build_parser():
     )
     parser.add_argument("--synchronous", action="store_true")
     parser.add_argument(
-        "--batch-size", type=int, default=32, help="number of batches for ppo"
+        "--num-batch", type=int, default=32, help="number of batches for ppo"
     )
     parser.add_argument("--success-reward", type=float)
 
