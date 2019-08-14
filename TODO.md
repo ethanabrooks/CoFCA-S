@@ -1,5 +1,5 @@
 * implement baseline
 * use same ArgumentParser for `tune.py` and `main.py`
 * make `--ppo-epoch` dependent on learning rate
-* Switch to `AsyncHyperBand`
-* Get running on `rldl17`
+* implement test/validate
+* get rid of kwargs
