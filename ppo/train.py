@@ -77,21 +77,21 @@ class Train:
 
         torch.set_num_threads(1)
 
-        self.make_eval_envs = lambda: self.make_vec_envs(
+        self.make_eval_envs = lambda s: self.make_vec_envs(
             **env_args,
             # env_id=env_id,
             time_limit=time_limit,
             num_processes=num_processes,
             # add_timestep=add_timestep,
             render=render_eval,
-            seed=self.i + seed + num_processes,
+            seed=s + seed + num_processes,
             gamma=gamma if normalize else None,
             evaluation=True,
             synchronous=True if render_eval else synchronous,
         )
-        self.make_train_envs = lambda: self.make_vec_envs(
+        self.make_train_envs = lambda s: self.make_vec_envs(
             **env_args,
-            seed=self.i + seed,
+            seed=s + seed,
             gamma=(gamma if normalize else None),
             render=render,
             synchronous=True if render else synchronous,
@@ -99,7 +99,7 @@ class Train:
             num_processes=num_processes,
             time_limit=time_limit,
         )
-        envs = self.make_train_envs()
+        envs = self.make_train_envs(0)
         self.agent = self.build_agent(envs=envs, **agent_args)
         self.num_steps = num_steps
         self.processes = num_processes
@@ -140,7 +140,7 @@ class Train:
             self._train()
 
     def _train(self):
-        envs = self.make_train_envs()
+        envs = self.make_train_envs(self.i)
         envs.to(self.device)
         obs = envs.reset()
         self.rollouts.obs[0].copy_(obs)
@@ -180,7 +180,7 @@ class Train:
 
         envs.close()
         del envs
-        envs = self.make_eval_envs()
+        envs = self.make_eval_envs(self.i)
         envs.to(self.device)
         # vec_norm = get_vec_normalize(eval_envs)
         # if vec_norm is not None:
@@ -341,7 +341,7 @@ class Train:
         save_path = Path(checkpoint_dir, "checkpoint.pt")
         torch.save(dict(step=self.i, **state_dict), save_path)
         print(f"Saved parameters to {save_path}")
-        return save_path
+        return str(save_path)
 
     def _restore(self, checkpoint):
         load_path = checkpoint
