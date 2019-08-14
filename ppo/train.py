@@ -174,7 +174,7 @@ class Train:
         self.envs.to(self.device)
         obs = self.envs.reset()
         self.rollouts.obs[0].copy_(obs)
-        self.i = i
+        self.i += 1
         epoch_counter = self.run_epoch(
             obs=self.rollouts.obs[0],
             rnn_hxs=self.rollouts.recurrent_hidden_states[0],
