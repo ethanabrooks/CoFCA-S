@@ -24,14 +24,19 @@ def cli():
 def exp_main(gridworld_args, wrapper_args, base, debug, **kwargs):
     class _Train(Train):
         def __init__(
-            self, run_id, log_dir: Path, save_dir: Path, save_interval: int, **kwargs
+            self,
+            run_id,
+            log_dir: Path,
+            save_interval: int,
+            save_dir: Path = None,
+            **kwargs
         ):
             if log_dir:
                 self.writer = SummaryWriter(logdir=str(log_dir))
             else:
                 self.writer = None
             self.run_id = run_id
-            self.save_dir = save_dir
+            self.save_dir = save_dir or log_dir
             self.save_interval = save_interval
             self.setup(**kwargs)
             self.last_save = time.time()  # dummy save
