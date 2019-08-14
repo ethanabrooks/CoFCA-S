@@ -75,6 +75,9 @@ class Train(ppo.train.Train, Trainable):
         env.seed(seed + rank)
         return env
 
+    def get_device(self):
+        return "cuda"
+
     def build_agent(self, envs, recurrent=None, device=None, **agent_args):
         return Agent(
             observation_space=envs.observation_space,
