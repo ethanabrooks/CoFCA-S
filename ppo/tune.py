@@ -128,6 +128,7 @@ tune.run(
     resources_per_trial=dict(cpu=1, gpu=0.5),
     checkpoint_freq=1,
     reuse_actors=True,
+    num_samples=100,
     local_dir=args.log_dir,
     scheduler=AsyncHyperBandScheduler(
         time_attr=TIME_TOTAL_S,
