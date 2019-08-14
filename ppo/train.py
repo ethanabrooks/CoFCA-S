@@ -159,103 +159,95 @@ class Train:
     def __train(self, last_save, start):
         tick = time.time()
         for _ in itertools.count():
-            if self.i % self.interval == 0:
-                log_progress = tqdm(total=self.interval, desc="log ")
-            if self.eval_interval and self.i % self.eval_interval == 0:
-                eval_progress = tqdm(total=self.eval_interval, desc="eval")
-                envs = self.make_train_envs()
-                envs.to(self.device)
-                obs = envs.reset()
-                self.rollouts.obs[0].copy_(obs)
-            self.i += 1
-            epoch_counter = self.run_epoch(
-                obs=self.rollouts.obs[0],
-                rnn_hxs=self.rollouts.recurrent_hidden_states[0],
-                masks=self.rollouts.masks[0],
+            envs = self.make_train_envs()
+            envs.to(self.device)
+            obs = envs.reset()
+            self.rollouts.obs[0].copy_(obs)
+            for _ in tqdm(range(self.eval_interval), desc="eval"):
+                if self.i % self.interval == 0:
+                    log_progress = tqdm(total=self.interval, desc="log ")
+                self.i += 1
+                epoch_counter = self.run_epoch(
+                    obs=self.rollouts.obs[0],
+                    rnn_hxs=self.rollouts.recurrent_hidden_states[0],
+                    masks=self.rollouts.masks[0],
+                    envs=envs,
+                    num_steps=self.num_steps,
+                    counter=self.counter,
+                )
+
+                with torch.no_grad():
+                    next_value = self.agent.get_value(
+                        self.rollouts.obs[-1],
+                        self.rollouts.recurrent_hidden_states[-1],
+                        self.rollouts.masks[-1],
+                    ).detach()
+
+                self.rollouts.compute_returns(next_value=next_value)
+                train_results = self.ppo.update(self.rollouts)
+                self.rollouts.after_update()
+
+                if (
+                    self.save_dir
+                    and self.save_interval
+                    and time.time() - last_save >= self.save_interval
+                ):
+                    last_save = time.time()
+                    self._save(self.save_dir)
+
+                total_num_steps = (self.i + 1) * self.processes * self.num_steps
+
+                if self.i % self.interval == 0 and self.writer is not None:
+                    start = tick
+                    tick = time.time()
+                    fps = total_num_steps / (tick - start)
+                    log_values = dict(fps=fps, **epoch_counter, **train_results)
+                    if self.writer:
+                        self.writer.add_scalar("cumulative_success", total_num_steps)
+
+                        for k, v in log_values.items():
+                            mean = np.mean(v)
+                            if not np.isnan(mean):
+                                self.writer.add_scalar(k, np.mean(v), total_num_steps)
+
+                log_progress.update()
+
+            envs.close()
+            del envs
+            envs = self.make_eval_envs()
+            envs.to(self.device)
+
+            # vec_norm = get_vec_normalize(eval_envs)
+            # if vec_norm is not None:
+            #     vec_norm.eval()
+            #     vec_norm.ob_rms = get_vec_normalize(envs).ob_rms
+
+            eval_recurrent_hidden_states = torch.zeros(
+                self.processes,
+                self.agent.recurrent_hidden_state_size,
+                device=self.device,
+            )
+            eval_masks = torch.zeros(self.processes, 1, device=self.device)
+            eval_counter = Counter()
+
+            eval_values = self.run_epoch(
                 envs=envs,
-                num_steps=self.num_steps,
-                counter=self.counter,
+                obs=envs.reset(),
+                rnn_hxs=eval_recurrent_hidden_states,
+                masks=eval_masks,
+                num_steps=max(self.num_steps, self.time_limit)
+                if self.time_limit
+                else self.num_steps,
+                counter=eval_counter,
             )
 
-            with torch.no_grad():
-                next_value = self.agent.get_value(
-                    self.rollouts.obs[-1],
-                    self.rollouts.recurrent_hidden_states[-1],
-                    self.rollouts.masks[-1],
-                ).detach()
-
-            self.rollouts.compute_returns(next_value=next_value)
-            train_results = self.ppo.update(self.rollouts)
-            self.rollouts.after_update()
-
-            if (
-                self.save_dir
-                and self.save_interval
-                and time.time() - last_save >= self.save_interval
-            ):
-                last_save = time.time()
-                self._save(self.save_dir)
-
-            total_num_steps = (self.i + 1) * self.processes * self.num_steps
-
-            if self.i % self.interval == 0 and self.writer is not None:
-                start = tick
-                tick = time.time()
-                fps = total_num_steps / (tick - start)
-                log_values = dict(fps=fps, **epoch_counter, **train_results)
-                if self.writer:
-                    self.writer.add_scalar("cumulative_success", total_num_steps)
-
-                    for k, v in log_values.items():
-                        mean = np.mean(v)
-                        if not np.isnan(mean):
-                            self.writer.add_scalar(k, np.mean(v), total_num_steps)
-
-            log_progress.update()
-
-            if (
-                self.eval_interval is not None
-                and self.i % self.eval_interval == self.eval_interval - 1
-            ):
-                envs.close()
-                del envs
-                envs = self.make_eval_envs()
-                envs.to(self.device)
-
-                # vec_norm = get_vec_normalize(eval_envs)
-                # if vec_norm is not None:
-                #     vec_norm.eval()
-                #     vec_norm.ob_rms = get_vec_normalize(envs).ob_rms
-
-                eval_recurrent_hidden_states = torch.zeros(
-                    self.processes,
-                    self.agent.recurrent_hidden_state_size,
-                    device=self.device,
-                )
-                eval_masks = torch.zeros(self.processes, 1, device=self.device)
-                eval_counter = Counter()
-
-                eval_values = self.run_epoch(
-                    envs=envs,
-                    obs=envs.reset(),
-                    rnn_hxs=eval_recurrent_hidden_states,
-                    masks=eval_masks,
-                    num_steps=max(self.num_steps, self.time_limit)
-                    if self.time_limit
-                    else self.num_steps,
-                    counter=eval_counter,
-                )
-
-                print("Evaluation outcome:")
-                if self.writer is not None:
-                    for k, v in eval_values.items():
-                        print(f"eval_{k}", np.mean(v))
-                        self.writer.add_scalar(f"eval_{k}", np.mean(v), total_num_steps)
-                envs.close()
-                del envs
-
-            if self.eval_interval:
-                eval_progress.update()
+            print("Evaluation outcome:")
+            if self.writer is not None:
+                for k, v in eval_values.items():
+                    print(f"eval_{k}", np.mean(v))
+                    self.writer.add_scalar(f"eval_{k}", np.mean(v), total_num_steps)
+            envs.close()
+            del envs
 
     def run_epoch(self, obs, rnn_hxs, masks, envs, num_steps, counter):
         # noinspection PyTypeChecker
