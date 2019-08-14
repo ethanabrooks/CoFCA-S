@@ -55,7 +55,7 @@ def exp_main(gridworld_args, wrapper_args, base, debug, **kwargs):
                 **agent_args
             )
 
-    _Train(**kwargs)
+    _Train(**kwargs).run()
 
 
 def exp_cli():

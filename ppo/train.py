@@ -155,9 +155,8 @@ class Train:
         self.last_save = time.time()  # dummy save
         self.log_progress = None
         del envs
-        self.__train()
 
-    def __train(self):
+    def run(self):
         for _ in itertools.count():
             self._train()
 
