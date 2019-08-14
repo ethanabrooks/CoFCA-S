@@ -90,7 +90,9 @@ class Wrapper(gym.Wrapper):
         self.observation_space = spaces.Dict(
             Obs(
                 base=spaces.Box(
-                    low=-2 * np.ones(base_shape), high=2 * np.ones(base_shape)
+                    low=-2 * np.ones(base_shape),
+                    high=2 * np.ones(base_shape),
+                    dtype=float,
                 ),
                 subtasks=spaces.MultiDiscrete(subtasks_nvec),
                 interactable=spaces.MultiBinary(len(self.object_types)),

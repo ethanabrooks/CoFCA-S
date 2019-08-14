@@ -1,3 +1,6 @@
+import argparse
+
+import ray
 from gym.wrappers import TimeLimit
 from rl_utils import hierarchical_parse_args
 
@@ -14,6 +17,10 @@ def cli():
 
 def exp_main(gridworld_args, wrapper_args, base, debug, **kwargs):
     class _Train(Train):
+        def __init__(self, run_id, save_interval, log_dir, **kwargs):
+            self.run_id = run_id
+            self.setup(**kwargs)
+
         @staticmethod
         def make_env(time_limit, seed, rank, evaluation, **kwargs):
             env = ppo.events.Gridworld(**gridworld_args)
@@ -38,7 +45,7 @@ def exp_main(gridworld_args, wrapper_args, base, debug, **kwargs):
                 **agent_args
             )
 
-    _Train(**kwargs)
+    _Train(**kwargs).run()
 
 
 def exp_cli():

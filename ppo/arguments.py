@@ -74,7 +74,6 @@ def build_parser():
         "--batch-size", type=int, default=32, help="number of batches for ppo"
     )
     parser.add_argument("--success-reward", type=float)
-    parser.add_argument("--target-success-rates", nargs="*", type=float, default=[])
 
     agent_parser = parser.add_argument_group("agent_args")
     agent_parser.add_argument("--recurrent", action="store_true")
