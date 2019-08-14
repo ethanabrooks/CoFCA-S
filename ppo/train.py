@@ -212,49 +212,39 @@ class Train:
                         if not np.isnan(mean):
                             self.writer.add_scalar(k, np.mean(v), total_num_steps)
             log_progress.update()
-        if (
-            self.eval_interval is not None
-            and self.i % self.eval_interval == self.eval_interval - 1
-        ):
-            self.envs.close()
-            del self.envs
-            eval_envs = self.make_eval_envs()
-            eval_envs.to(self.device)
+        self.envs.close()
+        del self.envs
+        eval_envs = self.make_eval_envs()
+        eval_envs.to(self.device)
 
-            # vec_norm = get_vec_normalize(eval_envs)
-            # if vec_norm is not None:
-            #     vec_norm.eval()
-            #     vec_norm.ob_rms = get_vec_normalize(envs).ob_rms
+        # vec_norm = get_vec_normalize(eval_envs)
+        # if vec_norm is not None:
+        #     vec_norm.eval()
+        #     vec_norm.ob_rms = get_vec_normalize(envs).ob_rms
 
-            eval_recurrent_hidden_states = torch.zeros(
-                self.processes,
-                self.agent.recurrent_hidden_state_size,
-                device=self.device,
-            )
-            eval_masks = torch.zeros(self.processes, 1, device=self.device)
-            eval_counter = Counter()
+        eval_recurrent_hidden_states = torch.zeros(
+            self.processes, self.agent.recurrent_hidden_state_size, device=self.device
+        )
+        eval_masks = torch.zeros(self.processes, 1, device=self.device)
+        eval_counter = Counter()
 
-            eval_values = self.run_epoch(
-                envs=eval_envs,
-                obs=eval_envs.reset(),
-                rnn_hxs=eval_recurrent_hidden_states,
-                masks=eval_masks,
-                num_steps=max(self.num_steps, self.time_limit)
-                if self.time_limit
-                else self.num_steps,
-                counter=eval_counter,
-            )
+        eval_values = self.run_epoch(
+            envs=eval_envs,
+            obs=eval_envs.reset(),
+            rnn_hxs=eval_recurrent_hidden_states,
+            masks=eval_masks,
+            num_steps=max(self.num_steps, self.time_limit)
+            if self.time_limit
+            else self.num_steps,
+            counter=eval_counter,
+        )
+        eval_envs.close()
 
-            eval_envs.close()
-
-            print("Evaluation outcome:")
-            if self.writer is not None:
-                for k, v in eval_values.items():
-                    print(f"eval_{k}", np.mean(v))
-                    self.writer.add_scalar(f"eval_{k}", np.mean(v), total_num_steps)
-            return
-        if self.eval_interval:
-            eval_progress.update()
+        print("Evaluation outcome:")
+        if self.writer is not None:
+            for k, v in eval_values.items():
+                print(f"eval_{k}", np.mean(v))
+                self.writer.add_scalar(f"eval_{k}", np.mean(v), total_num_steps)
 
     def run_epoch(self, obs, rnn_hxs, masks, envs, num_steps, counter):
         # noinspection PyTypeChecker
