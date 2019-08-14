@@ -140,7 +140,7 @@ class Gridworld(gym.Env):
         return State(objects=self.objects, interactions=interactions), 0, False, {}
 
     def seed(self, seed=None):
-        self.random, seed = seeding.np_random(seed)
+        self.random, seed = seeding.np_random(int(seed))
         return [seed]
 
     def reset(self):
