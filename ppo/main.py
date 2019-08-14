@@ -1,7 +1,10 @@
 import re
+import numpy as np
+from pathlib import Path
 
 from gym.wrappers import TimeLimit
 from rl_utils import hierarchical_parse_args
+from tensorboardX import SummaryWriter
 
 import ppo
 import ppo.events.agent
@@ -18,9 +21,13 @@ def cli():
 
 def exp_main(gridworld_args, wrapper_args, base, debug, **kwargs):
     class _Train(Train):
-        def __init__(self, run_id, **kwargs):
+        def __init__(self, run_id, log_dir: Path, **kwargs):
+            if log_dir:
+                self.writer = SummaryWriter(logdir=str(log_dir))
+            else:
+                self.writer = None
             self.run_id = run_id
-            self.setup(**kwargs, run_id=run_id)
+            self.setup(**kwargs)
 
         def get_device(self):
             match = re.search("\d+$", self.run_id)
@@ -54,6 +61,13 @@ def exp_main(gridworld_args, wrapper_args, base, debug, **kwargs):
                 debug=debug,
                 **agent_args
             )
+
+        def _log_result(self, result: dict):
+            if self.writer is None:
+                return
+            total_num_steps = (self.i + 1) * self.processes * self.num_steps
+            for k, v in result.items():
+                self.writer.add_scalar(k, np.mean(v), total_num_steps)
 
     _Train(**kwargs).run()
 

@@ -46,7 +46,6 @@ class Train:
         cuda_deterministic,
         cuda,
         time_limit,
-        log_dir: Path,
         gamma,
         normalize,
         save_interval,
@@ -62,7 +61,6 @@ class Train:
         success_reward,
         synchronous,
         batch_size,
-        run_id,
         env_args,
         save_dir=None,
     ):
@@ -73,7 +71,6 @@ class Train:
             num_processes = 1
             cuda = False
         self.success_reward = success_reward
-        save_dir = save_dir or log_dir
 
         torch.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
@@ -88,10 +85,6 @@ class Train:
         if cuda:
             self.device = self.get_device()
         # print("Using device", self.device)
-
-        self.writer = None
-        if log_dir:
-            self.writer = SummaryWriter(logdir=str(log_dir))
 
         torch.set_num_threads(1)
 
@@ -199,20 +192,20 @@ class Train:
 
             total_num_steps = (self.i + 1) * self.processes * self.num_steps
 
-            if self.i % self.interval == 0 and self.writer is not None:
+            self.log_progress.update()
+            if self.i % self.interval == 0:
                 start = self.tick
                 self.tick = time.time()
                 fps = total_num_steps / (self.tick - start)
                 log_values = dict(fps=fps, **epoch_counter, **train_results)
-                if self.writer:
-                    self.writer.add_scalar("cumulative_success", total_num_steps)
 
+                def result():
                     for k, v in log_values.items():
                         mean = np.mean(v)
                         if not np.isnan(mean):
-                            self.writer.add_scalar(k, np.mean(v), total_num_steps)
+                            yield k, mean
 
-            self.log_progress.update()
+                self._log_result(dict(result()))
 
         envs.close()
         del envs
@@ -391,3 +384,6 @@ class Train:
         # if isinstance(self.envs.venv, VecNormalize):
         #     self.envs.venv.load_state_dict(state_dict["vec_normalize"])
         print(f"Loaded parameters from {load_path}.")
+
+    def _log_result(self, result):
+        pass
