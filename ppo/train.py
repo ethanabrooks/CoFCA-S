@@ -152,12 +152,13 @@ class Train:
         self.save_interval = save_interval
         self.time_limit = time_limit
         self.i = 0
+        envs.close()
+        del envs
         self.__train(last_save, start)
 
     def __train(self, last_save, start):
         tick = time.time()
         for i in itertools.count():
-            self.i += 1
             if i % self.interval == 0:
                 log_progress = tqdm(total=self.interval, desc="log ")
             if self.eval_interval and i % self.eval_interval == 0:
@@ -166,6 +167,7 @@ class Train:
                 envs.to(self.device)
                 obs = envs.reset()
                 self.rollouts.obs[0].copy_(obs)
+            self.i += 1
             epoch_counter = self.run_epoch(
                 obs=self.rollouts.obs[0],
                 rnn_hxs=self.rollouts.recurrent_hidden_states[0],
