@@ -88,7 +88,7 @@ parser.add_argument("--ray-redis-address")
 args = parser.parse_args()
 ray.init(redis_address=args.ray_redis_address)
 hyperparams = dict(
-    batch_size=[1, 10, 5],
+    num_batch=[1, 2],
     entropy_coef=ray.tune.uniform(low=0.01, high=0.04),
     hidden_size=[32, 64, 128, 512],
     learning_rate=ray.tune.uniform(low=0.0002, high=0.002),
