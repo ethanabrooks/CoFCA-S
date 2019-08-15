@@ -22,11 +22,6 @@ from ppo.update import PPO
 from ppo.utils import k_scalar_pairs
 from ppo.wrappers import AddTimestep, TransposeImage, VecPyTorch, VecPyTorchFrameStack
 
-try:
-    import dm_control2gym
-except ImportError:
-    pass
-
 
 # noinspection PyAttributeOutsideInit
 class Train(abc.ABC):
@@ -255,7 +250,7 @@ class Train(abc.ABC):
                 # print(f"Writing to {self.logdir}")
                 start = tick
                 tick = time.time()
-                fps = total_num_steps / (self.tick - start)
+                fps = total_num_steps / (tick - start)
                 yield dict(
                     k_scalar_pairs(
                         fps=fps, **epoch_counter, **train_results, **eval_result
