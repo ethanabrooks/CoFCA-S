@@ -178,17 +178,16 @@ class Train:
             self.rollouts.compute_returns(next_value=next_value)
             train_results = self.ppo.update(self.rollouts)
             self.rollouts.after_update()
-            total_num_steps = (self.i + 1) * self.processes * self.num_steps
             if self.log_progress is not None:
                 self.log_progress.update()
             # print(self.i, self.i % self.log_interval)
             if self.i % self.log_interval == 0 and self.writer is not None:
+                total_num_steps = (self.i + 1) * self.processes * self.num_steps
                 # print(f"Writing to {self.logdir}")
                 start = self.tick
                 self.tick = time.time()
                 fps = total_num_steps / (self.tick - start)
-                for k, v in k_scalar_pairs(fps=fps, **epoch_counter, **train_results):
-                    self.writer.add_scalar(k, np.mean(v), total_num_steps)
+                self.log_results(fps=fps, **epoch_counter, **train_results)
 
         envs.close()
         del envs
@@ -217,6 +216,11 @@ class Train:
         envs.close()
         del envs
         return dict(k_scalar_pairs(**{f"eval_{k}": v for k, v in eval_values.items()}))
+
+    def log_results(self, *args, **kwargs):
+        total_num_steps = (self.i + 1) * self.processes * self.num_steps
+        for k, v in k_scalar_pairs(*args, **kwargs):
+            self.writer.add_scalar(k, np.mean(v), total_num_steps)
 
     def run_epoch(self, obs, rnn_hxs, masks, envs, num_steps, counter):
         # noinspection PyTypeChecker

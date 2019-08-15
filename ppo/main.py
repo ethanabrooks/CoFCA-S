@@ -161,7 +161,7 @@ def exp_main(
                 ):
                     self._save(self.logdir)
                     self.last_save = time.time()
-                return super()._train()
+                self.log_results(**super()._train())
 
             def get_device(self):
                 match = re.search("\d+$", self.run_id)
