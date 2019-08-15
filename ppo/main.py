@@ -30,7 +30,7 @@ def cli():
 def exp_main(
     gridworld_args,
     wrapper_args,
-    base,
+    single_subtask,
     debug,
     tune,
     redis_address,
@@ -42,9 +42,8 @@ def exp_main(
         @staticmethod
         def make_env(time_limit, seed, rank, evaluation, env_id, add_timestep):
             env = ppo.events.Gridworld(**gridworld_args)
-            if base:
-                raise NotImplementedError
-                env = ppo.events.BaseWrapper(
+            if single_subtask:
+                env = ppo.events.SingleSubtaskWrapper(
                     **wrapper_args, evaluation=evaluation, env=env
                 )
             else:
@@ -69,7 +68,7 @@ def exp_main(
                 activation=activation,
                 entropy_coef=entropy_coef,
             )
-            if base:
+            if single_subtask:
                 return super().build_agent(envs, recurrent=recurrent, **agent_args)
             return Agent(
                 observation_space=envs.observation_space,
@@ -203,7 +202,7 @@ def exp_main(
 
 def exp_cli():
     parser = build_parser()
-    parser.add_argument("--base", action="store_true")
+    parser.add_argument("--single-subtask", action="store_true")
     parser.add_argument("--debug", action="store_true")
     parser.add_argument("--tune", action="store_true")
     parser.add_argument("--quiet", action="store_true")

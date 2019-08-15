@@ -202,14 +202,15 @@ class Wrapper(gym.Wrapper):
         return obs
 
 
-class BaseWrapper(Wrapper):
-    def __init__(self, subtask, **kwargs):
-        super().__init__(subtask, **kwargs)
+class SingleSubtaskWrapper(Wrapper):
+    def __init__(self, check_obs=True, **kwargs):
+        super().__init__(**kwargs, check_obs=False)
+        self._check_obs = check_obs
         self.observation_space = self.observation_space.spaces["base"]
 
     def observation(self, observation):
         obs = super().observation(observation)["base"]
-        if self.check_obs:
+        if self._check_obs:
             assert self.observation_space.contains(obs)
         return obs
 
