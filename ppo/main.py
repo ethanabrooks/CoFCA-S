@@ -115,7 +115,7 @@ def exp_main(
                     )
                     ppo_args.update(ppo_epoch=ppo_epoch, learning_rate=learning_rate)
                     self.setup(
-                        **kwargs, agent_args=agent_args, ppo_args=ppo_args, quiet=False
+                        **kwargs, agent_args=agent_args, ppo_args=ppo_args, quiet=True
                     )
 
                 setup(**config)
