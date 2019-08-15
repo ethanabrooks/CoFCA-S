@@ -84,12 +84,14 @@ def exp_main(
             entropy_coef=ray.tune.uniform(low=0.01, high=0.04),
             hidden_size=ray.tune.choice([32, 64, 128, 512]),
             num_layers=ray.tune.choice([0, 1, 2]),
-            learning_rate=ray.tune.uniform(low=0.0002, high=0.0001),
+            learning_rate=ray.tune.uniform(low=0.0002, high=0.005),
             ppo_epoch=ray.tune.sample_from(
-                lambda spec: int(
-                    0.0035
-                    / spec.config.learning_rate
-                    * np.random.uniform(low=-2, high=2)
+                lambda spec: max(
+                    1,
+                    int(
+                        0.0035 / spec.config.learning_rate
+                        + np.random.uniform(low=-2, high=2)
+                    ),
                 )
             ),
         )
