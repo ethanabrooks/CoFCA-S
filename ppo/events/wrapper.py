@@ -41,10 +41,11 @@ class Wrapper(gym.Wrapper):
         evaluation: bool,
         subtasks: List[str] = None,
         check_obs=True,
-        held_out: List[List[str]] = None,
+        test: List[List[str]] = None,
+        valid: List[List[str]] = None,
     ):
         super().__init__(env)
-        self.evaluation = evaluation
+        self.testing = evaluation
         self.agent_index = env.object_types.index(Agent)
         self.check_obs = check_obs
         self.n_active_subtasks = n_active_subtasks
@@ -84,7 +85,8 @@ class Wrapper(gym.Wrapper):
         base_shape = len(self.object_types), self.height, self.width
         subtasks = list(map(subtask_str, make_subtasks()))
         n_subtasks = len(subtasks)
-        self.held_out = [sorted({subtasks.index(s) for s in task}) for task in held_out]
+        self.test_set = [sorted({subtasks.index(s) for s in task}) for task in test]
+        self.valid_set = [sorted({subtasks.index(s) for s in task}) for task in valid]
         subtasks_nvec = n_subtasks * np.ones(n_active_subtasks)
         assert n_active_subtasks <= n_subtasks
         self.observation_space = spaces.Dict(
@@ -141,13 +143,13 @@ class Wrapper(gym.Wrapper):
 
     def reset(self, **kwargs):
         possible_subtasks = list(self.make_subtasks())
-        if self.evaluation:
-            self.subtask_indexes = self.held_out[self.random.choice(len(self.held_out))]
+        if self.testing:
+            self.subtask_indexes = self.test_set[self.random.choice(len(self.test_set))]
         else:
             self.subtask_indexes = self.random.choice(
                 len(possible_subtasks), size=self.n_active_subtasks, replace=False
             )
-            if sorted(self.subtask_indexes) in self.held_out:
+            if sorted(self.subtask_indexes) in self.test_set + self.valid_set:
                 # if not evaluation and chosen task is held-out
                 return self.reset(**kwargs)
         # for i, s in enumerate(possible_subtasks):
