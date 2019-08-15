@@ -1,5 +1,8 @@
+import itertools
 import re
 import time
+from abc import ABC
+
 import numpy as np
 
 from pathlib import Path
@@ -9,13 +12,14 @@ from gym.wrappers import TimeLimit
 from ray.tune.result import TIME_TOTAL_S
 from ray.tune.schedulers import AsyncHyperBandScheduler
 from rl_utils import hierarchical_parse_args
+from tensorboardX import SummaryWriter
 
 import ppo
 import ppo.events.agent
 from ppo.arguments import get_args, build_parser
 from ppo.events.agent import Agent
 from ppo.train import Train
-from ppo.utils import get_random_gpu, get_n_gpu
+from ppo.utils import get_random_gpu, get_n_gpu, k_scalar_pairs
 import torch
 
 
@@ -34,7 +38,7 @@ def exp_main(
     num_samples,
     **kwargs,
 ):
-    class TrainEvents(Train):
+    class TrainEvents(Train, ABC):
         @staticmethod
         def make_env(time_limit, seed, rank, evaluation, env_id, add_timestep):
             env = ppo.events.Gridworld(**gridworld_args)
@@ -52,10 +56,10 @@ def exp_main(
         def build_agent(
             self,
             envs,
-            hidden_size,
-            num_layers,
-            activation,
-            entropy_coef,
+            hidden_size=None,
+            num_layers=None,
+            activation=None,
+            entropy_coef=None,
             recurrent=None,
             device=None,
         ):
@@ -144,22 +148,43 @@ def exp_main(
     else:
 
         class _Train(TrainEvents):
-            def __init__(self, run_id, log_dir: Path, save_interval: int, **kwargs):
+            def __init__(
+                self,
+                run_id,
+                log_dir: Path,
+                save_interval: int,
+                num_processes: int,
+                num_steps: int,
+                **kwargs,
+            ):
+                self.num_steps = num_steps
+                self.num_processes = num_processes
                 self.run_id = run_id
                 self.save_interval = save_interval
-                self.logdir = str(log_dir)
-                self.setup(**kwargs)
+                self.log_dir = log_dir
+                if log_dir:
+                    self.writer = SummaryWriter(logdir=str(log_dir))
+                else:
+                    self.writer = None
+                self.setup(**kwargs, num_processes=num_processes, num_steps=num_steps)
                 self.last_save = time.time()  # dummy save
 
-            def _train(self):
-                if (
-                    self.logdir
-                    and self.save_interval
-                    and (time.time() - self.last_save >= self.save_interval)
-                ):
-                    self._save(self.logdir)
-                    self.last_save = time.time()
-                self.log_results(**super()._train())
+            def run(self):
+                for _ in itertools.count():
+                    for result in self.make_train_iterator():
+                        total_num_steps = (
+                            (self.i + 1) * self.num_processes * self.num_steps
+                        )
+                        for k, v in k_scalar_pairs(*result):
+                            self.writer.add_scalar(k, v, total_num_steps)
+
+                        if (
+                            self.log_dir
+                            and self.save_interval
+                            and (time.time() - self.last_save >= self.save_interval)
+                        ):
+                            self._save(str(self.log_dir))
+                            self.last_save = time.time()
 
             def get_device(self):
                 match = re.search("\d+$", self.run_id)
