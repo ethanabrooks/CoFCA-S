@@ -144,9 +144,6 @@ class Wrapper(gym.Wrapper):
 
     def reset(self, **kwargs):
         possible_subtasks = list(self.make_subtasks())
-        import ipdb
-
-        ipdb.set_trace()
         if self.testing:
             self.subtask_indexes = self.test_set[self.random.choice(len(self.test_set))]
         else:
