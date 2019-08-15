@@ -36,6 +36,7 @@ def exp_main(
     redis_address,
     log_dir,
     num_samples,
+    baseline,
     **kwargs,
 ):
     class TrainEvents(Train, ABC):
@@ -74,6 +75,7 @@ def exp_main(
                 observation_space=envs.observation_space,
                 action_space=envs.action_space,
                 debug=False if tune else debug,
+                baseline=baseline,
                 **agent_args,
             )
 
@@ -206,6 +208,7 @@ def exp_cli():
     parser.add_argument("--debug", action="store_true")
     parser.add_argument("--tune", action="store_true")
     parser.add_argument("--quiet", action="store_true")
+    parser.add_argument("--baseline", action="store_true")
     parser.add_argument("--num-samples", type=int, default=100)
     parser.add_argument("--redis-address")
     gridworld_parser = parser.add_argument_group("gridworld_args")

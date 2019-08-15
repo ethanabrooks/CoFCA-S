@@ -24,8 +24,10 @@ class Recurrence(nn.Module):
         hidden_size,
         num_layers,
         debug,
+        baseline,
     ):
         super().__init__()
+        self.baseline = baseline
         obs_spaces = Obs(**observation_space.spaces)
         self.obs_shape = d, h, w = obs_spaces.base.shape
         self.obs_sections = [int(np.prod(s.shape)) for s in obs_spaces]
@@ -130,7 +132,10 @@ class Recurrence(nn.Module):
         A = torch.cat([actions, hx.a.unsqueeze(0)], dim=0).long().squeeze(2)
         for t in range(T):
             p = F.softmax(p, dim=-1)
-            r = (p.unsqueeze(1) @ M).squeeze(1)
+            if self.baseline:
+                r = M.sum(1)
+            else:
+                r = (p.unsqueeze(1) @ M).squeeze(1)
             s = self.f((inputs.base[t], r))
             dist = self.actor(s)
             nonzero = F.pad(inputs.interactable[t], [5, 0], "constant", 1)
