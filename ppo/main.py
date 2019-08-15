@@ -88,18 +88,19 @@ def exp_main(
             entropy_coef=ray.tune.uniform(low=0.01, high=0.04),
             hidden_size=ray.tune.choice([32, 64, 128, 512]),
             num_layers=ray.tune.choice([0, 1, 2]),
-            learning_rate=ray.tune.uniform(low=1e-5, high=0.005),
-            ppo_epoch=ray.tune.sample_from(
-                lambda spec: max(
-                    1,
-                    int(
-                        1.84240459e06 * spec.config.learning_rate ** 2
-                        - 1.14376715e04 * spec.config.learning_rate
-                        + 1.89339209e01
-                        + np.random.uniform(low=-2, high=2)
-                    ),
-                )
-            ),
+            learning_rate=ray.tune.uniform(low=0.0001, high=0.005),
+            ppo_epoch=ray.tune.choice(list(range(5)))
+            # ppo_epoch=ray.tune.sample_from(
+            #     lambda spec: max(
+            #         1,
+            #         int(
+            #             1.84240459e06 * spec.config.learning_rate ** 2
+            #             - 1.14376715e04 * spec.config.learning_rate
+            #             + 1.89339209e01
+            #             + np.random.uniform(low=-2, high=2)
+            #         ),
+            #     )
+            # ),
         )
 
         class _Train(TrainEvents, ray.tune.Trainable):
