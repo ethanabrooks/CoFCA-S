@@ -178,7 +178,7 @@ def exp_main(
                         total_num_steps = (
                             (self.i + 1) * self.num_processes * self.num_steps
                         )
-                        for k, v in k_scalar_pairs(*result):
+                        for k, v in k_scalar_pairs(**result):
                             self.writer.add_scalar(k, v, total_num_steps)
 
                         if (
