@@ -12,7 +12,7 @@ from ppo.events.wrapper import Obs
 from ppo.layers import Parallel, Reshape, Product, Flatten
 from ppo.utils import init_
 
-RecurrentState = namedtuple("RecurrentState", "a a_probs v s p")
+RecurrentState = namedtuple("RecurrentState", "a a_probs v h p")
 
 
 class Recurrence(nn.Module):
@@ -36,8 +36,10 @@ class Recurrence(nn.Module):
 
         # networks
         self.task_embeddings = nn.Embedding(obs_spaces.subtasks.nvec[0], hidden_size)
-        self.parser_sections = [1, 1] + [hidden_size] * 3
-        self.parser = nn.GRU(int(hidden_size), int(sum(self.parser_sections)))
+        self.task_output_sections = [1, 1] + [hidden_size] * 3
+        self.task_encoder = nn.GRU(
+            int(hidden_size), int(sum(self.task_output_sections))
+        )
         self.f = nn.Sequential(
             Parallel(Reshape(1, d, h, w), Reshape(hidden_size, 1, 1, 1)),
             Product(),
@@ -58,12 +60,16 @@ class Recurrence(nn.Module):
             init_(nn.Linear(hidden_size * h * w, hidden_size)),
             activation,
         )
-        self.psi = nn.Sequential(
-            Parallel(Reshape(hidden_size, 1), Reshape(1, action_space.n)),
-            Product(),
-            Reshape(hidden_size * action_space.n),
-            init_(nn.Linear(hidden_size * action_space.n, hidden_size)),
-        )
+        if self.baseline:
+            self.gru = nn.GRUCell(hidden_size, hidden_size)
+        else:
+            self.gru = None
+            self.psi = nn.Sequential(
+                Parallel(Reshape(hidden_size, 1), Reshape(1, action_space.n)),
+                Product(),
+                Reshape(hidden_size * action_space.n),
+                init_(nn.Linear(hidden_size * action_space.n, hidden_size)),
+            )
         self.critic = init_(nn.Linear(hidden_size, 1))
         self.actor = Categorical(hidden_size, action_space.n)
         self.a_one_hots = nn.Embedding.from_pretrained(torch.eye(action_space.n))
@@ -72,7 +78,7 @@ class Recurrence(nn.Module):
             a=1,
             a_probs=action_space.n,
             v=1,
-            s=hidden_size,
+            h=hidden_size,
             p=obs_spaces.subtasks.nvec.size,
         )
 
@@ -116,9 +122,9 @@ class Recurrence(nn.Module):
 
         # build memory
         rnn_inputs = self.task_embeddings(inputs.subtasks[0].long()).transpose(0, 1)
-        X, _ = self.parser(rnn_inputs)
+        X, _ = self.task_encoder(rnn_inputs)
         c, p0, M, M_minus, M_plus = X.transpose(0, 1).split(
-            self.parser_sections, dim=-1
+            self.task_output_sections, dim=-1
         )
         c.squeeze_(-1)
         p0.squeeze_(-1)
@@ -128,6 +134,7 @@ class Recurrence(nn.Module):
         for x in hx:
             x.squeeze_(0)
         p = hx.p
+        h = hx.h
         p[new_episode] = p0[new_episode]
         A = torch.cat([actions, hx.a.unsqueeze(0)], dim=0).long().squeeze(2)
         for t in range(T):
@@ -137,6 +144,8 @@ class Recurrence(nn.Module):
             else:
                 r = (p.unsqueeze(1) @ M).squeeze(1)
             s = self.f((inputs.base[t], r))
+            if self.baseline:
+                s = h = self.gru(s, h)
             dist = self.actor(s)
             nonzero = F.pad(inputs.interactable[t], [5, 0], "constant", 1)
             probs = dist.probs * nonzero
@@ -146,16 +155,17 @@ class Recurrence(nn.Module):
                 probs=F.normalize(torch.clamp(probs, 0.0, 1.0), p=1, dim=-1)
             )
             self.sample_new(A[t], dist)
-            a = self.a_one_hots(A[t].flatten().long())
-            e = self.psi((s, a)).unsqueeze(1).expand(*M.shape)
-            self.print("c", c)
-            self.print("p1", p)
-            p = p + c * F.cosine_similarity(e, M_plus, dim=-1)
-            self.print("minus")
-            self.print(-F.cosine_similarity(e, M_plus, dim=-1))
-            self.print("p2", p)
-            self.print("plus")
-            self.print(F.cosine_similarity(e, M_minus, dim=-1))
-            p = p - c * F.cosine_similarity(e, M_minus, dim=-1)
-            self.print("p3", p)
-            yield RecurrentState(a=A[t], a_probs=dist.probs, v=self.critic(s), s=s, p=p)
+            if not self.baseline:
+                a = self.a_one_hots(A[t].flatten().long())
+                e = self.psi((s, a)).unsqueeze(1).expand(*M.shape)
+                self.print("c", c)
+                self.print("p1", p)
+                p = p + c * F.cosine_similarity(e, M_plus, dim=-1)
+                self.print("minus")
+                self.print(-F.cosine_similarity(e, M_plus, dim=-1))
+                self.print("p2", p)
+                self.print("plus")
+                self.print(F.cosine_similarity(e, M_minus, dim=-1))
+                p = p - c * F.cosine_similarity(e, M_minus, dim=-1)
+                self.print("p3", p)
+            yield RecurrentState(a=A[t], a_probs=dist.probs, v=self.critic(s), h=h, p=p)
