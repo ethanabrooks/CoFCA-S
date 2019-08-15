@@ -116,9 +116,7 @@ def exp_main(
                         num_layers=num_layers,
                     )
                     ppo_args.update(ppo_epoch=ppo_epoch, learning_rate=learning_rate)
-                    self.setup(
-                        **kwargs, agent_args=agent_args, ppo_args=ppo_args, quiet=True
-                    )
+                    self.setup(**kwargs, agent_args=agent_args, ppo_args=ppo_args)
 
                 setup(**config)
 
@@ -172,7 +170,7 @@ def exp_main(
 
                 return torch.device("cuda", device_num)
 
-        _Train(**kwargs, log_dir=log_dir, quiet=False).run()
+        _Train(**kwargs, log_dir=log_dir).run()
 
 
 def exp_cli():
@@ -180,6 +178,7 @@ def exp_cli():
     parser.add_argument("--base", action="store_true")
     parser.add_argument("--debug", action="store_true")
     parser.add_argument("--tune", action="store_true")
+    parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--num-samples", type=int, default=100)
     parser.add_argument("--redis-address")
     gridworld_parser = parser.add_argument_group("gridworld_args")

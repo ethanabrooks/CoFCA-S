@@ -138,24 +138,69 @@ class Train:
         self.counter = counter
         self.time_limit = time_limit
         self.i = 0
-        envs.close()
         self.tick = time.time()
         self.log_progress = None
+        envs.close()
         del envs
+        self.train_iterator = self.train_generator()
 
     def run(self):
-        for _ in itertools.count():
-            self._train()
+        for _ in itertools.count(self.i):
+            for _ in self.train_generator():
+                pass
 
     def _train(self):
+        try:
+            return next(self.train_iterator)
+        except StopIteration:
+            self.train_iterator = self.train_generator()
+            return self._train()
+
+    def train_generator(self):
+        eval_interval = self.eval_interval
+        if eval_interval:
+            envs = self.make_eval_envs(self.i)
+            envs.to(self.device)
+            # vec_norm = get_vec_normalize(eval_envs)
+            # if vec_norm is not None:
+            #     vec_norm.eval()
+            #     vec_norm.ob_rms = get_vec_normalize(envs).ob_rms
+            eval_recurrent_hidden_states = torch.zeros(
+                self.processes,
+                self.agent.recurrent_hidden_state_size,
+                device=self.device,
+            )
+            eval_masks = torch.zeros(self.processes, 1, device=self.device)
+            eval_counter = Counter()
+            print("Evaluating....")
+            eval_result = self.run_epoch(
+                envs=envs,
+                obs=envs.reset(),
+                rnn_hxs=eval_recurrent_hidden_states,
+                masks=eval_masks,
+                num_steps=max(self.num_steps, self.time_limit)
+                if self.time_limit
+                else self.num_steps,
+                counter=eval_counter,
+            )
+            envs.close()
+            del envs
+            eval_result = {f"eval_{k}": v for k, v in eval_result.items()}
+        else:
+            eval_result = {}
+
         envs = self.make_train_envs(self.i)
         envs.to(self.device)
         obs = envs.reset()
         self.rollouts.obs[0].copy_(obs)
-        iterator = range(self.eval_interval)
-        if not self.quiet:
-            iterator = tqdm(iterator, desc="eval")
-        for _ in iterator:
+        if self.eval_interval:
+            eval_iterator = range(self.i, self.eval_interval)
+            if not self.quiet:
+                eval_iterator = tqdm(eval_iterator, desc="eval")
+        else:
+            eval_iterator = itertools.count(self.i)
+
+        for _ in eval_iterator:
             if self.i % self.log_interval == 0 and not self.quiet:
                 self.log_progress = tqdm(total=self.log_interval, desc="log ")
             self.i += 1
@@ -187,35 +232,9 @@ class Train:
                 start = self.tick
                 self.tick = time.time()
                 fps = total_num_steps / (self.tick - start)
-                self.log_results(fps=fps, **epoch_counter, **train_results)
-
+                yield dict(fps=fps, **epoch_counter, **train_results, **eval_result)
         envs.close()
         del envs
-        envs = self.make_eval_envs(self.i)
-        envs.to(self.device)
-        # vec_norm = get_vec_normalize(eval_envs)
-        # if vec_norm is not None:
-        #     vec_norm.eval()
-        #     vec_norm.ob_rms = get_vec_normalize(envs).ob_rms
-        eval_recurrent_hidden_states = torch.zeros(
-            self.processes, self.agent.recurrent_hidden_state_size, device=self.device
-        )
-        eval_masks = torch.zeros(self.processes, 1, device=self.device)
-        eval_counter = Counter()
-        print("Evaluating....")
-        eval_values = self.run_epoch(
-            envs=envs,
-            obs=envs.reset(),
-            rnn_hxs=eval_recurrent_hidden_states,
-            masks=eval_masks,
-            num_steps=max(self.num_steps, self.time_limit)
-            if self.time_limit
-            else self.num_steps,
-            counter=eval_counter,
-        )
-        envs.close()
-        del envs
-        return dict(k_scalar_pairs(**{f"eval_{k}": v for k, v in eval_values.items()}))
 
     def log_results(self, *args, **kwargs):
         total_num_steps = (self.i + 1) * self.processes * self.num_steps
