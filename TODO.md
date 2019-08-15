@@ -1,2 +1,2 @@
-* implement baseline
-* implement test/validate
+* should c be attention-weighted?
+* make f recurrent
