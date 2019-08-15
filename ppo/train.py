@@ -153,7 +153,6 @@ class Train(abc.ABC):
         quiet,
         env_args,
     ):
-        eval_interval = eval_interval
         if eval_interval:
             envs = self.make_vec_envs(
                 **env_args,
@@ -212,7 +211,7 @@ class Train(abc.ABC):
         log_progress = None
 
         if eval_interval:
-            eval_iterator = range(self.i, eval_interval)
+            eval_iterator = range(self.i % eval_interval, eval_interval)
             if not quiet:
                 eval_iterator = tqdm(eval_iterator, desc="eval")
         else:
