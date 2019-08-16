@@ -26,6 +26,7 @@ from ppo.events.subtasks import (
 )
 from ppo.utils import RESET, REVERSE
 from ppo.events.objects import Agent
+import itertools
 
 Obs = namedtuple("Obs", "base subtasks interactable")
 
@@ -86,8 +87,8 @@ class Wrapper(gym.Wrapper):
         base_shape = len(self.object_types), self.height, self.width
         subtasks = list(map(subtask_str, make_subtasks()))
         n_subtasks = len(subtasks)
-        self.test_set = [sorted({subtasks.index(s) for s in task}) for task in test]
-        self.valid_set = [sorted({subtasks.index(s) for s in task}) for task in valid]
+        self.test_set = [{subtasks.index(s) for s in task} for task in test]
+        self.valid_set = [{subtasks.index(s) for s in task} for task in valid]
         subtasks_nvec = n_subtasks * np.ones(n_active_subtasks)
         assert n_active_subtasks <= n_subtasks
         self.observation_space = spaces.Dict(
@@ -145,15 +146,16 @@ class Wrapper(gym.Wrapper):
     def reset(self, **kwargs):
         possible_subtasks = list(self.make_subtasks())
         if self.testing:
-            self.subtask_indexes = self.test_set[self.random.choice(len(self.test_set))]
-        else:
-            self.subtask_indexes = self.random.choice(
-                len(possible_subtasks), size=self.n_active_subtasks, replace=False
+            self.subtask_indexes = list(
+                self.test_set[self.random.choice(len(self.test_set))]
             )
-            if sorted(self.subtask_indexes) in self.test_set + self.valid_set:
-                # if not evaluation and chosen task is held-out
-                print("Chosen task in test/validation set. Resampling...")
-                return self.reset(**kwargs)
+        else:
+            exclude = self.test_set + self.valid_set
+            combinations = itertools.combinations(range(len(possible_subtasks)), 2)
+            allowed_subtasks = [c for c in combinations if set(c) not in exclude]
+            self.subtask_indexes = list(
+                allowed_subtasks[self.random.choice(len(allowed_subtasks))]
+            )
         # for i, s in enumerate(possible_subtasks):
         # print(i, s)
         # self.subtask_indexes = np.array([3, 5])
