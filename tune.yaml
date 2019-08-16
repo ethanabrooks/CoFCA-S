@@ -33,9 +33,26 @@ docker:
 # Local specific configuration.
 provider:
     type: local
-    head_ip: 141.212.113.173
+    head_ip: 141.212.113.180
     worker_ips: [
-141.212.113.250
+ #141.212.113.88, # rldl1 down
+ 141.213.3.138, # rldl2 
+ #141.213.3.134, # rldl3 risto
+ 141.213.3.21, # rldl4 
+ 141.213.3.28, # rldl5 
+ 141.213.3.27, # rldl6 
+ 141.213.3.130, # rldl7 
+ 141.213.3.4, # rldl8 
+ 141.212.113.254, # rldl9 
+ 141.212.113.23, # rldl10 
+ 141.212.113.249, # rldl11 
+ 141.212.113.98, # rldl12 
+ 141.213.3.71, # rldl13 
+ 141.212.113.59, # rldl14 
+ 141.212.113.250, # rldl15 
+ 141.212.113.173, # rldl16 
+ 141.212.113.180, # rldl17 
+
     ]
 
 # How Ray will authenticate with newly launched nodes.
