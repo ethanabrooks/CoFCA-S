@@ -213,13 +213,13 @@ class Train(abc.ABC):
         if eval_interval:
             eval_iterator = range(self.i % eval_interval, eval_interval)
             if not quiet:
-                eval_iterator = tqdm(eval_iterator, desc="eval")
+                eval_iterator = tqdm(eval_iterator, desc="next eval")
         else:
             eval_iterator = itertools.count(self.i)
 
         for _ in eval_iterator:
             if self.i % log_interval == 0 and not quiet:
-                log_progress = tqdm(total=log_interval, desc="log ")
+                log_progress = tqdm(total=log_interval, desc="next log")
             self.i += 1
             epoch_counter = self.run_epoch(
                 obs=self.rollouts.obs[0],
