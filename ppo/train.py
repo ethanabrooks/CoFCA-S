@@ -178,7 +178,6 @@ class Train(abc.ABC):
             )
             eval_masks = torch.zeros(num_processes, 1, device=self.device)
             eval_counter = Counter()
-            print("Evaluating....")
             eval_result = self.run_epoch(
                 envs=envs,
                 obs=envs.reset(),
