@@ -52,7 +52,7 @@ class Train(abc.ABC):
     ):
         if render_eval and not render:
             eval_interval = 1
-        if render:
+        if render or render_eval:
             ppo_args.update(ppo_epoch=0)
             num_processes = 1
             cuda = False
