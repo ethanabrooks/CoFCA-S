@@ -25,5 +25,10 @@ setup(
         "bin/reproduce",
     ],
     entry_points=dict(console_scripts=["ppo=ppo.main:cli", "exp=ppo.main:exp_cli"]),
-    install_requires=[],
+    install_requires=[
+        "ray==0.7.3",
+        "tensorboardX==1.8",
+        "opencv-python==4.1.0.25",
+        "psutil==5.6.3",
+    ],
 )
