@@ -37,7 +37,6 @@ def exp_main(
     log_dir,
     num_samples,
     baseline,
-    seed,
     **kwargs,
 ):
     class TrainEvents(Train, ABC):
@@ -125,7 +124,7 @@ def exp_main(
                         num_layers=num_layers,
                     )
                     ppo_args.update(ppo_epoch=ppo_epoch, learning_rate=learning_rate)
-                    self.setup(**kwargs, seed=seed, agent_args=agent_args, ppo_args=ppo_args)
+                    self.setup(**kwargs, agent_args=agent_args, ppo_args=ppo_args)
 
                 setup(**config)
 
@@ -200,7 +199,7 @@ def exp_main(
 
                 return torch.device("cuda", device_num)
 
-        _Train(**kwargs, seed=seed, log_dir=log_dir).run()
+        _Train(**kwargs, log_dir=log_dir).run()
 
 
 def exp_cli():
