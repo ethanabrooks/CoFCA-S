@@ -178,7 +178,6 @@ class Train(abc.ABC):
             )
             eval_masks = torch.zeros(num_processes, 1, device=self.device)
             eval_counter = Counter()
-            print("Evaluating....")
             eval_result = self.run_epoch(
                 envs=envs,
                 obs=envs.reset(),
@@ -187,6 +186,7 @@ class Train(abc.ABC):
                 num_steps=max(num_steps, time_limit) if time_limit else num_steps,
                 counter=eval_counter,
                 success_reward=success_reward,
+                quiet=quiet,
             )
             envs.close()
             del envs
@@ -229,6 +229,7 @@ class Train(abc.ABC):
                 num_steps=num_steps,
                 counter=self.counter,
                 success_reward=success_reward,
+                quiet=True,
             )
 
             with torch.no_grad():
@@ -258,10 +259,15 @@ class Train(abc.ABC):
         envs.close()
         del envs
 
-    def run_epoch(self, obs, rnn_hxs, masks, envs, num_steps, counter, success_reward):
+    def run_epoch(
+        self, obs, rnn_hxs, masks, envs, num_steps, counter, success_reward, quiet
+    ):
         # noinspection PyTypeChecker
         episode_counter = Counter(rewards=[], time_steps=[], success=[])
-        for step in range(num_steps):
+        iterator = range(num_steps)
+        if not quiet:
+            iterator = tqdm(iterator, desc="evaluting")
+        for step in iterator:
             with torch.no_grad():
                 act = self.agent(
                     inputs=obs, rnn_hxs=rnn_hxs, masks=masks
