@@ -12,7 +12,7 @@ from ppo.events.wrapper import Obs
 from ppo.layers import Parallel, Reshape, Product, Flatten
 from ppo.utils import init_
 
-RecurrentState = namedtuple("RecurrentState", "a a_probs v h p")
+RecurrentState = namedtuple("RecurrentState", "a a_probs v s p")
 
 
 class Recurrence(nn.Module):
@@ -57,13 +57,11 @@ class Recurrence(nn.Module):
             ],
             activation,
             Flatten(),
-            init_(nn.Linear(hidden_size * h * w, hidden_size)),
+            # init_(nn.Linear(hidden_size * h * w, hidden_size)),
             activation,
         )
-        if self.baseline:
-            self.gru = nn.GRUCell(hidden_size, hidden_size)
-        else:
-            self.gru = None
+        self.gru = nn.GRUCell(hidden_size * h * w, hidden_size)
+        if not self.baseline:
             self.psi = nn.Sequential(
                 Parallel(Reshape(hidden_size, 1), Reshape(1, action_space.n)),
                 Product(),
@@ -78,7 +76,7 @@ class Recurrence(nn.Module):
             a=1,
             a_probs=action_space.n,
             v=1,
-            h=hidden_size,
+            s=hidden_size,
             p=obs_spaces.subtasks.nvec.size,
         )
 
@@ -134,7 +132,7 @@ class Recurrence(nn.Module):
         for x in hx:
             x.squeeze_(0)
         p = hx.p
-        h = hx.h
+        s = hx.s
         p[new_episode] = p0[new_episode]
         A = torch.cat([actions, hx.a.unsqueeze(0)], dim=0).long().squeeze(2)
         for t in range(T):
@@ -143,9 +141,7 @@ class Recurrence(nn.Module):
                 r = M.sum(1)
             else:
                 r = (p.unsqueeze(1) @ M).squeeze(1)
-            s = self.f((inputs.base[t], r))
-            if self.baseline:
-                s = h = self.gru(s, h)
+            s = self.gru(self.f((inputs.base[t], r)), s)
             dist = self.actor(s)
             nonzero = F.pad(inputs.interactable[t], [5, 0], "constant", 1)
             probs = dist.probs * nonzero
@@ -168,4 +164,4 @@ class Recurrence(nn.Module):
                 self.print(F.cosine_similarity(e, M_minus, dim=-1))
                 p = p - c * F.cosine_similarity(e, M_minus, dim=-1)
                 self.print("p3", p)
-            yield RecurrentState(a=A[t], a_probs=dist.probs, v=self.critic(s), h=h, p=p)
+            yield RecurrentState(a=A[t], a_probs=dist.probs, v=self.critic(s), s=s, p=p)
