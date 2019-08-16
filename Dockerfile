@@ -21,4 +21,6 @@ RUN curl -o ~/miniconda.sh -O  https://repo.continuum.io/miniconda/Miniconda3-la
 ENV PATH /opt/conda/bin:$PATH
 # This must be done before pip so that requirements.txt is available
 WORKDIR /ppo
+COPY environment.yml .
+RUN conda env create -f environment.yml
 COPY . .
