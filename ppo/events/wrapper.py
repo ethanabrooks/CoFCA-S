@@ -152,6 +152,7 @@ class Wrapper(gym.Wrapper):
             )
             if sorted(self.subtask_indexes) in self.test_set + self.valid_set:
                 # if not evaluation and chosen task is held-out
+                print("Chosen task in test/validation set. Resampling...")
                 return self.reset(**kwargs)
         # for i, s in enumerate(possible_subtasks):
         # print(i, s)
