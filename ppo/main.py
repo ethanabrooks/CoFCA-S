@@ -227,7 +227,7 @@ def exp_cli():
     wrapper_parser.add_argument("--n-active-subtasks", help="", type=int, required=True)
     wrapper_parser.add_argument("--watch-baby-range", help="", type=int, default=2)
     wrapper_parser.add_argument("--avoid-dog-range", help="", type=int, default=2)
-    wrapper_parser.add_argument("--door-time-limit", help="", type=int, default=10)
+    wrapper_parser.add_argument("--door-time-limit", help="", type=int, default=7)
     wrapper_parser.add_argument("--max-time-outside", help="", type=int, default=15)
     wrapper_parser.add_argument("--subtask", dest="subtasks", action="append")
     wrapper_parser.add_argument("--test", nargs="*", action="append", default=[])
