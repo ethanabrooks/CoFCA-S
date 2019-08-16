@@ -152,7 +152,9 @@ class Wrapper(gym.Wrapper):
             )
         else:
             exclude = self.test_set + self.valid_set
-            combinations = itertools.combinations(range(len(possible_subtasks)), 2)
+            combinations = itertools.combinations(
+                range(len(possible_subtasks)), self.n_active_subtasks
+            )
             allowed_subtasks = [c for c in combinations if set(c) not in exclude]
             self.subtask_indexes = list(
                 allowed_subtasks[self.random.choice(len(allowed_subtasks))]
