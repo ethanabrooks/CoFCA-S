@@ -39,12 +39,13 @@ class Gridworld(gym.Env):
         mess_prob: float,
         fly_prob: float,
         toward_cat_prob: float,
+        seed: int,
     ):
         super().__init__()
         self.object_idxs = {}
         self.height = height
         self.width = width
-        self.random, seed = seeding.np_random(0)
+        self.random, seed = seeding.np_random(seed)
         self.grasping = None
         multiple_object_types = [Mess, Fly]
         self.object_types = object_types = [

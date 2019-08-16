@@ -107,10 +107,10 @@ class Train(abc.ABC):
         self.ppo = PPO(agent=self.agent, num_batch=num_batch, **ppo_args)
         self.counter = Counter()
 
+        self.i = 0
         if load_path:
             self._restore(load_path)
 
-        self.i = 0
         self.make_train_iterator = lambda: self.train_generator(
             num_steps=num_steps,
             num_processes=num_processes,

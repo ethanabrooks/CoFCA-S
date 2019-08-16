@@ -37,12 +37,13 @@ def exp_main(
     log_dir,
     num_samples,
     baseline,
+    seed,
     **kwargs,
 ):
     class TrainEvents(Train, ABC):
         @staticmethod
         def make_env(time_limit, seed, rank, evaluation, env_id, add_timestep):
-            env = ppo.events.Gridworld(**gridworld_args)
+            env = ppo.events.Gridworld(**gridworld_args, seed=seed)
             if single_subtask:
                 env = ppo.events.SingleSubtaskWrapper(
                     **wrapper_args, evaluation=evaluation, env=env
@@ -124,7 +125,7 @@ def exp_main(
                         num_layers=num_layers,
                     )
                     ppo_args.update(ppo_epoch=ppo_epoch, learning_rate=learning_rate)
-                    self.setup(**kwargs, agent_args=agent_args, ppo_args=ppo_args)
+                    self.setup(**kwargs, seed=seed, agent_args=agent_args, ppo_args=ppo_args)
 
                 setup(**config)
 
@@ -199,7 +200,7 @@ def exp_main(
 
                 return torch.device("cuda", device_num)
 
-        _Train(**kwargs, log_dir=log_dir).run()
+        _Train(**kwargs, seed=seed, log_dir=log_dir).run()
 
 
 def exp_cli():
