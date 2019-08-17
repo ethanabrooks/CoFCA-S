@@ -12,7 +12,7 @@ from ppo.events.wrapper import Obs
 from ppo.layers import Parallel, Reshape, Product, Flatten
 from ppo.utils import init_
 
-RecurrentState = namedtuple("RecurrentState", "a a_probs v s p")
+RecurrentState = namedtuple("RecurrentState", "a a_probs v h p")
 
 
 class Recurrence(nn.Module):
@@ -25,8 +25,12 @@ class Recurrence(nn.Module):
         num_layers,
         debug,
         baseline,
+        use_M_plus_minus,
+        feed_r_initially,
     ):
         super().__init__()
+        self.feed_r_initially = feed_r_initially
+        self.use_M_plus_minus = use_M_plus_minus
         self.baseline = baseline
         obs_spaces = Obs(**observation_space.spaces)
         self.obs_shape = d, h, w = obs_spaces.base.shape
@@ -41,10 +45,19 @@ class Recurrence(nn.Module):
             int(hidden_size), int(sum(self.task_output_sections))
         )
         self.f = nn.Sequential(
-            Parallel(Reshape(1, d, h, w), Reshape(hidden_size, 1, 1, 1)),
-            Product(),
-            Reshape(d * hidden_size, h, w),
-            init_(nn.Conv2d(d * hidden_size, hidden_size, kernel_size=1), activation),
+            *(
+                [
+                    Parallel(Reshape(1, d, h, w), Reshape(hidden_size, 1, 1, 1)),
+                    Product(),
+                    Reshape(d * hidden_size, h, w),
+                    init_(
+                        nn.Conv2d(d * hidden_size, hidden_size, kernel_size=1),
+                        activation,
+                    ),
+                ]
+                if feed_r_initially
+                else [init_(nn.Conv2d(d, hidden_size, kernel_size=1), activation)]
+            ),
             activation,
             *[
                 nn.Sequential(
@@ -57,10 +70,16 @@ class Recurrence(nn.Module):
             ],
             activation,
             Flatten(),
-            # init_(nn.Linear(hidden_size * h * w, hidden_size)),
+            *(
+                []
+                if feed_r_initially
+                else [init_(nn.Linear(hidden_size * h * w, hidden_size))]
+            ),
             activation,
         )
-        self.gru = nn.GRUCell(hidden_size * h * w, hidden_size)
+        self.gru = nn.GRUCell(
+            hidden_size * h * w if feed_r_initially else hidden_size, hidden_size
+        )
         if not self.baseline:
             self.psi = nn.Sequential(
                 Parallel(Reshape(hidden_size, 1), Reshape(1, action_space.n)),
@@ -76,7 +95,7 @@ class Recurrence(nn.Module):
             a=1,
             a_probs=action_space.n,
             v=1,
-            s=hidden_size,
+            h=hidden_size,
             p=obs_spaces.subtasks.nvec.size,
         )
 
@@ -121,30 +140,42 @@ class Recurrence(nn.Module):
         # build memory
         rnn_inputs = self.task_embeddings(inputs.subtasks[0].long()).transpose(0, 1)
         X, _ = self.task_encoder(rnn_inputs)
-        c, p0, M, M_minus, M_plus = X.transpose(0, 1).split(
-            self.task_output_sections, dim=-1
-        )
-        c.squeeze_(-1)
+
+        encoding = X.transpose(0, 1).split(self.task_output_sections, dim=-1)
+        cp, p0, M = encoding[:3]
+        M_minus = encoding[4] if self.use_M_plus_minus else M
+        M_plus = encoding[5] if self.use_M_plus_minus else M
+
+        cp.squeeze_(-1)
         p0.squeeze_(-1)
 
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
-        for x in hx:
-            x.squeeze_(0)
+        for _x in hx:
+            _x.squeeze_(0)
         p = hx.p
-        s = hx.s
+        h = hx.h
         p[new_episode] = p0[new_episode]
         A = torch.cat([actions, hx.a.unsqueeze(0)], dim=0).long().squeeze(2)
+
         for t in range(T):
             p = F.softmax(p, dim=-1)
             if self.baseline:
                 r = M.sum(1)
             else:
                 r = (p.unsqueeze(1) @ M).squeeze(1)
-            s = self.gru(self.f((inputs.base[t], r)), s)
+            if self.feed_r_initially or self.baseline:
+                # noinspection PyTypeChecker
+                s = self.gru(self.f((inputs.base[t], r)), h)
+            else:
+                x = self.f(inputs.base[t])
+                s = self.gru(r * x, h)
+
             dist = self.actor(s)
             nonzero = F.pad(inputs.interactable[t], [5, 0], "constant", 1)
             probs = dist.probs * nonzero
+
+            # noinspection PyTypeChecker
             deficit = 1 - probs.sum(-1, keepdim=True)
             probs = probs + F.normalize(nonzero, p=1, dim=-1) * deficit
             dist = FixedCategorical(
@@ -154,7 +185,7 @@ class Recurrence(nn.Module):
             if not self.baseline:
                 a = self.a_one_hots(A[t].flatten().long())
                 e = self.psi((s, a)).unsqueeze(1).expand(*M.shape)
-                self.print("c", c)
+                self.print("c", cp)
                 self.print("p1", p)
                 p_plus = F.cosine_similarity(e, M_plus, dim=-1)
                 p_minus = F.cosine_similarity(e, M_minus, dim=-1)
@@ -162,6 +193,6 @@ class Recurrence(nn.Module):
                 self.print(p_minus)
                 self.print("plus")
                 self.print(p_plus)
-                p = p + c * (p_plus - p_minus)
+                p = p + cp * (p_plus - p_minus)
                 self.print("p2", p)
-            yield RecurrentState(a=A[t], a_probs=dist.probs, v=self.critic(s), s=s, p=p)
+            yield RecurrentState(a=A[t], a_probs=dist.probs, v=self.critic(h), h=h, p=p)

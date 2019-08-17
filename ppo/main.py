@@ -56,21 +56,22 @@ def exp_main(
         def build_agent(
             self,
             envs,
-            hidden_size=None,
-            num_layers=None,
-            activation=None,
-            entropy_coef=None,
-            recurrent=None,
+            # hidden_size=None,
+            # num_layers=None,
+            # activation=None,
+            # entropy_coef=None,
+            # recurrent=None,
             device=None,
+            **agent_args,
         ):
-            agent_args = dict(
-                hidden_size=hidden_size,
-                num_layers=num_layers,
-                activation=activation,
-                entropy_coef=entropy_coef,
-            )
+            # agent_args = dict(
+            #     hidden_size=hidden_size,
+            #     num_layers=num_layers,
+            #     activation=activation,
+            #     entropy_coef=entropy_coef,
+            # )
             if single_subtask:
-                return super().build_agent(envs, recurrent=recurrent, **agent_args)
+                return super().build_agent(envs, **agent_args)
             return Agent(
                 observation_space=envs.observation_space,
                 action_space=envs.action_space,
@@ -204,7 +205,8 @@ def exp_main(
 
 
 def exp_cli():
-    parser = build_parser()
+    parsers = build_parser()
+    parser = parsers.main
     parser.add_argument("--single-subtask", action="store_true")
     parser.add_argument("--debug", action="store_true")
     parser.add_argument("--tune", action="store_true")
@@ -212,6 +214,8 @@ def exp_cli():
     parser.add_argument("--baseline", action="store_true")
     parser.add_argument("--num-samples", type=int, default=100)
     parser.add_argument("--redis-address")
+    parsers.agent.add_argument("--feed-r-initially", action="store_true")
+    parsers.agent.add_argument("--use-M-plus-minus", action="store_true")
     gridworld_parser = parser.add_argument_group("gridworld_args")
     gridworld_parser.add_argument("--height", help="", type=int, default=4)
     gridworld_parser.add_argument("--width", help="", type=int, default=4)
