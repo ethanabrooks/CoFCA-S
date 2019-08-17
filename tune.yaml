@@ -33,7 +33,7 @@ docker:
 # Local specific configuration.
 provider:
     type: local
-    head_ip: 141.213.3.138
+    head_ip: 141.212.113.59
     worker_ips: []
     # 141.212.113.88 # rldl1 down
     #- 141.213.3.138 # rldl2 
