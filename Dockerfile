@@ -41,3 +41,4 @@ RUN pip install \
       "psutil==5.6.3"
 COPY . .
 RUN pip install -e .
+CMD ["bash", "tune.sh", "141.212.113.59:6379"]
