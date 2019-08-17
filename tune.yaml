@@ -26,7 +26,7 @@ idle_timeout_minutes: 5
 # and opens all the necessary ports to support the Ray cluster.
 # Empty string means disabled. Assumes Docker is installed.
 docker:
-    image: nvidia/cuda:10.0-cudnn7-devel-ubuntu18.04
+    image: ppo
     container_name: ray_docker
     run_options: []  # Extra options to pass into "docker run"
 
@@ -78,7 +78,7 @@ file_mounts: {}
 initialization_commands: [cd ~/ppo && git pull]
 
 # List of shell commands to run to set up each nodes.
-setup_commands: []
+setup_commands: [bash tune.sh]
 
 # Custom commands that will be run on the head node after common setup.
 head_setup_commands: []
@@ -87,11 +87,11 @@ head_setup_commands: []
 worker_setup_commands: []
 
 # Command to start ray on the head node. You don't need to change this.
-head_start_ray_commands: []
-    #- ray stop
-    #- ulimit -c unlimited && ray start --head --redis-port=6379 --autoscaling-config=~/ray_bootstrap_config.yaml
+head_start_ray_commands: 
+    - ray stop
+    - ulimit -c unlimited && ray start --head --redis-port=6379 --autoscaling-config=~/ray_bootstrap_config.yaml
 
 # Command to start ray on worker nodes. You don't need to change this.
-worker_start_ray_commands: []
-    #- ray stop
-    #- ray start --redis-address=$RAY_HEAD_IP:6379
+worker_start_ray_commands:
+    - ray stop
+    - ray start --redis-address=$RAY_HEAD_IP:6379
