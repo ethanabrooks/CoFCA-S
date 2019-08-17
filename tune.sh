@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 nice python ppo/main.py \
   --cuda-deterministic \
   --log-dir=/home/ethanbro/tune_results \
@@ -5,7 +7,7 @@ nice python ppo/main.py \
   --num-processes="300" \
   \
   --tune \
-  --redis-address 141.212.113.250:6379 \
+  --redis-address $1 \
   \
   --subtask="AnswerDoor" \
   --subtask="AvoidDog" \

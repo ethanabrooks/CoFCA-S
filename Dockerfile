@@ -33,5 +33,11 @@ RUN conda install -y pandas
 RUN conda install -y -c pytorch pytorch 
 COPY environment.yml .
 RUN conda env create -f environment.yml
+COPY setup.py .
+RUN pip install \
+      "ray[debug]==0.7.3" \ 
+      "tensorboardX==1.8" \ 
+      "opencv-python==4.1.0.25" \ 
+      "psutil==5.6.3"
 COPY . .
 RUN pip install -e .
