@@ -11,10 +11,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
          libsm6 \
          libxext6 \
          libxrender-dev \
+         redis-server \
          libpng-dev && \
      rm -rf /var/lib/apt/lists/*
 
-
+RUN service redis-server start
 RUN curl -o ~/miniconda.sh -O  https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh  && \
      chmod +x ~/miniconda.sh && \
      ~/miniconda.sh -b -p /opt/conda && \
