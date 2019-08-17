@@ -225,6 +225,7 @@ def exp_cli():
     gridworld_parser.add_argument("--toward-cat-prob", help="", type=float, default=0.5)
     wrapper_parser = parser.add_argument_group("wrapper_args")
     wrapper_parser.add_argument("--n-active-subtasks", help="", type=int, required=True)
+    wrapper_parser.add_argument("--vision-range", help="", type=float, default=1)
     wrapper_parser.add_argument("--watch-baby-range", help="", type=int, default=2)
     wrapper_parser.add_argument("--avoid-dog-range", help="", type=int, default=2)
     wrapper_parser.add_argument("--door-time-limit", help="", type=int, default=7)

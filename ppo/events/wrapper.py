@@ -41,12 +41,14 @@ class Wrapper(gym.Wrapper):
         max_time_outside: int,
         n_active_subtasks: int,
         evaluation: bool,
+        vision_range: int,
         subtasks: List[str] = None,
         check_obs=True,
         test: List[List[str]] = None,
         valid: List[List[str]] = None,
     ):
         super().__init__(env)
+        self.vision_range = vision_range
         self.testing = evaluation
         self.agent_index = env.object_types.index(Agent)
         self.check_obs = check_obs
@@ -87,8 +89,8 @@ class Wrapper(gym.Wrapper):
         base_shape = len(self.object_types), self.height, self.width
         subtasks = list(map(subtask_str, make_subtasks()))
         n_subtasks = len(subtasks)
-        self.test_set = [{subtasks.index(s) for s in task} for task in test]
-        self.valid_set = [{subtasks.index(s) for s in task} for task in valid]
+        self.test_set = [{subtasks.index(s) for s in task} for task in test or []]
+        self.valid_set = [{subtasks.index(s) for s in task} for task in valid or []]
         subtasks_nvec = n_subtasks * np.ones(n_active_subtasks)
         assert n_active_subtasks <= n_subtasks
         self.observation_space = spaces.Dict(
@@ -186,6 +188,10 @@ class Wrapper(gym.Wrapper):
         dims = self.height, self.width
         object_pos = defaultdict(lambda: np.zeros((self.height, self.width)))
         interactable = np.zeros(len(self.object_types))
+        env = self.env.unwrapped
+        pos = np.array(env.agent.pos).reshape(2, 1, 1)
+        indexes = np.stack(np.meshgrid(np.arange(self.height), np.arange(self.width)))
+        eyeshot = np.max(indexes - pos, axis=0) <= self.vision_range
         for obj in observation.objects:
             if obj.pos is not None:
                 index = np.ravel_multi_index(obj.pos, dims)
@@ -195,8 +201,7 @@ class Wrapper(gym.Wrapper):
                     c *= 2
 
                 t = type(obj)
-                object_pos[t] += c * one_hot
-                env = self.env.unwrapped
+                object_pos[t] += c * eyeshot * one_hot
                 if obj.pos == env.agent.pos and obj is not env.agent:
                     interactable[env.object_types.index(t)] = 1
         base = np.stack([object_pos[k] for k in self.object_types])
@@ -232,6 +237,7 @@ if __name__ == "__main__":
             avoid_dog_range=2,
             door_time_limit=10,
             max_time_outside=15,
+            vision_range=1,
             env=ppo.events.Gridworld(
                 cook_time=2,
                 time_to_heat_oven=3,
@@ -243,7 +249,9 @@ if __name__ == "__main__":
                 fly_prob=0.005,
                 height=4,
                 width=4,
+                seed=0,
             ),
+            evaluation=False,
         ),
     )
     ppo.events.keyboard_control.run(env, actions="xswda1234567890", seed=0)
