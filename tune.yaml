@@ -1,5 +1,5 @@
 # An unique identifier for the head node and workers of this cluster.
-cluster_name: rldl
+cluster_name: local-default
 
 ## NOTE: Typically for local clusters, min_workers == initial_workers == max_workers.
 
@@ -9,12 +9,12 @@ cluster_name: rldl
 min_workers: 0
 # The initial number of worker nodes to launch in addition to the head node.
 # Typically, min_workers == initial_workers == max_workers.
-initial_workers: 8
+#initial_workers: 1
 
 # The maximum number of workers nodes to launch in addition to the head node.
 # This takes precedence over min_workers.
 # Typically, min_workers == initial_workers == max_workers.
-max_workers: 16
+max_workers: 2
 
 # Autoscaling parameters.
 # Ignore this if min_workers == initial_workers == max_workers.
@@ -26,31 +26,31 @@ idle_timeout_minutes: 5
 # and opens all the necessary ports to support the Ray cluster.
 # Empty string means disabled. Assumes Docker is installed.
 docker:
-    image: "ppo" # e.g., tensorflow/tensorflow:1.5.0-py3
-    container_name: "ray_docker" # e.g. ray_docker
+    image: nvidia/cuda:10.0-cudnn7-devel-ubuntu18.04
+    container_name: ray_docker
     run_options: []  # Extra options to pass into "docker run"
 
 # Local specific configuration.
 provider:
     type: local
-    head_ip: 141.212.113.180
-    worker_ips:      
+    head_ip: 141.213.3.138
+    worker_ips: []
     # 141.212.113.88 # rldl1 down
-    - 141.213.3.138 # rldl2 
+    #- 141.213.3.138 # rldl2 
     # 141.213.3.134 # rldl3 risto
-    - 141.213.3.21 # rldl4 
-    # 141.213.3.28 # rldl5 no access
-    - 141.213.3.27 # rldl6 
-    - 141.213.3.130 # rldl7 
-    - 141.213.3.4 # rldl8 
-    - 141.212.113.254 # rldl9 
-    # 141.212.113.23 # rldl10 Max
-    - 141.212.113.249 # rldl11 
-    - 141.212.113.98 # rldl12 
-    - 141.213.3.71 # rldl13 
-    - 141.212.113.59 # rldl14 
-    - 141.212.113.250 # rldl15 
-    - 141.212.113.173 # rldl16 
+    #- 141.213.3.21 # rldl4 
+    ## 141.213.3.28 # rldl5 no access
+    #- 141.213.3.27 # rldl6 
+    #- 141.213.3.130 # rldl7 
+    #- 141.213.3.4 # rldl8 
+    #- 141.212.113.254 # rldl9 
+    ## 141.212.113.23 # rldl10 Max
+    #- 141.212.113.249 # rldl11 
+    #- 141.212.113.98 # rldl12 
+    #- 141.213.3.71 # rldl13 
+    #- 141.212.113.59 # rldl14 
+    #- 141.212.113.250 # rldl15 
+    #- 141.212.113.173 # rldl16 
     # 141.212.113.180 # rldl17 Head
 
 
@@ -75,9 +75,7 @@ file_mounts: {}
 # List of commands that will be run before `setup_commands`. If docker is
 # enabled, these commands will run outside the container and before docker
 # is setup.
-initialization_commands: 
-  - cd ~/ppo
-  - git pull
+initialization_commands: [cd ~/ppo && git pull]
 
 # List of shell commands to run to set up each nodes.
 setup_commands: []
@@ -89,11 +87,11 @@ head_setup_commands: []
 worker_setup_commands: []
 
 # Command to start ray on the head node. You don't need to change this.
-head_start_ray_commands:
-    - ray stop
-    - ulimit -c unlimited && ray start --head --redis-port=6379 --autoscaling-config=~/ray_bootstrap_config.yaml
+head_start_ray_commands: []
+    #- ray stop
+    #- ulimit -c unlimited && ray start --head --redis-port=6379 --autoscaling-config=~/ray_bootstrap_config.yaml
 
 # Command to start ray on worker nodes. You don't need to change this.
-worker_start_ray_commands:
-    - ray stop
-    - ray start --redis-address=$RAY_HEAD_IP:6379
+worker_start_ray_commands: []
+    #- ray stop
+    #- ray start --redis-address=$RAY_HEAD_IP:6379
