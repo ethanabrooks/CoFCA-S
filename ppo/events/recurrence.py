@@ -29,7 +29,7 @@ class Recurrence(nn.Module):
         feed_r_initially,
     ):
         super().__init__()
-        self.feed_r_initially = feed_r_initially
+        self.feed_r_initially = feed_r_initially = feed_r_initially or baseline
         self.use_M_plus_minus = use_M_plus_minus
         self.baseline = baseline
         obs_spaces = Obs(**observation_space.spaces)
@@ -166,7 +166,7 @@ class Recurrence(nn.Module):
                 r = M.sum(1)
             else:
                 r = (p.unsqueeze(1) @ M).squeeze(1)
-            if self.feed_r_initially or self.baseline:
+            if self.feed_r_initially:
                 # noinspection PyTypeChecker
                 s = self.gru(self.f((inputs.base[t], r)), h)
             else:
