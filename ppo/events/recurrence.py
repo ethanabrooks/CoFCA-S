@@ -138,8 +138,8 @@ class Recurrence(nn.Module):
 
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
-        for x in hx:
-            x.squeeze_(0)
+        for _x in hx:
+            _x.squeeze_(0)
         p = hx.p
         h = hx.h
         p[new_episode] = p0[new_episode]
@@ -166,12 +166,12 @@ class Recurrence(nn.Module):
                 e = self.psi((h, a)).unsqueeze(1).expand(*M.shape)
                 self.print("c", c)
                 self.print("p1", p)
-                p = p + c * F.cosine_similarity(e, M_plus, dim=-1)
+                p_plus = F.cosine_similarity(e, M_plus, dim=-1)
+                p_minus = F.cosine_similarity(e, M_minus, dim=-1)
                 self.print("minus")
-                self.print(-F.cosine_similarity(e, M_plus, dim=-1))
-                self.print("p2", p)
+                self.print(p_minus)
                 self.print("plus")
-                self.print(F.cosine_similarity(e, M_minus, dim=-1))
-                p = p - c * F.cosine_similarity(e, M_minus, dim=-1)
-                self.print("p3", p)
+                self.print(p_plus)
+                p = p + c * (p_plus - p_minus)
+                self.print("p2", p)
             yield RecurrentState(a=A[t], a_probs=dist.probs, v=self.critic(h), h=h, p=p)
