@@ -204,7 +204,8 @@ def exp_main(
 
 
 def exp_cli():
-    parser = build_parser()
+    parsers = build_parser()
+    parser = parsers.main
     parser.add_argument("--single-subtask", action="store_true")
     parser.add_argument("--debug", action="store_true")
     parser.add_argument("--tune", action="store_true")

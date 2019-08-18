@@ -1,11 +1,13 @@
 # stdlib
 # third party
 import argparse
+from collections import namedtuple
 from pathlib import Path
 
 from rl_utils import hierarchical_parse_args
 import torch.nn as nn
 
+Parsers = namedtuple("Parser", "main agent ppo env")
 
 ACTIVATIONS = dict(
     selu=nn.SELU(), prelu=nn.PReLU(), leaky=nn.LeakyReLU(), relu=nn.ReLU()
@@ -120,7 +122,7 @@ def build_parser():
         help="add timestep to observations",
     )
 
-    return parser
+    return Parsers(main=parser, env=env_parser, ppo=ppo_parser, agent=agent_parser)
 
 
 def get_args():
