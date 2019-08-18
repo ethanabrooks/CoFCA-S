@@ -45,7 +45,7 @@ class Gridworld(gym.Env):
         self.object_idxs = {}
         self.height = height
         self.width = width
-        self.random, seed = seeding.np_random(seed)
+        self.random, seed = seeding.np_random(int(seed))
         self.grasping = None
         multiple_object_types = [Mess, Fly]
         self.object_types = object_types = [
