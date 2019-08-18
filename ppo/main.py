@@ -20,6 +20,7 @@ from ppo.arguments import get_args, build_parser
 from ppo.events.agent import Agent
 from ppo.train import Train
 from ppo.utils import get_random_gpu, get_n_gpu, k_scalar_pairs
+import ppo.oh_et_al
 import torch
 
 
@@ -37,6 +38,7 @@ def exp_main(
     log_dir,
     num_samples,
     baseline,
+    oh_et_al,
     **kwargs,
 ):
     class TrainEvents(Train, ABC):
@@ -47,6 +49,22 @@ def exp_main(
                 env = ppo.events.SingleInstructionWrapper(
                     **wrapper_args, evaluation=evaluation, env=env
                 )
+            elif oh_et_al:
+                env = ppo.oh_et_al.Wrapper(
+                    ppo.oh_et_al.GridWorld(
+                        text_map=["    "] * 4,
+                        n_objects=0,
+                        n_obstacles=2,
+                        random_obstacles=True,
+                        n_subtasks=2,
+                        task_types=["visit", "pick-up", "transform"],
+                        max_task_count=1,
+                        object_types=["pig", "sheep", "cat", "greenbot"],
+                    )
+                )
+                import ipdb
+
+                ipdb.set_trace()
             else:
                 env = ppo.events.Wrapper(**wrapper_args, evaluation=evaluation, env=env)
             env = TimeLimit(max_episode_steps=time_limit, env=env)
@@ -81,6 +99,7 @@ def exp_main(
                 baseline=baseline,
                 use_M_plus_minus=use_M_plus_minus,
                 feed_r_initially=feed_r_initially,
+                oh_et_al=oh_et_al,
                 **agent_args,
             )
 
@@ -222,6 +241,7 @@ def exp_cli():
     parser.add_argument("--tune", action="store_true")
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--baseline", action="store_true")
+    parser.add_argument("--oh-et-al", action="store_true")
     parser.add_argument("--num-samples", type=int, default=100)
     parser.add_argument("--redis-address")
     parsers.agent.add_argument("--feed-r-initially", action="store_true")

@@ -2,13 +2,12 @@ from collections import namedtuple
 
 import numpy as np
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 from torch import nn as nn
 from torch.nn import functional as F
 
+import ppo.events as events
+import ppo.oh_et_al
 from ppo.distributions import Categorical, FixedCategorical
-from ppo.events.wrapper import Obs
 from ppo.layers import Parallel, Reshape, Product, Flatten
 from ppo.utils import init_
 
@@ -27,12 +26,16 @@ class Recurrence(nn.Module):
         baseline,
         use_M_plus_minus,
         feed_r_initially,
+        oh_et_al,
     ):
         super().__init__()
+        self.oh_et_al = oh_et_al
         self.feed_r_initially = feed_r_initially = feed_r_initially or baseline
         self.use_M_plus_minus = use_M_plus_minus
         self.baseline = baseline
-        obs_spaces = Obs(**observation_space.spaces)
+        obs_spaces = (ppo.oh_et_al.gridworld.Obs if oh_et_al else events.wrapper.Obs)(
+            **observation_space.spaces
+        )
         self.obs_shape = d, h, w = obs_spaces.base.shape
         self.obs_sections = [int(np.prod(s.shape)) for s in obs_spaces]
         self.action_size = 1
@@ -121,8 +124,12 @@ class Recurrence(nn.Module):
         hx = torch.cat(list(pack()), dim=-1)
         return hx, hx[-1:]
 
-    def parse_inputs(self, inputs: torch.Tensor) -> Obs:
-        return Obs(*torch.split(inputs, self.obs_sections, dim=-1))
+    def parse_inputs(self, inputs: torch.Tensor):
+        return (
+            ppo.oh_et_al.gridworld.Obs
+            if self.oh_et_al
+            else events.wrapper.Obs(*torch.split(inputs, self.obs_sections, dim=-1))
+        )
 
     def parse_hidden(self, hx: torch.Tensor) -> RecurrentState:
         return RecurrentState(*torch.split(hx, self.state_sizes, dim=-1))
@@ -142,7 +149,8 @@ class Recurrence(nn.Module):
         inputs = inputs._replace(base=inputs.base.view(T, N, *self.obs_shape))
 
         # build memory
-        rnn_inputs = self.task_embeddings(inputs.instructions[0].long()).transpose(0, 1)
+        task = (inputs.task if self.oh_et_al else inputs.instructions)[0].long()
+        rnn_inputs = self.task_embeddings(task).transpose(0, 1)
         X, _ = self.task_encoder(rnn_inputs)
 
         encoding = X.transpose(0, 1).split(self.task_output_sections, dim=-1)
@@ -176,15 +184,16 @@ class Recurrence(nn.Module):
                 h = self.gru(r * x, h)
 
             dist = self.actor(h)
-            nonzero = F.pad(inputs.interactable[t], [5, 0], "constant", 1)
-            probs = dist.probs * nonzero
+            if not self.oh_et_al:
+                nonzero = F.pad(inputs.interactable[t], [5, 0], "constant", 1)
+                probs = dist.probs * nonzero
 
-            # noinspection PyTypeChecker
-            deficit = 1 - probs.sum(-1, keepdim=True)
-            probs = probs + F.normalize(nonzero, p=1, dim=-1) * deficit
-            dist = FixedCategorical(
-                probs=F.normalize(torch.clamp(probs, 0.0, 1.0), p=1, dim=-1)
-            )
+                # noinspection PyTypeChecker
+                deficit = 1 - probs.sum(-1, keepdim=True)
+                probs = probs + F.normalize(nonzero, p=1, dim=-1) * deficit
+                dist = FixedCategorical(
+                    probs=F.normalize(torch.clamp(probs, 0.0, 1.0), p=1, dim=-1)
+                )
             self.sample_new(A[t], dist)
             if not self.baseline:
                 a = self.a_one_hots(A[t].flatten().long())
