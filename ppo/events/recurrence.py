@@ -47,10 +47,19 @@ class Recurrence(nn.Module):
             int(hidden_size), int(sum(self.task_output_sections))
         )
         self.f = nn.Sequential(
-            Parallel(Reshape(1, d, h, w), Reshape(hidden_size, 1, 1, 1)),
-            Product(),
-            Reshape(d * hidden_size, h, w),
-            init_(nn.Conv2d(d * hidden_size, hidden_size, kernel_size=1), activation),
+            *(
+                [
+                    Parallel(Reshape(1, d, h, w), Reshape(hidden_size, 1, 1, 1)),
+                    Product(),
+                    Reshape(d * hidden_size, h, w),
+                    init_(
+                        nn.Conv2d(d * hidden_size, hidden_size, kernel_size=1),
+                        activation,
+                    ),
+                ]
+                if feed_r_initially
+                else [init_(nn.Conv2d(d, hidden_size, kernel_size=1), activation)]
+            ),
             activation,
             *[
                 nn.Sequential(
@@ -63,10 +72,16 @@ class Recurrence(nn.Module):
             ],
             activation,
             Flatten(),
-            # init_(nn.Linear(hidden_size * h * w, hidden_size)),
+            *(
+                []
+                if feed_r_initially
+                else [init_(nn.Linear(hidden_size * h * w, hidden_size))]
+            ),
             activation,
         )
-        self.gru = nn.GRUCell(hidden_size * h * w, hidden_size)
+        self.gru = nn.GRUCell(
+            hidden_size * h * w if feed_r_initially else hidden_size, hidden_size
+        )
         if not self.baseline:
             self.psi = nn.Sequential(
                 Parallel(Reshape(hidden_size, 1), Reshape(1, action_space.n)),
