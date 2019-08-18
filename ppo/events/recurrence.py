@@ -40,7 +40,9 @@ class Recurrence(nn.Module):
 
         # networks
         self.task_embeddings = nn.Embedding(obs_spaces.subtasks.nvec[0], hidden_size)
-        self.task_output_sections = [1, 1] + [hidden_size] * 3
+        self.task_output_sections = [1, 1] + [hidden_size] * (
+            3 if use_M_plus_minus else 1
+        )
         self.task_encoder = nn.GRU(
             int(hidden_size), int(sum(self.task_output_sections))
         )
@@ -125,9 +127,12 @@ class Recurrence(nn.Module):
         # build memory
         rnn_inputs = self.task_embeddings(inputs.subtasks[0].long()).transpose(0, 1)
         X, _ = self.task_encoder(rnn_inputs)
-        c, p0, M, M_minus, M_plus = X.transpose(0, 1).split(
-            self.task_output_sections, dim=-1
-        )
+
+        encoding = X.transpose(0, 1).split(self.task_output_sections, dim=-1)
+        c, p0, M = encoding[:3]
+        M_minus = encoding[3] if self.use_M_plus_minus else M
+        M_plus = encoding[4] if self.use_M_plus_minus else M
+
         c.squeeze_(-1)
         p0.squeeze_(-1)
 
