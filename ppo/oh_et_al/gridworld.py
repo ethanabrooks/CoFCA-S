@@ -1,112 +1,152 @@
 from collections import namedtuple
 import itertools
 import re
-import time
 
 import gym
 from gym import spaces
 from gym.envs.registration import EnvSpec
+from gym.spaces import Box
 from gym.utils import seeding
 import numpy as np
+from rl_utils import cartesian_product
 import six
 
-from ppo.utils import set_index
-from rl_utils import cartesian_product
+from ppo.utils import set_index, GREEN, RESET
 
-Obs = namedtuple("ObsSections", "base subtask task next_subtask")
-
-
-def get_task_space(task_types, max_task_count, object_types, n_subtasks):
-    return spaces.MultiDiscrete(
-        np.tile(
-            np.array([len(task_types), max_task_count, len(object_types)]),
-            (n_subtasks, 1),
-        )
-    )
+Subtask = namedtuple("Subtask", "interaction count object")
+Obs = namedtuple("Obs", "base subtask subtasks")
 
 
 class GridWorld(gym.Env):
     def __init__(
         self,
         text_map,
-        n_objects,
+        min_objects,
         n_obstacles,
         random_obstacles,
         n_subtasks,
-        task_types,
+        interactions,
         max_task_count,
         object_types,
+        evaluation=False,
+        eval_subtasks=None,
         task=None,
     ):
         super().__init__()
+        if eval_subtasks is None:
+            eval_subtasks = []
+        self.eval_subtasks = np.array(eval_subtasks)
         self.spec = EnvSpec
         self.n_subtasks = n_subtasks
         self.n_obstacles = n_obstacles
-        self.n_objects = n_objects
+        self.min_objects = min_objects
         self.np_random = np.random
-        self.object_types = np.array(object_types)
         self.transitions = np.array([[-1, 0], [1, 0], [0, -1], [0, 1]])
 
         # self.state_char = '🚡'
         self.desc = np.array([list(r) for r in text_map])
 
-        self.task_types = np.array(task_types)
-
+        self.interactions = np.array(interactions)
         self.max_task_count = max_task_count
+        self.object_types = np.array(object_types)
         self.random_task = task is None
         self.random_obstacles = random_obstacles
 
         # set on initialize
-        self.initialized = False
         self.obstacles_one_hot = np.zeros(self.desc.shape, dtype=bool)
-        self.open_spaces = None
         self.obstacles = None
+
+        self.possible_subtasks = np.array(
+            list(
+                itertools.product(
+                    range(len(interactions)),
+                    range(max_task_count),
+                    range(len(object_types)),
+                )
+            )
+        )
+        possible_subtasks = np.expand_dims(self.possible_subtasks, 0)
+        if eval_subtasks:
+            in_eval = possible_subtasks == np.expand_dims(eval_subtasks, 1)
+            in_eval = in_eval.all(axis=-1).any(axis=0)
+            if evaluation:
+                self.possible_subtasks = self.possible_subtasks[in_eval]
+            else:
+                not_in_eval = np.logical_not(in_eval)
+                self.possible_subtasks = self.possible_subtasks[not_in_eval]
 
         def encode_task():
             for string in task:
-                task_type, count, obj_type = re.split("[\s\\\]+", string)
+                subtask = Subtask(*re.split("[\s\\\]+", string))
                 yield (
-                    list(self.task_types).index(task_type),
-                    int(count),
-                    list(self.object_types).index(obj_type),
+                    list(self.interactions).index(subtask.interaction),
+                    int(subtask.count),
+                    list(self.object_types).index(subtask.object),
                 )
 
         # set on reset:
         if task:
-            self.task = np.array(list(encode_task()))
+            self.subtasks = np.array(list(encode_task()))
         else:
-            self.task = None
-        self.subtask_idx = None
-        self.subtask = None
-        self.task_iter = None
-        self.task_count = None
+            self.subtasks = None
+        self.subtask_idx = 0
+        self.count = None
         self.objects = None
         self.pos = None
         self.last_terminal = False
         self.last_action = None
-        self.next_subtask = False
 
         h, w = self.desc.shape
-        self.observation_space = spaces.Tuple(
-            [
-                spaces.MultiDiscrete(
-                    np.ones(
-                        (
-                            1 + 1 + 1 + len(object_types),  # obstacles  # ice  # agent
-                            h,
-                            w,
-                        )
+
+        self.observation_space = spaces.Dict(
+            Obs(
+                base=Box(
+                    0,
+                    1,
+                    shape=(
+                        1 + 1 + 1 + len(object_types),  # obstacles  # ice  # agent
+                        h,
+                        w,
+                    ),
+                ),
+                subtask=spaces.Discrete(n_subtasks),
+                subtasks=spaces.MultiDiscrete(
+                    np.tile(
+                        np.array(
+                            [len(interactions), max_task_count, len(object_types)]
+                        ),
+                        (n_subtasks, 1),
                     )
                 ),
-                get_task_space(
-                    task_types=self.task_types,
-                    max_task_count=self.max_task_count,
-                    object_types=object_types,
-                    n_subtasks=n_subtasks,
-                ),
+            )._asdict()
+        )
+        self.action_space = spaces.Discrete(
+            len(self.transitions) + 3
+        )  # +3: pick-up, transform, and no-op
+        world = self
+
+        class _Subtask(Subtask):
+            def __str__(self):
+                string = f"{world.interactions[self.interaction]} {self.count + 1} {world.object_types[self.object]}"
+                if self.count > 0:
+                    string += "s"
+                return string
+
+        self.Subtask = _Subtask
+        self.object_one_hots = np.vstack(
+            [
+                np.eye(1 + len(self.object_types)),
+                np.zeros((1, 1 + len(self.object_types))),
             ]
         )
-        self.action_space = spaces.Discrete(len(self.transitions) + 2)
+        self.layer_one_hots = np.eye(h * w).reshape(-1, h, w)
+
+    @property
+    def subtask(self):
+        try:
+            return self.subtasks[self.subtask_idx]
+        except IndexError:
+            return None
 
     def randomize_obstacles(self):
         h, w = self.desc.shape
@@ -120,45 +160,29 @@ class GridWorld(gym.Env):
         set_index(self.obstacles_one_hot, self.obstacles, True)
         self.obstacles = np.array(list(self.obstacles))
 
-    def initialize(self):
-        self.randomize_obstacles()
-        h, w = self.desc.shape
-        ij = cartesian_product(np.arange(h), np.arange(w))
-        self.open_spaces = ij[
-            np.logical_not(np.all(np.isin(ij, self.obstacles), axis=-1))
-        ]
-        self.initialized = True
-
     @property
     def transition_strings(self):
-        return np.array(list("👆👇👈👉pt"))
+        return np.array(list("👆👇👈👉ptn"))
 
     def render(self, mode="human", sleep_time=0.5):
-        def print_subtask(task_type, count, task_object_type):
-            print(
-                self.task_types[task_type], count, self.object_types[task_object_type]
-            )
-
         print("task:")
-        for task in self.task:
-            print_subtask(*task)
-        print()
-        print("subtask:")
-        print_subtask(*self.subtask)
-        print("remaining:", self.task_count)
+        print(self.task_string())
+        if self.subtask is not None:
+            print(f"❯❯ Active subtask: {self.subtask_idx}:{self.subtask}")
+        # if self.count is not None:
+        # print("remaining:", self.count + 1)
         print("action:", end=" ")
         if self.last_action is not None:
             print(self.transition_strings[self.last_action])
         else:
             print("reset")
+        print("objects", self.objects)
 
         # noinspection PyTypeChecker
         desc = self.desc.copy()
         desc[self.obstacles_one_hot] = "#"
-        positions = self.objects_one_hot()
-        types = np.append(self.object_types, "ice")
-        for pos, obj in zip(positions, types):
-            desc[pos] = obj[0]
+        for pos, obj in self.objects.items():
+            desc[pos] = np.append(self.object_types, "i")[obj][0]
         desc[tuple(self.pos)] = "*"
 
         for row in desc:
@@ -166,105 +190,133 @@ class GridWorld(gym.Env):
             print("".join(row), end="")
             print(six.u("\x1b[49m\x1b[39m"))
         # time.sleep(4 * sleep_time if self.last_terminal else sleep_time)
+        if self.subtask is None:
+            print(
+                GREEN
+                + "***********************************************************************************"
+            )
+            print(
+                "                                   Task Complete                                   "
+            )
+            print(
+                "***********************************************************************************"
+                + RESET
+            )
 
-    def subtask_generator(self):
-        task_types = np.arange(len(self.task_types))
-        object_types = np.arange(len(self.object_types))
-        task_counts = np.arange(self.max_task_count) + 1
-        multiple_options = [
-            (i, x)
-            for i, x in enumerate([task_types, task_counts, object_types])
-            if len(x) > 1
-        ]
+    def task_string(self):
+        return "\n".join(self.subtasks)
+
+    def subtasks_generator(self):
         last_subtask = None
-        while True:
-            task_type = self.np_random.choice(task_types)
-            task_count = self.np_random.choice(task_counts)
-            task_object = self.np_random.choice(object_types)
-            if self.task_types[task_type] == "visit":
-                task_count = 1
-            subtask = [task_type, task_count, task_object]
-            if subtask == last_subtask:
-                if multiple_options:
-                    idx, param = multiple_options[
-                        self.np_random.choice(len(multiple_options))
-                    ]
-                    options = [x for x in param if x != subtask[idx]]
-                    subtask[idx] = self.np_random.choice(options)
-            yield subtask
-            last_subtask = subtask
+        for _ in range(self.n_subtasks):
+            possible_subtasks = self.possible_subtasks
+            if last_subtask is not None:
+                subset = np.any(self.possible_subtasks != last_subtask, axis=-1)
+                possible_subtasks = possible_subtasks[subset]
+            choice = self.np_random.choice(len(possible_subtasks))
+            last_subtask = possible_subtasks[choice]
+            yield self.Subtask(*last_subtask)
+
+    def get_required_objects(self, task):
+        for subtask in task:
+            yield from [subtask.object] * (subtask.count + 1)
 
     def reset(self):
-        if not self.initialized:
-            self.initialize()
-        elif self.random_obstacles:
+        if self.random_obstacles:
             self.randomize_obstacles()
 
         if self.random_task:
-            task_iter = itertools.islice(self.subtask_generator(), self.n_subtasks)
-            self.task = np.array(list(task_iter))
-        self.task_iter = iter(self.task)
+            self.subtasks = list(self.subtasks_generator())
 
-        types = [x for t, c, o in self.task for x in c * [o]]
-        n_random = max(len(types), self.n_objects)
-        random_types = self.np_random.choice(
-            len(self.object_types), replace=True, size=n_random - len(types)
-        )
-        types = np.concatenate([random_types, types])
+        h, w = self.desc.shape
+        ij = cartesian_product(np.arange(h), np.arange(w))
+        open_spaces = ij[np.logical_not(np.all(np.isin(ij, self.obstacles), axis=-1))]
+
+        types = list(self.get_required_objects(self.subtasks))
         self.np_random.shuffle(types)
 
-        randoms = self.np_random.choice(
-            len(self.open_spaces), replace=False, size=n_random + 1  # + 1 for agent
-        )
-        *objects_pos, self.pos = self.open_spaces[randoms]
+        try:
+            randoms = self.np_random.choice(
+                len(open_spaces), replace=False, size=len(types) + 1  # + 1 for agent
+            )
+        except ValueError:
+            return self.reset()
+        *objects_pos, self.pos = open_spaces[randoms]
 
         self.objects = {tuple(p): t for p, t in zip(objects_pos, types)}
 
-        self.task_count = None
-        self.subtask_idx = -1
-        self.perform_iteration()
+        self.subtask_idx = None
+        self.subtask_idx = self.get_next_subtask()
+        if self.subtask is None:
+            return self.reset()
+        self.count = self.subtask.count
         self.last_terminal = False
         self.last_action = None
         return self.get_observation()
-
-    def objects_one_hot(self):
-        h, w, = self.desc.shape
-        objects_one_hot = np.zeros((1 + len(self.object_types), h, w), dtype=bool)
-        idx = [(v,) + k for k, v in self.objects.items()]
-        set_index(objects_one_hot, idx, True)
-        return objects_one_hot
 
     def get_observation(self):
         agent_one_hot = np.zeros_like(self.desc, dtype=bool)
         set_index(agent_one_hot, self.pos, True)
 
-        obs = [
-            np.expand_dims(self.obstacles_one_hot, 0),
-            self.objects_one_hot(),
-            np.expand_dims(agent_one_hot, 0),
-        ]
+        objects_desc = np.full(self.desc.shape, -1)
+        for k, v in self.objects.items():
+            objects_desc[k] = v
 
-        # noinspection PyTypeChecker
-        return np.vstack(obs), self.task
+        obstacles = self.layer_one_hots[
+            np.ravel_multi_index(self.obstacles.T, self.desc.shape)
+        ].sum(0)
+        objects = self.object_one_hots[objects_desc]
+        agent = self.layer_one_hots[np.ravel_multi_index(self.pos, self.desc.shape)]
+
+        obs = np.dstack(
+            [
+                np.expand_dims(obstacles, 2),
+                objects,
+                np.expand_dims(agent, 2),
+                # np.dstack([obstacles, agent]),
+            ]
+        ).transpose(2, 0, 1)
+
+        return Obs(base=obs, subtask=self.subtask_idx, subtasks=self.subtasks)._asdict()
 
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)
         return [seed]
 
-    def perform_iteration(self):
-        self.next_subtask = self.task_count == 1
-        if self.task_count is None or self.next_subtask:
-            self.subtask_idx += 1
-            task_type, task_count, _ = self.subtask = next(self.task_iter)
-            self.task_count = task_count
-        else:
-            self.task_count -= 1
-
     def step(self, a):
         self.last_action = a
-        self.next_subtask = False
+        if a == self.action_space.n - 1:
+            return self.get_observation(), -0.1, False, {}
+
         # act
         n_transitions = len(self.transitions)
+        pos = tuple(self.pos)
+        touching = pos in self.objects
+
+        if touching:
+            iterate = False
+            object_type = self.objects[pos]
+            interaction = self.interactions[self.subtask.interaction]
+            if "visit" == interaction and object_type == self.subtask.object:
+                iterate = True
+            if a >= n_transitions:
+                if a - n_transitions == 0:  # pick up
+                    del self.objects[pos]
+                    if "pick-up" == interaction and object_type == self.subtask.object:
+                        iterate = True
+                elif a - n_transitions == 1:  # transform
+                    self.objects[pos] = len(self.object_types)
+                    if (
+                        "transform" == interaction
+                        and object_type == self.subtask.object
+                    ):
+                        iterate = True
+            if iterate:
+                if self.count == 0:
+                    self.subtask_idx = self.get_next_subtask()
+                else:
+                    self.count -= 1
+
         if a < n_transitions:
             # move
             pos = self.pos + self.transitions[a]
@@ -273,49 +325,22 @@ class GridWorld(gym.Env):
             a_min = np.zeros(2)
             a_max = np.array(self.desc.shape) - 1
             self.pos = np.clip(pos, a_min, a_max).astype(int)
-        pos = tuple(self.pos)
-        touching = pos in self.objects
 
-        obs = self.get_observation()
+        self.last_terminal = t = self.subtask is None
+        r = 1.0 if t else -0.1
+        return self.get_observation(), r, t, {}
 
-        t = False
-        r = -0.1
-        if touching:
-            iterate = False
-            object_type = self.objects[pos]
-            task_type_idx, _, task_object_type_idx = self.subtask
-            task_type = self.task_types[task_type_idx]
-            if "visit" == task_type:
-                iterate = object_type == task_object_type_idx
-            if a >= n_transitions:
-                if a - n_transitions == 0:  # pick up
-                    del self.objects[pos]
-                    if "pick-up" == task_type:
-                        iterate = (
-                            object_type == task_object_type_idx
-                        )  # picked up object
-                elif a - n_transitions == 1:  # transform
-                    self.objects[pos] = len(self.object_types)
-                    if "transform" == task_type:
-                        iterate = object_type == task_object_type_idx
-
-            if iterate:
-                try:
-                    self.perform_iteration()
-                except StopIteration:
-                    r = 1
-                    t = True
-
-        self.last_terminal = t
-        return obs, r, t, {}
+    def get_next_subtask(self):
+        if self.subtask_idx is None:
+            return 0
+        return self.subtask_idx + 1
 
 
 if __name__ == "__main__":
     import gym
     import gridworld_env.keyboard_control
     import gridworld_env.random_walk
-    from ppo.oh_et_al.wrappers import Wrapper
 
-    env = Wrapper(gym.make("4x4SubtasksGridWorld-v0"))
+    env = gym.make("4x4SubtasksGridWorld-v0")
     actions = "wsadeq"
     gridworld_env.keyboard_control.run(env, actions=actions)

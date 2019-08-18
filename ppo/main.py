@@ -53,18 +53,15 @@ def exp_main(
                 env = ppo.oh_et_al.Wrapper(
                     ppo.oh_et_al.GridWorld(
                         text_map=["    "] * 4,
-                        n_objects=0,
+                        min_objects=0,
                         n_obstacles=2,
                         random_obstacles=True,
                         n_subtasks=2,
-                        task_types=["visit", "pick-up", "transform"],
+                        interactions=["visit", "pick-up", "transform"],
                         max_task_count=1,
                         object_types=["pig", "sheep", "cat", "greenbot"],
                     )
                 )
-                import ipdb
-
-                ipdb.set_trace()
             else:
                 env = ppo.events.Wrapper(**wrapper_args, evaluation=evaluation, env=env)
             env = TimeLimit(max_episode_steps=time_limit, env=env)

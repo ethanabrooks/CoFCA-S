@@ -42,9 +42,16 @@ class Recurrence(nn.Module):
         self.debug = debug
 
         # networks
-        self.task_embeddings = nn.Embedding(
-            obs_spaces.instructions.nvec[0], hidden_size
-        )
+        if oh_et_al:
+            self.task_embeddings = nn.EmbeddingBag(
+                obs_spaces.subtasks.nvec[0].sum(), hidden_size
+            )
+            self.subtasks_nvec = obs_spaces.subtasks.nvec
+        else:
+            self.task_embeddings = nn.Embedding(
+                obs_spaces.instructions.nvec[0], hidden_size
+            )
+            self.subtasks_nvec = None
         self.task_output_sections = [1, 1] + [hidden_size] * (
             3 if use_M_plus_minus else 1
         )
@@ -103,7 +110,9 @@ class Recurrence(nn.Module):
             a_probs=action_space.n,
             v=1,
             h=hidden_size,
-            p=obs_spaces.instructions.nvec.size,
+            p=len(obs_spaces.subtasks.nvec)
+            if oh_et_al
+            else obs_spaces.instructions.nvec.size,
         )
 
     @staticmethod
@@ -125,10 +134,8 @@ class Recurrence(nn.Module):
         return hx, hx[-1:]
 
     def parse_inputs(self, inputs: torch.Tensor):
-        return (
-            ppo.oh_et_al.gridworld.Obs
-            if self.oh_et_al
-            else events.wrapper.Obs(*torch.split(inputs, self.obs_sections, dim=-1))
+        return (ppo.oh_et_al.gridworld.Obs if self.oh_et_al else events.wrapper.Obs)(
+            *torch.split(inputs, self.obs_sections, dim=-1)
         )
 
     def parse_hidden(self, hx: torch.Tensor) -> RecurrentState:
@@ -149,8 +156,14 @@ class Recurrence(nn.Module):
         inputs = inputs._replace(base=inputs.base.view(T, N, *self.obs_shape))
 
         # build memory
-        task = (inputs.task if self.oh_et_al else inputs.instructions)[0].long()
-        rnn_inputs = self.task_embeddings(task).transpose(0, 1)
+        if self.oh_et_al:
+            n_subtasks = len(self.subtasks_nvec)
+            subtask_size = self.subtasks_nvec[0].size
+            task = inputs.subtasks[0].reshape(N * n_subtasks, subtask_size).long()
+            embeddings = self.task_embeddings(task).view(N, n_subtasks, -1)
+        else:
+            embeddings = self.task_embeddings(inputs.instructions[0].long())
+        rnn_inputs = embeddings.transpose(0, 1)
         X, _ = self.task_encoder(rnn_inputs)
 
         encoding = X.transpose(0, 1).split(self.task_output_sections, dim=-1)
