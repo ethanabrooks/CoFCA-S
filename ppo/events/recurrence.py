@@ -166,10 +166,18 @@ class Recurrence(nn.Module):
                 r = M.sum(1)
             else:
                 r = (p.unsqueeze(1) @ M).squeeze(1)
-            h = self.gru(self.f((inputs.base[t], r)), h)
+            if self.feed_r_initially:
+                # noinspection PyTypeChecker
+                h = self.gru(self.f((inputs.base[t], r)), h)
+            else:
+                x = self.f(inputs.base[t])
+                h = self.gru(r * x, h)
+
             dist = self.actor(h)
             nonzero = F.pad(inputs.interactable[t], [5, 0], "constant", 1)
             probs = dist.probs * nonzero
+
+            # noinspection PyTypeChecker
             deficit = 1 - probs.sum(-1, keepdim=True)
             probs = probs + F.normalize(nonzero, p=1, dim=-1) * deficit
             dist = FixedCategorical(
