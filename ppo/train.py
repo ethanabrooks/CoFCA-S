@@ -248,9 +248,8 @@ class Train(abc.ABC):
             if self.i % log_interval == 0:
                 total_num_steps = (self.i + 1) * num_processes * num_steps
                 # print(f"Writing to {self.logdir}")
-                start = tick
+                fps = total_num_steps / (time.time() - tick)
                 tick = time.time()
-                fps = total_num_steps / (tick - start)
                 yield dict(
                     k_scalar_pairs(
                         fps=fps, **epoch_counter, **train_results, **eval_result
