@@ -12,7 +12,7 @@ from ppo.events.recurrence import RecurrentState, Recurrence
 
 
 class Agent(ppo.agent.Agent, NNBase):
-    def __init__(self, entropy_coef, **network_args):
+    def __init__(self, entropy_coef, recurrent, **network_args):
         nn.Module.__init__(self)
         self.entropy_coef = entropy_coef
         self.recurrent_module = Recurrence(**network_args)

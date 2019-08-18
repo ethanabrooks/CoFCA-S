@@ -68,9 +68,10 @@ def exp_main(
                 num_layers=num_layers,
                 activation=activation,
                 entropy_coef=entropy_coef,
+                recurrent=recurrent,
             )
             if single_subtask:
-                return super().build_agent(envs, recurrent=recurrent, **agent_args)
+                return super().build_agent(envs, **agent_args)
             return Agent(
                 observation_space=envs.observation_space,
                 action_space=envs.action_space,
