@@ -61,6 +61,8 @@ def exp_main(
             activation=None,
             entropy_coef=None,
             recurrent=None,
+            feed_r_initially=None,
+            use_M_plus_minus=None,
             device=None,
         ):
             agent_args = dict(
@@ -77,6 +79,8 @@ def exp_main(
                 action_space=envs.action_space,
                 debug=False if tune else debug,
                 baseline=baseline,
+                use_M_plus_minus=use_M_plus_minus,
+                feed_r_initially=feed_r_initially,
                 **agent_args,
             )
 
@@ -91,7 +95,9 @@ def exp_main(
             hidden_size=ray.tune.choice([32, 64, 128, 512]),
             num_layers=ray.tune.choice([0, 1, 2]),
             learning_rate=ray.tune.uniform(low=0.0001, high=0.005),
-            ppo_epoch=ray.tune.choice(list(range(5)))
+            ppo_epoch=ray.tune.choice(list(range(5))),
+            feed_r_initially=ray.tune.choice([True, False]),
+            use_M_plus_minus=ray.tune.choice([True, False])
             # ppo_epoch=ray.tune.sample_from(
             #     lambda spec: max(
             #         1,
@@ -117,12 +123,16 @@ def exp_main(
                     num_layers,
                     learning_rate,
                     ppo_epoch,
+                    feed_r_initially,
+                    use_M_plus_minus,
                     **kwargs,
                 ):
                     agent_args.update(
                         entropy_coef=entropy_coef,
                         hidden_size=hidden_size,
                         num_layers=num_layers,
+                        feed_r_initially=feed_r_initially,
+                        use_M_plus_minus=use_M_plus_minus,
                     )
                     ppo_args.update(ppo_epoch=ppo_epoch, learning_rate=learning_rate)
                     self.setup(**kwargs, agent_args=agent_args, ppo_args=ppo_args)
@@ -214,6 +224,8 @@ def exp_cli():
     parser.add_argument("--baseline", action="store_true")
     parser.add_argument("--num-samples", type=int, default=100)
     parser.add_argument("--redis-address")
+    parsers.agent.add_argument("--feed-r-initially", action="store_true")
+    parsers.agent.add_argument("--use-M-plus-minus", action="store_true")
     gridworld_parser = parser.add_argument_group("gridworld_args")
     gridworld_parser.add_argument("--height", help="", type=int, default=4)
     gridworld_parser.add_argument("--width", help="", type=int, default=4)

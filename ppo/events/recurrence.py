@@ -25,8 +25,12 @@ class Recurrence(nn.Module):
         num_layers,
         debug,
         baseline,
+        use_M_plus_minus,
+        feed_r_initially,
     ):
         super().__init__()
+        self.feed_r_initially = feed_r_initially = feed_r_initially or baseline
+        self.use_M_plus_minus = use_M_plus_minus
         self.baseline = baseline
         obs_spaces = Obs(**observation_space.spaces)
         self.obs_shape = d, h, w = obs_spaces.base.shape
