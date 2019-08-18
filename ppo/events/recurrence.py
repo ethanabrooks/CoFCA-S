@@ -12,7 +12,7 @@ from ppo.events.wrapper import Obs
 from ppo.layers import Parallel, Reshape, Product, Flatten
 from ppo.utils import init_
 
-RecurrentState = namedtuple("RecurrentState", "a a_probs v s p")
+RecurrentState = namedtuple("RecurrentState", "a a_probs v h p")
 
 
 class Recurrence(nn.Module):
@@ -76,7 +76,7 @@ class Recurrence(nn.Module):
             a=1,
             a_probs=action_space.n,
             v=1,
-            s=hidden_size,
+            h=hidden_size,
             p=obs_spaces.subtasks.nvec.size,
         )
 
@@ -132,17 +132,18 @@ class Recurrence(nn.Module):
         for x in hx:
             x.squeeze_(0)
         p = hx.p
-        s = hx.s
+        h = hx.h
         p[new_episode] = p0[new_episode]
         A = torch.cat([actions, hx.a.unsqueeze(0)], dim=0).long().squeeze(2)
+
         for t in range(T):
             p = F.softmax(p, dim=-1)
             if self.baseline:
                 r = M.sum(1)
             else:
                 r = (p.unsqueeze(1) @ M).squeeze(1)
-            s = self.gru(self.f((inputs.base[t], r)), s)
-            dist = self.actor(s)
+            h = self.gru(self.f((inputs.base[t], r)), h)
+            dist = self.actor(h)
             nonzero = F.pad(inputs.interactable[t], [5, 0], "constant", 1)
             probs = dist.probs * nonzero
             deficit = 1 - probs.sum(-1, keepdim=True)
@@ -153,7 +154,7 @@ class Recurrence(nn.Module):
             self.sample_new(A[t], dist)
             if not self.baseline:
                 a = self.a_one_hots(A[t].flatten().long())
-                e = self.psi((s, a)).unsqueeze(1).expand(*M.shape)
+                e = self.psi((h, a)).unsqueeze(1).expand(*M.shape)
                 self.print("c", c)
                 self.print("p1", p)
                 p = p + c * F.cosine_similarity(e, M_plus, dim=-1)
@@ -164,4 +165,4 @@ class Recurrence(nn.Module):
                 self.print(F.cosine_similarity(e, M_minus, dim=-1))
                 p = p - c * F.cosine_similarity(e, M_minus, dim=-1)
                 self.print("p3", p)
-            yield RecurrentState(a=A[t], a_probs=dist.probs, v=self.critic(s), s=s, p=p)
+            yield RecurrentState(a=A[t], a_probs=dist.probs, v=self.critic(h), h=h, p=p)
