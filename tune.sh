@@ -9,16 +9,16 @@ nice python ppo/main.py \
   --tune \
   --redis-address $1 \
   \
-  --subtask="AnswerDoor" \
-  --subtask="AvoidDog" \
-  --subtask="ComfortBaby" \
-  --subtask="KillFlies" \
-  --subtask="MakeFire" \
-  --subtask="WatchBaby" \
+  --instruction="AnswerDoor" \
+  --instruction="AvoidDog" \
+  --instruction="ComfortBaby" \
+  --instruction="KillFlies" \
+  --instruction="MakeFire" \
+  --instruction="WatchBaby" \
   --test "WatchBaby"  "KillFlies" "MakeFire" \
   --test "AnswerDoor"  "KillFlies" "AvoidDog" \
   --test "AnswerDoor"  "MakeFire" "AvoidDog" \
-  --n-active-subtasks="3" \
+  --n-active-instructions="3" \
   --time-limit="30" \
   \
   --eval-interval="100" \

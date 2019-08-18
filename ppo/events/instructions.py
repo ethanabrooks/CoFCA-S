@@ -19,7 +19,7 @@ from ppo.events.objects import (
 )
 
 
-class Subtask:
+class Instruction:
     def step(self, *interactions, **objects):
         pass
 
@@ -37,7 +37,7 @@ class Subtask:
         ).capitalize()
 
 
-class AnswerDoor(Subtask):
+class AnswerDoor(Instruction):
     def __init__(self, time_limit=10):
         self.time_since_ring = 0
         self.time_limit = time_limit
@@ -53,12 +53,12 @@ class AnswerDoor(Subtask):
         return self.time_since_ring > self.time_limit
 
 
-class CatchMouse(Subtask):
+class CatchMouse(Instruction):
     def condition(self, *interactions, mouse: Mouse, **objects):
         return mouse.pos is not None
 
 
-class ComfortBaby(Subtask):
+class ComfortBaby(Instruction):
     def __init__(self):
         self.time_crying = 0
         super().__init__()
@@ -73,7 +73,7 @@ class ComfortBaby(Subtask):
         return baby.activated
 
 
-class MakeDinner(Subtask):
+class MakeDinner(Instruction):
     def __init__(self):
         self.made = 0
         super().__init__()
@@ -83,22 +83,22 @@ class MakeDinner(Subtask):
         return not food.activated
 
 
-class MakeFire(Subtask):
+class MakeFire(Instruction):
     def condition(self, *interactions, fire: Fire, baby: Baby, **objects):
         return not fire.activated or (fire.activated and baby.pos == fire.pos)
 
 
-class KillFlies(Subtask):
+class KillFlies(Instruction):
     def condition(self, *interactions, fly: List[Fly], **objects):
         return any(f.activated for f in fly)
 
 
-class CleanMess(Subtask):
+class CleanMess(Instruction):
     def condition(self, *interactions, mess: List[Mess], **objects):
         return any(m.activated for m in mess)
 
 
-class AvoidDog(Subtask):
+class AvoidDog(Instruction):
     def __init__(self, min_range):
         self.range = min_range
 
@@ -109,7 +109,7 @@ class AvoidDog(Subtask):
         )
 
 
-class LetDogIn(Subtask):
+class LetDogIn(Instruction):
     def __init__(self, max_time_outside):
         self.max_time_outside = max_time_outside
         self.time_outside = None
@@ -124,7 +124,7 @@ class LetDogIn(Subtask):
         return self.time_outside > self.max_time_outside
 
 
-class WatchBaby(Subtask):
+class WatchBaby(Instruction):
     def __init__(self, max_range: int):
         self.range = max_range
 
@@ -132,11 +132,11 @@ class WatchBaby(Subtask):
         return np.linalg.norm(np.array(baby.pos) - np.array(agent.pos)) > self.range
 
 
-class KeepBabyOutOfFire(Subtask):
+class KeepBabyOutOfFire(Instruction):
     def condition(self, *interactions, baby: Baby, fire: Fire, **objects):
         return fire.activated and baby.pos == fire.pos
 
 
-class KeepCatFromDog(Subtask):
+class KeepCatFromDog(Instruction):
     def condition(self, *interactions, cat: Cat, dog: Dog, **objects):
         return cat.pos == dog.pos

@@ -30,7 +30,7 @@ def cli():
 def exp_main(
     gridworld_args,
     wrapper_args,
-    single_subtask,
+    single_instruction,
     debug,
     tune,
     redis_address,
@@ -43,8 +43,8 @@ def exp_main(
         @staticmethod
         def make_env(time_limit, seed, rank, evaluation, env_id, add_timestep):
             env = ppo.events.Gridworld(**gridworld_args, seed=seed)
-            if single_subtask:
-                env = ppo.events.SingleSubtaskWrapper(
+            if single_instruction:
+                env = ppo.events.SingleInstructionWrapper(
                     **wrapper_args, evaluation=evaluation, env=env
                 )
             else:
@@ -72,7 +72,7 @@ def exp_main(
                 entropy_coef=entropy_coef,
                 recurrent=recurrent,
             )
-            if single_subtask:
+            if single_instruction:
                 return super().build_agent(envs, **agent_args)
             return Agent(
                 observation_space=envs.observation_space,
@@ -217,7 +217,7 @@ def exp_main(
 def exp_cli():
     parsers = build_parser()
     parser = parsers.main
-    parser.add_argument("--single-subtask", action="store_true")
+    parser.add_argument("--single-instruction", action="store_true")
     parser.add_argument("--debug", action="store_true")
     parser.add_argument("--tune", action="store_true")
     parser.add_argument("--quiet", action="store_true")
@@ -238,13 +238,15 @@ def exp_cli():
     gridworld_parser.add_argument("--fly-prob", help="", type=float, default=0.005)
     gridworld_parser.add_argument("--toward-cat-prob", help="", type=float, default=0.5)
     wrapper_parser = parser.add_argument_group("wrapper_args")
-    wrapper_parser.add_argument("--n-active-subtasks", help="", type=int, required=True)
+    wrapper_parser.add_argument(
+        "--n-active-instructions", help="", type=int, required=True
+    )
     wrapper_parser.add_argument("--vision-range", help="", type=float, default=1)
     wrapper_parser.add_argument("--watch-baby-range", help="", type=int, default=2)
     wrapper_parser.add_argument("--avoid-dog-range", help="", type=int, default=2)
     wrapper_parser.add_argument("--door-time-limit", help="", type=int, default=7)
     wrapper_parser.add_argument("--max-time-outside", help="", type=int, default=15)
-    wrapper_parser.add_argument("--subtask", dest="subtasks", action="append")
+    wrapper_parser.add_argument("--instruction", dest="instructions", action="append")
     wrapper_parser.add_argument("--test", nargs="*", action="append", default=[])
     wrapper_parser.add_argument("--valid", nargs="*", action="append", default=[])
     exp_main(**hierarchical_parse_args(parser))

@@ -9,7 +9,7 @@ from gym import spaces
 from gym.wrappers import TimeLimit
 
 from ppo.events.gridworld import State
-from ppo.events.subtasks import (
+from ppo.events.instructions import (
     AnswerDoor,
     CatchMouse,
     ComfortBaby,
@@ -19,7 +19,7 @@ from ppo.events.subtasks import (
     CleanMess,
     AvoidDog,
     WatchBaby,
-    Subtask,
+    Instruction,
     LetDogIn,
     KeepBabyOutOfFire,
     KeepCatFromDog,
@@ -28,7 +28,7 @@ from ppo.utils import RESET, REVERSE
 from ppo.events.objects import Agent
 import itertools
 
-Obs = namedtuple("Obs", "base subtasks interactable")
+Obs = namedtuple("Obs", "base instructions interactable")
 
 
 class Wrapper(gym.Wrapper):
@@ -39,10 +39,10 @@ class Wrapper(gym.Wrapper):
         avoid_dog_range: float,
         door_time_limit: int,
         max_time_outside: int,
-        n_active_subtasks: int,
+        n_active_instructions: int,
         evaluation: bool,
         vision_range: int,
-        subtasks: List[str] = None,
+        instructions: List[str] = None,
         check_obs=True,
         test: List[List[str]] = None,
         valid: List[List[str]] = None,
@@ -52,14 +52,16 @@ class Wrapper(gym.Wrapper):
         self.testing = evaluation
         self.agent_index = env.object_types.index(Agent)
         self.check_obs = check_obs
-        self.n_active_subtasks = n_active_subtasks
+        self.n_active_instructions = n_active_instructions
 
-        def subtask_str(subtask):
-            return type(subtask).__name__
+        def instruction_str(instruction):
+            return type(instruction).__name__
 
-        def make_subtasks():
+        def make_instructions():
             return filter(
-                lambda s: (subtask_str(s) in subtasks) if subtasks else True,
+                lambda s: (instruction_str(s) in instructions)
+                if instructions
+                else True,
                 [
                     AnswerDoor(door_time_limit),
                     CatchMouse(),
@@ -76,9 +78,9 @@ class Wrapper(gym.Wrapper):
                 ],
             )
 
-        self.make_subtasks = make_subtasks
-        self.active_subtasks = None
-        self.subtask_indexes = None
+        self.make_instructions = make_instructions
+        self.active_instructions = None
+        self.instruction_indexes = None
         self.rewards = None
         env = env.unwrapped
         self.random = env.random
@@ -87,12 +89,12 @@ class Wrapper(gym.Wrapper):
         self.object_types = env.object_types
         self.obj_one_hots = np.eye(len(env.object_types))
         base_shape = len(self.object_types), self.height, self.width
-        subtasks = list(map(subtask_str, make_subtasks()))
-        n_subtasks = len(subtasks)
-        self.test_set = [{subtasks.index(s) for s in task} for task in test or []]
-        self.valid_set = [{subtasks.index(s) for s in task} for task in valid or []]
-        subtasks_nvec = n_subtasks * np.ones(n_active_subtasks)
-        assert n_active_subtasks <= n_subtasks
+        instructions = list(map(instruction_str, make_instructions()))
+        n_instructions = len(instructions)
+        self.test_set = [{instructions.index(s) for s in task} for task in test or []]
+        self.valid_set = [{instructions.index(s) for s in task} for task in valid or []]
+        instructions_nvec = n_instructions * np.ones(n_active_instructions)
+        assert n_active_instructions <= n_instructions
         self.observation_space = spaces.Dict(
             Obs(
                 base=spaces.Box(
@@ -100,7 +102,7 @@ class Wrapper(gym.Wrapper):
                     high=2 * np.ones(base_shape),
                     dtype=float,
                 ),
-                subtasks=spaces.MultiDiscrete(subtasks_nvec),
+                instructions=spaces.MultiDiscrete(instructions_nvec),
                 interactable=spaces.MultiBinary(len(self.object_types)),
             )._asdict()
         )
@@ -132,12 +134,12 @@ class Wrapper(gym.Wrapper):
             for j in range(self.width):
                 print(object_string.get((i, j), " " * width), end="|")
         print()
-        for subtask in self.active_subtasks:
-            print(subtask, end="")
+        for instruction in self.active_instructions:
+            print(instruction, end="")
             if self.rewards is not None:
                 print(": ", end="")
                 try:
-                    print(self.rewards[subtask])
+                    print(self.rewards[instruction])
                 except KeyError:
                     print(0)
             else:
@@ -146,25 +148,27 @@ class Wrapper(gym.Wrapper):
             input("pause")
 
     def reset(self, **kwargs):
-        possible_subtasks = list(self.make_subtasks())
+        possible_instructions = list(self.make_instructions())
 
         if self.testing:
-            self.subtask_indexes = list(
+            self.instruction_indexes = list(
                 self.test_set[self.random.choice(len(self.test_set))]
             )
         else:
             exclude = self.test_set + self.valid_set
             combinations = itertools.combinations(
-                range(len(possible_subtasks)), self.n_active_subtasks
+                range(len(possible_instructions)), self.n_active_instructions
             )
-            allowed_subtasks = [c for c in combinations if set(c) not in exclude]
-            self.subtask_indexes = list(
-                allowed_subtasks[self.random.choice(len(allowed_subtasks))]
+            allowed_instructions = [c for c in combinations if set(c) not in exclude]
+            self.instruction_indexes = list(
+                allowed_instructions[self.random.choice(len(allowed_instructions))]
             )
-        # for i, s in enumerate(possible_subtasks):
+        # for i, s in enumerate(possible_instructions):
         # print(i, s)
-        # self.subtask_indexes = np.array([3, 5])
-        self.active_subtasks = [possible_subtasks[i] for i in self.subtask_indexes]
+        # self.instruction_indexes = np.array([3, 5])
+        self.active_instructions = [
+            possible_instructions[i] for i in self.instruction_indexes
+        ]
         return self.observation(super().reset())
 
     def get_rewards(self, s: State):
@@ -173,11 +177,11 @@ class Wrapper(gym.Wrapper):
             k = type(obj).__name__.lower()
             object_dict[k] += [obj]
         object_dict = {k: v[0] if len(v) == 1 else v for k, v in object_dict.items()}
-        subtask: Subtask
-        for subtask in self.active_subtasks:
-            subtask.step(*s.interactions, **object_dict)  # TODO wtf
-            if subtask.condition(*s.interactions, **object_dict):
-                yield subtask, subtask.reward
+        instruction: Instruction
+        for instruction in self.active_instructions:
+            instruction.step(*s.interactions, **object_dict)  # TODO wtf
+            if instruction.condition(*s.interactions, **object_dict):
+                yield instruction, instruction.reward
 
     def step(self, action):
         s, _, t, i = super().step(action)
@@ -206,14 +210,14 @@ class Wrapper(gym.Wrapper):
                     interactable[env.object_types.index(t)] = 1
         base = np.stack([object_pos[k] for k in self.object_types])
         obs = Obs(
-            base=base, subtasks=self.subtask_indexes, interactable=interactable
+            base=base, instructions=self.instruction_indexes, interactable=interactable
         )._asdict()
         if self.check_obs:
             assert self.observation_space.contains(obs)
         return obs
 
 
-class SingleSubtaskWrapper(Wrapper):
+class SingleInstructionWrapper(Wrapper):
     def __init__(self, check_obs=True, **kwargs):
         super().__init__(**kwargs, check_obs=False)
         self._check_obs = check_obs
@@ -232,7 +236,7 @@ if __name__ == "__main__":
     env = TimeLimit(
         max_episode_steps=30,
         env=Wrapper(
-            n_active_subtasks=1,
+            n_active_instructions=1,
             watch_baby_range=2,
             avoid_dog_range=2,
             door_time_limit=10,

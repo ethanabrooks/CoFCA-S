@@ -39,7 +39,9 @@ class Recurrence(nn.Module):
         self.debug = debug
 
         # networks
-        self.task_embeddings = nn.Embedding(obs_spaces.subtasks.nvec[0], hidden_size)
+        self.task_embeddings = nn.Embedding(
+            obs_spaces.instructions.nvec[0], hidden_size
+        )
         self.task_output_sections = [1, 1] + [hidden_size] * (
             3 if use_M_plus_minus else 1
         )
@@ -98,7 +100,7 @@ class Recurrence(nn.Module):
             a_probs=action_space.n,
             v=1,
             h=hidden_size,
-            p=obs_spaces.subtasks.nvec.size,
+            p=obs_spaces.instructions.nvec.size,
         )
 
     @staticmethod
@@ -140,7 +142,7 @@ class Recurrence(nn.Module):
         inputs = inputs._replace(base=inputs.base.view(T, N, *self.obs_shape))
 
         # build memory
-        rnn_inputs = self.task_embeddings(inputs.subtasks[0].long()).transpose(0, 1)
+        rnn_inputs = self.task_embeddings(inputs.instructions[0].long()).transpose(0, 1)
         X, _ = self.task_encoder(rnn_inputs)
 
         encoding = X.transpose(0, 1).split(self.task_output_sections, dim=-1)
