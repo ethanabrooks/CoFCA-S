@@ -1,6 +1,7 @@
 from collections import namedtuple, defaultdict
 from typing import List
 
+import re
 import numpy as np
 
 import gym
@@ -25,6 +26,7 @@ from ppo.events.subtasks import (
 )
 from ppo.utils import RESET, REVERSE
 from ppo.events.objects import Agent
+import itertools
 
 Obs = namedtuple("Obs", "base subtasks interactable")
 
@@ -39,12 +41,15 @@ class Wrapper(gym.Wrapper):
         max_time_outside: int,
         n_active_subtasks: int,
         evaluation: bool,
+        vision_range: int,
         subtasks: List[str] = None,
         check_obs=True,
-        held_out: List[List[str]] = None,
+        test: List[List[str]] = None,
+        valid: List[List[str]] = None,
     ):
         super().__init__(env)
-        self.evaluation = evaluation
+        self.vision_range = vision_range
+        self.testing = evaluation
         self.agent_index = env.object_types.index(Agent)
         self.check_obs = check_obs
         self.n_active_subtasks = n_active_subtasks
@@ -84,7 +89,8 @@ class Wrapper(gym.Wrapper):
         base_shape = len(self.object_types), self.height, self.width
         subtasks = list(map(subtask_str, make_subtasks()))
         n_subtasks = len(subtasks)
-        self.held_out = [sorted({subtasks.index(s) for s in task}) for task in held_out]
+        self.test_set = [{subtasks.index(s) for s in task} for task in test or []]
+        self.valid_set = [{subtasks.index(s) for s in task} for task in valid or []]
         subtasks_nvec = n_subtasks * np.ones(n_active_subtasks)
         assert n_active_subtasks <= n_subtasks
         self.observation_space = spaces.Dict(
@@ -141,15 +147,20 @@ class Wrapper(gym.Wrapper):
 
     def reset(self, **kwargs):
         possible_subtasks = list(self.make_subtasks())
-        if self.evaluation:
-            self.subtask_indexes = self.held_out[self.random.choice(len(self.held_out))]
-        else:
-            self.subtask_indexes = self.random.choice(
-                len(possible_subtasks), size=self.n_active_subtasks, replace=False
+
+        if self.testing:
+            self.subtask_indexes = list(
+                self.test_set[self.random.choice(len(self.test_set))]
             )
-            if sorted(self.subtask_indexes) in self.held_out:
-                # if not evaluation and chosen task is held-out
-                return self.reset(**kwargs)
+        else:
+            exclude = self.test_set + self.valid_set
+            combinations = itertools.combinations(
+                range(len(possible_subtasks)), self.n_active_subtasks
+            )
+            allowed_subtasks = [c for c in combinations if set(c) not in exclude]
+            self.subtask_indexes = list(
+                allowed_subtasks[self.random.choice(len(allowed_subtasks))]
+            )
         # for i, s in enumerate(possible_subtasks):
         # print(i, s)
         # self.subtask_indexes = np.array([3, 5])
@@ -177,6 +188,10 @@ class Wrapper(gym.Wrapper):
         dims = self.height, self.width
         object_pos = defaultdict(lambda: np.zeros((self.height, self.width)))
         interactable = np.zeros(len(self.object_types))
+        env = self.env.unwrapped
+        pos = np.array(env.agent.pos).reshape(2, 1, 1)
+        indexes = np.stack(np.meshgrid(np.arange(self.height), np.arange(self.width)))
+        eyeshot = np.max(indexes - pos, axis=0) <= self.vision_range
         for obj in observation.objects:
             if obj.pos is not None:
                 index = np.ravel_multi_index(obj.pos, dims)
@@ -186,8 +201,7 @@ class Wrapper(gym.Wrapper):
                     c *= 2
 
                 t = type(obj)
-                object_pos[t] += c * one_hot
-                env = self.env.unwrapped
+                object_pos[t] += c * eyeshot * one_hot
                 if obj.pos == env.agent.pos and obj is not env.agent:
                     interactable[env.object_types.index(t)] = 1
         base = np.stack([object_pos[k] for k in self.object_types])
@@ -199,14 +213,15 @@ class Wrapper(gym.Wrapper):
         return obs
 
 
-class BaseWrapper(Wrapper):
-    def __init__(self, subtask, **kwargs):
-        super().__init__(subtask, **kwargs)
+class SingleSubtaskWrapper(Wrapper):
+    def __init__(self, check_obs=True, **kwargs):
+        super().__init__(**kwargs, check_obs=False)
+        self._check_obs = check_obs
         self.observation_space = self.observation_space.spaces["base"]
 
     def observation(self, observation):
         obs = super().observation(observation)["base"]
-        if self.check_obs:
+        if self._check_obs:
             assert self.observation_space.contains(obs)
         return obs
 
@@ -222,6 +237,7 @@ if __name__ == "__main__":
             avoid_dog_range=2,
             door_time_limit=10,
             max_time_outside=15,
+            vision_range=1,
             env=ppo.events.Gridworld(
                 cook_time=2,
                 time_to_heat_oven=3,
@@ -233,7 +249,9 @@ if __name__ == "__main__":
                 fly_prob=0.005,
                 height=4,
                 width=4,
+                seed=0,
             ),
+            evaluation=False,
         ),
     )
     ppo.events.keyboard_control.run(env, actions="xswda1234567890", seed=0)

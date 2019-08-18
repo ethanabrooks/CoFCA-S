@@ -15,7 +15,7 @@ class PPO:
         agent,
         clip_param,
         ppo_epoch,
-        batch_size,
+        num_batch,
         value_loss_coef,
         learning_rate=None,
         eps=None,
@@ -29,7 +29,7 @@ class PPO:
 
         self.clip_param = clip_param
         self.ppo_epoch = ppo_epoch
-        self.num_mini_batch = batch_size
+        self.num_mini_batch = num_batch
 
         self.value_loss_coef = value_loss_coef
 

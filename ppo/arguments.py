@@ -1,11 +1,13 @@
 # stdlib
 # third party
 import argparse
+from collections import namedtuple
 from pathlib import Path
 
 from rl_utils import hierarchical_parse_args
 import torch.nn as nn
 
+Parsers = namedtuple("Parser", "main agent ppo env")
 
 ACTIVATIONS = dict(
     selu=nn.SELU(), prelu=nn.PReLU(), leaky=nn.LeakyReLU(), relu=nn.ReLU()
@@ -39,11 +41,11 @@ def build_parser():
     parser.add_argument(
         "--num-processes",
         type=int,
-        default=16,
+        required=True,
         help="how many training CPU processes to use",
     )
     parser.add_argument(
-        "--num-steps", type=int, default=5, help="number of forward steps in A2C"
+        "--num-steps", type=int, required=True, help="number of forward steps in A2C"
     )
     parser.add_argument(
         "--log-interval",
@@ -71,14 +73,14 @@ def build_parser():
     )
     parser.add_argument("--synchronous", action="store_true")
     parser.add_argument(
-        "--batch-size", type=int, default=32, help="number of batches for ppo"
+        "--num-batch", type=int, required=True, help="number of batches for ppo"
     )
     parser.add_argument("--success-reward", type=float)
 
     agent_parser = parser.add_argument_group("agent_args")
     agent_parser.add_argument("--recurrent", action="store_true")
-    agent_parser.add_argument("--hidden-size", type=int, default=256)
-    agent_parser.add_argument("--num-layers", type=int, default=3)
+    agent_parser.add_argument("--hidden-size", type=int, required=True)
+    agent_parser.add_argument("--num-layers", type=int, required=True)
     agent_parser.add_argument(
         "--activation",
         type=lambda x: ACTIVATIONS[x],
@@ -86,7 +88,7 @@ def build_parser():
         default=nn.ReLU(),
     )
     agent_parser.add_argument(
-        "--entropy-coef", type=float, default=0.01, help="entropy term coefficient"
+        "--entropy-coef", type=float, required=True, help="entropy term coefficient"
     )
 
     ppo_parser = parser.add_argument_group("ppo_args")
@@ -94,14 +96,12 @@ def build_parser():
         "--clip-param", type=float, default=0.2, help="ppo clip parameter"
     )
     ppo_parser.add_argument(
-        "--ppo-epoch", type=int, default=4, help="number of ppo epochs"
+        "--ppo-epoch", type=int, required=True, help="number of ppo epochs"
     )
     ppo_parser.add_argument(
         "--value-loss-coef", type=float, default=0.5, help="value loss coefficient"
     )
-    ppo_parser.add_argument(
-        "--learning-rate", type=float, default=7e-4, help="(default: 7e-4)"
-    )
+    ppo_parser.add_argument("--learning-rate", type=float, required=True, help="")
     ppo_parser.add_argument(
         "--eps", type=float, default=1e-5, help="RMSprop optimizer epsilon"
     )
@@ -122,7 +122,7 @@ def build_parser():
         help="add timestep to observations",
     )
 
-    return parser
+    return Parsers(main=parser, env=env_parser, ppo=ppo_parser, agent=agent_parser)
 
 
 def get_args():

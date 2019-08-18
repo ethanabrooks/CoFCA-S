@@ -108,7 +108,7 @@ class RandomWalking(Object, ABC):
 
     def wrap_action(self, action):
         choice = self.random.choice(len(self.actions))
-        return self.actions[choice] if self.random.rand() < 0.7 else (0, 0)
+        return self.actions[choice] if self.random.rand() < 0.3 else (0, 0)
 
 
 class Graspable(Object, ABC):
@@ -217,7 +217,7 @@ class MouseHole(Wall):
         return "🕳"
 
 
-class Mouse(RandomActivating, RandomWalking, Deactivatable):
+class Mouse(RandomActivating, Immobile, Deactivatable):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.caught = False
@@ -236,25 +236,26 @@ class Mouse(RandomActivating, RandomWalking, Deactivatable):
     def hole(self):
         return self.get_object(MouseHole)
 
-    def wrap_action(self, action):
-        if self.pos not in (None, self.hole.pos) and self.random.rand() < 0.5:
-            # step toward hole
-            from_hole = np.array(self.pos) - np.array(self.hole.pos)
-            action = min(self.actions, key=lambda a: np.sum(np.abs(a + from_hole)))
-        return action
+    # def wrap_action(self, action):
+    #     if self.pos not in (None, self.hole.pos) and self.random.rand() < 0.5:
+    #         # step toward hole
+    #         from_hole = np.array(self.pos) - np.array(self.hole.pos)
+    #         action = min(self.actions, key=lambda a: np.sum(np.abs(a + from_hole)))
+    #     return action
 
     def step(self, action):
-        hole = self.get_object(MouseHole)
-        if self.pos == hole.pos:
-            self.pos = None
-            self.activated = False
+        if self.activated:
+            rand = self.random.rand()
+            if rand < self.activation_prob:
+                self.pos = None
+                super().deactivate()
         return super().step(action)
 
     def icon(self):
         return "🐁"
 
 
-class Baby(Graspable, RandomPosition, RandomActivating, RandomWalking, Deactivatable):
+class Baby(Graspable, RandomPosition, RandomActivating, Immobile, Deactivatable):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -339,36 +340,40 @@ class Dog(Graspable, RandomPosition, RandomWalking):
         super().interact()
 
     def wrap_action(self, action):
-        if not self.grasped and self.random.rand() < self.toward_cat_prob:
+        action = super().wrap_action(action)
+        if (
+            not self.grasped
+            and not action == (0, 0)
+            and self.random.rand() < self.toward_cat_prob
+        ):
             cat = self.get_object(Cat)
             from_cat = np.array(self.pos) - np.array(cat.pos)
             return min(
                 self.actions, key=lambda a: np.sum(np.abs(np.array(a) + from_cat))
             )
-        else:
-            return super().wrap_action(action)
+        return action
 
     def icon(self):
         return "🐕"
 
 
-class Cat(Graspable, RandomPosition, RandomWalking):
+class Cat(Graspable, RandomPosition, Immobile):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.let_out = False
 
-    def wrap_action(self, action):
-        if self.grasped:
-            return super().wrap_action(action)
-        else:
-            agent = self.get_object(Agent)
-            from_agent = np.array(self.pos) - np.array(agent.pos)
-            toward_agent = min(
-                self.actions, key=lambda a: np.sum(np.abs(np.array(a) + from_agent))
-            )
-            actions = list(set(self.actions) - {toward_agent})
-            choice = self.random.choice(len(actions))
-            return super().wrap_action(actions[choice])
+    # def wrap_action(self, action):
+    #     if self.grasped:
+    #         return super().wrap_action(action)
+    #     else:
+    #         agent = self.get_object(Agent)
+    #         from_agent = np.array(self.pos) - np.array(agent.pos)
+    #         toward_agent = min(
+    #             self.actions, key=lambda a: np.sum(np.abs(np.array(a) + from_agent))
+    #         )
+    #         actions = list(set(self.actions) - {toward_agent})
+    #         choice = self.random.choice(len(actions))
+    #         return super().wrap_action(actions[choice])
 
     def icon(self):
         return "🐈"
@@ -395,7 +400,7 @@ class Fire(RandomPosition, Immobile, Activatable):
         return "🔥" if self.activated else "🜂"
 
 
-class Fly(RandomPosition, RandomWalking, RandomActivating, Deactivatable):
+class Fly(RandomPosition, RandomActivating, Immobile, Deactivatable):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         try:

@@ -1,3 +1,2 @@
-* determine when runs have converged
-* develop evaluation of hold-outs
-* implement baseline
+* should c be attention-weighted?
+* make f recurrent

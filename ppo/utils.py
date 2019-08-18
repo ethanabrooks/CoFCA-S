@@ -146,3 +146,10 @@ GREEN = "\033[0;32m"
 RESET = "\033[0;0m"
 BOLD = "\033[;1m"
 REVERSE = "\033[;7m"
+
+
+def k_scalar_pairs(*args, **kwargs):
+    for k, v in dict(*args, **kwargs).items():
+        mean = np.mean(v)
+        if not np.isnan(mean):
+            yield k, mean
