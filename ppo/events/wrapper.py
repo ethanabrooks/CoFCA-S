@@ -149,7 +149,6 @@ class Wrapper(gym.Wrapper):
 
     def reset(self, **kwargs):
         possible_instructions = list(self.make_instructions())
-
         if self.testing:
             self.instruction_indexes = list(
                 self.test_set[self.random.choice(len(self.test_set))]
@@ -195,7 +194,6 @@ class Wrapper(gym.Wrapper):
         env = self.env.unwrapped
         pos = np.array(env.agent.pos).reshape(2, 1, 1)
         indexes = np.stack(np.meshgrid(np.arange(self.height), np.arange(self.width)))
-        eyeshot = np.max(indexes - pos, axis=0) <= self.vision_range
         for obj in observation.objects:
             if obj.pos is not None:
                 index = np.ravel_multi_index(obj.pos, dims)
@@ -205,7 +203,7 @@ class Wrapper(gym.Wrapper):
                     c *= 2
 
                 t = type(obj)
-                object_pos[t] += c * eyeshot * one_hot
+                object_pos[t] += c * one_hot
                 if obj.pos == env.agent.pos and obj is not env.agent:
                     interactable[env.object_types.index(t)] = 1
         base = np.stack([object_pos[k] for k in self.object_types])
