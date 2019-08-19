@@ -33,7 +33,7 @@ docker:
 # Local specific configuration.
 provider:
     type: local
-    head_ip: 141.212.113.59
+    head_ip: 141.213.3.138
     worker_ips: []
     # 141.212.113.88 # rldl1 down
     #- 141.213.3.138 # rldl2 
@@ -75,10 +75,12 @@ file_mounts: {}
 # List of commands that will be run before `setup_commands`. If docker is
 # enabled, these commands will run outside the container and before docker
 # is setup.
-initialization_commands: [cd ~/ppo && git pull]
+initialization_commands: 
+  - docker pull ethanabrooks/ppo-repo:my-tag
 
 # List of shell commands to run to set up each nodes.
-setup_commands: [bash tune.sh]
+setup_commands: 
+  - bash tune.sh "$(hostname -i):6379"
 
 # Custom commands that will be run on the head node after common setup.
 head_setup_commands: []
