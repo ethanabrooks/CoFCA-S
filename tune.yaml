@@ -79,21 +79,26 @@ initialization_commands:
   - docker pull ethanabrooks/ppo-repo:my-tag
 
 # List of shell commands to run to set up each nodes.
+# Runs first inside docker
 setup_commands: []
 
 # Custom commands that will be run on the head node after common setup.
+# Runs second inside docker for head
 head_setup_commands: []
 
 # Custom commands that will be run on worker nodes after common setup.
+# Runs second inside docker for worker
 worker_setup_commands: []
 
 # Command to start ray on the head node. You don't need to change this.
+# Runs last inside docker for head
 head_start_ray_commands: 
     - ray stop
     - ulimit -c unlimited && ray start --head --redis-port=6379 --autoscaling-config=~/ray_bootstrap_config.yaml
     - bash tune.sh
 
 # Command to start ray on worker nodes. You don't need to change this.
+# Runs last inside docker for worker
 worker_start_ray_commands:
     - ray stop
     - ray start --redis-address=$RAY_HEAD_IP:6379
