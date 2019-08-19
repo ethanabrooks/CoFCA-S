@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 
+  #--tune \
 nice python ppo/main.py \
   --cuda-deterministic \
   --log-dir=/home/ethanbro/tune_results \
   --run-id=tune/maiden \
   --num-processes="300" \
   \
-  --tune \
   --redis-address "$(hostname -i):6379" \
   \
   --instruction="AnswerDoor" \
