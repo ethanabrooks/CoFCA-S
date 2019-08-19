@@ -26,8 +26,8 @@ idle_timeout_minutes: 5
 # and opens all the necessary ports to support the Ray cluster.
 # Empty string means disabled. Assumes Docker is installed.
 docker:
-    image: ethanabrooks/ppo-repo:my-tag
-    container_name: my-tag
+    image: ethanabrooks/ppo-repo:ppo
+    container_name: ppo
     run_options: []  # Extra options to pass into "docker run"
 
 # Local specific configuration.
