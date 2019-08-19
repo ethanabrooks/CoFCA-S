@@ -7,7 +7,7 @@ nice python ppo/main.py \
   --num-processes="300" \
   \
   --tune \
-  --redis-address $1 \
+  --redis-address "$(hostname -i):6379" \
   \
   --instruction="AnswerDoor" \
   --instruction="AvoidDog" \
