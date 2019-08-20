@@ -26,14 +26,14 @@ idle_timeout_minutes: 5
 # Empty string means disabled. Assumes Docker is installed.
 docker:
     image: ethanabrooks/ppo-repo:latest
-    container_name: latest
+    container_name: docker-tune
     run_options: ["--gpus all"]  # Extra options to pass into "docker run"
 
 # Local specific configuration.
 provider:
     type: local
-    head_ip: 141.212.113.254
-    worker_ips: []
+    head_ip: 141.213.3.4 # rldl8
+    worker_ips:
     # 141.212.113.88 # rldl1 
     #- 141.213.3.138 # rldl2 nvidia-docker error (nvidia-container-cli:
     #requirement error: unsatisfied condition: brand = tesla)
@@ -43,7 +43,7 @@ provider:
     #- 141.213.3.27 # rldl6 nvidia-docker installation issue (/boot is full)
     #- 141.213.3.130 # rldl7 CPU
     #- 141.213.3.4 # rldl8
-    #- 141.212.113.254 # rldl9 
+    - 141.212.113.254 # rldl9 
     # 141.212.113.23 # rldl10 Max
     #- 141.212.113.249 # rldl11 
     ##- 141.212.113.98 # rldl12 
@@ -95,11 +95,9 @@ worker_setup_commands: []
 head_start_ray_commands: 
     - ray stop
     - ulimit -c unlimited && ray start --head --redis-port=6379 --autoscaling-config=~/ray_bootstrap_config.yaml
-    - bash tune.sh
 
 # Command to start ray on worker nodes. You don't need to change this.
 # Runs last inside docker for worker
 worker_start_ray_commands:
     - ray stop
     - ray start --redis-address=$RAY_HEAD_IP:6379
-    - bash tune.sh
