@@ -44,6 +44,10 @@ RUN pip install \
       "tensorboardX==1.8" \ 
       "tensorflow==1.14.0" \
       "opencv-python==4.1.0.25" \ 
-      "psutil==5.6.3"
+      "psutil==5.6.3" \
+      "ipython" \
+      "ipdb"
+
+RUN apt-get update && apt-get install -y --no-install-recommends net-tools vim
 COPY . .
 RUN pip install -e .
