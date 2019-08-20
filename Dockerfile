@@ -50,5 +50,5 @@ RUN pip install \
       "ipdb"
 
 RUN apt-get update && apt-get install -y --no-install-recommends net-tools vim iproute2
-COPY . .
-RUN pip install -e .
+COPY . /root/
+RUN pip install -e /root/
