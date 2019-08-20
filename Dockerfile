@@ -42,6 +42,7 @@ RUN pip install -e rl-utils
 RUN pip install \
       "ray[debug]==0.7.3" \ 
       "tensorboardX==1.8" \ 
+      "tensorboard==1.14.0" \
       "opencv-python==4.1.0.25" \ 
       "psutil==5.6.3"
 COPY . .
