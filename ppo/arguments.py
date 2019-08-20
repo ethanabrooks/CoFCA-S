@@ -39,14 +39,9 @@ def build_parser():
     parser.add_argument("--render", action="store_true")
     parser.add_argument("--render-eval", action="store_true")
     parser.add_argument(
-        "--num-processes",
-        type=int,
-        required=True,
-        help="how many training CPU processes to use",
+        "--num-processes", type=int, help="how many training CPU processes to use"
     )
-    parser.add_argument(
-        "--num-steps", type=int, required=True, help="number of forward steps in A2C"
-    )
+    parser.add_argument("--num-steps", type=int, help="number of forward steps in A2C")
     parser.add_argument(
         "--log-interval",
         type=int,
@@ -72,15 +67,13 @@ def build_parser():
         "--no-cuda", dest="cuda", action="store_false", help="enables CUDA training"
     )
     parser.add_argument("--synchronous", action="store_true")
-    parser.add_argument(
-        "--num-batch", type=int, required=True, help="number of batches for ppo"
-    )
+    parser.add_argument("--num-batch", type=int, help="number of batches for ppo")
     parser.add_argument("--success-reward", type=float)
 
     agent_parser = parser.add_argument_group("agent_args")
     agent_parser.add_argument("--recurrent", action="store_true")
-    agent_parser.add_argument("--hidden-size", type=int, required=True)
-    agent_parser.add_argument("--num-layers", type=int, required=True)
+    agent_parser.add_argument("--hidden-size", type=int)
+    agent_parser.add_argument("--num-layers", type=int)
     agent_parser.add_argument(
         "--activation",
         type=lambda x: ACTIVATIONS[x],
@@ -88,20 +81,18 @@ def build_parser():
         default=nn.ReLU(),
     )
     agent_parser.add_argument(
-        "--entropy-coef", type=float, required=True, help="entropy term coefficient"
+        "--entropy-coef", type=float, help="entropy term coefficient"
     )
 
     ppo_parser = parser.add_argument_group("ppo_args")
     ppo_parser.add_argument(
         "--clip-param", type=float, default=0.2, help="ppo clip parameter"
     )
-    ppo_parser.add_argument(
-        "--ppo-epoch", type=int, required=True, help="number of ppo epochs"
-    )
+    ppo_parser.add_argument("--ppo-epoch", type=int, help="number of ppo epochs")
     ppo_parser.add_argument(
         "--value-loss-coef", type=float, default=0.5, help="value loss coefficient"
     )
-    ppo_parser.add_argument("--learning-rate", type=float, required=True, help="")
+    ppo_parser.add_argument("--learning-rate", type=float, help="")
     ppo_parser.add_argument(
         "--eps", type=float, default=1e-5, help="RMSprop optimizer epsilon"
     )

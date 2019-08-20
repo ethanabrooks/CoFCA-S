@@ -113,7 +113,8 @@ def exp_main(
             learning_rate=ray.tune.uniform(low=0.0001, high=0.005),
             ppo_epoch=ray.tune.choice(list(range(5))),
             feed_r_initially=ray.tune.choice([True, False]),
-            use_M_plus_minus=ray.tune.choice([True, False])
+            use_M_plus_minus=ray.tune.choice([True, False]),
+            num_processes=300,
             # ppo_epoch=ray.tune.sample_from(
             #     lambda spec: max(
             #         1,
@@ -235,7 +236,7 @@ def exp_cli():
     parser = parsers.main
     parser.add_argument("--single-instruction", action="store_true")
     parser.add_argument("--debug", action="store_true")
-    parser.add_argument("--tune", action="store_true")
+    parser.add_argument("--no-tune", dest='tune', action="store_false")
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--baseline", action="store_true")
     parser.add_argument("--oh-et-al", action="store_true")
@@ -255,9 +256,7 @@ def exp_cli():
     gridworld_parser.add_argument("--fly-prob", help="", type=float, default=0.005)
     gridworld_parser.add_argument("--toward-cat-prob", help="", type=float, default=0.5)
     wrapper_parser = parser.add_argument_group("wrapper_args")
-    wrapper_parser.add_argument(
-        "--n-active-instructions", help="", type=int, required=True
-    )
+    wrapper_parser.add_argument("--n-active-instructions", help="", default=2, type=int)
     wrapper_parser.add_argument("--vision-range", help="", type=float, default=1)
     wrapper_parser.add_argument("--watch-baby-range", help="", type=int, default=2)
     wrapper_parser.add_argument("--avoid-dog-range", help="", type=int, default=2)

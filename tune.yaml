@@ -33,7 +33,7 @@ docker:
 provider:
     type: local
     head_ip: 141.213.3.4 # rldl8
-    worker_ips:
+    worker_ips: []
     # 141.212.113.88 # rldl1 
     #- 141.213.3.138 # rldl2 nvidia-docker error (nvidia-container-cli:
     #requirement error: unsatisfied condition: brand = tesla)
@@ -43,7 +43,7 @@ provider:
     #- 141.213.3.27 # rldl6 nvidia-docker installation issue (/boot is full)
     #- 141.213.3.130 # rldl7 CPU
     #- 141.213.3.4 # rldl8
-    - 141.212.113.254 # rldl9 
+    #- 141.212.113.254 # rldl9 
     # 141.212.113.23 # rldl10 Max
     #- 141.212.113.249 # rldl11 
     ##- 141.212.113.98 # rldl12 
