@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 
+my_ip=$(ip route get 8.8.8.8 | awk -F"src " 'NR==1{split($2,a," ");print a[1]}')
+
 nice python ppo/main.py \
   --cuda-deterministic \
   --log-dir=/home/ethanbro/tune_results \
   --run-id=tune/maiden \
   --num-processes="300" \
   \
-  --redis-address "$(hostname -i):6379" \
+  --redis-address "$my_ip:6379" \
   --tune \
   --quiet \
   \
