@@ -47,8 +47,8 @@ class AnswerDoor(Instruction):
             self.time_waiting = 0
         if self.time_waiting is not None:
             self.time_waiting += 1
-        if door in interactions and self.time_since_ring < self.time_limit:
-            self.time_waiting = None
+            if door in interactions and self.time_waiting < self.time_limit:
+                self.time_waiting = None
 
     def condition(self, *interactions, door: Door, **objects):
         if self.time_waiting is None:
