@@ -224,11 +224,13 @@ class Wrapper(gym.Wrapper):
                 if self.i <= 1:
                     logs.update({f"return_{format_split(self.i)}": _return})
                 else:
-                    best_split = max([self.test_returns[s] for s in splits])
+                    best_split = max(splits, key=lambda s: self.test_returns[s])
                     logs.update(
                         {
-                            f"optimal_return": _return,
-                            f"optimal-best_split": _return - best_split,
+                            "optimal_return": _return,
+                            "best_split": best_split,
+                            f"optimal-best_split": _return
+                            - self.test_returns[best_split],
                         }
                     )
 
