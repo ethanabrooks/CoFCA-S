@@ -262,7 +262,7 @@ class Wrapper(gym.Wrapper):
                 if obj.pos == env.agent.pos and obj is not env.agent:
                     interactable[env.object_types.index(t)] = 1
         base = np.stack([object_pos[k] for k in self.object_types])
-        if self.testing and self.i <= 1:
+        if self.measure_interactivity and self.testing and self.i <= 1:
             instructions = [
                 self.random.choice(self.instruction_indexes, p=[self.i, 1 - self.i])
             ]
@@ -273,6 +273,7 @@ class Wrapper(gym.Wrapper):
                 instructions,
                 (0, self.instructions_per_task - len(instructions)),
                 mode="constant",
+                constant_values=-1,
             )
 
         obs = Obs(
@@ -289,17 +290,19 @@ class DefaultAgentWrapper(Wrapper):
         self._check_obs = check_obs
         d, h, w = self.observation_space.spaces["base"].shape
         nvec = self.observation_space.spaces["instructions"].nvec
-        shape = d + nvec.size, h, w
+        instruction_size = nvec[0] * nvec.size
+        shape = d + instruction_size, h, w
         self.observation_space = spaces.Box(
-            low=np.zeros(shape), high=nvec[0] * np.ones(shape)
+            low=-2 * np.ones(shape), high=2 * np.ones(shape)
         )
+        self.instruction_one_hots = np.vstack([np.eye(nvec[0]), np.zeros((1, nvec[0]))])
 
     def observation(self, observation):
         obs = super().observation(observation)
-        i = obs["instructions"]
+        i = self.instruction_one_hots[np.array(obs["instructions"])].flatten()
         b = obs["base"]
         i = np.broadcast_to(i.reshape(i.size, 1, 1), (i.size, *b.shape[1:]))
-        obs = np.stack([b, i])
+        obs = np.vstack([b, i])
         if self._check_obs:
             assert self.observation_space.contains(obs)
         return obs

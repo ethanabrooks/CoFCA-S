@@ -47,7 +47,9 @@ def exp_main(
             env = ppo.events.Gridworld(**gridworld_args, seed=seed)
             env = TimeLimit(max_episode_steps=time_limit, env=env)
             if default_agent:
-                env = ppo.events.Default(**wrapper_args, evaluation=evaluation, env=env)
+                env = ppo.events.DefaultAgentWrapper(
+                    **wrapper_args, evaluation=evaluation, env=env
+                )
             elif oh_et_al:
                 env = ppo.oh_et_al.Wrapper(
                     ppo.oh_et_al.GridWorld(
