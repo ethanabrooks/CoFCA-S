@@ -43,12 +43,14 @@ class Wrapper(gym.Wrapper):
         instructions_per_task: int,
         evaluation: bool,
         vision_range: int,
+        measure_interactivity: bool,
         instructions: List[str] = None,
         check_obs=True,
         test: List[List[str]] = None,
         valid: List[List[str]] = None,
     ):
         super().__init__(env)
+        self.measure_interactivity = measure_interactivity
         self.vision_range = vision_range
         self.testing = evaluation
         self.agent_index = env.object_types.index(Agent)
@@ -155,17 +157,19 @@ class Wrapper(gym.Wrapper):
         if self.testing:
             env = self.env.unwrapped
             env.seed(env._seed)
-            # self.instruction_indexes = list(
-            #     self.test_set[self.random.choice(len(self.test_set))]
-            # )
-            allowed_instructions = list(
-                itertools.combinations(
-                    range(len(possible_instructions)), self.instructions_per_task
+            if self.measure_interactivity:
+                allowed_instructions = list(
+                    itertools.combinations(
+                        range(len(possible_instructions)), self.instructions_per_task
+                    )
                 )
-            )
-            self.instruction_indexes = list(
-                allowed_instructions[self.random.choice(len(allowed_instructions))]
-            )
+                self.instruction_indexes = list(
+                    allowed_instructions[self.random.choice(len(allowed_instructions))]
+                )
+            else:
+                self.instruction_indexes = list(
+                    self.test_set[self.random.choice(len(self.test_set))]
+                )
         else:
             exclude = self.test_set + self.valid_set
             combinations = itertools.combinations(
@@ -173,10 +177,11 @@ class Wrapper(gym.Wrapper):
             )
             allowed_instructions = [c for c in combinations if set(c) not in exclude]
 
-            # individual instructions:
-            allowed_instructions += list(
-                set((i,) for c in allowed_instructions for i in c)
-            )
+            if self.measure_interactivity:
+                # individual instructions:
+                allowed_instructions += list(
+                    set((i,) for c in allowed_instructions for i in c)
+                )
 
             self.instruction_indexes = list(
                 allowed_instructions[self.random.choice(len(allowed_instructions))]
@@ -206,7 +211,7 @@ class Wrapper(gym.Wrapper):
         obs, _, t, logs = super().step(action)
         self.rewards = dict(self.get_rewards(obs))
         r = sum(self.rewards.values())
-        if self.testing:
+        if self.testing and self.measure_interactivity:
             self.test_returns[self.i] += r
 
             def format_split(split):
@@ -236,6 +241,7 @@ class Wrapper(gym.Wrapper):
                             }
                         )
                 self.i += 0.1
+
         return self.observation(obs), r, t, logs
 
     def observation(self, observation):
@@ -262,11 +268,12 @@ class Wrapper(gym.Wrapper):
             ]
         else:
             instructions = list(self.instruction_indexes)
-        instructions = np.pad(
-            instructions,
-            (0, self.instructions_per_task - len(instructions)),
-            mode="constant",
-        )
+        if self.measure_interactivity:
+            instructions = np.pad(
+                instructions,
+                (0, self.instructions_per_task - len(instructions)),
+                mode="constant",
+            )
 
         obs = Obs(
             base=base, instructions=instructions, interactable=interactable

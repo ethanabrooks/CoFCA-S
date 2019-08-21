@@ -270,6 +270,7 @@ def exp_cli():
     wrapper_parser.add_argument("--avoid-dog-range", help="", type=int, default=2)
     wrapper_parser.add_argument("--door-time-limit", help="", type=int, default=7)
     wrapper_parser.add_argument("--max-time-outside", help="", type=int, default=15)
+    wrapper_parser.add_argument("--measure-interactivity", action="store_true")
     wrapper_parser.add_argument("--instruction", dest="instructions", action="append")
     wrapper_parser.add_argument("--test", nargs="*", action="append", default=[])
     wrapper_parser.add_argument("--valid", nargs="*", action="append", default=[])
