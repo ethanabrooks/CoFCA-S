@@ -39,18 +39,21 @@ class Instruction:
 
 class AnswerDoor(Instruction):
     def __init__(self, time_limit=10):
-        self.time_since_ring = 0
         self.time_limit = time_limit
+        self.time_waiting = None
 
     def step(self, *interactions, door: Door, **objects):
-        self.time_since_ring += 1
-        if door.activated or (  # door bell rings once
-            door in interactions and self.time_since_ring < self.time_limit
-        ):
-            self.time_since_ring = 0
+        if door.activated:
+            self.time_waiting = 0
+        if self.time_waiting is not None:
+            self.time_waiting += 1
+            if door in interactions and self.time_waiting < self.time_limit:
+                self.time_waiting = None
 
     def condition(self, *interactions, door: Door, **objects):
-        return self.time_since_ring > self.time_limit
+        if self.time_waiting is None:
+            return False
+        return self.time_waiting > self.time_limit
 
 
 class CatchMouse(Instruction):
