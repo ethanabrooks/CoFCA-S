@@ -263,7 +263,8 @@ class Wrapper(gym.Wrapper):
         else:
             instructions = list(self.instruction_indexes)
         instructions = np.pad(
-            instructions, (0, self.instructions_per_task - len(instructions))
+            instructions, (0, self.instructions_per_task - len(instructions)),
+            mode='constant'
         )
 
         obs = Obs(
