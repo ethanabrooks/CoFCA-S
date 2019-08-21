@@ -254,13 +254,24 @@ class Mouse(RandomActivating, RandomWalking, Deactivatable):
 
 
 class Baby(Graspable, RandomPosition, RandomActivating, RandomWalking, Deactivatable):
-    def __init__(self, **kwargs):
+    def __init__(self, toward_fire_prob, **kwargs):
         super().__init__(**kwargs)
+        self.toward_fire_prob = toward_fire_prob
 
     def interact(self):
         if self.activated:
             self.deactivate()
         super().interact()
+
+    def wrap_action(self, action):
+        if not self.grasped and self.random.rand() < self.toward_fire_prob:
+            fire = self.get_object(Fire)
+            from_fire = np.array(self.pos) - np.array(fire.pos)
+            return min(
+                self.actions, key=lambda a: np.sum(np.abs(np.array(a) + from_fire))
+            )
+        else:
+            return super().wrap_action(action)
 
     def icon(self):
         return "😭" if self.activated else "👶"

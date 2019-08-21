@@ -44,6 +44,7 @@ class Gridworld(gym.Env):
         cat_speed: float,
         fly_speed: float,
         toward_cat_prob: float,
+        toward_fire_prob: float,
         seed: int,
     ):
         super().__init__()
@@ -85,11 +86,15 @@ class Gridworld(gym.Env):
                 if object_type is Mouse:
                     kwargs.update(activation_prob=mouse_prob, speed=mouse_speed)
                 if object_type is Baby:
-                    kwargs.update(activation_prob=baby_prob, speed=baby_speed)
+                    kwargs.update(
+                        activation_prob=baby_prob,
+                        speed=baby_speed,
+                        toward_fire_prob=toward_fire_prob,
+                    )
                 if object_type is Mess:
                     kwargs.update(activation_prob=mess_prob)
                 if object_type is Fly:
-                    kwargs.update(activation_prob=fly_prob, speed=baby_speed)
+                    kwargs.update(activation_prob=fly_prob, speed=fly_speed)
                 if object_type is Dog:
                     kwargs.update(toward_cat_prob=toward_cat_prob, speed=dog_speed)
                 if object_type is Cat:
