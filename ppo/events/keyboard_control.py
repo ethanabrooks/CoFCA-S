@@ -15,9 +15,7 @@ def run(env, actions, seed):
     env.seed(seed)
     actions = list(actions)
 
-    s = env.reset()
-    while True:
-        env.render(pause=False)
+    def get_action():
         action = None
         while action not in actions:
             action = input("act:")
@@ -28,13 +26,22 @@ def run(env, actions, seed):
 
         a = actions.index(action)
         unwrapped = env.unwrapped
-        if a >= len(unwrapped.transitions):
-            i = a - len(unwrapped.transitions)
-            touching = [o for o in unwrapped.objects if o.pos == unwrapped.agent.pos]
-            a = len(unwrapped.transitions) + unwrapped.object_types.index(
+        if a < len(unwrapped.transitions):
+            return a
+        i = a - len(unwrapped.transitions)
+        touching = [o for o in unwrapped.objects if o.pos == unwrapped.agent.pos]
+        try:
+            return len(unwrapped.transitions) + unwrapped.object_types.index(
                 type(touching[i])
             )
-        s, r, t, i = env.step(a)
+        except IndexError:
+            print("out of range")
+            return get_action()
+
+    s = env.reset()
+    while True:
+        env.render(pause=False)
+        s, r, t, i = env.step(get_action())
         print("reward", r)
         if t:
             env.render(pause=False)

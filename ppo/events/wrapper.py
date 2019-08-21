@@ -336,7 +336,6 @@ if __name__ == "__main__":
             max_time_outside=15,
             vision_range=1,
             measure_interactivity=False,
-            instructions=["AnswerDoor"],
             env=ppo.events.Gridworld(
                 cook_time=2,
                 time_to_heat_oven=3,
@@ -346,8 +345,8 @@ if __name__ == "__main__":
                 baby_prob=0.1,
                 mess_prob=0.02,
                 fly_prob=0.005,
-                height=4,
-                width=4,
+                height=8,
+                width=8,
                 seed=0,
                 baby_speed=0.1,
                 cat_speed=0.1,
