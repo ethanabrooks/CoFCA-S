@@ -80,25 +80,23 @@ class Immobile(Object, ABC):
 class RandomPosition(Object, ABC):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.candidate_positions = (
+            np.stack(np.meshgrid(np.arange(self.height), np.arange(self.width)))
+            .reshape(2, -1)
+            .T
+        )
         self.pos = self.random_position()
 
     def random_position(self):
         available = [
             t
-            for t in map(tuple, self.candidate_positions())
+            for t in map(tuple, self.candidate_positions)
             if t not in self.other_positions()
         ]
         if not available:
             return None
         choice = self.random.choice(len(available))
         return tuple(available[choice])
-
-    def candidate_positions(self):
-        return (
-            np.stack(np.meshgrid(np.arange(self.width), np.arange(self.height)))
-            .reshape(2, -1)
-            .T
-        )
 
 
 class RandomWalking(Object, ABC):
