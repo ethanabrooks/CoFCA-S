@@ -31,7 +31,7 @@ def cli():
 def exp_main(
     gridworld_args,
     wrapper_args,
-    single_instruction,
+    default_agent,
     debug,
     tune,
     redis_address,
@@ -46,10 +46,8 @@ def exp_main(
         def make_env(time_limit, seed, rank, evaluation, env_id, add_timestep):
             env = ppo.events.Gridworld(**gridworld_args, seed=seed)
             env = TimeLimit(max_episode_steps=time_limit, env=env)
-            if single_instruction:
-                env = ppo.events.SingleInstructionWrapper(
-                    **wrapper_args, evaluation=evaluation, env=env
-                )
+            if default_agent:
+                env = ppo.events.Default(**wrapper_args, evaluation=evaluation, env=env)
             elif oh_et_al:
                 env = ppo.oh_et_al.Wrapper(
                     ppo.oh_et_al.GridWorld(
@@ -87,7 +85,7 @@ def exp_main(
                 entropy_coef=entropy_coef,
                 recurrent=recurrent,
             )
-            if single_instruction:
+            if default_agent:
                 return super().build_agent(envs, **agent_args)
             return Agent(
                 observation_space=envs.observation_space,
@@ -234,7 +232,7 @@ def exp_main(
 def exp_cli():
     parsers = build_parser()
     parser = parsers.main
-    parser.add_argument("--single-instruction", action="store_true")
+    parser.add_argument("--default-agent", action="store_true")
     parser.add_argument("--debug", action="store_true")
     parser.add_argument("--no-tune", dest="tune", action="store_false")
     parser.add_argument("--quiet", action="store_true")

@@ -283,6 +283,28 @@ class Wrapper(gym.Wrapper):
         return obs
 
 
+class DefaultAgentWrapper(Wrapper):
+    def __init__(self, check_obs=True, **kwargs):
+        super().__init__(**kwargs, check_obs=False)
+        self._check_obs = check_obs
+        d, h, w = self.observation_space.spaces["base"].shape
+        nvec = self.observation_space.spaces["instructions"].nvec
+        shape = d + nvec.size, h, w
+        self.observation_space = spaces.Box(
+            low=np.zeros(shape), high=nvec[0] * np.ones(shape)
+        )
+
+    def observation(self, observation):
+        obs = super().observation(observation)
+        i = obs["instructions"]
+        b = obs["base"]
+        i = np.broadcast_to(i.reshape(i.size, 1, 1), (i.size, *b.shape[1:]))
+        obs = np.stack([b, i])
+        if self._check_obs:
+            assert self.observation_space.contains(obs)
+        return obs
+
+
 class SingleInstructionWrapper(Wrapper):
     def __init__(self, check_obs=True, **kwargs):
         super().__init__(**kwargs, check_obs=False)
