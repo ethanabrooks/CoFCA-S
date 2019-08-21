@@ -1,4 +1,5 @@
 from collections import namedtuple, defaultdict
+from pprint import pprint
 from typing import List
 
 import re
@@ -39,7 +40,7 @@ class Wrapper(gym.Wrapper):
         avoid_dog_range: float,
         door_time_limit: int,
         max_time_outside: int,
-        n_active_instructions: int,
+        instructions_per_task: int,
         evaluation: bool,
         vision_range: int,
         instructions: List[str] = None,
@@ -52,7 +53,7 @@ class Wrapper(gym.Wrapper):
         self.testing = evaluation
         self.agent_index = env.object_types.index(Agent)
         self.check_obs = check_obs
-        self.n_active_instructions = n_active_instructions
+        self.instructions_per_task = instructions_per_task
 
         def instruction_str(instruction):
             return type(instruction).__name__
@@ -93,8 +94,8 @@ class Wrapper(gym.Wrapper):
         n_instructions = len(instructions)
         self.test_set = [{instructions.index(s) for s in task} for task in test or []]
         self.valid_set = [{instructions.index(s) for s in task} for task in valid or []]
-        instructions_nvec = n_instructions * np.ones(n_active_instructions)
-        assert n_active_instructions <= n_instructions
+        instructions_nvec = n_instructions * np.ones(instructions_per_task)
+        assert instructions_per_task <= n_instructions
         self.observation_space = spaces.Dict(
             Obs(
                 base=spaces.Box(
@@ -107,6 +108,8 @@ class Wrapper(gym.Wrapper):
             )._asdict()
         )
         self.action_space = spaces.Discrete(5 + len(env.object_types))
+        self.i = 0
+        self.test_returns = defaultdict(float)
 
     def render(self, mode="human", pause=True, **kwargs):
         env = self.env.unwrapped
@@ -150,18 +153,35 @@ class Wrapper(gym.Wrapper):
     def reset(self, **kwargs):
         possible_instructions = list(self.make_instructions())
         if self.testing:
+            env = self.env.unwrapped
+            env.seed(env._seed)
+            # self.instruction_indexes = list(
+            #     self.test_set[self.random.choice(len(self.test_set))]
+            # )
+            allowed_instructions = list(
+                itertools.combinations(
+                    range(len(possible_instructions)), self.instructions_per_task
+                )
+            )
             self.instruction_indexes = list(
-                self.test_set[self.random.choice(len(self.test_set))]
+                allowed_instructions[self.random.choice(len(allowed_instructions))]
             )
         else:
             exclude = self.test_set + self.valid_set
             combinations = itertools.combinations(
-                range(len(possible_instructions)), self.n_active_instructions
+                range(len(possible_instructions)), self.instructions_per_task
             )
             allowed_instructions = [c for c in combinations if set(c) not in exclude]
+
+            # individual instructions:
+            allowed_instructions += list(
+                set(i for c in allowed_instructions for i in c)
+            )
+
             self.instruction_indexes = list(
                 allowed_instructions[self.random.choice(len(allowed_instructions))]
             )
+
         # for i, s in enumerate(possible_instructions):
         # print(i, s)
         # self.instruction_indexes = np.array([3, 5])
@@ -178,22 +198,51 @@ class Wrapper(gym.Wrapper):
         object_dict = {k: v[0] if len(v) == 1 else v for k, v in object_dict.items()}
         instruction: Instruction
         for instruction in self.active_instructions:
-            instruction.step(*s.interactions, **object_dict)  # TODO wtf
+            instruction.step(*s.interactions, **object_dict)
             if instruction.condition(*s.interactions, **object_dict):
                 yield instruction, instruction.reward
 
     def step(self, action):
-        s, _, t, i = super().step(action)
-        self.rewards = dict(self.get_rewards(s))
-        return self.observation(s), sum(self.rewards.values()), t, i
+        obs, _, t, logs = super().step(action)
+        self.rewards = dict(self.get_rewards(obs))
+        r = sum(self.rewards.values())
+        if self.testing:
+            self.test_returns[self.i] += r
+
+            def format_split(split):
+                x = round(split * 100)
+                return x, 100 - x
+
+            if t:
+                splits = [i / 10 for i in range(11)]
+                _return = self.test_returns[self.i]
+                if self.i <= 1:
+                    logs.update({f"return_{format_split(self.i)}": _return})
+                else:
+                    best_split = max([self.test_returns[s] for s in splits])
+                    logs.update(
+                        {
+                            f"optimal_return": _return,
+                            f"optimal-best_split": _return - best_split,
+                        }
+                    )
+
+                    for s in splits:
+                        logs.update(
+                            {
+                                f"optimal-({format_split(s)})": (
+                                    _return - self.test_returns[s]
+                                )
+                            }
+                        )
+                self.i += 0.1
+        return self.observation(obs), r, t, logs
 
     def observation(self, observation):
         dims = self.height, self.width
         object_pos = defaultdict(lambda: np.zeros((self.height, self.width)))
         interactable = np.zeros(len(self.object_types))
         env = self.env.unwrapped
-        pos = np.array(env.agent.pos).reshape(2, 1, 1)
-        indexes = np.stack(np.meshgrid(np.arange(self.height), np.arange(self.width)))
         for obj in observation.objects:
             if obj.pos is not None:
                 index = np.ravel_multi_index(obj.pos, dims)
@@ -207,8 +256,18 @@ class Wrapper(gym.Wrapper):
                 if obj.pos == env.agent.pos and obj is not env.agent:
                     interactable[env.object_types.index(t)] = 1
         base = np.stack([object_pos[k] for k in self.object_types])
+        if self.testing and self.i <= 1:
+            instructions = [
+                self.random.choice(self.instruction_indexes, p=[self.i, 1 - self.i])
+            ]
+        else:
+            instructions = list(self.instruction_indexes)
+        instructions = np.pad(
+            instructions, (0, self.instructions_per_task - len(instructions))
+        )
+
         obs = Obs(
-            base=base, instructions=self.instruction_indexes, interactable=interactable
+            base=base, instructions=instructions, interactable=interactable
         )._asdict()
         if self.check_obs:
             assert self.observation_space.contains(obs)
@@ -234,7 +293,7 @@ if __name__ == "__main__":
     env = TimeLimit(
         max_episode_steps=30,
         env=Wrapper(
-            n_active_instructions=1,
+            instructions_per_task=1,
             watch_baby_range=2,
             avoid_dog_range=2,
             door_time_limit=10,

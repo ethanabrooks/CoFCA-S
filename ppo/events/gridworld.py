@@ -104,6 +104,7 @@ class Gridworld(gym.Env):
         self.last_action = None
         self.transitions = [(0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)]
         self._mess = None
+        self._seed = None
 
     def interact(self, i):
         object_type = self.object_types[i]
@@ -142,6 +143,7 @@ class Gridworld(gym.Env):
 
     def seed(self, seed=None):
         self.random, seed = seeding.np_random(int(seed))
+        self._seed = int(seed)
         return [seed]
 
     def reset(self):

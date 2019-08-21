@@ -31,7 +31,7 @@ class Recurrence(nn.Module):
         super().__init__()
         self.oh_et_al = oh_et_al
         self.feed_r_initially = feed_r_initially = feed_r_initially or baseline
-        self.use_M_plus_minus = use_M_plus_minus
+        self.use_M_plus_minus = use_M_plus_minus or baseline
         self.baseline = baseline
         obs_spaces = (ppo.oh_et_al.gridworld.Obs if oh_et_al else events.wrapper.Obs)(
             **observation_space.spaces
@@ -52,9 +52,12 @@ class Recurrence(nn.Module):
                 obs_spaces.instructions.nvec[0], hidden_size
             )
             self.subtasks_nvec = None
-        self.task_output_sections = [1, 1] + [hidden_size] * (
-            3 if use_M_plus_minus else 1
-        )
+        self.task_output_sections = [hidden_size]
+        if not baseline:
+            self.task_output_sections += [1, 1]
+        if self.use_M_plus_minus:
+            self.task_output_sections += [hidden_size, hidden_size]
+
         self.task_encoder = nn.GRU(
             int(hidden_size), int(sum(self.task_output_sections))
         )
@@ -166,21 +169,22 @@ class Recurrence(nn.Module):
         rnn_inputs = embeddings.transpose(0, 1)
         X, _ = self.task_encoder(rnn_inputs)
 
-        encoding = X.transpose(0, 1).split(self.task_output_sections, dim=-1)
-        c, p0, M = encoding[:3]
-        M_minus = encoding[3] if self.use_M_plus_minus else M
-        M_plus = encoding[4] if self.use_M_plus_minus else M
-
-        c.squeeze_(-1)
-        p0.squeeze_(-1)
-
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
         for _x in hx:
             _x.squeeze_(0)
-        p = hx.p
+
+        encoding = X.transpose(0, 1).split(self.task_output_sections, dim=-1)
+        M = encoding[0]
+        if not self.baseline:
+            p0 = encoding[1].squeeze(-1)
+            c = encoding[2].squeeze(-1)
+            p = hx.p
+            p[new_episode] = p0[new_episode]
+
+        M_minus = encoding[3] if self.use_M_plus_minus else M
+        M_plus = encoding[4] if self.use_M_plus_minus else M
         h = hx.h
-        p[new_episode] = p0[new_episode]
         A = torch.cat([actions, hx.a.unsqueeze(0)], dim=0).long().squeeze(2)
 
         for t in range(T):
@@ -207,6 +211,7 @@ class Recurrence(nn.Module):
                 dist = FixedCategorical(
                     probs=F.normalize(torch.clamp(probs, 0.0, 1.0), p=1, dim=-1)
                 )
+
             self.sample_new(A[t], dist)
             if not self.baseline:
                 a = self.a_one_hots(A[t].flatten().long())
