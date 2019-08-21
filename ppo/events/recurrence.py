@@ -31,7 +31,7 @@ class Recurrence(nn.Module):
         super().__init__()
         self.oh_et_al = oh_et_al
         self.feed_r_initially = feed_r_initially = feed_r_initially or baseline
-        self.use_M_plus_minus = use_M_plus_minus or baseline
+        self.use_M_plus_minus = use_M_plus_minus and (not baseline)
         self.baseline = baseline
         obs_spaces = (ppo.oh_et_al.gridworld.Obs if oh_et_al else events.wrapper.Obs)(
             **observation_space.spaces
@@ -176,22 +176,22 @@ class Recurrence(nn.Module):
 
         encoding = X.transpose(0, 1).split(self.task_output_sections, dim=-1)
         M = encoding[0]
+        h = hx.h
+        p = hx.p
         if not self.baseline:
             p0 = encoding[1].squeeze(-1)
             c = encoding[2].squeeze(-1)
-            p = hx.p
             p[new_episode] = p0[new_episode]
 
         M_minus = encoding[3] if self.use_M_plus_minus else M
         M_plus = encoding[4] if self.use_M_plus_minus else M
-        h = hx.h
         A = torch.cat([actions, hx.a.unsqueeze(0)], dim=0).long().squeeze(2)
 
         for t in range(T):
-            p = F.softmax(p, dim=-1)
             if self.baseline:
                 r = M.sum(1)
             else:
+                p = F.softmax(p, dim=-1)
                 r = (p.unsqueeze(1) @ M).squeeze(1)
             if self.feed_r_initially:
                 # noinspection PyTypeChecker
