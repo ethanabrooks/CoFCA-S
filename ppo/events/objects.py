@@ -62,14 +62,14 @@ class Object:
         except StopIteration:
             raise RuntimeError("Object of type", types, "not found.")
 
-    def __str__(self):
-        return "_".join(re.findall("[A-Z][^A-Z]*", self.__class__.__name__)).lower()
-
     def icon(self):
         return str(self)[:1]
 
     def wrap_action(self, action):
         return action
+
+    def __str__(self):
+        return "_".join(re.findall("[A-Z][^A-Z]*", self.__class__.__name__)).lower()
 
 
 class Immobile(Object, ABC):
@@ -100,13 +100,14 @@ class RandomPosition(Object, ABC):
 
 
 class RandomWalking(Object, ABC):
-    def __init__(self, **kwargs):
+    def __init__(self, speed, **kwargs):
         super().__init__(**kwargs)
         self.actions = [(0, 1), (1, 0), (0, -1), (-1, 0), (0, 0)]
+        self.speed = speed
 
     def wrap_action(self, action):
         choice = self.random.choice(len(self.actions))
-        return self.actions[choice] if self.random.rand() < 0.3 else (0, 0)
+        return self.actions[choice] if self.random.rand() < self.speed else (0, 0)
 
 
 class Graspable(Object, ABC):

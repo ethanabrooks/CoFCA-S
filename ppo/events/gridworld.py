@@ -38,6 +38,11 @@ class Gridworld(gym.Env):
         baby_prob: float,
         mess_prob: float,
         fly_prob: float,
+        dog_speed: float,
+        mouse_speed: float,
+        baby_speed: float,
+        cat_speed: float,
+        fly_speed: float,
         toward_cat_prob: float,
         seed: int,
     ):
@@ -78,15 +83,17 @@ class Gridworld(gym.Env):
                 if object_type is Door:
                     kwargs.update(activation_prob=doorbell_prob)
                 if object_type is Mouse:
-                    kwargs.update(activation_prob=mouse_prob)
+                    kwargs.update(activation_prob=mouse_prob, speed=mouse_speed)
                 if object_type is Baby:
-                    kwargs.update(activation_prob=baby_prob)
+                    kwargs.update(activation_prob=baby_prob, speed=baby_speed)
                 if object_type is Mess:
                     kwargs.update(activation_prob=mess_prob)
                 if object_type is Fly:
-                    kwargs.update(activation_prob=fly_prob)
+                    kwargs.update(activation_prob=fly_prob, speed=baby_speed)
                 if object_type is Dog:
-                    kwargs.update(toward_cat_prob=toward_cat_prob)
+                    kwargs.update(toward_cat_prob=toward_cat_prob, speed=dog_speed)
+                if object_type is Cat:
+                    kwargs.update(speed=cat_speed)
                 if object_type is Food:
                     kwargs.update(cook_time=cook_time)
                 if object_type is Oven:
