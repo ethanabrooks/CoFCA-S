@@ -44,7 +44,9 @@ def exp_main(
     class TrainEvents(Train, ABC):
         @staticmethod
         def make_env(time_limit, seed, rank, evaluation, env_id, add_timestep):
-            env = ppo.events.Gridworld(**gridworld_args, seed=seed)
+            env = ppo.events.Gridworld(
+                **gridworld_args, time_limit=time_limit, seed=seed
+            )
             env = TimeLimit(max_episode_steps=time_limit, env=env)
             if default_agent:
                 env = ppo.events.DefaultAgentWrapper(
@@ -245,30 +247,31 @@ def exp_cli():
     parsers.agent.add_argument("--feed-r-initially", action="store_true")
     parsers.agent.add_argument("--use-M-plus-minus", action="store_true")
     gridworld_parser = parser.add_argument_group("gridworld_args")
-    gridworld_parser.add_argument("--height", help="", type=int, default=4)
-    gridworld_parser.add_argument("--width", help="", type=int, default=4)
+    gridworld_parser.add_argument("--height", help="", type=int, default=8)
+    gridworld_parser.add_argument("--width", help="", type=int, default=8)
     gridworld_parser.add_argument("--cook-time", help="", type=int, default=2)
     gridworld_parser.add_argument("--time-to-heat-oven", help="", type=int, default=3)
-    gridworld_parser.add_argument("--doorbell-prob", help="", type=float, default=0.05)
     gridworld_parser.add_argument("--mouse-prob", help="", type=float, default=0.2)
     gridworld_parser.add_argument("--baby-prob", help="", type=float, default=0.1)
     gridworld_parser.add_argument(
-        "--toward-fire-prob", help="", type=float, default=0.1
+        "--toward-fire-prob", help="", type=float, default=0.7
     )
-    gridworld_parser.add_argument("--mess-prob", help="", type=float, default=0.01)
-    gridworld_parser.add_argument("--fly-prob", help="", type=float, default=0.005)
-    gridworld_parser.add_argument("--mouse-speed", help="", type=float, default=0.2)
+    gridworld_parser.add_argument(
+        "--toward-hole-prob", help="", type=float, default=0.5
+    )
+    gridworld_parser.add_argument("--mess-prob", help="", type=float, default=0.2)
+    gridworld_parser.add_argument("--fly-prob", help="", type=float, default=0.05)
+    gridworld_parser.add_argument("--mouse-speed", help="", type=float, default=0.1)
     gridworld_parser.add_argument("--baby-speed", help="", type=float, default=0.1)
-    gridworld_parser.add_argument("--dog-speed", help="", type=float, default=0.3)
-    gridworld_parser.add_argument("--cat-speed", help="", type=float, default=0.2)
+    gridworld_parser.add_argument("--dog-speed", help="", type=float, default=0.2)
+    gridworld_parser.add_argument("--cat-speed", help="", type=float, default=0.1)
     gridworld_parser.add_argument("--fly-speed", help="", type=float, default=0.0)
     gridworld_parser.add_argument("--toward-cat-prob", help="", type=float, default=0.5)
     wrapper_parser = parser.add_argument_group("wrapper_args")
     wrapper_parser.add_argument("--instructions-per-task", help="", default=2, type=int)
-    wrapper_parser.add_argument("--vision-range", help="", type=float, default=1)
     wrapper_parser.add_argument("--watch-baby-range", help="", type=int, default=2)
-    wrapper_parser.add_argument("--avoid-dog-range", help="", type=int, default=2)
-    wrapper_parser.add_argument("--door-time-limit", help="", type=int, default=7)
+    wrapper_parser.add_argument("--avoid-dog-range", help="", type=int, default=4)
+    wrapper_parser.add_argument("--door-time-limit", help="", type=int, default=16)
     wrapper_parser.add_argument("--max-time-outside", help="", type=int, default=15)
     wrapper_parser.add_argument("--measure-interactivity", action="store_true")
     wrapper_parser.add_argument("--instruction", dest="instructions", action="append")

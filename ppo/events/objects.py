@@ -194,9 +194,17 @@ class Agent(RandomPosition):
         return "😀"
 
 
-class Door(Wall, RandomActivating, Deactivatable, Immobile):
+class Door(Wall, Deactivatable, Immobile):
+    def __init__(self, time_limit, **kwargs):
+        super().__init__(**kwargs)
+        self.time_to_ring = self.random.choice(time_limit // 2)
+        self.t = 0
+
     def step(self, action):
+        self.t += 1
         self.activated = False
+        if self.t == self.time_to_ring:
+            self.activated = True
         return super().step(action)
 
     def interact(self):
@@ -214,8 +222,9 @@ class MouseHole(Wall):
 
 
 class Mouse(RandomActivating, RandomWalking, Deactivatable):
-    def __init__(self, **kwargs):
+    def __init__(self, toward_hole_prob, **kwargs):
         super().__init__(**kwargs)
+        self.toward_hole_prob = toward_hole_prob
         self.caught = False
 
     def activate(self):
@@ -233,7 +242,10 @@ class Mouse(RandomActivating, RandomWalking, Deactivatable):
         return self.get_object(MouseHole)
 
     def wrap_action(self, action):
-        if self.pos not in (None, self.hole.pos) and self.random.rand() < 0.5:
+        if (
+            self.pos not in (None, self.hole.pos)
+            and self.random.rand() < self.toward_hole_prob
+        ):
             # step toward hole
             from_hole = np.array(self.pos) - np.array(self.hole.pos)
             action = min(self.actions, key=lambda a: np.sum(np.abs(a + from_hole)))
@@ -284,10 +296,15 @@ class Oven(RandomPosition, Activatable, Immobile):
         return self.time_heating > self.time_to_heat
 
     def interact(self):
+        import ipdb
+
+        ipdb.set_trace()
         if self.activated:
             self.deactivate()
         else:
             self.activate()
+        if self.activated:
+            print("activated")
         super().interact()
 
     def step(self, action):
@@ -410,8 +427,13 @@ class Fire(RandomPosition, Immobile, Activatable):
 class Fly(RandomPosition, RandomWalking, RandomActivating, Deactivatable):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.n_children = 0
         try:
-            self.parent = self.get_object(Fly)
+            self.parent = next(
+                (o for o in self.objects if type(o) is Fly and o.n_children < 2), None
+            )
+            if self.parent:
+                self.parent.n_children += 1
             self.activated = False
             self.pos = None
         except RuntimeError:
@@ -424,7 +446,7 @@ class Fly(RandomPosition, RandomWalking, RandomActivating, Deactivatable):
         super().deactivate()
 
     def activate(self):
-        if self.parent is not None:
+        if self.parent is None or self.parent.pos is not None:
             self.pos = self.random_position()
             super().activate()
 

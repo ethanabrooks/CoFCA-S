@@ -58,7 +58,7 @@ class AnswerDoor(Instruction):
 
 class CatchMouse(Instruction):
     def condition(self, *interactions, mouse: Mouse, **objects):
-        return mouse.pos is not None
+        return mouse.pos is None and not mouse.caught
 
 
 class ComfortBaby(Instruction):
@@ -82,8 +82,7 @@ class MakeDinner(Instruction):
         super().__init__()
 
     def condition(self, *interactions, food: Food, table: Table, **objects):
-        # return not (food.pos == table.pos and food.activated)
-        return not food.activated
+        return not (food.pos == table.pos)
 
 
 class MakeFire(Instruction):
@@ -128,7 +127,7 @@ class LetDogIn(Instruction):
 
 
 class WatchBaby(Instruction):
-    def __init__(self, max_range: int):
+    def __init__(self, max_range: float):
         self.range = max_range
 
     def condition(self, *interactions, baby: Baby, agent: Agent, **objects):

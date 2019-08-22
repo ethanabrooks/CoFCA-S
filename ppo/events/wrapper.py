@@ -41,7 +41,6 @@ class Wrapper(gym.Wrapper):
         max_time_outside: int,
         instructions_per_task: int,
         evaluation: bool,
-        vision_range: int,
         measure_interactivity: bool,
         instructions: List[str] = None,
         check_obs=True,
@@ -50,7 +49,6 @@ class Wrapper(gym.Wrapper):
     ):
         super().__init__(env)
         self.measure_interactivity = measure_interactivity
-        self.vision_range = vision_range
         self.testing = evaluation
         self.agent_index = env.object_types.index(Agent)
         self.check_obs = check_obs
@@ -68,7 +66,7 @@ class Wrapper(gym.Wrapper):
                     AnswerDoor(door_time_limit),
                     CatchMouse(),
                     ComfortBaby(),
-                    MakeDinner(),  # TODO: failing
+                    MakeDinner(),
                     MakeFire(),
                     KillFlies(),
                     CleanMess(),
@@ -336,29 +334,30 @@ if __name__ == "__main__":
         env=Wrapper(
             instructions_per_task=1,
             watch_baby_range=2,
-            avoid_dog_range=2,
+            avoid_dog_range=4,
             door_time_limit=16,
             max_time_outside=15,
-            vision_range=1,
             measure_interactivity=False,
+            instructions=["MakeDinner"],
             env=ppo.events.Gridworld(
-                cook_time=2,
-                time_to_heat_oven=3,
+                cook_time=1,
+                time_to_heat_oven=2,
                 toward_cat_prob=0.5,
-                doorbell_prob=0.05,
                 mouse_prob=0.2,
                 baby_prob=0.1,
-                mess_prob=0.3,
-                fly_prob=0.005,
-                height=2,
-                width=2,
+                time_limit=30,
+                mess_prob=0.1,
+                fly_prob=0.05,
+                height=8,
+                width=8,
                 seed=seed,
                 baby_speed=0.1,
                 cat_speed=0.1,
                 dog_speed=0.2,
                 fly_speed=0,
                 mouse_speed=0.1,
-                toward_fire_prob=0,
+                toward_fire_prob=0.7,
+                toward_hole_prob=0.5,
             ),
             evaluation=False,
         ),

@@ -31,9 +31,9 @@ class Gridworld(gym.Env):
         self,
         cook_time: int,
         time_to_heat_oven: int,
+        time_limit: int,
         height: int,
         width: int,
-        doorbell_prob: float,
         mouse_prob: float,
         baby_prob: float,
         mess_prob: float,
@@ -45,6 +45,7 @@ class Gridworld(gym.Env):
         fly_speed: float,
         toward_cat_prob: float,
         toward_fire_prob: float,
+        toward_hole_prob: float,
         seed: int,
     ):
         super().__init__()
@@ -82,9 +83,13 @@ class Gridworld(gym.Env):
                     random=self.random,
                 )
                 if object_type is Door:
-                    kwargs.update(activation_prob=doorbell_prob)
+                    kwargs.update(time_limit=time_limit)
                 if object_type is Mouse:
-                    kwargs.update(activation_prob=mouse_prob, speed=mouse_speed)
+                    kwargs.update(
+                        activation_prob=mouse_prob,
+                        speed=mouse_speed,
+                        toward_hole_prob=toward_hole_prob,
+                    )
                 if object_type is Baby:
                     kwargs.update(
                         activation_prob=baby_prob,
@@ -115,6 +120,7 @@ class Gridworld(gym.Env):
 
         self.objects = None
         self.make_objects = make_objects
+
         self.agent = None
         self.last_action = None
         self.transitions = [(0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)]
