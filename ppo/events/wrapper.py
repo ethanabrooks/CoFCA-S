@@ -111,12 +111,6 @@ class Wrapper(gym.Wrapper):
         self.test_iter = 0
         self.test_returns = defaultdict(float)
 
-    def evaluate(self):
-        self.testing = True
-
-    def train(self):
-        self.testing = False
-
     def render(self, mode="human", pause=True, **kwargs):
         env = self.env.unwrapped
         legend = {}

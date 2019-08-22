@@ -29,9 +29,9 @@ def worker(remote, parent_remote, env_fn_wrapper):
             elif cmd == "get_spaces":
                 remote.send((env.observation_space, env.action_space))
             elif cmd == "evaluate":
-                env.evaluation = True
+                env.testing = True
             elif cmd == "train":
-                env.evaluation = False
+                env.testing = False
             else:
                 raise NotImplementedError
     except KeyboardInterrupt:
