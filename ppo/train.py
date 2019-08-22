@@ -244,7 +244,7 @@ class Train(abc.ABC):
         episode_counter = Counter(rewards=[], time_steps=[], success=[])
         iterator = range(num_steps)
         if use_tqdm:
-            iterator = tqdm(iterator, desc="evaluting")
+            iterator = tqdm(iterator, desc="epoch")
         for step in iterator:
             with torch.no_grad():
                 act = self.agent(
