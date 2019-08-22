@@ -2,12 +2,10 @@ import itertools
 import re
 import time
 from abc import ABC
-
-import numpy as np
-
 from pathlib import Path
 
 import ray
+import torch
 from gym.wrappers import TimeLimit
 from ray.tune.result import TIME_TOTAL_S
 from ray.tune.schedulers import AsyncHyperBandScheduler
@@ -17,12 +15,11 @@ import socket
 
 import ppo
 import ppo.events.agent
+import ppo.oh_et_al
 from ppo.arguments import get_args, build_parser
 from ppo.events.agent import Agent
 from ppo.train import Train
 from ppo.utils import get_random_gpu, get_n_gpu, k_scalar_pairs
-import ppo.oh_et_al
-import torch
 
 
 def cli():

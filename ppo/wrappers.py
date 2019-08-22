@@ -84,8 +84,11 @@ class VecPyTorch(VecEnvWrapper):
         self.device = device
         self.venv.to(device)
 
-    def increment_curriculum(self):
-        self.venv.increment_curriculum()
+    def evaluate(self):
+        self.venv.evaluate()
+
+    def train(self):
+        self.venv.train()
 
 
 class VecNormalize(VecNormalize_):

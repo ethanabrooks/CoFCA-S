@@ -72,9 +72,9 @@ class Train(abc.ABC):
             self.device = self.get_device()
         # print("Using device", self.device)
 
-        self.make_train_envs = lambda s: self.make_vec_envs(
+        self.envs = self.make_vec_envs(
             **env_args,
-            seed=s + seed,
+            seed=seed,
             gamma=(gamma if normalize else None),
             render=render,
             synchronous=True if render else synchronous,
@@ -82,20 +82,18 @@ class Train(abc.ABC):
             num_processes=num_processes,
             time_limit=time_limit,
         )
-        envs = self.make_train_envs(0)
-        self.agent = self.build_agent(envs=envs, **agent_args)
+        self.envs.to(self.device)
+        self.agent = self.build_agent(envs=self.envs, **agent_args)
         self.rollouts = RolloutStorage(
             num_steps=num_steps,
             num_processes=num_processes,
-            obs_space=envs.observation_space,
-            action_space=envs.action_space,
+            obs_space=self.envs.observation_space,
+            action_space=self.envs.action_space,
             recurrent_hidden_state_size=self.agent.recurrent_hidden_state_size,
             use_gae=use_gae,
             gamma=gamma,
             tau=tau,
         )
-        envs.close()
-        del envs
 
         # copy to device
         if cuda:
@@ -154,23 +152,11 @@ class Train(abc.ABC):
         env_args,
     ):
         if eval_interval:
-            envs = self.make_vec_envs(
-                **env_args,
-                # env_id=env_id,
-                time_limit=time_limit,
-                num_processes=num_processes,
-                # add_timestep=add_timestep,
-                render=render_eval,
-                seed=self.i + seed + num_processes,
-                gamma=gamma if normalize else None,
-                evaluation=True,
-                synchronous=True if render_eval else synchronous,
-            )
-            envs.to(self.device)
             # vec_norm = get_vec_normalize(eval_envs)
             # if vec_norm is not None:
             #     vec_norm.eval()
             #     vec_norm.ob_rms = get_vec_normalize(envs).ob_rms
+            self.envs.evaluate()
             eval_recurrent_hidden_states = torch.zeros(
                 num_processes,
                 self.agent.recurrent_hidden_state_size,
@@ -179,8 +165,7 @@ class Train(abc.ABC):
             eval_masks = torch.zeros(num_processes, 1, device=self.device)
             eval_counter = Counter()
             eval_result = self.run_epoch(
-                envs=envs,
-                obs=envs.reset(),
+                obs=self.envs.reset(),
                 rnn_hxs=eval_recurrent_hidden_states,
                 masks=eval_masks,
                 num_steps=time_limit * 12,
@@ -189,24 +174,11 @@ class Train(abc.ABC):
                 success_reward=success_reward,
                 use_tqdm=use_tqdm,
             )
-            envs.close()
-            del envs
             eval_result = {f"eval_{k}": v for k, v in eval_result.items()}
         else:
             eval_result = {}
-
-        envs = self.make_vec_envs(
-            **env_args,
-            seed=self.i + seed,
-            gamma=(gamma if normalize else None),
-            render=render,
-            synchronous=True if render else synchronous,
-            evaluation=False,
-            num_processes=num_processes,
-            time_limit=time_limit,
-        )
-        envs.to(self.device)
-        obs = envs.reset()
+        self.envs.train()
+        obs = self.envs.reset()
         self.rollouts.obs[0].copy_(obs)
         tick = time.time()
         log_progress = None
@@ -226,7 +198,6 @@ class Train(abc.ABC):
                 obs=self.rollouts.obs[0],
                 rnn_hxs=self.rollouts.recurrent_hidden_states[0],
                 masks=self.rollouts.masks[0],
-                envs=envs,
                 num_steps=num_steps,
                 counter=self.counter,
                 success_reward=success_reward,
@@ -256,11 +227,9 @@ class Train(abc.ABC):
                         fps=fps, **epoch_counter, **train_results, **eval_result
                     )
                 )
-        envs.close()
-        del envs
 
     def run_epoch(
-        self, obs, rnn_hxs, masks, envs, num_steps, counter, success_reward, use_tqdm
+        self, obs, rnn_hxs, masks, num_steps, counter, success_reward, use_tqdm
     ):
         # noinspection PyTypeChecker
         episode_counter = Counter(rewards=[], time_steps=[], success=[])
@@ -274,7 +243,7 @@ class Train(abc.ABC):
                 )  # type: AgentValues
 
             # Observe reward and next obs
-            obs, reward, done, infos = envs.step(act.action)
+            obs, reward, done, infos = self.envs.step(act.action)
 
             for d in infos:
                 for k, v in d.items():
