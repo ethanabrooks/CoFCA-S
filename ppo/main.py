@@ -40,6 +40,7 @@ def exp_main(
     num_samples,
     baseline,
     oh_et_al,
+    tune_metric,
     **kwargs,
 ):
     class TrainEvents(Train, ABC):
@@ -173,7 +174,7 @@ def exp_main(
             local_dir=log_dir,
             scheduler=AsyncHyperBandScheduler(
                 time_attr=TIME_TOTAL_S,
-                metric="eval_rewards",
+                metric=tune_metric,
                 mode="max",
                 grace_period=3600,
                 max_t=43200,
@@ -245,6 +246,7 @@ def exp_cli():
     parser.add_argument("--num-samples", type=int, default=100)
     parser.add_argument("--redis-port", type=int, default=6379)
     parser.add_argument("--time-limit", type=int, default=40)
+    parser.add_argument("--tune-metric", default="eval_rewards")
     parsers.agent.add_argument("--feed-r-initially", action="store_true")
     parsers.agent.add_argument("--use-M-plus-minus", action="store_true")
     gridworld_parser = parser.add_argument_group("gridworld_args")
