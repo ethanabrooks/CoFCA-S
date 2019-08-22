@@ -60,7 +60,6 @@ def build_parser():
         default=None,
         help="eval interval, one eval per n updates",
     )
-    parser.add_argument("--time-limit", type=int)
     parser.add_argument("--load-path", type=Path)
     parser.add_argument("--log-dir", type=Path, help="directory to save agent logs")
     parser.add_argument(

@@ -146,16 +146,12 @@ def exp_main(
                     num_layers,
                     learning_rate,
                     ppo_epoch,
-                    feed_r_initially,
-                    use_M_plus_minus,
                     **kwargs,
                 ):
                     agent_args.update(
                         entropy_coef=entropy_coef,
                         hidden_size=hidden_size,
                         num_layers=num_layers,
-                        feed_r_initially=feed_r_initially,
-                        use_M_plus_minus=use_M_plus_minus,
                     )
                     ppo_args.update(ppo_epoch=ppo_epoch, learning_rate=learning_rate)
                     self.setup(**kwargs, agent_args=agent_args, ppo_args=ppo_args)
@@ -243,11 +239,12 @@ def exp_cli():
     parser.add_argument("--default-agent", action="store_true")
     parser.add_argument("--debug", action="store_true")
     parser.add_argument("--no-tune", dest="tune", action="store_false")
-    parser.add_argument("--quiet", action="store_true")
+    parser.add_argument("--use-tqdm", action="store_true")
     parser.add_argument("--baseline", action="store_true")
     parser.add_argument("--oh-et-al", action="store_true")
     parser.add_argument("--num-samples", type=int, default=100)
     parser.add_argument("--redis-port", type=int, default=6379)
+    parser.add_argument("--time-limit", type=int, default=40)
     parsers.agent.add_argument("--feed-r-initially", action="store_true")
     parsers.agent.add_argument("--use-M-plus-minus", action="store_true")
     gridworld_parser = parser.add_argument_group("gridworld_args")

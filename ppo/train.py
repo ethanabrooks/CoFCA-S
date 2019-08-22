@@ -48,7 +48,7 @@ class Train(abc.ABC):
         num_batch,
         env_args,
         success_reward,
-        quiet,
+        use_tqdm,
     ):
         if render_eval and not render:
             eval_interval = 1
@@ -123,7 +123,7 @@ class Train(abc.ABC):
             render=render,
             render_eval=render_eval,
             synchronous=synchronous,
-            quiet=quiet,
+            use_tqdm=use_tqdm,
             success_reward=success_reward,
             env_args=env_args,
         )
@@ -150,7 +150,7 @@ class Train(abc.ABC):
         render_eval,
         synchronous,
         success_reward,
-        quiet,
+        use_tqdm,
         env_args,
     ):
         if eval_interval:
@@ -187,7 +187,7 @@ class Train(abc.ABC):
                 # max(num_steps, time_limit) if time_limit else num_steps,
                 counter=eval_counter,
                 success_reward=success_reward,
-                quiet=quiet,
+                use_tqdm=use_tqdm,
             )
             envs.close()
             del envs
@@ -213,13 +213,13 @@ class Train(abc.ABC):
 
         if eval_interval:
             eval_iterator = range(self.i % eval_interval, eval_interval)
-            if not quiet:
+            if use_tqdm:
                 eval_iterator = tqdm(eval_iterator, desc="next eval")
         else:
             eval_iterator = itertools.count(self.i)
 
         for _ in eval_iterator:
-            if self.i % log_interval == 0 and not quiet:
+            if self.i % log_interval == 0 and use_tqdm:
                 log_progress = tqdm(total=log_interval, desc="next log")
             self.i += 1
             epoch_counter = self.run_epoch(
@@ -230,7 +230,7 @@ class Train(abc.ABC):
                 num_steps=num_steps,
                 counter=self.counter,
                 success_reward=success_reward,
-                quiet=True,
+                use_tqdm=use_tqdm,
             )
 
             with torch.no_grad():
@@ -260,12 +260,12 @@ class Train(abc.ABC):
         del envs
 
     def run_epoch(
-        self, obs, rnn_hxs, masks, envs, num_steps, counter, success_reward, quiet
+        self, obs, rnn_hxs, masks, envs, num_steps, counter, success_reward, use_tqdm
     ):
         # noinspection PyTypeChecker
         episode_counter = Counter(rewards=[], time_steps=[], success=[])
         iterator = range(num_steps)
-        if not quiet:
+        if use_tqdm:
             iterator = tqdm(iterator, desc="evaluting")
         for step in iterator:
             with torch.no_grad():

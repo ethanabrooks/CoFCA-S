@@ -296,15 +296,10 @@ class Oven(RandomPosition, Activatable, Immobile):
         return self.time_heating > self.time_to_heat
 
     def interact(self):
-        import ipdb
-
-        ipdb.set_trace()
         if self.activated:
             self.deactivate()
         else:
             self.activate()
-        if self.activated:
-            print("activated")
         super().interact()
 
     def step(self, action):
