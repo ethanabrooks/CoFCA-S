@@ -49,6 +49,7 @@ class Train(abc.ABC):
         env_args,
         success_reward,
         use_tqdm,
+        measure_interactivity,
     ):
         if render_eval and not render:
             eval_interval = 1
@@ -82,6 +83,8 @@ class Train(abc.ABC):
             num_processes=num_processes,
             time_limit=time_limit,
         )
+
+        self.measure_interactivity = measure_interactivity
         self.envs.to(self.device)
         self.agent = self.build_agent(envs=self.envs, **agent_args)
         self.rollouts = RolloutStorage(
@@ -168,7 +171,7 @@ class Train(abc.ABC):
                 obs=self.envs.reset(),
                 rnn_hxs=eval_recurrent_hidden_states,
                 masks=eval_masks,
-                num_steps=time_limit * 12,
+                num_steps=time_limit * (12 if self.measure_interactivity else 1),
                 # max(num_steps, time_limit) if time_limit else num_steps,
                 counter=eval_counter,
                 success_reward=success_reward,

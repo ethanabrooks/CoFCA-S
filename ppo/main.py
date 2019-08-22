@@ -38,6 +38,7 @@ def exp_main(
     baseline,
     oh_et_al,
     tune_metric,
+    measure_interactivity,
     **kwargs,
 ):
     class TrainEvents(Train, ABC):
@@ -47,6 +48,7 @@ def exp_main(
                 **gridworld_args, time_limit=time_limit, seed=seed
             )
             env = TimeLimit(max_episode_steps=time_limit, env=env)
+            wrapper_args.update(measure_interactivity=measure_interactivity)
             if default_agent:
                 env = ppo.events.DefaultAgentWrapper(
                     **wrapper_args, evaluation=evaluation, env=env
@@ -228,7 +230,9 @@ def exp_main(
 
                 return torch.device("cuda", device_num)
 
-        _Train(**kwargs, log_dir=log_dir).run()
+        _Train(
+            **kwargs, measure_interactivity=measure_interactivity, log_dir=log_dir
+        ).run()
 
 
 def exp_cli():
@@ -244,6 +248,7 @@ def exp_cli():
     parser.add_argument("--redis-port", type=int, default=6379)
     parser.add_argument("--time-limit", type=int, default=40)
     parser.add_argument("--tune-metric", default="eval_rewards")
+    parser.add_argument("--measure-interactivity", action="store_true")
     parsers.agent.add_argument("--feed-r-initially", action="store_true")
     parsers.agent.add_argument("--use-M-plus-minus", action="store_true")
     gridworld_parser = parser.add_argument_group("gridworld_args")
@@ -273,7 +278,6 @@ def exp_cli():
     wrapper_parser.add_argument("--avoid-dog-range", help="", type=int, default=4)
     wrapper_parser.add_argument("--door-time-limit", help="", type=int, default=16)
     wrapper_parser.add_argument("--max-time-outside", help="", type=int, default=15)
-    wrapper_parser.add_argument("--measure-interactivity", action="store_true")
     wrapper_parser.add_argument("--instruction", dest="instructions", action="append")
     wrapper_parser.add_argument("--test", nargs="*", action="append", default=[])
     wrapper_parser.add_argument("--valid", nargs="*", action="append", default=[])

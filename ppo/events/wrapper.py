@@ -158,8 +158,14 @@ class Wrapper(gym.Wrapper):
 
     def reset(self, **kwargs):
         possible_instructions = list(self.make_instructions())
+        import ipdb
+
+        ipdb.set_trace()
         if self.testing:
             env = self.env.unwrapped
+            print("*********************")
+            print("seed", env._seed + self.test_iter)
+            print("*********************")
             env.seed(env._seed + self.test_iter)
             if self.measure_interactivity:
                 allowed_instructions = list(
