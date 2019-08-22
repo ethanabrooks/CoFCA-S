@@ -13,6 +13,7 @@ from ray.tune.result import TIME_TOTAL_S
 from ray.tune.schedulers import AsyncHyperBandScheduler
 from rl_utils import hierarchical_parse_args
 from tensorboardX import SummaryWriter
+import socket
 
 import ppo
 import ppo.events.agent
@@ -34,7 +35,7 @@ def exp_main(
     default_agent,
     debug,
     tune,
-    redis_address,
+    redis_port,
     log_dir,
     num_samples,
     baseline,
@@ -103,19 +104,22 @@ def exp_main(
             )
 
     if tune:
-        ray.init(redis_address=redis_address, local_mode=debug)
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        ray.init(redis_address=f"{ip}:{redis_port}", local_mode=debug)
         kwargs.update(
             use_gae=ray.tune.choice([True, False]),
-            num_batch=ray.tune.choice([1, 2]),
-            num_steps=ray.tune.choice([16, 32, 64]),
+            num_batch=ray.tune.choice([1]),
+            num_steps=ray.tune.choice([16, 32, 64, 128]),
             seed=ray.tune.choice(list(range(10))),
             entropy_coef=ray.tune.uniform(low=0.01, high=0.04),
-            hidden_size=ray.tune.choice([32, 64, 128, 512]),
+            hidden_size=ray.tune.choice([32, 64, 128, 256]),
             num_layers=ray.tune.choice([0, 1, 2]),
             learning_rate=ray.tune.uniform(low=0.0001, high=0.005),
-            ppo_epoch=ray.tune.choice(list(range(5))),
-            feed_r_initially=ray.tune.choice([True, False]),
-            use_M_plus_minus=ray.tune.choice([True, False]),
+            ppo_epoch=ray.tune.choice(list(range(1, 6))),
+            # feed_r_initially=ray.tune.choice([True, False]),
+            # use_M_plus_minus=ray.tune.choice([True, False]),
             num_processes=300,
             # ppo_epoch=ray.tune.sample_from(
             #     lambda spec: max(
@@ -243,7 +247,7 @@ def exp_cli():
     parser.add_argument("--baseline", action="store_true")
     parser.add_argument("--oh-et-al", action="store_true")
     parser.add_argument("--num-samples", type=int, default=100)
-    parser.add_argument("--redis-address")
+    parser.add_argument("--redis-port", type=int, default=6379)
     parsers.agent.add_argument("--feed-r-initially", action="store_true")
     parsers.agent.add_argument("--use-M-plus-minus", action="store_true")
     gridworld_parser = parser.add_argument_group("gridworld_args")
