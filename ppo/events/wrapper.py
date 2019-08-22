@@ -107,9 +107,17 @@ class Wrapper(gym.Wrapper):
             )._asdict()
         )
         self.action_space = spaces.Discrete(5 + len(env.object_types))
-        self.split = 0
+        self.split = None
         self.test_iter = 0
         self.test_returns = defaultdict(float)
+
+    def evaluate(self):
+        self.testing = True
+        self.split = 0
+        self.test_iter += 1
+
+    def train(self):
+        self.testing = False
 
     def render(self, mode="human", pause=True, **kwargs):
         env = self.env.unwrapped
@@ -224,7 +232,6 @@ class Wrapper(gym.Wrapper):
                 else:
                     logs.update({"optimal_return": _return})
 
-                    self.test_iter += 1
                 self.split += 0.1
 
         return self.observation(obs), r, t, logs
