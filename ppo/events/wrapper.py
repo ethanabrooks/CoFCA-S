@@ -158,14 +158,8 @@ class Wrapper(gym.Wrapper):
 
     def reset(self, **kwargs):
         possible_instructions = list(self.make_instructions())
-        import ipdb
-
-        ipdb.set_trace()
         if self.testing:
             env = self.env.unwrapped
-            print("*********************")
-            print("seed", env._seed + self.test_iter)
-            print("*********************")
             env.seed(env._seed + self.test_iter)
             if self.measure_interactivity:
                 allowed_instructions = list(
@@ -241,18 +235,9 @@ class Wrapper(gym.Wrapper):
                             "optimal_return": _return,
                             "best_split": best_split_return,
                             "best_split_return": best_split_return,
-                            f"optimal-best_split_return": _return - best_split_return,
                         }
                     )
 
-                    for s in splits:
-                        logs.update(
-                            {
-                                f"optimal-({format_split(s)})": (
-                                    _return - self.test_returns[s]
-                                )
-                            }
-                        )
                     self.test_iter += 1
                 self.split += 0.1
 

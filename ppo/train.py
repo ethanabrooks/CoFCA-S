@@ -177,6 +177,12 @@ class Train(abc.ABC):
                 success_reward=success_reward,
                 use_tqdm=use_tqdm,
             )
+            if self.measure_interactivity:
+                split_keys = [f"return_{(s, 100 - s)}" for s in range(0, 110, 10)]
+                split_returns = [eval_result[k] for k in split_keys]
+                best_split = max(split_returns)
+                eval_optimal_return = eval_result["optimal_return"]
+                eval_result["optimal-best_split"] = eval_optimal_return - best_split
             eval_result = {f"eval_{k}": v for k, v in eval_result.items()}
         else:
             eval_result = {}
