@@ -183,6 +183,7 @@ class Train(abc.ABC):
                 best_split = max(split_returns)
                 eval_optimal_return = eval_result["optimal_return"]
                 eval_result["optimal-best_split"] = eval_optimal_return - best_split
+                eval_result["best_split"] = best_split
             eval_result = {f"eval_{k}": v for k, v in eval_result.items()}
         else:
             eval_result = {}
@@ -291,7 +292,7 @@ class Train(abc.ABC):
                     masks=masks,
                 )
 
-        return episode_counter
+        return dict(episode_counter)
 
     @staticmethod
     def build_agent(envs, **agent_args):
