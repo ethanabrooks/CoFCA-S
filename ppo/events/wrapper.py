@@ -107,7 +107,8 @@ class Wrapper(gym.Wrapper):
             )._asdict()
         )
         self.action_space = spaces.Discrete(5 + len(env.object_types))
-        self.i = 0
+        self.split = 0
+        self.test_iter = 0
         self.test_returns = defaultdict(float)
 
     def evaluate(self):
@@ -159,7 +160,7 @@ class Wrapper(gym.Wrapper):
         possible_instructions = list(self.make_instructions())
         if self.testing:
             env = self.env.unwrapped
-            env.seed(env._seed)
+            env.seed(env._seed + self.test_iter)
             if self.measure_interactivity:
                 allowed_instructions = list(
                     itertools.combinations(
@@ -215,7 +216,7 @@ class Wrapper(gym.Wrapper):
         self.rewards = dict(self.get_rewards(obs))
         r = sum(self.rewards.values())
         if self.testing and self.measure_interactivity:
-            self.test_returns[self.i] += r
+            self.test_returns[self.split] += r
 
             def format_split(split):
                 x = round(split * 100)
@@ -223,17 +224,18 @@ class Wrapper(gym.Wrapper):
 
             if t:
                 splits = [i / 10 for i in range(11)]
-                _return = self.test_returns[self.i]
-                if self.i <= 1:
-                    logs.update({f"return_{format_split(self.i)}": _return})
+                _return = self.test_returns[self.split]
+                if self.split <= 1:
+                    logs.update({f"return_{format_split(self.split)}": _return})
                 else:
                     best_split = max(splits, key=lambda s: self.test_returns[s])
+                    best_split_return = self.test_returns[best_split]
                     logs.update(
                         {
                             "optimal_return": _return,
-                            "best_split": best_split,
-                            f"optimal-best_split": _return
-                            - self.test_returns[best_split],
+                            "best_split": best_split_return,
+                            "best_split_return": best_split_return,
+                            f"optimal-best_split_return": _return - best_split_return,
                         }
                     )
 
@@ -245,7 +247,8 @@ class Wrapper(gym.Wrapper):
                                 )
                             }
                         )
-                self.i += 0.1
+                    self.test_iter += 1
+                self.split += 0.1
 
         return self.observation(obs), r, t, logs
 
@@ -267,9 +270,11 @@ class Wrapper(gym.Wrapper):
                 if obj.pos == env.agent.pos and obj is not env.agent:
                     interactable[env.object_types.index(t)] = 1
         base = np.stack([object_pos[k] for k in self.object_types])
-        if self.measure_interactivity and self.testing and self.i <= 1:
+        if self.measure_interactivity and self.testing and self.split <= 1:
             instructions = [
-                self.random.choice(self.instruction_indexes, p=[self.i, 1 - self.i])
+                self.random.choice(
+                    self.instruction_indexes, p=[self.split, 1 - self.split]
+                )
             ]
         else:
             instructions = list(self.instruction_indexes)
