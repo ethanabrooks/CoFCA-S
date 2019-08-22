@@ -47,9 +47,9 @@ class Object:
     def interact(self):
         pass
 
-    def other_positions(self):
+    def excluded_positions(self):
         for o in self.objects:
-            if o is not self:
+            if type(o) is type(self) and o is not self:
                 yield o.pos
 
     def get_objects(self, *types):
@@ -88,11 +88,8 @@ class RandomPosition(Object, ABC):
         self.pos = self.random_position()
 
     def random_position(self):
-        available = [
-            t
-            for t in map(tuple, self.candidate_positions)
-            if t not in self.other_positions()
-        ]
+        other = list(self.excluded_positions())
+        available = [t for t in map(tuple, self.candidate_positions) if t not in other]
         if not available:
             return None
         choice = self.random.choice(len(available))
@@ -349,14 +346,16 @@ class Dog(Graspable, RandomPosition, RandomWalking):
         super().interact()
 
     def wrap_action(self, action):
-        if not self.grasped and self.random.rand() < self.toward_cat_prob:
-            cat = self.get_object(Cat)
-            from_cat = np.array(self.pos) - np.array(cat.pos)
-            return min(
-                self.actions, key=lambda a: np.sum(np.abs(np.array(a) + from_cat))
-            )
-        else:
+        if self.grasped:
             return super().wrap_action(action)
+        if self.random.rand() >= self.speed:
+            return 0, 0
+        if self.random.rand() < self.toward_cat_prob:
+            obj = self.get_object(Cat)
+        else:
+            obj = self.get_object(Agent)
+        from_obj = np.array(self.pos) - np.array(obj.pos)
+        return min(self.actions, key=lambda a: np.sum(np.abs(np.array(a) + from_obj)))
 
     def icon(self):
         return "🐕"
@@ -385,11 +384,14 @@ class Cat(Graspable, RandomPosition, RandomWalking):
 
 
 class Mess(Immobile, RandomActivating, Deactivatable):
+    def __init__(self, pos, **kwargs):
+        super().__init__(**kwargs)
+        self._pos = pos
+
     def activate(self):
-        messes = self.get_objects(Mess)
         dog = self.get_object(Dog)
-        if dog.pos not in {m.pos for m in messes}:
-            self.pos = dog.pos
+        if dog.pos == self._pos:
+            self.pos = self._pos
             super().activate()
 
     def deactivate(self):

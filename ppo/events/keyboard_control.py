@@ -11,8 +11,7 @@ def cli():
     run(**vars(parser.parse_args()))
 
 
-def run(env, actions, seed):
-    env.seed(seed)
+def run(env, actions):
     actions = list(actions)
 
     def get_action():

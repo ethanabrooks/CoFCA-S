@@ -1,5 +1,4 @@
 from collections import namedtuple, defaultdict
-from pprint import pprint
 from typing import List
 
 import re
@@ -26,7 +25,7 @@ from ppo.events.instructions import (
     KeepCatFromDog,
 )
 from ppo.utils import RESET, REVERSE
-from ppo.events.objects import Agent
+from ppo.events.objects import Agent, Mess
 import itertools
 
 Obs = namedtuple("Obs", "base instructions interactable")
@@ -325,6 +324,12 @@ class SingleInstructionWrapper(Wrapper):
 
 if __name__ == "__main__":
     import ppo.events.keyboard_control
+    import sys
+
+    try:
+        seed = sys.argv[1]
+    except IndexError:
+        seed = 0
 
     env = TimeLimit(
         max_episode_steps=30,
@@ -332,7 +337,7 @@ if __name__ == "__main__":
             instructions_per_task=1,
             watch_baby_range=2,
             avoid_dog_range=2,
-            door_time_limit=10,
+            door_time_limit=16,
             max_time_outside=15,
             vision_range=1,
             measure_interactivity=False,
@@ -343,14 +348,14 @@ if __name__ == "__main__":
                 doorbell_prob=0.05,
                 mouse_prob=0.2,
                 baby_prob=0.1,
-                mess_prob=0.02,
+                mess_prob=0.3,
                 fly_prob=0.005,
-                height=8,
-                width=8,
-                seed=0,
+                height=2,
+                width=2,
+                seed=seed,
                 baby_speed=0.1,
                 cat_speed=0.1,
-                dog_speed=0.5,
+                dog_speed=0.2,
                 fly_speed=0,
                 mouse_speed=0.1,
                 toward_fire_prob=0,
@@ -358,4 +363,4 @@ if __name__ == "__main__":
             evaluation=False,
         ),
     )
-    ppo.events.keyboard_control.run(env, actions="xswda1234567890", seed=0)
+    ppo.events.keyboard_control.run(env, actions="xswda1234567890")
