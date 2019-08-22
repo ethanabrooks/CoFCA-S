@@ -289,16 +289,17 @@ class DefaultAgentWrapper(Wrapper):
         self._check_obs = check_obs
         d, h, w = self.observation_space.spaces["base"].shape
         nvec = self.observation_space.spaces["instructions"].nvec
-        instruction_size = nvec[0] * nvec.size
-        shape = d + instruction_size, h, w
+        self.n_instructions = nvec[0]
+        self.instruction_size = nvec[0]
+        shape = d + self.instruction_size, h, w
         self.observation_space = spaces.Box(
             low=-2 * np.ones(shape), high=2 * np.ones(shape)
         )
-        self.instruction_one_hots = np.vstack([np.eye(nvec[0]), np.zeros((1, nvec[0]))])
 
     def observation(self, observation):
         obs = super().observation(observation)
-        i = self.instruction_one_hots[np.array(obs["instructions"])].flatten()
+        i = np.zeros(self.instruction_size)
+        i[np.array(obs["instructions"])] = 1
         b = obs["base"]
         i = np.broadcast_to(i.reshape(i.size, 1, 1), (i.size, *b.shape[1:]))
         obs = np.vstack([b, i])
