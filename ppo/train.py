@@ -234,7 +234,11 @@ class Train(abc.ABC):
                 tick = time.time()
                 yield dict(
                     k_scalar_pairs(
-                        fps=fps, **epoch_counter, **train_results, **eval_result
+                        tick=tick,
+                        fps=fps,
+                        **epoch_counter,
+                        **train_results,
+                        **eval_result,
                     )
                 )
 
