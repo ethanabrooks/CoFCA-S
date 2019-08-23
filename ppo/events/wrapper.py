@@ -107,13 +107,14 @@ class Wrapper(gym.Wrapper):
             )._asdict()
         )
         self.action_space = spaces.Discrete(5 + len(env.object_types))
+        self.test_returns = None
         self.split = None
         self.test_iter = 0
-        self.test_returns = defaultdict(float)
 
     def evaluate(self):
         self.testing = True
         self.split = 0
+        self.test_returns = defaultdict(float)
         self.test_iter += 1
 
     def train(self):
