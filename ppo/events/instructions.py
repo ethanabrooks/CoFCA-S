@@ -58,7 +58,7 @@ class AnswerDoor(Instruction):
 
 class CatchMouse(Instruction):
     def condition(self, *interactions, mouse: Mouse, **objects):
-        return mouse.pos is None and not mouse.caught
+        return not mouse.caught
 
 
 class ComfortBaby(Instruction):
