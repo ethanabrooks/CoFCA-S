@@ -273,11 +273,12 @@ class Baby(Graspable, RandomPosition, RandomActivating, RandomWalking, Deactivat
         super().interact()
 
     def wrap_action(self, action):
-        if not self.grasped and self.random.rand() < self.toward_fire_prob:
-            fire = self.get_object(Fire)
-            from_fire = np.array(self.pos) - np.array(fire.pos)
+        fire = self.get_object(Fire)
+        if not self.grasped and fire.activated and self.random.rand() < self.speed:
+            pos = np.array(self.pos)
+            fire_pos = np.array(fire.pos)
             return min(
-                self.actions, key=lambda a: np.linalg.norm(np.array(a) + from_fire)
+                self.actions, key=lambda a: np.linalg.norm(pos + np.array(a) - fire_pos)
             )
         else:
             return super().wrap_action(action)
@@ -392,8 +393,9 @@ class Cat(Graspable, RandomPosition, RandomWalking):
         dog_pos = self.get_object(Dog).pos
         if dog_pos is None:
             return actions[self.random.choice(len(actions))]
-        return min(actions, key=lambda a: np.linalg.norm(pos + np.array(a) -
-            np.array(dog_pos)))
+        return min(
+            actions, key=lambda a: np.linalg.norm(pos + np.array(a) - np.array(dog_pos))
+        )
 
     def icon(self):
         return "🐈"
