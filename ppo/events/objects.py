@@ -1,9 +1,31 @@
 import functools
+import itertools
 import re
 from abc import ABC
 from typing import List
 
 import numpy as np
+
+
+def add_pair(a, b):
+    a1, a2 = a
+    b1, b2 = b
+    return a1 + b1, a2 + b2
+
+
+def subtract_pair(a, b):
+    a1, a2 = a
+    b1, b2 = b
+    return a1 - b1, a2 - b2
+
+
+def norm(p):
+    p1, p2 = p
+    return (p1 ** 2 + p2 ** 2) ** 0.5
+
+
+def distance(a, b):
+    return norm(subtract_pair(a, b))
 
 
 class Object:
@@ -32,17 +54,14 @@ class Object:
         if self.pos is None:
             return
 
-        action = self.wrap_action(action)
-        pos = np.array(self.pos) + np.array(action)
-        if tuple(pos) in (
+        p1, p2 = add_pair(self.pos, self.wrap_action(action))
+        if (p1, p2) not in (
             o.pos for o in self.objects if type(o) in self.obstacle_types
         ):
-            pos = self.pos
-        self.pos = tuple(
-            np.clip(
-                pos, np.zeros(2, dtype=int), np.array([self.height, self.width]) - 1
+            self.pos = (
+                min(max(p1, 0), self.height - 1),
+                min(max(p2, 0), self.width - 1),
             )
-        )
 
     def interact(self):
         pass
@@ -74,18 +93,17 @@ class Object:
 
 class Immobile(Object, ABC):
     def wrap_action(self, action):
-        return np.zeros(2, dtype=int)
+        return (0, 0)
 
 
 class RandomPosition(Object, ABC):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.candidate_positions = (
-            np.stack(np.meshgrid(np.arange(self.height), np.arange(self.width)))
-            .reshape(2, -1)
-            .T
-        )
+        self.candidate_positions = list(self.get_candidate_positions())
         self.pos = self.random_position()
+
+    def get_candidate_positions(self):
+        return itertools.product(range(self.height), range(self.width))
 
     def random_position(self):
         other = list(self.excluded_positions())
@@ -173,16 +191,13 @@ class RandomActivating(Activating, ABC):
 
 
 class Wall(Immobile, RandomPosition, ABC):
-    def candidate_positions(self):
-        idxs = np.stack(np.meshgrid(np.arange(self.width), np.arange(self.height))).T
-        return np.concatenate(
-            [
-                idxs[:, 0],  # right
-                idxs[:, -1],  # left
-                idxs[0],  # top
-                idxs[-1],  # bottom
-            ]
-        )
+    def get_candidate_positions(self):
+        for i in range(self.height):
+            yield i, 0
+            yield i, self.width - 1
+        for j in range(self.width):
+            yield 0, j
+            yield self.height - 1, j
 
 
 class Agent(RandomPosition):
@@ -237,18 +252,16 @@ class Mouse(RandomActivating, RandomWalking, Deactivatable):
         self.caught = True
         super().deactivate()
 
-    @property
-    def hole(self):
-        return self.get_object(MouseHole)
-
     def wrap_action(self, action):
+        hole = self.get_object(MouseHole)
         if (
-            self.pos not in (None, self.hole.pos)
+            self.pos not in (None, hole.pos)
             and self.random.rand() < self.toward_hole_prob
         ):
             # step toward hole
-            from_hole = np.array(self.pos) - np.array(self.hole.pos)
-            action = min(self.actions, key=lambda a: np.linalg.norm(a + from_hole))
+            action = min(
+                self.actions, key=lambda a: distance(add_pair(self.pos, a), hole.pos)
+            )
         return action
 
     def step(self, action):
@@ -273,12 +286,10 @@ class Baby(Graspable, RandomPosition, RandomActivating, RandomWalking, Deactivat
         super().interact()
 
     def wrap_action(self, action):
-        fire = self.get_object(Fire)
-        if not self.grasped and fire.activated and self.random.rand() < self.speed:
-            pos = np.array(self.pos)
-            fire_pos = np.array(fire.pos)
+        if not self.grasped and self.random.rand() < self.toward_fire_prob:
+            fire = self.get_object(Fire)
             return min(
-                self.actions, key=lambda a: np.linalg.norm(pos + np.array(a) - fire_pos)
+                self.actions, key=lambda a: distance(add_pair(self.pos, a), fire.pos)
             )
         else:
             return super().wrap_action(action)
@@ -367,8 +378,7 @@ class Dog(Graspable, RandomPosition, RandomWalking):
             obj = self.get_object(Cat)
         else:
             obj = self.get_object(Agent)
-        from_obj = np.array(self.pos) - np.array(obj.pos)
-        return min(self.actions, key=lambda a: np.linalg.norm(np.array(a) + from_obj))
+        return min(self.actions, key=lambda a: distance(add_pair(self.pos, a), obj.pos))
 
     def icon(self):
         return "🐕"
@@ -382,20 +392,16 @@ class Cat(Graspable, RandomPosition, RandomWalking):
     def wrap_action(self, action):
         if self.grasped:
             return super().wrap_action(action)
-        elif self.random.rand() > self.speed:
-            return (0, 0)
-        agent_pos = np.array(self.get_object(Agent).pos)
-        pos = np.array(self.pos)
-        toward_agent = min(
-            self.actions, key=lambda a: np.linalg.norm(pos + np.array(a) - agent_pos)
-        )
-        actions = list(set(self.actions) - {toward_agent})
-        dog_pos = self.get_object(Dog).pos
-        if dog_pos is None:
-            return actions[self.random.choice(len(actions))]
-        return min(
-            actions, key=lambda a: np.linalg.norm(pos + np.array(a) - np.array(dog_pos))
-        )
+        else:
+            agent = self.get_object(Agent)
+            toward_agent = min(
+                self.actions, key=lambda a: distance(add_pair(self.pos, a), agent.pos)
+            )
+            actions = [a for a in self.actions if a != toward_agent]
+            dog = self.get_object(Dog)
+            if dog.pos is None:
+                return actions[self.random.choice(len(actions))]
+            return min(actions, key=lambda a: distance(add_pair(self.pos, a), dog.pos))
 
     def icon(self):
         return "🐈"
