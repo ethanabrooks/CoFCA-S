@@ -248,7 +248,7 @@ class Mouse(RandomActivating, RandomWalking, Deactivatable):
         ):
             # step toward hole
             from_hole = np.array(self.pos) - np.array(self.hole.pos)
-            action = min(self.actions, key=lambda a: np.sum(np.abs(a + from_hole)))
+            action = min(self.actions, key=lambda a: np.linalg.norm(a + from_hole))
         return action
 
     def step(self, action):
@@ -277,7 +277,7 @@ class Baby(Graspable, RandomPosition, RandomActivating, RandomWalking, Deactivat
             fire = self.get_object(Fire)
             from_fire = np.array(self.pos) - np.array(fire.pos)
             return min(
-                self.actions, key=lambda a: np.sum(np.abs(np.array(a) + from_fire))
+                self.actions, key=lambda a: np.linalg.norm(np.array(a) + from_fire)
             )
         else:
             return super().wrap_action(action)
@@ -367,7 +367,7 @@ class Dog(Graspable, RandomPosition, RandomWalking):
         else:
             obj = self.get_object(Agent)
         from_obj = np.array(self.pos) - np.array(obj.pos)
-        return min(self.actions, key=lambda a: np.sum(np.abs(np.array(a) + from_obj)))
+        return min(self.actions, key=lambda a: np.linalg.norm(np.array(a) + from_obj))
 
     def icon(self):
         return "🐕"
@@ -381,15 +381,16 @@ class Cat(Graspable, RandomPosition, RandomWalking):
     def wrap_action(self, action):
         if self.grasped:
             return super().wrap_action(action)
-        else:
-            agent = self.get_object(Agent)
-            from_agent = np.array(self.pos) - np.array(agent.pos)
-            toward_agent = min(
-                self.actions, key=lambda a: np.sum(np.abs(np.array(a) + from_agent))
-            )
-            actions = list(set(self.actions) - {toward_agent})
-            choice = self.random.choice(len(actions))
-            return super().wrap_action(actions[choice])
+        elif self.random.rand() > self.speed:
+            return (0, 0)
+        agent_pos = np.array(self.get_object(Agent).pos)
+        pos = np.array(self.pos)
+        toward_agent = min(
+            self.actions, key=lambda a: np.linalg.norm(pos + np.array(a) - agent_pos)
+        )
+        actions = list(set(self.actions) - {toward_agent})
+        dog_pos = np.array(self.get_object(Dog).pos)
+        return min(actions, key=lambda a: np.linalg.norm(pos + np.array(a) - dog_pos))
 
     def icon(self):
         return "🐈"
