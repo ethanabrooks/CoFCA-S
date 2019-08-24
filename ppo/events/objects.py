@@ -389,8 +389,11 @@ class Cat(Graspable, RandomPosition, RandomWalking):
             self.actions, key=lambda a: np.linalg.norm(pos + np.array(a) - agent_pos)
         )
         actions = list(set(self.actions) - {toward_agent})
-        dog_pos = np.array(self.get_object(Dog).pos)
-        return min(actions, key=lambda a: np.linalg.norm(pos + np.array(a) - dog_pos))
+        dog_pos = self.get_object(Dog).pos
+        if dog_pos is None:
+            return actions[self.random.choice(len(actions))]
+        return min(actions, key=lambda a: np.linalg.norm(pos + np.array(a) -
+            np.array(dog_pos)))
 
     def icon(self):
         return "🐈"
