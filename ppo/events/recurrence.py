@@ -163,8 +163,20 @@ class Recurrence(nn.Module):
             n_subtasks = len(self.subtasks_nvec)
             subtask_size = self.subtasks_nvec[0].size
             task = inputs.subtasks[0].reshape(N * n_subtasks, subtask_size).long()
+            print(
+                "Switched instructions to one_hot format. This needs to be correctly implemented"
+            )
+            import ipdb
+
+            ipdb.set_trace()
             embeddings = self.task_embeddings(task).view(N, n_subtasks, -1)
         else:
+            print(
+                "Switched instructions to one_hot format. This needs to be correctly implemented"
+            )
+            import ipdb
+
+            ipdb.set_trace()
             embeddings = self.task_embeddings(inputs.instructions[0].long())
         rnn_inputs = embeddings.transpose(0, 1)
         X, _ = self.task_encoder(rnn_inputs)

@@ -17,6 +17,7 @@ import ppo
 import ppo.events.agent
 import ppo.oh_et_al
 from ppo.arguments import get_args, build_parser
+from ppo.events import InteractivityAgent
 from ppo.events.agent import Agent
 from ppo.train import Train
 from ppo.utils import get_random_gpu, get_n_gpu, k_scalar_pairs
@@ -29,7 +30,7 @@ def cli():
 def exp_main(
     gridworld_args,
     wrapper_args,
-    default_agent,
+    simple_agent,
     debug,
     tune,
     redis_port,
@@ -45,15 +46,11 @@ def exp_main(
         @staticmethod
         def make_env(time_limit, seed, rank, evaluation, env_id, add_timestep):
             env = ppo.events.Gridworld(
-                **gridworld_args, time_limit=time_limit, seed=seed
+                **gridworld_args, time_limit=time_limit, seed=seed + rank
             )
             env = TimeLimit(max_episode_steps=time_limit, env=env)
             wrapper_args.update(measure_interactivity=measure_interactivity)
-            if default_agent:
-                env = ppo.events.DefaultAgentWrapper(
-                    **wrapper_args, evaluation=evaluation, env=env
-                )
-            elif oh_et_al:
+            if oh_et_al:
                 env = ppo.oh_et_al.Wrapper(
                     ppo.oh_et_al.GridWorld(
                         text_map=["    "] * 4,
@@ -90,7 +87,13 @@ def exp_main(
                 entropy_coef=entropy_coef,
                 recurrent=recurrent,
             )
-            if default_agent:
+            if simple_agent:
+                if measure_interactivity:
+                    return InteractivityAgent(
+                        observation_space=envs.observation_space,
+                        action_space=envs.action_space,
+                        **agent_args,
+                    )
                 return super().build_agent(envs, **agent_args)
             return Agent(
                 observation_space=envs.observation_space,
@@ -238,7 +241,7 @@ def exp_main(
 def exp_cli():
     parsers = build_parser()
     parser = parsers.main
-    parser.add_argument("--default-agent", action="store_true")
+    parser.add_argument("--simple-agent", action="store_true")
     parser.add_argument("--debug", action="store_true")
     parser.add_argument("--no-tune", dest="tune", action="store_false")
     parser.add_argument("--use-tqdm", action="store_true")

@@ -93,7 +93,6 @@ class Wrapper(gym.Wrapper):
         n_instructions = len(instructions)
         self.test_set = [{instructions.index(s) for s in task} for task in test or []]
         self.valid_set = [{instructions.index(s) for s in task} for task in valid or []]
-        instructions_nvec = n_instructions * np.ones(instructions_per_task)
         assert instructions_per_task <= n_instructions
         self.observation_space = spaces.Dict(
             Obs(
@@ -102,7 +101,7 @@ class Wrapper(gym.Wrapper):
                     high=2 * np.ones(base_shape),
                     dtype=float,
                 ),
-                instructions=spaces.MultiDiscrete(instructions_nvec),
+                instructions=spaces.MultiBinary(n_instructions),
                 interactable=spaces.MultiBinary(len(self.object_types)),
             )._asdict()
         )
@@ -110,6 +109,7 @@ class Wrapper(gym.Wrapper):
         self.test_returns = None
         self.split = None
         self.test_iter = 0
+        self.instruction_one_hots = np.eye(n_instructions)
 
     def evaluate(self):
         self.testing = True
@@ -190,9 +190,8 @@ class Wrapper(gym.Wrapper):
                     set((i,) for c in allowed_instructions for i in c)
                 )
 
-            self.instruction_indexes = list(
-                allowed_instructions[self.random.choice(len(allowed_instructions))]
-            )
+            choice = self.random.choice(len(allowed_instructions))
+            self.instruction_indexes = list(allowed_instructions[choice])
 
         # for i, s in enumerate(possible_instructions):
         # print(i, s)
@@ -263,56 +262,11 @@ class Wrapper(gym.Wrapper):
             ]
         else:
             instructions = list(self.instruction_indexes)
-        if self.measure_interactivity:
-            instructions = np.pad(
-                instructions,
-                (0, self.instructions_per_task - len(instructions)),
-                mode="constant",
-                constant_values=-1,
-            )
-
+        instructions = self.instruction_one_hots[instructions].sum(0)
         obs = Obs(
             base=base, instructions=instructions, interactable=interactable
         )._asdict()
         if self.check_obs:
-            assert self.observation_space.contains(obs)
-        return obs
-
-
-class DefaultAgentWrapper(Wrapper):
-    def __init__(self, check_obs=True, **kwargs):
-        super().__init__(**kwargs, check_obs=False)
-        self._check_obs = check_obs
-        d, h, w = self.observation_space.spaces["base"].shape
-        nvec = self.observation_space.spaces["instructions"].nvec
-        self.n_instructions = nvec[0]
-        shape = d * self.n_instructions, h, w
-        self.observation_space = spaces.Box(
-            low=-3 * np.ones(shape), high=3 * np.ones(shape)
-        )
-
-    def observation(self, observation):
-        obs = super().observation(observation)
-        base = obs["base"]
-        base[base >= 0] += 1
-        base = np.expand_dims(base, 0)
-        base = np.tile(base, (self.n_instructions, 1, 1, 1))
-        base *= np.reshape(obs["instructions"], (-1, 1, 1, 1))
-        base = base.reshape(self.observation_space.shape)
-        if self._check_obs:
-            assert self.observation_space.contains(base)
-        return base
-
-
-class SingleInstructionWrapper(Wrapper):
-    def __init__(self, check_obs=True, **kwargs):
-        super().__init__(**kwargs, check_obs=False)
-        self._check_obs = check_obs
-        self.observation_space = self.observation_space.spaces["base"]
-
-    def observation(self, observation):
-        obs = super().observation(observation)["base"]
-        if self._check_obs:
             assert self.observation_space.contains(obs)
         return obs
 
