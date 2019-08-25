@@ -51,10 +51,10 @@ class InteractivityAgent(nn.Module):
 
         base = obs.base.view(N, *self.obs_shape)
         combined_values = AgentValues(
-            value=torch.zeros(N, 1),
-            action=torch.zeros(N, 1, dtype=int),
-            action_log_probs=torch.zeros(N, 1),
-            rnn_hxs=torch.zeros(n, self.recurrent_hidden_state_size),
+            value=torch.zeros(N, 1, device=device),
+            action=torch.zeros(N, 1, dtype=torch.long, device=device),
+            action_log_probs=torch.zeros(N, 1, device=device),
+            rnn_hxs=torch.zeros(n, self.recurrent_hidden_state_size, device=device),
             dist=None,
             aux_loss=0,
             log=Counter(),
