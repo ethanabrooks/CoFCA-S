@@ -46,14 +46,11 @@ class Gridworld(gym.Env):
         toward_cat_prob: float,
         toward_fire_prob: float,
         toward_hole_prob: float,
-        seed: int,
     ):
         super().__init__()
         self.object_idxs = {}
         self.height = height
         self.width = width
-        self.seed(seed)
-        self._seed = seed
         self.grasping = None
         multiple_object_types = [Mess, Fly]
         self.object_types = object_types = [
@@ -126,7 +123,6 @@ class Gridworld(gym.Env):
         self.last_action = None
         self.transitions = [(0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)]
         self._mess = None
-        self._seed = None
 
     def interact(self, i):
         object_type = self.object_types[i]

@@ -45,13 +45,13 @@ def exp_main(
     class TrainEvents(Train, ABC):
         @staticmethod
         def make_env(time_limit, seed, rank, evaluation, env_id, add_timestep):
-            env = ppo.events.Gridworld(
-                **gridworld_args, time_limit=time_limit, seed=seed + rank
-            )
+            env = ppo.events.Gridworld(**gridworld_args, time_limit=time_limit)
             env = TimeLimit(max_episode_steps=time_limit, env=env)
-            wrapper_args.update(measure_interactivity=measure_interactivity)
+            wrapper_args.update(
+                measure_interactivity=measure_interactivity, seed=seed + rank
+            )
             if oh_et_al:
-                env = ppo.oh_et_al.Wrapper(
+                return ppo.oh_et_al.Wrapper(
                     ppo.oh_et_al.GridWorld(
                         text_map=["    "] * 4,
                         min_objects=0,
@@ -64,9 +64,9 @@ def exp_main(
                     )
                 )
             else:
-                env = ppo.events.Wrapper(**wrapper_args, evaluation=evaluation, env=env)
-            env.seed(seed + rank)
-            return env
+                return ppo.events.Wrapper(
+                    **wrapper_args, evaluation=evaluation, env=env
+                )
 
         def build_agent(
             self,

@@ -42,6 +42,7 @@ class Wrapper(gym.Wrapper):
         instructions_per_task: int,
         evaluation: bool,
         measure_interactivity: bool,
+        seed: int,
         instructions: List[str] = None,
         check_obs=True,
         test: List[List[str]] = None,
@@ -83,6 +84,7 @@ class Wrapper(gym.Wrapper):
         self.instruction_indexes = None
         self.rewards = None
         env = env.unwrapped
+        self.seed, = env.seed(seed)
         self.random = env.random
         self.width, self.height = env.width, env.height
         self.pos_one_hots = np.eye(env.height * env.width)
@@ -163,7 +165,7 @@ class Wrapper(gym.Wrapper):
         possible_instructions = list(self.make_instructions())
         if self.testing:
             env = self.env.unwrapped
-            env.seed(env._seed + self.test_iter)
+            env.seed(self.seed + self.test_iter)
             if self.measure_interactivity:
                 allowed_instructions = list(
                     itertools.combinations(
