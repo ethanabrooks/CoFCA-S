@@ -286,22 +286,22 @@ class DefaultAgentWrapper(Wrapper):
         d, h, w = self.observation_space.spaces["base"].shape
         nvec = self.observation_space.spaces["instructions"].nvec
         self.n_instructions = nvec[0]
-        self.instruction_size = nvec[0]
-        shape = d + self.instruction_size, h, w
+        shape = d * self.n_instructions, h, w
         self.observation_space = spaces.Box(
-            low=-2 * np.ones(shape), high=2 * np.ones(shape)
+            low=-3 * np.ones(shape), high=3 * np.ones(shape)
         )
 
     def observation(self, observation):
         obs = super().observation(observation)
-        i = np.zeros(self.instruction_size)
-        i[np.array(obs["instructions"])] = 1
-        b = obs["base"]
-        i = np.broadcast_to(i.reshape(i.size, 1, 1), (i.size, *b.shape[1:]))
-        obs = np.vstack([b, i])
+        base = obs["base"]
+        base[base >= 0] += 1
+        base = np.expand_dims(base, 0)
+        base = np.tile(base, (self.n_instructions, 1, 1, 1))
+        base *= np.reshape(obs["instructions"], (-1, 1, 1, 1))
+        base = base.reshape(self.observation_space.shape)
         if self._check_obs:
-            assert self.observation_space.contains(obs)
-        return obs
+            assert self.observation_space.contains(base)
+        return base
 
 
 class SingleInstructionWrapper(Wrapper):
