@@ -19,13 +19,9 @@ def subtract_pair(a, b):
     return a1 - b1, a2 - b2
 
 
-def norm(p):
-    p1, p2 = p
-    return (p1 ** 2 + p2 ** 2) ** 0.5
-
-
 def distance(a, b):
-    return norm(subtract_pair(a, b))
+    p1, p2 = subtract_pair(a, b)
+    return p1 ** 2 + p2 ** 2
 
 
 class Object:
