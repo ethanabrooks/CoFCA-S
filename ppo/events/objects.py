@@ -286,8 +286,12 @@ class Baby(Graspable, RandomPosition, RandomActivating, RandomWalking, Deactivat
         super().interact()
 
     def wrap_action(self, action):
-        if not self.grasped and self.random.rand() < self.toward_fire_prob:
-            fire = self.get_object(Fire)
+        fire = self.get_object(Fire)
+        if (
+            not self.grasped
+            and fire.activated
+            and self.random.rand() < self.toward_fire_prob
+        ):
             return min(
                 self.actions, key=lambda a: distance(add_pair(self.pos, a), fire.pos)
             )
