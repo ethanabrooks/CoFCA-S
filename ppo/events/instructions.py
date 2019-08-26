@@ -1,9 +1,9 @@
 import abc
 import re
-import numpy as np
 from typing import List
 
 from ppo.events.objects import (
+    distance,
     Door,
     Mouse,
     Baby,
@@ -105,10 +105,7 @@ class AvoidDog(Instruction):
         self.range = min_range
 
     def condition(self, *interactions, dog: Dog, agent: Agent, **objects):
-        return (
-            dog.pos is not None
-            and np.linalg.norm(np.array(dog.pos) - np.array(agent.pos)) < self.range
-        )
+        return dog.pos is not None and distance(dog.pos, agent.pos) <= self.range ** 2
 
 
 class LetDogIn(Instruction):
@@ -131,7 +128,7 @@ class WatchBaby(Instruction):
         self.range = max_range
 
     def condition(self, *interactions, baby: Baby, agent: Agent, **objects):
-        return np.linalg.norm(np.array(baby.pos) - np.array(agent.pos)) > self.range
+        return distance(baby.pos, agent.pos) >= self.range ** 2
 
 
 class KeepBabyOutOfFire(Instruction):
