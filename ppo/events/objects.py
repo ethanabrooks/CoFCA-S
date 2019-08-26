@@ -262,7 +262,7 @@ class Mouse(RandomActivating, RandomWalking, Deactivatable):
 
     def step(self, action):
         hole = self.get_object(MouseHole)
-        if self.pos == hole.pos:
+        if self.random.rand() < self.speed and self.pos == hole.pos:
             self.pos = None
             self.activated = False
         return super().step(action)
