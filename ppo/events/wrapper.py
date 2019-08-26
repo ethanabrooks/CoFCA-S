@@ -148,6 +148,9 @@ class Wrapper(gym.Wrapper):
             for j in range(self.width):
                 print(object_string.get((i, j), " " * width), end="|")
         print()
+        if self.testing:
+            print("testing split:", self.split)
+
         for instruction in self.active_instructions:
             print(instruction, end="")
             if self.rewards is not None:
