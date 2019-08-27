@@ -74,11 +74,7 @@ class Gridworld(gym.Env):
             objects = []
             for object_type in object_types:
                 kwargs = dict(
-                    objects=objects,
-                    object_types=object_types,
-                    height=height,
-                    width=width,
-                    random=self.random,
+                    objects=objects, height=height, width=width, random=self.random
                 )
                 if object_type is Door:
                     kwargs.update(time_limit=time_limit)

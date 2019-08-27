@@ -25,14 +25,9 @@ def distance(a, b):
 
 
 class Object:
-    def __init__(
-        self,
-        objects: List,
-        random: np.random,
-        height: int,
-        width: int,
-        object_types: List[type],
-    ):
+    actions = [(0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)]
+
+    def __init__(self, objects: List, random: np.random, height: int, width: int):
         self.random = random
         self.width = width
         self.height = height
