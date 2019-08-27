@@ -3,6 +3,8 @@ import time
 
 import gym
 
+from ppo.events.objects import Object
+
 
 def cli():
     parser = argparse.ArgumentParser()
@@ -25,14 +27,12 @@ def run(env, actions):
 
         a = actions.index(action)
         unwrapped = env.unwrapped
-        if a < len(unwrapped.transitions):
+        if a < len(Object.actions):
             return a
-        i = a - len(unwrapped.transitions)
+        i = a - len(Object.actions)
         touching = [o for o in unwrapped.objects if o.pos == unwrapped.agent.pos]
         try:
-            return len(unwrapped.transitions) + unwrapped.object_types.index(
-                type(touching[i])
-            )
+            return len(Object.actions) + unwrapped.object_types.index(type(touching[i]))
         except IndexError:
             print("out of range")
             return get_action()

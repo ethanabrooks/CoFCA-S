@@ -34,6 +34,7 @@ class Gridworld(gym.Env):
         time_limit: int,
         height: int,
         width: int,
+        seed: int,
         mouse_prob: float,
         baby_prob: float,
         mess_prob: float,
@@ -65,64 +66,57 @@ class Gridworld(gym.Env):
             Food,
             Cat,
             Fire,
-            Mess,
-            Fly,
+            # Mess,
+            # Fly,
         ]
         assert len(object_types) == len(set(object_types))
+        self.seed(seed)
 
-        def make_objects():
-            objects = []
-            for object_type in object_types:
-                kwargs = dict(
-                    objects=objects,
-                    object_types=object_types,
-                    height=height,
-                    width=width,
-                    random=self.random,
+        self.objects = []
+        for object_type in object_types:
+            kwargs = dict(
+                objects=self.objects, height=height, width=width, random=self.random
+            )
+            if object_type is Door:
+                kwargs.update(time_limit=time_limit)
+            if object_type is Mouse:
+                kwargs.update(
+                    mouse_prob=mouse_prob,
+                    speed=mouse_speed,
+                    toward_hole_prob=toward_hole_prob,
                 )
-                if object_type is Door:
-                    kwargs.update(time_limit=time_limit)
-                if object_type is Mouse:
-                    kwargs.update(
-                        activation_prob=mouse_prob,
-                        speed=mouse_speed,
-                        toward_hole_prob=toward_hole_prob,
-                    )
-                if object_type is Baby:
-                    kwargs.update(
-                        activation_prob=baby_prob,
-                        speed=baby_speed,
-                        toward_fire_prob=toward_fire_prob,
-                    )
-                if object_type is Mess:
-                    kwargs.update(activation_prob=mess_prob)
-                if object_type is Fly:
-                    kwargs.update(activation_prob=fly_prob, speed=fly_speed)
-                if object_type is Dog:
-                    kwargs.update(toward_cat_prob=toward_cat_prob, speed=dog_speed)
-                if object_type is Cat:
-                    kwargs.update(speed=cat_speed)
-                if object_type is Food:
-                    kwargs.update(cook_time=cook_time)
-                if object_type is Oven:
-                    kwargs.update(time_to_heat=time_to_heat_oven)
-                # if object_type in multiple_object_types:
-                #     for i in range(height):
-                #         for j in range(width):
-                #             if object_type is Mess:
-                #                 kwargs.update(pos=(i, j))
-                #             objects += [object_type(**kwargs)]
-                # else:
-                objects += [object_type(**kwargs)]
-            return objects
+            if object_type is Baby:
+                kwargs.update(
+                    activation_prob=baby_prob,
+                    speed=baby_speed,
+                    toward_fire_prob=toward_fire_prob,
+                )
+            if object_type is Mess:
+                kwargs.update(activation_prob=mess_prob)
+            if object_type is Fly:
+                kwargs.update(activation_prob=fly_prob, speed=fly_speed)
+            if object_type is Dog:
+                kwargs.update(toward_cat_prob=toward_cat_prob, speed=dog_speed)
+            if object_type is Cat:
+                kwargs.update(speed=cat_speed)
+            if object_type is Food:
+                kwargs.update(cook_time=cook_time)
+            if object_type is Oven:
+                kwargs.update(time_to_heat=time_to_heat_oven)
+            # if object_type in multiple_object_types:
+            #     for i in range(height):
+            #         for j in range(width):
+            #             if object_type is Mess:
+            #                 kwargs.update(pos=(i, j))
+            #             objects += [object_type(**kwargs)]
+            # else:
+            self.objects += [object_type(**kwargs)]
 
-        self.objects = None
-        self.make_objects = make_objects
-
+        self.random_thresholds = np.array(
+            [t for o in self.objects for t in o.random_thresholds]
+        )
         self.agent = None
         self.last_action = None
-        self.transitions = [(0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)]
-        self._mess = None
 
     def interact(self, i):
         object_type = self.object_types[i]
@@ -139,17 +133,26 @@ class Gridworld(gym.Env):
     def step(self, a):
         a = int(a)
         self.last_action = a
-        n_transitions = len(self.transitions)
+        n_transitions = len(Object.actions)
         if a < n_transitions:
-            action = self.transitions[int(a)]
+            action = Object.actions[int(a)]
             interactions = []
         else:
             action = (0, 0)
             interactions = list(self.interact(a - n_transitions))
 
+        coin_flips = (
+            self.random.random(size=self.random_thresholds.size)
+            < self.random_thresholds
+        )
+
         obj: Object
         for obj in self.objects:
-            obj.step(action)
+            n = len(obj.random_thresholds)
+            obj.step(
+                agent_action=action, actions=Object.actions, coin_flips=coin_flips[:n]
+            )
+            coin_flips = coin_flips[n:]
         grasping = self.agent.grasping
         if grasping:
             try:
@@ -160,11 +163,12 @@ class Gridworld(gym.Env):
         return State(objects=self.objects, interactions=interactions), 0, False, {}
 
     def seed(self, seed=None):
-        self.random, seed = seeding.np_random(int(seed))
+        self.random, self.random_seed = seeding.np_random(int(seed))
         return [seed]
 
     def reset(self):
-        self.objects = self.make_objects()
+        for obj in self.objects:
+            obj.reset()
         self.agent = next((o for o in self.objects if type(o) is Agent))
         return State(objects=self.objects, interactions=[])
 

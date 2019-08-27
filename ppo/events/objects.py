@@ -2,6 +2,7 @@ import functools
 import itertools
 import re
 from abc import ABC
+from copy import copy
 from typing import List
 
 import numpy as np
@@ -25,14 +26,9 @@ def distance(a, b):
 
 
 class Object:
-    def __init__(
-        self,
-        objects: List,
-        random: np.random,
-        height: int,
-        width: int,
-        object_types: List[type],
-    ):
+    actions = [(0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)]
+
+    def __init__(self, objects: List, random: np.random, height: int, width: int):
         self.random = random
         self.width = width
         self.height = height
@@ -40,32 +36,24 @@ class Object:
         self.pos = None
         self.activated = False
         self.grasped = False
-        self.obstacle_types = [type(self)]
+        self.excluded_positions = [
+            o.pos for o in self.objects if type(o) is type(self) and o is not self
+        ]
+        self.random_thresholds = []
 
-    @property
-    def obstacle(self):
-        return False
+    def reset(self):
+        self.activated = False
+        self.grasped = False
 
-    def step(self, action):
+    def step(self, **kwargs):
         if self.pos is None:
             return
-
-        p1, p2 = add_pair(self.pos, self.wrap_action(action))
-        if (p1, p2) not in (
-            o.pos for o in self.objects if type(o) in self.obstacle_types
-        ):
-            self.pos = (
-                min(max(p1, 0), self.height - 1),
-                min(max(p2, 0), self.width - 1),
-            )
+        p1, p2 = add_pair(self.pos, self.action(**kwargs))
+        if (p1, p2) not in self.excluded_positions:
+            self.pos = min(max(p1, 0), self.height - 1), min(max(p2, 0), self.width - 1)
 
     def interact(self):
         pass
-
-    def excluded_positions(self):
-        for o in self.objects:
-            if type(o) is type(self) and o is not self:
-                yield o.pos
 
     def get_objects(self, *types):
         return (o for o in self.objects if type(o) in types)
@@ -80,45 +68,60 @@ class Object:
     def icon(self):
         return str(self)[:1]
 
-    def wrap_action(self, action):
-        return action
+    def action(self, agent_action, **kwargs):
+        return agent_action
+
+    def random_action(self, actions):
+        return actions[self.random.choice(len(actions))]
+
+    def move_toward(self, toward, actions):
+        try:
+            pos = toward.pos
+        except AttributeError:
+            pos = self.get_object(toward).pos
+        return min(actions, key=lambda a: distance(add_pair(self.pos, a), pos))
 
     def __str__(self):
         return "_".join(re.findall("[A-Z][^A-Z]*", self.__class__.__name__)).lower()
 
 
 class Immobile(Object, ABC):
-    def wrap_action(self, action):
-        return (0, 0)
+    def action(self, **kwargs):
+        return 0, 0
 
 
 class RandomPosition(Object, ABC):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.candidate_positions = list(self.get_candidate_positions())
+        self.pos = None
+
+    def reset(self):
         self.pos = self.random_position()
+        super().reset()
 
     def get_candidate_positions(self):
         return itertools.product(range(self.height), range(self.width))
 
     def random_position(self):
-        other = list(self.excluded_positions())
-        available = [t for t in map(tuple, self.candidate_positions) if t not in other]
+        other = list(self.excluded_positions)
+        available = [t for t in self.candidate_positions if t not in other]
         if not available:
             return None
         choice = self.random.choice(len(available))
         return tuple(available[choice])
 
 
-class RandomWalking(Object, ABC):
+class Slow(Object, ABC):
     def __init__(self, speed, **kwargs):
         super().__init__(**kwargs)
-        self.actions = [(0, 1), (1, 0), (0, -1), (-1, 0), (0, 0)]
-        self.speed = speed
+        self.random_thresholds += [speed]
 
-    def wrap_action(self, action):
-        choice = self.random.choice(len(self.actions))
-        return self.actions[choice] if self.random.rand() < self.speed else (0, 0)
+    def action(self, coin_flips, **kwargs):
+        move, *coin_flips = coin_flips
+        if not move:
+            return 0, 0
+        return super().action(coin_flips=coin_flips, **kwargs)
 
 
 class Graspable(Object, ABC):
@@ -126,11 +129,11 @@ class Graspable(Object, ABC):
         self.grasped = not self.grasped
         super().interact()
 
-    def wrap_action(self, action):
+    def action(self, agent_action, **kwargs):
         if self.grasped:
-            return action
+            return agent_action
         else:
-            return super().wrap_action(action)
+            return super().action(agent_action=agent_action, **kwargs)
 
 
 class Activating(Object, ABC):
@@ -155,35 +158,16 @@ class Activatable(Activating, ABC):
         super().interact()
 
 
-class DurationActivating(Activating, ABC):
-    def __init__(self, duration, **kwargs):
-        super().__init__(**kwargs)
-        self.duration = duration
-        self.time_activated = 0
-
-    def step(self, action):
-        if self.time_activated == self.duration:
-            self.deactivate()
-        if self.activated:
-            self.time_activated += 1
-        return super().step(action)
-
-    def deactivate(self):
-        self.time_activated = 0
-        super().deactivate()
-
-
 class RandomActivating(Activating, ABC):
     def __init__(self, activation_prob, **kwargs):
         super().__init__(**kwargs)
         self.activation_prob = activation_prob
 
-    def step(self, action):
-        if not self.activated:
-            rand = self.random.rand()
-            if rand < self.activation_prob:
-                self.activate()
-        return super().step(action)
+    def step(self, coin_flips, **kwargs):
+        activate, *coin_flips = coin_flips
+        if not self.activated and activate:
+            self.activate()
+        return super().step(coin_flips=coin_flips, **kwargs)
 
 
 class Wall(Immobile, RandomPosition, ABC):
@@ -201,6 +185,10 @@ class Agent(RandomPosition):
         super().__init__(**kwargs)
         self.grasping = None
 
+    def reset(self):
+        self.grasping = None
+        super().reset()
+
     def icon(self):
         return "😀"
 
@@ -211,12 +199,16 @@ class Door(Wall, Deactivatable, Immobile):
         self.time_to_ring = self.random.choice(time_limit // 2)
         self.t = 0
 
-    def step(self, action):
+    def reset(self):
+        self.t = 0
+        super().reset()
+
+    def step(self, **kwargs):
         self.t += 1
         self.activated = False
         if self.t == self.time_to_ring:
             self.activated = True
-        return super().step(action)
+        return super().step(**kwargs)
 
     def interact(self):
         dog = self.get_object(Dog)
@@ -232,67 +224,61 @@ class MouseHole(Wall):
         return "🕳"
 
 
-class Mouse(RandomActivating, RandomWalking, Deactivatable):
-    def __init__(self, toward_hole_prob, **kwargs):
-        super().__init__(**kwargs)
-        self.toward_hole_prob = toward_hole_prob
+class Mouse(Slow):
+    def __init__(self, speed, toward_hole_prob, mouse_prob, **kwargs):
+        super().__init__(speed=speed, **kwargs)
+        self.random_thresholds += [mouse_prob, speed, toward_hole_prob]
         self.caught = False
 
-    def activate(self):
-        if not self.caught:
-            self.pos = self.get_object(MouseHole).pos
-            super().activate()
+    def reset(self):
+        self.caught = False
+        super().reset()
 
-    def deactivate(self):
+    def interact(self):
         self.pos = None
         self.caught = True
-        super().deactivate()
+        super().interact()
 
-    def wrap_action(self, action):
+    def step(self, coin_flips, **kwargs):
         hole = self.get_object(MouseHole)
-        if (
-            self.pos not in (None, hole.pos)
-            and self.random.rand() < self.toward_hole_prob
-        ):
-            # step toward hole
-            action = min(
-                self.actions, key=lambda a: distance(add_pair(self.pos, a), hole.pos)
-            )
-        return action
-
-    def step(self, action):
-        hole = self.get_object(MouseHole)
-        if self.random.rand() < self.speed and self.pos == hole.pos:
+        enter_hole, appear, *coin_flips = coin_flips
+        if enter_hole and self.pos == hole.pos:
             self.pos = None
-            self.activated = False
-        return super().step(action)
+        if appear and self.pos is None:
+            self.pos = hole.pos
+        return super().step(coin_flips=coin_flips, **kwargs)
+
+    def action(self, actions, coin_flips, **kwargs):
+        toward_hole, *coin_flips = coin_flips
+        if self.pos is None:
+            return
+        if toward_hole:
+            # step toward hole
+            return self.move_toward(MouseHole, actions)
+        else:
+            return self.random_action(actions)
 
     def icon(self):
         return "🐁"
 
 
-class Baby(Graspable, RandomPosition, RandomActivating, RandomWalking, Deactivatable):
+class Baby(Graspable, Slow, RandomPosition, RandomActivating, Deactivatable):
     def __init__(self, toward_fire_prob, **kwargs):
         super().__init__(**kwargs)
-        self.toward_fire_prob = toward_fire_prob
+        self.random_thresholds += [toward_fire_prob]
 
     def interact(self):
         if self.activated:
             self.deactivate()
         super().interact()
 
-    def wrap_action(self, action):
+    def action(self, actions, coin_flips, **kwargs):
         fire = self.get_object(Fire)
-        if (
-            not self.grasped
-            and fire.activated
-            and self.random.rand() < self.toward_fire_prob
-        ):
-            return min(
-                self.actions, key=lambda a: distance(add_pair(self.pos, a), fire.pos)
-            )
+        toward_fire, *coin_flips = coin_flips
+        if fire.activated and toward_fire:
+            return self.move_toward(fire, actions)
         else:
-            return super().wrap_action(action)
+            return self.random_action(actions)
 
     def icon(self):
         return "😭" if self.activated else "👶"
@@ -304,6 +290,10 @@ class Oven(RandomPosition, Activatable, Immobile):
         self.time_to_heat = time_to_heat
         self.time_heating = 0
 
+    def reset(self):
+        self.time_heating = 0
+        super().reset()
+
     def hot(self):
         return self.time_heating > self.time_to_heat
 
@@ -314,10 +304,10 @@ class Oven(RandomPosition, Activatable, Immobile):
             self.activate()
         super().interact()
 
-    def step(self, action):
+    def step(self, **kwargs):
         if self.activated:
             self.time_heating += 1
-        super().step(action)
+        super().step(**kwargs)
 
     def deactivate(self):
         self.time_heating = 0
@@ -343,24 +333,32 @@ class Food(Graspable, RandomPosition, Immobile, Activating):
         self.cook_time = cook_time
         self.time_cooking = 0
 
+    def reset(self):
+        self.time_cooking = 0
+        super().reset()
+
     def icon(self):
         return "🍳" if self.activated else "🥚"
 
-    def step(self, action):
+    def step(self, **kwargs):
         # noinspection PyTypeChecker
         oven = self.get_object(Oven)  # type: Oven
         if self.time_cooking == self.cook_time:
             self.activate()
         if self.pos == oven.pos and oven.hot():
             self.time_cooking += 1
-        super().step(action)
+        super().step(**kwargs)
 
 
-class Dog(Graspable, RandomPosition, RandomWalking):
+class Dog(Graspable, Slow, RandomPosition):
     def __init__(self, toward_cat_prob, **kwargs):
         super().__init__(**kwargs)
         self.let_out = False
-        self.toward_cat_prob = toward_cat_prob
+        self.random_thresholds += [toward_cat_prob]
+
+    def reset(self):
+        self.let_out = False
+        super().reset()
 
     def interact(self):
         door = self.get_object(Door)
@@ -369,58 +367,48 @@ class Dog(Graspable, RandomPosition, RandomWalking):
             self.let_out = True
         super().interact()
 
-    def wrap_action(self, action):
-        if self.grasped:
-            return super().wrap_action(action)
-        if self.random.rand() >= self.speed:
-            return 0, 0
-        if self.random.rand() < self.toward_cat_prob:
-            obj = self.get_object(Cat)
-        else:
-            obj = self.get_object(Agent)
-        return min(self.actions, key=lambda a: distance(add_pair(self.pos, a), obj.pos))
+    def action(self, coin_flips, actions, **kwargs):
+        toward_cat, *coin_flips = coin_flips
+        return self.move_toward(Cat if toward_cat else Agent, actions)
 
     def icon(self):
         return "🐕"
 
 
-class Cat(Graspable, RandomPosition, RandomWalking):
+class Cat(Graspable, Slow, RandomPosition):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.let_out = False
 
-    def wrap_action(self, action):
+    def action(self, actions, **kwargs):
         if self.grasped:
-            return super().wrap_action(action)
+            return super().action(**kwargs)
         else:
-            agent = self.get_object(Agent)
-            toward_agent = min(
-                self.actions, key=lambda a: distance(add_pair(self.pos, a), agent.pos)
-            )
-            actions = [a for a in self.actions if a != toward_agent]
+            actions = [a for a in self.actions if a != self.move_toward(Agent, actions)]
             dog = self.get_object(Dog)
             if dog.pos is None:
-                return actions[self.random.choice(len(actions))]
-            return min(actions, key=lambda a: distance(add_pair(self.pos, a), dog.pos))
+                return self.random_action(actions)
+            return self.move_toward(Dog, actions)
 
     def icon(self):
         return "🐈"
 
 
-class Mess(Immobile, RandomActivating, Deactivatable):
+class Mess(Immobile):
     def __init__(self, pos, **kwargs):
         super().__init__(**kwargs)
-        self._pos = pos
+        self.eventual_pos = pos
 
-    def activate(self):
+    def step(self, coin_flips, **kwargs):
+        exist, *coin_flips = coin_flips
         dog = self.get_object(Dog)
-        if dog.pos == self._pos:
-            self.pos = self._pos
-            super().activate()
+        if dog.pos == self.eventual_pos:
+            self.pos = dog.pos
+        super().step(coin_flips=coin_flips, **kwargs)
 
-    def deactivate(self):
+    def interact(self):
         self.pos = None
-        super().deactivate()
+        super().interact()
 
     def icon(self):
         return "💩"
@@ -431,31 +419,36 @@ class Fire(RandomPosition, Immobile, Activatable):
         return "🔥" if self.activated else "🜂"
 
 
-class Fly(RandomPosition, RandomWalking, RandomActivating, Deactivatable):
-    def __init__(self, **kwargs):
+class Fly(RandomPosition, Deactivatable):
+    def __init__(self, pos, **kwargs):
         super().__init__(**kwargs)
         self.n_children = 0
-        try:
-            self.parent = next(
-                (o for o in self.objects if type(o) is Fly and o.n_children < 2), None
-            )
-            if self.parent:
-                self.parent.n_children += 1
-            self.activated = False
-            self.pos = None
-        except RuntimeError:
-            self.parent = None
-            self.activated = True
+        objects = copy(self.objects)
+        self.random.shuffle(objects)
+        self.parent = next(
+            (o for o in objects if type(o) is Fly and o.n_children < 2), None
+        )
+        if self.parent:
+            self.parent.n_children += 1
+        self.eventual_pos = pos
         assert (self.pos is not None) == self.activated
 
-    def deactivate(self):
-        self.pos = None
-        super().deactivate()
-
-    def activate(self):
-        if self.parent is None or self.parent.pos is not None:
+    def reset(self):
+        if self.parent is None:
             self.pos = self.random_position()
-            super().activate()
+        else:
+            self.pos = None
+        super().reset()
+
+    def step(self, coin_flips, **kwargs):
+        activate, *coin_flips = coin_flips
+        if activate and self.parent is not None:
+            self.pos = self.random_position()
+        super().step(coin_flips=coin_flips, **kwargs)
+
+    def interact(self):
+        self.pos = None
+        super().interact()
 
     def icon(self):
         return "🦟"
