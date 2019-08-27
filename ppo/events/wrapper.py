@@ -43,7 +43,7 @@ class Wrapper(gym.Wrapper):
         evaluation: bool,
         measure_interactivity: bool,
         instructions: List[str] = None,
-        check_obs=True,
+        check_obs=False,
         test: List[List[str]] = None,
         valid: List[List[str]] = None,
     ):
