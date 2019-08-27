@@ -295,7 +295,6 @@ if __name__ == "__main__":
             door_time_limit=16,
             max_time_outside=15,
             measure_interactivity=False,
-            instructions=["MakeDinner"],
             env=ppo.events.Gridworld(
                 cook_time=1,
                 time_to_heat_oven=2,
@@ -305,8 +304,8 @@ if __name__ == "__main__":
                 time_limit=30,
                 mess_prob=0.1,
                 fly_prob=0.05,
-                height=8,
-                width=8,
+                height=2,
+                width=2,
                 seed=seed,
                 baby_speed=0.1,
                 cat_speed=0.1,

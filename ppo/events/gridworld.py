@@ -91,10 +91,6 @@ class Gridworld(gym.Env):
                     speed=baby_speed,
                     toward_fire_prob=toward_fire_prob,
                 )
-            if object_type is Mess:
-                kwargs.update(activation_prob=mess_prob)
-            if object_type is Fly:
-                kwargs.update(activation_prob=fly_prob, speed=fly_speed)
             if object_type is Dog:
                 kwargs.update(toward_cat_prob=toward_cat_prob, speed=dog_speed)
             if object_type is Cat:
@@ -106,9 +102,12 @@ class Gridworld(gym.Env):
             # if object_type in multiple_object_types:
             #     for i in range(height):
             #         for j in range(width):
+            #             kwargs.update(pos=(i, j))
             #             if object_type is Mess:
-            #                 kwargs.update(pos=(i, j))
-            #             objects += [object_type(**kwargs)]
+            #                 kwargs.update(mess_prob=mess_prob)
+            #             if object_type is Fly:
+            #                 kwargs.update(fly_prob=fly_prob)
+            #             self.objects += [object_type(**kwargs)]
             # else:
             self.objects += [object_type(**kwargs)]
 
@@ -118,36 +117,33 @@ class Gridworld(gym.Env):
 
     def interact(self, i):
         object_type = self.object_types[i]
-        for obj in self.objects:
-            if type(obj) is object_type and obj.pos == self.agent.pos:
-                if self.grasping is None:
+        if self.grasping is None:
+            for obj in self.objects:
+                if type(obj) is object_type and obj.pos == self.agent.pos:
                     obj.interact()
                     self.grasping = obj if obj.grasped else None
-                else:
-                    self.grasping.interact()
-                    self.grasping = None
-                yield obj
+                    yield obj
+        else:
+            self.grasping.interact()
+            self.grasping = None
 
     def step(self, a):
         a = int(a)
         self.last_action = a
         n_transitions = len(Object.actions)
+        self.interactions = []
         if a < n_transitions:
             action = Object.actions[int(a)]
-            self.interactions = []
         else:
             action = (0, 0)
             self.interactions = list(self.interact(a - n_transitions))
 
         obj: Object
         for obj in self.objects:
-            obj.step(agent_action=action, actions=Object.actions)
-        grasping = self.agent.grasping
-        if grasping:
-            try:
-                grasping.set_pos(self.agent.pos)
-            except AttributeError:
-                pass
+            if obj.grasped:
+                obj.pos = self.agent.pos
+            else:
+                obj.step(agent_action=action, actions=Object.actions)
 
         return State(objects=self.objects, interactions=self.interactions), 0, False, {}
 

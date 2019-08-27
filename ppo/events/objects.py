@@ -67,8 +67,8 @@ class Object:
     def icon(self):
         return str(self)[:1]
 
-    def action(self, agent_action, **kwargs):
-        return agent_action
+    def action(self, **kwargs):
+        return 0, 0
 
     def random_action(self, actions):
         return actions[self.random.choice(len(actions))]
@@ -128,12 +128,6 @@ class Graspable(Object, ABC):
         self.grasped = not self.grasped
         super().interact()
 
-    def action(self, agent_action, **kwargs):
-        if self.grasped:
-            return agent_action
-        else:
-            return super().action(agent_action=agent_action, **kwargs)
-
 
 class Activating(Object, ABC):
     def activate(self):
@@ -183,6 +177,9 @@ class Agent(RandomPosition):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.grasping = None
+
+    def action(self, agent_action, **kwargs):
+        return agent_action
 
     def reset(self):
         self.grasping = None
