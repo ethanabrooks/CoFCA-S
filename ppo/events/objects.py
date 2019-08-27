@@ -115,13 +115,13 @@ class RandomPosition(Object, ABC):
 class Slow(Object, ABC):
     def __init__(self, speed, **kwargs):
         super().__init__(**kwargs)
-        self.random_thresholds += [speed]
+        self.speed = speed
 
-    def action(self, coin_flips, **kwargs):
-        move, *coin_flips = coin_flips
+    def action(self, **kwargs):
+        move = self.random.random_sample() < self.speed
         if not move:
             return 0, 0
-        return super().action(coin_flips=coin_flips, **kwargs)
+        return super().action(**kwargs)
 
 
 class Graspable(Object, ABC):
@@ -163,11 +163,11 @@ class RandomActivating(Activating, ABC):
         super().__init__(**kwargs)
         self.activation_prob = activation_prob
 
-    def step(self, coin_flips, **kwargs):
-        activate, *coin_flips = coin_flips
+    def step(self, **kwargs):
+        activate = self.random.random_sample() < self.activation_prob
         if not self.activated and activate:
             self.activate()
-        return super().step(coin_flips=coin_flips, **kwargs)
+        return super().step(**kwargs)
 
 
 class Wall(Immobile, RandomPosition, ABC):
@@ -227,7 +227,8 @@ class MouseHole(Wall):
 class Mouse(Slow):
     def __init__(self, speed, toward_hole_prob, mouse_prob, **kwargs):
         super().__init__(speed=speed, **kwargs)
-        self.random_thresholds += [mouse_prob, speed, toward_hole_prob]
+        self.toward_hole_prob = toward_hole_prob
+        self.random_thresholds = np.array([speed, mouse_prob])
         self.caught = False
 
     def reset(self):
@@ -239,17 +240,17 @@ class Mouse(Slow):
         self.caught = True
         super().interact()
 
-    def step(self, coin_flips, **kwargs):
+    def step(self, **kwargs):
         hole = self.get_object(MouseHole)
-        enter_hole, appear, *coin_flips = coin_flips
+        enter_hole, appear = self.random.random_sample(size=2) < self.random_thresholds
         if enter_hole and self.pos == hole.pos:
             self.pos = None
         if appear and self.pos is None:
             self.pos = hole.pos
-        return super().step(coin_flips=coin_flips, **kwargs)
+        return super().step(**kwargs)
 
-    def action(self, actions, coin_flips, **kwargs):
-        toward_hole, *coin_flips = coin_flips
+    def action(self, actions, **kwargs):
+        toward_hole = self.random.random_sample() < self.speed
         if self.pos is None:
             return
         if toward_hole:
@@ -272,9 +273,9 @@ class Baby(Graspable, Slow, RandomPosition, RandomActivating, Deactivatable):
             self.deactivate()
         super().interact()
 
-    def action(self, actions, coin_flips, **kwargs):
+    def action(self, actions, **kwargs):
         fire = self.get_object(Fire)
-        toward_fire, *coin_flips = coin_flips
+        toward_fire = self.random.random_sample() < self.speed
         if fire.activated and toward_fire:
             return self.move_toward(fire, actions)
         else:
@@ -353,8 +354,8 @@ class Food(Graspable, RandomPosition, Immobile, Activating):
 class Dog(Graspable, Slow, RandomPosition):
     def __init__(self, toward_cat_prob, **kwargs):
         super().__init__(**kwargs)
+        self.toward_cat_prob = toward_cat_prob
         self.let_out = False
-        self.random_thresholds += [toward_cat_prob]
 
     def reset(self):
         self.let_out = False
@@ -367,8 +368,8 @@ class Dog(Graspable, Slow, RandomPosition):
             self.let_out = True
         super().interact()
 
-    def action(self, coin_flips, actions, **kwargs):
-        toward_cat, *coin_flips = coin_flips
+    def action(self, actions, **kwargs):
+        toward_cat = self.random.random_sample() < self.toward_cat_prob
         return self.move_toward(Cat if toward_cat else Agent, actions)
 
     def icon(self):
@@ -395,16 +396,17 @@ class Cat(Graspable, Slow, RandomPosition):
 
 
 class Mess(Immobile):
-    def __init__(self, pos, **kwargs):
+    def __init__(self, pos, mess_prob, **kwargs):
         super().__init__(**kwargs)
+        self.mess_prob = mess_prob
         self.eventual_pos = pos
 
-    def step(self, coin_flips, **kwargs):
-        exist, *coin_flips = coin_flips
+    def step(self, **kwargs):
+        exist = self.random.random_sample() < self.mess_prob
         dog = self.get_object(Dog)
         if dog.pos == self.eventual_pos:
             self.pos = dog.pos
-        super().step(coin_flips=coin_flips, **kwargs)
+        super().step(**kwargs)
 
     def interact(self):
         self.pos = None
@@ -420,8 +422,9 @@ class Fire(RandomPosition, Immobile, Activatable):
 
 
 class Fly(RandomPosition, Deactivatable):
-    def __init__(self, pos, **kwargs):
+    def __init__(self, pos, fly_prob, **kwargs):
         super().__init__(**kwargs)
+        self.fly_prob = fly_prob
         self.n_children = 0
         objects = copy(self.objects)
         self.random.shuffle(objects)
@@ -440,11 +443,11 @@ class Fly(RandomPosition, Deactivatable):
             self.pos = None
         super().reset()
 
-    def step(self, coin_flips, **kwargs):
-        activate, *coin_flips = coin_flips
+    def step(self, **kwargs):
+        activate = self.random.random_sample() < self.fly_prob
         if activate and self.parent is not None:
             self.pos = self.random_position()
-        super().step(coin_flips=coin_flips, **kwargs)
+        super().step(**kwargs)
 
     def interact(self):
         self.pos = None

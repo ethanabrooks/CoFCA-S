@@ -141,18 +141,10 @@ class Gridworld(gym.Env):
             action = (0, 0)
             interactions = list(self.interact(a - n_transitions))
 
-        coin_flips = (
-            self.random.random(size=self.random_thresholds.size)
-            < self.random_thresholds
-        )
-
         obj: Object
         for obj in self.objects:
             n = len(obj.random_thresholds)
-            obj.step(
-                agent_action=action, actions=Object.actions, coin_flips=coin_flips[:n]
-            )
-            coin_flips = coin_flips[n:]
+            obj.step(agent_action=action, actions=Object.actions)
         grasping = self.agent.grasping
         if grasping:
             try:
