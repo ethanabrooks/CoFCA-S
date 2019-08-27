@@ -52,7 +52,7 @@ class Gridworld(gym.Env):
         self.height = height
         self.width = width
         self.grasping = None
-        multiple_object_types = [Mess, Fly]
+        # multiple_object_types = [Mess, Fly]
         self.object_types = object_types = [
             Agent,
             Mouse,
@@ -65,8 +65,8 @@ class Gridworld(gym.Env):
             Food,
             Cat,
             Fire,
-            Mess,
-            Fly,
+            # Mess,
+            # Fly,
         ]
         assert len(object_types) == len(set(object_types))
 
@@ -102,14 +102,14 @@ class Gridworld(gym.Env):
                     kwargs.update(cook_time=cook_time)
                 if object_type is Oven:
                     kwargs.update(time_to_heat=time_to_heat_oven)
-                if object_type in multiple_object_types:
-                    for i in range(height):
-                        for j in range(width):
-                            if object_type is Mess:
-                                kwargs.update(pos=(i, j))
-                            objects += [object_type(**kwargs)]
-                else:
-                    objects += [object_type(**kwargs)]
+                # if object_type in multiple_object_types:
+                #    for i in range(height):
+                #        for j in range(width):
+                #            if object_type is Mess:
+                #                kwargs.update(pos=(i, j))
+                #            objects += [object_type(**kwargs)]
+                # else:
+                objects += [object_type(**kwargs)]
             return objects
 
         self.objects = None
