@@ -39,7 +39,6 @@ class Object:
         self.excluded_positions = [
             o.pos for o in self.objects if type(o) is type(self) and o is not self
         ]
-        self.random_thresholds = []
 
     def reset(self):
         self.activated = False
@@ -266,7 +265,7 @@ class Mouse(Slow):
 class Baby(Graspable, Slow, RandomPosition, RandomActivating, Deactivatable):
     def __init__(self, toward_fire_prob, **kwargs):
         super().__init__(**kwargs)
-        self.random_thresholds += [toward_fire_prob]
+        self.toward_fire_prob = toward_fire_prob
 
     def interact(self):
         if self.activated:
@@ -275,7 +274,7 @@ class Baby(Graspable, Slow, RandomPosition, RandomActivating, Deactivatable):
 
     def action(self, actions, **kwargs):
         fire = self.get_object(Fire)
-        toward_fire = self.random.random_sample() < self.speed
+        toward_fire = self.random.random_sample() < self.toward_fire_prob
         if fire.activated and toward_fire:
             return self.move_toward(fire, actions)
         else:

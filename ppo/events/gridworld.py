@@ -112,9 +112,6 @@ class Gridworld(gym.Env):
             # else:
             self.objects += [object_type(**kwargs)]
 
-        self.random_thresholds = np.array(
-            [t for o in self.objects for t in o.random_thresholds]
-        )
         self.agent = None
         self.last_action = None
 
@@ -143,7 +140,6 @@ class Gridworld(gym.Env):
 
         obj: Object
         for obj in self.objects:
-            n = len(obj.random_thresholds)
             obj.step(agent_action=action, actions=Object.actions)
         grasping = self.agent.grasping
         if grasping:
