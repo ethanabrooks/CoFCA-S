@@ -231,7 +231,6 @@ class Wrapper(gym.Wrapper):
                 return x, 100 - x
 
             if t:
-                splits = [i / 10 for i in range(11)]
                 _return = self.test_returns[self.split]
                 if self.split <= 1:
                     logs.update({f"return_{format_split(self.split)}": _return})
@@ -249,7 +248,8 @@ class Wrapper(gym.Wrapper):
         self.base[:] = 0
         for obj in observation.objects:
             if obj.pos is not None:
-                index = np.ravel_multi_index(obj.pos, dims)
+                i, j = obj.pos
+                index = i * env.width + j
                 one_hot = self.pos_one_hots[index].reshape(dims)
                 c = -1 if obj.activated else 1
                 if obj.grasped:

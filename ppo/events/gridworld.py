@@ -111,15 +111,19 @@ class Gridworld(gym.Env):
             # else:
             self.objects += [object_type(**kwargs)]
 
+        self.objects_by_type = {
+            i: [o for o in self.objects if type(o) is t]
+            for i, t in enumerate(object_types)
+        }
+
         self.agent = None
         self.last_action = None
         self.interactions = []
 
     def interact(self, i):
-        object_type = self.object_types[i]
         if self.grasping is None:
-            for obj in self.objects:
-                if type(obj) is object_type and obj.pos == self.agent.pos:
+            for obj in self.objects_by_type[i]:
+                if obj.pos == self.agent.pos:
                     obj.interact()
                     self.grasping = obj if obj.grasped else None
                     yield obj
