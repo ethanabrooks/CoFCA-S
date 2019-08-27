@@ -131,7 +131,7 @@ class Wrapper(gym.Wrapper):
         for obj in env.objects:
             if obj.pos is not None:
                 string = "{:^3}".format(obj.icon())
-                if obj.grasped:
+                if obj.grasped or obj in env.interactions:
                     string = REVERSE + string + RESET
                 object_string[obj.pos] += string
                 object_count[obj.pos] += len(string)

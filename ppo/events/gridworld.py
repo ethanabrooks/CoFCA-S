@@ -114,6 +114,7 @@ class Gridworld(gym.Env):
 
         self.agent = None
         self.last_action = None
+        self.interactions = []
 
     def interact(self, i):
         object_type = self.object_types[i]
@@ -133,10 +134,10 @@ class Gridworld(gym.Env):
         n_transitions = len(Object.actions)
         if a < n_transitions:
             action = Object.actions[int(a)]
-            interactions = []
+            self.interactions = []
         else:
             action = (0, 0)
-            interactions = list(self.interact(a - n_transitions))
+            self.interactions = list(self.interact(a - n_transitions))
 
         obj: Object
         for obj in self.objects:
@@ -148,7 +149,7 @@ class Gridworld(gym.Env):
             except AttributeError:
                 pass
 
-        return State(objects=self.objects, interactions=interactions), 0, False, {}
+        return State(objects=self.objects, interactions=self.interactions), 0, False, {}
 
     def seed(self, seed=None):
         self.random, self.random_seed = seeding.np_random(int(seed))
