@@ -25,7 +25,7 @@ from ppo.events.instructions import (
     KeepCatFromDog,
 )
 from ppo.utils import RESET, REVERSE
-from ppo.events.objects import Agent, Mess
+from ppo.events.objects import Agent, Mess, Cat
 import itertools
 
 Obs = namedtuple("Obs", "base instructions interactable")
@@ -111,6 +111,8 @@ class Wrapper(gym.Wrapper):
         self.split = None
         self.test_iter = 0
         self.instruction_one_hots = np.eye(n_instructions)
+        self.base = np.zeros(base_shape)
+        self.base_layers_mapping = {t: i for i, t in enumerate(env.object_types)}
 
     def evaluate(self):
         self.testing = True
@@ -242,9 +244,9 @@ class Wrapper(gym.Wrapper):
 
     def observation(self, observation):
         dims = self.height, self.width
-        object_pos = defaultdict(lambda: np.zeros((self.height, self.width)))
         interactable = np.zeros(len(self.object_types))
         env = self.env.unwrapped
+        self.base[:] = 0
         for obj in observation.objects:
             if obj.pos is not None:
                 index = np.ravel_multi_index(obj.pos, dims)
@@ -253,11 +255,11 @@ class Wrapper(gym.Wrapper):
                 if obj.grasped:
                     c *= 2
 
-                t = type(obj)
-                object_pos[t] += c * one_hot
+                i = self.base_layers_mapping[type(obj)]
+                self.base[i] += c * one_hot
+
                 if obj.pos == env.agent.pos and obj is not env.agent:
-                    interactable[env.object_types.index(t)] = 1
-        base = np.stack([object_pos[k] for k in self.object_types])
+                    interactable[i] = 1
         if self.measure_interactivity and self.testing and self.split <= 1:
             instructions = [
                 self.random.choice(
@@ -268,7 +270,7 @@ class Wrapper(gym.Wrapper):
             instructions = list(self.instruction_indexes)
         instructions = self.instruction_one_hots[instructions].sum(0)
         obs = Obs(
-            base=base, instructions=instructions, interactable=interactable
+            base=self.base, instructions=instructions, interactable=interactable
         )._asdict()
         if self.check_obs:
             assert self.observation_space.contains(obs)
