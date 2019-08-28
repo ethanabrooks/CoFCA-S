@@ -261,7 +261,7 @@ class TrainBase(abc.ABC):
 
             for d in infos:
                 for k, v in d.items():
-                    episode_counter.update({k: float(v) / num_steps / len(infos)})
+                    episode_counter.update({k: float(v) / len(infos)})
 
             # track rewards
             counter["reward"] += reward.numpy()
