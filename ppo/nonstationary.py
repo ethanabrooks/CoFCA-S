@@ -4,7 +4,7 @@ from gym.utils import seeding
 
 
 class NonStationaryContextualBandit(gym.Env):
-    def __init__(self, n):
+    def __init__(self, n, time_limit):
         super().__init__()
         self.rewards = np.zeros(n)
         self.random = np.random.RandomState()
@@ -13,6 +13,8 @@ class NonStationaryContextualBandit(gym.Env):
         self.observation_space = gym.spaces.Box(high=np.inf, low=np.inf, shape=(n,))
         self.action_space = gym.spaces.Discrete(n)
         self.optimal_return = None
+        self.time_limit = time_limit
+        self.t = 0
 
     def train(self):
         pass
@@ -22,11 +24,16 @@ class NonStationaryContextualBandit(gym.Env):
         return [seed]
 
     def step(self, action: int):
+        self.t = 0
         r = self.rewards[int(action)]
-        self.optimal_return = 0
+        self.optimal_return += self.rewards.max()
         s = self.random.standard_normal(size=self.n)
         self.rewards += s
-        return s, r, False, dict(optimal=self.rewards.max())
+        t = self.t == self.time_limit
+        i = {}
+        if t:
+            i.update(optimal=self.optimal_return)
+        return s, r, t, i
 
     def reset(self):
         s = self.random.standard_normal(size=self.n)

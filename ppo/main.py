@@ -340,9 +340,7 @@ def non_stationary_main(n, **kwargs):
 
         @staticmethod
         def make_env(env_id, seed, rank, add_timestep, time_limit, evaluation):
-            return TimeLimit(
-                NonStationaryContextualBandit(n), max_episode_steps=time_limit
-            )
+            return NonStationaryContextualBandit(n, time_limit=time_limit)
 
     _Train(**kwargs).run()
 
