@@ -19,12 +19,13 @@ import ppo.oh_et_al
 from ppo.arguments import get_args, build_parser
 from ppo.events import InteractivityAgent
 from ppo.events.agent import Agent
-from ppo.train import Train
+from ppo.nonstationary import NonStationaryContextualBandit
+from ppo.trainbase import TrainBase
 from ppo.utils import get_random_gpu, get_n_gpu, k_scalar_pairs
 
 
 def cli():
-    Train(**get_args())
+    TrainBase(**get_args())
 
 
 def exp_main(
@@ -42,7 +43,7 @@ def exp_main(
     measure_interactivity,
     **kwargs,
 ):
-    class TrainEvents(Train, ABC):
+    class TrainEvents(TrainBase, ABC):
         @staticmethod
         def make_env(time_limit, seed, rank, evaluation, env_id, add_timestep):
             env = ppo.events.Gridworld(
@@ -287,5 +288,73 @@ def exp_cli():
     exp_main(**hierarchical_parse_args(parser))
 
 
+def non_stationary_main(n, **kwargs):
+    class _Train(TrainBase):
+        def __init__(
+            self,
+            run_id,
+            log_dir: Path,
+            save_interval: int,
+            num_processes: int,
+            num_steps: int,
+            **kwargs,
+        ):
+            self.num_steps = num_steps
+            self.num_processes = num_processes
+            self.run_id = run_id
+            self.save_interval = save_interval
+            self.log_dir = log_dir
+            if log_dir:
+                self.writer = SummaryWriter(logdir=str(log_dir))
+            else:
+                self.writer = None
+            self.setup(**kwargs, num_processes=num_processes, num_steps=num_steps)
+            self.last_save = time.time()  # dummy save
+
+        def run(self):
+            for _ in itertools.count():
+                for result in self.make_train_iterator():
+                    if self.writer is not None:
+                        total_num_steps = (
+                            (self.i + 1) * self.num_processes * self.num_steps
+                        )
+                        for k, v in k_scalar_pairs(**result):
+                            self.writer.add_scalar(k, v, total_num_steps)
+
+                    if (
+                        self.log_dir
+                        and self.save_interval
+                        and (time.time() - self.last_save >= self.save_interval)
+                    ):
+                        self._save(str(self.log_dir))
+                        self.last_save = time.time()
+
+        def get_device(self):
+            match = re.search("\d+$", self.run_id)
+            if match:
+                device_num = int(match.group()) % get_n_gpu()
+            else:
+                device_num = get_random_gpu()
+
+            return torch.device("cuda", device_num)
+
+        @staticmethod
+        def make_env(env_id, seed, rank, add_timestep, time_limit, evaluation):
+            return TimeLimit(
+                NonStationaryContextualBandit(n), max_episode_steps=time_limit
+            )
+
+    _Train(**kwargs).run()
+
+
+def non_stationary_cli():
+    parsers = build_parser()
+    parser = parsers.main
+    parser.add_argument("-n", type=int, default=5)
+    parser.add_argument("--time-limit", type=int, default=20)
+    parser.add_argument("--no-tqdm", dest="use_tqdm", action="store_false")
+    non_stationary_main(**hierarchical_parse_args(parser))
+
+
 if __name__ == "__main__":
-    exp_cli()
+    non_stationary_cli()

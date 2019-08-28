@@ -24,7 +24,7 @@ from ppo.wrappers import AddTimestep, TransposeImage, VecPyTorch, VecPyTorchFram
 
 
 # noinspection PyAttributeOutsideInit
-class Train(abc.ABC):
+class TrainBase(abc.ABC):
     def setup(
         self,
         num_steps,
@@ -49,7 +49,7 @@ class Train(abc.ABC):
         env_args,
         success_reward,
         use_tqdm,
-        measure_interactivity,
+        measure_interactivity=False,
     ):
         if render_eval and not render:
             eval_interval = 1
