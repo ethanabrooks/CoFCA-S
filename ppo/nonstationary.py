@@ -26,8 +26,7 @@ class NonStationaryContextualBandit(gym.Env):
         self.optimal_return = 0
         s = self.random.standard_normal(size=self.n)
         self.rewards += s
-        self.optimal_return += self.rewards.max()
-        return s, r, False, dict(optimal=self.optimal_return)
+        return s, r, False, dict(optimal=self.rewards.max())
 
     def reset(self):
         s = self.random.standard_normal(size=self.n)
