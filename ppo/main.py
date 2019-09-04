@@ -27,6 +27,69 @@ def cli():
     Train(**get_args())
 
 
+class TrainControlFlow(Train, ABC):
+    @staticmethod
+    def make_env(time_limit, seed, rank, evaluation, env_id, add_timestep):
+        env = ppo.events.Gridworld(
+            **gridworld_args, time_limit=time_limit, seed=seed + rank
+        )
+        env = TimeLimit(max_episode_steps=time_limit, env=env)
+        wrapper_args.update(measure_interactivity=measure_interactivity)
+        if oh_et_al:
+            return ppo.oh_et_al.Wrapper(
+                ppo.oh_et_al.GridWorld(
+                    text_map=["    "] * 4,
+                    min_objects=0,
+                    n_obstacles=2,
+                    random_obstacles=True,
+                    n_subtasks=2,
+                    interactions=["visit", "pick-up", "transform"],
+                    max_task_count=1,
+                    object_types=["pig", "sheep", "cat", "greenbot"],
+                )
+            )
+        else:
+            return ppo.events.Wrapper(**wrapper_args, evaluation=evaluation, env=env)
+
+    def build_agent(
+        self,
+        envs,
+        hidden_size=None,
+        num_layers=None,
+        activation=None,
+        entropy_coef=None,
+        recurrent=None,
+        feed_r_initially=None,
+        use_M_plus_minus=None,
+        device=None,
+    ):
+        agent_args = dict(
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            activation=activation,
+            entropy_coef=entropy_coef,
+            recurrent=recurrent,
+        )
+        if simple_agent:
+            if measure_interactivity:
+                return InteractivityAgent(
+                    observation_space=envs.observation_space,
+                    action_space=envs.action_space,
+                    **agent_args,
+                )
+            return super().build_agent(envs, **agent_args)
+        return Agent(
+            observation_space=envs.observation_space,
+            action_space=envs.action_space,
+            debug=False if tune else debug,
+            baseline=baseline,
+            use_M_plus_minus=use_M_plus_minus,
+            feed_r_initially=feed_r_initially,
+            oh_et_al=oh_et_al,
+            **agent_args,
+        )
+
+
 def exp_main(
     gridworld_args,
     wrapper_args,
@@ -42,70 +105,6 @@ def exp_main(
     measure_interactivity,
     **kwargs,
 ):
-    class TrainEvents(Train, ABC):
-        @staticmethod
-        def make_env(time_limit, seed, rank, evaluation, env_id, add_timestep):
-            env = ppo.events.Gridworld(
-                **gridworld_args, time_limit=time_limit, seed=seed + rank
-            )
-            env = TimeLimit(max_episode_steps=time_limit, env=env)
-            wrapper_args.update(measure_interactivity=measure_interactivity)
-            if oh_et_al:
-                return ppo.oh_et_al.Wrapper(
-                    ppo.oh_et_al.GridWorld(
-                        text_map=["    "] * 4,
-                        min_objects=0,
-                        n_obstacles=2,
-                        random_obstacles=True,
-                        n_subtasks=2,
-                        interactions=["visit", "pick-up", "transform"],
-                        max_task_count=1,
-                        object_types=["pig", "sheep", "cat", "greenbot"],
-                    )
-                )
-            else:
-                return ppo.events.Wrapper(
-                    **wrapper_args, evaluation=evaluation, env=env
-                )
-
-        def build_agent(
-            self,
-            envs,
-            hidden_size=None,
-            num_layers=None,
-            activation=None,
-            entropy_coef=None,
-            recurrent=None,
-            feed_r_initially=None,
-            use_M_plus_minus=None,
-            device=None,
-        ):
-            agent_args = dict(
-                hidden_size=hidden_size,
-                num_layers=num_layers,
-                activation=activation,
-                entropy_coef=entropy_coef,
-                recurrent=recurrent,
-            )
-            if simple_agent:
-                if measure_interactivity:
-                    return InteractivityAgent(
-                        observation_space=envs.observation_space,
-                        action_space=envs.action_space,
-                        **agent_args,
-                    )
-                return super().build_agent(envs, **agent_args)
-            return Agent(
-                observation_space=envs.observation_space,
-                action_space=envs.action_space,
-                debug=False if tune else debug,
-                baseline=baseline,
-                use_M_plus_minus=use_M_plus_minus,
-                feed_r_initially=feed_r_initially,
-                oh_et_al=oh_et_al,
-                **agent_args,
-            )
-
     if tune:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(("8.8.8.8", 80))

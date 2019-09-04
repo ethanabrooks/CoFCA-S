@@ -115,18 +115,11 @@ class Train(abc.ABC):
         self.make_train_iterator = lambda: self.train_generator(
             num_steps=num_steps,
             num_processes=num_processes,
-            seed=seed,
             time_limit=time_limit,
-            gamma=gamma,
-            normalize=normalize,
             log_interval=log_interval,
             eval_interval=eval_interval,
-            render=render,
-            render_eval=render_eval,
-            synchronous=synchronous,
             use_tqdm=use_tqdm,
             success_reward=success_reward,
-            env_args=env_args,
         )
         self.train_iterator = self.make_train_iterator()
 
@@ -141,18 +134,11 @@ class Train(abc.ABC):
         self,
         num_steps,
         num_processes,
-        seed,
         time_limit,
-        gamma,
-        normalize,
         log_interval,
         eval_interval,
-        render,
-        render_eval,
-        synchronous,
         success_reward,
         use_tqdm,
-        env_args,
     ):
         if eval_interval:
             # vec_norm = get_vec_normalize(eval_envs)
@@ -304,23 +290,14 @@ class Train(abc.ABC):
 
     @staticmethod
     def make_env(env_id, seed, rank, add_timestep, time_limit, evaluation):
-        if env_id.startswith("dm"):
-            _, domain, task = env_id.split(".")
-            env = dm_control2gym.make(domain_name=domain, task_name=task)
-        else:
-            env = gym.make(env_id)
-
+        env = gym.make(env_id)
         is_atari = hasattr(gym.envs, "atari") and isinstance(
             env.unwrapped, gym.envs.atari.atari_env.AtariEnv
         )
-
         env.seed(seed + rank)
-
         obs_shape = env.observation_space.shape
-
         if add_timestep and len(obs_shape) == 1 and str(env).find("TimeLimit") > -1:
             env = AddTimestep(env)
-
         if is_atari and len(env.observation_space.shape) == 3:
             env = wrap_deepmind(env)
 
@@ -352,6 +329,7 @@ class Train(abc.ABC):
         evaluation,
         time_limit,
         num_frame_stack=None,
+        **env_args,
     ):
         envs = [
             functools.partial(  # thunk
@@ -362,6 +340,7 @@ class Train(abc.ABC):
                 seed=seed,
                 evaluation=evaluation,
                 time_limit=time_limit,
+                **env_args,
             )
             for i in range(num_processes)
         ]
