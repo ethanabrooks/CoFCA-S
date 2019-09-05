@@ -49,7 +49,6 @@ class Train(abc.ABC):
         env_args,
         success_reward,
         use_tqdm,
-        measure_interactivity,
     ):
         if render_eval and not render:
             eval_interval = 1
@@ -84,7 +83,6 @@ class Train(abc.ABC):
             time_limit=time_limit,
         )
 
-        self.measure_interactivity = measure_interactivity
         self.envs.to(self.device)
         self.agent = self.build_agent(envs=self.envs, **agent_args)
         self.rollouts = RolloutStorage(
@@ -157,19 +155,12 @@ class Train(abc.ABC):
                 obs=self.envs.reset(),
                 rnn_hxs=eval_recurrent_hidden_states,
                 masks=eval_masks,
-                num_steps=time_limit * (12 if self.measure_interactivity else 1),
+                num_steps=time_limit,
                 # max(num_steps, time_limit) if time_limit else num_steps,
                 counter=eval_counter,
                 success_reward=success_reward,
                 use_tqdm=use_tqdm,
             )
-            if self.measure_interactivity:
-                split_keys = [f"return_{(s, 100 - s)}" for s in range(0, 110, 10)]
-                split_returns = [eval_result[k] for k in split_keys]
-                best_split = max(split_returns)
-                eval_optimal_return = eval_result["optimal_return"]
-                eval_result["optimal-best_split"] = eval_optimal_return - best_split
-                eval_result["best_split"] = best_split
             eval_result = {f"eval_{k}": v for k, v in eval_result.items()}
         else:
             eval_result = {}

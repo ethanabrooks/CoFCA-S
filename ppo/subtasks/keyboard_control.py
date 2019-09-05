@@ -12,6 +12,7 @@ def cli():
 
 
 def run(env, actions):
+    print(actions)
     actions = list(actions)
 
     s = env.reset()

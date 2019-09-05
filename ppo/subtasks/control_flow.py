@@ -72,11 +72,11 @@ class Env(subtasks.Env, ABC):
                 yield from self.get_transitions(lines_iter, current)  # from = While
             elif line is EndWhile:
                 # While
-                yield prev, current  # False: While -> EndWhile
+                yield prev, current + 1  # False: While -> EndWhile
                 yield prev, prev + 1  # True: While -> While + 1
                 # EndWhile
-                yield current, current + 1  # False: EndWhile -> EndWhile + 1
-                yield current, prev  # True: EndWhile -> While1
+                yield current, prev  # False: EndWhile -> While
+                yield current, prev  # True: EndWhile -> While
                 return
 
     def reset(self):
@@ -99,14 +99,10 @@ class Env(subtasks.Env, ABC):
         i = self.line_transitions[i][evaluation]
         if i >= len(self.lines):
             return None
-        if self.lines[i] is Subtask:
-            return i
-        return self.next(i)
+        return i
 
     def initial(self):
-        if self.lines[0] is Subtask:
-            return 0
-        return self.next(i=0)
+        return 0
 
     def evaluate_condition(self, i=None):
         if i is None:
