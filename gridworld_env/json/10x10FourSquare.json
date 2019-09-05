@@ -1,0 +1,18 @@
+{
+    "text_map": [
+        "rrrrrggggg",
+        "rrrrrggggg",
+        "rrrrrggggg",
+        "rrrrrggggg",
+        "rrrrrggggg",
+        "bbbbbyyyyy",
+        "bbbbbyyyyy",
+        "bbbbbyyyyy",
+        "bbbbbyyyyy",
+        "bbbbbyyyyy"
+    ],
+    "objects": [ ["1", "2", "3", "4" ]],
+    "max_episode_steps":
+    80,
+    "class": "LogicGridWorld"
+}

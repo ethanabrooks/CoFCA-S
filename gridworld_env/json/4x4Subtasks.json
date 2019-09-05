@@ -1,0 +1,12 @@
+{
+    "text_map": ["    ", "    ", "    ", "    "],
+    "object_types": ["pig", "sheep", "cat", "greenbot"],
+    "min_objects": 0,
+    "n_obstacles": 2,
+    "n_subtasks": 3,
+    "interactions": ["visit", "pick-up", "transform"],
+    "max_task_count": 2,
+    "class_": "SubtasksGridWorld",
+    "max_episode_steps": 63,
+    "random_obstacles": true
+}

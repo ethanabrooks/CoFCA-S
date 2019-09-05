@@ -1,0 +1,11 @@
+{
+    "text_map": ["   "],
+    "transitions": [[0, -1], [0, 1]],
+    "start": "s",
+    "random": {"s":  1, "*":  1},
+    "terminal": "*",
+    "reward": {
+        "*": 1
+    },
+    "max_episode_steps": 2
+}

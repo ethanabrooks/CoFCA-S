@@ -1,0 +1,8 @@
+{
+    "text_map": ["-ss+ss-"],
+    "transitions": [[0, 1], [0, -1]],
+    "start": "s",
+    "terminal": "-+",
+    "reward": {"+": 1, "-": -1},
+    "max_episode_steps": 2
+}

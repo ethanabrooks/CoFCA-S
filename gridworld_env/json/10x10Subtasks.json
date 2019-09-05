@@ -1,0 +1,30 @@
+{
+    "text_map": [
+        "          ",
+        "          ",
+        "          ",
+        "          ",
+        "          ",
+        "          ",
+        "          ",
+        "          ",
+        "          ",
+        "          "],
+    "object_types": [
+        "cow",
+        "pig",
+        "rock",
+        "tree",
+        "box",
+        "duck",
+        "enemy",
+        "candy"
+    ],
+    "n_objects": 17,
+    "n_obstacles": 8,
+    "n_subtasks": 2,
+    "interactions": [1, 2, 3],
+    "interactions": ["visit", "pick-up", "transform"],
+    "class": "SubtasksGridWorld",
+    "max_episode_steps": 80
+}
