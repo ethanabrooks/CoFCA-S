@@ -1,7 +1,12 @@
-from rl_utils import hierarchical_parse_args
+from collections import namedtuple
 
+from gym import spaces
+from rl_utils import hierarchical_parse_args
+import numpy as np
 from ppo.subtasks import control_flow, keyboard_control
 from ppo.subtasks.lines import If, Else, EndIf, While, EndWhile, Subtask
+
+Obs = namedtuple("Obs", "condition lines active")
 
 
 class Bandit(control_flow.Env):
@@ -11,6 +16,15 @@ class Bandit(control_flow.Env):
         self.n_arms = n_arms
         self.condition_bit = None
         self.arms = None
+        self.action_space = spaces.Discrete(n_arms)
+        self.observation_space = spaces.Dict(
+            dict(
+                condition=spaces.Discrete(2),
+                lines=spaces.MultiDiscrete(np.array([[6, n_arms]] * n_lines)),
+                active=spaces.Discrete(n_lines + 1),
+            )
+        )
+        self.line_types = [If, Else, EndIf, While, EndWhile, Subtask]
 
     def reset(self):
         self.condition_bit = self.random.randint(0, 2)
@@ -25,7 +39,14 @@ class Bandit(control_flow.Env):
         return super().step(action)
 
     def get_observation(self):
-        return [self.condition_bit]
+        lines = [self.line_types.index(t) for t in self.lines]
+        o = Obs(
+            condition=self.condition_bit,
+            lines=np.stack([lines, self.arms]).T,
+            active=self.n_lines if self.active is None else self.active,
+        )._asdict()
+        assert self.observation_space.contains(o)
+        return o
 
     def _evaluate_condition(self, i=None):
         return bool(self.condition_bit)
