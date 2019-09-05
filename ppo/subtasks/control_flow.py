@@ -4,7 +4,22 @@ from collections import defaultdict
 
 from gym.utils import seeding
 from ppo import subtasks
-from ppo.subtasks.lines import If, While, Subtask, Else, EndIf, EndWhile
+
+from ppo.subtasks.lines import (
+    If,
+    Else,
+    EndIf,
+    While,
+    EndWhile,
+    Subtask,
+    initial,
+    following_if,
+    inside_if,
+    following_else,
+    inside_else,
+    following_while,
+    inside_while,
+)
 
 
 class Env(subtasks.Env, ABC):
@@ -15,18 +30,21 @@ class Env(subtasks.Env, ABC):
         self.lines = None
         self.line_transitions = None
         self.active_line = None
-        self.line_state_transitions = dict(
-            initial={If: "following_if", While: "following_while", Subtask: "initial"},
-            following_if={Subtask: "inside_if"},
-            inside_if={Subtask: "inside_if", Else: "following_else", EndIf: "initial"},
-            following_else={Subtask: "inside_else", EndIf: "initial"},
-            inside_else={Subtask: "inside_else", EndIf: "initial"},
-            following_while={Subtask: "inside_while"},
-            inside_while={Subtask: "inside_while", EndWhile: "initial"},
-        )
-        self.legal_last_lines = dict(
-            initial=Subtask, inside_if=EndIf, inside_else=EndIf, inside_while=EndWhile
-        )
+        self.line_state_transitions = {
+            initial: {If: following_if, While: following_while, Subtask: initial},
+            following_if: {Subtask: inside_if},
+            inside_if: {Subtask: inside_if, Else: following_else, EndIf: initial},
+            following_else: {Subtask: inside_else, EndIf: initial},
+            inside_else: {Subtask: inside_else, EndIf: initial},
+            following_while: {Subtask: inside_while},
+            inside_while: {Subtask: inside_while, EndWhile: initial},
+        }
+        self.legal_last_lines = {
+            initial: Subtask,
+            inside_if: EndIf,
+            inside_else: EndIf,
+            inside_while: EndWhile,
+        }
 
     def seed(self, seed=None):
         assert self.seed == seed
