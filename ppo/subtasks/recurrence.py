@@ -36,15 +36,15 @@ class Recurrence(nn.Module):
         # networks
         self.embeddings = nn.Embedding(int(self.obs_spaces.lines.nvec[0]), hidden_size)
         self.task_encoder = nn.GRU(hidden_size, hidden_size + 1)
-        self.f = nn.Sequential(
-            Concat(dim=-1),
-            nn.Linear(self.obs_sections.condition + hidden_size, hidden_size),
-            *[
-                m
-                for _ in range(num_layers - 1)
-                for m in [nn.Linear(hidden_size, hidden_size), activation]
-            ],
-        )
+
+        # f
+        layers = [Concat(dim=-1)]
+        in_size = self.obs_sections.condition + hidden_size
+        for _ in range(num_layers + 1):
+            layers.extend([nn.Linear(in_size, hidden_size), activation])
+            in_size = hidden_size
+        self.f = nn.Sequential(*layers)
+
         self.gru = nn.GRUCell(hidden_size, hidden_size)
         self.critic = init_(nn.Linear(hidden_size, 1))
         self.actor = nn.Linear(hidden_size, hidden_size)
