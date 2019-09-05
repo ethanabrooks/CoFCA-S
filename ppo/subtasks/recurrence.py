@@ -137,7 +137,7 @@ class Recurrence(nn.Module):
             # w = (K @ k.unsqueeze(2)).squeeze(2)
             self.print("w")
             self.print(w)
-            dist = FixedCategorical(logits=b.abs() * w * c)
+            dist = FixedCategorical(logits=b ** 2 * w * c)
             self.print("dist")
             self.print(dist.probs)
             self.sample_new(A[t], dist)
