@@ -3,6 +3,7 @@ from collections import namedtuple
 import numpy as np
 import torch
 from torch import nn as nn
+import torch.nn.functional as F
 
 import ppo.oh_et_al
 import ppo.subtasks.bandit
@@ -30,10 +31,11 @@ class Recurrence(nn.Module):
         )
         self.action_size = 1
         self.debug = debug
+        self.hidden_size = hidden_size
 
         # networks
         self.embeddings = nn.Embedding(int(self.obs_spaces.lines.nvec[0]), hidden_size)
-        self.task_encoder = nn.GRU(hidden_size, 1)
+        self.task_encoder = nn.GRU(hidden_size, hidden_size + 1)
         self.f = nn.Sequential(
             Concat(dim=-1),
             nn.Linear(self.obs_sections.condition + hidden_size, hidden_size),
@@ -45,7 +47,7 @@ class Recurrence(nn.Module):
         )
         self.gru = nn.GRUCell(hidden_size, hidden_size)
         self.critic = init_(nn.Linear(hidden_size, 1))
-        self.actor = nn.Linear(hidden_size, action_space.n)
+        self.actor = nn.Linear(hidden_size, hidden_size)
         self.a_one_hots = nn.Embedding.from_pretrained(torch.eye(action_space.n))
         self.p0 = torch.zeros(len(self.obs_spaces.lines.nvec))
         self.p0[0] = 1
@@ -94,23 +96,24 @@ class Recurrence(nn.Module):
         # build memory
         lines = inputs.lines.view(T, N, *self.obs_spaces.lines.shape).long()[0, :, :]
         M = self.embeddings(lines.view(-1)).view(
-            *lines.shape, -1
+            *lines.shape, self.hidden_size
         )  # n_batch, n_lines, hidden_size
         forward_input = M.transpose(0, 1)  # n_lines, n_batch, hidden_size
         backward_input = forward_input.flip((0,))
-        connections = []
+        keys = []
         for i in range(len(forward_input)):
-            connections_per_i = []
+            keys_per_i = []
             if i > 0:
                 backward, _ = self.task_encoder(backward_input[:i])
-                connections_per_i.append(backward.flip((0,)))
+                keys_per_i.append(backward.flip((0,)))
             if i < len(forward_input):
                 forward, _ = self.task_encoder(forward_input[i:])
-                connections_per_i.append(forward)
-            connections.append(
-                torch.cat(connections_per_i).transpose(0, 1)
-            )  # put batch dim first
-        C = torch.cat(connections, dim=-1).transpose(1, 2)  # put from dim before to dim
+                keys_per_i.append(forward)
+            keys.append(torch.cat(keys_per_i).transpose(0, 1))  # put batch dim first
+        K = torch.stack(keys, dim=1)  # put from dim before to dim
+        K, C = torch.split(K, [self.hidden_size, 1], dim=-1)
+        K = K.sum(dim=1)
+        C = C.squeeze(dim=-1)
         self.print("C")
         self.print(C)
 
@@ -128,7 +131,9 @@ class Recurrence(nn.Module):
             r = (a @ M).squeeze(1)
             c = (a @ C).squeeze(1)
             h = self.gru(self.f((inputs.condition[t], r)), h)
-            w = self.actor(h)
+            k = self.actor(h)
+            # w = F.cosine_similarity(K, k.unsqueeze(1), dim=2) # TODO: try this
+            w = (K @ k.unsqueeze(2)).squeeze(2)
             self.print("w")
             self.print(w)
             dist = FixedCategorical(logits=w * c)
