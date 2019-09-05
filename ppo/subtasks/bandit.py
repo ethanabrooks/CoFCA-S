@@ -67,6 +67,7 @@ class Env(control_flow.Env):
         for i, string in enumerate(self.line_strings(index=0, level=1)):
             print(f"{i}{string}")
         print("Condition:", self.condition_bit)
+        input("pause")
 
     def train(self):
         print("No logic is currently implemented for the train() method")

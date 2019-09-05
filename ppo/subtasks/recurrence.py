@@ -113,6 +113,8 @@ class Recurrence(nn.Module):
         C = (
             torch.cat(connections, dim=-1).transpose(1, 2).sigmoid()
         )  # put from dim before to dim
+        self.print("C")
+        self.print(C)
 
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
@@ -129,6 +131,10 @@ class Recurrence(nn.Module):
             c = (a @ C).squeeze(1)
             h = self.gru(self.f((inputs.condition[t], r)), h)
             w = self.actor(h)
+            self.print("w")
+            self.print(w)
             dist = FixedCategorical(logits=w * c)
+            self.print("dist")
+            self.print(dist.probs)
             self.sample_new(A[t], dist)
             yield RecurrentState(a=A[t], v=self.critic(h), h=h, a_probs=dist.probs)
