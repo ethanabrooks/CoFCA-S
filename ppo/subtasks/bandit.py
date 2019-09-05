@@ -1,4 +1,7 @@
+from rl_utils import hierarchical_parse_args
+
 from ppo.subtasks import control_flow, keyboard_control
+from ppo.subtasks.lines import If, Else, EndIf, While, EndWhile, Subtask
 
 
 class Bandit(control_flow.Env):
@@ -24,27 +27,37 @@ class Bandit(control_flow.Env):
     def get_observation(self):
         return [self.condition_bit]
 
-    def evaluate_condition(self):
+    def _evaluate_condition(self, i=None):
         return bool(self.condition_bit)
 
     def done(self):
         return True  # bandits are always done
 
-    def line_strings(self, index, indent):
+    def line_strings(self, index, level):
+        if index == len(self.lines):
+            return
         line = self.lines[index]
-        print(' ' * indent + line)
-        if
-
-
+        if line in [Else, EndIf, EndWhile]:
+            level -= 1
+        name = self.arms[index] if line is Subtask else line.__name__
+        indent = ("> " if index == self.active else "  ") * level
+        yield indent + str(name)
+        if line in [If, While, Else]:
+            level += 1
+        yield from self.line_strings(index + 1, level)
 
     def render(self, mode="human"):
-        for line in self.lines:
-
-
-
+        print(*self.line_strings(index=0, level=1), sep="\n")
+        print("Condition:", self.condition_bit)
 
 
 if __name__ == "__main__":
-    keyboard_control.run(
-        Bandit(seed=0, n_lines=6, n_arms=3, flip_prob=0.1), actions="123"
-    )
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--seed", default=0, type=int)
+    parser.add_argument("--n-lines", default=6, type=int)
+    parser.add_argument("--n-arms", default=3, type=int)
+    parser.add_argument("--flip-prob", default=0.5, type=float)
+    args = hierarchical_parse_args(parser)
+    keyboard_control.run(Bandit(**args), actions="0123")
