@@ -47,7 +47,7 @@ class Recurrence(nn.Module):
 
         self.gru = nn.GRUCell(hidden_size, hidden_size)
         self.critic = init_(nn.Linear(hidden_size, 1))
-        self.actor = nn.Linear(hidden_size, hidden_size)
+        self.actor = nn.Linear(hidden_size, hidden_size + 1)
         self.a_one_hots = nn.Embedding.from_pretrained(torch.eye(action_space.n))
         self.p0 = torch.zeros(len(self.obs_spaces.lines.nvec))
         self.p0[0] = 1
@@ -113,7 +113,7 @@ class Recurrence(nn.Module):
         K = torch.stack(keys, dim=1)  # put from dim before to dim
         K, C = torch.split(K, [self.hidden_size, 1], dim=-1)
         K = K.sum(dim=1)
-        C = C.squeeze(dim=-1)
+        C = C.squeeze(dim=-1).tanh()
         self.print("C")
         self.print(C)
 
@@ -131,12 +131,12 @@ class Recurrence(nn.Module):
             r = (a @ M).squeeze(1)
             c = (a @ C).squeeze(1)
             h = self.gru(self.f((inputs.condition[t], r)), h)
-            k = self.actor(h)
+            k2, b = torch.split(self.actor(h), [self.hidden_size, 1], dim=-1)
             # w = F.cosine_similarity(K, k.unsqueeze(1), dim=2) # TODO: try this
-            w = (K @ k.unsqueeze(2)).squeeze(2)
+            w = (K @ k2.unsqueeze(2)).squeeze(2).tanh()
             self.print("w")
             self.print(w)
-            dist = FixedCategorical(logits=w * c)
+            dist = FixedCategorical(logits=b.abs() * w * c)
             self.print("dist")
             self.print(dist.probs)
             self.sample_new(A[t], dist)
