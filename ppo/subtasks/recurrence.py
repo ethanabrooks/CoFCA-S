@@ -3,12 +3,11 @@ from collections import namedtuple
 import numpy as np
 import torch
 from torch import nn as nn
-from torch.nn import functional as F
 
 import ppo.oh_et_al
 import ppo.subtasks.bandit
-from ppo.distributions import Categorical, FixedCategorical
-from ppo.layers import Parallel, Reshape, Product, Flatten, Concat
+from ppo.distributions import FixedCategorical
+from ppo.layers import Concat
 from ppo.utils import init_
 
 RecurrentState = namedtuple("RecurrentState", "a v h a_probs")
@@ -85,7 +84,7 @@ class Recurrence(nn.Module):
 
     def inner_loop(self, inputs, rnn_hxs):
         T, N, D = inputs.shape
-        inputs, attentions = torch.split(
+        inputs, actions = torch.split(
             inputs.detach(), [D - self.action_size, self.action_size], dim=2
         )
 
@@ -122,7 +121,7 @@ class Recurrence(nn.Module):
 
         h = hx.h
         # p[new_episode] = 0
-        A = torch.cat([attentions, hx.a.unsqueeze(0)], dim=0).long().squeeze(2)
+        A = torch.cat([actions, hx.a.unsqueeze(0)], dim=0).long().squeeze(2)
 
         for t in range(T):
             a = self.a_one_hots(A[t - 1]).unsqueeze(1)
@@ -132,5 +131,4 @@ class Recurrence(nn.Module):
             w = self.actor(h)
             dist = FixedCategorical(logits=w * c)
             self.sample_new(A[t], dist)
-            # TODO implement attention update
             yield RecurrentState(a=A[t], v=self.critic(h), h=h, a_probs=dist.probs)

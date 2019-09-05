@@ -8,7 +8,7 @@ class Env(gym.Env):
         self.active = None
 
     def step(self, action):
-        r = -0.1
+        r = 0
         t = False
         if self.done():
             self.active = self.next()
