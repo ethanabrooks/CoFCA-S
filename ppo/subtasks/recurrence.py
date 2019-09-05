@@ -113,7 +113,7 @@ class Recurrence(nn.Module):
         K = torch.stack(keys, dim=1)  # put from dim before to dim
         K, C = torch.split(K, [self.hidden_size, 1], dim=-1)
         K = K.sum(dim=1)
-        C = C.squeeze(dim=-1) ** 2
+        C = C.squeeze(dim=-1)
         self.print("C")
         self.print(C)
 
@@ -130,11 +130,10 @@ class Recurrence(nn.Module):
             a = self.a_one_hots(A[t - 1]).unsqueeze(1)
             r = (a @ M).squeeze(1)
             c = (a @ C).squeeze(1)
-            k1 = (a.unsqueeze(-1) * K).sum(1)
             h = self.gru(self.f((inputs.condition[t], r)), h)
-            k2 = self.actor(h)
-            w = F.cosine_similarity(k1, k2.unsqueeze(1), dim=2)  # TODO: try this
-            # w = (K @ k.unsqueeze(2)).squeeze(2)
+            k = self.actor(h)
+            # w = F.cosine_similarity(K, k.unsqueeze(1), dim=2) # TODO: try this
+            w = (K @ k.unsqueeze(2)).squeeze(2)
             self.print("w")
             self.print(w)
             dist = FixedCategorical(logits=w * c)
