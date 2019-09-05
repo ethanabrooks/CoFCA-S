@@ -167,6 +167,7 @@ def bandit_args():
     parsers.env.add_argument("--n-lines", type=int, required=True)
     parsers.env.add_argument("--flip-prob", type=float, required=True)
     parsers.agent.add_argument("--debug", action="store_true")
+    parsers.agent.add_argument("--baseline", action="store_true")
     return parser
 
 

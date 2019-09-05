@@ -14,6 +14,21 @@ from ppo.utils import init_
 RecurrentState = namedtuple("RecurrentState", "a v h a_probs")
 
 
+def batch_conv1d(inputs, weights):
+    outputs = []
+    # one convolution per instance
+    n = inputs.shape[0]
+    for i in range(n):
+        x = inputs[i]
+        w = weights[i]
+        convolved = F.conv1d(x.reshape(1, 1, -1), w.reshape(1, 1, -1), padding=2)
+        outputs.append(convolved.squeeze(0))
+    padded = torch.cat(outputs)
+    padded[:, 1] = padded[:, 1] + padded[:, 0]
+    padded[:, -2] = padded[:, -2] + padded[:, -1]
+    return padded[:, 1:-2]
+
+
 class Recurrence(nn.Module):
     def __init__(
         self,
@@ -23,8 +38,10 @@ class Recurrence(nn.Module):
         hidden_size,
         num_layers,
         debug,
+        baseline,
     ):
         super().__init__()
+        self.baseline = baseline
         self.obs_spaces = ppo.subtasks.bandit.Obs(**observation_space.spaces)
         self.obs_sections = ppo.subtasks.bandit.Obs(
             *[int(np.prod(s.shape)) for s in self.obs_spaces]
@@ -47,11 +64,8 @@ class Recurrence(nn.Module):
 
         self.gru = nn.GRUCell(hidden_size, hidden_size)
         self.critic = init_(nn.Linear(hidden_size, 1))
-        self.actor = nn.Linear(hidden_size, hidden_size)
+        self.actor = nn.Linear(hidden_size, 4 if baseline else hidden_size)
         self.a_one_hots = nn.Embedding.from_pretrained(torch.eye(action_space.n))
-        self.p0 = torch.zeros(len(self.obs_spaces.lines.nvec))
-        self.p0[0] = 1
-
         self.state_sizes = RecurrentState(
             a=1, a_probs=len(self.obs_spaces.lines.nvec), v=1, h=hidden_size
         )
@@ -98,24 +112,27 @@ class Recurrence(nn.Module):
         M = self.embeddings(lines.view(-1)).view(
             *lines.shape, self.hidden_size
         )  # n_batch, n_lines, hidden_size
-        forward_input = M.transpose(0, 1)  # n_lines, n_batch, hidden_size
-        backward_input = forward_input.flip((0,))
-        keys = []
-        for i in range(len(forward_input)):
-            keys_per_i = []
-            if i > 0:
-                backward, _ = self.task_encoder(backward_input[:i])
-                keys_per_i.append(backward.flip((0,)))
-            if i < len(forward_input):
-                forward, _ = self.task_encoder(forward_input[i:])
-                keys_per_i.append(forward)
-            keys.append(torch.cat(keys_per_i).transpose(0, 1))  # put batch dim first
-        K = torch.stack(keys, dim=1)  # put from dim before to dim
-        K, C = torch.split(K, [self.hidden_size, 1], dim=-1)
-        K = K.sum(dim=1)
-        C = C.squeeze(dim=-1)
-        self.print("C")
-        self.print(C)
+        if not self.baseline:
+            forward_input = M.transpose(0, 1)  # n_lines, n_batch, hidden_size
+            backward_input = forward_input.flip((0,))
+            keys = []
+            for i in range(len(forward_input)):
+                keys_per_i = []
+                if i > 0:
+                    backward, _ = self.task_encoder(backward_input[:i])
+                    keys_per_i.append(backward.flip((0,)))
+                if i < len(forward_input):
+                    forward, _ = self.task_encoder(forward_input[i:])
+                    keys_per_i.append(forward)
+                keys.append(
+                    torch.cat(keys_per_i).transpose(0, 1)
+                )  # put batch dim first
+            K = torch.stack(keys, dim=1)  # put from dim before to dim
+            K, C = torch.split(K, [self.hidden_size, 1], dim=-1)
+            K = K.sum(dim=1)
+            C = C.squeeze(dim=-1)
+            self.print("C")
+            self.print(C)
 
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
@@ -129,14 +146,22 @@ class Recurrence(nn.Module):
         for t in range(T):
             a = self.a_one_hots(A[t - 1]).unsqueeze(1)
             r = (a @ M).squeeze(1)
-            c = (a @ C).squeeze(1)
             h = self.gru(self.f((inputs.condition[t], r)), h)
             k = self.actor(h)
             # w = F.cosine_similarity(K, k.unsqueeze(1), dim=2) # TODO: try this
-            w = (K @ k.unsqueeze(2)).squeeze(2)
-            self.print("w")
-            self.print(w)
-            dist = FixedCategorical(logits=w * c)
+            if self.baseline:
+                l, no_op = torch.split(k, [3, 1], dim=-1)
+                l = F.softmax(l, dim=-1)
+                no_op = torch.sigmoid(no_op)
+                probs = batch_conv1d(a.squeeze(1), l)
+                probs = torch.cat([probs * (1 - no_op), no_op], dim=-1)
+                dist = FixedCategorical(probs=probs / probs.sum(-1, keepdim=True))
+            else:
+                c = (a @ C).squeeze(1)
+                w = (K @ k.unsqueeze(2)).squeeze(2)
+                self.print("w")
+                self.print(w)
+                dist = FixedCategorical(logits=w * c)
             self.print("dist")
             self.print(dist.probs)
             self.sample_new(A[t], dist)

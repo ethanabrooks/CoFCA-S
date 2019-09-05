@@ -36,6 +36,9 @@ class Env(control_flow.Env):
         return super().reset()
 
     def step(self, action):
+        if action == self.n_lines:
+            # no-op
+            return self.get_observation(), 0, False, {}
         self.last_action = action
         self.last_active = self.active
         if action != self.active:
