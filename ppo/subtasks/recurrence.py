@@ -64,11 +64,15 @@ class Recurrence(nn.Module):
 
         self.gru = nn.GRUCell(hidden_size, hidden_size)
         self.critic = init_(nn.Linear(hidden_size, 1))
-        self.actor = nn.Linear(hidden_size, 4 if baseline else hidden_size)
-        self.a_one_hots = nn.Embedding.from_pretrained(torch.eye(action_space.n))
-        self.state_sizes = RecurrentState(
-            a=1, a_probs=len(self.obs_spaces.lines.nvec), v=1, h=hidden_size
-        )
+        if baseline:
+            actor_out = 4
+            action_n = action_space.n + 1
+        else:
+            actor_out = hidden_size
+            action_n = action_space.n
+        self.actor = nn.Linear(hidden_size, actor_out)
+        self.a_one_hots = nn.Embedding.from_pretrained(torch.eye(action_n))
+        self.state_sizes = RecurrentState(a=1, a_probs=action_n, v=1, h=hidden_size)
 
     @staticmethod
     def sample_new(x, dist):
