@@ -15,6 +15,9 @@ class Env(control_flow.Env):
         super().__init__(seed, n_lines)
         self.flip_prob = flip_prob
         self.condition_bit = None
+        self.last_action = None
+        self.last_active = None
+        self.last_reward = None
         self.line_types = [If, Else, EndIf, While, EndWhile, Subtask]
         self.action_space = spaces.Discrete(n_lines)
         self.observation_space = spaces.Dict(
@@ -26,14 +29,21 @@ class Env(control_flow.Env):
         )
 
     def reset(self):
+        self.last_action = None
+        self.last_active = None
+        self.last_reward = None
         self.condition_bit = self.random.randint(0, 2)
         return super().reset()
 
     def step(self, action):
+        self.last_action = action
+        self.last_active = self.active
         if action != self.active:
             return self.get_observation(), -1, True, {}
         self.condition_bit = 1 - int(self.random.rand() < self.flip_prob)
-        return super().step(action)
+        s, r, t, i = super().step(action)
+        self.last_reward = r
+        return s, r, t, i
 
     def get_observation(self):
         lines = [self.line_types.index(t) for t in self.lines]
@@ -57,7 +67,15 @@ class Env(control_flow.Env):
         line = self.lines[index]
         if line in [Else, EndIf, EndWhile]:
             level -= 1
-        indent = ("> " if index == self.active else "  ") * level
+        if index == self.last_active and index == self.last_action:
+            pre = "+ "
+        elif index == self.last_action:
+            pre = "- "
+        elif index == self.last_active:
+            pre = "| "
+        else:
+            pre = "  "
+        indent = pre * level
         yield indent + line.__name__
         if line in [If, While, Else]:
             level += 1
@@ -67,6 +85,7 @@ class Env(control_flow.Env):
         for i, string in enumerate(self.line_strings(index=0, level=1)):
             print(f"{i}{string}")
         print("Condition:", self.condition_bit)
+        print("Reward:", self.last_reward)
         input("pause")
 
     def train(self):
