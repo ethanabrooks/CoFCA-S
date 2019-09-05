@@ -110,9 +110,7 @@ class Recurrence(nn.Module):
             connections.append(
                 torch.cat(connections_per_i).transpose(0, 1)
             )  # put batch dim first
-        C = (
-            torch.cat(connections, dim=-1).transpose(1, 2).sigmoid()
-        )  # put from dim before to dim
+        C = torch.cat(connections, dim=-1).transpose(1, 2)  # put from dim before to dim
         self.print("C")
         self.print(C)
 
