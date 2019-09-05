@@ -26,7 +26,7 @@ def batch_conv1d(inputs, weights):
     padded = torch.cat(outputs)
     padded[:, 1] = padded[:, 1] + padded[:, 0]
     padded[:, -2] = padded[:, -2] + padded[:, -1]
-    return padded[:, 1:-2]
+    return padded[:, 1:-1]
 
 
 class Recurrence(nn.Module):
@@ -152,9 +152,17 @@ class Recurrence(nn.Module):
             if self.baseline:
                 l, no_op = torch.split(k, [3, 1], dim=-1)
                 l = F.softmax(l, dim=-1)
+                self.print("l")
+                self.print(l)
                 no_op = torch.sigmoid(no_op)
+                self.print("no op")
+                self.print(no_op)
                 probs = batch_conv1d(a.squeeze(1), l)
+                self.print("probs1")
+                self.print(probs)
                 probs = torch.cat([probs * (1 - no_op), no_op], dim=-1)
+                self.print("probs2")
+                self.print(probs)
                 dist = FixedCategorical(probs=probs / probs.sum(-1, keepdim=True))
             else:
                 c = (a @ C).squeeze(1)
