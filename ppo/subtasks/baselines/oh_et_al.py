@@ -62,10 +62,10 @@ class Recurrence(nn.Module):
 
         self.gru = nn.GRUCell(hidden_size, hidden_size)
         self.critic = init_(nn.Linear(hidden_size, 1))
-        self.actor = nn.Linear(hidden_size, hidden_size)
+        self.actor = nn.Linear(hidden_size, 4)
         self.a_one_hots = nn.Embedding.from_pretrained(torch.eye(action_space.n))
         self.state_sizes = RecurrentState(
-            a=1, a_probs=(action_space.n), p=action_space.n, v=1, h=hidden_size
+            a=1, a_probs=(action_space.n + 1), p=action_space.n, v=1, h=hidden_size
         )
 
     @staticmethod
@@ -110,25 +110,6 @@ class Recurrence(nn.Module):
         M = self.embeddings(lines.view(-1)).view(
             *lines.shape, self.hidden_size
         )  # n_batch, n_lines, hidden_size
-        forward_input = M.transpose(0, 1)  # n_lines, n_batch, hidden_size
-        backward_input = forward_input.flip((0,))
-        keys = []
-        for i in range(len(forward_input)):
-            keys_per_i = []
-            if i > 0:
-                backward, _ = self.task_encoder(backward_input[:i])
-                keys_per_i.append(backward.flip((0,)))
-            if i < len(forward_input):
-                forward, _ = self.task_encoder(forward_input[i:])
-                keys_per_i.append(forward)
-            keys.append(torch.cat(keys_per_i).transpose(0, 1))  # put batch dim first
-        K = torch.stack(keys, dim=1)  # put from dim before to dim
-        K, C = torch.split(K, [self.hidden_size, 1], dim=-1)
-        K = K.sum(dim=1)
-        C = C.squeeze(dim=-1)
-        self.print("C")
-        self.print(C)
-
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
         for _x in hx:
@@ -143,13 +124,25 @@ class Recurrence(nn.Module):
             r = (p.unsqueeze(1) @ M).squeeze(1)
             h = self.gru(self.f((inputs.condition[t], r)), h)
             k = self.actor(h)
-            c = (p.unsqueeze(1) @ C).squeeze(1)
-            w = (K @ k.unsqueeze(2)).squeeze(2)
-            self.print("w")
-            self.print(w)
-            dist = FixedCategorical(logits=w * c)
+            l, no_op = torch.split(k, [3, 1], dim=-1)
+            l = F.softmax(l, dim=-1)
+            self.print("l")
+            self.print(l)
+            no_op = torch.sigmoid(no_op)
+            self.print("no op")
+            self.print(no_op)
+            probs = batch_conv1d(p.squeeze(1), l)
+            self.print("probs1")
+            self.print(probs)
+            probs = torch.cat([probs * (1 - no_op), no_op], dim=-1)
+            self.print("probs2")
+            self.print(probs)
+            dist = FixedCategorical(probs=probs / probs.sum(-1, keepdim=True))
             self.print("dist")
             self.print(dist.probs)
             self.sample_new(A[t], dist)
-            p = self.a_one_hots(A[t])
+            new = A[t] < self.state_sizes.p
+            a = A[t] * new.long()
+            new = new.float().unsqueeze(1)
+            p = self.a_one_hots(a) * new + p * (1 - new)
             yield RecurrentState(a=A[t], v=self.critic(h), h=h, a_probs=dist.probs, p=p)

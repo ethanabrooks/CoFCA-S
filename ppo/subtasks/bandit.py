@@ -11,8 +11,9 @@ Obs = namedtuple("Obs", "active condition lines")
 
 
 class Env(control_flow.Env):
-    def __init__(self, seed, n_lines, flip_prob):
+    def __init__(self, seed, n_lines, flip_prob, time_limit):
         super().__init__(seed, n_lines)
+        self.time_limit = time_limit
         self.flip_prob = flip_prob
         self.condition_bit = None
         self.last_action = None
@@ -27,15 +28,20 @@ class Env(control_flow.Env):
                 active=spaces.Discrete(n_lines + 1),
             )
         )
+        self.t = None
 
     def reset(self):
         self.last_action = None
         self.last_active = None
         self.last_reward = None
+        self.t = 0
         self.condition_bit = self.random.randint(0, 2)
         return super().reset()
 
     def step(self, action):
+        self.t += 1
+        if self.time_limit and self.t > self.time_limit:
+            return self.get_observation(), -1, True, {}
         if action == self.n_lines:
             # no-op
             return self.get_observation(), 0, False, {}

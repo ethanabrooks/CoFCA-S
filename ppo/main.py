@@ -21,13 +21,14 @@ from ppo.utils import get_random_gpu, get_n_gpu, k_scalar_pairs
 
 class TrainControlFlow(Train, ABC):
     @staticmethod
-    def make_env(time_limit, seed, rank, evaluation, env_id, add_timestep, **env_args):
+    def make_env(seed, rank, evaluation, env_id, add_timestep, **env_args):
         return subtasks.bandit.Env(**env_args, seed=seed + rank)
 
-    def build_agent(self, envs, **agent_args):
+    def build_agent(self, envs, baseline=None, **agent_args):
         return Agent(
             observation_space=envs.observation_space,
             action_space=envs.action_space,
+            baseline=baseline,
             **agent_args,
         )
 
@@ -167,7 +168,7 @@ def bandit_args():
     parsers.env.add_argument("--n-lines", type=int, required=True)
     parsers.env.add_argument("--flip-prob", type=float, required=True)
     parsers.agent.add_argument("--debug", action="store_true")
-    parsers.agent.add_argument("--baseline", action="store_true")
+    parsers.agent.add_argument("--baseline", choices="oh-et-al")
     return parser
 
 
