@@ -50,7 +50,7 @@ class Recurrence(nn.Module):
 
         # networks
         self.embeddings = nn.Embedding(int(self.obs_spaces.lines.nvec[0]), hidden_size)
-        self.task_encoder = nn.GRU(hidden_size, hidden_size + 1)
+        self.task_encoder = nn.GRU(hidden_size, hidden_size, bidirectional=True)
 
         # f
         layers = [Concat(dim=-1)]
@@ -62,7 +62,7 @@ class Recurrence(nn.Module):
 
         self.gru = nn.GRUCell(hidden_size, hidden_size)
         self.critic = init_(nn.Linear(hidden_size, 1))
-        self.actor = nn.Linear(hidden_size, hidden_size)
+        self.actor = nn.Linear(hidden_size, 2 * hidden_size)
         self.a_one_hots = nn.Embedding.from_pretrained(torch.eye(action_space.n))
         self.state_sizes = RecurrentState(
             a=1, a_probs=(action_space.n), p=action_space.n, v=1, h=hidden_size
@@ -111,23 +111,8 @@ class Recurrence(nn.Module):
             *lines.shape, self.hidden_size
         )  # n_batch, n_lines, hidden_size
         forward_input = M.transpose(0, 1)  # n_lines, n_batch, hidden_size
-        backward_input = forward_input.flip((0,))
-        keys = []
-        for i in range(len(forward_input)):
-            keys_per_i = []
-            if i > 0:
-                backward, _ = self.task_encoder(backward_input[:i])
-                keys_per_i.append(backward.flip((0,)))
-            if i < len(forward_input):
-                forward, _ = self.task_encoder(forward_input[i:])
-                keys_per_i.append(forward)
-            keys.append(torch.cat(keys_per_i).transpose(0, 1))  # put batch dim first
-        K = torch.stack(keys, dim=1)  # put from dim before to dim
-        K, C = torch.split(K, [self.hidden_size, 1], dim=-1)
-        K = K.sum(dim=1)
-        C = C.squeeze(dim=-1)
-        self.print("C")
-        self.print(C)
+        K, _ = self.task_encoder(forward_input)
+        K = K.transpose(0, 1)
 
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
@@ -143,15 +128,10 @@ class Recurrence(nn.Module):
             r = (p.unsqueeze(1) @ M).squeeze(1)
             h = self.gru(self.f((inputs.condition[t], r)), h)
             k = self.actor(h)
-            c = (p.unsqueeze(1) @ C).squeeze(1)
-            self.print("c")
-            self.print(c)
             w = (K @ k.unsqueeze(2)).squeeze(2)
             self.print("w")
             self.print(w)
-            self.print("w * c")
-            self.print(w * c)
-            dist = FixedCategorical(logits=w * c)
+            dist = FixedCategorical(logits=w)
             self.print("dist")
             self.print(dist.probs)
             self.sample_new(A[t], dist)
