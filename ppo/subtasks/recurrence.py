@@ -110,6 +110,7 @@ class Recurrence(nn.Module):
         M = self.embeddings(lines.view(-1)).view(
             *lines.shape, self.hidden_size
         )  # n_batch, n_lines, hidden_size
+
         forward_input = M.transpose(0, 1)  # n_lines, n_batch, hidden_size
         backward_input = forward_input.flip((0,))
         keys = []
