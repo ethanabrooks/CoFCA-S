@@ -8,11 +8,11 @@ from rl_utils import hierarchical_parse_args
 from tensorboardX import SummaryWriter
 
 import ppo.arguments
+import ppo.bandit.baselines.oh_et_al
+import ppo.maze.baselines
 from ppo import bandit, gntm, maze
-from ppo.gntm import Agent
 from ppo.train import Train
 from ppo.utils import get_random_gpu, get_n_gpu, k_scalar_pairs
-import ppo.bandit.baselines.oh_et_al
 
 
 class _Train(Train):
@@ -100,8 +100,12 @@ def train_maze(**kwargs):
         def build_agent(
             self, envs, recurrent=None, entropy_coef=None, baseline=None, **agent_args
         ):
-            if baseline == "oh-et-al":
-                raise NotImplementedError
+            if baseline == "one-shot":
+                recurrence = ppo.maze.baselines.one_shot.Recurrence(
+                    observation_space=envs.observation_space,
+                    action_space=envs.action_space,
+                    **agent_args,
+                )
             else:
                 assert baseline is None
                 recurrence = maze.Recurrence(
@@ -120,7 +124,6 @@ def build_parser():
     parser.add_argument("--no-tqdm", dest="use_tqdm", action="store_false")
     parser.add_argument("--time-limit", type=int)
     parsers.agent.add_argument("--debug", action="store_true")
-    parsers.agent.add_argument("--baseline", choices="oh-et-al")
     return parsers
 
 
@@ -128,6 +131,7 @@ def bandit_cli():
     parsers = build_parser()
     parsers.env.add_argument("--n-lines", type=int, required=True)
     parsers.env.add_argument("--flip-prob", type=float, required=True)
+    parsers.agent.add_argument("--baseline", choices=["oh-et-al"])
     train_bandit(**hierarchical_parse_args(parsers.main))
 
 
@@ -136,6 +140,7 @@ def maze_cli():
     parser = parsers.main
     parsers.env.add_argument("--height", type=int, required=True)
     parsers.env.add_argument("--width", type=int, required=True)
+    parsers.agent.add_argument("--baseline", choices=["one-shot"])
     train_maze(**hierarchical_parse_args(parser))
 
 
