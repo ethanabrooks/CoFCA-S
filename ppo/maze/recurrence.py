@@ -1,17 +1,16 @@
 from collections import namedtuple
 
-import numpy as np
 import torch
-from torch import nn as nn
 import torch.nn.functional as F
+from torch import nn as nn
 
-import ppo.oh_et_al
 import ppo.bandit.bandit
 from ppo.distributions import FixedCategorical
 from ppo.layers import Concat
+from ppo.maze.env import Actions
 from ppo.utils import init_
 
-RecurrentState = namedtuple("RecurrentState", "a v h a_probs p")
+RecurrentState = namedtuple("RecurrentState", "a v h a_probs")
 
 
 def batch_conv1d(inputs, weights):
@@ -48,22 +47,12 @@ class Recurrence(nn.Module):
         # networks
         self.task_embedding = nn.Conv2d(d, hidden_size, kernel_size=3, padding=1)
         self.task_encoder = nn.GRU(hidden_size, hidden_size, bidirectional=True)
-
-        # f
-        layers = [Concat(dim=-1)]
-        in_size = self.obs_sections.condition + hidden_size
-        for _ in range(num_layers + 1):
-            layers.extend([nn.Linear(in_size, hidden_size), activation])
-            in_size = hidden_size
-        self.f = nn.Sequential(*layers)
-
         self.gru = nn.GRUCell(hidden_size, hidden_size)
         self.critic = init_(nn.Linear(hidden_size, 1))
-        self.actor = nn.Linear(hidden_size, hidden_size)
-        self.a_one_hots = nn.Embedding.from_pretrained(torch.eye(action_space.n))
-        self.state_sizes = RecurrentState(
-            a=1, a_probs=(action_space.n), p=action_space.n, v=1, h=hidden_size
-        )
+        self.query_generator = nn.Linear(hidden_size, 2 * hidden_size)
+        self.terminator = nn.Sequential(nn.Linear(hidden_size, 1), nn.Sigmoid())
+        self.a_one_hots = nn.Embedding.from_pretrained(torch.eye(h * w))
+        self.state_sizes = RecurrentState(a=1, a_probs=h * w * 2, v=1, h=hidden_size)
 
     @staticmethod
     def sample_new(x, dist):
@@ -100,56 +89,34 @@ class Recurrence(nn.Module):
         )
 
         # build memory
-        embeddings = self.task_embedding(obs.view(*self.obs_shape))
-        K = self.task_encoder()
-        M = self.embeddings(lines.view(-1)).view(
-            *lines.shape, self.hidden_size
-        )  # n_batch, n_lines, hidden_size
+        M = (
+            self.task_embedding(obs.view(N, *self.obs_shape))  # N, hidden_size, h, w
+            .view(N, self.hidden_size, -1)  # N, hidden_size, h * w
+            .transpose(1, 2)  # N, h * w, hidden_size
+        )
+        K, _ = self.task_encoder(M.transpose(0, 1))  # h * w, N, hidden_size * 2
+        K = K.transpose(0, 1)  # N, h * w, hidden_size * 2
 
-        forward_input = M.transpose(0, 1)  # n_lines, n_batch, hidden_size
-        backward_input = forward_input.flip((0,))
-        keys = []
-        for i in range(len(forward_input)):
-            keys_per_i = []
-            if i > 0:
-                backward, _ = self.task_encoder(backward_input[:i])
-                keys_per_i.append(backward.flip((0,)))
-            if i < len(forward_input):
-                forward, _ = self.task_encoder(forward_input[i:])
-                keys_per_i.append(forward)
-            keys.append(torch.cat(keys_per_i).transpose(0, 1))  # put batch dim first
-        K = torch.stack(keys, dim=1)  # put from dim before to dim
-        K, C = torch.split(K, [self.hidden_size, 1], dim=-1)
-        K = K.sum(dim=1)
-        C = C.squeeze(dim=-1)
-        self.print("C")
-        self.print(C)
-
-        new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
         for _x in hx:
             _x.squeeze_(0)
 
         h = hx.h
-        p = hx.p
-        p[new_episode, 0] = 1
         A = torch.cat([actions, hx.a.unsqueeze(0)], dim=0).long().squeeze(2)
 
         for t in range(T):
-            r = (p.unsqueeze(1) @ M).squeeze(1)
-            h = self.gru(self.f((obs.condition[t], r)), h)
-            k = self.actor(h)
-            c = (p.unsqueeze(1) @ C).squeeze(1)
-            self.print("c")
-            self.print(c)
+            k = self.query_generator(h)
+            done = self.terminator(h)
             w = (K @ k.unsqueeze(2)).squeeze(2)
             self.print("w")
             self.print(w)
-            self.print("w * c")
-            self.print(w * c)
-            dist = FixedCategorical(logits=w * c)
+            logits = torch.cat([(1 - done) * w, done * w], dim=-1)
+            dist = FixedCategorical(logits=logits)
             self.print("dist")
             self.print(dist.probs)
             self.sample_new(A[t], dist)
-            p = self.a_one_hots(A[t])
-            yield RecurrentState(a=A[t], v=self.critic(h), h=h, a_probs=dist.probs, p=p)
+            a_size = self.a_one_hots.embedding_dim
+            p = self.a_one_hots(A[t] % a_size)
+            r = (p.unsqueeze(1) @ M).squeeze(1)
+            h = self.gru(r, h)
+            yield RecurrentState(a=A[t], v=self.critic(h), h=h, a_probs=dist.probs)

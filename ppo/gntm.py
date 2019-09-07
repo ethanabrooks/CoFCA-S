@@ -5,11 +5,9 @@ from torch.nn import functional as F
 
 import ppo.agent
 from ppo.agent import AgentValues, NNBase
-from ppo.distributions import FixedCategorical
 
 # noinspection PyMissingConstructor
-from ppo.bandit.baselines import oh_et_al
-from ppo.bandit.recurrence import RecurrentState, Recurrence
+from ppo.distributions import FixedCategorical
 
 
 class Agent(ppo.agent.Agent, NNBase):
@@ -32,7 +30,7 @@ class Agent(ppo.agent.Agent, NNBase):
             inputs.view(N, -1), rnn_hxs, masks, action=action
         )
         rm = self.recurrent_module
-        hx = RecurrentState(*rm.parse_hidden(all_hxs))
+        hx = rm.parse_hidden(all_hxs)
         dist = FixedCategorical(hx.a_probs)
         action_log_probs = dist.log_probs(hx.a)
         entropy = dist.entropy().mean()

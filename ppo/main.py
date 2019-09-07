@@ -91,10 +91,15 @@ def train_bandit(**kwargs):
 def train_maze(**kwargs):
     class TrainMaze(_Train):
         @staticmethod
-        def make_env(seed, rank, evaluation, env_id, add_timestep, **env_args):
-            return maze.Env(**env_args, seed=seed + rank)
+        def make_env(
+            seed, rank, evaluation, env_id, add_timestep, time_limit, **env_args
+        ):
+            assert time_limit
+            return maze.Env(**env_args, time_limit=time_limit, seed=seed + rank)
 
-        def build_agent(self, envs, entropy_coef=None, baseline=None, **agent_args):
+        def build_agent(
+            self, envs, recurrent=None, entropy_coef=None, baseline=None, **agent_args
+        ):
             if baseline == "oh-et-al":
                 raise NotImplementedError
             else:

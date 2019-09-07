@@ -5,23 +5,22 @@ import numpy as np
 from gym.utils import seeding
 
 Last = namedtuple("Last", "answer reward")
+Actions = namedtuple("Actions", "answer done")
 
 
 class Env(gym.Env):
-    def __init__(self, height, width, seed):
+    def __init__(self, height, width, time_limit, seed):
+        self.time_limit = time_limit
         self.random, self.seed = seeding.np_random(seed)
         self.width = width
         self.height = height
         self.answer = None
         self.last = None
         self.start = None
+        self.t = None
         self.map = np.zeros([height, width], dtype=int)
         self.one_hots = np.eye(4)
-        self.action_space = gym.spaces.Dict(
-            dict(
-                answer=gym.spaces.Discrete(height * width), done=gym.spaces.Discrete(2)
-            )
-        )
+        self.action_space = gym.spaces.Discrete(height * width * 2)
         self.observation_space = gym.spaces.MultiDiscrete(
             2 * np.ones((4, *self.map.shape))
         )
@@ -68,8 +67,9 @@ class Env(gym.Env):
 
     def reset(self):
         # self.start, nodes, self.answer = self.create_map()
-        start, paths = self.get_paths()
         self.last = None
+        self.t = 0
+        start, paths = self.get_paths()
         self.map[:] = 0
         for *path, last in paths:
             for node in path:
@@ -83,15 +83,18 @@ class Env(gym.Env):
             self.map[obstruct] = 0
         return self.get_observation()
 
-    def step(self, action):
-        answer, done = action
-        answer = (answer // self.width, answer % self.width)
-        if done:
+    def step(self, action: int):
+        self.t += 1
+        if self.t > self.time_limit:
+            return self.get_observation(), -1, True, {}
+        action = Actions(answer=action % self.map.size, done=action // self.map.size)
+        answer = (action.answer // self.width, action.answer % self.width)
+        if action.done:
             r = 1 if answer == self.answer else -1
             self.last = Last(reward=r, answer=answer)
         else:
             r = 0
-        return self.get_observation(), r, done, {}
+        return self.get_observation(), r, action.done, {}
 
     def get_observation(self):
         obs = self.one_hots[self.map].transpose(2, 0, 1)
@@ -135,6 +138,9 @@ class Env(gym.Env):
             length += 1
 
         return start, chosen, answer
+
+    def train(self):
+        pass
 
 
 if __name__ == "__main__":
