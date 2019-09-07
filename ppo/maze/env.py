@@ -34,7 +34,7 @@ class Env(gym.Env):
                 if 0 <= y1 < self.height and 0 <= y2 < self.width:
                     yield y1, y2
 
-        start = tuple(self.random.randint(low=np.zeros(2), high=self.map.shape))
+        start = tuple([self.random.randint(0, d) for d in self.map.shape])
         paths = [[start, s] for s in get_surrounding(*start)]
 
         def check_surrounding(prev, x):
@@ -94,7 +94,7 @@ class Env(gym.Env):
             self.last = Last(reward=r, answer=answer)
         else:
             r = 0
-        return self.get_observation(), r, action.done, {}
+        return self.get_observation(), r, bool(action.done), {}
 
     def get_observation(self):
         obs = self.one_hots[self.map].transpose(2, 0, 1)

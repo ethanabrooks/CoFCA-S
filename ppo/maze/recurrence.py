@@ -45,7 +45,15 @@ class Recurrence(nn.Module):
         self.hidden_size = hidden_size
 
         # networks
-        self.task_embedding = nn.Conv2d(d, hidden_size, kernel_size=3, padding=1)
+        layers = []
+        in_size = d
+        for _ in range(num_layers + 1):
+            layers += [
+                nn.Conv2d(in_size, hidden_size, kernel_size=3, padding=1),
+                activation,
+            ]
+            in_size = hidden_size
+        self.task_embedding = nn.Sequential(*layers)
         self.task_encoder = nn.GRU(hidden_size, hidden_size, bidirectional=True)
         self.gru = nn.GRUCell(hidden_size, hidden_size)
         self.critic = init_(nn.Linear(hidden_size, 1))
@@ -85,8 +93,9 @@ class Recurrence(nn.Module):
     def inner_loop(self, inputs, rnn_hxs):
         T, N, D = inputs.shape
         obs, actions = torch.split(
-            inputs.detach(), [D - self.action_size, self.action_size], dim=2
+            inputs.detach(), [D - self.action_size, self.action_size], dim=-1
         )
+        obs = obs[0]
 
         # build memory
         M = (
