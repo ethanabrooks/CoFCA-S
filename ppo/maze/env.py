@@ -91,9 +91,9 @@ class Env(gym.Env):
         answer = (action.answer // self.width, action.answer % self.width)
         if action.done:
             r = 1 if answer == self.answer else -1
-            self.last = Last(reward=r, answer=answer)
         else:
             r = 0
+        self.last = Last(reward=r, answer=answer)
         return self.get_observation(), r, bool(action.done), {}
 
     def get_observation(self):
@@ -102,11 +102,18 @@ class Env(gym.Env):
         return obs
 
     def render(self, mode="human"):
+        _map = np.where(self.map == 1, "#", " ")
+        _map[self.map == 2] = "g"
+        _map[self.map == 3] = "s"
         if self.last:
             print(self.last)
+            _map[self.last.answer] = "A"
+
         # print(self.one_hots[self.map])
-        print(self.map)
+        print(_map)
         print("answer:", self.answer)
+        print("time step:", self.t)
+        input("pause")
 
     def create_map(self):
         steps = np.array([[1, 0], [0, 1], [-1, 0], [0, -1]])
