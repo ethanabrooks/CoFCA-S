@@ -140,7 +140,7 @@ class Env(gym.Env):
 if __name__ == "__main__":
     import argparse
     from rl_utils import hierarchical_parse_args
-    from ppo.subtasks import keyboard_control
+    from ppo import keyboard_control
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", default=0, type=int)

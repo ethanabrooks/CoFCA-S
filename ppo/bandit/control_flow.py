@@ -3,11 +3,11 @@ from abc import ABC
 from collections import defaultdict
 
 from gym.utils import seeding
-from ppo import subtasks
-from ppo.subtasks.lines import If, Else, EndIf, While, EndWhile, Subtask
+from ppo import bandit
+from ppo.bandit.lines import If, Else, EndIf, While, EndWhile, Subtask
 
 
-class Env(subtasks.Env, ABC):
+class Env(bandit.Env, ABC):
     def __init__(self, seed, n_subtasks):
         super().__init__()
         self.n_lines = n_subtasks

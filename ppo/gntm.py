@@ -8,19 +8,15 @@ from ppo.agent import AgentValues, NNBase
 from ppo.distributions import FixedCategorical
 
 # noinspection PyMissingConstructor
-from ppo.subtasks.baselines import oh_et_al
-from ppo.subtasks.recurrence import RecurrentState, Recurrence
+from ppo.bandit.baselines import oh_et_al
+from ppo.bandit.recurrence import RecurrentState, Recurrence
 
 
 class Agent(ppo.agent.Agent, NNBase):
-    def __init__(self, entropy_coef, recurrent, baseline, **network_args):
+    def __init__(self, entropy_coef, recurrence):
         nn.Module.__init__(self)
         self.entropy_coef = entropy_coef
-        if baseline == "oh-et-al":
-            self.recurrent_module = oh_et_al.Recurrence(**network_args)
-        else:
-            assert baseline is None
-            self.recurrent_module = Recurrence(**network_args)
+        self.recurrent_module = recurrence
 
     @property
     def recurrent_hidden_state_size(self):

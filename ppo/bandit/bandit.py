@@ -3,8 +3,9 @@ from collections import namedtuple
 from gym import spaces
 from rl_utils import hierarchical_parse_args
 import numpy as np
-from ppo.subtasks import control_flow, keyboard_control
-from ppo.subtasks.lines import If, Else, EndIf, While, EndWhile, Subtask
+from ppo.bandit import control_flow
+from ppo import keyboard_control
+from ppo.bandit.lines import If, Else, EndIf, While, EndWhile, Subtask
 
 Obs = namedtuple("Obs", "active condition lines")
 # TODO: this is very hacky. things will break unless namedtuple is in alphabetical order.

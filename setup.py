@@ -24,7 +24,9 @@ setup(
         "bin/show-best",
         "bin/reproduce",
     ],
-    entry_points=dict(console_scripts=["ppo=ppo.main:cli", "exp=ppo.main:exp_cli"]),
+    entry_points=dict(
+        console_scripts=["bandit=ppo.main:bandit_cli", "maze=ppo.main:maze_cli"]
+    ),
     install_requires=[
         "ray[debug]==0.7.3",
         "tensorboardX==1.8",
