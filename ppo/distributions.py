@@ -1,8 +1,12 @@
 # third party
+from typing import List
+
 import torch
 import torch.nn as nn
 
 # first party
+from torch.distributions import Distribution
+
 from ppo.utils import AddBias, init, init_normc_
 
 """

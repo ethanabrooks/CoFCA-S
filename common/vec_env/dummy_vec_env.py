@@ -102,9 +102,16 @@ class DummyVecEnv(VecEnv):
     def get_images(self):
         return [env.render(mode="rgb_array") for env in self.envs]
 
-    def increment_curriculum(self):
+    def evaluate(self):
         for env in self.envs:
-            env.increment_curriculum()
+            env.evaluate()
+
+    def train(self):
+        for env in self.envs:
+            try:
+                env.train()
+            except AttributeError:
+                print("Attribute train undefined")
 
     def render(self, mode="human"):
         return self.envs[0].render(mode=mode)

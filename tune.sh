@@ -1,24 +1,27 @@
 #!/usr/bin/env bash
 
+my_ip=$(ip route get 8.8.8.8 | awk -F"src " 'NR==1{split($2,a," ");print a[1]}')
+
 nice python ppo/main.py \
   --cuda-deterministic \
   --log-dir=/home/ethanbro/tune_results \
   --run-id=tune/maiden \
   --num-processes="300" \
   \
+  --redis-address "$my_ip:6379" \
   --tune \
-  --redis-address $1 \
+  --quiet \
   \
-  --subtask="AnswerDoor" \
-  --subtask="AvoidDog" \
-  --subtask="ComfortBaby" \
-  --subtask="KillFlies" \
-  --subtask="MakeFire" \
-  --subtask="WatchBaby" \
+  --instruction="AnswerDoor" \
+  --instruction="AvoidDog" \
+  --instruction="ComfortBaby" \
+  --instruction="KillFlies" \
+  --instruction="MakeFire" \
+  --instruction="WatchBaby" \
   --test "WatchBaby"  "KillFlies" "MakeFire" \
   --test "AnswerDoor"  "KillFlies" "AvoidDog" \
   --test "AnswerDoor"  "MakeFire" "AvoidDog" \
-  --n-active-subtasks="3" \
+  --n-active-instructions="3" \
   --time-limit="30" \
   \
   --eval-interval="100" \

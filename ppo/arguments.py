@@ -30,7 +30,7 @@ def build_parser():
         help="use generalized advantage estimation",
     )
     parser.add_argument("--tau", type=float, default=0.95, help="gae parameter")
-    parser.add_argument("--seed", type=int, default=1, help="random seed")
+    parser.add_argument("--seed", type=int, default=0, help="random seed")
     parser.add_argument(
         "--cuda-deterministic",
         action="store_true",
@@ -41,11 +41,11 @@ def build_parser():
     parser.add_argument(
         "--num-processes",
         type=int,
-        required=True,
         help="how many training CPU processes to use",
+        required=True,
     )
     parser.add_argument(
-        "--num-steps", type=int, required=True, help="number of forward steps in A2C"
+        "--num-steps", type=int, help="number of forward steps in A2C", required=True
     )
     parser.add_argument(
         "--log-interval",
@@ -60,12 +60,8 @@ def build_parser():
         help="save interval, one save per n updates",
     )
     parser.add_argument(
-        "--eval-interval",
-        type=int,
-        default=None,
-        help="eval interval, one eval per n updates",
+        "--eval-interval", type=int, help="eval interval, one eval per n updates"
     )
-    parser.add_argument("--time-limit", type=int)
     parser.add_argument("--load-path", type=Path)
     parser.add_argument("--log-dir", type=Path, help="directory to save agent logs")
     parser.add_argument(
@@ -73,7 +69,7 @@ def build_parser():
     )
     parser.add_argument("--synchronous", action="store_true")
     parser.add_argument(
-        "--num-batch", type=int, required=True, help="number of batches for ppo"
+        "--num-batch", type=int, help="number of batches for ppo", required=True
     )
     parser.add_argument("--success-reward", type=float)
 
@@ -82,13 +78,10 @@ def build_parser():
     agent_parser.add_argument("--hidden-size", type=int, required=True)
     agent_parser.add_argument("--num-layers", type=int, required=True)
     agent_parser.add_argument(
-        "--activation",
-        type=lambda x: ACTIVATIONS[x],
-        choices=ACTIVATIONS.values(),
-        default=nn.ReLU(),
+        "--activation", type=lambda s: eval(f"nn.{s}"), default=nn.ReLU()
     )
     agent_parser.add_argument(
-        "--entropy-coef", type=float, required=True, help="entropy term coefficient"
+        "--entropy-coef", type=float, help="entropy term coefficient", required=True
     )
 
     ppo_parser = parser.add_argument_group("ppo_args")
@@ -101,7 +94,7 @@ def build_parser():
     ppo_parser.add_argument(
         "--value-loss-coef", type=float, default=0.5, help="value loss coefficient"
     )
-    ppo_parser.add_argument("--learning-rate", type=float, required=True, help="")
+    ppo_parser.add_argument("--learning-rate", type=float, help="", required=True)
     ppo_parser.add_argument(
         "--eps", type=float, default=1e-5, help="RMSprop optimizer epsilon"
     )
@@ -123,15 +116,3 @@ def build_parser():
     )
 
     return Parsers(main=parser, env=env_parser, ppo=ppo_parser, agent=agent_parser)
-
-
-def get_args():
-    return hierarchical_parse_args(build_parser())
-
-
-# def get_hsr_args():
-#     parser = build_parser()
-#     env_parser = parser.add_argument_group('env_args')
-#     add_env_args(env_parser)
-#     add_wrapper_args(parser.add_argument_group('wrapper_args'))
-#     return hierarchical_parse_args(parser)

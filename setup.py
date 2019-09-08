@@ -24,11 +24,15 @@ setup(
         "bin/show-best",
         "bin/reproduce",
     ],
-    entry_points=dict(console_scripts=["ppo=ppo.main:cli", "exp=ppo.main:exp_cli"]),
+    entry_points=dict(
+        console_scripts=["bandit=ppo.main:bandit_cli", "maze=ppo.main:maze_cli"]
+    ),
     install_requires=[
         "ray[debug]==0.7.3",
         "tensorboardX==1.8",
+        "tensorflow==1.14.0",
         "opencv-python==4.1.0.25",
         "psutil==5.6.3",
+        "requests==2.22.0",
     ],
 )

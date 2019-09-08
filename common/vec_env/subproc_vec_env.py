@@ -28,8 +28,13 @@ def worker(remote, parent_remote, env_fn_wrapper):
                 break
             elif cmd == "get_spaces":
                 remote.send((env.observation_space, env.action_space))
-            elif cmd == "increment_curriculum":
-                env.increment_curriculum()
+            elif cmd == "evaluate":
+                env.evaluate()
+            elif cmd == "train":
+                try:
+                    env.train()
+                except AttributeError:
+                    print("Attribute train undefined")
             else:
                 raise NotImplementedError
     except KeyboardInterrupt:
@@ -117,9 +122,13 @@ class SubprocVecEnv(VecEnv):
             not self.closed
         ), "Trying to operate on a SubprocVecEnv after calling close()"
 
-    def increment_curriculum(self):
+    def evaluate(self):
         for remote in self.remotes:
-            remote.send(("increment_curriculum", None))
+            remote.send(("evaluate", None))
+
+    def train(self):
+        for remote in self.remotes:
+            remote.send(("train", None))
 
 
 def _flatten_obs(obs):

@@ -2,11 +2,11 @@ import gym
 from gym import spaces
 from gym.spaces import Box
 import numpy as np
-from rl_utils import onehot
 import torch
 
 from common.vec_env import VecEnvWrapper
 from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
+from rl_utils import onehot
 
 SubtasksActions = namedtuple('SubtasksActions', 'a cr cg g')
 SubtasksObs = namedtuple('SubtasksObs', 'base subtask task next_subtask')
@@ -199,8 +199,11 @@ class VecPyTorch(VecEnvWrapper):
         self.device = device
         self.venv.to(device)
 
-    def increment_curriculum(self):
-        self.venv.increment_curriculum()
+    def evaluate(self):
+        self.venv.evaluate()
+
+    def train(self):
+        self.venv.train()
 
 
 class VecNormalize(VecNormalize_):
