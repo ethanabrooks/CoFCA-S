@@ -10,7 +10,7 @@ from tensorboardX import SummaryWriter
 import ppo.arguments
 import ppo.bandit.baselines.oh_et_al
 import ppo.maze.baselines
-from ppo import bandit, gntm, maze
+from ppo import bandit, gntm, maze, random_rewards
 from ppo.train import Train
 from ppo.utils import get_random_gpu, get_n_gpu, k_scalar_pairs
 
@@ -118,6 +118,36 @@ def train_maze(**kwargs):
     TrainMaze(**kwargs).run()
 
 
+def train_random_rewards(**kwargs):
+    class TrainMaze(_Train):
+        @staticmethod
+        def make_env(
+            seed, rank, evaluation, env_id, add_timestep, time_limit, **env_args
+        ):
+            assert time_limit
+            return random_rewards.Env(
+                **env_args, time_limit=time_limit, seed=seed + rank
+            )
+
+        def build_agent(
+            self, envs, recurrent=None, entropy_coef=None, baseline=None, **agent_args
+        ):
+            if baseline == "one-shot":
+                raise NotImplementedError
+            else:
+                assert baseline is None
+                recurrence = random_rewards.Recurrence(
+                    observation_space=envs.observation_space,
+                    action_space=envs.action_space,
+                    **agent_args,
+                )
+            return random_rewards.Agent(
+                entropy_coef=entropy_coef, recurrence=recurrence
+            )
+
+    TrainMaze(**kwargs).run()
+
+
 def build_parser():
     parsers = ppo.arguments.build_parser()
     parser = parsers.main
@@ -144,5 +174,16 @@ def maze_cli():
     train_maze(**hierarchical_parse_args(parser))
 
 
+def random_rewards_cli():
+    parsers = build_parser()
+    parser = parsers.main
+    parsers.env.add_argument("--size", type=int, required=True)
+    parsers.env.add_argument("--min-reward", type=int, required=True)
+    parsers.env.add_argument("--max-reward", type=int, required=True)
+    parsers.env.add_argument("--no-op-limit", type=int, required=True)
+    parsers.agent.add_argument("--baseline", choices=["one-shot"])
+    train_random_rewards(**hierarchical_parse_args(parser))
+
+
 if __name__ == "__main__":
-    maze_cli()
+    random_rewards_cli()

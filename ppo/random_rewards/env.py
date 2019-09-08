@@ -11,7 +11,8 @@ Actions = namedtuple("Actions", "answer done")
 
 
 class Env(gym.Env):
-    def __init__(self, size, time_limit, max_reward, min_reward, seed):
+    def __init__(self, size, time_limit, no_op_limit, max_reward, min_reward, seed):
+        self.no_op_limit = no_op_limit
         self.min_reward = min_reward
         self.max_reward = max_reward
         self.time_limit = time_limit
@@ -24,18 +25,22 @@ class Env(gym.Env):
         self.rewards = None
         self.start = None
         self.t = None
+        self.no_op_count = None
         self.pos = None
         self.optimal = None
         self.cumulative = None
 
         self.one_hots = np.eye(4)
-        self.action_space = gym.spaces.Discrete(5)
+        self.action_space = gym.spaces.Dict(
+            dict(a=gym.spaces.Discrete(5), p=gym.spaces.Discrete(size ** 2))
+        )
         self.observation_space = gym.spaces.Box(
             low=min_reward, high=max_reward, shape=self.dims
         )
 
     def reset(self):
         self.t = 0
+        self.no_op_count = 0
         self.cumulative = 0
         self.rewards = self.random.random_integers(
             low=self.min_reward, high=self.max_reward, size=self.dims
@@ -58,7 +63,13 @@ class Env(gym.Env):
             self.optimal += [values[tuple(self.pos)]]
         return self.get_observation()
 
-    def step(self, action: int):
+    def step(self, action: tuple):
+        action = int(action[0])
+        if action == len(self.transitions):
+            self.no_op_count += 1
+            t = self.no_op_count > self.no_op_limit
+            r = self.min_reward if t else 0
+            return self.get_observation(), r, t, {}
         r = self.rewards[tuple(self.pos)]
         self.cumulative += r
         self.t += 1

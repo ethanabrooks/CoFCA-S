@@ -5,12 +5,12 @@ import torch.nn.functional as F
 from torch import nn as nn
 
 import ppo.bandit.bandit
-from ppo.distributions import FixedCategorical
+from ppo.distributions import FixedCategorical, Categorical
 from ppo.layers import Concat
 from ppo.maze.env import Actions
 from ppo.utils import init_
 
-RecurrentState = namedtuple("RecurrentState", "a v h a_probs")
+RecurrentState = namedtuple("RecurrentState", "a v h a_probs p p_probs")
 
 
 def batch_conv1d(inputs, weights):
@@ -39,14 +39,14 @@ class Recurrence(nn.Module):
         debug,
     ):
         super().__init__()
-        self.obs_shape = d, h, w = observation_space.shape
-        self.action_size = 1
+        self.obs_shape = h, w = observation_space.shape
+        self.action_size = 2
         self.debug = debug
         self.hidden_size = hidden_size
 
         # networks
         layers = []
-        in_size = d
+        in_size = 1
         for _ in range(num_layers + 1):
             layers += [
                 nn.Conv2d(in_size, hidden_size, kernel_size=3, padding=1),
@@ -57,10 +57,18 @@ class Recurrence(nn.Module):
         self.task_encoder = nn.GRU(hidden_size, hidden_size, bidirectional=True)
         self.gru = nn.GRUCell(hidden_size, hidden_size)
         self.critic = init_(nn.Linear(hidden_size, 1))
+        self.actor = Categorical(hidden_size, action_space.spaces["a"].n)
         self.query_generator = nn.Linear(hidden_size, 2 * hidden_size)
         self.terminator = nn.Sequential(nn.Linear(hidden_size, 1), nn.Sigmoid())
-        self.a_one_hots = nn.Embedding.from_pretrained(torch.eye(h * w))
-        self.state_sizes = RecurrentState(a=1, a_probs=h * w * 2, v=1, h=hidden_size)
+        self.p_one_hots = nn.Embedding.from_pretrained(torch.eye(int(h * w)))
+        self.state_sizes = RecurrentState(
+            a=1,
+            a_probs=action_space.spaces["a"].n,
+            p=1,
+            p_probs=h * w,
+            v=1,
+            h=hidden_size,
+        )
 
     @staticmethod
     def sample_new(x, dist):
@@ -92,14 +100,12 @@ class Recurrence(nn.Module):
 
     def inner_loop(self, inputs, rnn_hxs):
         T, N, D = inputs.shape
-        obs, actions = torch.split(
-            inputs.detach(), [D - self.action_size, self.action_size], dim=-1
-        )
+        obs, actions, attentions = torch.split(inputs.detach(), [D - 2, 1, 1], dim=-1)
         obs = obs[0]
 
         # build memory
         M = (
-            self.task_embedding(obs.view(N, *self.obs_shape))  # N, hidden_size, h, w
+            self.task_embedding(obs.view(N, 1, *self.obs_shape))  # N, hidden_size, h, w
             .view(N, self.hidden_size, -1)  # N, hidden_size, h * w
             .transpose(1, 2)  # N, h * w, hidden_size
         )
@@ -112,20 +118,23 @@ class Recurrence(nn.Module):
 
         h = hx.h
         A = torch.cat([actions, hx.a.unsqueeze(0)], dim=0).long().squeeze(2)
+        P = torch.cat([attentions, hx.p.unsqueeze(0)], dim=0).long().squeeze(2)
 
         for t in range(T):
             k = self.query_generator(h)
-            done = self.terminator(h)
             w = (K @ k.unsqueeze(2)).squeeze(2)
-            self.print("w")
-            self.print(w)
-            logits = torch.cat([(1 - done) * w, done * w], dim=-1)
-            dist = FixedCategorical(logits=logits)
-            self.print("dist")
-            self.print(dist.probs)
-            self.sample_new(A[t], dist)
-            a_size = self.a_one_hots.embedding_dim
-            p = self.a_one_hots(A[t] % a_size)
+            p_dist = FixedCategorical(logits=w)
+            self.sample_new(P[t], p_dist)
+            p = self.p_one_hots(P[t])
             r = (p.unsqueeze(1) @ M).squeeze(1)
             h = self.gru(r, h)
-            yield RecurrentState(a=A[t], v=self.critic(h), h=h, a_probs=dist.probs)
+            a_dist = self.actor(h)
+            self.sample_new(A[t], a_dist)
+            yield RecurrentState(
+                a=A[t],
+                a_probs=a_dist.probs,
+                v=self.critic(h),
+                h=h,
+                p_probs=p_dist.probs,
+                p=P[t],
+            )
