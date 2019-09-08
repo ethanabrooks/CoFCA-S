@@ -68,8 +68,14 @@ class Env(gym.Env):
         if action == len(self.transitions):
             self.no_op_count += 1
             t = self.no_op_count > self.no_op_limit
-            r = self.min_reward if t else 0
-            return self.get_observation(), r, t, {}
+            r = self.time_limit * self.min_reward if t else 0
+            self.cumulative += r
+            return (
+                self.get_observation(),
+                r,
+                t,
+                dict(regret=self.optimal[self.t] - self.cumulative),
+            )
         r = self.rewards[tuple(self.pos)]
         self.cumulative += r
         self.t += 1
@@ -95,6 +101,7 @@ class Env(gym.Env):
                     print(RESET, end="")
             print()
         print("Time:", self.t)
+        print("No ops:", self.no_op_count)
         print("Cumulative:", self.cumulative)
         print("Optimal:", self.optimal[self.t])
         input("pause")
