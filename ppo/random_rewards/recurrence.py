@@ -39,14 +39,14 @@ class Recurrence(nn.Module):
         debug,
     ):
         super().__init__()
-        self.obs_shape = h, w = observation_space.shape
+        self.obs_shape = d, h, w = observation_space.shape
         self.action_size = 2
         self.debug = debug
         self.hidden_size = hidden_size
 
         # networks
         layers = []
-        in_size = 1
+        in_size = d
         for _ in range(num_layers + 1):
             layers += [
                 nn.Conv2d(in_size, hidden_size, kernel_size=3, padding=1),
@@ -105,7 +105,7 @@ class Recurrence(nn.Module):
 
         # build memory
         M = (
-            self.task_embedding(obs.view(N, 1, *self.obs_shape))  # N, hidden_size, h, w
+            self.task_embedding(obs.view(N, *self.obs_shape))  # N, hidden_size, h, w
             .view(N, self.hidden_size, -1)  # N, hidden_size, h * w
             .transpose(1, 2)  # N, h * w, hidden_size
         )
