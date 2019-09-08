@@ -97,6 +97,7 @@ class Env(gym.Env):
         print("Time:", self.t)
         print("Cumulative:", self.cumulative)
         print("Optimal:", self.optimal[self.t])
+        input("pause")
 
 
 if __name__ == "__main__":
