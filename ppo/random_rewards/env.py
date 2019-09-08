@@ -30,12 +30,13 @@ class Env(gym.Env):
         self.optimal = None
         self.cumulative = None
 
-        d = max_reward - min_reward
-        self.one_hots = np.eye(d, dtype=int)
+        self.one_hots = np.eye(4)
         self.action_space = gym.spaces.Dict(
             dict(a=gym.spaces.Discrete(6), p=gym.spaces.Discrete(size ** 2))
         )
-        self.observation_space = gym.spaces.MultiDiscrete(2 * np.ones((*self.dims, d)))
+        self.observation_space = gym.spaces.Box(
+            low=min_reward, high=max_reward, shape=self.dims
+        )
 
     def reset(self):
         self.t = 0
@@ -79,7 +80,7 @@ class Env(gym.Env):
         return self.get_observation(), r, t, info
 
     def get_observation(self):
-        obs = self.one_hots[self.rewards]
+        obs = self.rewards
         assert self.observation_space.contains(obs)
         return obs
 
