@@ -11,7 +11,9 @@ Actions = namedtuple("Actions", "answer done")
 
 
 class Env(gym.Env):
-    def __init__(self, size, time_limit, seed):
+    def __init__(self, size, time_limit, max_reward, min_reward, seed):
+        self.min_reward = min_reward
+        self.max_reward = max_reward
         self.time_limit = time_limit
         self.random, self.seed = seeding.np_random(seed)
         self.size = size
@@ -24,20 +26,23 @@ class Env(gym.Env):
         self.t = None
         self.pos = None
         self.optimal = None
+        self.cumulative = None
 
         self.one_hots = np.eye(4)
         self.action_space = gym.spaces.Discrete(5)
-        self.observation_space = gym.spaces.Box(low=-1, high=1, shape=self.dims)
+        self.observation_space = gym.spaces.Box(
+            low=min_reward, high=max_reward, shape=self.dims
+        )
 
     def reset(self):
         self.t = 0
-        self.rewards = self.random.random_integers(low=-1, high=1, size=self.dims)
+        self.cumulative = 0
+        self.rewards = self.random.random_integers(
+            low=self.min_reward, high=self.max_reward, size=self.dims
+        )
         self.pos = self.random.randint(low=np.zeros(2), high=self.dims)
-        self.optimal = self.compute_values()[self.pos]
-        return self.get_observation()
-
-    def compute_values(self):
-        values = self.rewards
+        values = np.zeros_like(self.rewards)
+        self.optimal = [0]
         positions = np.stack(np.meshgrid(np.arange(self.size), np.arange(self.size))).T
         next_pos = tuple(
             (
@@ -47,18 +52,21 @@ class Env(gym.Env):
             .clip(0, self.size - 1)
             .transpose(3, 0, 1, 2)
         )
+        # value iteration
         for _ in range(self.time_limit):
             values = self.rewards + values[next_pos].max(axis=-1)
-        return values
+            self.optimal += [values[tuple(self.pos)]]
+        return self.get_observation()
 
     def step(self, action: int):
+        r = self.rewards[tuple(self.pos)]
+        self.cumulative += r
         self.t += 1
-        if self.t > self.time_limit:
-            return self.get_observation(), 0, True, {}
-
+        t = self.t >= self.time_limit
+        info = dict(regret=self.optimal[self.t] - self.cumulative) if t else {}
         self.pos += self.transitions[action]
         self.pos.clip(0, self.size - 1, out=self.pos)
-        return self.get_observation(), self.rewards[self.pos], False, {}
+        return self.get_observation(), r, t, info
 
     def get_observation(self):
         obs = self.rewards
@@ -75,6 +83,9 @@ class Env(gym.Env):
                 if agent_pos:
                     print(RESET, end="")
             print()
+        print("Time:", self.t)
+        print("Cumulative:", self.cumulative)
+        print("Optimal:", self.optimal[self.t])
 
 
 if __name__ == "__main__":
@@ -85,10 +96,15 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", default=0, type=int)
     parser.add_argument("--size", default=4, type=int)
+    parser.add_argument("--max-reward", default=5, type=int)
+    parser.add_argument("--min-reward", default=-5, type=int)
     parser.add_argument("--time-limit", default=8, type=int)
     args = hierarchical_parse_args(parser)
 
     def action_fn(string):
-        return "sdwa ".index(string, None)
+        try:
+            return "sdwa ".index(string)
+        except ValueError:
+            return None
 
     keyboard_control.run(Env(**args), action_fn=action_fn)
