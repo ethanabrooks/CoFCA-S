@@ -108,7 +108,10 @@ class DummyVecEnv(VecEnv):
 
     def train(self):
         for env in self.envs:
-            env.train()
+            try:
+                env.train()
+            except AttributeError:
+                print("Attribute train undefined")
 
     def render(self, mode="human"):
         return self.envs[0].render(mode=mode)

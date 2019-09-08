@@ -31,7 +31,10 @@ def worker(remote, parent_remote, env_fn_wrapper):
             elif cmd == "evaluate":
                 env.evaluate()
             elif cmd == "train":
-                env.train()
+                try:
+                    env.train()
+                except AttributeError:
+                    print("Attribute train undefined")
             else:
                 raise NotImplementedError
     except KeyboardInterrupt:
