@@ -33,7 +33,7 @@ class Env(gym.Env):
         d = max_reward - min_reward
         self.one_hots = np.eye(d, dtype=int)
         self.action_space = gym.spaces.Dict(
-            dict(a=gym.spaces.Discrete(5), p=gym.spaces.Discrete(size ** 2))
+            dict(a=gym.spaces.Discrete(6), p=gym.spaces.Discrete(size ** 2))
         )
         self.observation_space = gym.spaces.MultiDiscrete(2 * np.ones((*self.dims, d)))
 
