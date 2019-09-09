@@ -61,9 +61,7 @@ class Env(gym.Env):
 
     def get_observation(self):
         q_values = self.q_values()
-        obs = Obs(
-            mdp=self.mdp, values=self.values[self.current] >= q_values.max()
-        )._asdict()
+        obs = Obs(mdp=self.mdp, values=self.values[self.current])._asdict()
         assert self.observation_space.contains(obs)
         return obs  # TODO: just send q_values
 
