@@ -24,7 +24,7 @@ class Env(gym.Env):
         self.observation_space = gym.spaces.Dict(
             Obs(
                 mdp=gym.spaces.MultiDiscrete(2 * np.ones([n_states, n_states])),
-                values=gym.spaces.Box(low=0, high=1, shape=(n_states,)),
+                values=gym.spaces.Box(0, 1, shape=[n_states, n_states]),
             )._asdict()
         )
 
@@ -69,8 +69,7 @@ class Env(gym.Env):
             input("pause")
 
     def get_observation(self):
-        q_values = self.q_values()
-        obs = Obs(mdp=self.mdp, values=self.values[self.current])._asdict()
+        obs = Obs(mdp=self.mdp, values=self.values)._asdict()
         assert self.observation_space.contains(obs)
         return obs  # TODO: just send q_values
 
