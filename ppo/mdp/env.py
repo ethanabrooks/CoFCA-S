@@ -30,7 +30,7 @@ class Env(gym.Env):
         action = int(action)
         self.t += 1
         r = float(self.q_values()[action] == self.q_values().max())
-        if self.mdp[self.current, action]:
+        if not self.mdp[self.current, action]:
             # if transition is possible
             self.current = action
         t = np.all(self.mdp[self.current] == 0) or self.t == self.time_limit
@@ -56,7 +56,7 @@ class Env(gym.Env):
         if self.last:
             print(self.last)
         print("current state:", self.current)
-        input('pause')
+        input("pause")
 
     def get_observation(self):
         q_values = self.q_values()
