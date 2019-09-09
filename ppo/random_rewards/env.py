@@ -30,12 +30,13 @@ class Env(gym.Env):
         self.optimal = None
         self.cumulative = None
 
-        d = max_reward - min_reward
-        self.one_hots = np.eye(d, dtype=int)
+        self.one_hots = np.eye(4)
         self.action_space = gym.spaces.Dict(
-            dict(a=gym.spaces.Discrete(5), p=gym.spaces.Discrete(size ** 2))
+            dict(a=gym.spaces.Discrete(6), p=gym.spaces.Discrete(size ** 2))
         )
-        self.observation_space = gym.spaces.MultiDiscrete(2 * np.ones((*self.dims, d)))
+        self.observation_space = gym.spaces.Box(
+            low=min_reward, high=max_reward, shape=self.dims
+        )
 
     def reset(self):
         self.t = 0
@@ -67,9 +68,16 @@ class Env(gym.Env):
         if action == len(self.transitions):
             self.no_op_count += 1
             t = self.no_op_count > self.no_op_limit
-            r = -1 if t else 0
-            return self.get_observation(), r, t, {}
-        self.cumulative += self.rewards[tuple(self.pos)]
+            r = self.time_limit * self.min_reward if t else 0
+            self.cumulative += r
+            return (
+                self.get_observation(),
+                r,
+                t,
+                dict(regret=self.optimal[self.t] - self.cumulative),
+            )
+        r = self.rewards[tuple(self.pos)]
+        self.cumulative += r
         self.t += 1
         t = self.t >= self.time_limit
         info = dict(regret=self.optimal[self.t] - self.cumulative) if t else {}
@@ -81,7 +89,7 @@ class Env(gym.Env):
         return self.get_observation(), r, t, info
 
     def get_observation(self):
-        obs = self.one_hots[self.rewards]
+        obs = self.rewards
         assert self.observation_space.contains(obs)
         return obs
 
@@ -96,6 +104,7 @@ class Env(gym.Env):
                     print(RESET, end="")
             print()
         print("Time:", self.t)
+        print("No ops:", self.no_op_count)
         print("Cumulative:", self.cumulative)
         print("Optimal:", self.optimal[self.t])
         input("pause")

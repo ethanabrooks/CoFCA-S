@@ -39,7 +39,7 @@ class Recurrence(nn.Module):
         debug,
     ):
         super().__init__()
-        self.obs_shape = h, w, d = observation_space.shape
+        self.obs_shape = d, h, w = observation_space.shape
         self.action_size = 1
         self.debug = debug
         self.hidden_size = hidden_size
@@ -98,13 +98,8 @@ class Recurrence(nn.Module):
         obs = obs[0]
 
         # build memory
-        import ipdb
-
-        ipdb.set_trace()
         M = (
-            self.task_embedding(
-                obs.view(N, *self.obs_shape).permute(2, 0, 1)
-            )  # N, hidden_size, h, w
+            self.task_embedding(obs.view(N, *self.obs_shape))  # N, hidden_size, h, w
             .view(N, self.hidden_size, -1)  # N, hidden_size, h * w
             .transpose(1, 2)  # N, h * w, hidden_size
         )
