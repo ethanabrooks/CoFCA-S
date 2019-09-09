@@ -52,11 +52,9 @@ class Recurrence(nn.Module):
         self.task_encoder = nn.GRU(hidden_size, hidden_size, bidirectional=True)
 
         # f
-        layers = [Concat(dim=-1)]
-        in_size = self.obs_sections.values + hidden_size
-        for _ in range(num_layers + 1):
-            layers.extend([nn.Linear(in_size, hidden_size), activation])
-            in_size = hidden_size
+        layers = []
+        for _ in range(num_layers):
+            layers.extend([nn.Linear(hidden_size, hidden_size), activation])
         self.f = nn.Sequential(*layers)
 
         self.gru = nn.GRUCell(hidden_size, hidden_size)
@@ -127,7 +125,7 @@ class Recurrence(nn.Module):
         for t in range(T):
             p = self.a_one_hots(A[t - 1])
             r = (p.unsqueeze(1) @ M).squeeze(1)
-            h = self.gru(r, h)
+            h = self.gru(self.f(r), h)
             k = self.query_generator(h)
             w = (K @ k.unsqueeze(2)).squeeze(2)
             self.print("w")
