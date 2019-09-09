@@ -46,7 +46,9 @@ class Recurrence(nn.Module):
         self.hidden_size = hidden_size
 
         # networks
-        self.embeddings = nn.Embedding(int(self.obs_spaces.lines.nvec[0]), hidden_size)
+        self.embeddings = init_(
+            nn.Linear(int(self.obs_spaces.mdp.shape[0]), hidden_size)
+        )
         self.task_encoder = nn.GRU(hidden_size, hidden_size, bidirectional=True)
 
         # f
@@ -101,18 +103,18 @@ class Recurrence(nn.Module):
 
         # parse non-action inputs
         inputs = self.parse_inputs(inputs)
-
         # build memory
-        lines = inputs.lines.view(T, N, *self.obs_spaces.lines.shape).long()[0, :, :]
-        M = self.embeddings(lines.view(-1)).view(
-            *lines.shape, self.hidden_size
-        )  # N, n_lines, hidden_size
+        h, w = self.obs_spaces.mdp.shape
+        mdp = inputs.mdp.view(T, N, h, w)[0]
+        M = self.embeddings(mdp.reshape(N * h, w)).view(
+            N, h, self.hidden_size
+        )  # N, n_states, hidden_size
 
-        forward_input = M.transpose(0, 1)  # n_lines, N, hidden_size
-        K, _ = self.task_encoder(forward_input)  # n_lines, N, hidden_size * 2
-        K = K.transpose(0, 1)  # N, n_lines, hidden_size * 2
+        forward_input = M.transpose(0, 1)  # n_states, N, hidden_size
+        K, _ = self.task_encoder(forward_input)  # n_states, N, hidden_size * 2
+        K = K.transpose(0, 1)  # N, n_states, hidden_size * 2
 
-        new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
+        # new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
         for _x in hx:
             _x.squeeze_(0)
