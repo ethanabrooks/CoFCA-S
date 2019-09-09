@@ -141,9 +141,7 @@ def train_random_rewards(**kwargs):
                     action_space=envs.action_space,
                     **agent_args,
                 )
-            return random_rewards.Agent(
-                entropy_coef=entropy_coef, recurrence=recurrence
-            )
+            return gntm.Agent(entropy_coef=entropy_coef, recurrence=recurrence)
 
     TrainMaze(**kwargs).run()
 
@@ -180,8 +178,9 @@ def random_rewards_cli():
     parsers.env.add_argument("--size", type=int, required=True)
     parsers.env.add_argument("--min-reward", type=int, required=True)
     parsers.env.add_argument("--max-reward", type=int, required=True)
-    parsers.env.add_argument("--no-op-limit", type=int, required=True)
+    parsers.env.add_argument("--planning-time", type=int, required=True)
     parsers.agent.add_argument("--baseline", choices=["one-shot"])
+    parsers.agent.add_argument("--num-conv-layers", type=int, required=True)
     train_random_rewards(**hierarchical_parse_args(parser))
 
 

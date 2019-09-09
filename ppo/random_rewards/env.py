@@ -7,12 +7,12 @@ from gym.utils import seeding
 from ppo.utils import REVERSE, RESET
 
 Last = namedtuple("Last", "answer reward")
-Actions = namedtuple("Actions", "answer done")
+Obs = namedtuple("Obs", "go rewards")
 
 
 class Env(gym.Env):
-    def __init__(self, size, time_limit, no_op_limit, max_reward, min_reward, seed):
-        self.no_op_limit = no_op_limit
+    def __init__(self, size, time_limit, planning_time, max_reward, min_reward, seed):
+        self.planning_time = planning_time
         self.min_reward = min_reward
         self.max_reward = max_reward
         self.time_limit = time_limit
@@ -29,13 +29,19 @@ class Env(gym.Env):
         self.pos = None
         self.optimal = None
         self.cumulative = None
+        self.answers = []
 
         d = max_reward - min_reward
         self.one_hots = np.eye(d, dtype=int)
-        self.action_space = gym.spaces.Dict(
-            dict(a=gym.spaces.Discrete(6), p=gym.spaces.Discrete(size ** 2))
+        self.action_space = gym.spaces.Discrete(size ** 2)
+        self.observation_space = gym.spaces.Dict(
+            dict(
+                rewards=gym.spaces.Box(
+                    low=self.min_reward, high=self.max_reward, shape=self.dims
+                ),
+                go=gym.spaces.Discrete(2),
+            )
         )
-        self.observation_space = gym.spaces.MultiDiscrete(2 * np.ones((*self.dims, d)))
 
     def reset(self):
         self.t = 0
@@ -56,30 +62,31 @@ class Env(gym.Env):
             .clip(0, self.size - 1)
             .transpose(3, 0, 1, 2)
         )
+        pos = tuple(self.pos)
+        self.answers = [pos]
         # value iteration
         for _ in range(self.time_limit):
             values = self.rewards + values[next_pos].max(axis=-1)
-            self.optimal += [values[tuple(self.pos)]]
+        for _ in range(self.time_limit):
+            transition = self.transitions[
+                values[next_pos][self.answers[-1]].argmax(axis=-1)
+            ]
+            self.answers += [
+                tuple(np.clip(self.answers[-1] + transition, 0, self.size - 1))
+            ]
         return self.get_observation()
 
-    def step(self, action: tuple):
-        action = int(action[0])
-        if action == len(self.transitions):
-            self.no_op_count += 1
-            t = self.no_op_count > self.no_op_limit
-            r = self.min_reward if t else 0
-            return self.get_observation(), r, t, {}
-        r = self.rewards[tuple(self.pos)]
-        self.cumulative += r
+    def step(self, action: int):
         self.t += 1
-        t = self.t >= self.time_limit
-        info = dict(regret=self.optimal[self.t] - self.cumulative) if t else {}
-        self.pos += self.transitions[action]
-        self.pos.clip(0, self.size - 1, out=self.pos)
-        return self.get_observation(), r, t, info
+        if self.t <= self.planning_time:
+            return self.get_observation(), 0, False, {}
+        answer = (action // self.size, action % self.size)
+        r = float(answer == self.answers[self.t - self.planning_time])
+        t = self.t == self.planning_time + self.time_limit
+        return self.get_observation(), r, t, {}
 
     def get_observation(self):
-        obs = self.one_hots[self.rewards]
+        obs = Obs(rewards=self.rewards, go=int(self.t <= self.planning_time))._asdict()
         assert self.observation_space.contains(obs)
         return obs
 
@@ -95,7 +102,6 @@ class Env(gym.Env):
             print()
         print("Time:", self.t)
         print("Cumulative:", self.cumulative)
-        print("Optimal:", self.optimal[self.t])
         input("pause")
 
 
@@ -110,12 +116,11 @@ if __name__ == "__main__":
     parser.add_argument("--max-reward", default=5, type=int)
     parser.add_argument("--min-reward", default=-5, type=int)
     parser.add_argument("--time-limit", default=8, type=int)
+    parser.add_argument("--planning-time", default=16, type=int)
     args = hierarchical_parse_args(parser)
 
     def action_fn(string):
-        try:
-            return "sdwa ".index(string)
-        except ValueError:
-            return None
+        x, y = string.split()
+        return int(x) * args["size"] + int(y)
 
     keyboard_control.run(Env(**args), action_fn=action_fn)

@@ -39,6 +39,7 @@ class Recurrence(nn.Module):
         debug,
     ):
         super().__init__()
+
         self.obs_shape = h, w, d = observation_space.shape
         self.action_size = 1
         self.debug = debug
