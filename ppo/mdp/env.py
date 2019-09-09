@@ -9,7 +9,8 @@ Last = namedtuple("last", "action reward terminal")
 
 
 class Env(gym.Env):
-    def __init__(self, n_states: int, seed: int, time_limit: int):
+    def __init__(self, n_states: int, seed: int, time_limit: int, max_value: int):
+        self.max_value = max_value
         self.time_limit = time_limit
         self.random, self.seed = seeding.np_random(seed)
         self.n_states = n_states
@@ -22,7 +23,7 @@ class Env(gym.Env):
         self.observation_space = gym.spaces.Dict(
             Obs(
                 mdp=gym.spaces.MultiDiscrete(2 * np.ones([n_states, n_states])),
-                values=gym.spaces.Box(low=0, high=1, shape=(n_states,)),
+                values=gym.spaces.Box(low=0, high=10, shape=(n_states,)),
             )._asdict()
         )
 
@@ -43,15 +44,13 @@ class Env(gym.Env):
     def reset(self):
         shape = [self.n_states, self.n_states]
         self.mdp = self.random.randint(0, 2, shape)
-        self.values = self.random.rand(*shape)
+        self.values = self.random.random_integers(0, self.max_value, shape)
         self.current = 0
         self.t = 0
         self.last = None
         return self.get_observation()
 
     def render(self, mode="human"):
-        print(self.mdp)
-        print(self.values)
         for k, x in self.get_observation().items():
             print(k)
             print(x)
