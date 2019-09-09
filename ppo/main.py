@@ -211,7 +211,6 @@ def mdp_cli():
     parsers = build_parser()
     parser = parsers.main
     parsers.env.add_argument("--n-states", type=int, required=True)
-    parsers.env.add_argument("--max-value", type=int, required=True)
     parsers.agent.add_argument("--baseline", choices=["one-shot"])
     train_mdp(**hierarchical_parse_args(parser))
 
