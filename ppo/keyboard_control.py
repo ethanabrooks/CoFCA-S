@@ -15,7 +15,7 @@ def run(env, action_fn):
 
     s = env.reset()
     while True:
-        env.render()
+        env.render(pause=False)
         action = None
         while action is None:
             action = action_fn(input("act:"))
@@ -27,7 +27,7 @@ def run(env, action_fn):
         s, r, t, i = env.step(action)
         print("reward", r)
         if t:
-            env.render()
+            env.render(pause=False)
             print("resetting")
             time.sleep(0.5)
             env.reset()

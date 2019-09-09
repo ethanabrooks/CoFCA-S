@@ -9,13 +9,15 @@ Last = namedtuple("last", "action reward terminal")
 
 
 class Env(gym.Env):
-    def __init__(self, n_states: int, seed: int, time_limit: int):
+    def __init__(self, n_states: int, seed: int, time_limit: int, delayed_reward: bool):
+        self.delayed_reward = delayed_reward
         self.time_limit = time_limit
         self.random, self.seed = seeding.np_random(seed)
         self.n_states = n_states
         self.mdp = None
         self.values = None
         self.current = None
+        self.correct = None
         self.last = None
         self.t = None
         self.action_space = gym.spaces.Discrete(n_states)
@@ -29,11 +31,17 @@ class Env(gym.Env):
     def step(self, action: int):
         action = int(action)
         self.t += 1
-        r = float(self.q_values()[action] == self.q_values().max())
+        t = np.all(self.mdp[self.current] == 0) or self.t == self.time_limit
+        correct = self.q_values()[action] == self.q_values().max()
+        if not correct:
+            self.correct = False
+        if self.delayed_reward:
+            r = self.correct if t else 0
+        else:
+            r = float(correct)
         if self.mdp[self.current, action]:
             # if transition is possible
             self.current = action
-        t = np.all(self.mdp[self.current] == 0) or self.t == self.time_limit
         self.last = Last(action=action, reward=r, terminal=t)
         return self.get_observation(), r, t, {}
 
@@ -44,19 +52,21 @@ class Env(gym.Env):
         shape = [self.n_states, self.n_states]
         self.mdp = self.random.randint(0, 2, shape)
         self.values = self.random.rand(*shape)
+        self.correct = True
         self.current = 0
         self.t = 0
         self.last = None
         return self.get_observation()
 
-    def render(self, mode="human"):
+    def render(self, mode="human", pause=True):
         for k, x in self.get_observation().items():
             print(k)
             print(x)
         if self.last:
             print(self.last)
         print("current state:", self.current)
-        input('pause')
+        if pause:
+            input("pause")
 
     def get_observation(self):
         q_values = self.q_values()
