@@ -47,13 +47,13 @@ class Recurrence(nn.Module):
 
         # networks
         self.embeddings = init_(
-            nn.Linear(int(self.obs_spaces.mdp.shape[0] * 2), hidden_size)
+            nn.Linear(int(self.obs_spaces.mdp.shape[0]), hidden_size)
         )
         self.task_encoder = nn.GRU(hidden_size, hidden_size, bidirectional=True)
 
         # f
         layers = [Concat(dim=-1)]
-        in_size = self.obs_sections.values + hidden_size
+        in_size = self.obs_spaces.values.shape[0] + hidden_size
         for _ in range(num_layers + 1):
             layers.extend([nn.Linear(in_size, hidden_size), activation])
             in_size = hidden_size
@@ -107,8 +107,7 @@ class Recurrence(nn.Module):
         h, w = self.obs_spaces.mdp.shape
         mdp = inputs.mdp.view(T, N, h, w)[0]
         values = inputs.mdp.view(T, N, h, w)[0]
-        embedding_inputs = torch.stack([mdp, values], dim=-1)
-        M = self.embeddings(embedding_inputs.reshape(N * h, w * 2)).view(
+        M = self.embeddings(mdp.reshape(N * h, w)).view(
             N, h, self.hidden_size
         )  # N, n_states, hidden_size
 
@@ -127,7 +126,9 @@ class Recurrence(nn.Module):
         for t in range(T):
             p = self.a_one_hots(A[t - 1])
             r = (p.unsqueeze(1) @ M).squeeze(1)
-            h = self.gru(r, h)
+            v = (p.unsqueeze(1) @ values).squeeze(1)
+            f = self.f((r, v))
+            h = self.gru(f, h)
             k = self.query_generator(h)
             w = (K @ k.unsqueeze(2)).squeeze(2)
             self.print("w")
