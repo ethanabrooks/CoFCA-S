@@ -19,6 +19,7 @@ class Env(control_flow.Env):
         self.last_action = None
         self.last_active = None
         self.last_reward = None
+        self.correct = None
         self.line_types = [If, Else, EndIf, While, EndWhile, Subtask]
         self.action_space = spaces.Discrete(n_lines)
         self.observation_space = spaces.Dict(
@@ -34,6 +35,7 @@ class Env(control_flow.Env):
         self.last_action = None
         self.last_active = None
         self.last_reward = None
+        self.correct = True
         self.t = 0
         self.condition_bit = self.random.randint(0, 2)
         return super().reset()
@@ -41,16 +43,17 @@ class Env(control_flow.Env):
     def step(self, action):
         self.t += 1
         if self.time_limit and self.t > self.time_limit:
-            return self.get_observation(), -1, True, {}
+            return self.get_observation(), float(self.correct), True, {}
         if action == self.n_lines:
             # no-op
             return self.get_observation(), 0, False, {}
         self.last_action = action
         self.last_active = self.active
         if action != self.active:
-            return self.get_observation(), -1, True, {}
+            self.correct = False
         self.condition_bit = 1 - int(self.random.rand() < self.flip_prob)
-        s, r, t, i = super().step(action)
+        s, _, t, i = super().step(action)
+        r = float(self.correct) if t else 0
         self.last_reward = r
         return s, r, t, i
 
