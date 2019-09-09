@@ -50,14 +50,13 @@ class Env(gym.Env):
         return self.get_observation()
 
     def render(self, mode="human"):
-        print(self.mdp)
-        print(self.values)
         for k, x in self.get_observation().items():
             print(k)
             print(x)
         if self.last:
             print(self.last)
         print("current state:", self.current)
+        input('pause')
 
     def get_observation(self):
         q_values = self.q_values()
