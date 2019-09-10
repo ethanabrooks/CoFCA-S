@@ -103,7 +103,8 @@ class Recurrence(nn.Module):
             values = torch.zeros_like(obs.rewards[t])
             for _ in range(self.time_limit):
                 P = (self.T).softmax(dim=1)
-                EV = (values.unsqueeze(-1).unsqueeze(-1) * P.unsqueeze(0)).sum(1)
+                S, S, A = P.shape
+                EV2 = (values @ P.view(S, -1)).view(N, S, A).sum(1)
                 values = obs.rewards[t] + EV.max(dim=-1).values
 
             yield RecurrentState(
