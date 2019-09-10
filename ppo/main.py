@@ -140,7 +140,7 @@ def train_values(time_limit, **kwargs):
                     time_limit=time_limit,
                     **agent_args,
                 )
-            return gntm.Agent(entropy_coef=entropy_coef, recurrence=recurrence)
+            return values.gntm.Agent(entropy_coef=entropy_coef, recurrence=recurrence)
 
     TrainValues(time_limit=time_limit, **kwargs).run()
 
