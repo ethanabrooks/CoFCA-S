@@ -54,12 +54,15 @@ class Recurrence(nn.Module):
         # networks
         # self.S = nn.Parameter(torch.normal(0, 1, (int(h * w), hidden_size)))
         # self.A = nn.Parameter(torch.normal(0, 1, (int(action_space.n), hidden_size)))
-        self.T = nn.Parameter(
-            torch.normal(
-                torch.zeros(h * w, h * w, int(action_space.n)),
-                torch.ones(h * w, h * w, int(action_space.n)),
-            )
+        self.S = nn.Parameter(torch.normal(0, 1, size=(h * w, hidden_size)))
+        self.SA = nn.Parameter(
+            torch.normal(0, 1, size=(h * w, hidden_size, int(action_space.n)))
         )
+        self.T = nn.Parameter(self.S @ self.SA)
+        # T = torch.normal(
+        #     torch.zeros(h * w, h * w, int(action_space.n)),
+        #     torch.ones(h * w, h * w, int(action_space.n)),
+        # )
         self.a_one_hots = nn.Embedding.from_pretrained(torch.eye(int(h * w)))
         self.state_sizes = RecurrentState(
             a=1, a_probs=action_space.n, v=1, h=hidden_size, estimated_values=h * w
