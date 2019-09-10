@@ -54,7 +54,7 @@ class Recurrence(nn.Module):
         # networks
         self.gru = nn.GRU(hidden_size, hidden_size)
         layers = []
-        in_size = hidden_size ** 2
+        in_size = hidden_size * 2
         for i in range(num_layers):
             layers += [
                 nn.Conv2d(
