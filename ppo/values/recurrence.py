@@ -46,30 +46,33 @@ class Recurrence(nn.Module):
         self.obs_sections = ppo.values.env.Obs(
             *[int(np.prod(s.shape)) for s in self.obs_spaces]
         )
-        self.obs_shape = h, w = self.obs_spaces.rewards.shape
+        self.obs_shape = h, w = list(map(int, self.obs_spaces.rewards.shape))
         self.action_size = 1
         self.debug = debug
         self.hidden_size = hidden_size
 
         # networks
-        self.S = nn.Parameter(
-            torch.normal(
-                torch.zeros(int(h * w), hidden_size),
-                torch.ones(int(h * w), hidden_size),
-            )
+        layers = []
+        for i in range(num_layers):
+            layers += [
+                nn.Conv2d(
+                    in_channels=hidden_size,
+                    out_channels=action_space.n if i == num_layers - 1 else hidden_size,
+                    kernel_size=1,
+                ),
+                activation,
+            ]
+        self.emb = nn.Sequential(*layers)
+
+        S = torch.normal(
+            torch.zeros(hidden_size, h * w), torch.ones(hidden_size, h * w)
         )
-        self.A = nn.Parameter(
-            torch.normal(
-                torch.zeros(int(action_space.n), hidden_size, hidden_size),
-                torch.ones(int(action_space.n), hidden_size, hidden_size),
-            )
+        A = torch.normal(
+            torch.zeros(int(action_space.n), hidden_size, hidden_size),
+            torch.ones(int(action_space.n), hidden_size, hidden_size),
         )
-        self.T = nn.Parameter(
-            torch.normal(
-                torch.zeros(h * w, h * w, int(action_space.n)),
-                torch.ones(h * w, h * w, int(action_space.n)),
-            )
-        )
+        self.S = nn.Parameter(S)
+        self.A = nn.Parameter(A)
         self.a_one_hots = nn.Embedding.from_pretrained(torch.eye(int(h * w)))
         self.state_sizes = RecurrentState(
             a=1, a_probs=action_space.n, v=1, h=hidden_size, estimated_values=h * w
@@ -112,10 +115,12 @@ class Recurrence(nn.Module):
         for t in range(T):
             values = torch.zeros_like(obs.rewards[t])
             for _ in range(self.time_limit):
-                L = self.S @ self.A @ self.S.t()
+                L = self.emb(
+                    (self.S.unsqueeze(1) * self.S.unsqueeze(2)).unsqueeze(0)
+                ).squeeze(0)
                 P = L.softmax(dim=1)
                 EV = values @ P
-                values = obs.rewards[t] + EV.max(dim=0).values
+                values = obs.rewards[t] + EV.max(dim=0)[0]
 
             yield RecurrentState(
                 a=hx.a[t],
