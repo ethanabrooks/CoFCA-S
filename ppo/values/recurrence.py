@@ -54,7 +54,7 @@ class Recurrence(nn.Module):
         # networks
         self.gru = nn.GRU(hidden_size, hidden_size)
         layers = []
-        in_size = hidden_size * 2
+        in_size = hidden_size ** 2
         for i in range(num_layers):
             layers += [
                 nn.Conv2d(
@@ -120,7 +120,10 @@ class Recurrence(nn.Module):
         for t in range(T):
             values = torch.zeros_like(obs.rewards[t])
             for _ in range(self.time_limit):
-                emb_input = self.S.unsqueeze(0) + self.A.unsqueeze(1)
+                S = self.S.unsqueeze(0).unsqueeze(2)
+                A = self.A.unsqueeze(1).unsqueeze(3)
+
+                emb_input = (S * A).view(self.S.size(0), self.A.size(1), -1)
                 q = self.emb(emb_input.permute(2, 0, 1)).permute(2, 0, 1)
                 P = (K @ q).softmax(dim=1)
                 EV = values @ P
