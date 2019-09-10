@@ -35,6 +35,7 @@ class Agent(ppo.agent.Agent, NNBase):
         # action_log_probs = a_dist.log_probs(hx.a) + p_dist.log_probs(hx.p)
         # entropy = a_dist.entropy() + p_dist.entropy()
         aux_loss = torch.mean(-(inputs.values - hx.estimated_values) ** 2)
+        max_diff = (inputs.values - hx.estimated_values).abs().max(dim=-1).values.mean()
         return AgentValues(
             value=hx.v,
             action=hx.a,
@@ -42,7 +43,7 @@ class Agent(ppo.agent.Agent, NNBase):
             aux_loss=aux_loss,
             dist=None,
             rnn_hxs=last_hx,
-            log=dict(aux_loss=aux_loss),
+            log=dict(aux_loss=aux_loss, max_diff=max_diff),
         )
 
     def _forward_gru(self, x, hxs, masks, action=None):
