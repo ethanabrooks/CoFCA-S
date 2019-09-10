@@ -52,6 +52,7 @@ class Recurrence(nn.Module):
         self.hidden_size = hidden_size
 
         # networks
+        self.gru = nn.GRU(hidden_size, hidden_size)
         layers = []
         in_size = hidden_size ** 2
         for i in range(num_layers):
@@ -67,11 +68,11 @@ class Recurrence(nn.Module):
         self.emb = nn.Sequential(*layers)
 
         S = torch.normal(
-            torch.zeros(hidden_size, h * w), torch.ones(hidden_size, h * w)
+            torch.zeros(h * w, hidden_size), torch.ones(h * w, hidden_size)
         )
         A = torch.normal(
-            torch.zeros(int(action_space.n), hidden_size, hidden_size),
-            torch.ones(int(action_space.n), hidden_size, hidden_size),
+            torch.zeros(int(action_space.n), hidden_size),
+            torch.ones(int(action_space.n), hidden_size),
         )
         self.S = nn.Parameter(S)
         self.A = nn.Parameter(A)
@@ -113,19 +114,17 @@ class Recurrence(nn.Module):
         obs, action = torch.split(inputs.detach(), [D - 1, 1], dim=-1)
         obs = self.parse_inputs(obs)
         hx = self.parse_hidden(rnn_hxs)
+        K, _ = self.gru(self.S.unsqueeze(1))
+        K = K.squeeze(1)
 
         for t in range(T):
             values = torch.zeros_like(obs.rewards[t])
             for _ in range(self.time_limit):
-                L = self.emb(
-                    (
-                        self.S.unsqueeze(0).unsqueeze(2)
-                        * self.S.unsqueeze(1).unsqueeze(3)
-                    ).view(1, self.hidden_size ** 2, self.S.size(1), self.S.size(1))
-                ).squeeze(0)
-                P = L.softmax(dim=1)
+                emb_input = self.S.unsqueeze(0) + self.A.unsqueeze(1)
+                q = self.emb(emb_input.permute(2, 0, 1)).permute(2, 0, 1)
+                P = (K @ q).softmax(dim=1)
                 EV = values @ P
-                values = obs.rewards[t] + EV.max(dim=0)[0]
+                values = obs.rewards[t] + EV.max(dim=-1).values.t()
 
             yield RecurrentState(
                 a=hx.a[t],
