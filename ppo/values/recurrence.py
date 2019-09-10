@@ -53,15 +53,17 @@ class Recurrence(nn.Module):
 
         # networks
         layers = []
+        in_size = hidden_size ** 2
         for i in range(num_layers):
             layers += [
                 nn.Conv2d(
-                    in_channels=hidden_size,
+                    in_channels=in_size,
                     out_channels=action_space.n if i == num_layers - 1 else hidden_size,
                     kernel_size=1,
                 ),
                 activation,
             ]
+            in_size = hidden_size
         self.emb = nn.Sequential(*layers)
 
         S = torch.normal(
@@ -116,7 +118,10 @@ class Recurrence(nn.Module):
             values = torch.zeros_like(obs.rewards[t])
             for _ in range(self.time_limit):
                 L = self.emb(
-                    (self.S.unsqueeze(1) * self.S.unsqueeze(2)).unsqueeze(0)
+                    (
+                        self.S.unsqueeze(0).unsqueeze(2)
+                        * self.S.unsqueeze(1).unsqueeze(3)
+                    ).view(1, self.hidden_size ** 2, self.S.size(1), self.S.size(1))
                 ).squeeze(0)
                 P = L.softmax(dim=1)
                 EV = values @ P
