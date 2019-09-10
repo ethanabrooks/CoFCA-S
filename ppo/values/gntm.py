@@ -31,18 +31,19 @@ class Agent(ppo.agent.Agent, NNBase):
         )
         rm = self.recurrent_module
         hx = rm.parse_hidden(all_hxs)
-        a_dist = FixedCategorical(hx.a_probs)
-        p_dist = FixedCategorical(hx.p_probs)
-        action_log_probs = a_dist.log_probs(hx.a) + p_dist.log_probs(hx.p)
-        entropy = a_dist.entropy() + p_dist.entropy()
+        inputs = rm.parse_inputs(inputs)
+        # action_log_probs = a_dist.log_probs(hx.a) + p_dist.log_probs(hx.p)
+        # entropy = a_dist.entropy() + p_dist.entropy()
+        aux_loss = torch.mean((inputs.values - hx.estimated_values) ** 2)
+        max_diff = (inputs.values - hx.estimated_values).abs().max(dim=-1).values.mean()
         return AgentValues(
             value=hx.v,
-            action=torch.cat([hx.a, hx.p], dim=-1),
-            action_log_probs=action_log_probs,
-            aux_loss=-self.entropy_coef * entropy.mean(),
+            action=hx.a,
+            action_log_probs=hx.a.float(),  # TODO: dummy,
+            aux_loss=aux_loss,
             dist=None,
             rnn_hxs=last_hx,
-            log=dict(entropy=entropy.mean()),
+            log=dict(aux_loss=aux_loss, max_diff=max_diff),
         )
 
     def _forward_gru(self, x, hxs, masks, action=None):

@@ -5,9 +5,9 @@ import torch
 from torch import nn as nn
 import torch.nn.functional as F
 
-import ppo.bandit.bandit
 from ppo.distributions import FixedCategorical
 from ppo.layers import Concat
+from ppo.mdp.env import Obs
 from ppo.utils import init_
 
 RecurrentState = namedtuple("RecurrentState", "a v h a_probs")
@@ -39,10 +39,8 @@ class Recurrence(nn.Module):
         debug,
     ):
         super().__init__()
-        self.obs_spaces = ppo.bandit.bandit.Obs(**observation_space.spaces)
-        self.obs_sections = ppo.bandit.bandit.Obs(
-            *[int(np.prod(s.shape)) for s in self.obs_spaces]
-        )
+        self.obs_spaces = Obs(**observation_space.spaces)
+        self.obs_sections = Obs(*[int(np.prod(s.shape)) for s in self.obs_spaces])
         self.action_size = 1
         self.debug = debug
         self.hidden_size = hidden_size
@@ -53,7 +51,7 @@ class Recurrence(nn.Module):
 
         # f
         layers = [Concat(dim=-1)]
-        in_size = self.obs_sections.condition + hidden_size
+        in_size = self.obs_sections.values + hidden_size
         for _ in range(num_layers + 1):
             layers.extend([nn.Linear(in_size, hidden_size), activation])
             in_size = hidden_size
@@ -86,7 +84,7 @@ class Recurrence(nn.Module):
         return hx, hx[-1:]
 
     def parse_inputs(self, inputs: torch.Tensor):
-        return ppo.bandit.bandit.Obs(*torch.split(inputs, self.obs_sections, dim=-1))
+        return Obs(*torch.split(inputs, self.obs_sections, dim=-1))
 
     def parse_hidden(self, hx: torch.Tensor) -> RecurrentState:
         return RecurrentState(*torch.split(hx, self.state_sizes, dim=-1))
@@ -125,7 +123,7 @@ class Recurrence(nn.Module):
         for t in range(T):
             p = self.a_one_hots(A[t - 1])
             r = (p.unsqueeze(1) @ M).squeeze(1)
-            h = self.gru(self.f((inputs.condition[t], r)), h)
+            h = self.gru(self.f((inputs.values[t], r)), h)
             k = self.query_generator(h)
             w = (K @ k.unsqueeze(2)).squeeze(2)
             self.print("w")
