@@ -52,8 +52,18 @@ class Recurrence(nn.Module):
         self.hidden_size = hidden_size
 
         # networks
-        # self.S = nn.Parameter(torch.normal(0, 1, (int(h * w), hidden_size)))
-        # self.A = nn.Parameter(torch.normal(0, 1, (int(action_space.n), hidden_size)))
+        self.S = nn.Parameter(
+            torch.normal(
+                torch.zeros(int(h * w), hidden_size),
+                torch.ones(int(h * w), hidden_size),
+            )
+        )
+        self.A = nn.Parameter(
+            torch.normal(
+                torch.zeros(int(action_space.n), hidden_size, hidden_size),
+                torch.ones(int(action_space.n), hidden_size, hidden_size),
+            )
+        )
         self.T = nn.Parameter(
             torch.normal(
                 torch.zeros(h * w, h * w, int(action_space.n)),
@@ -102,10 +112,10 @@ class Recurrence(nn.Module):
         for t in range(T):
             values = torch.zeros_like(obs.rewards[t])
             for _ in range(self.time_limit):
-                P = (self.T).softmax(dim=1)
-                S, S, A = P.shape
-                EV2 = (values @ P.view(S, -1)).view(N, S, A).sum(1)
-                values = obs.rewards[t] + EV.max(dim=-1).values
+                L = self.S @ self.A @ self.S.t()
+                P = L.softmax(dim=1)
+                EV = values @ P
+                values = obs.rewards[t] + EV.max(dim=0).values
 
             yield RecurrentState(
                 a=hx.a[t],
