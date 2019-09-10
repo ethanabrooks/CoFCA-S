@@ -52,14 +52,16 @@ class Recurrence(nn.Module):
         self.hidden_size = hidden_size
 
         # networks
-        self.gru = nn.GRU(hidden_size, hidden_size)
+        self.gru = nn.GRU(hidden_size, hidden_size, bidirectional=True)
         layers = []
-        in_size = hidden_size ** 2
+        in_size = hidden_size * 2
         for i in range(num_layers):
             layers += [
                 nn.Conv2d(
                     in_channels=in_size,
-                    out_channels=action_space.n if i == num_layers - 1 else hidden_size,
+                    out_channels=hidden_size * 2
+                    if i == num_layers - 1
+                    else hidden_size,
                     kernel_size=1,
                 ),
                 activation,
@@ -116,18 +118,25 @@ class Recurrence(nn.Module):
         hx = self.parse_hidden(rnn_hxs)
         K, _ = self.gru(self.S.unsqueeze(1))
         K = K.squeeze(1)
+        emb_input = (
+            torch.cat(
+                torch.broadcast_tensors(self.S.unsqueeze(0), self.A.unsqueeze(1)),
+                dim=-1,
+            )
+            .permute(2, 0, 1)
+            .unsqueeze(0)
+        )
 
         for t in range(T):
             values = torch.zeros_like(obs.rewards[t])
             for _ in range(self.time_limit):
-                S = self.S.unsqueeze(0).unsqueeze(2)
-                A = self.A.unsqueeze(1).unsqueeze(3)
-
-                emb_input = (S * A).view(self.S.size(0), self.A.size(1), -1)
-                q = self.emb(emb_input.permute(2, 0, 1)).permute(2, 0, 1)
-                P = (K @ q).softmax(dim=1)
-                EV = values @ P
-                values = obs.rewards[t] + EV.max(dim=-1).values.t()
+                q = self.emb(emb_input)
+                L = K @ q.view(2 * self.hidden_size, -1)
+                P = L.view(self.S.size(0), self.A.size(0), self.S.size(0))
+                EV = (values @ P.view(self.S.size(0), -1)).view(
+                    N, self.A.size(0), self.S.size(0)
+                )
+                values = obs.rewards[t] + EV.max(dim=1).values
 
             yield RecurrentState(
                 a=hx.a[t],
