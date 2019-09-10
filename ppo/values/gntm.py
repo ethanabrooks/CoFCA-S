@@ -34,7 +34,7 @@ class Agent(ppo.agent.Agent, NNBase):
         inputs = rm.parse_inputs(inputs)
         # action_log_probs = a_dist.log_probs(hx.a) + p_dist.log_probs(hx.p)
         # entropy = a_dist.entropy() + p_dist.entropy()
-        aux_loss = torch.mean(-(inputs.values - hx.estimated_values) ** 2)
+        aux_loss = torch.mean((inputs.values - hx.estimated_values) ** 2)
         max_diff = (inputs.values - hx.estimated_values).abs().max(dim=-1).values.mean()
         return AgentValues(
             value=hx.v,
