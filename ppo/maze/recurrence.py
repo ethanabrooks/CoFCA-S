@@ -99,9 +99,6 @@ class Recurrence(nn.Module):
         obs = obs[0]
 
         # build memory
-        import ipdb
-
-        ipdb.set_trace()
         M = (
             self.task_embedding(
                 obs.view(N, *self.obs_shape).permute(2, 0, 1)

@@ -135,7 +135,14 @@ class Recurrence(nn.Module):
 
             dist = self.actor(h)
             # self.sample_new(A[t], dist)
-            A[t] = maxEV.indices.gather(dim=-1, index=state_idx).squeeze(-1)
+
+            A[t] = torch.cat(
+                [
+                    next_state_idx // self.size - state_idx // self.size,
+                    next_state_idx % self.size - state_idx % self.size,
+                ],
+                dim=-1,
+            )
             yield RecurrentState(
                 a=A[t],
                 a_probs=dist.probs,
