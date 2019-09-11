@@ -55,11 +55,10 @@ class Recurrence(nn.Module):
         # self.S = nn.Parameter(torch.normal(0, 1, (int(h * w), hidden_size)))
         # self.A = nn.Parameter(torch.normal(0, 1, (int(action_space.n), hidden_size)))
         self.S = nn.Parameter(torch.normal(0, 1, size=(h * w, hidden_size)))
-        self.S1 = nn.Parameter(torch.normal(0, 1, size=(h * w, hidden_size)))
         self.A = nn.Parameter(
             torch.normal(0, 1, size=(int(action_space.n), hidden_size))
         )
-        self.SA = nn.Parameter(self.S1.unsqueeze(-1) + self.A.T.unsqueeze(0))
+        self.SA = nn.Parameter(self.S.unsqueeze(-1) + self.A.T.unsqueeze(0))
         self.T = nn.Parameter(self.S @ self.SA)
         # SA = nn.Parameter(
         #     torch.normal(0, 1, size=(h * w, hidden_size, int(action_space.n)))
