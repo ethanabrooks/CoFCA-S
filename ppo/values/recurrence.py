@@ -102,6 +102,8 @@ class Recurrence(nn.Module):
 
     def inner_loop(self, inputs, rnn_hxs):
         T, N, D = inputs.shape
+        ns = self.S.size(0)
+        na = self.A.size(0)
         obs, action = torch.split(inputs.detach(), [D - 1, 1], dim=-1)
         obs = self.parse_inputs(obs)
         hx = self.parse_hidden(rnn_hxs)
@@ -109,8 +111,8 @@ class Recurrence(nn.Module):
         for t in range(T):
             values = torch.zeros_like(obs.rewards[t])
             for _ in range(self.time_limit):
-                P = (self.T).softmax(dim=1)
-                EV = (values.unsqueeze(-1).unsqueeze(-1) * P.unsqueeze(0)).sum(1)
+                P = self.T.softmax(dim=1)
+                EV = (values @ P.view(ns, -1)).view(N, ns, na)
                 values = obs.rewards[t] + EV.max(dim=-1).values
 
             yield RecurrentState(
