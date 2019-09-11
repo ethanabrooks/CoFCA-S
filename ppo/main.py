@@ -173,7 +173,6 @@ def build_parser():
     parser = parsers.main
     parser.add_argument("--no-tqdm", dest="use_tqdm", action="store_false")
     parser.add_argument("--time-limit", type=int)
-    parsers.agent.add_argument("--debug", action="store_true")
     return parsers
 
 
@@ -194,25 +193,13 @@ def maze_cli():
     train_maze(**hierarchical_parse_args(parser))
 
 
-def values_cli():
+def cli():
     parsers = build_parser()
     parser = parsers.main
-    parsers.env.add_argument("--size", type=int, required=True)
-    parsers.env.add_argument("--min-reward", type=int, required=True)
-    parsers.env.add_argument("--max-reward", type=int, required=True)
-    parsers.agent.add_argument("--baseline", choices=["one-shot"])
-    parsers.ppo.add_argument("--aux-loss-only", action="store_true")
-    train_values(**hierarchical_parse_args(parser))
+    _Train(**hierarchical_parse_args(parser)).run()
 
 
-def mdp_cli():
-    parsers = build_parser()
-    parser = parsers.main
-    parsers.env.add_argument("--n-states", type=int, required=True)
-    parsers.env.add_argument("--delayed-reward", action="store_true")
-    parsers.agent.add_argument("--baseline", choices=["one-shot"])
-    train_mdp(**hierarchical_parse_args(parser))
 
 
 if __name__ == "__main__":
-    values_cli()
+    cli()
