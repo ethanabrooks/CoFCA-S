@@ -3,8 +3,9 @@ runs kill --active
 runs from-json "${@:2}"
 for arg in "$@"; do
   if [[ $arg =~ '--path=(\S+)' ]] then
-    echo "tb $1 $match[1] "
-    tb $1 $match[1] 
+    echo "tb $1 \"$match[1]\""
+    tb $1 "$match[1]"
+    echo "tmux attach -t \"$match[1]/0\""
     tmux attach -t "$match[1]/0"
   fi
 done
