@@ -127,14 +127,15 @@ class Recurrence(nn.Module):
                 maxEV = EV.max(dim=-1)
                 values = obs.rewards[t] + maxEV.values
 
-            state_idx = (obs.state[t] @ self.state_indexer).long()
-            next_state_idx = maxEV.indices.gather(dim=-1, index=state_idx.unsqueeze(-1))
-            s1 = self.S(state_idx)
+            state_idx = (obs.state[t] @ self.state_indexer).long().unsqueeze(-1)
+            next_state_idx = maxEV.indices.gather(dim=-1, index=state_idx)
+            s1 = self.S(state_idx).squeeze(1)
             s2 = self.S(next_state_idx).squeeze(1)
             h = self.f((s1, s2))
 
             dist = self.actor(h)
-            self.sample_new(A[t], dist)
+            # self.sample_new(A[t], dist)
+            A[t] = maxEV.indices.gather(dim=-1, index=state_idx).squeeze(-1)
             yield RecurrentState(
                 a=A[t],
                 a_probs=dist.probs,
