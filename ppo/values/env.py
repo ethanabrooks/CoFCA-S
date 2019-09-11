@@ -20,10 +20,14 @@ class Env(gym.Env):
         self.dims = np.array([size, size])
         self.transitions = np.array([[1, 0], [0, 1], [-1, 0], [0, -1], [0, 0]])
         self.rewards = None
+        self.rewards = self.random.random_integers(
+            low=self.min_reward, high=self.max_reward, size=self.dims
+        )
         self.values = None
         self.optimal = None
         self.cumulative = None
         self.pos = None
+        self.pos = self.random.randint(low=1, high=self.size, size=(2,))
         self.t = None
         self.last = None
         self.action_space = gym.spaces.Discrete(5)
@@ -45,10 +49,6 @@ class Env(gym.Env):
         self.t = 0
         self.cumulative = 0
         self.last = None
-        self.rewards = self.random.random_integers(
-            low=self.min_reward, high=self.max_reward, size=self.dims
-        )
-        self.pos = self.random.randint(low=1, high=self.size, size=(2,))
         self.values = np.zeros_like(self.rewards)
         positions = np.stack(np.meshgrid(np.arange(self.size), np.arange(self.size))).T
         next_pos = tuple(

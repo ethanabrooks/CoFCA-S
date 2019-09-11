@@ -53,8 +53,10 @@ class Recurrence(nn.Module):
         self.na = action_space.n
 
         # networks
-        layers = [Concat(dim=-1)]
-        in_size = hidden_size * 2
+        # layers = [Concat(dim=-1)]
+        # in_size = hidden_size * 2
+        layers = []
+        in_size = hidden_size
         for i in range(num_layers):
             layers += [init_(nn.Linear(in_size, hidden_size)), activation]
             in_size = hidden_size
@@ -131,7 +133,7 @@ class Recurrence(nn.Module):
             next_state_idx = maxEV.indices.gather(dim=-1, index=state_idx.unsqueeze(-1))
             s1 = self.S(state_idx)
             s2 = self.S(next_state_idx).squeeze(1)
-            h = self.f((s1, s2))
+            h = self.f(s1)
 
             dist = self.actor(h)
             self.sample_new(A[t], dist)
