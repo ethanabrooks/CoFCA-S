@@ -1,15 +1,14 @@
 from collections import namedtuple
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn as nn
 
 import ppo.bandit.bandit
-from ppo.distributions import FixedCategorical, Categorical
+from ppo.distributions import Categorical
 from ppo.layers import Concat
-from ppo.maze.env import Actions
 from ppo.utils import init_
-import numpy as np
 
 RecurrentState = namedtuple("RecurrentState", "a a_probs v h estimated_values")
 
@@ -47,6 +46,7 @@ class Recurrence(nn.Module):
             *[int(np.prod(s.shape)) for s in self.obs_spaces]
         )
         self.obs_shape = h, w = self.obs_spaces.rewards.shape
+        self.size = h
         self.action_size = 1
         self.debug = debug
         self.hidden_size = hidden_size
