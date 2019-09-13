@@ -6,9 +6,9 @@ import numpy as np
 import gym
 from gym.utils import seeding
 
-from ppo.shrdlu.constraints import Left, Right, Above, Below
+from ppo.blocks_world.constraints import Left, Right, Above, Below
 
-Obs = namedtuple("Obs", "constraints state")
+Obs = namedtuple("Obs", "obs go")
 
 
 class Env(gym.Env):
@@ -21,15 +21,11 @@ class Env(gym.Env):
         self.random, self.seed = seeding.np_random(seed)
         self.columns = None
         self.constraints = None
-        self.observation_space = gym.spaces.Dict(
-            Obs(
-                constraints=gym.spaces.MultiDiscrete(
-                    max(self.n_blocks + 1, 3) * np.ones((n_constraints, 3))
-                ),
-                state=gym.spaces.MultiDiscrete(
-                    self.n_blocks + 1 * np.ones([self.n_rows, self.n_cols])
-                ),
-            )._asdict()
+        self.observation_generator = None
+        self.int_to_tuple = list(itertools.permutations(range(self.n_cols), 2))
+        self.action_space = gym.spaces.Discrete(len(self.int_to_tuple))
+        self.observation_space = gym.spaces.MultiDiscrete(
+            np.array([max(self.n_blocks + 1, 4)] * self.n_rows * self.n_cols + [2])
         )
 
     def valid(self, _from, _to, columns=None):
@@ -37,9 +33,9 @@ class Env(gym.Env):
             columns = self.columns
         return columns[_from] and len(columns[_to]) < self.n_rows
 
-    def step(self, action: Tuple[int, int]):
-        _from, _to = action
-        if self.valid(*action):
+    def step(self, action: int):
+        _from, _to = self.int_to_tuple[action]
+        if self.valid(_from, _to):
             self.columns[_to].append(self.columns[_from].pop())
         if all(c.satisfied(self.columns) for c in self.constraints):
             r = 1
@@ -47,7 +43,7 @@ class Env(gym.Env):
         else:
             r = 0
             t = False
-        return self.get_observation(), r, t, {}
+        return next(self.observation_generator), r, t, {}
 
     def reset(self):
         self.columns = [[] for _ in range(self.n_cols)]
@@ -68,7 +64,8 @@ class Env(gym.Env):
                     self.constraints += [Left(left, right), Right(left, right)]
         self.random.shuffle(self.constraints)
         self.constraints = self.constraints[: self.n_constraints]
-        return self.get_observation()
+        self.observation_generator = self.generate_observations()
+        return next(self.observation_generator)
 
     def search_ahead(self, trajectory, columns, n_steps):
         if n_steps == 0:
@@ -87,12 +84,18 @@ class Env(gym.Env):
                 if future_state is not None:
                     return future_state
 
-    def get_observation(self):
+    def generate_observations(self):
+        def pack_obs(obs, go):
+            obs = np.append(obs, go)
+            assert self.observation_space.contains(obs)
+            return obs
+
+        for constraint in self.constraints:
+            constraint = constraint.list()
+            padding = self.n_cols * self.n_rows - len(constraint)
+            yield pack_obs(obs=np.pad(constraint, [0, padding]), go=0)
         state = [c + [0] * (self.n_rows - len(c)) for c in self.columns]
-        constraints = [c.list() for c in self.constraints]
-        obs = Obs(constraints=constraints, state=state)._asdict()
-        assert self.observation_space.contains(obs)
-        return obs
+        yield pack_obs(obs=state, go=1)
 
     def render(self, mode="human", pause=True):
         for row in reversed(list(itertools.zip_longest(*self.columns))):
@@ -120,11 +123,13 @@ if __name__ == "__main__":
     parser.add_argument("--n-constraints", default=4, type=int)
     parser.add_argument("--time-limit", default=8, type=int)
     args = hierarchical_parse_args(parser)
+    int_to_tuple = list(itertools.permutations(range(args["n_cols"]), 2))
 
     def action_fn(string):
         try:
-            _from, _to = string.split()
-            return int(_from), int(_to)
+            _from, _to = string
+            index = int_to_tuple.index((int(_from), int(_to)))
+            return index
         except ValueError:
             return
 

@@ -15,11 +15,16 @@ class SideBySide(Constraint, ABC):
         self.left = left
 
     def satisfied(self, columns):
-        left, right = [
-            next(i for i, c in enumerate(columns) if x in c)
+        (left_index, left_column), (right_index, right_column) = [
+            next((i, c) for (i, c) in enumerate(columns) if x in c)
             for x in [self.left, self.right]
         ]
-        return left + 1 == right
+        return all(
+            (
+                left_index + 1 == right_index,
+                left_column.index(self.left) == right_column.index(self.right),
+            )
+        )
 
     def __str__(self):
         return f"{self.left} left of {self.right}"
