@@ -150,16 +150,21 @@ class Env(gym.Env):
         return obs
 
     def render(self, mode="human", pause=True):
+        print()
         for row in reversed(list(itertools.zip_longest(*self.columns))):
             for x in row:
                 print("{:3}".format(x or " "), end="")
             print()
         for constraint in self.constraints:
             print(
-                "{:3}".format("✔︎") if constraint.satisfied(self.columns) else "  ",
+                "{:3}".format("✔︎")
+                if constraint.satisfied(self.padded_columns())
+                else "  ",
                 end="",
             )
             print(str(constraint))
+        print("search depth", self.search_depth)
+        print(f"time step: {self.t}/{self.time_limit}")
         print(self.last)
         if pause:
             input("pause")
