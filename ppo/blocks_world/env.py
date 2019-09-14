@@ -20,7 +20,6 @@ class Env(gym.Env):
         self.random, self.seed = seeding.np_random(seed)
         self.columns = None
         self.constraints = None
-        self.n_constraints = None
         self.search_depth = None
         self.time_limit = None
         self.last = None
@@ -68,7 +67,7 @@ class Env(gym.Env):
 
     def step(self, action: int):
         self.t += 1
-        if self.t <= self.n_constraints:
+        if self.t <= len(self.constraints):
             return self.get_observation(), 0, False, {}
         _from, _to = self.int_to_tuple[int(action)]
         if self.valid(_from, _to):
@@ -95,10 +94,10 @@ class Env(gym.Env):
         self.search_depth = self.random.random_integers(
             *self.curriculum.search_depth[self.curriculum_level]
         )
-        self.n_constraints = self.random.random_integers(
+        n_constraints = self.random.random_integers(
             *self.curriculum.constraints[self.curriculum_level]
         )
-        self.time_limit = self.search_depth + self.n_constraints
+        self.time_limit = self.search_depth + n_constraints
         self.columns = [[] for _ in range(self.n_cols)]
         blocks = list(range(1, n_blocks + 1))
         self.random.shuffle(blocks)
@@ -121,7 +120,7 @@ class Env(gym.Env):
             c for c in constraints if not c.satisfied(self.padded_columns())
         ]
         self.random.shuffle(self.constraints)
-        self.constraints = self.constraints[: self.n_constraints]
+        self.constraints = self.constraints[:n_constraints]
         return self.get_observation()
 
     def search_ahead(self, trajectory, columns, n_steps):
@@ -140,7 +139,7 @@ class Env(gym.Env):
                     return future_state
 
     def get_observation(self):
-        if self.t < self.n_constraints:
+        if self.t < len(self.constraints):
             state = [[0] * (self.n_rows * self.n_cols)]
         else:
             state = self.padded_columns()
@@ -148,7 +147,7 @@ class Env(gym.Env):
             constraint = [self.constraints[self.t].list()]
         except IndexError:
             constraint = [[0] * 3]
-        go = [[int(self.t >= self.n_constraints)]]
+        go = [[int(self.t >= len(self.constraints))]]
         obs = [x for r in state + constraint + go for x in r]
         assert self.observation_space.contains(obs)
         return obs
@@ -175,7 +174,6 @@ class Env(gym.Env):
             )
             print(str(constraint))
         print("search depth", self.search_depth)
-        print(self.n_constraints, "constraints")
         print(f"time step: {self.t}/{self.time_limit}")
         print(self.last)
         if pause:
