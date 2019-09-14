@@ -10,14 +10,13 @@ from ppo.blocks_world.constraints import Left, Right, Above, Below
 
 Obs = namedtuple("Obs", "obs go")
 Last = namedtuple("Last", "action reward terminal go")
-Curriculum = namedtuple("Curriculum", "constraints search_depth")
+Curriculum = namedtuple("Curriculum", "constraints n_blocks search_depth")
 
 
 class Env(gym.Env):
     def __init__(self, n_cols: int, seed: int):
         self.n_rows = self.n_cols = n_cols
         self.n_grids = n_cols ** 2
-        self.n_blocks = self.n_grids * 2 // 3
         self.random, self.seed = seeding.np_random(seed)
         self.columns = None
         self.constraints = None
@@ -28,41 +27,37 @@ class Env(gym.Env):
         self.int_to_tuple = list(itertools.permutations(range(self.n_cols), 2))
         self.action_space = gym.spaces.Discrete(len(self.int_to_tuple))
         self.observation_space = gym.spaces.MultiDiscrete(
-            np.array(
-                [max(self.n_blocks + 1, 4)] * (self.n_rows * self.n_cols + 3) + [2]
-            )
+            np.array([6] * (self.n_rows * self.n_cols + 3) + [2])
         )
 
         self.curriculum_level = 0
-        self.curriculum = Curriculum(constraints=[(1, 1)], search_depth=[(1, 1)])
-        while any(
-            (
-                self.curriculum.constraints[-1] < (6, 6),
-                self.curriculum.search_depth[-1] < (7, 7),
+
+        def curriculum_generator():
+            last_curriculum = Curriculum(
+                constraints=[1, 1], n_blocks=[3, 3], search_depth=[1, 1]
             )
-        ):
-            lower_constraint, upper_constraint = self.curriculum.constraints[-1]
-            lower_search_depth, upper_search_depth = self.curriculum.search_depth[-1]
-            upper_constraint += 1
-            self.curriculum.constraints.append((lower_constraint, upper_constraint))
-            self.curriculum.search_depth.append(
-                (lower_search_depth, upper_search_depth)
-            )
-            upper_search_depth += 1
-            self.curriculum.constraints.append((lower_constraint, upper_constraint))
-            self.curriculum.search_depth.append(
-                (lower_search_depth, upper_search_depth)
-            )
-            lower_constraint += 1
-            self.curriculum.constraints.append((lower_constraint, upper_constraint))
-            self.curriculum.search_depth.append(
-                (lower_search_depth, upper_search_depth)
-            )
-            lower_search_depth += 1
-            self.curriculum.constraints.append((lower_constraint, upper_constraint))
-            self.curriculum.search_depth.append(
-                (lower_search_depth, upper_search_depth)
-            )
+            while any(
+                (
+                    tuple(last_curriculum.constraints) < (6, 6),
+                    tuple(last_curriculum.search_depth) < (7, 7),
+                    tuple(last_curriculum.n_blocks) < (6, 6),
+                )
+            ):
+                yield copy.deepcopy(last_curriculum)
+                last_curriculum.constraints[1] += 1
+                last_curriculum.n_blocks[1] += 1
+                yield copy.deepcopy(last_curriculum)
+                last_curriculum.n_blocks[0] += 1
+                last_curriculum.search_depth[1] += 1
+                yield copy.deepcopy(last_curriculum)
+                last_curriculum.n_blocks[1] += 1
+                last_curriculum.constraints[0] += 1
+                yield copy.deepcopy(last_curriculum)
+                last_curriculum.n_blocks[0] += 1
+                last_curriculum.search_depth[0] += 1
+                yield copy.deepcopy(last_curriculum)
+
+        self.curriculum = Curriculum(*zip(*curriculum_generator()))
 
     def valid(self, _from, _to, columns=None):
         if columns is None:
@@ -91,6 +86,9 @@ class Env(gym.Env):
     def reset(self):
         self.last = None
         self.t = 0
+        n_blocks = self.random.random_integers(
+            *self.curriculum.n_blocks[self.curriculum_level]
+        )
         search_depth = self.random.random_integers(
             *self.curriculum.search_depth[self.curriculum_level]
         )
@@ -99,7 +97,7 @@ class Env(gym.Env):
         )
         self.time_limit = search_depth + self.n_constraints
         self.columns = [[] for _ in range(self.n_cols)]
-        blocks = list(range(1, self.n_blocks + 1))
+        blocks = list(range(1, n_blocks + 1))
         self.random.shuffle(blocks)
         for block in blocks:
             self.random.shuffle(self.columns)
