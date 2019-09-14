@@ -23,11 +23,16 @@ class Env(gym.Env):
         self.columns = None
         self.constraints = None
         self.last = None
-        self.observation_generator = None
+        self.t = None
         self.int_to_tuple = list(itertools.permutations(range(self.n_cols), 2))
         self.action_space = gym.spaces.Discrete(len(self.int_to_tuple))
         self.observation_space = gym.spaces.MultiDiscrete(
-            np.array([max(self.n_blocks + 1, 4)] * self.n_rows * self.n_cols + [2])
+            # TODO: np.array([max(self.n_blocks + 1, 4)] * self.n_rows * self.n_cols + [2])
+            np.array(
+                [max(self.n_blocks + 1, 4)]
+                * (self.n_rows * self.n_cols + 3 * self.n_constraints)
+                + [2]
+            )
         )
 
     def valid(self, _from, _to, columns=None):
@@ -36,6 +41,9 @@ class Env(gym.Env):
         return columns[_from] and len(columns[_to]) < self.n_rows
 
     def step(self, action: int):
+        self.t += 1
+        if self.t <= self.n_constraints:
+            return self.get_observation(), 0, False, {}
         _from, _to = self.int_to_tuple[int(action)]
         if self.valid(_from, _to):
             self.columns[_to].append(self.columns[_from].pop())
@@ -46,10 +54,11 @@ class Env(gym.Env):
             r = 0
             t = False
         self.last = Last(action=(_from, _to), reward=r, terminal=t, go=0)
-        return next(self.observation_generator), r, t, {}
+        return self.get_observation(), r, t, {}
 
     def reset(self):
         self.last = None
+        self.t = 0
         self.columns = [[] for _ in range(self.n_cols)]
         blocks = list(range(1, self.n_blocks + 1))
         self.random.shuffle(blocks)
@@ -73,8 +82,7 @@ class Env(gym.Env):
         ]
         self.random.shuffle(self.constraints)
         self.constraints = self.constraints[: self.n_constraints]
-        self.observation_generator = self.generate_observations()
-        return next(self.observation_generator)
+        return self.get_observation()
 
     def search_ahead(self, trajectory, columns, n_steps):
         if n_steps == 0:
@@ -91,20 +99,16 @@ class Env(gym.Env):
                 if future_state is not None:
                     return future_state
 
-    def generate_observations(self):
-        def pack_obs(obs, go):
-            obs = np.append(obs, go)
-            assert self.observation_space.contains(obs)
-            return obs
-
-        for constraint in self.constraints:
-            constraint = constraint.list()
-            padding = self.n_cols * self.n_rows - len(constraint)
-            yield pack_obs(obs=np.pad(constraint, [0, padding]), go=0)
-        while True:
-            self.last = self.last._replace(go=1)
+    def get_observation(self):
+        if self.t < self.n_constraints:
+            state = [[0] * (self.n_rows * self.n_cols)]
+        else:
             state = [c + [0] * (self.n_rows - len(c)) for c in self.columns]
-            yield pack_obs(obs=state, go=1)
+        constraints = [c.list() for c in self.constraints]
+        go = [[int(self.t >= self.n_constraints)]]
+        obs = [x for r in state + constraints + go for x in r]
+        assert self.observation_space.contains(obs)
+        return obs
 
     def render(self, mode="human", pause=True):
         for row in reversed(list(itertools.zip_longest(*self.columns))):

@@ -25,7 +25,7 @@ def train_blocks_world(time_limit, n_constraints, **kwargs):
                 blocks_world.Env(
                     **env_args, n_constraints=n_constraints, seed=seed + rank
                 ),
-                max_episode_steps=time_limit,
+                max_episode_steps=time_limit + n_constraints,
             )
 
         def build_agent(
