@@ -120,8 +120,9 @@ class Env(gym.Env):
                     if None not in (left, right):
                         yield from [Left(left, right), Right(left, right)]
 
+        constraints = list(generate_constraints())
         self.constraints = [
-            c for c in generate_constraints() if not c.satisfied(self.columns)
+            c for c in constraints if not c.satisfied(self.padded_columns())
         ]
         self.random.shuffle(self.constraints)
         self.constraints = self.constraints[:n_constraints]
@@ -146,12 +147,22 @@ class Env(gym.Env):
         if self.t < len(self.constraints):
             state = [[0] * (self.n_rows * self.n_cols)]
         else:
-            state = [c + [0] * (self.n_rows - len(c)) for c in self.columns]
-        constraints = [c.list() for c in self.constraints]
-        go = [[int(self.t >= len(constraints))]]
-        obs = [x for r in state + constraints + go for x in r]
+            state = self.padded_columns()
+        try:
+            constraint = [self.constraints[self.t].list()]
+        except IndexError:
+            constraint = [[0] * 3]
+        go = [[int(self.t >= len(self.constraints))]]
+        obs = [x for r in state + constraint + go for x in r]
         assert self.observation_space.contains(obs)
         return obs
+
+    def padded_columns(self):
+        return [c + [0] * (self.n_rows - len(c)) for c in self.columns]
+
+    def increment_curriculum(self):
+        if self.curriculum_level + 1 < len(self.curriculum.constraints):
+            self.curriculum_level += 1
 
     def render(self, mode="human", pause=True):
         for row in reversed(list(itertools.zip_longest(*self.columns))):
