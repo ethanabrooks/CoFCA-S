@@ -149,6 +149,13 @@ class Env(gym.Env):
         assert self.observation_space.contains(obs)
         return obs
 
+    def padded_columns(self):
+        return [c + [0] * (self.n_rows - len(c)) for c in self.columns]
+
+    def increment_curriculum(self):
+        if self.curriculum_level + 1 < len(self.curriculum.constraints):
+            self.curriculum_level += 1
+
     def render(self, mode="human", pause=True):
         print()
         for row in reversed(list(itertools.zip_longest(*self.columns))):
