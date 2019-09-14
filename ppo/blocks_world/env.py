@@ -149,7 +149,7 @@ class Env(gym.Env):
         else:
             state = [c + [0] * (self.n_rows - len(c)) for c in self.columns]
         constraints = [c.list() for c in self.constraints]
-        go = [[int(self.t >= len(constraints))]]
+        go = [[int(self.t >= len(self.constraints))]]
         obs = [x for r in state + constraints + go for x in r]
         assert self.observation_space.contains(obs)
         return obs
