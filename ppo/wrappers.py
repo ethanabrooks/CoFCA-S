@@ -90,6 +90,9 @@ class VecPyTorch(VecEnvWrapper):
     def train(self):
         self.venv.train()
 
+    def increment_curriculum(self):
+        self.venv.increment_curriculum()
+
 
 class VecNormalize(VecNormalize_):
     def __init__(self, *args, **kwargs):

@@ -1,4 +1,5 @@
 from abc import ABC
+import itertools
 
 
 class Constraint:

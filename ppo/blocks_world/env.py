@@ -10,6 +10,7 @@ from ppo.blocks_world.constraints import Left, Right, Above, Below
 
 Obs = namedtuple("Obs", "obs go")
 Last = namedtuple("Last", "action reward terminal go")
+Curriculum = namedtuple("Curriculum", "constraints n_blocks search_depth")
 
 
 class Env(gym.Env):
@@ -34,6 +35,36 @@ class Env(gym.Env):
                 + [2]
             )
         )
+
+        self.curriculum_level = 0
+
+        def curriculum_generator():
+            last_curriculum = Curriculum(
+                constraints=[1, 1], n_blocks=[3, 3], search_depth=[1, 1]
+            )
+            while any(
+                (
+                    tuple(last_curriculum.constraints) < (6, 6),
+                    tuple(last_curriculum.search_depth) < (7, 7),
+                    tuple(last_curriculum.n_blocks) < (6, 6),
+                )
+            ):
+                yield copy.deepcopy(last_curriculum)
+                last_curriculum.constraints[1] += 1
+                last_curriculum.n_blocks[1] += 1
+                yield copy.deepcopy(last_curriculum)
+                last_curriculum.n_blocks[0] += 1
+                last_curriculum.search_depth[1] += 1
+                yield copy.deepcopy(last_curriculum)
+                last_curriculum.n_blocks[1] += 1
+                last_curriculum.constraints[0] += 1
+                yield copy.deepcopy(last_curriculum)
+                last_curriculum.n_blocks[0] += 1
+                last_curriculum.search_depth[0] += 1
+                yield copy.deepcopy(last_curriculum)
+
+        self.curriculum = Curriculum(*zip(*curriculum_generator()))
+        assert len({len(l) for l in self.curriculum}) == 1  # all lists same length
 
     def valid(self, _from, _to, columns=None):
         if columns is None:
