@@ -26,18 +26,21 @@ class SideBySide(Constraint, ABC):
             )
         )
 
-    def __str__(self):
-        return f"{self.left} left of {self.right}"
-
 
 class Left(SideBySide):
     def list(self):
         return [self.left, 0, self.right]
 
+    def __str__(self):
+        return f"{self.left} left of {self.right}"
+
 
 class Right(SideBySide):
     def list(self):
         return [self.right, 1, self.left]
+
+    def __str__(self):
+        return f"{self.right} right of {self.left}"
 
 
 class Stacked(Constraint, ABC):
@@ -52,15 +55,18 @@ class Stacked(Constraint, ABC):
             return False
         return column.index(self.top) == column.index(self.bottom) + 1
 
-    def __str__(self):
-        return f"{self.top} above {self.bottom}"
-
 
 class Above(Stacked):
     def list(self):
         return [self.top, 2, self.bottom]
 
+    def __str__(self):
+        return f"{self.top} above {self.bottom}"
+
 
 class Below(Stacked):
     def list(self):
         return [self.bottom, 3, self.top]
+
+    def __str__(self):
+        return f"{self.bottom} below {self.top}"
