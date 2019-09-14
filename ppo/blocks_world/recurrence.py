@@ -101,10 +101,6 @@ class Recurrence(nn.Module):
         def pack():
             for name, hx in RecurrentState(*zip(*hxs))._asdict().items():
                 x = torch.stack(hx).float()
-                if x.size(1) != 2:
-                    import ipdb
-
-                    ipdb.set_trace()
                 yield x.view(*x.shape[:2], -1)
 
         l = list(pack())
