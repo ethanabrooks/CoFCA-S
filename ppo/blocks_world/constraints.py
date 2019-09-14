@@ -16,18 +16,10 @@ class SideBySide(Constraint, ABC):
         self.left = left or 0
 
     def satisfied(self, columns):
-        for (
-            (left_index, left_column),
-            (right_index, right_column),
-        ) in itertools.combinations(enumerate(columns), 2):
-            if all(
-                (
-                    left_index + 1 == right_index,
-                    self.left in left_column,
-                    self.right in right_column,
-                )
-            ):
-                return True
+        for left_column, right_column in zip(columns, columns[1:]):
+            for left, right in zip(left_column, right_column):
+                if self.left == left and self.right == right:
+                    return True
         return False
 
 
