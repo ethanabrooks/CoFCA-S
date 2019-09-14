@@ -27,8 +27,8 @@ def train_blocks_world(**kwargs):
 
         def run_epoch(self, *args, **kwargs):
             counter = super().run_epoch(*args, **kwargs)
-            # if counter["n_satisfied"] > 0.85:
-            #     self.envs.increment_curriculum()
+            if counter["n_satisfied"] > 0.85:
+                self.envs.increment_curriculum()
             return counter
 
         def build_agent(
