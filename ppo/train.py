@@ -4,7 +4,7 @@ import itertools
 import re
 import sys
 import time
-from collections import Counter
+from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Dict
 
@@ -225,7 +225,7 @@ class TrainBase(abc.ABC):
         self, obs, rnn_hxs, masks, num_steps, counter, success_reward, use_tqdm
     ):
         # noinspection PyTypeChecker
-        episode_counter = Counter(rewards=[], time_steps=[], success=[])
+        episode_counter = defaultdict(list)
         iterator = range(num_steps)
         if use_tqdm:
             iterator = tqdm(iterator, desc="evaluating")
@@ -240,7 +240,7 @@ class TrainBase(abc.ABC):
 
             for d in infos:
                 for k, v in d.items():
-                    episode_counter.update({k: float(v) / num_steps / len(infos)})
+                    episode_counter[k] += [float(v)]
 
             # track rewards
             counter["reward"] += reward.numpy()

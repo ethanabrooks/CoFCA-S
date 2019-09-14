@@ -6,6 +6,7 @@ import ppo.maze.baselines
 from ppo import blocks_world, gntm
 from ppo.train import Train
 from gym.wrappers import TimeLimit
+import numpy as np
 
 
 def build_parser():
@@ -26,13 +27,14 @@ def train_blocks_world(increment_curriculum_at_n_satisfied, **kwargs):
             return blocks_world.Env(**env_args, seed=seed + rank)
 
         def run_epoch(self, *args, **kwargs):
-            counter = super().run_epoch(*args, **kwargs)
+            dictionary = super().run_epoch(*args, **kwargs)
             if (
                 increment_curriculum_at_n_satisfied
-                and counter["n_satisfied"] > increment_curriculum_at_n_satisfied
+                and np.mean(dictionary["n_satisfied"])
+                > increment_curriculum_at_n_satisfied
             ):
                 self.envs.increment_curriculum()
-            return counter
+            return dictionary
 
         def build_agent(
             self, envs, recurrent=None, entropy_coef=None, baseline=None, **agent_args
