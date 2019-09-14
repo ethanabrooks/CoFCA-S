@@ -34,7 +34,7 @@ class Env(gym.Env):
         return columns[_from] and len(columns[_to]) < self.n_rows
 
     def step(self, action: int):
-        _from, _to = self.int_to_tuple[action]
+        _from, _to = self.int_to_tuple[int(action)]
         if self.valid(_from, _to):
             self.columns[_to].append(self.columns[_from].pop())
         if all(c.satisfied(self.columns) for c in self.constraints):
