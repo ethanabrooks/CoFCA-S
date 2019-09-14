@@ -55,7 +55,8 @@ class Recurrence(nn.Module):
             a=1,
             a_probs=action_space.n,
             v=1,
-            r=num_heads * slot_size,
+            # TODO: r=num_heads * slot_size,
+            r=num_layers * hidden_size,
             wr=num_heads * num_slots,
             u=num_slots,
             ww=num_slots,
@@ -79,7 +80,10 @@ class Recurrence(nn.Module):
         # networks
         assert num_layers > 0
         self.gru = nn.GRU(
-            int(nvec.max() * np.prod(nvec.shape)), hidden_size, num_layers
+            # TODO int(nvec.max() * np.prod(nvec.shape)),
+            int(hidden_size * np.prod(nvec.shape)),
+            hidden_size,
+            num_layers,
         )
         self.f1 = nn.Sequential(
             init_(nn.Linear(num_heads * slot_size, num_layers * hidden_size)),
@@ -88,10 +92,12 @@ class Recurrence(nn.Module):
         self.f2 = nn.Sequential(
             activation, init_(nn.Linear(hidden_size, sum(self.xi_sections)))
         )
-        self.actor = Categorical(num_heads * slot_size, action_space.n)
-        self.critic = init_(nn.Linear(num_heads * slot_size, 1))
+        # TODO:
+        self.actor = Categorical(hidden_size * num_layers, action_space.n)
+        self.critic = init_(nn.Linear(hidden_size * num_layers, 1))
+
         self.register_buffer("mem_one_hots", torch.eye(num_slots))
-        self.register_buffer("obs_one_hots", torch.eye(int(nvec.max())))
+        self.embeddings = nn.Embedding(int(nvec.max()), hidden_size)
 
     @staticmethod
     def sample_new(x, dist):
@@ -101,11 +107,13 @@ class Recurrence(nn.Module):
     def forward(self, inputs, hx):
         return self.pack(self.inner_loop(inputs, rnn_hxs=hx))
 
-    @staticmethod
-    def pack(hxs):
+    def pack(self, hxs):
         def pack():
-            for name, hx in RecurrentState(*zip(*hxs))._asdict().items():
+            for name, size, hx in zip(
+                RecurrentState._fields, self.state_sizes, zip(*hxs)
+            ):
                 x = torch.stack(hx).float()
+                assert np.prod(x.shape[2:]) == size
                 yield x.view(*x.shape[:2], -1)
 
         hx = torch.cat(list(pack()), dim=-1)
@@ -126,7 +134,7 @@ class Recurrence(nn.Module):
         inputs, actions = torch.split(
             inputs.detach(), [D - self.action_size, self.action_size], dim=2
         )
-        inputs = self.obs_one_hots[inputs.long()]
+        inputs = self.embeddings(inputs.long())
 
         # new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
@@ -141,13 +149,17 @@ class Recurrence(nn.Module):
         p = hx.p
         L = hx.L.view(N, self.num_slots, self.num_slots)
 
-        A = torch.cat([actions, hx.a.unsqueeze(0)], dim=0).long().squeeze(2)
+        A = torch.cat([actions, hx.a.unsqueeze(0)], dim=0).long()
 
         for t in range(T):
-            h = self.f1(r.view(N, -1))
-            h, _ = self.gru(
-                inputs[t].view(1, N, -1), h.view(self.gru.num_layers, N, -1)
+            # TODO: h = self.f1(r.view(N, -1))
+            _, r = self.gru(
+                inputs[t].view(1, N, -1),
+                r.view(N, self.gru.num_layers, -1).transpose(0, 1).contiguous(),
             )
+            r = r.transpose(0, 1).reshape(N, -1)
+
+            """TODO:
             xi = self.f2(h.view(N, -1))
             Kr, br, kw, bw, e, v, free, ga, gw, Pi = xi.squeeze(0).split(
                 self.xi_sections, dim=-1
@@ -195,6 +207,7 @@ class Recurrence(nn.Module):
             ).softmax(-1)
             wr = Pi[0] * b + Pi[1] * cr + Pi[2] * f
             r = wr @ M
+            """
 
             # act
             dist = self.actor(r.view(N, -1))

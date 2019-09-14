@@ -15,7 +15,7 @@ Last = namedtuple("Last", "action reward terminal go")
 class Env(gym.Env):
     def __init__(self, n_cols: int, seed: int, time_limit: int, n_constraints: int):
         self.n_constraints = n_constraints
-        self.search_distance = time_limit - n_constraints
+        self.search_distance = time_limit  # TODO - n_constraints
         self.n_rows = self.n_cols = n_cols
         self.n_grids = n_cols ** 2
         self.n_blocks = self.n_grids * 2 // 3
@@ -27,7 +27,11 @@ class Env(gym.Env):
         self.int_to_tuple = list(itertools.permutations(range(self.n_cols), 2))
         self.action_space = gym.spaces.Discrete(len(self.int_to_tuple))
         self.observation_space = gym.spaces.MultiDiscrete(
-            np.array([max(self.n_blocks + 1, 4)] * self.n_rows * self.n_cols + [2])
+            # TODO: np.array([max(self.n_blocks + 1, 4)] * self.n_rows * self.n_cols + [2])
+            np.array(
+                [max(self.n_blocks + 1, 4)]
+                * (self.n_rows * self.n_cols + 3 * self.n_constraints)
+            )
         )
 
     def valid(self, _from, _to, columns=None):
@@ -97,14 +101,18 @@ class Env(gym.Env):
             assert self.observation_space.contains(obs)
             return obs
 
-        for constraint in self.constraints:
-            constraint = constraint.list()
-            padding = self.n_cols * self.n_rows - len(constraint)
-            yield pack_obs(obs=np.pad(constraint, [0, padding]), go=0)
+        # TODO
+        # for constraint in self.constraints:
+        # constraint = constraint.list()
+        # padding = self.n_cols * self.n_rows - len(constraint)
+        # yield pack_obs(obs=np.pad(constraint, [0, padding]), go=0)
         while True:
-            self.last = self.last._replace(go=1)
+            # self.last = self.last._replace(go=1)
             state = [c + [0] * (self.n_rows - len(c)) for c in self.columns]
-            yield pack_obs(obs=state, go=1)
+            constraints = [c.list() for c in self.constraints]
+            obs = [x for r in state + constraints for x in r]
+            assert self.observation_space.contains(obs)
+            yield obs
 
     def render(self, mode="human", pause=True):
         for row in reversed(list(itertools.zip_longest(*self.columns))):

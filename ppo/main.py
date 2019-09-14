@@ -42,7 +42,7 @@ def train_blocks_world(time_limit, n_constraints, **kwargs):
                 )
             return gntm.Agent(entropy_coef=entropy_coef, recurrence=recurrence)
 
-    TrainValues(time_limit=time_limit + n_constraints, **kwargs).run()
+    TrainValues(time_limit=time_limit, **kwargs).run()  # TODO: + n_constraints,
 
 
 def blocks_world_cli():
