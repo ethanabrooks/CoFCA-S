@@ -147,7 +147,8 @@ class Recurrence(nn.Module):
             )
             br = F.softplus(br.view(N, self.num_heads))
             bw = F.softplus(bw)
-            e = e.sigmoid()
+            e = e.sigmoid().view(N, 1, self.slot_size)
+            v = v.view(N, 1, self.slot_size)
             free = free.sigmoid()
             ga = ga.sigmoid()
             gw = gw.sigmoid()
@@ -165,11 +166,13 @@ class Recurrence(nn.Module):
             phi_prod = torch.cumprod(phi.values, dim=-1)
             unsorted_phi_prod = phi_prod.scatter(-1, phi.indices, phi_prod)
             a = (1 - u) * unsorted_phi_prod  # page 8 left column
-            cw = (bw * F.cosine_similarity(M, kw.unsqueeze(1), dim=-1)).softmax(dim=-1)
+            cw = (
+                bw * F.cosine_similarity(M, kw.view(N, 1, self.slot_size), dim=-1)
+            ).softmax(dim=-1)
             ww = gw * (ga * a + (1 - ga) * cw)
             ww1 = ww.unsqueeze(-1)
             ww2 = ww.unsqueeze(-2)
-            M = M * (1 - ww1 * e.unsqueeze(1)) + ww1 * v.unsqueeze(1)
+            M = M * (1 - ww1 * e) + ww1 * v
             # page 7 right column
 
             # read
