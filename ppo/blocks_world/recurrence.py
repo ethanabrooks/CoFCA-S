@@ -56,8 +56,7 @@ class Recurrence(nn.Module):
             a=1,
             a_probs=action_space.n,
             v=1,
-            # TODO: r=num_heads * slot_size,
-            r=num_layers * hidden_size,
+            r=num_heads * slot_size,
             wr=num_heads * num_slots,
             u=num_slots,
             ww=num_slots,
@@ -81,22 +80,34 @@ class Recurrence(nn.Module):
         # networks
         assert num_layers > 0
         self.gru = nn.GRU(
-            # TODO int(embedding_size * np.prod(nvec.shape)),
-            int(embedding_size * np.prod(nvec.shape)),
-            hidden_size,
-            num_layers,
+            int(embedding_size * np.prod(nvec.shape)), hidden_size, num_layers
         )
         self.f1 = nn.Sequential(
-            init_(nn.Linear(num_heads * slot_size, num_layers * hidden_size)),
+            init_(
+                nn.Linear(
+                    # num_heads * slot_size,
+                    self.xi_sections.Kr,
+                    num_layers * hidden_size,
+                )
+            ),
             activation,
         )
         self.f2 = nn.Sequential(
             activation,
             init_(nn.Linear(num_layers * hidden_size, sum(self.xi_sections))),
         )
-        # TODO:
-        self.actor = Categorical(hidden_size * num_layers, action_space.n)
-        self.critic = init_(nn.Linear(hidden_size * num_layers, 1))
+        self.actor = Categorical(
+            # num_heads * slot_size,
+            self.xi_sections.Kr,
+            action_space.n,
+        )
+        self.critic = init_(
+            nn.Linear(
+                # num_heads * slot_size,
+                self.xi_sections.Kr,
+                1,
+            )
+        )
 
         self.register_buffer("mem_one_hots", torch.eye(num_slots))
         self.embeddings = nn.Embedding(int(nvec.max()), embedding_size)
@@ -154,18 +165,19 @@ class Recurrence(nn.Module):
         A = torch.cat([actions, hx.a.unsqueeze(0)], dim=0).long()
 
         for t in range(T):
-            # TODO: h = self.f1(r.view(N, -1))
-            _, r = self.gru(
+            h = self.f1(r.view(N, -1))
+            _, h = self.gru(
                 inputs[t].view(1, N, -1),
-                r.view(N, self.gru.num_layers, -1).transpose(0, 1).contiguous(),
+                h.view(N, self.gru.num_layers, self.gru.hidden_size)
+                .transpose(0, 1)
+                .contiguous(),
             )
-            r = r.transpose(0, 1).reshape(N, -1)
-
-            """TODO:
             xi = self.f2(h.view(N, -1))
             Kr, br, kw, bw, e, v, free, ga, gw, Pi = xi.squeeze(0).split(
                 self.xi_sections, dim=-1
             )
+            r = Kr
+            """
             br = F.softplus(br.view(N, self.num_heads))
             bw = F.softplus(bw)
             e = e.sigmoid().view(N, 1, self.slot_size)
