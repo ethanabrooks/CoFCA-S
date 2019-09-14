@@ -73,8 +73,7 @@ class Env(gym.Env):
         _from, _to = self.int_to_tuple[int(action)]
         if self.valid(_from, _to):
             self.columns[_to].append(self.columns[_from].pop())
-        satisfied = [c.satisfied(self.padded_columns()) for c in self.constraints]
-        if all(satisfied):
+        if all(c.satisfied(self.columns) for c in self.constraints):
             r = 1
             t = True
         elif self.t >= self.time_limit:
@@ -84,10 +83,7 @@ class Env(gym.Env):
             r = 0
             t = False
         self.last = Last(action=(_from, _to), reward=r, terminal=t, go=0)
-        i = dict(curriculum_level=self.curriculum_level)
-        if t:
-            i.update(n_satisfied=np.mean(satisfied))
-        return self.get_observation(), r, t, i
+        return self.get_observation(), r, t, {}
 
     def reset(self):
         self.last = None
@@ -120,9 +116,8 @@ class Env(gym.Env):
                     if None not in (left, right):
                         yield from [Left(left, right), Right(left, right)]
 
-        constraints = list(generate_constraints())
         self.constraints = [
-            c for c in constraints if not c.satisfied(self.padded_columns())
+            c for c in generate_constraints() if not c.satisfied(self.columns)
         ]
         self.random.shuffle(self.constraints)
         self.constraints = self.constraints[:n_constraints]
@@ -147,39 +142,24 @@ class Env(gym.Env):
         if self.t < len(self.constraints):
             state = [[0] * (self.n_rows * self.n_cols)]
         else:
-            state = self.padded_columns()
-        try:
-            constraint = [self.constraints[self.t].list()]
-        except IndexError:
-            constraint = [[0] * 3]
-        go = [[int(self.t >= len(self.constraints))]]
-        obs = [x for r in state + constraint + go for x in r]
+            state = [c + [0] * (self.n_rows - len(c)) for c in self.columns]
+        constraints = [c.list() for c in self.constraints]
+        go = [[int(self.t >= len(constraints))]]
+        obs = [x for r in state + constraints + go for x in r]
         assert self.observation_space.contains(obs)
         return obs
 
-    def padded_columns(self):
-        return [c + [0] * (self.n_rows - len(c)) for c in self.columns]
-
-    def increment_curriculum(self):
-        if self.curriculum_level + 1 < len(self.curriculum.constraints):
-            self.curriculum_level += 1
-
     def render(self, mode="human", pause=True):
-        print()
         for row in reversed(list(itertools.zip_longest(*self.columns))):
             for x in row:
                 print("{:3}".format(x or " "), end="")
             print()
         for constraint in self.constraints:
             print(
-                "{:3}".format("✔︎")
-                if constraint.satisfied(self.padded_columns())
-                else "  ",
+                "{:3}".format("✔︎") if constraint.satisfied(self.columns) else "  ",
                 end="",
             )
             print(str(constraint))
-        print("search depth", self.search_depth)
-        print(f"time step: {self.t}/{self.time_limit}")
         print(self.last)
         if pause:
             input("pause")

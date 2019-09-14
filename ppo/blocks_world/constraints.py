@@ -16,11 +16,16 @@ class SideBySide(Constraint, ABC):
         self.left = left
 
     def satisfied(self, columns):
-        for left_column, right_column in zip(columns, columns[1:]):
-            for left, right in zip(left_column, right_column):
-                if self.left == left and self.right == right:
-                    return True
-        return False
+        (left_index, left_column), (right_index, right_column) = [
+            next((i, c) for (i, c) in enumerate(columns) if x in c)
+            for x in [self.left, self.right]
+        ]
+        return all(
+            (
+                left_index + 1 == right_index,
+                left_column.index(self.left) == right_column.index(self.right),
+            )
+        )
 
     def __str__(self):
         return f"{self.left} left of {self.right}"
@@ -42,11 +47,11 @@ class Stacked(Constraint, ABC):
         self.bottom = bottom
 
     def satisfied(self, columns):
-        for column in columns:
-            for bottom, top in zip(column, column[1:]):
-                if bottom == self.bottom and top == self.top:
-                    return True
-        return False
+        try:
+            column = next(c for c in columns if self.top in c and self.bottom in c)
+        except StopIteration:
+            return False
+        return column.index(self.top) == column.index(self.bottom) + 1
 
     def __str__(self):
         return f"{self.top} above {self.bottom}"
