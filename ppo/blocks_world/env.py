@@ -58,14 +58,19 @@ class Env(gym.Env):
             column = next(c for c in self.columns if len(c) < self.n_rows)
             column.append(block)
         final_state = self.search_ahead([], self.columns, self.search_distance)
-        self.constraints = []
-        for column in final_state:
-            for bottom, top in zip(column, column[1:]):
-                self.constraints += [Above(top, bottom), Below(top, bottom)]
-        for row in itertools.zip_longest(*final_state):
-            for left, right in zip(row, row[1:]):
-                if None not in (left, right):
-                    self.constraints += [Left(left, right), Right(left, right)]
+
+        def generate_constraints():
+            for column in final_state:
+                for bottom, top in zip(column, column[1:]):
+                    yield from [Above(top, bottom), Below(top, bottom)]
+            for row in itertools.zip_longest(*final_state):
+                for left, right in zip(row, row[1:]):
+                    if None not in (left, right):
+                        yield from [Left(left, right), Right(left, right)]
+
+        self.constraints = [
+            c for c in generate_constraints() if not c.satisfied(self.columns)
+        ]
         self.random.shuffle(self.constraints)
         self.constraints = self.constraints[: self.n_constraints]
         self.observation_generator = self.generate_observations()
