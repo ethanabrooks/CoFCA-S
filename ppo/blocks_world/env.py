@@ -73,7 +73,8 @@ class Env(gym.Env):
         _from, _to = self.int_to_tuple[int(action)]
         if self.valid(_from, _to):
             self.columns[_to].append(self.columns[_from].pop())
-        if all(c.satisfied(self.columns) for c in self.constraints):
+        satisfied = [c.satisfied(self.padded_columns()) for c in self.constraints]
+        if all(satisfied):
             r = 1
             t = True
         elif self.t >= self.time_limit:
