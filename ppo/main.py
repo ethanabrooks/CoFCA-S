@@ -46,7 +46,8 @@ def blocks_world_cli():
     parsers = build_parser()
     parsers.env.add_argument("--n-cols", type=int, required=True)
     parsers.env.add_argument("--n-constraints", type=int, required=True)
-    parsers.agent.add_argument("--mem-size", type=int, required=True)
+    parsers.agent.add_argument("--num-slots", type=int, required=True)
+    parsers.agent.add_argument("--slot-size", type=int, required=True)
     parsers.agent.add_argument("--num-heads", type=int, required=True)
     train_blocks_world(**hierarchical_parse_args(parsers.main))
 

@@ -38,35 +38,36 @@ class Recurrence(nn.Module):
         hidden_size,
         num_layers,
         debug,
-        mem_size,
+        num_slots,
+        slot_size,
         num_heads,
     ):
         super().__init__()
         self.action_size = 1
         self.debug = debug
-        self.hidden_size = hidden_size
-        self.mem_size = mem_size
+        self.slot_size = slot_size
+        self.num_slots = num_slots
         self.num_heads = num_heads
 
         self.state_sizes = RecurrentState(
             a=1,
             a_probs=action_space.n,
             v=1,
-            r=num_heads * hidden_size,
-            wr=num_heads * mem_size,
-            u=mem_size,
-            ww=mem_size,
-            M=mem_size * hidden_size,
-            p=mem_size,
-            L=mem_size * mem_size,
+            r=num_heads * slot_size,
+            wr=num_heads * num_slots,
+            u=num_slots,
+            ww=num_slots,
+            M=num_slots * slot_size,
+            p=num_slots,
+            L=num_slots * num_slots,
         )
         self.xi_sections = XiSections(
-            Kr=num_heads * hidden_size,
+            Kr=num_heads * slot_size,
             Br=num_heads,
-            kw=hidden_size,
+            kw=slot_size,
             bw=1,
-            e=hidden_size,
-            v=hidden_size,
+            e=slot_size,
+            v=slot_size,
             F_hat=num_heads,
             ga=1,
             gw=1,
@@ -77,14 +78,14 @@ class Recurrence(nn.Module):
         assert num_layers > 0
         self.gru = nn.GRU(observation_space.nvec.size, hidden_size, num_layers)
         self.f1 = nn.Sequential(
-            init_(nn.Linear(num_heads * hidden_size, hidden_size)), activation
+            init_(nn.Linear(num_heads * slot_size, hidden_size)), activation
         )
         self.f2 = nn.Sequential(
             activation, init_(nn.Linear(hidden_size, sum(self.xi_sections)))
         )
-        self.actor = Categorical(num_heads * hidden_size, action_space.n)
-        self.critic = init_(nn.Linear(num_heads * hidden_size, 1))
-        self.register_buffer("mem_one_hots", torch.eye(mem_size))
+        self.actor = Categorical(num_heads * slot_size, action_space.n)
+        self.critic = init_(nn.Linear(num_heads * slot_size, 1))
+        self.register_buffer("mem_one_hots", torch.eye(num_slots))
 
     @staticmethod
     def sample_new(x, dist):
@@ -130,13 +131,13 @@ class Recurrence(nn.Module):
         for _x in hx:
             _x.squeeze_(0)
 
-        wr = hx.wr.view(N, self.num_heads, self.mem_size)
+        wr = hx.wr.view(N, self.num_heads, self.num_slots)
         u = hx.u
-        ww = hx.ww.view(N, self.mem_size)
+        ww = hx.ww.view(N, self.num_slots)
         r = hx.r.view(N, -1).unsqueeze(0)
-        M = hx.M.view(N, self.mem_size, self.hidden_size)
+        M = hx.M.view(N, self.num_slots, self.slot_size)
         p = hx.p
-        L = hx.L.view(N, self.mem_size, self.mem_size)
+        L = hx.L.view(N, self.num_slots, self.num_slots)
 
         A = torch.cat([actions, hx.a.unsqueeze(0)], dim=0).long().squeeze(2)
 
@@ -182,7 +183,7 @@ class Recurrence(nn.Module):
             L = (1 - self.mem_one_hots).unsqueeze(0) * L  # zero out L[i, i]
             b = wr @ L
             f = wr @ L.transpose(1, 2)
-            Kr = Kr.view(N, self.num_heads, 1, self.hidden_size)
+            Kr = Kr.view(N, self.num_heads, 1, self.slot_size)
             cr = br.unsqueeze(-1) * F.cosine_similarity(M.unsqueeze(1), Kr, dim=-1)
             wr = Pi[0] * b + Pi[1] * cr + Pi[2] * f
             r = wr @ M
