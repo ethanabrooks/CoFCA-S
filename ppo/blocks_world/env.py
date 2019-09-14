@@ -79,17 +79,15 @@ class Env(gym.Env):
     def search_ahead(self, trajectory, columns, n_steps):
         if n_steps == 0:
             return columns
+        trajectory = trajectory + [tuple(map(tuple, columns))]
         actions = list(itertools.permutations(range(self.n_rows), 2))
         self.random.shuffle(actions)
         for _from, _to in actions:
             if self.valid(_from, _to, columns):
                 columns = copy.deepcopy(columns)
                 columns[_to].append(columns[_from].pop())
-            state = tuple(map(tuple, columns))
-            if state not in trajectory:
-                future_state = self.search_ahead(
-                    trajectory + [state], columns, n_steps - 1
-                )
+            if tuple(map(tuple, columns)) not in trajectory:
+                future_state = self.search_ahead(trajectory, columns, n_steps - 1)
                 if future_state is not None:
                     return future_state
 
