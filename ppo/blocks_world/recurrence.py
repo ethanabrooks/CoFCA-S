@@ -164,7 +164,6 @@ class Recurrence(nn.Module):
             # write
             psi = (1 - f.unsqueeze(-1) * wr).prod(dim=1)  # page 8 left column
             u = (u + (1 - u) * ww) * psi
-            u = torch.rand(u.shape)
             phi = u.sort(dim=-1)
             phi_prod = torch.cumprod(phi.values, dim=-1)
             unsorted_phi_prod = phi_prod.scatter(-1, phi.indices, phi_prod)
