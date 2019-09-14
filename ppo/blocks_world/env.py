@@ -14,15 +14,15 @@ Curriculum = namedtuple("Curriculum", "constraints n_blocks search_depth")
 
 
 class Env(gym.Env):
-    def __init__(self, n_cols: int, seed: int, time_limit: int, n_constraints: int):
-        self.n_constraints = n_constraints
-        self.search_distance = time_limit - n_constraints
+    def __init__(self, n_cols: int, seed: int):
         self.n_rows = self.n_cols = n_cols
         self.n_grids = n_cols ** 2
         self.n_blocks = self.n_grids * 2 // 3
         self.random, self.seed = seeding.np_random(seed)
         self.columns = None
         self.constraints = None
+        self.search_depth = None
+        self.time_limit = None
         self.last = None
         self.t = None
         self.int_to_tuple = list(itertools.permutations(range(self.n_cols), 2))
@@ -30,9 +30,7 @@ class Env(gym.Env):
         self.observation_space = gym.spaces.MultiDiscrete(
             # TODO: np.array([max(self.n_blocks + 1, 4)] * self.n_rows * self.n_cols + [2])
             np.array(
-                [max(self.n_blocks + 1, 4)]
-                * (self.n_rows * self.n_cols + 3 * self.n_constraints)
-                + [2]
+                [max(self.n_blocks + 1, 4)] * (self.n_rows * self.n_cols + 3) + [2]
             )
         )
 
@@ -81,6 +79,9 @@ class Env(gym.Env):
         if all(c.satisfied(self.columns) for c in self.constraints):
             r = 1
             t = True
+        elif self.t >= self.time_limit:
+            r = 0
+            t = True
         else:
             r = 0
             t = False
@@ -90,6 +91,16 @@ class Env(gym.Env):
     def reset(self):
         self.last = None
         self.t = 0
+        n_blocks = self.random.random_integers(
+            *self.curriculum.n_blocks[self.curriculum_level]
+        )
+        self.search_depth = self.random.random_integers(
+            *self.curriculum.search_depth[self.curriculum_level]
+        )
+        n_constraints = self.random.random_integers(
+            *self.curriculum.constraints[self.curriculum_level]
+        )
+        self.time_limit = self.search_depth + n_constraints
         self.columns = [[] for _ in range(self.n_cols)]
         blocks = list(range(1, self.n_blocks + 1))
         self.random.shuffle(blocks)
@@ -97,7 +108,7 @@ class Env(gym.Env):
             self.random.shuffle(self.columns)
             column = next(c for c in self.columns if len(c) < self.n_rows)
             column.append(block)
-        final_state = self.search_ahead([], self.columns, self.search_distance)
+        final_state = self.search_ahead([], self.columns, self.search_depth)
 
         def generate_constraints():
             for column in final_state:
@@ -112,7 +123,7 @@ class Env(gym.Env):
             c for c in generate_constraints() if not c.satisfied(self.columns)
         ]
         self.random.shuffle(self.constraints)
-        self.constraints = self.constraints[: self.n_constraints]
+        self.constraints = self.constraints[:n_constraints]
         return self.get_observation()
 
     def search_ahead(self, trajectory, columns, n_steps):
@@ -165,8 +176,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", default=0, type=int)
     parser.add_argument("--n-cols", default=3, type=int)
-    parser.add_argument("--n-constraints", default=4, type=int)
-    parser.add_argument("--time-limit", default=8, type=int)
     args = hierarchical_parse_args(parser)
     int_to_tuple = list(itertools.permutations(range(args["n_cols"]), 2))
 
