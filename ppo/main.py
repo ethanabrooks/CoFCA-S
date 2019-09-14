@@ -25,6 +25,12 @@ def train_blocks_world(**kwargs):
         ):
             return blocks_world.Env(**env_args, seed=seed + rank)
 
+        def run_epoch(self, *args, **kwargs):
+            counter = super().run_epoch(*args, **kwargs)
+            # if counter["n_satisfied"] > 0.85:
+            #     self.envs.increment_curriculum()
+            return counter
+
         def build_agent(
             self, envs, recurrent=None, entropy_coef=None, baseline=None, **agent_args
         ):

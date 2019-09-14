@@ -58,6 +58,7 @@ class Env(gym.Env):
                 yield copy.deepcopy(last_curriculum)
 
         self.curriculum = Curriculum(*zip(*curriculum_generator()))
+        assert len({len(l) for l in self.curriculum}) == 1  # all lists same length
 
     def valid(self, _from, _to, columns=None):
         if columns is None:
@@ -71,7 +72,8 @@ class Env(gym.Env):
         _from, _to = self.int_to_tuple[int(action)]
         if self.valid(_from, _to):
             self.columns[_to].append(self.columns[_from].pop())
-        if all(c.satisfied(self.columns) for c in self.constraints):
+        satisfied = [c.satisfied(self.padded_columns()) for c in self.constraints]
+        if all(satisfied):
             r = 1
             t = True
         elif self.t >= self.time_limit:
@@ -81,7 +83,7 @@ class Env(gym.Env):
             r = 0
             t = False
         self.last = Last(action=(_from, _to), reward=r, terminal=t, go=0)
-        return self.get_observation(), r, t, {}
+        return self.get_observation(), r, t, dict(n_satisfied=np.mean(satisfied))
 
     def reset(self):
         self.last = None
@@ -107,16 +109,20 @@ class Env(gym.Env):
 
         def generate_constraints():
             for column in final_state:
-                for bottom, top in zip(column, column[1:]):
+                for bottom, top in itertools.zip_longest(column, column[1:]):
                     yield from [Above(top, bottom), Below(top, bottom)]
             for row in itertools.zip_longest(*final_state):
                 for left, right in zip(row, row[1:]):
-                    if None not in (left, right):
-                        yield from [Left(left, right), Right(left, right)]
+                    yield from [Left(left, right), Right(left, right)]
 
+        constraints = list(generate_constraints())
         self.constraints = [
-            c for c in generate_constraints() if not c.satisfied(self.columns)
+            c for c in constraints if not c.satisfied(self.padded_columns())
         ]
+        if not self.constraints:
+            import ipdb
+
+            ipdb.set_trace()
         self.random.shuffle(self.constraints)
         self.constraints = self.constraints[: self.n_constraints]
         return self.get_observation()
@@ -140,7 +146,7 @@ class Env(gym.Env):
         if self.t < self.n_constraints:
             state = [[0] * (self.n_rows * self.n_cols)]
         else:
-            state = [c + [0] * (self.n_rows - len(c)) for c in self.columns]
+            state = self.padded_columns()
         try:
             constraint = [self.constraints[self.t].list()]
         except IndexError:
@@ -150,8 +156,12 @@ class Env(gym.Env):
         assert self.observation_space.contains(obs)
         return obs
 
+    def padded_columns(self):
+        return [c + [0] * (self.n_rows - len(c)) for c in self.columns]
+
     def increment_curriculum(self):
-        self.curriculum_level += 1
+        if self.curriculum_level + 1 < len(self.curriculum.constraints):
+            self.curriculum_level += 1
 
     def render(self, mode="human", pause=True):
         for row in reversed(list(itertools.zip_longest(*self.columns))):
@@ -160,7 +170,9 @@ class Env(gym.Env):
             print()
         for constraint in self.constraints:
             print(
-                "{:3}".format("✔︎") if constraint.satisfied(self.columns) else "  ",
+                "{:3}".format("✔︎")
+                if constraint.satisfied(self.padded_columns())
+                else "  ",
                 end="",
             )
             print(str(constraint))

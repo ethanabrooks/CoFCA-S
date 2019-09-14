@@ -11,8 +11,8 @@ class Constraint:
 
 class SideBySide(Constraint, ABC):
     def __init__(self, left: int, right: int):
-        self.right = right
-        self.left = left
+        self.right = right or 0
+        self.left = left or 0
 
     def satisfied(self, columns):
         (left_index, left_column), (right_index, right_column) = [
@@ -42,8 +42,8 @@ class Right(SideBySide):
 
 class Stacked(Constraint, ABC):
     def __init__(self, top: int, bottom: int):
-        self.top = top
-        self.bottom = bottom
+        self.top = top or 0
+        self.bottom = bottom or 0
 
     def satisfied(self, columns):
         try:
