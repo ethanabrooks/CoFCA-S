@@ -120,8 +120,9 @@ class Env(gym.Env):
                     if None not in (left, right):
                         yield from [Left(left, right), Right(left, right)]
 
+        constraints = list(generate_constraints())
         self.constraints = [
-            c for c in generate_constraints() if not c.satisfied(self.columns)
+            c for c in constraints if not c.satisfied(self.padded_columns())
         ]
         self.random.shuffle(self.constraints)
         self.constraints = self.constraints[:n_constraints]
