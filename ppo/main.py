@@ -5,6 +5,7 @@ import ppo.bandit.baselines.oh_et_al
 import ppo.maze.baselines
 from ppo import blocks_world, gntm
 from ppo.train import Train
+from gym.wrappers import TimeLimit
 
 
 def build_parser():
@@ -20,8 +21,11 @@ def train_blocks_world(time_limit, n_constraints, **kwargs):
     class TrainValues(Train):
         @staticmethod
         def make_env(seed, rank, evaluation, env_id, add_timestep, **env_args):
-            return blocks_world.Env(
-                **env_args, n_constraints=n_constraints, seed=seed + rank
+            return TimeLimit(
+                blocks_world.Env(
+                    **env_args, n_constraints=n_constraints, seed=seed + rank
+                ),
+                max_episode_steps=time_limit,
             )
 
         def build_agent(

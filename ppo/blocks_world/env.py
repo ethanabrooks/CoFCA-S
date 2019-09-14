@@ -9,6 +9,7 @@ from gym.utils import seeding
 from ppo.blocks_world.constraints import Left, Right, Above, Below
 
 Obs = namedtuple("Obs", "obs go")
+Last = namedtuple("Last", "action reward terminal go")
 
 
 class Env(gym.Env):
@@ -21,6 +22,7 @@ class Env(gym.Env):
         self.random, self.seed = seeding.np_random(seed)
         self.columns = None
         self.constraints = None
+        self.last = None
         self.observation_generator = None
         self.int_to_tuple = list(itertools.permutations(range(self.n_cols), 2))
         self.action_space = gym.spaces.Discrete(len(self.int_to_tuple))
@@ -43,9 +45,11 @@ class Env(gym.Env):
         else:
             r = 0
             t = False
+        self.last = Last(action=(_from, _to), reward=r, terminal=t, go=0)
         return next(self.observation_generator), r, t, {}
 
     def reset(self):
+        self.last = None
         self.columns = [[] for _ in range(self.n_cols)]
         blocks = list(range(1, self.n_blocks + 1))
         self.random.shuffle(blocks)
@@ -95,6 +99,7 @@ class Env(gym.Env):
             padding = self.n_cols * self.n_rows - len(constraint)
             yield pack_obs(obs=np.pad(constraint, [0, padding]), go=0)
         while True:
+            self.last = self.last._replace(go=1)
             state = [c + [0] * (self.n_rows - len(c)) for c in self.columns]
             yield pack_obs(obs=state, go=1)
 
@@ -109,6 +114,7 @@ class Env(gym.Env):
                 end="",
             )
             print(str(constraint))
+        print(self.last)
         if pause:
             input("pause")
 
