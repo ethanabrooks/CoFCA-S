@@ -17,7 +17,7 @@ def build_parser():
     return parsers
 
 
-def train_blocks_world(**kwargs):
+def train_blocks_world(increment_curriculum_at_n_satisfied, **kwargs):
     class TrainValues(Train):
         @staticmethod
         def make_env(
@@ -27,7 +27,10 @@ def train_blocks_world(**kwargs):
 
         def run_epoch(self, *args, **kwargs):
             counter = super().run_epoch(*args, **kwargs)
-            if counter["n_satisfied"] > 0.85:
+            if (
+                increment_curriculum_at_n_satisfied
+                and counter["n_satisfied"] > increment_curriculum_at_n_satisfied
+            ):
                 self.envs.increment_curriculum()
             return counter
 
@@ -51,6 +54,7 @@ def train_blocks_world(**kwargs):
 def blocks_world_cli():
     parsers = build_parser()
     parsers.env.add_argument("--n-cols", type=int, required=True)
+    parsers.main.add_argument("--increment-curriculum-at-n-satisfied", type=float)
     parsers.agent.add_argument("--num-slots", type=int, required=True)
     parsers.agent.add_argument("--slot-size", type=int, required=True)
     parsers.agent.add_argument("--embedding-size", type=int, required=True)
