@@ -16,14 +16,13 @@ def build_parser():
     return parsers
 
 
-def train_blocks_world(**kwargs):
+def train_blocks_world(time_limit, n_constraints, **kwargs):
     class TrainValues(Train):
         @staticmethod
-        def make_env(
-            seed, rank, evaluation, env_id, add_timestep, time_limit, **env_args
-        ):
-            assert time_limit
-            return blocks_world.Env(**env_args, time_limit=time_limit, seed=seed + rank)
+        def make_env(seed, rank, evaluation, env_id, add_timestep, **env_args):
+            return blocks_world.Env(
+                **env_args, n_constraints=n_constraints, seed=seed + rank
+            )
 
         def build_agent(
             self, envs, recurrent=None, entropy_coef=None, baseline=None, **agent_args
@@ -39,13 +38,13 @@ def train_blocks_world(**kwargs):
                 )
             return gntm.Agent(entropy_coef=entropy_coef, recurrence=recurrence)
 
-    TrainValues(**kwargs).run()
+    TrainValues(time_limit=time_limit + n_constraints, **kwargs).run()
 
 
 def blocks_world_cli():
     parsers = build_parser()
+    parsers.main.add_argument("--n-constraints", type=int, required=True)
     parsers.env.add_argument("--n-cols", type=int, required=True)
-    parsers.env.add_argument("--n-constraints", type=int, required=True)
     parsers.agent.add_argument("--num-slots", type=int, required=True)
     parsers.agent.add_argument("--slot-size", type=int, required=True)
     parsers.agent.add_argument("--num-heads", type=int, required=True)

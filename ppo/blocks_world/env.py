@@ -14,7 +14,7 @@ Obs = namedtuple("Obs", "obs go")
 class Env(gym.Env):
     def __init__(self, n_cols: int, seed: int, time_limit: int, n_constraints: int):
         self.n_constraints = n_constraints
-        self.time_limit = time_limit
+        self.search_distance = time_limit - n_constraints
         self.n_rows = self.n_cols = n_cols
         self.n_grids = n_cols ** 2
         self.n_blocks = self.n_grids * 2 // 3
@@ -53,7 +53,7 @@ class Env(gym.Env):
             self.random.shuffle(self.columns)
             column = next(c for c in self.columns if len(c) < self.n_rows)
             column.append(block)
-        final_state = self.search_ahead([], self.columns, self.time_limit)
+        final_state = self.search_ahead([], self.columns, self.search_distance)
         self.constraints = []
         for column in final_state:
             for bottom, top in zip(column, column[1:]):
