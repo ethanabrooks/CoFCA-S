@@ -17,7 +17,6 @@ class Env(gym.Env):
     def __init__(self, n_cols: int, seed: int):
         self.n_rows = self.n_cols = n_cols
         self.n_grids = n_cols ** 2
-        self.n_blocks = self.n_grids * 2 // 3
         self.random, self.seed = seeding.np_random(seed)
         self.columns = None
         self.constraints = None
@@ -28,7 +27,7 @@ class Env(gym.Env):
         self.int_to_tuple = list(itertools.permutations(range(self.n_cols), 2))
         self.action_space = gym.spaces.Discrete(len(self.int_to_tuple))
         self.observation_space = gym.spaces.MultiDiscrete(
-            np.array([7] * (self.n_rows * self.n_cols + 3) + [2])
+            np.array([6] * (self.n_rows * self.n_cols + 3) + [2])
         )
 
         self.curriculum_level = 0
@@ -107,7 +106,7 @@ class Env(gym.Env):
         )
         self.time_limit = self.search_depth + n_constraints
         self.columns = [[] for _ in range(self.n_cols)]
-        blocks = list(range(1, self.n_blocks + 1))
+        blocks = list(range(1, n_blocks + 1))
         self.random.shuffle(blocks)
         for block in blocks:
             self.random.shuffle(self.columns)
