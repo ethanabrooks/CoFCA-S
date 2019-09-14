@@ -28,10 +28,7 @@ class Env(gym.Env):
         self.int_to_tuple = list(itertools.permutations(range(self.n_cols), 2))
         self.action_space = gym.spaces.Discrete(len(self.int_to_tuple))
         self.observation_space = gym.spaces.MultiDiscrete(
-            # TODO: np.array([max(self.n_blocks + 1, 4)] * self.n_rows * self.n_cols + [2])
-            np.array(
-                [max(self.n_blocks + 1, 4)] * (self.n_rows * self.n_cols + 3) + [2]
-            )
+            np.array([7] * (self.n_rows * self.n_cols + 3) + [2])
         )
 
         self.curriculum_level = 0
