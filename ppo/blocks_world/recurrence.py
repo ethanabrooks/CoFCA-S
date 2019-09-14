@@ -48,6 +48,8 @@ class Recurrence(nn.Module):
         self.slot_size = slot_size
         self.num_slots = num_slots
         self.num_heads = num_heads
+        nvec = observation_space.nvec
+        self.obs_shape = (*nvec.shape, nvec.max())
 
         self.state_sizes = RecurrentState(
             a=1,
@@ -76,7 +78,9 @@ class Recurrence(nn.Module):
 
         # networks
         assert num_layers > 0
-        self.gru = nn.GRU(observation_space.nvec.size, hidden_size, num_layers)
+        self.gru = nn.GRU(
+            int(nvec.max() * np.prod(nvec.shape)), hidden_size, num_layers
+        )
         self.f1 = nn.Sequential(
             init_(nn.Linear(num_heads * slot_size, num_layers * hidden_size)),
             activation,
@@ -87,6 +91,7 @@ class Recurrence(nn.Module):
         self.actor = Categorical(num_heads * slot_size, action_space.n)
         self.critic = init_(nn.Linear(num_heads * slot_size, 1))
         self.register_buffer("mem_one_hots", torch.eye(num_slots))
+        self.register_buffer("obs_one_hots", torch.eye(int(nvec.max())))
 
     @staticmethod
     def sample_new(x, dist):
@@ -103,8 +108,7 @@ class Recurrence(nn.Module):
                 x = torch.stack(hx).float()
                 yield x.view(*x.shape[:2], -1)
 
-        l = list(pack())
-        hx = torch.cat(l, dim=-1)
+        hx = torch.cat(list(pack()), dim=-1)
         return hx, hx[-1:]
 
     def parse_inputs(self, inputs: torch.Tensor):
@@ -122,6 +126,7 @@ class Recurrence(nn.Module):
         inputs, actions = torch.split(
             inputs.detach(), [D - self.action_size, self.action_size], dim=2
         )
+        inputs = self.obs_one_hots[inputs.long()]
 
         # new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
@@ -140,7 +145,9 @@ class Recurrence(nn.Module):
 
         for t in range(T):
             h = self.f1(r.view(N, -1))
-            h, _ = self.gru(inputs[t].unsqueeze(0), h.view(self.gru.num_layers, N, -1))
+            h, _ = self.gru(
+                inputs[t].view(1, N, -1), h.view(self.gru.num_layers, N, -1)
+            )
             xi = self.f2(h.view(N, -1))
             Kr, br, kw, bw, e, v, free, ga, gw, Pi = xi.squeeze(0).split(
                 self.xi_sections, dim=-1
