@@ -83,31 +83,15 @@ class Recurrence(nn.Module):
             int(embedding_size * np.prod(nvec.shape)), hidden_size, num_layers
         )
         self.f1 = nn.Sequential(
-            init_(
-                nn.Linear(
-                    # num_heads * slot_size,
-                    self.xi_sections.Kr,
-                    num_layers * hidden_size,
-                )
-            ),
+            init_(nn.Linear(num_heads * slot_size, num_layers * hidden_size)),
             activation,
         )
         self.f2 = nn.Sequential(
             activation,
             init_(nn.Linear(num_layers * hidden_size, sum(self.xi_sections))),
         )
-        self.actor = Categorical(
-            # num_heads * slot_size,
-            self.xi_sections.Kr,
-            action_space.n,
-        )
-        self.critic = init_(
-            nn.Linear(
-                # num_heads * slot_size,
-                self.xi_sections.Kr,
-                1,
-            )
-        )
+        self.actor = Categorical(num_heads * slot_size, action_space.n)
+        self.critic = init_(nn.Linear(num_heads * slot_size, 1))
 
         self.register_buffer("mem_one_hots", torch.eye(num_slots))
         self.embeddings = nn.Embedding(int(nvec.max()), embedding_size)
@@ -176,7 +160,6 @@ class Recurrence(nn.Module):
             Kr, br, kw, bw, e, v, free, ga, gw, Pi = xi.squeeze(0).split(
                 self.xi_sections, dim=-1
             )
-            r = Kr
             """
             br = F.softplus(br.view(N, self.num_heads))
             bw = F.softplus(bw)
@@ -219,9 +202,10 @@ class Recurrence(nn.Module):
             cr = (
                 br.unsqueeze(-1) * F.cosine_similarity(M.unsqueeze(1), Kr, dim=-1)
             ).softmax(-1)
-            wr = Pi[0] * b + Pi[1] * cr + Pi[2] * f
+            wr = cr  # Pi[0] * b + Pi[1] * cr + Pi[2] * f
             r = wr @ M
             """
+            r = Kr
 
             # act
             dist = self.actor(r.view(N, -1))
