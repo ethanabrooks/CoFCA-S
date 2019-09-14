@@ -201,7 +201,7 @@ class Recurrence(nn.Module):
             cr = (
                 br.unsqueeze(-1) * F.cosine_similarity(M.unsqueeze(1), Kr, dim=-1)
             ).softmax(-1)
-            wr = cr  # Pi[0] * b + Pi[1] * cr + Pi[2] * f
+            wr = Pi[0] * b + Pi[1] * cr + Pi[2] * f
             r = wr @ M
 
             # act
