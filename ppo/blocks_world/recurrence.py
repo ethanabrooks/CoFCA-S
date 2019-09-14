@@ -142,13 +142,13 @@ class Recurrence(nn.Module):
             h = self.f1(r.view(N, -1))
             h, _ = self.gru(inputs[t].unsqueeze(0), h.view(self.gru.num_layers, N, -1))
             xi = self.f2(h.view(N, -1))
-            Kr, br, kw, bw, e, v, f, ga, gw, Pi = xi.squeeze(0).split(
+            Kr, br, kw, bw, e, v, free, ga, gw, Pi = xi.squeeze(0).split(
                 self.xi_sections, dim=-1
             )
             br = F.softplus(br.view(N, self.num_heads))
             bw = F.softplus(bw)
             e = e.sigmoid()
-            f = f.sigmoid()
+            free = free.sigmoid()
             ga = ga.sigmoid()
             gw = gw.sigmoid()
             Pi = (
@@ -159,7 +159,7 @@ class Recurrence(nn.Module):
             )
 
             # write
-            psi = (1 - f.unsqueeze(-1) * wr).prod(dim=1)  # page 8 left column
+            psi = (1 - free.unsqueeze(-1) * wr).prod(dim=1)  # page 8 left column
             u = (u + (1 - u) * ww) * psi
             phi = u.sort(dim=-1)
             phi_prod = torch.cumprod(phi.values, dim=-1)
@@ -180,7 +180,9 @@ class Recurrence(nn.Module):
             b = wr @ L
             f = wr @ L.transpose(1, 2)
             Kr = Kr.view(N, self.num_heads, 1, self.slot_size)
-            cr = br.unsqueeze(-1) * F.cosine_similarity(M.unsqueeze(1), Kr, dim=-1)
+            cr = (
+                br.unsqueeze(-1) * F.cosine_similarity(M.unsqueeze(1), Kr, dim=-1)
+            ).softmax(-1)
             wr = Pi[0] * b + Pi[1] * cr + Pi[2] * f
             r = wr @ M
 
