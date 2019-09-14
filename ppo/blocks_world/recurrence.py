@@ -40,6 +40,7 @@ class Recurrence(nn.Module):
         debug,
         num_slots,
         slot_size,
+        embedding_size,
         num_heads,
     ):
         super().__init__()
@@ -81,7 +82,7 @@ class Recurrence(nn.Module):
         assert num_layers > 0
         self.gru = nn.GRU(
             # TODO int(nvec.max() * np.prod(nvec.shape)),
-            int(hidden_size * np.prod(nvec.shape)),
+            int(embedding_size * np.prod(nvec.shape)),
             hidden_size,
             num_layers,
         )
@@ -97,7 +98,7 @@ class Recurrence(nn.Module):
         self.critic = init_(nn.Linear(hidden_size * num_layers, 1))
 
         self.register_buffer("mem_one_hots", torch.eye(num_slots))
-        self.embeddings = nn.Embedding(int(nvec.max()), hidden_size)
+        self.embeddings = nn.Embedding(int(nvec.max()), embedding_size)
 
     @staticmethod
     def sample_new(x, dist):
