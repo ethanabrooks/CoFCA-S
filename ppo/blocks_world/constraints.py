@@ -12,8 +12,8 @@ class Constraint:
 
 class SideBySide(Constraint, ABC):
     def __init__(self, left: int, right: int):
-        self.right = right
-        self.left = left
+        self.right = right or 0
+        self.left = left or 0
 
     def satisfied(self, columns):
         for left_column, right_column in zip(columns, columns[1:]):
@@ -22,24 +22,17 @@ class SideBySide(Constraint, ABC):
                     return True
         return False
 
+    def list(self):
+        return [self.left, 0, self.right]
+
     def __str__(self):
         return f"{self.left} left of {self.right}"
 
 
-class Left(SideBySide):
-    def list(self):
-        return [self.left, 0, self.right]
-
-
-class Right(SideBySide):
-    def list(self):
-        return [self.right, 1, self.left]
-
-
 class Stacked(Constraint, ABC):
     def __init__(self, top: int, bottom: int):
-        self.top = top
-        self.bottom = bottom
+        self.top = top or 0
+        self.bottom = bottom or 0
 
     def satisfied(self, columns):
         for column in columns:
@@ -48,15 +41,8 @@ class Stacked(Constraint, ABC):
                     return True
         return False
 
+    def list(self):
+        return [self.top, 1, self.bottom]
+
     def __str__(self):
         return f"{self.top} above {self.bottom}"
-
-
-class Above(Stacked):
-    def list(self):
-        return [self.top, 2, self.bottom]
-
-
-class Below(Stacked):
-    def list(self):
-        return [self.bottom, 3, self.top]

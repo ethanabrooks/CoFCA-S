@@ -6,7 +6,7 @@ import numpy as np
 import gym
 from gym.utils import seeding
 
-from ppo.blocks_world.constraints import Left, Right, Above, Below
+from ppo.blocks_world.constraints import SideBySide, Stacked
 
 Obs = namedtuple("Obs", "obs go")
 Last = namedtuple("Last", "action reward terminal go")
@@ -113,12 +113,11 @@ class Env(gym.Env):
 
         def generate_constraints():
             for column in final_state:
-                for bottom, top in zip(column, column[1:]):
-                    yield from [Above(top, bottom), Below(top, bottom)]
+                for bottom, top in itertools.zip_longest(column, column[1:]):
+                    yield from [Stacked(top, bottom)]
             for row in itertools.zip_longest(*final_state):
                 for left, right in zip(row, row[1:]):
-                    if None not in (left, right):
-                        yield from [Left(left, right), Right(left, right)]
+                    yield from [SideBySide(left, right)]
 
         constraints = list(generate_constraints())
         self.constraints = [
