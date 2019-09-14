@@ -73,7 +73,7 @@ class Env(gym.Env):
 
     def step(self, action: int):
         self.t += 1
-        if self.t <= self.n_constraints:
+        if self.t <= len(self.constraints):
             return self.get_observation(), 0, False, {}
         _from, _to = self.int_to_tuple[int(action)]
         if self.valid(_from, _to):
@@ -131,12 +131,12 @@ class Env(gym.Env):
                     return future_state
 
     def get_observation(self):
-        if self.t < self.n_constraints:
+        if self.t < len(self.constraints):
             state = [[0] * (self.n_rows * self.n_cols)]
         else:
             state = [c + [0] * (self.n_rows - len(c)) for c in self.columns]
         constraints = [c.list() for c in self.constraints]
-        go = [[int(self.t >= self.n_constraints)]]
+        go = [[int(self.t >= len(constraints))]]
         obs = [x for r in state + constraints + go for x in r]
         assert self.observation_space.contains(obs)
         return obs
