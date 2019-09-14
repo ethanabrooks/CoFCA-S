@@ -1,15 +1,14 @@
 from collections import namedtuple
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn as nn
 
 import ppo.bandit.bandit
-from ppo.distributions import FixedCategorical, Categorical
+from ppo.distributions import Categorical
 from ppo.layers import Concat
-from ppo.maze.env import Actions
 from ppo.utils import init_
-import numpy as np
 
 RecurrentState = namedtuple("RecurrentState", "a a_probs v h estimated_values")
 
@@ -46,41 +45,39 @@ class Recurrence(nn.Module):
         self.obs_sections = ppo.values.env.Obs(
             *[int(np.prod(s.shape)) for s in self.obs_spaces]
         )
-        self.obs_shape = h, w = list(map(int, self.obs_spaces.rewards.shape))
+        self.obs_shape = h, w = self.obs_spaces.rewards.shape
+        self.size = h
         self.action_size = 1
         self.debug = debug
         self.hidden_size = hidden_size
+        self.na = action_space.n
 
         # networks
-        self.gru = nn.GRU(hidden_size, hidden_size, bidirectional=True)
-        layers = []
+        layers = [Concat(dim=-1)]
         in_size = hidden_size * 2
         for i in range(num_layers):
-            layers += [
-                nn.Conv2d(
-                    in_channels=in_size,
-                    out_channels=hidden_size * 2
-                    if i == num_layers - 1
-                    else hidden_size,
-                    kernel_size=1,
-                ),
-                activation,
-            ]
+            layers += [init_(nn.Linear(in_size, hidden_size)), activation]
             in_size = hidden_size
-        self.emb = nn.Sequential(*layers)
-
-        S = torch.normal(
-            torch.zeros(h * w, hidden_size), torch.ones(h * w, hidden_size)
-        )
-        A = torch.normal(
-            torch.zeros(int(action_space.n), hidden_size),
-            torch.ones(int(action_space.n), hidden_size),
-        )
-        self.S = nn.Parameter(S)
-        self.A = nn.Parameter(A)
+        self.f = nn.Sequential(*layers)
+        self.actor = Categorical(in_size, self.na)
+        self.critic = init_(nn.Linear(in_size, 1))
+        self.register_buffer("state_indexer", torch.tensor([w, 1.0]))
+        self.S = nn.Embedding(h * w, hidden_size)
+        _S = nn.Parameter(torch.normal(0, 1, size=(h * w, hidden_size)))
+        S = self.S.weight
+        A = nn.Parameter(torch.normal(0, 1, size=(int(action_space.n), hidden_size)))
+        SA = nn.Parameter(S.unsqueeze(-1) + A.T.unsqueeze(0))
+        self.T = nn.Parameter(S @ SA)
+        # SA = nn.Parameter(
+        #     torch.normal(0, 1, size=(h * w, hidden_size, int(action_space.n)))
+        # )
+        # T = torch.normal(
+        #     torch.zeros(h * w, h * w, int(action_space.n)),
+        #     torch.ones(h * w, h * w, int(action_space.n)),
+        # )
         self.a_one_hots = nn.Embedding.from_pretrained(torch.eye(int(h * w)))
         self.state_sizes = RecurrentState(
-            a=1, a_probs=action_space.n, v=1, h=hidden_size, estimated_values=h * w
+            a=1, a_probs=action_space.n, v=1, h=in_size, estimated_values=h * w
         )
 
     @staticmethod
@@ -112,36 +109,44 @@ class Recurrence(nn.Module):
             print(*args, **kwargs)
 
     def inner_loop(self, inputs, rnn_hxs):
-        time_steps, bs, d = inputs.shape
-        ns = self.S.size(0)
-        na = self.A.size(0)
-        obs, action = torch.split(inputs.detach(), [d - 1, 1], dim=-1)
+        T, N, D = inputs.shape
+        ns = self.S.num_embeddings
+        na = self.na
+        obs, action = torch.split(inputs.detach(), [D - 1, 1], dim=-1)
         obs = self.parse_inputs(obs)
         hx = self.parse_hidden(rnn_hxs)
-        K, _ = self.gru(self.S.unsqueeze(1))
-        K = K.squeeze(1)
-        emb_input = (
-            torch.cat(
-                torch.broadcast_tensors(self.S.unsqueeze(0), self.A.unsqueeze(1)),
-                dim=-1,
-            )
-            .permute(2, 0, 1)
-            .unsqueeze(0)
-        )
+        for _x in hx:
+            _x.squeeze_(0)
 
-        for t in range(time_steps):
+        A = torch.cat([action, hx.a.unsqueeze(0)], dim=0).long().squeeze(2)
+        for t in range(T):
             values = torch.zeros_like(obs.rewards[t])
             for _ in range(self.time_limit):
-                q = self.emb(emb_input)
-                L = K @ q.view(2 * self.hidden_size, -1)
-                P = L.view(ns, na, ns).softmax(dim=0)
-                EV = (values @ P.view(ns, -1)).view(bs, na, ns)
-                values = obs.rewards[t] + EV.max(dim=1).values
+                P = self.T.softmax(dim=1)
+                EV = (values @ P.view(ns, -1)).view(N, ns, na)
+                maxEV = EV.max(dim=-1)
+                values = obs.rewards[t] + maxEV.values
 
+            state_idx = (obs.state[t] @ self.state_indexer).long().unsqueeze(-1)
+            next_state_idx = maxEV.indices.gather(dim=-1, index=state_idx)
+            s1 = self.S(state_idx).squeeze(1)
+            s2 = self.S(next_state_idx).squeeze(1)
+            h = self.f((s1, s2))
+
+            dist = self.actor(h)
+            # self.sample_new(A[t], dist)
+
+            A[t] = torch.cat(
+                [
+                    next_state_idx // self.size - state_idx // self.size,
+                    next_state_idx % self.size - state_idx % self.size,
+                ],
+                dim=-1,
+            )
             yield RecurrentState(
-                a=hx.a[t],
-                a_probs=hx.a_probs[t],
-                v=hx.v[t],
-                h=hx.h[t],
+                a=A[t],
+                a_probs=dist.probs,
+                v=self.critic(h),
+                h=h,
                 estimated_values=values,
             )
