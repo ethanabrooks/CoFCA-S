@@ -160,7 +160,6 @@ class Recurrence(nn.Module):
             Kr, br, kw, bw, e, v, free, ga, gw, Pi = xi.squeeze(0).split(
                 self.xi_sections, dim=-1
             )
-            """
             br = F.softplus(br.view(N, self.num_heads))
             bw = F.softplus(bw)
             e = e.sigmoid().view(N, 1, self.slot_size)
@@ -190,6 +189,7 @@ class Recurrence(nn.Module):
             ww2 = ww.unsqueeze(-2)
             M = M * (1 - ww1 * e) + ww1 * v
             # page 7 right column
+            """
 
             # read
             p = (1 - ww.sum(-1, keepdim=True)) * p + ww
@@ -198,14 +198,13 @@ class Recurrence(nn.Module):
             L = (1 - self.mem_one_hots).unsqueeze(0) * L  # zero out L[i, i]
             b = wr @ L
             f = wr @ L.transpose(1, 2)
+            """
             Kr = Kr.view(N, self.num_heads, 1, self.slot_size)
             cr = (
                 br.unsqueeze(-1) * F.cosine_similarity(M.unsqueeze(1), Kr, dim=-1)
             ).softmax(-1)
             wr = cr  # Pi[0] * b + Pi[1] * cr + Pi[2] * f
             r = wr @ M
-            """
-            r = Kr
 
             # act
             dist = self.actor(r.view(N, -1))
