@@ -10,7 +10,7 @@ from ppo.layers import Concat
 from ppo.mdp.env import Obs
 from ppo.utils import init_
 
-RecurrentState = namedtuple("RecurrentState", "a a_probs v h wr u ww M p L")
+RecurrentState = namedtuple("RecurrentState", "a a_probs v r wr u ww M p L")
 XiSections = namedtuple("XiSections", "Kr Br kw bw e v F_hat ga gw Pi")
 
 
@@ -52,7 +52,7 @@ class Recurrence(nn.Module):
             a=1,
             a_probs=action_space.n,
             v=1,
-            h=hidden_size,
+            r=num_heads * hidden_size,
             wr=num_heads * mem_size,
             u=mem_size,
             ww=mem_size,
@@ -76,11 +76,15 @@ class Recurrence(nn.Module):
         # networks
         assert num_layers > 0
         self.gru = nn.GRU(observation_space.nvec.size, hidden_size, num_layers)
-        self.f = nn.Sequential(
+        self.f1 = nn.Sequential(
+            init_(nn.Linear(num_heads * hidden_size, hidden_size)), activation
+        )
+        self.f2 = nn.Sequential(
             activation, init_(nn.Linear(hidden_size, sum(self.xi_sections)))
         )
-        self.actor = Categorical(hidden_size, action_space.n)
-        self.critic = init_(nn.Linear(hidden_size, 1))
+        self.actor = Categorical(num_heads * hidden_size, action_space.n)
+        self.critic = init_(nn.Linear(num_heads * hidden_size, 1))
+        self.register_buffer("mem_one_hots", torch.eye(mem_size))
 
     @staticmethod
     def sample_new(x, dist):
@@ -95,9 +99,14 @@ class Recurrence(nn.Module):
         def pack():
             for name, hx in RecurrentState(*zip(*hxs))._asdict().items():
                 x = torch.stack(hx).float()
+                if x.size(1) != 2:
+                    import ipdb
+
+                    ipdb.set_trace()
                 yield x.view(*x.shape[:2], -1)
 
-        hx = torch.cat(list(pack()), dim=-1)
+        l = list(pack())
+        hx = torch.cat(l, dim=-1)
         return hx, hx[-1:]
 
     def parse_inputs(self, inputs: torch.Tensor):
@@ -123,63 +132,70 @@ class Recurrence(nn.Module):
 
         wr = hx.wr.view(N, self.num_heads, self.mem_size)
         u = hx.u
-        ww = hx.ww
-        h = hx.h
+        ww = hx.ww.view(N, self.mem_size)
+        r = hx.r.view(N, -1).unsqueeze(0)
         M = hx.M.view(N, self.mem_size, self.hidden_size)
         p = hx.p
-        L = hx.L
+        L = hx.L.view(N, self.mem_size, self.mem_size)
 
         A = torch.cat([actions, hx.a.unsqueeze(0)], dim=0).long().squeeze(2)
 
         for t in range(T):
+            h = self.f1(r.view(N, -1))
             h, _ = self.gru(inputs[t].unsqueeze(0), h.unsqueeze(0))
-            xi = self.f(h)
-            Kr, Br, kw, bw, e, v, F_hat, ga, gw, Pi = torch.split(
-                xi.squeeze(0), self.xi_sections, dim=-1
+            xi = self.f2(h)
+            Kr, br, kw, bw, e, v, f, ga, gw, Pi = xi.squeeze(0).split(
+                self.xi_sections, dim=-1
             )
-            Br = F.softplus(Br.view(N, self.num_heads))
+            br = F.softplus(br.view(N, self.num_heads))
             bw = F.softplus(bw)
-            e = torch.sigmoid(e)
-            F_hat = torch.sigmoid(F_hat)
-            ga = torch.sigmoid(ga)
-            gw = torch.sigmoid(gw)
-            Pi = torch.softmax(Pi.view(N, self.num_heads, -1), dim=-1)
+            e = e.sigmoid()
+            f = f.sigmoid()
+            ga = ga.sigmoid()
+            gw = gw.sigmoid()
+            Pi = (
+                Pi.view(N, self.num_heads, -1)
+                .permute(2, 0, 1)
+                .softmax(dim=0)
+                .unsqueeze(-1)
+            )
 
             # write
-            unsqueeze_wr = F_hat.unsqueeze(-1) * wr
-            import ipdb
-
-            ipdb.set_trace()
-            psi = torch.prod(1 - unsqueeze_wr, dim=-1)  # page 8 left column
-            import ipdb
-
-            ipdb.set_trace()
-            u = (u + ww - u * ww) * psi
-            phi = torch.argsort(u, dim=-1)
-            a = (1 - u[phi]) * torch.prod(u[phi])  # page 8 left column
-            cw = torch.softmax(bw * F.cosine_similarity(M, kw), dim=-1)
+            psi = (1 - f.unsqueeze(-1) * wr).prod(dim=1)  # page 8 left column
+            u = (u + (1 - u) * ww) * psi
+            u = torch.rand(u.shape)
+            phi = u.sort(dim=-1)
+            phi_prod = torch.cumprod(phi.values, dim=-1)
+            unsorted_phi_prod = phi_prod.scatter(-1, phi.indices, phi_prod)
+            a = (1 - u) * unsorted_phi_prod  # page 8 left column
+            cw = (bw * F.cosine_similarity(M, kw.unsqueeze(1), dim=-1)).softmax(dim=-1)
             ww = gw * (ga * a + (1 - ga) * cw)
-            M = M * (1 - ww @ e) + ww @ v  # page 7 right column
-
-            # read
-            p = (1 - ww.sum()) * p + ww
             ww1 = ww.unsqueeze(-1)
             ww2 = ww.unsqueeze(-2)
-            L = (1 - ww1 - ww2) * L + ww1 * p.unsqueeze(-2)
-            f = L @ wr
-            b = L @ wr
-            cr = torch.softmax(Br * F.cosine_similarity(M, Kr), dim=-1)
-            wr = Pi[1] * b + Pi[2] * cr + Pi[3] * f
-            r = M @ wr
+            M = M * (1 - ww1 * e.unsqueeze(1)) + ww1 * v.unsqueeze(1)
+            # page 7 right column
+
+            # read
+            p = (1 - ww.sum(-1, keepdim=True)) * p + ww
+            # TODO: what if we took out ww1 (or maybe ww2)?
+            L = (1 - ww1 - ww2) * L + ww1 * p.unsqueeze(-1)
+            L = (1 - self.mem_one_hots).unsqueeze(0) * L  # zero out L[i, i]
+            b = wr @ L
+            f = wr @ L.transpose(1, 2)
+            Kr = Kr.view(N, self.num_heads, 1, self.hidden_size)
+            cr = br.unsqueeze(-1) * F.cosine_similarity(M.unsqueeze(1), Kr, dim=-1)
+            wr = Pi[0] * b + Pi[1] * cr + Pi[2] * f
+            r = wr @ M
 
             # act
-            dist = self.actor(r)
+            dist = self.actor(r.view(N, -1))
+            value = self.critic(r.view(N, -1))
             self.sample_new(A[t], dist)
             yield RecurrentState(
                 a=A[t],
                 a_probs=dist.probs,
-                v=self.critic(h),
-                h=h,
+                v=value,
+                r=r,
                 wr=wr,
                 u=u,
                 ww=ww,

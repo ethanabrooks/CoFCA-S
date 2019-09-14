@@ -94,8 +94,9 @@ class Env(gym.Env):
             constraint = constraint.list()
             padding = self.n_cols * self.n_rows - len(constraint)
             yield pack_obs(obs=np.pad(constraint, [0, padding]), go=0)
-        state = [c + [0] * (self.n_rows - len(c)) for c in self.columns]
-        yield pack_obs(obs=state, go=1)
+        while True:
+            state = [c + [0] * (self.n_rows - len(c)) for c in self.columns]
+            yield pack_obs(obs=state, go=1)
 
     def render(self, mode="human", pause=True):
         for row in reversed(list(itertools.zip_longest(*self.columns))):
