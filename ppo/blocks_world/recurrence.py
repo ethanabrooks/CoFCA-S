@@ -78,7 +78,8 @@ class Recurrence(nn.Module):
         assert num_layers > 0
         self.gru = nn.GRU(observation_space.nvec.size, hidden_size, num_layers)
         self.f1 = nn.Sequential(
-            init_(nn.Linear(num_heads * slot_size, hidden_size)), activation
+            init_(nn.Linear(num_heads * slot_size, num_layers * hidden_size)),
+            activation,
         )
         self.f2 = nn.Sequential(
             activation, init_(nn.Linear(hidden_size, sum(self.xi_sections)))
@@ -143,8 +144,8 @@ class Recurrence(nn.Module):
 
         for t in range(T):
             h = self.f1(r.view(N, -1))
-            h, _ = self.gru(inputs[t].unsqueeze(0), h.unsqueeze(0))
-            xi = self.f2(h)
+            h, _ = self.gru(inputs[t].unsqueeze(0), h.view(self.gru.num_layers, N, -1))
+            xi = self.f2(h.view(N, -1))
             Kr, br, kw, bw, e, v, f, ga, gw, Pi = xi.squeeze(0).split(
                 self.xi_sections, dim=-1
             )
