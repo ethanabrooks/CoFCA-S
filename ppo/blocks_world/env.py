@@ -84,10 +84,14 @@ class Env(gym.Env):
             r = 0
             t = False
         self.last = Last(action=(_from, _to), reward=r, terminal=t, go=0)
-        i = dict(curriculum_level=self.curriculum_level)
-        if t:
-            i.update(n_satisfied=np.mean(satisfied))
-        return self.get_observation(), r, t, i
+        return (
+            self.get_observation(),
+            r,
+            t,
+            dict(
+                n_satisfied=np.mean(satisfied), curriculum_level=self.curriculum_level
+            ),
+        )
 
     def reset(self):
         self.last = None
