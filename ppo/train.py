@@ -208,7 +208,6 @@ class TrainBase(abc.ABC):
                 total_num_steps = (self.i + 1) * num_processes * num_steps
                 # print(f"Writing to {self.logdir}")
                 fps = total_num_steps / (time.time() - tick)
-                tick = time.time()
                 yield dict(
                     k_scalar_pairs(
                         tick=tick,
@@ -218,6 +217,7 @@ class TrainBase(abc.ABC):
                         **eval_result,
                     )
                 )
+                tick = time.time()
 
     def run_epoch(
         self, obs, rnn_hxs, masks, num_steps, counter, success_reward, use_tqdm
