@@ -21,6 +21,7 @@ class Env(gym.Env):
         self.columns = None
         self.constraints = None
         self.n_constraints = None
+        self.search_depth = None
         self.time_limit = None
         self.last = None
         self.t = None
@@ -91,13 +92,13 @@ class Env(gym.Env):
         n_blocks = self.random.random_integers(
             *self.curriculum.n_blocks[self.curriculum_level]
         )
-        search_depth = self.random.random_integers(
+        self.search_depth = self.random.random_integers(
             *self.curriculum.search_depth[self.curriculum_level]
         )
         self.n_constraints = self.random.random_integers(
             *self.curriculum.constraints[self.curriculum_level]
         )
-        self.time_limit = search_depth + self.n_constraints
+        self.time_limit = self.search_depth + self.n_constraints
         self.columns = [[] for _ in range(self.n_cols)]
         blocks = list(range(1, n_blocks + 1))
         self.random.shuffle(blocks)
@@ -105,7 +106,7 @@ class Env(gym.Env):
             self.random.shuffle(self.columns)
             column = next(c for c in self.columns if len(c) < self.n_rows)
             column.append(block)
-        final_state = self.search_ahead([], self.columns, search_depth)
+        final_state = self.search_ahead([], self.columns, self.search_depth)
 
         def generate_constraints():
             for column in final_state:
@@ -119,10 +120,6 @@ class Env(gym.Env):
         self.constraints = [
             c for c in constraints if not c.satisfied(self.padded_columns())
         ]
-        if not self.constraints:
-            import ipdb
-
-            ipdb.set_trace()
         self.random.shuffle(self.constraints)
         self.constraints = self.constraints[: self.n_constraints]
         return self.get_observation()
@@ -164,6 +161,7 @@ class Env(gym.Env):
             self.curriculum_level += 1
 
     def render(self, mode="human", pause=True):
+        print()
         for row in reversed(list(itertools.zip_longest(*self.columns))):
             for x in row:
                 print("{:3}".format(x or " "), end="")
@@ -176,6 +174,9 @@ class Env(gym.Env):
                 end="",
             )
             print(str(constraint))
+        print("search depth", self.search_depth)
+        print(self.n_constraints, "constraints")
+        print(f"time step: {self.t}/{self.time_limit}")
         print(self.last)
         if pause:
             input("pause")
@@ -189,8 +190,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", default=0, type=int)
     parser.add_argument("--n-cols", default=3, type=int)
-    parser.add_argument("--n-constraints", default=4, type=int)
-    parser.add_argument("--time-limit", default=8, type=int)
     args = hierarchical_parse_args(parser)
     int_to_tuple = list(itertools.permutations(range(args["n_cols"]), 2))
 

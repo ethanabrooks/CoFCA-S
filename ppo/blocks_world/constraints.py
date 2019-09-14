@@ -1,4 +1,5 @@
 from abc import ABC
+import itertools
 
 
 class Constraint:
@@ -15,29 +16,35 @@ class SideBySide(Constraint, ABC):
         self.left = left or 0
 
     def satisfied(self, columns):
-        (left_index, left_column), (right_index, right_column) = [
-            next((i, c) for (i, c) in enumerate(columns) if x in c)
-            for x in [self.left, self.right]
-        ]
-        return all(
-            (
-                left_index + 1 == right_index,
-                left_column.index(self.left) == right_column.index(self.right),
-            )
-        )
-
-    def __str__(self):
-        return f"{self.left} left of {self.right}"
+        for (
+            (left_index, left_column),
+            (right_index, right_column),
+        ) in itertools.combinations(enumerate(columns), 2):
+            if all(
+                (
+                    left_index + 1 == right_index,
+                    self.left in left_column,
+                    self.right in right_column,
+                )
+            ):
+                return True
+        return False
 
 
 class Left(SideBySide):
     def list(self):
         return [self.left, 0, self.right]
 
+    def __str__(self):
+        return f"{self.left} left of {self.right}"
+
 
 class Right(SideBySide):
     def list(self):
         return [self.right, 1, self.left]
+
+    def __str__(self):
+        return f"{self.right} right of {self.left}"
 
 
 class Stacked(Constraint, ABC):
@@ -46,21 +53,24 @@ class Stacked(Constraint, ABC):
         self.bottom = bottom or 0
 
     def satisfied(self, columns):
-        try:
-            column = next(c for c in columns if self.top in c and self.bottom in c)
-        except StopIteration:
-            return False
-        return column.index(self.top) == column.index(self.bottom) + 1
-
-    def __str__(self):
-        return f"{self.top} above {self.bottom}"
+        for column in columns:
+            for bottom, top in zip(column, column[1:]):
+                if bottom == self.bottom and top == self.top:
+                    return True
+        return False
 
 
 class Above(Stacked):
     def list(self):
         return [self.top, 2, self.bottom]
 
+    def __str__(self):
+        return f"{self.top} above {self.bottom}"
+
 
 class Below(Stacked):
     def list(self):
         return [self.bottom, 3, self.top]
+
+    def __str__(self):
+        return f"{self.bottom} below {self.top}"
