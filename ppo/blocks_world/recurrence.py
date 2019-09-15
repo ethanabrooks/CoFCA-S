@@ -178,20 +178,36 @@ class Recurrence(nn.Module):
                 .softmax(dim=0)
                 .unsqueeze(-1)
             )
+            self.print("Pi")
+            self.print(Pi.view(3, -1).mean(1))
 
             # write
             psi = (1 - free.unsqueeze(-1) * wr).prod(dim=1)  # page 8 left column
             u = (u + (1 - u) * ww) * psi
+            self.print("u")
+            self.print(u)
             phi = u.sort(dim=-1)
             phi_prod = torch.cumprod(phi.values, dim=-1)
             unsorted_phi_prod = phi_prod.scatter(-1, phi.indices, phi_prod)
             a = (1 - u) * unsorted_phi_prod  # page 8 left column
+            self.print("a")
+            self.print(a)
             cw = (
                 bw * F.cosine_similarity(M, kw.view(N, 1, self.slot_size), dim=-1)
             ).softmax(dim=-1)
+            self.print("cw")
+            self.print(cw)
+            self.print("gw")
+            self.print(gw)
+            self.print("ga")
+            self.print(ga)
             ww = gw * (ga * a + (1 - ga) * cw)
+            self.print("ww")
+            self.print(ww)
             ww1 = ww.unsqueeze(-1)
             ww2 = ww.unsqueeze(-2)
+            self.print("e")
+            self.print(e)
             M = M * (1 - ww1 * e) + ww1 * v
             # page 7 right column
 
@@ -200,6 +216,8 @@ class Recurrence(nn.Module):
             # TODO: what if we took out ww1 (or maybe ww2)?
             L = (1 - ww1 - ww2) * L + ww1 * p.unsqueeze(-1)
             L = (1 - self.mem_one_hots).unsqueeze(0) * L  # zero out L[i, i]
+            self.print("L")
+            self.print(L)
             b = wr @ L
             f = wr @ L.transpose(1, 2)
             Kr = Kr.view(N, self.num_heads, 1, self.slot_size)
@@ -207,6 +225,8 @@ class Recurrence(nn.Module):
                 br.unsqueeze(-1) * F.cosine_similarity(M.unsqueeze(1), Kr, dim=-1)
             ).softmax(-1)
             wr = Pi[0] * b + Pi[1] * cr + Pi[2] * f
+            self.print("wr")
+            self.print(wr)
             r = (wr @ M).view(N, -1)
 
             # act
