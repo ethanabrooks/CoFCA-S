@@ -27,7 +27,7 @@ class Env(gym.Env):
         self.int_to_tuple = list(itertools.permutations(range(self.n_cols), 2))
         self.action_space = gym.spaces.Discrete(len(self.int_to_tuple))
         self.observation_space = gym.spaces.MultiDiscrete(
-            np.array([6] * (self.n_rows * self.n_cols + 3) + [2])
+            np.array([7] * (self.n_rows * self.n_cols + 3) + [2])
         )
 
         self.curriculum_level = curriculum_level
@@ -36,24 +36,18 @@ class Env(gym.Env):
             last_curriculum = Curriculum(
                 constraints=[1, 1], n_blocks=[3, 3], search_depth=[1, 1]
             )
-            while any(
-                (
-                    tuple(last_curriculum.constraints) < (6, 6),
-                    tuple(last_curriculum.search_depth) < (7, 7),
-                    tuple(last_curriculum.n_blocks) < (6, 6),
-                )
-            ):
+            for _ in range(5):
                 yield copy.deepcopy(last_curriculum)
                 last_curriculum.constraints[1] += 1
-                last_curriculum.n_blocks[1] += 1
+                last_curriculum.n_blocks[1] = min(6, last_curriculum.n_blocks[1] + 1)
                 yield copy.deepcopy(last_curriculum)
-                last_curriculum.n_blocks[0] += 1
+                last_curriculum.n_blocks[0] = min(6, last_curriculum.n_blocks[0] + 1)
                 last_curriculum.search_depth[1] += 1
                 yield copy.deepcopy(last_curriculum)
-                last_curriculum.n_blocks[1] += 1
+                last_curriculum.n_blocks[1] = min(6, last_curriculum.n_blocks[1] + 1)
                 last_curriculum.constraints[0] += 1
                 yield copy.deepcopy(last_curriculum)
-                last_curriculum.n_blocks[0] += 1
+                last_curriculum.n_blocks[0] = min(6, last_curriculum.n_blocks[0] + 1)
                 last_curriculum.search_depth[0] += 1
                 yield copy.deepcopy(last_curriculum)
 
