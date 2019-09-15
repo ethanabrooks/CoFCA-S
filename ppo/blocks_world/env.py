@@ -14,7 +14,8 @@ Curriculum = namedtuple("Curriculum", "constraints n_blocks search_depth")
 
 
 class Env(gym.Env):
-    def __init__(self, n_cols: int, seed: int, curriculum_level: int):
+    def __init__(self, n_cols: int, seed: int, curriculum_level: int, extra_time: int):
+        self.extra_time = extra_time
         self.n_rows = self.n_cols = n_cols
         self.n_grids = n_cols ** 2
         self.random, self.seed = seeding.np_random(seed)
@@ -97,7 +98,7 @@ class Env(gym.Env):
         n_constraints = self.random.random_integers(
             *self.curriculum.constraints[self.curriculum_level]
         )
-        self.time_limit = self.search_depth + n_constraints
+        self.time_limit = self.search_depth + n_constraints + self.extra_time
         self.columns = [[] for _ in range(self.n_cols)]
         blocks = list(range(1, n_blocks + 1))
         self.random.shuffle(blocks)

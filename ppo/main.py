@@ -1,3 +1,4 @@
+import numpy as np
 from rl_utils import hierarchical_parse_args
 
 import ppo.arguments
@@ -5,8 +6,6 @@ import ppo.bandit.baselines.oh_et_al
 import ppo.maze.baselines
 from ppo import blocks_world, gntm
 from ppo.train import Train
-from gym.wrappers import TimeLimit
-import numpy as np
 
 
 def build_parser():
@@ -61,6 +60,7 @@ def blocks_world_cli():
     parsers = build_parser()
     parsers.env.add_argument("--n-cols", type=int, required=True)
     parsers.env.add_argument("--curriculum-level", type=int, default=0)
+    parsers.env.add_argument("--extra-time", type=int, default=6)
     parsers.main.add_argument("--increment-curriculum-at-n-satisfied", type=float)
     parsers.agent.add_argument("--num-slots", type=int, required=True)
     parsers.agent.add_argument("--slot-size", type=int, required=True)
