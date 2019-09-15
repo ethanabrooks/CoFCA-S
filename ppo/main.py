@@ -30,8 +30,9 @@ def train_blocks_world(increment_curriculum_at_n_satisfied, **kwargs):
             dictionary = super().run_epoch(*args, **kwargs)
             if (
                 increment_curriculum_at_n_satisfied
+                and "n_satisfied" in dictionary
                 and np.mean(dictionary["n_satisfied"])
-                > increment_curriculum_at_n_satisfied
+                > increment_curriculum_at_n_satisfied,
             ):
                 self.envs.increment_curriculum()
             return dictionary
