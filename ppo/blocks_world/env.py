@@ -110,11 +110,11 @@ class Env(gym.Env):
 
         def generate_constraints():
             for column in final_state:
-                for bottom, top in itertools.zip_longest(column, column[1:]):
-                    yield from [Stacked(top, bottom)]
+                for bottom, top in itertools.zip_longest([0] + column, column + [0]):
+                    constraint = Stacked(top, bottom)
             for row in itertools.zip_longest(*final_state):
-                for left, right in zip(row, row[1:]):
-                    yield from [SideBySide(left, right)]
+                for left, right in zip((0,) + row, row + (0,)):
+                    constraint = SideBySide(left, right)
 
         constraints = list(generate_constraints())
         self.constraints = [

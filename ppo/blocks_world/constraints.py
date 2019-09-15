@@ -16,7 +16,8 @@ class SideBySide(Constraint, ABC):
         self.left = left or 0
 
     def satisfied(self, columns):
-        for left_column, right_column in zip(columns, columns[1:]):
+        zeros = [[0 for _ in columns[0]]]
+        for left_column, right_column in zip(zeros + columns, columns + zeros):
             for left, right in zip(left_column, right_column):
                 if self.left == left and self.right == right:
                     return True
@@ -36,7 +37,7 @@ class Stacked(Constraint, ABC):
 
     def satisfied(self, columns):
         for column in columns:
-            for bottom, top in zip(column, column[1:]):
+            for bottom, top in zip([0] + column, column + [0]):
                 if bottom == self.bottom and top == self.top:
                     return True
         return False
