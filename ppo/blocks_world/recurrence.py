@@ -188,6 +188,7 @@ class Recurrence(nn.Module):
             self.print(u)
             phi = u.sort(dim=-1)
             phi_prod = torch.cumprod(phi.values, dim=-1)
+            phi_prod = F.pad(phi_prod, [1, 0], value=1)[:, :-1]
             unsorted_phi_prod = phi_prod.scatter(-1, phi.indices, phi_prod)
             a = (1 - u) * unsorted_phi_prod  # page 8 left column
             self.print("a")
