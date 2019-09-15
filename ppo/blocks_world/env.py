@@ -144,10 +144,7 @@ class Env(gym.Env):
                         return future_state
 
     def get_observation(self):
-        if self.t < len(self.constraints):
-            state = [[0] * (self.n_rows * self.n_cols)]
-        else:
-            state = self.pad(self.columns)
+        state = self.pad(self.columns)
         try:
             constraint = [self.constraints[self.t].list()]
         except IndexError:
