@@ -14,7 +14,7 @@ Curriculum = namedtuple("Curriculum", "constraints n_blocks search_depth")
 
 
 class Env(gym.Env):
-    def __init__(self, n_cols: int, seed: int):
+    def __init__(self, n_cols: int, seed: int, curriculum_level: int):
         self.n_rows = self.n_cols = n_cols
         self.n_grids = n_cols ** 2
         self.random, self.seed = seeding.np_random(seed)
@@ -30,7 +30,7 @@ class Env(gym.Env):
             np.array([6] * (self.n_rows * self.n_cols + 3) + [2])
         )
 
-        self.curriculum_level = 0
+        self.curriculum_level = curriculum_level
 
         def curriculum_generator():
             last_curriculum = Curriculum(

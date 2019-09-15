@@ -56,6 +56,7 @@ def train_blocks_world(increment_curriculum_at_n_satisfied, **kwargs):
 def blocks_world_cli():
     parsers = build_parser()
     parsers.env.add_argument("--n-cols", type=int, required=True)
+    parsers.env.add_argument("--curriculum-level", type=int, default=0)
     parsers.main.add_argument("--increment-curriculum-at-n-satisfied", type=float)
     parsers.agent.add_argument("--num-slots", type=int, required=True)
     parsers.agent.add_argument("--slot-size", type=int, required=True)
