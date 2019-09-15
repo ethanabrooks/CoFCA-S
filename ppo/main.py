@@ -28,12 +28,14 @@ def train_blocks_world(increment_curriculum_at_n_satisfied, **kwargs):
 
         def run_epoch(self, *args, **kwargs):
             dictionary = super().run_epoch(*args, **kwargs)
-            if (
-                increment_curriculum_at_n_satisfied
-                and "n_satisfied" in dictionary
-                and np.mean(dictionary["n_satisfied"])
-                > increment_curriculum_at_n_satisfied,
-            ):
+            try:
+                increment_curriculum = (
+                    np.mean(dictionary["n_satisfied"])
+                    > increment_curriculum_at_n_satisfied
+                )
+            except (TypeError, KeyError):
+                increment_curriculum = False
+            if increment_curriculum:
                 self.envs.increment_curriculum()
             return dictionary
 
@@ -49,6 +51,7 @@ def train_blocks_world(increment_curriculum_at_n_satisfied, **kwargs):
                     action_space=envs.action_space,
                     **agent_args,
                 )
+
             return gntm.Agent(entropy_coef=entropy_coef, recurrence=recurrence)
 
     TrainValues(**kwargs).run()
