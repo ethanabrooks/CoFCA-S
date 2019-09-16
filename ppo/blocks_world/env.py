@@ -155,7 +155,12 @@ class Env(gym.Env):
         return obs
 
     def pad(self, columns):
-        return [c + [0] * (self.n_rows - len(c)) for c in columns]
+        try:
+            return [c + [0] * (self.n_rows - len(c)) for c in columns]
+        except TypeError:
+            import ipdb
+
+            ipdb.set_trace()
 
     def increment_curriculum(self):
         if self.curriculum_level + 1 < len(self.curriculum.constraints):
