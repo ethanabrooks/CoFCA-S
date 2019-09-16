@@ -107,6 +107,8 @@ class Env(gym.Env):
             column = next(c for c in self.columns if len(c) < self.n_rows)
             column.append(block)
         ahead = self.search_ahead([], self.columns, self.search_depth)
+        if ahead is None:
+            return self.reset()
         start_state = self.pad(self.columns)
         final_state = self.pad(ahead)
 
