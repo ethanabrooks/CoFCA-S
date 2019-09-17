@@ -1,9 +1,9 @@
 import copy
 import itertools
 from collections import namedtuple
-from typing import Tuple
-import numpy as np
+
 import gym
+import numpy as np
 from gym.utils import seeding
 
 from ppo.blocks_world.constraints import SideBySide, Stacked

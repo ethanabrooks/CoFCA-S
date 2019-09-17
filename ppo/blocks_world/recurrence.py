@@ -5,7 +5,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn as nn
 
-from ppo.blocks_world.wrapper import Actions
+from ppo.blocks_world.envs.planner import Actions
 from ppo.distributions import FixedCategorical
 from ppo.layers import Product, Flatten
 from ppo.mdp.env import Obs
