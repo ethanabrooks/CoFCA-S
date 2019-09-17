@@ -8,7 +8,6 @@ from gym.utils import seeding
 
 from ppo.blocks_world.constraints import SideBySide, Stacked
 
-Obs = namedtuple("Obs", "obs go")
 Last = namedtuple("Last", "action reward terminal go")
 Curriculum = namedtuple("Curriculum", "n_blocks search_depth")
 
@@ -21,6 +20,7 @@ class Env(gym.Env):
         curriculum_level: int,
         extra_time: int,
         n_constraints: int,
+        planning_horizon: int,
     ):
         self.n_constraints = n_constraints
         self.extra_time = extra_time
@@ -36,7 +36,9 @@ class Env(gym.Env):
         self.last = None
         self.t = None
         self.int_to_tuple = list(itertools.permutations(range(self.n_cols), 2))
-        self.action_space = gym.spaces.Discrete(len(self.int_to_tuple))
+        self.action_space = gym.spaces.MultiDiscrete(
+            len(self.int_to_tuple) * (1 + planning_horizon)
+        )
         self.observation_space = gym.spaces.MultiDiscrete(
             np.array([7] * (self.n_rows * self.n_cols + 3 * n_constraints))
         )
@@ -73,11 +75,12 @@ class Env(gym.Env):
             columns = self.columns
         return columns[_from] and len(columns[_to]) < self.n_rows
 
-    def step(self, action: int):
+    def step(self, action: list):
+        action = int(action[0])
         self.t += 1
         if self.t <= len(self.constraints):
             return self.get_observation(), 0, False, {}
-        _from, _to = self.int_to_tuple[int(action)]
+        _from, _to = self.int_to_tuple[action]
         if self.valid(_from, _to):
             self.columns[_to].append(self.columns[_from].pop())
         satisfied = [c.satisfied(self.pad(self.columns)) for c in self.constraints]

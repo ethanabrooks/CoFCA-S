@@ -1,11 +1,12 @@
 import numpy as np
+import ppo.blocks_world.recurrences
 from rl_utils import hierarchical_parse_args
 
 import ppo.arguments
 import ppo.bandit.baselines.oh_et_al
 import ppo.maze.baselines
-from ppo import blocks_world, gntm
-import ppo.blocks_world.baselines
+from ppo import gntm
+from ppo.blocks_world import dnc, planner
 from ppo.train import Train
 
 
@@ -18,13 +19,17 @@ def build_parser():
     return parsers
 
 
-def train_blocks_world(increment_curriculum_at_n_satisfied, **kwargs):
+def train_blocks_world(increment_curriculum_at_n_satisfied, baseline, **kwargs):
     class TrainValues(Train):
         @staticmethod
         def make_env(
             seed, rank, evaluation, env_id, add_timestep, time_limit, **env_args
         ):
-            return blocks_world.Env(**env_args, seed=seed + rank)
+            if baseline == "dnc":
+                return dnc.Env(**env_args, seed=seed + rank)
+            else:
+                assert baseline is None
+                return planner.Env(**env_args, seed=seed + rank)
 
         def run_epoch(self, *args, **kwargs):
             dictionary = super().run_epoch(*args, **kwargs)
@@ -43,14 +48,14 @@ def train_blocks_world(increment_curriculum_at_n_satisfied, **kwargs):
             self, envs, recurrent=None, entropy_coef=None, baseline=None, **agent_args
         ):
             if baseline == "dnc":
-                recurrence = blocks_world.baselines.dnc.Recurrence(
+                recurrence = dnc.Recurrence(
                     observation_space=envs.observation_space,
                     action_space=envs.action_space,
                     **agent_args,
                 )
             else:
                 assert baseline is None
-                recurrence = blocks_world.Recurrence(
+                recurrence = planner.Recurrence(
                     observation_space=envs.observation_space,
                     action_space=envs.action_space,
                     **agent_args,

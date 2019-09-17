@@ -5,7 +5,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn as nn
 
-from ppo.blocks_world.envs.planner import Actions
+from ppo.blocks_world.planner.env import Actions
 from ppo.distributions import FixedCategorical
 from ppo.layers import Product, Flatten
 from ppo.mdp.env import Obs
@@ -133,7 +133,6 @@ class Recurrence(nn.Module):
         )
         embedded = self.embed1(inputs.long().view(-1, D)).view(T, N, -1)
         H, _ = self.controller(embedded)
-
         actions = self.parse_actions(actions)
 
         new = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
@@ -148,8 +147,6 @@ class Recurrence(nn.Module):
         P = actions.searched.view(N, self.planning_steps, self.action_sections.planned)[
             new
         ]
-        # TODO write wrapper handling many actions
-        # TODO write wrapper combining constraints
 
         # I dimensional
         n_new = torch.sum(new)  # type: int
