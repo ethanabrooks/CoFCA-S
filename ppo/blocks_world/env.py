@@ -21,6 +21,8 @@ class Env(gym.Env):
         self.random, self.seed = seeding.np_random(seed)
         self.columns = None
         self.constraints = None
+        self.n_blocks = None
+        self.n_constraints = None
         self.search_depth = None
         self.time_limit = None
         self.last = None
@@ -30,8 +32,6 @@ class Env(gym.Env):
         self.observation_space = gym.spaces.MultiDiscrete(
             np.array([7] * (self.n_rows * self.n_cols + 3) + [2])
         )
-
-        self.curriculum_level = curriculum_level
 
         def curriculum_generator():
             last_curriculum = Curriculum(
@@ -52,8 +52,10 @@ class Env(gym.Env):
                 last_curriculum.search_depth[0] += 1
                 yield copy.deepcopy(last_curriculum)
 
-        self.curriculum = Curriculum(*zip(*curriculum_generator()))
-        assert len({len(l) for l in self.curriculum}) == 1  # all lists same length
+        self.curriculum_level = curriculum_level
+        self.curriculum_iterator = curriculum_generator()
+        for _ in range(curriculum_level + 1):
+            self.curriculum = next(self.curriculum_iterator)
 
     def valid(self, _from, _to, columns=None):
         if columns is None:
@@ -79,6 +81,9 @@ class Env(gym.Env):
             t = False
         self.last = Last(action=(_from, _to), reward=r, terminal=t, go=0)
         i = dict(
+            n_blocks=self.n_blocks,
+            search_depth=self.search_depth,
+            constraints=self.n_constraints,
             curriculum_level=self.curriculum_level,
             reward_plus_curriculum=r + self.curriculum_level,
         )
@@ -89,18 +94,12 @@ class Env(gym.Env):
     def reset(self):
         self.last = None
         self.t = 0
-        n_blocks = self.random.random_integers(
-            *self.curriculum.n_blocks[self.curriculum_level]
-        )
-        self.search_depth = self.random.random_integers(
-            *self.curriculum.search_depth[self.curriculum_level]
-        )
-        n_constraints = self.random.random_integers(
-            *self.curriculum.constraints[self.curriculum_level]
-        )
-        self.time_limit = self.search_depth + n_constraints + self.extra_time
+        self.n_blocks = self.random.random_integers(*self.curriculum.n_blocks)
+        self.search_depth = self.random.random_integers(*self.curriculum.search_depth)
+        self.n_constraints = self.random.random_integers(*self.curriculum.constraints)
+        self.time_limit = self.search_depth + self.n_constraints + self.extra_time
         self.columns = [[] for _ in range(self.n_cols)]
-        blocks = list(range(1, n_blocks + 1))
+        blocks = list(range(1, self.n_blocks + 1))
         self.random.shuffle(blocks)
         for block in blocks:
             self.random.shuffle(self.columns)
@@ -127,7 +126,7 @@ class Env(gym.Env):
             if not c.satisfied(start_state) and c.satisfied(final_state)
         ]
         self.random.shuffle(self.constraints)
-        self.constraints = self.constraints[:n_constraints]
+        self.constraints = self.constraints[: self.n_constraints]
         return self.get_observation()
 
     def search_ahead(self, trajectory, columns, n_steps):
@@ -165,8 +164,8 @@ class Env(gym.Env):
             ipdb.set_trace()
 
     def increment_curriculum(self):
-        if self.curriculum_level + 1 < len(self.curriculum.constraints):
-            self.curriculum_level += 1
+        self.curriculum_level += 1
+        self.curriculum = next(self.curriculum_iterator)
 
     def render(self, mode="human", pause=True):
         print()
