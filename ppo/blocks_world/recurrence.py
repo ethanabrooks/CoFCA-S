@@ -2,16 +2,21 @@ from collections import namedtuple
 
 import numpy as np
 import torch
-from torch import nn as nn
 import torch.nn.functional as F
+from torch import nn as nn
 
-from ppo.distributions import FixedCategorical, Categorical
-from ppo.layers import Concat
+from ppo.blocks_world.wrapper import Actions
+from ppo.distributions import FixedCategorical
+from ppo.layers import Product, Flatten
 from ppo.mdp.env import Obs
 from ppo.utils import init_
 
-RecurrentState = namedtuple("RecurrentState", "a a_probs v h r wr u ww M p L")
-XiSections = namedtuple("XiSections", "Kr Br kw bw e v F_hat ga gw Pi")
+RecurrentState = namedtuple(
+    "RecurrentState",
+    "search_logits planned_actions planned_states probs actions state value model_loss embed_loss",
+)
+
+INF = 1e8
 
 
 def batch_conv1d(inputs, weights):
@@ -38,66 +43,50 @@ class Recurrence(nn.Module):
         hidden_size,
         num_layers,
         debug,
-        num_slots,
-        slot_size,
+        planning_steps,
+        planning_horizon,
         embedding_size,
-        num_heads,
     ):
         super().__init__()
         self.action_size = 1
         self.debug = debug
-        self.slot_size = slot_size
-        self.num_slots = num_slots
-        self.num_heads = num_heads
         nvec = observation_space.nvec
         self.obs_shape = (*nvec.shape, nvec.max())
+        self.planning_steps = planning_steps
+        self.planning_horizon = planning_horizon
+        self.num_options = action_space.n  # TODO: change
 
         self.state_sizes = RecurrentState(
-            a=1,
-            a_probs=action_space.n,
-            v=1,
-            h=num_layers * hidden_size,
-            r=num_heads * slot_size,
-            wr=num_heads * num_slots,
-            u=num_slots,
-            ww=num_slots,
-            M=num_slots * slot_size,
-            p=num_slots,
-            L=num_slots * num_slots,
+            search_logits=planning_steps * self.num_options,
+            planned_actions=planning_horizon,
+            planned_states=planning_horizon * embedding_size,
+            probs=action_space.n,
+            actions=1,
+            state=embedding_size,
+            value=1,
+            model_loss=1,
+            embed_loss=1,
         )
-        self.xi_sections = XiSections(
-            Kr=num_heads * slot_size,
-            Br=num_heads,
-            kw=slot_size,
-            bw=1,
-            e=slot_size,
-            v=slot_size,
-            F_hat=num_heads,
-            ga=1,
-            gw=1,
-            Pi=3 * num_heads,
-        )
+        self.action_sections = Actions(actual=1, searched=planning_steps)
 
         # networks
-        assert num_layers > 0
-        self.gru = nn.GRU(
-            int(embedding_size * np.prod(nvec.shape)) + num_heads * slot_size,
-            hidden_size,
-            num_layers,
+        self.embed1 = nn.Embedding(nvec.max(), nvec.max())
+        self.embed_options = nn.Embedding(self.num_options, self.num_options)
+        self.controller = nn.GRU(embedding_size, hidden_size, num_layers)
+        self.embed2 = init_(nn.Linear(hidden_size, embedding_size))
+        self.sharpener = nn.Sequential(activation, init_(nn.Linear(hidden_size, 1)))
+        self.critic = nn.Sequential(
+            activation, init_(nn.Linear(hidden_size, self.num_options))
         )
-        self.Wxi = nn.Sequential(
+        self.model = nn.Sequential(
+            Product(),
+            Flatten(),
             activation,
-            init_(nn.Linear(num_layers * hidden_size, sum(self.xi_sections))),
+            init_(nn.Linear(embedding_size * self.num_options, hidden_size)),
+            activation,
+            init_(nn.Linear(hidden_size, embedding_size)),
         )
-        self.actor = Categorical(
-            num_layers * hidden_size + num_heads * slot_size, action_space.n
-        )
-        self.critic = init_(
-            nn.Linear(num_layers * hidden_size + num_heads * slot_size, 1)
-        )
-
-        self.register_buffer("mem_one_hots", torch.eye(num_slots))
-        self.embeddings = nn.Embedding(int(nvec.max()), embedding_size)
+        self.eye = nn.Embedding.from_pretrained(torch.eye(self.num_options))
 
     @staticmethod
     def sample_new(x, dist):
@@ -125,108 +114,110 @@ class Recurrence(nn.Module):
     def parse_hidden(self, hx: torch.Tensor) -> RecurrentState:
         return RecurrentState(*torch.split(hx, self.state_sizes, dim=-1))
 
+    def parse_actions(self, actions):
+        return Actions(torch.split(actions, self.action_sections))
+
     def print(self, t, *args, **kwargs):
         if self.debug:
             if type(t) == torch.Tensor:
                 t = (t * 10.0).round() / 10.0
             print(t, *args, **kwargs)
 
+    def redistribute(self, logits, index):
+        return logits - torch.inf(device=logits) * self.eye(index)
+
     def inner_loop(self, inputs, rnn_hxs):
         T, N, D = inputs.shape
         inputs, actions = torch.split(
             inputs.detach(), [D - self.action_size, self.action_size], dim=2
         )
-        inputs = self.embeddings(inputs.long())
+        embedded = self.embed1(inputs.long().view(-1, D)).view(T, N, -1)
+        H, _ = self.controller(embedded)
 
-        # new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
+        actions = self.parse_actions(actions)
+
+        new = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
         for _x in hx:
             _x.squeeze_(0)
 
-        wr = hx.wr.view(N, self.num_heads, self.num_slots)
-        u = hx.u
-        ww = hx.ww.view(N, self.num_slots)
-        r = hx.r.view(N, -1).unsqueeze(0)
-        M = hx.M.view(N, self.num_slots, self.slot_size)
-        p = hx.p
-        L = hx.L.view(N, self.num_slots, self.num_slots)
-        h = (
-            hx.h.view(N, self.gru.num_layers, self.gru.hidden_size)
-            .transpose(0, 1)
-            .contiguous()
-        )
+        # i dimensional
+        search_logits = hx.search_logits.view(N, self.planning_steps, self.num_options)[
+            new
+        ]
+        P = actions.searched.view(N, self.planning_steps, self.action_sections.planned)[
+            new
+        ]
+        # TODO write wrapper handling many actions
+        # TODO write wrapper combining constraints
 
-        A = torch.cat([actions, hx.a.unsqueeze(0)], dim=0).long()
+        # I dimensional
+        n_new = torch.sum(new)  # type: int
+        I = torch.zeros(n_new, device=new.device)
+        planned_actions = hx.planned_actions.long()[new]
+        X = hx.planned_states.view(N, self.planning_horizon, -1)[new]
+        X[I] = H[0, new]
+        logits = torch.zeros(n_new, self.num_options, device=new.device)
 
+        for i in range(P.size(-1)):
+            # TODO: prevent cycles?
+            x = X[I]
+
+            sharpness = self.sharpener(x)
+            values = self.critic(x)
+            new = (logits[I] == 0).all(-1)
+            search_logits[i][new] = sharpness * values
+            old = (logits[I] != 0).any(-1)
+            search_logits[i][old] = logits[I][old]
+            self.sample_new(P[i], FixedCategorical(logits=search_logits[i]))
+
+            # stack stuff
+            logits[I] = search_logits[i] - INF * self.eye(P[i])
+            push = values[P[i]] > 0
+            pop = values[P[i]] <= 0
+            planned_actions[I] = P[i]
+            X[I + 1][push] = self.model(
+                (X[I].unsqueeze(1), self.embed_action(P[i]).unsqueeze(2))
+            )[push]
+            I[push] = torch.min(I[push] + 1, self.planning_horizon)
+            I[pop] = torch.max(I[pop] - 1, other=0)
+            # TODO: somehow add early termination
+
+        # TODO: add obs to recurrence
         for t in range(T):
-            x = torch.cat([inputs[t].view(1, N, -1), r.view(1, N, -1)], dim=-1)
-            _, h = self.gru(x, h)
-            hT = h.transpose(0, 1).reshape(N, -1)  # switch layer and batch dims
-            xi = self.Wxi(hT)
-            Kr, br, kw, bw, e, v, free, ga, gw, Pi = xi.squeeze(0).split(
-                self.xi_sections, dim=-1
-            )
-            # preprocess
-            br = F.softplus(br.view(N, self.num_heads))
-            bw = F.softplus(bw)
-            e = e.sigmoid().view(N, 1, self.slot_size)
-            v = v.view(N, 1, self.slot_size)
-            free = free.sigmoid()
-            ga = ga.sigmoid()
-            gw = gw.sigmoid()
-            Pi = (
-                Pi.view(N, self.num_heads, -1)
-                .permute(2, 0, 1)
-                .softmax(dim=0)
-                .unsqueeze(-1)
-            )
+            model_loss = (
+                self.model((inputs[t - 1], self.embed_action(P[t])))
+                - inputs[t].detach()
+            ) ** 2
+            # TODO: predict from start of episode
 
-            # write
-            psi = (1 - free.unsqueeze(-1) * wr).prod(dim=1)  # page 8 left column
-            u = (u + (1 - u) * ww) * psi
-            phi = u.sort(dim=-1)
-            phi_prod = torch.cumprod(phi.values, dim=-1)
-            phi_prod = F.pad(phi_prod, [1, 0], value=1)[:, :-1]
-            unsorted_phi_prod = phi_prod.scatter(-1, phi.indices, phi_prod)
-            a = (1 - u) * unsorted_phi_prod  # page 8 left column
-            cw = (
-                bw * F.cosine_similarity(M, kw.view(N, 1, self.slot_size), dim=-1)
-            ).softmax(dim=-1)
-            ww = gw * (ga * a + (1 - ga) * cw)
-            ww1 = ww.unsqueeze(-1)
-            ww2 = ww.unsqueeze(-2)
-            M = M * (1 - ww1 * e) + ww1 * v
-            # page 7 right column
+            # TODO add gate (c) so that obs is not compared every turn
+            logits = F.cosine_similarity(inputs[t], X)
+            dist = FixedCategorical(logits=self.sharpener(inputs[t]) * logits)
+            embed_loss = -dist.entropy()  # maximize distinctions among embedded
+            # self.sample_new(
+            #     planned_actions[t], dist
+            # )  # todo: distinguish actions from planned actions
 
-            # read
-            L = (1 - ww1 - ww2) * L + ww2 * p.unsqueeze(-1)
-            L = (1 - self.mem_one_hots).unsqueeze(0) * L  # zero out L[i, i]
-            p = (1 - ww.sum(-1, keepdim=True)) * p + ww
-            b = wr @ L
-            f = wr @ L.transpose(1, 2)
-            Kr = Kr.view(N, self.num_heads, 1, self.slot_size)
-            cr = (
-                br.unsqueeze(-1) * F.cosine_similarity(M.unsqueeze(1), Kr, dim=-1)
-            ).softmax(-1)
-            wr = Pi[0] * b + Pi[1] * cr + Pi[2] * f
-            r = (wr @ M).view(N, -1)
-
-            # act
-            x = torch.cat([hT, r], dim=-1)
-            dist = self.actor(x)  # page 7 left column
-            value = self.critic(x)
-            self.sample_new(A[t], dist)
-
+            action = planned_actions[t]
             yield RecurrentState(
-                a=A[t],
-                a_probs=dist.probs,
-                v=value,
-                h=hT,
-                r=r,
-                wr=wr,
-                u=u,
-                ww=ww,
-                M=M,
-                p=p,
-                L=L,
+                search_logits=search_logits,
+                planned_actions=planned_actions,
+                planned_states=X,
+                probs=None,
+                actions=action,
+                state=inputs[t],
+                value=search_logits[t, action],
+                model_loss=model_loss,
+                embed_loss=embed_loss,
             )
+
+
+"""
+Questions:
+- prevent cycles
+- early termination
+- gate network
+- controller design
+- model loss
+"""

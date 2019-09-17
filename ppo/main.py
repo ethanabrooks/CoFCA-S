@@ -5,6 +5,7 @@ import ppo.arguments
 import ppo.bandit.baselines.oh_et_al
 import ppo.maze.baselines
 from ppo import blocks_world, gntm
+import ppo.blocks_world.baselines
 from ppo.train import Train
 
 
@@ -41,8 +42,12 @@ def train_blocks_world(increment_curriculum_at_n_satisfied, **kwargs):
         def build_agent(
             self, envs, recurrent=None, entropy_coef=None, baseline=None, **agent_args
         ):
-            if baseline == "one-shot":
-                raise NotImplementedError
+            if baseline == "dnc":
+                recurrence = blocks_world.baselines.dnc.Recurrence(
+                    observation_space=envs.observation_space,
+                    action_space=envs.action_space,
+                    **agent_args,
+                )
             else:
                 assert baseline is None
                 recurrence = blocks_world.Recurrence(
@@ -66,6 +71,7 @@ def blocks_world_cli():
     parsers.agent.add_argument("--slot-size", type=int, required=True)
     parsers.agent.add_argument("--embedding-size", type=int, required=True)
     parsers.agent.add_argument("--num-heads", type=int, required=True)
+    parsers.agent.add_argument("--baseline", choices=["dnc"])
     train_blocks_world(**hierarchical_parse_args(parsers.main))
 
 

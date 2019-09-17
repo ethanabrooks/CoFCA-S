@@ -12,8 +12,8 @@ def cli():
 
 
 def run(env, action_fn):
-
     s = env.reset()
+    print(env.plan(trajectory=[env.columns], action_list=[]))
     while True:
         env.render(pause=False)
         action = None
@@ -33,6 +33,7 @@ def run(env, action_fn):
             print("resetting")
             time.sleep(0.5)
             env.reset()
+            print(env.plan(trajectory=[env.columns], action_list=[]))
             print()
 
 

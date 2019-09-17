@@ -156,7 +156,7 @@ class Env(gym.Env):
 
     def pad(self, columns):
         try:
-            return [c + [0] * (self.n_rows - len(c)) for c in columns]
+            return [list(c) + [0] * (self.n_rows - len(c)) for c in columns]
         except TypeError:
             import ipdb
 
@@ -186,6 +186,27 @@ class Env(gym.Env):
         print(self.last)
         if pause:
             input("pause")
+
+    def plan(self, trajectory, action_list):
+        columns = list(map(list, trajectory[-1]))
+        if tuple(map(tuple, columns)) in trajectory[:-1]:
+            return
+        if all(c.satisfied(self.pad(columns)) for c in self.constraints):
+            return action_list
+        actions = list(itertools.permutations(range(self.n_rows), 2))
+        self.random.shuffle(actions)
+        for _from, _to in actions:
+            if self.valid(_from, _to, columns):
+
+                new_columns = copy.deepcopy(columns)
+                new_columns[_to].append(new_columns[_from].pop())
+
+                plan = self.plan(
+                    trajectory=trajectory + [tuple(map(tuple, new_columns))],
+                    action_list=action_list + [(_from, _to)],
+                )
+                if plan is not None:
+                    return plan
 
 
 if __name__ == "__main__":
