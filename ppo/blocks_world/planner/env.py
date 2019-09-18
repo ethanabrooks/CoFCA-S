@@ -20,7 +20,7 @@ class Env(gym.Env):
         curriculum_level: int,
         extra_time: int,
         n_constraints: int,
-        planning_horizon: int,
+        planning_steps: int,
     ):
         self.n_constraints = n_constraints
         self.extra_time = extra_time
@@ -30,14 +30,15 @@ class Env(gym.Env):
         self.columns = None
         self.constraints = None
         self.n_blocks = None
-        self.n_constraints = None
         self.search_depth = None
         self.time_limit = None
         self.last = None
         self.t = None
-        self.int_to_tuple = list(itertools.permutations(range(self.n_cols), 2))
+        self.int_to_tuple = [(0, 0)] + list(
+            itertools.permutations(range(self.n_cols), 2)
+        )
         self.action_space = gym.spaces.MultiDiscrete(
-            len(self.int_to_tuple) * (1 + planning_horizon)
+            [len(self.int_to_tuple)] * (1 + planning_steps)
         )
         self.observation_space = gym.spaces.MultiDiscrete(
             np.array([7] * (self.n_rows * self.n_cols + 3 * n_constraints))
@@ -76,11 +77,11 @@ class Env(gym.Env):
         return columns[_from] and len(columns[_to]) < self.n_rows
 
     def step(self, action: list):
-        action = int(action[0])
+        action, *_ = action
         self.t += 1
         if self.t <= len(self.constraints):
             return self.get_observation(), 0, False, {}
-        _from, _to = self.int_to_tuple[action]
+        _from, _to = self.int_to_tuple[int(action)]
         if self.valid(_from, _to):
             self.columns[_to].append(self.columns[_from].pop())
         satisfied = [c.satisfied(self.pad(self.columns)) for c in self.constraints]
@@ -158,7 +159,8 @@ class Env(gym.Env):
 
     def get_observation(self):
         state = [c + [0] * (self.n_rows - len(c)) for c in self.columns]
-        constraints = [c.list() for c in self.constraints]
+        padding = [[0] * 3 * (self.n_constraints - len(self.constraints))]
+        constraints = [c.list() for c in self.constraints] + padding
         obs = [x for r in state + constraints for x in r]
         assert self.observation_space.contains(obs)
         return obs
