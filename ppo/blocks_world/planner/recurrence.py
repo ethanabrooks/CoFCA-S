@@ -148,12 +148,11 @@ class Recurrence(nn.Module):
             assert I.all()
             # search (needed for log_probs)
             values = torch.zeros_like(values)
-            values_list = []
             options = -torch.ones_like(options)
-            # hidden_states = torch.zeros(
-            #     (N, self.planning_steps, self.hidden_size, self.num_model_layers),
-            #     device=device,
-            # )
+            hidden_states = torch.zeros(
+                (N, self.planning_steps, self.hidden_size, self.num_model_layers),
+                device=device,
+            )
             hidden_states_list = [
                 torch.zeros(N, self.hidden_size, self.num_model_layers, device=device)
             ]
@@ -174,7 +173,7 @@ class Recurrence(nn.Module):
                 x = states[I, J]
                 sharpness = self.sharpener(x)
                 v = self.critic(x)
-                values_list.append(v)
+                values[:, j] = v
                 logits = torch.stack(logits_list, dim=1)
                 new_logits = (logits[I, J] == 0).all(-1, keepdim=True)
                 # l = torch.where(new_logits, sharpness * v, logits[I, indices[:, j]])
