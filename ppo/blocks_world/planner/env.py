@@ -33,10 +33,10 @@ class Env(gym.Env):
         self.search_depth = None
         self.time_limit = None
         self.last = None
+        self.solved = None
         self.t = None
-        self.int_to_tuple = [(0, 0)] + list(
-            itertools.permutations(range(self.n_cols), 2)
-        )
+        self.int_to_tuple = [(0, 0)]
+        self.int_to_tuple.extend(itertools.permutations(range(self.n_cols), 2))
         self.action_space = gym.spaces.MultiDiscrete(
             [len(self.int_to_tuple)] * (1 + planning_steps)
         )
@@ -79,21 +79,23 @@ class Env(gym.Env):
     def step(self, action: list):
         action, *_ = action
         self.t += 1
-        if self.t <= len(self.constraints):
-            return self.get_observation(), 0, False, {}
+        if self.solved or self.t > self.time_limit:
+            return (
+                self.get_observation(),
+                float(self.solved),
+                self.t > self.time_limit,
+                {},
+            )
         _from, _to = self.int_to_tuple[int(action)]
         if self.valid(_from, _to):
             self.columns[_to].append(self.columns[_from].pop())
         satisfied = [c.satisfied(self.pad(self.columns)) for c in self.constraints]
         if all(satisfied):
             r = 1
-            t = True
-        elif self.t >= self.time_limit:
-            r = 0
-            t = True
+            self.solved = True
         else:
             r = 0
-            t = False
+        t = False
         self.last = Last(action=(_from, _to), reward=r, terminal=t, go=0)
         i = dict(
             n_blocks=self.n_blocks,
@@ -101,12 +103,13 @@ class Env(gym.Env):
             curriculum_level=self.curriculum_level,
             reward_plus_curriculum=r + self.curriculum_level,
         )
-        if t:
+        if self.solved:
             i.update(n_satisfied=np.mean(satisfied))
         return self.get_observation(), r, t, i
 
     def reset(self):
         self.last = None
+        self.solved = False
         self.t = 0
         self.n_blocks = self.random.random_integers(*self.curriculum.n_blocks)
         self.search_depth = self.random.random_integers(*self.curriculum.search_depth)

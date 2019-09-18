@@ -11,10 +11,9 @@ from ppo.mdp.env import Obs
 from ppo.utils import init_
 
 RecurrentState = namedtuple(
-    "RecurrentState",
-    "values search_probs search_options planned_options model_loss embed_loss h x a v",
+    "RecurrentState", "values probs options indices model_loss embed_loss h x a v"
 )
-Actions = namedtuple("Actions", "actual searched")
+Actions = namedtuple("Actions", "actual options")
 
 INF = 1e8
 
@@ -46,17 +45,17 @@ class Recurrence(nn.Module):
 
         self.state_sizes = RecurrentState(
             values=planning_steps * self.num_options,
-            search_probs=planning_steps * self.num_options,
-            search_options=planning_steps,
-            planned_options=planning_steps,
+            probs=planning_steps * self.num_options,
+            options=planning_steps,
+            indices=planning_steps,
             model_loss=1,
             embed_loss=1,
             h=num_model_layers * hidden_size,
-            x=hidden_size,
+            x=embedding_size,
             a=1,
             v=1,
         )
-        self.action_sections = Actions(actual=1, searched=planning_steps)
+        self.action_sections = Actions(actual=1, options=planning_steps)
 
         # networks
         self.embed_options = nn.Embedding(self.num_options, self.num_options)
@@ -127,89 +126,90 @@ class Recurrence(nn.Module):
         inputs, actions = torch.split(
             inputs.detach(), [D - self.action_size, self.action_size], dim=2
         )
-        X = self.embed1(inputs.view(T * N, -1).long()).view(T, N, -1)
+        inputs = self.embed1(inputs.view(T * N, -1).long()).view(T, N, -1)
+        new_actions = (actions < 0).any()
+        if new_actions:
+            assert (actions < 0).all()
         actions = self.parse_actions(actions)
         hx = self.parse_hidden(rnn_hxs)
         for _x in hx:
             _x.squeeze_(0)
-        new = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
-        new[0] = False  # TODO
+        I = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
+        options = hx.options.view(N, self.planning_steps).long()
 
         # search (needed for log_probs)
         values = hx.values.view(N, self.planning_steps, self.num_options)
-        search_probs = hx.search_probs.view(values.shape)
-        search_options = actions.searched.view(T, N, self.planning_steps).long()[0, new]
+        probs = hx.probs.view(values.shape)
+        indices = hx.indices.view(N, self.planning_steps).long()
 
-        # indexes
-        I = torch.zeros_like(new[new]).long()
-        R = torch.arange(I.numel(), device=device)
+        if I.any():
+            options = actions.options.view(T, N, self.planning_steps).long()[0]
+            assert I.all()
+            # search (needed for log_probs)
+            values = torch.zeros_like(values)
+            options = -torch.ones_like(options)
+            hidden_states = torch.zeros(
+                (N, self.planning_steps, self.hidden_size, self.num_model_layers),
+                device=device,
+            )
+            logits = torch.zeros_like(probs)
+            # TODO: delete some of these?
 
-        # plan  (needed for execution)
-        planned_h = torch.zeros(
-            (new.sum(), self.planning_steps, self.hidden_size, self.num_model_layers),
-            device=device,
-        )
-        planned_options = hx.planned_options.view(N, self.planning_steps).long()
-        planned_states = torch.zeros(
-            (new.sum(), self.planning_steps, self.embedding_size), device=device
-        )
-        planned_logits = torch.zeros_like(values)[new]
-        planned_states[R, 0] = self.embed2(X[0, new])
+            # plan  (needed for execution)
+            states = torch.zeros(
+                (N, self.planning_steps, self.embedding_size), device=device
+            )
+            states[I, 0] = self.embed2(inputs[0])
 
-        if new.any():
-            for i in range(self.planning_steps):
+            J = torch.zeros_like(I).long()
+            for j in range(self.planning_steps):
+                indices[I, J] = j
                 # TODO: prevent cycles?
-                new_logits = (planned_logits[R, I] == 0).all(-1, keepdim=True)
-                # if new_logits.any():
-                x = planned_states[R, I]
+                x = states[I, J]
                 sharpness = self.sharpener(x)
                 v = self.critic(x)
-                values[new, I] = v
-                logits = torch.where(new_logits, sharpness * v, planned_logits[R, I])
-                # else:
-                #     logits = planned_logits[R, I]
-                dist = FixedCategorical(logits=logits)
-                self.sample_new(search_options[:, i], dist)
-                P = search_options[:, i]
-                search_probs[new, i] = dist.probs
+                values[:, j] = v
+                new_logits = (logits[I, J] == 0).all(-1, keepdim=True)
+                l = torch.where(new_logits, sharpness * v, logits[I, J])
+                dist = FixedCategorical(logits=l)
+                P = options[:, j]
+                self.sample_new(P, dist)
+                logits[:, j] = l - INF * self.eye(P)
 
                 # stack stuff
-                planned_logits[R, I] = logits - INF * self.eye(P)
-                pop = v[R, P] <= 0
-                push = v[R, P] > 0
-                planned_options[new, I] = P
+                pop = v[I, P] <= 0
+                push = v[I, P] > 0
+                options[I, J] = P
                 if push.any():
-                    options = self.embed_options(planned_options[new, I][push])
+                    embedded_options = self.embed_options(options[I, J][push])
                     model_input = torch.cat(
-                        [planned_states[R, I][push], options], dim=-1
+                        [states[I, J][push], embedded_options], dim=-1
                     )
-                    h = planned_h[push, I[push]]
+                    h = hidden_states[I, indices[I, J]][push]
                     model_output, h = self.model(
                         model_input.unsqueeze(0), h.permute(2, 0, 1)
                     )
-                    planned_states[push, I[push] + 1] = self.embed2(
-                        model_output.squeeze(0)
-                    )
-                    planned_h[push, I[push] + 1] = h.permute(1, 2, 0)
-                    I[push] = torch.min(I + 1, self.planning_steps * self.one)[push]
-                I[pop] = torch.max(I - 1, self.zero)[pop]
+                    hidden_states[push, j] = h.permute(1, 2, 0)
+                    J[push] = torch.min(J + 1, self.planning_steps * self.one - 1)[push]
+                    states[push, J[push]] = self.embed2(model_output[0])
+                J[pop] = torch.max(J - 1, self.zero)[pop]
                 # TODO: somehow add early termination
+            probs = logits.softmax(-1)
 
         # TODO: add obs to recurrence
-        h = hx.h.view(N, self.num_model_layers, -1).transpose(0, 1)
-        X = torch.cat([X, hx.x.unsqueeze(0)], dim=0)
-        new_search_options = search_options.float()
-        search_options = hx.search_options
-        search_options[new] = new_search_options
+        h = hx.h.view(N, self.hidden_size, self.num_model_layers).permute(2, 0, 1)
+        inputs = torch.cat([self.embed2(inputs), hx.x.unsqueeze(0)], dim=0)
+        I = torch.ones_like(I).bool()
 
         for t in range(T):
-            option = planned_options[:, t]
+            J = indices[:, t]
+            option = options[I, J]
             model_input = torch.cat(
-                [self.embed2(X[t - 1]), self.embed_options(option)], dim=-1
+                [inputs[t - 1], self.embed_options(option)], dim=-1
             ).unsqueeze(0)
             model_output, h = self.model(model_input, h)
             model_loss = F.mse_loss(
-                model_output[0], X[t].detach(), reduction="none"
+                self.embed2(model_output[0]), inputs[t].detach(), reduction="none"
             ).mean(-1)
             # TODO: predict from start of episode
 
@@ -223,15 +223,15 @@ class Recurrence(nn.Module):
 
             yield RecurrentState(
                 values=values,
-                planned_options=planned_options,
-                search_options=search_options,
-                search_probs=search_probs,
-                a=planned_options[:, t],
+                options=options,
+                indices=indices,
+                probs=probs,
+                a=options[I, J],
                 model_loss=model_loss,
                 embed_loss=hx.embed_loss,  # TODO
-                h=h.transpose(0, 1),
-                x=X[t],
-                v=values[:, t].gather(-1, planned_options[:, t].unsqueeze(1)),
+                h=h.permute(1, 2, 0),
+                x=inputs[t],
+                v=values[I, J, option.long()],
             )
 
 
