@@ -37,7 +37,7 @@ class Env(gym.Env):
             last_curriculum = Curriculum(
                 constraints=[1, 1], n_blocks=[3, 3], search_depth=[1, 1]
             )
-            for _ in range(5):
+            while True:
                 yield copy.deepcopy(last_curriculum)
                 last_curriculum.constraints[1] += 1
                 last_curriculum.n_blocks[1] = min(6, last_curriculum.n_blocks[1] + 1)

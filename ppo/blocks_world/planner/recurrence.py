@@ -143,9 +143,9 @@ class Recurrence(nn.Module):
         indices = hx.indices.view(N, self.planning_steps).long()
 
         if I.any():
+            assert I.all()
             indices = torch.zeros_like(indices)
             options = actions.options.view(T, N, self.planning_steps).long()[0]
-            assert I.all()
             # search (needed for log_probs)
             values = torch.zeros_like(values)
             options = -torch.ones_like(options)
@@ -191,7 +191,7 @@ class Recurrence(nn.Module):
                     model_input = torch.cat([states[I, J], embedded_options], dim=-1)
                     h = hidden_states[I, J]
                     model_output, h = self.model(
-                        model_input.unsqueeze(0), h.permute(2, 0, 1)
+                        model_input.unsqueeze(0), h.permute(2, 0, 1).contiguous()
                     )
                     hidden_states = hidden_states.index_copy(
                         1, j * self.one, h.permute(1, 2, 0).unsqueeze(1)
@@ -218,7 +218,7 @@ class Recurrence(nn.Module):
             model_input = torch.cat(
                 [inputs[t - 1], self.embed_options(option)], dim=-1
             ).unsqueeze(0)
-            model_output, h = self.model(model_input, h)
+            model_output, h = self.model(model_input, h.contiguous())
             model_loss = F.mse_loss(
                 self.embed2(model_output[0]), inputs[t].detach(), reduction="none"
             ).mean(-1)

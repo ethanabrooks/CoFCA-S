@@ -172,8 +172,9 @@ class Env(gym.Env):
         return [list(c) + [0] * (self.n_rows - len(c)) for c in columns]
 
     def increment_curriculum(self):
-        self.curriculum_level += 1
-        self.curriculum = next(self.curriculum_iterator)
+        pass
+        # self.curriculum_level += 1
+        # self.curriculum = next(self.curriculum_iterator)
 
     def render(self, mode="human", pause=True):
         print()
