@@ -143,57 +143,71 @@ class Recurrence(nn.Module):
         indices = hx.indices.view(N, self.planning_steps).long()
 
         if I.any():
+            indices = torch.zeros_like(indices)
             options = actions.options.view(T, N, self.planning_steps).long()[0]
             assert I.all()
             # search (needed for log_probs)
             values = torch.zeros_like(values)
+            values_list = []
             options = -torch.ones_like(options)
-            hidden_states = torch.zeros(
-                (N, self.planning_steps, self.hidden_size, self.num_model_layers),
-                device=device,
-            )
-            logits = torch.zeros_like(probs)
+            # hidden_states = torch.zeros(
+            #     (N, self.planning_steps, self.hidden_size, self.num_model_layers),
+            #     device=device,
+            # )
+            hidden_states_list = [
+                torch.zeros(N, self.hidden_size, self.num_model_layers, device=device)
+            ]
+            logits_list = [torch.zeros_like(probs)[:, 0]]
             # TODO: delete some of these?
 
             # plan  (needed for execution)
-            states = torch.zeros(
-                (N, self.planning_steps, self.embedding_size), device=device
-            )
-            states[I, 0] = self.embed2(inputs[0])
+            # states = torch.zeros(
+            #     (N, self.planning_steps, self.embedding_size), device=device
+            # )
+            states_list = [self.embed2(inputs[0])]
 
             J = torch.zeros_like(I).long()
             for j in range(self.planning_steps):
                 indices[I, J] = j
                 # TODO: prevent cycles?
+                states = torch.stack(states_list, dim=1)
                 x = states[I, J]
                 sharpness = self.sharpener(x)
                 v = self.critic(x)
-                values[:, j] = v
+                values_list.append(v)
+                logits = torch.stack(logits_list, dim=1)
                 new_logits = (logits[I, J] == 0).all(-1, keepdim=True)
+                # l = torch.where(new_logits, sharpness * v, logits[I, indices[:, j]])
                 l = torch.where(new_logits, sharpness * v, logits[I, J])
+                # torch.autograd.grad(l.mean(), self.parameters(), retain_graph=True)
+
                 dist = FixedCategorical(logits=l)
                 P = options[:, j]
                 self.sample_new(P, dist)
-                logits[:, j] = l - INF * self.eye(P)
+                logits_list += [l - INF * self.eye(P)]
 
                 # stack stuff
                 pop = v[I, P] <= 0
                 push = v[I, P] > 0
                 options[I, J] = P
                 if push.any():
-                    embedded_options = self.embed_options(options[I, J][push])
-                    model_input = torch.cat(
-                        [states[I, J][push], embedded_options], dim=-1
-                    )
-                    h = hidden_states[I, indices[I, J]][push]
+                    embedded_options = self.embed_options(options[I, J])
+                    model_input = torch.cat([states[I, J], embedded_options], dim=-1)
+                    hidden_states = torch.stack(hidden_states_list, dim=1)
+                    h = hidden_states[I, J]
                     model_output, h = self.model(
                         model_input.unsqueeze(0), h.permute(2, 0, 1)
                     )
-                    hidden_states[push, j] = h.permute(1, 2, 0)
-                    J[push] = torch.min(J + 1, self.planning_steps * self.one - 1)[push]
-                    states[push, J[push]] = self.embed2(model_output[0])
-                J[pop] = torch.max(J - 1, self.zero)[pop]
+                    hidden_states_list += [h.permute(1, 2, 0)]
+                    embed_ = self.embed2(model_output[0])
+                    new_state = embed_.where(push.unsqueeze(-1), states_list[-1])
+                    states_list += [new_state]
+                    J = torch.min(J + 1, self.planning_steps * self.one - 1).where(
+                        push, J
+                    )
+                J = torch.max(J - 1, self.zero).where(pop, J)
                 # TODO: somehow add early termination
+
             probs = logits.softmax(-1)
 
         # TODO: add obs to recurrence
@@ -214,12 +228,6 @@ class Recurrence(nn.Module):
             # TODO: predict from start of episode
 
             # TODO add gate (c) so that obs is not compared every turn
-            # logits = F.cosine_similarity(X[t], X)
-            # dist = FixedCategorical(logits=self.sharpener(inputs[t]) * logits)
-            # embed_loss = -dist.entropy()  # maximize distinctions among embedded
-            # self.sample_new(
-            #     planned_options[t], dist
-            # )
 
             yield RecurrentState(
                 values=values,
