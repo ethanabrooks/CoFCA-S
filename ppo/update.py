@@ -98,9 +98,6 @@ class PPO:
                 loss += self.value_loss_coef * value_loss
 
                 self.optimizer.zero_grad()
-                import ipdb
-
-                ipdb.set_trace()
                 loss.backward()
 
                 nn.utils.clip_grad_norm_(self.agent.parameters(), self.max_grad_norm)

@@ -153,37 +153,34 @@ class Recurrence(nn.Module):
                 (N, self.planning_steps, self.hidden_size, self.num_model_layers),
                 device=device,
             )
-            hidden_states_list = [
-                torch.zeros(N, self.hidden_size, self.num_model_layers, device=device)
-            ]
-            logits_list = [torch.zeros_like(probs)[:, 0]]
+            logits = torch.zeros_like(probs)
             # TODO: delete some of these?
 
             # plan  (needed for execution)
-            # states = torch.zeros(
-            #     (N, self.planning_steps, self.embedding_size), device=device
-            # )
-            states_list = [self.embed2(inputs[0])]
-
+            new_state = self.embed2(inputs[0])
+            states = torch.zeros(
+                (N, self.planning_steps, self.embedding_size), device=device
+            )
             J = torch.zeros_like(I).long()
+
             for j in range(self.planning_steps):
+                states = states.index_copy(1, j * self.one, new_state.unsqueeze(1))
                 indices[I, J] = j
                 # TODO: prevent cycles?
-                states = torch.stack(states_list, dim=1)
+
                 x = states[I, J]
                 sharpness = self.sharpener(x)
                 v = self.critic(x)
                 values[:, j] = v
-                logits = torch.stack(logits_list, dim=1)
                 new_logits = (logits[I, J] == 0).all(-1, keepdim=True)
-                # l = torch.where(new_logits, sharpness * v, logits[I, indices[:, j]])
                 l = torch.where(new_logits, sharpness * v, logits[I, J])
-                # torch.autograd.grad(l.mean(), self.parameters(), retain_graph=True)
 
                 dist = FixedCategorical(logits=l)
                 P = options[:, j]
                 self.sample_new(P, dist)
-                logits_list += [l - INF * self.eye(P)]
+                logits = logits.index_copy(
+                    1, j * torch.ones_like(J), l.unsqueeze(1) - INF * self.eye(P)
+                )
 
                 # stack stuff
                 pop = v[I, P] <= 0
@@ -192,15 +189,16 @@ class Recurrence(nn.Module):
                 if push.any():
                     embedded_options = self.embed_options(options[I, J])
                     model_input = torch.cat([states[I, J], embedded_options], dim=-1)
-                    hidden_states = torch.stack(hidden_states_list, dim=1)
                     h = hidden_states[I, J]
                     model_output, h = self.model(
                         model_input.unsqueeze(0), h.permute(2, 0, 1)
                     )
-                    hidden_states_list += [h.permute(1, 2, 0)]
-                    embed_ = self.embed2(model_output[0])
-                    new_state = embed_.where(push.unsqueeze(-1), states_list[-1])
-                    states_list += [new_state]
+                    hidden_states = hidden_states.index_copy(
+                        1, j * self.one, h.permute(1, 2, 0).unsqueeze(1)
+                    )
+                    new_state = self.embed2(model_output[0]).where(
+                        push.unsqueeze(-1), states[:, j]
+                    )
                     J = torch.min(J + 1, self.planning_steps * self.one - 1).where(
                         push, J
                     )
