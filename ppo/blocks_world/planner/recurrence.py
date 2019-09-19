@@ -10,7 +10,9 @@ from ppo.layers import Concat, Flatten
 from ppo.mdp.env import Obs
 from ppo.utils import init_
 
-RecurrentState = namedtuple("RecurrentState", "a a_probs v h log_probs entropy")
+RecurrentState = namedtuple(
+    "RecurrentState", "a a_probs planned_a planned_a_probs v h log_probs entropy"
+)
 XiSections = namedtuple("XiSections", "Kr Br kw bw e v F_hat ga gw Pi")
 
 
@@ -60,11 +62,13 @@ class Recurrence(nn.Module):
 
         self.state_sizes = RecurrentState(
             a=1,
+            planned_a=planning_steps,
             v=1,
             h=num_layers * hidden_size,
             log_probs=1,
             entropy=1,
             a_probs=action_space.n,
+            planned_a_probs=planning_steps * action_space.n,
         )
         self.xi_sections = XiSections(
             Kr=num_heads * slot_size,
@@ -160,6 +164,9 @@ class Recurrence(nn.Module):
             .contiguous()
         )
 
+        P = hx.planned_a
+        a_probs = hx.planned_a_probs
+
         new = torch.all(rnn_hxs == 0, dim=-1)
         if new.any():
             assert new.all()
@@ -178,7 +185,9 @@ class Recurrence(nn.Module):
                 ).unsqueeze(0)
                 hn, h = self.model(model_input, h)
                 state = self.embed2(hn.squeeze(0))
-            a_probs = torch.stack(probs)
+
+            a_probs = torch.stack(probs, dim=1)
+            P = torch.stack(P, dim=-1)
 
         A = torch.cat([actions, hx.a.unsqueeze(0)], dim=0).long()
 
@@ -196,9 +205,11 @@ class Recurrence(nn.Module):
             self.sample_new(A[t], dist)
             yield RecurrentState(
                 a=A[t],
+                planned_a=P,
+                planned_a_probs=a_probs,
                 a_probs=dist.probs,
                 v=value,
                 h=hT,
                 log_probs=torch.ones_like(dist.log_probs(A[t])),
-                entropy=torch.ones_like(dist.entropy()),
+                entropy=dist.entropy(),
             )

@@ -38,7 +38,7 @@ class Agent(ppo.agent.Agent, NNBase):
             value=hx.v,
             action=hx.a,
             action_log_probs=action_log_probs,
-            aux_loss=-self.entropy_coef * entropy,
+            aux_loss=-self.entropy_coef * hx.entropy.mean(),
             dist=dist,
             rnn_hxs=last_hx,
             log=dict(entropy=entropy),
