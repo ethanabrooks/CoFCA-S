@@ -137,7 +137,7 @@ class Recurrence(nn.Module):
         hx = self.parse_hidden(rnn_hxs)
         for _x in hx:
             _x.squeeze_(0)
-        I = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
+        I = torch.ones(N, device=device).bool()
 
         options = hx.options.view(N, self.planning_steps).long()
         values = hx.values.view(N, self.planning_steps, self.num_options)
@@ -146,8 +146,9 @@ class Recurrence(nn.Module):
         indices = hx.indices.view(N, self.planning_steps).long()
         states = hx.states.view(N, self.planning_steps, self.embedding_size)
 
-        if I.any():
-            assert I.all()
+        new = torch.all(rnn_hxs == 0, dim=-1)
+        if new.any():
+            assert new.all()
             options = (
                 actions.options.view(T, N, self.planning_steps)
                 .long()[0]
@@ -173,7 +174,6 @@ class Recurrence(nn.Module):
             new_state = self.embed2(inputs[0])
             J = torch.zeros_like(I).long()
 
-            tick = time.time()
             for j in range(self.planning_steps):
                 states = states + self.eye[:, j] * new_state.unsqueeze(1)
                 indices[I, J] = j
@@ -198,33 +198,29 @@ class Recurrence(nn.Module):
                 ).unsqueeze(1)
 
                 # stack stuff
-                pop = v[I, P] <= 0
-                push = v[I, P] > 0
-                if push.any():
-                    embedded_options = self.embed_options(P)
-                    model_input = torch.cat([states[I, J], embedded_options], dim=-1)
-                    h = hidden_states[I, J]
-                    model_output, h = self.model(
-                        model_input.unsqueeze(0), h.permute(2, 0, 1).contiguous()
-                    )
-                    hidden_states = hidden_states + self.eye[:, j].unsqueeze(-1) * (
-                        h.permute(1, 2, 0).unsqueeze(1)
-                    )
-                    new_state = self.embed2(model_output[0]).where(
-                        push.unsqueeze(-1), states[:, j]
-                    )
-                    J = torch.min(J + 1, self.planning_steps * self.one - 1).where(
-                        push, J
-                    )
-                J = torch.max(J - 1, self.zero).where(pop, J)
+                # pop = v[I, P] <= 0
+                # push = v[I, P] > 0
+                push = I  # TODO
+                # if push.any():
+                embedded_options = self.embed_options(P)
+                model_input = torch.cat([states[I, J], embedded_options], dim=-1)
+                h = hidden_states[I, J]
+                model_output, h = self.model(
+                    model_input.unsqueeze(0), h.permute(2, 0, 1).contiguous()
+                )
+                hidden_states = hidden_states + self.eye[:, j].unsqueeze(-1) * (
+                    h.permute(1, 2, 0).unsqueeze(1)
+                )
+                new_state = self.embed2(model_output[0]).where(
+                    push.unsqueeze(-1), states[:, j]
+                )
+                J = torch.min(J + 1, self.planning_steps * self.one - 1).where(push, J)
+                # J = torch.max(J - 1, self.zero).where(pop, J)
+
             options = torch.cat(options, dim=-1)
             # TODO: somehow add early termination
-            print(time.time() - tick)
-        if log_probs.grad_fn:
-            log_probs.mean().backward(retain_graph=True)
 
         # TODO: add obs to recurrence
-        I = torch.ones_like(I).bool()
 
         for t in range(T):
             J = indices[:, t]
