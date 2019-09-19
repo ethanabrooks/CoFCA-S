@@ -161,57 +161,8 @@ class Recurrence(nn.Module):
             x = torch.cat([inputs[t].view(1, N, -1), r.view(1, N, -1)], dim=-1)
             _, h = self.gru(x, h)
             hT = h.transpose(0, 1).reshape(N, -1)  # switch layer and batch dims
-            xi = self.Wxi(hT)
-            Kr, br, kw, bw, e, v, free, ga, gw, Pi = xi.squeeze(0).split(
-                self.xi_sections, dim=-1
-            )
-            # preprocess
-            br = F.softplus(br.view(N, self.num_heads))
-            bw = F.softplus(bw)
-            e = e.sigmoid().view(N, 1, self.slot_size)
-            v = v.view(N, 1, self.slot_size)
-            free = free.sigmoid()
-            ga = ga.sigmoid()
-            gw = gw.sigmoid()
-            Pi = (
-                Pi.view(N, self.num_heads, -1)
-                .permute(2, 0, 1)
-                .softmax(dim=0)
-                .unsqueeze(-1)
-            )
-
-            # write
-            psi = (1 - free.unsqueeze(-1) * wr).prod(dim=1)  # page 8 left column
-            u = (u + (1 - u) * ww) * psi
-            phi = u.sort(dim=-1)
-            phi_prod = torch.cumprod(phi.values, dim=-1)
-            phi_prod = F.pad(phi_prod, [1, 0], value=1)[:, :-1]
-            unsorted_phi_prod = phi_prod.scatter(-1, phi.indices, phi_prod)
-            a = (1 - u) * unsorted_phi_prod  # page 8 left column
-            cw = (
-                bw * F.cosine_similarity(M, kw.view(N, 1, self.slot_size), dim=-1)
-            ).softmax(dim=-1)
-            ww = gw * (ga * a + (1 - ga) * cw)
-            ww1 = ww.unsqueeze(-1)
-            ww2 = ww.unsqueeze(-2)
-            M = M * (1 - ww1 * e) + ww1 * v
-            # page 7 right column
-
-            # read
-            L = (1 - ww1 - ww2) * L + ww2 * p.unsqueeze(-1)
-            L = (1 - self.mem_one_hots).unsqueeze(0) * L  # zero out L[i, i]
-            p = (1 - ww.sum(-1, keepdim=True)) * p + ww
-            b = wr @ L
-            f = wr @ L.transpose(1, 2)
-            Kr = Kr.view(N, self.num_heads, 1, self.slot_size)
-            cr = (
-                br.unsqueeze(-1) * F.cosine_similarity(M.unsqueeze(1), Kr, dim=-1)
-            ).softmax(-1)
-            wr = Pi[0] * b + Pi[1] * cr + Pi[2] * f
-            r = (wr @ M).view(N, -1)
 
             # act
-            x = torch.cat([hT, r], dim=-1)
             dist = self.actor(hT)  # page 7 left column
             value = self.critic(hT)
             self.sample_new(A[t], dist)
@@ -221,11 +172,11 @@ class Recurrence(nn.Module):
                 a_probs=dist.probs,
                 v=value,
                 h=hT,
-                r=r,
-                wr=wr,
-                u=u,
-                ww=ww,
-                M=M,
-                p=p,
-                L=L,
+                r=hx.r,
+                wr=hx.wr,
+                u=hx.u,
+                ww=hx.ww,
+                M=hx.M,
+                p=hx.p,
+                L=hx.L,
             )
