@@ -185,12 +185,7 @@ class Recurrence(nn.Module):
                 self.sample_new(P, dist)
                 log_probs = log_probs + dist.log_prob(P)
 
-                # log_probs = log_probs.index_copy(1, j * self.one, dist.log_probs(P))
                 entropy = entropy + dist.entropy()
-                # entropy = entropy.index_copy(
-                # 1, j * self.one, dist.entropy().unsqueeze(-1)
-                # )
-                # print(dist.log_probs(P))
                 logits = logits.index_copy(
                     1, j * torch.ones_like(J), l.unsqueeze(1) - INF * self.eye(P)
                 )
