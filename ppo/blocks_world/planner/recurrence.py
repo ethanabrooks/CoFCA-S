@@ -138,6 +138,7 @@ class Recurrence(nn.Module):
             print(t, *args, **kwargs)
 
     def inner_loop(self, inputs, rnn_hxs):
+        device = inputs.device
         T, N, D = inputs.shape
         inputs, actions = torch.split(
             inputs.detach(), [D - self.action_size, self.action_size], dim=2
@@ -155,11 +156,12 @@ class Recurrence(nn.Module):
         )
 
         new = torch.all(rnn_hxs == 0, dim=-1)
-        """
         if new.any():
             assert new.all()
             # P = actions.long().squeeze(-1)
-            P = torch.zeros(self.planning_steps, N).long()  # TODO
+            P = [
+                torch.zeros(N, device=device).long() for _ in range(self.planning_steps)
+            ]  # TODO
             state = self.embed2(self.embed1(inputs[0]))
             probs = []
             for t in range(self.planning_steps):
@@ -172,7 +174,6 @@ class Recurrence(nn.Module):
                 hn, h = self.model(model_input, h)
                 state = self.embed2(hn.squeeze(0))
             a_probs = torch.stack(probs)
-        """
 
         A = torch.cat([actions, hx.a.unsqueeze(0)], dim=0).long()
 
