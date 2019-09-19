@@ -79,11 +79,11 @@ class Env(gym.Env):
     def step(self, action: list):
         action, *_ = action
         self.t += 1
-        if self.solved or self.t > self.time_limit:
+        if self.solved:
             return (
                 self.get_observation(),
                 float(self.solved),
-                self.t > self.time_limit,
+                self.t >= self.time_limit,
                 {},
             )
         _from, _to = self.int_to_tuple[int(action)]
@@ -95,7 +95,7 @@ class Env(gym.Env):
             self.solved = True
         else:
             r = 0
-        t = False
+        t = self.t >= self.time_limit
         self.last = Last(action=(_from, _to), reward=r, terminal=t, go=0)
         i = dict(
             n_blocks=self.n_blocks,
