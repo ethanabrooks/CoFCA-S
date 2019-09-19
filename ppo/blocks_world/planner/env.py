@@ -119,7 +119,7 @@ class Env(gym.Env):
         trajectory = self.plan(self.columns, self.search_depth)
         if not trajectory:
             return self.reset()
-        final_state = self.pad(trajectory[-1])
+        final_state = self.pad(trajectory[0])
 
         def generate_constraints():
             for column in final_state:
@@ -130,7 +130,7 @@ class Env(gym.Env):
                     yield SideBySide(left, right)
 
         def filter_constraint(constraint):
-            for state in trajectory[:-1]:
+            for state in trajectory[1:]:
                 if constraint.satisfied(self.pad(state)):
                     return False
             return True
@@ -141,9 +141,9 @@ class Env(gym.Env):
         return self.get_observation()
 
     def plan(self, start, max_depth):
-        back = {}
         depth = 0
         start = tuple(map(tuple, start))
+        back = {start: None}
         queue = deque([(depth, start)])
         while depth < max_depth and queue:
             depth, src = queue.popleft()
@@ -157,11 +157,11 @@ class Env(gym.Env):
                     if dst not in back:
                         back[dst] = src
                         queue += [(depth + 1, dst)]
-        trajectory = []
+        trajectory = [src]
         node = src
         while node != start:
-            trajectory.append(node)
             node = back[node]
+            trajectory.append(node)
         return trajectory
 
     def get_observation(self):
