@@ -10,9 +10,7 @@ from ppo.layers import Flatten
 from ppo.mdp.env import Obs
 from ppo.utils import init_
 
-RecurrentState = namedtuple(
-    "RecurrentState", "a a_probs planned_a planned_a_probs v h t "
-)
+RecurrentState = namedtuple("RecurrentState", "a probs planned_probs plan v h t ")
 XiSections = namedtuple("XiSections", "Kr Br kw bw e v F_hat ga gw Pi")
 
 
@@ -62,12 +60,12 @@ class Recurrence(nn.Module):
 
         self.state_sizes = RecurrentState(
             a=1,
-            planned_a=planning_steps,
+            plan=planning_steps,
             v=1,
             t=1,
             h=num_layers * hidden_size,
-            a_probs=action_space.nvec.max(),
-            planned_a_probs=planning_steps * action_space.nvec.max(),
+            probs=action_space.nvec.max(),
+            planned_probs=planning_steps * action_space.nvec.max(),
         )
         self.xi_sections = XiSections(
             Kr=num_heads * slot_size,
@@ -159,8 +157,8 @@ class Recurrence(nn.Module):
         for _x in hx:
             _x.squeeze_(0)
 
-        P = hx.planned_a
-        a_probs = hx.planned_a_probs.view(N, self.planning_steps, -1)
+        plan = hx.plan
+        planned_probs = hx.planned_probs.view(N, self.planning_steps, -1)
 
         new = torch.all(rnn_hxs == 0, dim=-1)
         if new.any():
@@ -173,23 +171,21 @@ class Recurrence(nn.Module):
                 .contiguous()
             )
 
-            _, *P = torch.split(actions[0].long(), 1, dim=-1)
+            _, *plan = torch.split(actions[0].long(), 1, dim=-1)
             state = self.embed2(self.embed1(inputs[0]))
             probs = []
             for t in range(self.planning_steps):
                 dist = self.actor(state)  # page 7 left column
                 probs.append(dist.probs)
-                self.sample_new(P[t], dist)
+                self.sample_new(plan[t], dist)
                 model_input = torch.cat(
-                    [state, self.embed_action(P[t].squeeze(1))], dim=-1
+                    [state, self.embed_action(plan[t].squeeze(1))], dim=-1
                 ).unsqueeze(0)
                 hn, h = self.model(model_input, h)
                 state = self.embed2(hn.squeeze(0))
 
-            a_probs = torch.stack(probs, dim=1)
-            P = torch.cat(P, dim=-1)
-
-        A = actions.long()[:, :, 0]
+            planned_probs = torch.stack(probs, dim=1)
+            plan = torch.cat(plan, dim=-1)
 
         h = (
             hx.h.view(N, self.gru.num_layers, self.gru.hidden_size)
@@ -210,12 +206,12 @@ class Recurrence(nn.Module):
             value = self.critic(state)
             # self.sample_new(A[t], dist)
             k = hx.t[0].long().item()
-            dist = FixedCategorical(a_probs[:, k])
+            probs = planned_probs[:, k].softmax(-1)
             yield RecurrentState(
-                a=P[:, k],
-                planned_a=P,
-                planned_a_probs=a_probs,
-                a_probs=dist.probs,
+                a=plan[:, k],
+                planned_probs=planned_probs,
+                plan=plan,
+                probs=probs,
                 v=value,
                 h=hT,
                 t=hx.t + 1,
