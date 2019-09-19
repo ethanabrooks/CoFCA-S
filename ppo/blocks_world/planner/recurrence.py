@@ -97,7 +97,6 @@ class Recurrence(nn.Module):
             ):
                 x = torch.stack(hx).float()
                 assert np.prod(x.shape[2:]) == size
-                print(name, x.shape, size)
                 yield x.view(*x.shape[:2], -1)
 
         hx = torch.cat(list(pack()), dim=-1)
@@ -133,9 +132,8 @@ class Recurrence(nn.Module):
         for _x in hx:
             _x.squeeze_(0)
         I = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
-        options = hx.options.view(N, self.planning_steps).long()
 
-        # search (needed for log_probs)
+        options = hx.options.view(N, self.planning_steps).long()
         values = hx.values.view(N, self.planning_steps, self.num_options)
         log_probs = hx.log_probs.flatten()
         entropy = hx.entropy.flatten()
@@ -153,6 +151,7 @@ class Recurrence(nn.Module):
             log_probs = torch.zeros_like(log_probs)
             entropy = torch.zeros_like(entropy)
             indices = torch.zeros_like(indices)
+            states = torch.zeros_like(states)
 
             # search (needed for log_probs)
             hidden_states = torch.zeros(
@@ -199,8 +198,6 @@ class Recurrence(nn.Module):
                 # stack stuff
                 pop = v[I, P] <= 0
                 push = v[I, P] > 0
-                if log_probs.grad_fn:
-                    log_probs.mean().backward(retain_graph=True)
                 if push.any():
                     embedded_options = self.embed_options(P)
                     model_input = torch.cat([states[I, J], embedded_options], dim=-1)
