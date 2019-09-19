@@ -10,7 +10,7 @@ from ppo.layers import Concat
 from ppo.mdp.env import Obs
 from ppo.utils import init_
 
-RecurrentState = namedtuple("RecurrentState", "a a_probs v h r wr u ww M p L")
+RecurrentState = namedtuple("RecurrentState", "a a_probs v h")
 XiSections = namedtuple("XiSections", "Kr Br kw bw e v F_hat ga gw Pi")
 
 
@@ -56,17 +56,7 @@ class Recurrence(nn.Module):
         self.obs_shape = (*nvec.shape, nvec.max())
 
         self.state_sizes = RecurrentState(
-            a=1,
-            a_probs=action_space.n,
-            v=1,
-            h=num_layers * hidden_size,
-            r=num_heads * slot_size,
-            wr=num_heads * num_slots,
-            u=num_slots,
-            ww=num_slots,
-            M=num_slots * slot_size,
-            p=num_slots,
-            L=num_slots * num_slots,
+            a=1, a_probs=action_space.n, v=1, h=num_layers * hidden_size
         )
         self.xi_sections = XiSections(
             Kr=num_heads * slot_size,
@@ -157,16 +147,4 @@ class Recurrence(nn.Module):
             value = self.critic(hT)
             self.sample_new(A[t], dist)
 
-            yield RecurrentState(
-                a=A[t],
-                a_probs=dist.probs,
-                v=value,
-                h=hT,
-                r=hx.r,
-                wr=hx.wr,
-                u=hx.u,
-                ww=hx.ww,
-                M=hx.M,
-                p=hx.p,
-                L=hx.L,
-            )
+            yield RecurrentState(a=A[t], a_probs=dist.probs, v=value, h=hT)
