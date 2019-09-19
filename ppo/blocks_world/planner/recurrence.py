@@ -78,7 +78,7 @@ class Recurrence(nn.Module):
             activation, init_(nn.Linear(embedding_size, 1)), nn.Softplus()
         )
         self.actor = nn.Sequential(
-            activation, init_(nn.Linear(embedding_size, self.num_options))
+            activation, init_(nn.Linear(hidden_size, self.num_options))
         )
         self.critic = nn.Sequential(activation, init_(nn.Linear(hidden_size, 1)))
 
@@ -140,6 +140,7 @@ class Recurrence(nn.Module):
             _x.squeeze_(0)
         I = torch.ones(N, device=device).bool()
 
+        """
         options = hx.options.view(N, self.planning_steps).long()
         values = hx.values.view(N, self.planning_steps, self.num_options)
         log_probs = hx.log_probs.flatten()
@@ -216,27 +217,32 @@ class Recurrence(nn.Module):
 
             options = torch.cat(options, dim=-1)
             # TODO: somehow add early termination
+            """
 
         # TODO: add obs to recurrence
 
         for t in range(T):
-            J = indices[:, t]
-            option = options[I, J]
-            model_loss = F.mse_loss(
-                states[I, J], self.embed2(inputs[t]).detach(), reduction="none"
-            ).mean(-1)
+            # J = indices[:, t]
+            # option = options[I, J]
+            logits = self.actor(inputs[t])
+            dist = FixedCategorical(logits=logits)
+            option = actions.actual[t].long()
+            self.sample_new(option, dist)
+            # model_loss = F.mse_loss(
+            #     states[I, J], self.embed2(inputs[t]).detach(), reduction="none"
+            # ).mean(-1)
 
             # TODO add gate (c) so that obs is not compared every turn
 
             yield RecurrentState(
-                values=values,
-                options=options,
-                indices=indices,
-                log_probs=log_probs,
-                entropy=entropy,
+                values=hx.values,
+                options=hx.options,
+                indices=hx.indices,
+                log_probs=dist.log_probs(option),
+                entropy=dist.entropy(),
                 a=option,
-                model_loss=model_loss,
-                states=states,
+                model_loss=hx.model_loss,
+                states=hx.states,
                 v=self.critic(inputs[t]),
             )
 
