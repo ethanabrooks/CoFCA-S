@@ -53,7 +53,7 @@ class Env(gym.Env):
                 search_depth=[1, 1],
             )
             max_blocks = self.n_rows * self.n_cols * 2 // 3
-            for _ in range(5):
+            while True:
                 yield copy.deepcopy(last_curriculum)
                 n_blocks = last_curriculum.n_blocks[1] + 1
                 last_curriculum.n_blocks[1] = min(max_blocks, n_blocks)
@@ -113,7 +113,7 @@ class Env(gym.Env):
         self.t = 0
         self.n_blocks = self.random.random_integers(*self.curriculum.n_blocks)
         self.search_depth = self.random.random_integers(*self.curriculum.search_depth)
-        self.time_limit = self.search_depth + self.n_constraints + self.extra_time
+        self.time_limit = self.search_depth + self.extra_time
         self.columns = [[] for _ in range(self.n_cols)]
         blocks = list(range(1, self.n_blocks + 1))
         self.random.shuffle(blocks)
