@@ -1,4 +1,5 @@
 from abc import ABC
+import itertools
 
 
 class Constraint:
@@ -11,20 +12,15 @@ class Constraint:
 
 class SideBySide(Constraint, ABC):
     def __init__(self, left: int, right: int):
-        self.right = right
-        self.left = left
+        self.right = right or 0
+        self.left = left or 0
 
     def satisfied(self, columns):
-        (left_index, left_column), (right_index, right_column) = [
-            next((i, c) for (i, c) in enumerate(columns) if x in c)
-            for x in [self.left, self.right]
-        ]
-        return all(
-            (
-                left_index + 1 == right_index,
-                left_column.index(self.left) == right_column.index(self.right),
-            )
-        )
+        for left_column, right_column in zip(columns, columns[1:]):
+            for left, right in zip(left_column, right_column):
+                if self.left == left and self.right == right:
+                    return True
+        return False
 
 
 class Left(SideBySide):
@@ -45,20 +41,20 @@ class Right(SideBySide):
 
 class Stacked(Constraint, ABC):
     def __init__(self, top: int, bottom: int):
-        self.top = top
-        self.bottom = bottom
+        self.top = top or 0
+        self.bottom = bottom or 0
 
     def satisfied(self, columns):
-        try:
-            column = next(c for c in columns if self.top in c and self.bottom in c)
-        except StopIteration:
-            return False
-        return column.index(self.top) == column.index(self.bottom) + 1
+        for column in columns:
+            for bottom, top in zip(column, column[1:]):
+                if bottom == self.bottom and top == self.top:
+                    return True
+        return False
 
 
 class Above(Stacked):
     def list(self):
-        return [self.top, 2, self.bottom]
+        return [self.top, 1, self.bottom]
 
     def __str__(self):
         return f"{self.top} above {self.bottom}"

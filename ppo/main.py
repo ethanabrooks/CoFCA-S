@@ -17,16 +17,22 @@ def build_parser():
     return parsers
 
 
-def train_blocks_world(time_limit, n_constraints, **kwargs):
+def train_blocks_world(increment_curriculum_at_n_satisfied, **kwargs):
     class TrainValues(Train):
         @staticmethod
-        def make_env(seed, rank, evaluation, env_id, add_timestep, **env_args):
-            return TimeLimit(
-                blocks_world.Env(
-                    **env_args, n_constraints=n_constraints, seed=seed + rank
-                ),
-                max_episode_steps=time_limit + n_constraints,
-            )
+        def make_env(
+            seed, rank, evaluation, env_id, add_timestep, time_limit, **env_args
+        ):
+            return blocks_world.Env(**env_args, seed=seed + rank)
+
+        def run_epoch(self, *args, **kwargs):
+            counter = super().run_epoch(*args, **kwargs)
+            if (
+                increment_curriculum_at_n_satisfied
+                and counter["n_satisfied"] > increment_curriculum_at_n_satisfied
+            ):
+                self.envs.increment_curriculum()
+            return counter
 
         def build_agent(
             self, envs, recurrent=None, entropy_coef=None, baseline=None, **agent_args
@@ -42,13 +48,13 @@ def train_blocks_world(time_limit, n_constraints, **kwargs):
                 )
             return gntm.Agent(entropy_coef=entropy_coef, recurrence=recurrence)
 
-    TrainValues(time_limit=time_limit + n_constraints, **kwargs).run()
+    TrainValues(**kwargs).run()
 
 
 def blocks_world_cli():
     parsers = build_parser()
-    parsers.main.add_argument("--n-constraints", type=int, required=True)
     parsers.env.add_argument("--n-cols", type=int, required=True)
+    parsers.main.add_argument("--increment-curriculum-at-n-satisfied", type=float)
     parsers.agent.add_argument("--num-slots", type=int, required=True)
     parsers.agent.add_argument("--slot-size", type=int, required=True)
     parsers.agent.add_argument("--embedding-size", type=int, required=True)

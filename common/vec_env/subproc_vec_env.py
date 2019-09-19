@@ -30,6 +30,8 @@ def worker(remote, parent_remote, env_fn_wrapper):
                 remote.send((env.observation_space, env.action_space))
             elif cmd == "evaluate":
                 env.evaluate()
+            elif cmd == "increment_curriculum":
+                env.increment_curriculum()
             elif cmd == "train":
                 try:
                     env.train()
