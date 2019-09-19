@@ -51,7 +51,7 @@ class Env(gym.Env):
                     self.n_rows * self.n_cols // 3,
                     self.n_rows * self.n_cols // 3,
                 ],
-                search_depth=[1, 1],
+                search_depth=[planning_steps, planning_steps],
             )
             max_blocks = self.n_rows * self.n_cols * 2 // 3
             while True:
