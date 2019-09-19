@@ -81,12 +81,7 @@ class Env(gym.Env):
         # action, *_ = action
         self.t += 1
         if self.solved:
-            return (
-                self.get_observation(),
-                float(self.solved),
-                self.t >= self.time_limit,
-                {},
-            )
+            return (self.get_observation(), 0, self.t >= self.time_limit, {})
         _from, _to = self.int_to_tuple[int(action)]
         if self.valid(_from, _to):
             self.columns[_to].append(self.columns[_from].pop())
