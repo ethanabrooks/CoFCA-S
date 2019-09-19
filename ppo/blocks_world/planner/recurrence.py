@@ -5,13 +5,13 @@ import torch
 import torch.nn.functional as F
 from torch import nn as nn
 
-from ppo.distributions import Categorical
+from ppo.distributions import Categorical, FixedCategorical
 from ppo.layers import Flatten
 from ppo.mdp.env import Obs
 from ppo.utils import init_
 
 RecurrentState = namedtuple(
-    "RecurrentState", "a a_probs planned_a planned_a_probs v h log_probs entropy"
+    "RecurrentState", "a a_probs planned_a planned_a_probs v h t "
 )
 XiSections = namedtuple("XiSections", "Kr Br kw bw e v F_hat ga gw Pi")
 
@@ -64,9 +64,8 @@ class Recurrence(nn.Module):
             a=1,
             planned_a=planning_steps,
             v=1,
+            t=1,
             h=num_layers * hidden_size,
-            log_probs=1,
-            entropy=1,
             a_probs=action_space.nvec.max(),
             planned_a_probs=planning_steps * action_space.nvec.max(),
         )
@@ -161,7 +160,7 @@ class Recurrence(nn.Module):
             _x.squeeze_(0)
 
         P = hx.planned_a
-        a_probs = hx.planned_a_probs
+        a_probs = hx.planned_a_probs.view(N, self.planning_steps, -1)
 
         new = torch.all(rnn_hxs == 0, dim=-1)
         if new.any():
@@ -188,7 +187,7 @@ class Recurrence(nn.Module):
                 state = self.embed2(hn.squeeze(0))
 
             a_probs = torch.stack(probs, dim=1)
-            P = torch.stack(P, dim=-1)
+            P = torch.cat(P, dim=-1)
 
         A = actions.long()[:, :, 0]
 
@@ -207,16 +206,17 @@ class Recurrence(nn.Module):
             state = self.embed2(hn.squeeze(0))
 
             # act
-            dist = self.actor(state)  # page 7 left column
+            # dist = self.actor(state)  # page 7 left column
             value = self.critic(state)
-            self.sample_new(A[t], dist)
+            # self.sample_new(A[t], dist)
+            k = hx.t[0].long().item()
+            dist = FixedCategorical(a_probs[:, k])
             yield RecurrentState(
-                a=A[t],
+                a=P[:, k],
                 planned_a=P,
                 planned_a_probs=a_probs,
                 a_probs=dist.probs,
                 v=value,
                 h=hT,
-                log_probs=torch.ones_like(dist.log_probs(A[t])),
-                entropy=dist.entropy(),
+                t=hx.t + 1,
             )
