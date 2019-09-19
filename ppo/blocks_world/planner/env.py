@@ -145,7 +145,7 @@ class Env(gym.Env):
         depth = 0
         start = tuple(map(tuple, start))
         queue = deque([(depth, start)])
-        while depth < max_depth and queue:
+        while depth <= max_depth and queue:
             depth, src = queue.popleft()
             actions = list(itertools.permutations(range(self.n_rows), 2))
             self.random.shuffle(actions)
