@@ -73,7 +73,9 @@ class Recurrence(nn.Module):
         self.model = nn.GRU(
             embedding_size + self.num_options, hidden_size, num_model_layers
         )
-        self.sharpener = nn.Sequential(activation, init_(nn.Linear(embedding_size, 1)))
+        self.sharpener = nn.Sequential(
+            activation, init_(nn.Linear(embedding_size, 1)), nn.Softplus()
+        )
         self.critic = nn.Sequential(
             activation, init_(nn.Linear(embedding_size, self.num_options))
         )
@@ -222,9 +224,8 @@ class Recurrence(nn.Module):
             J = indices[:, t]
             option = options[I, J]
             model_loss = F.mse_loss(
-                states[:, t], self.embed2(inputs[t]).detach(), reduction="none"
+                states[I, J], self.embed2(inputs[t]).detach(), reduction="none"
             ).mean(-1)
-            # TODO: predict from start of episode
 
             # TODO add gate (c) so that obs is not compared every turn
 
@@ -234,7 +235,7 @@ class Recurrence(nn.Module):
                 indices=indices,
                 log_probs=log_probs,
                 entropy=entropy,
-                a=options[I, J],
+                a=option,
                 model_loss=model_loss,
                 states=states,
                 v=values[I, J, option.long()],
