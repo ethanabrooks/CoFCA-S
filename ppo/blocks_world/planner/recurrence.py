@@ -84,9 +84,7 @@ class Recurrence(nn.Module):
         # networks
         assert num_layers > 0
         self.gru = nn.GRU(
-            int(embedding_size * np.prod(nvec.shape)) + num_heads * slot_size,
-            hidden_size,
-            num_layers,
+            int(embedding_size * np.prod(nvec.shape)), hidden_size, num_layers
         )
         self.Wxi = nn.Sequential(
             activation,
@@ -142,13 +140,6 @@ class Recurrence(nn.Module):
         for _x in hx:
             _x.squeeze_(0)
 
-        wr = hx.wr.view(N, self.num_heads, self.num_slots)
-        u = hx.u
-        ww = hx.ww.view(N, self.num_slots)
-        r = hx.r.view(N, -1).unsqueeze(0)
-        M = hx.M.view(N, self.num_slots, self.slot_size)
-        p = hx.p
-        L = hx.L.view(N, self.num_slots, self.num_slots)
         h = (
             hx.h.view(N, self.gru.num_layers, self.gru.hidden_size)
             .transpose(0, 1)
@@ -158,8 +149,7 @@ class Recurrence(nn.Module):
         A = torch.cat([actions, hx.a.unsqueeze(0)], dim=0).long()
 
         for t in range(T):
-            x = torch.cat([inputs[t].view(1, N, -1), r.view(1, N, -1)], dim=-1)
-            _, h = self.gru(x, h)
+            _, h = self.gru(inputs[t].view(1, N, -1), h)
             hT = h.transpose(0, 1).reshape(N, -1)  # switch layer and batch dims
 
             # act
