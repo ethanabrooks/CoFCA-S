@@ -117,7 +117,7 @@ class Env(gym.Env):
             column = next(c for c in self.columns if len(c) < self.n_rows)
             column.append(block)
         trajectory = self.plan(self.columns, self.search_depth)
-        if trajectory is None:
+        if not trajectory:
             return self.reset()
         final_state = self.pad(trajectory[-1])
 
