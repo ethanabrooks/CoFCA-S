@@ -11,7 +11,9 @@ from ppo.mdp.env import Obs
 from ppo.utils import init_
 
 RecurrentState = namedtuple(
-    "RecurrentState", "values probs options indices model_loss embed_loss h x a v"
+    # "RecurrentState", "values probs options indices model_loss embed_loss states h a v"
+    "RecurrentState",
+    "indices states model_loss log_probs entropy options values a v",
 )
 Actions = namedtuple("Actions", "actual options")
 
@@ -45,13 +47,12 @@ class Recurrence(nn.Module):
 
         self.state_sizes = RecurrentState(
             values=planning_steps * self.num_options,
-            probs=planning_steps * self.num_options,
+            log_probs=1,
+            entropy=1,
             options=planning_steps,
             indices=planning_steps,
             model_loss=1,
-            embed_loss=1,
-            h=num_model_layers * hidden_size,
-            x=embedding_size,
+            states=planning_steps * embedding_size,
             a=1,
             v=1,
         )
@@ -96,7 +97,7 @@ class Recurrence(nn.Module):
             ):
                 x = torch.stack(hx).float()
                 assert np.prod(x.shape[2:]) == size
-                # print(name, x.shape, view.shape)
+                print(name, x.shape, size)
                 yield x.view(*x.shape[:2], -1)
 
         hx = torch.cat(list(pack()), dim=-1)
@@ -117,9 +118,6 @@ class Recurrence(nn.Module):
                 t = (t * 10.0).round() / 10.0
             print(t, *args, **kwargs)
 
-    def redistribute(self, logits, index):
-        return logits - torch.inf(device=logits) * self.eye(index)
-
     def inner_loop(self, inputs, rnn_hxs):
         T, N, D = inputs.shape
         device = inputs.device
@@ -139,28 +137,36 @@ class Recurrence(nn.Module):
 
         # search (needed for log_probs)
         values = hx.values.view(N, self.planning_steps, self.num_options)
-        probs = hx.probs.view(values.shape)
+        log_probs = hx.log_probs.flatten()
+        entropy = hx.entropy.flatten()
         indices = hx.indices.view(N, self.planning_steps).long()
+        states = hx.states.view(N, self.planning_steps, self.embedding_size)
 
         if I.any():
             assert I.all()
-            indices = torch.zeros_like(indices)
-            options = actions.options.view(T, N, self.planning_steps).long()[0]
-            # search (needed for log_probs)
+            options = (
+                actions.options.view(T, N, self.planning_steps)
+                .long()[0]
+                .split(1, dim=-1)
+            )
             values = torch.zeros_like(values)
-            options = -torch.ones_like(options)
+            log_probs = torch.zeros_like(log_probs)
+            entropy = torch.zeros_like(entropy)
+            indices = torch.zeros_like(indices)
+
+            # search (needed for log_probs)
             hidden_states = torch.zeros(
-                (N, self.planning_steps, self.hidden_size, self.num_model_layers),
+                N,
+                self.planning_steps,
+                self.hidden_size,
+                self.num_model_layers,
                 device=device,
             )
-            logits = torch.zeros_like(probs)
+            logits = torch.zeros_like(values)
             # TODO: delete some of these?
 
             # plan  (needed for execution)
             new_state = self.embed2(inputs[0])
-            states = torch.zeros(
-                (N, self.planning_steps, self.embedding_size), device=device
-            )
             J = torch.zeros_like(I).long()
 
             for j in range(self.planning_steps):
@@ -176,8 +182,16 @@ class Recurrence(nn.Module):
                 l = torch.where(new_logits, sharpness * v, logits[I, J])
 
                 dist = FixedCategorical(logits=l)
-                P = options[:, j]
+                P = options[j].squeeze(-1)
                 self.sample_new(P, dist)
+                log_probs = log_probs + dist.log_prob(P)
+
+                # log_probs = log_probs.index_copy(1, j * self.one, dist.log_probs(P))
+                entropy = entropy + dist.entropy()
+                # entropy = entropy.index_copy(
+                # 1, j * self.one, dist.entropy().unsqueeze(-1)
+                # )
+                # print(dist.log_probs(P))
                 logits = logits.index_copy(
                     1, j * torch.ones_like(J), l.unsqueeze(1) - INF * self.eye(P)
                 )
@@ -185,9 +199,10 @@ class Recurrence(nn.Module):
                 # stack stuff
                 pop = v[I, P] <= 0
                 push = v[I, P] > 0
-                options[I, J] = P
+                if log_probs.grad_fn:
+                    log_probs.mean().backward(retain_graph=True)
                 if push.any():
-                    embedded_options = self.embed_options(options[I, J])
+                    embedded_options = self.embed_options(P)
                     model_input = torch.cat([states[I, J], embedded_options], dim=-1)
                     h = hidden_states[I, J]
                     model_output, h = self.model(
@@ -203,24 +218,19 @@ class Recurrence(nn.Module):
                         push, J
                     )
                 J = torch.max(J - 1, self.zero).where(pop, J)
-                # TODO: somehow add early termination
-
-            probs = logits.softmax(-1)
+            options = torch.cat(options, dim=-1)
+            # TODO: somehow add early termination
+        if log_probs.grad_fn:
+            log_probs.mean().backward(retain_graph=True)
 
         # TODO: add obs to recurrence
-        h = hx.h.view(N, self.hidden_size, self.num_model_layers).permute(2, 0, 1)
-        inputs = torch.cat([self.embed2(inputs), hx.x.unsqueeze(0)], dim=0)
         I = torch.ones_like(I).bool()
 
         for t in range(T):
             J = indices[:, t]
             option = options[I, J]
-            model_input = torch.cat(
-                [inputs[t - 1], self.embed_options(option)], dim=-1
-            ).unsqueeze(0)
-            model_output, h = self.model(model_input, h.contiguous())
             model_loss = F.mse_loss(
-                self.embed2(model_output[0]), inputs[t].detach(), reduction="none"
+                states[:, t], self.embed2(inputs[t]).detach(), reduction="none"
             ).mean(-1)
             # TODO: predict from start of episode
 
@@ -230,12 +240,11 @@ class Recurrence(nn.Module):
                 values=values,
                 options=options,
                 indices=indices,
-                probs=probs,
+                log_probs=log_probs,
+                entropy=entropy,
                 a=options[I, J],
                 model_loss=model_loss,
-                embed_loss=hx.embed_loss,  # TODO
-                h=h.permute(1, 2, 0),
-                x=inputs[t],
+                states=states,
                 v=values[I, J, option.long()],
             )
 

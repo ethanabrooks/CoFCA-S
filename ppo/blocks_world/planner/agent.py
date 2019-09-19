@@ -31,21 +31,15 @@ class Agent(ppo.agent.Agent, NNBase):
         )
         rm = self.recurrent_module
         hx = rm.parse_hidden(all_hxs)
-        dist = FixedCategorical(probs=hx.probs.view(N, rm.planning_steps, -1))
-        entropy = dist.entropy().mean()
-        log_probs = torch.zeros((N, 1), device=inputs.device)
-        if (hx.options >= 0).any():
-            assert (hx.options >= 0).all()
-            log_probs = dist.log_probs(hx.options).sum(1)
         # TODO: this is where we zero out parts of log_prob to help with credit assignment
         return AgentValues(
             value=hx.v,
             action=torch.cat([hx.a, hx.options], dim=-1),
-            action_log_probs=log_probs,
-            aux_loss=(hx.model_loss - self.entropy_coef * entropy).mean(),
-            dist=dist,
+            action_log_probs=hx.log_probs,
+            aux_loss=(hx.model_loss - self.entropy_coef * hx.entropy).mean(),
+            dist=None,
             rnn_hxs=last_hx,
-            log=dict(entropy=entropy),
+            log=dict(entropy=hx.entropy),
         )
 
     def _forward_gru(self, x, hxs, masks, action=None):

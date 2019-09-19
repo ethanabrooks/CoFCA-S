@@ -105,6 +105,9 @@ def blocks_world_cli():
     dnc_parser.add_argument("--num-slots", type=int)
     dnc_parser.add_argument("--slot-size", type=int)
     dnc_parser.add_argument("--num-heads", type=int)
+    import torch
+
+    torch.autograd.set_detect_anomaly(True)
     train_blocks_world(**hierarchical_parse_args(parsers.main))
 
 
