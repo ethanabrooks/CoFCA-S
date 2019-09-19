@@ -10,7 +10,7 @@ from ppo.layers import Flatten
 from ppo.mdp.env import Obs
 from ppo.utils import init_
 
-RecurrentState = namedtuple("RecurrentState", "a probs planned_probs plan v h t ")
+RecurrentState = namedtuple("RecurrentState", "a probs planned_probs plan v t ")
 XiSections = namedtuple("XiSections", "Kr Br kw bw e v F_hat ga gw Pi")
 
 
@@ -63,7 +63,6 @@ class Recurrence(nn.Module):
             plan=planning_steps,
             v=1,
             t=1,
-            h=num_layers * hidden_size,
             probs=action_space.nvec.max(),
             planned_probs=planning_steps * action_space.nvec.max(),
         )
@@ -82,12 +81,10 @@ class Recurrence(nn.Module):
 
         # networks
         assert num_layers > 0
-        self.embeddings = nn.Embedding(int(nvec.max()), int(nvec.max()))
         self.embed_action = nn.Embedding(
             int(action_space.nvec.max()), int(action_space.nvec.max())
         )
 
-        self.gru = nn.GRU(int(embedding_size), hidden_size, num_layers)
         layers = [nn.Embedding(nvec.max(), nvec.max()), Flatten()]
         in_size = int(nvec.max() * np.prod(nvec.shape))
         for _ in range(num_embedding_layers):
@@ -104,10 +101,6 @@ class Recurrence(nn.Module):
             num_model_layers,
         )
 
-        self.Wxi = nn.Sequential(
-            activation,
-            init_(nn.Linear(num_layers * hidden_size, sum(self.xi_sections))),
-        )
         self.actor = Categorical(embedding_size, action_space.nvec.max())
         self.critic = init_(nn.Linear(embedding_size, 1))
 
@@ -187,32 +180,15 @@ class Recurrence(nn.Module):
             planned_probs = torch.stack(probs, dim=1)
             plan = torch.cat(plan, dim=-1)
 
-        h = (
-            hx.h.view(N, self.gru.num_layers, self.gru.hidden_size)
-            .transpose(0, 1)
-            .contiguous()
-        )
-
         for t in range(T):
-            x = self.embed2(self.embed1(inputs[t]))
-            hn, h = self.gru(x.view(1, N, -1), h)
-            hT = (
-                h.transpose(0, 1).reshape(N, -1).contiguous()
-            )  # switch layer and batch dims
-            state = self.embed2(hn.squeeze(0))
-
-            # act
-            # dist = self.actor(state)  # page 7 left column
-            value = self.critic(state)
-            # self.sample_new(A[t], dist)
-            k = hx.t[0].long().item()
-            probs = planned_probs[:, k].softmax(-1)
+            value = self.critic(self.embed2(self.embed1(inputs[t])))
+            t = hx.t[0].long().item()
+            probs = planned_probs[:, t].softmax(-1)
             yield RecurrentState(
-                a=plan[:, k],
+                a=plan[:, t],
                 planned_probs=planned_probs,
                 plan=plan,
                 probs=probs,
                 v=value,
-                h=hT,
                 t=hx.t + 1,
             )
