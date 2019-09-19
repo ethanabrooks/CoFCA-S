@@ -1,6 +1,6 @@
 import copy
 import itertools
-from collections import namedtuple
+from collections import namedtuple, deque
 
 import gym
 import numpy as np
@@ -116,10 +116,9 @@ class Env(gym.Env):
             self.random.shuffle(self.columns)
             column = next(c for c in self.columns if len(c) < self.n_rows)
             column.append(block)
-        trajectory = self.search_ahead([], self.columns, self.search_depth)
+        trajectory = self.plan(self.columns, self.search_depth)
         if trajectory is None:
             return self.reset()
-        start_state = self.pad(self.columns)
         final_state = self.pad(trajectory[-1])
 
         def generate_constraints():
@@ -141,20 +140,29 @@ class Env(gym.Env):
         self.constraints = self.constraints[: self.n_constraints]
         return self.get_observation()
 
-    def search_ahead(self, trajectory, columns, n_steps):
-        trajectory = trajectory + [tuple(map(tuple, columns))]
-        if n_steps == 0:
-            return trajectory
-        actions = list(itertools.permutations(range(self.n_rows), 2))
-        self.random.shuffle(actions)
-        for _from, _to in actions:
-            if self.valid(_from, _to, columns):
-                columns = copy.deepcopy(columns)
-                columns[_to].append(columns[_from].pop())
-                if tuple(map(tuple, columns)) not in trajectory:
-                    future_state = self.search_ahead(trajectory, columns, n_steps - 1)
-                    if future_state is not None:
-                        return future_state
+    def plan(self, start, max_depth):
+        back = {}
+        depth = 0
+        start = tuple(map(tuple, start))
+        queue = deque([(depth, start)])
+        while depth < max_depth and queue:
+            depth, src = queue.popleft()
+            actions = list(itertools.permutations(range(self.n_rows), 2))
+            self.random.shuffle(actions)
+            for _from, _to in actions:
+                if self.valid(_from, _to, src):
+                    dst = list(map(list, src))
+                    dst[_to].append(dst[_from].pop())
+                    dst = tuple(map(tuple, dst))
+                    if dst not in back:
+                        back[dst] = src
+                        queue += [(depth + 1, dst)]
+        trajectory = []
+        node = src
+        while node != start:
+            trajectory.append(node)
+            node = back[node]
+        return trajectory
 
     def get_observation(self):
         state = [c + [0] * (self.n_rows - len(c)) for c in self.columns]
@@ -192,27 +200,6 @@ class Env(gym.Env):
         print(self.last)
         if pause:
             input("pause")
-
-    def plan(self, trajectory, action_list):
-        columns = list(map(list, trajectory[-1]))
-        if tuple(map(tuple, columns)) in trajectory[:-1]:
-            return
-        if all(c.satisfied(self.pad(columns)) for c in self.constraints):
-            return action_list
-        actions = list(itertools.permutations(range(self.n_rows), 2))
-        self.random.shuffle(actions)
-        for _from, _to in actions:
-            if self.valid(_from, _to, columns):
-
-                new_columns = copy.deepcopy(columns)
-                new_columns[_to].append(new_columns[_from].pop())
-
-                plan = self.plan(
-                    trajectory=trajectory + [tuple(map(tuple, new_columns))],
-                    action_list=action_list + [(_from, _to)],
-                )
-                if plan is not None:
-                    return plan
 
 
 if __name__ == "__main__":
