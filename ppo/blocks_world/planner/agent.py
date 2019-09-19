@@ -11,8 +11,9 @@ from ppo.distributions import FixedCategorical
 
 
 class Agent(ppo.agent.Agent, NNBase):
-    def __init__(self, entropy_coef, recurrence):
+    def __init__(self, entropy_coef, model_loss_coef, recurrence):
         nn.Module.__init__(self)
+        self.model_loss_coef = model_loss_coef
         self.entropy_coef = entropy_coef
         self.recurrent_module = recurrence
 
@@ -36,7 +37,9 @@ class Agent(ppo.agent.Agent, NNBase):
             value=hx.v,
             action=torch.cat([hx.a, hx.options], dim=-1),
             action_log_probs=hx.log_probs,
-            aux_loss=(hx.model_loss - self.entropy_coef * hx.entropy).mean(),
+            aux_loss=(
+                self.model_loss_coef * hx.model_loss - self.entropy_coef * hx.entropy
+            ).mean(),
             dist=None,
             rnn_hxs=last_hx,
             log=dict(entropy=hx.entropy, model_loss=hx.model_loss),

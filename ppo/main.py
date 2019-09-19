@@ -62,6 +62,7 @@ def train_blocks_world(
             envs,
             recurrent=None,
             entropy_coef=None,
+            model_loss_coef=None,
             dnc_args=None,
             planner_args=None,
             **agent_args,
@@ -83,7 +84,11 @@ def train_blocks_world(
                     **planner_args,
                     **agent_args,
                 )
-                return planner.Agent(entropy_coef=entropy_coef, recurrence=recurrence)
+                return planner.Agent(
+                    entropy_coef=entropy_coef,
+                    model_loss_coef=model_loss_coef,
+                    recurrence=recurrence,
+                )
 
     TrainValues(**_kwargs).run()
 
@@ -98,6 +103,7 @@ def blocks_world_cli():
     parsers.env.add_argument("--curriculum-level", type=int, default=0)
     parsers.env.add_argument("--extra-time", type=int, default=0)
     parsers.agent.add_argument("--embedding-size", type=int, required=True)
+    parsers.agent.add_argument("--model-loss-coef", type=float, required=True)
     planner_parser = parsers.agent.add_argument_group("planner_args")
     planner_parser.add_argument("--num-model-layers", type=int)
     planner_parser.add_argument("--num-embedding-layers", type=int)
