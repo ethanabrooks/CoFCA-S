@@ -119,7 +119,7 @@ class Env(gym.Env):
         trajectory = self.plan(self.columns, self.search_depth)
         if not trajectory:
             return self.reset()
-        final_state = self.pad(trajectory[-1])
+        final_state = self.pad(trajectory[0])
 
         def generate_constraints():
             for column in final_state:
@@ -130,7 +130,7 @@ class Env(gym.Env):
                     yield SideBySide(left, right)
 
         def filter_constraint(constraint):
-            for state in trajectory[:-1]:
+            for state in trajectory[1:]:
                 if constraint.satisfied(self.pad(state)):
                     return False
             return True
