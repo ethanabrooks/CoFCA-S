@@ -67,28 +67,28 @@ def train_blocks_world(
             planner_args=None,
             **agent_args,
         ):
-            if baseline == "dnc":
-                recurrence = dnc.Recurrence(
-                    observation_space=envs.observation_space,
-                    action_space=envs.action_space,
-                    **dnc_args,
-                    **agent_args,
-                )
-                return gntm.Agent(entropy_coef=entropy_coef, recurrence=recurrence)
-            else:
-                assert baseline is None
-                recurrence = planner.Recurrence(
-                    observation_space=envs.observation_space,
-                    action_space=envs.action_space,
-                    planning_steps=planning_steps,
-                    **planner_args,
-                    **agent_args,
-                )
-                return planner.Agent(
-                    entropy_coef=entropy_coef,
-                    model_loss_coef=model_loss_coef,
-                    recurrence=recurrence,
-                )
+            # if baseline == "dnc":
+            recurrence = dnc.Recurrence(
+                observation_space=envs.observation_space,
+                action_space=envs.action_space,
+                **dnc_args,
+                **agent_args,
+            )
+            return gntm.Agent(entropy_coef=entropy_coef, recurrence=recurrence)
+            # else:
+            #     assert baseline is None
+            #     recurrence = planner.Recurrence(
+            #         observation_space=envs.observation_space,
+            #         action_space=envs.action_space,
+            #         planning_steps=planning_steps,
+            #         **planner_args,
+            #         **agent_args,
+            #     )
+            #     return planner.Agent(
+            #         entropy_coef=entropy_coef,
+            #         model_loss_coef=model_loss_coef,
+            #         recurrence=recurrence,
+            #     )
 
     TrainValues(**_kwargs).run()
 
@@ -111,9 +111,6 @@ def blocks_world_cli():
     dnc_parser.add_argument("--num-slots", type=int)
     dnc_parser.add_argument("--slot-size", type=int)
     dnc_parser.add_argument("--num-heads", type=int)
-    import torch
-
-    torch.autograd.set_detect_anomaly(True)
     train_blocks_world(**hierarchical_parse_args(parsers.main))
 
 
