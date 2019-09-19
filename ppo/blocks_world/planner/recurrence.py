@@ -50,7 +50,7 @@ class Recurrence(nn.Module):
     ):
         super().__init__()
         self.planning_steps = planning_steps
-        self.action_size = 1
+        self.action_size = 1 + planning_steps
         self.debug = debug
         self.slot_size = slot_size
         self.num_slots = num_slots
@@ -67,8 +67,8 @@ class Recurrence(nn.Module):
             h=num_layers * hidden_size,
             log_probs=1,
             entropy=1,
-            a_probs=action_space.n,
-            planned_a_probs=planning_steps * action_space.n,
+            a_probs=action_space.nvec.max(),
+            planned_a_probs=planning_steps * action_space.nvec.max(),
         )
         self.xi_sections = XiSections(
             Kr=num_heads * slot_size,
@@ -86,7 +86,9 @@ class Recurrence(nn.Module):
         # networks
         assert num_layers > 0
         self.embeddings = nn.Embedding(int(nvec.max()), int(nvec.max()))
-        self.embed_action = nn.Embedding(int(action_space.n), int(action_space.n))
+        self.embed_action = nn.Embedding(
+            int(action_space.nvec.max()), int(action_space.nvec.max())
+        )
 
         self.gru = nn.GRU(int(embedding_size), hidden_size, num_layers)
         layers = [nn.Embedding(nvec.max(), nvec.max()), Flatten()]
@@ -109,7 +111,7 @@ class Recurrence(nn.Module):
             activation,
             init_(nn.Linear(num_layers * hidden_size, sum(self.xi_sections))),
         )
-        self.actor = Categorical(embedding_size, action_space.n)
+        self.actor = Categorical(embedding_size, action_space.nvec.max())
         self.critic = init_(nn.Linear(embedding_size, 1))
 
         self.register_buffer("mem_one_hots", torch.eye(num_slots))
@@ -172,10 +174,7 @@ class Recurrence(nn.Module):
                 .contiguous()
             )
 
-            # P = actions.long().squeeze(-1)
-            P = [
-                torch.zeros(N, device=device).long() for _ in range(self.planning_steps)
-            ]  # TODO
+            _, *P = torch.split(actions[0].long(), 1, dim=-1)
             state = self.embed2(self.embed1(inputs[0]))
             probs = []
             for t in range(self.planning_steps):
@@ -183,7 +182,7 @@ class Recurrence(nn.Module):
                 probs.append(dist.probs)
                 self.sample_new(P[t], dist)
                 model_input = torch.cat(
-                    [state, self.embed_action(P[t])], dim=-1
+                    [state, self.embed_action(P[t].squeeze(1))], dim=-1
                 ).unsqueeze(0)
                 hn, h = self.model(model_input, h)
                 state = self.embed2(hn.squeeze(0))
@@ -191,7 +190,7 @@ class Recurrence(nn.Module):
             a_probs = torch.stack(probs, dim=1)
             P = torch.stack(P, dim=-1)
 
-        A = torch.cat([actions, hx.a.unsqueeze(0)], dim=0).long()
+        A = actions.long()[:, :, 0]
 
         h = (
             hx.h.view(N, self.gru.num_layers, self.gru.hidden_size)
