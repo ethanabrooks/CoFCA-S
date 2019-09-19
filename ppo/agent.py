@@ -219,7 +219,6 @@ class MLPBase(NNBase):
     def __init__(self, num_inputs, hidden_size, num_layers, recurrent, activation):
         recurrent_module = nn.GRU if recurrent else None
         super(MLPBase, self).__init__(recurrent_module, num_inputs, hidden_size)
-
         if recurrent:
             num_inputs = hidden_size
 
@@ -252,7 +251,7 @@ class MLPBase(NNBase):
         if self.is_recurrent:
             x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)
 
+
         hidden_critic = self.critic(x)
         hidden_actor = self.actor(x)
-
         return self.critic_linear(hidden_critic), hidden_actor, rnn_hxs

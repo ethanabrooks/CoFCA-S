@@ -130,11 +130,20 @@ class RolloutStorage(object):
             "".format(num_processes, num_steps, num_processes * num_steps, num_batch)
         )
         mini_batch_size = total_batch_size // num_batch
-
+        batch_size_remainder = total_batch_size % num_batch
+        total_batch_size = total_batch_size - batch_size_remainder 
+        #print("total batch size: ", total_batch_size)
+        #print("mini batch size: ", mini_batch_size)
         random_sampler = SubsetRandomSampler(range(total_batch_size))
         sampler = BatchSampler(
             sampler=random_sampler, batch_size=mini_batch_size, drop_last=False
         )
+        #print(random_sampler)
+        #print("len rndm sampler: ",len(random_sampler))
+        #print(sampler)
+        #print("sampler len should be: ", (len(random_sampler) + mini_batch_size - 1)//mini_batch_size)
+
+        #print("num_batch ", num_batch, "len sampler: ", len(sampler))
         assert len(sampler) == num_batch
         for indices in sampler:
             assert len(indices) == mini_batch_size
