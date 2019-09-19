@@ -76,7 +76,7 @@ def build_parser():
     agent_parser = parser.add_argument_group("agent_args")
     agent_parser.add_argument("--recurrent", action="store_true")
     agent_parser.add_argument("--hidden-size", type=int, required=True)
-    agent_parser.add_argument("--num-layers", type=int, required=True)
+    agent_parser.add_argument("--num-layers", type=int)
     agent_parser.add_argument(
         "--activation", type=lambda s: eval(f"nn.{s}"), default=nn.ReLU()
     )

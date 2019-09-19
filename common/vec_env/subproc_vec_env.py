@@ -132,6 +132,10 @@ class SubprocVecEnv(VecEnv):
         for remote in self.remotes:
             remote.send(("train", None))
 
+    def increment_curriculum(self):
+        for remote in self.remotes:
+            remote.send(("increment_curriculum", None))
+
 
 def _flatten_obs(obs):
     assert isinstance(obs, list) or isinstance(obs, tuple)
