@@ -81,12 +81,7 @@ class Env(gym.Env):
         # action, *_ = action
         self.t += 1
         if self.solved:
-            return (
-                self.get_observation(),
-                float(self.solved),
-                self.t >= self.time_limit,
-                {},
-            )
+            return (self.get_observation(), 0, self.t >= self.time_limit, {})
         _from, _to = self.int_to_tuple[int(action)]
         if self.valid(_from, _to):
             self.columns[_to].append(self.columns[_from].pop())
@@ -122,11 +117,11 @@ class Env(gym.Env):
             self.random.shuffle(self.columns)
             column = next(c for c in self.columns if len(c) < self.n_rows)
             column.append(block)
-        ahead = self.search_ahead([], self.columns, self.search_depth)
-        if ahead is None:
+        trajectory = self.search_ahead([], self.columns, self.search_depth)
+        if trajectory is None:
             return self.reset()
         start_state = self.pad(self.columns)
-        final_state = self.pad(ahead)
+        final_state = self.pad(trajectory[-1])
 
         def generate_constraints():
             for column in final_state:
@@ -136,20 +131,21 @@ class Env(gym.Env):
                 for left, right in zip((0,) + row, row + (0,)):
                     yield SideBySide(left, right)
 
-        constraints = list(generate_constraints())
-        self.constraints = [
-            c
-            for c in constraints
-            if not c.satisfied(start_state) and c.satisfied(final_state)
-        ]
+        def filter_constraint(constraint):
+            for state in trajectory[:-1]:
+                if constraint.satisfied(self.pad(state)):
+                    return False
+            return True
+
+        self.constraints = list(filter(filter_constraint, generate_constraints()))
         self.random.shuffle(self.constraints)
         self.constraints = self.constraints[: self.n_constraints]
         return self.get_observation()
 
     def search_ahead(self, trajectory, columns, n_steps):
-        if n_steps == 0:
-            return columns
         trajectory = trajectory + [tuple(map(tuple, columns))]
+        if n_steps == 0:
+            return trajectory
         actions = list(itertools.permutations(range(self.n_rows), 2))
         self.random.shuffle(actions)
         for _from, _to in actions:
