@@ -2,11 +2,11 @@ from collections import namedtuple
 
 import numpy as np
 import torch
-from torch import nn as nn
 import torch.nn.functional as F
+from torch import nn as nn
 
-from ppo.distributions import FixedCategorical, Categorical
-from ppo.layers import Concat, Flatten
+from ppo.distributions import Categorical
+from ppo.layers import Flatten
 from ppo.mdp.env import Obs
 from ppo.utils import init_
 
@@ -100,7 +100,9 @@ class Recurrence(nn.Module):
         )
 
         self.model = nn.GRU(
-            embedding_size + self.embed_action.embedding_dim, hidden_size, num_layers
+            embedding_size + self.embed_action.embedding_dim,
+            hidden_size,
+            num_model_layers,
         )
 
         self.Wxi = nn.Sequential(
@@ -156,18 +158,20 @@ class Recurrence(nn.Module):
         for _x in hx:
             _x.squeeze_(0)
 
-        h = (
-            hx.h.view(N, self.gru.num_layers, self.gru.hidden_size)
-            .transpose(0, 1)
-            .contiguous()
-        )
-
         P = hx.planned_a
         a_probs = hx.planned_a_probs
 
         new = torch.all(rnn_hxs == 0, dim=-1)
         if new.any():
             assert new.all()
+            h = (
+                torch.zeros(
+                    N, self.model.num_layers, self.model.hidden_size, device=device
+                )
+                .transpose(0, 1)
+                .contiguous()
+            )
+
             # P = actions.long().squeeze(-1)
             P = [
                 torch.zeros(N, device=device).long() for _ in range(self.planning_steps)
@@ -188,6 +192,12 @@ class Recurrence(nn.Module):
             P = torch.stack(P, dim=-1)
 
         A = torch.cat([actions, hx.a.unsqueeze(0)], dim=0).long()
+
+        h = (
+            hx.h.view(N, self.gru.num_layers, self.gru.hidden_size)
+            .transpose(0, 1)
+            .contiguous()
+        )
 
         for t in range(T):
             x = self.embed2(self.embed1(inputs[t]))
