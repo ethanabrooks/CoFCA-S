@@ -9,6 +9,7 @@ from ppo.distributions import FixedCategorical
 from ppo.layers import Flatten
 from ppo.mdp.env import Obs
 from ppo.utils import init_
+import time
 
 RecurrentState = namedtuple(
     # "RecurrentState", "values probs options indices model_loss embed_loss states h a v"
@@ -80,7 +81,10 @@ class Recurrence(nn.Module):
             activation, init_(nn.Linear(embedding_size, self.num_options))
         )
 
-        self.eye = nn.Embedding.from_pretrained(torch.eye(self.num_options))
+        self.logits_eye = nn.Embedding.from_pretrained(torch.eye(self.num_options))
+        self.register_buffer(
+            "eye", torch.eye(self.planning_steps).unsqueeze(0).unsqueeze(-1)
+        )
         self.register_buffer("one", torch.tensor(1))
         self.register_buffer("zero", torch.tensor(0))
 
@@ -164,18 +168,19 @@ class Recurrence(nn.Module):
                 device=device,
             )
             logits = torch.zeros_like(values)
-            # TODO: delete some of these?
 
             # plan  (needed for execution)
             new_state = self.embed2(inputs[0])
             J = torch.zeros_like(I).long()
 
+            tick = time.time()
             for j in range(self.planning_steps):
-                states = states.index_copy(1, j * self.one, new_state.unsqueeze(1))
+                states = states + self.eye[:, j] * new_state.unsqueeze(1)
                 indices[I, J] = j
                 # TODO: prevent cycles?
 
                 x = states[I, J]
+
                 sharpness = self.sharpener(x)
                 v = self.critic(x)
                 values[:, j] = v
@@ -188,9 +193,9 @@ class Recurrence(nn.Module):
                 log_probs = log_probs + dist.log_prob(P)
 
                 entropy = entropy + dist.entropy()
-                logits = logits.index_copy(
-                    1, j * torch.ones_like(J), l.unsqueeze(1) - INF * self.eye(P)
-                )
+                logits = logits + self.eye[:, j] * (
+                    l - INF * self.logits_eye(P)
+                ).unsqueeze(1)
 
                 # stack stuff
                 pop = v[I, P] <= 0
@@ -202,8 +207,8 @@ class Recurrence(nn.Module):
                     model_output, h = self.model(
                         model_input.unsqueeze(0), h.permute(2, 0, 1).contiguous()
                     )
-                    hidden_states = hidden_states.index_copy(
-                        1, j * self.one, h.permute(1, 2, 0).unsqueeze(1)
+                    hidden_states = hidden_states + self.eye[:, j].unsqueeze(-1) * (
+                        h.permute(1, 2, 0).unsqueeze(1)
                     )
                     new_state = self.embed2(model_output[0]).where(
                         push.unsqueeze(-1), states[:, j]
@@ -214,6 +219,7 @@ class Recurrence(nn.Module):
                 J = torch.max(J - 1, self.zero).where(pop, J)
             options = torch.cat(options, dim=-1)
             # TODO: somehow add early termination
+            print(time.time() - tick)
         if log_probs.grad_fn:
             log_probs.mean().backward(retain_graph=True)
 
