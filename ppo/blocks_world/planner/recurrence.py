@@ -92,12 +92,8 @@ class Recurrence(nn.Module):
             activation,
             init_(nn.Linear(num_layers * hidden_size, sum(self.xi_sections))),
         )
-        self.actor = Categorical(
-            num_layers * hidden_size + num_heads * slot_size, action_space.n
-        )
-        self.critic = init_(
-            nn.Linear(num_layers * hidden_size + num_heads * slot_size, 1)
-        )
+        self.actor = Categorical(num_layers * hidden_size, action_space.n)
+        self.critic = init_(nn.Linear(num_layers * hidden_size, 1))
 
         self.register_buffer("mem_one_hots", torch.eye(num_slots))
         self.embeddings = nn.Embedding(int(nvec.max()), embedding_size)
@@ -216,8 +212,8 @@ class Recurrence(nn.Module):
 
             # act
             x = torch.cat([hT, r], dim=-1)
-            dist = self.actor(x)  # page 7 left column
-            value = self.critic(x)
+            dist = self.actor(hT)  # page 7 left column
+            value = self.critic(hT)
             self.sample_new(A[t], dist)
 
             yield RecurrentState(
