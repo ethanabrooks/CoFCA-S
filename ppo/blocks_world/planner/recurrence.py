@@ -77,9 +77,10 @@ class Recurrence(nn.Module):
         self.sharpener = nn.Sequential(
             activation, init_(nn.Linear(embedding_size, 1)), nn.Softplus()
         )
-        self.critic = nn.Sequential(
+        self.actor = nn.Sequential(
             activation, init_(nn.Linear(embedding_size, self.num_options))
         )
+        self.critic = nn.Sequential(activation, init_(nn.Linear(hidden_size, 1)))
 
         self.logits_eye = nn.Embedding.from_pretrained(torch.eye(self.num_options))
         self.register_buffer(
@@ -154,13 +155,12 @@ class Recurrence(nn.Module):
                 .long()[0]
                 .split(1, dim=-1)
             )
-            values = torch.zeros_like(values)
+
             log_probs = torch.zeros_like(log_probs)
             entropy = torch.zeros_like(entropy)
             indices = torch.zeros_like(indices)
             states = torch.zeros_like(states)
 
-            # search (needed for log_probs)
             hidden_states = torch.zeros(
                 N,
                 self.planning_steps,
@@ -169,8 +169,6 @@ class Recurrence(nn.Module):
                 device=device,
             )
             logits = torch.zeros_like(values)
-
-            # plan  (needed for execution)
             new_state = self.embed2(inputs[0])
             J = torch.zeros_like(I).long()
 
@@ -182,8 +180,7 @@ class Recurrence(nn.Module):
                 x = states[I, J]
 
                 sharpness = self.sharpener(x)
-                v = self.critic(x)
-                values[:, j] = v
+                v = self.actor(x)
                 new_logits = (logits[I, J] == 0).all(-1, keepdim=True)
                 l = torch.where(new_logits, sharpness * v, logits[I, J])
 
@@ -240,7 +237,7 @@ class Recurrence(nn.Module):
                 a=option,
                 model_loss=model_loss,
                 states=states,
-                v=values[I, J, option.long()],
+                v=self.critic(inputs[t]),
             )
 
 
