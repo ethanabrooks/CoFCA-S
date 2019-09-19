@@ -78,10 +78,9 @@ class Env(gym.Env):
         return columns[_from] and len(columns[_to]) < self.n_rows
 
     def step(self, action: list):
-        # action, *_ = action
         self.t += 1
         if self.solved:
-            return (self.get_observation(), 0, self.t >= self.time_limit, {})
+            return self.get_observation(), 0, self.t >= self.time_limit, {}
         _from, _to = self.int_to_tuple[int(action)]
         if self.valid(_from, _to):
             self.columns[_to].append(self.columns[_from].pop())

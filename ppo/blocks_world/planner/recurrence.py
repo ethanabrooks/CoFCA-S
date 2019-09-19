@@ -10,7 +10,7 @@ from ppo.layers import Concat, Flatten
 from ppo.mdp.env import Obs
 from ppo.utils import init_
 
-RecurrentState = namedtuple("RecurrentState", "a a_probs v h")
+RecurrentState = namedtuple("RecurrentState", "a a_probs v h log_probs entropy")
 XiSections = namedtuple("XiSections", "Kr Br kw bw e v F_hat ga gw Pi")
 
 
@@ -59,7 +59,12 @@ class Recurrence(nn.Module):
         self.hidden_size = hidden_size
 
         self.state_sizes = RecurrentState(
-            a=1, a_probs=action_space.n, v=1, h=num_layers * hidden_size
+            a=1,
+            v=1,
+            h=num_layers * hidden_size,
+            log_probs=1,
+            entropy=1,
+            a_probs=action_space.n,
         )
         self.xi_sections = XiSections(
             Kr=num_heads * slot_size,
@@ -189,4 +194,11 @@ class Recurrence(nn.Module):
             dist = self.actor(state)  # page 7 left column
             value = self.critic(state)
             self.sample_new(A[t], dist)
-            yield RecurrentState(a=A[t], a_probs=dist.probs, v=value, h=hT)
+            yield RecurrentState(
+                a=A[t],
+                a_probs=dist.probs,
+                v=value,
+                h=hT,
+                log_probs=torch.ones_like(dist.log_probs(A[t])),
+                entropy=torch.ones_like(dist.entropy()),
+            )
