@@ -6,7 +6,7 @@ from torch import nn as nn
 import torch.nn.functional as F
 
 from ppo.distributions import FixedCategorical, Categorical
-from ppo.layers import Concat
+from ppo.layers import Concat, Flatten
 from ppo.mdp.env import Obs
 from ppo.utils import init_
 
@@ -47,6 +47,7 @@ class Recurrence(nn.Module):
         num_embedding_layers,
     ):
         super().__init__()
+        self.planning_steps = planning_steps
         self.action_size = 1
         self.debug = debug
         self.slot_size = slot_size
@@ -54,6 +55,8 @@ class Recurrence(nn.Module):
         self.num_heads = num_heads
         nvec = observation_space.nvec
         self.obs_shape = (*nvec.shape, nvec.max())
+        self.num_options = nvec.max()
+        self.hidden_size = hidden_size
 
         self.state_sizes = RecurrentState(
             a=1, a_probs=action_space.n, v=1, h=num_layers * hidden_size
@@ -73,18 +76,34 @@ class Recurrence(nn.Module):
 
         # networks
         assert num_layers > 0
-        self.gru = nn.GRU(
-            int(embedding_size * np.prod(nvec.shape)), hidden_size, num_layers
+        self.embeddings = nn.Embedding(int(nvec.max()), int(nvec.max()))
+        self.embed_action = nn.Embedding(int(action_space.n), int(action_space.n))
+
+        self.gru = nn.GRU(int(embedding_size), hidden_size, num_layers)
+        layers = [nn.Embedding(nvec.max(), nvec.max()), Flatten()]
+        in_size = int(nvec.max() * np.prod(nvec.shape))
+        for _ in range(num_embedding_layers):
+            layers += [activation, init_(nn.Linear(in_size, hidden_size))]
+            in_size = hidden_size
+        self.embed1 = nn.Sequential(*layers)
+        self.embed2 = nn.Sequential(
+            activation, init_(nn.Linear(hidden_size, embedding_size))
         )
+
+        self.model = nn.GRU(
+            embedding_size + self.embed_action.embedding_dim,
+            hidden_size,
+            num_model_layers,
+        )
+
         self.Wxi = nn.Sequential(
             activation,
             init_(nn.Linear(num_layers * hidden_size, sum(self.xi_sections))),
         )
-        self.actor = Categorical(num_layers * hidden_size, action_space.n)
-        self.critic = init_(nn.Linear(num_layers * hidden_size, 1))
+        self.actor = Categorical(embedding_size, action_space.n)
+        self.critic = init_(nn.Linear(embedding_size, 1))
 
         self.register_buffer("mem_one_hots", torch.eye(num_slots))
-        self.embeddings = nn.Embedding(int(nvec.max()), embedding_size)
 
     @staticmethod
     def sample_new(x, dist):
@@ -123,9 +142,8 @@ class Recurrence(nn.Module):
         inputs, actions = torch.split(
             inputs.detach(), [D - self.action_size, self.action_size], dim=2
         )
-        inputs = self.embeddings(inputs.long())
+        inputs = inputs.long()
 
-        # new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
         for _x in hx:
             _x.squeeze_(0)
@@ -136,15 +154,38 @@ class Recurrence(nn.Module):
             .contiguous()
         )
 
+        new = torch.all(rnn_hxs == 0, dim=-1)
+        """
+        if new.any():
+            assert new.all()
+            # P = actions.long().squeeze(-1)
+            P = torch.zeros(self.planning_steps, N).long()  # TODO
+            state = self.embed2(self.embed1(inputs[0]))
+            probs = []
+            for t in range(self.planning_steps):
+                dist = self.actor(state)  # page 7 left column
+                probs.append(dist.probs)
+                self.sample_new(P[t], dist)
+                model_input = torch.cat(
+                    [state, self.embed_action(P[t])], dim=-1
+                ).unsqueeze(0)
+                hn, h = self.model(model_input, h)
+                state = self.embed2(hn.squeeze(0))
+            a_probs = torch.stack(probs)
+        """
+
         A = torch.cat([actions, hx.a.unsqueeze(0)], dim=0).long()
 
         for t in range(T):
-            _, h = self.gru(inputs[t].view(1, N, -1), h)
-            hT = h.transpose(0, 1).reshape(N, -1)  # switch layer and batch dims
+            x = self.embed2(self.embed1(inputs[t]))
+            hn, h = self.gru(x.view(1, N, -1), h)
+            hT = (
+                h.transpose(0, 1).reshape(N, -1).contiguous()
+            )  # switch layer and batch dims
+            state = self.embed2(hn.squeeze(0))
 
             # act
-            dist = self.actor(hT)  # page 7 left column
-            value = self.critic(hT)
+            dist = self.actor(state)  # page 7 left column
+            value = self.critic(state)
             self.sample_new(A[t], dist)
-
             yield RecurrentState(a=A[t], a_probs=dist.probs, v=value, h=hT)
