@@ -100,9 +100,7 @@ class Recurrence(nn.Module):
         )
 
         self.model = nn.GRU(
-            embedding_size + self.embed_action.embedding_dim,
-            hidden_size,
-            num_model_layers,
+            embedding_size + self.embed_action.embedding_dim, hidden_size, num_layers
         )
 
         self.Wxi = nn.Sequential(
