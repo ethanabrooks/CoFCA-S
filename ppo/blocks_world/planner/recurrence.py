@@ -178,21 +178,14 @@ class Recurrence(nn.Module):
                 state = self.embed2(hn.squeeze(0))
 
             planned_probs = torch.stack(probs, dim=1)
-            plan = torch.stack(plan, dim=-1)
-
-        A = actions.long()[:, :, 0]
+            plan = torch.cat(plan, dim=-1)
 
         for t in range(T):
-            x = self.embed2(self.embed1(inputs[t]))
-
-            # act
-            dist = self.actor(x)
-            self.sample_new(A[t], dist)
             value = self.critic(self.embed2(self.embed1(inputs[t])))
             t = hx.t[0].long().item()
             probs = planned_probs[:, t].softmax(-1)
             yield RecurrentState(
-                a=A[t],
+                a=plan[:, t],
                 planned_probs=planned_probs,
                 plan=plan,
                 probs=probs,
