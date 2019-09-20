@@ -13,6 +13,7 @@ from ppo.distributions import FixedCategorical
 class Agent(ppo.agent.Agent, NNBase):
     def __init__(self, entropy_coef, model_loss_coef, recurrence):
         nn.Module.__init__(self)
+        self.model_loss_coef = model_loss_coef
         self.entropy_coef = entropy_coef
         self.recurrent_module = recurrence
 
@@ -32,15 +33,14 @@ class Agent(ppo.agent.Agent, NNBase):
         rm = self.recurrent_module
         hx = rm.parse_hidden(all_hxs)
         dist = FixedCategorical(hx.probs)
-        planned_dist = FixedCategorical(hx.plan.view(N, rm.planning_steps, -1))
-        plan = hx.plan.unsqueeze(-1)
         action_log_probs = dist.log_probs(hx.a)
         entropy = dist.entropy()
+        aux_loss = self.model_loss_coef * hx.model_loss - self.entropy_coef * entropy
         return AgentValues(
             value=hx.v,
             action=torch.cat([hx.a, hx.plan], dim=1),
             action_log_probs=action_log_probs,
-            aux_loss=-self.entropy_coef * entropy.mean(),
+            aux_loss=aux_loss.mean(),
             dist=dist,
             rnn_hxs=last_hx,
             log=dict(entropy=entropy),

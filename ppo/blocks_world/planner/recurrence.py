@@ -10,7 +10,9 @@ from ppo.layers import Flatten
 from ppo.mdp.env import Obs
 from ppo.utils import init_
 
-RecurrentState = namedtuple("RecurrentState", "a probs planned_probs plan v t state h")
+RecurrentState = namedtuple(
+    "RecurrentState", "a probs planned_probs plan v t state h model_loss"
+)
 XiSections = namedtuple("XiSections", "Kr Br kw bw e v F_hat ga gw Pi")
 
 
@@ -52,6 +54,7 @@ class Recurrence(nn.Module):
             planned_probs=planning_steps * action_space.nvec.max(),
             state=embedding_size,
             h=hidden_size * num_model_layers,
+            model_loss=1,
         )
         self.xi_sections = XiSections(
             Kr=num_heads * slot_size,
@@ -152,9 +155,10 @@ class Recurrence(nn.Module):
         A = actions.long()[:, :, 0]
 
         for t in range(T):
-            state = self.embed2(self.embed1(inputs[t]))
-            dist = self.actor(state)
-            value = self.critic(state)
+            x = self.embed2(self.embed1(inputs[t]))
+            model_loss = F.mse_loss(state, x, reduction="none").sum(-1)
+            dist = self.actor(x)
+            value = self.critic(x)
             self.sample_new(A[t], dist)
             model_input = torch.cat([state, self.embed_action(A[t].clone())], dim=-1)
             hn, h = self.model(model_input.unsqueeze(0), h)
@@ -168,4 +172,5 @@ class Recurrence(nn.Module):
                 t=hx.t + 1,
                 state=hx.state,
                 h=h.transpose(0, 1),
+                model_loss=model_loss,
             )
