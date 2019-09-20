@@ -151,7 +151,7 @@ class Recurrence(nn.Module):
             _x.squeeze_(0)
 
         plan = hx.plan
-        a_probs = hx.planned_probs
+        planned_probs = hx.planned_probs.view(N, self.planning_steps, -1)
 
         new = torch.all(rnn_hxs == 0, dim=-1)
         if new.any():
@@ -177,7 +177,7 @@ class Recurrence(nn.Module):
                 hn, h = self.model(model_input, h)
                 state = self.embed2(hn.squeeze(0))
 
-            a_probs = torch.stack(probs, dim=1)
+            planned_probs = torch.stack(probs, dim=1)
             plan = torch.stack(plan, dim=-1)
 
         A = actions.long()[:, :, 0]
@@ -192,7 +192,7 @@ class Recurrence(nn.Module):
             yield RecurrentState(
                 a=A[t],
                 plan=plan,
-                planned_probs=a_probs,
+                planned_probs=planned_probs,
                 probs=dist.probs,
                 v=value,
                 t=hx.t + 1,
