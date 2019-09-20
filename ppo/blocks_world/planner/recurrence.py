@@ -11,7 +11,7 @@ from ppo.mdp.env import Obs
 from ppo.utils import init_
 
 RecurrentState = namedtuple(
-    "RecurrentState", "a probs plan planned_a_probs v h log_probs entropy"
+    "RecurrentState", "a probs plan planned_probs v h log_probs entropy"
 )
 XiSections = namedtuple("XiSections", "Kr Br kw bw e v F_hat ga gw Pi")
 
@@ -68,7 +68,7 @@ class Recurrence(nn.Module):
             log_probs=1,
             entropy=1,
             probs=action_space.nvec.max(),
-            planned_a_probs=planning_steps * action_space.nvec.max(),
+            planned_probs=planning_steps * action_space.nvec.max(),
         )
         self.xi_sections = XiSections(
             Kr=num_heads * slot_size,
@@ -161,7 +161,7 @@ class Recurrence(nn.Module):
             _x.squeeze_(0)
 
         P = hx.plan
-        a_probs = hx.planned_a_probs
+        a_probs = hx.planned_probs
 
         new = torch.all(rnn_hxs == 0, dim=-1)
         if new.any():
@@ -213,7 +213,7 @@ class Recurrence(nn.Module):
             yield RecurrentState(
                 a=A[t],
                 plan=P,
-                planned_a_probs=a_probs,
+                planned_probs=a_probs,
                 probs=dist.probs,
                 v=value,
                 h=hT,
