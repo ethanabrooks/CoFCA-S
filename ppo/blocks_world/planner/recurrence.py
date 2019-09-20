@@ -59,11 +59,11 @@ class Recurrence(nn.Module):
         self.hidden_size = hidden_size
 
         self.state_sizes = RecurrentState(
-            a=1,
+            a=planning_steps,
             plan=planning_steps,
             v=1,
             t=1,
-            probs=action_space.nvec.max(),
+            probs=planning_steps * action_space.nvec.max(),
             planned_probs=planning_steps * action_space.nvec.max(),
         )
         self.xi_sections = XiSections(
@@ -184,10 +184,10 @@ class Recurrence(nn.Module):
             value = self.critic(self.embed2(self.embed1(inputs[t])))
             t = hx.t[0].long().item()
             yield RecurrentState(
-                a=plan[:, t],
+                a=plan,
                 planned_probs=planned_probs,
                 plan=plan,
-                probs=planned_probs[:, t],
+                probs=planned_probs,
                 v=value,
                 t=hx.t + 1,
             )
