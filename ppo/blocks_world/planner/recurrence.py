@@ -167,6 +167,7 @@ class Recurrence(nn.Module):
         A = actions.long()[:, :, 0]
 
         for t in range(T):
+            state = self.embed2(self.embed1(inputs[t]))
             dist = self.actor(state)
             value = self.critic(state)
             self.sample_new(A[t], dist)
