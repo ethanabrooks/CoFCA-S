@@ -159,18 +159,16 @@ class Env(gym.Env):
 
     def render(self, mode="human", pause=True):
         print()
+        print("state")
         for row in reversed(list(itertools.zip_longest(*self.columns))):
             for x in row:
                 print("{:3}".format(x or " "), end="")
             print()
-        for constraint in self.constraints:
-            print(
-                "{:3}".format("✔︎")
-                if constraint.satisfied(self.pad(self.columns))
-                else "  ",
-                end="",
-            )
-            print(str(constraint))
+        print("goal")
+        for row in reversed(list(itertools.zip_longest(*self.final_state))):
+            for x in row:
+                print("{:3}".format(x or " "), end="")
+            print()
         print("curriculum level", self.curriculum_level)
         print("search depth", self.search_depth)
         print(f"time step: {self.t}/{self.time_limit}")
