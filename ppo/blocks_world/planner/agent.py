@@ -36,7 +36,7 @@ class Agent(ppo.agent.Agent, NNBase):
         entropy = dist.entropy()
         return AgentValues(
             value=hx.v,
-            action=torch.cat([hx.a, hx.plan], dim=1),
+            action=hx.a,
             action_log_probs=action_log_probs,
             aux_loss=-self.entropy_coef * entropy.mean(),
             dist=dist,
