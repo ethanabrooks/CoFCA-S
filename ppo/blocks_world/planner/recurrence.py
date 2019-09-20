@@ -48,7 +48,7 @@ class Recurrence(nn.Module):
     ):
         super().__init__()
         self.planning_steps = planning_steps
-        self.action_size = planning_steps
+        self.action_size = 1 + planning_steps
         self.debug = debug
         self.slot_size = slot_size
         self.num_slots = num_slots
@@ -59,11 +59,11 @@ class Recurrence(nn.Module):
         self.hidden_size = hidden_size
 
         self.state_sizes = RecurrentState(
-            a=planning_steps,
+            a=1,
             plan=planning_steps,
             v=1,
             t=1,
-            probs=planning_steps * action_space.nvec.max(),
+            probs=action_space.nvec.max(),
             planned_probs=planning_steps * action_space.nvec.max(),
         )
         self.xi_sections = XiSections(
@@ -164,7 +164,7 @@ class Recurrence(nn.Module):
                 .contiguous()
             )
 
-            plan = torch.split(actions[0].long(), 1, dim=-1)
+            _, *plan = torch.split(actions[0].long(), 1, dim=-1)
             state = self.embed2(self.embed1(inputs[0]))
             probs = []
             for t in range(self.planning_steps):
@@ -186,14 +186,14 @@ class Recurrence(nn.Module):
             x = self.embed2(self.embed1(inputs[t]))
 
             # act
-            dist = FixedCategorical(probs=planned_probs[:, int(hx.t[0])])
+            dist = self.actor(x)
             value = self.critic(x)
             self.sample_new(A[t], dist)
             yield RecurrentState(
-                a=plan,
+                a=A[t],
                 plan=plan,
                 planned_probs=planned_probs,
-                probs=planned_probs,
+                probs=dist.probs,
                 v=value,
                 t=hx.t + 1,
             )
