@@ -5,14 +5,12 @@ import torch
 import torch.nn.functional as F
 from torch import nn as nn
 
-from ppo.distributions import Categorical
+from ppo.distributions import Categorical, FixedCategorical
 from ppo.layers import Flatten
 from ppo.mdp.env import Obs
 from ppo.utils import init_
 
-RecurrentState = namedtuple(
-    "RecurrentState", "a probs plan planned_probs v log_probs entropy"
-)
+RecurrentState = namedtuple("RecurrentState", "a probs planned_probs plan v t ")
 XiSections = namedtuple("XiSections", "Kr Br kw bw e v F_hat ga gw Pi")
 
 
@@ -64,8 +62,7 @@ class Recurrence(nn.Module):
             a=1,
             plan=planning_steps,
             v=1,
-            log_probs=1,
-            entropy=1,
+            t=1,
             probs=action_space.nvec.max(),
             planned_probs=planning_steps * action_space.nvec.max(),
         )
@@ -204,6 +201,5 @@ class Recurrence(nn.Module):
                 planned_probs=a_probs,
                 probs=dist.probs,
                 v=value,
-                log_probs=torch.ones_like(dist.log_probs(A[t])),
-                entropy=dist.entropy(),
+                t=hx.t + 1,
             )
