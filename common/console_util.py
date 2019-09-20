@@ -35,16 +35,7 @@ def fmt_item(x, l):
 
 
 color2num = dict(
-    gray=30,
-    red=31,
-    green=32,
-    yellow=33,
-    blue=34,
-    magenta=35,
-    cyan=36,
-    white=37,
-    crimson=38,
-)
+    gray=30, red=31, green=32, yellow=33, blue=34, magenta=35, cyan=36, white=37, crimson=38)
 
 
 def colorize(string, color="green", bold=False, highlight=False):
@@ -73,9 +64,8 @@ def get_git_commit(cwd=None):
 
 
 def get_git_commit_message(cwd=None):
-    return subprocess.check_output(
-        ["git", "show", "-s", "--format=%B", "HEAD"], cwd=cwd
-    ).decode("utf8")
+    return subprocess.check_output(['git', 'show', '-s', '--format=%B', 'HEAD'],
+                                   cwd=cwd).decode('utf8')
 
 
 def ccap(cmd, dry=False, env=None, **kwargs):
@@ -97,7 +87,5 @@ def timed(msg):
     MESSAGE_DEPTH -= 1
     print(
         colorize(
-            "\t" * MESSAGE_DEPTH + "done in %.3f seconds" % (time.time() - tstart),
-            color="magenta",
-        )
-    )
+            '\t' * MESSAGE_DEPTH + "done in %.3f seconds" % (time.time() - tstart),
+            color='magenta'))

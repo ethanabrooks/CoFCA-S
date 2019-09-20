@@ -48,13 +48,9 @@ class PPO:
 
         for e in range(self.ppo_epoch):
             if self.agent.is_recurrent:
-                data_generator = rollouts.recurrent_generator(
-                    advantages, self.num_mini_batch
-                )
+                data_generator = rollouts.recurrent_generator(advantages, self.num_mini_batch)
             else:
-                data_generator = rollouts.feed_forward_generator(
-                    advantages, self.num_mini_batch
-                )
+                data_generator = rollouts.feed_forward_generator(advantages, self.num_mini_batch)
 
             sample: Batch
             for sample in data_generator:
@@ -89,9 +85,7 @@ class PPO:
                     ).clamp(-self.clip_param, self.clip_param)
                     value_losses = (values - sample.ret).pow(2)
                     value_losses_clipped = (value_pred_clipped - sample.ret).pow(2)
-                    value_loss = (
-                        0.5 * torch.max(value_losses, value_losses_clipped).mean()
-                    )
+                    value_loss = .5 * torch.max(value_losses, value_losses_clipped).mean()
                 else:
                     value_loss = 0.5 * F.mse_loss(sample.ret, values)
                 logger.update(value_loss=value_loss)

@@ -74,9 +74,7 @@ def get_index(array, idxs):
 
 def get_n_gpu():
     nvidia_smi = subprocess.check_output(
-        "nvidia-smi --format=csv --query-gpu=memory.free".split(),
-        universal_newlines=True,
-    )
+        'nvidia-smi --format=csv --query-gpu=memory.free'.split(), universal_newlines=True)
     return len(list(csv.reader(StringIO(nvidia_smi)))) - 1
 
 
@@ -86,13 +84,9 @@ def get_random_gpu():
 
 def get_freer_gpu():
     nvidia_smi = subprocess.check_output(
-        "nvidia-smi --format=csv --query-gpu=memory.free".split(),
-        universal_newlines=True,
-    )
+        'nvidia-smi --format=csv --query-gpu=memory.free'.split(), universal_newlines=True)
     free_memory = [
-        float(x[0].split()[0])
-        for i, x in enumerate(csv.reader(StringIO(nvidia_smi)))
-        if i > 0
+        float(x[0].split()[0]) for i, x in enumerate(csv.reader(StringIO(nvidia_smi))) if i > 0
     ]
     return int(np.argmax(free_memory))
 
@@ -114,18 +108,27 @@ def init_(network, nonlinearity=None):
 
     if nonlinearity is None:
         return init(network, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0))
-    return init(
-        network,
-        nn.init.orthogonal_,
-        lambda x: nn.init.constant_(x, 0),
-        nn.init.calculate_gain(nonlinearity_str),
-    )
+    return init(network, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0),
+                nn.init.calculate_gain(nonlinearity))
 
 
 def broadcast3d(inputs, shape):
     return inputs.view(*inputs.shape, 1, 1).expand(*inputs.shape, *shape)
 
 
+@torch.jit.script
+def batch_conv1d(inputs, weights):
+    outputs = []
+    # one convolution per instance
+    n = inputs.shape[0]
+    for i in range(n):
+        x = inputs[i]
+        w = weights[i]
+        outputs.append(F.conv1d(x.reshape(1, 1, -1), w.reshape(1, 1, -1), padding=1))
+    return torch.cat(outputs)
+
+
+@torch.jit.script
 def interp(x1, x2, c):
     return c * x2 + (1 - c) * x1
 
@@ -137,19 +140,3 @@ def log_prob(i, probs):
 
 def trace(module_fn, in_size):
     return torch.jit.trace(module_fn(in_size), example_inputs=torch.rand(1, in_size))
-
-
-RED = "\033[1;31m"
-BLUE = "\033[1;34m"
-CYAN = "\033[1;36m"
-GREEN = "\033[0;32m"
-RESET = "\033[0;0m"
-BOLD = "\033[;1m"
-REVERSE = "\033[;7m"
-
-
-def k_scalar_pairs(*args, **kwargs):
-    for k, v in dict(*args, **kwargs).items():
-        mean = np.mean(v)
-        if not np.isnan(mean):
-            yield k, mean

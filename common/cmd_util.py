@@ -115,9 +115,7 @@ def make_mujoco_env(env_id, seed, reward_scale=1.0):
     myseed = seed + 1000 * rank if seed is not None else None
     set_global_seeds(myseed)
     env = gym.make(env_id)
-    logger_path = (
-        None if logger.get_dir() is None else os.path.join(logger.get_dir(), str(rank))
-    )
+    logger_path = None if logger.get_dir() is None else os.path.join(logger.get_dir(), str(rank))
     env = Monitor(env, logger_path, allow_early_resets=True)
     env.seed(seed)
     if reward_scale != 1.0:
@@ -148,10 +146,7 @@ def arg_parser():
     Create an empty argparse.ArgumentParser.
     """
     import argparse
-
-    return argparse.ArgumentParser(
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter
-    )
+    return argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
 
 def atari_arg_parser():
@@ -172,20 +167,14 @@ def common_arg_parser():
     Create an argparse.ArgumentParser for run_mujoco.py.
     """
     parser = arg_parser()
-    parser.add_argument("--env", help="environment ID", type=str, default="Reacher-v2")
-    parser.add_argument("--seed", help="RNG seed", type=int, default=None)
-    parser.add_argument("--alg", help="Algorithm", type=str, default="ppo2")
-    parser.add_argument("--num_timesteps", type=float, default=1e6),
+    parser.add_argument('--env', help='environment ID', type=str, default='Reacher-v2')
+    parser.add_argument('--seed', help='RNG seed', type=int, default=None)
+    parser.add_argument('--alg', help='Algorithm', type=str, default='ppo2')
+    parser.add_argument('--num_timesteps', type=float, default=1e6),
     parser.add_argument(
-        "--network",
-        help="network type (mlp, cnn, lstm, cnn_lstm, conv_only)",
-        default=None,
-    )
+        '--network', help='network type (mlp, cnn, lstm, cnn_lstm, conv_only)', default=None)
     parser.add_argument(
-        "--gamestate",
-        help="game state to load (so far only used in retro games)",
-        default=None,
-    )
+        '--gamestate', help='game state to load (so far only used in retro games)', default=None)
     parser.add_argument(
         "--num_env",
         help="Number of environment copies being run in parallel. When not specified, set to number of cpus for Atari, and to 1 for Mujoco",
@@ -193,14 +182,9 @@ def common_arg_parser():
         type=int,
     )
     parser.add_argument(
-        "--reward_scale",
-        help="Reward scale factor. Default: 1.0",
-        default=1.0,
-        type=float,
-    )
+        '--reward_scale', help='Reward scale factor. Default: 1.0', default=1.0, type=float)
     parser.add_argument(
-        "--save_path", help="Path to save trained model to", default=None, type=str
-    )
+        '--save_path', help='Path to save trained model to', default=None, type=str)
     parser.add_argument(
         "--save_video_interval",
         help="Save video every x steps (0 = disabled)",
@@ -222,11 +206,9 @@ def robotics_arg_parser():
     Create an argparse.ArgumentParser for run_mujoco.py.
     """
     parser = arg_parser()
-    parser.add_argument(
-        "--env", help="environment ID", type=str, default="FetchReach-v0"
-    )
-    parser.add_argument("--seed", help="RNG seed", type=int, default=None)
-    parser.add_argument("--num-timesteps", type=int, default=int(1e6))
+    parser.add_argument('--env', help='environment ID', type=str, default='FetchReach-v0')
+    parser.add_argument('--seed', help='RNG seed', type=int, default=None)
+    parser.add_argument('--num-timesteps', type=int, default=int(1e6))
     return parser
 
 

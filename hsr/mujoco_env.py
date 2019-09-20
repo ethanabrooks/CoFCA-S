@@ -85,11 +85,10 @@ class MujocoEnv(gym.Env, ABC):
         return self.reset_model()
 
     def set_state(self, qpos, qvel):
-        assert qpos.shape == (self.model.nq,) and qvel.shape == (self.model.nv,)
+        assert qpos.shape == (self.model.nq, ) and qvel.shape == (self.model.nv, )
         old_state = self.sim.get_state()
-        new_state = mujoco_py.MjSimState(
-            old_state.time, qpos, qvel, old_state.act, old_state.udd_state
-        )
+        new_state = mujoco_py.MjSimState(old_state.time, qpos, qvel, old_state.act,
+                                         old_state.udd_state)
         self.sim.set_state(new_state)
         self.sim.forward()
 

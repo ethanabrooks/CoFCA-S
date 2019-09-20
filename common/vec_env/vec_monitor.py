@@ -14,7 +14,7 @@ class VecMonitor(VecEnvWrapper):
         self.eprets = None
         self.eplens = None
         self.tstart = time.time()
-        self.results_writer = ResultsWriter(filename, header={"t_start": self.tstart})
+        self.results_writer = ResultsWriter(filename, header={'t_start': self.tstart})
 
     def reset(self):
         obs = self.venv.reset()
@@ -32,12 +32,8 @@ class VecMonitor(VecEnvWrapper):
         ):
             info = info.copy()
             if done:
-                epinfo = {
-                    "r": ret,
-                    "l": eplen,
-                    "t": round(time.time() - self.tstart, 6),
-                }
-                info["episode"] = epinfo
+                epinfo = {'r': ret, 'l': eplen, 't': round(time.time() - self.tstart, 6)}
+                info['episode'] = epinfo
                 self.eprets[i] = 0
                 self.eplens[i] = 0
                 self.results_writer.write_row(epinfo)
