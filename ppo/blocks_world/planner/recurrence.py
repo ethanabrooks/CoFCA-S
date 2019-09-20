@@ -81,12 +81,10 @@ class Recurrence(nn.Module):
 
         # networks
         assert num_layers > 0
-        self.embeddings = nn.Embedding(int(nvec.max()), int(nvec.max()))
         self.embed_action = nn.Embedding(
             int(action_space.nvec.max()), int(action_space.nvec.max())
         )
 
-        self.gru = nn.GRU(int(embedding_size), hidden_size, num_layers)
         layers = [nn.Embedding(nvec.max(), nvec.max()), Flatten()]
         in_size = int(nvec.max() * np.prod(nvec.shape))
         for _ in range(num_embedding_layers):
@@ -103,10 +101,6 @@ class Recurrence(nn.Module):
             num_model_layers,
         )
 
-        self.Wxi = nn.Sequential(
-            activation,
-            init_(nn.Linear(num_layers * hidden_size, sum(self.xi_sections))),
-        )
         self.actor = Categorical(embedding_size, action_space.nvec.max())
         self.critic = init_(nn.Linear(embedding_size, 1))
 
