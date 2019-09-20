@@ -160,7 +160,7 @@ class Recurrence(nn.Module):
         for _x in hx:
             _x.squeeze_(0)
 
-        P = hx.plan
+        plan = hx.plan
         a_probs = hx.planned_probs
 
         new = torch.all(rnn_hxs == 0, dim=-1)
@@ -174,21 +174,21 @@ class Recurrence(nn.Module):
                 .contiguous()
             )
 
-            _, *P = torch.split(actions[0].long(), 1, dim=-1)
+            _, *plan = torch.split(actions[0].long(), 1, dim=-1)
             state = self.embed2(self.embed1(inputs[0]))
             probs = []
             for t in range(self.planning_steps):
                 dist = self.actor(state)  # page 7 left column
                 probs.append(dist.probs)
-                self.sample_new(P[t], dist)
+                self.sample_new(plan[t], dist)
                 model_input = torch.cat(
-                    [state, self.embed_action(P[t].squeeze(1))], dim=-1
+                    [state, self.embed_action(plan[t].squeeze(1))], dim=-1
                 ).unsqueeze(0)
                 hn, h = self.model(model_input, h)
                 state = self.embed2(hn.squeeze(0))
 
             a_probs = torch.stack(probs, dim=1)
-            P = torch.stack(P, dim=-1)
+            plan = torch.stack(plan, dim=-1)
 
         A = actions.long()[:, :, 0]
 
@@ -212,7 +212,7 @@ class Recurrence(nn.Module):
             self.sample_new(A[t], dist)
             yield RecurrentState(
                 a=A[t],
-                plan=P,
+                plan=plan,
                 planned_probs=a_probs,
                 probs=dist.probs,
                 v=value,
