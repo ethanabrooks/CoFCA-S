@@ -142,7 +142,7 @@ class Recurrence(nn.Module):
         A = actions.long()[:, :, 0]
 
         for t in range(T):
-            x = self.embed2(self.embed1(inputs[t]))
+            x = self.embed2(self.embed1(inputs[t])).detach()
             model_loss = F.mse_loss(state, x, reduction="none").sum(-1)
             dist = self.actor(state)
             value = self.critic(state)
