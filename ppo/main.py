@@ -26,13 +26,9 @@ def train_blocks_world(
         def make_env(
             seed, rank, evaluation, env_id, add_timestep, time_limit, **env_args
         ):
-            if baseline == "dnc":
-                return dnc.Env(**env_args, seed=seed + rank)
-            else:
-                assert baseline is None
-                return planner.Env(
-                    **env_args, planning_steps=planning_steps, seed=seed + rank
-                )
+            return planner.Env(
+                **env_args, planning_steps=planning_steps, seed=seed + rank
+            )
 
         def run_epoch(self, *args, **kwargs):
             dictionary = super().run_epoch(*args, **kwargs)
