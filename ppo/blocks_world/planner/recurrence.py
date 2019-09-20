@@ -56,18 +56,6 @@ class Recurrence(nn.Module):
             h=hidden_size * num_model_layers,
             model_loss=1,
         )
-        self.xi_sections = XiSections(
-            Kr=num_heads * slot_size,
-            Br=num_heads,
-            kw=slot_size,
-            bw=1,
-            e=slot_size,
-            v=slot_size,
-            F_hat=num_heads,
-            ga=1,
-            gw=1,
-            Pi=3 * num_heads,
-        )
 
         # networks
         assert num_layers > 0
@@ -90,7 +78,6 @@ class Recurrence(nn.Module):
         )
         self.actor = Categorical(embedding_size, action_space.nvec.max())
         self.critic = init_(nn.Linear(embedding_size, 1))
-        self.register_buffer("mem_one_hots", torch.eye(num_slots))
 
     @staticmethod
     def sample_new(x, dist):
@@ -157,8 +144,8 @@ class Recurrence(nn.Module):
         for t in range(T):
             x = self.embed2(self.embed1(inputs[t]))
             model_loss = F.mse_loss(state, x, reduction="none").sum(-1)
-            dist = self.actor(x)
-            value = self.critic(x)
+            dist = self.actor(state)
+            value = self.critic(state)
             self.sample_new(A[t], dist)
             model_input = torch.cat([state, self.embed_action(A[t].clone())], dim=-1)
             hn, h = self.model(model_input.unsqueeze(0), h)
