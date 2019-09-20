@@ -18,9 +18,7 @@ def build_parser():
     return parsers
 
 
-def train_blocks_world(
-    increment_curriculum_at_n_satisfied, planning_steps, baseline, **_kwargs
-):
+def train_blocks_world(increment_curriculum_at, planning_steps, baseline, **_kwargs):
     class TrainValues(Train):
         @staticmethod
         def make_env(
@@ -38,8 +36,7 @@ def train_blocks_world(
             dictionary = super().run_epoch(*args, **kwargs)
             try:
                 increment_curriculum = (
-                    np.mean(dictionary["n_satisfied"])
-                    > increment_curriculum_at_n_satisfied
+                    np.mean(dictionary["rewards"]) > increment_curriculum_at
                 )
             except (TypeError, KeyError):
                 increment_curriculum = False
@@ -88,7 +85,7 @@ def blocks_world_cli():
     parsers = build_parser()
     parsers.main.add_argument("--baseline", choices=["dnc"])
     parsers.main.add_argument("--planning-steps", type=int, default=10)
-    parsers.main.add_argument("--increment-curriculum-at-n-satisfied", type=float)
+    parsers.main.add_argument("--increment-curriculum-at", type=float)
     parsers.env.add_argument("--n-cols", type=int, required=True)
     parsers.env.add_argument("--curriculum-level", type=int, default=0)
     parsers.env.add_argument("--extra-time", type=int, default=0)
