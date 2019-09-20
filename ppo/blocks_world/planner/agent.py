@@ -31,12 +31,12 @@ class Agent(ppo.agent.Agent, NNBase):
         )
         rm = self.recurrent_module
         hx = rm.parse_hidden(all_hxs)
-        dist = FixedCategorical(hx.probs)
-        action_log_probs = dist.log_probs(hx.a)
-        entropy = dist.entropy()
+        dist = FixedCategorical(hx.probs.view(N, rm.planning_steps, -1))
+        action_log_probs = dist.log_probs(hx.a).sum(1)
+        entropy = dist.entropy().sum(1)
         return AgentValues(
             value=hx.v,
-            action=torch.cat([hx.a, hx.plan], dim=1),
+            action=hx.plan,
             action_log_probs=action_log_probs,
             aux_loss=-self.entropy_coef * entropy.mean(),
             dist=dist,
