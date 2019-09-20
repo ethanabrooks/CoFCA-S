@@ -24,7 +24,13 @@ def train_blocks_world(increment_curriculum_at_n_satisfied, **kwargs):
         def make_env(
             seed, rank, evaluation, env_id, add_timestep, time_limit, **env_args
         ):
-            return blocks_world.Env(**env_args, seed=seed + rank)
+            if baseline == "dnc":
+                return dnc.Env(**env_args, seed=seed + rank)
+            else:
+                assert baseline is None
+                return planner.Env(
+                    **env_args, planning_steps=planning_steps, seed=seed + rank
+                )
 
         def run_epoch(self, *args, **kwargs):
             counter = super().run_epoch(*args, **kwargs)
@@ -74,6 +80,9 @@ def train_blocks_world(increment_curriculum_at_n_satisfied, **kwargs):
 
 def blocks_world_cli():
     parsers = build_parser()
+    parsers.main.add_argument("--baseline", choices=["dnc"])
+    parsers.main.add_argument("--planning-steps", type=int, default=10)
+    parsers.main.add_argument("--increment-curriculum-at-n-satisfied", type=float)
     parsers.env.add_argument("--n-cols", type=int, required=True)
     parsers.main.add_argument("--increment-curriculum-at-n-satisfied", type=float)
     parsers.agent.add_argument("--num-slots", type=int, required=True)
