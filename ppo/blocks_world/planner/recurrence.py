@@ -14,21 +14,6 @@ RecurrentState = namedtuple("RecurrentState", "a probs planned_probs plan v t st
 XiSections = namedtuple("XiSections", "Kr Br kw bw e v F_hat ga gw Pi")
 
 
-def batch_conv1d(inputs, weights):
-    outputs = []
-    # one convolution per instance
-    n = inputs.shape[0]
-    for i in range(n):
-        x = inputs[i]
-        w = weights[i]
-        convolved = F.conv1d(x.reshape(1, 1, -1), w.reshape(1, 1, -1), padding=2)
-        outputs.append(convolved.squeeze(0))
-    padded = torch.cat(outputs)
-    padded[:, 1] = padded[:, 1] + padded[:, 0]
-    padded[:, -2] = padded[:, -2] + padded[:, -1]
-    return padded[:, 1:-1]
-
-
 class Recurrence(nn.Module):
     def __init__(
         self,
@@ -171,9 +156,9 @@ class Recurrence(nn.Module):
             dist = self.actor(state)
             value = self.critic(state)
             self.sample_new(A[t], dist)
-            model_input = torch.cat([state, self.embed_action(A[t])], dim=-1)
-            # hn, h = self.model(model_input.unsqueeze(0), h)
-            # state = self.embed2(hn.squeeze(0))
+            model_input = torch.cat([state, self.embed_action(A[t].clone())], dim=-1)
+            hn, h = self.model(model_input.unsqueeze(0), h)
+            state = self.embed2(hn.squeeze(0))
             yield RecurrentState(
                 a=A[t],
                 plan=plan,
