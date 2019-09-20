@@ -31,7 +31,7 @@ class Agent(ppo.agent.Agent, NNBase):
         )
         rm = self.recurrent_module
         hx = rm.parse_hidden(all_hxs)
-        dist = FixedCategorical(hx.a_probs)
+        dist = FixedCategorical(hx.probs)
         planned_dist = FixedCategorical(hx.plan.view(N, rm.planning_steps, -1))
         plan = hx.plan.unsqueeze(-1)
         action_log_probs = dist.log_probs(hx.a)
