@@ -186,7 +186,7 @@ class Recurrence(nn.Module):
             x = self.embed2(self.embed1(inputs[t]))
 
             # act
-            dist = self.actor(x)
+            dist = FixedCategorical(probs=planned_probs[:, int(hx.t[0])])
             value = self.critic(x)
             self.sample_new(A[t], dist)
             yield RecurrentState(
