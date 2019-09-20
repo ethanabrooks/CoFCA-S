@@ -11,7 +11,7 @@ from ppo.mdp.env import Obs
 from ppo.utils import init_
 
 RecurrentState = namedtuple(
-    "RecurrentState", "a probs plan planned_probs v h log_probs entropy"
+    "RecurrentState", "a probs plan planned_probs v log_probs entropy"
 )
 XiSections = namedtuple("XiSections", "Kr Br kw bw e v F_hat ga gw Pi")
 
@@ -64,7 +64,6 @@ class Recurrence(nn.Module):
             a=1,
             plan=planning_steps,
             v=1,
-            h=num_layers * hidden_size,
             log_probs=1,
             entropy=1,
             probs=action_space.nvec.max(),
@@ -192,23 +191,12 @@ class Recurrence(nn.Module):
 
         A = actions.long()[:, :, 0]
 
-        h = (
-            hx.h.view(N, self.gru.num_layers, self.gru.hidden_size)
-            .transpose(0, 1)
-            .contiguous()
-        )
-
         for t in range(T):
             x = self.embed2(self.embed1(inputs[t]))
-            hn, h = self.gru(x.view(1, N, -1), h)
-            hT = (
-                h.transpose(0, 1).reshape(N, -1).contiguous()
-            )  # switch layer and batch dims
-            state = self.embed2(hn.squeeze(0))
 
             # act
-            dist = self.actor(state)  # page 7 left column
-            value = self.critic(state)
+            dist = self.actor(x)
+            value = self.critic(x)
             self.sample_new(A[t], dist)
             yield RecurrentState(
                 a=A[t],
@@ -216,7 +204,6 @@ class Recurrence(nn.Module):
                 planned_probs=a_probs,
                 probs=dist.probs,
                 v=value,
-                h=hT,
                 log_probs=torch.ones_like(dist.log_probs(A[t])),
                 entropy=dist.entropy(),
             )
