@@ -183,12 +183,11 @@ class Recurrence(nn.Module):
         for t in range(T):
             value = self.critic(self.embed2(self.embed1(inputs[t])))
             t = hx.t[0].long().item()
-            probs = planned_probs[:, t].softmax(-1)
             yield RecurrentState(
                 a=plan[:, t],
                 planned_probs=planned_probs,
                 plan=plan,
-                probs=probs,
+                probs=planned_probs[:, t],
                 v=value,
                 t=hx.t + 1,
             )
