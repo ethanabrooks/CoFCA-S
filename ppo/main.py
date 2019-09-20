@@ -24,24 +24,14 @@ def train_blocks_world(
     class TrainValues(Train):
         @staticmethod
         def make_env(
-            seed,
-            rank,
-            evaluation,
-            env_id,
-            add_timestep,
-            time_limit,
-            n_constraints,
-            **env_args,
+            seed, rank, evaluation, env_id, add_timestep, time_limit, **env_args
         ):
             if baseline == "dnc":
                 return dnc.Env(**env_args, seed=seed + rank)
             else:
                 assert baseline is None
                 return planner.Env(
-                    **env_args,
-                    n_constraints=n_constraints,
-                    planning_steps=planning_steps,
-                    seed=seed + rank,
+                    **env_args, planning_steps=planning_steps, seed=seed + rank
                 )
 
         def run_epoch(self, *args, **kwargs):
@@ -99,7 +89,6 @@ def blocks_world_cli():
     parsers.main.add_argument("--baseline", choices=["dnc"])
     parsers.main.add_argument("--planning-steps", type=int, default=10)
     parsers.main.add_argument("--increment-curriculum-at-n-satisfied", type=float)
-    parsers.env.add_argument("--n-constraints", type=int, default=2)
     parsers.env.add_argument("--n-cols", type=int, required=True)
     parsers.env.add_argument("--curriculum-level", type=int, default=0)
     parsers.env.add_argument("--extra-time", type=int, default=0)

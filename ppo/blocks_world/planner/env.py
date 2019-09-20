@@ -19,10 +19,8 @@ class Env(gym.Env):
         seed: int,
         curriculum_level: int,
         extra_time: int,
-        n_constraints: int,
         planning_steps: int,
     ):
-        self.n_constraints = n_constraints
         self.extra_time = extra_time
         self.n_rows = self.n_cols = n_cols
         self.n_grids = n_cols ** 2
@@ -31,6 +29,7 @@ class Env(gym.Env):
         self.constraints = None
         self.n_blocks = None
         self.search_depth = None
+        self.final_state = None
         self.time_limit = None
         self.last = None
         self.solved = None
@@ -42,7 +41,7 @@ class Env(gym.Env):
         )
         # self.action_space = gym.spaces.Discrete(len(self.int_to_tuple))
         self.observation_space = gym.spaces.MultiDiscrete(
-            np.array([7] * (self.n_rows * self.n_cols + 3 * n_constraints))
+            np.array([7] * (self.n_rows * self.n_cols * 2))
         )
 
         def curriculum_generator():
@@ -84,8 +83,7 @@ class Env(gym.Env):
         _from, _to = self.int_to_tuple[int(action[0])]
         if self.valid(_from, _to):
             self.columns[_to].append(self.columns[_from].pop())
-        satisfied = [c.satisfied(self.pad(self.columns)) for c in self.constraints]
-        if all(satisfied):
+        if tuple(map(tuple, self.columns)) == self.final_state:
             r = 1
             self.solved = True
         else:
@@ -98,8 +96,6 @@ class Env(gym.Env):
             curriculum_level=self.curriculum_level,
             reward_plus_curriculum=r + self.curriculum_level,
         )
-        if self.solved:
-            i.update(n_satisfied=np.mean(satisfied))
         return self.get_observation(), r, t, i
 
     def reset(self):
@@ -119,25 +115,7 @@ class Env(gym.Env):
         trajectory = self.plan(self.columns, self.search_depth)
         if not trajectory:
             return self.reset()
-        final_state = self.pad(trajectory[0])
-
-        def generate_constraints():
-            for column in final_state:
-                for bottom, top in itertools.zip_longest([0] + column, column + [0]):
-                    yield Stacked(top, bottom)
-            for row in itertools.zip_longest(*final_state):
-                for left, right in zip((0,) + row, row + (0,)):
-                    yield SideBySide(left, right)
-
-        def filter_constraint(constraint):
-            for state in trajectory[1:]:
-                if constraint.satisfied(self.pad(state)):
-                    return False
-            return True
-
-        self.constraints = list(filter(filter_constraint, generate_constraints()))
-        self.random.shuffle(self.constraints)
-        self.constraints = self.constraints[: self.n_constraints]
+        self.final_state = trajectory[0]
         return self.get_observation()
 
     def plan(self, start, max_depth):
@@ -165,10 +143,9 @@ class Env(gym.Env):
         return trajectory
 
     def get_observation(self):
-        state = [c + [0] * (self.n_rows - len(c)) for c in self.columns]
-        padding = [[0] * 3 * (self.n_constraints - len(self.constraints))]
-        constraints = [c.list() for c in self.constraints] + padding
-        obs = [x for r in state + constraints for x in r]
+        obs = [
+            x for r in self.pad(self.columns) + self.pad(self.final_state) for x in r
+        ]
         assert self.observation_space.contains(obs)
         return obs
 
