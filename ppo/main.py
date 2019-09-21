@@ -84,11 +84,11 @@ def train_blocks_world(
             else:
                 assert baseline is None
                 del agent_args["debug"]
-                del agent_args["embedding_size"]
+                del agent_args["num_layers"]
                 recurrence = single_step.Recurrence(
                     action_space=envs.action_space,
                     observation_space=envs.observation_space,
-                    recurrent=False,
+                    **planner_args,
                     **agent_args,
                 )
                 return single_step.Agent(
