@@ -6,7 +6,7 @@ import ppo.bandit.baselines.oh_et_al
 import ppo.maze.baselines
 from ppo import gntm
 from ppo.agent import Agent
-from ppo.blocks_world import dnc, single_step, non_recurrent
+from ppo.blocks_world import dnc, single_step, non_recurrent, planner
 from ppo.train import Train
 
 
@@ -35,8 +35,8 @@ def train_blocks_world(
                 )
             else:
                 assert baseline is None
-                # return planner.Env(
-                return single_step.Env(
+                # return single_step.Env(
+                return planner.Env(
                     **env_args, planning_steps=planning_steps, seed=seed + rank
                 )
 
