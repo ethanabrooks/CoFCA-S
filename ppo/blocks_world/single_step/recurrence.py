@@ -89,7 +89,7 @@ class Recurrence(nn.Module):
 
     def inner_loop(self, inputs, rnn_hxs):
         T, N, D = inputs.shape
-        inputs, action = torch.split(
+        inputs, actions = torch.split(
             inputs.detach(), [D - self.action_size, self.action_size], dim=2
         )
 
@@ -106,7 +106,7 @@ class Recurrence(nn.Module):
                 .contiguous()
             )
 
-            A = action.long()
+            A = actions.long()
             first_state = state = self.embed2(self.embed1(inputs[0]))
             probs = []
             for t in range(self.action_size):
@@ -118,7 +118,13 @@ class Recurrence(nn.Module):
                 )
                 hn, h = self.model(model_input.unsqueeze(0), h)
                 state = self.embed2(hn.squeeze(0))
-        v = self.critic(first_state)
-        probs = torch.stack(probs, dim=1)
+            a = A[0]
+            probs = torch.stack(probs, dim=1)
+        else:
+            state = hx.state
+            a = hx.a
+            probs = hx.probs
+
         for t in range(T):
-            yield RecurrentState(a=A[t], probs=probs, v=v, state=state, h=hx.h)
+            v = self.critic(self.embed2(self.embed1(inputs[0])))
+            yield RecurrentState(a=a, probs=probs, v=v, state=state, h=hx.h)
