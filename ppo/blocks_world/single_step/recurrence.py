@@ -18,9 +18,9 @@ class Recurrence(nn.Module):
         observation_space,
         action_space,
         hidden_size,
-        embedding_size,
         num_embedding_layers,
         num_model_layers,
+        embedding_size,
         activation,
     ):
         num_inputs = int(np.prod(observation_space.shape))
@@ -35,6 +35,8 @@ class Recurrence(nn.Module):
             h=hidden_size * num_model_layers,
         )
 
+        # networks
+        self.embed_action = nn.Embedding(int(action_space.n), int(action_space.n))
         layers = []
         in_size = num_inputs
         for _ in range(num_embedding_layers):
@@ -43,6 +45,11 @@ class Recurrence(nn.Module):
         self.embed1 = nn.Sequential(*layers)
         self.embed2 = nn.Sequential(
             activation, init_(nn.Linear(hidden_size, embedding_size))
+        )
+        self.model = nn.GRU(
+            embedding_size + self.embed_action.embedding_dim,
+            hidden_size,
+            num_model_layers,
         )
 
         self.critic = init_(nn.Linear(hidden_size, 1))
@@ -88,11 +95,27 @@ class Recurrence(nn.Module):
         for _x in hx:
             _x.squeeze_(0)
 
+        new = torch.all(rnn_hxs == 0, dim=-1)
+        if new.any():
+            assert new.all()
+            state = self.embed2(self.embed1(inputs[0]))
+        else:
+            state = hx.state.view(N, -1)
+
+        h = (
+            hx.h.view(N, self.model.num_layers, self.model.hidden_size)
+            .transpose(0, 1)
+            .contiguous()
+        )
+
         A = actions.long()[:, :, 0]
         for t in range(T):
             x = self.embed1(inputs[t])
             dist = self.actor(x)
             self.sample_new(A[t], dist)
+            model_input = torch.cat([state, self.embed_action(A[t].clone())], dim=-1)
+            hn, h = self.model(model_input.unsqueeze(0), h)
+            state = self.embed2(hn.squeeze(0))
             yield RecurrentState(
-                a=A[t], probs=dist.probs, v=self.critic(x), state=hx.state, h=hx.h
+                a=A[t], probs=dist.probs, v=self.critic(x), state=state, h=hx.h
             )
