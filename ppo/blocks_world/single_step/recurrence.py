@@ -4,9 +4,8 @@ import numpy as np
 from gym.spaces import Box
 from torch import nn as nn
 
-from ppo.agent import NNBase
 from ppo.distributions import Categorical
-from ppo.utils import init, init_normc_
+from ppo.utils import init_
 
 RecurrentState = namedtuple("RecurrentState", "a probs v")
 # "planned_probs plan v t state h model_loss"
@@ -27,11 +26,6 @@ class Recurrence(nn.Module):
         super().__init__()
 
         self.state_sizes = RecurrentState(a=1, v=1, probs=action_space.n)
-
-        if recurrent:
-            num_inputs = hidden_size
-
-        init_ = lambda m: init(m, init_normc_, lambda x: nn.init.constant_(x, 0))
 
         layers = []
         in_size = num_inputs
