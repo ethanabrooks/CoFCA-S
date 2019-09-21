@@ -58,7 +58,6 @@ class Recurrence(nn.Module):
         )
 
         # networks
-        assert num_layers > 0
         self.embed_action = nn.Embedding(int(action_space.n), int(action_space.n))
         layers = [nn.Embedding(nvec.max(), nvec.max()), Flatten()]
         in_size = int(nvec.max() * np.prod(nvec.shape))
