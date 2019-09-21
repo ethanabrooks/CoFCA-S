@@ -2,7 +2,7 @@ import ppo
 from ppo.agent import AgentValues, NNBase
 
 # noinspection PyMissingConstructor
-from ppo.blocks_world.single_step.recurrence import MLPBase
+from ppo.blocks_world.single_step.recurrence import Recurrence
 
 from collections import namedtuple
 

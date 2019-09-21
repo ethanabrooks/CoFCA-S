@@ -5,7 +5,6 @@ import ppo.arguments
 import ppo.bandit.baselines.oh_et_al
 import ppo.maze.baselines
 from ppo import gntm
-from ppo.agent import Agent, MLPBase
 from ppo.blocks_world import dnc, single_step, non_recurrent
 from ppo.train import Train
 
@@ -87,7 +86,7 @@ def train_blocks_world(
                 del agent_args["embedding_size"]
                 # recurrence = planner.Recurrence(
 
-                recurrence = MLPBase(
+                recurrence = single_step.Recurrence(
                     num_inputs=envs.observation_space.shape[0],
                     recurrent=False,
                     **agent_args,

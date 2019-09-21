@@ -93,10 +93,10 @@ class NNBase(nn.Module):
         return x, hxs
 
 
-class MLPBase(NNBase):
+class Recurrence(NNBase):
     def __init__(self, num_inputs, hidden_size, num_layers, recurrent, activation):
         recurrent_module = nn.GRU if recurrent else None
-        super(MLPBase, self).__init__(recurrent_module, num_inputs, hidden_size)
+        super(Recurrence, self).__init__(recurrent_module, num_inputs, hidden_size)
 
         if recurrent:
             num_inputs = hidden_size
