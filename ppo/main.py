@@ -87,8 +87,7 @@ def train_blocks_world(
                 del agent_args["embedding_size"]
                 recurrence = single_step.Recurrence(
                     action_space=envs.action_space,
-                    num_inputs=envs.observation_space.shape[0],
-                    recurrent=False,
+                    observation_space=envs.observation_space,
                     **agent_args,
                 )
                 return single_step.Agent(

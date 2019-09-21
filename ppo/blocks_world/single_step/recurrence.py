@@ -1,50 +1,45 @@
 from collections import namedtuple
 
-from gym.spaces import Box
+import numpy as np
 from torch import nn as nn
 
-from ppo.agent import NNBase
 from ppo.distributions import Categorical
-from ppo.utils import init, init_normc_
+from ppo.utils import init_
 
 RecurrentState = namedtuple("RecurrentState", "a probs v")
 # "planned_probs plan v t state h model_loss"
 
 
-class Recurrence(NNBase):
+class Recurrence(nn.Module):
     def __init__(
-        self, num_inputs, action_space, hidden_size, num_layers, recurrent, activation
+        self, observation_space, action_space, activation, hidden_size, num_layers
     ):
-        recurrent_module = nn.GRU if recurrent else None
-        super(Recurrence, self).__init__(recurrent_module, num_inputs, hidden_size)
+        super().__init__()
+        self.action_size = 1
+        nvec = observation_space.nvec
+        self.obs_shape = (*nvec.shape, nvec.max())
+        self.hidden_size = hidden_size
 
-        if recurrent:
-            num_inputs = hidden_size
+        self.state_sizes = RecurrentState(a=1, v=1, probs=action_space.n)
 
-        init_ = lambda m: init(m, init_normc_, lambda x: nn.init.constant_(x, 0))
-
-        self.actor = nn.Sequential()
-        self.critic = nn.Sequential()
-        for i in range(num_layers):
-            in_features = num_inputs if i == 0 else hidden_size
-            self.actor.add_module(
-                name=f"fc{i}",
-                module=nn.Sequential(
-                    init_(nn.Linear(in_features, hidden_size)), activation
-                ),
-            )
-            self.critic.add_module(
-                name=f"fc{i}",
-                module=nn.Sequential(
-                    init_(nn.Linear(in_features, hidden_size)), activation
-                ),
-            )
-
-        self.critic_linear = init_(nn.Linear(hidden_size, 1))
-
-        self.dist = Categorical(self.output_size, action_space.n)
-        self.continuous = isinstance(action_space, Box)
-
+        # networks
+        # self.embed_action = nn.Embedding(int(action_space.n), int(action_space.n))
+        layers = []
+        in_size = int(np.prod(nvec.shape))
+        for _ in range(num_layers):
+            layers += [activation, init_(nn.Linear(in_size, hidden_size))]
+            in_size = hidden_size
+        self.embed1 = nn.Sequential(*layers)
+        # self.embed2 = nn.Sequential(
+        #     activation, init_(nn.Linear(hidden_size, embedding_size))
+        # )
+        # self.model = nn.GRU(
+        #     embedding_size + self.embed_action.embedding_dim,
+        #     hidden_size,
+        #     num_model_layers,
+        # )
+        self.actor = Categorical(hidden_size, action_space.n)
+        self.critic = init_(nn.Linear(hidden_size, 1))
         self.train()
 
     @staticmethod
@@ -53,17 +48,13 @@ class Recurrence(NNBase):
         x[new] = dist.sample()[new].flatten()
 
     def forward(self, inputs, rnn_hxs, masks, action):
-        x = inputs
+        x = self.embed1(inputs)
+        #
+        # if self.is_recurrent:
+        #     x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)
 
-        if self.is_recurrent:
-            x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)
-
-        hidden_critic = self.critic(x)
-        hidden_actor = self.actor(x)
-
-        dist = self.dist(hidden_actor)
+        v = self.critic(x)
+        dist = self.actor(x)
         self.sample_new(action, dist)
 
-        return RecurrentState(
-            a=action, probs=dist.probs, v=self.critic_linear(hidden_critic)
-        )
+        return RecurrentState(a=action, probs=dist.probs, v=v)
