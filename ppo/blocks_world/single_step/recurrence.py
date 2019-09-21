@@ -6,7 +6,7 @@ from torch import nn as nn
 
 from ppo.agent import NNBase
 from ppo.distributions import Categorical
-from ppo.utils import init, init_normc_
+from ppo.utils import init, init_normc_, init_
 
 RecurrentState = namedtuple("RecurrentState", "a probs v")
 # "planned_probs plan v t state h model_loss"
@@ -22,7 +22,7 @@ class Recurrence(nn.Module):
         recurrent,
         activation,
     ):
-        recurrent_module = nn.GRU if recurrent else None
+        # recurrent_module = nn.GRU if recurrent else None
         num_inputs = int(np.prod(observation_space.shape))
         super().__init__()
 
@@ -30,8 +30,6 @@ class Recurrence(nn.Module):
 
         if recurrent:
             num_inputs = hidden_size
-
-        init_ = lambda m: init(m, init_normc_, lambda x: nn.init.constant_(x, 0))
 
         layers = []
         in_size = num_inputs
