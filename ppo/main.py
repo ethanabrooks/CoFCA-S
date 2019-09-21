@@ -85,9 +85,8 @@ def train_blocks_world(
                 assert baseline is None
                 del agent_args["debug"]
                 del agent_args["embedding_size"]
-                # recurrence = planner.Recurrence(
-
                 recurrence = single_step.Recurrence(
+                    action_space=envs.action_space,
                     num_inputs=envs.observation_space.shape[0],
                     recurrent=False,
                     **agent_args,
@@ -96,7 +95,6 @@ def train_blocks_world(
                     entropy_coef=entropy_coef,
                     model_loss_coef=model_loss_coef,
                     recurrence=recurrence,
-                    action_space=envs.action_space,
                 )
 
     TrainValues(**_kwargs).run()

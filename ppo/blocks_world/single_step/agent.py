@@ -1,15 +1,13 @@
-import ppo
-from ppo.agent import AgentValues, NNBase
-
-# noinspection PyMissingConstructor
-from ppo.blocks_world.single_step.recurrence import Recurrence
-
 from collections import namedtuple
 
-from gym.spaces import Box, Discrete
+import torch
 import torch.nn as nn
 
-from ppo.distributions import Categorical, DiagGaussian
+import ppo
+from ppo.agent import AgentValues, NNBase
+from ppo.distributions import FixedCategorical
+
+# noinspection PyMissingConstructor
 
 AgentValues = namedtuple(
     "AgentValues", "value action action_log_probs aux_loss rnn_hxs log dist"
@@ -17,13 +15,11 @@ AgentValues = namedtuple(
 
 
 class Agent(ppo.agent.Agent, NNBase):
-    def __init__(self, action_space, entropy_coef, model_loss_coef, recurrence):
+    def __init__(self, entropy_coef, model_loss_coef, recurrence):
         nn.Module.__init__(self)
         self.model_loss_coef = model_loss_coef
         self.entropy_coef = entropy_coef
         self.recurrent_module = recurrence
-        self.dist = Categorical(self.recurrent_module.output_size, action_space.n)
-        self.continuous = isinstance(action_space, Box)
 
     @property
     def is_recurrent(self):
@@ -35,21 +31,21 @@ class Agent(ppo.agent.Agent, NNBase):
         return self.recurrent_module.recurrent_hidden_state_size
 
     def forward(self, inputs, rnn_hxs, masks, deterministic=False, action=None):
-        value, actor_features, rnn_hxs = self.recurrent_module(inputs, rnn_hxs, masks)
-
-        dist = self.dist(actor_features)
-
-        if action is None:
-            if deterministic:
-                action = dist.mode()
-            else:
-                action = dist.sample()
-
-        action_log_probs = dist.log_probs(action)
+        N = inputs.size(0)
+        hx = self.recurrent_module(
+            inputs,
+            rnn_hxs,
+            masks,
+            action=-torch.ones(N, 1, device=inputs.device, dtype=torch.long)
+            if action is None
+            else action,
+        )
+        dist = FixedCategorical(hx.probs)
+        action_log_probs = dist.log_probs(hx.a)
         entropy = dist.entropy().mean()
         return AgentValues(
-            value=value,
-            action=action,
+            value=hx.v,
+            action=hx.a,
             action_log_probs=action_log_probs,
             aux_loss=-self.entropy_coef * entropy,
             dist=dist,
@@ -58,8 +54,8 @@ class Agent(ppo.agent.Agent, NNBase):
         )
 
     def get_value(self, inputs, rnn_hxs, masks):
-        value, _, _ = self.recurrent_module(inputs, rnn_hxs, masks)
-        return value
+        action = -torch.ones(inputs.size(0), 1, device=inputs.device, dtype=torch.long)
+        return self.recurrent_module(inputs, rnn_hxs, masks, action).v
 
 
 # class Agent(ppo.agent.Agent, NNBase):

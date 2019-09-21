@@ -1,11 +1,20 @@
+from collections import namedtuple
+
+from gym.spaces import Box
 from torch import nn as nn
 
 from ppo.agent import NNBase
+from ppo.distributions import Categorical
 from ppo.utils import init, init_normc_
+
+RecurrentState = namedtuple("RecurrentState", "a probs v")
+# "planned_probs plan v t state h model_loss"
 
 
 class Recurrence(NNBase):
-    def __init__(self, num_inputs, hidden_size, num_layers, recurrent, activation):
+    def __init__(
+        self, num_inputs, action_space, hidden_size, num_layers, recurrent, activation
+    ):
         recurrent_module = nn.GRU if recurrent else None
         super(Recurrence, self).__init__(recurrent_module, num_inputs, hidden_size)
 
@@ -33,9 +42,17 @@ class Recurrence(NNBase):
 
         self.critic_linear = init_(nn.Linear(hidden_size, 1))
 
+        self.dist = Categorical(self.output_size, action_space.n)
+        self.continuous = isinstance(action_space, Box)
+
         self.train()
 
-    def forward(self, inputs, rnn_hxs, masks):
+    @staticmethod
+    def sample_new(x, dist):
+        new = x < 0
+        x[new] = dist.sample()[new].flatten()
+
+    def forward(self, inputs, rnn_hxs, masks, action):
         x = inputs
 
         if self.is_recurrent:
@@ -44,4 +61,9 @@ class Recurrence(NNBase):
         hidden_critic = self.critic(x)
         hidden_actor = self.actor(x)
 
-        return self.critic_linear(hidden_critic), hidden_actor, rnn_hxs
+        dist = self.dist(hidden_actor)
+        self.sample_new(action, dist)
+
+        return RecurrentState(
+            a=action, probs=dist.probs, v=self.critic_linear(hidden_critic)
+        )
