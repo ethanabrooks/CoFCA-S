@@ -23,12 +23,12 @@ class Agent(ppo.agent.Agent, NNBase):
 
     @property
     def is_recurrent(self):
-        return True
+        return self.recurrent_module.is_recurrent
 
     @property
     def recurrent_hidden_state_size(self):
         """Size of rnn_hx."""
-        return 1  # TODO
+        return self.recurrent_module.recurrent_hidden_state_size
 
     def forward(self, inputs, rnn_hxs, masks, deterministic=False, action=None):
         N = inputs.size(0)
