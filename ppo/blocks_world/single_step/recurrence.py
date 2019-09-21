@@ -1,162 +1,136 @@
-from collections import namedtuple
-
-import numpy as np
 import torch
-import torch.nn.functional as F
 from torch import nn as nn
 
-from ppo.distributions import Categorical, FixedCategorical
-from ppo.layers import Flatten
-from ppo.mdp.env import Obs
-from ppo.utils import init_
-
-RecurrentState = namedtuple(
-    "RecurrentState", "a probs planned_probs plan v t state h model_loss"
-)
-XiSections = namedtuple("XiSections", "Kr Br kw bw e v F_hat ga gw Pi")
+from ppo.utils import init, init_normc_
 
 
-class Recurrence(nn.Module):
-    def __init__(
-        self,
-        observation_space,
-        action_space,
-        activation,
-        hidden_size,
-        num_layers,
-        debug,
-        num_slots,
-        slot_size,
-        embedding_size,
-        num_heads,
-        planning_steps,
-        num_model_layers,
-        num_embedding_layers,
-    ):
-        super().__init__()
-        self.planning_steps = planning_steps
-        self.action_size = 1
-        self.debug = debug
-        self.slot_size = slot_size
-        self.num_slots = num_slots
-        self.num_heads = num_heads
-        nvec = observation_space.nvec
-        self.obs_shape = (*nvec.shape, nvec.max())
-        self.num_options = nvec.max()
-        self.hidden_size = hidden_size
+class NNBase(nn.Module):
+    def __init__(self, recurrent: bool, recurrent_input_size, hidden_size):
+        super(NNBase, self).__init__()
 
-        self.state_sizes = RecurrentState(
-            a=1,
-            plan=planning_steps,
-            v=1,
-            t=1,
-            probs=action_space.n,
-            planned_probs=planning_steps * action_space.n,
-            state=embedding_size,
-            h=hidden_size * num_model_layers,
-            model_loss=1,
-        )
+        self._hidden_size = hidden_size
+        self._recurrent = recurrent
 
-        # networks
-        self.embed_action = nn.Embedding(int(action_space.n), int(action_space.n))
-        layers = [nn.Embedding(nvec.max(), nvec.max()), Flatten()]
-        in_size = int(nvec.max() * np.prod(nvec.shape))
-        for _ in range(num_embedding_layers):
-            layers += [activation, init_(nn.Linear(in_size, hidden_size))]
-            in_size = hidden_size
-        self.embed1 = nn.Sequential(*layers)
-        self.embed2 = nn.Sequential(
-            activation, init_(nn.Linear(hidden_size, embedding_size))
-        )
-        self.model = nn.GRU(
-            embedding_size + self.embed_action.embedding_dim,
-            hidden_size,
-            num_model_layers,
-        )
-        self.actor = Categorical(embedding_size, action_space.n)
-        self.critic = init_(nn.Linear(embedding_size, 1))
-
-    @staticmethod
-    def sample_new(x, dist):
-        new = x < 0
-        x[new] = dist.sample()[new].flatten()
-
-    def forward(self, inputs, hx):
-        return self.pack(self.inner_loop(inputs, rnn_hxs=hx))
-
-    def pack(self, hxs):
-        def pack():
-            for name, size, hx in zip(
-                RecurrentState._fields, self.state_sizes, zip(*hxs)
-            ):
-                x = torch.stack(hx).float()
-                assert np.prod(x.shape[2:]) == size
-                yield x.view(*x.shape[:2], -1)
-
-        hx = torch.cat(list(pack()), dim=-1)
-        return hx, hx[-1:]
-
-    def parse_inputs(self, inputs: torch.Tensor):
-        return Obs(*torch.split(inputs, self.obs_sections, dim=-1))
-
-    def parse_hidden(self, hx: torch.Tensor) -> RecurrentState:
-        return RecurrentState(*torch.split(hx, self.state_sizes, dim=-1))
-
-    def print(self, t, *args, **kwargs):
-        if self.debug:
-            if type(t) == torch.Tensor:
-                t = (t * 10.0).round() / 10.0
-            print(t, *args, **kwargs)
-
-    def inner_loop(self, inputs, rnn_hxs):
-        device = inputs.device
-        T, N, D = inputs.shape
-        inputs, actions = torch.split(
-            inputs.detach(), [D - self.action_size, self.action_size], dim=2
-        )
-        inputs = inputs.long()
-
-        hx = self.parse_hidden(rnn_hxs)
-        for _x in hx:
-            _x.squeeze_(0)
-
-        plan = hx.plan
-        planned_probs = hx.planned_probs.view(N, self.planning_steps, -1)
-
-        new = torch.all(rnn_hxs == 0, dim=-1)
-        # if new.any():
-        #     assert new.all()
-        #     state = self.embed2(self.embed1(inputs[0]))
-        # else:
-        #     state = hx.state.view(N, -1)
-
-        # h = (
-        #     hx.h.view(N, self.model.num_layers, self.model.hidden_size)
-        #     .transpose(0, 1)
-        #     .contiguous()
-        # )
-
-        A = actions.long()[:, :, 0]
-
-        for t in range(T):
-            x = self.embed2(self.embed1(inputs[t])).detach()
-            # model_loss = F.mse_loss(state, x, reduction="none").sum(-1)
-            dist = self.actor(x)
-            value = self.critic(x)
-            self.sample_new(A[t], dist)
-            # model_input = torch.cat([state, self.embed_action(A[t].clone())], dim=-1)
-            # hn, h = self.model(model_input.unsqueeze(0), h)
-            # state = self.embed2(hn.squeeze(0))
-            yield RecurrentState(
-                a=A[t],
-                plan=plan,
-                planned_probs=planned_probs,
-                probs=dist.probs,
-                v=value,
-                t=hx.t + 1,
-                state=hx.state,
-                h=hx.h,
-                model_loss=hx.model_loss,
-                # h=h.transpose(0, 1),
-                # model_loss=model_loss,
+        if self._recurrent:
+            self.recurrent_module = self.build_recurrent_module(
+                recurrent_input_size, hidden_size
             )
+            for name, param in self.recurrent_module.named_parameters():
+                print("zeroed out", name)
+                if "bias" in name:
+                    nn.init.constant_(param, 0)
+                elif "weight" in name:
+                    nn.init.orthogonal_(param)
+
+    def build_recurrent_module(self, input_size, hidden_size):
+        return nn.GRU(input_size, hidden_size)
+
+    @property
+    def is_recurrent(self):
+        return self._recurrent
+
+    @property
+    def recurrent_hidden_state_size(self):
+        if self._recurrent:
+            return self._hidden_size
+        return 1
+
+    @property
+    def output_size(self):
+        return self._hidden_size
+
+    def _forward_gru(self, x, hxs, masks):
+        if x.size(0) == hxs.size(0):
+            x, hxs = self.recurrent_module(x.unsqueeze(0), (hxs * masks).unsqueeze(0))
+            x = x.squeeze(0)
+            hxs = hxs.squeeze(0)
+        else:
+            # x is a (T, N, -1) tensor that has been flatten to (T * N, -1)
+            N = hxs.size(0)
+            T = int(x.size(0) / N)
+
+            # unflatten
+            x = x.view(T, N, *x.shape[1:])
+
+            # Same deal with masks
+            masks = masks.view(T, N)
+
+            # Let's figure out which steps in the sequence have a zero for any agent
+            # We will always assume t=0 has a zero in it as that makes the logic cleaner
+            has_zeros = (masks[1:] == 0.0).any(dim=-1).nonzero().squeeze().cpu()
+
+            # +1 to correct the masks[1:]
+            if has_zeros.dim() == 0:
+                # Deal with scalar
+                has_zeros = [has_zeros.item() + 1]
+            else:
+                has_zeros = (has_zeros + 1).numpy().tolist()
+
+            # add t=0 and t=T to the list
+            has_zeros = [0] + has_zeros + [T]
+
+            hxs = hxs.unsqueeze(0)
+            outputs = []
+            for i in range(len(has_zeros) - 1):
+                # We can now process steps that don't have any zeros in masks together!
+                # This is much faster
+                start_idx = has_zeros[i]
+                end_idx = has_zeros[i + 1]
+
+                rnn_scores, hxs = self.recurrent_module(
+                    x[start_idx:end_idx], hxs * masks[start_idx].view(1, -1, 1)
+                )
+
+                outputs.append(rnn_scores)
+
+            # assert len(outputs) == T
+            # x is a (T, N, -1) tensor
+            x = torch.cat(outputs, dim=0)
+            # flatten
+            x = x.view(T * N, -1)
+            hxs = hxs.squeeze(0)
+
+        return x, hxs
+
+
+class MLPBase(NNBase):
+    def __init__(self, num_inputs, hidden_size, num_layers, recurrent, activation):
+        recurrent_module = nn.GRU if recurrent else None
+        super(MLPBase, self).__init__(recurrent_module, num_inputs, hidden_size)
+
+        if recurrent:
+            num_inputs = hidden_size
+
+        init_ = lambda m: init(m, init_normc_, lambda x: nn.init.constant_(x, 0))
+
+        self.actor = nn.Sequential()
+        self.critic = nn.Sequential()
+        for i in range(num_layers):
+            in_features = num_inputs if i == 0 else hidden_size
+            self.actor.add_module(
+                name=f"fc{i}",
+                module=nn.Sequential(
+                    init_(nn.Linear(in_features, hidden_size)), activation
+                ),
+            )
+            self.critic.add_module(
+                name=f"fc{i}",
+                module=nn.Sequential(
+                    init_(nn.Linear(in_features, hidden_size)), activation
+                ),
+            )
+
+        self.critic_linear = init_(nn.Linear(hidden_size, 1))
+
+        self.train()
+
+    def forward(self, inputs, rnn_hxs, masks):
+        x = inputs
+
+        if self.is_recurrent:
+            x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)
+
+        hidden_critic = self.critic(x)
+        hidden_actor = self.actor(x)
+
+        return self.critic_linear(hidden_critic), hidden_actor, rnn_hxs
