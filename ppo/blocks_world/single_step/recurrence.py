@@ -107,7 +107,7 @@ class Recurrence(nn.Module):
             )
 
             A = actions.long()
-            first_state = state = self.embed2(self.embed1(inputs[0]))
+            state = self.embed2(self.embed1(inputs[0]))
             probs = []
             for t in range(self.action_size):
                 dist = FixedCategorical(logits=self.actor(state))
