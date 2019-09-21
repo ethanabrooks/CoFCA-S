@@ -8,7 +8,7 @@ from torch import nn as nn
 from ppo.distributions import Categorical, FixedCategorical
 from ppo.utils import init_
 
-RecurrentState = namedtuple("RecurrentState", "a probs v state h ")
+RecurrentState = namedtuple("RecurrentState", "a p actions probs v state h ")
 # "planned_probs plan v t state h model_loss"
 
 
@@ -26,12 +26,14 @@ class Recurrence(nn.Module):
     ):
         num_inputs = int(np.prod(observation_space.shape))
         super().__init__()
-        self.action_size = planning_steps
+        self.action_size = self.planning_steps = planning_steps
 
         na = action_space.nvec.max()
         self.state_sizes = RecurrentState(
-            a=planning_steps,
+            a=1,
             v=1,
+            p=na,
+            actions=planning_steps,
             probs=planning_steps * na,
             state=embedding_size,
             h=hidden_size * num_model_layers,
@@ -118,13 +120,21 @@ class Recurrence(nn.Module):
                 )
                 hn, h = self.model(model_input.unsqueeze(0), h)
                 state = self.embed2(hn.squeeze(0))
-            a = A[0]
+            actions = A[0]
             probs = torch.stack(probs, dim=1)
         else:
             state = hx.state
-            a = hx.a
-            probs = hx.probs
+            actions = hx.actions
+            probs = hx.probs.view(N, self.planning_steps, -1)
 
         for t in range(T):
             v = self.critic(self.embed2(self.embed1(inputs[0])))
-            yield RecurrentState(a=a, probs=probs, v=v, state=state, h=hx.h)
+            yield RecurrentState(
+                a=actions[:, t],
+                p=probs[:, t],
+                actions=actions,
+                probs=probs,
+                v=v,
+                state=state,
+                h=hx.h,
+            )
