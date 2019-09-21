@@ -5,7 +5,7 @@ import ppo.arguments
 import ppo.bandit.baselines.oh_et_al
 import ppo.maze.baselines
 from ppo import gntm
-from ppo.agent import Agent
+from ppo.agent import Agent, MLPBase
 from ppo.blocks_world import dnc, single_step, non_recurrent
 from ppo.train import Train
 
@@ -85,29 +85,19 @@ def train_blocks_world(
                 assert baseline is None
                 del agent_args["debug"]
                 del agent_args["embedding_size"]
-                return Agent(
-                    entropy_coef=entropy_coef,
-                    obs_shape=envs.observation_space.shape,
-                    action_space=envs.action_space,
+                # recurrence = planner.Recurrence(
+
+                recurrence = MLPBase(
+                    num_inputs=envs.observation_space.shape[0],
                     recurrent=False,
                     **agent_args,
                 )
-                # recurrence = planner.Recurrence(
-                # recurrence = single_step.Recurrence(
-                #     observation_space=envs.observation_space,
-                #     action_space=envs.action_space,
-                #     planning_steps=planning_steps,
-                #     **planner_args,
-                #     **dnc_args,
-                #     **agent_args,
-                # )
-                # return planner.Agent(
-
-                # return single_step.Agent(
-                #     entropy_coef=entropy_coef,
-                #     model_loss_coef=model_loss_coef,
-                #     recurrence=recurrence,
-                # )
+                return single_step.Agent(
+                    entropy_coef=entropy_coef,
+                    model_loss_coef=model_loss_coef,
+                    recurrence=recurrence,
+                    action_space=envs.action_space,
+                )
 
     TrainValues(**_kwargs).run()
 

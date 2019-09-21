@@ -1,4 +1,5 @@
-from ppo.agent import AgentValues
+import ppo
+from ppo.agent import AgentValues, NNBase
 
 # noinspection PyMissingConstructor
 from ppo.blocks_world.single_step.recurrence import MLPBase
@@ -15,36 +16,13 @@ AgentValues = namedtuple(
 )
 
 
-class Agent(nn.Module):
-    def __init__(
-        self,
-        obs_shape,
-        action_space,
-        recurrent,
-        hidden_size,
-        entropy_coef,
-        **network_args,
-    ):
-        super(Agent, self).__init__()
+class Agent(ppo.agent.Agent, NNBase):
+    def __init__(self, action_space, entropy_coef, model_loss_coef, recurrence):
+        nn.Module.__init__(self)
+        self.model_loss_coef = model_loss_coef
         self.entropy_coef = entropy_coef
-        if len(obs_shape) == 1:
-            self.recurrent_module = MLPBase(
-                obs_shape[0],
-                recurrent=recurrent,
-                hidden_size=hidden_size,
-                **network_args,
-            )
-        else:
-            raise NotImplementedError
-
-        if isinstance(action_space, Discrete):
-            num_outputs = action_space.n
-            self.dist = Categorical(self.recurrent_module.output_size, num_outputs)
-        elif isinstance(action_space, Box):
-            num_outputs = action_space.shape[0]
-            self.dist = DiagGaussian(self.recurrent_module.output_size, num_outputs)
-        else:
-            raise NotImplementedError
+        self.recurrent_module = recurrence
+        self.dist = Categorical(self.recurrent_module.output_size, action_space.n)
         self.continuous = isinstance(action_space, Box)
 
     @property
