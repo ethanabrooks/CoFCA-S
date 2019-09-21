@@ -52,8 +52,8 @@ class Recurrence(nn.Module):
             num_model_layers,
         )
 
-        self.critic = init_(nn.Linear(hidden_size, 1))
-        self.actor = Categorical(hidden_size, action_space.n)
+        self.critic = init_(nn.Linear(embedding_size, 1))
+        self.actor = Categorical(embedding_size, action_space.n)
         self.train()
 
     def print(self, t, *args, **kwargs):
@@ -110,12 +110,11 @@ class Recurrence(nn.Module):
 
         A = actions.long()[:, :, 0]
         for t in range(T):
-            x = self.embed1(inputs[t])
+            x = self.embed2(self.embed1(inputs[t]))
             dist = self.actor(x)
+            v = self.critic(x)
             self.sample_new(A[t], dist)
             model_input = torch.cat([state, self.embed_action(A[t].clone())], dim=-1)
             hn, h = self.model(model_input.unsqueeze(0), h)
             state = self.embed2(hn.squeeze(0))
-            yield RecurrentState(
-                a=A[t], probs=dist.probs, v=self.critic(x), state=state, h=hx.h
-            )
+            yield RecurrentState(a=A[t], probs=dist.probs, v=v, state=state, h=hx.h)
