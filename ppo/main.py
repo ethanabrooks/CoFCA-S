@@ -5,7 +5,8 @@ import ppo.arguments
 import ppo.bandit.baselines.oh_et_al
 import ppo.maze.baselines
 from ppo import gntm
-from ppo.blocks_world import dnc, planner, single_step
+from ppo.agent import Agent
+from ppo.blocks_world import dnc, single_step, non_recurrent
 from ppo.train import Train
 
 
@@ -28,6 +29,10 @@ def train_blocks_world(
         ):
             if baseline == "dnc":
                 return dnc.Env(**env_args, seed=seed + rank)
+            elif baseline == "non-recurrent":
+                return non_recurrent.Env(
+                    **env_args, planning_steps=planning_steps, seed=seed + rank
+                )
             else:
                 assert baseline is None
                 # return planner.Env(
@@ -66,6 +71,16 @@ def train_blocks_world(
                     **agent_args,
                 )
                 return gntm.Agent(entropy_coef=entropy_coef, recurrence=recurrence)
+            elif baseline == "non-recurrent":
+                del agent_args["debug"]
+                del agent_args["embedding_size"]
+                return Agent(
+                    entropy_coef=entropy_coef,
+                    obs_shape=envs.observation_space.shape,
+                    action_space=envs.action_space,
+                    recurrent=False,
+                    **agent_args,
+                )
             else:
                 assert baseline is None
                 # recurrence = planner.Recurrence(
@@ -89,7 +104,7 @@ def train_blocks_world(
 
 def blocks_world_cli():
     parsers = build_parser()
-    parsers.main.add_argument("--baseline", choices=["dnc"])
+    parsers.main.add_argument("--baseline", choices=["dnc", "non-recurrent"])
     parsers.main.add_argument("--planning-steps", type=int, default=10)
     parsers.main.add_argument("--increment-curriculum-at-n-satisfied", type=float)
     parsers.env.add_argument("--n-cols", type=int, required=True)
