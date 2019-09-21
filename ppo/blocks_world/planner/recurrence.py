@@ -5,6 +5,7 @@ import torch
 from gym.spaces import Box
 from torch import nn as nn
 
+from ppo.blocks_world.planner.env import Obs
 from ppo.distributions import Categorical, FixedCategorical
 from ppo.utils import init_
 
@@ -24,7 +25,10 @@ class Recurrence(nn.Module):
         activation,
         planning_steps,
     ):
-        num_inputs = int(np.prod(observation_space.shape))
+        self.input_sections = Obs(
+            *[int(np.prod(s.shape)) for s in observation_space.spaces.values()]
+        )
+        num_inputs = self.input_sections.obs
         super().__init__()
         self.action_size = planning_steps
 
@@ -75,6 +79,9 @@ class Recurrence(nn.Module):
     def parse_hidden(self, hx: torch.Tensor) -> RecurrentState:
         return RecurrentState(*torch.split(hx, self.state_sizes, dim=-1))
 
+    def parse_inputs(self, inputs: torch.Tensor) -> list:
+        return Obs(*torch.split(inputs, self.input_sections, dim=-1))
+
     def pack(self, hxs):
         def pack():
             for name, size, hx in zip(
@@ -92,6 +99,7 @@ class Recurrence(nn.Module):
         inputs, actions = torch.split(
             inputs.detach(), [D - self.action_size, self.action_size], dim=2
         )
+        inputs = self.parse_inputs(inputs).obs
 
         hx = self.parse_hidden(rnn_hxs)
         for _x in hx:

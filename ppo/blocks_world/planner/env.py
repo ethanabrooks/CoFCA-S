@@ -10,6 +10,7 @@ from ppo.blocks_world.constraints import SideBySide, Stacked
 
 Last = namedtuple("Last", "action reward terminal go")
 Curriculum = namedtuple("Curriculum", "n_blocks search_depth")
+Obs = namedtuple("Obs", "search_depth obs")
 
 
 class Env(gym.Env):
@@ -40,8 +41,13 @@ class Env(gym.Env):
             [len(self.int_to_tuple)] * planning_steps
         )
         # self.action_space = gym.spaces.Discrete(len(self.int_to_tuple))
-        self.observation_space = gym.spaces.MultiDiscrete(
-            np.array([7] * (self.n_rows * self.n_cols * 2))
+        self.observation_space = gym.spaces.Dict(
+            Obs(
+                search_depth=gym.spaces.Discrete(planning_steps),
+                obs=gym.spaces.MultiDiscrete(
+                    np.array([7] * (self.n_rows * self.n_cols * 2))
+                ),
+            )._asdict()
         )
 
         def curriculum_generator():
@@ -144,9 +150,14 @@ class Env(gym.Env):
         return trajectory
 
     def get_observation(self):
-        obs = [
-            x for r in self.pad(self.columns) + self.pad(self.final_state) for x in r
-        ]
+        obs = Obs(
+            obs=[
+                x
+                for r in self.pad(self.columns) + self.pad(self.final_state)
+                for x in r
+            ],
+            search_depth=self.search_depth,
+        )._asdict()
         assert self.observation_space.contains(obs)
         return obs
 
