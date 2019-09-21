@@ -111,12 +111,14 @@ class Recurrence(nn.Module):
         )
 
         A = actions.long()
-        x = self.embed2(self.embed1(inputs[0]))
-        dist = FixedCategorical(logits=self.actor(x).view(N, -1, 7))
-        v = self.critic(x)
-        self.sample_new(A[0], dist)
+        first_state = state = self.embed2(self.embed1(inputs[0]))
+        for t in range(self.action_size):
+            dist = FixedCategorical(logits=self.actor(state).view(N, -1, 7)[:, t])
+            self.sample_new(A[0, :, t], dist)
+        v = self.critic(first_state)
         # model_input = torch.cat([state, self.embed_action(A[t].clone())], dim=-1)
         # hn, h = self.model(model_input.unsqueeze(0), h)
         # state = self.embed2(hn.squeeze(0))
+        dist = FixedCategorical(logits=self.actor(state).view(N, -1, 7))
         for t in range(T):
             yield RecurrentState(a=A[t], probs=dist.probs, v=v, state=state, h=hx.h)
