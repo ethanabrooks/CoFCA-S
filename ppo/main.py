@@ -6,7 +6,7 @@ import ppo.bandit.baselines.oh_et_al
 import ppo.maze.baselines
 from ppo import gntm
 from ppo.agent import Agent
-from ppo.blocks_world import dnc, single_step, non_recurrent, planner
+from ppo.blocks_world import dnc, non_recurrent, planner
 from ppo.train import Train
 
 
@@ -78,14 +78,14 @@ def train_blocks_world(increment_curriculum_at, planning_steps, baseline, **_kwa
                 assert baseline is None
                 del agent_args["debug"]
                 del agent_args["num_layers"]
-                recurrence = single_step.Recurrence(
+                recurrence = planner.Recurrence(
                     action_space=envs.action_space,
                     observation_space=envs.observation_space,
                     planning_steps=planning_steps,
                     **planner_args,
                     **agent_args,
                 )
-                return single_step.Agent(
+                return planner.Agent(
                     entropy_coef=entropy_coef,
                     model_loss_coef=model_loss_coef,
                     recurrence=recurrence,
