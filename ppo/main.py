@@ -6,7 +6,7 @@ import ppo.bandit.baselines.oh_et_al
 import ppo.maze.baselines
 from ppo import gntm
 from ppo.agent import Agent
-from ppo.blocks_world import dnc, single_step, non_recurrent
+from ppo.blocks_world import dnc, single_step, non_recurrent, planner
 from ppo.train import Train
 
 

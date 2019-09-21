@@ -89,7 +89,7 @@ class Recurrence(nn.Module):
 
     def inner_loop(self, inputs, rnn_hxs):
         T, N, D = inputs.shape
-        inputs, actions = torch.split(
+        inputs, action = torch.split(
             inputs.detach(), [D - self.action_size, self.action_size], dim=2
         )
 
@@ -100,28 +100,24 @@ class Recurrence(nn.Module):
         new = torch.all(rnn_hxs == 0, dim=-1)
         if new.any():
             assert new.all()
-            state = self.embed2(self.embed1(inputs[0]))
-        else:
-            state = hx.state.view(N, -1)
-
-        h = (
-            hx.h.view(N, self.model.num_layers, self.model.hidden_size)
-            .transpose(0, 1)
-            .contiguous()
-        )
-
-        A = actions.long()
-        first_state = state = self.embed2(self.embed1(inputs[0]))
-        probs = []
-        for t in range(self.action_size):
-            dist = FixedCategorical(logits=self.actor(state))
-            self.sample_new(A[0, :, t], dist)
-            probs.append(dist.probs)
-            model_input = torch.cat(
-                [state, self.embed_action(A[0, :, t].clone())], dim=-1
+            h = (
+                hx.h.view(N, self.model.num_layers, self.model.hidden_size)
+                .transpose(0, 1)
+                .contiguous()
             )
-            hn, h = self.model(model_input.unsqueeze(0), h)
-            state = self.embed2(hn.squeeze(0))
+
+            A = action.long()
+            first_state = state = self.embed2(self.embed1(inputs[0]))
+            probs = []
+            for t in range(self.action_size):
+                dist = FixedCategorical(logits=self.actor(state))
+                self.sample_new(A[0, :, t], dist)
+                probs.append(dist.probs)
+                model_input = torch.cat(
+                    [state, self.embed_action(A[0, :, t].clone())], dim=-1
+                )
+                hn, h = self.model(model_input.unsqueeze(0), h)
+                state = self.embed2(hn.squeeze(0))
         v = self.critic(first_state)
         probs = torch.stack(probs, dim=1)
         for t in range(T):
