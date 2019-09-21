@@ -19,7 +19,7 @@ class Env(gym.Env):
         seed: int,
         curriculum_level: int,
         extra_time: int,
-        search_depth: int,
+        planning_steps: int,
     ):
         self.extra_time = extra_time
         self.n_rows = self.n_cols = n_cols
@@ -37,7 +37,7 @@ class Env(gym.Env):
         self.int_to_tuple = [(0, 0)]
         self.int_to_tuple.extend(itertools.permutations(range(self.n_cols), 2))
         self.action_space = gym.spaces.MultiDiscrete(
-            [len(self.int_to_tuple)] * search_depth
+            [len(self.int_to_tuple)] * planning_steps
         )
         # self.action_space = gym.spaces.Discrete(len(self.int_to_tuple))
         self.observation_space = gym.spaces.MultiDiscrete(
@@ -50,7 +50,7 @@ class Env(gym.Env):
                     self.n_rows * self.n_cols // 3,
                     self.n_rows * self.n_cols // 3,
                 ],
-                search_depth=[search_depth, search_depth],
+                search_depth=[planning_steps, planning_steps],
             )
             max_blocks = self.n_rows * self.n_cols * 2 // 3
             while True:
