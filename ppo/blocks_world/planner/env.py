@@ -76,8 +76,8 @@ class Env(gym.Env):
             columns = self.columns
         return columns[_from] and len(columns[_to]) < self.n_rows
 
-    def step(self, action: int):
-        _from, _to = self.int_to_tuple[int(action)]
+    def step(self, action: list):
+        _from, _to = self.int_to_tuple[int(action[self.t])]
         self.t += 1
         if self.solved:
             return self.get_observation(), 0, self.t >= self.time_limit, {}

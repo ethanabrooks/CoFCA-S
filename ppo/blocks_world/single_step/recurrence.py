@@ -30,7 +30,7 @@ class Recurrence(nn.Module):
 
         na = action_space.nvec.max()
         self.state_sizes = RecurrentState(
-            a=1,
+            a=planning_steps,
             v=1,
             p=na,
             actions=planning_steps,
@@ -130,7 +130,7 @@ class Recurrence(nn.Module):
         for t in range(T):
             v = self.critic(self.embed2(self.embed1(inputs[0])))
             yield RecurrentState(
-                a=actions[:, t],
+                a=actions,
                 p=probs[:, t],
                 actions=actions,
                 probs=probs,
