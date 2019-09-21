@@ -83,30 +83,21 @@ def train_blocks_world(
                 )
             else:
                 assert baseline is None
-                del agent_args["debug"]
-                del agent_args["embedding_size"]
-                return Agent(
-                    entropy_coef=entropy_coef,
-                    obs_shape=envs.observation_space.shape,
+                # recurrence = planner.Recurrence(
+                recurrence = single_step.Recurrence(
+                    observation_space=envs.observation_space,
                     action_space=envs.action_space,
-                    recurrent=False,
+                    planning_steps=planning_steps,
+                    **planner_args,
+                    **dnc_args,
                     **agent_args,
                 )
-                # recurrence = planner.Recurrence(
-                # recurrence = single_step.Recurrence(
-                #     observation_space=envs.observation_space,
-                #     action_space=envs.action_space,
-                #     planning_steps=planning_steps,
-                #     **planner_args,
-                #     **dnc_args,
-                #     **agent_args,
-                # )
                 # return planner.Agent(
-                # return single_step.Agent(
-                #     entropy_coef=entropy_coef,
-                #     model_loss_coef=model_loss_coef,
-                #     recurrence=recurrence,
-                # )
+                return single_step.Agent(
+                    entropy_coef=entropy_coef,
+                    model_loss_coef=model_loss_coef,
+                    recurrence=recurrence,
+                )
 
     TrainValues(**_kwargs).run()
 
