@@ -125,29 +125,29 @@ class Recurrence(nn.Module):
         planned_probs = hx.planned_probs.view(N, self.planning_steps, -1)
 
         new = torch.all(rnn_hxs == 0, dim=-1)
-        if new.any():
-            assert new.all()
-            state = self.embed2(self.embed1(inputs[0]))
-        else:
-            state = hx.state.view(N, -1)
+        # if new.any():
+        #     assert new.all()
+        #     state = self.embed2(self.embed1(inputs[0]))
+        # else:
+        #     state = hx.state.view(N, -1)
 
-        h = (
-            hx.h.view(N, self.model.num_layers, self.model.hidden_size)
-            .transpose(0, 1)
-            .contiguous()
-        )
+        # h = (
+        #     hx.h.view(N, self.model.num_layers, self.model.hidden_size)
+        #     .transpose(0, 1)
+        #     .contiguous()
+        # )
 
         A = actions.long()[:, :, 0]
 
         for t in range(T):
             x = self.embed2(self.embed1(inputs[t])).detach()
-            model_loss = F.mse_loss(state, x, reduction="none").sum(-1)
+            # model_loss = F.mse_loss(state, x, reduction="none").sum(-1)
             dist = self.actor(x)
             value = self.critic(x)
             self.sample_new(A[t], dist)
-            model_input = torch.cat([state, self.embed_action(A[t].clone())], dim=-1)
-            hn, h = self.model(model_input.unsqueeze(0), h)
-            state = self.embed2(hn.squeeze(0))
+            # model_input = torch.cat([state, self.embed_action(A[t].clone())], dim=-1)
+            # hn, h = self.model(model_input.unsqueeze(0), h)
+            # state = self.embed2(hn.squeeze(0))
             yield RecurrentState(
                 a=A[t],
                 plan=plan,
@@ -156,6 +156,8 @@ class Recurrence(nn.Module):
                 v=value,
                 t=hx.t + 1,
                 state=hx.state,
-                h=h.transpose(0, 1),
-                model_loss=model_loss,
+                h=hx.h,
+                model_loss=hx.model_loss,
+                # h=h.transpose(0, 1),
+                # model_loss=model_loss,
             )
