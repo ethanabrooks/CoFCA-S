@@ -32,7 +32,8 @@ class Agent(ppo.agent.Agent, NNBase):
 
     def forward(self, inputs, rnn_hxs, masks, deterministic=False, action=None):
         N = inputs.size(0)
-        hx = self.recurrent_module(
+        rm = self.recurrent_module
+        all_hxs, last_hx = rm(
             inputs,
             rnn_hxs,
             masks,
@@ -40,6 +41,7 @@ class Agent(ppo.agent.Agent, NNBase):
             if action is None
             else action,
         )
+        hx = rm.parse_hidden(last_hx.squeeze(0))  # TODO
         dist = FixedCategorical(hx.probs)
         action_log_probs = dist.log_probs(hx.a)
         entropy = dist.entropy().mean()
@@ -55,7 +57,8 @@ class Agent(ppo.agent.Agent, NNBase):
 
     def get_value(self, inputs, rnn_hxs, masks):
         action = -torch.ones(inputs.size(0), 1, device=inputs.device, dtype=torch.long)
-        return self.recurrent_module(inputs, rnn_hxs, masks, action).v
+        _, last_hxs = self.recurrent_module(inputs, rnn_hxs, masks, action)
+        return self.recurrent_module.parse_hidden(last_hxs.squeeze(0)).v
 
 
 # class Agent(ppo.agent.Agent, NNBase):
