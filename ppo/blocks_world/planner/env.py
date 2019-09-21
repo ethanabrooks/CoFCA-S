@@ -43,7 +43,7 @@ class Env(gym.Env):
         # self.action_space = gym.spaces.Discrete(len(self.int_to_tuple))
         self.observation_space = gym.spaces.Dict(
             Obs(
-                search_depth=gym.spaces.Discrete(planning_steps),
+                search_depth=gym.spaces.Discrete(planning_steps + 1),
                 obs=gym.spaces.MultiDiscrete(
                     np.array([7] * (self.n_rows * self.n_cols * 2))
                 ),
