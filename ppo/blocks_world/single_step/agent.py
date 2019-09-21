@@ -2,6 +2,7 @@ from collections import namedtuple
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 import ppo
 from ppo.agent import AgentValues, NNBase
@@ -32,33 +33,37 @@ class Agent(ppo.agent.Agent, NNBase):
 
     def forward(self, inputs, rnn_hxs, masks, deterministic=False, action=None):
         N = inputs.size(0)
-        rm = self.recurrent_module
-        all_hxs, last_hx = rm(
-            inputs,
-            rnn_hxs,
-            masks,
-            action=-torch.ones(N, 1, device=inputs.device, dtype=torch.long)
-            if action is None
-            else action,
+        all_hxs, last_hx = self._forward_gru(
+            inputs.view(N, -1), rnn_hxs, masks, action=action
         )
-        hx = rm.parse_hidden(last_hx.squeeze(0))  # TODO
+        rm = self.recurrent_module
+        hx = rm.parse_hidden(all_hxs)
         dist = FixedCategorical(hx.probs)
         action_log_probs = dist.log_probs(hx.a)
-        entropy = dist.entropy().mean()
+        entropy = dist.entropy()
+        aux_loss = -self.entropy_coef * entropy
         return AgentValues(
             value=hx.v,
             action=hx.a,
             action_log_probs=action_log_probs,
-            aux_loss=-self.entropy_coef * entropy,
+            aux_loss=aux_loss.mean(),
             dist=dist,
-            rnn_hxs=rnn_hxs,
+            rnn_hxs=last_hx,
             log=dict(entropy=entropy),
         )
 
+    def _forward_gru(self, x, hxs, masks, action=None):
+        if action is None:
+            y = F.pad(x, [0, self.recurrent_module.action_size], "constant", -1)
+        else:
+            y = torch.cat([x, action.float()], dim=-1)
+        return super()._forward_gru(y, hxs, masks)
+
     def get_value(self, inputs, rnn_hxs, masks):
-        action = -torch.ones(inputs.size(0), 1, device=inputs.device, dtype=torch.long)
-        _, last_hxs = self.recurrent_module(inputs, rnn_hxs, masks, action)
-        return self.recurrent_module.parse_hidden(last_hxs.squeeze(0)).v
+        all_hxs, last_hx = self._forward_gru(
+            inputs.view(inputs.size(0), -1), rnn_hxs, masks
+        )
+        return self.recurrent_module.parse_hidden(last_hx).v
 
 
 # class Agent(ppo.agent.Agent, NNBase):

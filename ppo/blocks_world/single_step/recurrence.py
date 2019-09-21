@@ -25,6 +25,7 @@ class Recurrence(nn.Module):
         # recurrent_module = nn.GRU if recurrent else None
         num_inputs = int(np.prod(observation_space.shape))
         super().__init__()
+        self.action_size = 1
 
         self.state_sizes = RecurrentState(a=1, v=1, probs=action_space.n)
 
@@ -46,8 +47,8 @@ class Recurrence(nn.Module):
         new = x < 0
         x[new] = dist.sample()[new].flatten()
 
-    def forward(self, inputs, rnn_hxs, masks, action):
-        return self.pack(self.inner_loop(inputs, action, hx=rnn_hxs))
+    def forward(self, inputs, rnn_hxs):
+        return self.pack(self.inner_loop(inputs, rnn_hxs=rnn_hxs))
 
     def parse_hidden(self, hx: torch.Tensor) -> RecurrentState:
         return RecurrentState(*torch.split(hx, self.state_sizes, dim=-1))
@@ -64,8 +65,19 @@ class Recurrence(nn.Module):
         hx = torch.cat(list(pack()), dim=-1)
         return hx, hx[-1:]
 
-    def inner_loop(self, inputs, action, hx):
-        x = self.embed1(inputs)
-        dist = self.actor(x)
-        self.sample_new(action, dist)
-        yield RecurrentState(a=action, probs=dist.probs, v=self.critic(x))
+    def inner_loop(self, inputs, rnn_hxs):
+        T, N, D = inputs.shape
+        inputs, actions = torch.split(
+            inputs.detach(), [D - self.action_size, self.action_size], dim=2
+        )
+
+        rnn_hxs = self.parse_hidden(rnn_hxs)
+        for _x in rnn_hxs:
+            _x.squeeze_(0)
+
+        A = actions.long()[:, :, 0]
+        for t in range(T):
+            x = self.embed1(inputs[t])
+            dist = self.actor(x)
+            self.sample_new(A[t], dist)
+            yield RecurrentState(a=A[t], probs=dist.probs, v=self.critic(x))
