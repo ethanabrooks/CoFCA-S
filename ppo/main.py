@@ -88,6 +88,7 @@ def train_blocks_world(
                 recurrence = single_step.Recurrence(
                     action_space=envs.action_space,
                     observation_space=envs.observation_space,
+                    planning_steps=planning_steps,
                     **planner_args,
                     **agent_args,
                 )

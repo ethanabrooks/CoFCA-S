@@ -37,10 +37,10 @@ class Agent(ppo.agent.Agent, NNBase):
         )
         rm = self.recurrent_module
         hx = rm.parse_hidden(all_hxs)
-        dist = FixedCategorical(hx.probs)
+        dist = FixedCategorical(hx.probs.view(N, rm.action_size, -1))
         action_log_probs = dist.log_probs(hx.a)
-        entropy = dist.entropy()
-        aux_loss = -self.entropy_coef * entropy
+        action_log_probs = action_log_probs.sum(1)
+        aux_loss = -self.entropy_coef * dist.entropy()
         return AgentValues(
             value=hx.v,
             action=hx.a,
@@ -48,7 +48,7 @@ class Agent(ppo.agent.Agent, NNBase):
             aux_loss=aux_loss.mean(),
             dist=dist,
             rnn_hxs=last_hx,
-            log=dict(entropy=entropy),
+            log=dict(entropy=(dist.entropy())),
         )
 
     def _forward_gru(self, x, hxs, masks, action=None):

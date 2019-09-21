@@ -37,8 +37,8 @@ class Env(gym.Env):
         self.int_to_tuple = [(0, 0)]
         self.int_to_tuple.extend(itertools.permutations(range(self.n_cols), 2))
         self.unravel_array = (len(self.int_to_tuple),) * planning_steps
-        self.action_space = gym.spaces.Discrete(
-            len(self.int_to_tuple) ** planning_steps
+        self.action_space = gym.spaces.MultiDiscrete(
+            [len(self.int_to_tuple)] * planning_steps
         )
         self.observation_space = gym.spaces.MultiDiscrete(
             np.array([7] * (self.n_rows * self.n_cols * 2))
@@ -82,8 +82,7 @@ class Env(gym.Env):
             search_depth=self.search_depth,
             curriculum_level=self.curriculum_level,
         )
-        action = int(action)
-        for a in np.unravel_index(action, self.unravel_array):
+        for a in action:
             _from, _to = self.int_to_tuple[int(a)]
             if self.valid(_from, _to):
                 self.columns[_to].append(self.columns[_from].pop())

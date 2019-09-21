@@ -22,21 +22,23 @@ class Recurrence(nn.Module):
         num_model_layers,
         embedding_size,
         activation,
+        planning_steps,
     ):
         num_inputs = int(np.prod(observation_space.shape))
         super().__init__()
-        self.action_size = 1
+        self.action_size = planning_steps
 
+        na = action_space.nvec.max()
         self.state_sizes = RecurrentState(
-            a=1,
+            a=planning_steps,
             v=1,
-            probs=action_space.n,
+            probs=planning_steps * na,
             state=embedding_size,
             h=hidden_size * num_model_layers,
         )
 
         # networks
-        self.embed_action = nn.Embedding(int(action_space.n), int(action_space.n))
+        self.embed_action = nn.Embedding(int(na), int(na))
         layers = []
         in_size = num_inputs
         for _ in range(num_embedding_layers):
@@ -53,7 +55,7 @@ class Recurrence(nn.Module):
         )
 
         self.critic = init_(nn.Linear(embedding_size, 1))
-        self.actor = init_(nn.Linear(embedding_size, action_space.n))
+        self.actor = init_(nn.Linear(embedding_size, planning_steps * na))
         self.train()
 
     def print(self, t, *args, **kwargs):
@@ -108,13 +110,13 @@ class Recurrence(nn.Module):
             .contiguous()
         )
 
-        A = actions.long()[:, :, 0]
+        A = actions.long()
         for t in range(T):
             x = self.embed2(self.embed1(inputs[t]))
-            dist = FixedCategorical(logits=self.actor(x))
+            dist = FixedCategorical(logits=self.actor(x).view(N, -1, 7))
             v = self.critic(x)
             self.sample_new(A[t], dist)
-            model_input = torch.cat([state, self.embed_action(A[t].clone())], dim=-1)
-            hn, h = self.model(model_input.unsqueeze(0), h)
-            state = self.embed2(hn.squeeze(0))
+            # model_input = torch.cat([state, self.embed_action(A[t].clone())], dim=-1)
+            # hn, h = self.model(model_input.unsqueeze(0), h)
+            # state = self.embed2(hn.squeeze(0))
             yield RecurrentState(a=A[t], probs=dist.probs, v=v, state=state, h=hx.h)
