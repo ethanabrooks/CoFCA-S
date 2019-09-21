@@ -10,13 +10,25 @@ from ppo.layers import Flatten
 from ppo.mdp.env import Obs
 from ppo.utils import init_
 
-RecurrentState = namedtuple(
-    "RecurrentState", "a probs planned_probs plan v t state h model_loss"
-)
-XiSections = namedtuple("XiSections", "Kr Br kw bw e v F_hat ga gw Pi")
+RecurrentState = namedtuple("RecurrentState", "a probs v t ")
 
 
-class Recurrence(nn.Module):
+def batch_conv1d(inputs, weights):
+    outputs = []
+    # one convolution per instance
+    n = inputs.shape[0]
+    for i in range(n):
+        x = inputs[i]
+        w = weights[i]
+        convolved = F.conv1d(x.reshape(1, 1, -1), w.reshape(1, 1, -1), padding=2)
+        outputs.append(convolved.squeeze(0))
+    padded = torch.cat(outputs)
+    padded[:, 1] = padded[:, 1] + padded[:, 0]
+    padded[:, -2] = padded[:, -2] + padded[:, -1]
+    return padded[:, 1:-1]
+
+
+class Architecture(nn.Module):
     def __init__(
         self,
         observation_space,
@@ -34,34 +46,19 @@ class Recurrence(nn.Module):
         num_embedding_layers,
     ):
         super().__init__()
-        self.planning_steps = planning_steps
-        self.action_size = 1 + planning_steps
+        self.action_size = 1
         self.debug = debug
-        self.slot_size = slot_size
-        self.num_slots = num_slots
-        self.num_heads = num_heads
         nvec = observation_space.nvec
         self.obs_shape = (*nvec.shape, nvec.max())
         self.num_options = nvec.max()
         self.hidden_size = hidden_size
 
-        self.state_sizes = RecurrentState(
-            a=planning_steps,
-            plan=planning_steps,
-            v=1,
-            t=1,
-            probs=planning_steps * action_space.nvec.max(),
-            planned_probs=planning_steps * action_space.nvec.max(),
-            state=embedding_size,
-            h=hidden_size * num_model_layers,
-            model_loss=1,
-        )
+        self.state_sizes = RecurrentState(a=1, v=1, t=1, probs=action_space.n)
 
         # networks
         assert num_layers > 0
-        self.embed_action = nn.Embedding(
-            int(action_space.nvec.max()), int(action_space.nvec.max())
-        )
+        self.embed_action = nn.Embedding(int(action_space.n), int(action_space.n))
+
         layers = [nn.Embedding(nvec.max(), nvec.max()), Flatten()]
         in_size = int(nvec.max() * np.prod(nvec.shape))
         for _ in range(num_embedding_layers):
@@ -71,12 +68,8 @@ class Recurrence(nn.Module):
         self.embed2 = nn.Sequential(
             activation, init_(nn.Linear(hidden_size, embedding_size))
         )
-        self.model = nn.GRU(
-            embedding_size + self.embed_action.embedding_dim,
-            hidden_size,
-            num_model_layers,
-        )
-        self.actor = Categorical(embedding_size, action_space.nvec.max())
+
+        self.actor = Categorical(embedding_size, action_space.n)
         self.critic = init_(nn.Linear(embedding_size, 1))
 
     @staticmethod
@@ -112,7 +105,6 @@ class Recurrence(nn.Module):
             print(t, *args, **kwargs)
 
     def inner_loop(self, inputs, rnn_hxs):
-        device = inputs.device
         T, N, D = inputs.shape
         inputs, actions = torch.split(
             inputs.detach(), [D - self.action_size, self.action_size], dim=2
@@ -123,41 +115,13 @@ class Recurrence(nn.Module):
         for _x in hx:
             _x.squeeze_(0)
 
-        plan = hx.plan
-        planned_probs = hx.planned_probs.view(N, self.planning_steps, -1)
-
-        new = torch.all(rnn_hxs == 0, dim=-1)
-        if new.any():
-            assert new.all()
-            state = self.embed2(self.embed1(inputs[0]))
-        else:
-            state = hx.state.view(N, -1)
-
-        h = (
-            hx.h.view(N, self.model.num_layers, self.model.hidden_size)
-            .transpose(0, 1)
-            .contiguous()
-        )
-
         A = actions.long()[:, :, 0]
 
         for t in range(T):
-            x = self.embed2(self.embed1(inputs[t])).detach()
-            model_loss = F.mse_loss(state, x, reduction="none").sum(-1)
-            dist = self.actor(state)
-            value = self.critic(state)
+            x = self.embed2(self.embed1(inputs[t]))
+
+            # act
+            dist = self.actor(x)
+            value = self.critic(x)
             self.sample_new(A[t], dist)
-            model_input = torch.cat([state, self.embed_action(A[t].clone())], dim=-1)
-            hn, h = self.model(model_input.unsqueeze(0), h)
-            state = self.embed2(hn.squeeze(0))
-            yield RecurrentState(
-                a=plan,
-                planned_probs=planned_probs,
-                plan=plan,
-                probs=planned_probs,
-                v=value,
-                t=hx.t + 1,
-                state=hx.state,
-                h=h.transpose(0, 1),
-                model_loss=model_loss,
-            )
+            yield RecurrentState(a=A[t], probs=dist.probs, v=value, t=hx.t + 1)

@@ -1,13 +1,18 @@
-import torch
-import torch.jit
-from torch import nn as nn
-from torch.nn import functional as F
+from collections import namedtuple
 
-import ppo.agent
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+import ppo
 from ppo.agent import AgentValues, NNBase
+from ppo.distributions import FixedCategorical
 
 # noinspection PyMissingConstructor
-from ppo.distributions import FixedCategorical
+
+AgentValues = namedtuple(
+    "AgentValues", "value action action_log_probs aux_loss rnn_hxs log dist"
+)
 
 
 class Agent(ppo.agent.Agent, NNBase):
@@ -18,12 +23,12 @@ class Agent(ppo.agent.Agent, NNBase):
         self.recurrent_module = recurrence
 
     @property
-    def recurrent_hidden_state_size(self):
-        return sum(self.recurrent_module.state_sizes)
-
-    @property
     def is_recurrent(self):
         return True
+
+    @property
+    def recurrent_hidden_state_size(self):
+        return sum(self.recurrent_module.state_sizes)
 
     def forward(self, inputs, rnn_hxs, masks, deterministic=False, action=None):
         N = inputs.size(0)
@@ -32,17 +37,17 @@ class Agent(ppo.agent.Agent, NNBase):
         )
         rm = self.recurrent_module
         hx = rm.parse_hidden(all_hxs)
-        # TODO: this is where we zero out parts of log_prob to help with credit assignment
+        dist = FixedCategorical(hx.p)
+        action_log_probs = dist.log_probs(hx.a)
+        aux_loss = -self.entropy_coef * dist.entropy()
         return AgentValues(
             value=hx.v,
-            action=torch.cat([hx.a, hx.options], dim=-1),
-            action_log_probs=hx.log_probs,
-            aux_loss=(
-                self.model_loss_coef * hx.model_loss - self.entropy_coef * hx.entropy
-            ).mean(),
-            dist=None,
+            action=hx.a,
+            action_log_probs=action_log_probs,
+            aux_loss=aux_loss.mean(),
+            dist=dist,
             rnn_hxs=last_hx,
-            log=dict(entropy=hx.entropy, model_loss=hx.model_loss),
+            log=dict(entropy=(dist.entropy())),
         )
 
     def _forward_gru(self, x, hxs, masks, action=None):

@@ -37,6 +37,7 @@ class Env(gym.Env):
         self.int_to_tuple = [(0, 0)]
         self.int_to_tuple.extend(itertools.permutations(range(self.n_cols), 2))
         self.action_space = gym.spaces.Discrete(len(self.int_to_tuple))
+        # self.action_space = gym.spaces.Discrete(len(self.int_to_tuple))
         self.observation_space = gym.spaces.MultiDiscrete(
             np.array([7] * (self.n_rows * self.n_cols * 2))
         )

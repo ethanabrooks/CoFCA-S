@@ -36,7 +36,10 @@ class Env(gym.Env):
         self.t = None
         self.int_to_tuple = [(0, 0)]
         self.int_to_tuple.extend(itertools.permutations(range(self.n_cols), 2))
-        self.action_space = gym.spaces.Discrete(len(self.int_to_tuple))
+        self.unravel_array = (len(self.int_to_tuple),) * planning_steps
+        self.action_space = gym.spaces.MultiDiscrete(
+            [len(self.int_to_tuple)] * planning_steps
+        )
         self.observation_space = gym.spaces.MultiDiscrete(
             np.array([7] * (self.n_rows * self.n_cols * 2))
         )
@@ -74,26 +77,22 @@ class Env(gym.Env):
         return columns[_from] and len(columns[_to]) < self.n_rows
 
     def step(self, action: int):
-        self.t += 1
-        if self.solved:
-            return self.get_observation(), 0, self.t >= self.time_limit, {}
-        _from, _to = self.int_to_tuple[int(action)]
-        if self.valid(_from, _to):
-            self.columns[_to].append(self.columns[_from].pop())
-        if tuple(map(tuple, self.columns)) == self.final_state:
-            r = 1
-            self.solved = True
-        else:
-            r = 0
-        t = self.t >= self.time_limit
-        self.last = Last(action=(_from, _to), reward=r, terminal=t, go=0)
         i = dict(
             n_blocks=self.n_blocks,
             search_depth=self.search_depth,
             curriculum_level=self.curriculum_level,
-            reward_plus_curriculum=r + self.curriculum_level,
         )
-        return self.get_observation(), r, t, i
+        for a in action:
+            _from, _to = self.int_to_tuple[int(a)]
+            if self.valid(_from, _to):
+                self.columns[_to].append(self.columns[_from].pop())
+            if tuple(map(tuple, self.columns)) == self.final_state:
+                i.update(reward_plus_curriculum=1 + self.curriculum_level)
+                return self.get_observation(), 1, True, i
+            else:
+                r = 0
+            self.last = Last(action=(_from, _to), reward=r, terminal=False, go=0)
+        return self.get_observation(), 0, True, i
 
     def reset(self):
         self.last = None

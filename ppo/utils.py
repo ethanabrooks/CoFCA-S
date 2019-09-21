@@ -107,9 +107,14 @@ def init_(network, nonlinearity=None):
     }.get(nonlinearity.__class__, "linear")
 
     if nonlinearity is None:
-        return init(network, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0))
-    return init(network, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0),
-                nn.init.calculate_gain(nonlinearity))
+        return init(network, init_normc_, lambda x: nn.init.constant_(x, 0))
+        # return init(network, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0))
+    return init(
+        network,
+        nn.init.orthogonal_,
+        lambda x: nn.init.constant_(x, 0),
+        nn.init.calculate_gain(nonlinearity_str),
+    )
 
 
 def broadcast3d(inputs, shape):
