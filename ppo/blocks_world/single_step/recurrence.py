@@ -12,7 +12,7 @@ RecurrentState = namedtuple("RecurrentState", "a probs v")
 # "planned_probs plan v t state h model_loss"
 
 
-class Recurrence(NNBase):
+class Recurrence(nn.Module):
     def __init__(
         self,
         observation_space,
@@ -24,7 +24,9 @@ class Recurrence(NNBase):
     ):
         recurrent_module = nn.GRU if recurrent else None
         num_inputs = int(np.prod(observation_space.shape))
-        super(Recurrence, self).__init__(recurrent_module, num_inputs, hidden_size)
+        super().__init__()
+
+        self.state_sizes = RecurrentState(a=1, v=1, probs=action_space.n)
 
         if recurrent:
             num_inputs = hidden_size
@@ -39,7 +41,7 @@ class Recurrence(NNBase):
         self.embed1 = nn.Sequential(*layers)
 
         self.critic = init_(nn.Linear(hidden_size, 1))
-        self.actor = Categorical(self.output_size, action_space.n)
+        self.actor = Categorical(hidden_size, action_space.n)
         self.continuous = isinstance(action_space, Box)
 
         self.train()
