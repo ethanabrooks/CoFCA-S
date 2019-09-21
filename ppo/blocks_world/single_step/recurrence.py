@@ -55,7 +55,7 @@ class Recurrence(nn.Module):
         )
 
         self.critic = init_(nn.Linear(embedding_size, 1))
-        self.actor = init_(nn.Linear(embedding_size, planning_steps * na))
+        self.actor = init_(nn.Linear(embedding_size, na))
         self.train()
 
     def print(self, t, *args, **kwargs):
@@ -114,12 +114,14 @@ class Recurrence(nn.Module):
         first_state = state = self.embed2(self.embed1(inputs[0]))
         probs = []
         for t in range(self.action_size):
-            dist = FixedCategorical(logits=self.actor(state).view(N, -1, 7)[:, t])
+            dist = FixedCategorical(logits=self.actor(state))
             self.sample_new(A[0, :, t], dist)
             probs.append(dist.probs)
-            # model_input = torch.cat([state, self.embed_action(A[t].clone())], dim=-1)
-            # hn, h = self.model(model_input.unsqueeze(0), h)
-            # state = self.embed2(hn.squeeze(0))
+            model_input = torch.cat(
+                [state, self.embed_action(A[0, :, t].clone())], dim=-1
+            )
+            hn, h = self.model(model_input.unsqueeze(0), h)
+            state = self.embed2(hn.squeeze(0))
         v = self.critic(first_state)
         probs = torch.stack(probs, dim=1)
         for t in range(T):
