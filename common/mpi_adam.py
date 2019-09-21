@@ -46,7 +46,7 @@ class MpiAdam(object):
             globalg = np.copy(localg)
 
         self.t += 1
-        a = stepsize * np.sqrt(1 - self.beta2 ** self.t) / (1 - self.beta1 ** self.t)
+        a = stepsize * np.sqrt(1 - self.beta2**self.t) / (1 - self.beta1**self.t)
         self.m = self.beta1 * self.m + (1 - self.beta1) * globalg
         self.v = self.beta2 * self.v + (1 - self.beta2) * (globalg * globalg)
         step = (-a) * self.m / (np.sqrt(self.v) + self.epsilon)
@@ -106,9 +106,7 @@ def test_MpiAdam():
         print(i, l)
         losslist_test.append(l)
 
-    np.testing.assert_allclose(
-        np.array(losslist_ref), np.array(losslist_test), atol=1e-4
-    )
+    np.testing.assert_allclose(np.array(losslist_ref), np.array(losslist_test), atol=1e-4)
 
 
 if __name__ == "__main__":

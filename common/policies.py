@@ -78,7 +78,7 @@ class PolicyWithValue(object):
         for inpt_name, data in extra_feed.items():
             if inpt_name in self.__dict__.keys():
                 inpt = self.__dict__[inpt_name]
-                if isinstance(inpt, tf.Tensor) and inpt._op.type == "Placeholder":
+                if isinstance(inpt, tf.Tensor) and inpt._op.type == 'Placeholder':
                     feed_dict[inpt] = adjust_shape(inpt, data)
 
         return sess.run(variables, feed_dict)
@@ -99,9 +99,8 @@ class PolicyWithValue(object):
         (action, value estimate, next state, negative log likelihood of the action under current policy parameters) tuple
         """
 
-        a, v, state, neglogp = self._evaluate(
-            [self.action, self.vf, self.state, self.neglogp], observation, **extra_feed
-        )
+        a, v, state, neglogp = self._evaluate([self.action, self.vf, self.state, self.neglogp],
+                                              observation, **extra_feed)
         if state.size == 0:
             state = None
         return a, v, state, neglogp
@@ -169,11 +168,8 @@ def build_policy(
                 if recurrent_tensors is not None:
                     # recurrent architecture, need a few more steps
                     nenv = nbatch // nsteps
-                    assert (
-                        nenv > 0
-                    ), "Bad input for recurrent policy: batch size {} smaller than nsteps {}".format(
-                        nbatch, nsteps
-                    )
+                    assert nenv > 0, 'Bad input for recurrent policy: batch size {} smaller than nsteps {}'.format(
+                        nbatch, nsteps)
                     policy_latent, recurrent_tensors = policy_network(encoded_x, nenv)
                     extra_tensors.update(recurrent_tensors)
 
@@ -207,7 +203,5 @@ def build_policy(
 
 def _normalize_clip_observation(x, clip_range=[-5.0, 5.0]):
     rms = RunningMeanStd(shape=x.shape[1:])
-    norm_x = tf.clip_by_value(
-        (x - rms.mean) / rms.std, min(clip_range), max(clip_range)
-    )
+    norm_x = tf.clip_by_value((x - rms.mean) / rms.std, min(clip_range), max(clip_range))
     return norm_x, rms

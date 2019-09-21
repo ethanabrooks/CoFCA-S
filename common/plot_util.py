@@ -79,19 +79,12 @@ def one_sided_ema(
     low = xolds[0] if low is None else low
     high = xolds[-1] if high is None else high
 
-    assert (
-        xolds[0] <= low
-    ), "low = {} < xolds[0] = {} - extrapolation not permitted!".format(low, xolds[0])
-    assert (
-        xolds[-1] >= high
-    ), "high = {} > xolds[-1] = {}  - extrapolation not permitted!".format(
-        high, xolds[-1]
-    )
-    assert len(xolds) == len(
-        yolds
-    ), "length of xolds ({}) and yolds ({}) do not match!".format(
-        len(xolds), len(yolds)
-    )
+    assert xolds[0] <= low, 'low = {} < xolds[0] = {} - extrapolation not permitted!'.format(
+        low, xolds[0])
+    assert xolds[-1] >= high, 'high = {} > xolds[-1] = {}  - extrapolation not permitted!'.format(
+        high, xolds[-1])
+    assert len(xolds) == len(yolds), 'length of xolds ({}) and yolds ({}) do not match!'.format(
+        len(xolds), len(yolds))
 
     xolds = xolds.astype("float64")
     yolds = yolds.astype("float64")
@@ -163,8 +156,7 @@ def symmetric_ema(
         xolds, yolds, low, high, n, decay_steps, low_counts_threshold=0
     )
     _, ys2, count_ys2 = one_sided_ema(
-        -xolds[::-1], yolds[::-1], -high, -low, n, decay_steps, low_counts_threshold=0
-    )
+        -xolds[::-1], yolds[::-1], -high, -low, n, decay_steps, low_counts_threshold=0)
     ys2 = ys2[::-1]
     count_ys2 = count_ys2[::-1]
     count_ys = count_ys1 + count_ys2
@@ -177,10 +169,8 @@ Result = namedtuple("Result", "monitor progress dirname metadata")
 Result.__new__.__defaults__ = (None,) * len(Result._fields)
 
 
-def load_results(
-    root_dir_or_dirs, enable_progress=True, enable_monitor=True, verbose=False
-):
-    """
+def load_results(root_dir_or_dirs, enable_progress=True, enable_monitor=True, verbose=False):
+    '''
     load summaries of runs from a list of directories (including subdirectories)
     Arguments:
 
@@ -228,30 +218,25 @@ def load_results(
                 progcsv = osp.join(dirname, "progress.csv")
                 if enable_progress:
                     if osp.exists(progjson):
-                        result["progress"] = pandas.DataFrame(read_json(progjson))
+                        result['progress'] = pandas.DataFrame(read_json(progjson))
                     elif osp.exists(progcsv):
                         try:
                             result["progress"] = read_csv(progcsv)
                         except pandas.errors.EmptyDataError:
-                            print("skipping progress file in ", dirname, "empty data")
+                            print('skipping progress file in ', dirname, 'empty data')
                     else:
                         if verbose:
                             print("skipping %s: no progress file" % dirname)
 
                 if enable_monitor:
                     try:
-                        result["monitor"] = pandas.DataFrame(
-                            monitor.load_results(dirname)
-                        )
+                        result['monitor'] = pandas.DataFrame(monitor.load_results(dirname))
                     except monitor.LoadMonitorResultsError:
                         print("skipping %s: no monitor files" % dirname)
                     except Exception as e:
-                        print("exception loading monitor file in %s: %s" % (dirname, e))
+                        print('exception loading monitor file in %s: %s' % (dirname, e))
 
-                if (
-                    result.get("monitor") is not None
-                    or result.get("progress") is not None
-                ):
+                if result.get('monitor') is not None or result.get('progress') is not None:
                     allresults.append(Result(**result))
                     if verbose:
                         print("successfully loaded %s" % dirname)
@@ -262,28 +247,9 @@ def load_results(
 
 
 COLORS = [
-    "blue",
-    "green",
-    "red",
-    "cyan",
-    "magenta",
-    "yellow",
-    "black",
-    "purple",
-    "pink",
-    "brown",
-    "orange",
-    "teal",
-    "lightblue",
-    "lime",
-    "lavender",
-    "turquoise",
-    "darkgreen",
-    "tan",
-    "salmon",
-    "gold",
-    "darkred",
-    "darkblue",
+    'blue', 'green', 'red', 'cyan', 'magenta', 'yellow', 'black', 'purple', 'pink', 'brown',
+    'orange', 'teal', 'lightblue', 'lime', 'lavender', 'turquoise', 'darkgreen', 'tan', 'salmon',
+    'gold', 'darkred', 'darkblue'
 ]
 
 
@@ -398,8 +364,7 @@ def plot_results(
             else:
                 if resample:
                     x, y, counts = symmetric_ema(
-                        x, y, x[0], x[-1], resample, decay_steps=smooth_step
-                    )
+                        x, y, x[0], x[-1], resample, decay_steps=smooth_step)
                 l, = ax.plot(x, y, color=COLORS[groups.index(group) % len(COLORS)])
                 g2l[group] = l
         if average_group:
@@ -421,10 +386,7 @@ def plot_results(
                     ys = []
                     for (x, y) in xys:
                         ys.append(
-                            symmetric_ema(
-                                x, y, low, high, resample, decay_steps=smooth_step
-                            )[1]
-                        )
+                            symmetric_ema(x, y, low, high, resample, decay_steps=smooth_step)[1])
                 else:
                     assert allequal(
                         [x[:minxlen] for x in origxs]
@@ -437,20 +399,16 @@ def plot_results(
                 l, = axarr[isplit][0].plot(usex, ymean, color=color)
                 g2l[group] = l
                 if shaded_err:
-                    ax.fill_between(
-                        usex, ymean - ystderr, ymean + ystderr, color=color, alpha=0.4
-                    )
+                    ax.fill_between(usex, ymean - ystderr, ymean + ystderr, color=color, alpha=.4)
                 if shaded_std:
-                    ax.fill_between(
-                        usex, ymean - ystd, ymean + ystd, color=color, alpha=0.2
-                    )
+                    ax.fill_between(usex, ymean - ystd, ymean + ystd, color=color, alpha=.2)
 
         # https://matplotlib.org/users/legend_guide.html
         plt.tight_layout()
         if any(g2l.keys()):
             ax.legend(
                 g2l.values(),
-                ["%s (%i)" % (g, g2c[g]) for g in g2l] if average_group else g2l.keys(),
+                ['%s (%i)' % (g, g2c[g]) for g in g2l] if average_group else g2l.keys(),
                 loc=2 if legend_outside else None,
                 bbox_to_anchor=(1, 1) if legend_outside else None,
             )
@@ -475,20 +433,14 @@ def test_smooth():
     ndown = 30
     xs = np.cumsum(np.random.rand(norig) * 10 / norig)
     yclean = np.sin(xs)
-    ys = yclean + 0.1 * np.random.randn(yclean.size)
-    xup, yup, _ = symmetric_ema(
-        xs, ys, xs.min(), xs.max(), nup, decay_steps=nup / ndown
-    )
-    xdown, ydown, _ = symmetric_ema(
-        xs, ys, xs.min(), xs.max(), ndown, decay_steps=ndown / ndown
-    )
-    xsame, ysame, _ = symmetric_ema(
-        xs, ys, xs.min(), xs.max(), norig, decay_steps=norig / ndown
-    )
-    plt.plot(xs, ys, label="orig", marker="x")
-    plt.plot(xup, yup, label="up", marker="x")
-    plt.plot(xdown, ydown, label="down", marker="x")
-    plt.plot(xsame, ysame, label="same", marker="x")
-    plt.plot(xs, yclean, label="clean", marker="x")
+    ys = yclean + .1 * np.random.randn(yclean.size)
+    xup, yup, _ = symmetric_ema(xs, ys, xs.min(), xs.max(), nup, decay_steps=nup / ndown)
+    xdown, ydown, _ = symmetric_ema(xs, ys, xs.min(), xs.max(), ndown, decay_steps=ndown / ndown)
+    xsame, ysame, _ = symmetric_ema(xs, ys, xs.min(), xs.max(), norig, decay_steps=norig / ndown)
+    plt.plot(xs, ys, label='orig', marker='x')
+    plt.plot(xup, yup, label='up', marker='x')
+    plt.plot(xdown, ydown, label='down', marker='x')
+    plt.plot(xsame, ysame, label='same', marker='x')
+    plt.plot(xs, yclean, label='clean', marker='x')
     plt.legend()
     plt.show()

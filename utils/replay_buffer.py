@@ -46,9 +46,7 @@ class ReplayBuffer:
 
     def modulate(self, key: Key):
         if isinstance(key, slice):
-            key = np.arange(
-                key.start or 0, 0 if key.stop is None else key.stop, key.step
-            )
+            key = np.arange(key.start or 0, 0 if key.stop is None else key.stop, key.step)
         return (key + self.pos) % self.maxlen
 
     def sample(self, batch_size: int, seq_len: int = None):
@@ -70,8 +68,6 @@ class ReplayBuffer:
 
     def extend(self, x: X):
         if self.buffer is None:
-            self.buffer = ArrayGroup.shape_like(
-                x=ArrayGroup(x)[0], pre_shape=(self.maxlen,)
-            )
+            self.buffer = ArrayGroup.shape_like(x=ArrayGroup(x)[0], pre_shape=(self.maxlen, ))
 
         self.append(x)

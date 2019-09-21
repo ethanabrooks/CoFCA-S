@@ -138,4 +138,4 @@ if __name__ == "__main__":
     from visdom import Visdom
 
     viz = Visdom()
-    visdom_plot(viz, None, "/tmp/gym/", "BreakOut", "a2c", bin_size=100, smooth=1)
+    visdom_plot(viz, None, '/tmp/gym/', 'BreakOut', 'a2c', bin_size=100, smooth=1)

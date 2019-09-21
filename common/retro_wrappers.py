@@ -97,15 +97,11 @@ class PartialFrameStack(gym.Wrapper):
 
     def _get_ob(self):
         assert len(self.frames) == self.k
-        return np.concatenate(
-            [
-                frame
-                if i == self.k - 1
-                else frame[:, :, self.channel : self.channel + 1]
-                for (i, frame) in enumerate(self.frames)
-            ],
-            axis=2,
-        )
+        return np.concatenate([
+            frame if i == self.k - 1 else frame[:, :, self.channel:self.channel + 1]
+            for (i, frame) in enumerate(self.frames)
+        ],
+                              axis=2)
 
 
 class Downsample(gym.ObservationWrapper):
@@ -116,9 +112,7 @@ class Downsample(gym.ObservationWrapper):
         gym.ObservationWrapper.__init__(self, env)
         (oldh, oldw, oldc) = env.observation_space.shape
         newshape = (oldh // ratio, oldw // ratio, oldc)
-        self.observation_space = spaces.Box(
-            low=0, high=255, shape=newshape, dtype=np.uint8
-        )
+        self.observation_space = spaces.Box(low=0, high=255, shape=newshape, dtype=np.uint8)
 
     def observation(self, frame):
         height, width, _ = self.observation_space.shape
@@ -187,8 +181,8 @@ class AppendTimeout(gym.Wrapper):
         self.ac_count = None
         while 1:
             if not hasattr(
-                env, "_max_episode_steps"
-            ):  # Looking for TimeLimit wrapper that has this field
+                    env,
+                    "_max_episode_steps"):  # Looking for TimeLimit wrapper that has this field
                 env = env.env
                 continue
             break
@@ -231,8 +225,7 @@ class StartDoingRandomActionsWrapper(gym.Wrapper):
         # print("running for random %i frames" % n)
         for _ in range(n):
             self.last_obs, _, done, _ = self.env.step(self.env.action_space.sample())
-            if done:
-                self.last_obs = self.env.reset()
+            if done: self.last_obs = self.env.reset()
 
     def reset(self):
         return self.last_obs
@@ -276,29 +269,9 @@ class SonicDiscretizer(gym.ActionWrapper):
 
     def __init__(self, env):
         super(SonicDiscretizer, self).__init__(env)
-        buttons = [
-            "B",
-            "A",
-            "MODE",
-            "START",
-            "UP",
-            "DOWN",
-            "LEFT",
-            "RIGHT",
-            "C",
-            "Y",
-            "X",
-            "Z",
-        ]
-        actions = [
-            ["LEFT"],
-            ["RIGHT"],
-            ["LEFT", "DOWN"],
-            ["RIGHT", "DOWN"],
-            ["DOWN"],
-            ["DOWN", "B"],
-            ["B"],
-        ]
+        buttons = ["B", "A", "MODE", "START", "UP", "DOWN", "LEFT", "RIGHT", "C", "Y", "X", "Z"]
+        actions = [['LEFT'], ['RIGHT'], ['LEFT', 'DOWN'], ['RIGHT', 'DOWN'], ['DOWN'],
+                   ['DOWN', 'B'], ['B']]
         self._actions = []
         for action in actions:
             arr = np.array([False] * 12)

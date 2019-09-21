@@ -137,10 +137,8 @@ class AddTimestep(gym.ObservationWrapper):
         super(AddTimestep, self).__init__(env)
         self.observation_space = Box(
             self.observation_space.low[0],
-            self.observation_space.high[0],
-            [self.observation_space.shape[0] + 1],
-            dtype=self.observation_space.dtype,
-        )
+            self.observation_space.high[0], [self.observation_space.shape[0] + 1],
+            dtype=self.observation_space.dtype)
 
     def observation(self, observation):
         return np.concatenate((observation, [self.env._elapsed_steps]))
@@ -152,10 +150,8 @@ class TransposeImage(gym.ObservationWrapper):
         obs_shape = self.observation_space.shape
         self.observation_space = Box(
             self.observation_space.low[0, 0, 0],
-            self.observation_space.high[0, 0, 0],
-            [obs_shape[2], obs_shape[1], obs_shape[0]],
-            dtype=self.observation_space.dtype,
-        )
+            self.observation_space.high[0, 0, 0], [obs_shape[2], obs_shape[1], obs_shape[0]],
+            dtype=self.observation_space.dtype)
 
     def observation(self, observation):
         return observation.transpose(2, 0, 1)
@@ -218,11 +214,8 @@ class VecNormalize(VecNormalize_):
         if self.ob_rms:
             if self.training:
                 self.ob_rms.update(obs)
-            obs = np.clip(
-                (obs - self.ob_rms.mean) / np.sqrt(self.ob_rms.var + self.epsilon),
-                -self.clipob,
-                self.clipob,
-            )
+            obs = np.clip((obs - self.ob_rms.mean) / np.sqrt(self.ob_rms.var + self.epsilon),
+                          -self.clipob, self.clipob)
             return obs
         else:
             return obs
@@ -247,9 +240,7 @@ class VecPyTorchFrameStack(VecEnvWrapper):
 
         self.stacked_obs = torch.zeros((venv.num_envs,) + low.shape)
 
-        observation_space = gym.spaces.Box(
-            low=low, high=high, dtype=venv.observation_space.dtype
-        )
+        observation_space = gym.spaces.Box(low=low, high=high, dtype=venv.observation_space.dtype)
         VecEnvWrapper.__init__(self, venv, observation_space=observation_space)
 
     def step_wait(self):
@@ -286,9 +277,7 @@ class OneHotWrapper(gym.Wrapper):
 
             def one_hots():
                 nvec = observation_space.nvec
-                for o, n in zip(
-                    obs.reshape(len(obs), -1).T, nvec.reshape(len(nvec), -1).T
-                ):
+                for o, n in zip(obs.reshape(len(obs), -1).T, nvec.reshape(len(nvec), -1).T):
                     yield onehot(o, n)
 
             return np.concatenate(list(one_hots()), axis=-1)
