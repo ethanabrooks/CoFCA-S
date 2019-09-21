@@ -5,7 +5,7 @@ import ppo.arguments
 import ppo.bandit.baselines.oh_et_al
 import ppo.maze.baselines
 from ppo import gntm
-from ppo.blocks_world import dnc, planner
+from ppo.blocks_world import dnc, planner, single_step
 from ppo.train import Train
 
 
@@ -30,7 +30,8 @@ def train_blocks_world(
                 return dnc.Env(**env_args, seed=seed + rank)
             else:
                 assert baseline is None
-                return planner.Env(
+                # return planner.Env(
+                return single_step.Env(
                     **env_args, planning_steps=planning_steps, seed=seed + rank
                 )
 
@@ -67,7 +68,8 @@ def train_blocks_world(
                 return gntm.Agent(entropy_coef=entropy_coef, recurrence=recurrence)
             else:
                 assert baseline is None
-                recurrence = planner.Recurrence(
+                # recurrence = planner.Recurrence(
+                recurrence = single_step.Recurrence(
                     observation_space=envs.observation_space,
                     action_space=envs.action_space,
                     planning_steps=planning_steps,
@@ -75,7 +77,8 @@ def train_blocks_world(
                     **dnc_args,
                     **agent_args,
                 )
-                return planner.Agent(
+                # return planner.Agent(
+                return single_step.Agent(
                     entropy_coef=entropy_coef,
                     model_loss_coef=model_loss_coef,
                     recurrence=recurrence,
