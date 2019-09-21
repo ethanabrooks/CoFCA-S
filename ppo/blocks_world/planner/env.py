@@ -50,7 +50,7 @@ class Env(gym.Env):
                     self.n_rows * self.n_cols // 3,
                     self.n_rows * self.n_cols // 3,
                 ],
-                search_depth=[planning_steps, planning_steps],
+                search_depth=[1, 1],
             )
             max_blocks = self.n_rows * self.n_cols * 2 // 3
             while True:
@@ -58,12 +58,14 @@ class Env(gym.Env):
                 n_blocks = last_curriculum.n_blocks[1] + 1
                 last_curriculum.n_blocks[1] = min(max_blocks, n_blocks)
                 yield copy.deepcopy(last_curriculum)
-                last_curriculum.search_depth[1] += 1
+                search_depth = last_curriculum.search_depth[1] + 1
+                last_curriculum.search_depth[1] = min(planning_steps, search_depth)
                 yield copy.deepcopy(last_curriculum)
                 n_blocks = last_curriculum.n_blocks[0] + 1
                 last_curriculum.n_blocks[0] = min(max_blocks, n_blocks)
                 yield copy.deepcopy(last_curriculum)
-                last_curriculum.search_depth[0] += 1
+                search_depth = last_curriculum.search_depth[0] + 1
+                last_curriculum.search_depth[0] = min(planning_steps, search_depth)
                 yield copy.deepcopy(last_curriculum)
 
         self.curriculum_level = curriculum_level
@@ -153,9 +155,8 @@ class Env(gym.Env):
         return [list(c) + [0] * (self.n_rows - len(c)) for c in columns]
 
     def increment_curriculum(self):
-        pass
-        # self.curriculum_level += 1
-        # self.curriculum = next(self.curriculum_iterator)
+        self.curriculum_level += 1
+        self.curriculum = next(self.curriculum_iterator)
 
     def render(self, mode="human", pause=True):
         print()
