@@ -82,6 +82,7 @@ class Env(gym.Env):
             search_depth=self.search_depth,
             curriculum_level=self.curriculum_level,
         )
+        action = int(action)
         for a in np.unravel_index(action, self.unravel_array):
             _from, _to = self.int_to_tuple[int(a)]
             if self.valid(_from, _to):
