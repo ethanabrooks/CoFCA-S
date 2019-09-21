@@ -113,7 +113,8 @@ def init_(network, nonlinearity=None):
     }.get(nonlinearity.__class__, "linear")
 
     if nonlinearity is None:
-        return init(network, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0))
+        return lambda m: init(m, init_normc_, lambda x: nn.init.constant_(x, 0))
+        # return init(network, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0))
     return init(
         network,
         nn.init.orthogonal_,
