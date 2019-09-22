@@ -31,7 +31,7 @@ class Env(gym.Env):
         self.n_blocks = None
         self.search_depth = None
         self.final_state = None
-        self.time_limit = planning_steps + extra_time
+        self.time_limit = None
         self.last = None
         self.solved = None
         self.t = None
@@ -112,6 +112,7 @@ class Env(gym.Env):
         self.t = 0
         self.n_blocks = self.random.random_integers(*self.curriculum.n_blocks)
         self.search_depth = self.random.random_integers(*self.curriculum.search_depth)
+        self.time_limit = self.extra_time + self.curriculum.search_depth[1]
         self.columns = [[] for _ in range(self.n_cols)]
         blocks = list(range(1, self.n_blocks + 1))
         self.random.shuffle(blocks)
