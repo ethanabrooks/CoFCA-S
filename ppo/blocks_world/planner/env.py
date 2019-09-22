@@ -165,8 +165,10 @@ class Env(gym.Env):
         return [list(c) + [0] * (self.n_rows - len(c)) for c in columns]
 
     def increment_curriculum(self):
-        self.curriculum_level += 1
+        last_curriculum = copy.deepcopy(self.curriculum)
         self.curriculum = next(self.curriculum_iterator)
+        if self.curriculum != last_curriculum:
+            self.curriculum_level += 1
 
     def render(self, mode="human", pause=True):
         print()
