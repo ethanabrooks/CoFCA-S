@@ -125,10 +125,9 @@ class Recurrence(nn.Module):
     def parse_hidden(self, hx: torch.Tensor) -> RecurrentState:
         return RecurrentState(*torch.split(hx, self.state_sizes, dim=-1))
 
-    def print(self, t, *args, **kwargs):
+    def print(self, t, *args, precision=2, **kwargs):
         if self.debug:
-            if type(t) == torch.Tensor:
-                t = (t * 10.0).round() / 10.0
+            torch.set_printoptions(precision=precision, sci_mode=False)
             print(t, *args, **kwargs)
 
     def inner_loop(self, inputs, rnn_hxs):
