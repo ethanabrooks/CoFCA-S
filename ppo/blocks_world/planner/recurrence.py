@@ -7,6 +7,7 @@ from torch import nn as nn
 
 from ppo.blocks_world.planner.env import Obs
 from ppo.distributions import Categorical, FixedCategorical
+from ppo.layers import Flatten
 from ppo.utils import init_
 
 RecurrentState = namedtuple("RecurrentState", "a probs v state h ")
@@ -29,10 +30,11 @@ class Recurrence(nn.Module):
             *[int(np.prod(s.shape)) for s in observation_space.spaces.values()]
         )
         num_inputs = self.input_sections.obs
+        no = observation_space.spaces["obs"].nvec.max()
+        na = action_space.nvec.max()
         super().__init__()
         self.action_size = planning_steps
 
-        na = action_space.nvec.max()
         self.state_sizes = RecurrentState(
             a=planning_steps,
             v=1,
@@ -42,9 +44,9 @@ class Recurrence(nn.Module):
         )
 
         # networks
-        self.embed_action = nn.Embedding(int(na), int(na))
-        layers = []
-        in_size = num_inputs
+        self.embed_action = nn.Embedding(na, na)
+        layers = [nn.Embedding(no, no), Flatten()]
+        in_size = no * num_inputs
         for _ in range(num_embedding_layers):
             layers += [activation, init_(nn.Linear(in_size, hidden_size))]
             in_size = hidden_size
@@ -53,7 +55,7 @@ class Recurrence(nn.Module):
             activation, init_(nn.Linear(hidden_size, embedding_size))
         )
         self.model = nn.GRU(
-            embedding_size + self.embed_action.embedding_dim,
+            int(embedding_size + self.embed_action.embedding_dim),
             hidden_size,
             num_model_layers,
         )
@@ -99,7 +101,7 @@ class Recurrence(nn.Module):
         inputs, actions = torch.split(
             inputs.detach(), [D - self.action_size, self.action_size], dim=2
         )
-        inputs = self.parse_inputs(inputs).obs
+        inputs = self.parse_inputs(inputs).obs.long()
 
         hx = self.parse_hidden(rnn_hxs)
         for _x in hx:
