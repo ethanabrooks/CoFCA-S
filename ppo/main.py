@@ -104,7 +104,6 @@ def blocks_world_cli():
     parsers.env.add_argument("--extra-time", type=int, default=0)
     parsers.agent.add_argument("--embedding-size", type=int)
     parsers.agent.add_argument("--model-loss-coef", type=float)
-    parsers.agent.add_argument("--critic-per-step", action="store_true")
     planner_parser = parsers.agent.add_argument_group("planner_args")
     planner_parser.add_argument("--num-model-layers", type=int)
     planner_parser.add_argument("--num-embedding-layers", type=int)

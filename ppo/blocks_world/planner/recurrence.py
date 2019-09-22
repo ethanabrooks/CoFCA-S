@@ -2,17 +2,15 @@ from collections import namedtuple
 
 import numpy as np
 import torch
-from torch import nn as nn
 import torch.nn.functional as F
+from torch import nn as nn
 
 from ppo.blocks_world.planner.env import Obs
-from ppo.distributions import Categorical, FixedCategorical
+from ppo.distributions import FixedCategorical
 from ppo.layers import Flatten
 from ppo.utils import init_
 
-RecurrentState = namedtuple(
-    "RecurrentState", "a p t h v actions probs states model_loss"
-)
+RecurrentState = namedtuple("RecurrentState", "a p t v actions probs states model_loss")
 
 
 class Recurrence(nn.Module):
@@ -26,7 +24,6 @@ class Recurrence(nn.Module):
         embedding_size,
         activation,
         planning_steps,
-        critic_per_step,
         always_plan,
     ):
         self.always_plan = always_plan
@@ -39,13 +36,11 @@ class Recurrence(nn.Module):
         super().__init__()
         self.action_size = 1
         self.planning_steps = planning_steps
-        self.critic_per_step = critic_per_step
 
         self.state_sizes = RecurrentState(
             a=1,
             p=na,
             t=1,
-            h=hidden_size * num_model_layers,
             v=1,
             actions=planning_steps,
             probs=planning_steps * na,
@@ -108,7 +103,6 @@ class Recurrence(nn.Module):
 
     def inner_loop(self, inputs, rnn_hxs):
         T, N, D = inputs.shape
-        I = torch.arange(N, device=rnn_hxs.device)
         inputs, input_actions = torch.split(
             inputs.detach(), [D - self.action_size, self.action_size], dim=2
         )
@@ -123,7 +117,12 @@ class Recurrence(nn.Module):
             assert new.all()
         if new.any() or self.always_plan:
             h = (
-                hx.h.view(N, self.model.num_layers, self.model.hidden_size)
+                torch.zeros(
+                    N,
+                    self.model.num_layers,
+                    self.model.hidden_size,
+                    device=rnn_hxs.device,
+                )
                 .transpose(0, 1)
                 .contiguous()
             )
@@ -154,16 +153,13 @@ class Recurrence(nn.Module):
         i = int(hx.t.mean())
         for t in range(T):
             x = self.embed2(self.embed1(inputs[t]))
-            v = self.critic(
-                x if self.critic_per_step else self.embed2(self.embed1(inputs[0]))
-            )
+            v = self.critic(x)
             model_loss = F.mse_loss(states[:, t], x.detach(), reduction="none").mean(1)
             a = input_actions[t].where(input_actions[t] >= 0, recurrent_actions[:, i])
             yield RecurrentState(
                 a=a,
                 p=probs[:, i],
                 t=hx.t + 1,
-                h=hx.h,
                 v=v,
                 actions=recurrent_actions,
                 probs=probs,
