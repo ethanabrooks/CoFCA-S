@@ -50,7 +50,7 @@ class Agent(ppo.agent.Agent, NNBase):
             aux_loss=aux_loss.mean(),
             dist=dist,
             rnn_hxs=last_hx,
-            log=dict(entropy=(dist.entropy())),
+            log=dict(entropy=(dist.entropy()), model_loss=hx.model_loss.mean()),
         )
 
     def _forward_gru(self, x, hxs, masks, action=None):
