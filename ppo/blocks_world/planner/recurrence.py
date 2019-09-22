@@ -35,13 +35,14 @@ class Recurrence(nn.Module):
         )
         num_inputs = self.input_sections.obs
         no = observation_space.spaces["obs"].nvec.max()
-        na = action_space.nvec.max()
+        na = action_space.n
         super().__init__()
-        self.action_size = self.planning_steps = planning_steps
+        self.action_size = 1
+        self.planning_steps = planning_steps
         self.critic_per_step = critic_per_step
 
         self.state_sizes = RecurrentState(
-            a=planning_steps,
+            a=1,
             p=na,
             t=1,
             h=hidden_size * num_model_layers,
@@ -108,7 +109,7 @@ class Recurrence(nn.Module):
     def inner_loop(self, inputs, rnn_hxs):
         T, N, D = inputs.shape
         I = torch.arange(N, device=rnn_hxs.device)
-        inputs, actions = torch.split(
+        inputs, input_actions = torch.split(
             inputs.detach(), [D - self.action_size, self.action_size], dim=2
         )
         inputs = self.parse_inputs(inputs).obs.long()
@@ -127,41 +128,44 @@ class Recurrence(nn.Module):
                 .contiguous()
             )
 
-            A = actions.long()
             state = self.embed2(self.embed1(inputs[0]))
+            new_actions = []
             states = []
             probs = []
-            for t in range(self.action_size):
+            for t in range(self.planning_steps):
                 states.append(state)
                 dist = FixedCategorical(logits=self.actor(state))
-                self.sample_new(A[0, :, t], dist)
+                new_actions.append(dist.sample())
                 probs.append(dist.probs)
                 model_input = torch.cat(
-                    [state, self.embed_action(A[0, :, t].clone())], dim=-1
+                    [state, self.embed_action(new_actions[-1].squeeze(1).clone())],
+                    dim=-1,
                 )
                 hn, h = self.model(model_input.unsqueeze(0), h)
                 state = self.embed2(hn.squeeze(0))
-            a = A[0]
+            recurrent_actions = torch.stack(new_actions, dim=1).float()
             probs = torch.stack(probs, dim=1)
             states = torch.stack(states, dim=1)
         else:
-            a = hx.a
-            probs = hx.probs
+            recurrent_actions = hx.actions.view(N, self.planning_steps, 1)
+            probs = hx.probs.view(N, self.planning_steps, -1)
             states = hx.states.view(N, self.planning_steps, -1)
 
+        i = int(hx.t.mean())
         for t in range(T):
             x = self.embed2(self.embed1(inputs[t]))
             v = self.critic(
                 x if self.critic_per_step else self.embed2(self.embed1(inputs[0]))
             )
             model_loss = F.mse_loss(states[:, t], x.detach(), reduction="none").mean(1)
+            a = input_actions[t].where(input_actions[t] >= 0, recurrent_actions[:, i])
             yield RecurrentState(
                 a=a,
-                p=probs[I, hx.t.long().squeeze(1)],
+                p=probs[:, i],
                 t=hx.t + 1,
                 h=hx.h,
                 v=v,
-                actions=a,
+                actions=recurrent_actions,
                 probs=probs,
                 states=states,
                 model_loss=model_loss,
