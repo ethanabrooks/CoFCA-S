@@ -102,8 +102,9 @@ class Env(gym.Env):
             n_blocks=self.n_blocks,
             search_depth=self.search_depth,
             curriculum_level=self.curriculum_level,
-            reward_plus_curriculum=r + self.curriculum_level,
         )
+        if r == 1 or t:
+            i.update(reward_plus_curriculum=r + self.curriculum_level)
         return self.get_observation(), r, t, i
 
     def reset(self):
