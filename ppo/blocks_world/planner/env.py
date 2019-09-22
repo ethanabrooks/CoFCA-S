@@ -37,10 +37,10 @@ class Env(gym.Env):
         self.t = None
         self.int_to_tuple = [(0, 0)]
         self.int_to_tuple.extend(itertools.permutations(range(self.n_cols), 2))
-        self.action_space = gym.spaces.MultiDiscrete(
-            [len(self.int_to_tuple)] * planning_steps
-        )
-        # self.action_space = gym.spaces.Discrete(len(self.int_to_tuple))
+        # self.action_space = gym.spaces.MultiDiscrete(
+        #     [len(self.int_to_tuple)] * planning_steps
+        # )
+        self.action_space = gym.spaces.Discrete(len(self.int_to_tuple))
         self.observation_space = gym.spaces.Dict(
             Obs(
                 search_depth=gym.spaces.Discrete(planning_steps + 1),
@@ -84,8 +84,8 @@ class Env(gym.Env):
             columns = self.columns
         return columns[_from] and len(columns[_to]) < self.n_rows
 
-    def step(self, action: list):
-        _from, _to = self.int_to_tuple[int(action[self.t])]
+    def step(self, action: int):
+        _from, _to = self.int_to_tuple[int(action)]
         self.t += 1
         if self.solved:
             return self.get_observation(), 0, self.t >= self.time_limit, {}
