@@ -10,7 +10,9 @@ from ppo.distributions import Categorical, FixedCategorical
 from ppo.layers import Flatten
 from ppo.utils import init_
 
-RecurrentState = namedtuple("RecurrentState", "a probs v state states h model_loss")
+RecurrentState = namedtuple(
+    "RecurrentState", "a p t h v actions probs states model_loss"
+)
 
 
 class Recurrence(nn.Module):
@@ -40,11 +42,13 @@ class Recurrence(nn.Module):
 
         self.state_sizes = RecurrentState(
             a=planning_steps,
-            v=1,
-            probs=planning_steps * na,
-            state=embedding_size,
-            states=planning_steps * embedding_size,
+            p=na,
+            t=1,
             h=hidden_size * num_model_layers,
+            v=1,
+            actions=planning_steps,
+            probs=planning_steps * na,
+            states=planning_steps * embedding_size,
             model_loss=1,
         )
 
@@ -103,6 +107,7 @@ class Recurrence(nn.Module):
 
     def inner_loop(self, inputs, rnn_hxs):
         T, N, D = inputs.shape
+        I = torch.arange(N, device=rnn_hxs.device)
         inputs, actions = torch.split(
             inputs.detach(), [D - self.action_size, self.action_size], dim=2
         )
@@ -140,7 +145,6 @@ class Recurrence(nn.Module):
             probs = torch.stack(probs, dim=1)
             states = torch.stack(states, dim=1)
         else:
-            state = hx.state
             a = hx.a
             probs = hx.probs
             states = hx.states.view(N, self.planning_steps, -1)
@@ -153,10 +157,12 @@ class Recurrence(nn.Module):
             model_loss = F.mse_loss(states[:, t], x.detach(), reduction="none").mean(1)
             yield RecurrentState(
                 a=a,
-                probs=probs,
-                v=v,
-                state=state,
+                p=probs[I, hx.t.long().squeeze(1)],
+                t=hx.t + 1,
                 h=hx.h,
+                v=v,
+                actions=a,
+                probs=probs,
                 states=states,
                 model_loss=model_loss,
             )
