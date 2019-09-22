@@ -25,7 +25,9 @@ class Recurrence(nn.Module):
         activation,
         planning_steps,
         critic_per_step,
+        always_plan,
     ):
+        self.always_plan = always_plan
         self.input_sections = Obs(
             *[int(np.prod(s.shape)) for s in observation_space.spaces.values()]
         )
@@ -113,6 +115,7 @@ class Recurrence(nn.Module):
         new = torch.all(rnn_hxs == 0, dim=-1)
         if new.any():
             assert new.all()
+        if new.any() or self.always_plan:
             h = (
                 hx.h.view(N, self.model.num_layers, self.model.hidden_size)
                 .transpose(0, 1)

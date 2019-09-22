@@ -108,6 +108,7 @@ def blocks_world_cli():
     planner_parser = parsers.agent.add_argument_group("planner_args")
     planner_parser.add_argument("--num-model-layers", type=int)
     planner_parser.add_argument("--num-embedding-layers", type=int)
+    planner_parser.add_argument("--always-plan", action="store_true")
     dnc_parser = parsers.agent.add_argument_group("dnc_args")
     dnc_parser.add_argument("--num-slots", type=int)
     dnc_parser.add_argument("--slot-size", type=int)
