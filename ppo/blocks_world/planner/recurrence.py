@@ -136,5 +136,5 @@ class Recurrence(nn.Module):
             probs = hx.probs
 
         for t in range(T):
-            v = self.critic(self.embed2(self.embed1(inputs[0])))
+            v = self.critic(self.embed2(self.embed1(inputs[t])))
             yield RecurrentState(a=a, probs=probs, v=v, state=state, h=hx.h)
