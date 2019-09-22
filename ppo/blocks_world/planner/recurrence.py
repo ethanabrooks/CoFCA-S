@@ -25,6 +25,7 @@ class Recurrence(nn.Module):
         embedding_size,
         activation,
         planning_steps,
+        critic_per_step,
     ):
         self.input_sections = Obs(
             *[int(np.prod(s.shape)) for s in observation_space.spaces.values()]
@@ -34,6 +35,7 @@ class Recurrence(nn.Module):
         na = action_space.nvec.max()
         super().__init__()
         self.action_size = planning_steps
+        self.critic_per_step = critic_per_step
 
         self.state_sizes = RecurrentState(
             a=planning_steps,
@@ -136,5 +138,7 @@ class Recurrence(nn.Module):
             probs = hx.probs
 
         for t in range(T):
-            v = self.critic(self.embed2(self.embed1(inputs[t])))
+            v = self.critic(
+                self.embed2(self.embed1(inputs[t if self.critic_per_step else 0]))
+            )
             yield RecurrentState(a=a, probs=probs, v=v, state=state, h=hx.h)
