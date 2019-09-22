@@ -2,16 +2,15 @@ from collections import namedtuple
 
 import numpy as np
 import torch
-from gym.spaces import Box
 from torch import nn as nn
+import torch.nn.functional as F
 
 from ppo.blocks_world.planner.env import Obs
 from ppo.distributions import Categorical, FixedCategorical
 from ppo.layers import Flatten
 from ppo.utils import init_
 
-RecurrentState = namedtuple("RecurrentState", "a probs v state h ")
-# "planned_probs plan v t state h model_loss"
+RecurrentState = namedtuple("RecurrentState", "a probs v state states h model_loss")
 
 
 class Recurrence(nn.Module):
@@ -34,7 +33,7 @@ class Recurrence(nn.Module):
         no = observation_space.spaces["obs"].nvec.max()
         na = action_space.nvec.max()
         super().__init__()
-        self.action_size = planning_steps
+        self.action_size = self.planning_steps = planning_steps
         self.critic_per_step = critic_per_step
 
         self.state_sizes = RecurrentState(
@@ -42,7 +41,9 @@ class Recurrence(nn.Module):
             v=1,
             probs=planning_steps * na,
             state=embedding_size,
+            states=planning_steps * embedding_size,
             h=hidden_size * num_model_layers,
+            model_loss=1,
         )
 
         # networks
@@ -120,8 +121,10 @@ class Recurrence(nn.Module):
 
             A = actions.long()
             state = self.embed2(self.embed1(inputs[0]))
+            states = []
             probs = []
             for t in range(self.action_size):
+                states.append(state)
                 dist = FixedCategorical(logits=self.actor(state))
                 self.sample_new(A[0, :, t], dist)
                 probs.append(dist.probs)
@@ -132,13 +135,25 @@ class Recurrence(nn.Module):
                 state = self.embed2(hn.squeeze(0))
             a = A[0]
             probs = torch.stack(probs, dim=1)
+            states = torch.stack(states, dim=1)
         else:
             state = hx.state
             a = hx.a
             probs = hx.probs
+            states = hx.states.view(N, self.planning_steps, -1)
 
         for t in range(T):
+            x = self.embed2(self.embed1(inputs[t]))
             v = self.critic(
-                self.embed2(self.embed1(inputs[t if self.critic_per_step else 0]))
+                x if self.critic_per_step else self.embed2(self.embed1(inputs[0]))
             )
-            yield RecurrentState(a=a, probs=probs, v=v, state=state, h=hx.h)
+            model_loss = F.mse_loss(states[:, t], x.detach(), reduction="none").mean(1)
+            yield RecurrentState(
+                a=a,
+                probs=probs,
+                v=v,
+                state=state,
+                h=hx.h,
+                states=states,
+                model_loss=model_loss,
+            )
