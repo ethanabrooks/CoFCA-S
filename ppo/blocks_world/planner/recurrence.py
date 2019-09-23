@@ -151,18 +151,17 @@ class Recurrence(nn.Module):
             probs = hx.probs.view(N, self.planning_steps, -1)
             states = hx.states.view(N, self.planning_steps, -1)
 
-        index = hx.index
         for t in range(T):
-            i = int(torch.mean(index))
+            index = hx.index + t
+            i = int(index.mean())
             x = self.embed2(self.embed1(inputs[t]))
             v = self.critic(x)
             model_loss = F.mse_loss(states[:, t], x.detach(), reduction="none").mean(1)
             a = input_actions[t].where(input_actions[t] >= 0, recurrent_actions[:, i])
-            index += 1
             yield RecurrentState(
                 a=a,
                 p=probs[:, i],
-                index=index,
+                index=index + 1,
                 v=v,
                 actions=recurrent_actions,
                 probs=probs,
