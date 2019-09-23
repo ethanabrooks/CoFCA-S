@@ -26,9 +26,9 @@ class Recurrence(nn.Module):
         embedding_size,
         activation,
         planning_steps,
-        always_plan,
+        plan_prob,
     ):
-        self.always_plan = always_plan
+        self.plan_prob = plan_prob
         self.input_sections = Obs(
             *[int(np.prod(s.shape)) for s in observation_space.spaces.values()]
         )
@@ -107,7 +107,8 @@ class Recurrence(nn.Module):
         inputs, input_actions = torch.split(
             inputs.detach(), [D - self.action_size, self.action_size], dim=2
         )
-        inputs = self.parse_inputs(inputs).obs.long()
+        inputs = self.parse_inputs(inputs)
+        obs = inputs.obs.long()
 
         hx = self.parse_hidden(rnn_hxs)
         for _x in hx:
@@ -116,7 +117,11 @@ class Recurrence(nn.Module):
         new = torch.all(rnn_hxs == 0, dim=-1)
         if new.any():
             assert new.all()
-        if new.any() or self.always_plan:
+        evaluating = inputs.evaluating.bool()
+        if evaluating.any():
+            assert evaluating.all()
+        plan = new.any() or evaluating.any() or np.random.rand() < self.plan_prob
+        if plan:
             h = (
                 torch.zeros(
                     N,
@@ -128,7 +133,7 @@ class Recurrence(nn.Module):
                 .contiguous()
             )
 
-            state = self.embed2(self.embed1(inputs[0]))
+            state = self.embed2(self.embed1(obs[0]))
             new_actions = []
             states = []
             probs = []
@@ -154,7 +159,7 @@ class Recurrence(nn.Module):
         for t in range(T):
             index = hx.index + t
             i = int(index.mean())
-            x = self.embed2(self.embed1(inputs[t]))
+            x = self.embed2(self.embed1(obs[t]))
             v = self.critic(x)
             model_loss = F.mse_loss(states[:, t], x.detach(), reduction="none").mean(1)
             a = input_actions[t].where(input_actions[t] >= 0, recurrent_actions[:, i])

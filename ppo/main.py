@@ -19,7 +19,9 @@ def build_parser():
     return parsers
 
 
-def train_blocks_world(increment_curriculum_at, planning_steps, baseline, **_kwargs):
+def train_blocks_world(
+    increment_curriculum_at, time_limit, planning_steps, baseline, **_kwargs
+):
     class TrainValues(Train):
         @staticmethod
         def make_env(
@@ -91,7 +93,7 @@ def train_blocks_world(increment_curriculum_at, planning_steps, baseline, **_kwa
                     recurrence=recurrence,
                 )
 
-    TrainValues(**_kwargs).run()
+    TrainValues(**_kwargs, time_limit=planning_steps).run()
 
 
 def blocks_world_cli():
@@ -104,10 +106,10 @@ def blocks_world_cli():
     parsers.env.add_argument("--extra-time", type=int, default=0)
     parsers.agent.add_argument("--embedding-size", type=int)
     parsers.agent.add_argument("--model-loss-coef", type=float)
+    parsers.agent.add_argument("--plan-prob", type=float)
     planner_parser = parsers.agent.add_argument_group("planner_args")
     planner_parser.add_argument("--num-model-layers", type=int)
     planner_parser.add_argument("--num-embedding-layers", type=int)
-    planner_parser.add_argument("--always-plan", action="store_true")
     dnc_parser = parsers.agent.add_argument_group("dnc_args")
     dnc_parser.add_argument("--num-slots", type=int)
     dnc_parser.add_argument("--slot-size", type=int)

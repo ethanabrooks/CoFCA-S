@@ -10,7 +10,7 @@ from ppo.blocks_world.constraints import SideBySide, Stacked
 
 Last = namedtuple("Last", "action reward terminal go")
 Curriculum = namedtuple("Curriculum", "n_blocks search_depth")
-Obs = namedtuple("Obs", "search_depth obs")
+Obs = namedtuple("Obs", "evaluating search_depth obs")
 
 
 class Env(gym.Env):
@@ -26,6 +26,22 @@ class Env(gym.Env):
         self.n_rows = self.n_cols = n_cols
         self.n_grids = n_cols ** 2
         self.random, self.seed = seeding.np_random(seed)
+        self.int_to_tuple = [(0, 0)]
+        self.int_to_tuple.extend(itertools.permutations(range(self.n_cols), 2))
+        # self.action_space = gym.spaces.MultiDiscrete(
+        #     [len(self.int_to_tuple)] * planning_steps
+        # )
+        self.action_space = gym.spaces.Discrete(len(self.int_to_tuple))
+        self.observation_space = gym.spaces.Dict(
+            Obs(
+                evaluating=gym.spaces.Discrete(2),
+                search_depth=gym.spaces.Discrete(planning_steps + 1),
+                obs=gym.spaces.MultiDiscrete(
+                    np.array([7] * (self.n_rows * self.n_cols * 2))
+                ),
+            )._asdict()
+        )
+
         self.columns = None
         self.constraints = None
         self.n_blocks = None
@@ -35,20 +51,7 @@ class Env(gym.Env):
         self.last = None
         self.solved = None
         self.t = None
-        self.int_to_tuple = [(0, 0)]
-        self.int_to_tuple.extend(itertools.permutations(range(self.n_cols), 2))
-        # self.action_space = gym.spaces.MultiDiscrete(
-        #     [len(self.int_to_tuple)] * planning_steps
-        # )
-        self.action_space = gym.spaces.Discrete(len(self.int_to_tuple))
-        self.observation_space = gym.spaces.Dict(
-            Obs(
-                search_depth=gym.spaces.Discrete(planning_steps + 1),
-                obs=gym.spaces.MultiDiscrete(
-                    np.array([7] * (self.n_rows * self.n_cols * 2))
-                ),
-            )._asdict()
-        )
+        self.evaluating = None
 
         def curriculum_generator():
             last_curriculum = Curriculum(
@@ -78,6 +81,12 @@ class Env(gym.Env):
         self.curriculum_iterator = curriculum_generator()
         for _ in range(curriculum_level + 1):
             self.curriculum = next(self.curriculum_iterator)
+
+    def evaluate(self):
+        self.evaluating = True
+
+    def train(self):
+        self.evaluating = False
 
     def valid(self, _from, _to, columns=None):
         if columns is None:
@@ -159,6 +168,7 @@ class Env(gym.Env):
                 for x in r
             ],
             search_depth=self.search_depth,
+            evaluating=int(self.evaluating),
         )._asdict()
         assert self.observation_space.contains(obs)
         return obs
