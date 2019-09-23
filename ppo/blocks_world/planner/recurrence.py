@@ -10,7 +10,9 @@ from ppo.distributions import FixedCategorical
 from ppo.layers import Flatten
 from ppo.utils import init_
 
-RecurrentState = namedtuple("RecurrentState", "a p t v actions probs states model_loss")
+RecurrentState = namedtuple(
+    "RecurrentState", "a p v index actions probs states model_loss"
+)
 
 
 class Recurrence(nn.Module):
@@ -40,7 +42,7 @@ class Recurrence(nn.Module):
         self.state_sizes = RecurrentState(
             a=1,
             p=na,
-            t=1,
+            index=1,
             v=1,
             actions=planning_steps,
             probs=planning_steps * na,
@@ -71,8 +73,7 @@ class Recurrence(nn.Module):
 
     def print(self, t, *args, **kwargs):
         if self.debug:
-            if type(t) == torch.Tensor:
-                t = (t * 10.0).round() / 10.0
+            torch.set_printoptions(precision=2)
             print(t, *args, **kwargs)
 
     @staticmethod
@@ -131,7 +132,7 @@ class Recurrence(nn.Module):
             new_actions = []
             states = []
             probs = []
-            for t in range(self.planning_steps):
+            for i in range(self.planning_steps):
                 states.append(state)
                 dist = FixedCategorical(logits=self.actor(state))
                 new_actions.append(dist.sample())
@@ -150,16 +151,18 @@ class Recurrence(nn.Module):
             probs = hx.probs.view(N, self.planning_steps, -1)
             states = hx.states.view(N, self.planning_steps, -1)
 
-        i = int(hx.t.mean())
+        index = hx.index
         for t in range(T):
+            i = int(torch.mean(index))
             x = self.embed2(self.embed1(inputs[t]))
             v = self.critic(x)
             model_loss = F.mse_loss(states[:, t], x.detach(), reduction="none").mean(1)
             a = input_actions[t].where(input_actions[t] >= 0, recurrent_actions[:, i])
+            index += 1
             yield RecurrentState(
                 a=a,
                 p=probs[:, i],
-                t=hx.t + 1,
+                index=index,
                 v=v,
                 actions=recurrent_actions,
                 probs=probs,
