@@ -9,6 +9,7 @@ from ppo.utils import REVERSE, RESET
 
 Subtask = namedtuple("Subtask", "interaction object")
 Obs = namedtuple("Obs", "obs subtasks")
+Last = namedtuple("Last", "reward terminal")
 
 
 class Env(gym.Env):
@@ -31,6 +32,7 @@ class Env(gym.Env):
         self.subtask = None
         self.subtasks = None
         self.subtask_idx = None
+        self.last = None
         if implement_lower_level:
             self.action_space = gym.spaces.Discrete(n_subtasks)
         else:
@@ -57,6 +59,7 @@ class Env(gym.Env):
         pos = tuple(self.pos)
         if self.implement_lower_level:
             if action != self.subtask_idx:
+                self.last = Last(reward=-1, terminal=True)
                 return self.get_observation(), -1, True, {}
             subtask = self.subtasks[action]
             if pos in self.objects and self.objects[pos] == subtask.object:
@@ -92,6 +95,7 @@ class Env(gym.Env):
                 del self.objects[pos]
             if interaction == "transform":
                 self.objects[pos] = len(self.object_types)
+        self.last = Last(reward=r, terminal=t)
         return self.get_observation(), r, t, {}
 
     def reset(self):
@@ -105,6 +109,7 @@ class Env(gym.Env):
             for o, i in zip(list(self.objects.values()), interactions)
         ]
         self.subtask_idx = 0
+        self.last = None
         return self.get_observation()
 
     def get_observation(self):
@@ -133,6 +138,7 @@ class Env(gym.Env):
                     interaction=self.interactions[subtask.interaction],
                 ),
             )
+        print(self.last)
         if pause:
             input("pause")
 
