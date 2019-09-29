@@ -8,10 +8,14 @@ from gym.utils import seeding
 from ppo.utils import REVERSE, RESET
 
 Subtask = namedtuple("Subtask", "object interaction")
+Obs = namedtuple("Obs", "obs subtasks")
 
 
 class Env(gym.Env):
-    def __init__(self, seed, height, width, n_subtasks, n_objects):
+    def __init__(
+        self, seed, height, width, n_subtasks, n_objects, implement_lower_level=False
+    ):
+        self.implement_lower_level = implement_lower_level
         self.transitions = np.array(
             list(chain(permutations(range(2), 2), permutations(range(-1, 1), 2)))
         )
@@ -26,9 +30,27 @@ class Env(gym.Env):
         self.objects = None
         self.subtask = None
         self.subtasks = None
+        self.subtask_idx = None
 
     def step(self, action: int):
         action = int(action)
+        pos = tuple(self.pos)
+        if self.implement_lower_level:
+            subtask = self.subtasks[action]
+            if pos in self.objects and self.objects[pos] == subtask.object:
+                action = len(self.transitions) + subtask.interaction
+            else:
+                goals = [
+                    pos for pos, obj in self.objects.items() if obj == subtask.object
+                ]
+                if not goals:
+                    action = self.random.choice(len(self.transitions))
+                else:
+                    goals = np.array(goals)
+                    new_pos = self.pos + self.transitions
+                    vectors = np.expand_dims(goals, 0) - np.expand_dims(new_pos, 1)
+                    distances = np.abs(vectors).sum(-1)
+                    action = distances.min(1).argmin()
         t = r = 0
         if action < len(self.transitions):
             self.pos += self.transitions[action]
@@ -36,15 +58,13 @@ class Env(gym.Env):
             interaction = "visit"
         else:
             interaction = self.interactions[action - len(self.transitions)]
-        pos = tuple(self.pos)
         if pos in self.objects:
-            if self.subtask == Subtask(
+            if self.subtasks[self.subtask_idx] == Subtask(
                 interaction=self.interactions.index(interaction),
                 object=self.objects[pos],
             ):
-                try:
-                    self.subtask = next(self.subtasks)
-                except StopIteration:
+                self.subtask_idx += 1
+                if self.subtask_idx == len(self.subtasks):
                     t = r = 1
             if interaction == "pick-up":
                 del self.objects[pos]
@@ -58,33 +78,35 @@ class Env(gym.Env):
         object_types = self.random.choice(len(self.object_types), len(objects))
         self.objects = dict(zip(map(tuple, objects), object_types))
         interactions = self.random.choice(len(self.interactions), len(objects))
-        self.subtasks = (
+        self.subtasks = [
             Subtask(object=o, interaction=i)
             for o, i in zip(list(self.objects.values()), interactions)
-        )
-        self.subtask = next(self.subtasks)
+        ]
+        self.subtask_idx = 0
         return self.get_observation()
 
     def get_observation(self):
         top_down = np.zeros(self.dims, dtype=int)
         for pos, obj in self.objects.items():
             top_down[pos] = obj + 1
-        return top_down
+        return Obs(obs=top_down, subtasks=self.subtasks)
 
     def render(self, mode="human", pause=True):
-        top_down = self.get_observation()
+        top_down = self.get_observation().obs
         top_down = self.icons[top_down]
         for i, row in enumerate(top_down):
             print("|", end="")
             for j, x in enumerate(row):
                 print(REVERSE + x + RESET if (i, j) == tuple(self.pos) else x, end="")
             print("|")
-        print(
-            Subtask(
-                object=self.object_types[self.subtask.object],
-                interaction=self.interactions[self.subtask.interaction],
+        for i, subtask in enumerate(self.subtasks):
+            print(
+                ">" if i == self.subtask_idx else " ",
+                Subtask(
+                    object=self.object_types[subtask.object],
+                    interaction=self.interactions[subtask.interaction],
+                ),
             )
-        )
         if pause:
             input("pause")
 
@@ -100,11 +122,13 @@ if __name__ == "__main__":
     parser.add_argument("--width", default=4, type=int)
     parser.add_argument("--n-subtasks", default=4, type=int)
     parser.add_argument("--n-objects", default=4, type=int)
+    parser.add_argument("--implement-lower-level", action="store_true")
     args = hierarchical_parse_args(parser)
 
     def action_fn(string):
+        characters = "0123456789" if args["implement_lower_level"] else "dswaeq"
         try:
-            return "dswaeq".index(string)
+            return characters.index(string)
         except ValueError:
             return
 
