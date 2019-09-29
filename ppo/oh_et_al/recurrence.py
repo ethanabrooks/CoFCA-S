@@ -46,19 +46,21 @@ class Recurrence(nn.Module):
         self.action_size = 1
         self.debug = debug
         self.hidden_size = hidden_size
-        self.register_buffer(
-            "subtask_floor",
-            torch.tensor([0] + list(self.obs_spaces.subtasks.nvec[0, :-1])),
-        )
 
         # networks
-        self.embeddings = nn.EmbeddingBag(
-            int(self.obs_spaces.subtasks.nvec[0].sum()), hidden_size
+        self.subtask_embeddings = nn.Embedding(
+            int(self.obs_spaces.subtasks.nvec.max()), hidden_size
+        )
+        self.obs_embeddings = nn.Embedding(
+            int(self.obs_spaces.obs.nvec.max()), hidden_size
         )
 
-        # f
-        in_size = self.obs_sections.obs + hidden_size
-        self.gru = nn.GRU(in_size, hidden_size, num_layers)
+        self.conv = nn.Conv2d(2 * hidden_size, 2 * hidden_size, kernel_size=1)
+        self.gru = nn.GRU(
+            hidden_size * (self.obs_sections.obs + self.obs_spaces.subtasks.shape[1]),
+            hidden_size,
+            num_layers,
+        )
         self.critic = init_(nn.Linear(hidden_size, 1))
         self.phi_update = init_(nn.Linear(hidden_size, 1))
         self.state_sizes = RecurrentState(
@@ -102,17 +104,15 @@ class Recurrence(nn.Module):
     def inner_loop(self, inputs, rnn_hxs):
         T, N, D = inputs.shape
         inputs, actions = torch.split(
-            inputs.detach(), [D - self.action_size, self.action_size], dim=2
+            inputs.detach().long(), [D - self.action_size, self.action_size], dim=2
         )
 
         # parse non-action inputs
         inputs = self.parse_inputs(inputs)
 
         # build memory
-        n_subtasks = self.obs_spaces.subtasks.shape[0]
-        subtasks = inputs.subtasks[0].long().view(N * n_subtasks, 2)
-        M = self.embeddings(subtasks + self.subtask_floor).view(
-            N, n_subtasks, self.hidden_size
+        M = self.subtask_embeddings(inputs.subtasks[0]).view(
+            N, self.obs_spaces.subtasks.shape[0], -1
         )
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
@@ -126,11 +126,16 @@ class Recurrence(nn.Module):
         )
         p = hx.p
         p[new_episode, 0] = 1
-        A = torch.cat([actions, hx.a.unsqueeze(0)], dim=0).long().squeeze(2)
+        A = torch.cat([actions, hx.a.unsqueeze(0).long()], dim=0).squeeze(2)
+        d, *dims = self.obs_spaces.obs.shape
 
         for t in range(T):
             r = (p.unsqueeze(1) @ M).squeeze(1)
-            gru_inputs = torch.cat([inputs.obs[t], r], dim=-1).unsqueeze(0)
+            obs = inputs.obs[t].view(N, d, *dims)
+            embedded = self.obs_embeddings(obs)
+            conv_in = embedded.permute(0, 1, 4, 2, 3).reshape(N, -1, *dims)
+            conv_out = self.conv(conv_in)
+            gru_inputs = torch.cat([conv_out.view(N, -1), r], dim=-1).unsqueeze(0)
             hn, h = self.gru(gru_inputs, h)
             c = self.phi_update(hn.squeeze(0)).sigmoid()
             p = (1 - c) * p + c * torch.roll(p, shifts=1)
