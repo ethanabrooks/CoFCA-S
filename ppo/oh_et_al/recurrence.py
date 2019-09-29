@@ -99,6 +99,7 @@ class Recurrence(nn.Module):
 
     def print(self, *args, **kwargs):
         if self.debug:
+            torch.set_printoptions(precision=2, sci_mode=False)
             print(*args, **kwargs)
 
     def inner_loop(self, inputs, rnn_hxs):
@@ -138,7 +139,11 @@ class Recurrence(nn.Module):
             gru_inputs = torch.cat([conv_out.view(N, -1), r], dim=-1).unsqueeze(0)
             hn, h = self.gru(gru_inputs, h)
             c = self.phi_update(hn.squeeze(0)).sigmoid()
-            p = (1 - c) * p + c * torch.roll(p, shifts=1)
+            self.print(p)
+            self.print(c)
+            p1 = torch.roll(F.pad(p, (0, 1)), shifts=1)  # pad for overflow
+            p2 = p1[:, : p.size(1)] + p * p1[:, -1:]  # redistribute overflow
+            p = (1 - c) * p + c * p2
             dist = FixedCategorical(p)
             self.sample_new(A[t], dist)
             yield RecurrentState(
