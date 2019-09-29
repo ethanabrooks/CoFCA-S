@@ -1,13 +1,9 @@
-import numpy as np
+import ppo.maze.baselines
 from gym.wrappers import TimeLimit
 from rl_utils import hierarchical_parse_args
 
 import ppo.arguments
-import ppo.bandit.baselines.oh_et_al
-import ppo.maze.baselines
 from ppo import gntm, oh_et_al
-from ppo.agent import Agent
-from ppo.blocks_world import dnc, planner
 from ppo.train import Train
 
 
