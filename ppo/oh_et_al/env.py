@@ -58,9 +58,9 @@ class Env(gym.Env):
         action = int(action)
         pos = tuple(self.pos)
         if self.implement_lower_level:
-            if action != self.subtask_idx:
-                self.last = Last(reward=-1, terminal=True)
-                return self.get_observation(), -1, True, {}
+            # if action != self.subtask_idx:
+            # self.last = Last(reward=-1, terminal=True)
+            # return self.get_observation(), -1, True, {}
             subtask = self.subtasks[action]
             if pos in self.objects and self.objects[pos] == subtask.object:
                 action = len(self.transitions) + subtask.interaction
