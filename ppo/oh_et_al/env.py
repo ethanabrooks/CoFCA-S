@@ -76,7 +76,7 @@ class Env(gym.Env):
                     vectors = np.expand_dims(goals, 0) - np.expand_dims(new_pos, 1)
                     distances = np.abs(vectors).sum(-1)
                     action = distances.min(1).argmin()
-        t = r = 0
+        r = 0
         if action < len(self.transitions):
             self.pos += self.transitions[action]
             self.pos = np.clip(self.pos, (0, 0), self.dims - 1)
@@ -90,13 +90,13 @@ class Env(gym.Env):
             ):
                 self.subtask_idx += 1
                 if self.subtask_idx == len(self.subtasks):
-                    t = r = 1
+                    r = 1
             if interaction == "pick-up":
                 del self.objects[pos]
             if interaction == "transform":
                 self.objects[pos] = len(self.object_types)
-        self.last = Last(reward=r, terminal=t)
-        return self.get_observation(), r, t, {}
+        self.last = Last(reward=r, terminal=bool(r))
+        return self.get_observation(), r, bool(r), {}
 
     def reset(self):
         ints = self.random.choice(np.prod(self.dims), self.n_objects + 1, replace=False)
