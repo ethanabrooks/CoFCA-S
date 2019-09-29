@@ -49,17 +49,17 @@ class RolloutStorage(object):
             num_steps + 1, num_processes, recurrent_hidden_state_size
         )
 
-        self.rewards = torch.zeros(num_steps, num_processes, 1)
-        self.value_preds = torch.zeros(num_steps + 1, num_processes, 1)
-        self.returns = torch.zeros(num_steps + 1, num_processes, 1)
-        self.action_log_probs = torch.zeros(num_steps, num_processes, 1)
+        self.rewards = torch.zeros(num_steps, num_processes, 2)
+        self.value_preds = torch.zeros(num_steps + 1, num_processes, 2)
+        self.returns = torch.zeros(num_steps + 1, num_processes, 2)
+        self.action_log_probs = torch.zeros(num_steps, num_processes, 2)
 
         self.actions = torch.zeros(
             num_steps, num_processes, *buffer_shape(action_space)
         )
         if isinstance(action_space, (spaces.Discrete, spaces.MultiDiscrete)):
             self.actions = self.actions.long()
-        self.masks = torch.ones(num_steps + 1, num_processes, 1)
+        self.masks = torch.ones(num_steps + 1, num_processes, 2)
 
         self.num_steps = num_steps
         self.step = 0
@@ -84,13 +84,14 @@ class RolloutStorage(object):
         rewards,
         masks,
     ):
+        B = actions[:, 1:]
         self.obs[self.step + 1].copy_(obs)
         self.recurrent_hidden_states[self.step + 1].copy_(recurrent_hidden_states)
         self.actions[self.step].copy_(actions)
         self.action_log_probs[self.step].copy_(action_log_probs)
         self.value_preds[self.step].copy_(values)
         self.rewards[self.step].copy_(rewards.unsqueeze(dim=1))
-        self.masks[self.step + 1].copy_(masks)
+        self.masks[self.step + 1].copy_(torch.cat([masks, B], dim=-1))
         self.step = (self.step + 1) % self.num_steps
 
     def after_update(self):

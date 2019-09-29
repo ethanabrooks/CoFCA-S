@@ -9,7 +9,7 @@ import ppo.oh_et_al
 from ppo.distributions import FixedCategorical, Categorical
 from ppo.utils import init_
 
-RecurrentState = namedtuple("RecurrentState", "a a_probs b b_probs v h p")
+RecurrentState = namedtuple("RecurrentState", "a a_probs b b_probs v0 v1 h p")
 
 
 def batch_conv1d(inputs, weights):
@@ -64,7 +64,14 @@ class Recurrence(nn.Module):
             hidden_size,
             num_layers,
         )
-        self.critic = init_(nn.Linear(hidden_size, 1))
+        self.critic0 = init_(nn.Linear(hidden_size, 1))
+        self.critic1 = init_(
+            nn.Linear(
+                hidden_size
+                * (self.obs_sections.obs + self.obs_spaces.subtasks.shape[1]),
+                1,
+            )
+        )
         self.actor = Categorical(
             hidden_size * (self.obs_sections.obs + self.obs_spaces.subtasks.shape[1]),
             self.act_spaces.action.n,
@@ -76,7 +83,8 @@ class Recurrence(nn.Module):
             b=1,
             b_probs=self.act_spaces.beta.n,
             p=1,
-            v=1,
+            v0=1,
+            v1=1,
             h=num_layers * hidden_size,
         )
 
@@ -163,7 +171,8 @@ class Recurrence(nn.Module):
                 b=B[t],
                 a_probs=a_dist.probs,
                 b_probs=b_dist.probs,
-                v=self.critic(hn.squeeze(0)),
+                v0=self.critic0(hn.squeeze(0)),
+                v1=self.critic1(actor_inputs),
                 h=h.transpose(0, 1),
                 p=p,
             )
