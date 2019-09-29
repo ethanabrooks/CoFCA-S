@@ -26,7 +26,7 @@ class Env(gym.Env):
         self.interactions = ["pick-up", "transform", "visit"]
         self.object_types = ["cat", "sheep", "pig", "greenbot"]
         self.icons = np.array([" "] + [s[0] for s in self.object_types] + ["i"])
-        self.n_objects = n_objects
+        self.n_objects = n_subtasks
         self.n_subtasks = n_subtasks
         self.pos = None
         self.objects = None
@@ -124,7 +124,7 @@ class Env(gym.Env):
             top_down[(0, *pos)] = obj + 1
         top_down[(1, *self.pos)] = 1
 
-        obs = Obs(obs=top_down, subtasks=self.subtasks)._asdict()
+        obs = Obs(obs=top_down, subtasks=np.array(self.subtasks))._asdict()
         assert self.observation_space.contains(obs)
         return obs
 
