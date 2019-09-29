@@ -13,7 +13,6 @@ def cli():
 
 def run(env, action_fn):
     s = env.reset()
-    print(env.plan(trajectory=[env.columns], action_list=[]))
     while True:
         env.render(pause=False)
         action = None
@@ -27,13 +26,10 @@ def run(env, action_fn):
         s, r, t, i = env.step(action)
         print("reward", r)
         if t:
-            if r == 1:
-                env.increment_curriculum()
             env.render(pause=False)
             print("resetting")
             time.sleep(0.5)
             env.reset()
-            print(env.plan(trajectory=[env.columns], action_list=[]))
             print()
 
 
