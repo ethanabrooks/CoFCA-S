@@ -2,8 +2,8 @@ from gym.wrappers import TimeLimit
 from rl_utils import hierarchical_parse_args
 
 import ppo.arguments
-from ppo import gntm, oh_et_al
-from ppo.train import Train
+from ppo import oh_et_al
+from ppo.oh_et_al.train import Train
 
 
 def build_parser():

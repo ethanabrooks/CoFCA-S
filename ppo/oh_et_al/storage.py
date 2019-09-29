@@ -49,15 +49,17 @@ class RolloutStorage(object):
             num_steps + 1, num_processes, recurrent_hidden_state_size
         )
 
-        self.rewards = torch.zeros(num_steps, num_processes, 2)
-        self.value_preds = torch.zeros(num_steps + 1, num_processes, 2)
-        self.returns = torch.zeros(num_steps + 1, num_processes, 2)
-        self.action_log_probs = torch.zeros(num_steps, num_processes, 2)
+        self.rewards = torch.zeros(num_steps, num_processes, 1)
+        self.value_preds = torch.zeros(num_steps + 1, num_processes, 1)
+        self.returns = torch.zeros(num_steps + 1, num_processes, 1)
+        self.action_log_probs = torch.zeros(num_steps, num_processes, 1)
 
-        self.actions = torch.zeros(num_steps, num_processes, 2)
+        self.actions = torch.zeros(
+            num_steps, num_processes, *buffer_shape(action_space)
+        )
         if isinstance(action_space, (spaces.Discrete, spaces.MultiDiscrete)):
             self.actions = self.actions.long()
-        self.masks = torch.ones(num_steps + 1, num_processes, 2)
+        self.masks = torch.ones(num_steps + 1, num_processes, 1)
 
         self.num_steps = num_steps
         self.step = 0
