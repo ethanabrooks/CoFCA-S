@@ -118,7 +118,7 @@ class Env(gym.Env):
         return obs
 
     def render(self, mode="human", pause=True):
-        top_down = self.get_observation().obs
+        top_down = Obs(**self.get_observation()).obs[0]
         top_down = self.icons[top_down]
         for i, row in enumerate(top_down):
             print("|", end="")
