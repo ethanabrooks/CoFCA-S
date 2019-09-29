@@ -7,7 +7,7 @@ from gym.utils import seeding
 
 from ppo.utils import REVERSE, RESET
 
-Subtask = namedtuple("Subtask", "object interaction")
+Subtask = namedtuple("Subtask", "interaction object")
 Obs = namedtuple("Obs", "obs subtasks")
 
 
@@ -31,11 +31,33 @@ class Env(gym.Env):
         self.subtask = None
         self.subtasks = None
         self.subtask_idx = None
+        if implement_lower_level:
+            self.action_space = gym.spaces.Discrete(n_subtasks)
+        else:
+            self.action_space = gym.spaces.Discrete(
+                len(self.transitions) + len(self.interactions)
+            )
+        self.observation_space = gym.spaces.Dict(
+            Obs(
+                obs=gym.spaces.MultiDiscrete(
+                    np.array([[[3 + len(self.object_types)]], [[2]]])
+                    * np.ones((2, *self.dims))
+                ),
+                subtasks=gym.spaces.MultiDiscrete(
+                    np.tile(
+                        np.array([[len(self.interactions), len(self.object_types)]]),
+                        (self.n_subtasks, 1),
+                    )
+                ),
+            )._asdict()
+        )
 
     def step(self, action: int):
         action = int(action)
         pos = tuple(self.pos)
         if self.implement_lower_level:
+            if action != self.subtask_idx:
+                return self.get_observation(), -1, True, {}
             subtask = self.subtasks[action]
             if pos in self.objects and self.objects[pos] == subtask.object:
                 action = len(self.transitions) + subtask.interaction
@@ -86,10 +108,14 @@ class Env(gym.Env):
         return self.get_observation()
 
     def get_observation(self):
-        top_down = np.zeros(self.dims, dtype=int)
+        top_down = np.zeros((2, *self.dims), dtype=int)
         for pos, obj in self.objects.items():
-            top_down[pos] = obj + 1
-        return Obs(obs=top_down, subtasks=self.subtasks)
+            top_down[(0, *pos)] = obj + 1
+        top_down[(1, *self.pos)] = 1
+
+        obs = Obs(obs=top_down, subtasks=self.subtasks)._asdict()
+        assert self.observation_space.contains(obs)
+        return obs
 
     def render(self, mode="human", pause=True):
         top_down = self.get_observation().obs
