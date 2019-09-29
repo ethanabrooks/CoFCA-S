@@ -1,4 +1,3 @@
-import ppo.maze.baselines
 from gym.wrappers import TimeLimit
 from rl_utils import hierarchical_parse_args
 
@@ -32,7 +31,7 @@ def train_oh_et_al(**_kwargs):
                 observation_space=envs.observation_space,
                 **agent_args,
             )
-            return gntm.Agent(entropy_coef=entropy_coef, recurrence=recurrence)
+            return oh_et_al.Agent(entropy_coef=entropy_coef, recurrence=recurrence)
 
     TrainOhEtAl(**_kwargs).run()
 

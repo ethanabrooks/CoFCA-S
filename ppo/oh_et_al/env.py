@@ -9,6 +9,7 @@ from ppo.utils import REVERSE, RESET
 
 Subtask = namedtuple("Subtask", "interaction object")
 Obs = namedtuple("Obs", "obs subtasks")
+Actions = namedtuple("Actions", "action goal")
 Last = namedtuple("Last", "reward terminal")
 
 
@@ -33,12 +34,14 @@ class Env(gym.Env):
         self.subtasks = None
         self.subtask_idx = None
         self.last = None
-        if implement_lower_level:
-            self.action_space = gym.spaces.Discrete(n_subtasks)
-        else:
-            self.action_space = gym.spaces.Discrete(
-                len(self.transitions) + len(self.interactions)
-            )
+        self.action_space = gym.spaces.Dict(
+            Actions(
+                action=gym.spaces.Discrete(
+                    len(self.transitions) + len(self.interactions)
+                ),
+                goal=gym.spaces.Discrete(self.n_subtasks),
+            )._asdict()
+        )
         self.observation_space = gym.spaces.Dict(
             Obs(
                 obs=gym.spaces.MultiDiscrete(
@@ -54,10 +57,11 @@ class Env(gym.Env):
             )._asdict()
         )
 
-    def step(self, action: int):
-        action = int(action)
+    def step(self, action: tuple):
         pos = tuple(self.pos)
+        actions = Actions(*action)
         if self.implement_lower_level:
+            action = int(actions.goal)
             if action != self.subtask_idx:
                 self.last = Last(reward=-1, terminal=True)
                 return self.get_observation(), -1, True, {}
@@ -76,6 +80,8 @@ class Env(gym.Env):
                     vectors = np.expand_dims(goals, 0) - np.expand_dims(new_pos, 1)
                     distances = np.abs(vectors).sum(-1)
                     action = distances.min(1).argmin()
+        else:
+            action = int(actions.action)
         r = 0
         if action < len(self.transitions):
             self.pos += self.transitions[action]
