@@ -9,7 +9,7 @@ import ppo.oh_et_al
 from ppo.distributions import FixedCategorical, Categorical
 from ppo.utils import init_
 
-RecurrentState = namedtuple("RecurrentState", "a a_probs g g_probs v h p")
+RecurrentState = namedtuple("RecurrentState", "a a_probs b b_probs v h p")
 
 
 def batch_conv1d(inputs, weights):
@@ -69,13 +69,13 @@ class Recurrence(nn.Module):
             hidden_size * (self.obs_sections.obs + self.obs_spaces.subtasks.shape[1]),
             self.act_spaces.action.n,
         )
-        self.phi_update = init_(nn.Linear(hidden_size, 1))
+        self.phi_update = Categorical(hidden_size, 2)
         self.state_sizes = RecurrentState(
             a=1,
             a_probs=self.act_spaces.action.n,
-            g=1,
-            g_probs=self.act_spaces.goal.n,
-            p=self.obs_spaces.subtasks.shape[0],
+            b=1,
+            b_probs=self.act_spaces.beta.n,
+            p=1,
             v=1,
             h=num_layers * hidden_size,
         )
@@ -135,37 +135,34 @@ class Recurrence(nn.Module):
             .transpose(0, 1)
             .contiguous()
         )
-        p = hx.p
-        p[new_episode, 0] = 1
+        p = hx.p.long().squeeze(1)
+        p[new_episode] = 0
         A = actions[:, :, 0]
-        G = actions[:, :, 1]
+        B = actions[:, :, 1]
         d, *dims = self.obs_spaces.obs.shape
+        R = torch.arange(N, device=device)
 
         for t in range(T):
-            r = (p.unsqueeze(1) @ M).squeeze(1)
+            r = M[R, p]
             obs = inputs.obs[t].view(N, d, *dims)
             embedded = self.obs_embeddings(obs)
             conv_in = embedded.permute(0, 1, 4, 2, 3).reshape(N, -1, *dims)
             conv_out = self.conv(conv_in)
             gru_inputs = torch.cat([conv_out.view(N, -1), r], dim=-1).unsqueeze(0)
             hn, h = self.gru(gru_inputs, h)
-            c = self.phi_update(hn.squeeze(0)).sigmoid()
+            b_dist = self.phi_update(hn.squeeze(0))
             self.print(p)
-            self.print(c)
-            p1 = torch.roll(F.pad(p, [0, 1]), shifts=1)  # pad for overflow
-            p2 = p1[:, :-1] + p * p1[:, -1:]  # redistribute overflow
-            p = (1 - c) * p + c * p2
-            g_dist = FixedCategorical(p)
-            self.sample_new(G[t], g_dist)
-            g = M[torch.arange(N, device=device), G[t].clone()]
+            self.sample_new(B[t], b_dist)
+            p = torch.clamp(p + B[t], max=self.obs_spaces.subtasks.nvec.shape[0] - 1)
+            g = M[R, p]
             actor_inputs = torch.cat([conv_out.view(N, -1), g], dim=-1)
             a_dist = self.actor(actor_inputs)
             self.sample_new(A[t], a_dist)
             yield RecurrentState(
                 a=A[t],
-                g=G[t],
+                b=B[t],
                 a_probs=a_dist.probs,
-                g_probs=g_dist.probs,
+                b_probs=b_dist.probs,
                 v=self.critic(hn.squeeze(0)),
                 h=h.transpose(0, 1),
                 p=p,

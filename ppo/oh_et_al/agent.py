@@ -32,12 +32,12 @@ class Agent(ppo.agent.Agent, NNBase):
         rm = self.recurrent_module
         hx = rm.parse_hidden(all_hxs)
         a_dist = FixedCategorical(hx.a_probs)
-        g_dist = FixedCategorical(hx.g_probs)
-        action_log_probs = a_dist.log_probs(hx.a) + g_dist.log_probs(hx.g)
-        entropy = (a_dist.entropy() + g_dist.entropy()).mean()
+        b_dist = FixedCategorical(hx.b_probs)
+        action_log_probs = a_dist.log_probs(hx.a) + b_dist.log_probs(hx.b)
+        entropy = (a_dist.entropy() + b_dist.entropy()).mean()
         return AgentValues(
             value=hx.v,
-            action=torch.cat([hx.a, hx.g], dim=-1),
+            action=torch.cat([hx.a, hx.b], dim=-1),
             action_log_probs=action_log_probs,
             aux_loss=-self.entropy_coef * entropy,
             dist=None,

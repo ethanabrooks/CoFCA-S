@@ -9,7 +9,7 @@ from ppo.utils import REVERSE, RESET
 
 Subtask = namedtuple("Subtask", "interaction object")
 Obs = namedtuple("Obs", "obs subtasks")
-Actions = namedtuple("Actions", "action goal")
+Actions = namedtuple("Actions", "action beta")
 Last = namedtuple("Last", "reward terminal")
 
 
@@ -33,13 +33,14 @@ class Env(gym.Env):
         self.subtask = None
         self.subtasks = None
         self.subtask_idx = None
+        self.agent_idx = None
         self.last = None
         self.action_space = gym.spaces.Dict(
             Actions(
                 action=gym.spaces.Discrete(
                     len(self.transitions) + len(self.interactions)
                 ),
-                goal=gym.spaces.Discrete(self.n_subtasks),
+                beta=gym.spaces.Discrete(2),
             )._asdict()
         )
         self.observation_space = gym.spaces.Dict(
@@ -61,11 +62,12 @@ class Env(gym.Env):
         pos = tuple(self.pos)
         actions = Actions(*action)
         if self.implement_lower_level:
-            action = int(actions.goal)
-            if action != self.subtask_idx:
+            self.agent_idx += int(actions.beta)
+            self.agent_idx = min(self.agent_idx, self.n_subtasks - 1)
+            if self.agent_idx != self.subtask_idx:
                 self.last = Last(reward=-1, terminal=True)
                 return self.get_observation(), -1, True, {}
-            subtask = self.subtasks[action]
+            subtask = self.subtasks[self.agent_idx]
             if pos in self.objects and self.objects[pos] == subtask.object:
                 action = len(self.transitions) + subtask.interaction
             else:
@@ -115,6 +117,7 @@ class Env(gym.Env):
             for o, i in zip(list(self.objects.values()), interactions)
         ]
         self.subtask_idx = 0
+        self.agent_idx = 0
         self.last = None
         return self.get_observation()
 
