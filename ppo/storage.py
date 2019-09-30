@@ -49,10 +49,10 @@ class RolloutStorage(object):
             num_steps + 1, num_processes, recurrent_hidden_state_size
         )
 
-        self.rewards = torch.zeros(num_steps, num_processes, 1)
-        self.value_preds = torch.zeros(num_steps + 1, num_processes, 1)
-        self.returns = torch.zeros(num_steps + 1, num_processes, 1)
-        self.action_log_probs = torch.zeros(num_steps, num_processes, 1)
+        self.rewards = torch.zeros(num_steps, num_processes, 2)
+        self.value_preds = torch.zeros(num_steps + 1, num_processes, 2)
+        self.returns = torch.zeros(num_steps + 1, num_processes, 2)
+        self.action_log_probs = torch.zeros(num_steps, num_processes, 2)
 
         self.actions = torch.zeros(
             num_steps, num_processes, *buffer_shape(action_space)
@@ -60,9 +60,11 @@ class RolloutStorage(object):
         if isinstance(action_space, (spaces.Discrete, spaces.MultiDiscrete)):
             self.actions = self.actions.long()
         self.masks = torch.ones(num_steps + 1, num_processes, 1)
+        self.betas = torch.zeros_like(self.masks)
 
         self.num_steps = num_steps
         self.step = 0
+        self.value_product = None
 
     def to(self, device):
         self.obs = self.obs.to(device)
@@ -73,6 +75,7 @@ class RolloutStorage(object):
         self.action_log_probs = self.action_log_probs.to(device)
         self.actions = self.actions.to(device)
         self.masks = self.masks.to(device)
+        self.betas = self.betas.to(device)
 
     def insert(
         self,
@@ -92,11 +95,13 @@ class RolloutStorage(object):
         self.rewards[self.step].copy_(rewards.unsqueeze(dim=1))
         self.masks[self.step + 1].copy_(masks)
         self.step = (self.step + 1) % self.num_steps
+        self.betas[self.step + 1].copy_(actions[:, 1:])
 
     def after_update(self):
         self.obs[0].copy_(self.obs[-1])
         self.recurrent_hidden_states[0].copy_(self.recurrent_hidden_states[-1])
         self.masks[0].copy_(self.masks[-1])
+        self.betas[0].copy_(self.betas[-1])
 
     def compute_returns(self, next_value):
         if self.use_gae:
@@ -112,11 +117,27 @@ class RolloutStorage(object):
                 self.returns[step] = gae + self.value_preds[step]
         else:
             self.returns[-1] = next_value
+            value_products = []
+            end_of_episode_returns = []
+            value_product = torch.ones_like(self.value_preds[0, :, 0])
             for step in reversed(range(self.rewards.size(0))):
                 self.returns[step] = (
                     self.returns[step + 1] * self.gamma * self.masks[step + 1]
                     + self.rewards[step]
                 )
+                b = self.betas[step].squeeze(1)
+                value_product = value_product * (
+                    b * self.value_preds[step, :, 1] + (1 - b)
+                )
+                mask = self.masks[step].squeeze(1)
+                value_products.extend(value_product[mask == 0])
+                end_of_episode_returns.extend(self.returns[step, mask == 0, 0])
+                value_product = value_product * mask + (1 - mask)
+            if value_products:
+                self.value_product = torch.stack(value_products)
+                self.end_of_episode_returns = torch.stack(end_of_episode_returns)
+            else:
+                self.value_product = None
 
     def feed_forward_generator(
         self, advantages, num_batch

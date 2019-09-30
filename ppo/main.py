@@ -3,7 +3,7 @@ from rl_utils import hierarchical_parse_args
 
 import ppo.arguments
 from ppo import oh_et_al
-from ppo.oh_et_al.train import Train
+from ppo.train import Train
 
 
 def build_parser():
