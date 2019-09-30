@@ -50,9 +50,10 @@ class Agent(ppo.agent.Agent, NNBase):
     def _forward_gru(self, x, hxs, masks, action=None):
         if action is None:
             y = F.pad(x, [0, self.recurrent_module.action_size], "constant", -1)
+            masks = masks[:, :1]
         else:
             y = torch.cat([x, action.float()], dim=-1)
-        return super()._forward_gru(y, hxs, masks[:, :1])
+        return super()._forward_gru(y, hxs, masks)
 
     def get_value(self, inputs, rnn_hxs, masks):
         all_hxs, last_hx = self._forward_gru(
