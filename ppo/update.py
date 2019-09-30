@@ -82,7 +82,6 @@ class PPO:
                     loss += action_loss
 
                 if self.use_clipped_value_loss:
-
                     value_pred_clipped = sample.value_preds + (
                         values - sample.value_preds
                     ).clamp(-self.clip_param, self.clip_param)
@@ -97,6 +96,14 @@ class PPO:
                 loss += self.value_loss_coef * value_loss
 
                 self.optimizer.zero_grad()
+                if rollouts.value_product is not None:
+                    returns = rollouts.returns[:, :, 0]
+                    end_of_episode_returns = returns[rollouts.masks.squeeze(-1) == 0]
+                    value_product_loss = F.mse_loss(
+                        rollouts.value_product, end_of_episode_returns
+                    )
+                    logger.update(value_product_loss=value_product_loss)
+                    loss += value_product_loss
                 loss.backward()
 
                 nn.utils.clip_grad_norm_(self.agent.parameters(), self.max_grad_norm)
