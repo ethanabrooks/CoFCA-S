@@ -65,17 +65,8 @@ class Recurrence(nn.Module):
             num_layers,
         )
         self.critic0 = init_(nn.Linear(hidden_size, 1))
-        self.critic1 = init_(
-            nn.Linear(
-                hidden_size
-                * (self.obs_sections.obs + self.obs_spaces.subtasks.shape[1]),
-                1,
-            )
-        )
-        self.actor = Categorical(
-            hidden_size * (self.obs_sections.obs + self.obs_spaces.subtasks.shape[1]),
-            self.act_spaces.action.n,
-        )
+        self.critic1 = init_(nn.Linear(hidden_size, 1))
+        self.actor = Categorical(hidden_size, self.act_spaces.action.n)
         self.phi_update = Categorical(hidden_size, 2)
         self.state_sizes = RecurrentState(
             a=1,
@@ -158,18 +149,16 @@ class Recurrence(nn.Module):
             conv_out = self.conv(conv_in)
             gru_inputs = torch.cat([conv_out.view(N, -1), r], dim=-1).unsqueeze(0)
             hn, h = self.gru(gru_inputs, h)
+            v0 = self.critic0(hn.squeeze(0))
+            v1 = self.critic1(hn.squeeze(0))
+            a_dist = self.actor(hn.squeeze(0))
             b_dist = self.phi_update(hn.squeeze(0))
-            self.print(p)
+            self.sample_new(A[t], a_dist)
             self.sample_new(B[t], b_dist)
             p = torch.clamp(p + B[t], max=self.obs_spaces.subtasks.nvec.shape[0] - 1)
-            g = M[R, p]
-            actor_inputs = torch.cat([conv_out.view(N, -1), g], dim=-1)
-            a_dist = self.actor(actor_inputs)
-            self.sample_new(A[t], a_dist)
-            v0 = self.critic0(hn.squeeze(0))
-            v1 = self.critic1(actor_inputs)
             self.print(v0)
             self.print(v1)
+            self.print(p)
             yield RecurrentState(
                 a=A[t],
                 b=B[t],

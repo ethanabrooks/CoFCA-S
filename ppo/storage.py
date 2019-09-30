@@ -95,13 +95,12 @@ class RolloutStorage(object):
         self.rewards[self.step].copy_(rewards.unsqueeze(dim=1))
         self.masks[self.step + 1].copy_(masks)
         self.step = (self.step + 1) % self.num_steps
-        self.betas[self.step + 1].copy_(actions[:, 1:])
+        self.betas[self.step].copy_(actions[:, 1:])
 
     def after_update(self):
         self.obs[0].copy_(self.obs[-1])
         self.recurrent_hidden_states[0].copy_(self.recurrent_hidden_states[-1])
         self.masks[0].copy_(self.masks[-1])
-        self.betas[0].copy_(self.betas[-1])
 
     def compute_returns(self, next_value):
         if self.use_gae:
@@ -117,22 +116,30 @@ class RolloutStorage(object):
                 self.returns[step] = gae + self.value_preds[step]
         else:
             self.returns[-1] = next_value
-            value_products = []
-            end_of_episode_returns = []
-            value_product = torch.ones_like(self.value_preds[0, :, 0])
             for step in reversed(range(self.rewards.size(0))):
                 self.returns[step] = (
-                    self.returns[step + 1] * self.gamma * self.masks[step + 1]
-                    + self.rewards[step]
+                    self.rewards[step]
+                    + self.masks[step + 1] * self.gamma * self.returns[step + 1]
                 )
-                b = self.betas[step].squeeze(1)
+            end_of_episode_returns = []
+            value_products = []
+            value_product = torch.ones_like(self.value_preds[0, :, 0])
+            for step in range(self.rewards.size(0)):
+                c = ((1 - self.betas[step]) * self.masks[step + 1]).squeeze(1)
+
+                # multiply by v for beta or next-turn mask
                 value_product = value_product * (
-                    b * self.value_preds[step, :, 1] + (1 - b)
+                    c + (1 - c) * self.value_preds[step, :, 1]
                 )
+
+                # append values on new episode
                 mask = self.masks[step].squeeze(1)
+                end_of_episode_returns.extend(self.returns[step - 1, mask == 0, 0])
                 value_products.extend(value_product[mask == 0])
-                end_of_episode_returns.extend(self.returns[step, mask == 0, 0])
-                value_product = value_product * mask + (1 - mask)
+                value_product = mask * value_product + (
+                    1 - mask
+                )  # reset to 1 for new episode
+
             if value_products:
                 self.value_product = torch.stack(value_products)
                 self.end_of_episode_returns = torch.stack(end_of_episode_returns)
