@@ -65,8 +65,8 @@ class PPO:
                     masks=sample.masks,
                     action=sample.actions,
                 )
-                values = act.value[:, 0]
-                action_log_probs = act.action_log_probs[:, 0]
+                values = act.value
+                action_log_probs = act.action_log_probs
                 loss = act.aux_loss
                 log_values = act.log
                 logger.update(**log_values)
