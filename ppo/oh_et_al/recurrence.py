@@ -166,13 +166,17 @@ class Recurrence(nn.Module):
             actor_inputs = torch.cat([conv_out.view(N, -1), g], dim=-1)
             a_dist = self.actor(actor_inputs)
             self.sample_new(A[t], a_dist)
+            v0 = self.critic0(hn.squeeze(0))
+            v1 = self.critic1(actor_inputs)
+            self.print(v0)
+            self.print(v1)
             yield RecurrentState(
                 a=A[t],
                 b=B[t],
                 a_probs=a_dist.probs,
                 b_probs=b_dist.probs,
-                v0=self.critic0(hn.squeeze(0)),
-                v1=self.critic1(actor_inputs),
+                v0=v0,
+                v1=v1,
                 h=h.transpose(0, 1),
                 p=p,
             )
