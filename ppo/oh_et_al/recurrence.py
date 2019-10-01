@@ -9,7 +9,7 @@ import ppo.oh_et_al
 from ppo.distributions import FixedCategorical, Categorical
 from ppo.utils import init_
 
-RecurrentState = namedtuple("RecurrentState", "a a_probs b b_probs v0 v1 h p")
+RecurrentState = namedtuple("RecurrentState", "a a_probs b b_probs v0 v1 h0 h1 p")
 
 
 def batch_conv1d(inputs, weights):
@@ -59,7 +59,12 @@ class Recurrence(nn.Module):
         self.conv = nn.Sequential(
             nn.Conv2d(2 * hidden_size, 2 * hidden_size, kernel_size=1), activation
         )
-        self.gru = nn.GRU(
+        self.gru0 = nn.GRU(
+            hidden_size * (self.obs_sections.obs + self.obs_spaces.subtasks.shape[1]),
+            hidden_size,
+            num_layers,
+        )
+        self.gru1 = nn.GRU(
             hidden_size * (self.obs_sections.obs + self.obs_spaces.subtasks.shape[1]),
             hidden_size,
             num_layers,
@@ -76,7 +81,8 @@ class Recurrence(nn.Module):
             p=1,
             v0=1,
             v1=1,
-            h=num_layers * hidden_size,
+            h0=num_layers * hidden_size,
+            h1=num_layers * hidden_size,
         )
 
     @staticmethod
@@ -129,8 +135,13 @@ class Recurrence(nn.Module):
         for _x in hx:
             _x.squeeze_(0)
 
-        h = (
-            hx.h.view(N, self.gru.num_layers, self.gru.hidden_size)
+        h0 = (
+            hx.h0.view(N, self.gru0.num_layers, self.gru0.hidden_size)
+            .transpose(0, 1)
+            .contiguous()
+        )
+        h1 = (
+            hx.h1.view(N, self.gru0.num_layers, self.gru0.hidden_size)
             .transpose(0, 1)
             .contiguous()
         )
@@ -148,17 +159,22 @@ class Recurrence(nn.Module):
             conv_in = embedded.permute(0, 1, 4, 2, 3).reshape(N, -1, *dims)
             conv_out = self.conv(conv_in)
             gru_inputs = torch.cat([conv_out.view(N, -1), r], dim=-1).unsqueeze(0)
-            hn, h = self.gru(gru_inputs, h)
-            v0 = self.critic0(hn.squeeze(0))
-            v1 = self.critic1(hn.squeeze(0))
-            a_dist = self.actor(hn.squeeze(0))
-            b_dist = self.phi_update(hn.squeeze(0))
+            hn0, h0 = self.gru0(gru_inputs, h0)
+            hn1, h1 = self.gru1(gru_inputs, h1)
+            hn0.squeeze_(0)
+            hn1.squeeze_(0)
+            b_dist = self.phi_update(hn0)
+            a_dist = self.actor(hn1)
             self.sample_new(A[t], a_dist)
             self.sample_new(B[t], b_dist)
+            v0 = self.critic0(hn0)
+            v1 = self.critic1(hn1)
             p = torch.clamp(p + B[t], max=self.obs_spaces.subtasks.nvec.shape[0] - 1)
+            self.print(p)
             self.print(v0)
             self.print(v1)
             self.print(p)
+            h1 = h1 * B[t].unsqueeze(0).unsqueeze(-1).float()
             yield RecurrentState(
                 a=A[t],
                 b=B[t],
@@ -166,6 +182,7 @@ class Recurrence(nn.Module):
                 b_probs=b_dist.probs,
                 v0=v0,
                 v1=v1,
-                h=h.transpose(0, 1),
+                h0=h0.transpose(0, 1),
+                h1=h1.transpose(0, 1),
                 p=p,
             )
