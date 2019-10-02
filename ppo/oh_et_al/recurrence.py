@@ -169,7 +169,7 @@ class Recurrence(nn.Module):
             self.sample_new(B[t], b_dist)
             v0 = self.critic0(hn0)
             v1 = self.critic1(hn1)
-            p = torch.clamp(p + B[t], max=self.obs_spaces.subtasks.nvec.shape[0] - 1)
+            p = torch.min(p + B[t], (inputs.n_subtasks[t] - 1).flatten())
             self.print(p)
             self.print(v0)
             self.print(v1)
