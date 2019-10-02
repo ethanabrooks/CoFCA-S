@@ -15,7 +15,7 @@ def build_parser():
     return parsers
 
 
-def train_oh_et_al(**_kwargs):
+def train_oh_et_al(increment_curriculum_at, **_kwargs):
     class TrainOhEtAl(Train):
         @staticmethod
         def make_env(
@@ -33,17 +33,29 @@ def train_oh_et_al(**_kwargs):
             )
             return oh_et_al.Agent(entropy_coef=entropy_coef, recurrence=recurrence)
 
+        def run_epoch(self, *args, **kwargs):
+            dictionary = super().run_epoch(*args, **kwargs)
+            rewards = dictionary["rewards"]
+            if (
+                increment_curriculum_at
+                and rewards
+                and sum(rewards) / len(rewards) > increment_curriculum_at
+            ):
+                self.envs.increment_curriculum()
+            return dictionary
+
     TrainOhEtAl(**_kwargs).run()
 
 
 def oh_et_al_cli():
     parsers = build_parser()
+    parsers.main.add_argument("--increment-curriculum-at", type=float)
     parsers.env.add_argument("--height", type=int, default=3)
     parsers.env.add_argument("--width", type=int, default=3)
-    parsers.env.add_argument("--n-subtasks", type=int, default=3)
-    parsers.env.add_argument("--n-objects", type=int, default=3)
+    parsers.env.add_argument("--max-subtasks", type=int, default=10)
     parsers.env.add_argument("--implement-lower-level", action="store_true")
-    train_oh_et_al(**hierarchical_parse_args(parsers.main))
+    args = hierarchical_parse_args(parsers.main)
+    train_oh_et_al(**args)
 
 
 if __name__ == "__main__":
