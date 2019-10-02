@@ -52,6 +52,7 @@ def oh_et_al_cli():
     parsers.main.add_argument("--increment-curriculum-at", type=float)
     parsers.env.add_argument("--height", type=int, default=3)
     parsers.env.add_argument("--width", type=int, default=3)
+    parsers.env.add_argument("--min-subtasks", type=int, default=2)
     parsers.env.add_argument("--max-subtasks", type=int, default=10)
     parsers.env.add_argument("--implement-lower-level", action="store_true")
     args = hierarchical_parse_args(parsers.main)

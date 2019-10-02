@@ -14,7 +14,15 @@ Last = namedtuple("Last", "reward terminal")
 
 
 class Env(gym.Env):
-    def __init__(self, seed, height, width, max_subtasks, implement_lower_level=False):
+    def __init__(
+        self,
+        seed,
+        height,
+        width,
+        max_subtasks,
+        min_subtasks,
+        implement_lower_level=False,
+    ):
         self.implement_lower_level = implement_lower_level
         self.transitions = np.array(
             list(chain(permutations(range(2), 2), permutations(range(-1, 1), 2)))
@@ -25,7 +33,7 @@ class Env(gym.Env):
         self.object_types = ["cat", "sheep", "pig", "greenbot"]
         self.icons = np.array([" "] + [s[0] for s in self.object_types] + ["i"])
         self.max_subtasks = max_subtasks
-        self.n_subtasks = 2
+        self.n_subtasks = min_subtasks
         self.pos = None
         self.objects = None
         self.subtask = None
