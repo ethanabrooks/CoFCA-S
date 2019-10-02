@@ -110,7 +110,14 @@ class Env(gym.Env):
             if interaction == "transform":
                 self.objects[pos] = len(self.object_types)
         self.last = Last(reward=r, terminal=bool(r))
-        return self.get_observation(), r, bool(r), {}
+        return (
+            self.get_observation(),
+            r,
+            bool(r),
+            dict(
+                n_subtasks=self.n_subtasks, reward_plus_n_subtasks=self.n_subtasks + r
+            ),
+        )
 
     def reset(self):
         ints = self.random.choice(
@@ -147,6 +154,7 @@ class Env(gym.Env):
 
     def increment_curriculum(self):
         self.n_subtasks = min(self.max_subtasks, self.n_subtasks + 1)
+        self.reset()
 
     def render(self, mode="human", pause=True):
         top_down = Obs(**self.get_observation()).obs[0]
