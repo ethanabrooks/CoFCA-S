@@ -49,7 +49,9 @@ class Recurrence(nn.Module):
         )
         self.gru = nn.GRU(hidden_size, hidden_size, num_layers)
         self.critic = init_(nn.Linear(hidden_size, 1))
-        self.actor = DiagGaussian(hidden_size, 1)
+        self.actor = DiagGaussian(
+            hidden_size, 1, limits=(action_space.low.item(), action_space.high.item())
+        )
         self.state_sizes = RecurrentState(
             a=1, loc=1, scale=1, p=1, v=1, h=num_layers * hidden_size
         )
