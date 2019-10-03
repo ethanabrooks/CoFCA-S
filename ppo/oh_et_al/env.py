@@ -41,6 +41,7 @@ class Env(gym.Env):
         self.subtask_idx = None
         self.agent_idx = None
         self.last = None
+        self.t = None
         self.action_space = gym.spaces.Dict(
             Actions(
                 action=gym.spaces.Discrete(
@@ -66,6 +67,17 @@ class Env(gym.Env):
         )
 
     def step(self, action: tuple):
+        self.t += 1
+        if self.t > self.n_subtasks * (1 + np.sum(self.dims)):
+            return (
+                self.get_observation(),
+                0,
+                True,
+                dict(
+                    n_subtasks=self.n_subtasks, reward_plus_n_subtasks=self.n_subtasks
+                ),
+            )
+
         pos = tuple(self.pos)
         actions = Actions(*action)
         if self.implement_lower_level:
@@ -109,17 +121,15 @@ class Env(gym.Env):
                 del self.objects[pos]
             if interaction == "transform":
                 self.objects[pos] = len(self.object_types)
-        self.last = Last(reward=r, terminal=bool(r))
-        return (
-            self.get_observation(),
-            r,
-            bool(r),
-            dict(
-                n_subtasks=self.n_subtasks, reward_plus_n_subtasks=self.n_subtasks + r
-            ),
-        )
+        t = bool(r)
+        i = dict(n_subtasks=self.n_subtasks)
+        self.last = Last(reward=r, terminal=t)
+        if t:
+            i.update(reward_plus_n_subtasks=self.n_subtasks + r)
+        return self.get_observation(), r, t, i
 
     def reset(self):
+        self.t = 0
         ints = self.random.choice(
             np.prod(self.dims), self.n_subtasks + 1, replace=False
         )

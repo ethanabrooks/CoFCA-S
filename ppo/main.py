@@ -21,9 +21,7 @@ def train_oh_et_al(increment_curriculum_at, **_kwargs):
         def make_env(
             seed, rank, evaluation, env_id, add_timestep, time_limit, **env_args
         ):
-            return TimeLimit(
-                oh_et_al.Env(**env_args, seed=seed + rank), max_episode_steps=time_limit
-            )
+            return oh_et_al.Env(**env_args, seed=seed + rank)
 
         def build_agent(self, envs, recurrent=None, entropy_coef=None, **agent_args):
             recurrence = oh_et_al.Recurrence(
