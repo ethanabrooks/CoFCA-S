@@ -57,12 +57,12 @@ class Env(gym.Env):
         terminal_width = shutil.get_terminal_size((80, 20)).columns
         ratio = terminal_width / self.width
         right = 0
-        for picture in self.sizes:
-            print("=" * int(round(picture * ratio)))
-        for center, picture in zip(self.center, self.sizes):
+        for i, picture in enumerate(self.sizes):
+            print(str(i) * int(round(picture * ratio)))
+        for i, (center, picture) in enumerate(zip(self.center, self.sizes)):
             left = center - picture / 2
-            print(" " * int(round((left - right) * ratio)), end="")
-            print("=" * int(round(picture * ratio)), end="")
+            print("-" * int(round(left * ratio)), end="")
+            print(str(i) * int(round(picture * ratio)), end="")
             right = center + picture / 2
         print()
         if pause:
