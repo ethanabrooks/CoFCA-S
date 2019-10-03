@@ -7,7 +7,7 @@ import ppo.agent
 from ppo.agent import AgentValues, NNBase
 
 # noinspection PyMissingConstructor
-from ppo.distributions import FixedNormal
+from ppo.distributions import FixedNormal, FixedCategorical
 
 
 class Agent(ppo.agent.Agent, NNBase):
@@ -31,7 +31,8 @@ class Agent(ppo.agent.Agent, NNBase):
         )
         rm = self.recurrent_module
         hx = rm.parse_hidden(all_hxs)
-        dist = FixedNormal(loc=hx.loc, scale=hx.scale)
+        # dist = FixedNormal(loc=hx.loc, scale=hx.scale)
+        dist = FixedCategorical(hx.probs)
         return AgentValues(
             value=hx.v,
             action=hx.a,

@@ -9,7 +9,7 @@ import ppo.oh_et_al
 from ppo.distributions import FixedCategorical, Categorical, DiagGaussian
 from ppo.utils import init_
 
-RecurrentState = namedtuple("RecurrentState", "a loc scale v h p")
+RecurrentState = namedtuple("RecurrentState", "a probs loc scale v h p")
 
 
 def batch_conv1d(inputs, weights):
@@ -47,13 +47,20 @@ class Recurrence(nn.Module):
             init_(nn.Conv1d(1, hidden_size, kernel_size=5, padding=2), "conv1d"),
             activation,
         )
-        self.gru = nn.GRU(hidden_size, hidden_size, num_layers)
+        self.gru = nn.GRU(observation_space.shape[0], hidden_size, num_layers)
         self.critic = init_(nn.Linear(hidden_size, 1))
-        self.actor = DiagGaussian(
-            hidden_size, 1, limits=(action_space.low.item(), action_space.high.item())
-        )
+        # self.actor = DiagGaussian(
+        #     hidden_size, 1, limits=(action_space.low.item(), action_space.high.item())
+        # )
+        self.actor = Categorical(hidden_size, action_space.n)
         self.state_sizes = RecurrentState(
-            a=1, loc=1, scale=1, p=1, v=1, h=num_layers * hidden_size
+            a=1,
+            probs=action_space.n,
+            loc=1,
+            scale=1,
+            p=1,
+            v=1,
+            h=num_layers * hidden_size,
         )
 
     @staticmethod
@@ -95,10 +102,10 @@ class Recurrence(nn.Module):
         )
 
         # build memory
-        H = self.conv(inputs[0].unsqueeze(1))
-        M, _ = self.gru(H.permute(2, 0, 1))
-        M = M.transpose(0, 1)
-        new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
+        # H = self.conv(inputs[0].unsqueeze(1))
+        # M, hn = self.gru(H.permute(2, 0, 1))
+        # M = M.transpose(0, 1)
+        # new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
         for _x in hx:
             _x.squeeze_(0)
@@ -108,20 +115,27 @@ class Recurrence(nn.Module):
             .transpose(0, 1)
             .contiguous()
         )
-        p = hx.p.long().squeeze(1)
-        p[new_episode] = 0
-        A = actions[:, :, 0]
-        R = torch.arange(N, device=device)
+        # p = hx.p.long().squeeze(1)
+        # p[new_episode] = 0
+        # h[:, new_episode] = hn[:, new_episode]
+        A = actions[:, :, 0].long()
+        # R = torch.arange(N, device=device)
 
         for t in range(T):
-            r = M[R, p]
-            hn, h = self.gru(r.unsqueeze(0), h)
+            # r = M[R, p]
+            hn, h = self.gru(inputs[t].unsqueeze(0), h)  #  (seq_len, batch, input_size)
             v = self.critic(hn.squeeze(0))
             dist = self.actor(hn.squeeze(0))
             self.sample_new(A[t], dist)
-            p = p + 1
+            # p = p + 1
             self.print(v)
-            self.print(p)
+            # self.print(p)
             yield RecurrentState(
-                a=A[t], loc=dist.loc, scale=dist.scale, v=v, h=h.transpose(0, 1), p=p
+                a=A[t],
+                probs=dist.probs,
+                loc=hx.loc,  # TODO
+                scale=hx.scale,  # TODO
+                v=v,
+                h=h.transpose(0, 1),
+                p=hx.p,
             )
