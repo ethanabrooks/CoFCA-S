@@ -35,6 +35,7 @@ class Recurrence(nn.Module):
         activation,
         hidden_size,
         num_layers,
+        kernel_radius,
         debug,
     ):
         super().__init__()
@@ -44,7 +45,15 @@ class Recurrence(nn.Module):
 
         # networks
         self.conv = nn.Sequential(
-            init_(nn.Conv1d(1, hidden_size, kernel_size=5, padding=2), "conv1d"),
+            init_(
+                nn.Conv1d(
+                    1,
+                    hidden_size,
+                    kernel_size=kernel_radius * 2 + 1,
+                    padding=kernel_radius,
+                ),
+                "conv1d",
+            ),
             activation,
         )
         self.gru0 = nn.GRU(hidden_size, hidden_size, num_layers)
@@ -106,7 +115,7 @@ class Recurrence(nn.Module):
         H = self.conv(inputs[0].unsqueeze(1))
         M, hn = self.gru0(H.permute(2, 0, 1))
         M = M.transpose(0, 1)
-        # new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
+
         hx = self.parse_hidden(rnn_hxs)
         for _x in hx:
             _x.squeeze_(0)
@@ -122,7 +131,7 @@ class Recurrence(nn.Module):
 
         for t in range(T):
             r = M[R, p]
-            hn, h = self.gru1(r.unsqueeze(0), h)  #  (seq_len, batch, input_size)
+            hn, h = self.gru1(r.unsqueeze(0), h)  # (seq_len, batch, input_size)
             v = self.critic(hn.squeeze(0))
             dist = self.actor(hn.squeeze(0))
             self.sample_new(A[t], dist)

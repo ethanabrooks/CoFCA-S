@@ -42,6 +42,7 @@ def cli():
     parsers.main.add_argument("--no-tqdm", dest="use_tqdm", action="store_false")
     parsers.main.add_argument("--increment-curriculum-at", type=float)
     parsers.agent.add_argument("--debug", action="store_true")
+    parsers.agent.add_argument("--kernel-radius", type=int, default=5)
     parsers.env.add_argument("--width", type=int, default=3)
     parsers.env.add_argument("--min-pictures", type=int, default=2)
     parsers.env.add_argument("--max-pictures", type=int, default=20)
