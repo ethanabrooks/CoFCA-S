@@ -60,12 +60,13 @@ class Env(gym.Env):
         right = 0
         for i, picture in enumerate(self.sizes):
             print(str(i) * int(round(picture * ratio)))
+        print("placements")
         for i, (center, picture) in enumerate(zip(self.center, self.sizes)):
             left = center - picture / 2
             print("-" * int(round(left * ratio)), end="")
-            print(str(i) * int(round(picture * ratio)), end="")
+            print(str(i) * int(round(picture * ratio)))
             right = center + picture / 2
-        print()
+        print("-" * int(round(self.width * ratio)))
         if pause:
             input("pause")
 

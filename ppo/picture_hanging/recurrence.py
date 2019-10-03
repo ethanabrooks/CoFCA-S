@@ -47,7 +47,8 @@ class Recurrence(nn.Module):
             init_(nn.Conv1d(1, hidden_size, kernel_size=5, padding=2), "conv1d"),
             activation,
         )
-        self.gru = nn.GRU(observation_space.shape[0], hidden_size, num_layers)
+        self.gru0 = nn.GRU(hidden_size, hidden_size, num_layers)
+        self.gru1 = nn.GRU(hidden_size, hidden_size, num_layers)
         self.critic = init_(nn.Linear(hidden_size, 1))
         # self.actor = DiagGaussian(
         #     hidden_size, 1, limits=(action_space.low.item(), action_space.high.item())
@@ -102,32 +103,30 @@ class Recurrence(nn.Module):
         )
 
         # build memory
-        # H = self.conv(inputs[0].unsqueeze(1))
-        # M, hn = self.gru(H.permute(2, 0, 1))
-        # M = M.transpose(0, 1)
+        H = self.conv(inputs[0].unsqueeze(1))
+        M, hn = self.gru0(H.permute(2, 0, 1))
+        M = M.transpose(0, 1)
         # new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
         for _x in hx:
             _x.squeeze_(0)
 
         h = (
-            hx.h.view(N, self.gru.num_layers, self.gru.hidden_size)
+            hx.h.view(N, self.gru1.num_layers, self.gru1.hidden_size)
             .transpose(0, 1)
             .contiguous()
         )
-        # p = hx.p.long().squeeze(1)
-        # p[new_episode] = 0
-        # h[:, new_episode] = hn[:, new_episode]
+        p = hx.p.long().squeeze(1)
         A = actions[:, :, 0].long()
-        # R = torch.arange(N, device=device)
+        R = torch.arange(N, device=device)
 
         for t in range(T):
-            # r = M[R, p]
-            hn, h = self.gru(inputs[t].unsqueeze(0), h)  #  (seq_len, batch, input_size)
+            r = M[R, p]
+            hn, h = self.gru1(r.unsqueeze(0), h)  #  (seq_len, batch, input_size)
             v = self.critic(hn.squeeze(0))
             dist = self.actor(hn.squeeze(0))
             self.sample_new(A[t], dist)
-            # p = p + 1
+            p = p + 1
             self.print(v)
             # self.print(p)
             yield RecurrentState(
@@ -137,5 +136,5 @@ class Recurrence(nn.Module):
                 scale=hx.scale,  # TODO
                 v=v,
                 h=h.transpose(0, 1),
-                p=hx.p,
+                p=p,
             )
