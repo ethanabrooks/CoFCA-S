@@ -129,7 +129,7 @@ class RolloutStorage(object):
 
                 # multiply by v for beta or next-turn mask
                 value_product = value_product * (
-                    c + (1 - c) * self.value_preds[step, :, 1]
+                    c + (1 - c) * self.value_preds[step].min(dim=1).values
                 )
 
                 # append values on new episode

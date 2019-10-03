@@ -69,7 +69,7 @@ class Recurrence(nn.Module):
             hidden_size,
             num_layers,
         )
-        self.critic0 = init_(nn.Linear(hidden_size, 1))
+        self.critic0 = init_(nn.Linear(hidden_size + 1, 1))
         self.critic1 = init_(nn.Linear(hidden_size, 1))
         self.actor = Categorical(hidden_size, self.act_spaces.action.n)
         self.phi_update = Categorical(hidden_size, 2)
@@ -167,7 +167,7 @@ class Recurrence(nn.Module):
             a_dist = self.actor(hn1)
             self.sample_new(A[t], a_dist)
             self.sample_new(B[t], b_dist)
-            v0 = self.critic0(hn0)
+            v0 = self.critic0(torch.cat([hn0, B[t].float().unsqueeze(-1)], dim=-1))
             v1 = self.critic1(hn1)
             p = torch.min(p + B[t], (inputs.n_subtasks[t] - 1).flatten())
             self.print("p", p)
