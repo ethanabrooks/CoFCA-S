@@ -1,23 +1,27 @@
 import shutil
-
+import numpy as np
 import gym
 from gym.utils import seeding
 
 
 class Env(gym.Env):
-    def __init__(self, width, n_pictures, seed):
-        self.n_pictures = n_pictures
+    def __init__(self, width, min_pictures, max_pictures, seed):
+        self.min_pictures = min_pictures
+        self.max_pictures = max_pictures
         self.center = None
         self.sizes = None
-        self.pictures = list(range(n_pictures))
+        self.n_pictures = min_pictures
         self.assigned_pictures = None
         self.width = width
         self.random, self.seed = seeding.np_random(seed)
+        self.observation_space = gym.spaces.Box(
+            low=0, high=self.width, shape=(max_pictures,)
+        )
+        self.action_space = gym.spaces.Discrete(self.width)
+        # self.action_space = gym.spaces.Box(low=0, high=self.width, shape=(1,))
 
     def step(self, center):
-        picture, center = center
         self.center.append(center)
-        self.assigned_pictures.append(picture)
         t = False
         r = 0
         if len(self.center) == len(self.sizes):
@@ -32,10 +36,7 @@ class Env(gym.Env):
                 yield self.width - left
 
             white_space = list(compute_white_space())
-            if tuple(self.assigned_pictures) == tuple(self.sizes):
-                r = min(white_space) - max(white_space)  # max reward is 0
-            else:
-                r = -self.width
+            r = min(white_space) - max(white_space)  # max reward is 0
 
         return self.get_observation(), r, t, {}
 
@@ -46,26 +47,33 @@ class Env(gym.Env):
             self.random.rand() * self.width / self.n_pictures
             for _ in range(self.n_pictures)
         ]
-        self.random.shuffle(self.pictures)
         return self.get_observation()
 
     def get_observation(self):
-        return self.pictures, self.sizes
+        obs = np.pad(self.sizes, (0, self.max_pictures - self.n_pictures))
+        self.observation_space.contains(obs)
+        return obs
 
     def render(self, mode="human", pause=True):
         terminal_width = shutil.get_terminal_size((80, 20)).columns
         ratio = terminal_width / self.width
         right = 0
-        for picture in self.sizes:
-            print("=" * int(round(picture * ratio)))
-        for center, picture in zip(self.center, self.sizes):
+        for i, picture in enumerate(self.sizes):
+            print(str(i) * int(round(picture * ratio)))
+        print("placements")
+        for i, (center, picture) in enumerate(zip(self.center, self.sizes)):
             left = center - picture / 2
-            print(" " * int(round((left - right) * ratio)), end="")
-            print("=" * int(round(picture * ratio)), end="")
+            print("-" * int(round(left * ratio)), end="")
+            print(str(i) * int(round(picture * ratio)))
             right = center + picture / 2
-        print()
+        print("-" * int(round(self.width * ratio)))
         if pause:
             input("pause")
+
+    def increment_curriculum(self):
+        return  # TODO
+        self.n_pictures = min(self.n_pictures + 1, self.max_pictures)
+        self.reset()
 
 
 if __name__ == "__main__":
