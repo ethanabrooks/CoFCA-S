@@ -5,10 +5,11 @@ from gym.utils import seeding
 
 
 class Env(gym.Env):
-    def __init__(self, width, min_pictures, max_pictures, seed):
+    def __init__(self, width, min_pictures, max_pictures, single_step, seed):
+        self.single_step = single_step
         self.min_pictures = min_pictures
         self.max_pictures = max_pictures
-        self.center = None
+        self.centers = None
         self.sizes = None
         self.n_pictures = min_pictures
         self.assigned_pictures = None
@@ -18,18 +19,26 @@ class Env(gym.Env):
             low=0, high=self.width, shape=(max_pictures,)
         )
         # self.action_space = gym.spaces.Discrete(self.width)
-        self.action_space = gym.spaces.Box(low=0, high=self.width, shape=(1,))
+        if single_step:
+            self.action_space = gym.spaces.Box(
+                low=0, high=self.width, shape=(self.n_pictures,)
+            )
+        else:
+            self.action_space = gym.spaces.Box(low=0, high=self.width, shape=(1,))
 
     def step(self, center):
-        self.center.append(center)
+        if self.single_step:
+            self.centers = center
+        else:
+            self.centers.append(center)
         t = False
         r = 0
-        if len(self.center) == len(self.sizes):
+        if len(self.centers) == len(self.sizes):
             t = True
 
             def compute_white_space():
                 left = 0
-                for center, picture in zip(self.center, self.sizes):
+                for center, picture in zip(self.centers, self.sizes):
                     right = center - picture / 2
                     yield right - left
                     left = center + picture / 2
@@ -41,7 +50,7 @@ class Env(gym.Env):
         return self.get_observation(), r, t, {}
 
     def reset(self):
-        self.center = []
+        self.centers = []
         self.assigned_pictures = []
 
         def sizes():
@@ -67,7 +76,7 @@ class Env(gym.Env):
         for i, picture in enumerate(self.sizes):
             print(str(i) * int(round(picture * ratio)))
         print("placements")
-        for i, (center, picture) in enumerate(zip(self.center, self.sizes)):
+        for i, (center, picture) in enumerate(zip(self.centers, self.sizes)):
             left = center - picture / 2
             print("-" * int(round(left * ratio)), end="")
             print(str(i) * int(round(picture * ratio)))
