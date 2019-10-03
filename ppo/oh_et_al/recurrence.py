@@ -170,10 +170,9 @@ class Recurrence(nn.Module):
             v0 = self.critic0(hn0)
             v1 = self.critic1(hn1)
             p = torch.min(p + B[t], (inputs.n_subtasks[t] - 1).flatten())
-            self.print(p)
-            self.print(v0)
-            self.print(v1)
-            self.print(p)
+            self.print("p", p)
+            self.print("v0", v0)
+            self.print("v1", v1)
             h1 = h1 * B[t].unsqueeze(0).unsqueeze(-1).float()
             yield RecurrentState(
                 a=A[t],
