@@ -44,7 +44,7 @@ def cli():
     # parsers.agent.add_argument("--debug", action="store_true")
     # parsers.agent.add_argument("--kernel-radius", type=int, default=5)
     parsers.env.add_argument("--single-step", action="store_true")
-    parsers.env.add_argument("--width", type=int, default=3)
+    parsers.env.add_argument("--width", type=int, default=100)
     parsers.env.add_argument("--min-pictures", type=int, default=2)
     parsers.env.add_argument("--max-pictures", type=int, default=20)
     args = hierarchical_parse_args(parsers.main)
