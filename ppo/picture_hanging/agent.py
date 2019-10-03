@@ -31,8 +31,8 @@ class Agent(ppo.agent.Agent, NNBase):
         )
         rm = self.recurrent_module
         hx = rm.parse_hidden(all_hxs)
-        # dist = FixedNormal(loc=hx.loc, scale=hx.scale)
-        dist = FixedCategorical(hx.probs)
+        dist = FixedNormal(loc=hx.loc, scale=hx.scale)
+        # dist = FixedCategorical(hx.probs)
         return AgentValues(
             value=hx.v,
             action=hx.a,

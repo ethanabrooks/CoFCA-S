@@ -17,8 +17,8 @@ class Env(gym.Env):
         self.observation_space = gym.spaces.Box(
             low=0, high=self.width, shape=(max_pictures,)
         )
-        self.action_space = gym.spaces.Discrete(self.width)
-        # self.action_space = gym.spaces.Box(low=0, high=self.width, shape=(1,))
+        # self.action_space = gym.spaces.Discrete(self.width)
+        self.action_space = gym.spaces.Box(low=0, high=self.width, shape=(1,))
 
     def step(self, center):
         self.center.append(center)

@@ -59,13 +59,14 @@ class Recurrence(nn.Module):
         self.gru0 = nn.GRU(hidden_size, hidden_size, num_layers)
         self.gru1 = nn.GRU(hidden_size, hidden_size, num_layers)
         self.critic = init_(nn.Linear(hidden_size, 1))
-        # self.actor = DiagGaussian(
-        #     hidden_size, 1, limits=(action_space.low.item(), action_space.high.item())
-        # )
-        self.actor = Categorical(hidden_size, action_space.n)
+        self.actor = DiagGaussian(
+            hidden_size, 1, limits=(action_space.low.item(), action_space.high.item())
+        )
+        # self.actor = DiagGaussian(hidden_size, action_space.n)
         self.state_sizes = RecurrentState(
             a=1,
-            probs=action_space.n,
+            # probs=action_space.n,
+            probs=1,
             loc=1,
             scale=1,
             p=1,
@@ -126,7 +127,7 @@ class Recurrence(nn.Module):
             .contiguous()
         )
         p = hx.p.long().squeeze(1)
-        A = actions[:, :, 0].long()
+        A = actions[:, :, 0]
         R = torch.arange(N, device=device)
 
         for t in range(T):
@@ -140,9 +141,9 @@ class Recurrence(nn.Module):
             # self.print(p)
             yield RecurrentState(
                 a=A[t],
-                probs=dist.probs,
-                loc=hx.loc,  # TODO
-                scale=hx.scale,  # TODO
+                probs=hx.probs,
+                loc=dist.loc,  # TODO
+                scale=dist.scale,  # TODO
                 v=v,
                 h=h.transpose(0, 1),
                 p=p,
