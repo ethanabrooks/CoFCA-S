@@ -1,3 +1,4 @@
+import itertools
 from collections import namedtuple
 from itertools import permutations, chain, tee
 import numpy as np
@@ -90,7 +91,7 @@ class Env(gym.Env):
         actions = Actions(*action)
         if self.implement_lower_level:
             self.agent_idx += int(actions.beta)
-            self.agent_idx = min(self.agent_idx, self.n_subtasks - 1)
+            self.agent_idx = min(self.agent_idx, n_subtasks - 1)
             agent_subtask = self.subtasks[self.agent_idx]
             if pos in self.objects and self.objects[pos] == agent_subtask.object:
                 action = len(self.transitions) + agent_subtask.interaction
