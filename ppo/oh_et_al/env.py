@@ -11,6 +11,7 @@ Subtask = namedtuple("Subtask", "interaction object")
 Obs = namedtuple("Obs", "obs subtasks n_subtasks")
 Actions = namedtuple("Actions", "action beta")
 Last = namedtuple("Last", "reward terminal")
+Curriculum = namedtuple("Curriculum", "subtask_low subtask_high")
 
 
 class Env(gym.Env):
@@ -33,7 +34,6 @@ class Env(gym.Env):
         self.object_types = ["cat", "sheep", "pig", "greenbot"]
         self.icons = np.array([" "] + [s[0] for s in self.object_types] + ["i"])
         self.max_subtasks = max_subtasks
-        self.n_subtasks = min_subtasks
         self.pos = None
         self.objects = None
         self.subtask = None
@@ -66,16 +66,24 @@ class Env(gym.Env):
             )._asdict()
         )
 
+        def curriculum():
+            for i in itertools.count(min_subtasks):
+                i = min(i, max_subtasks)
+                yield Curriculum(subtask_low=i, subtask_high=i)
+                yield Curriculum(subtask_low=i, subtask_high=i + 1)
+
+        self.iterator = curriculum()
+        self.curriculum = next(self.iterator)
+
     def step(self, action: tuple):
         self.t += 1
-        if self.t > self.n_subtasks * (1 + np.sum(self.dims)):
+        n_subtasks = len(self.subtasks)
+        if self.t > n_subtasks * (1 + np.sum(self.dims)):
             return (
                 self.get_observation(),
                 0,
                 True,
-                dict(
-                    n_subtasks=self.n_subtasks, reward_plus_n_subtasks=self.n_subtasks
-                ),
+                dict(n_subtasks=n_subtasks, reward_plus_n_subtasks=n_subtasks),
             )
 
         pos = tuple(self.pos)
@@ -115,24 +123,25 @@ class Env(gym.Env):
                 object=self.objects[pos],
             ):
                 self.subtask_idx += 1
-                if self.subtask_idx == len(self.subtasks):
+                if self.subtask_idx == n_subtasks:
                     r = 1
             if interaction == "pick-up":
                 del self.objects[pos]
             if interaction == "transform":
                 self.objects[pos] = len(self.object_types)
         t = bool(r)
-        i = dict(n_subtasks=self.n_subtasks)
+        i = dict(n_subtasks=n_subtasks)
         self.last = Last(reward=r, terminal=t)
         if t:
-            i.update(reward_plus_n_subtasks=self.n_subtasks + r)
+            i.update(reward_plus_n_subtasks=n_subtasks + r)
         return self.get_observation(), r, t, i
 
     def reset(self):
         self.t = 0
-        ints = self.random.choice(
-            np.prod(self.dims), self.n_subtasks + 1, replace=False
+        n_subtasks = self.random.random_integers(
+            low=self.curriculum.subtask_low, high=self.curriculum.subtask_high
         )
+        ints = self.random.choice(np.prod(self.dims), n_subtasks + 1, replace=False)
         self.pos, *objects = np.stack(np.unravel_index(ints, self.dims), axis=1)
         object_types = self.random.choice(len(self.object_types), len(objects))
         self.objects = dict(zip(map(tuple, objects), object_types))
@@ -153,9 +162,12 @@ class Env(gym.Env):
         top_down[(1, *self.pos)] = 1
 
         subtasks = np.pad(
-            np.array(self.subtasks), ((0, self.max_subtasks - self.n_subtasks), (0, 0))
+            np.array(self.subtasks),
+            ((0, self.max_subtasks - len(self.subtasks)), (0, 0)),
         )
-        obs = Obs(obs=top_down, subtasks=subtasks, n_subtasks=self.n_subtasks)._asdict()
+        obs = Obs(
+            obs=top_down, subtasks=subtasks, n_subtasks=len(self.subtasks)
+        )._asdict()
         for name, space, o in zip(
             Obs._fields, self.observation_space.spaces.values(), obs.values()
         ):
@@ -163,8 +175,7 @@ class Env(gym.Env):
         return obs
 
     def increment_curriculum(self):
-        self.n_subtasks = min(self.max_subtasks, self.n_subtasks + 1)
-        self.reset()
+        self.curriculum = next(self.iterator)
 
     def render(self, mode="human", pause=True):
         top_down = Obs(**self.get_observation()).obs[0]
