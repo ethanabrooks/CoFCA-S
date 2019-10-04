@@ -5,10 +5,11 @@ from gym.utils import seeding
 
 
 class Env(gym.Env):
-    def __init__(self, width, min_pictures, max_pictures, seed):
+    def __init__(self, width, min_pictures, max_pictures, single_step, seed):
+        self.single_step = single_step
         self.min_pictures = min_pictures
         self.max_pictures = max_pictures
-        self.center = None
+        self.centers = None
         self.sizes = None
         self.n_pictures = min_pictures
         self.assigned_pictures = None
@@ -17,19 +18,28 @@ class Env(gym.Env):
         self.observation_space = gym.spaces.Box(
             low=0, high=self.width, shape=(max_pictures,)
         )
-        self.action_space = gym.spaces.Discrete(self.width)
-        # self.action_space = gym.spaces.Box(low=0, high=self.width, shape=(1,))
+        # self.action_space = gym.spaces.Discrete(self.width)
+        if single_step:
+            self.action_space = gym.spaces.Box(
+                low=0, high=self.width, shape=(self.n_pictures,)
+            )
+        else:
+            self.action_space = gym.spaces.Box(low=0, high=self.width, shape=(1,))
 
     def step(self, center):
-        self.center.append(center)
+        if self.single_step:
+            self.centers = center
+        else:
+            self.centers.append(center)
         t = False
         r = 0
-        if len(self.center) == len(self.sizes):
+        n_pictures = len(self.sizes)
+        if len(self.centers) == n_pictures:
             t = True
 
             def compute_white_space():
                 left = 0
-                for center, picture in zip(self.center, self.sizes):
+                for center, picture in zip(self.centers, self.sizes):
                     right = center - picture / 2
                     yield right - left
                     left = center + picture / 2
@@ -38,15 +48,24 @@ class Env(gym.Env):
             white_space = list(compute_white_space())
             r = min(white_space) - max(white_space)  # max reward is 0
 
-        return self.get_observation(), r, t, {}
+        i = dict(n_pictures=n_pictures)
+        if t:
+            i.update(reward_plus_n_picturs=n_pictures + r)
+        return self.get_observation(), r, t, i
 
     def reset(self):
-        self.center = []
+        self.centers = []
         self.assigned_pictures = []
-        self.sizes = [
-            self.random.rand() * self.width / self.n_pictures
-            for _ in range(self.n_pictures)
-        ]
+
+        def sizes():
+            width = self.width
+            for _ in range(self.n_pictures):
+                picture_width = self.random.rand() * width
+                yield picture_width
+                width -= picture_width
+
+        self.sizes = list(sizes())
+        self.random.shuffle(self.sizes)
         return self.get_observation()
 
     def get_observation(self):
@@ -61,7 +80,7 @@ class Env(gym.Env):
         for i, picture in enumerate(self.sizes):
             print(str(i) * int(round(picture * ratio)))
         print("placements")
-        for i, (center, picture) in enumerate(zip(self.center, self.sizes)):
+        for i, (center, picture) in enumerate(zip(self.centers, self.sizes)):
             left = center - picture / 2
             print("-" * int(round(left * ratio)), end="")
             print(str(i) * int(round(picture * ratio)))
@@ -71,7 +90,6 @@ class Env(gym.Env):
             input("pause")
 
     def increment_curriculum(self):
-        return  # TODO
         self.n_pictures = min(self.n_pictures + 1, self.max_pictures)
         self.reset()
 
