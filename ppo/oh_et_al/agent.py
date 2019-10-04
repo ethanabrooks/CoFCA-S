@@ -33,8 +33,10 @@ class Agent(ppo.agent.Agent, NNBase):
         hx = rm.parse_hidden(all_hxs)
         a_dist = FixedCategorical(hx.a_probs)
         b_dist = FixedCategorical(hx.b_probs)
+        probs_a = a_dist.log_probs(hx.a)
+        probs_b = b_dist.log_probs(hx.b)
         action_log_probs = torch.cat(
-            [a_dist.log_probs(hx.a), b_dist.log_probs(hx.b)], dim=-1
+            [torch.zeros_like(probs_a), probs_a + probs_b], dim=-1
         )
         entropy = (a_dist.entropy() + b_dist.entropy()).mean()
         return AgentValues(
