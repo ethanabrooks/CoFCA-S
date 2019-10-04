@@ -15,13 +15,19 @@ def train(increment_curriculum_at, **_kwargs):
         ):
             return Env(**env_args, seed=seed + rank)
 
-        # def build_agent(self, envs, recurrent=None, entropy_coef=None, **agent_args):
-        #     recurrence = Recurrence(
-        #         action_space=envs.action_space,
-        #         observation_space=envs.observation_space,
-        #         **agent_args,
-        #     )
-        #     return Agent(entropy_coef=entropy_coef, recurrence=recurrence)
+        def build_agent(self, envs, recurrent=None, entropy_coef=None, **agent_args):
+            # recurrence = Recurrence(
+            # action_space=envs.action_space,
+            # observation_space=envs.observation_space,
+            # **agent_args,
+            # )
+            return Agent(
+                entropy_coef=entropy_coef,
+                obs_shape=envs.observation_space.shape,
+                action_space=envs.action_space,
+                recurrent=True,
+                **agent_args,
+            )  # , recurrence=recurrence)
 
         def run_epoch(self, *args, **kwargs):
             dictionary = super().run_epoch(*args, **kwargs)
