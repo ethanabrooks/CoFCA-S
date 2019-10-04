@@ -173,7 +173,7 @@ class Recurrence(nn.Module):
             self.print("p", p)
             self.print("v0", v0)
             self.print("v1", v1)
-            h1 = h1 * B[t].unsqueeze(0).unsqueeze(-1).float()
+            h1 = h1 * (1 - B[t].unsqueeze(0).unsqueeze(-1).float())
             yield RecurrentState(
                 a=A[t],
                 b=B[t],
