@@ -10,7 +10,6 @@ def build_parser():
     parsers = ppo.arguments.build_parser()
     parser = parsers.main
     parser.add_argument("--no-tqdm", dest="use_tqdm", action="store_false")
-    parser.add_argument("--time-limit", type=int, required=True)
     parsers.agent.add_argument("--debug", action="store_true")
     return parsers
 
@@ -21,9 +20,7 @@ def train(increment_curriculum_at, **_kwargs):
         def make_env(
             seed, rank, evaluation, env_id, add_timestep, time_limit, **env_args
         ):
-            return TimeLimit(
-                oh_et_al.Env(**env_args, seed=seed + rank), max_episode_steps=time_limit
-            )
+            return oh_et_al.Env(**env_args, seed=seed + rank)
 
         def build_agent(self, envs, recurrent=None, entropy_coef=None, **agent_args):
             recurrence = oh_et_al.Recurrence(
@@ -44,7 +41,7 @@ def train(increment_curriculum_at, **_kwargs):
                 self.envs.increment_curriculum()
             return dictionary
 
-    Train(**_kwargs).run()
+    Train(**_kwargs, time_limit=None).run()
 
 
 def cli():
