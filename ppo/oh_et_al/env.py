@@ -69,9 +69,9 @@ class Env(gym.Env):
 
         def curriculum():
             for i in itertools.count(min_subtasks):
-                i = min(i, max_subtasks)
-                if i == max_subtasks:
-                    yield Curriculum(subtask_low=0, subtask_high=i)
+                i = min(i, 5)
+                if i == 5:
+                    yield Curriculum(subtask_low=2, subtask_high=i)
                 yield Curriculum(subtask_low=i, subtask_high=i)
                 yield Curriculum(subtask_low=i, subtask_high=i + 1)
 
