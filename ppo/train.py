@@ -207,7 +207,7 @@ class TrainBase(abc.ABC):
                 log_progress.update()
             # print(self.i, self.i % self.log_interval)
             if self.i % log_interval == 0:
-                total_num_steps = (self.i + 1) * num_processes * num_steps
+                total_num_steps = log_interval * num_processes * num_steps
                 # print(f"Writing to {self.logdir}")
                 fps = total_num_steps / (time.time() - tick)
                 tick = time.time()
