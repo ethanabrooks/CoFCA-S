@@ -209,7 +209,11 @@ class TrainBase(abc.ABC):
             if self.i % log_interval == 0:
                 total_num_steps = (self.i + 1) * num_processes * num_steps
                 # print(f"Writing to {self.logdir}")
-                fps = total_num_steps / (time.time() - tick)
+                tick2 = time.time()
+                print("logging at", tick2)
+                fps = total_num_steps / (tick2 - tick)
+                print("diff from tick", tick2 - tick)
+                print("fps", fps)
                 tick = time.time()
                 yield dict(
                     k_scalar_pairs(
