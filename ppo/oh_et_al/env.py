@@ -1,6 +1,8 @@
 import itertools
 from collections import namedtuple
 from itertools import permutations, chain, tee
+from typing import List
+
 import numpy as np
 
 import gym
@@ -17,13 +19,7 @@ Curriculum = namedtuple("Curriculum", "subtask_low subtask_high")
 
 class Env(gym.Env):
     def __init__(
-        self,
-        seed,
-        height,
-        width,
-        max_subtasks,
-        min_subtasks,
-        implement_lower_level=False,
+        self, seed, height, width, n_subtasks, time_limit, implement_lower_level=False
     ):
         self.implement_lower_level = implement_lower_level
         self.transitions = np.array(
@@ -34,7 +30,9 @@ class Env(gym.Env):
         self.interactions = ["pick-up", "transform", "visit"]
         self.object_types = ["cat", "sheep", "pig", "greenbot"]
         self.icons = np.array([" "] + [s[0] for s in self.object_types] + ["i"])
-        self.max_subtasks = max_subtasks
+        self.time_limit = time_limit
+        self.n_subtasks = n_subtasks
+        self.evaluating = False
         self.pos = None
         self.objects = None
         self.subtask = None
@@ -60,28 +58,43 @@ class Env(gym.Env):
                 subtasks=gym.spaces.MultiDiscrete(
                     np.tile(
                         np.array([[len(self.interactions), len(self.object_types)]]),
-                        (self.max_subtasks, 1),
+                        (self.n_subtasks, 1),
                     )
                 ),
-                n_subtasks=gym.spaces.Discrete(self.max_subtasks),
+                n_subtasks=gym.spaces.Discrete(self.n_subtasks + 1),
             )._asdict()
         )
 
-        def curriculum():
-            for i in itertools.count(min_subtasks):
-                i = min(i, 5)
-                if i == 5:
-                    yield Curriculum(subtask_low=0, subtask_high=i)
-                yield Curriculum(subtask_low=i, subtask_high=i)
-                yield Curriculum(subtask_low=i, subtask_high=i + 1)
+        def tasks():
+            trained_object_types = set()
+            trained_interactions = set()
+            all_object_types = set(range(len(self.object_types)))
+            all_interactions = set(range(len(self.interactions)))
+            while not all(
+                (
+                    trained_object_types == all_object_types,
+                    trained_interactions == all_interactions,
+                )
+            ):
+                task = self.random_task()
+                interactions, object_types = zip(*task)
+                trained_object_types |= set(object_types)
+                trained_interactions |= set(interactions)
+                yield task
 
-        self.iterator = curriculum()
-        self.curriculum = next(self.iterator)
+        self.training_tasks = list(tasks())  # type: List[List[Subtask]]
+
+    def random_task(self) -> List[Subtask]:
+        object_types = self.random.choice(len(self.object_types), self.n_subtasks)
+        interactions = self.random.choice(len(self.interactions), self.n_subtasks)
+        return [
+            Subtask(object=o, interaction=i) for o, i in zip(object_types, interactions)
+        ]
 
     def step(self, action: tuple):
         self.t += 1
         n_subtasks = len(self.subtasks)
-        if self.t > n_subtasks * (1 + np.sum(self.dims)):
+        if self.t > self.time_limit:
             return (
                 self.get_observation(),
                 0,
@@ -141,20 +154,19 @@ class Env(gym.Env):
 
     def reset(self):
         self.t = 0
-        n_subtasks = self.random.random_integers(
-            low=self.curriculum.subtask_low, high=self.curriculum.subtask_high
-        )
         squares = np.prod(self.dims)
-        n_subtasks = min(n_subtasks, squares - 1)
+        n_subtasks = min(self.n_subtasks, squares - 1)
         ints = self.random.choice(squares, n_subtasks + 1, replace=False)
-        self.pos, *objects = np.stack(np.unravel_index(ints, self.dims), axis=1)
-        object_types = self.random.choice(len(self.object_types), len(objects))
-        self.objects = dict(zip(map(tuple, objects), object_types))
-        interactions = self.random.choice(len(self.interactions), len(objects))
-        self.subtasks = [
-            Subtask(object=o, interaction=i)
-            for o, i in zip(list(self.objects.values()), interactions)
-        ]
+        self.pos, *objects_pos = np.stack(np.unravel_index(ints, self.dims), axis=1)
+        if self.evaluating:
+            self.subtasks = self.random_task()
+        else:
+            self.subtasks = self.training_tasks[
+                self.random.choice(len(self.training_tasks))
+            ]  # type: List[Subtask]
+        object_types = [subtask.object for subtask in self.subtasks]
+        self.random.shuffle(object_types)
+        self.objects = dict(zip(map(tuple, objects_pos), object_types))
         self.subtask_idx = 0
         self.agent_idx = 0
         self.last = None
@@ -166,10 +178,7 @@ class Env(gym.Env):
             top_down[(0, *pos)] = obj + 1
         top_down[(1, *self.pos)] = 1
 
-        subtasks = np.pad(
-            np.array(self.subtasks),
-            ((0, self.max_subtasks - len(self.subtasks)), (0, 0)),
-        )
+        subtasks = np.array(self.subtasks)
         obs = Obs(
             obs=top_down, subtasks=subtasks, n_subtasks=len(self.subtasks)
         )._asdict()
@@ -201,6 +210,12 @@ class Env(gym.Env):
         print(self.last)
         if pause:
             input("pause")
+
+    def evaluate(self):
+        self.evaluating = True
+
+    def train(self):
+        self.evaluating = False
 
 
 if __name__ == "__main__":

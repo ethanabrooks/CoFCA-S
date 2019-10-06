@@ -20,7 +20,7 @@ def train(increment_curriculum_at, **_kwargs):
         def make_env(
             seed, rank, evaluation, env_id, add_timestep, time_limit, **env_args
         ):
-            return oh_et_al.Env(**env_args, seed=seed + rank)
+            return oh_et_al.Env(**env_args, time_limit=time_limit, seed=seed + rank)
 
         def build_agent(self, envs, recurrent=None, entropy_coef=None, **agent_args):
             recurrence = oh_et_al.Recurrence(
@@ -41,16 +41,16 @@ def train(increment_curriculum_at, **_kwargs):
                 self.envs.increment_curriculum()
             return dictionary
 
-    Train(**_kwargs, time_limit=None).run()
+    Train(**_kwargs).run()
 
 
 def cli():
     parsers = build_parser()
     parsers.main.add_argument("--increment-curriculum-at", type=float)
+    parsers.main.add_argument("--time-limit", type=int, default=25)
     parsers.env.add_argument("--height", type=int, default=4)
     parsers.env.add_argument("--width", type=int, default=4)
-    parsers.env.add_argument("--min-subtasks", type=int, default=2)
-    parsers.env.add_argument("--max-subtasks", type=int, default=20)
+    parsers.env.add_argument("--n-subtasks", type=int, default=3)
     parsers.env.add_argument("--implement-lower-level", action="store_true")
     args = hierarchical_parse_args(parsers.main)
     train(**args)
