@@ -144,7 +144,9 @@ class Env(gym.Env):
         n_subtasks = self.random.random_integers(
             low=self.curriculum.subtask_low, high=self.curriculum.subtask_high
         )
-        ints = self.random.choice(np.prod(self.dims), n_subtasks + 1, replace=False)
+        squares = np.prod(self.dims)
+        n_subtasks = min(n_subtasks, squares - 1)
+        ints = self.random.choice(squares, n_subtasks + 1, replace=False)
         self.pos, *objects = np.stack(np.unravel_index(ints, self.dims), axis=1)
         object_types = self.random.choice(len(self.object_types), len(objects))
         self.objects = dict(zip(map(tuple, objects), object_types))
