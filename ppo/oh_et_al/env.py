@@ -94,7 +94,7 @@ class Env(gym.Env):
     def step(self, action: tuple):
         self.t += 1
         n_subtasks = len(self.subtasks)
-        if self.t > self.time_limit:
+        if self.t >= self.time_limit:
             return (
                 self.get_observation(),
                 0,
