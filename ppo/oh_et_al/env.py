@@ -65,25 +65,6 @@ class Env(gym.Env):
             )._asdict()
         )
 
-        def tasks():
-            trained_object_types = set()
-            trained_interactions = set()
-            all_object_types = set(range(len(self.object_types)))
-            all_interactions = set(range(len(self.interactions)))
-            while not all(
-                (
-                    trained_object_types == all_object_types,
-                    trained_interactions == all_interactions,
-                )
-            ):
-                task = self.random_task()
-                interactions, object_types = zip(*task)
-                trained_object_types |= set(object_types)
-                trained_interactions |= set(interactions)
-                yield task
-
-        self.training_tasks = list(tasks())  # type: List[List[Subtask]]
-
     def random_task(self) -> List[Subtask]:
         object_types = self.random.choice(len(self.object_types), self.n_subtasks)
         interactions = self.random.choice(len(self.interactions), self.n_subtasks)
@@ -158,12 +139,7 @@ class Env(gym.Env):
         n_subtasks = min(self.n_subtasks, squares - 1)
         ints = self.random.choice(squares, n_subtasks + 1, replace=False)
         self.pos, *objects_pos = np.stack(np.unravel_index(ints, self.dims), axis=1)
-        if self.evaluating:
-            self.subtasks = self.random_task()
-        else:
-            self.subtasks = self.training_tasks[
-                self.random.choice(len(self.training_tasks))
-            ]  # type: List[Subtask]
+        self.subtasks = self.random_task()
         object_types = [subtask.object for subtask in self.subtasks]
         self.random.shuffle(object_types)
         self.objects = dict(zip(map(tuple, objects_pos), object_types))
