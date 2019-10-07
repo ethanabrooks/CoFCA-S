@@ -277,7 +277,7 @@ class TrainBase(abc.ABC):
         iterator = range(num_steps)
         if use_tqdm:
             iterator = tqdm(iterator, desc="evaluating")
-        for step in iterator:
+        for _ in iterator:
             with torch.no_grad():
                 act = self.agent(inputs=obs, rnn_hxs=rnn_hxs, masks=masks)  # type: AgentValues
 

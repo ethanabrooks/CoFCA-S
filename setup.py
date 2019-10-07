@@ -25,7 +25,10 @@ setup(
         "bin/reproduce",
     ],
     entry_points=dict(
-        console_scripts=["bandit=ppo.main:bandit_cli", "maze=ppo.main:maze_cli"]
+        console_scripts=[
+            "oh-et-al=ppo.oh_et_al.main:cli",
+            "picture-hanging=ppo.picture_hanging.main:cli",
+        ]
     ),
     install_requires=[
         "ray[debug]",
