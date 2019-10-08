@@ -1,6 +1,7 @@
 import abc
 import functools
 import itertools
+import os
 import re
 import sys
 import time
@@ -53,6 +54,12 @@ class TrainBase(abc.ABC):
         success_reward,
         use_tqdm,
     ):
+        # Properly restrict pytorch to not consume extra resources.
+        #  - https://github.com/pytorch/pytorch/issues/975
+        #  - https://github.com/ray-project/ray/issues/3609
+        torch.set_num_threads(1)
+        os.environ["OMP_NUM_THREADS"] = "1"
+
         if render_eval and not render:
             eval_interval = 1
         if render or render_eval:
