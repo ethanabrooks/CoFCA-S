@@ -5,6 +5,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn as nn
 
+import ppo.oh_et_al
 from ppo.distributions import FixedCategorical, Categorical, DiagGaussian
 from ppo.utils import init_
 
@@ -91,6 +92,9 @@ class Recurrence(nn.Module):
 
         hx = torch.cat(list(pack()), dim=-1)
         return hx, hx[-1:]
+
+    def parse_inputs(self, inputs: torch.Tensor):
+        return ppo.oh_et_al.Obs(*torch.split(inputs, self.obs_sections, dim=-1))
 
     def parse_hidden(self, hx: torch.Tensor) -> RecurrentState:
         return RecurrentState(*torch.split(hx, self.state_sizes, dim=-1))

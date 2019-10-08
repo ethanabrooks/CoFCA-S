@@ -7,7 +7,7 @@ import ppo.agent
 from ppo.agent import AgentValues, NNBase
 
 # noinspection PyMissingConstructor
-from ppo.distributions import FixedCategorical, FixedNormal
+from ppo.distributions import FixedNormal, FixedCategorical
 
 
 class Agent(ppo.agent.Agent, NNBase):
@@ -31,17 +31,16 @@ class Agent(ppo.agent.Agent, NNBase):
         )
         rm = self.recurrent_module
         hx = rm.parse_hidden(all_hxs)
-        a_dist = FixedNormal(loc=hx.loc, scale=hx.scale)
-        action_log_probs = a_dist.log_probs(hx.a)
-        entropy = a_dist.entropy().mean()
+        # dist = FixedNormal(loc=hx.loc, scale=hx.scale)
+        dist = FixedCategorical(hx.probs)
         return AgentValues(
             value=hx.v,
             action=hx.a,
-            action_log_probs=action_log_probs,
-            aux_loss=-self.entropy_coef * entropy,
+            action_log_probs=dist.log_probs(hx.a),
+            aux_loss=-self.entropy_coef * dist.entropy().mean(),
             dist=None,
             rnn_hxs=last_hx,
-            log=dict(entropy=entropy),
+            log=dict(entropy=dist.entropy()),
         )
 
     def _forward_gru(self, x, hxs, masks, action=None):
@@ -49,7 +48,7 @@ class Agent(ppo.agent.Agent, NNBase):
             y = F.pad(x, [0, self.recurrent_module.action_size], "constant", -1)
         else:
             y = torch.cat([x, action.float()], dim=-1)
-        return super()._forward_gru(y, hxs, masks)
+        return super()._forward_gru(y, hxs, masks[:, :1])
 
     def get_value(self, inputs, rnn_hxs, masks):
         all_hxs, last_hx = self._forward_gru(
