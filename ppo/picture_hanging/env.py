@@ -1,3 +1,4 @@
+import itertools
 import shutil
 import numpy as np
 import gym
@@ -5,26 +6,30 @@ from gym.utils import seeding
 
 
 class Env(gym.Env):
-    def __init__(self, width, min_pictures, max_pictures, single_step, seed):
+    def __init__(self, width, n_train: int, n_eval: int, single_step, seed):
+        self.n_eval = n_eval
+        self.n_train = n_train
         self.single_step = single_step
-        self.min_pictures = min_pictures
-        self.max_pictures = max_pictures
-        self.centers = None
         self.sizes = None
-        self.n_pictures = min_pictures
-        self.assigned_pictures = None
+        self.centers = None
         self.width = width
         self.random, self.seed = seeding.np_random(seed)
+        self.max_pictures = max(n_eval, n_train)
         self.observation_space = gym.spaces.Box(
-            low=0, high=self.width, shape=(max_pictures,)
+            low=0, high=self.width, shape=(self.max_pictures,)
         )
         # self.action_space = gym.spaces.Discrete(self.width)
         if single_step:
             self.action_space = gym.spaces.Box(
-                low=0, high=self.width, shape=(self.n_pictures,)
+                low=0, high=self.width, shape=(self.max_pictures,)
             )
         else:
             self.action_space = gym.spaces.Box(low=0, high=self.width, shape=(1,))
+        self.train_sizes = self.width * self.random.random(n_train)
+        self.eval_sizes = np.array(
+            list(itertools.islice(itertools.cycle(self.train_sizes), n_eval))
+        )
+        self.evaluating = False
 
     def step(self, center):
         if self.single_step:
@@ -54,11 +59,10 @@ class Env(gym.Env):
 
     def reset(self):
         self.centers = []
-        self.assigned_pictures = []
 
         def sizes():
             width = self.width
-            for _ in range(self.n_pictures):
+            for _ in range(self.n_train):
                 picture_width = self.random.rand() * width
                 yield picture_width
                 width -= picture_width

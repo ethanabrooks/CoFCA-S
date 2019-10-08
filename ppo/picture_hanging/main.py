@@ -7,7 +7,7 @@ from ppo.picture_hanging.env import Env
 from ppo.picture_hanging.recurrence import Recurrence
 
 
-def train(increment_curriculum_at, **_kwargs):
+def train(**_kwargs):
     class Train(ppo.train.Train):
         @staticmethod
         def make_env(
@@ -40,14 +40,12 @@ def train(increment_curriculum_at, **_kwargs):
 def cli():
     parsers = ppo.arguments.build_parser()
     parsers.main.add_argument("--no-tqdm", dest="use_tqdm", action="store_false")
-    parsers.main.add_argument("--increment-curriculum-at", type=float)
     parsers.main.add_argument("--eval-steps", type=int)
     parsers.agent.add_argument("--debug", action="store_true")
-    # parsers.agent.add_argument("--kernel-radius", type=int, default=5)
     parsers.env.add_argument("--single-step", action="store_true")
-    parsers.env.add_argument("--width", type=int, default=100)
-    parsers.env.add_argument("--min-pictures", type=int, default=2)
-    parsers.env.add_argument("--max-pictures", type=int, default=20)
+    parsers.env.add_argument("--width", type=int, default=1)
+    parsers.env.add_argument("--n-train", type=int, default=3)
+    parsers.env.add_argument("--n-eval", type=int, default=6)
     args = hierarchical_parse_args(parsers.main)
     train(**args)
 
