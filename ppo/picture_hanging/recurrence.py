@@ -43,11 +43,7 @@ class Recurrence(nn.Module):
         self.hidden_size = hidden_size
 
         # networks
-        self.gru = nn.GRU(
-            observation_space.shape[0],
-            hidden_size,
-            # num_layers,
-        )
+        self.gru = nn.GRU(observation_space.shape[0], hidden_size)
         self.critic = nn.Sequential()
         self.actor = nn.Sequential()
         layers = []
@@ -110,13 +106,8 @@ class Recurrence(nn.Module):
         for t in range(T):
             hn, h = self.gru(inputs[t].unsqueeze(0), h)
             v = self.critic(hn.squeeze(0))
-            a_dist = self.actor(hn.squeeze(0))
-            self.sample_new(A[t], a_dist)
+            dist = self.actor(hn.squeeze(0))
+            self.sample_new(A[t], dist)
             yield RecurrentState(
-                a=A[t],
-                loc=a_dist.loc,
-                scale=a_dist.scale,
-                v=v,
-                h=h.transpose(0, 1),
-                p=hx.p,
+                a=A[t], loc=dist.loc, scale=dist.scale, v=v, h=h.transpose(0, 1), p=hx.p
             )
