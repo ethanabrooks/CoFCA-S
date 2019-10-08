@@ -33,8 +33,7 @@ class Env(gym.Env):
             self.centers.append(center)
         t = False
         r = 0
-        n_pictures = len(self.sizes)
-        if len(self.centers) == n_pictures:
+        if len(self.centers) == len(self.sizes):
             t = True
 
             def compute_white_space():
@@ -48,9 +47,9 @@ class Env(gym.Env):
             white_space = list(compute_white_space())
             r = min(white_space) - max(white_space)  # max reward is 0
 
-        i = dict(n_pictures=n_pictures)
+        i = dict(n_pictures=len(self.sizes))
         if t:
-            i.update(reward_plus_n_picturs=n_pictures + r)
+            i.update(reward_plus_n_picturs=len(self.sizes) + r)
         return self.get_observation(), r, t, i
 
     def reset(self):
@@ -69,7 +68,11 @@ class Env(gym.Env):
         return self.get_observation()
 
     def get_observation(self):
-        obs = np.pad(self.sizes, (0, self.max_pictures - self.n_pictures))
+        obs = self.sizes
+        if len(self.sizes) < self.max_pictures:
+            obs = np.pad(
+                self.sizes, (0, self.max_pictures - len(self.sizes)), constant_values=-1
+            )
         self.observation_space.contains(obs)
         return obs
 
@@ -92,6 +95,12 @@ class Env(gym.Env):
     def increment_curriculum(self):
         self.n_pictures = min(self.n_pictures + 1, self.max_pictures)
         self.reset()
+
+    def train(self):
+        self.evaluating = False
+
+    def evaluate(self):
+        self.evaluating = True
 
 
 if __name__ == "__main__":
