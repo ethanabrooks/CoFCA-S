@@ -1,4 +1,3 @@
-import itertools
 import shutil
 import numpy as np
 import gym
@@ -6,30 +5,26 @@ from gym.utils import seeding
 
 
 class Env(gym.Env):
-    def __init__(self, width, n_train: int, n_eval: int, single_step, seed):
-        self.n_eval = n_eval
-        self.n_train = n_train
+    def __init__(self, width, min_pictures, max_pictures, single_step, seed):
         self.single_step = single_step
-        self.sizes = None
+        self.min_pictures = min_pictures
+        self.max_pictures = max_pictures
         self.centers = None
+        self.sizes = None
+        self.n_pictures = min_pictures
+        self.assigned_pictures = None
         self.width = width
         self.random, self.seed = seeding.np_random(seed)
-        self.max_pictures = max(n_eval, n_train)
         self.observation_space = gym.spaces.Box(
-            low=0, high=self.width, shape=(self.max_pictures,)
+            low=0, high=self.width, shape=(max_pictures,)
         )
         # self.action_space = gym.spaces.Discrete(self.width)
         if single_step:
             self.action_space = gym.spaces.Box(
-                low=0, high=self.width, shape=(self.max_pictures,)
+                low=0, high=self.width, shape=(self.n_pictures,)
             )
         else:
             self.action_space = gym.spaces.Box(low=0, high=self.width, shape=(1,))
-        self.train_sizes = self.width * self.random.random(n_train)
-        self.eval_sizes = np.array(
-            list(itertools.islice(itertools.cycle(self.train_sizes), n_eval))
-        )
-        self.evaluating = False
 
     def step(self, center):
         if self.single_step:
@@ -38,7 +33,8 @@ class Env(gym.Env):
             self.centers.append(center)
         t = False
         r = 0
-        if len(self.centers) == len(self.sizes):
+        n_pictures = len(self.sizes)
+        if len(self.centers) == n_pictures:
             t = True
 
             def compute_white_space():
@@ -52,23 +48,28 @@ class Env(gym.Env):
             white_space = list(compute_white_space())
             r = min(white_space) - max(white_space)  # max reward is 0
 
-        i = dict(n_pictures=len(self.sizes))
+        i = dict(n_pictures=n_pictures)
         if t:
-            i.update(reward_plus_n_picturs=len(self.sizes) + r)
+            i.update(reward_plus_n_picturs=n_pictures + r)
         return self.get_observation(), r, t, i
 
     def reset(self):
         self.centers = []
-        self.sizes = self.eval_sizes if self.evaluating else self.train_sizes
+        self.assigned_pictures = []
+
+        def sizes():
+            width = self.width
+            for _ in range(self.n_pictures):
+                picture_width = self.random.rand() * width
+                yield picture_width
+                width -= picture_width
+
+        self.sizes = list(sizes())
         self.random.shuffle(self.sizes)
         return self.get_observation()
 
     def get_observation(self):
-        obs = self.sizes
-        if len(self.sizes) < self.max_pictures:
-            obs = np.pad(
-                self.sizes, (0, self.max_pictures - len(self.sizes)), constant_values=-1
-            )
+        obs = np.pad(self.sizes, (0, self.max_pictures - self.n_pictures))
         self.observation_space.contains(obs)
         return obs
 
@@ -91,12 +92,6 @@ class Env(gym.Env):
     def increment_curriculum(self):
         self.n_pictures = min(self.n_pictures + 1, self.max_pictures)
         self.reset()
-
-    def train(self):
-        self.evaluating = False
-
-    def evaluate(self):
-        self.evaluating = True
 
 
 if __name__ == "__main__":
