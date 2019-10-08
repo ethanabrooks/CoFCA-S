@@ -68,7 +68,7 @@ class DiagGaussian(nn.Module):
         action_mean = self.fc_mean(x)
         if self.limits is not None:
             low, high = self.limits
-        action_mean = action_mean * (high - low) + low
+            action_mean = action_mean * (high - low) + low
 
         #  An ugly hack for my KFAC implementation.
         zeros = torch.zeros_like(action_mean)
