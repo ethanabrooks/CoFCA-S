@@ -59,15 +59,7 @@ class Env(gym.Env):
 
     def reset(self):
         self.centers = []
-
-        def sizes():
-            width = self.width
-            for _ in range(self.n_train):
-                picture_width = self.random.rand() * width
-                yield picture_width
-                width -= picture_width
-
-        self.sizes = list(sizes())
+        self.sizes = self.train_sizes
         self.random.shuffle(self.sizes)
         return self.get_observation()
 
