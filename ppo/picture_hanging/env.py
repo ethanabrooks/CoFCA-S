@@ -6,18 +6,18 @@ from gym.utils import seeding
 
 
 class Env(gym.Env):
-    def __init__(self, width, n_train: int, n_eval: int, single_step, seed):
-        self.n_eval = n_eval
-        self.n_train = n_train
+    def __init__(self, width, n_train, n_eval, single_step, seed):
         self.single_step = single_step
-        self.sizes = None
+        self.n_train = n_train
+        self.n_eval = n_eval
+        self.max_pictures = max(n_train, n_eval)
         self.centers = None
+        self.sizes = None
+        self.n_pictures = n_train
+        self.assigned_pictures = None
         self.width = width
         self.random, self.seed = seeding.np_random(seed)
-        self.max_pictures = max(n_eval, n_train)
-        self.observation_space = gym.spaces.Box(
-            low=0, high=self.width, shape=(self.max_pictures,)
-        )
+        self.observation_space = gym.spaces.Box(low=0, high=self.width, shape=(n_eval,))
         # self.action_space = gym.spaces.Discrete(self.width)
         if single_step:
             self.action_space = gym.spaces.Box(
