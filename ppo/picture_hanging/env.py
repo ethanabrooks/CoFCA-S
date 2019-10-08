@@ -25,10 +25,6 @@ class Env(gym.Env):
             )
         else:
             self.action_space = gym.spaces.Box(low=0, high=self.width, shape=(1,))
-        self.train_sizes = self.width * self.random.random(n_train)
-        self.eval_sizes = np.array(
-            list(itertools.islice(itertools.cycle(self.train_sizes), n_eval))
-        )
         self.evaluating = False
 
     def step(self, center):
@@ -59,7 +55,12 @@ class Env(gym.Env):
 
     def reset(self):
         self.centers = []
-        self.sizes = self.eval_sizes if self.evaluating else self.train_sizes
+        self.sizes = self.random.random(
+            self.n_eval
+            if self.evaluating
+            else self.random.random_integers(2, self.n_train)
+        )
+        self.sizes = self.sizes * self.width / self.sizes.sum()
         self.random.shuffle(self.sizes)
         return self.get_observation()
 
