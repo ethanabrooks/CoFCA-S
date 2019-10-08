@@ -23,16 +23,16 @@ def train(increment_curriculum_at, **_kwargs):
             )
             return Agent(entropy_coef=entropy_coef, recurrence=recurrence)
 
-        def run_epoch(self, *args, **kwargs):
-            dictionary = super().run_epoch(*args, **kwargs)
-            rewards = dictionary["rewards"]
-            if (
-                increment_curriculum_at
-                and rewards
-                and sum(rewards) / len(rewards) > increment_curriculum_at
-            ):
-                self.envs.increment_curriculum()
-            return dictionary
+        # def run_epoch(self, *args, **kwargs):
+        #     dictionary = super().run_epoch(*args, **kwargs)
+        #     rewards = dictionary["rewards"]
+        #     if (
+        #         increment_curriculum_at
+        #         and rewards
+        #         and sum(rewards) / len(rewards) > increment_curriculum_at
+        #     ):
+        #         self.envs.increment_curriculum()
+        #     return dictionary
 
     Train(**_kwargs, time_limit=None).run()
 
