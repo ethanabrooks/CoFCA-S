@@ -43,14 +43,12 @@ class Recurrence(nn.Module):
         self.hidden_size = hidden_size
 
         # networks
-        self.gru = nn.GRU(1, hidden_size)
+        self.gru = nn.GRU(observation_space.shape[0], hidden_size)
         self.critic = nn.Sequential()
         self.actor = nn.Sequential()
         layers = []
-        in_size = hidden_size * 2
         for i in range(num_layers):
-            layers += [init_(nn.Linear(in_size, hidden_size)), activation]
-            in_size = hidden_size
+            layers += [init_(nn.Linear(hidden_size, hidden_size)), activation]
         self.actor = nn.Sequential(*layers)
         self.critic = copy.deepcopy(self.actor)
         self.actor.add_module("dist", DiagGaussian(hidden_size, action_space.shape[0]))
@@ -90,27 +88,23 @@ class Recurrence(nn.Module):
         inputs, actions = torch.split(
             inputs.detach(), [D - self.action_size, self.action_size], dim=2
         )
-        M, Mn = self.gru(inputs[0].T.unsqueeze(-1))
 
         hx = self.parse_hidden(rnn_hxs)
         for _x in hx:
             _x.squeeze_(0)
 
-        P = hx.p.squeeze(1).long()
-        R = torch.arange(P.size(0), device=P.device)
+        h = (
+            hx.h.view(N, self.gru.num_layers, self.gru.hidden_size)
+            .transpose(0, 1)
+            .contiguous()
+        )
         A = actions.clone()
 
         for t in range(T):
-            r = M[P, R]
-            hn = torch.cat([Mn.squeeze(0), r], dim=-1)
-            v = self.critic(hn)
-            dist = self.actor(hn)
+            hn, h = self.gru(inputs[t].unsqueeze(0), h)
+            v = self.critic(hn.squeeze(0))
+            dist = self.actor(hn.squeeze(0))
             self.sample_new(A[t], dist)
             yield RecurrentState(
-                a=A[t],
-                loc=dist.loc,
-                scale=dist.scale,
-                v=v,
-                h=hx.h,
-                p=(P + 1) % (M.size(0)),
+                a=A[t], loc=dist.loc, scale=dist.scale, v=v, h=h.transpose(0, 1), p=hx.p
             )

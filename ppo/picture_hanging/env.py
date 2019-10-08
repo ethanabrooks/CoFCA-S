@@ -90,8 +90,7 @@ class Env(gym.Env):
             input("pause")
 
     def increment_curriculum(self):
-        self.n_pictures = min(self.n_pictures + 1, self.max_pictures)
-        self.reset()
+        raise NotImplementedError
 
     def train(self):
         self.evaluating = False
