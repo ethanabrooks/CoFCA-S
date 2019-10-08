@@ -7,8 +7,9 @@ from gym.utils import seeding
 class Env(gym.Env):
     def __init__(self, width, n_train, n_eval, single_step, seed):
         self.single_step = single_step
-        self.min_pictures = n_train
-        self.max_pictures = n_eval
+        self.n_train = n_train
+        self.n_eval = n_eval
+        self.max_pictures = max(n_train, n_eval)
         self.centers = None
         self.sizes = None
         self.n_pictures = n_train
