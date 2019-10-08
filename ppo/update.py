@@ -74,9 +74,8 @@ class PPO:
                 if not self.aux_loss_only:
                     ratio = torch.exp(action_log_probs - sample.old_action_log_probs)
                     surr1 = ratio * sample.adv
-                    surr2 = (
-                        torch.clamp(ratio, 1.0 - self.clip_param, 1.0 + self.clip_param)
-                        * sample.adv
+                    surr2 = sample.adv * torch.clamp(
+                        ratio, 1.0 - self.clip_param, 1.0 + self.clip_param
                     )
                     action_loss = -torch.min(surr1, surr2).mean()
                     logger.update(action_loss=action_loss)
