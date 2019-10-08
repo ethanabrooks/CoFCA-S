@@ -217,7 +217,8 @@ class CNNBase(NNBase):
 
 class MLPBase(NNBase):
     def __init__(self, num_inputs, hidden_size, num_layers, recurrent, activation):
-        super(MLPBase, self).__init__(recurrent, num_inputs, hidden_size)
+        recurrent_module = nn.GRU if recurrent else None
+        super(MLPBase, self).__init__(recurrent_module, num_inputs, hidden_size)
 
         if recurrent:
             num_inputs = hidden_size
