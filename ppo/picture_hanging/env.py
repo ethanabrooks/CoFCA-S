@@ -5,19 +5,17 @@ from gym.utils import seeding
 
 
 class Env(gym.Env):
-    def __init__(self, width, min_pictures, max_pictures, single_step, seed):
+    def __init__(self, width, n_train, n_eval, single_step, seed):
         self.single_step = single_step
-        self.min_pictures = min_pictures
-        self.max_pictures = max_pictures
+        self.n_train = n_train
+        self.max_pictures = n_eval
         self.centers = None
         self.sizes = None
-        self.n_pictures = min_pictures
+        self.n_pictures = n_train
         self.assigned_pictures = None
         self.width = width
         self.random, self.seed = seeding.np_random(seed)
-        self.observation_space = gym.spaces.Box(
-            low=0, high=self.width, shape=(max_pictures,)
-        )
+        self.observation_space = gym.spaces.Box(low=0, high=self.width, shape=(n_eval,))
         # self.action_space = gym.spaces.Discrete(self.width)
         if single_step:
             self.action_space = gym.spaces.Box(
