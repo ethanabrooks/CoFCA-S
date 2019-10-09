@@ -36,6 +36,7 @@ class Recurrence(nn.Module):
         hidden_size,
         num_layers,
         debug,
+        bidirectional,
     ):
         super().__init__()
         self.action_size = 1
@@ -43,12 +44,11 @@ class Recurrence(nn.Module):
         self.hidden_size = hidden_size
 
         # networks
-        self.gru = nn.GRU(1, hidden_size, bidirectional=True)
-        self.f = init_(nn.Linear(observation_space.shape[0], hidden_size))
+        self.gru = nn.GRU(1, hidden_size, bidirectional=bidirectional)
         self.critic = nn.Sequential()
         self.actor = nn.Sequential()
         layers = []
-        in_size = hidden_size * 4
+        in_size = hidden_size * (4 if bidirectional else 2)
         for i in range(num_layers):
             layers += [init_(nn.Linear(in_size, hidden_size)), activation]
             in_size = hidden_size
