@@ -43,12 +43,12 @@ class Recurrence(nn.Module):
         self.hidden_size = hidden_size
 
         # networks
-        self.gru = nn.GRU(1, hidden_size)
+        self.gru = nn.GRU(1, hidden_size, bidirectional=True)
         self.f = init_(nn.Linear(observation_space.shape[0], hidden_size))
         self.critic = nn.Sequential()
         self.actor = nn.Sequential()
         layers = []
-        in_size = hidden_size * 2
+        in_size = hidden_size * 4
         for i in range(num_layers):
             layers += [init_(nn.Linear(in_size, hidden_size)), activation]
             in_size = hidden_size
@@ -91,8 +91,7 @@ class Recurrence(nn.Module):
         inputs, actions = torch.split(
             inputs.detach(), [D - self.action_size, self.action_size], dim=2
         )
-        M, _ = self.gru(inputs[0].T.unsqueeze(-1))
-        Mn = self.f(inputs[0])
+        M, Mn = self.gru(inputs[0].T.unsqueeze(-1))
 
         hx = self.parse_hidden(rnn_hxs)
         for _x in hx:
@@ -104,7 +103,7 @@ class Recurrence(nn.Module):
 
         for t in range(T):
             r = M[P, R]
-            hn = torch.cat([Mn.squeeze(0), r], dim=-1)
+            hn = torch.cat([Mn.permute(1, 2, 0).reshape(N, -1), r], dim=-1)
             v = self.critic(hn)
             dist = self.actor(hn)
             self.sample_new(A[t], dist)
