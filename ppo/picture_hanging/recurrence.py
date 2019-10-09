@@ -36,6 +36,7 @@ class Recurrence(nn.Module):
         hidden_size,
         num_layers,
         debug,
+        bidirectional,
     ):
         super().__init__()
         self.action_size = 1
@@ -43,18 +44,16 @@ class Recurrence(nn.Module):
         self.hidden_size = hidden_size
 
         # networks
-        self.gru = nn.GRU(1, hidden_size)
-        self.critic = nn.Sequential()
-        self.actor = nn.Sequential()
-        layers = []
-        in_size = hidden_size * 2
-        for i in range(num_layers):
-            layers += [init_(nn.Linear(in_size, hidden_size)), activation]
-            in_size = hidden_size
-        self.actor = nn.Sequential(*layers)
-        self.critic = copy.deepcopy(self.actor)
-        self.actor.add_module("dist", DiagGaussian(hidden_size, action_space.shape[0]))
-        self.critic.add_module("out", init_(nn.Linear(hidden_size, 1)))
+        self.gru = nn.GRU(
+            1, hidden_size, num_layers=num_layers, bidirectional=bidirectional
+        )
+        in_size = hidden_size * (num_layers + 1)
+        if bidirectional:
+            in_size *= 2
+        self.actor = nn.Sequential(
+            activation, DiagGaussian(in_size, action_space.shape[0])
+        )
+        self.critic = nn.Sequential(activation, init_(nn.Linear(in_size, 1)))
         self.state_sizes = RecurrentState(a=1, loc=1, scale=1, p=1, v=1, h=hidden_size)
 
     @staticmethod
@@ -102,7 +101,7 @@ class Recurrence(nn.Module):
 
         for t in range(T):
             r = M[P, R]
-            hn = torch.cat([Mn.squeeze(0), r], dim=-1)
+            hn = torch.cat([Mn.permute(1, 2, 0).reshape(N, -1), r], dim=-1)
             v = self.critic(hn)
             dist = self.actor(hn)
             self.sample_new(A[t], dist)
