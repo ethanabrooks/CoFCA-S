@@ -16,7 +16,7 @@ class Env(gym.Env):
         self.random, self.seed = seeding.np_random(seed)
         self.max_pictures = max(n_eval, n_train)
         self.observation_space = gym.spaces.Box(
-            low=0, high=self.width, shape=(self.max_pictures,)
+            low=-1, high=np.inf, shape=(self.max_pictures + 1,)
         )
         # self.action_space = gym.spaces.Discrete(self.width)
         if single_step:
@@ -29,9 +29,9 @@ class Env(gym.Env):
 
     def step(self, center):
         if self.single_step:
-            self.centers = center
+            self.centers = np.maximum(center, 0)
         else:
-            self.centers.append(center)
+            self.centers.append(max(center, 0))
         t = False
         r = 0
         if len(self.centers) == len(self.sizes):
@@ -51,7 +51,9 @@ class Env(gym.Env):
         i = dict(n_pictures=len(self.sizes))
         if t:
             i.update(reward_plus_n_picturs=len(self.sizes) + r)
-        return self.get_observation(), r, t, i
+
+        obs = self.pad(np.concatenate([[1], self.centers]))
+        return obs, r, t, i
 
     def reset(self):
         self.centers = []
@@ -62,16 +64,23 @@ class Env(gym.Env):
         )
         self.sizes = self.sizes * self.width / self.sizes.sum()
         self.random.shuffle(self.sizes)
-        return self.get_observation()
+        return self.pad(np.concatenate([[0], self.sizes]))
 
-    def get_observation(self):
-        obs = self.sizes
-        if len(self.sizes) < self.max_pictures:
-            obs = np.pad(
-                self.sizes, (0, self.max_pictures - len(self.sizes)), constant_values=-1
-            )
-        self.observation_space.contains(obs)
+    def pad(self, obs):
+        obs_size = self.observation_space.shape[0]
+        if obs.shape[0] < obs_size:
+            obs = np.pad(obs, (0, obs_size - obs.size), constant_values=-1)
+        assert self.observation_space.contains(obs)
         return obs
+
+    # def get_observation(self):
+    #     obs = self.sizes
+    #     if len(self.sizes) < self.max_pictures:
+    #         obs = np.pad(
+    #             self.sizes, (0, self.max_pictures - len(self.sizes)), constant_values=-1
+    #         )
+    #     self.observation_space.contains(obs)
+    #     return obs
 
     def render(self, mode="human", pause=True):
         terminal_width = shutil.get_terminal_size((80, 20)).columns
