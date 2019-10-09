@@ -29,16 +29,19 @@ class Recurrence(nn.Module):
         self.hidden_size = hidden_size
 
         # networks
-        self.gru = nn.GRU(
-            1, hidden_size, num_layers=num_layers, bidirectional=bidirectional
-        )
+        self.gru = nn.GRU(1, hidden_size, bidirectional=bidirectional)
         self.seq_len = seq_len = observation_space.shape[0]
         self.num_directions = num_directions = 2 if bidirectional else 1
-        in_size = (1 + num_layers) * num_directions * hidden_size
-        self.actor = nn.Sequential(
-            activation, DiagGaussian(in_size, action_space.shape[0])
-        )
-        self.critic = nn.Sequential(activation, init_(nn.Linear(in_size, 1)))
+        layers = []
+        self.num_directions = 2 if bidirectional else 1
+        in_size = 2 * hidden_size * self.num_directions
+        for i in range(num_layers):
+            layers += [init_(nn.Linear(in_size, hidden_size)), activation]
+            in_size = hidden_size
+        self.actor = nn.Sequential(*layers)
+        self.critic = copy.deepcopy(self.actor)
+        self.actor.add_module("dist", DiagGaussian(hidden_size, action_space.shape[0]))
+        self.critic.add_module("out", init_(nn.Linear(hidden_size, 1)))
         self.state_sizes = RecurrentState(
             a=1,
             loc=1,
@@ -47,7 +50,7 @@ class Recurrence(nn.Module):
             v=1,
             h=hidden_size,
             M=seq_len * num_directions * hidden_size,
-            Mn=num_layers * num_directions * hidden_size,
+            Mn=num_directions * hidden_size,
         )
 
     @staticmethod
@@ -89,14 +92,16 @@ class Recurrence(nn.Module):
 
         new_episode = (rnn_hxs == 0).all()
         M, Mn = self.gru(inputs[0].T.unsqueeze(-1))
-        hx_M = hx.M.view(
-            N, self.seq_len, self.num_directions * self.hidden_size
-        ).transpose(0, 1)
-        M = M.where(new_episode.expand_as(M), hx_M)
-        hx_Mn = hx.Mn.view(
-            N, self.gru.num_layers * self.num_directions, self.hidden_size
-        ).transpose(0, 1)
-        Mn = Mn.where(new_episode.expand_as(Mn), hx_Mn)
+        M = M.where(
+            new_episode.expand_as(M),
+            hx.M.view(
+                N, self.seq_len, self.num_directions * self.hidden_size
+            ).transpose(0, 1),
+        )
+        Mn = Mn.where(
+            new_episode.expand_as(Mn),
+            hx.Mn.view(N, self.num_directions, self.hidden_size).transpose(0, 1),
+        )
 
         P = hx.p.squeeze(1).long()
         R = torch.arange(P.size(0), device=P.device)
