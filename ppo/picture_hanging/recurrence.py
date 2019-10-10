@@ -36,6 +36,7 @@ class Recurrence(nn.Module):
         hidden_size,
         num_layers,
         debug,
+        bottleneck,
         bidirectional,
     ):
         super().__init__()
@@ -47,9 +48,9 @@ class Recurrence(nn.Module):
         self.gru = nn.GRU(hidden_size, hidden_size, bidirectional=bidirectional)
         num_directions = 2 if bidirectional else 1
         self.conv = nn.Conv1d(1, hidden_size, kernel_size=1)
-        self.bottleneck = init_(nn.Linear(hidden_size * num_directions, 1))
+        self.bottleneck = init_(nn.Linear(hidden_size * num_directions, bottleneck))
         layers = []
-        in_size = hidden_size + 1
+        in_size = hidden_size + bottleneck
         for i in range(num_layers):
             layers += [init_(nn.Linear(in_size, hidden_size)), activation]
             in_size = hidden_size
