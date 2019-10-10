@@ -44,11 +44,12 @@ class Recurrence(nn.Module):
         self.hidden_size = hidden_size
 
         # networks
-        self.gru = nn.GRU(1, hidden_size, bidirectional=bidirectional)
-        self.critic = nn.Sequential()
-        self.actor = nn.Sequential()
+        self.gru = nn.GRU(hidden_size, hidden_size, bidirectional=bidirectional)
+        num_directions = 2 if bidirectional else 1
+        self.conv = nn.Conv1d(1, hidden_size, kernel_size=1)
+        self.bottleneck = init_(nn.Linear(hidden_size * num_directions, 1))
         layers = []
-        in_size = hidden_size * (2 if bidirectional else 1)
+        in_size = hidden_size + 1
         for i in range(num_layers):
             layers += [init_(nn.Linear(in_size, hidden_size)), activation]
             in_size = hidden_size
@@ -91,7 +92,10 @@ class Recurrence(nn.Module):
         inputs, actions = torch.split(
             inputs.detach(), [D - self.action_size, self.action_size], dim=2
         )
-        M, Mn = self.gru(inputs[0].T.unsqueeze(-1))
+        M = self.conv(inputs[0].unsqueeze(1))
+        M = M.permute(2, 0, 1)
+        _, Mn = self.gru(M)
+        c = self.bottleneck(Mn.transpose(0, 1).reshape(N, -1))
 
         hx = self.parse_hidden(rnn_hxs)
         for _x in hx:
@@ -103,8 +107,9 @@ class Recurrence(nn.Module):
 
         for t in range(T):
             r = M[P, R]
-            v = self.critic(r)
-            dist = self.actor(r)
+            h = torch.cat([r, c], dim=-1)
+            v = self.critic(h)
+            dist = self.actor(h)
             self.sample_new(A[t], dist)
             yield RecurrentState(
                 a=A[t],
