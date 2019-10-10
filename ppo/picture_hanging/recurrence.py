@@ -48,7 +48,7 @@ class Recurrence(nn.Module):
         self.critic = nn.Sequential()
         self.actor = nn.Sequential()
         layers = []
-        in_size = hidden_size * (4 if bidirectional else 2)
+        in_size = hidden_size * (2 if bidirectional else 1)
         for i in range(num_layers):
             layers += [init_(nn.Linear(in_size, hidden_size)), activation]
             in_size = hidden_size
@@ -103,9 +103,8 @@ class Recurrence(nn.Module):
 
         for t in range(T):
             r = M[P, R]
-            hn = torch.cat([Mn.permute(1, 2, 0).reshape(N, -1), r], dim=-1)
-            v = self.critic(hn)
-            dist = self.actor(hn)
+            v = self.critic(r)
+            dist = self.actor(r)
             self.sample_new(A[t], dist)
             yield RecurrentState(
                 a=A[t],
