@@ -36,6 +36,7 @@ class Recurrence(nn.Module):
         hidden_size,
         num_layers,
         debug,
+        bottleneck,
         bidirectional,
     ):
         super().__init__()

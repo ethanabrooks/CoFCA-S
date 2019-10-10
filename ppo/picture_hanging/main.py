@@ -50,6 +50,7 @@ def cli():
     parsers.agent.add_argument("--debug", action="store_true")
     parsers.agent.add_argument("--bidirectional", action="store_true")
     parsers.agent.add_argument("--baseline", action="store_true")
+    parsers.agent.add_argument("--bottleneck", type=int, default=1)
     parsers.env.add_argument("--single-step", action="store_true")
     parsers.env.add_argument("--width", type=int, default=1)
     parsers.env.add_argument("--n-train", type=int, default=3)
