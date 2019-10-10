@@ -45,7 +45,7 @@ class Recurrence(nn.Module):
         self.hidden_size = hidden_size
 
         # networks
-        self.gru = nn.GRU(hidden_size, hidden_size, bidirectional=bidirectional)
+        self.gru = nn.GRU(1, hidden_size, bidirectional=bidirectional)
         num_directions = 2 if bidirectional else 1
         self.conv = nn.Conv1d(1, hidden_size, kernel_size=1)
         self.bottleneck = init_(nn.Linear(hidden_size * num_directions, bottleneck))
@@ -93,10 +93,7 @@ class Recurrence(nn.Module):
         inputs, actions = torch.split(
             inputs.detach(), [D - self.action_size, self.action_size], dim=2
         )
-        C = self.conv(inputs[0].unsqueeze(1))
-        C = C.permute(2, 0, 1)
-        M, Mn = self.gru(C)
-        # c = self.bottleneck(Mn.transpose(0, 1).reshape(N, -1))
+        M, Mn = self.gru(inputs[0].T.unsqueeze(-1))
 
         hx = self.parse_hidden(rnn_hxs)
         for _x in hx:
