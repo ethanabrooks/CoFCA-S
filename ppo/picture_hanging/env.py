@@ -1,3 +1,4 @@
+import itertools
 import shutil
 import numpy as np
 import gym
@@ -5,24 +6,26 @@ from gym.utils import seeding
 
 
 class Env(gym.Env):
-    def __init__(self, width, n_train, n_eval, single_step, seed):
-        self.single_step = single_step
+    def __init__(self, width, n_train: int, n_eval: int, single_step, seed):
+        self.n_eval = n_eval
         self.n_train = n_train
-        self.max_pictures = n_eval
-        self.centers = None
+        self.single_step = single_step
         self.sizes = None
-        self.n_pictures = n_train
-        self.assigned_pictures = None
+        self.centers = None
         self.width = width
         self.random, self.seed = seeding.np_random(seed)
-        self.observation_space = gym.spaces.Box(low=0, high=self.width, shape=(n_eval,))
+        self.max_pictures = max(n_eval, n_train)
+        self.observation_space = gym.spaces.Box(
+            low=0, high=self.width, shape=(self.max_pictures,)
+        )
         # self.action_space = gym.spaces.Discrete(self.width)
         if single_step:
             self.action_space = gym.spaces.Box(
-                low=0, high=self.width, shape=(self.n_pictures,)
+                low=0, high=self.width, shape=(self.max_pictures,)
             )
         else:
             self.action_space = gym.spaces.Box(low=0, high=self.width, shape=(1,))
+        self.evaluating = False
 
     def step(self, center):
         if self.single_step:
@@ -46,22 +49,16 @@ class Env(gym.Env):
             r = min(white_space) - max(white_space)  # max reward is 0
 
         i = dict(n_pictures=len(self.sizes))
-        if t:
-            i.update(reward_plus_n_picturs=len(self.sizes) + r)
         return self.get_observation(), r, t, i
 
     def reset(self):
         self.centers = []
-        self.assigned_pictures = []
-
-        def sizes():
-            width = self.width
-            for _ in range(self.n_pictures):
-                picture_width = self.random.rand() * width
-                yield picture_width
-                width -= picture_width
-
-        self.sizes = list(sizes())
+        self.sizes = self.random.random(
+            self.n_eval
+            if self.evaluating
+            else self.random.random_integers(2, self.n_train)
+        )
+        self.sizes = self.sizes * self.width / self.sizes.sum()
         self.random.shuffle(self.sizes)
         return self.get_observation()
 
@@ -91,8 +88,13 @@ class Env(gym.Env):
             input("pause")
 
     def increment_curriculum(self):
-        self.n_pictures = min(self.n_pictures + 1, self.max_pictures)
-        self.reset()
+        raise NotImplementedError
+
+    def train(self):
+        self.evaluating = False
+
+    def evaluate(self):
+        self.evaluating = True
 
     def train(self):
         self.evaluating = False

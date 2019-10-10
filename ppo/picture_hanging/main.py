@@ -4,7 +4,8 @@ import ppo.arguments
 import ppo.train
 from ppo.picture_hanging.agent import Agent
 from ppo.picture_hanging.env import Env
-from ppo.picture_hanging.recurrence import Recurrence
+import ppo.picture_hanging.recurrence
+import ppo.picture_hanging.baseline
 
 
 def train(**_kwargs):
@@ -15,11 +16,16 @@ def train(**_kwargs):
         ):
             return Env(**env_args, seed=seed + rank)
 
-        def build_agent(self, envs, recurrent=None, entropy_coef=None, **agent_args):
-            recurrence = Recurrence(
-                action_space=envs.action_space,
-                observation_space=envs.observation_space,
-                **agent_args,
+        def build_agent(
+            self, envs, recurrent=None, entropy_coef=None, baseline=False, **agent_args
+        ):
+            agent_args.update(
+                action_space=envs.action_space, observation_space=envs.observation_space
+            )
+            recurrence = (
+                ppo.picture_hanging.baseline.Recurrence(**agent_args)
+                if baseline
+                else ppo.picture_hanging.recurrence.Recurrence(**agent_args)
             )
             return Agent(entropy_coef=entropy_coef, recurrence=recurrence)
 
@@ -42,6 +48,8 @@ def cli():
     parsers.main.add_argument("--no-tqdm", dest="use_tqdm", action="store_false")
     parsers.main.add_argument("--eval-steps", type=int)
     parsers.agent.add_argument("--debug", action="store_true")
+    parsers.agent.add_argument("--bidirectional", action="store_true")
+    parsers.agent.add_argument("--baseline", action="store_true")
     parsers.env.add_argument("--single-step", action="store_true")
     parsers.env.add_argument("--width", type=int, default=1)
     parsers.env.add_argument("--n-train", type=int, default=3)
