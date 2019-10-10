@@ -49,8 +49,6 @@ class Env(gym.Env):
             r = min(white_space) - max(white_space)  # max reward is 0
 
         i = dict(n_pictures=len(self.sizes))
-        if t:
-            i.update(reward_plus_n_picturs=len(self.sizes) + r)
         return self.get_observation(), r, t, i
 
     def reset(self):
