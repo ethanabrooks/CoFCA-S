@@ -17,7 +17,13 @@ def train(**_kwargs):
             return Env(**env_args, seed=seed + rank)
 
         def build_agent(
-            self, envs, recurrent=None, entropy_coef=None, baseline=False, **agent_args
+            self,
+            envs,
+            recurrent=None,
+            entropy_coef=None,
+            bottleneck=None,
+            baseline=False,
+            **agent_args
         ):
             agent_args.update(
                 action_space=envs.action_space, observation_space=envs.observation_space
@@ -25,7 +31,9 @@ def train(**_kwargs):
             recurrence = (
                 ppo.picture_hanging.baseline.Recurrence(**agent_args)
                 if baseline
-                else ppo.picture_hanging.recurrence.Recurrence(**agent_args)
+                else ppo.picture_hanging.recurrence.Recurrence(
+                    **agent_args, bottleneck=bottleneck
+                )
             )
             return Agent(entropy_coef=entropy_coef, recurrence=recurrence)
 

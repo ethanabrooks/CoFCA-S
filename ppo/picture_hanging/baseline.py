@@ -6,25 +6,11 @@ import torch
 import torch.nn.functional as F
 from torch import nn as nn
 
+from ppo.picture_hanging.env import Obs
 from ppo.distributions import DiagGaussian
 from ppo.utils import init_
 
 RecurrentState = namedtuple("RecurrentState", "a loc scale v h p")
-
-
-def batch_conv1d(inputs, weights):
-    outputs = []
-    # one convolution per instance
-    n = inputs.shape[0]
-    for i in range(n):
-        x = inputs[i]
-        w = weights[i]
-        convolved = F.conv1d(x.reshape(1, 1, -1), w.reshape(1, 1, -1), padding=2)
-        outputs.append(convolved.squeeze(0))
-    padded = torch.cat(outputs)
-    padded[:, 1] = padded[:, 1] + padded[:, 0]
-    padded[:, -2] = padded[:, -2] + padded[:, -1]
-    return padded[:, 1:-1]
 
 
 class Recurrence(nn.Module):
@@ -35,25 +21,35 @@ class Recurrence(nn.Module):
         activation,
         hidden_size,
         num_layers,
+        bidirectional,
         debug,
     ):
         super().__init__()
+        self.obs_spaces = Obs(**observation_space.spaces)
+        self.obs_sections = Obs(*[int(np.prod(s.shape)) for s in self.obs_spaces])
         self.action_size = 1
         self.debug = debug
         self.hidden_size = hidden_size
 
         # networks
-        self.gru = nn.GRU(observation_space.shape[0], hidden_size)
+        self.gru = nn.GRU(
+            sum(self.obs_sections), hidden_size, bidirectional=bidirectional
+        )
         self.critic = nn.Sequential()
         self.actor = nn.Sequential()
         layers = []
+        self.num_directions = 2 if bidirectional else 1
+        in_size = hidden_size * self.num_directions
         for i in range(num_layers):
-            layers += [init_(nn.Linear(hidden_size, hidden_size)), activation]
+            layers += [init_(nn.Linear(in_size, hidden_size)), activation]
+            in_size = hidden_size
         self.actor = nn.Sequential(*layers)
         self.critic = copy.deepcopy(self.actor)
         self.actor.add_module("dist", DiagGaussian(hidden_size, action_space.shape[0]))
         self.critic.add_module("out", init_(nn.Linear(hidden_size, 1)))
-        self.state_sizes = RecurrentState(a=1, loc=1, scale=1, p=1, v=1, h=hidden_size)
+        self.state_sizes = RecurrentState(
+            a=1, loc=1, scale=1, p=1, v=1, h=hidden_size * self.num_directions
+        )
 
     @staticmethod
     def sample_new(x, dist):
@@ -94,7 +90,9 @@ class Recurrence(nn.Module):
             _x.squeeze_(0)
 
         h = (
-            hx.h.view(N, self.gru.num_layers, self.gru.hidden_size)
+            hx.h.view(
+                N, self.gru.num_layers * self.num_directions, self.gru.hidden_size
+            )
             .transpose(0, 1)
             .contiguous()
         )
