@@ -96,6 +96,12 @@ class Env(gym.Env):
     def evaluate(self):
         self.evaluating = True
 
+    def train(self):
+        self.evaluating = False
+
+    def evaluate(self):
+        self.evaluating = True
+
 
 if __name__ == "__main__":
     import argparse

@@ -50,7 +50,7 @@ class Recurrence(nn.Module):
         self.conv = nn.Conv1d(1, hidden_size, kernel_size=1)
         self.bottleneck = init_(nn.Linear(hidden_size * num_directions, bottleneck))
         layers = []
-        in_size = hidden_size + bottleneck
+        in_size = hidden_size * num_directions
         for i in range(num_layers):
             layers += [init_(nn.Linear(in_size, hidden_size)), activation]
             in_size = hidden_size
@@ -95,8 +95,7 @@ class Recurrence(nn.Module):
         )
         M = self.conv(inputs[0].unsqueeze(1))
         M = M.permute(2, 0, 1)
-        _, Mn = self.gru(M)
-        c = self.bottleneck(Mn.transpose(0, 1).reshape(N, -1))
+        M, Mn = self.gru(M)
 
         hx = self.parse_hidden(rnn_hxs)
         for _x in hx:
@@ -108,9 +107,8 @@ class Recurrence(nn.Module):
 
         for t in range(T):
             r = M[P, R]
-            h = torch.cat([r, c], dim=-1)
-            v = self.critic(h)
-            dist = self.actor(h)
+            v = self.critic(r)
+            dist = self.actor(r)
             self.sample_new(A[t], dist)
             yield RecurrentState(
                 a=A[t],
