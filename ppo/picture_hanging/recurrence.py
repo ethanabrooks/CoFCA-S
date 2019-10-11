@@ -7,6 +7,7 @@ import torch.nn.functional as F
 from torch import nn as nn
 
 from ppo.distributions import DiagGaussian
+from ppo.picture_hanging.env import Obs
 from ppo.utils import init_
 
 RecurrentState = namedtuple("RecurrentState", "a loc scale v h p")
@@ -40,17 +41,19 @@ class Recurrence(nn.Module):
         bidirectional,
     ):
         super().__init__()
+        self.obs_spaces = Obs(**observation_space.spaces)
+        self.obs_sections = Obs(*[int(np.prod(s.shape)) for s in self.obs_spaces])
         self.action_size = 1
         self.debug = debug
         self.hidden_size = hidden_size
 
         # networks
-        self.gru = nn.GRU(hidden_size, hidden_size, bidirectional=bidirectional)
+        self.gru = nn.GRU(1, hidden_size, bidirectional=bidirectional)
         num_directions = 2 if bidirectional else 1
         self.conv = nn.Conv1d(1, hidden_size, kernel_size=1)
         self.bottleneck = init_(nn.Linear(hidden_size * num_directions, bottleneck))
         layers = []
-        in_size = hidden_size * num_directions
+        in_size = self.obs_sections.obs + hidden_size * num_directions
         for i in range(num_layers):
             layers += [init_(nn.Linear(in_size, hidden_size)), activation]
             in_size = hidden_size
@@ -80,6 +83,9 @@ class Recurrence(nn.Module):
         hx = torch.cat(list(pack()), dim=-1)
         return hx, hx[-1:]
 
+    def parse_inputs(self, inputs: torch.Tensor):
+        return Obs(*torch.split(inputs, self.obs_sections, dim=-1))
+
     def parse_hidden(self, hx: torch.Tensor) -> RecurrentState:
         return RecurrentState(*torch.split(hx, self.state_sizes, dim=-1))
 
@@ -93,9 +99,8 @@ class Recurrence(nn.Module):
         inputs, actions = torch.split(
             inputs.detach(), [D - self.action_size, self.action_size], dim=2
         )
-        M = self.conv(inputs[0].unsqueeze(1))
-        M = M.permute(2, 0, 1)
-        M, Mn = self.gru(M)
+        inputs = self.parse_inputs(inputs)
+        M, Mn = self.gru(inputs.sizes[0].T.unsqueeze(-1))
 
         hx = self.parse_hidden(rnn_hxs)
         for _x in hx:
@@ -107,8 +112,9 @@ class Recurrence(nn.Module):
 
         for t in range(T):
             r = M[P, R]
-            v = self.critic(r)
-            dist = self.actor(r)
+            h = torch.cat([r, inputs.obs[t]], dim=-1)
+            v = self.critic(h)
+            dist = self.actor(h)
             self.sample_new(A[t], dist)
             yield RecurrentState(
                 a=A[t],
