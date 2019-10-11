@@ -112,7 +112,7 @@ class Recurrence(nn.Module):
 
         for t in range(T):
             r = M[P, R]
-            h = torch.cat([r, inputs.obs[t]], dim=-1)
+            h = torch.cat([Mn.transpose(0, 1).reshape(N, -1), inputs.obs[t]], dim=-1)
             v = self.critic(h)
             dist = self.actor(h)
             self.sample_new(A[t], dist)
