@@ -105,7 +105,7 @@ class Recurrence(nn.Module):
             layers += [init_(nn.Linear(in_size, hidden_size)), activation]
             in_size = hidden_size
 
-        # self.beta = nn.Sequential(*layers, Categorical(hidden_size, 2))
+        self.beta = nn.Sequential(*layers, Categorical(hidden_size, 2))
         self.state_sizes = RecurrentState(
             a=1, b=1, a_loc=1, a_scale=1, b_probs=2, p=1, v=1, h=hidden_size
         )
@@ -142,7 +142,6 @@ class Recurrence(nn.Module):
             print(*args, **kwargs)
 
     def inner_loop(self, inputs, rnn_hxs):
-        device = inputs.device
         T, N, D = inputs.shape
         inputs, actions = torch.split(
             inputs.detach(), [D - self.action_size, self.action_size], dim=2
@@ -163,10 +162,7 @@ class Recurrence(nn.Module):
             r = M[P, R]
             v = self.critic(r)
             a_dist = self.actor(r)
-            # b_dist = self.beta(inputs.obs[t])
-            b_dist = FixedCategorical(
-                probs=torch.tensor([[0.0, 1.0]], device=device).expand(N, -1)
-            )
+            b_dist = self.beta(inputs.obs[t])
             self.sample_new(A[t], a_dist)
             self.sample_new(B[t], b_dist)
             yield RecurrentState(
