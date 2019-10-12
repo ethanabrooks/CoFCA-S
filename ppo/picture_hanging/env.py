@@ -24,10 +24,14 @@ class Env(gym.Env):
         box = gym.spaces.Box(low=0, high=self.width, shape=(self.max_pictures,))
         self.observation_space = gym.spaces.Dict(Obs(sizes=box, obs=box)._asdict())
         # self.action_space = gym.spaces.Discrete(self.width)
-        self.action_space = gym.spaces.Box(low=0, high=self.width, shape=(1,))
+        self.action_space = gym.spaces.Dict(
+            goal=gym.spaces.Box(low=0, high=self.width, shape=(1,)),
+            next=gym.spaces.Discrete(2),
+        )
         self.evaluating = False
 
-    def step(self, center):
+    def step(self, action):
+        center, _ = action
         self.centers.append(center)
         t = False
         r = 0
@@ -87,12 +91,6 @@ class Env(gym.Env):
 
     def increment_curriculum(self):
         raise NotImplementedError
-
-    def train(self):
-        self.evaluating = False
-
-    def evaluate(self):
-        self.evaluating = True
 
     def train(self):
         self.evaluating = False
