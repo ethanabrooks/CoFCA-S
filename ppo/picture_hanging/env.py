@@ -3,6 +3,9 @@ import shutil
 import numpy as np
 import gym
 from gym.utils import seeding
+from collections import namedtuple
+
+Obs = namedtuple("Obs", "sizes obs")
 
 
 class Env(gym.Env):
