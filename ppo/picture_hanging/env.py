@@ -9,10 +9,13 @@ Obs = namedtuple("Obs", "sizes obs")
 
 
 class Env(gym.Env):
-    def __init__(self, width, n_train: int, n_eval: int, single_step, seed):
+    def __init__(
+        self, width, n_train: int, n_eval: int, speed: float, seed: int, time_limit: int
+    ):
+        self.time_limit = time_limit
+        self.speed = speed
         self.n_eval = n_eval
         self.n_train = n_train
-        self.single_step = single_step
         self.sizes = None
         self.centers = None
         self.width = width
@@ -21,19 +24,11 @@ class Env(gym.Env):
         box = gym.spaces.Box(low=0, high=self.width, shape=(self.max_pictures,))
         self.observation_space = gym.spaces.Dict(Obs(sizes=box, obs=box)._asdict())
         # self.action_space = gym.spaces.Discrete(self.width)
-        if single_step:
-            self.action_space = gym.spaces.Box(
-                low=0, high=self.width, shape=(self.max_pictures,)
-            )
-        else:
-            self.action_space = gym.spaces.Box(low=0, high=self.width, shape=(1,))
+        self.action_space = gym.spaces.Box(low=0, high=self.width, shape=(1,))
         self.evaluating = False
 
     def step(self, center):
-        if self.single_step:
-            self.centers = center
-        else:
-            self.centers.append(center)
+        self.centers.append(center)
         t = False
         r = 0
         if len(self.centers) == len(self.sizes):
