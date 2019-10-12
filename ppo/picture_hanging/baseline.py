@@ -5,26 +5,63 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn as nn
+from torch.nn import functional as F
 
-from ppo.distributions import DiagGaussian
+import ppo.agent
+from ppo.agent import NNBase, AgentValues
+
+from ppo.distributions import DiagGaussian, FixedNormal
 from ppo.utils import init_
 
 RecurrentState = namedtuple("RecurrentState", "a loc scale v h p")
 
 
-def batch_conv1d(inputs, weights):
-    outputs = []
-    # one convolution per instance
-    n = inputs.shape[0]
-    for i in range(n):
-        x = inputs[i]
-        w = weights[i]
-        convolved = F.conv1d(x.reshape(1, 1, -1), w.reshape(1, 1, -1), padding=2)
-        outputs.append(convolved.squeeze(0))
-    padded = torch.cat(outputs)
-    padded[:, 1] = padded[:, 1] + padded[:, 0]
-    padded[:, -2] = padded[:, -2] + padded[:, -1]
-    return padded[:, 1:-1]
+class Agent(ppo.agent.Agent, NNBase):
+    def __init__(self, entropy_coef, recurrence):
+        nn.Module.__init__(self)
+        self.entropy_coef = entropy_coef
+        self.recurrent_module = recurrence
+
+    @property
+    def recurrent_hidden_state_size(self):
+        return sum(self.recurrent_module.state_sizes)
+
+    @property
+    def is_recurrent(self):
+        return True
+
+    def forward(self, inputs, rnn_hxs, masks, deterministic=False, action=None):
+        N = inputs.size(0)
+        all_hxs, last_hx = self._forward_gru(
+            inputs.view(N, -1), rnn_hxs, masks, action=action
+        )
+        rm = self.recurrent_module
+        hx = rm.parse_hidden(all_hxs)
+        a_dist = FixedNormal(loc=hx.loc, scale=hx.scale)
+        action_log_probs = a_dist.log_probs(hx.a)
+        entropy = a_dist.entropy().mean()
+        return AgentValues(
+            value=hx.v,
+            action=hx.a,
+            action_log_probs=action_log_probs,
+            aux_loss=-self.entropy_coef * entropy,
+            dist=None,
+            rnn_hxs=last_hx,
+            log=dict(entropy=entropy),
+        )
+
+    def _forward_gru(self, x, hxs, masks, action=None):
+        if action is None:
+            y = F.pad(x, [0, self.recurrent_module.action_size], "constant", -1)
+        else:
+            y = torch.cat([x, action.float()], dim=-1)
+        return super()._forward_gru(y, hxs, masks)
+
+    def get_value(self, inputs, rnn_hxs, masks):
+        all_hxs, last_hx = self._forward_gru(
+            inputs.view(inputs.size(0), -1), rnn_hxs, masks
+        )
+        return self.recurrent_module.parse_hidden(last_hx).v
 
 
 class Recurrence(nn.Module):

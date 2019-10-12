@@ -1,11 +1,11 @@
 from rl_utils import hierarchical_parse_args
 
 import ppo.arguments
-import ppo.train
-from ppo.picture_hanging.agent import Agent
-from ppo.picture_hanging.env import Env
-import ppo.picture_hanging.recurrence
 import ppo.picture_hanging.baseline
+import ppo.picture_hanging.exp
+import ppo.train
+from ppo.picture_hanging.baseline import Agent
+from ppo.picture_hanging.env import Env
 
 
 def train(**_kwargs):
@@ -22,12 +22,16 @@ def train(**_kwargs):
             agent_args.update(
                 action_space=envs.action_space, observation_space=envs.observation_space
             )
-            recurrence = (
-                ppo.picture_hanging.baseline.Recurrence(**agent_args)
-                if baseline
-                else ppo.picture_hanging.recurrence.Recurrence(**agent_args)
-            )
-            return Agent(entropy_coef=entropy_coef, recurrence=recurrence)
+            if baseline:
+                return ppo.picture_hanging.baseline.Agent(
+                    entropy_coef=entropy_coef,
+                    recurrence=(ppo.picture_hanging.baseline.Recurrence(**agent_args)),
+                )
+            else:
+                return ppo.picture_hanging.exp.Agent(
+                    entropy_coef=entropy_coef,
+                    recurrence=(ppo.picture_hanging.exp.Recurrence(**agent_args)),
+                )
 
         # def run_epoch(self, *args, **kwargs):
         #     dictionary = super().run_epoch(*args, **kwargs)
