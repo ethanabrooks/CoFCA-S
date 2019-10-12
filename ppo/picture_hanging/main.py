@@ -1,3 +1,4 @@
+from gym.wrappers import TimeLimit
 from rl_utils import hierarchical_parse_args
 
 import ppo.arguments
@@ -14,7 +15,9 @@ def train(**_kwargs):
         def make_env(
             seed, rank, evaluation, env_id, add_timestep, time_limit, **env_args
         ):
-            return Env(**env_args, seed=seed + rank)
+            return TimeLimit(
+                Env(**env_args, seed=seed + rank), max_episode_steps=time_limit
+            )
 
         def build_agent(
             self, envs, recurrent=None, entropy_coef=None, baseline=False, **agent_args
@@ -44,13 +47,14 @@ def train(**_kwargs):
         #         self.envs.increment_curriculum()
         #     return dictionary
 
-    Train(**_kwargs, time_limit=None).run()
+    Train(**_kwargs).run()
 
 
 def cli():
     parsers = ppo.arguments.build_parser()
     parsers.main.add_argument("--no-tqdm", dest="use_tqdm", action="store_false")
     parsers.main.add_argument("--eval-steps", type=int)
+    parsers.main.add_argument("--time-limit", type=int, required=True)
     parsers.agent.add_argument("--debug", action="store_true")
     parsers.agent.add_argument("--bidirectional", action="store_true")
     parsers.agent.add_argument("--baseline", action="store_true")

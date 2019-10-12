@@ -30,26 +30,28 @@ class Env(gym.Env):
     def step(self, actions):
         goal, next_picture = actions
         if next_picture:
+            if len(self.centers) == len(self.sizes):
+
+                def compute_white_space():
+                    left = 0
+                    for center, picture in zip(self.centers, self.sizes):
+                        right = center - picture / 2
+                        yield right - left
+                        left = center + picture / 2
+                    yield self.width - left
+
+                white_space = list(compute_white_space())
+                # max reward is 0
+                return (
+                    self.get_observation(),
+                    (min(white_space) - max(white_space)),
+                    True,
+                    {},
+                )
             self.centers.append(0)
         self.centers[-1] = max(0, min(goal, self.centers[-1] + self.speed))
-        t = False
-        r = 0
-        if len(self.centers) == len(self.sizes):
-            t = True
-
-            def compute_white_space():
-                left = 0
-                for center, picture in zip(self.centers, self.sizes):
-                    right = center - picture / 2
-                    yield right - left
-                    left = center + picture / 2
-                yield self.width - left
-
-            white_space = list(compute_white_space())
-            r = min(white_space) - max(white_space)  # max reward is 0
-
         i = dict(n_pictures=len(self.sizes))
-        return self.get_observation(), r, t, i
+        return self.get_observation(), 0, False, i
 
     def reset(self):
         self.centers = [0]
