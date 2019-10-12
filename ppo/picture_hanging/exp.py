@@ -5,23 +5,16 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn as nn
-
-from ppo.picture_hanging.env import Obs
-from ppo.distributions import DiagGaussian
-from ppo.utils import init_
-
-RecurrentState = namedtuple("RecurrentState", "a loc scale v h p")
-
-import torch
-import torch.jit
-from torch import nn as nn
 from torch.nn import functional as F
 
 import ppo.agent
-from ppo.agent import AgentValues, NNBase
+from ppo.agent import NNBase, AgentValues
 
-# noinspection PyMissingConstructor
-from ppo.distributions import FixedCategorical, FixedNormal
+from ppo.distributions import DiagGaussian, Categorical, FixedNormal, FixedCategorical
+from ppo.picture_hanging.env import Obs
+from ppo.utils import init_
+
+RecurrentState = namedtuple("RecurrentState", "a b a_loc a_scale b_probs v h p")
 
 
 class Agent(ppo.agent.Agent, NNBase):
@@ -45,12 +38,13 @@ class Agent(ppo.agent.Agent, NNBase):
         )
         rm = self.recurrent_module
         hx = rm.parse_hidden(all_hxs)
-        a_dist = FixedNormal(loc=hx.loc, scale=hx.scale)
-        action_log_probs = a_dist.log_probs(hx.a)
-        entropy = a_dist.entropy().mean()
+        a_dist = FixedNormal(loc=hx.a_loc, scale=hx.a_scale)
+        b_dist = FixedCategorical(probs=hx.b_probs)
+        action_log_probs = a_dist.log_probs(hx.a) + b_dist.log_probs(hx.b)
+        entropy = (a_dist.entropy() + b_dist.entropy()).mean()
         return AgentValues(
             value=hx.v,
-            action=hx.a,
+            action=torch.cat([hx.a, hx.b], dim=-1),
             action_log_probs=action_log_probs,
             aux_loss=-self.entropy_coef * entropy,
             dist=None,
@@ -80,34 +74,40 @@ class Recurrence(nn.Module):
         activation,
         hidden_size,
         num_layers,
-        bidirectional,
         debug,
+        bidirectional,
     ):
         super().__init__()
         self.obs_spaces = Obs(**observation_space.spaces)
         self.obs_sections = Obs(*[int(np.prod(s.shape)) for s in self.obs_spaces])
-        self.action_size = 1
+        self.action_size = 2
         self.debug = debug
         self.hidden_size = hidden_size
 
         # networks
-        self.gru = nn.GRU(
-            sum(self.obs_sections), hidden_size, bidirectional=bidirectional
-        )
-        self.critic = nn.Sequential()
-        self.actor = nn.Sequential()
+        self.gru = nn.GRU(1, hidden_size, bidirectional=bidirectional)
+        num_directions = 2 if bidirectional else 1
         layers = []
-        self.num_directions = 2 if bidirectional else 1
-        in_size = hidden_size * self.num_directions
+        in_size = num_directions * hidden_size
         for i in range(num_layers):
             layers += [init_(nn.Linear(in_size, hidden_size)), activation]
             in_size = hidden_size
         self.actor = nn.Sequential(*layers)
         self.critic = copy.deepcopy(self.actor)
-        self.actor.add_module("dist", DiagGaussian(hidden_size, action_space.shape[0]))
+        self.actor.add_module(
+            "dist", DiagGaussian(hidden_size, action_space.spaces["goal"].shape[0])
+        )
         self.critic.add_module("out", init_(nn.Linear(hidden_size, 1)))
+
+        layers = []
+        in_size = self.obs_sections.obs
+        for i in range(num_layers):
+            layers += [init_(nn.Linear(in_size, hidden_size)), activation]
+            in_size = hidden_size
+
+        self.beta = nn.Sequential(*layers, Categorical(hidden_size, 2))
         self.state_sizes = RecurrentState(
-            a=1, loc=1, scale=1, p=1, v=1, h=hidden_size * self.num_directions
+            a=1, b=1, a_loc=1, a_scale=1, b_probs=2, p=1, v=1, h=hidden_size
         )
 
     @staticmethod
@@ -130,6 +130,9 @@ class Recurrence(nn.Module):
         hx = torch.cat(list(pack()), dim=-1)
         return hx, hx[-1:]
 
+    def parse_inputs(self, inputs: torch.Tensor):
+        return Obs(*torch.split(inputs, self.obs_sections, dim=-1))
+
     def parse_hidden(self, hx: torch.Tensor) -> RecurrentState:
         return RecurrentState(*torch.split(hx, self.state_sizes, dim=-1))
 
@@ -143,25 +146,32 @@ class Recurrence(nn.Module):
         inputs, actions = torch.split(
             inputs.detach(), [D - self.action_size, self.action_size], dim=2
         )
+        inputs = self.parse_inputs(inputs)
+        M, Mn = self.gru(inputs.sizes[0].T.unsqueeze(-1))
 
         hx = self.parse_hidden(rnn_hxs)
         for _x in hx:
             _x.squeeze_(0)
 
-        h = (
-            hx.h.view(
-                N, self.gru.num_layers * self.num_directions, self.gru.hidden_size
-            )
-            .transpose(0, 1)
-            .contiguous()
-        )
-        A = actions.clone()
+        P = hx.p.squeeze(1).long()
+        R = torch.arange(P.size(0), device=P.device)
+        A = actions.clone()[:, :, 0]
+        B = actions.clone()[:, :, 1].long()
 
         for t in range(T):
-            hn, h = self.gru(inputs[t].unsqueeze(0), h)
-            v = self.critic(hn.squeeze(0))
-            dist = self.actor(hn.squeeze(0))
-            self.sample_new(A[t], dist)
+            r = M[P, R]
+            v = self.critic(r)
+            a_dist = self.actor(r)
+            b_dist = self.beta(inputs.obs[t])
+            self.sample_new(A[t], a_dist)
+            self.sample_new(B[t], b_dist)
             yield RecurrentState(
-                a=A[t], loc=dist.loc, scale=dist.scale, v=v, h=h.transpose(0, 1), p=hx.p
+                a=A[t],
+                b=B[t],
+                a_loc=a_dist.loc,
+                a_scale=a_dist.scale,
+                b_probs=b_dist.probs,
+                v=v,
+                h=hx.h,
+                p=(P + 1) % (M.size(0)),
             )
