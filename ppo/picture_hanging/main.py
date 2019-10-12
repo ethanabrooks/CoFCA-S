@@ -15,9 +15,7 @@ def train(**_kwargs):
         def make_env(
             seed, rank, evaluation, env_id, add_timestep, time_limit, **env_args
         ):
-            return TimeLimit(
-                Env(**env_args, seed=seed + rank), max_episode_steps=time_limit
-            )
+            return Env(**env_args, seed=seed + rank, time_limit=time_limit)
 
         def build_agent(
             self, envs, recurrent=None, entropy_coef=None, baseline=False, **agent_args

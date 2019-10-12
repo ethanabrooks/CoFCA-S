@@ -9,7 +9,10 @@ Obs = namedtuple("Obs", "sizes obs")
 
 
 class Env(gym.Env):
-    def __init__(self, width, n_train: int, n_eval: int, speed: float, seed):
+    def __init__(
+        self, width, n_train: int, n_eval: int, speed: float, seed: int, time_limit: int
+    ):
+        self.time_limit = time_limit
         self.speed = speed
         self.n_eval = n_eval
         self.n_train = n_train
@@ -26,9 +29,13 @@ class Env(gym.Env):
             next=gym.spaces.Discrete(2),
         )
         self.evaluating = False
+        self.t = None
 
     def step(self, actions):
         goal, next_picture = actions
+        self.t += 1
+        if self.t > self.time_limit:
+            return self.get_observation(), -self.width, True, {}
         if next_picture:
             if len(self.centers) == len(self.sizes):
 
@@ -50,10 +57,10 @@ class Env(gym.Env):
                 )
             self.centers.append(0)
         self.centers[-1] = max(0, min(goal, self.centers[-1] + self.speed))
-        i = dict(n_pictures=len(self.sizes))
-        return self.get_observation(), 0, False, i
+        return self.get_observation(), 0, False, {}
 
     def reset(self):
+        self.t = 0
         self.centers = [0]
         self.sizes = self.random.random(
             self.n_eval
