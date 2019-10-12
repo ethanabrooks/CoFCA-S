@@ -36,7 +36,9 @@ class Env(gym.Env):
         self.t += 1
         if self.t > self.time_limit:
             return self.get_observation(), -2 * self.width, True, {}
-        self.centers[-1] = max(0, min(self.width, center))
+        self.centers[-1] = max(
+            0, min(self.width, min(self.centers[-1] + self.speed, center))
+        )
         t = False
         r = 0
         if next_picture:
