@@ -18,9 +18,8 @@ class Env(gym.Env):
         self.width = width
         self.random, self.seed = seeding.np_random(seed)
         self.max_pictures = max(n_eval, n_train)
-        self.observation_space = gym.spaces.Box(
-            low=0, high=self.width, shape=(self.max_pictures,)
-        )
+        box = gym.spaces.Box(low=0, high=self.width, shape=(self.max_pictures,))
+        self.observation_space = gym.spaces.Dict(Obs(sizes=box, obs=box)._asdict())
         # self.action_space = gym.spaces.Discrete(self.width)
         if single_step:
             self.action_space = gym.spaces.Box(
@@ -66,13 +65,14 @@ class Env(gym.Env):
         return self.get_observation()
 
     def get_observation(self):
-        obs = self.sizes
-        if len(self.sizes) < self.max_pictures:
-            obs = np.pad(
-                self.sizes, (0, self.max_pictures - len(self.sizes)), constant_values=-1
-            )
+        obs = Obs(sizes=self.pad(self.sizes), obs=self.pad(self.centers))._asdict()
         self.observation_space.contains(obs)
         return obs
+
+    def pad(self, obs):
+        if len(obs) == self.max_pictures:
+            return obs
+        return np.pad(obs, (0, self.max_pictures - len(obs)), constant_values=-1)
 
     def render(self, mode="human", pause=True):
         terminal_width = shutil.get_terminal_size((80, 20)).columns
@@ -108,7 +108,7 @@ class Env(gym.Env):
 
 if __name__ == "__main__":
     import argparse
-    from rl_utils import hierarchical_parse_args
+    from rl_utils import hierarchical_parse_args, namedtuple
     from ppo import keyboard_control
 
     parser = argparse.ArgumentParser()

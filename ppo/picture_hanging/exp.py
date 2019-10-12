@@ -8,6 +8,7 @@ from torch import nn as nn
 
 import ppo.agent
 from ppo.distributions import DiagGaussian, FixedNormal
+from ppo.picture_hanging.env import Obs
 from ppo.utils import init_
 from ppo.agent import AgentValues
 
@@ -74,6 +75,8 @@ class Recurrence(nn.Module):
         bidirectional,
     ):
         super().__init__()
+        self.obs_spaces = Obs(**observation_space.spaces)
+        self.obs_sections = Obs(*[int(np.prod(s.shape)) for s in self.obs_spaces])
         self.action_size = 1
         self.debug = debug
         self.hidden_size = hidden_size
@@ -113,6 +116,9 @@ class Recurrence(nn.Module):
         hx = torch.cat(list(pack()), dim=-1)
         return hx, hx[-1:]
 
+    def parse_inputs(self, inputs: torch.Tensor):
+        return Obs(*torch.split(inputs, self.obs_sections, dim=-1))
+
     def parse_hidden(self, hx: torch.Tensor) -> RecurrentState:
         return RecurrentState(*torch.split(hx, self.state_sizes, dim=-1))
 
@@ -126,7 +132,8 @@ class Recurrence(nn.Module):
         inputs, actions = torch.split(
             inputs.detach(), [D - self.action_size, self.action_size], dim=2
         )
-        M, Mn = self.gru(inputs[0].T.unsqueeze(-1))
+        inputs = self.parse_inputs(inputs)
+        M, Mn = self.gru(inputs.sizes[0].T.unsqueeze(-1))
 
         hx = self.parse_hidden(rnn_hxs)
         for _x in hx:
