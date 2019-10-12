@@ -29,9 +29,13 @@ class Env(gym.Env):
             next=gym.spaces.Discrete(2),
         )
         self.evaluating = False
+        self.t = None
 
     def step(self, action):
         center, next_picture = action
+        self.t += 1
+        if self.t > self.time_limit:
+            return self.get_observation(), -2 * self.width, True, {}
         self.centers[-1] = max(0, min(self.width, center))
         t = False
         r = 0
@@ -50,11 +54,17 @@ class Env(gym.Env):
                     yield self.width - left
 
                 white_space = list(compute_white_space())
-                r = min(white_space) - max(white_space)  # max reward is 0
-
-        return self.get_observation(), r, t, {}
+                # max reward is 0
+                return (
+                    self.get_observation(),
+                    (min(white_space) - max(white_space)),
+                    True,
+                    {},
+                )
+        return self.get_observation(), 0, False, {}
 
     def reset(self):
+        self.t = 0
         self.centers = [0]
         self.sizes = self.random.random(
             self.n_eval
