@@ -31,13 +31,19 @@ class Env(gym.Env):
         self.evaluating = False
         self.t = None
 
-    def step(self, actions):
-        goal, next_picture = actions
+    def step(self, action):
+        center, next_picture = action
         self.t += 1
         if self.t > self.time_limit:
             return self.get_observation(), -2 * self.width, True, {}
+        self.centers[-1] = max(0, min(self.width, center))
+        t = False
+        r = 0
         if next_picture:
-            if len(self.centers) == len(self.sizes):
+            if len(self.centers) < len(self.sizes):
+                self.centers.append(0)
+            else:
+                t = True
 
                 def compute_white_space():
                     left = 0
@@ -55,8 +61,6 @@ class Env(gym.Env):
                     True,
                     {},
                 )
-            self.centers.append(0)
-        self.centers[-1] = max(0, min(goal, self.centers[-1] + self.speed))
         return self.get_observation(), 0, False, {}
 
     def reset(self):
