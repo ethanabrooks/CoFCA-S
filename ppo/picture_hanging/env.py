@@ -31,8 +31,8 @@ class Env(gym.Env):
         self.evaluating = False
 
     def step(self, action):
-        center, _ = action
-        self.centers.append(center)
+        center, next_picture = action
+        self.centers[-1] = max(0, min(self.width, center))
         t = False
         r = 0
         if len(self.centers) == len(self.sizes):
@@ -50,10 +50,12 @@ class Env(gym.Env):
             r = min(white_space) - max(white_space)  # max reward is 0
 
         i = dict(n_pictures=len(self.sizes))
+        if next_picture and len(self.centers) < len(self.sizes):
+            self.centers.append(0)
         return self.get_observation(), r, t, i
 
     def reset(self):
-        self.centers = []
+        self.centers = [0]
         self.sizes = self.random.random(
             self.n_eval
             if self.evaluating
@@ -106,13 +108,16 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", default=0, type=int)
-    parser.add_argument("--width", default=4, type=int)
-    parser.add_argument("--n-actions", default=4, type=int)
+    parser.add_argument("--width", default=100, type=int)
+    parser.add_argument("--n-train", default=4, type=int)
+    parser.add_argument("--n-eval", default=6, type=int)
+    parser.add_argument("--speed", default=100, type=int)
+    parser.add_argument("--time-limit", default=100, type=int)
     args = hierarchical_parse_args(parser)
 
     def action_fn(string):
         try:
-            return float(string)
+            return float(string), 1
         except ValueError:
             return
 
