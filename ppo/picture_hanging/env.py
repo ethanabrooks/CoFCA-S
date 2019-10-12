@@ -29,30 +29,40 @@ class Env(gym.Env):
             next=gym.spaces.Discrete(2),
         )
         self.evaluating = False
+        self.t = None
 
-    def step(self, action):
-        center, _ = action
-        self.centers.append(center)
-        t = False
-        r = 0
-        if len(self.centers) == len(self.sizes):
-            t = True
+    def step(self, actions):
+        goal, next_picture = actions
+        self.t += 1
+        if self.t > self.time_limit:
+            return self.get_observation(), -self.width, True, {}
+        if next_picture:
+            if len(self.centers) == len(self.sizes):
 
-            def compute_white_space():
-                left = 0
-                for center, picture in zip(self.centers, self.sizes):
-                    right = center - picture / 2
-                    yield right - left
-                    left = center + picture / 2
-                yield self.width - left
+                def compute_white_space():
+                    left = 0
+                    for center, picture in zip(self.centers, self.sizes):
+                        right = center - picture / 2
+                        yield right - left
+                        left = center + picture / 2
+                    yield self.width - left
 
-            white_space = list(compute_white_space())
-            r = min(white_space) - max(white_space)  # max reward is 0
-
-        i = dict(n_pictures=len(self.sizes))
-        return self.get_observation(), r, t, i
+                white_space = list(compute_white_space())
+                # max reward is 0
+                return (
+                    self.get_observation(),
+                    (min(white_space) - max(white_space)),
+                    True,
+                    {},
+                )
+            self.centers.append(0)
+        self.centers[-1] = max(
+            0, min(self.width, min(goal, self.centers[-1] + self.speed))
+        )
+        return self.get_observation(), 0, False, {}
 
     def reset(self):
+        self.t = 0
         self.centers = []
         self.sizes = self.random.random(
             self.n_eval
@@ -106,13 +116,16 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", default=0, type=int)
-    parser.add_argument("--width", default=4, type=int)
-    parser.add_argument("--n-actions", default=4, type=int)
+    parser.add_argument("--width", default=100, type=int)
+    parser.add_argument("--n-train", default=4, type=int)
+    parser.add_argument("--n-eval", default=6, type=int)
+    parser.add_argument("--speed", default=100, type=int)
+    parser.add_argument("--time-limit", default=100, type=int)
     args = hierarchical_parse_args(parser)
 
     def action_fn(string):
         try:
-            return float(string)
+            return float(string), 1
         except ValueError:
             return
 
