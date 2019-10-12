@@ -106,12 +106,6 @@ class Env(gym.Env):
     def evaluate(self):
         self.evaluating = True
 
-    def train(self):
-        self.evaluating = False
-
-    def evaluate(self):
-        self.evaluating = True
-
 
 if __name__ == "__main__":
     import argparse
@@ -120,13 +114,16 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", default=0, type=int)
-    parser.add_argument("--width", default=4, type=int)
-    parser.add_argument("--n-actions", default=4, type=int)
+    parser.add_argument("--width", default=100, type=int)
+    parser.add_argument("--n-train", default=4, type=int)
+    parser.add_argument("--n-eval", default=6, type=int)
+    parser.add_argument("--speed", default=100, type=int)
+    parser.add_argument("--time-limit", default=100, type=int)
     args = hierarchical_parse_args(parser)
 
     def action_fn(string):
         try:
-            return float(string)
+            return float(string), 1
         except ValueError:
             return
 
