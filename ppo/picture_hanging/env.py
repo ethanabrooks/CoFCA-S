@@ -35,7 +35,7 @@ class Env(gym.Env):
         goal, next_picture = actions
         self.t += 1
         if self.t > self.time_limit:
-            return self.get_observation(), -self.width, True, {}
+            return self.get_observation(), -2 * self.width, True, {}
         if next_picture:
             if len(self.centers) == len(self.sizes):
 
