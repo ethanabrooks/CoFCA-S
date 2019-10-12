@@ -88,24 +88,28 @@ class Recurrence(nn.Module):
         self.gru = nn.GRU(1, hidden_size, bidirectional=bidirectional)
         num_directions = 2 if bidirectional else 1
         layers = []
-        in_size = num_directions * hidden_size
-        for i in range(num_layers):
-            layers += [init_(nn.Linear(in_size, hidden_size)), activation]
-            in_size = hidden_size
-        self.actor = nn.Sequential(*layers)
-        self.critic = copy.deepcopy(self.actor)
-        self.actor.add_module(
-            "dist", DiagGaussian(hidden_size, action_space.spaces["goal"].shape[0])
+        for i in range(max(0, num_layers - 1)):
+            layers += [init_(nn.Linear(hidden_size, hidden_size)), activation]
+
+        self.actor = nn.Sequential(
+            init_(nn.Linear(hidden_size * num_directions, hidden_size)),
+            *layers,
+            DiagGaussian(hidden_size, action_space.spaces["goal"].shape[0])
         )
-        self.critic.add_module("out", init_(nn.Linear(hidden_size, 1)))
-
-        layers = []
-        in_size = self.obs_sections.obs
-        for i in range(num_layers):
-            layers += [init_(nn.Linear(in_size, hidden_size)), activation]
-            in_size = hidden_size
-
-        self.beta = nn.Sequential(*layers, Categorical(hidden_size, 2))
+        self.critic = nn.Sequential(
+            init_(nn.Linear(hidden_size * num_directions, hidden_size)),
+            *copy.deepcopy(layers),
+            init_(nn.Linear(hidden_size, 1))
+        )
+        self.beta = nn.Sequential(
+            init_(
+                nn.Linear(
+                    hidden_size * num_directions + self.obs_sections.obs, hidden_size
+                )
+            ),
+            *copy.deepcopy(layers),
+            Categorical(hidden_size, 2)
+        )
         self.state_sizes = RecurrentState(
             a=1, b=1, a_loc=1, a_scale=1, b_probs=2, p=1, v=1, h=hidden_size
         )
@@ -162,7 +166,7 @@ class Recurrence(nn.Module):
             r = M[P, R]
             v = self.critic(r)
             a_dist = self.actor(r)
-            b_dist = self.beta(inputs.obs[t])
+            b_dist = self.beta(torch.cat([inputs.obs[t], r], dim=-1))
             self.sample_new(A[t], a_dist)
             self.sample_new(B[t], b_dist)
             yield RecurrentState(
@@ -173,5 +177,5 @@ class Recurrence(nn.Module):
                 b_probs=b_dist.probs,
                 v=v,
                 h=hx.h,
-                p=(P + 1) % (M.size(0)),
+                p=(P + B[t]) % (M.size(0)),
             )
