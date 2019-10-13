@@ -76,8 +76,10 @@ class Recurrence(nn.Module):
         num_layers,
         debug,
         bidirectional,
+        feed_r_to_beta,
     ):
         super().__init__()
+        self.feed_r_to_beta = feed_r_to_beta
         self.obs_spaces = Obs(**observation_space.spaces)
         self.obs_sections = Obs(*[int(np.prod(s.shape)) for s in self.obs_spaces])
         self.action_size = 2
@@ -101,8 +103,11 @@ class Recurrence(nn.Module):
             *copy.deepcopy(layers),
             init_(nn.Linear(hidden_size, 1))
         )
+        in_size = hidden_size + self.obs_sections.obs
+        if feed_r_to_beta:
+            in_size += num_directions * hidden_size
         self.beta = nn.Sequential(
-            init_(nn.Linear(hidden_size + self.obs_sections.obs, hidden_size)),
+            init_(nn.Linear(in_size, hidden_size)),
             *copy.deepcopy(layers),
             Categorical(hidden_size, 2)
         )
@@ -164,7 +169,10 @@ class Recurrence(nn.Module):
             a_dist = self.actor(r)
             self.sample_new(A[t], a_dist)
             a = A[t].clone().unsqueeze(1)
-            b_dist = self.beta(-torch.cat([inputs.obs[t], self.embed(a)], dim=-1))
+            beta_in = [inputs.obs[t], self.embed(a)]
+            if self.feed_r_to_beta:
+                beta_in += [r]
+            b_dist = self.beta(-torch.cat(beta_in, dim=-1))
             self.sample_new(B[t], b_dist)
             self.print("b", B[t])
             yield RecurrentState(
