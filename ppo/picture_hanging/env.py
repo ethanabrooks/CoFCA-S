@@ -36,16 +36,14 @@ class Env(gym.Env):
         self.t += 1
         if self.t > self.time_limit:
             return self.get_observation(), -2 * self.width, True, {}
-        self.centers[-1] = max(
-            0, min(self.width, min(self.centers[-1] + self.speed, center))
-        )
-        t = False
-        r = 0
+        pos = self.centers[-1]
+        delta = center - pos
+        delta = min(abs(delta), self.speed) * (1 if delta > 0 else -1)
+        self.centers[-1] = max(0, min(self.width, pos + delta))
         if next_picture:
             if len(self.centers) < len(self.sizes):
-                self.centers.append(0)
+                self.centers.append(self.new_position())
             else:
-                t = True
 
                 def compute_white_space():
                     left = 0
@@ -67,7 +65,7 @@ class Env(gym.Env):
 
     def reset(self):
         self.t = 0
-        self.centers = [0]
+        self.centers = [self.new_position()]
         self.sizes = self.random.random(
             self.n_eval
             if self.evaluating
@@ -76,6 +74,9 @@ class Env(gym.Env):
         self.sizes = self.sizes * self.width / self.sizes.sum()
         self.random.shuffle(self.sizes)
         return self.get_observation()
+
+    def new_position(self):
+        return self.random.random() * self.width
 
     def get_observation(self):
         obs = Obs(sizes=self.pad(self.sizes), obs=self.pad(self.centers))._asdict()
@@ -129,7 +130,8 @@ if __name__ == "__main__":
 
     def action_fn(string):
         try:
-            return float(string), 1
+            a, b = string.split()
+            return float(a), int(b)
         except ValueError:
             return
 
