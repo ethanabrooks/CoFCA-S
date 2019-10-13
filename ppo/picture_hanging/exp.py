@@ -166,6 +166,7 @@ class Recurrence(nn.Module):
             a = A[t].clone().unsqueeze(1)
             b_dist = self.beta(-torch.cat([inputs.obs[t], self.embed(a)], dim=-1))
             self.sample_new(B[t], b_dist)
+            self.print("b", B[t])
             yield RecurrentState(
                 a=A[t],
                 b=B[t],
