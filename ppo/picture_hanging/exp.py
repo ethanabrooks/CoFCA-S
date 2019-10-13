@@ -85,12 +85,12 @@ class Recurrence(nn.Module):
         self.hidden_size = hidden_size
 
         # networks
+        self.embed = init_(nn.Linear(1, hidden_size))
         self.gru = nn.GRU(1, hidden_size, bidirectional=bidirectional)
         num_directions = 2 if bidirectional else 1
         layers = []
         for i in range(max(0, num_layers - 1)):
             layers += [init_(nn.Linear(hidden_size, hidden_size)), activation]
-
         self.actor = nn.Sequential(
             init_(nn.Linear(hidden_size * num_directions, hidden_size)),
             *layers,
@@ -102,11 +102,7 @@ class Recurrence(nn.Module):
             init_(nn.Linear(hidden_size, 1))
         )
         self.beta = nn.Sequential(
-            init_(
-                nn.Linear(
-                    hidden_size * num_directions + self.obs_sections.obs, hidden_size
-                )
-            ),
+            init_(nn.Linear(hidden_size + self.obs_sections.obs, hidden_size)),
             *copy.deepcopy(layers),
             Categorical(hidden_size, 2)
         )
@@ -166,8 +162,9 @@ class Recurrence(nn.Module):
             r = M[P, R]
             v = self.critic(r)
             a_dist = self.actor(r)
-            b_dist = self.beta(torch.cat([inputs.obs[t], r], dim=-1))
             self.sample_new(A[t], a_dist)
+            a = A[t].clone().unsqueeze(1)
+            b_dist = self.beta(-torch.cat([inputs.obs[t], self.embed(a)], dim=-1))
             self.sample_new(B[t], b_dist)
             yield RecurrentState(
                 a=A[t],
