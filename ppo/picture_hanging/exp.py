@@ -184,7 +184,7 @@ class Recurrence(nn.Module):
             self.print("b", B[t])
             b = B[t].float()
             yield RecurrentState(
-                a=A[t] * b + A[t - 1] * (1 - b),
+                a=A[t],
                 b=B[t],
                 c=c,
                 a_loc=a_dist.loc,
