@@ -40,7 +40,7 @@ class Agent(ppo.agent.Agent, NNBase):
         hx = rm.parse_hidden(all_hxs)
         a_dist = FixedNormal(loc=hx.a_loc, scale=hx.a_scale)
         b_dist = FixedCategorical(probs=hx.b_probs)
-        action_log_probs = a_dist.log_probs(hx.a) + b_dist.log_probs(hx.b)
+        action_log_probs = hx.b * a_dist.log_probs(hx.a) + b_dist.log_probs(hx.b)
         entropy = (a_dist.entropy() + b_dist.entropy()).mean()
         return AgentValues(
             value=hx.v,
@@ -103,9 +103,7 @@ class Recurrence(nn.Module):
             *copy.deepcopy(layers),
             init_(nn.Linear(hidden_size, 1))
         )
-        in_size = hidden_size + self.obs_sections.obs
-        if feed_r_to_beta:
-            in_size += num_directions * hidden_size
+        in_size = hidden_size + self.obs_sections.obs + num_directions * hidden_size
         self.beta = nn.Sequential(
             init_(nn.Linear(in_size, hidden_size)),
             *copy.deepcopy(layers),
@@ -160,7 +158,7 @@ class Recurrence(nn.Module):
 
         P = hx.p.squeeze(1).long()
         R = torch.arange(P.size(0), device=P.device)
-        A = actions.clone()[:, :, 0]
+        A = torch.cat([actions.clone()[:, :, 0], hx.a.T], dim=0)
         B = actions.clone()[:, :, 1].long()
 
         for t in range(T):
@@ -169,14 +167,13 @@ class Recurrence(nn.Module):
             a_dist = self.actor(r)
             self.sample_new(A[t], a_dist)
             a = A[t].clone().unsqueeze(1)
-            beta_in = [inputs.obs[t], self.embed(a)]
-            if self.feed_r_to_beta:
-                beta_in += [r]
-            b_dist = self.beta(-torch.cat(beta_in, dim=-1))
+            beta_in = [inputs.obs[t], self.embed(a), r]
+            b_dist = self.beta(torch.cat(beta_in, dim=-1))
             self.sample_new(B[t], b_dist)
             self.print("b", B[t])
+            b = B[t].float()
             yield RecurrentState(
-                a=A[t],
+                a=A[t] * b + A[t - 1] * (1 - b),
                 b=B[t],
                 a_loc=a_dist.loc,
                 a_scale=a_dist.scale,
