@@ -26,14 +26,13 @@ class Env(gym.Env):
         # self.action_space = gym.spaces.Discrete(self.width)
         self.action_space = gym.spaces.Dict(
             goal=gym.spaces.Box(low=0, high=self.width, shape=(1,)),
-            next1=gym.spaces.Discrete(2),
-            next2=gym.spaces.Discrete(2),
+            next=gym.spaces.Discrete(2),
         )
         self.evaluating = False
         self.t = None
 
     def step(self, action):
-        center, next_picture, _ = action
+        center, next_picture = action
         self.t += 1
         if self.t > self.time_limit:
             return self.get_observation(), -2 * self.width, True, {}

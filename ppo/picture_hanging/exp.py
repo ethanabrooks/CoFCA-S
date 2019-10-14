@@ -14,9 +14,7 @@ from ppo.distributions import DiagGaussian, Categorical, FixedNormal, FixedCateg
 from ppo.picture_hanging.env import Obs
 from ppo.utils import init_
 
-RecurrentState = namedtuple(
-    "RecurrentState", "a b c a_loc a_scale b_probs c_probs v h p"
-)
+RecurrentState = namedtuple("RecurrentState", "a b a_loc a_scale b_probs v h p")
 
 
 class Agent(ppo.agent.Agent, NNBase):
@@ -42,16 +40,11 @@ class Agent(ppo.agent.Agent, NNBase):
         hx = rm.parse_hidden(all_hxs)
         a_dist = FixedNormal(loc=hx.a_loc, scale=hx.a_scale)
         b_dist = FixedCategorical(probs=hx.b_probs)
-        c_dist = FixedCategorical(probs=hx.c_probs)
-        action_log_probs = sum(
-            (1 - hx.b) * a_dist.log_probs(hx.a)
-            + b_dist.log_probs(hx.b)
-            + c_dist.log_probs(hx.c)
-        )
-        entropy = (a_dist.entropy() + b_dist.entropy() + c_dist.entropy()).mean()
+        action_log_probs = a_dist.log_probs(hx.a) + b_dist.log_probs(hx.b)
+        entropy = (a_dist.entropy() + b_dist.entropy()).mean()
         return AgentValues(
             value=hx.v,
-            action=torch.cat([hx.a, hx.b, hx.c], dim=-1),
+            action=torch.cat([hx.a, hx.b], dim=-1),
             action_log_probs=action_log_probs,
             aux_loss=-self.entropy_coef * entropy,
             dist=None,
@@ -83,15 +76,18 @@ class Recurrence(nn.Module):
         num_layers,
         debug,
         bidirectional,
+        feed_r_to_beta,
     ):
         super().__init__()
+        self.feed_r_to_beta = feed_r_to_beta
         self.obs_spaces = Obs(**observation_space.spaces)
         self.obs_sections = Obs(*[int(np.prod(s.shape)) for s in self.obs_spaces])
-        self.action_size = 3
+        self.action_size = 2
         self.debug = debug
         self.hidden_size = hidden_size
 
         # networks
+        self.embed = init_(nn.Linear(1, hidden_size))
         self.gru = nn.GRU(1, hidden_size, bidirectional=bidirectional)
         num_directions = 2 if bidirectional else 1
         layers = []
@@ -107,31 +103,16 @@ class Recurrence(nn.Module):
             *copy.deepcopy(layers),
             init_(nn.Linear(hidden_size, 1))
         )
+        in_size = hidden_size + self.obs_sections.obs
+        if feed_r_to_beta:
+            in_size += num_directions * hidden_size
         self.beta = nn.Sequential(
-            init_(nn.Linear(1 + self.obs_sections.obs, hidden_size)),
-            *copy.deepcopy(layers),
-            Categorical(hidden_size, 2)
-        )
-        self.gamma = nn.Sequential(
-            init_(
-                nn.Linear(
-                    num_directions * hidden_size + self.obs_sections.obs, hidden_size
-                )
-            ),
+            init_(nn.Linear(in_size, hidden_size)),
             *copy.deepcopy(layers),
             Categorical(hidden_size, 2)
         )
         self.state_sizes = RecurrentState(
-            a=1,
-            b=1,
-            c=1,
-            a_loc=1,
-            a_scale=1,
-            b_probs=2,
-            c_probs=2,
-            p=1,
-            v=1,
-            h=hidden_size,
+            a=1, b=1, a_loc=1, a_scale=1, b_probs=2, p=1, v=1, h=hidden_size
         )
 
     @staticmethod
@@ -179,9 +160,8 @@ class Recurrence(nn.Module):
 
         P = hx.p.squeeze(1).long()
         R = torch.arange(P.size(0), device=P.device)
-        A = torch.cat([actions.clone()[:, :, 0], hx.a.T], dim=0)
+        A = actions.clone()[:, :, 0]
         B = actions.clone()[:, :, 1].long()
-        C = actions.clone()[:, :, 2].long()
 
         for t in range(T):
             r = M[P, R]
@@ -189,20 +169,19 @@ class Recurrence(nn.Module):
             a_dist = self.actor(r)
             self.sample_new(A[t], a_dist)
             a = A[t].clone().unsqueeze(1)
-            b_dist = self.beta(torch.cat([inputs.obs[t], a], dim=-1))
+            beta_in = [inputs.obs[t], self.embed(a)]
+            if self.feed_r_to_beta:
+                beta_in += [r]
+            b_dist = self.beta(-torch.cat(beta_in, dim=-1))
             self.sample_new(B[t], b_dist)
-            c_dist = self.gamma(torch.cat([inputs.obs[t], r], dim=-1))
-            self.sample_new(C[t], c_dist)
-            b = B[t].float()
+            self.print("b", B[t])
             yield RecurrentState(
-                a=(1 - b) * A[t] + b * A[t - 1],
-                b=b,
-                c=C[t],
+                a=A[t],
+                b=B[t],
                 a_loc=a_dist.loc,
                 a_scale=a_dist.scale,
                 b_probs=b_dist.probs,
-                c_probs=c_dist.probs,
                 v=v,
                 h=hx.h,
-                p=(P + C[t]) % (M.size(0)),
+                p=(P + B[t]) % (M.size(0)),
             )
