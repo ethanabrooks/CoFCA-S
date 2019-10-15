@@ -14,7 +14,7 @@ from ppo.distributions import DiagGaussian, Categorical, FixedNormal, FixedCateg
 from ppo.picture_hanging.env import Obs
 from ppo.utils import init_
 
-RecurrentState = namedtuple("RecurrentState", "a b a_loc a_scale b_probs v h p")
+RecurrentState = namedtuple("RecurrentState", "a b n right a_loc a_scale b_probs v h p")
 
 
 class Agent(ppo.agent.Agent, NNBase):
@@ -40,8 +40,9 @@ class Agent(ppo.agent.Agent, NNBase):
         hx = rm.parse_hidden(all_hxs)
         a_dist = FixedNormal(loc=hx.a_loc, scale=hx.a_scale)
         b_dist = FixedCategorical(probs=hx.b_probs)
-        action_log_probs = a_dist.log_probs(hx.a) + b_dist.log_probs(hx.b)
-        entropy = (a_dist.entropy() + b_dist.entropy()).mean()
+        action_log_probs = b_dist.log_probs(hx.b)
+        # action_log_probs = a_dist.log_probs(hx.a) + b_dist.log_probs(hx.b)
+        entropy = (b_dist.entropy()).mean()
         return AgentValues(
             value=hx.v,
             action=torch.cat([hx.a, hx.b], dim=-1),
@@ -116,7 +117,16 @@ class Recurrence(nn.Module):
             self.obs_sections.obs + num_directions * hidden_size + 1, hidden_size
         )
         self.state_sizes = RecurrentState(
-            a=1, b=1, a_loc=1, a_scale=1, b_probs=2, p=1, v=1, h=hidden_size
+            a=1,
+            b=1,
+            a_loc=1,
+            a_scale=1,
+            b_probs=2,
+            p=1,
+            v=1,
+            h=hidden_size,
+            n=1,
+            right=1,
         )
 
     @staticmethod
@@ -151,6 +161,7 @@ class Recurrence(nn.Module):
             print(*args, **kwargs)
 
     def inner_loop(self, inputs, rnn_hxs):
+        device = inputs.device
         T, N, D = inputs.shape
         inputs, actions = torch.split(
             inputs.detach(), [D - self.action_size, self.action_size], dim=2
@@ -161,6 +172,10 @@ class Recurrence(nn.Module):
         hx = self.parse_hidden(rnn_hxs)
         for _x in hx:
             _x.squeeze_(0)
+
+        n = hx.n.long().squeeze(-1)
+        right = hx.right.squeeze(-1)
+        I = torch.arange(N, device=device)
 
         h = hx.h
         P = hx.p.squeeze(1).long()
@@ -183,8 +198,10 @@ class Recurrence(nn.Module):
                 scale=b * a_dist.scale + (1 - b) * self.scale(y),
             )
             self.sample_new(A[t], a_dist)
+            picture_size = inputs.sizes[t, I, n]
             yield RecurrentState(
-                a=A[t],
+                # a=A[t],
+                a=(right + picture_size / 2),
                 b=B[t],
                 a_loc=a_dist.loc,
                 a_scale=a_dist.scale,
@@ -192,4 +209,6 @@ class Recurrence(nn.Module):
                 v=v,
                 h=h,
                 p=(P + B[t]) % (M.size(0)),
+                n=n + B[t],
+                right=right + picture_size * B[t].float(),
             )

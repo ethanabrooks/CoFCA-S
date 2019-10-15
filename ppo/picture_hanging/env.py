@@ -5,7 +5,7 @@ import gym
 from gym.utils import seeding
 from collections import namedtuple
 
-Obs = namedtuple("Obs", "sizes obs")
+Obs = namedtuple("Obs", "sizes obs n_pictures")
 
 
 class Env(gym.Env):
@@ -22,7 +22,11 @@ class Env(gym.Env):
         self.random, self.seed = seeding.np_random(seed)
         self.max_pictures = max(n_eval, n_train)
         box = gym.spaces.Box(low=0, high=self.width, shape=(self.max_pictures,))
-        self.observation_space = gym.spaces.Dict(Obs(sizes=box, obs=box)._asdict())
+        self.observation_space = gym.spaces.Dict(
+            Obs(
+                sizes=box, n_pictures=gym.spaces.Discrete(self.max_pictures), obs=box
+            )._asdict()
+        )
         # self.action_space = gym.spaces.Discrete(self.width)
         self.action_space = gym.spaces.Dict(
             goal=gym.spaces.Box(low=0, high=self.width, shape=(1,)),
@@ -79,7 +83,11 @@ class Env(gym.Env):
         return self.random.random() * self.width
 
     def get_observation(self):
-        obs = Obs(sizes=self.pad(self.sizes), obs=self.pad(self.centers))._asdict()
+        obs = Obs(
+            sizes=self.pad(self.sizes),
+            obs=self.pad(self.centers),
+            n_pictures=len(self.sizes),
+        )._asdict()
         self.observation_space.contains(obs)
         return obs
 
