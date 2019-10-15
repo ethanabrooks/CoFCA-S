@@ -3,57 +3,69 @@ import shutil
 import numpy as np
 import gym
 from gym.utils import seeding
+from collections import namedtuple
+
+Obs = namedtuple("Obs", "sizes obs")
 
 
 class Env(gym.Env):
-    def __init__(self, width, n_train: int, n_eval: int, single_step, seed):
+    def __init__(
+        self, width, n_train: int, n_eval: int, speed: float, seed: int, time_limit: int
+    ):
+        self.time_limit = time_limit
+        self.speed = speed
         self.n_eval = n_eval
         self.n_train = n_train
-        self.single_step = single_step
         self.sizes = None
         self.centers = None
         self.width = width
         self.random, self.seed = seeding.np_random(seed)
         self.max_pictures = max(n_eval, n_train)
-        self.observation_space = gym.spaces.Box(
-            low=-1, high=np.inf, shape=(self.max_pictures + 1,)
-        )
+        box = gym.spaces.Box(low=0, high=self.width, shape=(self.max_pictures,))
+        self.observation_space = gym.spaces.Dict(Obs(sizes=box, obs=box)._asdict())
         # self.action_space = gym.spaces.Discrete(self.width)
-        if single_step:
-            self.action_space = gym.spaces.Box(
-                low=0, high=self.width, shape=(self.max_pictures,)
-            )
-        else:
-            self.action_space = gym.spaces.Box(low=0, high=self.width, shape=(1,))
+        self.action_space = gym.spaces.Dict(
+            goal=gym.spaces.Box(low=0, high=self.width, shape=(1,)),
+            next=gym.spaces.Discrete(2),
+        )
         self.evaluating = False
+        self.t = None
 
-    def step(self, center):
-        if self.single_step:
-            self.centers = np.maximum(center, 0)
-        else:
-            self.centers.append(max(center, 0))
-        t = False
-        r = 0
-        if len(self.centers) == len(self.sizes):
-            t = True
+    def step(self, action):
+        center, next_picture = action
+        self.t += 1
+        if self.t > self.time_limit:
+            return self.get_observation(), -2 * self.width, True, {}
+        if next_picture:
+            if len(self.centers) < len(self.sizes):
+                self.centers.append(self.new_position())
+            else:
 
-            def compute_white_space():
-                left = 0
-                for center, picture in zip(self.centers, self.sizes):
-                    right = center - picture / 2
-                    yield right - left
-                    left = center + picture / 2
-                yield self.width - left
+                def compute_white_space():
+                    left = 0
+                    for center, picture in zip(self.centers, self.sizes):
+                        right = center - picture / 2
+                        yield right - left
+                        left = center + picture / 2
+                    yield self.width - left
 
-            white_space = list(compute_white_space())
-            r = min(white_space) - max(white_space)  # max reward is 0
-
-        i = dict(n_pictures=len(self.sizes))
-        obs = self.pad(np.concatenate([[1], self.centers]))
-        return obs, r, t, i
+                white_space = list(compute_white_space())
+                # max reward is 0
+                return (
+                    self.get_observation(),
+                    (min(white_space) - max(white_space)),
+                    True,
+                    {},
+                )
+        pos = self.centers[-1]
+        delta = center - pos
+        delta = min(abs(delta), self.speed) * (1 if delta > 0 else -1)
+        self.centers[-1] = max(0, min(self.width, pos + delta))
+        return self.get_observation(), 0, False, {}
 
     def reset(self):
-        self.centers = []
+        self.t = 0
+        self.centers = [self.new_position()]
         self.sizes = self.random.random(
             self.n_eval
             if self.evaluating
@@ -63,21 +75,18 @@ class Env(gym.Env):
         self.random.shuffle(self.sizes)
         return self.pad(np.concatenate([[0], self.sizes]))
 
-    def pad(self, obs):
-        obs_size = self.observation_space.shape[0]
-        if obs.shape[0] < obs_size:
-            obs = np.pad(obs, (0, obs_size - obs.size), constant_values=-1)
-        assert self.observation_space.contains(obs)
+    def new_position(self):
+        return self.random.random() * self.width
+
+    def get_observation(self):
+        obs = Obs(sizes=self.pad(self.sizes), obs=self.pad(self.centers))._asdict()
+        self.observation_space.contains(obs)
         return obs
 
-    # def get_observation(self):
-    #     obs = self.sizes
-    #     if len(self.sizes) < self.max_pictures:
-    #         obs = np.pad(
-    #             self.sizes, (0, self.max_pictures - len(self.sizes)), constant_values=-1
-    #         )
-    #     self.observation_space.contains(obs)
-    #     return obs
+    def pad(self, obs):
+        if len(obs) == self.max_pictures:
+            return obs
+        return np.pad(obs, (0, self.max_pictures - len(obs)), constant_values=-1)
 
     def render(self, mode="human", pause=True):
         terminal_width = shutil.get_terminal_size((80, 20)).columns
@@ -113,18 +122,22 @@ class Env(gym.Env):
 
 if __name__ == "__main__":
     import argparse
-    from rl_utils import hierarchical_parse_args
+    from rl_utils import hierarchical_parse_args, namedtuple
     from ppo import keyboard_control
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", default=0, type=int)
-    parser.add_argument("--width", default=4, type=int)
-    parser.add_argument("--n-actions", default=4, type=int)
+    parser.add_argument("--width", default=100, type=int)
+    parser.add_argument("--n-train", default=4, type=int)
+    parser.add_argument("--n-eval", default=6, type=int)
+    parser.add_argument("--speed", default=100, type=int)
+    parser.add_argument("--time-limit", default=100, type=int)
     args = hierarchical_parse_args(parser)
 
     def action_fn(string):
         try:
-            return float(string)
+            a, b = string.split()
+            return float(a), int(b)
         except ValueError:
             return
 
