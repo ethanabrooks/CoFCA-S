@@ -183,6 +183,7 @@ class Recurrence(nn.Module):
                 scale=b * a_dist.scale + (1 - b) * self.scale(y),
             )
             self.sample_new(A[t], a_dist)
+            P = (P + B[t]) % (M.size(0))
             yield RecurrentState(
                 a=A[t],
                 b=B[t],
@@ -191,5 +192,5 @@ class Recurrence(nn.Module):
                 b_probs=b_dist.probs,
                 v=v,
                 h=h,
-                p=(P + B[t]) % (M.size(0)),
+                p=P,
             )
