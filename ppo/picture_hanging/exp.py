@@ -96,6 +96,12 @@ class Recurrence(nn.Module):
             *layers,
             DiagGaussian(hidden_size, action_space.spaces["goal"].shape[0])
         )
+        self.scale = nn.Sequential(
+            init_(nn.Linear(hidden_size, hidden_size)),
+            *layers,
+            init_(nn.Linear(hidden_size, 1)),
+            nn.Softplus()
+        )
         self.critic = nn.Sequential(
             init_(nn.Linear(hidden_size, hidden_size)),
             *copy.deepcopy(layers),
@@ -105,11 +111,6 @@ class Recurrence(nn.Module):
             init_(nn.Linear(hidden_size, hidden_size)),
             *copy.deepcopy(layers),
             Categorical(hidden_size, 2)
-        )
-        self.gamma = nn.Sequential(
-            init_(nn.Linear(hidden_size, hidden_size)),
-            *copy.deepcopy(layers),
-            init_(nn.Linear(hidden_size, 1))
         )
         self.controller = nn.GRUCell(
             self.obs_sections.obs + num_directions * hidden_size + 1, hidden_size
@@ -179,7 +180,7 @@ class Recurrence(nn.Module):
             a_dist = self.actor(r)
             a_dist = FixedNormal(
                 loc=b * a_dist.loc + (1 - b) * hx.a,
-                scale=b * a_dist.scale + (1 - b) * 1e-5,
+                scale=b * a_dist.scale + (1 - b) * self.scale(y),
             )
             self.sample_new(A[t], a_dist)
             yield RecurrentState(
