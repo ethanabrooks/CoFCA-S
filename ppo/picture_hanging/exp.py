@@ -199,16 +199,20 @@ class Recurrence(nn.Module):
             )
             self.sample_new(A[t], a_dist)
             picture_size = inputs.sizes[t, I, n]
+            a = right + picture_size / 2
+            P = (P + B[t]) % (M.size(0))
+            n = (n + B[t]) % (M.size(0))
+            right = right + picture_size * B[t].float()
             yield RecurrentState(
                 # a=A[t],
-                a=(right + picture_size / 2),
+                a=a,
                 b=B[t],
                 a_loc=a_dist.loc,
                 a_scale=a_dist.scale,
                 b_probs=b_dist.probs,
                 v=v,
                 h=h,
-                p=(P + B[t]) % (M.size(0)),
-                n=n + B[t],
-                right=right + picture_size * B[t].float(),
+                p=P,
+                n=n,
+                right=right,
             )
