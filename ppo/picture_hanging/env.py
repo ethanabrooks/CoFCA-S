@@ -69,7 +69,7 @@ class Env(gym.Env):
         self.sizes = self.random.random(
             self.n_eval
             if self.evaluating
-            else self.random.random_integers(2, self.n_train)
+            else self.random.random_integers(1, self.n_train)
         )
         self.sizes = self.sizes * self.width / self.sizes.sum()
         self.random.shuffle(self.sizes)
