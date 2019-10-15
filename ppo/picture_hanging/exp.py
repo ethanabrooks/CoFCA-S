@@ -92,7 +92,7 @@ class Recurrence(nn.Module):
         for i in range(max(0, num_layers - 1)):
             layers += [init_(nn.Linear(hidden_size, hidden_size)), activation]
         self.actor = nn.Sequential(
-            init_(nn.Linear(hidden_size, hidden_size)),
+            init_(nn.Linear(num_directions * hidden_size, hidden_size)),
             *layers,
             DiagGaussian(hidden_size, action_space.spaces["goal"].shape[0])
         )
@@ -176,7 +176,7 @@ class Recurrence(nn.Module):
             self.sample_new(B[t], b_dist)
             b = B[t].float().unsqueeze(-1)
             v = self.critic(y)
-            a_dist = self.actor(y)
+            a_dist = self.actor(r)
             a_dist = FixedNormal(
                 loc=b * a_dist.loc + (1 - b) * hx.a,
                 scale=b * a_dist.scale + (1 - b) * 1e-5,
