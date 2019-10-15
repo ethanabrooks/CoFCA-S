@@ -171,12 +171,18 @@ class Recurrence(nn.Module):
             r = M[P, R]
             v = self.critic(r)
             a_dist = self.actor(r)
+            a_dist = FixedNormal(
+                loc=(1 - c) * a_dist.loc + c * hx.a,
+                scale=(1 - c) * a_dist.scale + (1 - c),
+            )
             self.sample_new(A[t], a_dist)
             a = A[t].clone().unsqueeze(1)
             x = torch.cat([inputs.obs[t], self.embed(a), r], dim=-1)
             b_dist = self.beta(x)
             self.sample_new(B[t], b_dist)
+            c = self.gamma(x).sigmoid()
             self.print("b", B[t])
+            b = B[t].float()
             yield RecurrentState(
                 a=A[t],
                 b=B[t],

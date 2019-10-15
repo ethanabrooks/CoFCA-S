@@ -18,7 +18,6 @@ class Env(gym.Env):
         self.n_train = n_train
         self.sizes = None
         self.centers = None
-        self.goal = None
         self.width = width
         self.random, self.seed = seeding.np_random(seed)
         self.max_pictures = max(n_eval, n_train)
@@ -33,19 +32,15 @@ class Env(gym.Env):
         self.t = None
 
     def step(self, action):
-        goal, next_picture = action
-        if self.goal is None:
-            self.goal = goal
-
+        center, next_picture = action
         self.t += 1
         if self.t > self.time_limit:
             return self.get_observation(), -2 * self.width, True, {}
         pos = self.centers[-1]
-        delta = self.goal - pos
+        delta = center - pos
         delta = min(abs(delta), self.speed) * (1 if delta > 0 else -1)
         self.centers[-1] = max(0, min(self.width, pos + delta))
         if next_picture:
-            self.goal = None
             if len(self.centers) < len(self.sizes):
                 self.centers.append(self.new_position())
             else:
@@ -70,7 +65,6 @@ class Env(gym.Env):
 
     def reset(self):
         self.t = 0
-        self.goal = None
         self.centers = [self.new_position()]
         self.sizes = self.random.random(
             self.n_eval
