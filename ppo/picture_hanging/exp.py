@@ -40,8 +40,7 @@ class Agent(ppo.agent.Agent, NNBase):
         hx = rm.parse_hidden(all_hxs)
         a_dist = FixedNormal(loc=hx.a_loc, scale=hx.a_scale)
         b_dist = FixedCategorical(probs=hx.b_probs)
-        action_log_probs = b_dist.log_probs(hx.b)
-        # action_log_probs = a_dist.log_probs(hx.a) + b_dist.log_probs(hx.b)
+        action_log_probs = a_dist.log_probs(hx.a) + b_dist.log_probs(hx.b)
         entropy = (b_dist.entropy()).mean()
         return AgentValues(
             value=hx.v,
@@ -93,9 +92,9 @@ class Recurrence(nn.Module):
         for i in range(max(0, num_layers - 1)):
             layers += [init_(nn.Linear(hidden_size, hidden_size)), activation]
         self.actor = nn.Sequential(
-            init_(nn.Linear(num_directions * hidden_size, hidden_size)),
-            *layers,
-            DiagGaussian(hidden_size, action_space.spaces["goal"].shape[0])
+            # init_(nn.Linear(num_directions * hidden_size, hidden_size)),
+            # *layers,
+            DiagGaussian(1, action_space.spaces["goal"].shape[0])
         )
         self.scale = nn.Sequential(
             init_(nn.Linear(hidden_size, hidden_size)),
@@ -192,20 +191,20 @@ class Recurrence(nn.Module):
             self.sample_new(B[t], b_dist)
             b = B[t].float().unsqueeze(-1)
             v = self.critic(y)
-            a_dist = self.actor(r)
-            a_dist = FixedNormal(
-                loc=b * a_dist.loc + (1 - b) * hx.a,
-                scale=b * a_dist.scale + (1 - b) * self.scale(y),
-            )
-            self.sample_new(A[t], a_dist)
+
             picture_size = inputs.sizes[t, I, n]
             a = right + picture_size / 2
             P = (P + B[t]) % (M.size(0))
             n = (n + B[t]) % (M.size(0))
             right = right + picture_size * B[t].float()
+            a_dist = self.actor(a.unsqueeze(-1))
+            a_dist = FixedNormal(
+                loc=b * a_dist.loc + (1 - b) * hx.a,
+                scale=b * a_dist.scale + (1 - b) * self.scale(y),
+            )
+            self.sample_new(A[t], a_dist)
             yield RecurrentState(
-                # a=A[t],
-                a=a,
+                a=A[t],
                 b=B[t],
                 a_loc=a_dist.loc,
                 a_scale=a_dist.scale,
