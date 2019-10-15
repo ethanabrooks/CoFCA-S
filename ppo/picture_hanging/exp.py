@@ -103,7 +103,7 @@ class Recurrence(nn.Module):
             init_(nn.Linear(hidden_size, 1))
         )
         self.beta = nn.Sequential(
-            init_(nn.Linear(in_size + 1, hidden_size)),
+            init_(nn.Linear(in_size, hidden_size)),
             *copy.deepcopy(layers),
             Categorical(hidden_size, 2)
         )
@@ -166,16 +166,16 @@ class Recurrence(nn.Module):
 
         for t in range(T):
             r = M[P, R]
-            a = A[t - 1].clone().unsqueeze(1)
-            b_dist = self.beta(torch.cat([inputs.obs[t], r, a], dim=-1))
+            b_dist = self.beta(torch.cat([inputs.obs[t], r], dim=-1))
             self.sample_new(B[t], b_dist)
+            a = A[t - 1].clone().unsqueeze(1)
             x = torch.cat([inputs.obs[t], r, a], dim=-1)
+            c = self.gamma(x).sigmoid()
             v = self.critic(x)
             a_dist = self.actor(r)
-            b = B[t].float().unsqueeze(-1)
             a_dist = FixedNormal(
-                loc=b * a_dist.loc + (1 - b) * hx.a,
-                scale=b * a_dist.scale + (1 - b) * 1e-5,
+                loc=(1 - c) * a_dist.loc + c * hx.a,
+                scale=(1 - c) * a_dist.scale + c * 1e-5,
             )
             self.sample_new(A[t], a_dist)
             yield RecurrentState(
