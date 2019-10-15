@@ -175,6 +175,7 @@ class Recurrence(nn.Module):
             b_dist = self.beta(y)
             self.sample_new(B[t], b_dist)
             b = B[t].float().unsqueeze(-1)
+            self.print('b', b)
             v = self.critic(y)
             a_dist = self.actor(r)
             a_dist = FixedNormal(
