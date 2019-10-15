@@ -36,10 +36,6 @@ class Env(gym.Env):
         self.t += 1
         if self.t > self.time_limit:
             return self.get_observation(), -2 * self.width, True, {}
-        pos = self.centers[-1]
-        delta = center - pos
-        delta = min(abs(delta), self.speed) * (1 if delta > 0 else -1)
-        self.centers[-1] = max(0, min(self.width, pos + delta))
         if next_picture:
             if len(self.centers) < len(self.sizes):
                 self.centers.append(self.new_position())
@@ -61,6 +57,10 @@ class Env(gym.Env):
                     True,
                     {},
                 )
+        pos = self.centers[-1]
+        delta = center - pos
+        delta = min(abs(delta), self.speed) * (1 if delta > 0 else -1)
+        self.centers[-1] = max(0, min(self.width, pos + delta))
         return self.get_observation(), 0, False, {}
 
     def reset(self):

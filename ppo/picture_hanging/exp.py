@@ -14,7 +14,7 @@ from ppo.distributions import DiagGaussian, Categorical, FixedNormal, FixedCateg
 from ppo.picture_hanging.env import Obs
 from ppo.utils import init_
 
-RecurrentState = namedtuple("RecurrentState", "a b c a_loc a_scale b_probs v h p")
+RecurrentState = namedtuple("RecurrentState", "a b a_loc a_scale b_probs v h p")
 
 
 class Agent(ppo.agent.Agent, NNBase):
@@ -76,10 +76,8 @@ class Recurrence(nn.Module):
         num_layers,
         debug,
         bidirectional,
-        feed_r_to_beta,
     ):
         super().__init__()
-        self.feed_r_to_beta = feed_r_to_beta
         self.obs_spaces = Obs(**observation_space.spaces)
         self.obs_sections = Obs(*[int(np.prod(s.shape)) for s in self.obs_spaces])
         self.action_size = 2
@@ -103,19 +101,19 @@ class Recurrence(nn.Module):
             *copy.deepcopy(layers),
             init_(nn.Linear(hidden_size, 1))
         )
-        in_size = hidden_size + self.obs_sections.obs + num_directions * hidden_size
+        in_size = self.obs_sections.obs + num_directions * hidden_size
         self.beta = nn.Sequential(
             init_(nn.Linear(in_size, hidden_size)),
             *copy.deepcopy(layers),
             Categorical(hidden_size, 2)
         )
         self.gamma = nn.Sequential(
-            init_(nn.Linear(in_size, hidden_size)),
+            init_(nn.Linear(in_size + 1, hidden_size)),
             *copy.deepcopy(layers),
             init_(nn.Linear(hidden_size, 1))
         )
         self.state_sizes = RecurrentState(
-            a=1, b=1, c=1, a_loc=1, a_scale=1, b_probs=2, p=1, v=1, h=hidden_size
+            a=1, b=1, a_loc=1, a_scale=1, b_probs=2, p=1, v=1, h=hidden_size
         )
 
     @staticmethod
@@ -161,7 +159,6 @@ class Recurrence(nn.Module):
         for _x in hx:
             _x.squeeze_(0)
 
-        c = hx.c
         P = hx.p.squeeze(1).long()
         R = torch.arange(P.size(0), device=P.device)
         A = torch.cat([actions.clone()[:, :, 0], hx.a.T], dim=0)
@@ -169,6 +166,10 @@ class Recurrence(nn.Module):
 
         for t in range(T):
             r = M[P, R]
+            b_dist = self.beta(torch.cat([inputs.obs[t], r], dim=-1))
+            self.sample_new(B[t], b_dist)
+            a = A[t - 1].clone().unsqueeze(1)
+            c = self.gamma(torch.cat([inputs.obs[t], r, a], dim=-1)).sigmoid()
             v = self.critic(r)
             a_dist = self.actor(r)
             a_dist = FixedNormal(
@@ -176,17 +177,9 @@ class Recurrence(nn.Module):
                 scale=(1 - c) * a_dist.scale + (1 - c),
             )
             self.sample_new(A[t], a_dist)
-            a = A[t].clone().unsqueeze(1)
-            x = torch.cat([inputs.obs[t], self.embed(a), r], dim=-1)
-            b_dist = self.beta(x)
-            self.sample_new(B[t], b_dist)
-            c = self.gamma(x).sigmoid()
-            self.print("b", B[t])
-            b = B[t].float()
             yield RecurrentState(
                 a=A[t],
                 b=B[t],
-                c=c,
                 a_loc=a_dist.loc,
                 a_scale=a_dist.scale,
                 b_probs=b_dist.probs,
