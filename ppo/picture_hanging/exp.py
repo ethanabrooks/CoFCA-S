@@ -76,8 +76,10 @@ class Recurrence(nn.Module):
         num_layers,
         debug,
         bidirectional,
+        scale,
     ):
         super().__init__()
+        self.default_scale = scale
         self.obs_spaces = Obs(**observation_space.spaces)
         self.obs_sections = Obs(*[int(np.prod(s.shape)) for s in self.obs_spaces])
         self.action_size = 2
@@ -177,13 +179,18 @@ class Recurrence(nn.Module):
             self.sample_new(B[t], b_dist)
             b = B[t].float().unsqueeze(-1)
             v = self.critic(y)
+            if self.default_scale is None:
+                scale = self.scale(y)
+            else:
+                scale = self.default_scale
             a_dist = self.actor(r)
             a_dist = FixedNormal(
                 loc=b * a_dist.loc + (1 - b) * hx.a,
-                scale=b * a_dist.scale + (1 - b) * self.scale(y),
+                scale=b * a_dist.scale + (1 - b) * scale,
             )
             self.sample_new(A[t], a_dist)
             P = (P + B[t]) % (M.size(0))
+            self.print("b", B[t])
             yield RecurrentState(
                 a=A[t],
                 b=B[t],
