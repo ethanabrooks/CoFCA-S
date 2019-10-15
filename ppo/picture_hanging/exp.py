@@ -175,7 +175,7 @@ class Recurrence(nn.Module):
             a_dist = self.actor(r)
             a_dist = FixedNormal(
                 loc=(1 - c) * a_dist.loc + c * hx.a,
-                scale=(1 - c) * a_dist.scale + c * 1e-5,
+                scale=(1 - c) * a_dist.scale + (1 - c),
             )
             self.sample_new(A[t], a_dist)
             yield RecurrentState(
