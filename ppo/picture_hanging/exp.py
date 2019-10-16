@@ -93,7 +93,7 @@ class Recurrence(nn.Module):
         for i in range(max(0, num_layers - 1)):
             layers += [init_(nn.Linear(hidden_size, hidden_size)), activation]
         self.actor = nn.Sequential(
-            init_(nn.Linear(hidden_size, hidden_size)),
+            init_(nn.Linear(hidden_size * num_directions, hidden_size)),
             *layers,
             init_(nn.Linear(hidden_size, action_space.n - 1)),
         )
@@ -203,7 +203,7 @@ class Recurrence(nn.Module):
             # P = (P + B[t]) % (M.size(0))
             # n = (n + B[t]) % (M.size(0))
             # right = right + picture_size * B[t].float()
-            a_probs = self.actor(y).softmax(-1)
+            a_probs = self.actor(r).softmax(-1)
             dist = FixedCategorical((1 - b) * F.pad(a_probs, [0, 1]) + b * self.next)
 
             # a_dist = FixedNormal(
