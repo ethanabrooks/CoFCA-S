@@ -5,12 +5,21 @@ import gym
 from gym.utils import seeding
 from collections import namedtuple
 
-Obs = namedtuple("Obs", "sizes obs")
+Obs = namedtuple("Obs", "sizes pos index")
 
 
 class Env(gym.Env):
     def __init__(
-        self, width, n_train: int, n_eval: int, speed: float, seed: int, time_limit: int
+        self,
+        width,
+        n_train: int,
+        n_eval: int,
+        speed: float,
+        seed: int,
+        time_limit: int,
+        one_hot_sizes: bool,
+        one_hot_pos: bool,
+        one_hot_index: bool,
     ):
         self.time_limit = time_limit
         self.speed = speed
@@ -21,13 +30,26 @@ class Env(gym.Env):
         self.width = width
         self.random, self.seed = seeding.np_random(seed)
         self.max_pictures = max(n_eval, n_train)
-        box = gym.spaces.Box(low=0, high=self.width, shape=(self.max_pictures,))
+        self.one_hot_index = one_hot_index
+        self.one_hot_pos = one_hot_pos
+        self.one_hot_sizes = one_hot_sizes
+        sizes = (
+            gym.spaces.MultiDiscrete(np.ones((self.max_pictures, self.width)))
+            if one_hot_sizes
+            else gym.spaces.MultiDiscrete(np.ones(self.max_pictures) * self.width)
+        )
+        pos = (
+            gym.spaces.MultiBinary(self.width)
+            if one_hot_pos
+            else gym.spaces.Discrete(self.width)
+        )
+        index = (
+            gym.spaces.MultiBinary(self.max_pictures)
+            if one_hot_index
+            else gym.spaces.Discrete(self.max_pictures)
+        )
         self.observation_space = gym.spaces.Dict(
-            Obs(
-                sizes=box,
-                # n_pictures=gym.spaces.Discrete(self.max_pictures),
-                obs=gym.spaces.Discrete(self.width),
-            )._asdict()
+            Obs(sizes=sizes, pos=pos, index=index)._asdict()
         )
         self.action_space = gym.spaces.Discrete(self.width + 1)
         # self.action_space = gym.spaces.Dict(
@@ -35,6 +57,10 @@ class Env(gym.Env):
         # )
         self.evaluating = False
         self.t = None
+        if one_hot_sizes or one_hot_pos:
+            self.eye = np.vstack([np.eye(self.width), np.zeros((1, self.width))])
+        if one_hot_index:
+            self.pic_eye = np.eye(self.max_pictures)
 
     def step(self, action):
         next_picture = action >= self.width
@@ -64,8 +90,10 @@ class Env(gym.Env):
                 )
         else:
             pos = self.centers[-1]
-            delta = action - pos
-            delta = min(abs(delta), self.speed) * (1 if delta > 0 else -1)
+            desired_delta = action - pos
+            delta = min(abs(desired_delta), self.speed) * (
+                1 if desired_delta > 0 else -1
+            )
             self.centers[-1] = max(0, min(self.width, pos + delta))
         return self.get_observation(), 0, False, {}
 
@@ -78,21 +106,26 @@ class Env(gym.Env):
             else self.random.random_integers(1, self.n_train)
         )
         normalized = randoms * self.width / randoms.sum()
-        cumsum = np.round(np.cumsum(normalized))
+        cumsum = np.round(np.cumsum(normalized)).astype(int)
         z = np.roll(np.append(cumsum, 0), 1)
         self.sizes = z[1:] - z[:-1]
         self.random.shuffle(self.sizes)
         return self.get_observation()
 
     def new_position(self):
-        return self.random.random() * self.width
+        return int(self.random.random() * self.width)
 
     def get_observation(self):
-        obs = Obs(
-            sizes=self.pad(self.sizes),
-            obs=self.centers[-1],
-            # n_pictures=len(self.sizes),
-        )._asdict()
+        sizes = self.pad(self.sizes)
+        if self.one_hot_sizes:
+            sizes = self.eye[sizes]
+        pos = self.centers[-1]
+        if self.one_hot_pos:
+            pos = self.eye[pos]
+        index = len(self.centers) - 1
+        if self.one_hot_index:
+            index = self.pic_eye[index]
+        obs = Obs(sizes=sizes, pos=pos, index=index)._asdict()
         self.observation_space.contains(obs)
         return obs
 
