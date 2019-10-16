@@ -113,7 +113,10 @@ class Recurrence(nn.Module):
             *copy.deepcopy(layers),
             init_(nn.Linear(hidden_size, 1)),
         )
-        self.controller = nn.GRUCell(sum(self.obs_sections) + hidden_size, hidden_size)
+        self.controller = nn.GRUCell(
+            self.obs_sections.obs + num_directions * hidden_size + hidden_size,
+            hidden_size,
+        )
         self.register_buffer("next", torch.eye(action_space.n)[-1])
         self.state_sizes = RecurrentState(
             a=1,
@@ -186,7 +189,9 @@ class Recurrence(nn.Module):
         for t in range(T):
             # a = A[t - 1]
             r = M[P, R]
-            x = torch.cat([inputs[t], self.embed(A[t - 1].clone())], dim=-1)
+            x = torch.cat(
+                [parsed_inputs.obs[t], r, self.embed(A[t - 1].clone())], dim=-1
+            )
             y = self.controller(x, h)
             b = self.beta(y).sigmoid()
             # self.sample_new(B[t], b_dist)
@@ -206,6 +211,7 @@ class Recurrence(nn.Module):
             #     scale=b * a_dist.scale + (1 - b) * self.scale(y),
             # )
             self.sample_new(A[t], dist)
+            b = (A[t] == a_probs.size(1)).long()
             yield RecurrentState(
                 a=A[t],
                 # b=B[t],
@@ -216,6 +222,6 @@ class Recurrence(nn.Module):
                 # b_probs=b_dist.probs,
                 v=v,
                 h=h,
-                p=P,
+                p=(P + b) % M.size(0),
                 # right=right,
             )
