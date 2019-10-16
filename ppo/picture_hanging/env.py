@@ -86,6 +86,7 @@ class Env(gym.Env):
         cumsum = np.round(np.cumsum(normalized)).astype(int)
         z = np.roll(np.append(cumsum, 0), 1)
         self.sizes = z[1:] - z[:-1]
+        self.sizes = self.sizes[self.sizes > 0]
         self.edges = [
             self.random.random_integers(0, self.width - size) for size in self.sizes
         ]
