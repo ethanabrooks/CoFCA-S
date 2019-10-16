@@ -14,7 +14,7 @@ from ppo.distributions import DiagGaussian, Categorical, FixedNormal, FixedCateg
 from ppo.picture_hanging.env import Obs
 from ppo.utils import init_
 
-RecurrentState = namedtuple("RecurrentState", "a b n right a_loc a_scale b_probs v h p")
+RecurrentState = namedtuple("RecurrentState", "a b probs v h p")
 
 
 class Agent(ppo.agent.Agent, NNBase):
@@ -38,13 +38,14 @@ class Agent(ppo.agent.Agent, NNBase):
         )
         rm = self.recurrent_module
         hx = rm.parse_hidden(all_hxs)
-        a_dist = FixedNormal(loc=hx.a_loc, scale=hx.a_scale)
-        b_dist = FixedCategorical(probs=hx.b_probs)
-        action_log_probs = a_dist.log_probs(hx.a) + b_dist.log_probs(hx.b)
-        entropy = (b_dist.entropy()).mean()
+        a_dist = FixedCategorical(probs=hx.probs)
+        # b_dist = FixedCategorical(probs=hx.b_probs)
+        action_log_probs = a_dist.log_probs(hx.a)  # + b_dist.log_probs(hx.b)
+        entropy = (a_dist.entropy()).mean()
         return AgentValues(
             value=hx.v,
-            action=torch.cat([hx.a, hx.b], dim=-1),
+            # action=torch.cat([hx.a, hx.b], dim=-1),
+            action=hx.a,
             action_log_probs=action_log_probs,
             aux_loss=-self.entropy_coef * entropy,
             dist=None,
@@ -80,52 +81,51 @@ class Recurrence(nn.Module):
         super().__init__()
         self.obs_spaces = Obs(**observation_space.spaces)
         self.obs_sections = Obs(*[int(np.prod(s.shape)) for s in self.obs_spaces])
-        self.action_size = 2
+        self.action_size = 1
         self.debug = debug
         self.hidden_size = hidden_size
 
         # networks
-        self.embed = init_(nn.Linear(1, hidden_size))
+        self.embed = nn.Embedding(action_space.n, hidden_size)
         self.gru = nn.GRU(1, hidden_size, bidirectional=bidirectional)
         num_directions = 2 if bidirectional else 1
         layers = []
         for i in range(max(0, num_layers - 1)):
             layers += [init_(nn.Linear(hidden_size, hidden_size)), activation]
         self.actor = nn.Sequential(
-            # init_(nn.Linear(num_directions * hidden_size, hidden_size)),
-            # *layers,
-            DiagGaussian(1, action_space.spaces["goal"].shape[0])
-        )
-        self.scale = nn.Sequential(
             init_(nn.Linear(hidden_size, hidden_size)),
             *layers,
-            init_(nn.Linear(hidden_size, 1)),
-            nn.Softplus()
+            Categorical(hidden_size, action_space.n)
         )
+        # self.scale = nn.Sequential(
+        #     init_(nn.Linear(hidden_size, hidden_size)),
+        #     *layers,
+        #     init_(nn.Linear(hidden_size, 1)),
+        #     nn.Softplus()
+        # )
         self.critic = nn.Sequential(
             init_(nn.Linear(hidden_size, hidden_size)),
             *copy.deepcopy(layers),
             init_(nn.Linear(hidden_size, 1))
         )
-        self.beta = nn.Sequential(
-            init_(nn.Linear(hidden_size, hidden_size)),
-            *copy.deepcopy(layers),
-            Categorical(hidden_size, 2)
-        )
-        self.controller = nn.GRUCell(
-            self.obs_sections.obs + num_directions * hidden_size + 1, hidden_size
-        )
+        # self.beta = nn.Sequential(
+        #     init_(nn.Linear(hidden_size, hidden_size)),
+        #     *copy.deepcopy(layers),
+        #     Categorical(hidden_size, 2)
+        # )
+        self.controller = nn.GRUCell(sum(self.obs_sections) + hidden_size, hidden_size)
         self.state_sizes = RecurrentState(
             a=1,
             b=1,
-            a_loc=1,
-            a_scale=1,
-            b_probs=2,
+            # a_loc=1,
+            # a_scale=1,
+            # b_probs=2,
+            probs=action_space.n,
             p=1,
             v=1,
             h=hidden_size,
-            n=1,
-            right=1,
+            # n=1,
+            # right=1,
         )
 
     @staticmethod
@@ -160,58 +160,59 @@ class Recurrence(nn.Module):
             print(*args, **kwargs)
 
     def inner_loop(self, inputs, rnn_hxs):
-        device = inputs.device
+        # device = inputs.device
         T, N, D = inputs.shape
         inputs, actions = torch.split(
             inputs.detach(), [D - self.action_size, self.action_size], dim=2
         )
-        inputs = self.parse_inputs(inputs)
-        M, Mn = self.gru(inputs.sizes[0].T.unsqueeze(-1))
+        # inputs = self.parse_inputs(inputs)
+        # M, Mn = self.gru(inputs.sizes[0].T.unsqueeze(-1))
 
         hx = self.parse_hidden(rnn_hxs)
         for _x in hx:
             _x.squeeze_(0)
 
-        n = hx.n.long().squeeze(-1)
-        right = hx.right.squeeze(-1)
-        I = torch.arange(N, device=device)
+        # n = hx.n.long().squeeze(-1)
+        # right = hx.right.squeeze(-1)
+        # I = torch.arange(N, device=device)
 
         h = hx.h
         P = hx.p.squeeze(1).long()
-        R = torch.arange(P.size(0), device=P.device)
-        A = torch.cat([actions.clone()[:, :, 0], hx.a.T], dim=0)
-        B = actions.clone()[:, :, 1].long()
+        # R = torch.arange(P.size(0), device=P.device)
+        A = torch.cat([actions.clone()[:, :, 0], hx.a.T], dim=0).long()
+        # B = actions.clone()[:, :, 1].long()
 
         for t in range(T):
-            a = A[t - 1].clone().unsqueeze(1)
-            r = M[P, R]
-            x = torch.cat([inputs.obs[t], r, a], dim=-1)
+            # a = A[t - 1]
+            # r = M[P, R]
+            x = torch.cat([inputs[t], self.embed(A[t - 1].clone())], dim=-1)
             y = self.controller(x, h)
-            b_dist = self.beta(y)
-            self.sample_new(B[t], b_dist)
-            b = B[t].float().unsqueeze(-1)
+            # b_dist = self.beta(y)
+            # self.sample_new(B[t], b_dist)
+            # b = B[t].float().unsqueeze(-1)
             v = self.critic(y)
 
-            picture_size = inputs.sizes[t, I, n]
-            a = right + picture_size / 2
-            P = (P + B[t]) % (M.size(0))
-            n = (n + B[t]) % (M.size(0))
-            right = right + picture_size * B[t].float()
-            a_dist = self.actor(a.unsqueeze(-1))
-            a_dist = FixedNormal(
-                loc=b * a_dist.loc + (1 - b) * hx.a,
-                scale=b * a_dist.scale + (1 - b) * self.scale(y),
-            )
+            # picture_size = inputs.sizes[t, I, n]
+            # a = right + picture_size / 2
+            # P = (P + B[t]) % (M.size(0))
+            # n = (n + B[t]) % (M.size(0))
+            # right = right + picture_size * B[t].float()
+            a_dist = self.actor(y)
+            # a_dist = FixedNormal(
+            #     loc=b * a_dist.loc + (1 - b) * hx.a,
+            #     scale=b * a_dist.scale + (1 - b) * self.scale(y),
+            # )
             self.sample_new(A[t], a_dist)
             yield RecurrentState(
                 a=A[t],
-                b=B[t],
-                a_loc=a_dist.loc,
-                a_scale=a_dist.scale,
-                b_probs=b_dist.probs,
+                # b=B[t],
+                b=hx.b,
+                probs=a_dist.probs,
+                # a_loc=a_dist.loc,
+                # a_scale=a_dist.scale,
+                # b_probs=b_dist.probs,
                 v=v,
                 h=h,
                 p=P,
-                n=n,
-                right=right,
+                # right=right,
             )

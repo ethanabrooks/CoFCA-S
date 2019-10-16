@@ -5,7 +5,7 @@ import gym
 from gym.utils import seeding
 from collections import namedtuple
 
-Obs = namedtuple("Obs", "sizes obs n_pictures")
+Obs = namedtuple("Obs", "sizes obs")
 
 
 class Env(gym.Env):
@@ -24,19 +24,20 @@ class Env(gym.Env):
         box = gym.spaces.Box(low=0, high=self.width, shape=(self.max_pictures,))
         self.observation_space = gym.spaces.Dict(
             Obs(
-                sizes=box, n_pictures=gym.spaces.Discrete(self.max_pictures), obs=box
+                sizes=box,
+                # n_pictures=gym.spaces.Discrete(self.max_pictures),
+                obs=box,
             )._asdict()
         )
-        # self.action_space = gym.spaces.Discrete(self.width)
-        self.action_space = gym.spaces.Dict(
-            goal=gym.spaces.Box(low=0, high=self.width, shape=(1,)),
-            next=gym.spaces.Discrete(2),
-        )
+        self.action_space = gym.spaces.Discrete(self.width + 1)
+        # self.action_space = gym.spaces.Dict(
+        #     goal=gym.spaces.Discrete(self.width), next=gym.spaces.Discrete(2)
+        # )
         self.evaluating = False
         self.t = None
 
-    def step(self, action):
-        center, next_picture = action
+    def step(self, action: int):
+        next_picture = action >= self.width
         self.t += 1
         if self.t > self.time_limit:
             return self.get_observation(), -2 * self.width, True, {}
@@ -61,21 +62,25 @@ class Env(gym.Env):
                     True,
                     {},
                 )
-        pos = self.centers[-1]
-        delta = center - pos
-        delta = min(abs(delta), self.speed) * (1 if delta > 0 else -1)
-        self.centers[-1] = max(0, min(self.width, pos + delta))
+        else:
+            pos = self.centers[-1]
+            delta = action - pos
+            delta = min(abs(delta), self.speed) * (1 if delta > 0 else -1)
+            self.centers[-1] = max(0, min(self.width, pos + delta))
         return self.get_observation(), 0, False, {}
 
     def reset(self):
         self.t = 0
         self.centers = [self.new_position()]
-        self.sizes = self.random.random(
+        randoms = self.random.random(
             self.n_eval
             if self.evaluating
-            else self.random.random_integers(2, self.n_train)
+            else self.random.random_integers(1, self.n_train)
         )
-        self.sizes = self.sizes * self.width / self.sizes.sum()
+        normalized = randoms * self.width / randoms.sum()
+        cumsum = np.round(np.cumsum(normalized))
+        z = np.roll(np.append(cumsum, 0), 1)
+        self.sizes = z[1:] - z[:-1]
         self.random.shuffle(self.sizes)
         return self.get_observation()
 
@@ -86,7 +91,7 @@ class Env(gym.Env):
         obs = Obs(
             sizes=self.pad(self.sizes),
             obs=self.pad(self.centers),
-            n_pictures=len(self.sizes),
+            # n_pictures=len(self.sizes),
         )._asdict()
         self.observation_space.contains(obs)
         return obs
