@@ -26,7 +26,7 @@ class Env(gym.Env):
             Obs(
                 sizes=box,
                 # n_pictures=gym.spaces.Discrete(self.max_pictures),
-                obs=box,
+                obs=gym.spaces.Discrete(self.width),
             )._asdict()
         )
         self.action_space = gym.spaces.Discrete(self.width + 1)
@@ -90,7 +90,7 @@ class Env(gym.Env):
     def get_observation(self):
         obs = Obs(
             sizes=self.pad(self.sizes),
-            obs=self.pad(self.centers),
+            obs=self.centers[-1],
             # n_pictures=len(self.sizes),
         )._asdict()
         self.observation_space.contains(obs)

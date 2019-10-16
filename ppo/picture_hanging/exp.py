@@ -80,13 +80,14 @@ class Recurrence(nn.Module):
     ):
         super().__init__()
         self.obs_spaces = Obs(**observation_space.spaces)
-        self.obs_sections = Obs(*[int(np.prod(s.shape)) for s in self.obs_spaces])
+        self.obs_sections = Obs(sizes=observation_space.spaces["sizes"].shape[0], obs=1)
         self.action_size = 1
         self.debug = debug
         self.hidden_size = hidden_size
 
         # networks
-        self.embed = nn.Embedding(action_space.n, hidden_size)
+        self.embed_action = nn.Embedding(action_space.n, hidden_size)
+        self.embed_obs = nn.Embedding(observation_space.spaces["obs"].n, hidden_size)
         self.gru = nn.GRU(1, hidden_size, bidirectional=bidirectional)
         num_directions = 2 if bidirectional else 1
         layers = []
@@ -113,10 +114,7 @@ class Recurrence(nn.Module):
             *copy.deepcopy(layers),
             init_(nn.Linear(hidden_size, 1)),
         )
-        self.controller = nn.GRUCell(
-            self.obs_sections.obs + num_directions * hidden_size + hidden_size,
-            hidden_size,
-        )
+        self.controller = nn.GRUCell(hidden_size * (2 + num_directions), hidden_size)
         self.register_buffer("next", torch.eye(action_space.n)[-1])
         self.state_sizes = RecurrentState(
             a=1,
@@ -169,8 +167,8 @@ class Recurrence(nn.Module):
         inputs, actions = torch.split(
             inputs.detach(), [D - self.action_size, self.action_size], dim=2
         )
-        parsed_inputs = self.parse_inputs(inputs)
-        M, Mn = self.gru(parsed_inputs.sizes[0].T.unsqueeze(-1))
+        inputs = self.parse_inputs(inputs)
+        M, Mn = self.gru(inputs.sizes[0].T.unsqueeze(-1))
 
         hx = self.parse_hidden(rnn_hxs)
         for _x in hx:
@@ -180,6 +178,7 @@ class Recurrence(nn.Module):
         # right = hx.right.squeeze(-1)
         # I = torch.arange(N, device=device)
 
+        obs = inputs.obs.long().squeeze(-1)
         h = hx.h
         P = hx.p.squeeze(1).long()
         R = torch.arange(P.size(0), device=P.device)
@@ -190,7 +189,7 @@ class Recurrence(nn.Module):
             # a = A[t - 1]
             r = M[P, R]
             x = torch.cat(
-                [parsed_inputs.obs[t], r, self.embed(A[t - 1].clone())], dim=-1
+                [self.embed_obs(obs[t]), r, self.embed_action(A[t - 1].clone())], dim=-1
             )
             y = self.controller(x, h)
             b = self.beta(y).sigmoid()
