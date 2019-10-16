@@ -101,9 +101,11 @@ class Env(gym.Env):
             [0] * edge + ([1] if i == self.i else [2]) * size
             for i, (edge, size) in enumerate(zip(self.edges, self.sizes))
         ] + [[0] * self.width] * (self.max_pictures - len(self.edges))
-        return np.array(
+        obs = np.array(
             [row[: self.width] + [0] * (self.width - len(row)) for row in obs]
         )
+        self.random.shuffle(obs)
+        return obs
 
     def pad(self, obs):
         if len(obs) == self.max_pictures:
