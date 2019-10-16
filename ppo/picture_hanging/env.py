@@ -26,6 +26,7 @@ class Env(gym.Env):
         self.sizes = None
         self.indices = None
         self.edges = None
+        self.split = None
         self.width = width
         self.random, self.seed = seeding.np_random(seed)
         self.max_pictures = max(n_eval, n_train)
@@ -79,6 +80,7 @@ class Env(gym.Env):
         self.indices = list(range(self.max_pictures))
         self.random.shuffle(self.indices)
         n_pictures = self.random.random_integers(1, self.n_train)
+        self.split = self.random.randint(self.max_pictures - n_pictures)
         randoms = self.random.random(self.n_eval if self.evaluating else n_pictures)
         normalized = randoms * self.width / randoms.sum()
         cumsum = np.round(np.cumsum(normalized)).astype(int)
@@ -100,13 +102,14 @@ class Env(gym.Env):
         return obs
 
     def raw_observation(self):
-        obs = [
+        zero = [[0] * self.width] * (self.max_pictures - len(self.edges))
+        nonzero = [
             [0] * edge + ([1] if i == self.i else [2]) * size
             for i, (edge, size) in enumerate(zip(self.edges, self.sizes))
-        ] + [[0] * self.width] * (self.max_pictures - len(self.edges))
-        return np.array(
-            [row[: self.width] + [0] * (self.width - len(row)) for row in obs]
-        )
+        ]
+        nonzero = [row[: self.width] + [0] * (self.width - len(row)) for row in nonzero]
+        obs = zero[: self.split] + nonzero + zero[self.split :]
+        return np.array(obs)
 
     def pad(self, obs):
         if len(obs) == self.max_pictures:
