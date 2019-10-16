@@ -56,7 +56,7 @@ def cli():
     parsers.agent.add_argument("--debug", action="store_true")
     parsers.agent.add_argument("--bidirectional", action="store_true")
     parsers.agent.add_argument("--baseline", action="store_true")
-    parsers.env.add_argument("--width", type=int, default=1)
+    parsers.env.add_argument("--width", type=int, default=100)
     parsers.env.add_argument("--speed", type=float, default=0.1)
     parsers.env.add_argument("--n-train", type=int, default=3)
     parsers.env.add_argument("--n-eval", type=int, default=6)

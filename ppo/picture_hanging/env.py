@@ -36,7 +36,7 @@ class Env(gym.Env):
         self.evaluating = False
         self.t = None
 
-    def step(self, action: int):
+    def step(self, action):
         next_picture = action >= self.width
         self.t += 1
         if self.t > self.time_limit:

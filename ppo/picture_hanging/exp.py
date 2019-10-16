@@ -95,7 +95,7 @@ class Recurrence(nn.Module):
         self.actor = nn.Sequential(
             init_(nn.Linear(hidden_size, hidden_size)),
             *layers,
-            Categorical(hidden_size, action_space.n)
+            init_(nn.Linear(hidden_size, action_space.n - 1)),
         )
         # self.scale = nn.Sequential(
         #     init_(nn.Linear(hidden_size, hidden_size)),
@@ -106,14 +106,15 @@ class Recurrence(nn.Module):
         self.critic = nn.Sequential(
             init_(nn.Linear(hidden_size, hidden_size)),
             *copy.deepcopy(layers),
-            init_(nn.Linear(hidden_size, 1))
+            init_(nn.Linear(hidden_size, 1)),
         )
-        # self.beta = nn.Sequential(
-        #     init_(nn.Linear(hidden_size, hidden_size)),
-        #     *copy.deepcopy(layers),
-        #     Categorical(hidden_size, 2)
-        # )
+        self.beta = nn.Sequential(
+            init_(nn.Linear(hidden_size, hidden_size)),
+            *copy.deepcopy(layers),
+            init_(nn.Linear(hidden_size, 1)),
+        )
         self.controller = nn.GRUCell(sum(self.obs_sections) + hidden_size, hidden_size)
+        self.register_buffer("next", torch.eye(action_space.n)[-1])
         self.state_sizes = RecurrentState(
             a=1,
             b=1,
@@ -165,8 +166,8 @@ class Recurrence(nn.Module):
         inputs, actions = torch.split(
             inputs.detach(), [D - self.action_size, self.action_size], dim=2
         )
-        # inputs = self.parse_inputs(inputs)
-        # M, Mn = self.gru(inputs.sizes[0].T.unsqueeze(-1))
+        parsed_inputs = self.parse_inputs(inputs)
+        M, Mn = self.gru(parsed_inputs.sizes[0].T.unsqueeze(-1))
 
         hx = self.parse_hidden(rnn_hxs)
         for _x in hx:
@@ -178,16 +179,16 @@ class Recurrence(nn.Module):
 
         h = hx.h
         P = hx.p.squeeze(1).long()
-        # R = torch.arange(P.size(0), device=P.device)
+        R = torch.arange(P.size(0), device=P.device)
         A = torch.cat([actions.clone()[:, :, 0], hx.a.T], dim=0).long()
         # B = actions.clone()[:, :, 1].long()
 
         for t in range(T):
             # a = A[t - 1]
-            # r = M[P, R]
+            r = M[P, R]
             x = torch.cat([inputs[t], self.embed(A[t - 1].clone())], dim=-1)
             y = self.controller(x, h)
-            # b_dist = self.beta(y)
+            b = self.beta(y).sigmoid()
             # self.sample_new(B[t], b_dist)
             # b = B[t].float().unsqueeze(-1)
             v = self.critic(y)
@@ -197,17 +198,19 @@ class Recurrence(nn.Module):
             # P = (P + B[t]) % (M.size(0))
             # n = (n + B[t]) % (M.size(0))
             # right = right + picture_size * B[t].float()
-            a_dist = self.actor(y)
+            a_probs = self.actor(y).softmax(-1)
+            dist = FixedCategorical((1 - b) * F.pad(a_probs, [0, 1]) + b * self.next)
+
             # a_dist = FixedNormal(
             #     loc=b * a_dist.loc + (1 - b) * hx.a,
             #     scale=b * a_dist.scale + (1 - b) * self.scale(y),
             # )
-            self.sample_new(A[t], a_dist)
+            self.sample_new(A[t], dist)
             yield RecurrentState(
                 a=A[t],
                 # b=B[t],
-                b=hx.b,
-                probs=a_dist.probs,
+                b=b,
+                probs=dist.probs,
                 # a_loc=a_dist.loc,
                 # a_scale=a_dist.scale,
                 # b_probs=b_dist.probs,
