@@ -103,14 +103,13 @@ class Env(gym.Env):
         return obs
 
     def raw_observation(self):
-        zero = [[0] * self.width] * (self.max_pictures - len(self.edges))
-        nonzero = [
+        ragged = [
             [0] * edge + ([1] if i == self.i else [2]) * size
             for i, (edge, size) in enumerate(zip(self.edges, self.sizes))
         ]
-        nonzero = [row[: self.width] + [0] * (self.width - len(row)) for row in nonzero]
-        obs = zero[: self.split] + nonzero + zero[self.split :]
-        return np.array(obs)
+        padded = [row[: self.width] + [0] * (self.width - len(row)) for row in ragged]
+        zeros = [[0] * self.width] * (self.max_pictures - len(self.edges))
+        return np.array(padded + zeros)
 
     def pad(self, obs):
         if len(obs) == self.max_pictures:
