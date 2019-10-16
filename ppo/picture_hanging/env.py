@@ -24,6 +24,7 @@ class Env(gym.Env):
         self.n_eval = n_eval
         self.n_train = n_train
         self.sizes = None
+        self.indices = None
         self.edges = None
         self.width = width
         self.random, self.seed = seeding.np_random(seed)
@@ -75,6 +76,8 @@ class Env(gym.Env):
     def reset(self):
         self.t = 0
         self.i = 0
+        self.indices = list(range(self.max_pictures))
+        self.random.shuffle(self.indices)
         n_pictures = self.random.random_integers(1, self.n_train)
         randoms = self.random.random(self.n_eval if self.evaluating else n_pictures)
         normalized = randoms * self.width / randoms.sum()
@@ -91,7 +94,7 @@ class Env(gym.Env):
         return int(self.random.random() * self.width)
 
     def get_observation(self):
-        obs = self.raw_observation()
+        obs = self.raw_observation()[self.indices]
         obs = np.array([[0, 0], [1, 0], [0, 1]])[obs].transpose((2, 0, 1))
         self.observation_space.contains(obs)
         return obs
