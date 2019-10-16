@@ -92,6 +92,7 @@ class Env(gym.Env):
 
     def get_observation(self):
         obs = self.raw_observation()
+        self.random.shuffle(obs)
         obs = np.array([[0, 0], [1, 0], [0, 1]])[obs].transpose((2, 0, 1))
         self.observation_space.contains(obs)
         return obs
