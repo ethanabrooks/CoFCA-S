@@ -86,6 +86,7 @@ class Env(gym.Env):
         cumsum = np.round(np.cumsum(normalized)).astype(int)
         z = np.roll(np.append(cumsum, 0), 1)
         self.sizes = z[1:] - z[:-1]
+        self.sizes = self.sizes[self.sizes > 0]
         self.edges = [
             self.random.random_integers(0, self.width - size) for size in self.sizes
         ]
@@ -96,7 +97,7 @@ class Env(gym.Env):
         return int(self.random.random() * self.width)
 
     def get_observation(self):
-        obs = self.raw_observation()[self.indices]
+        obs = self.raw_observation()
         obs = np.array([[0, 0], [1, 0], [0, 1]])[obs].transpose((2, 0, 1))
         self.observation_space.contains(obs)
         return obs
