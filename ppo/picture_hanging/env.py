@@ -17,50 +17,24 @@ class Env(gym.Env):
         speed: float,
         seed: int,
         time_limit: int,
-        one_hot_sizes: bool,
-        one_hot_pos: bool,
-        one_hot_index: bool,
+        obs_type: str,
     ):
         self.time_limit = time_limit
         self.speed = speed
         self.n_eval = n_eval
         self.n_train = n_train
         self.sizes = None
-        self.centers = None
+        self.edges = None
         self.width = width
         self.random, self.seed = seeding.np_random(seed)
         self.max_pictures = max(n_eval, n_train)
-        self.one_hot_index = one_hot_index
-        self.one_hot_pos = one_hot_pos
-        self.one_hot_sizes = one_hot_sizes
-        sizes = (
-            gym.spaces.MultiDiscrete(np.ones((self.max_pictures, self.width)))
-            if one_hot_sizes
-            else gym.spaces.MultiDiscrete(np.ones(self.max_pictures) * self.width)
-        )
-        pos = (
-            gym.spaces.MultiBinary(self.width)
-            if one_hot_pos
-            else gym.spaces.Discrete(self.width)
-        )
-        index = (
-            gym.spaces.MultiBinary(self.max_pictures)
-            if one_hot_index
-            else gym.spaces.Discrete(self.max_pictures)
-        )
-        self.observation_space = gym.spaces.Dict(
-            Obs(sizes=sizes, pos=pos, index=index)._asdict()
+        self.observation_space = gym.spaces.Box(
+            high=1, low=0, shape=(2, self.max_pictures, self.width)
         )
         self.action_space = gym.spaces.Discrete(self.width + 1)
-        # self.action_space = gym.spaces.Dict(
-        #     goal=gym.spaces.Discrete(self.width), next=gym.spaces.Discrete(2)
-        # )
         self.evaluating = False
         self.t = None
-        if one_hot_sizes or one_hot_pos:
-            self.eye = np.vstack([np.eye(self.width), np.zeros((1, self.width))])
-        if one_hot_index:
-            self.pic_eye = np.eye(self.max_pictures)
+        self.i = None
 
     def step(self, action):
         next_picture = action >= self.width
@@ -68,16 +42,15 @@ class Env(gym.Env):
         if self.t > self.time_limit:
             return self.get_observation(), -2 * self.width, True, {}
         if next_picture:
-            if len(self.centers) < len(self.sizes):
-                self.centers.append(self.new_position())
+            if self.i < len(self.sizes) - 1:
+                self.i += 1
             else:
 
                 def compute_white_space():
                     left = 0
-                    for center, picture in zip(self.centers, self.sizes):
-                        right = center - picture / 2
+                    for right, picture in zip(self.edges, self.sizes):
                         yield right - left
-                        left = center + picture / 2
+                        left = right + picture
                     yield self.width - left
 
                 white_space = list(compute_white_space())
@@ -89,26 +62,28 @@ class Env(gym.Env):
                     {},
                 )
         else:
-            pos = self.centers[-1]
-            desired_delta = action - pos
+            edge = self.edges[self.i]
+            desired_delta = action - edge
             delta = min(abs(desired_delta), self.speed) * (
                 1 if desired_delta > 0 else -1
             )
-            self.centers[-1] = max(0, min(self.width, pos + delta))
+            self.edges[self.i] = max(
+                0, min(self.width - self.sizes[self.i], edge + delta)
+            )
         return self.get_observation(), 0, False, {}
 
     def reset(self):
         self.t = 0
-        self.centers = [self.new_position()]
-        randoms = self.random.random(
-            self.n_eval
-            if self.evaluating
-            else self.random.random_integers(1, self.n_train)
-        )
+        self.i = 0
+        n_pictures = self.random.random_integers(1, self.n_train)
+        randoms = self.random.random(self.n_eval if self.evaluating else n_pictures)
         normalized = randoms * self.width / randoms.sum()
         cumsum = np.round(np.cumsum(normalized)).astype(int)
         z = np.roll(np.append(cumsum, 0), 1)
         self.sizes = z[1:] - z[:-1]
+        self.edges = [
+            self.random.random_integers(0, self.width - size) for size in self.sizes
+        ]
         self.random.shuffle(self.sizes)
         return self.get_observation()
 
@@ -116,18 +91,19 @@ class Env(gym.Env):
         return int(self.random.random() * self.width)
 
     def get_observation(self):
-        sizes = self.pad(self.sizes)
-        if self.one_hot_sizes:
-            sizes = self.eye[sizes]
-        pos = self.centers[-1]
-        if self.one_hot_pos:
-            pos = self.eye[pos]
-        index = len(self.centers) - 1
-        if self.one_hot_index:
-            index = self.pic_eye[index]
-        obs = Obs(sizes=sizes, pos=pos, index=index)._asdict()
+        obs = self.raw_observation()
+        obs = np.array([[0, 0], [1, 0], [0, 1]])[obs].transpose((2, 0, 1))
         self.observation_space.contains(obs)
         return obs
+
+    def raw_observation(self):
+        obs = [
+            [0] * edge + ([1] if i == self.i else [2]) * size
+            for i, (edge, size) in enumerate(zip(self.edges, self.sizes))
+        ] + [[0] * self.width] * (self.max_pictures - len(self.edges))
+        return np.array(
+            [row[: self.width] + [0] * (self.width - len(row)) for row in obs]
+        )
 
     def pad(self, obs):
         if len(obs) == self.max_pictures:
@@ -135,18 +111,10 @@ class Env(gym.Env):
         return np.pad(obs, (0, self.max_pictures - len(obs)), constant_values=-1)
 
     def render(self, mode="human", pause=True):
-        terminal_width = shutil.get_terminal_size((80, 20)).columns
-        ratio = terminal_width / self.width
-        right = 0
-        for i, picture in enumerate(self.sizes):
-            print(str(i) * int(round(picture * ratio)))
-        print("placements")
-        for i, (center, picture) in enumerate(zip(self.centers, self.sizes)):
-            left = center - picture / 2
-            print("-" * int(round(left * ratio)), end="")
-            print(str(i) * int(round(picture * ratio)))
-            right = center + picture / 2
-        print("-" * int(round(self.width * ratio)))
+        np.set_printoptions(
+            threshold=self.width * self.max_pictures, linewidth=2 * self.width + 4
+        )
+        print(self.raw_observation())
         if pause:
             input("pause")
 

@@ -26,14 +26,8 @@ def train(**_kwargs):
             if baseline:
                 del agent_args["debug"]
                 del agent_args["bidirectional"]
-                obs_shape = [
-                    sum(
-                        int(np.prod(s.shape))
-                        for s in envs.observation_space.spaces.values()
-                    )
-                ]
                 return ppo.agent.Agent(
-                    obs_shape=obs_shape,
+                    obs_shape=envs.observation_space.shape,
                     action_space=envs.action_space,
                     entropy_coef=entropy_coef,
                     recurrent=recurrent,
@@ -77,9 +71,7 @@ def cli():
     parsers.agent.add_argument("--debug", action="store_true")
     parsers.agent.add_argument("--bidirectional", action="store_true")
     parsers.agent.add_argument("--baseline", action="store_true")
-    parsers.env.add_argument("--one-hot-sizes", action="store_true")
-    parsers.env.add_argument("--one-hot-pos", action="store_true")
-    parsers.env.add_argument("--one-hot-index", action="store_true")
+    parsers.env.add_argument("--obs-type", choices=["homo", "hetero", "2d"])
     parsers.env.add_argument("--width", type=int, default=100)
     parsers.env.add_argument("--speed", type=int, default=20)
     parsers.env.add_argument("--n-train", type=int, default=3)
