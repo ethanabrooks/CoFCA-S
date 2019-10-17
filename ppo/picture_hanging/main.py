@@ -25,9 +25,16 @@ def train(agent, **_kwargs):
                 include_sizes=agent != "default",
             )
 
-        def build_agent(self, envs, recurrent=None, entropy_coef=None, **agent_args):
+        def build_agent(
+            self,
+            envs,
+            recurrent=None,
+            entropy_coef=None,
+            r_to_actor=None,
+            debug=None,
+            **agent_args,
+        ):
             if agent == "default":
-                del agent_args["debug"]
                 return ppo.agent.Agent(
                     obs_shape=envs.observation_space.shape,
                     action_space=envs.action_space,
@@ -40,6 +47,7 @@ def train(agent, **_kwargs):
                     entropy_coef=entropy_coef,
                     recurrence=ppo.picture_hanging.baseline.Recurrence(
                         **agent_args,
+                        debug=debug,
                         action_space=envs.action_space,
                         observation_space=envs.observation_space,
                     ),
@@ -50,6 +58,8 @@ def train(agent, **_kwargs):
                     recurrence=(
                         ppo.picture_hanging.exp.Recurrence(
                             **agent_args,
+                            debug=debug,
+                            r_to_actor=r_to_actor,
                             action_space=envs.action_space,
                             observation_space=envs.observation_space,
                         )
