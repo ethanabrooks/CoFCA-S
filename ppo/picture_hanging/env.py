@@ -81,16 +81,14 @@ class Env(gym.Env):
         self.t = 0
         n_pictures = self.random.random_integers(self.min_train, self.max_train)
         randoms = self.random.random(self.n_eval if self.evaluating else n_pictures)
-        normalized = randoms * self.width / randoms.sum()
+        normalized = randoms / randoms.sum() * self.width
         cumsum = np.round(np.cumsum(normalized)).astype(int)
         z = np.roll(np.append(cumsum, 0), 1)
         self.sizes = z[1:] - z[:-1]
         self.sizes = self.sizes[self.sizes > 0]
-        gap = self.random.randint(0, self.sizes.min())
-        self.sizes -= gap
-        self.edges = self.random.random_integers(
-            low=0, high=self.width, size=len(self.sizes)
-        )
+        # gap = self.random.randint(0, self.sizes.min())
+        # self.sizes -= gap
+        self.edges = [self.new_position()]
         self.observation_iterator = self.observation_generator()
         return self.get_observation()
 
