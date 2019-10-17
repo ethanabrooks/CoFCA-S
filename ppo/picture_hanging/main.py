@@ -77,6 +77,7 @@ def cli():
     parsers.main.add_argument("--time-limit", type=int, required=True)
     parsers.main.add_argument("--agent", choices=["exp", "baseline", "default"])
     parsers.agent.add_argument("--debug", action="store_true")
+    parsers.agent.add_argument("--r-to-actor", action="store_true")
     parsers.env.add_argument("--width", type=int, default=100)
     parsers.env.add_argument("--speed", type=int, default=20)
     parsers.env.add_argument("--min-train", type=int, default=1)

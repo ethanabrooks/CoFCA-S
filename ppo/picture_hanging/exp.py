@@ -76,8 +76,10 @@ class Recurrence(nn.Module):
         hidden_size,
         num_layers,
         debug,
+        r_to_actor,
     ):
         super().__init__()
+        self.r_to_actor = r_to_actor
         self.obs_spaces = Obs(**observation_space.spaces)
         self.obs_sections = Obs(
             sizes=self.obs_spaces.sizes.nvec.size, obs=self.obs_spaces.obs.shape[0]
@@ -95,7 +97,7 @@ class Recurrence(nn.Module):
         for i in range(max(0, num_layers - 1)):
             layers += [init_(nn.Linear(hidden_size, hidden_size)), activation]
         self.actor = nn.Sequential(
-            init_(nn.Linear(hidden_size, hidden_size)),
+            init_(nn.Linear(hidden_size * (2 if r_to_actor else 1), hidden_size)),
             *layers,
             init_(nn.Linear(hidden_size, action_space.n - 1)),
         )
@@ -168,8 +170,10 @@ class Recurrence(nn.Module):
             h = self.controller(x, h)
             b = self.beta(h).sigmoid()
             v = self.critic(h)
-            # a_probs = self.actor(r).softmax(-1)
-            a_probs = self.actor(h).softmax(-1)
+            if self.r_to_actor:
+                a_probs = self.actor(r).softmax(-1)
+            else:
+                a_probs = self.actor(h).softmax(-1)
             dist = FixedCategorical((1 - b) * F.pad(a_probs, [0, 1]) + b * self.next)
 
             self.sample_new(A[t], dist)
