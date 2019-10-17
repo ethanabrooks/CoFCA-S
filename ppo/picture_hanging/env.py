@@ -27,7 +27,7 @@ class Env(gym.Env):
         self.min_train = min_train
         self.max_train = max_train
         self.sizes = None
-        self.edges = None
+        self.centers = None
         self.new_picture = None
         self.observation_iterator = None
         self.width = width
@@ -51,13 +51,14 @@ class Env(gym.Env):
         if self.t > self.time_limit:
             return self.get_observation(), -2 * self.width, True, {}
         if next_picture:
-            if len(self.edges) < len(self.sizes):
-                self.edges += [self.new_position()]
+            if len(self.centers) < len(self.sizes):
+                self.centers += [self.new_position()]
             else:
 
                 def compute_white_space():
                     left = 0
-                    for right, picture in zip(self.edges, self.sizes):
+                    for center, picture in zip(self.centers, self.sizes):
+                        right = center - picture // 2
                         yield right - left
                         left = right + picture
                     yield self.width - left
@@ -71,12 +72,12 @@ class Env(gym.Env):
                     {},
                 )
         else:
-            edge = self.edges[-1]
-            desired_delta = action - edge
+            center = self.centers[-1]
+            desired_delta = action - center
             delta = min(abs(desired_delta), self.speed) * (
                 1 if desired_delta > 0 else -1
             )
-            self.edges[-1] = max(0, min(self.width - self.sizes[-1], edge + delta))
+            self.centers[-1] = max(0, min(self.width - self.sizes[-1], center + delta))
         return self.get_observation(), 0, False, {}
 
     def reset(self):
@@ -91,7 +92,7 @@ class Env(gym.Env):
         self.sizes = self.sizes[self.sizes > 0]
         # gap = self.random.randint(0, self.sizes.min())
         # self.sizes -= gap
-        self.edges = [self.new_position()]
+        self.centers = [self.new_position()]
         self.observation_iterator = self.observation_generator()
         return self.get_observation()
 
@@ -103,9 +104,9 @@ class Env(gym.Env):
             size = list(self.eye[size]) if self.one_hot else [size]
             yield (size + [0, self.new_picture])
         while True:
-            edge = self.edges[-1]
-            edge = list(self.eye[edge]) if self.one_hot else [edge]
-            yield (edge + [1, self.new_picture])
+            center = self.centers[-1]
+            center = list(self.eye[center]) if self.one_hot else [center]
+            yield (center + [1, self.new_picture])
 
     def get_observation(self):
         obs = next(self.observation_iterator)
@@ -121,8 +122,8 @@ class Env(gym.Env):
         print("sizes", self.sizes)
         np.set_printoptions(threshold=self.width * self.max_pictures)
         state2d = [
-            [0] * edge + [1] * size
-            for i, (edge, size) in enumerate(zip(self.edges, self.sizes))
+            [0] * (center - size // 2) + [1] * size
+            for center, size in zip(self.centers, self.sizes)
         ]
         state2d = [row[: self.width] + [0] * (self.width - len(row)) for row in state2d]
         print(*state2d, sep="\n")
@@ -146,17 +147,18 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", default=0, type=int)
-    parser.add_argument("--width", default=100, type=int)
-    parser.add_argument("--n-train", default=4, type=int)
+    parser.add_argument("--width", default=3, type=int)
+    parser.add_argument("--min-train", default=2, type=int)
+    parser.add_argument("--max-train", default=2, type=int)
     parser.add_argument("--n-eval", default=6, type=int)
-    parser.add_argument("--speed", default=100, type=int)
+    parser.add_argument("--speed", default=3, type=int)
     parser.add_argument("--time-limit", default=100, type=int)
+    parser.add_argument("--one-hot", action="store_true")
     args = hierarchical_parse_args(parser)
 
     def action_fn(string):
         try:
-            a, b = string.split()
-            return float(a), int(b)
+            return int(string)
         except ValueError:
             return
 
