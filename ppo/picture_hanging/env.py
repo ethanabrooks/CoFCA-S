@@ -10,8 +10,16 @@ Obs = namedtuple("Obs", "sizes pos index")
 
 class Env(gym.Env):
     def __init__(
-        self, width, n_train: int, n_eval: int, speed: float, seed: int, time_limit: int
+        self,
+        width,
+        n_train: int,
+        n_eval: int,
+        speed: float,
+        seed: int,
+        time_limit: int,
+        one_hot: bool,
     ):
+        self.one_hot = one_hot
         self.time_limit = time_limit
         self.speed = speed
         self.n_eval = n_eval
@@ -22,10 +30,16 @@ class Env(gym.Env):
         self.width = width
         self.random, self.seed = seeding.np_random(seed)
         self.max_pictures = max(n_eval, n_train)
-        self.observation_space = gym.spaces.MultiDiscrete(np.array([self.width, 2]))
+        self.observation_space = (
+            gym.spaces.MultiDiscrete(2 * np.ones(self.width + 2))
+            if one_hot
+            else gym.spaces.MultiDiscrete(np.array([self.width, 2]))
+        )
         self.action_space = gym.spaces.Discrete(self.width + 1)
         self.evaluating = False
         self.t = None
+        if one_hot:
+            self.eye = np.eye(self.width + 1)
 
     def step(self, action):
         next_picture = action >= self.width
@@ -83,9 +97,12 @@ class Env(gym.Env):
 
     def observation_generator(self):
         for size in self.sizes:
-            yield [size, 0]
+            size = list(self.eye[size]) if self.one_hot else [size]
+            yield (size + [0])
         while True:
-            yield [self.edges[-1], 1]
+            edge = self.edges[-1]
+            edge = list(self.eye[edge]) if self.one_hot else [edge]
+            yield (edge + [1])
 
     def get_observation(self):
         obs = next(self.observation_iterator)

@@ -73,6 +73,7 @@ def cli():
     parsers.env.add_argument("--speed", type=int, default=20)
     parsers.env.add_argument("--n-train", type=int, default=3)
     parsers.env.add_argument("--n-eval", type=int, default=6)
+    parsers.env.add_argument("--one-hot", action="store_true")
     args = hierarchical_parse_args(parsers.main)
     train(**args)
 
