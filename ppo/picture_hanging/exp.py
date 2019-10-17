@@ -77,7 +77,6 @@ class Recurrence(nn.Module):
         num_layers,
         debug,
         bidirectional,
-        scale,
     ):
         super().__init__()
         self.default_scale = scale

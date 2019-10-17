@@ -83,15 +83,21 @@ class Recurrence(nn.Module):
         debug,
     ):
         super().__init__()
+        self.obs_spaces = Obs(**observation_space.spaces)
+        self.obs_sections = Obs(
+            sizes=self.obs_spaces.sizes.nvec.size, obs=self.obs_spaces.obs.shape[0]
+        )
         self.action_size = 1
         self.debug = debug
         self.hidden_size = hidden_size
 
         # networks
-        self.gru = nn.GRUCell(observation_space.shape[0], hidden_size)
+        self.gru = nn.GRU(1, hidden_size, bidirectional=True)
+        self.controller = nn.GRUCell(
+            self.obs_sections.obs + hidden_size * 2, hidden_size
+        )
         self.critic = nn.Sequential()
         self.actor = nn.Sequential()
-        self.num_directions = 1  # hold over from bidirectional
         layers = []
         for i in range(max(0, num_layers - 1)):
             layers += [init_(nn.Linear(hidden_size, hidden_size)), activation]
@@ -105,9 +111,7 @@ class Recurrence(nn.Module):
             *copy.deepcopy(layers),
             init_(nn.Linear(hidden_size, 1)),
         )
-        self.state_sizes = RecurrentState(
-            a=1, probs=action_space.n, v=1, h=hidden_size * self.num_directions
-        )
+        self.state_sizes = RecurrentState(a=1, probs=action_space.n, v=1, h=hidden_size)
 
     @staticmethod
     def sample_new(x, dist):
@@ -132,6 +136,9 @@ class Recurrence(nn.Module):
     def parse_hidden(self, hx: torch.Tensor) -> RecurrentState:
         return RecurrentState(*torch.split(hx, self.state_sizes, dim=-1))
 
+    def parse_inputs(self, inputs: torch.Tensor):
+        return Obs(*torch.split(inputs, self.obs_sections, dim=-1))
+
     def print(self, *args, **kwargs):
         if self.debug:
             torch.set_printoptions(precision=2, sci_mode=False)
@@ -142,6 +149,9 @@ class Recurrence(nn.Module):
         inputs, actions = torch.split(
             inputs.detach(), [D - self.action_size, self.action_size], dim=2
         )
+        inputs = self.parse_inputs(inputs)
+        _, Mn = self.gru(inputs.sizes[0].T.unsqueeze(-1))
+        Mn = Mn.transpose(0, 1).reshape(N, -1)
 
         hx = self.parse_hidden(rnn_hxs)
         for _x in hx:
@@ -158,7 +168,7 @@ class Recurrence(nn.Module):
         A = actions.long()
 
         for t in range(T):
-            h = self.gru(inputs[t], h)
+            h = self.controller(torch.cat([inputs.obs[t], Mn], dim=-1), h)
             v = self.critic(h.squeeze(0))
             dist = self.actor(h.squeeze(0))
             self.sample_new(A[t], dist)

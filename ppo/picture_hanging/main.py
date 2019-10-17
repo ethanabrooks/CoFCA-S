@@ -22,7 +22,7 @@ def train(agent, **_kwargs):
                 **env_args,
                 seed=seed + rank,
                 time_limit=time_limit,
-                include_sizes=agent == "exp",
+                include_sizes=agent != "default",
             )
 
         def build_agent(self, envs, recurrent=None, entropy_coef=None, **agent_args):
