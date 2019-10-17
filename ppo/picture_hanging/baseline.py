@@ -96,8 +96,6 @@ class Recurrence(nn.Module):
         self.controller = nn.GRUCell(
             self.obs_sections.obs + hidden_size * 2, hidden_size
         )
-        self.critic = nn.Sequential()
-        self.actor = nn.Sequential()
         layers = []
         for i in range(max(0, num_layers - 1)):
             layers += [init_(nn.Linear(hidden_size, hidden_size)), activation]
@@ -168,8 +166,12 @@ class Recurrence(nn.Module):
         A = actions.long()
 
         for t in range(T):
-            h = self.controller(torch.cat([inputs.obs[t], Mn], dim=-1), h)
-            v = self.critic(h.squeeze(0))
-            dist = self.actor(h.squeeze(0))
+            x = torch.cat([inputs.obs[t], Mn], dim=-1)
+            h = self.controller(x, h)
+            import ipdb
+
+            ipdb.set_trace()
+            v = self.critic(h)
+            dist = self.actor(h)
             self.sample_new(A[t], dist)
             yield RecurrentState(a=A[t], probs=dist.probs, v=v, h=h)
