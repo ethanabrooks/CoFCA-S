@@ -115,6 +115,7 @@ class Env(gym.Env):
         return np.pad(obs, (0, self.max_pictures - len(obs)), constant_values=-1)
 
     def render(self, mode="human", pause=True):
+        print("sizes", self.sizes)
         np.set_printoptions(threshold=self.width * self.max_pictures)
         state2d = [
             [0] * edge + [1] * size
