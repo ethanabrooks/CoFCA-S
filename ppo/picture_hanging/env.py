@@ -10,33 +10,22 @@ Obs = namedtuple("Obs", "sizes pos index")
 
 class Env(gym.Env):
     def __init__(
-        self,
-        width,
-        n_train: int,
-        n_eval: int,
-        speed: float,
-        seed: int,
-        time_limit: int,
-        obs_type: str,
+        self, width, n_train: int, n_eval: int, speed: float, seed: int, time_limit: int
     ):
         self.time_limit = time_limit
         self.speed = speed
         self.n_eval = n_eval
         self.n_train = n_train
         self.sizes = None
-        self.indices = None
         self.edges = None
-        self.split = None
+        self.observation_iterator = None
         self.width = width
         self.random, self.seed = seeding.np_random(seed)
         self.max_pictures = max(n_eval, n_train)
-        self.observation_space = gym.spaces.Box(
-            high=1, low=0, shape=(2, self.max_pictures, self.width)
-        )
+        self.observation_space = gym.spaces.MultiDiscrete(np.array([self.width, 2]))
         self.action_space = gym.spaces.Discrete(self.width + 1)
         self.evaluating = False
         self.t = None
-        self.i = None
 
     def step(self, action):
         next_picture = action >= self.width
@@ -44,8 +33,8 @@ class Env(gym.Env):
         if self.t > self.time_limit:
             return self.get_observation(), -2 * self.width, True, {}
         if next_picture:
-            if self.i < len(self.sizes) - 1:
-                self.i += 1
+            if len(self.edges) < len(self.sizes) - 1:
+                self.edges += [self.new_position()]
             else:
 
                 def compute_white_space():
@@ -64,53 +53,44 @@ class Env(gym.Env):
                     {},
                 )
         else:
-            edge = self.edges[self.i]
+            edge = self.edges[-1]
             desired_delta = action - edge
             delta = min(abs(desired_delta), self.speed) * (
                 1 if desired_delta > 0 else -1
             )
-            self.edges[self.i] = max(
-                0, min(self.width - self.sizes[self.i], edge + delta)
-            )
+            self.edges[-1] = max(0, min(self.width - self.sizes[-1], edge + delta))
         return self.get_observation(), 0, False, {}
 
     def reset(self):
         self.t = 0
-        self.i = 0
-        self.indices = list(range(self.max_pictures))
-        self.random.shuffle(self.indices)
         n_pictures = self.random.random_integers(1, self.n_train)
-        self.split = self.random.randint(self.max_pictures - n_pictures)
         randoms = self.random.random(self.n_eval if self.evaluating else n_pictures)
         normalized = randoms * self.width / randoms.sum()
         cumsum = np.round(np.cumsum(normalized)).astype(int)
         z = np.roll(np.append(cumsum, 0), 1)
         self.sizes = z[1:] - z[:-1]
         self.sizes = self.sizes[self.sizes > 0]
-        self.edges = [
-            self.random.random_integers(0, self.width - size) for size in self.sizes
-        ]
-        self.random.shuffle(self.sizes)
+        gap = self.random.randint(0, self.sizes.min())
+        self.sizes -= gap
+        self.edges = self.random.random_integers(
+            low=0, high=self.width, size=len(self.sizes)
+        )
+        self.observation_iterator = self.observation_generator()
         return self.get_observation()
 
     def new_position(self):
         return int(self.random.random() * self.width)
 
+    def observation_generator(self):
+        for size in self.sizes:
+            yield [size, 0]
+        while True:
+            yield [self.edges[-1], 1]
+
     def get_observation(self):
-        obs = self.raw_observation()[self.indices]
-        obs = np.array([[0, 0], [1, 0], [0, 1]])[obs].transpose((2, 0, 1))
+        obs = next(self.observation_iterator)
         self.observation_space.contains(obs)
         return obs
-
-    def raw_observation(self):
-        zero = [[0] * self.width] * (self.max_pictures - len(self.edges))
-        nonzero = [
-            [0] * edge + ([1] if i == self.i else [2]) * size
-            for i, (edge, size) in enumerate(zip(self.edges, self.sizes))
-        ]
-        nonzero = [row[: self.width] + [0] * (self.width - len(row)) for row in nonzero]
-        obs = zero[: self.split] + nonzero + zero[self.split :]
-        return np.array(obs)
 
     def pad(self, obs):
         if len(obs) == self.max_pictures:
@@ -118,10 +98,13 @@ class Env(gym.Env):
         return np.pad(obs, (0, self.max_pictures - len(obs)), constant_values=-1)
 
     def render(self, mode="human", pause=True):
-        np.set_printoptions(
-            threshold=self.width * self.max_pictures, linewidth=2 * self.width + 4
-        )
-        print(self.raw_observation())
+        np.set_printoptions(threshold=self.width * self.max_pictures)
+        state2d = [
+            [0] * edge + [1] * size
+            for i, (edge, size) in enumerate(zip(self.edges, self.sizes))
+        ]
+        state2d = [row[: self.width] + [0] * (self.width - len(row)) for row in state2d]
+        print(*state2d, sep="\n")
         if pause:
             input("pause")
 

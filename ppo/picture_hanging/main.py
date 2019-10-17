@@ -25,7 +25,6 @@ def train(**_kwargs):
         ):
             if baseline:
                 del agent_args["debug"]
-                del agent_args["bidirectional"]
                 return ppo.agent.Agent(
                     obs_shape=envs.observation_space.shape,
                     action_space=envs.action_space,
@@ -69,9 +68,7 @@ def cli():
     parsers.main.add_argument("--eval-steps", type=int)
     parsers.main.add_argument("--time-limit", type=int, required=True)
     parsers.agent.add_argument("--debug", action="store_true")
-    parsers.agent.add_argument("--bidirectional", action="store_true")
     parsers.agent.add_argument("--baseline", action="store_true")
-    parsers.env.add_argument("--obs-type", choices=["homo", "hetero", "2d"])
     parsers.env.add_argument("--width", type=int, default=100)
     parsers.env.add_argument("--speed", type=int, default=20)
     parsers.env.add_argument("--n-train", type=int, default=3)
