@@ -2,11 +2,14 @@ from gym.wrappers import TimeLimit
 from rl_utils import hierarchical_parse_args
 
 import ppo.arguments
+import ppo.agent
 import ppo.train
 from ppo.picture_hanging.exp import Agent
 from ppo.picture_hanging.env import Env
 import ppo.picture_hanging.exp
 import ppo.picture_hanging.baseline
+
+import numpy as np
 
 
 def train(**_kwargs):
@@ -20,18 +23,30 @@ def train(**_kwargs):
         def build_agent(
             self, envs, recurrent=None, entropy_coef=None, baseline=False, **agent_args
         ):
-            agent_args.update(
-                action_space=envs.action_space, observation_space=envs.observation_space
-            )
             if baseline:
-                return ppo.picture_hanging.baseline.Agent(
+                del agent_args["debug"]
+                del agent_args["bidirectional"]
+                return ppo.agent.Agent(
+                    obs_shape=envs.observation_space.shape,
+                    action_space=envs.action_space,
                     entropy_coef=entropy_coef,
-                    recurrence=ppo.picture_hanging.baseline.Recurrence(**agent_args),
+                    recurrent=recurrent,
+                    **agent_args
                 )
+                # return ppo.picture_hanging.baseline.Agent(
+                # entropy_coef=entropy_coef,
+                #     recurrence=ppo.picture_hanging.baseline.Recurrence(**agent_args),
+                # )
             else:
                 return ppo.picture_hanging.exp.Agent(
                     entropy_coef=entropy_coef,
-                    recurrence=(ppo.picture_hanging.exp.Recurrence(**agent_args)),
+                    recurrence=(
+                        ppo.picture_hanging.exp.Recurrence(
+                            **agent_args,
+                            action_space=envs.action_space,
+                            observation_space=envs.observation_space
+                        )
+                    ),
                 )
 
         # def run_epoch(self, *args, **kwargs):
@@ -56,9 +71,9 @@ def cli():
     parsers.agent.add_argument("--debug", action="store_true")
     parsers.agent.add_argument("--bidirectional", action="store_true")
     parsers.agent.add_argument("--baseline", action="store_true")
-    parsers.agent.add_argument("--scale", type=float)
-    parsers.env.add_argument("--width", type=int, default=1)
-    parsers.env.add_argument("--speed", type=float, default=0.1)
+    parsers.env.add_argument("--obs-type", choices=["homo", "hetero", "2d"])
+    parsers.env.add_argument("--width", type=int, default=100)
+    parsers.env.add_argument("--speed", type=int, default=20)
     parsers.env.add_argument("--n-train", type=int, default=3)
     parsers.env.add_argument("--n-eval", type=int, default=6)
     args = hierarchical_parse_args(parsers.main)
