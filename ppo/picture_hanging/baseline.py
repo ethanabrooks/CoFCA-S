@@ -168,9 +168,6 @@ class Recurrence(nn.Module):
         for t in range(T):
             x = torch.cat([inputs.obs[t], Mn], dim=-1)
             h = self.controller(x, h)
-            import ipdb
-
-            ipdb.set_trace()
             v = self.critic(h)
             dist = self.actor(h)
             self.sample_new(A[t], dist)
