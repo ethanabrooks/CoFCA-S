@@ -5,7 +5,7 @@ import gym
 from gym.utils import seeding
 from collections import namedtuple
 
-Obs = namedtuple("Obs", "sizes pos index")
+Obs = namedtuple("Obs", "sizes obs")
 
 
 class Env(gym.Env):
@@ -18,9 +18,9 @@ class Env(gym.Env):
         speed: float,
         seed: int,
         time_limit: int,
-        one_hot: bool,
+        include_sizes: bool,
     ):
-        self.one_hot = one_hot
+        self.include_sizes = include_sizes
         self.time_limit = time_limit
         self.speed = speed
         self.n_eval = n_eval
@@ -33,16 +33,20 @@ class Env(gym.Env):
         self.width = width
         self.random, self.seed = seeding.np_random(seed)
         self.max_pictures = max(n_eval, max_train)
-        self.observation_space = (
-            gym.spaces.MultiDiscrete(2 * np.ones(self.width + 3))
-            if one_hot
-            else gym.spaces.MultiDiscrete(np.array([self.width, 3]))
-        )
-        self.action_space = gym.spaces.Discrete(self.width + 1)
+        self.observation_space = gym.spaces.MultiDiscrete(2 * np.ones(self.width + 3))
+        if include_sizes:
+            self.observation_space = gym.spaces.Dict(
+                Obs(
+                    sizes=gym.spaces.MultiDiscrete(
+                        self.width * np.ones(self.max_pictures)
+                    ),
+                    obs=self.observation_space,
+                )._asdict()
+            )
+        self.action_space = gym.spaces.Discrete(2 * self.width + 1)
         self.evaluating = False
         self.t = None
-        if one_hot:
-            self.eye = np.eye(self.width + 1)
+        self.eye = np.eye(self.width + 1)
 
     def step(self, action):
         next_picture = action >= self.width
@@ -100,15 +104,14 @@ class Env(gym.Env):
 
     def observation_generator(self):
         for size in self.sizes:
-            size = list(self.eye[size]) if self.one_hot else [size]
-            yield (size + [0, self.new_picture])
+            yield list(self.eye[size]) + [0, self.new_picture]
         while True:
-            edge = self.edges[-1]
-            edge = list(self.eye[edge]) if self.one_hot else [edge]
-            yield (edge + [1, self.new_picture])
+            yield list(self.eye[self.edges[-1]]) + [1, self.new_picture]
 
     def get_observation(self):
         obs = next(self.observation_iterator)
+        if self.include_sizes:
+            obs = Obs(sizes=self.pad(self.sizes), obs=obs)._asdict()
         self.observation_space.contains(obs)
         return obs
 
@@ -146,17 +149,17 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", default=0, type=int)
-    parser.add_argument("--width", default=100, type=int)
-    parser.add_argument("--n-train", default=4, type=int)
+    parser.add_argument("--width", default=3, type=int)
+    parser.add_argument("--min-train", default=2, type=int)
+    parser.add_argument("--max-train", default=2, type=int)
     parser.add_argument("--n-eval", default=6, type=int)
-    parser.add_argument("--speed", default=100, type=int)
+    parser.add_argument("--speed", default=3, type=int)
     parser.add_argument("--time-limit", default=100, type=int)
     args = hierarchical_parse_args(parser)
 
     def action_fn(string):
         try:
-            a, b = string.split()
-            return float(a), int(b)
+            return int(string)
         except ValueError:
             return
 
