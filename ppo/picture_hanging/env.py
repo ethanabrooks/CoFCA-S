@@ -12,7 +12,8 @@ class Env(gym.Env):
     def __init__(
         self,
         width,
-        n_train: int,
+        min_train: int,
+        max_train: int,
         n_eval: int,
         speed: float,
         seed: int,
@@ -23,13 +24,14 @@ class Env(gym.Env):
         self.time_limit = time_limit
         self.speed = speed
         self.n_eval = n_eval
-        self.n_train = n_train
+        self.min_train = min_train
+        self.max_train = max_train
         self.sizes = None
         self.edges = None
         self.observation_iterator = None
         self.width = width
         self.random, self.seed = seeding.np_random(seed)
-        self.max_pictures = max(n_eval, n_train)
+        self.max_pictures = max(n_eval, max_train)
         self.observation_space = (
             gym.spaces.MultiDiscrete(2 * np.ones(self.width + 2))
             if one_hot
@@ -77,7 +79,7 @@ class Env(gym.Env):
 
     def reset(self):
         self.t = 0
-        n_pictures = self.random.random_integers(1, self.n_train)
+        n_pictures = self.random.random_integers(self.min_train, self.max_train)
         randoms = self.random.random(self.n_eval if self.evaluating else n_pictures)
         normalized = randoms * self.width / randoms.sum()
         cumsum = np.round(np.cumsum(normalized)).astype(int)
