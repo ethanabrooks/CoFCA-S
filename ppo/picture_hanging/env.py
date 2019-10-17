@@ -106,7 +106,7 @@ class Env(gym.Env):
         for size in self.sizes:
             yield list(self.eye[size]) + [0, self.new_picture]
         while True:
-            yield list(self.eye[self.edges[-1]]) + [1, self.new_picture]
+            yield list(self.eye[int(self.edges[-1])]) + [1, self.new_picture]
 
     def get_observation(self):
         obs = next(self.observation_iterator)

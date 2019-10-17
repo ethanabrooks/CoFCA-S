@@ -12,7 +12,7 @@ import ppo.picture_hanging.baseline
 import numpy as np
 
 
-def train(baseline, **_kwargs):
+def train(agent, **_kwargs):
     class Train(ppo.train.Train):
         @staticmethod
         def make_env(
@@ -22,23 +22,28 @@ def train(baseline, **_kwargs):
                 **env_args,
                 seed=seed + rank,
                 time_limit=time_limit,
-                include_sizes=not baseline
+                include_sizes=agent == "exp",
             )
 
         def build_agent(self, envs, recurrent=None, entropy_coef=None, **agent_args):
-            if baseline:
+            if agent == "default":
                 del agent_args["debug"]
                 return ppo.agent.Agent(
                     obs_shape=envs.observation_space.shape,
                     action_space=envs.action_space,
                     entropy_coef=entropy_coef,
                     recurrent=recurrent,
-                    **agent_args
+                    **agent_args,
                 )
-                # return ppo.picture_hanging.baseline.Agent(
-                # entropy_coef=entropy_coef,
-                #     recurrence=ppo.picture_hanging.baseline.Recurrence(**agent_args),
-                # )
+            elif agent == "baseline":
+                return ppo.picture_hanging.baseline.Agent(
+                    entropy_coef=entropy_coef,
+                    recurrence=ppo.picture_hanging.baseline.Recurrence(
+                        **agent_args,
+                        action_space=envs.action_space,
+                        observation_space=envs.observation_space,
+                    ),
+                )
             else:
                 return ppo.picture_hanging.exp.Agent(
                     entropy_coef=entropy_coef,
@@ -46,7 +51,7 @@ def train(baseline, **_kwargs):
                         ppo.picture_hanging.exp.Recurrence(
                             **agent_args,
                             action_space=envs.action_space,
-                            observation_space=envs.observation_space
+                            observation_space=envs.observation_space,
                         )
                     ),
                 )
@@ -70,7 +75,7 @@ def cli():
     parsers.main.add_argument("--no-tqdm", dest="use_tqdm", action="store_false")
     parsers.main.add_argument("--eval-steps", type=int)
     parsers.main.add_argument("--time-limit", type=int, required=True)
-    parsers.main.add_argument("--baseline", action="store_true")
+    parsers.main.add_argument("--agent", choices=["exp", "baseline", "default"])
     parsers.agent.add_argument("--debug", action="store_true")
     parsers.env.add_argument("--width", type=int, default=100)
     parsers.env.add_argument("--speed", type=int, default=20)
