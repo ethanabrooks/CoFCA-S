@@ -38,14 +38,14 @@ class Env(gym.Env):
             if one_hot
             else gym.spaces.MultiDiscrete(np.array([self.width, 3]))
         )
-        self.action_space = gym.spaces.Discrete(self.width + 1)
+        self.action_space = gym.spaces.Discrete(2 * self.width + 1)
         self.evaluating = False
         self.t = None
         if one_hot:
             self.eye = np.eye(self.width + 1)
 
     def step(self, action):
-        next_picture = action >= self.width
+        next_picture = action / 2 >= self.width
         self.new_picture = next_picture
         self.t += 1
         if self.t > self.time_limit:
@@ -58,7 +58,7 @@ class Env(gym.Env):
                 def compute_white_space():
                     left = 0
                     for center, picture in zip(self.centers, self.sizes):
-                        right = center - picture // 2
+                        right = center / 2 - picture / 2
                         yield right - left
                         left = right + picture
                     yield self.width - left
@@ -122,7 +122,7 @@ class Env(gym.Env):
         print("sizes", self.sizes)
         np.set_printoptions(threshold=self.width * self.max_pictures)
         state2d = [
-            [0] * (center - size // 2) + [1] * size
+            [0] * (int(np.round(center / 2 - size / 2))) + [1] * size
             for center, size in zip(self.centers, self.sizes)
         ]
         state2d = [row[: self.width] + [0] * (self.width - len(row)) for row in state2d]
