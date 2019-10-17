@@ -49,7 +49,7 @@ class Env(gym.Env):
         if self.t > self.time_limit:
             return self.get_observation(), -2 * self.width, True, {}
         if next_picture:
-            if len(self.edges) < len(self.sizes) - 1:
+            if len(self.edges) < len(self.sizes):
                 self.edges += [self.new_position()]
             else:
 
