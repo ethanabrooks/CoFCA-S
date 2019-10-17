@@ -7,10 +7,10 @@ import torch.nn.functional as F
 from torch import nn as nn
 
 from ppo.picture_hanging.env import Obs
-from ppo.distributions import DiagGaussian
+from ppo.distributions import DiagGaussian, Categorical
 from ppo.utils import init_
 
-RecurrentState = namedtuple("RecurrentState", "a loc scale v h p")
+RecurrentState = namedtuple("RecurrentState", "a probs v h")
 
 import torch
 import torch.jit
@@ -45,9 +45,9 @@ class Agent(ppo.agent.Agent, NNBase):
         )
         rm = self.recurrent_module
         hx = rm.parse_hidden(all_hxs)
-        a_dist = FixedNormal(loc=hx.loc, scale=hx.scale)
-        action_log_probs = a_dist.log_probs(hx.a)
-        entropy = a_dist.entropy().mean()
+        dist = FixedCategorical(hx.probs)
+        action_log_probs = dist.log_probs(hx.a)
+        entropy = dist.entropy().mean()
         return AgentValues(
             value=hx.v,
             action=hx.a,
@@ -80,34 +80,33 @@ class Recurrence(nn.Module):
         activation,
         hidden_size,
         num_layers,
-        bidirectional,
         debug,
     ):
         super().__init__()
-        self.obs_spaces = Obs(**observation_space.spaces)
-        self.obs_sections = Obs(*[int(np.prod(s.shape)) for s in self.obs_spaces])
         self.action_size = 1
         self.debug = debug
         self.hidden_size = hidden_size
 
         # networks
-        self.gru = nn.GRU(
-            sum(self.obs_sections), hidden_size, bidirectional=bidirectional
-        )
+        self.gru = nn.GRUCell(observation_space.shape[0], hidden_size)
         self.critic = nn.Sequential()
         self.actor = nn.Sequential()
+        self.num_directions = 1  # hold over from bidirectional
         layers = []
-        self.num_directions = 2 if bidirectional else 1
-        in_size = hidden_size * self.num_directions
-        for i in range(num_layers):
-            layers += [init_(nn.Linear(in_size, hidden_size)), activation]
-            in_size = hidden_size
-        self.actor = nn.Sequential(*layers)
-        self.critic = copy.deepcopy(self.actor)
-        self.actor.add_module("dist", DiagGaussian(hidden_size, action_space.shape[0]))
-        self.critic.add_module("out", init_(nn.Linear(hidden_size, 1)))
+        for i in range(max(0, num_layers - 1)):
+            layers += [init_(nn.Linear(hidden_size, hidden_size)), activation]
+        self.actor = nn.Sequential(
+            init_(nn.Linear(hidden_size, hidden_size)),
+            *layers,
+            Categorical(hidden_size, action_space.n),
+        )
+        self.critic = nn.Sequential(
+            init_(nn.Linear(hidden_size, hidden_size)),
+            *copy.deepcopy(layers),
+            init_(nn.Linear(hidden_size, 1)),
+        )
         self.state_sizes = RecurrentState(
-            a=1, loc=1, scale=1, p=1, v=1, h=hidden_size * self.num_directions
+            a=1, probs=action_space.n, v=1, h=hidden_size * self.num_directions
         )
 
     @staticmethod
@@ -148,20 +147,19 @@ class Recurrence(nn.Module):
         for _x in hx:
             _x.squeeze_(0)
 
-        h = (
-            hx.h.view(
-                N, self.gru.num_layers * self.num_directions, self.gru.hidden_size
-            )
-            .transpose(0, 1)
-            .contiguous()
-        )
-        A = actions.clone()
+        # h = (
+        #     hx.h.view(
+        #         N, self.gru.num_layers * self.num_directions, self.gru.hidden_size
+        #     )
+        #     .transpose(0, 1)
+        #     .contiguous()
+        # )
+        h = hx.h
+        A = actions.long()
 
         for t in range(T):
-            hn, h = self.gru(inputs[t].unsqueeze(0), h)
-            v = self.critic(hn.squeeze(0))
-            dist = self.actor(hn.squeeze(0))
+            h = self.gru(inputs[t], h)
+            v = self.critic(h.squeeze(0))
+            dist = self.actor(h.squeeze(0))
             self.sample_new(A[t], dist)
-            yield RecurrentState(
-                a=A[t], loc=dist.loc, scale=dist.scale, v=v, h=h.transpose(0, 1), p=hx.p
-            )
+            yield RecurrentState(a=A[t], probs=dist.probs, v=v, h=h)

@@ -10,43 +10,61 @@ Obs = namedtuple("Obs", "sizes obs")
 
 class Env(gym.Env):
     def __init__(
-        self, width, n_train: int, n_eval: int, speed: float, seed: int, time_limit: int
+        self,
+        width,
+        min_train: int,
+        max_train: int,
+        n_eval: int,
+        speed: float,
+        seed: int,
+        time_limit: int,
+        include_sizes: bool,
     ):
+        self.include_sizes = include_sizes
         self.time_limit = time_limit
         self.speed = speed
         self.n_eval = n_eval
-        self.n_train = n_train
+        self.min_train = min_train
+        self.max_train = max_train
         self.sizes = None
         self.centers = None
+        self.new_picture = None
+        self.observation_iterator = None
         self.width = width
         self.random, self.seed = seeding.np_random(seed)
-        self.max_pictures = max(n_eval, n_train)
-        box = gym.spaces.Box(low=0, high=self.width, shape=(self.max_pictures,))
-        self.observation_space = gym.spaces.Dict(Obs(sizes=box, obs=box)._asdict())
-        # self.action_space = gym.spaces.Discrete(self.width)
-        self.action_space = gym.spaces.Dict(
-            goal=gym.spaces.Box(low=0, high=self.width, shape=(1,)),
-            next=gym.spaces.Discrete(2),
-        )
+        self.max_pictures = max(n_eval, max_train)
+        self.observation_space = gym.spaces.MultiDiscrete(2 * np.ones(self.width + 3))
+        if include_sizes:
+            self.observation_space = gym.spaces.Dict(
+                Obs(
+                    sizes=gym.spaces.MultiDiscrete(
+                        self.width * np.ones(self.max_pictures)
+                    ),
+                    obs=self.observation_space,
+                )._asdict()
+            )
+        self.action_space = gym.spaces.Discrete(2 * self.width + 1)
         self.evaluating = False
         self.t = None
+        self.eye = np.eye(self.width + 1)
 
-    def step(self, action):
-        center, next_picture = action
+    def step(self, action: int):
+        next_picture = action / 2 >= self.width
+        self.new_picture = next_picture
         self.t += 1
         if self.t > self.time_limit:
             return self.get_observation(), -2 * self.width, True, {}
         if next_picture:
             if len(self.centers) < len(self.sizes):
-                self.centers.append(self.new_position())
+                self.centers += [self.new_position()]
             else:
 
                 def compute_white_space():
                     left = 0
                     for center, picture in zip(self.centers, self.sizes):
-                        right = center - picture / 2
+                        right = center / 2 - picture / 2
                         yield right - left
-                        left = center + picture / 2
+                        left = right + picture
                     yield self.width - left
 
                 white_space = list(compute_white_space())
@@ -57,29 +75,44 @@ class Env(gym.Env):
                     True,
                     {},
                 )
-        pos = self.centers[-1]
-        delta = center - pos
-        delta = min(abs(delta), self.speed) * (1 if delta > 0 else -1)
-        self.centers[-1] = max(0, min(self.width, pos + delta))
+        else:
+            center = self.centers[-1]
+            desired_delta = action - center
+            delta = min(abs(desired_delta), self.speed) * (
+                1 if desired_delta > 0 else -1
+            )
+            self.centers[-1] = max(0, min(self.width - self.sizes[-1], center + delta))
         return self.get_observation(), 0, False, {}
 
     def reset(self):
         self.t = 0
+        self.new_picture = True
+        n_pictures = self.random.random_integers(self.min_train, self.max_train)
+        randoms = self.random.random(self.n_eval if self.evaluating else n_pictures)
+        normalized = randoms / randoms.sum() * self.width
+        cumsum = np.round(np.cumsum(normalized)).astype(int)
+        z = np.roll(np.append(cumsum, 0), 1)
+        self.sizes = z[1:] - z[:-1]
+        self.sizes = self.sizes[self.sizes > 0]
+        # gap = self.random.randint(0, self.sizes.min())
+        # self.sizes -= gap
         self.centers = [self.new_position()]
-        self.sizes = self.random.random(
-            self.n_eval
-            if self.evaluating
-            else self.random.random_integers(1, self.n_train)
-        )
-        self.sizes = self.sizes * self.width / self.sizes.sum()
-        self.random.shuffle(self.sizes)
-        return self.pad(np.concatenate([[0], self.sizes]))
+        self.observation_iterator = self.observation_generator()
+        return self.get_observation()
 
     def new_position(self):
-        return self.random.random() * self.width
+        return int(self.random.random() * self.width)
+
+    def observation_generator(self):
+        for size in self.sizes:
+            yield list(self.eye[size]) + [0, self.new_picture]
+        while True:
+            yield list(self.eye[self.centers[-1]]) + [1, self.new_picture]
 
     def get_observation(self):
-        obs = Obs(sizes=self.pad(self.sizes), obs=self.pad(self.centers))._asdict()
+        obs = next(self.observation_iterator)
+        if self.include_sizes:
+            obs = Obs(sizes=self.pad(self.sizes), obs=obs)._asdict()
         self.observation_space.contains(obs)
         return obs
 
@@ -89,18 +122,14 @@ class Env(gym.Env):
         return np.pad(obs, (0, self.max_pictures - len(obs)), constant_values=-1)
 
     def render(self, mode="human", pause=True):
-        terminal_width = shutil.get_terminal_size((80, 20)).columns
-        ratio = terminal_width / self.width
-        right = 0
-        for i, picture in enumerate(self.sizes):
-            print(str(i) * int(round(picture * ratio)))
-        print("placements")
-        for i, (center, picture) in enumerate(zip(self.centers, self.sizes)):
-            left = center - picture / 2
-            print("-" * int(round(left * ratio)), end="")
-            print(str(i) * int(round(picture * ratio)))
-            right = center + picture / 2
-        print("-" * int(round(self.width * ratio)))
+        print("sizes", self.sizes)
+        np.set_printoptions(threshold=self.width * self.max_pictures)
+        state2d = [
+            [0] * (int(np.round(center / 2 - size / 2))) + [1] * size
+            for center, size in zip(self.centers, self.sizes)
+        ]
+        state2d = [row[: self.width] + [0] * (self.width - len(row)) for row in state2d]
+        print(*state2d, sep="\n")
         if pause:
             input("pause")
 
@@ -127,17 +156,17 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", default=0, type=int)
-    parser.add_argument("--width", default=100, type=int)
-    parser.add_argument("--n-train", default=4, type=int)
+    parser.add_argument("--width", default=3, type=int)
+    parser.add_argument("--min-train", default=2, type=int)
+    parser.add_argument("--max-train", default=2, type=int)
     parser.add_argument("--n-eval", default=6, type=int)
-    parser.add_argument("--speed", default=100, type=int)
+    parser.add_argument("--speed", default=3, type=int)
     parser.add_argument("--time-limit", default=100, type=int)
     args = hierarchical_parse_args(parser)
 
     def action_fn(string):
         try:
-            a, b = string.split()
-            return float(a), int(b)
+            return int(string)
         except ValueError:
             return
 
