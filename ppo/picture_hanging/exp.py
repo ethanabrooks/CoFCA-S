@@ -92,13 +92,12 @@ class Recurrence(nn.Module):
         for i in range(max(0, num_layers - 1)):
             layers += [init_(nn.Linear(hidden_size, hidden_size)), activation]
         self.actor = nn.Sequential(
-            init_(nn.Linear(hidden_size * num_directions, hidden_size)),
+            init_(nn.Linear(num_directions * hidden_size, hidden_size)),
             *layers,
             DiagGaussian(hidden_size, action_space.spaces["goal"].shape[0])
         )
-        in_size = self.obs_sections.obs + num_directions * hidden_size
         self.critic = nn.Sequential(
-            init_(nn.Linear(in_size + 1, hidden_size)),
+            init_(nn.Linear(hidden_size, hidden_size)),
             *copy.deepcopy(layers),
             init_(nn.Linear(hidden_size, 1))
         )
@@ -108,9 +107,12 @@ class Recurrence(nn.Module):
             Categorical(hidden_size, 2)
         )
         self.gamma = nn.Sequential(
-            init_(nn.Linear(in_size + 1, hidden_size)),
+            init_(nn.Linear(hidden_size, hidden_size)),
             *copy.deepcopy(layers),
             init_(nn.Linear(hidden_size, 1))
+        )
+        self.controller = nn.GRUCell(
+            self.obs_sections.obs + num_directions * hidden_size + 1, hidden_size
         )
         self.state_sizes = RecurrentState(
             a=1, b=1, a_loc=1, a_scale=1, b_probs=2, p=1, v=1, h=hidden_size
@@ -159,6 +161,7 @@ class Recurrence(nn.Module):
         for _x in hx:
             _x.squeeze_(0)
 
+        h = hx.h
         P = hx.p.squeeze(1).long()
         R = torch.arange(P.size(0), device=P.device)
         A = torch.cat([actions.clone()[:, :, 0], hx.a.T], dim=0)
@@ -185,6 +188,6 @@ class Recurrence(nn.Module):
                 a_scale=a_dist.scale,
                 b_probs=b_dist.probs,
                 v=v,
-                h=hx.h,
+                h=h,
                 p=(P + B[t]) % (M.size(0)),
             )
