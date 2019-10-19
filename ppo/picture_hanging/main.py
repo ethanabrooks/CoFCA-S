@@ -4,10 +4,11 @@ from rl_utils import hierarchical_parse_args
 import ppo.arguments
 import ppo.agent
 import ppo.train
-from ppo.picture_hanging.exp import Agent
+from ppo.picture_hanging.multi_step import Agent
 from ppo.picture_hanging.env import Env
-import ppo.picture_hanging.exp
-import ppo.picture_hanging.baseline
+import ppo.picture_hanging.multi_step
+import ppo.picture_hanging.last_step
+import ppo.picture_hanging.dnc
 
 import numpy as np
 
@@ -32,9 +33,10 @@ def train(agent, **_kwargs):
             entropy_coef=None,
             r_to_actor=None,
             debug=None,
+            dnc_args=None,
             **agent_args,
         ):
-            if agent == "default":
+            if agent == "simple":
                 return ppo.agent.Agent(
                     obs_shape=envs.observation_space.shape,
                     action_space=envs.action_space,
@@ -42,21 +44,32 @@ def train(agent, **_kwargs):
                     recurrent=recurrent,
                     **agent_args,
                 )
-            elif agent == "baseline":
-                return ppo.picture_hanging.baseline.Agent(
+            elif agent == "last-step":
+                return ppo.picture_hanging.last_step.Agent(
                     entropy_coef=entropy_coef,
-                    recurrence=ppo.picture_hanging.baseline.Recurrence(
+                    recurrence=ppo.picture_hanging.last_step.Recurrence(
                         **agent_args,
                         debug=debug,
                         action_space=envs.action_space,
                         observation_space=envs.observation_space,
                     ),
                 )
-            else:
-                return ppo.picture_hanging.exp.Agent(
+            elif agent == "dnc":
+                return ppo.picture_hanging.dnc.Agent(
+                    entropy_coef=entropy_coef,
+                    recurrence=ppo.picture_hanging.dnc.Recurrence(
+                        **agent_args,
+                        **dnc_args,
+                        debug=debug,
+                        action_space=envs.action_space,
+                        observation_space=envs.observation_space,
+                    ),
+                )
+            elif agent == "multi-step":
+                return ppo.picture_hanging.multi_step.Agent(
                     entropy_coef=entropy_coef,
                     recurrence=(
-                        ppo.picture_hanging.exp.Recurrence(
+                        ppo.picture_hanging.multi_step.Recurrence(
                             **agent_args,
                             debug=debug,
                             r_to_actor=r_to_actor,
@@ -65,6 +78,8 @@ def train(agent, **_kwargs):
                         )
                     ),
                 )
+            else:
+                raise RuntimeError
 
         # def run_epoch(self, *args, **kwargs):
         #     dictionary = super().run_epoch(*args, **kwargs)
@@ -85,7 +100,7 @@ def cli():
     parsers.main.add_argument("--no-tqdm", dest="use_tqdm", action="store_false")
     parsers.main.add_argument("--eval-steps", type=int)
     parsers.main.add_argument("--time-limit", type=int, required=True)
-    parsers.main.add_argument("--agent", choices=["exp", "baseline", "default"])
+    parsers.main.add_argument("--agent")
     parsers.agent.add_argument("--debug", action="store_true")
     parsers.agent.add_argument("--r-to-actor", action="store_true")
     parsers.env.add_argument("--width", type=int, default=100)
@@ -93,6 +108,10 @@ def cli():
     parsers.env.add_argument("--min-train", type=int, default=1)
     parsers.env.add_argument("--max-train", type=int, default=3)
     parsers.env.add_argument("--n-eval", type=int, default=6)
+    dnc_parser = parsers.agent.add_argument_group("dnc_args")
+    dnc_parser.add_argument("--num-slots", type=int, default=8)
+    dnc_parser.add_argument("--slot-size", type=int, default=128)
+    dnc_parser.add_argument("--num-heads", type=int, default=2)
     args = hierarchical_parse_args(parsers.main)
     train(**args)
 
