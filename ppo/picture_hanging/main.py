@@ -1,16 +1,13 @@
-from gym.wrappers import TimeLimit
 from rl_utils import hierarchical_parse_args
 
-import ppo.arguments
 import ppo.agent
-import ppo.train
-from ppo.picture_hanging.multi_step import Agent
-from ppo.picture_hanging.env import Env
-import ppo.picture_hanging.multi_step
-import ppo.picture_hanging.last_step
+import ppo.arguments
 import ppo.picture_hanging.dnc
-
-import numpy as np
+import ppo.picture_hanging.last_step
+import ppo.picture_hanging.multi_step
+import ppo.train
+from ppo.picture_hanging.env import Env
+from ppo.picture_hanging.multi_step import Agent
 
 
 def train(agent, **_kwargs):
@@ -23,7 +20,7 @@ def train(agent, **_kwargs):
                 **env_args,
                 seed=seed + rank,
                 time_limit=time_limit,
-                include_sizes=agent != "default",
+                include_sizes=agent not in ["default", "dnc"],
             )
 
         def build_agent(

@@ -81,10 +81,6 @@ class Recurrence(nn.Module):
         num_heads,
     ):
         super().__init__()
-        self.obs_spaces = Obs(**observation_space.spaces)
-        self.obs_sections = Obs(
-            sizes=self.obs_spaces.sizes.nvec.size, obs=self.obs_spaces.obs.shape[0]
-        )
         self.slot_size = slot_size
         self.num_slots = num_slots
         self.num_heads = num_heads
@@ -121,7 +117,7 @@ class Recurrence(nn.Module):
         # networks
         assert num_layers > 0
         self.gru = nn.GRU(
-            sum(self.obs_sections) + num_heads * slot_size, hidden_size, num_layers
+            observation_space.shape[0] + num_heads * slot_size, hidden_size, num_layers
         )
         self.Wxi = nn.Sequential(
             activation,
