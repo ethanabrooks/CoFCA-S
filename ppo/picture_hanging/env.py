@@ -122,13 +122,19 @@ class Env(gym.Env):
 
     def render(self, mode="human", pause=True):
         print("sizes", self.sizes)
-        np.set_printoptions(threshold=self.width * self.max_pictures)
+        # np.set_printoptions(
+        # threshold=self.width * self.max_pictures, linewidth=4 * (self.width + 1)
+        # )
         state2d = [
             [0] * edge + [1] * size
             for i, (edge, size) in enumerate(zip(self.edges, self.sizes))
         ]
-        state2d = [row[: self.width] + [0] * (self.width - len(row)) for row in state2d]
-        print(*state2d, sep="\n")
+        state2d = np.array(
+            [row[: self.width] + [0] * (self.width - len(row)) for row in state2d]
+        )
+        string = np.array([["-"], ["#"]])[state2d, 0]
+        for row in string:
+            print(*row)
         if pause:
             input("pause")
 
