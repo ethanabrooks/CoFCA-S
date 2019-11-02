@@ -30,8 +30,13 @@ def worker(remote, parent_remote, env_fn_wrapper):
                 remote.send((env.observation_space, env.action_space))
             elif cmd == "evaluate":
                 env.evaluate()
+            elif cmd == "increment_curriculum":
+                env.increment_curriculum()
             elif cmd == "train":
-                env.train()
+                try:
+                    env.train()
+                except AttributeError:
+                    print("Attribute train undefined")
             else:
                 raise NotImplementedError
     except KeyboardInterrupt:
@@ -126,6 +131,10 @@ class SubprocVecEnv(VecEnv):
     def train(self):
         for remote in self.remotes:
             remote.send(("train", None))
+
+    def increment_curriculum(self):
+        for remote in self.remotes:
+            remote.send(("increment_curriculum", None))
 
 
 def _flatten_obs(obs):
