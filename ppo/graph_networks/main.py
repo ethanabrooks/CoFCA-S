@@ -40,6 +40,7 @@ def bandit_args():
     parser = parsers.main
     parser.add_argument("--no-tqdm", dest="use_tqdm", action="store_false")
     parser.add_argument("--time-limit", type=int)
+    parser.add_argument("--eval-steps", type=int)
     parser.add_argument("--baseline", choices=["oh-et-al", "default"])
     parsers.env.add_argument("--n-lines", type=int, required=True)
     parsers.env.add_argument("--flip-prob", type=float, required=True)
