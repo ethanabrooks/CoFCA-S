@@ -1,10 +1,11 @@
 import abc
 import functools
 import itertools
+import os
 import re
 import sys
 import time
-from collections import Counter
+from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Dict
 
@@ -30,6 +31,7 @@ class TrainBase(abc.ABC):
     def setup(
         self,
         num_steps,
+        eval_steps,
         num_processes,
         seed,
         cuda_deterministic,
@@ -52,6 +54,12 @@ class TrainBase(abc.ABC):
         success_reward,
         use_tqdm,
     ):
+        # Properly restrict pytorch to not consume extra resources.
+        #  - https://github.com/pytorch/pytorch/issues/975
+        #  - https://github.com/ray-project/ray/issues/3609
+        torch.set_num_threads(1)
+        os.environ["OMP_NUM_THREADS"] = "1"
+
         if render_eval and not render:
             eval_interval = 1
         if render or render_eval:
@@ -115,7 +123,7 @@ class TrainBase(abc.ABC):
         self.make_train_iterator = lambda: self.train_generator(
             num_steps=num_steps,
             num_processes=num_processes,
-            time_limit=time_limit,
+            eval_steps=eval_steps,
             log_interval=log_interval,
             eval_interval=eval_interval,
             use_tqdm=use_tqdm,
@@ -134,7 +142,7 @@ class TrainBase(abc.ABC):
         self,
         num_steps,
         num_processes,
-        time_limit,
+        eval_steps,
         log_interval,
         eval_interval,
         success_reward,
@@ -157,7 +165,7 @@ class TrainBase(abc.ABC):
                 obs=self.envs.reset(),
                 rnn_hxs=eval_recurrent_hidden_states,
                 masks=eval_masks,
-                num_steps=time_limit,
+                num_steps=eval_steps,
                 # max(num_steps, time_limit) if time_limit else num_steps,
                 counter=eval_counter,
                 success_reward=success_reward,
@@ -207,7 +215,7 @@ class TrainBase(abc.ABC):
                 log_progress.update()
             # print(self.i, self.i % self.log_interval)
             if self.i % log_interval == 0:
-                total_num_steps = (self.i + 1) * num_processes * num_steps
+                total_num_steps = log_interval * num_processes * num_steps
                 # print(f"Writing to {self.logdir}")
                 fps = total_num_steps / (time.time() - tick)
                 tick = time.time()
@@ -225,11 +233,11 @@ class TrainBase(abc.ABC):
         self, obs, rnn_hxs, masks, num_steps, counter, success_reward, use_tqdm
     ):
         # noinspection PyTypeChecker
-        episode_counter = Counter(rewards=[], time_steps=[], success=[])
+        episode_counter = defaultdict(list)
         iterator = range(num_steps)
         if use_tqdm:
             iterator = tqdm(iterator, desc="evaluating")
-        for step in iterator:
+        for _ in iterator:
             with torch.no_grad():
                 act = self.agent(
                     inputs=obs, rnn_hxs=rnn_hxs, masks=masks
@@ -240,7 +248,7 @@ class TrainBase(abc.ABC):
 
             for d in infos:
                 for k, v in d.items():
-                    episode_counter.update({k: float(v) / num_steps / len(infos)})
+                    episode_counter[k] += [float(v)]
 
             # track rewards
             counter["reward"] += reward.numpy()

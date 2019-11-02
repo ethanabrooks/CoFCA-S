@@ -4,7 +4,7 @@ import ppo.agent
 import ppo.graph_networks.agent
 from ppo import graph_networks
 from ppo.arguments import build_parser
-from ppo.trainbase import Train
+from ppo.train import Train
 
 
 def main(log_dir, baseline, seed, **kwargs):
