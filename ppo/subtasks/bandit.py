@@ -6,28 +6,37 @@ import numpy as np
 from ppo.subtasks import control_flow, keyboard_control
 from ppo.subtasks.lines import If, Else, EndIf, While, EndWhile, Subtask
 
-Obs = namedtuple("Obs", "active condition lines")
+Obs = namedtuple("Obs", "condition lines")
 # TODO: this is very hacky. things will break unless namedtuple is in alphabetical order.
 
 
 class Env(control_flow.Env):
-    def __init__(self, seed, n_lines, flip_prob, time_limit):
+    def __init__(self, seed, n_lines, flip_prob, time_limit, baseline):
         super().__init__(seed, n_lines)
         self.time_limit = time_limit
         self.flip_prob = flip_prob
+        self.baseline = baseline
         self.condition_bit = None
         self.last_action = None
         self.last_active = None
         self.last_reward = None
         self.line_types = [If, Else, EndIf, While, EndWhile, Subtask]
         self.action_space = spaces.Discrete(n_lines)
-        self.observation_space = spaces.Dict(
-            dict(
-                condition=spaces.Discrete(2),
-                lines=spaces.MultiDiscrete(np.array([len(self.line_types)] * n_lines)),
-                active=spaces.Discrete(n_lines + 1),
+        if baseline:
+            self.observation_space = spaces.MultiBinary(
+                2 + len(self.line_types) * n_lines
             )
-        )
+            self.eye = Obs(condition=np.eye(2), lines=np.eye(len(self.line_types)))
+        else:
+            self.observation_space = spaces.Dict(
+                dict(
+                    condition=spaces.Discrete(2),
+                    lines=spaces.MultiDiscrete(
+                        np.array([len(self.line_types)] * n_lines)
+                    ),
+                    # active=spaces.Discrete(n_lines + 1),
+                )
+            )
         self.t = None
 
     def reset(self):
@@ -56,13 +65,18 @@ class Env(control_flow.Env):
 
     def get_observation(self):
         lines = [self.line_types.index(t) for t in self.lines]
-        o = Obs(
+        obs = Obs(
             condition=self.condition_bit,
             lines=lines,
-            active=self.n_lines if self.active is None else self.active,
-        )._asdict()
-        assert self.observation_space.contains(o)
-        return o
+            # active=self.n_lines if self.active is None else self.active,
+        )
+        if self.baseline:
+            obs = [eye[o].flatten() for eye, o in zip(self.eye, obs)]
+            obs = np.concatenate(obs)
+        else:
+            obs = obs._asdict()
+        assert self.observation_space.contains(obs)
+        return obs
 
     def _evaluate_condition(self, i=None):
         return bool(self.condition_bit)
@@ -98,7 +112,8 @@ class Env(control_flow.Env):
         input("pause")
 
     def train(self):
-        print("No logic is currently implemented for the train() method")
+        pass
+        # print("No logic is currently implemented for the train() method")
 
 
 if __name__ == "__main__":

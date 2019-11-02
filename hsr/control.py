@@ -5,7 +5,7 @@ from rl_utils import argparse, hierarchical_parse_args, space_to_size
 
 import hsr
 from ppo.env_adapter import HSREnv
-from ppo.main import add_hsr_args
+from ppo.subtasks.main import add_hsr_args
 
 
 class ControlViewer(mujoco_py.MjViewer):
