@@ -4,15 +4,16 @@ from gym import spaces
 from rl_utils import hierarchical_parse_args
 import numpy as np
 from ppo.graph_networks import control_flow, keyboard_control
-from ppo.graph_networks.lines import If, Else, EndIf, While, EndWhile, Subtask
+from ppo.graph_networks.lines import If, Else, EndIf, While, EndWhile, Subtask, Padding
 
 Obs = namedtuple("Obs", "condition lines")
 # TODO: this is very hacky. things will break unless namedtuple is in alphabetical order.
 
 
 class Env(control_flow.Env):
-    def __init__(self, seed, n_lines, flip_prob, time_limit, baseline):
-        super().__init__(seed, n_lines)
+    def __init__(self, seed, min_lines, max_lines, flip_prob, time_limit, baseline):
+        super().__init__(seed, min_lines, max_lines)
+        self.evaluating = False
         self.time_limit = time_limit
         self.flip_prob = flip_prob
         self.baseline = baseline
@@ -20,11 +21,11 @@ class Env(control_flow.Env):
         self.last_action = None
         self.last_active = None
         self.last_reward = None
-        self.line_types = [If, Else, EndIf, While, EndWhile, Subtask]
-        self.action_space = spaces.Discrete(n_lines)
+        self.line_types = [If, Else, EndIf, While, EndWhile, Subtask, Padding]
+        self.action_space = spaces.Discrete(max_lines)
         if baseline:
             self.observation_space = spaces.MultiBinary(
-                2 + len(self.line_types) * n_lines
+                2 + len(self.line_types) * max_lines
             )
             self.eye = Obs(condition=np.eye(2), lines=np.eye(len(self.line_types)))
         else:
@@ -32,7 +33,7 @@ class Env(control_flow.Env):
                 dict(
                     condition=spaces.Discrete(2),
                     lines=spaces.MultiDiscrete(
-                        np.array([len(self.line_types)] * n_lines)
+                        np.array([len(self.line_types)] * max_lines)
                     ),
                     # active=spaces.Discrete(n_lines + 1),
                 )
@@ -51,7 +52,7 @@ class Env(control_flow.Env):
         self.t += 1
         if self.time_limit and self.t > self.time_limit:
             return self.get_observation(), -1, True, {}
-        if action == self.n_lines:
+        if action == len(self.lines):
             # no-op
             return self.get_observation(), 0, False, {}
         self.last_action = action
@@ -64,7 +65,8 @@ class Env(control_flow.Env):
         return s, r, t, i
 
     def get_observation(self):
-        lines = [self.line_types.index(t) for t in self.lines]
+        padded = self.lines + [Padding] * (self.max_lines - len(self.lines))
+        lines = [self.line_types.index(t) for t in padded]
         obs = Obs(
             condition=self.condition_bit,
             lines=lines,
@@ -112,8 +114,10 @@ class Env(control_flow.Env):
         input("pause")
 
     def train(self):
-        pass
-        # print("No logic is currently implemented for the train() method")
+        self.evaluating = False
+
+    def evaluate(self):
+        self.evaluating = True
 
 
 if __name__ == "__main__":

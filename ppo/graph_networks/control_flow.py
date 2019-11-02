@@ -8,9 +8,10 @@ from ppo.graph_networks.lines import If, Else, EndIf, While, EndWhile, Subtask
 
 
 class Env(graph_networks.Env, ABC):
-    def __init__(self, seed, n_subtasks):
+    def __init__(self, seed, min_lines, max_lines):
         super().__init__()
-        self.n_lines = n_subtasks
+        self.min_lines = min_lines
+        self.max_lines = max_lines
         self.random, self.seed = seeding.np_random(seed)
         self.lines = None
         self.line_transitions = None
@@ -80,7 +81,8 @@ class Env(graph_networks.Env, ABC):
                 return
 
     def reset(self):
-        self.lines = self.get_lines(self.n_lines, line_state="initial")
+        n_lines = self.random.random_integers(self.min_lines, self.max_lines)
+        self.lines = self.get_lines(n_lines, line_state="initial")
         self.line_transitions = defaultdict(list)
         for _from, _to in self.get_transitions(iter(enumerate(self.lines))):
             self.line_transitions[_from].append(_to)

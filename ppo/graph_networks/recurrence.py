@@ -65,7 +65,7 @@ class Recurrence(nn.Module):
         self.actor = nn.Linear(hidden_size, 2 * hidden_size)
         self.a_one_hots = nn.Embedding.from_pretrained(torch.eye(action_space.n))
         self.state_sizes = RecurrentState(
-            a=1, a_probs=(action_space.n), p=action_space.n, v=1, h=hidden_size
+            a=1, a_probs=action_space.n, p=action_space.n, v=1, h=hidden_size
         )
 
     @staticmethod
