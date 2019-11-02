@@ -6,7 +6,7 @@ import os
 import torch
 
 # first party
-from ppo.train import make_vec_envs
+from ppo.trainbase import make_vec_envs
 from ppo.utils import get_render_func
 from ppo.wrappers import get_vec_normalize
 

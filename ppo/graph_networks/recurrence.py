@@ -6,7 +6,7 @@ from torch import nn as nn
 import torch.nn.functional as F
 
 import ppo.oh_et_al
-import ppo.subtasks.bandit
+import ppo.graph_networks.bandit
 from ppo.distributions import FixedCategorical
 from ppo.layers import Concat
 from ppo.utils import init_
@@ -40,8 +40,8 @@ class Recurrence(nn.Module):
         debug,
     ):
         super().__init__()
-        self.obs_spaces = ppo.subtasks.bandit.Obs(**observation_space.spaces)
-        self.obs_sections = ppo.subtasks.bandit.Obs(
+        self.obs_spaces = ppo.graph_networks.bandit.Obs(**observation_space.spaces)
+        self.obs_sections = ppo.graph_networks.bandit.Obs(
             *[int(np.prod(s.shape)) for s in self.obs_spaces]
         )
         self.action_size = 1
@@ -87,7 +87,9 @@ class Recurrence(nn.Module):
         return hx, hx[-1:]
 
     def parse_inputs(self, inputs: torch.Tensor):
-        return ppo.subtasks.bandit.Obs(*torch.split(inputs, self.obs_sections, dim=-1))
+        return ppo.graph_networks.bandit.Obs(
+            *torch.split(inputs, self.obs_sections, dim=-1)
+        )
 
     def parse_hidden(self, hx: torch.Tensor) -> RecurrentState:
         return RecurrentState(*torch.split(hx, self.state_sizes, dim=-1))

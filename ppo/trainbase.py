@@ -1,6 +1,7 @@
 import abc
 import functools
 import itertools
+import re
 import sys
 import time
 from collections import Counter
@@ -11,6 +12,7 @@ import gym
 import numpy as np
 import torch
 from gym.wrappers import TimeLimit
+from tensorboardX import SummaryWriter
 from tqdm import tqdm
 
 from common.atari_wrappers import wrap_deepmind
@@ -19,12 +21,12 @@ from common.vec_env.subproc_vec_env import SubprocVecEnv
 from ppo.agent import Agent, AgentValues
 from ppo.storage import RolloutStorage
 from ppo.update import PPO
-from ppo.utils import k_scalar_pairs
+from ppo.utils import k_scalar_pairs, get_n_gpu, get_random_gpu
 from ppo.wrappers import AddTimestep, TransposeImage, VecPyTorch, VecPyTorchFrameStack
 
 
 # noinspection PyAttributeOutsideInit
-class Train(abc.ABC):
+class TrainBase(abc.ABC):
     def setup(
         self,
         num_steps,
@@ -384,3 +386,51 @@ class Train(abc.ABC):
     @abc.abstractmethod
     def get_device(self):
         raise NotImplementedError
+
+
+class Train(TrainBase):
+    def __init__(
+        self,
+        run_id,
+        log_dir: Path,
+        save_interval: int,
+        num_processes: int,
+        num_steps: int,
+        **kwargs,
+    ):
+        self.num_steps = num_steps
+        self.num_processes = num_processes
+        self.run_id = run_id
+        self.save_interval = save_interval
+        self.log_dir = log_dir
+        if log_dir:
+            self.writer = SummaryWriter(logdir=str(log_dir))
+        else:
+            self.writer = None
+        self.setup(**kwargs, num_processes=num_processes, num_steps=num_steps)
+        self.last_save = time.time()  # dummy save
+
+    def run(self):
+        for _ in itertools.count():
+            for result in self.make_train_iterator():
+                if self.writer is not None:
+                    total_num_steps = (self.i + 1) * self.num_processes * self.num_steps
+                    for k, v in k_scalar_pairs(**result):
+                        self.writer.add_scalar(k, v, total_num_steps)
+
+                if (
+                    self.log_dir
+                    and self.save_interval
+                    and (time.time() - self.last_save >= self.save_interval)
+                ):
+                    self._save(str(self.log_dir))
+                    self.last_save = time.time()
+
+    def get_device(self):
+        match = re.search("\d+$", self.run_id)
+        if match:
+            device_num = int(match.group()) % get_n_gpu()
+        else:
+            device_num = get_random_gpu()
+
+        return torch.device("cuda", device_num)
