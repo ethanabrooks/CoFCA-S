@@ -71,7 +71,10 @@ class Env(gym.Env, ABC):
         self.last_reward = None
         self.t = 0
         self.condition_bit = self.random.randint(0, 2)
-        n_lines = self.random.random_integers(self.min_lines, self.max_lines)
+        if self.evaluating:
+            n_lines = self.eval_lines
+        else:
+            n_lines = self.random.random_integers(self.min_lines, self.max_lines)
         self.lines = self.get_lines(n_lines, line_state="initial")
         self.line_transitions = defaultdict(list)
         for _from, _to in self.get_transitions(iter(enumerate(self.lines))):
