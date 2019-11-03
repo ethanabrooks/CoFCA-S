@@ -20,3 +20,7 @@ class EndWhile:
 
 class Subtask:
     pass
+
+
+class Padding:
+    pass

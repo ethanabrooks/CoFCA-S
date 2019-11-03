@@ -1,12 +1,8 @@
 # third party
-from typing import List
-
 import torch
 import torch.nn as nn
 
 # first party
-from torch.distributions import Distribution
-
 from ppo.utils import AddBias, init, init_normc_
 
 """
@@ -53,22 +49,16 @@ class Categorical(nn.Module):
 
 
 class DiagGaussian(nn.Module):
-    def __init__(self, num_inputs, num_outputs, limits=None):
+    def __init__(self, num_inputs, num_outputs):
         super(DiagGaussian, self).__init__()
 
         init_ = lambda m: init(m, init_normc_, lambda x: nn.init.constant_(x, 0))
 
         self.fc_mean = init_(nn.Linear(num_inputs, num_outputs))
-        if limits is not None:
-            self.fc_mean = nn.Sequential(self.fc_mean, nn.Sigmoid())
-        self.limits = limits
         self.logstd = AddBias(torch.zeros(num_outputs))
 
     def forward(self, x):
         action_mean = self.fc_mean(x)
-        if self.limits is not None:
-            low, high = self.limits
-            action_mean = action_mean * (high - low) + low
 
         #  An ugly hack for my KFAC implementation.
         zeros = torch.zeros_like(action_mean)

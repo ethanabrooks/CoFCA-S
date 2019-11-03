@@ -166,7 +166,6 @@ class TrainBase(abc.ABC):
                 rnn_hxs=eval_recurrent_hidden_states,
                 masks=eval_masks,
                 num_steps=eval_steps,
-                # max(num_steps, time_limit) if time_limit else num_steps,
                 counter=eval_counter,
                 success_reward=success_reward,
                 use_tqdm=use_tqdm,
