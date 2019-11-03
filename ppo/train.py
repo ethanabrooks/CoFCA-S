@@ -161,18 +161,15 @@ class TrainBase(abc.ABC):
             )
             eval_masks = torch.zeros(num_processes, 1, device=self.device)
             eval_counter = Counter()
-            eval_result = {}
-            self.envs.reset()
-            # eval_result = self.run_epoch(
-            # obs=self.envs.reset(),
-            # rnn_hxs=eval_recurrent_hidden_states,
-            # masks=eval_masks,
-            # num_steps=eval_steps,
-            # # max(num_steps, time_limit) if time_limit else num_steps,
-            # counter=eval_counter,
-            # success_reward=success_reward,
-            # use_tqdm=use_tqdm,
-            # )
+            eval_result = self.run_epoch(
+                obs=self.envs.reset(),
+                rnn_hxs=eval_recurrent_hidden_states,
+                masks=eval_masks,
+                num_steps=eval_steps,
+                counter=eval_counter,
+                success_reward=success_reward,
+                use_tqdm=use_tqdm,
+            )
             eval_result = {f"eval_{k}": v for k, v in eval_result.items()}
         else:
             eval_result = {}
