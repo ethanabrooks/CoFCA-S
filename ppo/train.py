@@ -251,13 +251,13 @@ class TrainBase(abc.ABC):
                     inputs=obs, rnn_hxs=rnn_hxs, masks=masks
                 )  # type: AgentValues
 
-                # Observe reward and next obs
-                obs, reward, done, infos = self.envs.step(act.action)
-            if not eval:
-                for d in infos:
-                    for k, v in d.items():
-                        episode_counter[k] += [float(v)]
+            # Observe reward and next obs
+            obs, reward, done, infos = self.envs.step(act.action)
+            for d in infos:
+                for k, v in d.items():
+                    episode_counter[k] += [float(v)]
 
+            if not eval:
                 # track rewards
                 counter["reward"] += reward.numpy()
                 counter["time_step"] += np.ones_like(done)
