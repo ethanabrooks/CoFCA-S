@@ -162,6 +162,7 @@ class TrainBase(abc.ABC):
             eval_masks = torch.zeros(num_processes, 1, device=self.device)
             eval_counter = Counter()
             eval_result = self.run_epoch(
+                eval=True,
                 obs=self.envs.reset(),
                 rnn_hxs=eval_recurrent_hidden_states,
                 masks=eval_masks,
@@ -229,58 +230,69 @@ class TrainBase(abc.ABC):
                 )
 
     def run_epoch(
-        self, obs, rnn_hxs, masks, num_steps, counter, success_reward, use_tqdm
+        self,
+        obs,
+        rnn_hxs,
+        masks,
+        num_steps,
+        counter,
+        success_reward,
+        use_tqdm,
+        eval=False,
     ):
         # noinspection PyTypeChecker
         episode_counter = defaultdict(list)
         iterator = range(num_steps)
         if use_tqdm:
             iterator = tqdm(iterator, desc="evaluating")
-        for _ in iterator:
-            with torch.no_grad():
-                act = self.agent(
-                    inputs=obs, rnn_hxs=rnn_hxs, masks=masks
-                )  # type: AgentValues
+        if not eval:
+            for _ in iterator:
+                with torch.no_grad():
+                    act = self.agent(
+                        inputs=obs, rnn_hxs=rnn_hxs, masks=masks
+                    )  # type: AgentValues
 
-            # Observe reward and next obs
-            obs, reward, done, infos = self.envs.step(act.action)
+                # Observe reward and next obs
+                obs, reward, done, infos = self.envs.step(act.action)
 
-            for d in infos:
-                for k, v in d.items():
-                    episode_counter[k] += [float(v)]
+                for d in infos:
+                    for k, v in d.items():
+                        episode_counter[k] += [float(v)]
 
-            # track rewards
-            counter["reward"] += reward.numpy()
-            counter["time_step"] += np.ones_like(done)
-            episode_rewards = counter["reward"][done]
-            episode_counter["rewards"] += list(episode_rewards)
-            if success_reward is not None:
-                # noinspection PyTypeChecker
-                episode_counter["success"] += list(episode_rewards >= success_reward)
-                # if np.any(episode_rewards < self.success_reward):
-                #     import ipdb
-                #
-                #     ipdb.set_trace()
+                # track rewards
+                counter["reward"] += reward.numpy()
+                counter["time_step"] += np.ones_like(done)
+                episode_rewards = counter["reward"][done]
+                episode_counter["rewards"] += list(episode_rewards)
+                if success_reward is not None:
+                    # noinspection PyTypeChecker
+                    episode_counter["success"] += list(
+                        episode_rewards >= success_reward
+                    )
+                    # if np.any(episode_rewards < self.success_reward):
+                    #     import ipdb
+                    #
+                    #     ipdb.set_trace()
 
-            episode_counter["time_steps"] += list(counter["time_step"][done])
-            counter["reward"][done] = 0
-            counter["time_step"][done] = 0
+                episode_counter["time_steps"] += list(counter["time_step"][done])
+                counter["reward"][done] = 0
+                counter["time_step"][done] = 0
 
-            # If done then clean the history of observations.
-            masks = torch.tensor(
-                1 - done, dtype=torch.float32, device=obs.device
-            ).unsqueeze(1)
-            rnn_hxs = act.rnn_hxs
-            if self.rollouts is not None:
-                self.rollouts.insert(
-                    obs=obs,
-                    recurrent_hidden_states=act.rnn_hxs,
-                    actions=act.action,
-                    action_log_probs=act.action_log_probs,
-                    values=act.value,
-                    rewards=reward,
-                    masks=masks,
-                )
+                # If done then clean the history of observations.
+                masks = torch.tensor(
+                    1 - done, dtype=torch.float32, device=obs.device
+                ).unsqueeze(1)
+                rnn_hxs = act.rnn_hxs
+                if self.rollouts is not None:
+                    self.rollouts.insert(
+                        obs=obs,
+                        recurrent_hidden_states=act.rnn_hxs,
+                        actions=act.action,
+                        action_log_probs=act.action_log_probs,
+                        values=act.value,
+                        rewards=reward,
+                        masks=masks,
+                    )
 
         return dict(episode_counter)
 
