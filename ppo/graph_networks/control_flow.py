@@ -14,18 +14,9 @@ Obs = namedtuple("Obs", "condition lines")
 
 class Env(gym.Env, ABC):
     def __init__(
-        self,
-        seed,
-        min_lines,
-        max_lines,
-        eval_lines,
-        flip_prob,
-        time_limit,
-        baseline,
-        **kwargs,
+        self, seed, min_lines, max_lines, eval_lines, flip_prob, time_limit, baseline
     ):
         super().__init__()
-        # assert eval_lines > max_lines
         self.eval_lines = eval_lines
         self.min_lines = min_lines
         self.max_lines = max_lines
