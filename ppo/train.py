@@ -153,7 +153,6 @@ class TrainBase(abc.ABC):
             # if vec_norm is not None:
             #     vec_norm.eval()
             #     vec_norm.ob_rms = get_vec_normalize(envs).ob_rms
-            eval_result = {}
             self.envs.evaluate()
             eval_recurrent_hidden_states = torch.zeros(
                 num_processes,
@@ -162,6 +161,7 @@ class TrainBase(abc.ABC):
             )
             eval_masks = torch.zeros(num_processes, 1, device=self.device)
             eval_counter = Counter()
+            eval_result = {}
             # eval_result = self.run_epoch(
             # obs=self.envs.reset(),
             # rnn_hxs=eval_recurrent_hidden_states,
@@ -172,7 +172,7 @@ class TrainBase(abc.ABC):
             # success_reward=success_reward,
             # use_tqdm=use_tqdm,
             # )
-            # eval_result = {f"eval_{k}": v for k, v in eval_result.items()}
+            eval_result = {f"eval_{k}": v for k, v in eval_result.items()}
         else:
             eval_result = {}
         self.envs.train()
