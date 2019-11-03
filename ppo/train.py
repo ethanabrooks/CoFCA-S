@@ -257,22 +257,20 @@ class TrainBase(abc.ABC):
                 for k, v in d.items():
                     episode_counter[k] += [float(v)]
 
-            if not eval:
-                # track rewards
-                counter["reward"] += reward.numpy()
-                counter["time_step"] += np.ones_like(done)
-                episode_rewards = counter["reward"][done]
-                episode_counter["rewards"] += list(episode_rewards)
-                if success_reward is not None:
-                    # noinspection PyTypeChecker
-                    episode_counter["success"] += list(
-                        episode_rewards >= success_reward
-                    )
-                    # if np.any(episode_rewards < self.success_reward):
-                    #     import ipdb
-                    #
-                    #     ipdb.set_trace()
+            # track rewards
+            counter["reward"] += reward.numpy()
+            counter["time_step"] += np.ones_like(done)
+            episode_rewards = counter["reward"][done]
+            episode_counter["rewards"] += list(episode_rewards)
+            if success_reward is not None:
+                # noinspection PyTypeChecker
+                episode_counter["success"] += list(episode_rewards >= success_reward)
+                # if np.any(episode_rewards < self.success_reward):
+                #     import ipdb
+                #
+                #     ipdb.set_trace()
 
+            if not eval:
                 episode_counter["time_steps"] += list(counter["time_step"][done])
                 counter["reward"][done] = 0
                 counter["time_step"][done] = 0
