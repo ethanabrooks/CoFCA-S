@@ -2,6 +2,7 @@ from rl_utils import hierarchical_parse_args
 
 import ppo.agent
 import ppo.graph_networks.agent
+import ppo.graph_networks.control_flow
 from ppo import graph_networks
 from ppo.arguments import build_parser
 from ppo.train import Train
@@ -28,7 +29,7 @@ def main(log_dir, baseline, seed, **kwargs):
 
         @staticmethod
         def make_env(seed, rank, evaluation, env_id, add_timestep, **env_args):
-            return graph_networks.bandit.Env(
+            return graph_networks.control_flow.Env(
                 **env_args, baseline=baseline, seed=seed + rank
             )
 
