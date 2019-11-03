@@ -160,7 +160,7 @@ class TrainBase(abc.ABC):
                 self.agent.recurrent_hidden_state_size,
                 device=self.device,
             )
-            # eval_masks = torch.zeros(num_processes, 1, device=self.device)
+            eval_masks = torch.zeros(num_processes, 1, device=self.device)
             # eval_counter = Counter()
             # eval_result = self.run_epoch(
             # obs=self.envs.reset(),
