@@ -161,7 +161,7 @@ class TrainBase(abc.ABC):
                 device=self.device,
             )
             eval_masks = torch.zeros(num_processes, 1, device=self.device)
-            # eval_counter = Counter()
+            eval_counter = Counter()
             # eval_result = self.run_epoch(
             # obs=self.envs.reset(),
             # rnn_hxs=eval_recurrent_hidden_states,
