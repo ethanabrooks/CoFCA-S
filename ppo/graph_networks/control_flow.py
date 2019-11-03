@@ -8,11 +8,14 @@ from ppo.graph_networks.lines import If, Else, EndIf, While, EndWhile, Subtask
 
 
 class Env(graph_networks.Env, ABC):
-    def __init__(self, seed, min_lines, max_lines):
+    def __init__(self, seed, min_lines, max_lines, eval_lines):
         super().__init__()
+        assert eval_lines > max_lines
+        self.eval_lines = eval_lines
         self.min_lines = min_lines
         self.max_lines = max_lines
         self.random, self.seed = seeding.np_random(seed)
+        self.evaluating = False
         self.lines = None
         self.line_transitions = None
         self.active_line = None
@@ -116,3 +119,9 @@ class Env(graph_networks.Env, ABC):
     @abc.abstractmethod
     def _evaluate_condition(self, i=None):
         pass
+
+    def train(self):
+        self.evaluating = False
+
+    def evaluate(self):
+        self.evaluating = True

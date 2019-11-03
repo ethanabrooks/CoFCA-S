@@ -11,9 +11,8 @@ Obs = namedtuple("Obs", "condition lines")
 
 
 class Env(control_flow.Env):
-    def __init__(self, seed, min_lines, max_lines, flip_prob, time_limit, baseline):
-        super().__init__(seed, min_lines, max_lines)
-        self.evaluating = False
+    def __init__(self, flip_prob, eval_lines, time_limit, baseline, **kwargs):
+        super().__init__(eval_lines=eval_lines, **kwargs)
         self.time_limit = time_limit
         self.flip_prob = flip_prob
         self.baseline = baseline
@@ -22,10 +21,10 @@ class Env(control_flow.Env):
         self.last_active = None
         self.last_reward = None
         self.line_types = [If, Else, EndIf, While, EndWhile, Subtask, Padding]
-        self.action_space = spaces.Discrete(max_lines)
+        self.action_space = spaces.Discrete(eval_lines)
         if baseline:
             self.observation_space = spaces.MultiBinary(
-                2 + len(self.line_types) * max_lines
+                2 + len(self.line_types) * eval_lines
             )
             self.eye = Obs(condition=np.eye(2), lines=np.eye(len(self.line_types)))
         else:
@@ -33,7 +32,7 @@ class Env(control_flow.Env):
                 dict(
                     condition=spaces.Discrete(2),
                     lines=spaces.MultiDiscrete(
-                        np.array([len(self.line_types)] * max_lines)
+                        np.array([len(self.line_types)] * eval_lines)
                     ),
                     # active=spaces.Discrete(n_lines + 1),
                 )
@@ -65,7 +64,7 @@ class Env(control_flow.Env):
         return s, r, t, i
 
     def get_observation(self):
-        padded = self.lines + [Padding] * (self.max_lines - len(self.lines))
+        padded = self.lines + [Padding] * (self.eval_lines - len(self.lines))
         lines = [self.line_types.index(t) for t in padded]
         obs = Obs(
             condition=self.condition_bit,
@@ -112,12 +111,6 @@ class Env(control_flow.Env):
         print("Condition:", self.condition_bit)
         print("Reward:", self.last_reward)
         input("pause")
-
-    def train(self):
-        self.evaluating = False
-
-    def evaluate(self):
-        self.evaluating = True
 
 
 if __name__ == "__main__":
