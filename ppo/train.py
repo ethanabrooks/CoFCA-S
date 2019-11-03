@@ -245,16 +245,15 @@ class TrainBase(abc.ABC):
         iterator = range(num_steps)
         if use_tqdm:
             iterator = tqdm(iterator, desc="evaluating")
-        if not eval:
-            for _ in iterator:
-                with torch.no_grad():
-                    act = self.agent(
-                        inputs=obs, rnn_hxs=rnn_hxs, masks=masks
-                    )  # type: AgentValues
+        for _ in iterator:
+            with torch.no_grad():
+                act = self.agent(
+                    inputs=obs, rnn_hxs=rnn_hxs, masks=masks
+                )  # type: AgentValues
 
                 # Observe reward and next obs
                 obs, reward, done, infos = self.envs.step(act.action)
-
+            if not eval:
                 for d in infos:
                     for k, v in d.items():
                         episode_counter[k] += [float(v)]
