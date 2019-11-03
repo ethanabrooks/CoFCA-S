@@ -10,7 +10,7 @@ from ppo.graph_networks.lines import If, Else, EndIf, While, EndWhile, Subtask
 class Env(graph_networks.Env, ABC):
     def __init__(self, seed, min_lines, max_lines, eval_lines):
         super().__init__()
-        assert eval_lines > max_lines
+        # assert eval_lines > max_lines
         self.eval_lines = eval_lines
         self.min_lines = min_lines
         self.max_lines = max_lines
