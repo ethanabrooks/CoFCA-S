@@ -270,16 +270,16 @@ class TrainBase(abc.ABC):
                 #
                 #     ipdb.set_trace()
 
-            if not eval:
                 episode_counter["time_steps"] += list(counter["time_step"][done])
-                counter["reward"][done] = 0
-                counter["time_step"][done] = 0
+            counter["reward"][done] = 0
+            counter["time_step"][done] = 0
 
-                # If done then clean the history of observations.
-                masks = torch.tensor(
-                    1 - done, dtype=torch.float32, device=obs.device
-                ).unsqueeze(1)
-                rnn_hxs = act.rnn_hxs
+            # If done then clean the history of observations.
+            masks = torch.tensor(
+                1 - done, dtype=torch.float32, device=obs.device
+            ).unsqueeze(1)
+            rnn_hxs = act.rnn_hxs
+            if not eval:
                 if self.rollouts is not None:
                     self.rollouts.insert(
                         obs=obs,
