@@ -338,8 +338,8 @@ class GridWorld(gym.Env):
 
 if __name__ == "__main__":
     import gym
-    import ppo.control_flow.keyboard_control
+    import ppo.keyboard_control
 
     env = gym.make("4x4SubtasksGridWorld-v0")
     actions = "wsadeq"
-    ppo.control_flow.keyboard_control.run(env, actions=actions)
+    ppo.keyboard_control.run(env, actions=actions)
