@@ -8,8 +8,8 @@ from ppo.agent import AgentValues, NNBase
 from ppo.distributions import FixedCategorical
 
 # noinspection PyMissingConstructor
-from ppo.graph_networks.baselines import oh_et_al
-from ppo.graph_networks.recurrence import RecurrentState, Recurrence
+from ppo.control_flow.baselines import oh_et_al
+from ppo.control_flow.recurrence import RecurrentState, Recurrence
 
 
 class Agent(ppo.agent.Agent, NNBase):

@@ -1,9 +1,9 @@
 from rl_utils import hierarchical_parse_args
 
 import ppo.agent
-import ppo.graph_networks.agent
-import ppo.graph_networks.control_flow
-from ppo import graph_networks
+import ppo.control_flow.agent
+import ppo.control_flow.env
+from ppo import control_flow
 from ppo.arguments import build_parser
 from ppo.train import Train
 
@@ -19,7 +19,7 @@ def main(log_dir, baseline, seed, **kwargs):
                 )
             elif baseline == "oh-et-al":
                 raise NotImplementedError
-            return ppo.graph_networks.agent.Agent(
+            return ppo.control_flow.agent.Agent(
                 observation_space=envs.observation_space,
                 action_space=envs.action_space,
                 debug=debug,
@@ -29,7 +29,7 @@ def main(log_dir, baseline, seed, **kwargs):
 
         @staticmethod
         def make_env(seed, rank, evaluation, env_id, add_timestep, **env_args):
-            return graph_networks.control_flow.Env(
+            return control_flow.env.Env(
                 **env_args, baseline=baseline == "default", seed=seed + rank
             )
 
