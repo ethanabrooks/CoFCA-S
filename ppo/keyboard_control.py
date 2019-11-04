@@ -11,25 +11,22 @@ def cli():
     run(**vars(parser.parse_args()))
 
 
-def run(env, actions):
-    print(actions)
-    actions = list(actions)
-
+def run(env, action_fn):
     s = env.reset()
     while True:
-        env.render()
+        env.render(pause=False)
         action = None
-        while action not in actions:
-            action = input("act:")
+        while action is None:
+            action = action_fn(input("act:"))
             if action == "p":
                 import ipdb
 
                 ipdb.set_trace()
 
-        s, r, t, i = env.step(actions.index(action))
+        s, r, t, i = env.step(action)
         print("reward", r)
         if t:
-            env.render()
+            env.render(pause=False)
             print("resetting")
             time.sleep(0.5)
             env.reset()
