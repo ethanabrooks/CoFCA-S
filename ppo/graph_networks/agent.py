@@ -19,8 +19,9 @@ class Agent(ppo.agent.Agent, NNBase):
         if baseline == "oh-et-al":
             self.recurrent_module = oh_et_al.Recurrence(**network_args)
         else:
-            assert baseline is None
-            self.recurrent_module = Recurrence(**network_args)
+            self.recurrent_module = Recurrence(
+                **network_args, baseline=baseline == "no-attention"
+            )
 
     @property
     def recurrent_hidden_state_size(self):

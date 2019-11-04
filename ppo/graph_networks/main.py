@@ -30,7 +30,7 @@ def main(log_dir, baseline, seed, **kwargs):
         @staticmethod
         def make_env(seed, rank, evaluation, env_id, add_timestep, **env_args):
             return graph_networks.control_flow.Env(
-                **env_args, baseline=baseline, seed=seed + rank
+                **env_args, baseline=baseline == "default", seed=seed + rank
             )
 
     _Train(**kwargs, seed=seed, log_dir=log_dir).run()
@@ -42,7 +42,7 @@ def bandit_args():
     parser.add_argument("--no-tqdm", dest="use_tqdm", action="store_false")
     parser.add_argument("--time-limit", type=int)
     parser.add_argument("--eval-steps", type=int)
-    parser.add_argument("--baseline", choices=["oh-et-al", "default"])
+    parser.add_argument("--baseline", choices=["oh-et-al", "default", "no-attention"])
     parsers.env.add_argument("--min-lines", type=int, required=True)
     parsers.env.add_argument("--max-lines", type=int, required=True)
     parsers.env.add_argument("--eval-lines", type=int, required=True)

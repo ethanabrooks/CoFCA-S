@@ -37,8 +37,10 @@ class Recurrence(nn.Module):
         hidden_size,
         num_layers,
         debug,
+        baseline,
     ):
         super().__init__()
+        self.baseline = baseline
         self.obs_spaces = Obs(**observation_space.spaces)
         self.obs_sections = Obs(*[int(np.prod(s.shape)) for s in self.obs_spaces])
         self.action_size = 1
@@ -51,7 +53,7 @@ class Recurrence(nn.Module):
 
         # f
         layers = [Concat(dim=-1)]
-        in_size = self.obs_sections.condition + hidden_size
+        in_size = self.obs_sections.condition + (2 if baseline else 1) * hidden_size
         for _ in range(num_layers + 1):
             layers.extend([nn.Linear(in_size, hidden_size), activation])
             in_size = hidden_size
@@ -108,7 +110,8 @@ class Recurrence(nn.Module):
             *lines.shape, self.hidden_size
         )  # n_batch, n_lines, hidden_size
         forward_input = M.transpose(0, 1)  # n_lines, n_batch, hidden_size
-        K, _ = self.task_encoder(forward_input)
+        K, Kn = self.task_encoder(forward_input)
+        Kn = Kn.transpose(0, 1).reshape(N, -1)
         K = K.transpose(0, 1)
 
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
@@ -123,7 +126,10 @@ class Recurrence(nn.Module):
 
         for t in range(T):
             r = (p.unsqueeze(1) @ M).squeeze(1)
-            h = self.gru(self.f((inputs.condition[t], r)), h)
+            if self.baseline:
+                h = self.gru(self.f((inputs.condition[t], Kn)), h)
+            else:
+                h = self.gru(self.f((inputs.condition[t], r)), h)
             k = self.actor(h)
             w = (K @ k.unsqueeze(2)).squeeze(2)
             self.print("w")
