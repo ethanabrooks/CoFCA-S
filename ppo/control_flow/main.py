@@ -45,7 +45,7 @@ def bandit_args():
     parser.add_argument("--baseline", choices=["oh-et-al", "default", "no-attention"])
     parsers.env.add_argument("--min-lines", type=int, required=True)
     parsers.env.add_argument("--max-lines", type=int, required=True)
-    parsers.env.add_argument("--eval-lines", type=int, required=True)
+    parsers.env.add_argument("--eval-lines", type=int)
     parsers.env.add_argument("--flip-prob", type=float, required=True)
     parsers.env.add_argument("--delayed-reward", action="store_true")
     parsers.agent.add_argument("--debug", action="store_true")

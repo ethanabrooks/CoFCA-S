@@ -29,6 +29,11 @@ class Env(gym.Env, ABC):
         self.eval_lines = eval_lines
         self.min_lines = min_lines
         self.max_lines = max_lines
+        if eval_lines is None:
+            self.n_lines = n_lines = self.max_lines
+        else:
+            assert eval_lines >= self.max_lines
+            self.n_lines = n_lines = eval_lines
         self.random, self.seed = seeding.np_random(seed)
         self.time_limit = time_limit
         self.flip_prob = flip_prob
@@ -58,18 +63,18 @@ class Env(gym.Env, ABC):
             initial=Subtask, inside_if=EndIf, inside_else=EndIf, inside_while=EndWhile
         )
         if baseline:
-            self.action_space = spaces.Discrete(eval_lines)
+            self.action_space = spaces.Discrete(n_lines)
             self.observation_space = spaces.MultiBinary(
-                2 + len(self.line_types) * eval_lines
+                2 + len(self.line_types) * n_lines
             )
             self.eye = Obs(condition=np.eye(2), lines=np.eye(len(self.line_types)))
         else:
-            self.action_space = spaces.MultiDiscrete(eval_lines * np.ones(2))
+            self.action_space = spaces.MultiDiscrete(n_lines * np.ones(2))
             self.observation_space = spaces.Dict(
                 dict(
                     condition=spaces.Discrete(2),
                     lines=spaces.MultiDiscrete(
-                        np.array([len(self.line_types)] * eval_lines)
+                        np.array([len(self.line_types)] * n_lines)
                     ),
                     # active=spaces.Discrete(n_lines + 1),
                 )
@@ -84,6 +89,7 @@ class Env(gym.Env, ABC):
         self.t = 0
         self.condition_bit = self.random.randint(0, 2)
         if self.evaluating:
+            assert self.eval_lines is not None
             n_lines = self.eval_lines
         else:
             n_lines = self.random.random_integers(self.min_lines, self.max_lines)
@@ -124,7 +130,7 @@ class Env(gym.Env, ABC):
         return self.get_observation(), r, t, {}
 
     def get_observation(self):
-        padded = self.lines + [Padding] * (self.eval_lines - len(self.lines))
+        padded = self.lines + [Padding] * (self.n_lines - len(self.lines))
         lines = [self.line_types.index(t) for t in padded]
         obs = Obs(
             condition=self.condition_bit,
