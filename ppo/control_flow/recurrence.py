@@ -48,8 +48,7 @@ class Recurrence(nn.Module):
         self.hidden_size = hidden_size
 
         # networks
-        na = int(action_space.nvec[0])
-        self.embeddings = nn.Embedding(na, hidden_size)
+        self.embeddings = nn.Embedding(int(self.obs_spaces.lines.nvec[0]), hidden_size)
         self.task_encoder = nn.GRU(hidden_size, hidden_size, bidirectional=True)
 
         # f
@@ -63,8 +62,10 @@ class Recurrence(nn.Module):
         self.gru = nn.GRUCell(hidden_size, hidden_size)
         self.critic = init_(nn.Linear(hidden_size, 1))
         self.actor = nn.Linear(hidden_size, 2 * hidden_size)
-        self.a_one_hots = nn.Embedding.from_pretrained(torch.eye(na))
-        self.state_sizes = RecurrentState(a=1, a_probs=na, p=na, v=1, h=hidden_size)
+        self.a_one_hots = nn.Embedding.from_pretrained(torch.eye(action_space.n))
+        self.state_sizes = RecurrentState(
+            a=1, a_probs=action_space.n, p=action_space.n, v=1, h=hidden_size
+        )
 
     @staticmethod
     def sample_new(x, dist):
@@ -121,7 +122,7 @@ class Recurrence(nn.Module):
         h = hx.h
         p = hx.p
         p[new_episode, 0] = 1
-        A = torch.cat([actions[:, :, :1], hx.a.unsqueeze(0)], dim=0).long().squeeze(2)
+        A = torch.cat([actions, hx.a.unsqueeze(0)], dim=0).long().squeeze(2)
 
         for t in range(T):
             r = (p.unsqueeze(1) @ M).squeeze(1)

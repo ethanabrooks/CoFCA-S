@@ -47,14 +47,13 @@ class Env(gym.Env, ABC):
         self.legal_last_lines = dict(
             initial=Subtask, inside_if=EndIf, inside_else=EndIf, inside_while=EndWhile
         )
+        self.action_space = spaces.Discrete(eval_lines)
         if baseline:
-            self.action_space = spaces.Discrete(eval_lines)
             self.observation_space = spaces.MultiBinary(
                 2 + len(self.line_types) * eval_lines
             )
             self.eye = Obs(condition=np.eye(2), lines=np.eye(len(self.line_types)))
         else:
-            self.action_space = spaces.MultiDiscrete(eval_lines * np.ones(1))
             self.observation_space = spaces.Dict(
                 dict(
                     condition=spaces.Discrete(2),
@@ -88,8 +87,6 @@ class Env(gym.Env, ABC):
         self.t += 1
         if self.time_limit and self.t > self.time_limit:
             return self.get_observation(), -1, True, {}
-        # if not self.baseline:
-        #     action = int(action[0])
         if action == len(self.lines):
             # no-op
             return self.get_observation(), 0, False, {}
