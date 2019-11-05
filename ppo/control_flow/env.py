@@ -14,9 +14,18 @@ Obs = namedtuple("Obs", "condition lines")
 
 class Env(gym.Env, ABC):
     def __init__(
-        self, seed, min_lines, max_lines, eval_lines, flip_prob, time_limit, baseline
+        self,
+        seed,
+        min_lines,
+        max_lines,
+        eval_lines,
+        flip_prob,
+        time_limit,
+        baseline,
+        delayed_reward,
     ):
         super().__init__()
+        self.delayed_reward = delayed_reward
         self.eval_lines = eval_lines
         self.min_lines = min_lines
         self.max_lines = max_lines
@@ -30,6 +39,7 @@ class Env(gym.Env, ABC):
         self.last_active = None
         self.last_reward = None
         self.evaluating = False
+        self.failing = False
         self.lines = None
         self.line_transitions = None
         self.active_line = None
@@ -70,6 +80,7 @@ class Env(gym.Env, ABC):
         self.last_action = None
         self.last_active = None
         self.last_reward = None
+        self.failing = False
         self.t = 0
         self.condition_bit = self.random.randint(0, 2)
         if self.evaluating:
@@ -96,7 +107,9 @@ class Env(gym.Env, ABC):
         self.last_action = action
         self.last_active = self.active
         if action != self.active:
-            return self.get_observation(), -1, True, {}
+            self.failing = True
+            if not self.delayed_reward:
+                return self.get_observation(), -1, True, {}
         self.condition_bit = 1 - int(self.random.rand() < self.flip_prob)
 
         r = 0
@@ -104,6 +117,8 @@ class Env(gym.Env, ABC):
         self.active = self.next()
         if self.active is None:
             r = 1
+            if self.delayed_reward and self.failing:
+                r = -1
             t = True
         self.last_reward = r
         return self.get_observation(), r, t, {}
