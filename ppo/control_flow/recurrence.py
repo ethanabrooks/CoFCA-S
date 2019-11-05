@@ -139,14 +139,14 @@ class Recurrence(nn.Module):
                 h = self.gru(self.f((inputs.condition[t], r)), h)
             q = self.linear(h)
             k = (K @ q.unsqueeze(2)).squeeze(2)
+            z = (k.unsqueeze(1) @ K).squeeze(1)
+            a_dist = self.actor(z)
             self.print("k")
             self.print(k)
             p_dist = FixedCategorical(logits=k)
             self.print("dist")
             self.print(p_dist.probs)
             self.sample_new(P[t], p_dist)
-            z = K[R, P[t]]
-            a_dist = self.actor(z)
             self.sample_new(A[t], a_dist)
             yield RecurrentState(
                 a=A[t],
