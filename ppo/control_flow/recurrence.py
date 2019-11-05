@@ -66,7 +66,7 @@ class Recurrence(nn.Module):
         na = int(action_space.nvec[0])
         self.a_one_hots = nn.Embedding.from_pretrained(torch.eye(na))
         self.state_sizes = RecurrentState(
-            a=1, a_probs=na, p=na, p_probs=na, v=1, h=hidden_size
+            a=1, a_probs=na, p=1, p_probs=na, v=1, h=hidden_size
         )
 
     @staticmethod
@@ -125,11 +125,13 @@ class Recurrence(nn.Module):
 
         h = hx.h
         p = hx.p
-        p[new_episode, 0] = 1
-        A = torch.cat([actions[:, :, :1], hx.a.unsqueeze(0)], dim=0).long().squeeze(2)
+        p[new_episode] = 0
+        R = torch.arange(N, device=rnn_hxs.device)
+        A = torch.cat([actions[:, :, 0], hx.a.view(1, N)], dim=0).long()
+        P = torch.cat([actions[:, :, 1], hx.p.view(1, N)], dim=0).long()
 
         for t in range(T):
-            r = (p.unsqueeze(1) @ M).squeeze(1)
+            r = M[R, P[t].clone()]
             if self.baseline:
                 h = self.gru(self.f((inputs.condition[t], Kn)), h)
             else:
@@ -141,13 +143,12 @@ class Recurrence(nn.Module):
             dist = FixedCategorical(logits=w)
             self.print("dist")
             self.print(dist.probs)
-            self.sample_new(A[t], dist)
-            p = self.a_one_hots(A[t])
+            self.sample_new(P[t], dist)
             yield RecurrentState(
-                a=A[t],
+                a=P[t],
                 v=self.critic(h),
                 h=h,
                 a_probs=dist.probs,
-                p=p,
+                p=P[t],
                 p_probs=dist.probs,  # TODO
             )
