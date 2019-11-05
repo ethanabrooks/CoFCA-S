@@ -71,6 +71,7 @@ class Env(gym.Env):
         self.path = path = self.choose_path()
         self.state = path[0]
         self.goal = path[-1]
+        self.open[self.state] = 1
         return self.get_observation()
 
     @staticmethod
