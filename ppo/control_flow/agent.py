@@ -5,16 +5,23 @@ from torch.nn import functional as F
 
 import ppo.agent
 from ppo.agent import AgentValues, NNBase
+from ppo.distributions import FixedCategorical
 
 # noinspection PyMissingConstructor
-from ppo.distributions import FixedCategorical
+from ppo.control_flow.baselines import oh_et_al
+from ppo.control_flow.recurrence import RecurrentState, Recurrence
 
 
 class Agent(ppo.agent.Agent, NNBase):
-    def __init__(self, entropy_coef, recurrence):
+    def __init__(self, entropy_coef, recurrent, baseline, **network_args):
         nn.Module.__init__(self)
         self.entropy_coef = entropy_coef
-        self.recurrent_module = recurrence
+        if baseline == "oh-et-al":
+            self.recurrent_module = oh_et_al.Recurrence(**network_args)
+        else:
+            self.recurrent_module = Recurrence(
+                **network_args, baseline=baseline == "no-attention"
+            )
 
     @property
     def recurrent_hidden_state_size(self):
@@ -30,7 +37,7 @@ class Agent(ppo.agent.Agent, NNBase):
             inputs.view(N, -1), rnn_hxs, masks, action=action
         )
         rm = self.recurrent_module
-        hx = rm.parse_hidden(all_hxs)
+        hx = RecurrentState(*rm.parse_hidden(all_hxs))
         dist = FixedCategorical(hx.a_probs)
         action_log_probs = dist.log_probs(hx.a)
         entropy = dist.entropy().mean()

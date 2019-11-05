@@ -24,12 +24,7 @@ setup(
         "bin/show-best",
         "bin/reproduce",
     ],
-    entry_points=dict(
-        console_scripts=[
-            "oh-et-al=ppo.oh_et_al.main:cli",
-            "picture-hanging=ppo.picture_hanging.main:cli",
-        ]
-    ),
+    entry_points=dict(console_scripts=["ppo=ppo.main:cli", "exp=ppo.main:exp_cli"]),
     install_requires=[
         "ray[debug]==0.7.3",
         "tensorboardX==1.8",

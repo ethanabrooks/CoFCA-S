@@ -1,5 +1,2 @@
-Forms of generalization
------------------------
-* Number of pictures
-* New picture sizes
-* New combinations of known sizes
+* should c be attention-weighted?
+* make f recurrent
