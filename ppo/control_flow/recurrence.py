@@ -5,12 +5,12 @@ import torch
 import torch.nn.functional as F
 from torch import nn as nn
 
-from ppo.distributions import FixedCategorical
+from ppo.distributions import FixedCategorical, Categorical
 from ppo.control_flow.env import Obs
 from ppo.layers import Concat
 from ppo.utils import init_
 
-RecurrentState = namedtuple("RecurrentState", "a v h a_probs p")
+RecurrentState = namedtuple("RecurrentState", "a p v h a_probs p_probs")
 
 
 def batch_conv1d(inputs, weights):
@@ -65,7 +65,9 @@ class Recurrence(nn.Module):
         self.actor = nn.Linear(hidden_size, 2 * hidden_size)
         na = int(action_space.nvec[0])
         self.a_one_hots = nn.Embedding.from_pretrained(torch.eye(na))
-        self.state_sizes = RecurrentState(a=1, a_probs=na, p=na, v=1, h=hidden_size)
+        self.state_sizes = RecurrentState(
+            a=1, a_probs=na, p=na, p_probs=na, v=1, h=hidden_size
+        )
 
     @staticmethod
     def sample_new(x, dist):
@@ -75,11 +77,13 @@ class Recurrence(nn.Module):
     def forward(self, inputs, hx):
         return self.pack(self.inner_loop(inputs, rnn_hxs=hx))
 
-    @staticmethod
-    def pack(hxs):
+    def pack(self, hxs):
         def pack():
-            for name, hx in RecurrentState(*zip(*hxs))._asdict().items():
+            for name, size, hx in zip(
+                RecurrentState._fields, self.state_sizes, zip(*hxs)
+            ):
                 x = torch.stack(hx).float()
+                assert np.prod(x.shape[2:]) == size
                 yield x.view(*x.shape[:2], -1)
 
         hx = torch.cat(list(pack()), dim=-1)
@@ -139,4 +143,11 @@ class Recurrence(nn.Module):
             self.print(dist.probs)
             self.sample_new(A[t], dist)
             p = self.a_one_hots(A[t])
-            yield RecurrentState(a=A[t], v=self.critic(h), h=h, a_probs=dist.probs, p=p)
+            yield RecurrentState(
+                a=A[t],
+                v=self.critic(h),
+                h=h,
+                a_probs=dist.probs,
+                p=p,
+                p_probs=dist.probs,  # TODO
+            )
