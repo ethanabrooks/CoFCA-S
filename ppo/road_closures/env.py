@@ -10,6 +10,7 @@ from ppo import keyboard_control
 from ppo.utils import RED, RESET
 
 Obs = namedtuple("Obs", "roads open goal")
+Last = namedtuple("Last", "state action reward terminal")
 
 
 class Env(gym.Env):
@@ -24,6 +25,7 @@ class Env(gym.Env):
         self.goal = None
         self.open = None
         self.path = None
+        self.last = None
         self.t = None
         self.eye = np.eye(n_states)
         self.action_space = gym.spaces.Discrete(n_states)
@@ -45,6 +47,9 @@ class Env(gym.Env):
         new_state = int(action)
         open_road = ((self.eye[self.state] @ self.transitions) * self.open)[new_state]
         if not open_road or self.time_limit and self.t > self.time_limit:
+            self.last = Last(
+                state=self.state, action=action, reward=-self.time_limit, terminal=True
+            )
             return self.get_observation(), -self.time_limit, True, {}
         self.state = new_state
         self.open = np.abs(
@@ -52,10 +57,12 @@ class Env(gym.Env):
         )
         t = self.state == self.goal
         r = float(t) - 1
+        self.last = Last(state=self.state, action=action, reward=r, terminal=t)
         return self.get_observation(), r, t, {}
 
     def reset(self):
         self.t = 0
+        self.last = None
         self.transitions = self.random.randint(
             0, 2, size=[self.n_states, self.n_states]
         )
@@ -105,6 +112,7 @@ class Env(gym.Env):
 
     def render(self, pause=True, mode="human"):
         print("optimal path:", self.path)
+        print(self.last)
         print(
             " ", *["v" if i == self.goal else " " for i in range(self.n_states)], sep=""
         )
