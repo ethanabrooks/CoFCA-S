@@ -48,7 +48,8 @@ class Recurrence(nn.Module):
         self.hidden_size = hidden_size
 
         # networks
-        self.embeddings = nn.Embedding(int(self.obs_spaces.lines.nvec[0]), hidden_size)
+        nl = int(self.obs_spaces.lines.nvec[0])
+        self.embeddings = nn.Embedding(nl, hidden_size)
         self.task_encoder = nn.GRU(hidden_size, hidden_size, bidirectional=True)
 
         # f
@@ -57,19 +58,16 @@ class Recurrence(nn.Module):
         for _ in range(num_layers + 1):
             layers.extend([nn.Linear(in_size, hidden_size), activation])
             in_size = hidden_size
-        self.mlp = nn.Sequential(*layers)
+        self.f = nn.Sequential(*layers)
 
+        na = int(action_space.nvec[0])
         self.gru = nn.GRUCell(hidden_size, hidden_size)
         self.critic = init_(nn.Linear(hidden_size, 1))
+        self.actor = Categorical(hidden_size, na)
         self.linear = nn.Linear(hidden_size, 2 * hidden_size)
-        self.actor = Categorical(hidden_size, action_space.nvec[0])
+        self.a_one_hots = nn.Embedding.from_pretrained(torch.eye(na))
         self.state_sizes = RecurrentState(
-            a=1,
-            a_probs=action_space.nvec[0],
-            p=1,
-            p_probs=action_space.nvec[1],
-            v=1,
-            h=hidden_size,
+            a=1, a_probs=na, p=1, p_probs=na, v=1, h=hidden_size
         )
 
     @staticmethod
@@ -127,31 +125,33 @@ class Recurrence(nn.Module):
             _x.squeeze_(0)
 
         h = hx.h
-        p = hx.p
+        p = hx.p.long()
         p[new_episode] = 0
         R = torch.arange(N, device=rnn_hxs.device)
         A = torch.cat([actions[:, :, 0], hx.a.view(1, N)], dim=0).long()
         P = torch.cat([actions[:, :, 1], hx.p.view(1, N)], dim=0).long()
 
         for t in range(T):
-            r = M[R, P[t].clone()]
+            r = M[R, p.squeeze(1)]
             if self.baseline:
-                h = self.gru(self.mlp((inputs.condition[t], Kn)), h)
+                h = self.gru(self.f((inputs.condition[t], Kn)), h)
             else:
-                h = self.gru(self.mlp((inputs.condition[t], r)), h)
+                h = self.gru(self.f((inputs.condition[t], r)), h)
+            a_dist = self.actor(h)
             q = self.linear(h)
             k = (K @ q.unsqueeze(2)).squeeze(2)
-            self.print("w")
+            self.print("k")
             self.print(k)
             p_dist = FixedCategorical(logits=k)
+            self.print("dist")
+            self.print(p_dist.probs)
             self.sample_new(P[t], p_dist)
-            a_dist = self.actor(h)
             self.sample_new(A[t], a_dist)
             yield RecurrentState(
-                a=P[t],  # TODO
+                a=A[t],
                 v=self.critic(h),
                 h=h,
-                a_probs=p_dist.probs,  # TODO
-                p_probs=p_dist.probs,
+                a_probs=a_dist.probs,
                 p=P[t],
+                p_probs=p_dist.probs,
             )
