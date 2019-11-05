@@ -13,7 +13,8 @@ Obs = namedtuple("Obs", "roads open goal")
 
 
 class Env(gym.Env):
-    def __init__(self, seed, n_states, baseline, flip_prob):
+    def __init__(self, seed, n_states, baseline, flip_prob, time_limit):
+        self.time_limit = time_limit
         self.flip_prob = flip_prob
         self.baseline = baseline
         self.n_states = n_states
@@ -22,7 +23,9 @@ class Env(gym.Env):
         self.state = None
         self.goal = None
         self.open = None
+        self.t = None
         self.eye = np.eye(n_states)
+        self.action_space = gym.spaces.Discrete(n_states)
         if baseline:
             self.observation_space = gym.spaces.MultiBinary(
                 n_states ** 2 + 2 * n_states
@@ -37,10 +40,11 @@ class Env(gym.Env):
             )
 
     def step(self, action):
+        self.t += 1
         new_state = int(action)
         open_road = ((self.eye[self.state] @ self.transitions) * self.open)[new_state]
-        if not open_road:
-            return self.get_observation(), -self.n_states, True, {}
+        if not open_road or self.time_limit and self.t > self.time_limit:
+            return self.get_observation(), -self.time_limit, True, {}
         self.state = new_state
         self.open = np.abs(
             self.open - self.random.binomial(n=1, size=self.n_states, p=self.flip_prob)
@@ -50,6 +54,7 @@ class Env(gym.Env):
         return self.get_observation(), r, t, {}
 
     def reset(self):
+        self.t = 0
         self.transitions = self.random.randint(
             0, 2, size=[self.n_states, self.n_states]
         )
@@ -83,7 +88,6 @@ class Env(gym.Env):
             key=lambda t: distances[t],
         )
         path = [i] + paths[i, j]
-        print(path)
         return path
 
     def get_observation(self):
@@ -95,6 +99,7 @@ class Env(gym.Env):
         else:
             obs = obs._asdict()
         assert self.observation_space.contains(obs)
+        return obs
 
     def render(self, pause=True, mode="human"):
         print(

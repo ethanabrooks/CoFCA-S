@@ -6,8 +6,8 @@ import torch.nn.functional as F
 from torch import nn as nn
 
 from ppo.distributions import FixedCategorical
-from ppo.control_flow.env import Obs
 from ppo.layers import Concat
+from ppo.road_closures.env import Obs
 from ppo.utils import init_
 
 RecurrentState = namedtuple("RecurrentState", "a v h a_probs p")
@@ -48,12 +48,12 @@ class Recurrence(nn.Module):
         self.hidden_size = hidden_size
 
         # networks
-        self.embeddings = nn.Embedding(int(self.obs_spaces.lines.nvec[0]), hidden_size)
+        self.embeddings = nn.Linear(len(self.obs_spaces.roads.nvec), hidden_size)
         self.task_encoder = nn.GRU(hidden_size, hidden_size, bidirectional=True)
 
         # f
         layers = [Concat(dim=-1)]
-        in_size = self.obs_sections.condition + (2 if baseline else 1) * hidden_size
+        in_size = self.obs_sections.open + (2 if baseline else 1) * hidden_size
         for _ in range(num_layers + 1):
             layers.extend([nn.Linear(in_size, hidden_size), activation])
             in_size = hidden_size
@@ -105,11 +105,11 @@ class Recurrence(nn.Module):
         inputs = self.parse_inputs(inputs)
 
         # build memory
-        lines = inputs.lines.view(T, N, *self.obs_spaces.lines.shape).long()[0, :, :]
-        M = self.embeddings(lines.view(-1)).view(
-            *lines.shape, self.hidden_size
-        )  # n_batch, n_lines, hidden_size
-        forward_input = M.transpose(0, 1)  # n_lines, n_batch, hidden_size
+        roads = inputs.roads.view(T, N, *self.obs_spaces.roads.shape)[0, :, :]
+        M = self.embeddings(roads.reshape(-1, roads.size(-1))).view(
+            N, roads.size(1), self.hidden_size
+        )  # n_batch, n_states, hidden_size
+        forward_input = M.transpose(0, 1)  # n_states, n_batch, hidden_size
         K, Kn = self.task_encoder(forward_input)
         Kn = Kn.transpose(0, 1).reshape(N, -1)
         K = K.transpose(0, 1)
@@ -127,9 +127,9 @@ class Recurrence(nn.Module):
         for t in range(T):
             r = (p.unsqueeze(1) @ M).squeeze(1)
             if self.baseline:
-                h = self.gru(self.f((inputs.condition[t], Kn)), h)
+                h = self.gru(self.f((inputs.open[t], Kn)), h)
             else:
-                h = self.gru(self.f((inputs.condition[t], r)), h)
+                h = self.gru(self.f((inputs.open[t], r)), h)
             k = self.actor(h)
             w = (K @ k.unsqueeze(2)).squeeze(2)
             self.print("w")
