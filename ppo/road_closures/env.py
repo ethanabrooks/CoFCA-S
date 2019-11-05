@@ -52,9 +52,9 @@ class Env(gym.Env):
             )
             return self.get_observation(), -self.time_limit, True, {}
         self.state = new_state
-        self.open = np.abs(
-            self.open - self.random.binomial(n=1, size=self.n_states, p=self.flip_prob)
-        )
+        flip = self.random.binomial(n=1, size=self.n_states, p=self.flip_prob)
+        flip[self.state] = 0
+        self.open = np.abs(self.open - flip)
         t = self.state == self.goal
         r = float(t) - 1
         self.last = Last(state=self.state, action=action, reward=r, terminal=t)
