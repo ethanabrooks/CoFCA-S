@@ -124,7 +124,7 @@ class Recurrence(nn.Module):
             _x.squeeze_(0)
 
         h = hx.h
-        p1 = hx.p1
+        p1 = hx.p1.long()
         p = hx.p
         p1[new_episode] = 0
         p[new_episode, 0] = 1
@@ -133,8 +133,7 @@ class Recurrence(nn.Module):
         P = torch.cat([actions[:, :, 1], hx.p1.view(1, N)], dim=0).long()
 
         for t in range(T):
-            # r = M[R, P[t].clone()]
-            r = (p.unsqueeze(1) @ M).squeeze(1)
+            r = M[R, p1.squeeze(1)]
             if self.baseline:
                 h = self.gru(self.f((inputs.condition[t], Kn)), h)
             else:
