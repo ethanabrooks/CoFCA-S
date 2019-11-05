@@ -143,9 +143,10 @@ class Recurrence(nn.Module):
             dist = FixedCategorical(logits=w)
             self.print("dist")
             self.print(dist.probs)
+            self.sample_new(A[t], dist)
             self.sample_new(P[t], dist)
             yield RecurrentState(
-                a=P[t],
+                a=A[t],
                 v=self.critic(h),
                 h=h,
                 a_probs=dist.probs,
