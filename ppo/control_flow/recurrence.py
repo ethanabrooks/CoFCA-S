@@ -152,7 +152,7 @@ class Recurrence(nn.Module):
                 a=A[t],
                 v=self.critic(h),
                 h=h,
-                a_probs=p_dist.probs,
+                a_probs=a_dist.probs,
                 p=P[t],
-                p_probs=p_dist.probs,  # TODO
+                p_probs=p_dist.probs,
             )
