@@ -14,7 +14,7 @@ from ppo.distributions import DiagGaussian, Categorical, FixedNormal, FixedCateg
 from ppo.picture_hanging.env import Obs
 from ppo.utils import init_
 
-RecurrentState = namedtuple("RecurrentState", "a b probs v h p")
+RecurrentState = namedtuple("RecurrentState", "a b a_loc a_scale b_probs v h p")
 
 
 class Agent(ppo.agent.Agent, NNBase):
@@ -38,14 +38,13 @@ class Agent(ppo.agent.Agent, NNBase):
         )
         rm = self.recurrent_module
         hx = rm.parse_hidden(all_hxs)
-        a_dist = FixedCategorical(probs=hx.probs)
-        # b_dist = FixedCategorical(probs=hx.b_probs)
-        action_log_probs = a_dist.log_probs(hx.a)  # + b_dist.log_probs(hx.b)
-        entropy = (a_dist.entropy()).mean()
+        a_dist = FixedNormal(loc=hx.a_loc, scale=hx.a_scale)
+        b_dist = FixedCategorical(probs=hx.b_probs)
+        action_log_probs = a_dist.log_probs(hx.a) + b_dist.log_probs(hx.b)
+        entropy = (a_dist.entropy() + b_dist.entropy()).mean()
         return AgentValues(
             value=hx.v,
-            # action=torch.cat([hx.a, hx.b], dim=-1),
-            action=hx.a,
+            action=torch.cat([hx.a, hx.b], dim=-1),
             action_log_probs=action_log_probs,
             aux_loss=-self.entropy_coef * entropy,
             dist=None,
@@ -77,62 +76,38 @@ class Recurrence(nn.Module):
         num_layers,
         debug,
         bidirectional,
-        scale,
     ):
         super().__init__()
-        self.default_scale = scale
         self.obs_spaces = Obs(**observation_space.spaces)
-        self.obs_sections = Obs(sizes=self.obs_spaces.sizes.nvec.size, pos=1, index=1)
-        self.action_size = 1
+        self.obs_sections = Obs(*[int(np.prod(s.shape)) for s in self.obs_spaces])
+        self.action_size = 2
         self.debug = debug
         self.hidden_size = hidden_size
 
         # networks
-        self.embed_action = nn.Embedding(action_space.n, hidden_size)
-        self.embed_pos = nn.Embedding(observation_space.spaces["pos"].n, hidden_size)
-        self.embed_index = nn.Embedding(
-            observation_space.spaces["index"].n, hidden_size
-        )
         self.gru = nn.GRU(1, hidden_size, bidirectional=bidirectional)
         num_directions = 2 if bidirectional else 1
         layers = []
-        for i in range(max(0, num_layers - 1)):
-            layers += [init_(nn.Linear(hidden_size, hidden_size)), activation]
-        self.actor = nn.Sequential(
-            init_(nn.Linear(hidden_size * num_directions, hidden_size)),
-            *layers,
-            init_(nn.Linear(hidden_size, action_space.n - 1)),
+        in_size = num_directions * hidden_size
+        for i in range(num_layers):
+            layers += [init_(nn.Linear(in_size, hidden_size)), activation]
+            in_size = hidden_size
+        self.actor = nn.Sequential(*layers)
+        self.critic = copy.deepcopy(self.actor)
+        self.actor.add_module(
+            "dist", DiagGaussian(hidden_size, action_space.spaces["goal"].shape[0])
         )
-        # self.scale = nn.Sequential(
-        #     init_(nn.Linear(hidden_size, hidden_size)),
-        #     *layers,
-        #     init_(nn.Linear(hidden_size, 1)),
-        #     nn.Softplus()
-        # )
-        self.critic = nn.Sequential(
-            init_(nn.Linear(hidden_size, hidden_size)),
-            *copy.deepcopy(layers),
-            init_(nn.Linear(hidden_size, 1)),
-        )
-        self.beta = nn.Sequential(
-            init_(nn.Linear(in_size, hidden_size)),
-            *copy.deepcopy(layers),
-            init_(nn.Linear(hidden_size, 1)),
-        )
-        self.controller = nn.GRUCell(hidden_size * (3 + num_directions), hidden_size)
-        self.register_buffer("next", torch.eye(action_space.n)[-1])
+        self.critic.add_module("out", init_(nn.Linear(hidden_size, 1)))
+
+        layers = []
+        in_size = self.obs_sections.obs
+        for i in range(num_layers):
+            layers += [init_(nn.Linear(in_size, hidden_size)), activation]
+            in_size = hidden_size
+
+        # self.beta = nn.Sequential(*layers, Categorical(hidden_size, 2))
         self.state_sizes = RecurrentState(
-            a=1,
-            b=1,
-            # a_loc=1,
-            # a_scale=1,
-            # b_probs=2,
-            probs=action_space.n,
-            p=1,
-            v=1,
-            h=hidden_size,
-            # n=1,
-            # right=1,
+            a=1, b=1, a_loc=1, a_scale=1, b_probs=2, p=1, v=1, h=hidden_size
         )
 
     @staticmethod
@@ -167,7 +142,7 @@ class Recurrence(nn.Module):
             print(*args, **kwargs)
 
     def inner_loop(self, inputs, rnn_hxs):
-        # device = inputs.device
+        device = inputs.device
         T, N, D = inputs.shape
         inputs, actions = torch.split(
             inputs.detach(), [D - self.action_size, self.action_size], dim=2
@@ -179,60 +154,28 @@ class Recurrence(nn.Module):
         for _x in hx:
             _x.squeeze_(0)
 
-        # n = hx.n.long().squeeze(-1)
-        # right = hx.right.squeeze(-1)
-        # I = torch.arange(N, device=device)
-
-        index = inputs.index.long().squeeze(-1)
-        pos = inputs.pos.long().squeeze(-1)
-        h = hx.h
         P = hx.p.squeeze(1).long()
         R = torch.arange(P.size(0), device=P.device)
-        A = torch.cat([actions.clone()[:, :, 0], hx.a.T], dim=0).long()
-        # B = actions.clone()[:, :, 1].long()
+        A = actions.clone()[:, :, 0]
+        B = actions.clone()[:, :, 1].long()
 
         for t in range(T):
-            # a = A[t - 1]
             r = M[P, R]
-            x = torch.cat(
-                [
-                    self.embed_index(index[t]),
-                    self.embed_pos(pos[t]),
-                    self.embed_action(A[t - 1].clone()),
-                    r,
-                ],
-                dim=-1,
+            v = self.critic(r)
+            a_dist = self.actor(r)
+            # b_dist = self.beta(inputs.obs[t])
+            b_dist = FixedCategorical(
+                probs=torch.tensor([[0.0, 1.0]], device=device).expand(N, -1)
             )
-            y = self.controller(x, h)
-            b = self.beta(y).sigmoid()
-            # self.sample_new(B[t], b_dist)
-            # b = B[t].float().unsqueeze(-1)
-            v = self.critic(y)
-
-            # picture_size = inputs.sizes[t, I, n]
-            # a = right + picture_size / 2
-            # P = (P + B[t]) % (M.size(0))
-            # n = (n + B[t]) % (M.size(0))
-            # right = right + picture_size * B[t].float()
-            a_probs = self.actor(r).softmax(-1)
-            dist = FixedCategorical((1 - b) * F.pad(a_probs, [0, 1]) + b * self.next)
-
-            # a_dist = FixedNormal(
-            #     loc=b * a_dist.loc + (1 - b) * hx.a,
-            #     scale=b * a_dist.scale + (1 - b) * self.scale(y),
-            # )
-            self.sample_new(A[t], dist)
-            b = (A[t] == a_probs.size(1)).long()
+            self.sample_new(A[t], a_dist)
+            self.sample_new(B[t], b_dist)
             yield RecurrentState(
                 a=A[t],
-                # b=B[t],
-                b=b,
-                probs=dist.probs,
-                # a_loc=a_dist.loc,
-                # a_scale=a_dist.scale,
-                # b_probs=b_dist.probs,
+                b=B[t],
+                a_loc=a_dist.loc,
+                a_scale=a_dist.scale,
+                b_probs=b_dist.probs,
                 v=v,
-                h=h,
-                p=(P + b) % M.size(0),
-                # right=right,
+                h=hx.h,
+                p=(P + 1) % (M.size(0)),
             )

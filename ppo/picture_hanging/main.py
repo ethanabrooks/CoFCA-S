@@ -18,42 +18,23 @@ def train(agent, **_kwargs):
         def make_env(
             seed, rank, evaluation, env_id, add_timestep, time_limit, **env_args
         ):
-            return Env(
-                **env_args,
-                seed=seed + rank,
-                time_limit=time_limit,
-                include_sizes=agent == "exp",
-            )
+            return Env(**env_args, seed=seed + rank, time_limit=time_limit)
 
-        def build_agent(self, envs, recurrent=None, entropy_coef=None, **agent_args):
-            if agent == "default":
-                del agent_args["debug"]
-                return ppo.agent.Agent(
-                    obs_shape=envs.observation_space.shape,
-                    action_space=envs.action_space,
-                    entropy_coef=entropy_coef,
-                    recurrent=recurrent,
-                    **agent_args,
-                )
-            elif agent == "baseline":
+        def build_agent(
+            self, envs, recurrent=None, entropy_coef=None, baseline=False, **agent_args
+        ):
+            agent_args.update(
+                action_space=envs.action_space, observation_space=envs.observation_space
+            )
+            if baseline:
                 return ppo.picture_hanging.baseline.Agent(
                     entropy_coef=entropy_coef,
-                    recurrence=ppo.picture_hanging.baseline.Recurrence(
-                        **agent_args,
-                        action_space=envs.action_space,
-                        observation_space=envs.observation_space,
-                    ),
+                    recurrence=ppo.picture_hanging.baseline.Recurrence(**agent_args),
                 )
             else:
                 return ppo.picture_hanging.exp.Agent(
                     entropy_coef=entropy_coef,
-                    recurrence=(
-                        ppo.picture_hanging.exp.Recurrence(
-                            **agent_args,
-                            action_space=envs.action_space,
-                            observation_space=envs.observation_space,
-                        )
-                    ),
+                    recurrence=(ppo.picture_hanging.exp.Recurrence(**agent_args)),
                 )
 
         # def run_epoch(self, *args, **kwargs):
@@ -75,12 +56,12 @@ def cli():
     parsers.main.add_argument("--no-tqdm", dest="use_tqdm", action="store_false")
     parsers.main.add_argument("--eval-steps", type=int)
     parsers.main.add_argument("--time-limit", type=int, required=True)
-    parsers.main.add_argument("--agent", choices=["exp", "baseline", "default"])
     parsers.agent.add_argument("--debug", action="store_true")
-    parsers.env.add_argument("--width", type=int, default=100)
-    parsers.env.add_argument("--speed", type=int, default=20)
-    parsers.env.add_argument("--min-train", type=int, default=1)
-    parsers.env.add_argument("--max-train", type=int, default=3)
+    parsers.agent.add_argument("--bidirectional", action="store_true")
+    parsers.agent.add_argument("--baseline", action="store_true")
+    parsers.env.add_argument("--width", type=int, default=1)
+    parsers.env.add_argument("--speed", type=float, default=0.1)
+    parsers.env.add_argument("--n-train", type=int, default=3)
     parsers.env.add_argument("--n-eval", type=int, default=6)
     args = hierarchical_parse_args(parsers.main)
     train(**args)

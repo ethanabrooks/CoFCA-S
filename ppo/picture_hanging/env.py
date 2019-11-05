@@ -10,61 +10,49 @@ Obs = namedtuple("Obs", "sizes obs")
 
 class Env(gym.Env):
     def __init__(
-        self,
-        width,
-        min_train: int,
-        max_train: int,
-        n_eval: int,
-        speed: float,
-        seed: int,
-        time_limit: int,
-        include_sizes: bool,
+        self, width, n_train: int, n_eval: int, speed: float, seed: int, time_limit: int
     ):
-        self.include_sizes = include_sizes
         self.time_limit = time_limit
         self.speed = speed
         self.n_eval = n_eval
-        self.min_train = min_train
-        self.max_train = max_train
+        self.n_train = n_train
         self.sizes = None
         self.centers = None
         self.new_picture = None
         self.observation_iterator = None
         self.width = width
         self.random, self.seed = seeding.np_random(seed)
-        self.max_pictures = max(n_eval, max_train)
-        self.observation_space = gym.spaces.MultiDiscrete(2 * np.ones(self.width + 3))
-        if include_sizes:
-            self.observation_space = gym.spaces.Dict(
-                Obs(
-                    sizes=gym.spaces.MultiDiscrete(
-                        self.width * np.ones(self.max_pictures)
-                    ),
-                    obs=self.observation_space,
-                )._asdict()
-            )
-        self.action_space = gym.spaces.Discrete(2 * self.width + 1)
+        self.max_pictures = max(n_eval, n_train)
+        box = gym.spaces.Box(low=0, high=self.width, shape=(self.max_pictures,))
+        self.observation_space = gym.spaces.Dict(Obs(sizes=box, obs=box)._asdict())
+        # self.action_space = gym.spaces.Discrete(self.width)
+        self.action_space = gym.spaces.Dict(
+            goal=gym.spaces.Box(low=0, high=self.width, shape=(1,)),
+            next=gym.spaces.Discrete(2),
+        )
         self.evaluating = False
         self.t = None
-        self.eye = np.eye(self.width + 1)
 
-    def step(self, action: int):
-        next_picture = action / 2 >= self.width
-        self.new_picture = next_picture
+    def step(self, action):
+        center, next_picture = action
         self.t += 1
         if self.t > self.time_limit:
             return self.get_observation(), -2 * self.width, True, {}
+        self.centers[-1] = max(0, min(self.width, center))
+        t = False
+        r = 0
         if next_picture:
             if len(self.centers) < len(self.sizes):
-                self.centers += [self.new_position()]
+                self.centers.append(0)
             else:
+                t = True
 
                 def compute_white_space():
                     left = 0
                     for center, picture in zip(self.centers, self.sizes):
-                        right = center / 2 - picture / 2
+                        right = center - picture / 2
                         yield right - left
-                        left = right + picture
+                        left = center + picture / 2
                     yield self.width - left
 
                 white_space = list(compute_white_space())
@@ -75,29 +63,18 @@ class Env(gym.Env):
                     True,
                     {},
                 )
-        else:
-            center = self.centers[-1]
-            desired_delta = action - center
-            delta = min(abs(desired_delta), self.speed) * (
-                1 if desired_delta > 0 else -1
-            )
-            self.centers[-1] = max(0, min(self.width - self.sizes[-1], center + delta))
         return self.get_observation(), 0, False, {}
 
     def reset(self):
         self.t = 0
-        self.new_picture = True
-        n_pictures = self.random.random_integers(self.min_train, self.max_train)
-        randoms = self.random.random(self.n_eval if self.evaluating else n_pictures)
-        normalized = randoms / randoms.sum() * self.width
-        cumsum = np.round(np.cumsum(normalized)).astype(int)
-        z = np.roll(np.append(cumsum, 0), 1)
-        self.sizes = z[1:] - z[:-1]
-        self.sizes = self.sizes[self.sizes > 0]
-        # gap = self.random.randint(0, self.sizes.min())
-        # self.sizes -= gap
-        self.centers = [self.new_position()]
-        self.observation_iterator = self.observation_generator()
+        self.centers = [0]
+        self.sizes = self.random.random(
+            self.n_eval
+            if self.evaluating
+            else self.random.random_integers(2, self.n_train)
+        )
+        self.sizes = self.sizes * self.width / self.sizes.sum()
+        self.random.shuffle(self.sizes)
         return self.get_observation()
 
     def new_position(self):
@@ -110,9 +87,7 @@ class Env(gym.Env):
             yield list(self.eye[self.centers[-1]]) + [1, self.new_picture]
 
     def get_observation(self):
-        obs = next(self.observation_iterator)
-        if self.include_sizes:
-            obs = Obs(sizes=self.pad(self.sizes), obs=obs)._asdict()
+        obs = Obs(sizes=self.pad(self.sizes), obs=self.pad(self.centers))._asdict()
         self.observation_space.contains(obs)
         return obs
 
@@ -142,12 +117,6 @@ class Env(gym.Env):
     def evaluate(self):
         self.evaluating = True
 
-    def train(self):
-        self.evaluating = False
-
-    def evaluate(self):
-        self.evaluating = True
-
 
 if __name__ == "__main__":
     import argparse
@@ -156,17 +125,16 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", default=0, type=int)
-    parser.add_argument("--width", default=3, type=int)
-    parser.add_argument("--min-train", default=2, type=int)
-    parser.add_argument("--max-train", default=2, type=int)
+    parser.add_argument("--width", default=100, type=int)
+    parser.add_argument("--n-train", default=4, type=int)
     parser.add_argument("--n-eval", default=6, type=int)
-    parser.add_argument("--speed", default=3, type=int)
+    parser.add_argument("--speed", default=100, type=int)
     parser.add_argument("--time-limit", default=100, type=int)
     args = hierarchical_parse_args(parser)
 
     def action_fn(string):
         try:
-            return int(string)
+            return float(string), 1
         except ValueError:
             return
 
