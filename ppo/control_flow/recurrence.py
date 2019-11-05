@@ -43,7 +43,7 @@ class Recurrence(nn.Module):
         self.baseline = baseline
         self.obs_spaces = Obs(**observation_space.spaces)
         self.obs_sections = Obs(*[int(np.prod(s.shape)) for s in self.obs_spaces])
-        self.action_size = 1
+        self.action_size = 2
         self.debug = debug
         self.hidden_size = hidden_size
 
@@ -122,7 +122,7 @@ class Recurrence(nn.Module):
         h = hx.h
         p = hx.p
         p[new_episode, 0] = 1
-        A = torch.cat([actions, hx.a.unsqueeze(0)], dim=0).long().squeeze(2)
+        A = torch.cat([actions[:, :, :1], hx.a.unsqueeze(0)], dim=0).long().squeeze(2)
 
         for t in range(T):
             r = (p.unsqueeze(1) @ M).squeeze(1)
