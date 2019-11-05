@@ -56,9 +56,8 @@ class Env(gym.Env):
         flip[self.state] = 0
         self.open = np.abs(self.open - flip)
         t = self.state == self.goal
-        r = float(t) - 1
-        self.last = Last(state=self.state, action=action, reward=r, terminal=t)
-        return self.get_observation(), r, t, {}
+        self.last = Last(state=self.state, action=action, reward=-1, terminal=t)
+        return self.get_observation(), -1, t, {}
 
     def reset(self):
         self.t = 0
