@@ -23,6 +23,7 @@ class Env(gym.Env):
         self.state = None
         self.goal = None
         self.open = None
+        self.path = None
         self.t = None
         self.eye = np.eye(n_states)
         self.action_space = gym.spaces.Discrete(n_states)
@@ -60,7 +61,7 @@ class Env(gym.Env):
         )
         np.fill_diagonal(self.transitions, 1)
         self.open = self.random.randint(0, 2, self.n_states)
-        path = self.choose_path()
+        self.path = path = self.choose_path()
         self.state = path[0]
         self.goal = path[-1]
         return self.get_observation()
@@ -83,6 +84,7 @@ class Env(gym.Env):
 
     def choose_path(self):
         paths, distances = self.floyd_warshall(self.transitions)  # all shortest paths
+        distances[np.isinf(distances)] *= -1
         i, j = max(
             itertools.product(range(self.n_states), range(self.n_states)),
             key=lambda t: distances[t],
@@ -102,6 +104,7 @@ class Env(gym.Env):
         return obs
 
     def render(self, pause=True, mode="human"):
+        print("optimal path:", self.path)
         print(
             " ", *["v" if i == self.goal else " " for i in range(self.n_states)], sep=""
         )
