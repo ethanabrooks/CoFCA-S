@@ -5,12 +5,12 @@ import torch
 import torch.nn.functional as F
 from torch import nn as nn
 
-from ppo.distributions import FixedCategorical
+from ppo.distributions import FixedCategorical, Categorical
 from ppo.control_flow.env import Obs
 from ppo.layers import Concat
 from ppo.utils import init_
 
-RecurrentState = namedtuple("RecurrentState", "a v h a_probs p")
+RecurrentState = namedtuple("RecurrentState", "a p v h a_probs p_probs")
 
 
 def batch_conv1d(inputs, weights):
@@ -43,7 +43,7 @@ class Recurrence(nn.Module):
         self.baseline = baseline
         self.obs_spaces = Obs(**observation_space.spaces)
         self.obs_sections = Obs(*[int(np.prod(s.shape)) for s in self.obs_spaces])
-        self.action_size = 1
+        self.action_size = 2
         self.debug = debug
         self.hidden_size = hidden_size
 
@@ -57,14 +57,19 @@ class Recurrence(nn.Module):
         for _ in range(num_layers + 1):
             layers.extend([nn.Linear(in_size, hidden_size), activation])
             in_size = hidden_size
-        self.f = nn.Sequential(*layers)
+        self.mlp = nn.Sequential(*layers)
 
         self.gru = nn.GRUCell(hidden_size, hidden_size)
         self.critic = init_(nn.Linear(hidden_size, 1))
-        self.actor = nn.Linear(hidden_size, 2 * hidden_size)
-        self.a_one_hots = nn.Embedding.from_pretrained(torch.eye(action_space.n))
+        self.linear = nn.Linear(hidden_size, 2 * hidden_size)
+        self.actor = Categorical(hidden_size, action_space.nvec[0])
         self.state_sizes = RecurrentState(
-            a=1, a_probs=action_space.n, p=action_space.n, v=1, h=hidden_size
+            a=1,
+            a_probs=action_space.nvec[0],
+            p=1,
+            p_probs=action_space.nvec[1],
+            v=1,
+            h=hidden_size,
         )
 
     @staticmethod
@@ -75,11 +80,13 @@ class Recurrence(nn.Module):
     def forward(self, inputs, hx):
         return self.pack(self.inner_loop(inputs, rnn_hxs=hx))
 
-    @staticmethod
-    def pack(hxs):
+    def pack(self, hxs):
         def pack():
-            for name, hx in RecurrentState(*zip(*hxs))._asdict().items():
+            for name, size, hx in zip(
+                RecurrentState._fields, self.state_sizes, zip(*hxs)
+            ):
                 x = torch.stack(hx).float()
+                assert np.prod(x.shape[2:]) == size
                 yield x.view(*x.shape[:2], -1)
 
         hx = torch.cat(list(pack()), dim=-1)
@@ -121,22 +128,30 @@ class Recurrence(nn.Module):
 
         h = hx.h
         p = hx.p
-        p[new_episode, 0] = 1
-        A = torch.cat([actions, hx.a.unsqueeze(0)], dim=0).long().squeeze(2)
+        p[new_episode] = 0
+        R = torch.arange(N, device=rnn_hxs.device)
+        A = torch.cat([actions[:, :, 0], hx.a.view(1, N)], dim=0).long()
+        P = torch.cat([actions[:, :, 1], hx.p.view(1, N)], dim=0).long()
 
         for t in range(T):
-            r = (p.unsqueeze(1) @ M).squeeze(1)
+            r = M[R, P[t].clone()]
             if self.baseline:
-                h = self.gru(self.f((inputs.condition[t], Kn)), h)
+                h = self.gru(self.mlp((inputs.condition[t], Kn)), h)
             else:
-                h = self.gru(self.f((inputs.condition[t], r)), h)
-            k = self.actor(h)
-            w = (K @ k.unsqueeze(2)).squeeze(2)
+                h = self.gru(self.mlp((inputs.condition[t], r)), h)
+            q = self.linear(h)
+            k = (K @ q.unsqueeze(2)).squeeze(2)
             self.print("w")
-            self.print(w)
-            dist = FixedCategorical(logits=w)
-            self.print("dist")
-            self.print(dist.probs)
-            self.sample_new(A[t], dist)
-            p = self.a_one_hots(A[t])
-            yield RecurrentState(a=A[t], v=self.critic(h), h=h, a_probs=dist.probs, p=p)
+            self.print(k)
+            p_dist = FixedCategorical(logits=k)
+            self.sample_new(P[t], p_dist)
+            a_dist = self.actor(h)
+            self.sample_new(A[t], a_dist)
+            yield RecurrentState(
+                a=A[t],
+                v=self.critic(h),
+                h=h,
+                a_probs=a_dist.probs,
+                p_probs=p_dist.probs,
+                p=P[t],
+            )
