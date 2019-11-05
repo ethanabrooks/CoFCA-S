@@ -140,16 +140,16 @@ class Recurrence(nn.Module):
             w = (K @ k.unsqueeze(2)).squeeze(2)
             self.print("w")
             self.print(w)
-            dist = FixedCategorical(logits=w)
+            p_dist = FixedCategorical(logits=w)
             self.print("dist")
-            self.print(dist.probs)
-            self.sample_new(A[t], dist)
-            self.sample_new(P[t], dist)
+            self.print(p_dist.probs)
+            self.sample_new(A[t], p_dist)
+            self.sample_new(P[t], p_dist)
             yield RecurrentState(
                 a=A[t],
                 v=self.critic(h),
                 h=h,
-                a_probs=dist.probs,
+                a_probs=p_dist.probs,
                 p=P[t],
-                p_probs=dist.probs,  # TODO
+                p_probs=p_dist.probs,  # TODO
             )
