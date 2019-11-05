@@ -10,7 +10,7 @@ from ppo.control_flow.env import Obs
 from ppo.layers import Concat
 from ppo.utils import init_
 
-RecurrentState = namedtuple("RecurrentState", "a p p1 v h a_probs p_probs")
+RecurrentState = namedtuple("RecurrentState", "a p1 v h a_probs p_probs")
 
 
 def batch_conv1d(inputs, weights):
@@ -66,7 +66,7 @@ class Recurrence(nn.Module):
         na = int(action_space.nvec[0])
         self.a_one_hots = nn.Embedding.from_pretrained(torch.eye(na))
         self.state_sizes = RecurrentState(
-            a=1, a_probs=na, p=na, p1=1, p_probs=na, v=1, h=hidden_size
+            a=1, a_probs=na, p1=1, p_probs=na, v=1, h=hidden_size
         )
 
     @staticmethod
@@ -125,9 +125,7 @@ class Recurrence(nn.Module):
 
         h = hx.h
         p1 = hx.p1.long()
-        p = hx.p
         p1[new_episode] = 0
-        p[new_episode, 0] = 1
         R = torch.arange(N, device=rnn_hxs.device)
         A = torch.cat([actions[:, :, 0], hx.a.view(1, N)], dim=0).long()
         P = torch.cat([actions[:, :, 1], hx.p1.view(1, N)], dim=0).long()
@@ -152,6 +150,5 @@ class Recurrence(nn.Module):
                 h=h,
                 a_probs=dist.probs,
                 p1=P[t],
-                p=self.a_one_hots(P[t]),
                 p_probs=dist.probs,  # TODO
             )
