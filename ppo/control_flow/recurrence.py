@@ -148,10 +148,10 @@ class Recurrence(nn.Module):
             a_dist = self.actor(h)
             self.sample_new(A[t], a_dist)
             yield RecurrentState(
-                a=A[t],
+                a=P[t],  # TODO
                 v=self.critic(h),
                 h=h,
-                a_probs=a_dist.probs,
+                a_probs=p_dist.probs,  # TODO
                 p_probs=p_dist.probs,
                 p=P[t],
             )
