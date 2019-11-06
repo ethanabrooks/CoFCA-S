@@ -49,6 +49,7 @@ def bandit_args():
     parsers.env.add_argument("--flip-prob", type=float, required=True)
     parsers.env.add_argument("--delayed-reward", action="store_true")
     parsers.agent.add_argument("--debug", action="store_true")
+    parsers.agent.add_argument("--a-equals-p", action="store_true")
     return parser
 
 

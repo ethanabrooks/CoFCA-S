@@ -13,8 +13,9 @@ from ppo.control_flow.recurrence import RecurrentState, Recurrence
 
 
 class Agent(ppo.agent.Agent, NNBase):
-    def __init__(self, entropy_coef, recurrent, baseline, **network_args):
+    def __init__(self, entropy_coef, recurrent, baseline, a_equals_p, **network_args):
         nn.Module.__init__(self)
+        self.a_equals_p = a_equals_p
         self.entropy_coef = entropy_coef
         if baseline == "oh-et-al":
             self.recurrent_module = oh_et_al.Recurrence(**network_args)
@@ -40,11 +41,17 @@ class Agent(ppo.agent.Agent, NNBase):
         hx = RecurrentState(*rm.parse_hidden(all_hxs))
         a_dist = FixedCategorical(hx.a_probs)
         p_dist = FixedCategorical(hx.p_probs)
-        action_log_probs = a_dist.log_probs(hx.a) + p_dist.log_probs(hx.p)
-        entropy = (a_dist.entropy() + p_dist.entropy()).mean()
+        if self.a_equals_p:
+            action_log_probs = p_dist.log_probs(hx.p)
+            entropy = p_dist.entropy().mean()
+            action = torch.cat([hx.p, hx.p], dim=-1)
+        else:
+            action_log_probs = a_dist.log_probs(hx.a) + p_dist.log_probs(hx.p)
+            entropy = (a_dist.entropy() + p_dist.entropy()).mean()
+            action = torch.cat([hx.a, hx.p], dim=-1)
         return AgentValues(
             value=hx.v,
-            action=torch.cat([hx.a, hx.p], dim=-1),
+            action=action,
             action_log_probs=action_log_probs,
             aux_loss=-self.entropy_coef * entropy,
             dist=None,
