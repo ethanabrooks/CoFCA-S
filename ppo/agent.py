@@ -217,6 +217,7 @@ class CNNBase(NNBase):
 
 class MLPBase(NNBase):
     def __init__(self, num_inputs, hidden_size, num_layers, recurrent, activation):
+        assert num_layers > 0
         super(MLPBase, self).__init__(recurrent, num_inputs, hidden_size)
 
         if recurrent:
@@ -244,6 +245,10 @@ class MLPBase(NNBase):
         self.critic_linear = init_(nn.Linear(num_inputs, 1))
 
         self.train()
+
+    @property
+    def output_size(self):
+        return super().output_size
 
     def forward(self, inputs, rnn_hxs, masks):
         x = inputs
