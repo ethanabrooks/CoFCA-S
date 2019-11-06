@@ -58,6 +58,7 @@ class Env(gym.Env):
         if flip:
             self.open = 1 - self.open
             self.open[self.state] = 1
+            self.open[self.goal] = 1
         t = self.state == self.goal
         self.last = Last(state=self.state, action=action, reward=-1, terminal=t)
         return self.get_observation(), -1, t, {}
@@ -75,6 +76,7 @@ class Env(gym.Env):
         self.state = np.argmin(indices)
         self.goal = np.argmax(indices)
         self.open[self.state] = 1
+        self.open[self.goal] = 1
         return self.get_observation()
 
     @staticmethod
