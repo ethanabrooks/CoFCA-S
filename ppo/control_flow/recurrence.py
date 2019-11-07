@@ -56,7 +56,7 @@ class Recurrence(nn.Module):
         layers = []
         in_size = (
             self.obs_sections.condition
-            + self.obs_sections.state
+            + self.obs_sections.action
             + (2 if baseline else 1) * hidden_size
         )
 
@@ -142,7 +142,7 @@ class Recurrence(nn.Module):
                 obs_list = [inputs.condition[t], Kn]
             else:
                 obs_list = [inputs.condition[t], r]
-            obs_list.append(inputs.state[t])
+            obs_list.append(inputs.action[t])
             z = torch.cat(obs_list, dim=-1)
             h = self.gru(self.f(z))
             a_dist = self.actor(h)
