@@ -108,8 +108,6 @@ class Env(gym.Env, ABC):
 
     def step(self, action):
         self.t += 1
-        if self.time_limit and self.t > self.time_limit:
-            return self.get_observation(), -1, True, {}
         if not self.baseline:
             action = int(action[0])
         selected = self.prev + action
@@ -132,6 +130,8 @@ class Env(gym.Env, ABC):
             r = 1
             if self.delayed_reward and self.failing:
                 r = -1
+            t = True
+        if self.time_limit and self.t > self.time_limit:
             t = True
         self.last_reward = r
         return self.get_observation(), r, t, {}
