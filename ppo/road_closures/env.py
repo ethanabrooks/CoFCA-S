@@ -123,7 +123,7 @@ class Env(gym.Env):
         for i, row in enumerate(self.transitions):
             print(">" if i == self.state else " ", end="")
             for x, open_road in zip(row, self.open):
-                print(RESET if open_road else RED, x, sep="", end="")
+                print(RESET if open_road else RED, int(x), sep="", end="")
             print(RESET)
         if pause:
             input("pause")
@@ -135,6 +135,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", default=0, type=int)
     parser.add_argument("--n-states", default=6, type=int)
+    parser.add_argument("--time-limit", default=100, type=int)
     parser.add_argument("--flip-prob", default=0.5, type=float)
     args = hierarchical_parse_args(parser)
-    keyboard_control.run(Env(**args, baseline=False), action_fn=int)
+    keyboard_control.run(Env(**args, baseline=False), action_fn=lambda s: (int(s), 0))
