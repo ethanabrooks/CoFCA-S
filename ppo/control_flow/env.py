@@ -65,24 +65,24 @@ class Env(gym.Env, ABC):
             initial=Subtask, inside_if=EndIf, inside_else=EndIf, inside_while=EndWhile
         )
         if baseline:
-            self.action_space = spaces.Discrete(n_lines)
+            self.action_space = spaces.Discrete(2 * n_lines)
             self.observation_space = spaces.MultiBinary(
-                2 + len(self.line_types) * n_lines + n_lines + 1
+                2 + len(self.line_types) * n_lines + 2 * n_lines
             )
             self.eye = Obs(
                 condition=np.eye(2),
                 lines=np.eye(len(self.line_types)),
-                action=np.eye(n_lines + 1),
+                action=np.eye(2 * n_lines),
             )
         else:
-            self.action_space = spaces.MultiDiscrete(n_lines * np.ones(2))
+            self.action_space = spaces.MultiDiscrete(np.array([2 * n_lines, n_lines]))
             self.observation_space = spaces.Dict(
                 dict(
                     condition=spaces.Discrete(2),
                     lines=spaces.MultiDiscrete(
                         np.array([len(self.line_types)] * n_lines)
                     ),
-                    action=spaces.Discrete(n_lines + 1),
+                    action=spaces.Discrete(2 * n_lines),
                 )
             )
         self.t = None
@@ -120,7 +120,7 @@ class Env(gym.Env, ABC):
             if self.delayed_reward and self.failing:
                 r = -1
             t = True
-        selected = prev + action
+        selected = prev + action - self.n_lines
         if selected != self.active:
             self.failing = True
             if not self.delayed_reward:
