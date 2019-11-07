@@ -53,8 +53,13 @@ class Recurrence(nn.Module):
         self.task_encoder = nn.GRU(hidden_size, hidden_size, bidirectional=True)
 
         # f
-        layers = [Concat(dim=-1)]
-        in_size = self.obs_sections.condition + (2 if baseline else 1) * hidden_size
+        layers = []
+        in_size = (
+            self.obs_sections.condition
+            + self.obs_sections.state
+            + (2 if baseline else 1) * hidden_size
+        )
+
         for _ in range(num_layers + 1):
             layers.extend([nn.Linear(in_size, hidden_size), activation])
             in_size = hidden_size
@@ -134,9 +139,12 @@ class Recurrence(nn.Module):
         for t in range(T):
             r = M[R, p.squeeze(1)]
             if self.baseline:
-                h = self.gru(self.f((inputs.condition[t], Kn)), h)
+                obs_list = [inputs.condition[t], Kn]
             else:
-                h = self.gru(self.f((inputs.condition[t], r)), h)
+                obs_list = [inputs.condition[t], r]
+            obs_list.append(inputs.state[t])
+            z = torch.cat(obs_list, dim=-1)
+            h = self.gru(self.f(z))
             a_dist = self.actor(h)
             q = self.linear(h)
             k = (K @ q.unsqueeze(2)).squeeze(2)
