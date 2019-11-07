@@ -31,10 +31,10 @@ class Env(gym.Env, ABC):
         self.min_lines = min_lines
         self.max_lines = max_lines
         if eval_lines is None:
-            self.n_lines = n_lines = self.max_lines
+            self.n_lines = n_lines = self.max_lines + 2
         else:
             assert eval_lines >= self.max_lines
-            self.n_lines = n_lines = eval_lines
+            self.n_lines = n_lines = eval_lines + 2
         self.random, self.seed = seeding.np_random(seed)
         self.time_limit = time_limit
         self.flip_prob = flip_prob
@@ -110,7 +110,6 @@ class Env(gym.Env, ABC):
         if not self.baseline:
             action = int(action[0])
 
-        prev = self.active
         self.active = self.next()
 
         r = 0
