@@ -10,7 +10,7 @@ from ppo import keyboard_control
 from ppo.control_flow.lines import If, Else, EndIf, While, EndWhile, Subtask, Padding
 
 Obs = namedtuple("Obs", "condition lines action")
-Last = namedtuple("Last", "reward action terminal")
+Last = namedtuple("Last", "reward action terminal active selected")
 
 
 class Env(gym.Env, ABC):
@@ -43,7 +43,6 @@ class Env(gym.Env, ABC):
         self.active = None
         self.prev = None
         self.condition_bit = None
-        self.last_action = None
         self.last_active = None
         self.last_reward = None
         self.evaluating = False
@@ -89,11 +88,8 @@ class Env(gym.Env, ABC):
         self.t = None
 
     def reset(self):
-        self.last_action = 0
-        self.last_active = None
-        self.last_reward = None
+        self.last = Last(action=0, active=0, reward=None, terminal=False, selected=0)
         self.failing = False
-        self.last = None
         self.t = 0
         self.condition_bit = self.random.randint(0, 2)
         if self.evaluating:
@@ -113,24 +109,25 @@ class Env(gym.Env, ABC):
         self.t += 1
         if not self.baseline:
             action = int(action[0])
-        selected = self.prev + action
-        if selected == len(self.lines):
-            # no-op
-            self.last = Last(action=action, reward=0, terminal=True)
-            return self.get_observation(), 0, False, {}
-        self.last_action = action
-        self.last_active = self.active
-        if selected != self.active:
-            self.failing = True
-            if not self.delayed_reward:
-                self.last = Last(action=action, reward=-1, terminal=True)
-                return self.get_observation(), -1, True, {}
-        self.condition_bit = 1 - int(self.random.rand() < self.flip_prob)
+
+        prev = self.active
+        self.active = self.next()
 
         r = 0
         t = False
-        self.prev = self.active
-        self.active = self.next()
+        if self.active is None:
+            r = 1
+            if self.delayed_reward and self.failing:
+                r = -1
+            t = True
+        selected = prev + action
+        if selected != self.active:
+            self.failing = True
+            if not self.delayed_reward:
+                r = -1
+                t = True
+
+        self.condition_bit = 1 - int(self.random.rand() < self.flip_prob)
         if self.active is None:
             r = 1
             if self.delayed_reward and self.failing:
@@ -138,8 +135,9 @@ class Env(gym.Env, ABC):
             t = True
         if self.time_limit and self.t > self.time_limit:
             t = True
-        self.last_reward = r
-        self.last = Last(action=action, reward=r, terminal=t)
+        self.last = Last(
+            action=action, reward=r, terminal=t, active=self.active, selected=selected
+        )
         return self.get_observation(), r, t, {}
 
     def get_observation(self):
@@ -148,7 +146,7 @@ class Env(gym.Env, ABC):
         obs = Obs(
             condition=self.condition_bit,
             lines=lines,
-            action=self.last_action
+            action=self.last.action,
             # active=self.n_lines if self.active is None else self.active,
         )
         if self.baseline:
@@ -240,11 +238,11 @@ class Env(gym.Env, ABC):
         line = self.lines[index]
         if line in [Else, EndIf, EndWhile]:
             level -= 1
-        if index == self.last_active and index == self.last_action:
+        if index == self.last.active and index == self.last.selected:
             pre = "+ "
-        elif index == self.last_action:
+        elif index == self.last.selected:
             pre = "- "
-        elif index == self.last_active:
+        elif index == self.last.active:
             pre = "| "
         else:
             pre = "  "
@@ -254,13 +252,14 @@ class Env(gym.Env, ABC):
             level += 1
         yield from self.line_strings(index + 1, level)
 
-    def render(self, mode="human"):
+    def render(self, pause=True, mode="human"):
         print(self.last)
         for i, string in enumerate(self.line_strings(index=0, level=1)):
             print(f"{i}{string}")
         print("Condition:", self.condition_bit)
         print("Reward:", self.last_reward)
-        input("pause")
+        if pause:
+            input("pause")
 
 
 if __name__ == "__main__":
@@ -268,7 +267,18 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", default=0, type=int)
-    parser.add_argument("--n-lines", default=6, type=int)
+    parser.add_argument("--min-lines", default=6, type=int)
+    parser.add_argument("--max-lines", default=6, type=int)
+    parser.add_argument("--eval-lines", default=6, type=int)
+    parser.add_argument("--time-limit", default=100, type=int)
     parser.add_argument("--flip-prob", default=0.5, type=float)
+    parser.add_argument("--delayed-reward", action="store_true")
     args = hierarchical_parse_args(parser)
-    keyboard_control.run(Env(**args), actions="".join(map(str, range(args["n_lines"]))))
+
+    def action_fn(s):
+        try:
+            return int(s), 0
+        except ValueError:
+            return None
+
+    keyboard_control.run(Env(**args, baseline=False), action_fn=lambda s: (int(s), 0))
