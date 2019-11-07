@@ -10,6 +10,7 @@ from ppo import keyboard_control
 from ppo.control_flow.lines import If, Else, EndIf, While, EndWhile, Subtask, Padding
 
 Obs = namedtuple("Obs", "condition lines action")
+Last = namedtuple("Last", "reward action terminal")
 
 
 class Env(gym.Env, ABC):
@@ -38,6 +39,7 @@ class Env(gym.Env, ABC):
         self.time_limit = time_limit
         self.flip_prob = flip_prob
         self.baseline = baseline
+        self.last = None
         self.active = None
         self.prev = None
         self.condition_bit = None
@@ -91,6 +93,7 @@ class Env(gym.Env, ABC):
         self.last_active = None
         self.last_reward = None
         self.failing = False
+        self.last = None
         self.t = 0
         self.condition_bit = self.random.randint(0, 2)
         if self.evaluating:
@@ -113,12 +116,14 @@ class Env(gym.Env, ABC):
         selected = self.prev + action
         if selected == len(self.lines):
             # no-op
+            self.last = Last(action=action, reward=0, terminal=True)
             return self.get_observation(), 0, False, {}
         self.last_action = action
         self.last_active = self.active
         if selected != self.active:
             self.failing = True
             if not self.delayed_reward:
+                self.last = Last(action=action, reward=-1, terminal=True)
                 return self.get_observation(), -1, True, {}
         self.condition_bit = 1 - int(self.random.rand() < self.flip_prob)
 
@@ -134,6 +139,7 @@ class Env(gym.Env, ABC):
         if self.time_limit and self.t > self.time_limit:
             t = True
         self.last_reward = r
+        self.last = Last(action=action, reward=r, terminal=t)
         return self.get_observation(), r, t, {}
 
     def get_observation(self):
@@ -249,6 +255,7 @@ class Env(gym.Env, ABC):
         yield from self.line_strings(index + 1, level)
 
     def render(self, mode="human"):
+        print(self.last)
         for i, string in enumerate(self.line_strings(index=0, level=1)):
             print(f"{i}{string}")
         print("Condition:", self.condition_bit)
