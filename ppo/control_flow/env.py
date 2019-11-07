@@ -65,7 +65,7 @@ class Env(gym.Env, ABC):
         if baseline:
             self.action_space = spaces.Discrete(n_lines)
             self.observation_space = spaces.MultiBinary(
-                2 + len(self.line_types) * n_lines + n_lines
+                2 + len(self.line_types) * n_lines + n_lines + 1
             )
             self.eye = Obs(
                 condition=np.eye(2),
@@ -147,10 +147,6 @@ class Env(gym.Env, ABC):
             obs = np.concatenate(obs)
         else:
             obs = obs._asdict()
-        if not self.observation_space.contains(obs):
-            import ipdb
-
-            ipdb.set_trace()
 
         assert self.observation_space.contains(obs)
         return obs
