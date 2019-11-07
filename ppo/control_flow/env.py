@@ -87,7 +87,7 @@ class Env(gym.Env, ABC):
         self.t = None
 
     def reset(self):
-        self.last_action = None
+        self.last_action = 0
         self.last_active = None
         self.last_reward = None
         self.failing = False
@@ -142,7 +142,7 @@ class Env(gym.Env, ABC):
         obs = Obs(
             condition=self.condition_bit,
             lines=lines,
-            action=self.n_lines if self.active is None else self.active
+            action=self.last_action
             # active=self.n_lines if self.active is None else self.active,
         )
         if self.baseline:
