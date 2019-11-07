@@ -97,6 +97,7 @@ class Recurrence(nn.Module):
         return RecurrentState(*torch.split(hx, self.state_sizes, dim=-1))
 
     def print(self, *args, **kwargs):
+        torch.set_printoptions(precision=1)
         if self.debug:
             print(*args, **kwargs)
 
@@ -138,12 +139,12 @@ class Recurrence(nn.Module):
             else:
                 h = self.gru(self.f((inputs.condition[t], r)), h)
             a_dist = self.actor(h)
+            self.print("a probs")
+            self.print(a_dist.probs)
             q = self.linear(h)
             k = (K @ q.unsqueeze(2)).squeeze(2)
-            self.print("k")
-            self.print(k)
             p_dist = FixedCategorical(logits=k)
-            self.print("dist")
+            self.print("p probs")
             self.print(p_dist.probs)
             self.sample_new(P[t], p_dist)
             self.sample_new(A[t], a_dist)
