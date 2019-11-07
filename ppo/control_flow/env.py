@@ -67,22 +67,22 @@ class Env(gym.Env, ABC):
         if baseline:
             self.action_space = spaces.Discrete(2 * n_lines)
             self.observation_space = spaces.MultiBinary(
-                2 + len(self.line_types) * n_lines + 2 * n_lines
+                2 + len(self.line_types) * n_lines + n_lines
             )
             self.eye = Obs(
                 condition=np.eye(2),
                 lines=np.eye(len(self.line_types)),
-                action=np.eye(2 * n_lines),
+                action=np.eye(n_lines),
             )
         else:
-            self.action_space = spaces.MultiDiscrete(np.array([2 * n_lines, n_lines]))
+            self.action_space = spaces.MultiDiscrete(np.array([n_lines, n_lines]))
             self.observation_space = spaces.Dict(
                 dict(
                     condition=spaces.Discrete(2),
                     lines=spaces.MultiDiscrete(
                         np.array([len(self.line_types)] * n_lines)
                     ),
-                    action=spaces.Discrete(2 * n_lines),
+                    action=spaces.Discrete(n_lines),
                 )
             )
         self.t = None
@@ -120,8 +120,7 @@ class Env(gym.Env, ABC):
             if self.delayed_reward and self.failing:
                 r = -1
             t = True
-        selected = prev + action - self.n_lines
-        if selected != self.active:
+        if action != self.active:
             self.failing = True
             if not self.delayed_reward:
                 r = -1
@@ -136,7 +135,7 @@ class Env(gym.Env, ABC):
         if self.time_limit and self.t > self.time_limit:
             t = True
         self.last = Last(
-            action=action, reward=r, terminal=t, active=self.active, selected=selected
+            action=action, reward=r, terminal=t, active=self.active, selected=(action)
         )
         return self.get_observation(), r, t, {}
 
