@@ -10,6 +10,7 @@ from ppo import keyboard_control
 from ppo.control_flow.lines import If, Else, EndIf, While, EndWhile, Subtask, Padding
 
 Obs = namedtuple("Obs", "condition lines")
+Last = namedtuple("Last", "action active reward terminal")
 
 
 class Env(gym.Env, ABC):
@@ -38,11 +39,9 @@ class Env(gym.Env, ABC):
         self.time_limit = time_limit
         self.flip_prob = flip_prob
         self.baseline = baseline
+        self.last = None
         self.active = None
         self.condition_bit = None
-        self.last_action = None
-        self.last_active = None
-        self.last_reward = None
         self.evaluating = False
         self.failing = False
         self.lines = None
@@ -82,9 +81,7 @@ class Env(gym.Env, ABC):
         self.t = None
 
     def reset(self):
-        self.last_action = None
-        self.last_active = None
-        self.last_reward = None
+        self.last = None
         self.failing = False
         self.t = 0
         self.condition_bit = self.random.randint(0, 2)
@@ -102,6 +99,11 @@ class Env(gym.Env, ABC):
         return self.get_observation()
 
     def step(self, action):
+        s, r, t, i = self._step(action)
+        self.last = Last(action=action, active=self.active, reward=r, terminal=t)
+        return s, r, t, i
+
+    def _step(self, action):
         self.t += 1
         if self.time_limit and self.t > self.time_limit:
             return self.get_observation(), -1, True, {}
@@ -110,14 +112,11 @@ class Env(gym.Env, ABC):
         if action == len(self.lines):
             # no-op
             return self.get_observation(), 0, False, {}
-        self.last_action = action
-        self.last_active = self.active
         if action != self.active:
             self.failing = True
             if not self.delayed_reward:
                 return self.get_observation(), -1, True, {}
         self.condition_bit = 1 - int(self.random.rand() < self.flip_prob)
-
         r = 0
         t = False
         self.active = self.next()
@@ -126,7 +125,6 @@ class Env(gym.Env, ABC):
             if self.delayed_reward and self.failing:
                 r = -1
             t = True
-        self.last_reward = r
         return self.get_observation(), r, t, {}
 
     def get_observation(self):
