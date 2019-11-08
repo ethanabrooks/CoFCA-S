@@ -90,7 +90,7 @@ class Env(gym.Env, ABC):
         self.last = None
         self.failing = False
         self.t = 0
-        self.condition_bit = self.random.randint(0, 2)
+        self.condition_bit = 0  # TODO self.random.randint(0, 2)
         if self.evaluating:
             assert self.eval_lines is not None
             n_lines = self.eval_lines
@@ -123,7 +123,7 @@ class Env(gym.Env, ABC):
             self.failing = True
             if not self.delayed_reward:
                 return self.get_observation(), -1, True, {}
-        self.condition_bit = 1 - int(self.random.rand() < self.flip_prob)
+        # self.condition_bit = 1 - int(self.random.rand() < self.flip_prob)
         r = 0
         t = False
         self.active = self.next()
