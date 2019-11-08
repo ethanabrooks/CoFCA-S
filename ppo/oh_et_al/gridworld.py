@@ -14,7 +14,7 @@ import six
 from ppo.utils import set_index, GREEN, RESET
 
 Subtask = namedtuple("Subtask", "interaction count object")
-Obs = namedtuple("Obs", "base subtask graph_networks")
+Obs = namedtuple("Obs", "base subtask control_flow")
 
 
 class GridWorld(gym.Env):
@@ -338,8 +338,8 @@ class GridWorld(gym.Env):
 
 if __name__ == "__main__":
     import gym
-    import ppo.graph_networks.keyboard_control
+    import ppo.keyboard_control
 
     env = gym.make("4x4SubtasksGridWorld-v0")
     actions = "wsadeq"
-    ppo.graph_networks.keyboard_control.run(env, actions=actions)
+    ppo.keyboard_control.run(env, actions=actions)

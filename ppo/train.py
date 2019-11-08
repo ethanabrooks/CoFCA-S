@@ -170,6 +170,7 @@ class TrainBase(abc.ABC):
                 counter=eval_counter,
                 success_reward=success_reward,
                 use_tqdm=use_tqdm,
+                rollouts=None,
             )
             eval_result = {f"eval_{k}": v for k, v in eval_result.items()}
         else:
@@ -199,6 +200,7 @@ class TrainBase(abc.ABC):
                 counter=self.counter,
                 success_reward=success_reward,
                 use_tqdm=False,
+                rollouts=self.rollouts,
             )
 
             with torch.no_grad():
@@ -238,7 +240,7 @@ class TrainBase(abc.ABC):
         counter,
         success_reward,
         use_tqdm,
-        eval=False,
+        rollouts,
     ):
         # noinspection PyTypeChecker
         episode_counter = defaultdict(list)
@@ -279,17 +281,16 @@ class TrainBase(abc.ABC):
                 1 - done, dtype=torch.float32, device=obs.device
             ).unsqueeze(1)
             rnn_hxs = act.rnn_hxs
-            if not eval:
-                if self.rollouts is not None:
-                    self.rollouts.insert(
-                        obs=obs,
-                        recurrent_hidden_states=act.rnn_hxs,
-                        actions=act.action,
-                        action_log_probs=act.action_log_probs,
-                        values=act.value,
-                        rewards=reward,
-                        masks=masks,
-                    )
+            if rollouts is not None:
+                rollouts.insert(
+                    obs=obs,
+                    recurrent_hidden_states=act.rnn_hxs,
+                    actions=act.action,
+                    action_log_probs=act.action_log_probs,
+                    values=act.value,
+                    rewards=reward,
+                    masks=masks,
+                )
 
         return dict(episode_counter)
 

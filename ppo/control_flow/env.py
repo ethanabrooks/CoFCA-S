@@ -6,10 +6,11 @@ from gym.utils import seeding
 from gym.vector.utils import spaces
 from rl_utils import hierarchical_parse_args, gym
 
-from ppo.graph_networks import keyboard_control
-from ppo.graph_networks.lines import If, Else, EndIf, While, EndWhile, Subtask, Padding
+from ppo import keyboard_control
+from ppo.control_flow.lines import If, Else, EndIf, While, EndWhile, Subtask, Padding
 
-Obs = namedtuple("Obs", "condition lines")
+Obs = namedtuple("Obs", "condition lines active")
+Last = namedtuple("Last", "action active reward terminal")
 
 
 class Env(gym.Env, ABC):
@@ -22,30 +23,35 @@ class Env(gym.Env, ABC):
         flip_prob,
         time_limit,
         baseline,
-        **kwargs,
+        delayed_reward,
     ):
         super().__init__()
-        # assert eval_lines > max_lines
+        self.delayed_reward = delayed_reward
         self.eval_lines = eval_lines
         self.min_lines = min_lines
         self.max_lines = max_lines
+        if eval_lines is None:
+            self.n_lines = n_lines = self.max_lines
+        else:
+            assert eval_lines >= self.max_lines
+            self.n_lines = n_lines = eval_lines
         self.random, self.seed = seeding.np_random(seed)
         self.time_limit = time_limit
         self.flip_prob = flip_prob
         self.baseline = baseline
+        self.last = None
         self.active = None
         self.condition_bit = None
-        self.last_action = None
-        self.last_active = None
-        self.last_reward = None
         self.evaluating = False
+        self.failing = False
         self.lines = None
         self.line_transitions = None
         self.active_line = None
         self.if_evaluations = None
         self.line_types = [If, Else, EndIf, While, EndWhile, Subtask, Padding]
         self.line_state_transitions = dict(
-            initial={If: "following_if", While: "following_while", Subtask: "initial"},
+            # initial={If: "following_if", While: "following_while", Subtask: "initial"},
+            initial={Subtask: "initial"},
             following_if={Subtask: "inside_if"},
             inside_if={Subtask: "inside_if", Else: "following_else", EndIf: "initial"},
             following_else={Subtask: "inside_else"},
@@ -56,31 +62,39 @@ class Env(gym.Env, ABC):
         self.legal_last_lines = dict(
             initial=Subtask, inside_if=EndIf, inside_else=EndIf, inside_while=EndWhile
         )
-        self.action_space = spaces.Discrete(eval_lines)
         if baseline:
+            self.action_space = spaces.Discrete(2 * n_lines)
             self.observation_space = spaces.MultiBinary(
-                2 + len(self.line_types) * eval_lines
+                2 + len(self.line_types) * n_lines + (n_lines + 1)
             )
-            self.eye = Obs(condition=np.eye(2), lines=np.eye(len(self.line_types)))
+            self.eye = Obs(
+                condition=np.eye(2),
+                lines=np.eye(len(self.line_types)),
+                active=np.eye(n_lines + 1),
+            )
         else:
+            self.action_space = spaces.MultiDiscrete(np.array([2 * n_lines, n_lines]))
             self.observation_space = spaces.Dict(
                 dict(
                     condition=spaces.Discrete(2),
                     lines=spaces.MultiDiscrete(
-                        np.array([len(self.line_types)] * eval_lines)
+                        np.array([len(self.line_types)] * n_lines)
                     ),
-                    # active=spaces.Discrete(n_lines + 1),
+                    active=spaces.Discrete(n_lines + 1),
                 )
             )
         self.t = None
 
     def reset(self):
-        self.last_action = None
-        self.last_active = None
-        self.last_reward = None
+        self.last = None
+        self.failing = False
         self.t = 0
         self.condition_bit = self.random.randint(0, 2)
-        n_lines = self.random.random_integers(self.min_lines, self.max_lines)
+        if self.evaluating:
+            assert self.eval_lines is not None
+            n_lines = self.eval_lines
+        else:
+            n_lines = self.random.random_integers(self.min_lines, self.max_lines)
         self.lines = self.get_lines(n_lines, line_state="initial")
         self.line_transitions = defaultdict(list)
         for _from, _to in self.get_transitions(iter(enumerate(self.lines))):
@@ -90,34 +104,42 @@ class Env(gym.Env, ABC):
         return self.get_observation()
 
     def step(self, action):
+        s, r, t, i = self._step(action)
+        self.last = Last(action=action, active=self.active, reward=r, terminal=t)
+        return s, r, t, i
+
+    def _step(self, action):
         self.t += 1
         if self.time_limit and self.t > self.time_limit:
             return self.get_observation(), -1, True, {}
-        if action == len(self.lines):
+        if not self.baseline:
+            action = int(action[0])
+        selected = self.active + action - self.n_lines
+        if selected == len(self.lines):
             # no-op
             return self.get_observation(), 0, False, {}
-        self.last_action = action
-        self.last_active = self.active
-        if action != self.active:
-            return self.get_observation(), -1, True, {}
+        if selected != self.active:
+            self.failing = True
+            if not self.delayed_reward:
+                return self.get_observation(), -1, True, {}
         self.condition_bit = 1 - int(self.random.rand() < self.flip_prob)
-
         r = 0
         t = False
         self.active = self.next()
         if self.active is None:
             r = 1
+            if self.delayed_reward and self.failing:
+                r = -1
             t = True
-        self.last_reward = r
         return self.get_observation(), r, t, {}
 
     def get_observation(self):
-        padded = self.lines + [Padding] * (self.eval_lines - len(self.lines))
+        padded = self.lines + [Padding] * (self.n_lines - len(self.lines))
         lines = [self.line_types.index(t) for t in padded]
         obs = Obs(
             condition=self.condition_bit,
             lines=lines,
-            # active=self.n_lines if self.active is None else self.active,
+            active=self.n_lines if self.active is None else self.active,
         )
         if self.baseline:
             obs = [eye[o].flatten() for eye, o in zip(self.eye, obs)]

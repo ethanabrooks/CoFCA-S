@@ -8,19 +8,21 @@ from ppo.agent import AgentValues, NNBase
 from ppo.distributions import FixedCategorical
 
 # noinspection PyMissingConstructor
-from ppo.graph_networks.baselines import oh_et_al
-from ppo.graph_networks.recurrence import RecurrentState, Recurrence
+from ppo.control_flow.baselines import oh_et_al
+from ppo.control_flow.recurrence import RecurrentState, Recurrence
 
 
 class Agent(ppo.agent.Agent, NNBase):
-    def __init__(self, entropy_coef, recurrent, baseline, **network_args):
+    def __init__(self, entropy_coef, recurrent, baseline, a_equals_p, **network_args):
         nn.Module.__init__(self)
+        self.a_equals_p = a_equals_p
         self.entropy_coef = entropy_coef
         if baseline == "oh-et-al":
             self.recurrent_module = oh_et_al.Recurrence(**network_args)
         else:
-            assert baseline is None
-            self.recurrent_module = Recurrence(**network_args)
+            self.recurrent_module = Recurrence(
+                **network_args, baseline=baseline == "no-attention"
+            )
 
     @property
     def recurrent_hidden_state_size(self):
@@ -37,15 +39,25 @@ class Agent(ppo.agent.Agent, NNBase):
         )
         rm = self.recurrent_module
         hx = RecurrentState(*rm.parse_hidden(all_hxs))
-        dist = FixedCategorical(hx.a_probs)
-        action_log_probs = dist.log_probs(hx.a)
-        entropy = dist.entropy().mean()
+        a_dist = FixedCategorical(hx.a_probs)
+        action_log_probs = a_dist.log_probs(hx.a)
+        entropy = a_dist.entropy().mean()
+        action = torch.cat([hx.a, hx.a], dim=-1)
+        # p_dist = FixedCategorical(hx.p_probs)
+        # if self.a_equals_p:
+        # action_log_probs = p_dist.log_probs(hx.p)
+        # entropy = p_dist.entropy().mean()
+        # action = torch.cat([hx.a, hx.p], dim=-1)
+        # else:
+        #     action_log_probs = a_dist.log_probs(hx.a) + p_dist.log_probs(hx.p)
+        #     entropy = (a_dist.entropy() + p_dist.entropy()).mean()
+        #     action = torch.cat([hx.a, hx.p], dim=-1)
         return AgentValues(
             value=hx.v,
-            action=hx.a,
+            action=action,
             action_log_probs=action_log_probs,
             aux_loss=-self.entropy_coef * entropy,
-            dist=dist,
+            dist=None,
             rnn_hxs=last_hx,
             log=dict(entropy=entropy),
         )

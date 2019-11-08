@@ -217,6 +217,7 @@ class CNNBase(NNBase):
 
 class MLPBase(NNBase):
     def __init__(self, num_inputs, hidden_size, num_layers, recurrent, activation):
+        assert num_layers > 0
         super(MLPBase, self).__init__(recurrent, num_inputs, hidden_size)
 
         if recurrent:
@@ -227,23 +228,27 @@ class MLPBase(NNBase):
         self.actor = nn.Sequential()
         self.critic = nn.Sequential()
         for i in range(num_layers):
-            in_features = num_inputs if i == 0 else hidden_size
             self.actor.add_module(
                 name=f"fc{i}",
                 module=nn.Sequential(
-                    init_(nn.Linear(in_features, hidden_size)), activation
+                    init_(nn.Linear(num_inputs, hidden_size)), activation
                 ),
             )
             self.critic.add_module(
                 name=f"fc{i}",
                 module=nn.Sequential(
-                    init_(nn.Linear(in_features, hidden_size)), activation
+                    init_(nn.Linear(num_inputs, hidden_size)), activation
                 ),
             )
+            num_inputs = hidden_size
 
-        self.critic_linear = init_(nn.Linear(hidden_size, 1))
+        self.critic_linear = init_(nn.Linear(num_inputs, 1))
 
         self.train()
+
+    @property
+    def output_size(self):
+        return super().output_size
 
     def forward(self, inputs, rnn_hxs, masks):
         x = inputs
