@@ -153,14 +153,10 @@ class Recurrence(nn.Module):
         for i in range(self.obs_sections.lines):
             k, _ = self.task_encoder(torch.roll(gru_input, shifts=i, dims=0))
             K.append(k)
-        S = F.relu(torch.stack(K, dim=0))  # ns, ns, nb, 2*h
-
+        S = torch.stack(K, dim=0)  # ns, ns, nb, 2*h
         V = S.view(S.size(0), S.size(1), N, 2, -1)  # ns, ns, nb, 2, h
-        # L = self.linear(V)  # ns, ns, nb, 2, no
         K0 = V.permute(2, 0, 1, 3, 4)  # nb, ns, ns, 2, h
         K = K0.reshape(N, K0.size(1), -1, K0.size(-1))
-
-        # O = L2.reshape(L2.size(0), L2.size(1), -1, L2.size(4))  # nb, ns, 2*ns, no
 
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
