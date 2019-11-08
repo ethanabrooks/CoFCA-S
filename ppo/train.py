@@ -162,11 +162,11 @@ class TrainBase(abc.ABC):
             eval_masks = torch.zeros(num_processes, 1, device=self.device)
             eval_counter = Counter()
             eval_result = self.run_epoch(
-                eval=True,
                 obs=self.envs.reset(),
                 rnn_hxs=eval_recurrent_hidden_states,
                 masks=eval_masks,
                 num_steps=eval_steps,
+                # max(num_steps, time_limit) if time_limit else num_steps,
                 counter=eval_counter,
                 success_reward=success_reward,
                 use_tqdm=use_tqdm,
@@ -255,6 +255,7 @@ class TrainBase(abc.ABC):
 
             # Observe reward and next obs
             obs, reward, done, infos = self.envs.step(act.action)
+
             for d in infos:
                 for k, v in d.items():
                     episode_counter[k] += [float(v)]
@@ -272,7 +273,7 @@ class TrainBase(abc.ABC):
                 #
                 #     ipdb.set_trace()
 
-                episode_counter["time_steps"] += list(counter["time_step"][done])
+            episode_counter["time_steps"] += list(counter["time_step"][done])
             counter["reward"][done] = 0
             counter["time_step"][done] = 0
 
