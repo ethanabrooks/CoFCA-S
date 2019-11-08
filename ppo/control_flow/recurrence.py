@@ -62,8 +62,15 @@ class Recurrence(nn.Module):
 
         self.na = na = int(action_space.nvec[0])
         self.gru = nn.GRUCell(hidden_size, hidden_size)
-        self.critic = init_(nn.Linear(hidden_size, 1))
-        self.actor = Categorical(int(sum(self.obs_sections)), na)
+
+        layers = []
+        in_size = int(sum(self.obs_sections))
+        for _ in range(num_layers):
+            layers.extend([nn.Linear(in_size, hidden_size), activation])
+            in_size = hidden_size
+        self.critic = nn.Sequential(*layers, init_(nn.Linear(in_size, 1)))
+
+        self.actor = Categorical(hidden_size, na)
         self.no = 2
         self.linear = init_(nn.Linear(hidden_size, self.no))
         self.linear2 = init_(nn.Linear(1, self.no))
@@ -109,6 +116,7 @@ class Recurrence(nn.Module):
         )
 
         # parse non-action inputs
+        all_inputs = inputs
         inputs = self.parse_inputs(inputs)
 
         # build memory
@@ -143,20 +151,18 @@ class Recurrence(nn.Module):
         for i in range(self.obs_sections.lines):
             k, _ = self.task_encoder(torch.roll(gru_input, shifts=i, dims=0))
             K.append(k)
-        S = torch.stack(K, dim=0)  # ns, ns, nb, 2*h
+        S = F.relu(torch.stack(K, dim=0))  # ns, ns, nb, 2*h
 
         V = S.view(S.size(0), S.size(1), N, 2, -1)  # ns, ns, nb, 2, h
         L = self.linear(V)  # ns, ns, nb, 2, no
         L2 = L.permute(2, 0, 1, 3, 4)  # nb, ns, ns, 2, no
-        L3 = L2.reshape(L2.size(0), L2.size(1), -1, L2.size(4))  # nb, ns, 2*ns, no
-        PP = F.softmax(L3, dim=-2)  # along 2 * ns axis
+        O = L2.reshape(L2.size(0), L2.size(1), -1, L2.size(4))  # nb, ns, 2*ns, no
 
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
         for _x in hx:
             _x.squeeze_(0)
 
-        h = hx.h
         a = hx.a.long().squeeze(-1)
         a[new_episode] = 0
         R = torch.arange(N, device=rnn_hxs.device)
@@ -169,7 +175,7 @@ class Recurrence(nn.Module):
             #     h = self.gru(self.f((inputs.condition[t], Kn)), h)
             # else:
             #     h = self.gru(self.f((inputs.condition[t], r)), h)
-            o = F.softmax(self.linear2(inputs.condition[t]), dim=-1)
+            w = F.softmax(self.linear2(inputs.condition[t]), dim=-1)
 
             # a_dist = self.actor(h)
             # q = self.linear(h)
@@ -179,17 +185,17 @@ class Recurrence(nn.Module):
             # p_dist = FixedCategorical(logits=k)
             # self.print("dist")
             # self.print(p_dist.probs)
-            P = torch.sum(PP * o.view(o.size(0), 1, 1, o.size(1)), dim=-1)
-            probs = P[R, inputs.active[t].long().squeeze(-1)]
-            a_dist = FixedCategorical(probs=probs)
+            o = O[R, inputs.active[t].long().squeeze(-1)]
+            ow = torch.sum(o * w.unsqueeze(1), dim=-1)
+            a_dist = FixedCategorical(logits=ow)
             self.sample_new(A[t], a_dist)
             # a = torch.clamp(a + P[t] - self.na, 0, self.na - 1)
             # a = a + A[t]
             # self.sample_new(A[t], a_dist
             yield RecurrentState(
                 a=A[t],
-                v=self.critic(h),
-                h=h,
+                v=self.critic(all_inputs[t]),
+                h=hx.h,
                 a_probs=a_dist.probs,
                 p=hx.p,  # TODO
                 p_probs=hx.p_probs,  # TODO
