@@ -9,7 +9,7 @@ from rl_utils import hierarchical_parse_args, gym
 from ppo import keyboard_control
 from ppo.control_flow.lines import If, Else, EndIf, While, EndWhile, Subtask, Padding
 
-Obs = namedtuple("Obs", "condition lines active")
+Obs = namedtuple("Obs", "action condition lines")
 Last = namedtuple("Last", "action active reward terminal selected")
 
 
@@ -69,7 +69,7 @@ class Env(gym.Env, ABC):
             self.eye = Obs(
                 condition=np.eye(2),
                 lines=np.eye(len(self.line_types)),
-                active=np.eye(n_lines + 1),
+                action=np.eye(n_lines * 2),
             )
         else:
             self.action_space = spaces.MultiDiscrete(np.array([2 * n_lines, n_lines]))
@@ -79,7 +79,7 @@ class Env(gym.Env, ABC):
                     lines=spaces.MultiDiscrete(
                         np.array([len(self.line_types)] * n_lines)
                     ),
-                    active=spaces.Discrete(n_lines + 1),
+                    action=spaces.Discrete(n_lines * 2),
                 )
             )
         self.t = None
@@ -102,10 +102,9 @@ class Env(gym.Env, ABC):
             self.line_transitions[_from].append(_to)
         self.if_evaluations = []
         self.active = 0
-        return self.get_observation()
+        return self.get_observation(action=0)
 
     def step(self, action):
-        selected = self.active + action[0] - self.n_lines
         s, r, t, i = self._step(action)
         action = action[0]
         if self.active is None:
@@ -120,17 +119,17 @@ class Env(gym.Env, ABC):
     def _step(self, action):
         self.t += 1
         if self.time_limit and self.t > self.time_limit:
-            return self.get_observation(), -1, True, {}
+            return self.get_observation(action), -1, True, {}
         if not self.baseline:
             action = int(action[0])
         selected = self.active + action - self.n_lines
         if selected == len(self.lines):
             # no-op
-            return self.get_observation(), 0, False, {}
+            return self.get_observation(action), 0, False, {}
         if selected != self.active:
             self.failing = True
             if not self.delayed_reward:
-                return self.get_observation(), -1, True, {}
+                return self.get_observation(action), -1, True, {}
         self.condition_bit = 1 - int(self.random.rand() < self.flip_prob)
         r = 0
         t = False
@@ -140,16 +139,12 @@ class Env(gym.Env, ABC):
             if self.delayed_reward and self.failing:
                 r = -1
             t = True
-        return self.get_observation(), r, t, {}
+        return self.get_observation(action), r, t, {}
 
-    def get_observation(self):
+    def get_observation(self, action):
         padded = self.lines + [Padding] * (self.n_lines - len(self.lines))
         lines = [self.line_types.index(t) for t in padded]
-        obs = Obs(
-            condition=self.condition_bit,
-            lines=lines,
-            active=self.n_lines if self.active is None else self.active,
-        )
+        obs = Obs(condition=self.condition_bit, lines=lines, action=action)
         if self.baseline:
             obs = [eye[o].flatten() for eye, o in zip(self.eye, obs)]
             obs = np.concatenate(obs)
