@@ -10,7 +10,7 @@ from ppo import keyboard_control
 from ppo.control_flow.lines import If, Else, EndIf, While, EndWhile, Subtask, Padding
 
 Obs = namedtuple("Obs", "condition lines active")
-Last = namedtuple("Last", "action active reward terminal")
+Last = namedtuple("Last", "action active reward terminal selected")
 
 
 class Env(gym.Env, ABC):
@@ -85,7 +85,9 @@ class Env(gym.Env, ABC):
         self.t = None
 
     def reset(self):
-        self.last = None
+        self.last = Last(
+            action=(0, 0), selected=0, active=None, reward=None, terminal=None
+        )
         self.failing = False
         self.t = 0
         self.condition_bit = 0  # TODO self.random.randint(0, 2)
@@ -103,8 +105,11 @@ class Env(gym.Env, ABC):
         return self.get_observation()
 
     def step(self, action):
+        selected = self.active + action[0] - self.n_lines
         s, r, t, i = self._step(action)
-        self.last = Last(action=action, active=self.active, reward=r, terminal=t)
+        self.last = Last(
+            action=action, active=self.active, reward=r, terminal=t, selected=selected
+        )
         return s, r, t, i
 
     def _step(self, action):
@@ -228,11 +233,11 @@ class Env(gym.Env, ABC):
         line = self.lines[index]
         if line in [Else, EndIf, EndWhile]:
             level -= 1
-        if index == self.last_active and index == self.last_action:
+        if index == self.active and index == self.last.selected:
             pre = "+ "
-        elif index == self.last_action:
+        elif index == self.last.selected:
             pre = "- "
-        elif index == self.last_active:
+        elif index == self.active:
             pre = "| "
         else:
             pre = "  "
@@ -246,7 +251,7 @@ class Env(gym.Env, ABC):
         for i, string in enumerate(self.line_strings(index=0, level=1)):
             print(f"{i}{string}")
         print("Condition:", self.condition_bit)
-        print("Reward:", self.last_reward)
+        print("Reward:", self.last.reward)
         input("pause")
 
 

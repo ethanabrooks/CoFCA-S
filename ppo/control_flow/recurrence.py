@@ -148,6 +148,7 @@ class Recurrence(nn.Module):
         L2 = L.permute(2, 0, 1, 3)  # nb, ns, ns, 2
         L3 = L2.reshape(L2.size(0), L2.size(1), -1)  # nb, ns, 2*ns
         P = F.softmax(L3, dim=-1)
+        self.print(P)
 
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
