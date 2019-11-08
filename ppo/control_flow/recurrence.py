@@ -63,7 +63,7 @@ class Recurrence(nn.Module):
         self.na = na = int(action_space.nvec[0])
         self.gru = nn.GRUCell(hidden_size, hidden_size)
         self.critic = init_(nn.Linear(hidden_size, 1))
-        self.actor = Categorical(hidden_size, 2)
+        self.actor = Categorical(int(sum(self.obs_sections)), 2)  # TODO
         self.linear = nn.Linear(hidden_size, 2 * hidden_size)
         self.a_one_hots = nn.Embedding.from_pretrained(torch.eye(na))
         self.state_sizes = RecurrentState(
@@ -107,17 +107,17 @@ class Recurrence(nn.Module):
         )
 
         # parse non-action inputs
-        inputs = self.parse_inputs(inputs)
+        # inputs = self.parse_inputs(inputs)
 
         # build memory
-        lines = inputs.lines.view(T, N, *self.obs_spaces.lines.shape).long()[0, :, :]
-        M = self.embeddings(lines.view(-1)).view(
-            *lines.shape, self.hidden_size
-        )  # n_batch, n_lines, hidden_size
-        forward_input = M.transpose(0, 1)  # n_lines, n_batch, hidden_size
-        K, Kn = self.task_encoder(forward_input)
-        Kn = Kn.transpose(0, 1).reshape(N, -1)
-        K = K.transpose(0, 1)
+        # lines = inputs.lines.view(T, N, *self.obs_spaces.lines.shape).long()[0, :, :]
+        # M = self.embeddings(lines.view(-1)).view(
+        #     *lines.shape, self.hidden_size
+        # )  # n_batch, n_lines, hidden_size
+        # forward_input = M.transpose(0, 1)  # n_lines, n_batch, hidden_size
+        # K, Kn = self.task_encoder(forward_input)
+        # Kn = Kn.transpose(0, 1).reshape(N, -1)
+        # K = K.transpose(0, 1)
 
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
@@ -132,7 +132,7 @@ class Recurrence(nn.Module):
         P = torch.cat([actions[:, :, 1], hx.p.view(1, N)], dim=0).long()
 
         for t in range(T):
-            r = M[R, a]
+            # r = M[R, a]
             # if self.baseline:
             #     h = self.gru(self.f((inputs.condition[t], Kn)), h)
             # else:
@@ -145,16 +145,16 @@ class Recurrence(nn.Module):
             # p_dist = FixedCategorical(logits=k)
             # self.print("dist")
             # self.print(p_dist.probs)
-            p_dist = self.actor(r)
-            self.sample_new(P[t], p_dist)
+            a_dist = self.actor(inputs[t])
+            self.sample_new(A[t], a_dist)
             # a = torch.clamp(a + P[t] - self.na, 0, self.na - 1)
-            a = a + P[t]
+            # a = a + P[t]
             # self.sample_new(A[t], a_dist
             yield RecurrentState(
-                a=a,
+                a=A[t],
                 v=self.critic(h),
                 h=h,
-                a_probs=p_dist.probs,  # TODO
-                p=P[t],
-                p_probs=p_dist.probs,
+                a_probs=a_dist.probs,
+                p=hx.p,  # TODO
+                p_probs=hx.p_probs,  # TODO
             )
