@@ -35,6 +35,7 @@ class Recurrence(nn.Module):
         action_space,
         activation,
         hidden_size,
+        task_encoder_hidden_size,
         num_layers,
         debug,
         baseline,
@@ -50,11 +51,16 @@ class Recurrence(nn.Module):
         # networks
         nl = int(self.obs_spaces.lines.nvec[0])
         self.embeddings = nn.Embedding(nl, hidden_size)
-        self.task_encoder = nn.GRU(hidden_size, hidden_size, bidirectional=True)
+        self.task_encoder = nn.GRU(
+            hidden_size, task_encoder_hidden_size, bidirectional=True
+        )
 
         # f
         layers = [Concat(dim=-1)]
-        in_size = self.obs_sections.condition + (2 if baseline else 1) * hidden_size
+        in_size = (
+            self.obs_sections.condition
+            + (2 if baseline else 1) * task_encoder_hidden_size
+        )
         for _ in range(num_layers + 1):
             layers.extend([nn.Linear(in_size, hidden_size), activation])
             in_size = hidden_size
@@ -64,7 +70,7 @@ class Recurrence(nn.Module):
         self.gru = nn.GRUCell(hidden_size, hidden_size)
         self.critic = init_(nn.Linear(hidden_size, 1))
         self.actor = Categorical(hidden_size, na)
-        self.linear = nn.Linear(hidden_size, 2 * hidden_size)
+        self.linear = nn.Linear(hidden_size, 2 * task_encoder_hidden_size)
         self.a_one_hots = nn.Embedding.from_pretrained(torch.eye(na))
         self.state_sizes = RecurrentState(
             a=1, a_probs=na, p=1, p_probs=na, v=1, h=hidden_size
