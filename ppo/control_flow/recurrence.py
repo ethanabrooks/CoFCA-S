@@ -57,7 +57,7 @@ class Recurrence(nn.Module):
         # layers = [Concat(dim=-1)]
         # in_size = self.obs_sections.condition + (2 if baseline else 1) * hidden_size
         layers = []
-        in_size = self.obs_sections.condition
+        in_size = self.obs_sections.condition + hidden_size
         for _ in range(num_layers + 1):
             layers.extend([init_(nn.Linear(in_size, hidden_size)), activation])
             in_size = hidden_size
@@ -67,7 +67,7 @@ class Recurrence(nn.Module):
         self.gru = nn.GRUCell(hidden_size, hidden_size)
 
         layers = []
-        in_size = int(sum(self.obs_sections))
+        in_size = hidden_size
         for _ in range(num_layers):
             layers.extend([nn.Linear(in_size, hidden_size), activation])
             in_size = hidden_size
@@ -82,7 +82,7 @@ class Recurrence(nn.Module):
         )
         # self.actor = Categorical(hidden_size, na)
         # self.no = 2
-        # self.linear = init_(nn.Linear(hidden_size, self.no))
+        self.linear = init_(nn.Linear(hidden_size, hidden_size))
         # self.linear2 = init_(nn.Linear(1, self.no))
         # self.a_one_hots = nn.Embedding.from_pretrained(torch.eye(na))
         self.state_sizes = RecurrentState(
@@ -181,12 +181,16 @@ class Recurrence(nn.Module):
         for t in range(T):
             # r = M[R, a]
             # if self.baseline:
-            h = self.gru(self.action_embedding(A[t - 1].clone()), h)
+            y = torch.cat(
+                [inputs.condition[t], self.action_embedding(A[t - 1].clone())], dim=-1
+            )
+            gru_inputs = self.f(y)
+            h = self.gru(gru_inputs, h)
             p_dist = self.attention(h)
             self.sample_new(P[t], p_dist)
             # else:
             #     h = self.gru(self.f((inputs.condition[t], r)), h)
-            q = self.f(inputs.condition[t])
+            q = self.linear(h)
             k = K[R, P[t].clone()]
             l = torch.sum(k * q.unsqueeze(1), dim=-1)
             # w = F.softmax(self.linear2(inputs.condition[t]), dim=-1)
@@ -209,8 +213,8 @@ class Recurrence(nn.Module):
             # self.sample_new(A[t], a_dist
             yield RecurrentState(
                 a=A[t],
-                v=self.critic(all_inputs[t]),
-                h=hx.h,
+                v=self.critic(h),
+                h=h,
                 a_probs=a_dist.probs,
                 p=P[t],
                 p_probs=p_dist.probs,
