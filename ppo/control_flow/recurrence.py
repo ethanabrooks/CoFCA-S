@@ -64,7 +64,9 @@ class Recurrence(nn.Module):
         self.gru = nn.GRUCell(hidden_size, hidden_size)
         self.critic = init_(nn.Linear(hidden_size, 1))
         self.actor = Categorical(int(sum(self.obs_sections)), na)
-        self.linear = nn.Linear(hidden_size, 1)
+        self.no = 2
+        self.linear = init_(nn.Linear(hidden_size, self.no))
+        self.linear2 = init_(nn.Linear(1, self.no))
         self.a_one_hots = nn.Embedding.from_pretrained(torch.eye(na))
         self.state_sizes = RecurrentState(
             a=1, a_probs=na, p=1, p_probs=2, v=1, h=hidden_size
@@ -144,11 +146,10 @@ class Recurrence(nn.Module):
         S = torch.stack(K, dim=0)  # ns, ns, nb, 2*h
 
         V = S.view(S.size(0), S.size(1), N, 2, -1)  # ns, ns, nb, 2, h
-        L = self.linear(V).squeeze(-1)  # ns, ns, nb, 2
-        L2 = L.permute(2, 0, 1, 3)  # nb, ns, ns, 2
-        L3 = L2.reshape(L2.size(0), L2.size(1), -1)  # nb, ns, 2*ns
-        P = F.softmax(L3, dim=-1)
-        self.print(P)
+        L = self.linear(V)  # ns, ns, nb, 2, no
+        L2 = L.permute(2, 0, 1, 3, 4)  # nb, ns, ns, 2, no
+        L3 = L2.reshape(L2.size(0), L2.size(1), -1, L2.size(4))  # nb, ns, 2*ns, no
+        PP = F.softmax(L3, dim=-2)  # along 2 * ns axis
 
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
@@ -168,6 +169,8 @@ class Recurrence(nn.Module):
             #     h = self.gru(self.f((inputs.condition[t], Kn)), h)
             # else:
             #     h = self.gru(self.f((inputs.condition[t], r)), h)
+            o = F.softmax(self.linear2(inputs.condition[t]), dim=-1)
+
             # a_dist = self.actor(h)
             # q = self.linear(h)
             # k = (K @ q.unsqueeze(2)).squeeze(2)
@@ -176,11 +179,12 @@ class Recurrence(nn.Module):
             # p_dist = FixedCategorical(logits=k)
             # self.print("dist")
             # self.print(p_dist.probs)
+            P = torch.sum(PP * o.view(o.size(0), 1, 1, o.size(1)), dim=-1)
             probs = P[R, inputs.active[t].long().squeeze(-1)]
             a_dist = FixedCategorical(probs=probs)
             self.sample_new(A[t], a_dist)
             # a = torch.clamp(a + P[t] - self.na, 0, self.na - 1)
-            # a = a + P[t]
+            # a = a + A[t]
             # self.sample_new(A[t], a_dist
             yield RecurrentState(
                 a=A[t],
