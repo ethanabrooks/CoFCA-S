@@ -63,11 +63,11 @@ class Recurrence(nn.Module):
         self.na = na = int(action_space.nvec[0])
         self.gru = nn.GRUCell(hidden_size, hidden_size)
         self.critic = init_(nn.Linear(hidden_size, 1))
-        self.actor = Categorical(hidden_size, 2 * na)
+        self.actor = Categorical(hidden_size, 2)
         self.linear = nn.Linear(hidden_size, 2 * hidden_size)
         self.a_one_hots = nn.Embedding.from_pretrained(torch.eye(na))
         self.state_sizes = RecurrentState(
-            a=1, a_probs=2 * na, p=1, p_probs=2 * na, v=1, h=hidden_size
+            a=1, a_probs=2, p=1, p_probs=2, v=1, h=hidden_size
         )
 
     @staticmethod
@@ -147,7 +147,8 @@ class Recurrence(nn.Module):
             # self.print(p_dist.probs)
             p_dist = self.actor(r)
             self.sample_new(P[t], p_dist)
-            a = torch.clamp(a + P[t] - self.na, 0, self.na - 1)
+            # a = torch.clamp(a + P[t] - self.na, 0, self.na - 1)
+            a = a + P[t]
             # self.sample_new(A[t], a_dist
             yield RecurrentState(
                 a=a,
