@@ -118,10 +118,10 @@ class Env(gym.Env, ABC):
 
     def _step(self, action):
         self.t += 1
-        if self.time_limit and self.t > self.time_limit:
-            return self.get_observation(action), -1, True, {}
         if not self.baseline:
             action = int(action[0])
+        if self.time_limit and self.t > self.time_limit:
+            return self.get_observation(action), -1, True, {}
         selected = self.active + action - self.n_lines
         if selected == len(self.lines):
             # no-op
