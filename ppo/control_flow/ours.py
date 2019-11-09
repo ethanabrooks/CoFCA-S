@@ -37,10 +37,8 @@ class Recurrence(nn.Module):
         hidden_size,
         num_layers,
         debug,
-        baseline,
     ):
         super().__init__()
-        self.baseline = baseline
         self.obs_spaces = Obs(**observation_space.spaces)
         self.obs_sections = Obs(*[int(np.prod(s.shape)) for s in self.obs_spaces])
         self.action_size = 2
