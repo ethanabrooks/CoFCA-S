@@ -120,8 +120,6 @@ class Env(gym.Env, ABC):
         self.t += 1
         if not self.baseline:
             action = int(action[0])
-        if self.time_limit and self.t > self.time_limit:
-            return self.get_observation(action), -1, True, {}
         selected = self.active + action - self.n_lines
         if selected == len(self.lines):
             # no-op
@@ -129,10 +127,10 @@ class Env(gym.Env, ABC):
         if selected != self.active:
             self.failing = True
             if not self.delayed_reward:
-                return self.get_observation(action), -1, True, {}
+                return self.get_observation(action), 0, True, {}
         self.condition_bit = 1 - int(self.random.rand() < self.flip_prob)
         r = 0
-        t = False
+        t = self.t > self.time_limit
         self.active = self.next()
         if self.active is None:
             r = 1
