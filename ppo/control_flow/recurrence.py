@@ -46,10 +46,11 @@ class Recurrence(nn.Module):
         self.action_size = 2
         self.debug = debug
         self.hidden_size = hidden_size
+        nl = int(self.obs_spaces.lines.nvec[0])
+        na = int(action_space.nvec[0])
 
         # networks
-        nl = int(self.obs_spaces.lines.nvec[0])
-        self.embeddings = nn.Embedding(nl, hidden_size)
+        self.task_embeddings = nn.Embedding(nl, hidden_size)
         self.task_encoder = nn.GRU(hidden_size, hidden_size, bidirectional=True)
 
         # f
@@ -58,15 +59,13 @@ class Recurrence(nn.Module):
         for _ in range(num_layers + 1):
             layers.extend([init_(nn.Linear(in_size, hidden_size)), activation])
             in_size = hidden_size
-        self.f = nn.Sequential(*layers)
-
-        self.na = na = int(action_space.nvec[0])
+        self.mlp = nn.Sequential(*layers)
         self.gru = nn.GRUCell(hidden_size, hidden_size)
         self.critic = init_(nn.Linear(hidden_size, 1))
         self.action_embedding = nn.Embedding(na, hidden_size)
         self.pointer = Categorical(hidden_size, self.obs_sections.lines)
-        self.actor = Categorical(hidden_size, na)
-        self.query = init_(nn.Linear(hidden_size, hidden_size))
+        self.actor = Categorical(2 * hidden_size, na)
+        self.query = init_(nn.Linear(hidden_size, 2 * hidden_size))
         self.state_sizes = RecurrentState(
             a=1, a_probs=na, p=1, p_probs=self.obs_sections.lines, v=1, h=hidden_size
         )
@@ -112,7 +111,7 @@ class Recurrence(nn.Module):
 
         # build memory
         lines = inputs.lines.view(T, N, *self.obs_spaces.lines.shape).long()[0, :, :]
-        M = self.embeddings(lines.view(-1)).view(
+        M = self.task_embeddings(lines.view(-1)).view(
             *lines.shape, self.hidden_size
         )  # n_batch, n_lines, hidden_size
         gru_input = M.transpose(0, 1)
@@ -121,10 +120,7 @@ class Recurrence(nn.Module):
         for i in range(self.obs_sections.lines):
             k, _ = self.task_encoder(torch.roll(gru_input, shifts=i, dims=0))
             K.append(k)
-        K1 = torch.stack(K, dim=0)  # ns, ns, nb, 2*h
-        K2 = K1.view(K1.size(0), K1.size(1), N, 2, -1)  # ns, ns, nb, 2, h
-        K3 = K2.permute(2, 0, 1, 3, 4)  # nb, ns, ns, 2, h
-        K = K3.reshape(N, K3.size(1), -1, K3.size(-1))
+        K = torch.stack(K, dim=0).permute(2, 0, 1, 3)  # nb, ns, ns, 2*h
 
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
@@ -142,7 +138,7 @@ class Recurrence(nn.Module):
             obs = torch.cat(
                 [inputs.condition[t], self.action_embedding(A[t - 1].clone())], dim=-1
             )
-            h = self.gru(self.f(obs), h)
+            h = self.gru(self.mlp(obs), h)
             p_dist = self.pointer(h)
             self.sample_new(P[t], p_dist)
             q = self.query(h)
