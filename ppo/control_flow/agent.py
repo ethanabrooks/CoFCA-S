@@ -10,20 +10,15 @@ from ppo.distributions import FixedCategorical
 # noinspection PyMissingConstructor
 from ppo.control_flow.baselines import oh_et_al
 from ppo.control_flow.ours import RecurrentState
-import ppo.control_flow.reduce_k
+import ppo.control_flow.ours
 import ppo.control_flow.ours
 
 
 class Agent(ppo.agent.Agent, NNBase):
-    def __init__(self, entropy_coef, recurrent, baseline, **network_args):
+    def __init__(self, entropy_coef, recurrent, **network_args):
         nn.Module.__init__(self)
         self.entropy_coef = entropy_coef
-        if baseline is not None:
-            self.recurrent_module = ppo.control_flow.reduce_k.Recurrence(
-                **network_args, reduction=baseline.split("-")[0]
-            )
-        else:
-            self.recurrent_module = ppo.control_flow.ours.Recurrence(**network_args)
+        self.recurrent_module = ppo.control_flow.ours.Recurrence(**network_args)
 
     @property
     def recurrent_hidden_state_size(self):

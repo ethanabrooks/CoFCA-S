@@ -37,8 +37,10 @@ class Recurrence(nn.Module):
         hidden_size,
         num_layers,
         debug,
+        reduction,
     ):
         super().__init__()
+        self.reduction = reduction
         self.obs_spaces = Obs(**observation_space.spaces)
         self.obs_sections = Obs(*[int(np.prod(s.shape)) for s in self.obs_spaces])
         self.action_size = 2
@@ -118,7 +120,16 @@ class Recurrence(nn.Module):
         for i in range(self.obs_sections.lines):
             k, _ = self.task_encoder(torch.roll(gru_input, shifts=i, dims=0))
             K.append(k)
-        K = torch.stack(K, dim=0).permute(2, 0, 1, 3)  # nb, ns, ns, 2*h
+        K = torch.stack(K, dim=0)
+        if self.reduction == "sum":
+            reduced = K.sum(dim=0)
+        elif self.reduction == "mean":
+            reduced = K.mean(dim=0)
+        elif self.reduction == "max":
+            reduced = K.max(dim=0).values
+        else:
+            raise RuntimeError
+        k = reduced.permute(1, 0, 2)
 
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
@@ -140,7 +151,6 @@ class Recurrence(nn.Module):
             p_dist = self.pointer(h)
             self.sample_new(P[t], p_dist)
             q = self.query(h)
-            k = K[R, P[t].clone()]
             l = torch.sum(k * q.unsqueeze(1), dim=-1)
             z = torch.sum(l.unsqueeze(-1) * k, dim=1)
             a_dist = self.actor(z)
