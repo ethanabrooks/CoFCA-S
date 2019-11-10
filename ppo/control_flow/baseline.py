@@ -37,7 +37,7 @@ class Agent(ppo.agent.Agent, NNBase):
     def __init__(self, entropy_coef, recurrent, **network_args):
         nn.Module.__init__(self)
         self.entropy_coef = entropy_coef
-        self.recurrent_module = ppo.control_flow.ours.Recurrence(**network_args)
+        self.recurrent_module = ppo.control_flow.baseline.Recurrence(**network_args)
 
     @property
     def recurrent_hidden_state_size(self):
@@ -55,9 +55,8 @@ class Agent(ppo.agent.Agent, NNBase):
         rm = self.recurrent_module
         hx = RecurrentState(*rm.parse_hidden(all_hxs))
         a_dist = FixedCategorical(hx.a_probs)
-        p_dist = FixedCategorical(hx.p_probs)
-        action_log_probs = a_dist.log_probs(hx.a) + p_dist.log_probs(hx.p)
-        entropy = (a_dist.entropy() + p_dist.entropy()).mean()
+        action_log_probs = a_dist.log_probs(hx.a)
+        entropy = a_dist.entropy().mean()
         action = torch.cat([hx.a, hx.p], dim=-1)
         return AgentValues(
             value=hx.v,
@@ -110,7 +109,7 @@ class Recurrence(nn.Module):
 
         # f
         layers = []
-        in_size = self.obs_sections.condition + hidden_size
+        in_size = self.obs_sections.condition + 3 * hidden_size
         for _ in range(num_layers + 1):
             layers.extend([init_(nn.Linear(in_size, hidden_size)), activation])
             in_size = hidden_size
@@ -119,7 +118,7 @@ class Recurrence(nn.Module):
         self.critic = init_(nn.Linear(hidden_size, 1))
         self.action_embedding = nn.Embedding(na, hidden_size)
         self.pointer = Categorical(hidden_size, self.obs_sections.lines)
-        self.actor = Categorical(2 * hidden_size, na)
+        self.actor = Categorical(hidden_size, na)
         self.query = init_(nn.Linear(hidden_size, 2 * hidden_size))
         self.state_sizes = RecurrentState(
             a=1, a_probs=na, p=1, p_probs=self.obs_sections.lines, v=1, h=hidden_size
@@ -173,7 +172,7 @@ class Recurrence(nn.Module):
 
         K = []
         for i in range(self.obs_sections.lines):
-            k, _ = self.task_encoder(torch.roll(gru_input, shifts=i, dims=0))
+            _, k = self.task_encoder(torch.roll(gru_input, shifts=i, dims=0))
             K.append(k)
         K = torch.stack(K, dim=0)
         if self.reduction == "sum":
@@ -184,7 +183,8 @@ class Recurrence(nn.Module):
             reduced = K.max(dim=0).values
         else:
             raise RuntimeError
-        k = reduced.permute(1, 0, 2)
+        k = reduced.transpose(0, 1)
+        k = k.reshape(N, -1)
 
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
@@ -195,25 +195,21 @@ class Recurrence(nn.Module):
         a = hx.a.long().squeeze(-1)
         a[new_episode] = 0
         A = torch.cat([actions[:, :, 0], hx.a.view(1, N)], dim=0).long()
-        P = torch.cat([actions[:, :, 1], hx.p.view(1, N)], dim=0).long()
 
         for t in range(T):
             obs = torch.cat(
-                [inputs.condition[t], self.action_embedding(A[t - 1].clone())], dim=-1
+                [k, inputs.condition[t], self.action_embedding(A[t - 1].clone())],
+                dim=-1,
             )
-            h = self.gru(self.mlp(obs), h)
-            p_dist = self.pointer(h)
-            self.sample_new(P[t], p_dist)
-            q = self.query(h)
-            l = torch.sum(k * q.unsqueeze(1), dim=-1)
-            z = torch.sum(l.unsqueeze(-1) * k, dim=1)
-            a_dist = self.actor(z)
+            z = self.mlp(obs)
+            h = self.gru(z, h)
+            a_dist = self.actor(h)
             self.sample_new(A[t], a_dist)
             yield RecurrentState(
                 a=A[t],
                 v=self.critic(h),
                 h=h,
                 a_probs=a_dist.probs,
-                p=P[t],
-                p_probs=p_dist.probs,
+                p=hx.p,
+                p_probs=hx.p_probs,
             )
