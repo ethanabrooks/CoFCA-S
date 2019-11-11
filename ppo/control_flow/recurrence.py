@@ -139,7 +139,7 @@ class Recurrence(nn.Module):
 
         K = []
         for i in range(self.obs_sections.lines):
-            k, _ = self.task_encoder(torch.roll(gru_input, shifts=i, dims=0))
+            k, _ = self.task_encoder(torch.roll(gru_input, shifts=-i, dims=0))
             K.append(k)
         S = torch.stack(K, dim=0)  # ns, ns, nb, 2*h
 
