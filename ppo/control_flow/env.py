@@ -62,7 +62,7 @@ class Env(gym.Env, ABC):
             initial=Subtask, inside_if=EndIf, inside_else=EndIf, inside_while=EndWhile
         )
         if baseline:
-            self.action_space = spaces.Discrete(n_lines)
+            self.action_space = spaces.Discrete(2 * n_lines)
             self.observation_space = spaces.MultiBinary(
                 2 + len(self.line_types) * n_lines + (n_lines + 1)
             )
@@ -72,7 +72,7 @@ class Env(gym.Env, ABC):
                 action=np.eye(n_lines * 2),
             )
         else:
-            self.action_space = spaces.MultiDiscrete(n_lines * np.ones(2))
+            self.action_space = spaces.MultiDiscrete(np.array([2 * n_lines, n_lines]))
             self.observation_space = spaces.Dict(
                 dict(
                     condition=spaces.Discrete(2),
@@ -120,7 +120,7 @@ class Env(gym.Env, ABC):
         self.t += 1
         if not self.baseline:
             action = int(action[0])
-        selected = action
+        selected = self.active + action - self.n_lines
         if selected == len(self.lines):
             # no-op
             return self.get_observation(action), 0, False, {}

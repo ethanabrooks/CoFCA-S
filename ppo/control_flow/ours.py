@@ -134,7 +134,7 @@ class Recurrence(nn.Module):
         self.linear = nn.Linear(hidden_size, 2 * hidden_size)
         self.a_one_hots = nn.Embedding.from_pretrained(torch.eye(na))
         self.state_sizes = RecurrentState(
-            a=1, a_probs=na, p=1, p_probs=na, v=1, h=hidden_size
+            a=1, a_probs=na, p=1, p_probs=self.obs_sections.lines, v=1, h=hidden_size
         )
 
     @staticmethod
