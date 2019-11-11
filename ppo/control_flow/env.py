@@ -127,18 +127,20 @@ class Env(gym.Env, ABC):
         #     # no-op
         #     return self.get_observation(action), 0, False, {}
         self.active = self.next()
-        if selected != self.active:
-            self.failing = True
-            if not self.delayed_reward:
-                return self.get_observation(action), 0, True, {}
         # TODO self.condition_bit = 1 - int(self.random.rand() < self.flip_prob)
         r = 0
         t = self.t > self.time_limit
         if self.active is None:
-            r = 1
             if self.delayed_reward and self.failing:
                 r = 0
+            else:
+                r = 1
             t = True
+        elif selected != self.active:
+            self.failing = True
+            if not self.delayed_reward:
+                r = 0
+                t = True
         return self.get_observation(action), r, t, {}
 
     def get_observation(self, action):
