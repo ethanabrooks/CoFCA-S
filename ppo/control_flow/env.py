@@ -9,8 +9,8 @@ from rl_utils import hierarchical_parse_args, gym
 from ppo import keyboard_control
 from ppo.control_flow.lines import If, Else, EndIf, While, EndWhile, Subtask, Padding
 
-Obs = namedtuple("Obs", "condition lines active")
-Last = namedtuple("Last", "action active reward terminal")
+Obs = namedtuple("Obs", "active condition lines")
+Last = namedtuple("Last", "action active reward terminal selected")
 
 
 class Env(gym.Env, ABC):
@@ -40,6 +40,7 @@ class Env(gym.Env, ABC):
         self.flip_prob = flip_prob
         self.baseline = baseline
         self.last = None
+        self.prev = None
         self.active = None
         self.condition_bit = None
         self.evaluating = False
@@ -87,7 +88,7 @@ class Env(gym.Env, ABC):
         self.t = None
 
     def reset(self):
-        self.last = None
+        self.last = Last(action=(0, 0), active=0, reward=0, terminal=False, selected=0)
         self.failing = False
         self.t = 0
         self.condition_bit = self.random.randint(0, 2)
@@ -102,11 +103,20 @@ class Env(gym.Env, ABC):
             self.line_transitions[_from].append(_to)
         self.if_evaluations = []
         self.active = 0
+        self.prev = 0
         return self.get_observation()
 
     def step(self, action):
         s, r, t, i = self._step(action)
-        self.last = Last(action=action, active=self.active, reward=r, terminal=t)
+        if not self.baseline:
+            action = action[0]
+        if self.active is None:
+            selected = None
+        else:
+            selected = self.active + action - self.n_lines
+        self.last = Last(
+            action=action, active=self.active, reward=r, terminal=t, selected=selected
+        )
         return s, r, t, i
 
     def _step(self, action):
@@ -115,7 +125,7 @@ class Env(gym.Env, ABC):
             return self.get_observation(), -1, True, {}
         if not self.baseline:
             action = int(action[0])
-        selected = self.active + action - self.n_lines
+        selected = self.prev + action - self.n_lines
         if selected == len(self.lines):
             # no-op
             return self.get_observation(), 0, False, {}
@@ -126,6 +136,7 @@ class Env(gym.Env, ABC):
         self.condition_bit = 1 - int(self.random.rand() < self.flip_prob)
         r = 0
         t = False
+        self.prev = self.active
         self.active = self.next()
         if self.active is None:
             r = 1
@@ -230,11 +241,11 @@ class Env(gym.Env, ABC):
         line = self.lines[index]
         if line in [Else, EndIf, EndWhile]:
             level -= 1
-        if index == self.last_active and index == self.last_action:
+        if index == self.active and index == self.last.selected:
             pre = "+ "
-        elif index == self.last_action:
+        elif index == self.last.selected:
             pre = "- "
-        elif index == self.last_active:
+        elif index == self.active:
             pre = "| "
         else:
             pre = "  "
@@ -248,7 +259,7 @@ class Env(gym.Env, ABC):
         for i, string in enumerate(self.line_strings(index=0, level=1)):
             print(f"{i}{string}")
         print("Condition:", self.condition_bit)
-        print("Reward:", self.last_reward)
+        print("Reward:", self.last.reward)
         input("pause")
 
 
