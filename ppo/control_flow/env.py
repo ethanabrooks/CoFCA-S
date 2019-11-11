@@ -90,7 +90,11 @@ class Env(gym.Env, ABC):
 
     def reset(self):
         self.last = Last(
-            action=(0, 0), selected=0, active=None, reward=None, terminal=None
+            action=0 if self.baseline else (0, 0),
+            selected=0,
+            active=None,
+            reward=None,
+            terminal=None,
         )
         self.failing = False
         self.t = 0
@@ -110,23 +114,17 @@ class Env(gym.Env, ABC):
         return self.get_observation(action=0)
 
     def step(self, action):
-        s, r, t, i = self._step(action)
         if not self.baseline:
-            action = action[0]
-        if self.active is None:
-            selected = None
-        else:
-            selected = self.active + action - self.n_lines
+            action = int(action[0])
+        selected = self.prev + action - self.n_lines
+        s, r, t, i = self._step(action=action, selected=selected)
         self.last = Last(
             action=action, active=self.active, reward=r, terminal=t, selected=selected
         )
         return s, r, t, i
 
-    def _step(self, action):
+    def _step(self, action, selected):
         self.t += 1
-        if not self.baseline:
-            action = int(action[0])
-        selected = self.prev + action - self.n_lines
         if selected == len(self.lines):
             # no-op
             return self.get_observation(action), 0, False, {}
