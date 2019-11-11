@@ -89,11 +89,7 @@ class Env(gym.Env, ABC):
 
     def reset(self):
         self.last = Last(
-            action=0 if self.baseline else (0, 0),
-            selected=0,
-            active=None,
-            reward=None,
-            terminal=None,
+            action=None, selected=0, active=None, reward=None, terminal=None
         )
         self.failing = False
         self.t = 0
@@ -257,7 +253,7 @@ class Env(gym.Env, ABC):
         for i, string in enumerate(self.line_strings(index=0, level=1)):
             print(f"{i}{string}")
         print("Condition:", self.condition_bit)
-        print("Reward:", self.last.reward)
+        print(self.last)
         input("pause")
 
 
