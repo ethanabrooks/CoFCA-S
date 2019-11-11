@@ -10,6 +10,7 @@ from ppo import keyboard_control
 from ppo.control_flow.lines import If, Else, EndIf, While, EndWhile, Subtask, Padding
 
 Obs = namedtuple("Obs", "condition lines")
+Last = namedtuple("Last", "action active reward terminal selected")
 
 
 class Env(gym.Env, ABC):
@@ -102,6 +103,18 @@ class Env(gym.Env, ABC):
         return self.get_observation()
 
     def step(self, action):
+        s, r, t, i = self._step(action)
+        action = action[0]
+        if self.active is None:
+            selected = None
+        else:
+            selected = self.active + action - self.n_lines
+        self.last = Last(
+            action=action, active=self.active, reward=r, terminal=t, selected=selected
+        )
+        return s, r, t, i
+
+    def _step(self, action):
         self.t += 1
         if not self.baseline:
             action = int(action[0])
@@ -113,9 +126,8 @@ class Env(gym.Env, ABC):
         if action != self.active:
             self.failing = True
             if not self.delayed_reward:
-                return self.get_observation(), -1, True, {}
+                return self.get_observation(action), 0, True, {}
         self.condition_bit = 1 - int(self.random.rand() < self.flip_prob)
-
         r = 0
         t = self.t > self.time_limit
         self.active = self.next()
