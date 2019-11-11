@@ -120,13 +120,14 @@ class Recurrence(nn.Module):
 
         # f
         layers = [Concat(dim=-1)]
-        in_size = self.obs_sections.condition + (2 if baseline else 1) * hidden_size
+        in_size = self.obs_sections.condition + (3 if baseline else 2) * hidden_size
         for _ in range(num_layers + 1):
             layers.extend([nn.Linear(in_size, hidden_size), activation])
             in_size = hidden_size
         self.f = nn.Sequential(*layers)
 
         na = int(action_space.nvec[0])
+        self.action_embedding = nn.Embedding(na, hidden_size)
         self.gru = nn.GRUCell(hidden_size, hidden_size)
         self.critic = init_(nn.Linear(hidden_size, 1))
         self.actor = Categorical(hidden_size, na)
@@ -199,10 +200,11 @@ class Recurrence(nn.Module):
 
         for t in range(T):
             r = M[R, p.squeeze(1)]
+            a = self.action_embedding(A[t - 1].clone())
             if self.baseline:
-                h = self.gru(self.f((inputs.condition[t], Kn)), h)
+                h = self.gru(self.f((inputs.condition[t], Kn, a)), h)
             else:
-                h = self.gru(self.f((inputs.condition[t], r)), h)
+                h = self.gru(self.f((inputs.condition[t], r, a)), h)
             a_dist = self.actor(h)
             q = self.linear(h)
             k = (K @ q.unsqueeze(2)).squeeze(2)
