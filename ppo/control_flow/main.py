@@ -1,8 +1,8 @@
 from rl_utils import hierarchical_parse_args
 
 import ppo.agent
-import ppo.control_flow.agent
 import ppo.control_flow.env
+import ppo.control_flow.ours
 from ppo import control_flow
 from ppo.arguments import build_parser
 from ppo.train import Train
@@ -19,7 +19,7 @@ def main(log_dir, baseline, seed, **kwargs):
                 )
             elif baseline == "oh-et-al":
                 raise NotImplementedError
-            return ppo.control_flow.agent.Agent(
+            return ppo.control_flow.ours.Agent(
                 observation_space=envs.observation_space,
                 action_space=envs.action_space,
                 debug=debug,
