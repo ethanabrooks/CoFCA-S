@@ -170,21 +170,8 @@ class Recurrence(nn.Module):
         )  # n_batch, n_lines, hidden_size
         gru_input = M.transpose(0, 1)
 
-        K = []
-        for i in range(self.obs_sections.lines):
-            _, k = self.task_encoder(torch.roll(gru_input, shifts=i, dims=0))
-            K.append(k)
-        K = torch.stack(K, dim=0)
-        if self.reduction == "sum":
-            reduced = K.sum(dim=0)
-        elif self.reduction == "mean":
-            reduced = K.mean(dim=0)
-        elif self.reduction == "max":
-            reduced = K.max(dim=0).values
-        else:
-            raise RuntimeError
-        k = reduced.transpose(0, 1)
-        k = k.reshape(N, -1)
+        _, k = self.task_encoder(gru_input)
+        k = k.transpose(0, 1).reshape(N, -1)
 
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
