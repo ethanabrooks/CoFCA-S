@@ -131,7 +131,7 @@ class Env(gym.Env, ABC):
         if self.active is None:
             r = 1
             if self.delayed_reward and self.failing:
-                r = -1
+                r = 0
             t = True
         return self.get_observation(action), r, t, {}
 
