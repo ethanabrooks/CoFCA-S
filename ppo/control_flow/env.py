@@ -38,6 +38,7 @@ class Env(gym.Env, ABC):
         self.random, self.seed = seeding.np_random(seed)
         self.time_limit = time_limit
         self.flip_prob = flip_prob
+
         self.baseline = baseline
         self.last = None
         self.prev = None
@@ -88,7 +89,9 @@ class Env(gym.Env, ABC):
         self.t = None
 
     def reset(self):
-        self.last = Last(action=(0, 0), active=0, reward=0, terminal=False, selected=0)
+        self.last = Last(
+            action=(0, 0), selected=0, active=None, reward=None, terminal=None
+        )
         self.failing = False
         self.t = 0
         self.condition_bit = 0  # TODO self.random.randint(0, 2)
@@ -104,7 +107,7 @@ class Env(gym.Env, ABC):
         self.if_evaluations = []
         self.active = 0
         self.prev = 0
-        return self.get_observation()
+        return self.get_observation(action=0)
 
     def step(self, action):
         s, r, t, i = self._step(action)
@@ -121,31 +124,29 @@ class Env(gym.Env, ABC):
 
     def _step(self, action):
         self.t += 1
-        if self.time_limit and self.t > self.time_limit:
-            return self.get_observation(), -1, True, {}
         if not self.baseline:
             action = int(action[0])
         selected = self.prev + action - self.n_lines
         if selected == len(self.lines):
             # no-op
-            return self.get_observation(), 0, False, {}
+            return self.get_observation(action), 0, False, {}
         if selected != self.active:
             self.failing = True
             if not self.delayed_reward:
-                return self.get_observation(), -1, True, {}
+                return self.get_observation(action), 0, True, {}
         # TODO self.condition_bit = 1 - int(self.random.rand() < self.flip_prob)
         r = 0
-        t = False
+        t = self.t > self.time_limit
         self.prev = self.active
         self.active = self.next()
         if self.active is None:
             r = 1
             if self.delayed_reward and self.failing:
-                r = -1
+                r = 0
             t = True
-        return self.get_observation(), r, t, {}
+        return self.get_observation(action), r, t, {}
 
-    def get_observation(self):
+    def get_observation(self, action):
         padded = self.lines + [Padding] * (self.n_lines - len(self.lines))
         lines = [self.line_types.index(t) for t in padded]
         obs = Obs(
