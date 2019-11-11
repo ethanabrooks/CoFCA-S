@@ -103,8 +103,6 @@ class Env(gym.Env, ABC):
 
     def step(self, action):
         self.t += 1
-        if self.time_limit and self.t > self.time_limit:
-            return self.get_observation(), -1, True, {}
         if not self.baseline:
             action = int(action[0])
         if action == len(self.lines):
@@ -119,7 +117,7 @@ class Env(gym.Env, ABC):
         self.condition_bit = 1 - int(self.random.rand() < self.flip_prob)
 
         r = 0
-        t = False
+        t = self.t > self.time_limit
         self.active = self.next()
         if self.active is None:
             r = 1
