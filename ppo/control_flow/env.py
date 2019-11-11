@@ -39,11 +39,9 @@ class Env(gym.Env, ABC):
         self.time_limit = time_limit
         self.flip_prob = flip_prob
         self.baseline = baseline
+        self.last = None
         self.active = None
         self.condition_bit = None
-        self.last_action = None
-        self.last_active = None
-        self.last_reward = None
         self.evaluating = False
         self.failing = False
         self.lines = None
@@ -83,9 +81,9 @@ class Env(gym.Env, ABC):
         self.t = None
 
     def reset(self):
-        self.last_action = None
-        self.last_active = None
-        self.last_reward = None
+        self.last = Last(
+            action=(0, 0), selected=0, active=None, reward=None, terminal=None
+        )
         self.failing = False
         self.t = 0
         self.condition_bit = self.random.randint(0, 2)
@@ -100,7 +98,7 @@ class Env(gym.Env, ABC):
             self.line_transitions[_from].append(_to)
         self.if_evaluations = []
         self.active = 0
-        return self.get_observation()
+        return self.get_observation(action=0)
 
     def step(self, action):
         s, r, t, i = self._step(action)
@@ -118,12 +116,11 @@ class Env(gym.Env, ABC):
         self.t += 1
         if not self.baseline:
             action = int(action[0])
-        if action == len(self.lines):
+        selected = action
+        if selected == len(self.lines):
             # no-op
-            return self.get_observation(), 0, False, {}
-        self.last_action = action
-        self.last_active = self.active
-        if action != self.active:
+            return self.get_observation(action), 0, False, {}
+        if selected != self.active:
             self.failing = True
             if not self.delayed_reward:
                 return self.get_observation(action), 0, True, {}
@@ -136,10 +133,9 @@ class Env(gym.Env, ABC):
             if self.delayed_reward and self.failing:
                 r = -1
             t = True
-        self.last_reward = r
-        return self.get_observation(), r, t, {}
+        return self.get_observation(action), r, t, {}
 
-    def get_observation(self):
+    def get_observation(self, action):
         padded = self.lines + [Padding] * (self.n_lines - len(self.lines))
         lines = [self.line_types.index(t) for t in padded]
         obs = Obs(
@@ -235,11 +231,11 @@ class Env(gym.Env, ABC):
         line = self.lines[index]
         if line in [Else, EndIf, EndWhile]:
             level -= 1
-        if index == self.last_active and index == self.last_action:
+        if index == self.active and index == self.last.selected:
             pre = "+ "
-        elif index == self.last_action:
+        elif index == self.last.selected:
             pre = "- "
-        elif index == self.last_active:
+        elif index == self.active:
             pre = "| "
         else:
             pre = "  "
@@ -253,7 +249,7 @@ class Env(gym.Env, ABC):
         for i, string in enumerate(self.line_strings(index=0, level=1)):
             print(f"{i}{string}")
         print("Condition:", self.condition_bit)
-        print("Reward:", self.last_reward)
+        print("Reward:", self.last.reward)
         input("pause")
 
 
