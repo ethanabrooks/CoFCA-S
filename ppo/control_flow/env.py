@@ -38,6 +38,7 @@ class Env(gym.Env, ABC):
         self.random, self.seed = seeding.np_random(seed)
         self.time_limit = time_limit
         self.flip_prob = flip_prob
+
         self.baseline = baseline
         self.last = None
         self.active = None
@@ -64,7 +65,7 @@ class Env(gym.Env, ABC):
         if baseline:
             self.action_space = spaces.Discrete(2 * n_lines)
             self.observation_space = spaces.MultiBinary(
-                2 + len(self.line_types) * n_lines + (n_lines + 1)
+                2 + len(self.line_types) * n_lines + (n_lines * 2)
             )
             self.eye = Obs(
                 condition=np.eye(2),
@@ -106,7 +107,8 @@ class Env(gym.Env, ABC):
 
     def step(self, action):
         s, r, t, i = self._step(action)
-        action = action[0]
+        if not self.baseline:
+            action = action[0]
         if self.active is None:
             selected = None
         else:

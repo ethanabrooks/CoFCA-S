@@ -34,7 +34,7 @@ def batch_conv1d(inputs, weights):
 
 
 class Agent(ppo.agent.Agent, NNBase):
-    def __init__(self, entropy_coef, recurrent, **network_args):
+    def __init__(self, entropy_coef, **network_args):
         nn.Module.__init__(self)
         self.entropy_coef = entropy_coef
         self.recurrent_module = ppo.control_flow.ours.Recurrence(**network_args)
@@ -91,10 +91,8 @@ class Recurrence(nn.Module):
         hidden_size,
         num_layers,
         debug,
-        reduction,
     ):
         super().__init__()
-        self.reduction = reduction
         self.obs_spaces = Obs(**observation_space.spaces)
         self.obs_sections = Obs(*[int(np.prod(s.shape)) for s in self.obs_spaces])
         self.action_size = 2
@@ -188,8 +186,7 @@ class Recurrence(nn.Module):
                 [k, inputs.condition[t], self.action_embedding(A[t - 1].clone())],
                 dim=-1,
             )
-            z = self.mlp(obs)
-            h = self.gru(z, h)
+            h = self.gru(self.mlp(obs), h)
             a_dist = self.actor(h)
             self.sample_new(A[t], a_dist)
             yield RecurrentState(
