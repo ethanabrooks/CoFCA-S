@@ -41,6 +41,7 @@ class Env(gym.Env, ABC):
 
         self.baseline = baseline
         self.last = None
+        self.prev = None
         self.active = None
         self.condition_bit = None
         self.evaluating = False
@@ -103,6 +104,7 @@ class Env(gym.Env, ABC):
             self.line_transitions[_from].append(_to)
         self.if_evaluations = []
         self.active = 0
+        self.prev = 0
         return self.get_observation(action=0)
 
     def step(self, action):
@@ -122,7 +124,7 @@ class Env(gym.Env, ABC):
         self.t += 1
         if not self.baseline:
             action = int(action[0])
-        selected = self.active + action - self.n_lines
+        selected = self.prev + action - self.n_lines
         if selected == len(self.lines):
             # no-op
             return self.get_observation(action), 0, False, {}
@@ -133,6 +135,7 @@ class Env(gym.Env, ABC):
         self.condition_bit = 1 - int(self.random.rand() < self.flip_prob)
         r = 0
         t = self.t > self.time_limit
+        self.prev = self.active
         self.active = self.next()
         if self.active is None:
             r = 1
