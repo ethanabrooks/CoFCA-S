@@ -3,7 +3,7 @@ from rl_utils import hierarchical_parse_args
 import ppo.agent
 import ppo.control_flow.env
 import ppo.control_flow.ours
-import ppo.control_flow.baseline
+import ppo.control_flow.ours
 from ppo import control_flow
 from ppo.arguments import build_parser
 from ppo.train import Train
@@ -13,7 +13,7 @@ def main(log_dir, seed, **kwargs):
     class _Train(Train):
         def build_agent(self, envs, debug=False, baseline=False, **agent_args):
             if baseline:
-                return ppo.control_flow.baseline.Agent(
+                return ppo.control_flow.ours.Agent(
                     observation_space=envs.observation_space,
                     action_space=envs.action_space,
                     debug=debug,
