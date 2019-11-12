@@ -63,7 +63,7 @@ class Recurrence(nn.Module):
         self.na = na = int(action_space.nvec[0])
         self.gru = nn.GRUCell(hidden_size, hidden_size)
         self.critic = init_(nn.Linear(hidden_size, 1))
-        self.actor = Categorical(int(sum(self.obs_sections)), na)
+        self.actor = init_(nn.Linear(2 * hidden_size, na))
         self.linear = nn.Linear(hidden_size, 1)
         self.a_one_hots = nn.Embedding.from_pretrained(torch.eye(na))
         self.state_sizes = RecurrentState(
@@ -139,15 +139,15 @@ class Recurrence(nn.Module):
 
         K = []
         for i in range(self.obs_sections.lines):
-            k, _ = self.task_encoder(torch.roll(gru_input, shifts=-i, dims=0))
+            _, k = self.task_encoder(torch.roll(gru_input, shifts=-i, dims=0))
             K.append(k)
-        S = torch.stack(K, dim=0)  # ns, ns, nb, 2*h
+        S = torch.stack(K, dim=0)  # ns, 2, nb, h
 
-        V = S.view(S.size(0), S.size(1), N, 2, -1)  # ns, ns, nb, 2, h
-        L = self.linear(V).squeeze(-1)  # ns, ns, nb, 2
-        L2 = L.permute(2, 0, 1, 3)  # nb, ns, ns, 2
-        L3 = L2.reshape(L2.size(0), L2.size(1), -1)  # nb, ns, 2*ns
-        P = F.softmax(L3, dim=-1)
+        V = S.transpose(1, 2).reshape(S.size(0), N, -1)
+        L = self.actor(V)
+        # L2 = L.permute(2, 0, 1, 3)  # nb, ns, ns, 2
+        # L3 = L2.reshape(L2.size(0), L2.size(1), -1)  # nb, ns, 2*ns
+        # P = F.softmax(L3, dim=-1)
 
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
@@ -177,10 +177,10 @@ class Recurrence(nn.Module):
             # self.print(p_dist.probs)
             self.print("active")
             self.print(inputs.active[t])
-            probs = P[R, inputs.active[t].long().squeeze(-1)]
+            logits = L[inputs.active[t].long().squeeze(-1), R]
+            a_dist = FixedCategorical(logits=logits)
             self.print("probs")
-            self.print(torch.round(probs * 10))
-            a_dist = FixedCategorical(probs=probs)
+            self.print(torch.round(a_dist.probs * 10))
             self.sample_new(A[t], a_dist)
             # a = torch.clamp(a + P[t] - self.na, 0, self.na - 1)
             # a = a + P[t]
