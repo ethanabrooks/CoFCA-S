@@ -129,9 +129,6 @@ class Env(gym.Env, ABC):
 
     def _step(self, action, selected):
         self.t += 1
-        # if selected > len(self.lines):
-        #     # no-op
-        #     return self.get_observation(action), 0, False, {}
         self.active = self.next()
         self.condition_bit = 1 - int(self.random.rand() < self.flip_prob)
         r = 0
@@ -208,10 +205,10 @@ class Env(gym.Env, ABC):
                 yield from self.get_transitions(lines_iter, current)  # from = While
             elif line is EndWhile:
                 # While
-                yield prev, current + 1  # False: While -> EndWhile + 1
+                yield prev, current  # False: While -> EndWhile
                 yield prev, prev + 1  # True: While -> While + 1
                 # EndWhile
-                yield current, prev  # False: EndWhile -> While
+                yield current, current + 1  # False: EndWhile -> While
                 yield current, prev  # True: EndWhile -> While
                 return
 
