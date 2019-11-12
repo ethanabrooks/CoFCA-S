@@ -53,7 +53,7 @@ class Recurrence(nn.Module):
 
         # f
         layers = []
-        in_size = self.obs_sections.condition + 3 * hidden_size
+        in_size = self.obs_sections.condition + hidden_size
         for _ in range(num_layers + 1):
             layers.extend([nn.Linear(in_size, hidden_size), activation])
             in_size = hidden_size
@@ -61,11 +61,11 @@ class Recurrence(nn.Module):
 
         self.na = na = int(action_space.nvec[0])
         self.gru = nn.GRUCell(hidden_size, hidden_size)
-        self.critic = init_(nn.Linear(hidden_size, 1))
+        self.critic = init_(nn.Linear(2 * hidden_size, 1))
         self.embed_action = nn.Embedding(na, hidden_size)
-        self.actor = Categorical(hidden_size, na)
+        self.actor = Categorical(2 * hidden_size, na)
         nl = self.obs_spaces.lines.nvec[0]
-        self.attention = Categorical(hidden_size, nl)
+        self.attention = init_(nn.Linear(hidden_size, self.obs_sections.lines))
         # self.linear = nn.Linear(hidden_size, 1)
         # self.a_one_hots = nn.Embedding.from_pretrained(torch.eye(na))
         self.state_sizes = RecurrentState(
@@ -145,7 +145,7 @@ class Recurrence(nn.Module):
             K.append(k)
         S = torch.stack(K, dim=0)  # ns, 2, nb, h
 
-        H = S.transpose(1, 2).reshape(S.size(0), N, -1)  # ns, nb, 2*h
+        H = S.permute(2, 0, 1, 3).reshape(N, S.size(0), -1)  # nb, ns, 2*h
 
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
@@ -160,13 +160,13 @@ class Recurrence(nn.Module):
         P = torch.cat([actions[:, :, 1], hx.p.view(1, N)], dim=0).long()
 
         for t in range(T):
-            r = H[P[t].clone(), R]
+            # r = H[P[t].clone(), R]
             # r = M[R, a]
             # if self.baseline:
             #     h = self.gru(self.f((inputs.condition[t], Kn)), h)
             # else:
             x = torch.cat(
-                [self.embed_action(A[t - 1].clone()), inputs.condition[t], r], dim=-1
+                [self.embed_action(A[t - 1].clone()), inputs.condition[t]], dim=-1
             )
             h = self.gru(self.f(x), h)
             # a_dist = self.actor(h)
@@ -174,11 +174,11 @@ class Recurrence(nn.Module):
             # k = (K @ q.unsqueeze(2)).squeeze(2)
             # self.print("k")
             # self.print(k)
-            p_dist = self.attention(h)
-            self.sample_new(P[t], p_dist)
+            w = self.attention(h)
+            z = (w.unsqueeze(1) @ H).squeeze(1)
             # self.print("dist")
             # self.print(p_dist.probs)
-            a_dist = self.actor(h)
+            a_dist = self.actor(z)
             self.print("probs")
             self.print(torch.round(a_dist.probs * 10))
             self.sample_new(A[t], a_dist)
@@ -187,9 +187,9 @@ class Recurrence(nn.Module):
             # self.sample_new(A[t], a_dist
             yield RecurrentState(
                 a=A[t],
-                v=self.critic(h),
+                v=self.critic(z),
                 h=h,
                 a_probs=a_dist.probs,
-                p=P[t],
-                p_probs=p_dist.probs,
+                p=hx.p,
+                p_probs=hx.p_probs,
             )
