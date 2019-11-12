@@ -161,20 +161,8 @@ class Recurrence(nn.Module):
 
         for t in range(T):
             r = H[w, R]
-            # r = M[R, a]
-            # if self.baseline:
-            #     h = self.gru(self.f((inputs.condition[t], Kn)), h)
-            # else:
             x = torch.cat([inputs.condition[t], r], dim=-1)
             h = self.gru(self.f(x), h)
-            # a_dist = self.actor(h)
-            # q = self.linear(h)
-            # k = (K @ q.unsqueeze(2)).squeeze(2)
-            # self.print("k")
-            # self.print(k)
-            # p_dist = FixedCategorical(logits=k)
-            # self.print("dist")
-            # self.print(p_dist.probs)
             self.print("active")
             self.print(inputs.active[t])
             a_dist = self.actor(h)
@@ -185,8 +173,6 @@ class Recurrence(nn.Module):
             self.sample_new(P[t], p_dist)
             delta = (-1) ** (P[t] >= self.obs_sections.lines).long() * P[t]
             w = torch.clamp(w + delta, min=0, max=self.obs_sections.lines - 1)
-            # a = a + P[t]
-            # self.sample_new(A[t], a_dist
             yield RecurrentState(
                 a=A[t],
                 v=self.critic(h),
