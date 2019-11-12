@@ -175,7 +175,11 @@ class Recurrence(nn.Module):
             # p_dist = FixedCategorical(logits=k)
             # self.print("dist")
             # self.print(p_dist.probs)
+            self.print("active")
+            self.print(inputs.active[t])
             probs = P[R, inputs.active[t].long().squeeze(-1)]
+            self.print("probs")
+            self.print(torch.round(probs * 10))
             a_dist = FixedCategorical(probs=probs)
             self.sample_new(A[t], a_dist)
             # a = torch.clamp(a + P[t] - self.na, 0, self.na - 1)
