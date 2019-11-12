@@ -5,9 +5,8 @@ import torch
 import torch.nn.functional as F
 from torch import nn as nn
 
-from ppo.distributions import FixedCategorical, Categorical
 from ppo.control_flow.env import Obs
-from ppo.layers import Concat
+from ppo.distributions import Categorical
 from ppo.utils import init_
 
 RecurrentState = namedtuple("RecurrentState", "a p v h a_probs p_probs")
@@ -49,12 +48,12 @@ class Recurrence(nn.Module):
 
         # networks
         nl = int(self.obs_spaces.lines.nvec[0])
-        self.embeddings = nn.Embedding(nl, hidden_size)
+        self.embed_task = nn.Embedding(nl, hidden_size)
         self.task_encoder = nn.GRU(hidden_size, hidden_size, bidirectional=True)
 
         # f
-        layers = [Concat(dim=-1)]
-        in_size = self.obs_sections.condition + 2 * hidden_size
+        layers = []
+        in_size = self.obs_sections.condition + 3 * hidden_size
         for _ in range(num_layers + 1):
             layers.extend([nn.Linear(in_size, hidden_size), activation])
             in_size = hidden_size
@@ -63,11 +62,14 @@ class Recurrence(nn.Module):
         self.na = na = int(action_space.nvec[0])
         self.gru = nn.GRUCell(hidden_size, hidden_size)
         self.critic = init_(nn.Linear(hidden_size, 1))
+        self.embed_action = nn.Embedding(na, hidden_size)
         self.actor = Categorical(hidden_size, na)
-        self.linear = nn.Linear(hidden_size, 1)
-        self.a_one_hots = nn.Embedding.from_pretrained(torch.eye(na))
+        nl = self.obs_spaces.lines.nvec[0]
+        self.attention = Categorical(hidden_size, nl)
+        # self.linear = nn.Linear(hidden_size, 1)
+        # self.a_one_hots = nn.Embedding.from_pretrained(torch.eye(na))
         self.state_sizes = RecurrentState(
-            a=1, a_probs=na, p=1, p_probs=2, v=1, h=hidden_size
+            a=1, a_probs=na, p=1, p_probs=nl, v=1, h=hidden_size
         )
 
     @staticmethod
@@ -111,7 +113,7 @@ class Recurrence(nn.Module):
 
         # build memory
         lines = inputs.lines.view(T, N, *self.obs_spaces.lines.shape).long()[0, :, :]
-        M = self.embeddings(lines.view(-1)).view(
+        M = self.embed_task(lines.view(-1)).view(
             *lines.shape, self.hidden_size
         )  # n_batch, n_lines, hidden_size
         # forward_input = M.transpose(0, 1)  # n_lines, n_batch, hidden_size
@@ -155,25 +157,27 @@ class Recurrence(nn.Module):
         a[new_episode] = 0
         R = torch.arange(N, device=rnn_hxs.device)
         A = torch.cat([actions[:, :, 0], hx.a.view(1, N)], dim=0).long()
-        # P = torch.cat([actions[:, :, 1], hx.p.view(1, N)], dim=0).long()
+        P = torch.cat([actions[:, :, 1], hx.p.view(1, N)], dim=0).long()
 
         for t in range(T):
-            r = H[inputs.active[t].long().squeeze(-1), R]
+            r = H[P[t].clone(), R]
             # r = M[R, a]
             # if self.baseline:
             #     h = self.gru(self.f((inputs.condition[t], Kn)), h)
             # else:
-            h = self.gru(self.f((inputs.condition[t], r)), h)
+            x = torch.cat(
+                [self.embed_action(A[t - 1].clone()), inputs.condition[t], r], dim=-1
+            )
+            h = self.gru(self.f(x), h)
             # a_dist = self.actor(h)
             # q = self.linear(h)
             # k = (K @ q.unsqueeze(2)).squeeze(2)
             # self.print("k")
             # self.print(k)
-            # p_dist = FixedCategorical(logits=k)
+            p_dist = self.attention(h)
+            self.sample_new(P[t], p_dist)
             # self.print("dist")
             # self.print(p_dist.probs)
-            self.print("active")
-            self.print(inputs.active[t])
             a_dist = self.actor(h)
             self.print("probs")
             self.print(torch.round(a_dist.probs * 10))
@@ -186,6 +190,6 @@ class Recurrence(nn.Module):
                 v=self.critic(h),
                 h=h,
                 a_probs=a_dist.probs,
-                p=hx.p,  # TODO
-                p_probs=hx.p_probs,  # TODO
+                p=P[t],
+                p_probs=p_dist.probs,
             )
