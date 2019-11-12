@@ -109,8 +109,7 @@ class Env(gym.Env, ABC):
     def step(self, action):
         if not self.baseline:
             action = int(action[0])
-        delta = action if action < self.n_lines else -action
-        assert delta == ((-1) ** int(action >= self.n_lines)) * action
+        delta = action - self.n_lines
         selected = self.active + delta
         s, r, t, i = self._step(action=action, selected=selected)
         self.last = Last(

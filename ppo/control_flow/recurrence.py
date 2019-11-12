@@ -181,7 +181,7 @@ class Recurrence(nn.Module):
             self.print("probs")
             self.print(torch.round(a_dist.probs * 10))
             self.sample_new(A[t], a_dist)
-            delta = (-1) ** (A[t] >= self.obs_sections.lines).long() * A[t]
+            delta = A[t] - self.obs_sections.lines
             w = torch.clamp(w + delta, min=0, max=self.obs_sections.lines - 1)
             # a = a + P[t]
             # self.sample_new(A[t], a_dist
