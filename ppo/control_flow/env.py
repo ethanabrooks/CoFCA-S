@@ -52,7 +52,7 @@ class Env(gym.Env, ABC):
         self.line_types = [If, Else, EndIf, While, EndWhile, Subtask, Padding]
         self.line_state_transitions = dict(
             # initial={If: "following_if", While: "following_while", Subtask: "initial"},
-            initial={If: "following_if", Subtask: "initial"},
+            initial={While: "following_while", Subtask: "initial"},
             following_if={Subtask: "inside_if"},
             inside_if={Subtask: "inside_if", Else: "following_else", EndIf: "initial"},
             following_else={Subtask: "inside_else"},
