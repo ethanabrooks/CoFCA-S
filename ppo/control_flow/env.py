@@ -198,7 +198,7 @@ class Env(gym.Env, ABC):
                 yield from self.get_transitions(lines_iter, current)  # from = While
             elif line is EndWhile:
                 # While
-                yield prev, current  # False: While -> EndWhile
+                yield prev, current + 1  # False: While -> EndWhile + 1
                 yield prev, prev + 1  # True: While -> While + 1
                 # EndWhile
                 yield current, prev  # False: EndWhile -> While
