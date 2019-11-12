@@ -9,7 +9,7 @@ from ppo.control_flow.env import Obs
 from ppo.distributions import Categorical
 from ppo.utils import init_
 
-RecurrentState = namedtuple("RecurrentState", "a p v h a_probs p_probs")
+RecurrentState = namedtuple("RecurrentState", "a p w v h a_probs p_probs")
 
 
 def batch_conv1d(inputs, weights):
@@ -64,11 +64,17 @@ class Recurrence(nn.Module):
         self.critic = init_(nn.Linear(2 * hidden_size, 1))
         self.embed_action = nn.Embedding(na, hidden_size)
         self.actor = Categorical(2 * hidden_size, na)
-        self.attention = Categorical(hidden_size, self.obs_sections.lines)
+        self.attention = Categorical(hidden_size, na)
         # self.linear = nn.Linear(hidden_size, 1)
         # self.a_one_hots = nn.Embedding.from_pretrained(torch.eye(na))
         self.state_sizes = RecurrentState(
-            a=1, a_probs=na, p=1, p_probs=self.obs_sections.lines, v=1, h=hidden_size
+            a=1,
+            a_probs=na,
+            p=1,
+            p_probs=self.obs_sections.lines,
+            w=1,
+            v=1,
+            h=hidden_size,
         )
 
     @staticmethod
@@ -152,6 +158,7 @@ class Recurrence(nn.Module):
             _x.squeeze_(0)
 
         h = hx.h
+        w = hx.w.long().squeeze(-1)
         a = hx.a.long().squeeze(-1)
         a[new_episode] = 0
         R = torch.arange(N, device=rnn_hxs.device)
@@ -173,15 +180,21 @@ class Recurrence(nn.Module):
             # k = (K @ q.unsqueeze(2)).squeeze(2)
             # self.print("k")
             # self.print(k)
-            p_dist = self.attention(h)
-            self.sample_new(P[t], p_dist)
-            z = H[R, P[t].clone()]
+            # p_dist = self.attention(h)
+            # self.sample_new(P[t], p_dist)
+            # w = w + P[t]
+            z = H[R, w]
             # self.print("dist")
             # self.print(p_dist.probs)
             a_dist = self.actor(z)
             self.print("probs")
             self.print(torch.round(a_dist.probs * 10))
             self.sample_new(A[t], a_dist)
+            w = torch.clamp(
+                w + self.obs_sections.lines - A[t],
+                min=0,
+                max=self.obs_sections.lines - 1,
+            )
             # a = torch.clamp(a + P[t] - self.na, 0, self.na - 1)
             # a = a + P[t]
             # self.sample_new(A[t], a_dist
@@ -189,7 +202,8 @@ class Recurrence(nn.Module):
                 a=A[t],
                 v=self.critic(z),
                 h=h,
+                w=w,
                 a_probs=a_dist.probs,
-                p=P[t],
-                p_probs=p_dist.probs,
+                p=hx.p,  # TODO P[t],
+                p_probs=hx.p_probs,  # TODO p_dist.probs,
             )
