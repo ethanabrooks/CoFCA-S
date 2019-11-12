@@ -160,7 +160,6 @@ class Recurrence(nn.Module):
         active = inputs.active.long().squeeze(-1)
 
         for t in range(T):
-            w = inputs.active[t].long().squeeze(-1)
             r = H[w, R]
             # r = M[R, a]
             # if self.baseline:
