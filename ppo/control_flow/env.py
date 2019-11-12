@@ -201,7 +201,7 @@ class Env(gym.Env, ABC):
                 yield prev, current  # False: While -> EndWhile
                 yield prev, prev + 1  # True: While -> While + 1
                 # EndWhile
-                yield current, current + 1  # False: EndWhile -> While
+                yield current, prev  # False: EndWhile -> While
                 yield current, prev  # True: EndWhile -> While
                 return
 
