@@ -64,12 +64,11 @@ class Recurrence(nn.Module):
         self.critic = init_(nn.Linear(2 * hidden_size, 1))
         self.embed_action = nn.Embedding(na, hidden_size)
         self.actor = Categorical(2 * hidden_size, na)
-        nl = self.obs_spaces.lines.nvec[0]
-        self.attention = init_(nn.Linear(hidden_size, self.obs_sections.lines))
+        self.attention = Categorical(hidden_size, self.obs_sections.lines)
         # self.linear = nn.Linear(hidden_size, 1)
         # self.a_one_hots = nn.Embedding.from_pretrained(torch.eye(na))
         self.state_sizes = RecurrentState(
-            a=1, a_probs=na, p=1, p_probs=nl, v=1, h=hidden_size
+            a=1, a_probs=na, p=1, p_probs=self.obs_sections.lines, v=1, h=hidden_size
         )
 
     @staticmethod
@@ -174,8 +173,9 @@ class Recurrence(nn.Module):
             # k = (K @ q.unsqueeze(2)).squeeze(2)
             # self.print("k")
             # self.print(k)
-            w = self.attention(h)
-            z = (w.unsqueeze(1) @ H).squeeze(1)
+            p_dist = self.attention(h)
+            self.sample_new(P[t], p_dist)
+            z = H[R, P[t].clone()]
             # self.print("dist")
             # self.print(p_dist.probs)
             a_dist = self.actor(z)
@@ -190,6 +190,6 @@ class Recurrence(nn.Module):
                 v=self.critic(z),
                 h=h,
                 a_probs=a_dist.probs,
-                p=hx.p,
-                p_probs=hx.p_probs,
+                p=P[t],
+                p_probs=p_dist.probs,
             )
