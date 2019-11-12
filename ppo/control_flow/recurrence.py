@@ -54,7 +54,7 @@ class Recurrence(nn.Module):
 
         # f
         layers = [Concat(dim=-1)]
-        in_size = self.obs_sections.condition + (2 if baseline else 1) * hidden_size
+        in_size = self.obs_sections.condition + 2 * hidden_size
         for _ in range(num_layers + 1):
             layers.extend([nn.Linear(in_size, hidden_size), activation])
             in_size = hidden_size
@@ -63,7 +63,7 @@ class Recurrence(nn.Module):
         self.na = na = int(action_space.nvec[0])
         self.gru = nn.GRUCell(hidden_size, hidden_size)
         self.critic = init_(nn.Linear(hidden_size, 1))
-        self.actor = Categorical(2 * hidden_size, na)
+        self.actor = Categorical(hidden_size, na)
         self.linear = nn.Linear(hidden_size, 1)
         self.a_one_hots = nn.Embedding.from_pretrained(torch.eye(na))
         self.state_sizes = RecurrentState(
@@ -144,9 +144,6 @@ class Recurrence(nn.Module):
         S = torch.stack(K, dim=0)  # ns, 2, nb, h
 
         H = S.transpose(1, 2).reshape(S.size(0), N, -1)  # ns, nb, 2*h
-        # L2 = L.permute(2, 0, 1, 3)  # nb, ns, ns, 2
-        # L3 = L2.reshape(L2.size(0), L2.size(1), -1)  # nb, ns, 2*ns
-        # P = F.softmax(L3, dim=-1)
 
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
@@ -161,11 +158,12 @@ class Recurrence(nn.Module):
         # P = torch.cat([actions[:, :, 1], hx.p.view(1, N)], dim=0).long()
 
         for t in range(T):
+            r = H[inputs.active[t].long().squeeze(-1), R]
             # r = M[R, a]
             # if self.baseline:
             #     h = self.gru(self.f((inputs.condition[t], Kn)), h)
             # else:
-            #     h = self.gru(self.f((inputs.condition[t], r)), h)
+            h = self.gru(self.f((inputs.condition[t], r)), h)
             # a_dist = self.actor(h)
             # q = self.linear(h)
             # k = (K @ q.unsqueeze(2)).squeeze(2)
@@ -176,7 +174,7 @@ class Recurrence(nn.Module):
             # self.print(p_dist.probs)
             self.print("active")
             self.print(inputs.active[t])
-            a_dist = self.actor(H[inputs.active[t].long().squeeze(-1), R])
+            a_dist = self.actor(h)
             self.print("probs")
             self.print(torch.round(a_dist.probs * 10))
             self.sample_new(A[t], a_dist)
