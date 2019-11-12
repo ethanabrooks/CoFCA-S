@@ -5,8 +5,9 @@ import torch
 import torch.nn.functional as F
 from torch import nn as nn
 
+from ppo.distributions import FixedCategorical, Categorical
 from ppo.control_flow.env import Obs
-from ppo.distributions import Categorical
+from ppo.layers import Concat
 from ppo.utils import init_
 
 RecurrentState = namedtuple("RecurrentState", "a p w v h a_probs p_probs")
@@ -53,7 +54,7 @@ class Recurrence(nn.Module):
 
         # f
         layers = []
-        in_size = self.obs_sections.condition + hidden_size
+        in_size = self.obs_sections.condition + 2 * hidden_size
         for _ in range(num_layers + 1):
             layers.extend([nn.Linear(in_size, hidden_size), activation])
             in_size = hidden_size
@@ -61,12 +62,11 @@ class Recurrence(nn.Module):
 
         self.na = na = int(action_space.nvec[0])
         self.gru = nn.GRUCell(hidden_size, hidden_size)
-        self.critic = init_(nn.Linear(2 * hidden_size, 1))
-        self.embed_action = nn.Embedding(na, hidden_size)
-        self.actor = Categorical(2 * hidden_size, na)
+        self.critic = init_(nn.Linear(hidden_size, 1))
+        self.actor = Categorical(hidden_size, na)
         self.attention = Categorical(hidden_size, na)
-        # self.linear = nn.Linear(hidden_size, 1)
-        # self.a_one_hots = nn.Embedding.from_pretrained(torch.eye(na))
+        self.linear = nn.Linear(hidden_size, 1)
+        self.a_one_hots = nn.Embedding.from_pretrained(torch.eye(na))
         self.state_sizes = RecurrentState(
             a=1, a_probs=na, p=1, p_probs=na, w=1, v=1, h=hidden_size
         )
@@ -144,7 +144,7 @@ class Recurrence(nn.Module):
             K.append(k)
         S = torch.stack(K, dim=0)  # ns, 2, nb, h
 
-        H = S.permute(2, 0, 1, 3).reshape(N, S.size(0), -1)  # nb, ns, 2*h
+        H = S.transpose(1, 2).reshape(S.size(0), N, -1)  # ns, nb, 2*h
 
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
@@ -160,46 +160,39 @@ class Recurrence(nn.Module):
         P = torch.cat([actions[:, :, 1], hx.p.view(1, N)], dim=0).long()
 
         for t in range(T):
-            # r = H[P[t].clone(), R]
+            r = H[w, R]
             # r = M[R, a]
             # if self.baseline:
             #     h = self.gru(self.f((inputs.condition[t], Kn)), h)
             # else:
-            x = torch.cat(
-                [self.embed_action(A[t - 1].clone()), inputs.condition[t]], dim=-1
-            )
+            x = torch.cat([inputs.condition[t], r], dim=-1)
             h = self.gru(self.f(x), h)
             # a_dist = self.actor(h)
             # q = self.linear(h)
             # k = (K @ q.unsqueeze(2)).squeeze(2)
             # self.print("k")
             # self.print(k)
-            # p_dist = self.attention(h)
-            # self.sample_new(P[t], p_dist)
-            # w = w + P[t]
-            z = H[R, w]
+            # p_dist = FixedCategorical(logits=k)
             # self.print("dist")
             # self.print(p_dist.probs)
-            a_dist = self.actor(z)
+            self.print("active")
+            self.print(inputs.active[t])
+            a_dist = self.actor(h)
+            p_dist = self.attention(h)
             self.print("probs")
             self.print(torch.round(a_dist.probs * 10))
             self.sample_new(A[t], a_dist)
-            p_dist = self.actor(z)
             self.sample_new(P[t], p_dist)
-            w = torch.clamp(
-                w + self.obs_sections.lines - P[t],
-                min=0,
-                max=self.obs_sections.lines - 1,
-            )
-            # a = torch.clamp(a + P[t] - self.na, 0, self.na - 1)
+            delta = (-1) ** (P[t] >= self.obs_sections.lines).long() * P[t]
+            w = torch.clamp(w + delta, min=0, max=self.obs_sections.lines - 1)
             # a = a + P[t]
             # self.sample_new(A[t], a_dist
             yield RecurrentState(
                 a=A[t],
-                v=self.critic(z),
+                v=self.critic(h),
                 h=h,
                 w=w,
                 a_probs=a_dist.probs,
-                p=P[t],  # TODO P[t],
-                p_probs=p_dist.probs,  # TODO p_dist.probs,
+                p=P[t],
+                p_probs=p_dist.probs,
             )
