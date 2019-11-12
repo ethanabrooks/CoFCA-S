@@ -10,7 +10,7 @@ from ppo.train import Train
 
 def main(log_dir, baseline, seed, **kwargs):
     class _Train(Train):
-        def build_agent(self, envs, debug=False, a_equals_p=False, **agent_args):
+        def build_agent(self, envs, debug=False, d_equals_a=False, **agent_args):
             if baseline == "default":
                 return ppo.agent.Agent(
                     obs_shape=envs.observation_space.shape,
@@ -24,7 +24,7 @@ def main(log_dir, baseline, seed, **kwargs):
                 action_space=envs.action_space,
                 debug=debug,
                 baseline=baseline,
-                a_equals_p=a_equals_p,
+                d_equals_a=d_equals_a,
                 **agent_args,
             )
 
@@ -50,7 +50,7 @@ def bandit_args():
     parsers.env.add_argument("--flip-prob", type=float, required=True)
     parsers.env.add_argument("--delayed-reward", action="store_true")
     parsers.agent.add_argument("--debug", action="store_true")
-    parsers.agent.add_argument("--a-equals-p", action="store_true")
+    parsers.agent.add_argument("--d-equals-a", action="store_true")
     return parser
 
 
