@@ -130,7 +130,8 @@ class Env(gym.Env, ABC):
     def _step(self, action, selected):
         self.t += 1
         self.active = self.next()
-        self.condition_bit = 1 - int(self.random.rand() < self.flip_prob)
+        if self.lines[self.active] is not EndWhile:  # do not flip on EndWhile
+            self.condition_bit = 1 - int(self.random.rand() < self.flip_prob)
         r = 0
         t = self.t > self.time_limit
         if self.active is None:
