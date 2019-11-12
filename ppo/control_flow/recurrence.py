@@ -39,9 +39,11 @@ class Recurrence(nn.Module):
         debug,
         baseline,
         d_equals_a,
+        reduceG,
     ):
         super().__init__()
 
+        self.reduceG = reduceG
         self.d_equals_a = d_equals_a
         self.baseline = baseline
         self.obs_spaces = Obs(**observation_space.spaces)
@@ -118,36 +120,25 @@ class Recurrence(nn.Module):
         M = self.embed_task(lines.view(-1)).view(
             *lines.shape, self.hidden_size
         )  # n_batch, n_lines, hidden_size
-        # forward_input = M.transpose(0, 1)  # n_lines, n_batch, hidden_size
-        # K, Kn = self.task_encoder(forward_input)
-        # Kn = Kn.transpose(0, 1).reshape(N, -1)
-        # K = K.transpose(0, 1)
-
-        # forward_input = M.transpose(0, 1)  # n_lines, n_batch, hidden_size
-        # backward_input = forward_input.flip((0,))
-        # keys = []
-        # for i in range(len(forward_input)):
-        #     keys_per_i = []
-        #     if i > 0:
-        #         backward, _ = self.task_encoder(backward_input[:i])
-        #         keys_per_i.append(backward.flip((0,)))
-        #     if i < len(forward_input):
-        #         forward, _ = self.task_encoder(forward_input[i:])
-        #         keys_per_i.append(forward)
-        #     keys.append(torch.cat(keys_per_i).transpose(0, 1))  # put batch dim first
-        # K = torch.stack(keys, dim=1)  # put from dim before to dim
-        # K, C = torch.split(K, [self.hidden_size, 1], dim=-1)
-        # K = K.sum(dim=1)
-        # C = C.squeeze(dim=-1)
         gru_input = M.transpose(0, 1)
 
-        K = []
+        G = []
         for i in range(self.obs_sections.lines):
-            _, k = self.task_encoder(torch.roll(gru_input, shifts=-i, dims=0))
-            K.append(k)
-        S = torch.stack(K, dim=0)  # ns, 2, nb, h
-
-        H = S.transpose(1, 2).reshape(S.size(0), N, -1)  # ns, nb, 2*h
+            _, g = self.task_encoder(torch.roll(gru_input, shifts=-i, dims=0))
+            G.append(g)
+        G = torch.stack(G, dim=0)  # ns, 2, nb, h
+        G = G.transpose(1, 2).reshape(G.size(0), N, -1)  # ns, nb, 2*h
+        g = None
+        if self.reduceG == "first":
+            g = G[0]
+        if self.reduceG == "sum":
+            g = G.sum(dim=0)
+        elif self.reduceG == "mean":
+            g = G.mean(dim=0)
+        elif self.reduceG == "max":
+            g = G.max(dim=0).values
+        else:
+            assert self.reduceG is None
 
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
@@ -163,21 +154,10 @@ class Recurrence(nn.Module):
         P = torch.cat([actions[:, :, 1], hx.p.view(1, N)], dim=0).long()
 
         for t in range(T):
-            r = H[w, R]
-            # r = M[R, a]
-            # if self.baseline:
-            #     h = self.gru(self.f((inputs.condition[t], Kn)), h)
-            # else:
-            x = torch.cat([inputs.condition[t], r], dim=-1)
+            if self.reduceG is None:
+                g = G[w, R]
+            x = torch.cat([inputs.condition[t], g], dim=-1)
             h = self.gru(self.f(x), h)
-            # a_dist = self.actor(h)
-            # q = self.linear(h)
-            # k = (K @ q.unsqueeze(2)).squeeze(2)
-            # self.print("k")
-            # self.print(k)
-            # p_dist = FixedCategorical(logits=k)
-            # self.print("dist")
-            # self.print(p_dist.probs)
             self.print("active")
             self.print(inputs.active[t])
             a_dist = self.actor(h)
@@ -191,8 +171,6 @@ class Recurrence(nn.Module):
                 self.sample_new(P[t], p_dist)
                 d = P[t].clone()
             w = torch.clamp(w + d, min=0, max=self.obs_sections.lines - 1)
-            # a = a + P[t]
-            # self.sample_new(A[t], a_dist
             yield RecurrentState(
                 a=A[t],
                 v=self.critic(h),

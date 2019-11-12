@@ -24,6 +24,7 @@ class Env(gym.Env, ABC):
         time_limit,
         baseline,
         delayed_reward,
+        line_types,
     ):
         super().__init__()
         self.delayed_reward = delayed_reward
@@ -50,11 +51,20 @@ class Env(gym.Env, ABC):
         self.active_line = None
         self.if_evaluations = None
         self.line_types = [If, Else, EndIf, While, EndWhile, Subtask, Padding]
+        if line_types is None:
+            line_types = "if-while-else"
+        initial = {Subtask: "initial"}
+        if "if" in line_types:
+            initial[If] = "following_if"
+        if "while" in line_types:
+            initial[While] = "following_while"
+        inside_if = {Subtask: "inside_if", EndIf: "initial"}
+        if "else" in line_types:
+            inside_if[Else] = "following_else"
         self.line_state_transitions = dict(
-            # initial={If: "following_if", While: "following_while", Subtask: "initial"},
-            initial={While: "following_while", Subtask: "initial"},
+            initial=initial,
             following_if={Subtask: "inside_if"},
-            inside_if={Subtask: "inside_if", Else: "following_else", EndIf: "initial"},
+            inside_if=inside_if,
             following_else={Subtask: "inside_else"},
             inside_else={Subtask: "inside_else", EndIf: "initial"},
             following_while={Subtask: "inside_while"},

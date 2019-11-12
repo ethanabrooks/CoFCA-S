@@ -49,8 +49,10 @@ def bandit_args():
     parsers.env.add_argument("--eval-lines", type=int)
     parsers.env.add_argument("--flip-prob", type=float, required=True)
     parsers.env.add_argument("--delayed-reward", action="store_true")
+    parsers.env.add_argument("--line-types")
     parsers.agent.add_argument("--debug", action="store_true")
     parsers.agent.add_argument("--d-equals-a", action="store_true")
+    parsers.agent.add_argument("--reduceG", choices="first sum mean max".split())
     return parser
 
 
