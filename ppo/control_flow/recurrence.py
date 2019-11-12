@@ -53,9 +53,12 @@ class Recurrence(nn.Module):
         # networks
         nl = int(self.obs_spaces.lines.nvec[0])
         self.embed_task = nn.Embedding(nl, hidden_size)
+        self.embed_active = nn.Embedding(self.obs_sections.lines, hidden_size)
         self.task_encoder = nn.GRU(hidden_size, hidden_size, bidirectional=True)
         na = int(action_space.nvec[0])
         in_size = self.obs_sections.condition + 2 * hidden_size
+        if reduceG is not None:
+            in_size += hidden_size
         self.gru = nn.GRUCell(in_size, hidden_size)
 
         layers = []
@@ -125,7 +128,7 @@ class Recurrence(nn.Module):
         g = None
         if self.reduceG == "first":
             g = G[0]
-        if self.reduceG == "sum":
+        elif self.reduceG == "sum":
             g = G.sum(dim=0)
         elif self.reduceG == "mean":
             g = G.mean(dim=0)
@@ -147,12 +150,16 @@ class Recurrence(nn.Module):
         A = torch.cat([actions[:, :, 0], hx.a.view(1, N)], dim=0).long()
         P = torch.cat([actions[:, :, 1], hx.p.view(1, N)], dim=0).long()
         active = inputs.active.squeeze(-1).long()
+        if self.reduceG is not None:
+            embedded_active = self.embed_active(active)
 
         for t in range(T):
             if self.reduceG is None:
                 g = G[active[t], R]
-            x = torch.cat([inputs.condition[t], g], dim=-1)
-            h = self.gru(x, h)
+            x = [inputs.condition[t], g]
+            if self.reduceG is not None:
+                x.append(embedded_active[t])
+            h = self.gru(torch.cat(x, dim=-1), h)
             z = self.mlp(h)
             self.print("active")
             self.print(inputs.active[t])
