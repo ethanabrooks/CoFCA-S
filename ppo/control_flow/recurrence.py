@@ -97,7 +97,6 @@ class Recurrence(nn.Module):
         return RecurrentState(*torch.split(hx, self.state_sizes, dim=-1))
 
     def print(self, *args, **kwargs):
-        torch.set_printoptions(precision=1)
         if self.debug:
             print(*args, **kwargs)
 
