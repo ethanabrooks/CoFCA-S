@@ -151,15 +151,15 @@ class Recurrence(nn.Module):
             _x.squeeze_(0)
 
         h = hx.h
-        w = hx.w
+        w = hx.w.long().squeeze(-1)
         a = hx.a.long().squeeze(-1)
         a[new_episode] = 0
         R = torch.arange(N, device=rnn_hxs.device)
         A = torch.cat([actions[:, :, 0], hx.a.view(1, N)], dim=0).long()
         # P = torch.cat([actions[:, :, 1], hx.p.view(1, N)], dim=0).long()
+        active = inputs.active.long().squeeze(-1)
 
         for t in range(T):
-            w = inputs.active[t].long().squeeze(-1)
             r = H[w, R]
             # r = M[R, a]
             # if self.baseline:
@@ -181,7 +181,8 @@ class Recurrence(nn.Module):
             self.print("probs")
             self.print(torch.round(a_dist.probs * 10))
             self.sample_new(A[t], a_dist)
-            # a = torch.clamp(a + P[t] - self.na, 0, self.na - 1)
+            delta = (-1) ** (A[t] >= self.obs_sections.lines).long() * A[t]
+            w = torch.clamp(w + delta, min=0, max=self.obs_sections.lines - 1)
             # a = a + P[t]
             # self.sample_new(A[t], a_dist
             yield RecurrentState(
