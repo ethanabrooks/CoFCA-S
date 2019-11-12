@@ -41,7 +41,7 @@ class Recurrence(nn.Module):
         reduceG,
     ):
         super().__init__()
-
+        self.d_equals_a = True
         self.reduceG = reduceG
         self.baseline = baseline
         self.obs_spaces = Obs(**observation_space.spaces)
@@ -54,22 +54,18 @@ class Recurrence(nn.Module):
         nl = int(self.obs_spaces.lines.nvec[0])
         self.embed_task = nn.Embedding(nl, hidden_size)
         self.task_encoder = nn.GRU(hidden_size, hidden_size, bidirectional=True)
-
-        # f
-        layers = []
+        na = int(action_space.nvec[0])
         in_size = self.obs_sections.condition + 2 * hidden_size
-        for _ in range(num_layers + 1):
-            layers.extend([nn.Linear(in_size, hidden_size), activation])
-            in_size = hidden_size
-        self.f = nn.Sequential(*layers)
+        self.gru = nn.GRUCell(in_size, hidden_size)
 
-        self.na = na = int(action_space.nvec[0])
-        self.gru = nn.GRUCell(hidden_size, hidden_size)
+        layers = []
+        for _ in range(num_layers + 1):
+            layers.extend([nn.Linear(hidden_size, hidden_size), activation])
+        self.mlp = nn.Sequential(*layers)
+
         self.critic = init_(nn.Linear(hidden_size, 1))
         self.actor = Categorical(hidden_size, na)
-        self.attention = Categorical(hidden_size, na)
-        self.linear = nn.Linear(hidden_size, 1)
-        self.a_one_hots = nn.Embedding.from_pretrained(torch.eye(na))
+        # self.attention = Categorical(hidden_size, na)
         self.state_sizes = RecurrentState(
             a=1, a_probs=na, p=1, p_probs=na, w=1, v=1, h=hidden_size
         )
@@ -157,15 +153,16 @@ class Recurrence(nn.Module):
                 g = G[active[t], R]
             x = torch.cat([inputs.condition[t], g], dim=-1)
             h = self.gru(x, h)
+            z = self.mlp(h)
             self.print("active")
             self.print(inputs.active[t])
-            a_dist = self.actor(h)
+            a_dist = self.actor(z)
             self.print("probs")
             self.print(torch.round(a_dist.probs * 10))
             self.sample_new(A[t], a_dist)
             yield RecurrentState(
                 a=A[t],
-                v=self.critic(h),
+                v=self.critic(z),
                 h=h,
                 w=w,
                 a_probs=a_dist.probs,

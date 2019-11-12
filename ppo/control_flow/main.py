@@ -10,7 +10,7 @@ from ppo.train import Train
 
 def main(log_dir, baseline, seed, **kwargs):
     class _Train(Train):
-        def build_agent(self, envs, debug=False, d_equals_a=False, **agent_args):
+        def build_agent(self, envs, debug=False, **agent_args):
             if baseline == "default":
                 return ppo.agent.Agent(
                     obs_shape=envs.observation_space.shape,
@@ -24,7 +24,6 @@ def main(log_dir, baseline, seed, **kwargs):
                 action_space=envs.action_space,
                 debug=debug,
                 baseline=baseline,
-                d_equals_a=d_equals_a,
                 **agent_args,
             )
 
