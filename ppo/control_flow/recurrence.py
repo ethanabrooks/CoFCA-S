@@ -63,7 +63,7 @@ class Recurrence(nn.Module):
         self.na = na = int(action_space.nvec[0])
         self.gru = nn.GRUCell(hidden_size, hidden_size)
         self.critic = init_(nn.Linear(hidden_size, 1))
-        self.actor = init_(nn.Linear(2 * hidden_size, na))
+        self.actor = Categorical(2 * hidden_size, na)
         self.linear = nn.Linear(hidden_size, 1)
         self.a_one_hots = nn.Embedding.from_pretrained(torch.eye(na))
         self.state_sizes = RecurrentState(
@@ -143,8 +143,7 @@ class Recurrence(nn.Module):
             K.append(k)
         S = torch.stack(K, dim=0)  # ns, 2, nb, h
 
-        V = S.transpose(1, 2).reshape(S.size(0), N, -1)
-        L = self.actor(V)
+        H = S.transpose(1, 2).reshape(S.size(0), N, -1)  # ns, nb, 2*h
         # L2 = L.permute(2, 0, 1, 3)  # nb, ns, ns, 2
         # L3 = L2.reshape(L2.size(0), L2.size(1), -1)  # nb, ns, 2*ns
         # P = F.softmax(L3, dim=-1)
@@ -177,8 +176,7 @@ class Recurrence(nn.Module):
             # self.print(p_dist.probs)
             self.print("active")
             self.print(inputs.active[t])
-            logits = L[inputs.active[t].long().squeeze(-1), R]
-            a_dist = FixedCategorical(logits=logits)
+            a_dist = self.actor(H[inputs.active[t].long().squeeze(-1), R])
             self.print("probs")
             self.print(torch.round(a_dist.probs * 10))
             self.sample_new(A[t], a_dist)
