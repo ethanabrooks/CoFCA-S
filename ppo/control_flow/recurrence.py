@@ -68,13 +68,7 @@ class Recurrence(nn.Module):
         # self.linear = nn.Linear(hidden_size, 1)
         # self.a_one_hots = nn.Embedding.from_pretrained(torch.eye(na))
         self.state_sizes = RecurrentState(
-            a=1,
-            a_probs=na,
-            p=1,
-            p_probs=self.obs_sections.lines,
-            w=1,
-            v=1,
-            h=hidden_size,
+            a=1, a_probs=na, p=1, p_probs=na, w=1, v=1, h=hidden_size
         )
 
     @staticmethod
@@ -190,8 +184,10 @@ class Recurrence(nn.Module):
             self.print("probs")
             self.print(torch.round(a_dist.probs * 10))
             self.sample_new(A[t], a_dist)
+            p_dist = self.actor(z)
+            self.sample_new(P[t], p_dist)
             w = torch.clamp(
-                w + self.obs_sections.lines - A[t],
+                w + self.obs_sections.lines - P[t],
                 min=0,
                 max=self.obs_sections.lines - 1,
             )
@@ -204,6 +200,6 @@ class Recurrence(nn.Module):
                 h=h,
                 w=w,
                 a_probs=a_dist.probs,
-                p=hx.p,  # TODO P[t],
-                p_probs=hx.p_probs,  # TODO p_dist.probs,
+                p=P[t],  # TODO P[t],
+                p_probs=p_dist.probs,  # TODO p_dist.probs,
             )
