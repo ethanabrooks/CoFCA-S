@@ -9,7 +9,7 @@ from rl_utils import hierarchical_parse_args, gym
 from ppo import keyboard_control
 from ppo.control_flow.lines import If, Else, EndIf, While, EndWhile, Subtask, Padding
 
-Obs = namedtuple("Obs", "active condition lines")
+Obs = namedtuple("Obs", "active condition lines line_type")
 Last = namedtuple("Last", "action active reward terminal selected")
 
 
@@ -76,12 +76,13 @@ class Env(gym.Env, ABC):
         if baseline:
             self.action_space = spaces.Discrete(2 * n_lines)
             self.observation_space = spaces.MultiBinary(
-                2 + len(self.line_types) * n_lines + (n_lines + 1)
+                2 + 2 * len(self.line_types) * n_lines + (n_lines + 1)
             )
             self.eye = Obs(
                 condition=np.eye(2),
                 lines=np.eye(len(self.line_types)),
                 active=np.eye(n_lines + 1),
+                line_type=np.eye(len(self.line_types)),
             )
         else:
             self.action_space = spaces.MultiDiscrete(np.array([2 * n_lines, n_lines]))
@@ -92,6 +93,7 @@ class Env(gym.Env, ABC):
                         np.array([len(self.line_types)] * n_lines)
                     ),
                     active=spaces.Discrete(n_lines + 1),
+                    line_type=spaces.Discrete(len(line_types)),
                 )
             )
         self.t = None
@@ -152,10 +154,15 @@ class Env(gym.Env, ABC):
     def get_observation(self, action):
         padded = self.lines + [Padding] * (self.n_lines - len(self.lines))
         lines = [self.line_types.index(t) for t in padded]
+        if self.active is None:
+            line_type = Padding
+        else:
+            line_type = self.lines[self.active]
         obs = Obs(
             condition=self.condition_bit,
             lines=lines,
             active=self.n_lines if self.active is None else self.active,
+            line_type=self.line_types.index(line_type),
         )
         if self.baseline:
             obs = [eye[o].flatten() for eye, o in zip(self.eye, obs)]

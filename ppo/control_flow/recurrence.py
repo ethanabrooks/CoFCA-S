@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from torch import nn as nn
 
 from ppo.control_flow.env import Obs
-from ppo.distributions import Categorical
+from ppo.distributions import Categorical, FixedCategorical
 from ppo.utils import init_
 
 RecurrentState = namedtuple("RecurrentState", "a p w v h a_probs p_probs")
@@ -59,10 +59,11 @@ class Recurrence(nn.Module):
         na = int(action_space.nvec[0])
         self.embed_task = nn.Embedding(nl, hidden_size)
         self.embed_action = nn.Embedding(na, hidden_size)
+        self.embed_line_type = nn.Embedding(nl, hidden_size)
         self.task_encoder = nn.GRU(
             hidden_size, self.no * hidden_size, bidirectional=True
         )
-        in_size = self.obs_sections.condition
+        in_size = self.obs_sections.condition + hidden_size
         if reduceG is not None:
             in_size += hidden_size
         self.gru = nn.GRUCell(in_size, hidden_size)
@@ -70,11 +71,12 @@ class Recurrence(nn.Module):
         layers = []
         for _ in range(num_layers):
             layers.extend([init_(nn.Linear(hidden_size, hidden_size)), activation])
-        self.mlp = nn.Sequential(*layers, init_(nn.Linear(hidden_size, self.no)))
+        self.mlp = nn.Sequential(*layers)
 
-        self.critic = init_(nn.Linear(2 * hidden_size, 1))
-        self.actor = Categorical(2 * hidden_size, na)
+        self.critic = init_(nn.Linear(hidden_size, 1))
+        self.actor = init_(nn.Linear(2 * hidden_size, na))
         self.attention = Categorical(hidden_size, na)
+        self.options = init_(nn.Linear(hidden_size, self.no))
         self.state_sizes = RecurrentState(
             a=1, a_probs=na, p=1, p_probs=na, w=1, v=1, h=hidden_size
         )
@@ -127,20 +129,21 @@ class Recurrence(nn.Module):
 
         G = []
         for i in range(self.obs_sections.lines):
-            _, g = self.task_encoder(torch.roll(gru_input, shifts=-i, dims=0))
-            G.append(g)
+            _, l = self.task_encoder(torch.roll(gru_input, shifts=-i, dims=0))
+            G.append(l)
         G = torch.stack(G, dim=0)  # ns, 2, nb, no*h
-        G = G.transpose(1, 2)  # ns, nb, 2, no*h
-        G = G.reshape(G.size(0), N, -1, self.no)  # ns, nb, 2*h, no
-        g = None
+        G = G.permute(0, 2, 3, 1)  # ns, nb, no*h, 2
+        G = G.reshape(G.size(0), N, self.no, -1)  # ns, nb, no, 2*h
+        L = self.actor(G)
+        l = None
         if self.reduceG == "first":
-            g = G[0]
+            l = G[0]
         elif self.reduceG == "sum":
-            g = G.sum(dim=0)
+            l = G.sum(dim=0)
         elif self.reduceG == "mean":
-            g = G.mean(dim=0)
+            l = G.mean(dim=0)
         elif self.reduceG == "max":
-            g = G.max(dim=0).values
+            l = G.max(dim=0).values
         else:
             assert self.reduceG is None
 
@@ -163,16 +166,18 @@ class Recurrence(nn.Module):
             if self.reduceG is None:
                 if self.w_equals_active:
                     w = active[t]
-                g = G[w, R]
-            x = [inputs.condition[t]]
+                l = L[w, R]
+            line_type = inputs.line_type[t].squeeze(-1).long()
+            x = [inputs.condition[t], self.embed_line_type(line_type)]
             if self.reduceG is not None:
                 x.append(self.embed_action(A[t - 1].clone()))
             h = self.gru(torch.cat(x, dim=-1), h)
-            o = self.mlp(h)
-            z = (g @ o.unsqueeze(-1)).squeeze(-1)
+            z = self.mlp(h).softmax(-1)
+            o = self.options(z)
+            logits = (o.unsqueeze(1) @ l).squeeze(1)
             self.print("active")
             self.print(inputs.active[t])
-            a_dist = self.actor(z)
+            a_dist = FixedCategorical(logits=logits)
             self.print("probs")
             self.print(torch.round(a_dist.probs * 10))
             self.sample_new(A[t], a_dist)
