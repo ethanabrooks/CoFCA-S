@@ -71,7 +71,7 @@ class Recurrence(nn.Module):
 
         self.critic = init_(nn.Linear(hidden_size, 1))
         self.actor = Categorical(hidden_size, na)
-        self.attention = Categorical(2 * hidden_size, na)
+        self.attention = Categorical(hidden_size, na)
         self.state_sizes = RecurrentState(
             a=1, a_probs=na, p=1, p_probs=na, w=1, v=1, h=hidden_size
         )
@@ -172,10 +172,7 @@ class Recurrence(nn.Module):
             self.print(torch.round(a_dist.probs * 10))
             self.sample_new(A[t], a_dist)
             if not self.w_equals_active:
-                attention_input = torch.cat(
-                    [self.embed_action(A[t].clone()), z], dim=-1
-                )
-                p_dist = self.attention(attention_input)
+                p_dist = self.attention(self.embed_action(A[t].clone()))
                 self.sample_new(P[t], p_dist)
                 w = w + P[t].clone()
                 w = torch.clamp(w, min=0, max=self.obs_sections.lines - 1)
