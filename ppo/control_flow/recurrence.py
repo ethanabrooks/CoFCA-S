@@ -54,23 +54,26 @@ class Recurrence(nn.Module):
         self.hidden_size = hidden_size
 
         # networks
+        self.no = 2
         nl = int(self.obs_spaces.lines.nvec[0])
         na = int(action_space.nvec[0])
         self.embed_task = nn.Embedding(nl, hidden_size)
         self.embed_action = nn.Embedding(na, hidden_size)
-        self.task_encoder = nn.GRU(hidden_size, hidden_size, bidirectional=True)
-        in_size = self.obs_sections.condition + 2 * hidden_size
+        self.task_encoder = nn.GRU(
+            hidden_size, self.no * hidden_size, bidirectional=True
+        )
+        in_size = self.obs_sections.condition
         if reduceG is not None:
             in_size += hidden_size
         self.gru = nn.GRUCell(in_size, hidden_size)
 
         layers = []
-        for _ in range(num_layers + 1):
-            layers.extend([nn.Linear(hidden_size, hidden_size), activation])
-        self.mlp = nn.Sequential(*layers)
+        for _ in range(num_layers):
+            layers.extend([init_(nn.Linear(hidden_size, hidden_size)), activation])
+        self.mlp = nn.Sequential(*layers, init_(nn.Linear(hidden_size, self.no)))
 
-        self.critic = init_(nn.Linear(hidden_size, 1))
-        self.actor = Categorical(hidden_size, na)
+        self.critic = init_(nn.Linear(2 * hidden_size, 1))
+        self.actor = Categorical(2 * hidden_size, na)
         self.attention = Categorical(hidden_size, na)
         self.state_sizes = RecurrentState(
             a=1, a_probs=na, p=1, p_probs=na, w=1, v=1, h=hidden_size
@@ -126,8 +129,9 @@ class Recurrence(nn.Module):
         for i in range(self.obs_sections.lines):
             _, g = self.task_encoder(torch.roll(gru_input, shifts=-i, dims=0))
             G.append(g)
-        G = torch.stack(G, dim=0)  # ns, 2, nb, h
-        G = G.transpose(1, 2).reshape(G.size(0), N, -1)  # ns, nb, 2*h
+        G = torch.stack(G, dim=0)  # ns, 2, nb, no*h
+        G = G.transpose(1, 2)  # ns, nb, 2, no*h
+        G = G.reshape(G.size(0), N, -1, self.no)  # ns, nb, 2*h, no
         g = None
         if self.reduceG == "first":
             g = G[0]
@@ -160,11 +164,12 @@ class Recurrence(nn.Module):
                 if self.w_equals_active:
                     w = active[t]
                 g = G[w, R]
-            x = [inputs.condition[t], g]
+            x = [inputs.condition[t]]
             if self.reduceG is not None:
                 x.append(self.embed_action(A[t - 1].clone()))
             h = self.gru(torch.cat(x, dim=-1), h)
-            z = self.mlp(h)
+            o = self.mlp(h)
+            z = (g @ o.unsqueeze(-1)).squeeze(-1)
             self.print("active")
             self.print(inputs.active[t])
             a_dist = self.actor(z)
