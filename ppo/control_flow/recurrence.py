@@ -172,7 +172,7 @@ class Recurrence(nn.Module):
             self.print(torch.round(a_dist.probs * 10))
             self.sample_new(A[t], a_dist)
             if not self.w_equals_active:
-                p_dist = self.attention(self.embed_action(A[t].clone()))
+                p_dist = self.attention(h)
                 self.sample_new(P[t], p_dist)
                 w = w + P[t].clone()
                 w = torch.clamp(w, min=0, max=self.obs_sections.lines - 1)
