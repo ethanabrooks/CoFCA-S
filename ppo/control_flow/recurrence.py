@@ -65,13 +65,11 @@ class Recurrence(nn.Module):
         in_size = self.obs_sections.condition
         if reduceG is not None:
             in_size += hidden_size
-        # self.gru = nn.GRUCell(in_size, hidden_size)
+        self.gru = nn.GRUCell(in_size, hidden_size)
 
         layers = []
-        in_size = self.obs_sections.condition
         for _ in range(num_layers):
-            layers.extend([init_(nn.Linear(in_size, hidden_size)), activation])
-            in_size = hidden_size
+            layers.extend([init_(nn.Linear(hidden_size, hidden_size)), activation])
         self.mlp = nn.Sequential(*layers, init_(nn.Linear(hidden_size, self.no)))
 
         self.critic = init_(nn.Linear(2 * hidden_size, 1))
@@ -169,8 +167,8 @@ class Recurrence(nn.Module):
             x = [inputs.condition[t]]
             if self.reduceG is not None:
                 x.append(self.embed_action(A[t - 1].clone()))
-            # h = self.gru(torch.cat(x, dim=-1), h)
-            o = self.mlp(torch.cat(x, dim=-1)).softmax(dim=-1)
+            h = self.gru(torch.cat(x, dim=-1), h)
+            o = self.mlp(h)
             z = (g @ o.unsqueeze(-1)).squeeze(-1)
             self.print("active")
             self.print(inputs.active[t])
