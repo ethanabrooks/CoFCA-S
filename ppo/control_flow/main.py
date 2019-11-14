@@ -42,6 +42,7 @@ def bandit_args():
     parser.add_argument("--no-tqdm", dest="use_tqdm", action="store_false")
     parser.add_argument("--time-limit", type=int)
     parser.add_argument("--eval-steps", type=int)
+    parser.add_argument("--no-eval", action="store_true")
     parser.add_argument("--baseline", choices=["oh-et-al", "default", "no-attention"])
     parsers.env.add_argument("--min-lines", type=int, required=True)
     parsers.env.add_argument("--max-lines", type=int, required=True)

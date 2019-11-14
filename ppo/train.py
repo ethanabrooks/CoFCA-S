@@ -41,6 +41,7 @@ class TrainBase(abc.ABC):
         normalize,
         log_interval,
         eval_interval,
+        no_eval,
         use_gae,
         tau,
         ppo_args,
@@ -126,6 +127,7 @@ class TrainBase(abc.ABC):
             eval_steps=eval_steps,
             log_interval=log_interval,
             eval_interval=eval_interval,
+            no_eval=no_eval,
             use_tqdm=use_tqdm,
             success_reward=success_reward,
         )
@@ -145,10 +147,11 @@ class TrainBase(abc.ABC):
         eval_steps,
         log_interval,
         eval_interval,
+        no_eval,
         success_reward,
         use_tqdm,
     ):
-        if eval_interval:
+        if eval_interval and not no_eval:
             # vec_norm = get_vec_normalize(eval_envs)
             # if vec_norm is not None:
             #     vec_norm.eval()
@@ -265,6 +268,7 @@ class TrainBase(abc.ABC):
             counter["time_step"] += np.ones_like(done)
             episode_rewards = counter["reward"][done]
             episode_counter["rewards"] += list(episode_rewards)
+            print(list(episode_rewards))
             if success_reward is not None:
                 # noinspection PyTypeChecker
                 episode_counter["success"] += list(episode_rewards >= success_reward)
@@ -293,6 +297,9 @@ class TrainBase(abc.ABC):
                     masks=masks,
                 )
 
+        import ipdb
+
+        ipdb.set_trace()
         return dict(episode_counter)
 
     @staticmethod
