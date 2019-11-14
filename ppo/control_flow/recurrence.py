@@ -60,13 +60,12 @@ class Recurrence(nn.Module):
         self.embed_task = nn.Embedding(nl, hidden_size)
         self.embed_action = nn.Embedding(na, hidden_size)
         self.embed_line_type = nn.Embedding(nl, hidden_size)
-        self.task_encoder = nn.GRU(
-            hidden_size, self.no * hidden_size, bidirectional=True
-        )
-        in_size = self.obs_sections.condition + hidden_size
-        if reduceG is not None:
-            in_size += hidden_size
+        self.task_encoder = nn.GRU(hidden_size, hidden_size, bidirectional=True)
+        in_size = self.obs_sections.condition + 2 * hidden_size
         self.gru = nn.GRUCell(in_size, hidden_size)
+        self.keys = init_(nn.Linear(2 * hidden_size, hidden_size))
+        self.query = init_(nn.Linear(hidden_size, hidden_size))
+        self.sharpener = init_(nn.Linear(hidden_size, 1))
 
         layers = []
         for _ in range(num_layers):
@@ -74,7 +73,7 @@ class Recurrence(nn.Module):
         self.mlp = nn.Sequential(*layers)
 
         self.critic = init_(nn.Linear(hidden_size, 1))
-        self.actor = init_(nn.Linear(2 * hidden_size, na))
+        self.actor = init_(nn.Linear(2 * hidden_size, self.no * na))
         self.attention = Categorical(hidden_size, na)
         self.options = init_(nn.Linear(hidden_size, self.no))
         self.state_sizes = RecurrentState(
@@ -133,10 +132,11 @@ class Recurrence(nn.Module):
                 torch.roll(gru_input, shifts=-i, dims=0)
             )
             G.append(current_probs)
-        G = torch.stack(G, dim=0)  # ns, 2, nb, no*h
-        G = G.permute(0, 2, 3, 1)  # ns, nb, no*h, 2
-        G = G.reshape(G.size(0), N, self.no, -1)  # ns, nb, no, 2*h
-        all_probs = self.actor(G).softmax(-1)
+        G = torch.stack(G, dim=0)  # ns, 2, nb, h
+        G = G.permute(0, 2, 3, 1)  # ns, nb, h, 2
+        G = G.reshape(G.size(0), N, -1)  # ns, nb, 2*h
+        all_probs = self.actor(G).view(G.size(0), N, self.no, -1).softmax(-1)
+        K = self.keys(G)
         current_probs = None
         if self.reduceG == "first":
             current_probs = G[0]
@@ -165,18 +165,25 @@ class Recurrence(nn.Module):
         active = inputs.active.squeeze(-1).long()
 
         for t in range(T):
-            if self.reduceG is None:
-                if self.w_equals_active:
-                    w = active[t]
-                current_probs = all_probs[w, R]
             line_type = inputs.line_type[t].squeeze(-1).long()
-            x = [inputs.condition[t], self.embed_line_type(line_type)]
-            if self.reduceG is not None:
-                x.append(self.embed_action(A[t - 1].clone()))
+            x = [
+                inputs.condition[t],
+                self.embed_line_type(line_type),
+                self.embed_action(A[t - 1].clone()),
+            ]
             h = self.gru(torch.cat(x, dim=-1), h)
             z = self.mlp(h)
+            q = self.query(z)
             o = self.options(z).softmax(-1)
-            probs = (o.unsqueeze(1) @ current_probs).squeeze(1)
+            sharpness = self.sharpener(z).transpose(0, 1)
+            sims = F.cosine_similarity(K, q.unsqueeze(0), dim=-1)
+            w = F.softmax(sims * sharpness, dim=0).unsqueeze(-1).unsqueeze(-1)
+            probs = torch.sum(w * all_probs, dim=0)
+            probs = torch.sum(probs * o.unsqueeze(-1), dim=1)
+            # if self.reduceG is None:
+            #     if self.w_equals_active:
+            #         w = active[t]
+            #     current_probs = all_probs[w, R]
             self.print("active")
             self.print(inputs.active[t])
             a_dist = FixedCategorical(probs=probs)
@@ -184,20 +191,20 @@ class Recurrence(nn.Module):
             self.print(torch.round(a_dist.probs * 10)[:, :15])
             self.print(torch.round(a_dist.probs * 10)[:, 15:])
             self.sample_new(A[t], a_dist)
-            if not self.w_equals_active:
-                p_dist = self.attention(self.embed_action(A[t].clone()))
-                self.print("p probs")
-                self.print(torch.round(p_dist.probs * 10)[:, :15])
-                self.print(torch.round(p_dist.probs * 10)[:, 15:])
-                self.sample_new(P[t], p_dist)
-                w = w + P[t].clone() - self.obs_sections.lines
-                w = torch.clamp(w, min=0, max=self.obs_sections.lines - 1)
-                p_probs = p_dist.probs
+            # if not self.w_equals_active:
+            # p_dist = self.attention(self.embed_action(A[t].clone()))
+            # self.print("p probs")
+            # self.print(torch.round(p_dist.probs * 10)[:, :15])
+            # self.print(torch.round(p_dist.probs * 10)[:, 15:])
+            # self.sample_new(P[t], p_dist)
+            # w = w + P[t].clone() - self.obs_sections.lines
+            # w = torch.clamp(w, min=0, max=self.obs_sections.lines - 1)
+            # p_probs = p_dist.probs
             yield RecurrentState(
                 a=A[t],
                 v=self.critic(z),
                 h=h,
-                w=w,
+                w=hx.w,
                 a_probs=a_dist.probs,
                 p=P[t],
                 p_probs=p_probs,

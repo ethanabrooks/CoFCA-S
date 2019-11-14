@@ -39,7 +39,7 @@ class Agent(ppo.agent.Agent, NNBase):
         rm = self.recurrent_module
         hx = RecurrentState(*rm.parse_hidden(all_hxs))
         a_dist = FixedCategorical(hx.a_probs)
-        if rm.w_equals_active:
+        if True:  # TODO rm.w_equals_active:
             action_log_probs = a_dist.log_probs(hx.a)
             entropy = a_dist.entropy().mean()
             action = torch.cat([hx.a, hx.a], dim=-1)
