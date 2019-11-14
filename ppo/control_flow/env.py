@@ -136,6 +136,7 @@ class Env(gym.Env, ABC):
             self.condition_bit = 1 - int(self.random.rand() < self.flip_prob)
         r = 0
         t = self.t > self.time_limit
+        i = {}
         if self.active is None:
             if self.delayed_reward and self.failing:
                 r = 0
@@ -143,6 +144,7 @@ class Env(gym.Env, ABC):
                 r = 1
             t = True
         elif selected != self.active:
+            i["termination_line"] = self.active
             self.failing = True
             if not self.delayed_reward:
                 r = 0
