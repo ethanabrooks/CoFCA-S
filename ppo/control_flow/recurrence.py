@@ -54,7 +54,7 @@ class Recurrence(nn.Module):
         self.hidden_size = hidden_size
 
         # networks
-        self.no = 8
+        self.no = 2
         nl = int(self.obs_spaces.lines.nvec[0])
         na = int(action_space.nvec[0])
         self.embed_task = nn.Embedding(nl, hidden_size)
@@ -62,7 +62,7 @@ class Recurrence(nn.Module):
         self.task_encoder = nn.GRU(
             hidden_size, self.no * hidden_size, bidirectional=True
         )
-        in_size = self.obs_sections.condition + 2 * self.no * hidden_size
+        in_size = self.obs_sections.condition + 4 * hidden_size
         self.gru = nn.GRUCell(in_size, hidden_size)
 
         layers = []
