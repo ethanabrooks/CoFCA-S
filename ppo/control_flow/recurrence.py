@@ -129,21 +129,23 @@ class Recurrence(nn.Module):
 
         G = []
         for i in range(self.obs_sections.lines):
-            _, l = self.task_encoder(torch.roll(gru_input, shifts=-i, dims=0))
-            G.append(l)
+            _, current_probs = self.task_encoder(
+                torch.roll(gru_input, shifts=-i, dims=0)
+            )
+            G.append(current_probs)
         G = torch.stack(G, dim=0)  # ns, 2, nb, no*h
         G = G.permute(0, 2, 3, 1)  # ns, nb, no*h, 2
         G = G.reshape(G.size(0), N, self.no, -1)  # ns, nb, no, 2*h
-        L = self.actor(G)
-        l = None
+        all_probs = self.actor(G).softmax(-1)
+        current_probs = None
         if self.reduceG == "first":
-            l = G[0]
+            current_probs = G[0]
         elif self.reduceG == "sum":
-            l = G.sum(dim=0)
+            current_probs = G.sum(dim=0)
         elif self.reduceG == "mean":
-            l = G.mean(dim=0)
+            current_probs = G.mean(dim=0)
         elif self.reduceG == "max":
-            l = G.max(dim=0).values
+            current_probs = G.max(dim=0).values
         else:
             assert self.reduceG is None
 
@@ -166,23 +168,27 @@ class Recurrence(nn.Module):
             if self.reduceG is None:
                 if self.w_equals_active:
                     w = active[t]
-                l = L[w, R]
+                current_probs = all_probs[w, R]
             line_type = inputs.line_type[t].squeeze(-1).long()
             x = [inputs.condition[t], self.embed_line_type(line_type)]
             if self.reduceG is not None:
                 x.append(self.embed_action(A[t - 1].clone()))
             h = self.gru(torch.cat(x, dim=-1), h)
-            z = self.mlp(h).softmax(-1)
-            o = self.options(z)
-            logits = (o.unsqueeze(1) @ l).squeeze(1)
+            z = self.mlp(h)
+            o = self.options(z).softmax(-1)
+            probs = (o.unsqueeze(1) @ current_probs).squeeze(1)
             self.print("active")
             self.print(inputs.active[t])
-            a_dist = FixedCategorical(logits=logits)
-            self.print("probs")
-            self.print(torch.round(a_dist.probs * 10))
+            a_dist = FixedCategorical(probs=probs)
+            self.print("a probs")
+            self.print(torch.round(a_dist.probs * 10)[:, :15])
+            self.print(torch.round(a_dist.probs * 10)[:, 15:])
             self.sample_new(A[t], a_dist)
             if not self.w_equals_active:
                 p_dist = self.attention(self.embed_action(A[t].clone()))
+                self.print("p probs")
+                self.print(torch.round(p_dist.probs * 10)[:, :15])
+                self.print(torch.round(p_dist.probs * 10)[:, 15:])
                 self.sample_new(P[t], p_dist)
                 self.print("p probs")
                 self.print(torch.round(p_dist.probs * 10)[:, 15:])
