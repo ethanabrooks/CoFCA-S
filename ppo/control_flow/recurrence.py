@@ -175,11 +175,14 @@ class Recurrence(nn.Module):
             z = self.mlp(h)
             q = self.query(z)
             o = self.options(z).softmax(-1)
+            self.print("o", o.view(-1))
             sharpness = self.sharpener(z).transpose(0, 1)
             sims = F.cosine_similarity(K, q.unsqueeze(0), dim=-1)
             w = F.softmax(sims * sharpness, dim=0).unsqueeze(-1).unsqueeze(-1)
+            self.print("w", torch.round(10 * w.view(-1)))
             probs = torch.sum(w * all_probs, dim=0)
             probs = torch.sum(probs * o.unsqueeze(-1), dim=1)
+            half = probs.size(-1) // 2
             # if self.reduceG is None:
             #     if self.w_equals_active:
             #         w = active[t]
@@ -188,8 +191,8 @@ class Recurrence(nn.Module):
             self.print(inputs.active[t])
             a_dist = FixedCategorical(probs=probs)
             self.print("a probs")
-            self.print(torch.round(a_dist.probs * 10)[:, :15])
-            self.print(torch.round(a_dist.probs * 10)[:, 15:])
+            self.print(torch.round(a_dist.probs * 10)[:, :half])
+            self.print(torch.round(a_dist.probs * 10)[:, half:])
             self.sample_new(A[t], a_dist)
             # if not self.w_equals_active:
             # p_dist = self.attention(self.embed_action(A[t].clone()))
