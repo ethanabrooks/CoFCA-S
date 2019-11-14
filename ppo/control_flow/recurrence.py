@@ -62,10 +62,9 @@ class Recurrence(nn.Module):
         self.task_encoder = nn.GRU(
             hidden_size, self.no * hidden_size, bidirectional=True
         )
-        in_size = self.obs_sections.condition
         if reduceG is not None:
             in_size += hidden_size
-        in_size = self.obs_sections.condition
+        in_size = self.obs_sections.condition + hidden_size
         self.gru = nn.GRUCell(in_size, hidden_size)
 
         layers = []
@@ -165,7 +164,7 @@ class Recurrence(nn.Module):
                 if self.w_equals_active:
                     w = active[t]
                 g = G[w, R]
-            x = [inputs.condition[t]]
+            x = [inputs.condition[t], M[R, w]]
             if self.reduceG is not None:
                 x.append(self.embed_action(A[t - 1].clone()))
             h = self.gru(torch.cat(x, dim=-1), h)
