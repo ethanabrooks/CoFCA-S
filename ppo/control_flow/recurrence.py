@@ -168,15 +168,19 @@ class Recurrence(nn.Module):
             h = self.gru(torch.cat(x, dim=-1), h)
             o = self.mlp(h).softmax(dim=-1)
             z = (g @ o.unsqueeze(-1)).squeeze(-1)
-            self.print("active")
-            self.print(inputs.active[t])
+            self.print("w", w)
+            self.print("o", o)
             a_dist = self.actor(z)
             self.print("probs")
-            self.print(torch.round(a_dist.probs * 10))
+            half = a_dist.probs.size(-1) // 2
+            self.print(torch.round(a_dist.probs * 10).flatten()[:half])
+            self.print(torch.round(a_dist.probs * 10).flatten()[half:])
             self.sample_new(A[t], a_dist)
             if not self.w_equals_active:
                 p_dist = self.attention(self.embed_action(A[t].clone()))
                 self.sample_new(P[t], p_dist)
+                self.print(torch.round(p_dist.probs * 10).flatten()[:half])
+                self.print(torch.round(p_dist.probs * 10).flatten()[half:])
                 w = w + P[t].clone() - self.obs_sections.lines
                 w = torch.clamp(w, min=0, max=self.obs_sections.lines - 1)
                 p_probs = p_dist.probs
