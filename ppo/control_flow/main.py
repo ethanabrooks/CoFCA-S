@@ -52,6 +52,7 @@ def bandit_args():
     parsers.env.add_argument("--line-types")
     parsers.agent.add_argument("--debug", action="store_true")
     parsers.agent.add_argument("--w-equals-active", action="store_true")
+    parsers.agent.add_argument("--num-encoding-layers", type=int, required=True)
     parsers.agent.add_argument("--reduceG", choices="first sum mean max".split())
     return parser
 
