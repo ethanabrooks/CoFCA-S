@@ -56,9 +56,9 @@ class Recurrence(nn.Module):
 
         # networks
         self.no = 2
-        nl = int(self.obs_spaces.lines.nvec[0])
+        nt = int(self.obs_spaces.lines.nvec[0])
         na = int(action_space.nvec[0])
-        self.embed_task = nn.Embedding(nl, hidden_size)
+        self.embed_task = nn.Embedding(nt, hidden_size)
         self.embed_action = nn.Embedding(na, hidden_size)
         self.task_encoder = nn.GRU(
             hidden_size, hidden_size, bidirectional=True, batch_first=True
@@ -69,7 +69,7 @@ class Recurrence(nn.Module):
         layers = []
         for _ in range(num_layers):
             layers.extend([init_(nn.Linear(hidden_size, hidden_size)), activation])
-        self.mlp = nn.Sequential(*layers, init_(nn.Linear(hidden_size, 2 * self.no)))
+        self.mlp = nn.Sequential(*layers, init_(nn.Linear(hidden_size, self.no)))
 
         layers = []
         in_size = hidden_size
@@ -85,7 +85,7 @@ class Recurrence(nn.Module):
         self.state_sizes = RecurrentState(
             a=1, a_probs=na, p=1, p_probs=na, w=1, v=1, h=hidden_size
         )
-        first = torch.zeros(1, 1, self.obs_sections.lines, 1, 1)
+        first = torch.zeros(1, 1, 2 * self.obs_sections.lines, 1)
         first[0, 0, 0] = 1
         self.register_buffer("first", first)
 
@@ -135,27 +135,29 @@ class Recurrence(nn.Module):
         )  # n_batch, n_lines, hidden_size
 
         rolled = []
-        for i in range(self.obs_sections.lines):
+        nl = self.obs_sections.lines
+        for i in range(nl):
             rolled.append(torch.roll(M, shifts=-i, dims=1))
         rolled = torch.cat(rolled, dim=0)
         G, _ = self.task_encoder(rolled)
-        G = G.view(self.obs_sections.lines, N, G.size(1), 2, self.hidden_size)
+        G = G.view(nl, N, nl, 2, self.hidden_size)
         B = self.mlp2(G).sigmoid()
-        # arange = torch.zeros(15).float()
+        # arange = 0.05 * torch.zeros(15).float()
         # arange[0] = 1
         # B[:, :, :, 0] = arange.view(1, 1, -1, 1)
         # B[:, :, :, 1] = arange.flip(0).view(1, 1, -1, 1)
         f, b = torch.unbind(B, dim=3)
-        B = torch.stack([f, b.flip(2)], dim=-1)
+        B = torch.stack([f, b.flip(2)], dim=-2)
+        B = B.view(nl, N, 2 * nl, self.no)
         last = self.first.flip(2)
         zero_last = (1 - last) * B
         B = zero_last + last
         rolled = torch.roll(zero_last, shifts=1, dims=2)
         C = torch.cumprod(1 - rolled, dim=2)
         P = B * C
-        P = F.pad(P, [0, 0, 0, 0, P.size(2), 0])
-        f, b = torch.unbind(P, dim=-1)
-        P = torch.cat([f, b.flip(2)], dim=-1)
+        P = P.view(nl, N, nl, 2, self.no)
+        f, b = torch.unbind(P, dim=3)
+        P = torch.cat([b.flip(2), f], dim=2)
 
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
@@ -196,8 +198,8 @@ class Recurrence(nn.Module):
                 self.sample_new(W[t], p_dist)
                 self.print(torch.round(p_dist.probs * 10).flatten()[:half])
                 self.print(torch.round(p_dist.probs * 10).flatten()[half:])
-                w = w + W[t].clone() - self.obs_sections.lines
-                w = torch.clamp(w, min=0, max=self.obs_sections.lines - 1)
+                w = w + W[t].clone() - nl
+                w = torch.clamp(w, min=0, max=nl - 1)
                 p_probs = p_dist.probs
             yield RecurrentState(
                 a=A[t],
