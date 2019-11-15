@@ -55,12 +55,14 @@ class Recurrence(nn.Module):
         self.hidden_size = hidden_size
 
         # networks
-        self.no = 5
+        self.no = 2
         nl = int(self.obs_spaces.lines.nvec[0])
         na = int(action_space.nvec[0])
         self.embed_task = nn.Embedding(nl, hidden_size)
         self.embed_action = nn.Embedding(na, hidden_size)
-        self.task_encoder = nn.GRU(hidden_size, hidden_size, bidirectional=True)
+        self.task_encoder = nn.GRU(
+            hidden_size, hidden_size, bidirectional=True, batch_first=True
+        )
         in_size = self.obs_sections.condition + hidden_size
         self.gru = nn.GRUCell(in_size, hidden_size)
 
@@ -83,6 +85,9 @@ class Recurrence(nn.Module):
         self.state_sizes = RecurrentState(
             a=1, a_probs=na, p=1, p_probs=na, w=1, v=1, h=hidden_size
         )
+        first = torch.zeros(1, 1, self.obs_sections.lines, 1, 1)
+        first[0, 0, 0] = 1
+        self.register_buffer("first", first)
 
     @staticmethod
     def sample_new(x, dist):
@@ -128,40 +133,24 @@ class Recurrence(nn.Module):
         M = self.embed_task(lines.view(-1)).view(
             *lines.shape, self.hidden_size
         )  # n_batch, n_lines, hidden_size
-        gru_input = M.transpose(0, 1)
 
-        G = []
+        rolled = []
         for i in range(self.obs_sections.lines):
-            g, _ = self.task_encoder(torch.roll(gru_input, shifts=-i, dims=0))
-            G.append(g)
-        G = torch.stack(G, dim=1)
-        G = G.view(G.size(0), G.size(1), N, 2, -1)
-        G = self.mlp2(G).sigmoid()
-
-        f = [None]
-        b = [None]
-        remaining = torch.ones(G.shape[1:], device=rnn_hxs.device)
-        for g in G[1:]:
-            p = remaining * g
-            f.append(p[:, :, 0])
-            b.append(p[:, :, 1])
-            remaining = remaining - p
-        f[0] = remaining[:, :, 0]
-        b[0] = remaining[:, :, 1]
-        f = F.pad(torch.stack(f, dim=-1), [len(f), 0])
-        b = F.pad(torch.stack(b, dim=-1), [len(b), 0])
-        P = torch.cat([f, b.flip(-1)], dim=2)
-        # g = None
-        # if self.reduceG == "first":
-        #     g = G[0]
-        # elif self.reduceG == "sum":
-        #     g = G.sum(dim=0)
-        # elif self.reduceG == "mean":
-        #     g = G.mean(dim=0)
-        # elif self.reduceG == "max":
-        #     g = G.max(dim=0).values
-        # else:
-        #     assert self.reduceG is None
+            rolled.append(torch.roll(M, shifts=-i, dims=1))
+        rolled = torch.cat(rolled, dim=0)
+        G, _ = self.task_encoder(rolled)
+        G = G.view(self.obs_sections.lines, N, G.size(1), 2, self.hidden_size)
+        B = self.mlp2(G).sigmoid()
+        last = self.first.flip(2)
+        B = (1 - last) * B + last
+        f, b = torch.unbind(B, dim=3)
+        B = torch.stack([f, b.flip(2)], dim=-1)
+        rolled = torch.roll(B, shifts=1, dims=2) * (1 - self.first)
+        B1 = torch.cumprod(1 - rolled, dim=2)
+        P = B * B1
+        P = F.pad(P, [0, 0, 0, 0, P.size(2), 0])
+        f, b = torch.unbind(P, dim=-1)
+        P = torch.cat([f, b.flip(2)], dim=-1)
 
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
@@ -188,7 +177,7 @@ class Recurrence(nn.Module):
                 x.append(self.embed_action(A[t - 1].clone()))
             h = self.gru(torch.cat(x, dim=-1), h)
             o = self.mlp(h).softmax(dim=-1)
-            p = (o.unsqueeze(1) @ g).squeeze(1)
+            p = (g @ o.unsqueeze(-1)).squeeze(-1)
             self.print("w", w)
             self.print("o", o)
             a_dist = FixedCategorical(probs=p)
