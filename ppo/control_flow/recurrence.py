@@ -141,13 +141,18 @@ class Recurrence(nn.Module):
         G, _ = self.task_encoder(rolled)
         G = G.view(self.obs_sections.lines, N, G.size(1), 2, self.hidden_size)
         B = self.mlp2(G).sigmoid()
-        last = self.first.flip(2)
-        B = (1 - last) * B + last
+        # arange = torch.zeros(15).float()
+        # arange[0] = 1
+        # B[:, :, :, 0] = arange.view(1, 1, -1, 1)
+        # B[:, :, :, 1] = arange.flip(0).view(1, 1, -1, 1)
         f, b = torch.unbind(B, dim=3)
         B = torch.stack([f, b.flip(2)], dim=-1)
-        rolled = torch.roll(B, shifts=1, dims=2) * (1 - self.first)
-        B1 = torch.cumprod(1 - rolled, dim=2)
-        P = B * B1
+        last = self.first.flip(2)
+        zero_last = (1 - last) * B
+        B = zero_last + last
+        rolled = torch.roll(zero_last, shifts=1, dims=2)
+        C = torch.cumprod(1 - rolled, dim=2)
+        P = B * C
         P = F.pad(P, [0, 0, 0, 0, P.size(2), 0])
         f, b = torch.unbind(P, dim=-1)
         P = torch.cat([f, b.flip(2)], dim=-1)
