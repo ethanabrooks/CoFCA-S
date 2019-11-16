@@ -55,7 +55,7 @@ class Recurrence(nn.Module):
         self.hidden_size = hidden_size
 
         # networks
-        self.no = 2
+        self.no = 10
         nt = int(self.obs_spaces.lines.nvec[0])
         na = int(action_space.nvec[0])
         self.embed_task = nn.Embedding(nt, hidden_size)
