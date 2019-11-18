@@ -135,15 +135,8 @@ class Env(gym.Env, ABC):
                 else_lines=self.lines.count(Else),
                 while_lines=self.lines.count(While),
             )
+        prev = self.lines[self.active]
         self.t += 1
-        i.update(
-            passing_if=self.condition_bit == 1 and self.lines[self.active] is If,
-            failing_if=self.condition_bit == 0 and self.lines[self.active] is If,
-            passing_while=self.condition_bit == 1
-            and self.lines[self.active] is EndWhile,
-            failing_while=self.condition_bit == 0
-            and self.lines[self.active] is EndWhile,
-        )
         self.active = self.next()
         if (
             self.active is None or self.lines[self.active] is not EndWhile
@@ -163,6 +156,10 @@ class Env(gym.Env, ABC):
             if not self.delayed_reward:
                 r = 0
                 t = True
+        if prev is EndWhile:
+            i.update(successful_while=not self.failing)
+        if prev is If:
+            i.update(successful_if=not self.failing)
         return self.get_observation(action), r, t, i
 
     def get_observation(self, action):
