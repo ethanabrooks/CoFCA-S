@@ -128,7 +128,22 @@ class Env(gym.Env, ABC):
         return s, r, t, i
 
     def _step(self, action, selected):
+        i = {}
+        if self.t == 0:
+            i.update(
+                if_lines=self.lines.count(If),
+                else_lines=self.lines.count(Else),
+                while_lines=self.lines.count(While),
+            )
         self.t += 1
+        i.update(
+            passing_if=self.condition_bit == 1 and self.lines[self.active] is If,
+            failing_if=self.condition_bit == 0 and self.lines[self.active] is If,
+            passing_while=self.condition_bit == 1
+            and self.lines[self.active] is EndWhile,
+            failing_while=self.condition_bit == 0
+            and self.lines[self.active] is EndWhile,
+        )
         self.active = self.next()
         if (
             self.active is None or self.lines[self.active] is not EndWhile
@@ -136,7 +151,6 @@ class Env(gym.Env, ABC):
             self.condition_bit = 1 - int(self.random.rand() < self.flip_prob)
         r = 0
         t = self.t > self.time_limit
-        i = {}
         if self.active is None:
             if self.delayed_reward and self.failing:
                 r = 0
@@ -144,12 +158,12 @@ class Env(gym.Env, ABC):
                 r = 1
             t = True
         elif selected != self.active:
-            i["termination_line"] = self.active
+            i.update(termination_line=self.active)
             self.failing = True
             if not self.delayed_reward:
                 r = 0
                 t = True
-        return self.get_observation(action), r, t, {}
+        return self.get_observation(action), r, t, i
 
     def get_observation(self, action):
         padded = self.lines + [Padding] * (self.n_lines - len(self.lines))
