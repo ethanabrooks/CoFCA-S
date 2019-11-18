@@ -58,9 +58,9 @@ class Recurrence(nn.Module):
         # networks
         self.ne = num_edges
         nt = int(self.obs_spaces.lines.nvec[0])
-        na = int(action_space.nvec[0])
+        n_a, n_p = map(int, action_space.nvec)
         self.embed_task = nn.Embedding(nt, hidden_size)
-        self.embed_action = nn.Embedding(na, hidden_size)
+        self.embed_action = nn.Embedding(n_a, hidden_size)
         self.task_encoder = nn.GRU(
             hidden_size, hidden_size, bidirectional=True, batch_first=True
         )
@@ -70,7 +70,8 @@ class Recurrence(nn.Module):
         layers = []
         for _ in range(num_layers):
             layers.extend([init_(nn.Linear(hidden_size, hidden_size)), activation])
-        self.mlp = nn.Sequential(*layers, init_(nn.Linear(hidden_size, self.ne)))
+        self.mlp = nn.Sequential(*layers)
+        self.option = init_(nn.Linear(hidden_size, self.ne))
 
         layers = []
         in_size = hidden_size
@@ -81,10 +82,10 @@ class Recurrence(nn.Module):
 
         self.stuff = init_(nn.Linear(hidden_size, 1))
         self.critic = init_(nn.Linear(hidden_size, 1))
-        self.actor = Categorical(2 * hidden_size, na)
-        self.attention = Categorical(hidden_size, na)
+        self.actor = Categorical(hidden_size, n_a)
+        self.attention = Categorical(hidden_size, n_a)
         self.state_sizes = RecurrentState(
-            a=1, a_probs=na, p=1, p_probs=na, w=1, v=1, h=hidden_size
+            a=1, a_probs=n_a, p=1, p_probs=n_p, w=1, v=1, h=hidden_size
         )
         first = torch.zeros(1, 1, 2 * self.obs_sections.lines, 1)
         first[0, 0, 0] = 1
@@ -168,7 +169,6 @@ class Recurrence(nn.Module):
         h = hx.h
         w = hx.w.long().squeeze(-1)
         a = hx.a.long().squeeze(-1)
-        p_probs = hx.p_probs
         a[new_episode] = 0
         R = torch.arange(N, device=rnn_hxs.device)
         A = torch.cat([actions[:, :, 0], hx.a.view(1, N)], dim=0).long()
@@ -181,33 +181,26 @@ class Recurrence(nn.Module):
                     w = active[t]
                 g = P[w, R]
             x = [inputs.condition[t], M[R, w]]
-            if self.reduceG is not None:
-                x.append(self.embed_action(A[t - 1].clone()))
             h = self.gru(torch.cat(x, dim=-1), h)
-            o = self.mlp(h).softmax(dim=-1)
-            p = (g @ o.unsqueeze(-1)).squeeze(-1)
-            self.print("w", w)
-            self.print("o", o)
-            a_dist = FixedCategorical(probs=p)
-            self.print("probs")
-            half = a_dist.probs.size(-1) // 2
-            self.print(torch.round(a_dist.probs * 10).flatten()[:half])
-            self.print(torch.round(a_dist.probs * 10).flatten()[half:])
+            z = F.relu(self.mlp(h))
+            o = self.option(z).softmax(dim=-1)
+            a_dist = self.actor(z)
             self.sample_new(A[t], a_dist)
-            if not self.w_equals_active:
-                p_dist = self.attention(self.embed_action(A[t].clone()))
-                self.sample_new(W[t], p_dist)
-                self.print(torch.round(p_dist.probs * 10).flatten()[:half])
-                self.print(torch.round(p_dist.probs * 10).flatten()[half:])
-                w = w + W[t].clone() - nl
-                w = torch.clamp(w, min=0, max=nl - 1)
-                p_probs = p_dist.probs
+            p = (g @ o.unsqueeze(-1)).squeeze(-1)
+            p_dist = FixedCategorical(probs=p)
+            half = p_dist.probs.size(-1) // 2
+            p_probs = torch.round(p_dist.probs * 10).flatten()
+            self.print(p_probs[:half])
+            self.print(p_probs[half:])
+            self.sample_new(W[t], p_dist)
+            w = w + W[t].clone() - nl
+            w = torch.clamp(w, min=0, max=nl - 1)
             yield RecurrentState(
                 a=A[t],
-                v=self.critic(h),
+                v=self.critic(z),
                 h=h,
                 w=w,
                 a_probs=a_dist.probs,
                 p=W[t],
-                p_probs=p_probs,
+                p_probs=p_dist.probs,
             )

@@ -25,8 +25,10 @@ class Env(gym.Env, ABC):
         baseline,
         delayed_reward,
         line_types,
+        num_subtasks,
     ):
         super().__init__()
+        self.num_subtasks = num_subtasks
         self.delayed_reward = delayed_reward
         self.eval_lines = eval_lines
         self.min_lines = min_lines
@@ -50,6 +52,8 @@ class Env(gym.Env, ABC):
         self.line_transitions = None
         self.active_line = None
         self.if_evaluations = None
+        self.choices = None
+        self.target = None
         self.line_types = [If, Else, EndIf, While, EndWhile, Subtask, Padding]
         if line_types is None:
             line_types = "if-while-else"
@@ -74,6 +78,7 @@ class Env(gym.Env, ABC):
             initial=Subtask, inside_if=EndIf, inside_else=EndIf, inside_while=EndWhile
         )
         if baseline:
+            raise NotImplementedError
             self.action_space = spaces.Discrete(2 * n_lines)
             self.observation_space = spaces.MultiBinary(
                 2 + len(self.line_types) * n_lines + (n_lines + 1)
@@ -84,12 +89,14 @@ class Env(gym.Env, ABC):
                 active=np.eye(n_lines + 1),
             )
         else:
-            self.action_space = spaces.MultiDiscrete(np.array([2 * n_lines, n_lines]))
+            self.action_space = spaces.MultiDiscrete(
+                np.array([self.max_lines + 1, 2 * n_lines])
+            )
             self.observation_space = spaces.Dict(
                 dict(
                     condition=spaces.Discrete(2),
                     lines=spaces.MultiDiscrete(
-                        np.array([len(self.line_types)] * n_lines)
+                        np.array([len(self.line_types) + num_subtasks] * n_lines)
                     ),
                     active=spaces.Discrete(n_lines + 1),
                 )
@@ -101,6 +108,8 @@ class Env(gym.Env, ABC):
             action=None, selected=0, active=None, reward=None, terminal=None
         )
         self.failing = False
+        self.choices = []
+        self.target = []
         self.t = 0
         self.condition_bit = self.random.randint(0, 2)
         if self.evaluating:
@@ -108,7 +117,11 @@ class Env(gym.Env, ABC):
             n_lines = self.eval_lines
         else:
             n_lines = self.random.random_integers(self.min_lines, self.max_lines)
-        self.lines = self.get_lines(n_lines, line_state="initial")
+        lines = self.get_lines(n_lines, line_state="initial")
+        self.lines = [
+            Subtask(self.random.choice(self.num_subtasks)) if line is Subtask else line
+            for line in lines
+        ]
         self.line_transitions = defaultdict(list)
         for _from, _to in self.get_transitions(iter(enumerate(self.lines))):
             self.line_transitions[_from].append(_to)
@@ -117,17 +130,14 @@ class Env(gym.Env, ABC):
         return self.get_observation(action=0)
 
     def step(self, action):
-        if not self.baseline:
-            action = int(action[0])
-        delta = action - self.n_lines
-        selected = self.active + delta
-        s, r, t, i = self._step(action=action, selected=selected)
+        action, selected = action
+        s, r, t, i = self._step(action=int(action))
         self.last = Last(
-            action=action, active=self.active, reward=r, terminal=t, selected=selected
+            action=action, selected=selected, active=self.active, reward=r, terminal=t
         )
         return s, r, t, i
 
-    def _step(self, action, selected):
+    def _step(self, action):
         i = {}
         if self.t == 0:
             i.update(
@@ -135,33 +145,39 @@ class Env(gym.Env, ABC):
                 else_lines=self.lines.count(Else),
                 while_lines=self.lines.count(While),
             )
-        prev = self.lines[self.active]
+        line = self.lines[self.active]
+        if action < self.num_subtasks:
+            self.choices.append(action)
+        if type(line) is Subtask:
+            self.target.append(line.id)
         self.t += 1
         self.active = self.next()
         self.condition_bit = 1 - int(self.random.rand() < self.flip_prob)
         r = 0
         t = self.t > self.time_limit
         if self.active is None:
-            if self.delayed_reward and self.failing:
-                r = 0
-            else:
-                r = 1
+            r = int(tuple(self.choices) == tuple(self.target))
             t = True
-        elif selected != self.active:
+        elif not (
+            contains(self.choices, self.target) or contains(self.target, self.choices)
+        ):
             i.update(termination_line=self.active)
             self.failing = True
             if not self.delayed_reward:
                 r = 0
                 t = True
-        if prev is While:
+        if line is While:
             i.update(successful_while=not self.failing)
-        if prev is If:
+        if line is If:
             i.update(successful_if=not self.failing)
         return self.get_observation(action), r, t, i
 
     def get_observation(self, action):
         padded = self.lines + [Padding] * (self.n_lines - len(self.lines))
-        lines = [self.line_types.index(t) for t in padded]
+        lines = [
+            t.id if type(t) is Subtask else self.num_subtasks + self.line_types.index(t)
+            for t in padded
+        ]
         obs = Obs(
             condition=self.condition_bit,
             lines=lines,
@@ -199,7 +215,7 @@ class Env(gym.Env, ABC):
                 current, line = next(lines_iter)
             except StopIteration:
                 return
-            if line in [Subtask, EndIf]:
+            if line is EndIf or type(line) is Subtask:
                 yield current, current + 1  # False
                 yield current, current + 1  # True
             if line is If:
@@ -264,17 +280,28 @@ class Env(gym.Env, ABC):
         else:
             pre = "  "
         indent = pre * level
-        yield indent + line.__name__
+        if type(line) is Subtask:
+            yield f"{indent}Subtask {line.id}"
+        else:
+            yield f"{indent}{line.__name__}"
         if line in [If, While, Else]:
             level += 1
         yield from self.line_strings(index + 1, level)
 
-    def render(self, mode="human"):
+    def render(self, mode="human", pause=True):
         for i, string in enumerate(self.line_strings(index=0, level=1)):
             print(f"{i}{string}")
         print("Condition:", self.condition_bit)
         print(self.last)
-        input("pause")
+        if pause:
+            input("pause")
+
+
+def contains(A, B):
+    for b in B:
+        if b not in A:
+            return False
+    return True
 
 
 if __name__ == "__main__":
@@ -282,7 +309,21 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", default=0, type=int)
-    parser.add_argument("--n-lines", default=6, type=int)
+    parser.add_argument("--min-lines", default=6, type=int)
+    parser.add_argument("--max-lines", default=6, type=int)
+    parser.add_argument("--eval-lines", type=int)
+    parser.add_argument("--time-limit", default=100, type=int)
+    parser.add_argument("--num-subtasks", default=12, type=int)
     parser.add_argument("--flip-prob", default=0.5, type=float)
     args = hierarchical_parse_args(parser)
-    keyboard_control.run(Env(**args), actions="".join(map(str, range(args["n_lines"]))))
+
+    def action_fn(string):
+        try:
+            return int(string), 0
+        except ValueError:
+            return
+
+    keyboard_control.run(
+        Env(**args, baseline=False, delayed_reward=False, line_types=None),
+        action_fn=action_fn,
+    )
