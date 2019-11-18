@@ -167,11 +167,10 @@ class Recurrence(nn.Module):
         h = hx.h
         w = hx.w.long().squeeze(-1)
         a = hx.a.long().squeeze(-1)
-        p_probs = hx.p_probs
         a[new_episode] = 0
         R = torch.arange(N, device=rnn_hxs.device)
         A = torch.cat([actions[:, :, 0], hx.a.view(1, N)], dim=0).long()
-        W = torch.cat([actions[:, :, 1], hx.p.view(1, N)], dim=0).long()
+        D = torch.cat([actions[:, :, 1], hx.p.view(1, N)], dim=0).long()
         active = inputs.active.squeeze(-1).long()
 
         for t in range(T):
@@ -187,26 +186,25 @@ class Recurrence(nn.Module):
             p = (g @ o.unsqueeze(-1)).squeeze(-1)
             self.print("w", w)
             self.print("o", o)
-            a_dist = FixedCategorical(probs=p)
+            p_dist = FixedCategorical(probs=p)
             self.print("probs")
-            half = a_dist.probs.size(-1) // 2
+            half = p_dist.probs.size(-1) // 2
+            self.print(torch.round(p_dist.probs * 10).flatten()[:half])
+            self.print(torch.round(p_dist.probs * 10).flatten()[half:])
+            self.sample_new(D[t], p_dist)
+            a_dist = self.attention(self.embed_action(D[t].clone()))
+            self.sample_new(A[t], a_dist)
             self.print(torch.round(a_dist.probs * 10).flatten()[:half])
             self.print(torch.round(a_dist.probs * 10).flatten()[half:])
-            self.sample_new(A[t], a_dist)
-            if not self.w_equals_active:
-                p_dist = self.attention(self.embed_action(A[t].clone()))
-                self.sample_new(W[t], p_dist)
-                self.print(torch.round(p_dist.probs * 10).flatten()[:half])
-                self.print(torch.round(p_dist.probs * 10).flatten()[half:])
-                w = w + W[t].clone() - nl
-                w = torch.clamp(w, min=0, max=nl - 1)
-                p_probs = p_dist.probs
+            w = w + D[t].clone() - nl
+            w = torch.clamp(w, min=0, max=nl - 1)
+            p_probs = p_dist.probs
             yield RecurrentState(
                 a=A[t],
                 v=self.critic(h),
                 h=h,
                 w=w,
                 a_probs=a_dist.probs,
-                p=W[t],
+                p=D[t],
                 p_probs=p_probs,
             )
