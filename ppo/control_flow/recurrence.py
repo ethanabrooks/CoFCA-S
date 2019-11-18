@@ -35,6 +35,7 @@ class Recurrence(nn.Module):
         activation,
         hidden_size,
         num_layers,
+        num_edges,
         num_encoding_layers,
         debug,
         baseline,
@@ -55,7 +56,7 @@ class Recurrence(nn.Module):
         self.hidden_size = hidden_size
 
         # networks
-        self.no = 10
+        self.ne = num_edges
         nt = int(self.obs_spaces.lines.nvec[0])
         na = int(action_space.nvec[0])
         self.embed_task = nn.Embedding(nt, hidden_size)
@@ -69,14 +70,14 @@ class Recurrence(nn.Module):
         layers = []
         for _ in range(num_layers):
             layers.extend([init_(nn.Linear(hidden_size, hidden_size)), activation])
-        self.mlp = nn.Sequential(*layers, init_(nn.Linear(hidden_size, self.no)))
+        self.mlp = nn.Sequential(*layers, init_(nn.Linear(hidden_size, self.ne)))
 
         layers = []
         in_size = hidden_size
         for _ in range(num_encoding_layers - 1):
             layers.extend([init_(nn.Linear(in_size, hidden_size)), activation])
             in_size = hidden_size
-        self.mlp2 = nn.Sequential(*layers, init_(nn.Linear(in_size, self.no)))
+        self.mlp2 = nn.Sequential(*layers, init_(nn.Linear(in_size, self.ne)))
 
         self.stuff = init_(nn.Linear(hidden_size, 1))
         self.critic = init_(nn.Linear(hidden_size, 1))
@@ -148,14 +149,14 @@ class Recurrence(nn.Module):
         # B[:, :, :, 1] = arange.flip(0).view(1, 1, -1, 1)
         f, b = torch.unbind(B, dim=3)
         B = torch.stack([f, b.flip(2)], dim=-2)
-        B = B.view(nl, N, 2 * nl, self.no)
+        B = B.view(nl, N, 2 * nl, self.ne)
         last = self.first.flip(2)
         zero_last = (1 - last) * B
         B = zero_last + last
         rolled = torch.roll(zero_last, shifts=1, dims=2)
         C = torch.cumprod(1 - rolled, dim=2)
         P = B * C
-        P = P.view(nl, N, nl, 2, self.no)
+        P = P.view(nl, N, nl, 2, self.ne)
         f, b = torch.unbind(P, dim=3)
         P = torch.cat([b.flip(2), f], dim=2)
 
