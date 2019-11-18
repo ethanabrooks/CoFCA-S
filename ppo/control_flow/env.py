@@ -138,10 +138,7 @@ class Env(gym.Env, ABC):
         prev = self.lines[self.active]
         self.t += 1
         self.active = self.next()
-        if (
-            self.active is None or self.lines[self.active] is not EndWhile
-        ):  # do not flip on EndWhile
-            self.condition_bit = 1 - int(self.random.rand() < self.flip_prob)
+        self.condition_bit = 1 - int(self.random.rand() < self.flip_prob)
         r = 0
         t = self.t > self.time_limit
         if self.active is None:
@@ -156,8 +153,8 @@ class Env(gym.Env, ABC):
             if not self.delayed_reward:
                 r = 0
                 t = True
-        if prev is EndWhile:
-            i.update(successful_while=not self.failing)
+        if prev is While:
+            i.update(successful_passing_while=not self.failing)
         if prev is If:
             i.update(successful_if=not self.failing)
         return self.get_observation(action), r, t, i
@@ -221,10 +218,10 @@ class Env(gym.Env, ABC):
                 yield from self.get_transitions(lines_iter, current)  # from = While
             elif line is EndWhile:
                 # While
-                yield prev, current  # False: While -> EndWhile
+                yield prev, current + 1  # False: While -> EndWhile + 1
                 yield prev, prev + 1  # True: While -> While + 1
                 # EndWhile
-                yield current, current + 1  # False: EndWhile -> While
+                yield current, prev  # False: EndWhile -> While
                 yield current, prev  # True: EndWhile -> While
                 return
 
