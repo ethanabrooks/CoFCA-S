@@ -154,7 +154,7 @@ class Env(gym.Env, ABC):
                 r = 0
                 t = True
         if prev is While:
-            i.update(successful_passing_while=not self.failing)
+            i.update(successful_while=not self.failing)
         if prev is If:
             i.update(successful_if=not self.failing)
         return self.get_observation(action), r, t, i
