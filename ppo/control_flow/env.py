@@ -152,7 +152,6 @@ class Env(gym.Env, ABC):
         r = 0
         t = self.t > self.time_limit
         if self.active is None:
-            i.update(termination_line=len(self.lines))
             if self.delayed_reward and self.failing:
                 r = 0
             else:
