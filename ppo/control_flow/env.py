@@ -14,6 +14,8 @@ Last = namedtuple("Last", "action active reward terminal selected")
 
 
 class Env(gym.Env, ABC):
+    pairs = {If: EndIf, Else: EndIf, While: EndWhile}
+
     def __init__(
         self,
         seed,
@@ -51,28 +53,6 @@ class Env(gym.Env, ABC):
         self.active_line = None
         self.if_evaluations = None
         self.line_types = [If, Else, EndIf, While, EndWhile, Subtask, Padding]
-        if line_types is None:
-            line_types = "if-while-else"
-        initial = {Subtask: "initial"}
-        if "if" in line_types:
-            initial[If] = "following_if"
-        if "while" in line_types:
-            initial[While] = "following_while"
-        inside_if = {Subtask: "inside_if", EndIf: "initial"}
-        if "else" in line_types:
-            inside_if[Else] = "following_else"
-        self.line_state_transitions = dict(
-            initial=initial,
-            following_if={Subtask: "inside_if"},
-            inside_if=inside_if,
-            following_else={Subtask: "inside_else"},
-            inside_else={Subtask: "inside_else", EndIf: "initial"},
-            following_while={Subtask: "inside_while"},
-            inside_while={Subtask: "inside_while", EndWhile: "initial"},
-        )
-        self.legal_last_lines = dict(
-            initial=Subtask, inside_if=EndIf, inside_else=EndIf, inside_while=EndWhile
-        )
         if baseline:
             self.action_space = spaces.Discrete(2 * n_lines)
             self.observation_space = spaces.MultiBinary(
@@ -108,9 +88,10 @@ class Env(gym.Env, ABC):
             n_lines = self.eval_lines
         else:
             n_lines = self.random.random_integers(self.min_lines, self.max_lines)
-        self.lines = self.get_lines(n_lines, line_state="initial")
+        self.lines = self.get_lines(n_lines, active_conditions=[])
+
         self.line_transitions = defaultdict(list)
-        for _from, _to in self.get_transitions(iter(enumerate(self.lines))):
+        for _from, _to in self.get_transitions(iter(enumerate(self.lines)), []):
             self.line_transitions[_from].append(_to)
         self.if_evaluations = []
         self.active = 0
@@ -199,28 +180,46 @@ class Env(gym.Env, ABC):
             obs = np.concatenate(obs)
         else:
             obs = obs._asdict()
-        assert self.observation_space.contains(obs)
+        # assert self.observation_space.contains(obs)
         return obs
 
     def seed(self, seed=None):
         assert self.seed == seed
 
-    def get_lines(self, n, line_state):
-        if n == 1:
-            try:
-                return [self.legal_last_lines[line_state]]
-            except KeyError:
-                return None
+    def get_lines(self, n, active_conditions, last=None):
+        if n < 0:
+            return []
+        if n == 0:
+            return []
+        if n == len(active_conditions):
+            lines = [self.pairs[c] for c in reversed(active_conditions)]
+            return lines + [Subtask for _ in range(n - len(lines))]
+        elif n == 1:
+            return [Subtask]
+        line_types = [Subtask]
+        if n > len(active_conditions) + 2:
+            line_types += [If, While]
+        if active_conditions and last is Subtask:
+            last_condition = active_conditions[-1]
+            if last_condition is If:
+                line_types += [Else, EndIf]
+            elif last_condition is Else:
+                line_types += [EndIf]
+            elif last_condition is While:
+                line_types += [EndWhile]
+        line_type = self.random.choice(line_types)
+        if line_type in [If, While]:
+            active_conditions = active_conditions + [line_type]
+        elif line_type is Else:
+            active_conditions = active_conditions[:-1] + [line_type]
+        elif line_type in [EndIf, EndWhile]:
+            active_conditions = active_conditions[:-1]
+        get_lines = self.get_lines(
+            n - 1, active_conditions=active_conditions, last=line_type
+        )
+        return [line_type] + get_lines
 
-        possible_lines = list(self.line_state_transitions[line_state])
-        self.random.shuffle(possible_lines)
-        for line in possible_lines:
-            new_state = self.line_state_transitions[line_state][line]
-            lines = self.get_lines(n - 1, new_state)
-            if lines is not None:  # valid last line
-                return [line, *lines]
-
-    def get_transitions(self, lines_iter, prev=None):
+    def get_transitions(self, lines_iter, previous):
         while True:  # stops at StopIteration
             try:
                 current, line = next(lines_iter)
@@ -230,20 +229,25 @@ class Env(gym.Env, ABC):
                 yield current, current + 1  # False
                 yield current, current + 1  # True
             if line is If:
-                yield from self.get_transitions(lines_iter, current)  # from = If
+                yield from self.get_transitions(
+                    lines_iter, previous + [current]
+                )  # from = If
             elif line is Else:
-                assert prev is not None
+                prev = previous[-1]
                 yield prev, current  # False: If -> Else
                 yield prev, prev + 1  # True: If -> If + 1
-                yield from self.get_transitions(lines_iter, current)  # from = Else
+                previous[-1] = current
             elif line is EndIf:
-                assert prev is not None
+                prev = previous[-1]
                 yield prev, current  # False: If/Else -> EndIf
                 yield prev, prev + 1  # True: If/Else -> If/Else + 1
                 return
             elif line is While:
-                yield from self.get_transitions(lines_iter, current)  # from = While
+                yield from self.get_transitions(
+                    lines_iter, previous + [current]
+                )  # from = While
             elif line is EndWhile:
+                prev = previous[-1]
                 # While
                 yield prev, current + 1  # False: While -> EndWhile + 1
                 yield prev, prev + 1  # True: While -> While + 1
@@ -296,12 +300,13 @@ class Env(gym.Env, ABC):
             level += 1
         yield from self.line_strings(index + 1, level)
 
-    def render(self, mode="human"):
+    def render(self, mode="human", pause=True):
         for i, string in enumerate(self.line_strings(index=0, level=1)):
             print(f"{i}{string}")
         print("Condition:", self.condition_bit)
         print(self.last)
-        input("pause")
+        if pause:
+            input("pause")
 
 
 if __name__ == "__main__":
@@ -309,7 +314,20 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", default=0, type=int)
-    parser.add_argument("--n-lines", default=6, type=int)
+    parser.add_argument("--min-lines", default=6, type=int)
+    parser.add_argument("--max-lines", default=6, type=int)
+    parser.add_argument("--eval-lines", type=int)
+    parser.add_argument("--time-limit", default=100, type=int)
     parser.add_argument("--flip-prob", default=0.5, type=float)
+    parser.add_argument("--delayed-reward", action="store_true")
     args = hierarchical_parse_args(parser)
-    keyboard_control.run(Env(**args), actions="".join(map(str, range(args["n_lines"]))))
+
+    def action_fn(string):
+        try:
+            return int(string), 0
+        except ValueError:
+            return
+
+    keyboard_control.run(
+        Env(**args, baseline=False, line_types=None), action_fn=action_fn
+    )
