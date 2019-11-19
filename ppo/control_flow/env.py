@@ -27,8 +27,10 @@ class Env(gym.Env, ABC):
         baseline,
         delayed_reward,
         line_types,
+        num_subtasks,
     ):
         super().__init__()
+        self.num_subtasks = num_subtasks
         self.delayed_reward = delayed_reward
         self.eval_lines = eval_lines
         self.min_lines = min_lines
@@ -318,6 +320,7 @@ if __name__ == "__main__":
     parser.add_argument("--max-lines", default=6, type=int)
     parser.add_argument("--eval-lines", type=int)
     parser.add_argument("--time-limit", default=100, type=int)
+    parser.add_argument("--num-subtasks", default=12, type=int)
     parser.add_argument("--flip-prob", default=0.5, type=float)
     parser.add_argument("--delayed-reward", action="store_true")
     args = hierarchical_parse_args(parser)
