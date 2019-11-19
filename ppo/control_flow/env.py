@@ -135,6 +135,14 @@ class Env(gym.Env, ABC):
                 else_lines=self.lines.count(Else),
                 while_lines=self.lines.count(While),
             )
+            keys = {
+                (If, EndIf): "if clause length",
+                (If, Else): "if-else clause length",
+                (Else, EndIf): "else clause length",
+                (While, EndWhile): "while clause length",
+            }
+            for k, v in self.average_interval():
+                i[keys[k]] = v
         prev = self.lines[self.active]
         self.t += 1
         self.active = self.next()
@@ -158,6 +166,25 @@ class Env(gym.Env, ABC):
         if prev is If:
             i.update(successful_if=not self.failing)
         return self.get_observation(action), r, t, i
+
+    def average_interval(self):
+        intervals = defaultdict(lambda: [None])
+        pairs = [(If, EndIf), (While, EndWhile)]
+        if Else in self.lines:
+            pairs.extend([(If, Else), (Else, EndIf)])
+        for line in self.lines:
+            for start, stop in pairs:
+                if line is start:
+                    intervals[start, stop][-1] = 0
+                if line is stop:
+                    intervals[start, stop].append(None)
+            for k, (*_, value) in intervals.items():
+                if value is not None:
+                    intervals[k][-1] += 1
+        for keys, values in intervals.items():
+            values = [v for v in values if v]
+            if values:
+                yield keys, sum(values) / len(values)
 
     def get_observation(self, action):
         padded = self.lines + [Padding] * (self.n_lines - len(self.lines))
