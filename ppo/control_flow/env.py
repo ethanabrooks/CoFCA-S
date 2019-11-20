@@ -40,6 +40,7 @@ class Env(gym.Env, ABC):
         else:
             assert eval_lines >= self.max_lines
             self.n_lines = n_lines = eval_lines
+        self.n_lines += 1
         self.random, self.seed = seeding.np_random(seed)
         self.time_limit = time_limit
         self.flip_prob = flip_prob
@@ -56,24 +57,26 @@ class Env(gym.Env, ABC):
         self.if_evaluations = None
         self.line_types = [If, Else, EndIf, While, EndWhile, Subtask, Padding]
         if baseline:
-            self.action_space = spaces.Discrete(2 * n_lines)
+            self.action_space = spaces.Discrete(2 * self.n_lines)
             self.observation_space = spaces.MultiBinary(
-                2 + len(self.line_types) * n_lines + (n_lines + 1)
+                2 + len(self.line_types) * self.n_lines + (self.n_lines + 1)
             )
             self.eye = Obs(
                 condition=np.eye(2),
                 lines=np.eye(len(self.line_types)),
-                active=np.eye(n_lines + 1),
+                active=np.eye(self.n_lines + 1),
             )
         else:
-            self.action_space = spaces.MultiDiscrete(np.array([2 * n_lines, n_lines]))
+            self.action_space = spaces.MultiDiscrete(
+                np.array([2 * self.n_lines, self.n_lines])
+            )
             self.observation_space = spaces.Dict(
                 dict(
                     condition=spaces.Discrete(2),
                     lines=spaces.MultiDiscrete(
-                        np.array([len(self.line_types)] * n_lines)
+                        np.array([len(self.line_types)] * self.n_lines)
                     ),
-                    active=spaces.Discrete(n_lines + 1),
+                    active=spaces.Discrete(self.n_lines + 1),
                 )
             )
         self.t = None
