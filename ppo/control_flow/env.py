@@ -139,18 +139,19 @@ class Env(gym.Env, ABC):
         self.condition_bit = 1 - int(self.random.rand() < self.flip_prob)
         r = 0
         t = self.t > self.time_limit
+        active = len(self.lines) if self.active is None else self.active
+        if not selected == active:
+            i.update(termination_line=active)
+            self.failing = True
+            if not self.delayed_reward:
+                r = 0
+                t = True
         if self.active is None:
             if self.delayed_reward and self.failing:
                 r = 0
             else:
                 r = 1
             t = True
-        elif selected != self.active:
-            i.update(termination_line=self.active)
-            self.failing = True
-            if not self.delayed_reward:
-                r = 0
-                t = True
         if prev is While:
             i.update(successful_while=not self.failing)
         if prev is If:
@@ -348,6 +349,7 @@ if __name__ == "__main__":
     parser.add_argument("--eval-lines", type=int)
     parser.add_argument("--time-limit", default=100, type=int)
     parser.add_argument("--num-subtasks", default=12, type=int)
+    parser.add_argument("--max-nesting-depth", default=2, type=int)
     parser.add_argument("--flip-prob", default=0.5, type=float)
     parser.add_argument("--delayed-reward", action="store_true")
     args = hierarchical_parse_args(parser)
@@ -358,6 +360,4 @@ if __name__ == "__main__":
         except ValueError:
             return
 
-    keyboard_control.run(
-        Env(**args, baseline=False, line_types=None), action_fn=action_fn
-    )
+    keyboard_control.run(Env(**args, baseline=False), action_fn=action_fn)
