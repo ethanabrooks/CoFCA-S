@@ -59,6 +59,7 @@ class Recurrence(nn.Module):
         self.ne = num_edges
         nt = int(self.obs_spaces.lines.nvec[0])
         n_a, n_p = map(int, action_space.nvec)
+        self.n_a = n_a
         self.embed_task = nn.Embedding(nt, hidden_size)
         self.embed_action = nn.Embedding(n_a, hidden_size)
         self.task_encoder = nn.GRU(
@@ -180,6 +181,9 @@ class Recurrence(nn.Module):
                 if self.w_equals_active:
                     w = active[t]
                 g = P[w, R]
+            line = inputs.lines[t, R, w]
+            is_subtask = (line < self.n_a).float()
+            action = line * is_subtask + self.n_a * (1 - is_subtask)
             x = [inputs.condition[t], M[R, w]]
             h = self.gru(torch.cat(x, dim=-1), h)
             z = F.relu(self.mlp(h))
@@ -196,7 +200,7 @@ class Recurrence(nn.Module):
             w = w + W[t].clone() - nl
             w = torch.clamp(w, min=0, max=nl - 1)
             yield RecurrentState(
-                a=A[t],
+                a=action,
                 v=self.critic(z),
                 h=h,
                 w=w,
