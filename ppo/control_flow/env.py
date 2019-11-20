@@ -120,6 +120,7 @@ class Env(gym.Env, ABC):
                 if_lines=self.lines.count(If),
                 else_lines=self.lines.count(Else),
                 while_lines=self.lines.count(While),
+                nesting_depth=self.get_nesting_depth(),
             )
             keys = {
                 (If, EndIf): "if clause length",
@@ -190,6 +191,17 @@ class Env(gym.Env, ABC):
 
     def seed(self, seed=None):
         assert self.seed == seed
+
+    def get_nesting_depth(self):
+        max_depth = 0
+        depth = 0
+        for line in self.lines:
+            if line in [If, While]:
+                depth += 1
+            if line in [EndIf, EndWhile]:
+                depth -= 1
+            max_depth = max(depth, max_depth)
+        return max_depth
 
     def get_lines(self, n, active_conditions, last=None):
         if n < 0:
