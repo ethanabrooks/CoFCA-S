@@ -26,10 +26,11 @@ class Env(gym.Env, ABC):
         time_limit,
         baseline,
         delayed_reward,
-        line_types,
         num_subtasks,
+        max_nesting_depth,
     ):
         super().__init__()
+        self.max_nesting_depth = max_nesting_depth
         self.num_subtasks = num_subtasks
         self.delayed_reward = delayed_reward
         self.eval_lines = eval_lines
@@ -93,7 +94,9 @@ class Env(gym.Env, ABC):
             n_lines = self.eval_lines
         else:
             n_lines = self.random.random_integers(self.min_lines, self.max_lines)
-        self.lines = self.get_lines(n_lines, active_conditions=[])
+        self.lines = self.get_lines(
+            n_lines, active_conditions=[], max_nesting_depth=self.max_nesting_depth
+        )
 
         self.line_transitions = defaultdict(list)
         for _from, _to in self.get_transitions(iter(enumerate(self.lines)), []):
@@ -203,7 +206,9 @@ class Env(gym.Env, ABC):
             max_depth = max(depth, max_depth)
         return max_depth
 
-    def get_lines(self, n, active_conditions, last=None):
+    def get_lines(
+        self, n, active_conditions, last=None, nesting_depth=0, max_nesting_depth=None
+    ):
         if n < 0:
             return []
         if n == 0:
@@ -214,7 +219,9 @@ class Env(gym.Env, ABC):
         elif n == 1:
             return [Subtask]
         line_types = [Subtask]
-        if n > len(active_conditions) + 2:
+        if n > len(active_conditions) + 2 and (
+            max_nesting_depth is None or nesting_depth < max_nesting_depth
+        ):
             line_types += [If, While]
         if active_conditions and last is Subtask:
             last_condition = active_conditions[-1]
@@ -227,12 +234,17 @@ class Env(gym.Env, ABC):
         line_type = self.random.choice(line_types)
         if line_type in [If, While]:
             active_conditions = active_conditions + [line_type]
+            nesting_depth += 1
         elif line_type is Else:
             active_conditions = active_conditions[:-1] + [line_type]
         elif line_type in [EndIf, EndWhile]:
             active_conditions = active_conditions[:-1]
         get_lines = self.get_lines(
-            n - 1, active_conditions=active_conditions, last=line_type
+            n - 1,
+            active_conditions=active_conditions,
+            last=line_type,
+            nesting_depth=nesting_depth,
+            max_nesting_depth=max_nesting_depth,
         )
         return [line_type] + get_lines
 
