@@ -181,18 +181,22 @@ class Recurrence(nn.Module):
                 if self.w_equals_active:
                     w = active[t]
                 g = P[w, R]
+            self.print("w", w)
+            b = B[w, R]
+            self.print(
+                torch.round(10 * b).view(b.size(0), -1, 2, self.ne).transpose(1, 2)
+            )
             x = [inputs.condition[t], M[R, w]]
             h = self.gru(torch.cat(x, dim=-1), h)
             z = F.relu(self.mlp(h))
             a_dist = self.actor(z)
             self.sample_new(A[t], a_dist)
             o = self.option(z).softmax(dim=-1)
+            self.print("o", torch.round(10 * o))
             p = (g @ o.unsqueeze(-1)).squeeze(-1)
             p_dist = FixedCategorical(probs=p)
             half = p_dist.probs.size(-1) // 2
             p_probs = torch.round(p_dist.probs * 10).flatten()
-            self.print(p_probs[:half])
-            self.print(p_probs[half:])
             self.sample_new(W[t], p_dist)
             w = w + W[t].clone() - nl
             w = torch.clamp(w, min=0, max=nl - 1)
