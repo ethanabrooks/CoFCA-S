@@ -41,6 +41,7 @@ class TrainBase(abc.ABC):
         normalize,
         log_interval,
         eval_interval,
+        no_eval,
         use_gae,
         tau,
         ppo_args,
@@ -126,6 +127,7 @@ class TrainBase(abc.ABC):
             eval_steps=eval_steps,
             log_interval=log_interval,
             eval_interval=eval_interval,
+            no_eval=no_eval,
             use_tqdm=use_tqdm,
             success_reward=success_reward,
         )
@@ -145,10 +147,11 @@ class TrainBase(abc.ABC):
         eval_steps,
         log_interval,
         eval_interval,
+        no_eval,
         success_reward,
         use_tqdm,
     ):
-        if eval_interval:
+        if eval_interval and not no_eval:
             # vec_norm = get_vec_normalize(eval_envs)
             # if vec_norm is not None:
             #     vec_norm.eval()

@@ -5,17 +5,16 @@ from torch.nn import functional as F
 
 import ppo.agent
 from ppo.agent import AgentValues, NNBase
-from ppo.distributions import FixedCategorical
 
 # noinspection PyMissingConstructor
 from ppo.control_flow.baselines import oh_et_al
 from ppo.control_flow.recurrence import RecurrentState, Recurrence
+from ppo.distributions import FixedCategorical
 
 
 class Agent(ppo.agent.Agent, NNBase):
-    def __init__(self, entropy_coef, recurrent, baseline, a_equals_p, **network_args):
+    def __init__(self, entropy_coef, recurrent, baseline, **network_args):
         nn.Module.__init__(self)
-        self.a_equals_p = a_equals_p
         self.entropy_coef = entropy_coef
         if baseline == "oh-et-al":
             self.recurrent_module = oh_et_al.Recurrence(**network_args)
@@ -40,18 +39,15 @@ class Agent(ppo.agent.Agent, NNBase):
         rm = self.recurrent_module
         hx = RecurrentState(*rm.parse_hidden(all_hxs))
         a_dist = FixedCategorical(hx.a_probs)
-        # action_log_probs = a_dist.log_probs(hx.a)
-        # entropy = a_dist.entropy().mean()
-        # action = torch.cat([hx.a, hx.a], dim=-1)
-        p_dist = FixedCategorical(hx.p_probs)
-        # if self.a_equals_p:
-        # action_log_probs = p_dist.log_probs(hx.p)
-        # entropy = p_dist.entropy().mean()
-        # action = torch.cat([hx.a, hx.p], dim=-1)
-        # else:
-        action_log_probs = a_dist.log_probs(hx.a) + p_dist.log_probs(hx.p)
-        entropy = (a_dist.entropy() + p_dist.entropy()).mean()
-        action = torch.cat([hx.a, hx.p], dim=-1)
+        if rm.w_equals_active:
+            action_log_probs = a_dist.log_probs(hx.a)
+            entropy = a_dist.entropy().mean()
+            action = torch.cat([hx.a, hx.a], dim=-1)
+        else:
+            p_dist = FixedCategorical(hx.p_probs)
+            action_log_probs = a_dist.log_probs(hx.a) + p_dist.log_probs(hx.p)
+            entropy = (a_dist.entropy() + p_dist.entropy()).mean()
+            action = torch.cat([hx.a, hx.p], dim=-1)
         return AgentValues(
             value=hx.v,
             action=action,
