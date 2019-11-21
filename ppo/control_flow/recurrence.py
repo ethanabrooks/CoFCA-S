@@ -181,15 +181,12 @@ class Recurrence(nn.Module):
                 if self.w_equals_active:
                     w = active[t]
                 g = P[w, R]
-            line = inputs.lines[t, R, w]
-            is_subtask = (line < self.n_a).float()
-            action = line * is_subtask + self.n_a * (1 - is_subtask)
+            a_dist = self.actor(M[R, w])
+            self.sample_new(A[t], a_dist)
             x = [inputs.condition[t], M[R, w]]
             h = self.gru(torch.cat(x, dim=-1), h)
             z = F.relu(self.mlp(h))
             o = self.option(z).softmax(dim=-1)
-            a_dist = self.actor(z)
-            self.sample_new(A[t], a_dist)
             p = (g @ o.unsqueeze(-1)).squeeze(-1)
             p_dist = FixedCategorical(probs=p)
             half = p_dist.probs.size(-1) // 2
@@ -200,7 +197,7 @@ class Recurrence(nn.Module):
             w = w + W[t].clone() - nl
             w = torch.clamp(w, min=0, max=nl - 1)
             yield RecurrentState(
-                a=action,
+                a=A[t],
                 v=self.critic(z),
                 h=h,
                 w=w,
