@@ -71,7 +71,7 @@ class Env(gym.Env, ABC):
             )
         else:
             self.action_space = spaces.MultiDiscrete(
-                np.array([self.num_subtasks, 2 * self.n_lines])
+                np.array([self.num_subtasks + 1, 2 * self.n_lines])
             )
             self.observation_space = spaces.Dict(
                 dict(
