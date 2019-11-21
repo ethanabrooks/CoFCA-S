@@ -39,19 +39,15 @@ class Agent(ppo.agent.Agent, NNBase):
         rm = self.recurrent_module
         hx = RecurrentState(*rm.parse_hidden(all_hxs))
         a_dist = FixedCategorical(hx.a_probs)
-        # if rm.w_equals_active:
-        #     action_log_probs = a_dist.log_probs(hx.a)
-        #     entropy = a_dist.entropy().mean()
-        #     action = torch.cat([hx.a, hx.a], dim=-1)
-        # else:
-        #     p_dist = FixedCategorical(hx.p_probs)
-        #     action_log_probs = a_dist.log_probs(hx.a) + p_dist.log_probs(hx.p)
-        #     entropy = (a_dist.entropy() + p_dist.entropy()).mean()
-        #     action = torch.cat([hx.a, hx.p], dim=-1)
-        p_dist = FixedCategorical(hx.p_probs)
-        action_log_probs = p_dist.log_probs(hx.p)
-        entropy = (p_dist.entropy()).mean()
-        action = torch.cat([hx.a, hx.p], dim=-1)
+        if rm.w_equals_active:
+            action_log_probs = a_dist.log_probs(hx.a)
+            entropy = a_dist.entropy().mean()
+            action = torch.cat([hx.a, hx.a], dim=-1)
+        else:
+            p_dist = FixedCategorical(hx.p_probs)
+            action_log_probs = a_dist.log_probs(hx.a) + p_dist.log_probs(hx.p)
+            entropy = (a_dist.entropy() + p_dist.entropy()).mean()
+            action = torch.cat([hx.a, hx.p], dim=-1)
         return AgentValues(
             value=hx.v,
             action=action,
