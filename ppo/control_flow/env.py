@@ -29,8 +29,10 @@ class Env(gym.Env, ABC):
         delayed_reward,
         num_subtasks,
         max_nesting_depth,
+        subtask_per_step,
     ):
         super().__init__()
+        self.subtask_per_step = subtask_per_step
         self.max_nesting_depth = max_nesting_depth
         self.num_subtasks = num_subtasks
         self.delayed_reward = delayed_reward
@@ -308,6 +310,8 @@ class Env(gym.Env, ABC):
         i = self.line_transitions[i][evaluation]
         if i >= len(self.lines):
             return None
+        if self.subtask_per_step and type(self.lines[i]) is not Subtask:
+            return self.next(i)
         return i
 
     def evaluate_condition(self, i=None):
