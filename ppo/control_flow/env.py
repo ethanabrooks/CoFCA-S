@@ -1,5 +1,6 @@
 from abc import ABC
 from collections import defaultdict, namedtuple
+from pprint import pprint
 
 import numpy as np
 from gym.utils import seeding
@@ -113,7 +114,8 @@ class Env(gym.Env, ABC):
         return self.get_observation(action=0)
 
     def step(self, action):
-        action, selected = action
+        action, delta = action
+        selected = self.last.selected + delta - self.n_lines
         s, r, t, i = self._step(action=int(action))
         self.last = Last(
             action=action, active=self.active, reward=r, terminal=t, selected=selected
@@ -250,6 +252,7 @@ class Env(gym.Env, ABC):
             active_conditions = active_conditions[:-1] + [line_type]
         elif line_type in [EndIf, EndWhile]:
             active_conditions = active_conditions[:-1]
+            nesting_depth -= 1
         get_lines = self.get_lines(
             n - 1,
             active_conditions=active_conditions,
