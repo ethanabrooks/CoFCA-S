@@ -83,7 +83,7 @@ class Recurrence(nn.Module):
 
         self.stuff = init_(nn.Linear(hidden_size, 1))
         self.critic = init_(nn.Linear(hidden_size, 1))
-        self.actor = Categorical(hidden_size, n_a)
+        self.actor = init_(nn.Linear(hidden_size, n_a))
         self.attention = Categorical(hidden_size, n_a)
         self.state_sizes = RecurrentState(
             a=1, a_probs=n_a, p=1, p_probs=n_p, w=1, v=1, h=hidden_size
@@ -181,8 +181,10 @@ class Recurrence(nn.Module):
                 if self.w_equals_active:
                     w = active[t]
                 g = P[w, R]
-            a_dist = self.actor(M[R, w])
-            self.sample_new(A[t], a_dist)
+            a_dist = F.gumbel_softmax(self.actor(M[R, w]), hard=True)
+            new = A[t] < 0
+            if torch.any(new):
+                A[t, new] = a_dist.argmax(-1)
             x = [inputs.condition[t], M[R, w]]
             h = self.gru(torch.cat(x, dim=-1), h)
             z = F.relu(self.mlp(h))
@@ -201,7 +203,7 @@ class Recurrence(nn.Module):
                 v=self.critic(z),
                 h=h,
                 w=w,
-                a_probs=a_dist.probs,
+                a_probs=hx.a_probs,  # TODO
                 p=W[t],
                 p_probs=p_dist.probs,
             )
