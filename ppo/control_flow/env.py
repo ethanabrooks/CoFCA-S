@@ -1,3 +1,4 @@
+import functools
 from abc import ABC
 from collections import defaultdict, namedtuple
 from pprint import pprint
@@ -44,6 +45,7 @@ class Env(gym.Env, ABC):
         else:
             assert eval_lines >= self.max_lines
             self.n_lines = eval_lines
+        assert self.n_lines < 20  # otherwise need to adjust size of lru_cache
         self.n_lines += 1
         self.random, self.seed = seeding.np_random(seed)
         self.time_limit = time_limit
@@ -156,7 +158,8 @@ class Env(gym.Env, ABC):
             r = int(tuple(self.choices) == tuple(self.target))
             t = True
         elif not (
-            contains(self.choices, self.target) or contains(self.target, self.choices)
+            contains(tuple(self.choices), tuple(self.target))
+            or contains(tuple(self.target), tuple(self.choices))
         ):
             i.update(termination_line=self.active)
             self.failing = True
@@ -359,11 +362,15 @@ class Env(gym.Env, ABC):
             input("pause")
 
 
+@functools.lru_cache(maxsize=20)
 def contains(A, B):
-    for b in B:
-        if b not in A:
-            return False
-    return True
+    if not B:
+        return True
+    if not A:
+        return not B
+    a, *A = A
+    b, *_B = B
+    return a == b and contains(tuple(A), tuple(_B)) or contains(tuple(A), tuple(B))
 
 
 if __name__ == "__main__":
