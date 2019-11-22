@@ -358,6 +358,8 @@ class Env(gym.Env, ABC):
             print(f"{i}{string}")
         print("Condition:", self.condition_bit)
         print(self.last)
+        print("choices", self.choices)
+        print("target", self.target)
         if pause:
             input("pause")
 
