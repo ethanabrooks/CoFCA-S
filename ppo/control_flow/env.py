@@ -30,10 +30,8 @@ class Env(gym.Env, ABC):
         delayed_reward,
         num_subtasks,
         max_nesting_depth,
-        subtask_per_step,
     ):
         super().__init__()
-        self.subtask_per_step = subtask_per_step
         self.max_nesting_depth = max_nesting_depth
         self.num_subtasks = num_subtasks
         self.delayed_reward = delayed_reward
@@ -115,6 +113,8 @@ class Env(gym.Env, ABC):
             self.line_transitions[_from].append(_to)
         self.if_evaluations = []
         self.active = 0
+        if not type(self.lines[self.active]) is Subtask:
+            self.active = self.next()
         return self.get_observation(action=0)
 
     def step(self, action):
@@ -144,32 +144,25 @@ class Env(gym.Env, ABC):
             for k, v in self.average_interval():
                 i[keys[k]] = v
 
-        line = self.lines[self.active]
-        if action < self.num_subtasks:
-            self.choices.append(action)
-        if type(line) is Subtask:
-            self.target.append(line.id)
-        self.t += 1
-        self.active = self.next()
-        self.condition_bit = 1 - int(self.random.rand() < self.flip_prob)
         r = 0
         t = self.t > self.time_limit
-        if self.active is None:
-            r = int(tuple(self.choices) == tuple(self.target))
+        if action < self.num_subtasks:
+            if self.active is None or action != self.lines[self.active].id:
+                if self.active is not None:
+                    i.update(termination_line=self.active)
+                self.failing = True
+                if not self.delayed_reward:
+                    r = 0
+                    t = True
+            if self.active is not None:
+                self.active = self.next()
+            self.condition_bit = abs(
+                self.condition_bit - int(self.random.rand() < self.flip_prob)
+            )
+        elif self.active is None:
+            r = 1
             t = True
-        elif not (
-            contains(tuple(self.choices), tuple(self.target))
-            or contains(tuple(self.target), tuple(self.choices))
-        ):
-            i.update(termination_line=self.active)
-            self.failing = True
-            if not self.delayed_reward:
-                r = 0
-                t = True
-        if line is While:
-            i.update(successful_while=not self.failing)
-        if line is If:
-            i.update(successful_if=not self.failing)
+        self.t += 1
         return self.get_observation(action), r, t, i
 
     def average_interval(self):
@@ -313,7 +306,7 @@ class Env(gym.Env, ABC):
         i = self.line_transitions[i][evaluation]
         if i >= len(self.lines):
             return None
-        if self.subtask_per_step and type(self.lines[i]) is not Subtask:
+        if type(self.lines[i]) is not Subtask:
             return self.next(i)
         return i
 
@@ -358,8 +351,6 @@ class Env(gym.Env, ABC):
             print(f"{i}{string}")
         print("Condition:", self.condition_bit)
         print(self.last)
-        print("choices", self.choices)
-        print("target", self.target)
         if pause:
             input("pause")
 
