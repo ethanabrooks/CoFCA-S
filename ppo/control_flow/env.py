@@ -146,22 +146,20 @@ class Env(gym.Env, ABC):
 
         r = 0
         t = self.t > self.time_limit
-        if action < self.num_subtasks:
-            if self.active is None or action != self.lines[self.active].id:
-                if self.active is not None:
-                    i.update(termination_line=self.active)
+        if self.active is None:
+            r = 1
+            t = True
+        elif action < self.num_subtasks:
+            if action != self.lines[self.active].id:
+                i.update(termination_line=self.active)
                 self.failing = True
                 if not self.delayed_reward:
                     r = 0
                     t = True
-            if self.active is not None:
-                self.active = self.next()
+            self.active = self.next()
             self.condition_bit = abs(
                 self.condition_bit - int(self.random.rand() < self.flip_prob)
             )
-        elif self.active is None:
-            r = 1
-            t = True
         self.t += 1
         return self.get_observation(action), r, t, i
 
