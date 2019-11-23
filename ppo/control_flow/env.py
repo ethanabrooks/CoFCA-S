@@ -135,6 +135,27 @@ class Env(gym.Env, ABC):
 
     def _step(self, action):
         i = {}
+        if self.t == 0:
+            num_if = self.lines.count(If)
+            num_else = self.lines.count(Else)
+            num_while = self.lines.count(While)
+            num_subtask = self.lines.count(lambda l: type(l) is Subtask)
+            i.update(
+                if_lines=num_if,
+                else_lines=num_else,
+                while_lines=num_while,
+                nesting_depth=self.get_nesting_depth(),
+                num_edges=2 * (num_if + num_else + num_while) + num_subtask,
+            )
+            keys = {
+                (If, EndIf): "if clause length",
+                (If, Else): "if-else clause length",
+                (Else, EndIf): "else clause length",
+                (While, EndWhile): "while clause length",
+            }
+            for k, v in self.average_interval():
+                i[keys[k]] = v
+
         r = 0
         t = self.t > self.time_limit
         if self.active is None:
