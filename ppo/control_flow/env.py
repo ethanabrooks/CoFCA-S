@@ -137,13 +137,6 @@ class Env(gym.Env, ABC):
         i = {}
         r = 0
         t = self.t > self.time_limit
-        active = len(self.lines) if self.active is None else self.active
-        if not selected == active:
-            i.update(termination_line=active)
-            self.failing = True
-            if not self.delayed_reward:
-                r = 0
-                t = True
         if self.active is None:
             r = 1
             t = True
@@ -202,7 +195,7 @@ class Env(gym.Env, ABC):
             obs = np.concatenate(obs)
         else:
             obs = obs._asdict()
-        # assert self.observation_space.contains(obs)
+        assert self.observation_space.contains(obs)
         return obs
 
     def seed(self, seed=None):
