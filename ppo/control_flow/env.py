@@ -342,17 +342,6 @@ class Env(gym.Env, ABC):
             input("pause")
 
 
-@functools.lru_cache(maxsize=31)
-def contains(A, B):
-    if not B:
-        return True
-    if not A:
-        return not B
-    a, *A = A
-    b, *_B = B
-    return a == b and contains(tuple(A), tuple(_B)) or contains(tuple(A), tuple(B))
-
-
 if __name__ == "__main__":
     import argparse
 
