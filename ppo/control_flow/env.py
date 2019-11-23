@@ -128,22 +128,6 @@ class Env(gym.Env, ABC):
 
     def _step(self, action):
         i = {}
-        if self.t == 0:
-            i.update(
-                if_lines=self.lines.count(If),
-                else_lines=self.lines.count(Else),
-                while_lines=self.lines.count(While),
-                nesting_depth=self.get_nesting_depth(),
-            )
-            keys = {
-                (If, EndIf): "if clause length",
-                (If, Else): "if-else clause length",
-                (Else, EndIf): "else clause length",
-                (While, EndWhile): "while clause length",
-            }
-            for k, v in self.average_interval():
-                i[keys[k]] = v
-
         r = 0
         t = self.t > self.time_limit
         if self.active is None:
@@ -151,7 +135,9 @@ class Env(gym.Env, ABC):
             t = True
         elif action < self.num_subtasks:
             if action != self.lines[self.active].id:
-                i.update(termination_line=self.active)
+                i.update(
+                    failure_line=len(self.lines) if self.active is None else self.active
+                )
                 self.failing = True
                 if not self.delayed_reward:
                     r = 0
@@ -159,6 +145,10 @@ class Env(gym.Env, ABC):
             self.active = self.next()
             self.condition_bit = abs(
                 self.condition_bit - int(self.random.rand() < self.flip_prob)
+            )
+        if t:
+            i.update(
+                termination_line=len(self.lines) if self.active is None else self.active
             )
         self.t += 1
         return self.get_observation(action), r, t, i
