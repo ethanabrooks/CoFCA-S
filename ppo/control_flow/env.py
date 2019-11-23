@@ -43,7 +43,6 @@ class Env(gym.Env, ABC):
         else:
             assert eval_lines >= self.max_lines
             self.n_lines = eval_lines
-        assert self.n_lines < 31  # otherwise need to adjust size of lru_cache
         self.n_lines += 1
         self.random, self.seed = seeding.np_random(seed)
         self.time_limit = time_limit
