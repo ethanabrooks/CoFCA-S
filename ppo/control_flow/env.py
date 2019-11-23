@@ -30,8 +30,10 @@ class Env(gym.Env, ABC):
         delayed_reward,
         num_subtasks,
         max_nesting_depth,
+        eval_condition_size,
     ):
         super().__init__()
+        self.eval_condition_size = eval_condition_size
         self.max_nesting_depth = max_nesting_depth
         self.num_subtasks = num_subtasks
         self.delayed_reward = delayed_reward
@@ -94,15 +96,21 @@ class Env(gym.Env, ABC):
         self.choices = []
         self.target = []
         self.t = 0
-        self.condition_bit = self.random.randint(0, 2)
+        eval_condition_size = self.eval_condition_size and self.evaluating
+        self.condition_bit = 0 if eval_condition_size else self.random.randint(0, 2)
         if self.evaluating:
             assert self.eval_lines is not None
             n_lines = self.eval_lines
         else:
             n_lines = self.random.random_integers(self.min_lines, self.max_lines)
-        lines = self.get_lines(
-            n_lines, active_conditions=[], max_nesting_depth=self.max_nesting_depth
-        )
+        if eval_condition_size:
+            line0 = self.random.choice([While, If])
+            lines = [line0] + [Subtask] * (self.eval_lines - 3)
+            lines += [EndWhile if line0 is While else EndIf, Subtask]
+        else:
+            lines = self.get_lines(
+                n_lines, active_conditions=[], max_nesting_depth=self.max_nesting_depth
+            )
         self.lines = [
             Subtask(self.random.choice(self.num_subtasks)) if line is Subtask else line
             for line in lines
