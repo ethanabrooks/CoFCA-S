@@ -50,6 +50,7 @@ def bandit_args():
     parsers.env.add_argument("--eval-lines", type=int)
     parsers.env.add_argument("--flip-prob", type=float, required=True)
     parsers.env.add_argument("--delayed-reward", action="store_true")
+    parsers.env.add_argument("--eval-condition-size", action="store_true")
     parsers.env.add_argument("--max-nesting-depth", type=int)
     parsers.agent.add_argument("--debug", action="store_true")
     parsers.agent.add_argument("--w-equals-active", action="store_true")
