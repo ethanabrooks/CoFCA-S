@@ -31,8 +31,10 @@ class Env(gym.Env, ABC):
         num_subtasks,
         max_nesting_depth,
         eval_condition_size,
+        eval_time_limit,
     ):
         super().__init__()
+        self.eval_time_limit = eval_time_limit
         self.eval_condition_size = eval_condition_size
         self.max_nesting_depth = max_nesting_depth
         self.num_subtasks = num_subtasks
@@ -156,7 +158,10 @@ class Env(gym.Env, ABC):
             for k, v in self.average_interval():
                 i[keys[k]] = v
 
-        t = self.t > self.time_limit
+        time_limit = self.time_limit
+        if self.evaluating and self.eval_time_limit:
+            time_limit = self.eval_time_limit
+        t = self.t > time_limit
         if self.active is None:
             t = True
         elif action < self.num_subtasks:
