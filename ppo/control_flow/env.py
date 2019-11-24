@@ -159,8 +159,10 @@ class Env(gym.Env, ABC):
                 i[keys[k]] = v
 
         t = self.t > self.time_limit
+        r = 0
         if self.active is None:
             t = True
+            r = int(not self.failing)
         elif action < self.num_subtasks:
             if action != self.lines[self.active].id:
                 i.update(
@@ -177,7 +179,6 @@ class Env(gym.Env, ABC):
             i.update(
                 termination_line=len(self.lines) if self.active is None else self.active
             )
-        r = int(t) * int(not self.failing)
         self.t += 1
         return self.get_observation(action), r, t, i
 
