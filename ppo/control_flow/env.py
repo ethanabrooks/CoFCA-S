@@ -158,10 +158,8 @@ class Env(gym.Env, ABC):
             for k, v in self.average_interval():
                 i[keys[k]] = v
 
-        r = 0
         t = self.t > self.time_limit
         if self.active is None:
-            r = 1
             t = True
         elif action < self.num_subtasks:
             if action != self.lines[self.active].id:
@@ -170,7 +168,6 @@ class Env(gym.Env, ABC):
                 )
                 self.failing = True
                 if not self.delayed_reward:
-                    r = 0
                     t = True
             self.active = self.next()
             self.condition_bit = abs(
@@ -180,6 +177,7 @@ class Env(gym.Env, ABC):
             i.update(
                 termination_line=len(self.lines) if self.active is None else self.active
             )
+        r = int(t) * int(not self.failing)
         self.t += 1
         return self.get_observation(action), r, t, i
 
