@@ -159,13 +159,11 @@ class Env(gym.Env, ABC):
                 i[keys[k]] = v
 
         t = (not self.evaluating) and self.t > self.time_limit
-        r = 0
         if self.no_op_limit and self.n > self.no_op_limit:
             self.failing = True
         current_line = len(self.lines) if self.active is None else self.active
         if self.active is None:
             t = True
-            r = int(not self.failing)
             i.update(success_line=current_line)
         elif action < self.num_subtasks:
             self.t += 1
@@ -184,6 +182,8 @@ class Env(gym.Env, ABC):
             self.t += 1
         if t:
             i.update(termination_line=current_line)
+
+        r = int(t) * int(not self.failing)
         return self.get_observation(action), r, t, i
 
     def average_interval(self):
