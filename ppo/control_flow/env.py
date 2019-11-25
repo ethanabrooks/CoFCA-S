@@ -162,15 +162,15 @@ class Env(gym.Env, ABC):
         r = 0
         if self.no_op_limit and self.n > self.no_op_limit:
             self.failing = True
+        current_line = len(self.lines) if self.active is None else self.active
         if self.active is None:
             t = True
             r = int(not self.failing)
+            i.update(success_line=current_line)
         elif action < self.num_subtasks:
             self.t += 1
             if action != self.lines[self.active].id:
-                i.update(
-                    failure_line=len(self.lines) if self.active is None else self.active
-                )
+                i.update(failure_line=current_line, success_line=current_line - 1)
                 self.failing = True
                 if not self.delayed_reward:
                     t = True
@@ -183,9 +183,7 @@ class Env(gym.Env, ABC):
         else:
             self.t += 1
         if t:
-            i.update(
-                termination_line=len(self.lines) if self.active is None else self.active
-            )
+            i.update(termination_line=current_line)
         return self.get_observation(action), r, t, i
 
     def average_interval(self):
