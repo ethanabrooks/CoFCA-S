@@ -158,7 +158,7 @@ class Env(gym.Env, ABC):
             for k, v in self.average_interval():
                 i[keys[k]] = v
 
-        t = self.t > self.time_limit
+        t = (not self.evaluating) and self.t > self.time_limit
         r = 0
         if self.active is None:
             t = True
