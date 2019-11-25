@@ -1,7 +1,5 @@
-import functools
 from abc import ABC
 from collections import defaultdict, namedtuple
-from pprint import pprint
 
 import numpy as np
 from gym.utils import seeding
@@ -31,10 +29,10 @@ class Env(gym.Env, ABC):
         num_subtasks,
         max_nesting_depth,
         eval_condition_size,
-        eval_time_limit,
+        no_op_limit,
     ):
         super().__init__()
-        self.eval_time_limit = eval_time_limit
+        self.no_op_limit = no_op_limit
         self.eval_condition_size = eval_condition_size
         self.max_nesting_depth = max_nesting_depth
         self.num_subtasks = num_subtasks
@@ -89,6 +87,7 @@ class Env(gym.Env, ABC):
                 )
             )
         self.t = None
+        self.n = None
 
     def reset(self):
         self.last = Last(
@@ -98,6 +97,7 @@ class Env(gym.Env, ABC):
         self.choices = []
         self.target = []
         self.t = 0
+        self.n = 0
         eval_condition_size = self.eval_condition_size and self.evaluating
         self.condition_bit = 0 if eval_condition_size else self.random.randint(0, 2)
         if self.evaluating:
@@ -160,10 +160,13 @@ class Env(gym.Env, ABC):
 
         t = (not self.evaluating) and self.t > self.time_limit
         r = 0
+        if self.no_op_limit and self.n > self.no_op_limit:
+            self.failing = True
         if self.active is None:
             t = True
             r = int(not self.failing)
         elif action < self.num_subtasks:
+            self.t += 1
             if action != self.lines[self.active].id:
                 i.update(
                     failure_line=len(self.lines) if self.active is None else self.active
@@ -175,11 +178,14 @@ class Env(gym.Env, ABC):
             self.condition_bit = abs(
                 self.condition_bit - int(self.random.rand() < self.flip_prob)
             )
+        elif self.no_op_limit:
+            self.n += 1
+        else:
+            self.t += 1
         if t:
             i.update(
                 termination_line=len(self.lines) if self.active is None else self.active
             )
-        self.t += 1
         return self.get_observation(action), r, t, i
 
     def average_interval(self):
