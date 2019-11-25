@@ -373,6 +373,7 @@ class Env(gym.Env, ABC):
         for i, string in enumerate(self.line_strings(index=0, level=1)):
             print(f"{i}{string}")
         print("Condition:", self.condition_bit)
+        print("Failing:", self.failing)
         print(self.last)
         if pause:
             input("pause")
