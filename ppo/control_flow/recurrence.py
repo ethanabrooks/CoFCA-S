@@ -9,7 +9,7 @@ from ppo.control_flow.env import Obs
 from ppo.distributions import Categorical, FixedCategorical
 from ppo.utils import init_
 
-RecurrentState = namedtuple("RecurrentState", "a d p v h a_probs d_probs")
+RecurrentState = namedtuple("RecurrentState", "a p w v h a_probs p_probs")
 
 
 def batch_conv1d(inputs, weights):
@@ -58,7 +58,7 @@ class Recurrence(nn.Module):
         # networks
         self.ne = num_edges
         nt = int(self.obs_spaces.lines.nvec[0])
-        n_a, n_d = map(int, action_space.nvec)
+        n_a, n_p = map(int, action_space.nvec)
         self.n_a = n_a
         self.embed_task = nn.Embedding(nt, hidden_size)
         self.embed_action = nn.Embedding(n_a, hidden_size)
@@ -86,7 +86,7 @@ class Recurrence(nn.Module):
         self.actor = Categorical(hidden_size, n_a)
         self.attention = Categorical(hidden_size, n_a)
         self.state_sizes = RecurrentState(
-            a=1, a_probs=n_a, d=1, d_probs=n_d, p=1, v=1, h=hidden_size
+            a=1, a_probs=n_a, p=1, p_probs=n_p, w=1, v=1, h=hidden_size
         )
         first = torch.zeros(1, 1, 2 * self.obs_sections.lines, 1)
         first[0, 0, 0] = 1
@@ -123,9 +123,9 @@ class Recurrence(nn.Module):
             print(*args, **kwargs)
 
     def inner_loop(self, inputs, rnn_hxs):
-        T, N, dim = inputs.shape
+        T, N, D = inputs.shape
         inputs, actions = torch.split(
-            inputs.detach(), [dim - self.action_size, self.action_size], dim=2
+            inputs.detach(), [D - self.action_size, self.action_size], dim=2
         )
 
         # parse non-action inputs
@@ -168,44 +168,44 @@ class Recurrence(nn.Module):
             _x.squeeze_(0)
 
         h = hx.h
-        p = hx.p.long().squeeze(-1)
+        w = hx.w.long().squeeze(-1)
         a = hx.a.long().squeeze(-1)
         a[new_episode] = 0
         R = torch.arange(N, device=rnn_hxs.device)
         A = torch.cat([actions[:, :, 0], hx.a.view(1, N)], dim=0).long()
-        D = torch.cat([actions[:, :, 1], hx.d.view(1, N)], dim=0).long()
+        W = torch.cat([actions[:, :, 1], hx.p.view(1, N)], dim=0).long()
         active = inputs.active.squeeze(-1).long()
 
         for t in range(T):
             if self.reduceG is None:
                 if self.w_equals_active:
-                    p = active[t]
-                g = P[p, R]
-            self.print("p", p)
-            b = B[p, R]
+                    w = active[t]
+                g = P[w, R]
+            self.print("w", w)
+            b = B[w, R]
             self.print(
                 torch.round(10 * b).view(b.size(0), -1, 2, self.ne).transpose(1, 2)
             )
-            x = [inputs.condition[t], M[R, p]]
+            x = [inputs.condition[t], M[R, w]]
             h = self.gru(torch.cat(x, dim=-1), h)
             z = F.relu(self.mlp(h))
             a_dist = self.actor(z)
             self.sample_new(A[t], a_dist)
             o = self.option(z).softmax(dim=-1)
             self.print("o", torch.round(10 * o))
-            d_probs = (g @ o.unsqueeze(-1)).squeeze(-1)
-            d_dist = FixedCategorical(probs=d_probs)
-            # half = d_dist.probs.size(-1) // 2
-            # p_probs = torch.round(d_dist.probs * 10).flatten()
-            self.sample_new(D[t], d_dist)
-            p = p + D[t].clone() - nl
-            p = torch.clamp(p, min=0, max=nl - 1)
+            p = (g @ o.unsqueeze(-1)).squeeze(-1)
+            p_dist = FixedCategorical(probs=p)
+            half = p_dist.probs.size(-1) // 2
+            p_probs = torch.round(p_dist.probs * 10).flatten()
+            self.sample_new(W[t], p_dist)
+            w = w + W[t].clone() - nl
+            w = torch.clamp(w, min=0, max=nl - 1)
             yield RecurrentState(
                 a=A[t],
                 v=self.critic(z),
                 h=h,
-                p=p,
+                w=w,
                 a_probs=a_dist.probs,
-                d=D[t],
-                d_probs=d_dist.probs,
+                p=W[t],
+                p_probs=p_dist.probs,
             )
