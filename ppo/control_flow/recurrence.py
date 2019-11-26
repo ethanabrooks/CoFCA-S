@@ -38,17 +38,12 @@ class Recurrence(nn.Module):
         num_edges,
         num_encoding_layers,
         debug,
-        baseline,
-        reduceG,
-        w_equals_active,
+        no_scan,
+        no_roll,
     ):
         super().__init__()
-        if reduceG is None:
-            self.w_equals_active = w_equals_active
-        else:
-            self.w_equals_active = True
-        self.reduceG = reduceG
-        self.baseline = baseline
+        self.no_roll = no_roll
+        self.no_scan = no_scan
         self.obs_spaces = Obs(**observation_space.spaces)
         self.obs_sections = Obs(*[int(np.prod(s.shape)) for s in self.obs_spaces])
         self.action_size = 2
@@ -140,27 +135,30 @@ class Recurrence(nn.Module):
         rolled = []
         nl = self.obs_sections.lines
         for i in range(nl):
-            rolled.append(torch.roll(M, shifts=-i, dims=1))
+            rolled.append(M if self.no_roll else torch.roll(M, shifts=-i, dims=1))
         rolled = torch.cat(rolled, dim=0)
         G, _ = self.task_encoder(rolled)
         G = G.view(nl, N, nl, 2, self.hidden_size)
-        B = self.mlp2(G).sigmoid()
-        # arange = 0.05 * torch.zeros(15).float()
-        # arange[0] = 1
-        # B[:, :, :, 0] = arange.view(1, 1, -1, 1)
-        # B[:, :, :, 1] = arange.flip(0).view(1, 1, -1, 1)
-        f, b = torch.unbind(B, dim=3)
-        B = torch.stack([f, b.flip(2)], dim=-2)
-        B = B.view(nl, N, 2 * nl, self.ne)
-        last = self.first.flip(2)
-        zero_last = (1 - last) * B
-        B = zero_last + last
-        rolled = torch.roll(zero_last, shifts=1, dims=2)
-        C = torch.cumprod(1 - rolled, dim=2)
-        P = B * C
-        P = P.view(nl, N, nl, 2, self.ne)
-        f, b = torch.unbind(P, dim=3)
-        P = torch.cat([b.flip(2), f], dim=2)
+        B = self.mlp2(G)
+        if self.no_scan:
+            P = B.view(nl, N, nl * 2, self.ne).softmax(dim=2)
+        else:
+            # arange = 0.05 * torch.zeros(15).float()
+            # arange[0] = 1
+            # B[:, :, :, 0] = arange.view(1, 1, -1, 1)
+            # B[:, :, :, 1] = arange.flip(0).view(1, 1, -1, 1)
+            f, b = torch.unbind(B.sigmoid(), dim=3)
+            B = torch.stack([f, b.flip(2)], dim=-2)
+            B = B.view(nl, N, 2 * nl, self.ne)
+            last = self.first.flip(2)
+            zero_last = (1 - last) * B
+            B = zero_last + last
+            rolled = torch.roll(zero_last, shifts=1, dims=2)
+            C = torch.cumprod(1 - rolled, dim=2)
+            P = B * C
+            P = P.view(nl, N, nl, 2, self.ne)
+            f, b = torch.unbind(P, dim=3)
+            P = torch.cat([b.flip(2), f], dim=2)
 
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
@@ -174,18 +172,14 @@ class Recurrence(nn.Module):
         R = torch.arange(N, device=rnn_hxs.device)
         A = torch.cat([actions[:, :, 0], hx.a.view(1, N)], dim=0).long()
         W = torch.cat([actions[:, :, 1], hx.p.view(1, N)], dim=0).long()
-        active = inputs.active.squeeze(-1).long()
 
         for t in range(T):
-            if self.reduceG is None:
-                if self.w_equals_active:
-                    w = active[t]
-                g = P[w, R]
             self.print("w", w)
-            b = B[w, R]
-            self.print(
-                torch.round(10 * b).view(b.size(0), -1, 2, self.ne).transpose(1, 2)
-            )
+            if not self.no_scan:
+                b = B[w, R]
+                self.print(
+                    torch.round(10 * b).view(b.size(0), -1, 2, self.ne).transpose(1, 2)
+                )
             x = [inputs.condition[t], M[R, w]]
             h = self.gru(torch.cat(x, dim=-1), h)
             z = F.relu(self.mlp(h))
@@ -193,10 +187,11 @@ class Recurrence(nn.Module):
             self.sample_new(A[t], a_dist)
             o = self.option(z).softmax(dim=-1)
             self.print("o", torch.round(10 * o))
+            g = P[w, R]
             p = (g @ o.unsqueeze(-1)).squeeze(-1)
             p_dist = FixedCategorical(probs=p)
-            half = p_dist.probs.size(-1) // 2
-            p_probs = torch.round(p_dist.probs * 10).flatten()
+            # half = p_dist.probs.size(-1) // 2
+            # p_probs = torch.round(p_dist.probs * 10).flatten()
             self.sample_new(W[t], p_dist)
             w = w + W[t].clone() - nl
             w = torch.clamp(w, min=0, max=nl - 1)

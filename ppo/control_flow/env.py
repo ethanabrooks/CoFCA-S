@@ -24,12 +24,12 @@ class Env(gym.Env, ABC):
         eval_lines,
         flip_prob,
         time_limit,
-        baseline,
         delayed_reward,
         num_subtasks,
         max_nesting_depth,
         eval_condition_size,
         no_op_limit,
+        baseline=False,
     ):
         super().__init__()
         self.no_op_limit = no_op_limit

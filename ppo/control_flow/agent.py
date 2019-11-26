@@ -13,15 +13,10 @@ from ppo.distributions import FixedCategorical
 
 
 class Agent(ppo.agent.Agent, NNBase):
-    def __init__(self, entropy_coef, recurrent, baseline, **network_args):
+    def __init__(self, entropy_coef, recurrent, **network_args):
         nn.Module.__init__(self)
         self.entropy_coef = entropy_coef
-        if baseline == "oh-et-al":
-            self.recurrent_module = oh_et_al.Recurrence(**network_args)
-        else:
-            self.recurrent_module = Recurrence(
-                **network_args, baseline=baseline == "no-attention"
-            )
+        self.recurrent_module = Recurrence(**network_args)
 
     @property
     def recurrent_hidden_state_size(self):
@@ -39,15 +34,10 @@ class Agent(ppo.agent.Agent, NNBase):
         rm = self.recurrent_module
         hx = RecurrentState(*rm.parse_hidden(all_hxs))
         a_dist = FixedCategorical(hx.a_probs)
-        if rm.w_equals_active:
-            action_log_probs = a_dist.log_probs(hx.a)
-            entropy = a_dist.entropy().mean()
-            action = torch.cat([hx.a, hx.a], dim=-1)
-        else:
-            p_dist = FixedCategorical(hx.p_probs)
-            action_log_probs = a_dist.log_probs(hx.a) + p_dist.log_probs(hx.p)
-            entropy = (a_dist.entropy() + p_dist.entropy()).mean()
-            action = torch.cat([hx.a, hx.p], dim=-1)
+        p_dist = FixedCategorical(hx.p_probs)
+        action_log_probs = a_dist.log_probs(hx.a) + p_dist.log_probs(hx.p)
+        entropy = (a_dist.entropy() + p_dist.entropy()).mean()
+        action = torch.cat([hx.a, hx.p], dim=-1)
         return AgentValues(
             value=hx.v,
             action=action,
