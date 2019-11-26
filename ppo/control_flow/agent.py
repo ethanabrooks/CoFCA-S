@@ -8,15 +8,22 @@ from ppo.agent import AgentValues, NNBase
 
 # noinspection PyMissingConstructor
 from ppo.control_flow.baselines import oh_et_al
-from ppo.control_flow.recurrence import RecurrentState, Recurrence
+from ppo.control_flow.recurrence import RecurrentState
+import ppo.control_flow.recurrence
+import ppo.control_flow.simple
 from ppo.distributions import FixedCategorical
 
 
 class Agent(ppo.agent.Agent, NNBase):
-    def __init__(self, entropy_coef, recurrent, **network_args):
+    def __init__(self, entropy_coef, recurrent, simple, **network_args):
         nn.Module.__init__(self)
         self.entropy_coef = entropy_coef
-        self.recurrent_module = Recurrence(**network_args)
+        self.simple = simple
+        self.recurrent_module = (
+            ppo.control_flow.simple.Recurrence(**network_args)
+            if simple
+            else ppo.control_flow.recurrence.Recurrence(**network_args)
+        )
 
     @property
     def recurrent_hidden_state_size(self):
@@ -32,12 +39,17 @@ class Agent(ppo.agent.Agent, NNBase):
             inputs.view(N, -1), rnn_hxs, masks, action=action
         )
         rm = self.recurrent_module
-        hx = RecurrentState(*rm.parse_hidden(all_hxs))
+        hx = rm.parse_hidden(all_hxs)
         a_dist = FixedCategorical(hx.a_probs)
-        p_dist = FixedCategorical(hx.p_probs)
-        action_log_probs = a_dist.log_probs(hx.a) + p_dist.log_probs(hx.p)
-        entropy = (a_dist.entropy() + p_dist.entropy()).mean()
-        action = torch.cat([hx.a, hx.p], dim=-1)
+        if self.simple:
+            action_log_probs = a_dist.log_probs(hx.a)
+            entropy = a_dist.entropy().mean()
+            action = F.pad(hx.a, [0, 1])
+        else:
+            p_dist = FixedCategorical(hx.p_probs)
+            action_log_probs = a_dist.log_probs(hx.a) + p_dist.log_probs(hx.p)
+            entropy = (a_dist.entropy() + p_dist.entropy()).mean()
+            action = torch.cat([hx.a, hx.p], dim=-1)
         return AgentValues(
             value=hx.v,
             action=action,
