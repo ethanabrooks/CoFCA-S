@@ -1,5 +1,5 @@
 from abc import ABC
-from collections import defaultdict, namedtuple
+from collections import defaultdict, namedtuple, OrderedDict
 
 import numpy as np
 from gym.utils import seeding
@@ -64,15 +64,15 @@ class Env(gym.Env, ABC):
         self.target = None
         self.line_types = [If, Else, EndIf, While, EndWhile, Subtask, Padding]
         if baseline:
-            self.action_space = spaces.Discrete(2 * self.n_lines)
-            self.observation_space = spaces.MultiBinary(
-                2 + len(self.line_types) * self.n_lines + (self.n_lines + 1)
+            self.action_space = spaces.Discrete(self.num_subtasks + 1)
+            n_line_types = len(self.line_types) + num_subtasks
+            self.observation_space = spaces.Dict(
+                dict(
+                    condition=spaces.Discrete(2),
+                    lines=spaces.MultiBinary(n_line_types * self.n_lines),
+                )
             )
-            self.eye = Obs(
-                condition=np.eye(2),
-                lines=np.eye(len(self.line_types)),
-                active=np.eye(self.n_lines + 1),
-            )
+            self.eye = np.eye(n_line_types)
         else:
             self.action_space = spaces.MultiDiscrete(
                 np.array([self.num_subtasks + 1, 2 * self.n_lines])
@@ -127,8 +127,11 @@ class Env(gym.Env, ABC):
         return self.get_observation(action=0)
 
     def step(self, action):
-        action, delta = action
-        selected = self.last.selected + delta - self.n_lines
+        if self.baseline:
+            selected = None
+        else:
+            action, delta = action
+            selected = self.last.selected + delta - self.n_lines
         s, r, t, i = self._step(action=int(action))
         self.last = Last(
             action=action, active=self.active, reward=r, terminal=t, selected=selected
@@ -217,8 +220,9 @@ class Env(gym.Env, ABC):
             active=self.n_lines if self.active is None else self.active,
         )
         if self.baseline:
-            obs = [eye[o].flatten() for eye, o in zip(self.eye, obs)]
-            obs = np.concatenate(obs)
+            obs = OrderedDict(
+                condition=obs.condition, lines=self.eye[obs.lines].flatten()
+            )
         else:
             obs = obs._asdict()
         assert self.observation_space.contains(obs)

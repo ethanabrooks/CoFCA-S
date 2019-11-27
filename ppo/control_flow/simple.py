@@ -131,6 +131,9 @@ class Recurrence(nn.Module):
         )  # n_batch, n_lines, hidden_size
 
         _, H = self.task_encoder(M)
+        import ipdb
+
+        ipdb.set_trace()
         H = H.transpose(0, 1).reshape(N, -1)
 
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
