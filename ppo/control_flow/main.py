@@ -26,6 +26,7 @@ def main(log_dir, seed, baseline, **kwargs):
                 observation_space=obs_space,
                 action_space=envs.action_space,
                 debug=debug,
+                simple=baseline == "simple",
                 **agent_args,
             )
 
