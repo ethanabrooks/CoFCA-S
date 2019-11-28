@@ -60,7 +60,7 @@ class Recurrence(nn.Module):
         self.task_encoder = nn.GRU(
             hidden_size, hidden_size, bidirectional=True, batch_first=True
         )
-        in_size = self.obs_sections.condition + hidden_size * self.obs_sections.lines
+        in_size = self.obs_sections.condition + hidden_size * 2
         self.gru = nn.GRUCell(in_size, hidden_size)
 
         layers = []
@@ -126,12 +126,12 @@ class Recurrence(nn.Module):
 
         # build memory
         lines = inputs.lines.view(T, N, *self.obs_spaces.lines.shape).long()[0, :, :]
-        # M = self.embed_task(lines.view(-1)).view(
-        #     *lines.shape, self.hidden_size
-        # )  # n_batch, n_lines, hidden_size
+        M = self.embed_task(lines.view(-1)).view(
+            *lines.shape, self.hidden_size
+        )  # n_batch, n_lines, hidden_size
 
-        # _, H = self.task_encoder(M)
-        # H = H.transpose(0, 1).reshape(N, -1)
+        _, H = self.task_encoder(M)
+        H = H.transpose(0, 1).reshape(N, -1)
 
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
@@ -144,7 +144,7 @@ class Recurrence(nn.Module):
         A = torch.cat([actions[:, :, 0], hx.a.view(1, N)], dim=0).long()
 
         for t in range(T):
-            x = [inputs.condition[t], self.embed_task(lines).view(N, -1)]
+            x = [inputs.condition[t], H]
             h = self.gru(torch.cat(x, dim=-1), h)
             z = F.relu(self.mlp(h))
             a_dist = self.actor(z)
