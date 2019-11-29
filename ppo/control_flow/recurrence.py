@@ -84,7 +84,7 @@ class Recurrence(nn.Module):
         self.state_sizes = RecurrentState(
             a=1, a_probs=n_a, p=1, p_probs=n_p, w=1, v=1, h=hidden_size
         )
-        first = torch.zeros(1, 1, 2 * self.obs_sections.lines, 1)
+        first = torch.zeros(1, 1, 2 * self.obs_sections.lines, 1, 1)
         first[0, 0, 0] = 1
         self.register_buffer("first", first)
 
@@ -143,25 +143,31 @@ class Recurrence(nn.Module):
             H = H.transpose(0, 1).reshape(nl, N, -1)
             P = self.mlp2(H).view(nl, N, nl * 2, self.ne).softmax(2)
         else:
-            G, _ = self.task_encoder(rolled)
-            G = G.view(nl, N, nl, 2, self.hidden_size)
-            B = self.mlp2(G)
-            # arange = 0.05 * torch.zeros(15).float()
+            # G, _ = self.task_encoder(rolled)
+            # G = G.view(nl, N, nl, 2, self.hidden_size)
+            # B = self.mlp2(G)
+            B = (
+                self.mlp2(rolled.view(nl, N, nl, self.hidden_size))
+                .view(nl, N, nl, 2, self.ne // 2)
+                .sigmoid()
+            )
+            # arange = 0.05 * torch.zeros(16).float()
             # arange[0] = 1
             # B[:, :, :, 0] = arange.view(1, 1, -1, 1)
             # B[:, :, :, 1] = arange.flip(0).view(1, 1, -1, 1)
-            f, b = torch.unbind(B.sigmoid(), dim=3)
+            f, b = torch.unbind(B, dim=3)
             B = torch.stack([f, b.flip(2)], dim=-2)
-            B = B.view(nl, N, 2 * nl, self.ne)
+            B = F.pad(B, [0, 0, 0, 0, B.size(2), 0])
+            B = B.view(nl, N, 2 * nl, 2, self.ne // 2)
             last = self.first.flip(2)
             zero_last = (1 - last) * B
             B = zero_last + last
             rolled = torch.roll(zero_last, shifts=1, dims=2)
             C = torch.cumprod(1 - rolled, dim=2)
             P = B * C
-            P = P.view(nl, N, nl, 2, self.ne)
+            # P = P.view(nl, N, nl, 2, self.ne)
             f, b = torch.unbind(P, dim=3)
-            P = torch.cat([b.flip(2), f], dim=2)
+            P = torch.cat([b.flip(2), f], dim=3)
 
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
