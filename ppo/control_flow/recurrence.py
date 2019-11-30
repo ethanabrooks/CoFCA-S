@@ -70,7 +70,7 @@ class Recurrence(nn.Module):
         self.option = init_(nn.Linear(hidden_size, self.ne))
 
         layers = []
-        in_size = (2 if no_scan else 1) * hidden_size
+        in_size = (2 if no_scan else 1) * (2 * hidden_size)
         for _ in range(num_encoding_layers - 1):
             layers.extend([init_(nn.Linear(in_size, hidden_size)), activation])
             in_size = hidden_size
@@ -146,11 +146,10 @@ class Recurrence(nn.Module):
             # G, _ = self.task_encoder(rolled)
             # G = G.view(nl, N, nl, 2, self.hidden_size)
             # B = self.mlp2(G)
-            B = (
-                self.mlp2(rolled.view(nl, N, nl, self.hidden_size))
-                .view(nl, N, nl, 2, self.ne // 2)
-                .sigmoid()
-            )
+            rolled = rolled.view(nl, N, nl, self.hidden_size)
+            first = rolled[:, :, 0].unsqueeze(2)
+            G = torch.cat([rolled, first.expand_as(rolled)], dim=-1)
+            B = self.mlp2(G).view(nl, N, nl, 2, self.ne // 2).sigmoid()
             # arange = 0.05 * torch.zeros(16).float()
             # arange[0] = 1
             # B[:, :, :, 0] = arange.view(1, 1, -1, 1)
