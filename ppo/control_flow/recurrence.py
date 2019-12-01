@@ -201,9 +201,8 @@ class Recurrence(nn.Module):
             self.print("o", torch.round(10 * o))
             g = P[w, R]
             half1 = g.size(1) // 2
-            half2 = g.size(2) // 2
-            self.print(torch.round(10 * g)[:, :half1, :half2])
-            self.print(torch.round(10 * g)[:, half1:, half2:])
+            self.print(torch.round(10 * g)[0, half1:])
+            self.print(torch.round(10 * g)[0, :half1])
             p = (g @ o.unsqueeze(-1)).squeeze(-1)
             p_dist = FixedCategorical(probs=p)
             # p_probs = torch.round(p_dist.probs * 10).flatten()
