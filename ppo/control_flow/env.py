@@ -175,10 +175,10 @@ class Env(gym.Env, ABC):
                 self.failing = True
                 if not self.delayed_reward:
                     t = True
-            self.active = self.next()
             self.condition_bit = abs(
                 self.condition_bit - int(self.random.rand() < self.flip_prob)
             )
+            self.active = self.next()
         elif self.no_op_limit:
             self.n += 1
         else:
