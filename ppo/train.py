@@ -6,12 +6,15 @@ import time
 from collections import Counter
 from pathlib import Path
 from typing import Dict
+import os
 
 import gym
 import numpy as np
 import torch
 from gym.wrappers import TimeLimit
 from tqdm import tqdm
+from typing import List, Tuple
+
 
 from common.atari_wrappers import wrap_deepmind
 from common.vec_env.dummy_vec_env import DummyVecEnv
@@ -21,6 +24,58 @@ from ppo.storage import RolloutStorage
 from ppo.update import PPO
 from ppo.utils import k_scalar_pairs
 from ppo.wrappers import AddTimestep, TransposeImage, VecPyTorch, VecPyTorchFrameStack
+from gym import spaces
+from pathlib import *
+import hsr.control
+
+import hsr
+from hsr.util import add_env_args
+from rl_utils import argparse, hierarchical_parse_args, space_to_size
+
+
+def hierarchical_parse_args(parser: argparse.ArgumentParser,
+                            include_positional=False):
+    """
+    :return:
+    {
+        group1: {**kwargs}
+        group2: {**kwargs}
+        ...
+        **kwargs
+    }
+    """
+    args = parser.parse_args(["--block-space", "(0,0)(0,0)(0.418,0.418)(1,1)(0,0)(0,0)(0,0)", "--steps-per-action=300", "--geofence=.5", "--goal-space", "(0,0)(0,0)(.418,.418)", "--use-dof", "arm_flex_joint", "--use-dof", "hand_l_proximal_joint", "--use-dof", "hand_r_proximal_joint", "--use-dof", "wrist_flex_joint", "--use-dof", "arm_roll_joint", "--use-dof", "wrist_roll_joint", "--use-dof", "slide_x", "--use-dof", "slide_y", "--n-blocks=1"])
+
+    def key_value_pairs(group):
+        for action in group._group_actions:
+            if action.dest != 'help':
+                yield action.dest, getattr(args, action.dest, None)
+
+    def get_positionals(groups):
+        for group in groups:
+            if group.title == 'positional arguments':
+                for k, v in key_value_pairs(group):
+                    yield v
+
+    def get_nonpositionals(groups: List[argparse._ArgumentGroup]):
+        for group in groups:
+            if group.title != 'positional arguments':
+                children = key_value_pairs(group)
+                descendants = get_nonpositionals(group._action_groups)
+                yield group.title, {**dict(children), **dict(descendants)}
+
+    positional = list(get_positionals(parser._action_groups))
+    nonpositional = dict(get_nonpositionals(parser._action_groups))
+    optional = nonpositional.pop('optional arguments')
+    nonpositional = {**nonpositional, **optional}
+    if include_positional:
+        return positional, nonpositional
+    return nonpositional
+
+def get_env(env_args):
+    return hsr.HSREnv(**env_args)
+ 
+
 
 
 # noinspection PyAttributeOutsideInit
@@ -48,7 +103,7 @@ class Train(abc.ABC):
         num_batch,
         env_args,
         success_reward,
-        use_tqdm,
+        use_tqdm
     ):
         if render_eval and not render:
             eval_interval = 1
@@ -138,6 +193,7 @@ class Train(abc.ABC):
         success_reward,
         use_tqdm,
     ):
+
         if eval_interval:
             # vec_norm = get_vec_normalize(eval_envs)
             # if vec_norm is not None:
@@ -164,12 +220,12 @@ class Train(abc.ABC):
             eval_result = {f"eval_{k}": v for k, v in eval_result.items()}
         else:
             eval_result = {}
+
         self.envs.train()
         obs = self.envs.reset()
         self.rollouts.obs[0].copy_(obs)
         tick = time.time()
         log_progress = None
-
         if eval_interval:
             eval_iterator = range(self.i % eval_interval, eval_interval)
             if use_tqdm:
@@ -235,7 +291,8 @@ class Train(abc.ABC):
 
             # Observe reward and next obs
             obs, reward, done, infos = self.envs.step(act.action)
-
+            #print(self.envs.action_space)
+            print("action: ", act.action, "obs: ", obs, " rew: ", reward, " done: ", done, " infos: ", infos)
             for d in infos:
                 for k, v in d.items():
                     episode_counter.update({k: float(v) / num_steps / len(infos)})
@@ -279,10 +336,33 @@ class Train(abc.ABC):
     def build_agent(envs, **agent_args):
         return Agent(envs.observation_space.shape, envs.action_space, **agent_args)
 
+
+
     @staticmethod
     def make_env(env_id, seed, rank, add_timestep, time_limit, evaluation):
-        env = gym.make(env_id)
-        is_atari = hasattr(gym.envs, "atari") and isinstance(
+        parser = argparse.ArgumentParser()
+        wrapper_parser = parser.add_argument_group('wrapper_args')
+        env_parser = parser.add_argument_group('env_args')
+        hsr.util.add_env_args(env_parser)
+        hsr.util.add_wrapper_args(wrapper_parser)
+        args = hierarchical_parse_args(parser)
+        env = hsr.util.env_wrapper(get_env)(**args)
+
+        
+        #setting up the action with the appropiate bounds
+
+        #forward, backwards, right, left, up, down, rotate claw clockwise, rotate claw counterclockwise, open/close claws
+        env.action_space = spaces.Discrete(10)
+        #env.action_space = spaces.Box(low = low, high = high, dtype=np.int32)
+        low = np.array([-np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf])
+        high = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
+        env.observation_space = spaces.Box(low=low, high=high, dtype = np.float32)
+        #bounds = self.model.actuator_ctrlrange.copy()
+        #low = bounds[:, 0]
+        #high = bounds[:, 1]
+        #env.action_space = spaces.Box(low=low, high=high, dtype=np.float32)
+        #env = gym.make(env_id)
+        is_atari = hasattr(gym.envs, "atari") and isinstanice(
             env.unwrapped, gym.envs.atari.atari_env.AtariEnv
         )
         env.seed(seed + rank)
@@ -305,7 +385,6 @@ class Train(abc.ABC):
 
         if time_limit is not None:
             env = TimeLimit(env, max_episode_steps=time_limit)
-
         return env
 
     def make_vec_envs(
@@ -336,6 +415,8 @@ class Train(abc.ABC):
             for i in range(num_processes)
         ]
 
+        print("num processes: ", num_processes)
+
         if len(envs) == 1 or sys.platform == "darwin" or synchronous:
             envs = DummyVecEnv(envs, render=render)
         else:
@@ -356,7 +437,6 @@ class Train(abc.ABC):
             envs = VecPyTorchFrameStack(envs, num_frame_stack)
         # elif len(envs.observation_space.shape) == 3:
         #     envs = VecPyTorchFrameStack(envs, 4, device)
-
         return envs
 
     def _save(self, checkpoint_dir):

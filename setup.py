@@ -34,5 +34,6 @@ setup(
         "opencv-python==4.1.0.25",
         "psutil==5.6.3",
         "requests==2.22.0",
+        "mujoco-py<2.1,>=2.0"
     ],
 )
