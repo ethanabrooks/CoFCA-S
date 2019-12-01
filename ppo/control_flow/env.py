@@ -131,7 +131,7 @@ class Env(gym.Env, ABC):
             selected = None
         else:
             action, delta = action
-            selected = self.last.selected + delta - self.n_lines
+            selected = (self.last.selected + delta - self.n_lines) % self.n_lines
         s, r, t, i = self._step(action=int(action))
         self.last = Last(
             action=action, active=self.active, reward=r, terminal=t, selected=selected
