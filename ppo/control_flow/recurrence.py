@@ -58,7 +58,7 @@ class Recurrence(nn.Module):
         self.embed_task = nn.Embedding(nt, hidden_size)
         self.embed_action = nn.Embedding(n_a, hidden_size)
         self.task_encoder = nn.GRU(
-            hidden_size, hidden_size, bidirectional=True, batch_first=True
+            2 * hidden_size, hidden_size, bidirectional=True, batch_first=True
         )
         in_size = self.obs_sections.condition + hidden_size
         self.gru = nn.GRUCell(in_size, hidden_size)
@@ -70,11 +70,11 @@ class Recurrence(nn.Module):
         self.option = init_(nn.Linear(hidden_size, self.ne))
 
         layers = []
-        in_size = (2 if no_scan else 1) * (2 * hidden_size)
+        in_size = (2 if no_scan else 1) * hidden_size
         for _ in range(num_encoding_layers - 1):
             layers.extend([init_(nn.Linear(in_size, hidden_size)), activation])
             in_size = hidden_size
-        out_size = self.ne * n_p if no_scan else self.ne
+        out_size = (self.ne * n_p if no_scan else self.ne) // 2
         self.mlp2 = nn.Sequential(*layers, init_(nn.Linear(in_size, out_size)))
 
         self.stuff = init_(nn.Linear(hidden_size, 1))
@@ -143,13 +143,14 @@ class Recurrence(nn.Module):
             H = H.transpose(0, 1).reshape(nl, N, -1)
             P = self.mlp2(H).view(nl, N, nl * 2, self.ne).softmax(2)
         else:
-            # G, _ = self.task_encoder(rolled)
-            # G = G.view(nl, N, nl, 2, self.hidden_size)
-            # B = self.mlp2(G)
-            rolled = rolled.view(nl, N, nl, self.hidden_size)
-            first = rolled[:, :, 0].unsqueeze(2)
-            G = torch.cat([rolled, first.expand_as(rolled)], dim=-1)
-            B = self.mlp2(G).view(nl, N, nl, 2, self.ne // 2).sigmoid()
+            first = rolled.view(nl, N, nl, self.hidden_size)[:, :, 0].view(
+                -1, 1, self.hidden_size
+            )
+            X = torch.cat([rolled, first.expand_as(rolled)], dim=-1)
+            G, _ = self.task_encoder(X)
+            G = G.view(nl, N, nl, 2, self.hidden_size)
+            B = self.mlp2(G).sigmoid()
+            # B = self.mlp2(G).view(nl, N, nl, 2, self.ne // 2).sigmoid()
             # arange = 0.05 * torch.zeros(16).float()
             # arange[0] = 1
             # B[:, :, :, 0] = arange.view(1, 1, -1, 1)
@@ -157,7 +158,7 @@ class Recurrence(nn.Module):
             f, b = torch.unbind(B, dim=3)
             B = torch.stack([f, b.flip(2)], dim=-2)
             B = F.pad(B, [0, 0, 0, 0, B.size(2), 0])
-            B = B.view(nl, N, 2 * nl, 2, self.ne // 2)
+            # B = B.view(nl, N, 2 * nl, 2, self.ne)
             last = self.first.flip(2)
             zero_last = (1 - last) * B
             B = zero_last + last  # this ensures that the last B is 1
