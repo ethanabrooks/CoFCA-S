@@ -160,7 +160,7 @@ class Recurrence(nn.Module):
             B = B.view(nl, N, 2 * nl, 2, self.ne // 2)
             last = self.first.flip(2)
             zero_last = (1 - last) * B
-            B = zero_last + last
+            B = zero_last + last  # this ensures that the last B is 1
             rolled = torch.roll(zero_last, shifts=1, dims=2)
             C = torch.cumprod(1 - rolled, dim=2)
             P = B * C
@@ -184,11 +184,6 @@ class Recurrence(nn.Module):
 
         for t in range(T):
             self.print("w", w)
-            if not self.no_scan:
-                b = B[w, R]
-                self.print(
-                    torch.round(10 * b).view(b.size(0), -1, 2, self.ne).transpose(1, 2)
-                )
             x = [inputs.condition[t], M[R, w]]
             h = self.gru(torch.cat(x, dim=-1), h)
             z = F.relu(self.mlp(h))
@@ -197,9 +192,12 @@ class Recurrence(nn.Module):
             o = self.option(z).softmax(dim=-1)
             self.print("o", torch.round(10 * o))
             g = P[w, R]
+            half1 = g.size(1) // 2
+            half2 = g.size(2) // 2
+            self.print(torch.round(10 * g)[:, :half1, :half2])
+            self.print(torch.round(10 * g)[:, half1:, half2:])
             p = (g @ o.unsqueeze(-1)).squeeze(-1)
             p_dist = FixedCategorical(probs=p)
-            # half = p_dist.probs.size(-1) // 2
             # p_probs = torch.round(p_dist.probs * 10).flatten()
             self.sample_new(W[t], p_dist)
             w = w + W[t].clone() - nl
