@@ -59,6 +59,7 @@ def bandit_args():
     parsers.agent.add_argument("--debug", action="store_true")
     parsers.agent.add_argument("--no-scan", action="store_true")
     parsers.agent.add_argument("--no-roll", action="store_true")
+    parsers.agent.add_argument("--append-first", action="store_true")
     parsers.agent.add_argument("--num-encoding-layers", type=int, required=True)
     parsers.agent.add_argument("--num-edges", type=int, required=True)
     return parser
