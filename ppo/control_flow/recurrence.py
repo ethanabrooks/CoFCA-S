@@ -41,8 +41,10 @@ class Recurrence(nn.Module):
         no_scan,
         no_roll,
         append_first,
+        roll_P,
     ):
         super().__init__()
+        self.roll_P = roll_P
         self.append_first = append_first
         self.no_roll = no_roll
         self.no_scan = no_scan
@@ -172,7 +174,8 @@ class Recurrence(nn.Module):
             P = P.view(nl, N, nl, 2, self.ne)
             f, b = torch.unbind(P, dim=3)
             P = torch.cat([b.flip(2), f], dim=2)
-            P = P.roll(shifts=(-1, 1), dims=(0, 2))
+            if self.roll_P:
+                P = P.roll(shifts=(-1, 1), dims=(0, 2))
 
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
