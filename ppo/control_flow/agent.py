@@ -15,15 +15,10 @@ from ppo.distributions import FixedCategorical
 
 
 class Agent(ppo.agent.Agent, NNBase):
-    def __init__(self, entropy_coef, recurrent, simple, **network_args):
+    def __init__(self, entropy_coef, recurrent, **network_args):
         nn.Module.__init__(self)
         self.entropy_coef = entropy_coef
-        self.simple = simple
-        self.recurrent_module = (
-            ppo.control_flow.simple.Recurrence(**network_args)
-            if simple
-            else ppo.control_flow.recurrence.Recurrence(**network_args)
-        )
+        self.recurrent_module = ppo.control_flow.recurrence.Recurrence(**network_args)
 
     @property
     def recurrent_hidden_state_size(self):
@@ -41,7 +36,7 @@ class Agent(ppo.agent.Agent, NNBase):
         rm = self.recurrent_module
         hx = rm.parse_hidden(all_hxs)
         a_dist = FixedCategorical(hx.a_probs)
-        if self.simple:
+        if rm.no_pointer:
             action_log_probs = a_dist.log_probs(hx.a)
             entropy = a_dist.entropy().mean()
             action = F.pad(hx.a, [0, 1])

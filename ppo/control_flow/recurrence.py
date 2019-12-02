@@ -40,8 +40,10 @@ class Recurrence(nn.Module):
         debug,
         no_scan,
         no_roll,
+        no_pointer,
     ):
         super().__init__()
+        self.no_pointer = no_pointer
         self.no_roll = no_roll
         self.no_scan = no_scan
         self.obs_spaces = Obs(**observation_space.spaces)
@@ -60,7 +62,7 @@ class Recurrence(nn.Module):
         self.task_encoder = nn.GRU(
             hidden_size, hidden_size, bidirectional=True, batch_first=True
         )
-        in_size = self.obs_sections.condition + hidden_size
+        in_size = self.obs_sections.condition + (2 if no_pointer else 1) * hidden_size
         self.gru = nn.GRUCell(in_size, hidden_size)
 
         layers = []
@@ -138,12 +140,11 @@ class Recurrence(nn.Module):
         for i in range(nl):
             rolled.append(M if self.no_roll else torch.roll(M, shifts=-i, dims=1))
         rolled = torch.cat(rolled, dim=0)
+        G, H = self.task_encoder(rolled)
+        H = H.transpose(0, 1).reshape(nl, N, -1)
         if self.no_scan:
-            _, H = self.task_encoder(rolled)
-            H = H.transpose(0, 1).reshape(nl, N, -1)
             P = self.mlp2(H).view(nl, N, nl * 2, self.ne).softmax(2)
         else:
-            G, _ = self.task_encoder(rolled)
             G = G.view(nl, N, nl, 2, self.hidden_size)
             B = self.mlp2(G)
             # arange = 0.05 * torch.zeros(15).float()
@@ -179,7 +180,7 @@ class Recurrence(nn.Module):
 
         for t in range(T):
             self.print("w", w)
-            x = [inputs.condition[t], M[R, w]]
+            x = [inputs.condition[t], H.sum(0) if self.no_pointer else M[R, w]]
             h = self.gru(torch.cat(x, dim=-1), h)
             z = F.relu(self.mlp(h))
             a_dist = self.actor(z)
