@@ -107,7 +107,10 @@ class Env(gym.Env, ABC):
             n_lines = self.random.random_integers(self.min_lines, self.max_lines)
         if eval_condition_size:
             line0 = self.random.choice([While, If])
-            lines = [line0] + [Subtask] * (self.eval_lines - 3)
+            edge_length = self.random.random_integers(
+                self.max_lines, self.eval_lines - 1
+            )
+            lines = [line0] + [Subtask] * (edge_length - 2)
             lines += [EndWhile if line0 is While else EndIf, Subtask]
         else:
             lines = self.get_lines(
