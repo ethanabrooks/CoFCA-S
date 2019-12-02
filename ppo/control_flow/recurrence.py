@@ -40,12 +40,8 @@ class Recurrence(nn.Module):
         debug,
         no_scan,
         no_roll,
-        append_first,
-        roll_P,
     ):
         super().__init__()
-        self.roll_P = roll_P
-        self.append_first = append_first
         self.no_roll = no_roll
         self.no_scan = no_scan
         self.obs_spaces = Obs(**observation_space.spaces)
@@ -62,10 +58,7 @@ class Recurrence(nn.Module):
         self.embed_task = nn.Embedding(nt, hidden_size)
         self.embed_action = nn.Embedding(n_a, hidden_size)
         self.task_encoder = nn.GRU(
-            hidden_size * (2 if append_first else 1),
-            hidden_size,
-            bidirectional=True,
-            batch_first=True,
+            hidden_size, hidden_size, bidirectional=True, batch_first=True
         )
         in_size = self.obs_sections.condition + hidden_size
         self.gru = nn.GRUCell(in_size, hidden_size)
@@ -144,18 +137,13 @@ class Recurrence(nn.Module):
         nl = self.obs_sections.lines
         for i in range(nl):
             rolled.append(M if self.no_roll else torch.roll(M, shifts=-i, dims=1))
-        X = rolled = torch.cat(rolled, dim=0)
-        if self.append_first:
-            first = rolled.view(nl, N, nl, self.hidden_size)[:, :, 0].view(
-                -1, 1, self.hidden_size
-            )
-            X = torch.cat([rolled, first.expand_as(rolled)], dim=-1)
+        rolled = torch.cat(rolled, dim=0)
         if self.no_scan:
             _, H = self.task_encoder(rolled)
             H = H.transpose(0, 1).reshape(nl, N, -1)
             P = self.mlp2(H).view(nl, N, nl * 2, self.ne).softmax(2)
         else:
-            G, _ = self.task_encoder(X)
+            G, _ = self.task_encoder(rolled)
             G = G.view(nl, N, nl, 2, self.hidden_size)
             B = self.mlp2(G)
             # arange = 0.05 * torch.zeros(15).float()
@@ -174,8 +162,7 @@ class Recurrence(nn.Module):
             P = P.view(nl, N, nl, 2, self.ne)
             f, b = torch.unbind(P, dim=3)
             P = torch.cat([b.flip(2), f], dim=2)
-            if self.roll_P:
-                P = P.roll(shifts=(-1, 1), dims=(0, 2))
+            P = P.roll(shifts=(-1, 1), dims=(0, 2))
 
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
