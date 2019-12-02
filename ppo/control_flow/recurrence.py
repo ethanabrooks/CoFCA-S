@@ -45,7 +45,7 @@ class Recurrence(nn.Module):
         super().__init__()
         self.no_pointer = no_pointer
         self.no_roll = no_roll
-        self.no_scan = no_scan
+        self.no_scan = no_scan or no_pointer  # no scan if no pointer
         self.obs_spaces = Obs(**observation_space.spaces)
         self.obs_sections = Obs(*[int(np.prod(s.shape)) for s in self.obs_spaces])
         self.action_size = 2
