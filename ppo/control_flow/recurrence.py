@@ -72,11 +72,11 @@ class Recurrence(nn.Module):
         self.option = init_(nn.Linear(hidden_size, self.ne))
 
         layers = []
-        in_size = (2 if no_scan else 1) * hidden_size
+        in_size = (2 if self.no_scan else 1) * hidden_size
         for _ in range(num_encoding_layers - 1):
             layers.extend([init_(nn.Linear(in_size, hidden_size)), activation])
             in_size = hidden_size
-        out_size = self.ne * n_p if no_scan else self.ne
+        out_size = self.ne * n_p if self.no_scan else self.ne
         self.mlp2 = nn.Sequential(*layers, init_(nn.Linear(in_size, out_size)))
 
         self.stuff = init_(nn.Linear(hidden_size, 1))
