@@ -165,7 +165,7 @@ class Env(gym.Env, ABC):
                 i[keys[k]] = v
 
         t = (not self.evaluating) and self.t > self.time_limit
-        if self.no_op_limit and self.n > self.no_op_limit:
+        if (not self.evaluating) and self.no_op_limit and self.n > self.no_op_limit:
             self.failing = True
         current_line = len(self.lines) if self.active is None else self.active
         if self.active is None:
