@@ -41,8 +41,10 @@ class Recurrence(nn.Module):
         no_scan,
         no_roll,
         no_pointer,
+        include_action,
     ):
         super().__init__()
+        self.include_action = include_action
         self.no_pointer = no_pointer
         self.no_roll = no_roll
         self.no_scan = no_scan or no_pointer  # no scan if no pointer
@@ -62,7 +64,13 @@ class Recurrence(nn.Module):
         self.task_encoder = nn.GRU(
             hidden_size, hidden_size, bidirectional=True, batch_first=True
         )
-        in_size = self.obs_sections.condition + (3 if no_pointer else 1) * hidden_size
+        if no_pointer:
+            in_size = 3 * hidden_size
+        elif include_action:
+            in_size = 2 * hidden_size
+        else:
+            in_size = hidden_size
+        in_size += self.obs_sections.condition
         self.gru = nn.GRUCell(in_size, hidden_size)
 
         layers = []
@@ -181,7 +189,7 @@ class Recurrence(nn.Module):
         for t in range(T):
             self.print("w", w)
             x = [inputs.condition[t], H.sum(0) if self.no_pointer else M[R, w]]
-            if self.no_pointer:
+            if self.no_pointer or self.include_action:
                 x += [self.embed_action(A[t - 1].clone())]
             h = self.gru(torch.cat(x, dim=-1), h)
             z = F.relu(self.mlp(h))
