@@ -111,7 +111,7 @@ class Recurrence(nn.Module):
 
     @property
     def n_lines(self):
-        return self.eval_lines if self._evaluating else self.train_lines
+        return (1 + self.eval_lines) if self._evaluating else self.train_lines
 
     @contextmanager
     def evaluating(self):
