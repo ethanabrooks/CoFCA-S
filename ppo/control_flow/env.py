@@ -340,7 +340,8 @@ class Env(gym.Env, ABC):
                 yield current, prev  # True: EndWhile -> While
                 return
 
-    def line_generator(self, lines, line_transitions):
+    @staticmethod
+    def line_generator(lines, line_transitions):
         condition_bit = yield
         i = 0
         if_evaluations = []
@@ -348,11 +349,7 @@ class Env(gym.Env, ABC):
             if lines[i] is Else:
                 evaluation = not if_evaluations.pop()
             else:
-                if self.condition_bit != condition_bit:
-                    import ipdb
-
-                    ipdb.set_trace()
-                evaluation = bool(self.condition_bit)
+                evaluation = bool(condition_bit)
             if lines[i] is If:
                 if_evaluations.append(evaluation)
             i = line_transitions[i][evaluation]
