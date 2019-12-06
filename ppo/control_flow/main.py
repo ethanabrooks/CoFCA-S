@@ -8,20 +8,23 @@ from ppo.arguments import build_parser
 from ppo.train import Train
 
 
-def main(log_dir, seed, **kwargs):
+def main(log_dir, seed, eval_lines, **kwargs):
     class _Train(Train):
         def build_agent(self, envs, debug=False, **agent_args):
             obs_space = envs.observation_space
             return ppo.control_flow.agent.Agent(
                 observation_space=obs_space,
                 action_space=envs.action_space,
+                eval_lines=eval_lines,
                 debug=debug,
                 **agent_args,
             )
 
         @staticmethod
         def make_env(seed, rank, evaluation, env_id, add_timestep, **env_args):
-            return control_flow.env.Env(**env_args, baseline=False, seed=seed + rank)
+            return control_flow.env.Env(
+                **env_args, eval_lines=eval_lines, baseline=False, seed=seed + rank
+            )
 
     _Train(**kwargs, seed=seed, log_dir=log_dir).run()
 
@@ -32,12 +35,12 @@ def bandit_args():
     parser.add_argument("--no-tqdm", dest="use_tqdm", action="store_false")
     parser.add_argument("--time-limit", type=int)
     parser.add_argument("--eval-steps", type=int)
+    parser.add_argument("--eval-lines", type=int, required=True)
     parser.add_argument("--no-eval", action="store_true")
     parsers.env.add_argument("--min-lines", type=int, required=True)
     parsers.env.add_argument("--max-lines", type=int, required=True)
     parsers.env.add_argument("--num-subtasks", type=int, default=12)
     parsers.env.add_argument("--no-op-limit", type=int)
-    parsers.env.add_argument("--eval-lines", type=int)
     parsers.env.add_argument("--flip-prob", type=float, required=True)
     parsers.env.add_argument("--delayed-reward", action="store_true")
     parsers.env.add_argument("--eval-condition-size", action="store_true")
