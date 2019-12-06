@@ -131,6 +131,7 @@ class Env(gym.Env, ABC):
         next(self.line_iterator)
         if not type(self.lines[self.active]) is Subtask:
             self.active = self.line_iterator.send(self.condition_bit)
+            print(self.active)
         action = yield self.get_observation()
         while True:
             if self.baseline:
@@ -196,6 +197,7 @@ class Env(gym.Env, ABC):
                 self.condition_bit - int(self.random.rand() < self.flip_prob)
             )
             self.active = next(self.line_iterator)
+            print(self.active)
         elif self.no_op_limit:
             self.n += 1
         else:
@@ -340,8 +342,7 @@ class Env(gym.Env, ABC):
                 yield current, prev  # True: EndWhile -> While
                 return
 
-    @staticmethod
-    def line_generator(lines, line_transitions):
+    def line_generator(self, lines, line_transitions):
         i = 0
         if_evaluations = []
         condition_bit = yield i
@@ -349,7 +350,7 @@ class Env(gym.Env, ABC):
             if lines[i] is Else:
                 evaluation = not if_evaluations.pop()
             else:
-                evaluation = bool(condition_bit)
+                evaluation = bool(self.condition_bit)
             if lines[i] is If:
                 if_evaluations.append(evaluation)
             i = line_transitions[i][evaluation]
