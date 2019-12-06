@@ -93,7 +93,7 @@ class Env(gym.Env, ABC):
         self.t = None
         self.n = None
 
-    def reset(self):
+    def generator(self):
         self.last = Last(
             action=None, selected=0, active=None, reward=None, terminal=None
         )
@@ -131,19 +131,29 @@ class Env(gym.Env, ABC):
         self.active = 0
         if not type(self.lines[self.active]) is Subtask:
             self.active = self.next()
-        return self.get_observation()
+        action = yield self.get_observation()
+        while True:
+            if self.baseline:
+                selected = None
+            else:
+                action, delta = action
+                selected = (self.last.selected + delta - self.n_lines) % self.n_lines
+            s, r, t, i = self._step(action=int(action))
+            self.last = Last(
+                action=action,
+                active=self.active,
+                reward=r,
+                terminal=t,
+                selected=selected,
+            )
+            action = yield s, r, t, i
+
+    def reset(self):
+        self.iterator = self.generator()
+        return next(self.iterator)
 
     def step(self, action):
-        if self.baseline:
-            selected = None
-        else:
-            action, delta = action
-            selected = (self.last.selected + delta - self.n_lines) % self.n_lines
-        s, r, t, i = self._step(action=int(action))
-        self.last = Last(
-            action=action, active=self.active, reward=r, terminal=t, selected=selected
-        )
-        return s, r, t, i
+        return self.iterator.send(action)
 
     def _step(self, action):
         i = {}
