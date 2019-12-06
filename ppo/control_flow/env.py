@@ -95,7 +95,7 @@ class Env(gym.Env, ABC):
         line_transitions = defaultdict(list)
         for _from, _to in self.get_transitions(iter(enumerate(lines)), []):
             line_transitions[_from].append(_to)
-        line_iterator = self.line_iterator(lines, line_transitions)
+        line_iterator = self.line_generator(lines, line_transitions)
 
         def next_subtask(b):
             while True:
@@ -366,7 +366,7 @@ class Env(gym.Env, ABC):
         assert self.seed == seed
 
     @staticmethod
-    def line_iterator(lines, line_transitions, i=0):
+    def line_generator(lines, line_transitions, i=0):
         if_evaluations = []
         while i < len(lines):
             bit = yield i
