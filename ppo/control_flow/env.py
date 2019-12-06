@@ -52,15 +52,11 @@ class Env(gym.Env, ABC):
 
         self.baseline = baseline
         self.last = None
-        active = None
-        condition_bit = None
         self.evaluating = evaluating
-        failing = False
-        lines = None
-        line_transitions = None
         self.active_line = None
         self.choices = None
         self.target = None
+        self._render = None
         self.line_types = [If, Else, EndIf, While, EndWhile, Subtask, Padding]
         if baseline:
             raise NotImplementedError
@@ -133,6 +129,39 @@ class Env(gym.Env, ABC):
             active = line_iterator.send(condition_bit)
         action = yield self.get_observation(condition_bit, active, lines)
         while True:
+
+            def line_strings(index, level):
+                if index == len(lines):
+                    return
+                line = lines[index]
+                if line in [Else, EndIf, EndWhile]:
+                    level -= 1
+                if index == active and index == self.last.selected:
+                    pre = "+ "
+                elif index == self.last.selected:
+                    pre = "- "
+                elif index == active:
+                    pre = "| "
+                else:
+                    pre = "  "
+                indent = pre * level
+                if type(line) is Subtask:
+                    yield f"{indent}Subtask {line.id}"
+                else:
+                    yield f"{indent}{line.__name__}"
+                if line in [If, While, Else]:
+                    level += 1
+                yield from self.line_strings(index + 1, level)
+
+            def render():
+                for i, string in enumerate(line_strings(index=0, level=1)):
+                    print(f"{i}{string}")
+                print("Condition:", condition_bit)
+                print("Failing:", failing)
+                print(self.last)
+
+            self._render = render
+
             if self.baseline:
                 selected = None
             else:
@@ -355,35 +384,8 @@ class Env(gym.Env, ABC):
             i = line_transitions[i][evaluation]
             condition_bit = yield (None if i >= len(lines) else i)
 
-    def line_strings(self, index, level):
-        if index == len(lines):
-            return
-        line = lines[index]
-        if line in [Else, EndIf, EndWhile]:
-            level -= 1
-        if index == active and index == self.last.selected:
-            pre = "+ "
-        elif index == self.last.selected:
-            pre = "- "
-        elif index == active:
-            pre = "| "
-        else:
-            pre = "  "
-        indent = pre * level
-        if type(line) is Subtask:
-            yield f"{indent}Subtask {line.id}"
-        else:
-            yield f"{indent}{line.__name__}"
-        if line in [If, While, Else]:
-            level += 1
-        yield from self.line_strings(index + 1, level)
-
     def render(self, mode="human", pause=True):
-        for i, string in enumerate(self.line_strings(index=0, level=1)):
-            print(f"{i}{string}")
-        print("Condition:", condition_bit)
-        print("Failing:", failing)
-        print(self.last)
+        self._render()
         if pause:
             input("pause")
 
