@@ -195,7 +195,7 @@ class Env(gym.Env, ABC):
             self.condition_bit = abs(
                 self.condition_bit - int(self.random.rand() < self.flip_prob)
             )
-            self.active = next(self.line_iterator)
+            self.active = self.line_iterator.send(self.condition_bit)
         elif self.no_op_limit:
             self.n += 1
         else:
@@ -341,13 +341,17 @@ class Env(gym.Env, ABC):
                 return
 
     def line_generator(self, lines, line_transitions):
+        condition_bit = yield
         i = 0
         if_evaluations = []
-        condition_bit = yield i
         while True:
             if lines[i] is Else:
                 evaluation = not if_evaluations.pop()
             else:
+                if self.condition_bit != condition_bit:
+                    import ipdb
+
+                    ipdb.set_trace()
                 evaluation = bool(self.condition_bit)
             if lines[i] is If:
                 if_evaluations.append(evaluation)
