@@ -126,10 +126,10 @@ class Env(gym.Env, ABC):
         self.line_transitions = defaultdict(list)
         for _from, _to in self.get_transitions(iter(enumerate(self.lines)), []):
             self.line_transitions[_from].append(_to)
-        self.active = 0
         self.line_iterator = self.line_generator(self.lines, self.line_transitions)
+        self.active = next(self.line_iterator)
         if not type(self.lines[self.active]) is Subtask:
-            self.active = next(self.line_iterator)
+            self.active = self.line_iterator.send(self.condition_bit)
         action = yield self.get_observation()
         while True:
             if self.baseline:
@@ -342,18 +342,19 @@ class Env(gym.Env, ABC):
     def line_generator(self, lines, line_transitions):
         i = 0
         if_evaluations = []
+        condition_bit = yield i
         while True:
             if lines[i] is Else:
                 evaluation = not if_evaluations.pop()
             else:
-                evaluation = bool(self.condition_bit)
+                evaluation = bool(condition_bit)
             if lines[i] is If:
                 if_evaluations.append(evaluation)
             i = line_transitions[i][evaluation]
             if i >= len(lines):
-                yield None
-            if type(lines[i]) is Subtask:
-                yield i
+                condition_bit = yield None
+            elif type(lines[i]) is Subtask:
+                condition_bit = yield i
 
     def line_strings(self, index, level):
         if index == len(self.lines):
