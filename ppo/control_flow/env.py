@@ -59,7 +59,6 @@ class Env(gym.Env, ABC):
         self.lines = None
         self.line_transitions = None
         self.active_line = None
-        self.if_evaluations = None
         self.choices = None
         self.target = None
         self.line_types = [If, Else, EndIf, While, EndWhile, Subtask, Padding]
@@ -127,7 +126,6 @@ class Env(gym.Env, ABC):
         self.line_transitions = defaultdict(list)
         for _from, _to in self.get_transitions(iter(enumerate(self.lines)), []):
             self.line_transitions[_from].append(_to)
-        self.if_evaluations = []
         self.active = 0
         self.line_iterator = self.line_generator()
         if not type(self.lines[self.active]) is Subtask:
@@ -343,13 +341,14 @@ class Env(gym.Env, ABC):
 
     def line_generator(self):
         i = 0
+        if_evaluations = []
         while True:
             if self.lines[i] is Else:
-                evaluation = not self.if_evaluations.pop()
+                evaluation = not if_evaluations.pop()
             else:
                 evaluation = bool(self.condition_bit)
             if self.lines[i] is If:
-                self.if_evaluations.append(evaluation)
+                if_evaluations.append(evaluation)
             i = self.line_transitions[i][evaluation]
             if i >= len(self.lines):
                 yield None
