@@ -196,6 +196,7 @@ class TrainBase(abc.ABC):
                     envs=envs,
                 )
                 print("Ran eval epoch.")
+            envs.close_extras()
             eval_result = {f"eval_{k}": v for k, v in eval_result.items()}
         else:
             eval_result = {}
