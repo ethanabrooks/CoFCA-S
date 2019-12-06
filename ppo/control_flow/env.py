@@ -29,6 +29,7 @@ class Env(gym.Env, ABC):
         max_nesting_depth,
         eval_condition_size,
         no_op_limit,
+        evaluating,
         baseline=False,
     ):
         super().__init__()
@@ -40,12 +41,11 @@ class Env(gym.Env, ABC):
         self.eval_lines = eval_lines
         self.min_lines = min_lines
         self.max_lines = max_lines
-        if eval_lines is None:
-            self.n_lines = self.max_lines
-        else:
-            assert eval_lines >= self.max_lines
+        if evaluating:
             self.n_lines = eval_lines
-        self.n_lines += 1
+        else:
+            self.n_lines = max_lines
+        # self.n_lines += 1
         self.random, self.seed = seeding.np_random(seed)
         self.time_limit = time_limit
         self.flip_prob = flip_prob
@@ -54,7 +54,7 @@ class Env(gym.Env, ABC):
         self.last = None
         self.active = None
         self.condition_bit = None
-        self.evaluating = False
+        self.evaluating = evaluating
         self.failing = False
         self.lines = None
         self.line_transitions = None
@@ -64,6 +64,7 @@ class Env(gym.Env, ABC):
         self.target = None
         self.line_types = [If, Else, EndIf, While, EndWhile, Subtask, Padding]
         if baseline:
+            raise NotImplementedError
             self.action_space = spaces.Discrete(self.num_subtasks + 1)
             n_line_types = len(self.line_types) + num_subtasks
             self.observation_space = spaces.Dict(
@@ -86,6 +87,9 @@ class Env(gym.Env, ABC):
                     active=spaces.Discrete(self.n_lines + 1),
                 )
             )
+        self.eval_action_space = spaces.MultiDiscrete(
+            np.array([self.num_subtasks + 1, 2 * self.eval_lines])
+        )
         self.t = None
         self.n = None
 
@@ -127,7 +131,7 @@ class Env(gym.Env, ABC):
         self.active = 0
         if not type(self.lines[self.active]) is Subtask:
             self.active = self.next()
-        return self.get_observation(action=0)
+        return self.get_observation()
 
     def step(self, action):
         if self.baseline:
@@ -190,7 +194,7 @@ class Env(gym.Env, ABC):
             i.update(termination_line=current_line)
 
         r = int(t) * int(not self.failing)
-        return self.get_observation(action), r, t, i
+        return self.get_observation(), r, t, i
 
     def average_interval(self):
         intervals = defaultdict(lambda: [None])
@@ -211,7 +215,7 @@ class Env(gym.Env, ABC):
             if values:
                 yield keys, sum(values) / len(values)
 
-    def get_observation(self, action):
+    def get_observation(self):
         padded = self.lines + [Padding] * (self.n_lines - len(self.lines))
         lines = [
             t.id if type(t) is Subtask else self.num_subtasks + self.line_types.index(t)
@@ -228,7 +232,8 @@ class Env(gym.Env, ABC):
             )
         else:
             obs = obs._asdict()
-        assert self.observation_space.contains(obs)
+        if not self.evaluating:
+            assert self.observation_space.contains(obs)
         return obs
 
     def seed(self, seed=None):
@@ -345,11 +350,12 @@ class Env(gym.Env, ABC):
             return not self.if_evaluations.pop()
         return bool(self.condition_bit)
 
-    def train(self):
-        self.evaluating = False
-
-    def evaluate(self):
-        self.evaluating = True
+    # def train(self):
+    #     self.evaluating = False
+    #
+    # def evaluate(self):
+    #     self.evaluating = True
+    #     # TODO: need to change observation size
 
     def line_strings(self, index, level):
         if index == len(self.lines):

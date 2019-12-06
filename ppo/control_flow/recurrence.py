@@ -1,4 +1,5 @@
 from collections import namedtuple
+from contextlib import contextmanager
 
 import numpy as np
 import torch
@@ -32,6 +33,7 @@ class Recurrence(nn.Module):
         self,
         observation_space,
         action_space,
+        eval_lines,
         activation,
         hidden_size,
         num_layers,
@@ -48,18 +50,22 @@ class Recurrence(nn.Module):
         self.no_pointer = no_pointer
         self.no_roll = no_roll
         self.no_scan = no_scan or no_pointer  # no scan if no pointer
-        self.obs_spaces = Obs(**observation_space.spaces)
-        self.obs_sections = Obs(*[int(np.prod(s.shape)) for s in self.obs_spaces])
+        obs_spaces = Obs(**observation_space.spaces)
         self.action_size = 2
         self.debug = debug
         self.hidden_size = hidden_size
 
+        self._evaluating = False
+        self._obs_sections = Obs(*[int(np.prod(s.shape)) for s in obs_spaces])
+        self.eval_lines = eval_lines
+        self.train_lines = self._obs_sections.lines
+
         # networks
         self.ne = num_edges
-        nt = int(self.obs_spaces.lines.nvec[0])
+        n_lt = int(obs_spaces.lines.nvec[0])
         n_a, n_p = map(int, action_space.nvec)
         self.n_a = n_a
-        self.embed_task = nn.Embedding(nt, hidden_size)
+        self.embed_task = nn.Embedding(n_lt, hidden_size)
         self.embed_action = nn.Embedding(n_a, hidden_size)
         self.task_encoder = nn.GRU(
             hidden_size, hidden_size, bidirectional=True, batch_first=True
@@ -91,12 +97,27 @@ class Recurrence(nn.Module):
         self.critic = init_(nn.Linear(hidden_size, 1))
         self.actor = Categorical(hidden_size, n_a)
         self.attention = Categorical(hidden_size, n_a)
-        self.state_sizes = RecurrentState(
-            a=1, a_probs=n_a, p=1, p_probs=n_p, w=1, v=1, h=hidden_size
+        self._state_sizes = RecurrentState(
+            a=1, a_probs=n_a, p=1, p_probs=None, w=1, v=1, h=hidden_size
         )
-        first = torch.zeros(1, 1, 2 * self.obs_sections.lines, 1)
-        first[0, 0, 0] = 1
-        self.register_buffer("first", first)
+
+    @property
+    def state_sizes(self):
+        return self._state_sizes._replace(p_probs=2 * self.n_lines)
+
+    @property
+    def obs_sections(self):
+        return self._obs_sections._replace(lines=self.n_lines)
+
+    @property
+    def n_lines(self):
+        return self.eval_lines if self._evaluating else self.train_lines
+
+    @contextmanager
+    def evaluating(self):
+        self._evaluating = True
+        yield self
+        self._evaluating = False
 
     @staticmethod
     def sample_new(x, dist):
@@ -138,7 +159,7 @@ class Recurrence(nn.Module):
         inputs = self.parse_inputs(inputs)
 
         # build memory
-        lines = inputs.lines.view(T, N, *self.obs_spaces.lines.shape).long()[0, :, :]
+        lines = inputs.lines.view(T, N, self.obs_sections.lines).long()[0, :, :]
         M = self.embed_task(lines.view(-1)).view(
             *lines.shape, self.hidden_size
         )  # n_batch, n_lines, hidden_size
@@ -162,7 +183,8 @@ class Recurrence(nn.Module):
             f, b = torch.unbind(B.sigmoid(), dim=3)
             B = torch.stack([f, b.flip(2)], dim=-2)
             B = B.view(nl, N, 2 * nl, self.ne)
-            last = self.first.flip(2)
+            last = torch.zeros_like(B)
+            last[:, :, -1] = 1
             zero_last = (1 - last) * B
             B = zero_last + last  # this ensures that the last B is 1
             rolled = torch.roll(zero_last, shifts=1, dims=2)
