@@ -175,10 +175,6 @@ class TrainBase(abc.ABC):
             print("Making eval envs...")
             envs = self.make_eval_envs()
             print("Made eval envs.")
-            print(
-                "number of child processes:",
-                len(psutil.Process().children(recursive=True)),
-            )
             envs.to(self.device)
             with self.agent.recurrent_module.evaluating():
                 eval_recurrent_hidden_states = torch.zeros(
@@ -219,7 +215,6 @@ class TrainBase(abc.ABC):
             eval_iterator = itertools.count(self.i)
 
         for _ in eval_iterator:
-            print(self.i)
             if self.i % log_interval == 0 and use_tqdm:
                 log_progress = tqdm(total=log_interval, desc="next log")
             self.i += 1
