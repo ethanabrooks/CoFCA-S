@@ -131,7 +131,6 @@ class Env(gym.Env, ABC):
         next(self.line_iterator)
         if not type(self.lines[self.active]) is Subtask:
             self.active = self.line_iterator.send(self.condition_bit)
-            print(self.active)
         action = yield self.get_observation()
         while True:
             if self.baseline:
@@ -197,7 +196,6 @@ class Env(gym.Env, ABC):
                 self.condition_bit - int(self.random.rand() < self.flip_prob)
             )
             self.active = next(self.line_iterator)
-            print(self.active)
         elif self.no_op_limit:
             self.n += 1
         else:
