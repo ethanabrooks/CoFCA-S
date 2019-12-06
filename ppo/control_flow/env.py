@@ -52,12 +52,12 @@ class Env(gym.Env, ABC):
 
         self.baseline = baseline
         self.last = None
-        self.active = None
-        self.condition_bit = None
+        active = None
+        condition_bit = None
         self.evaluating = evaluating
-        self.failing = False
-        self.lines = None
-        self.line_transitions = None
+        failing = False
+        lines = None
+        line_transitions = None
         self.active_line = None
         self.choices = None
         self.target = None
@@ -89,20 +89,20 @@ class Env(gym.Env, ABC):
         self.eval_action_space = spaces.MultiDiscrete(
             np.array([self.num_subtasks + 1, 2 * self.eval_lines])
         )
-        self.t = None
-        self.n = None
+        step = None
+        n = None
 
     def generator(self):
         self.last = Last(
             action=None, selected=0, active=None, reward=None, terminal=None
         )
-        self.failing = False
-        self.choices = []
-        self.target = []
-        self.t = 0
-        self.n = 0
+        failing = False
+        choices = []
+        target = []
+        step = 0
+        n = 0
         eval_condition_size = self.eval_condition_size and self.evaluating
-        self.condition_bit = 0 if eval_condition_size else self.random.randint(0, 2)
+        condition_bit = 0 if eval_condition_size else self.random.randint(0, 2)
         if self.evaluating:
             assert self.eval_lines is not None
             n_lines = self.eval_lines
@@ -119,19 +119,19 @@ class Env(gym.Env, ABC):
             lines = self.get_lines(
                 n_lines, active_conditions=[], max_nesting_depth=self.max_nesting_depth
             )
-        self.lines = [
+        lines = [
             Subtask(self.random.choice(self.num_subtasks)) if line is Subtask else line
             for line in lines
         ]
-        self.line_transitions = defaultdict(list)
-        for _from, _to in self.get_transitions(iter(enumerate(self.lines)), []):
-            self.line_transitions[_from].append(_to)
-        self.active = 0
-        self.line_iterator = self.line_generator(self.lines, self.line_transitions)
-        next(self.line_iterator)
-        while not (self.active is None or type(self.lines[self.active]) is Subtask):
-            self.active = self.line_iterator.send(self.condition_bit)
-        action = yield self.get_observation()
+        line_transitions = defaultdict(list)
+        for _from, _to in self.get_transitions(iter(enumerate(lines)), []):
+            line_transitions[_from].append(_to)
+        active = 0
+        line_iterator = self.line_generator(lines, line_transitions)
+        next(line_iterator)
+        while not (active is None or type(lines[active]) is Subtask):
+            active = line_iterator.send(condition_bit)
+        action = yield self.get_observation(condition_bit, active, lines)
         while True:
             if self.baseline:
                 selected = None
@@ -139,16 +139,16 @@ class Env(gym.Env, ABC):
                 action, delta = action
                 selected = (self.last.selected + delta - self.n_lines) % self.n_lines
             i = {}
-            if self.t == 0:
-                num_if = self.lines.count(If)
-                num_else = self.lines.count(Else)
-                num_while = self.lines.count(While)
-                num_subtask = self.lines.count(lambda l: type(l) is Subtask)
+            if step == 0:
+                num_if = lines.count(If)
+                num_else = lines.count(Else)
+                num_while = lines.count(While)
+                num_subtask = lines.count(lambda l: type(l) is Subtask)
                 i.update(
                     if_lines=num_if,
                     else_lines=num_else,
                     while_lines=num_while,
-                    nesting_depth=self.get_nesting_depth(),
+                    nesting_depth=self.get_nesting_depth(lines),
                     num_edges=2 * (num_if + num_else + num_while) + num_subtask,
                 )
                 keys = {
@@ -157,51 +157,47 @@ class Env(gym.Env, ABC):
                     (Else, EndIf): "else clause length",
                     (While, EndWhile): "while clause length",
                 }
-                for k, v in self.average_interval():
+                for k, v in self.average_interval(lines):
                     i[keys[k]] = v
 
-            t = (not self.evaluating) and self.t > self.time_limit
-            if (not self.evaluating) and self.no_op_limit and self.n > self.no_op_limit:
-                self.failing = True
-            current_line = len(self.lines) if self.active is None else self.active
-            if self.active is None:
+            t = (not self.evaluating) and step > self.time_limit
+            if (not self.evaluating) and self.no_op_limit and n > self.no_op_limit:
+                failing = True
+            current_line = len(lines) if active is None else active
+            if active is None:
                 t = True
                 i.update(success_line=current_line)
             elif action < self.num_subtasks:
-                self.t += 1
-                if action != self.lines[self.active].id:
+                step += 1
+                if action != lines[active].id:
                     i.update(failure_line=current_line, success_line=current_line - 1)
-                    self.failing = True
+                    failing = True
                     if not self.delayed_reward:
                         t = True
-                self.condition_bit = abs(
-                    self.condition_bit - int(self.random.rand() < self.flip_prob)
+                condition_bit = abs(
+                    condition_bit - int(self.random.rand() < self.flip_prob)
                 )
 
                 def next_subtask():
-                    active = self.line_iterator.send(self.condition_bit)
-                    if active is None or type(self.lines[active]) is Subtask:
+                    active = line_iterator.send(condition_bit)
+                    if active is None or type(lines[active]) is Subtask:
                         return active
                     else:
                         return next_subtask()
 
-                self.active = next_subtask()
+                active = next_subtask()
             elif self.no_op_limit:
-                self.n += 1
+                n += 1
             else:
-                self.t += 1
+                step += 1
             if t:
                 i.update(termination_line=current_line)
 
-            r = int(t) * int(not self.failing)
+            r = int(t) * int(not failing)
             self.last = Last(
-                action=action,
-                active=self.active,
-                reward=r,
-                terminal=t,
-                selected=selected,
+                action=action, active=active, reward=r, terminal=t, selected=selected
             )
-            action = yield self.get_observation(), r, t, i
+            action = yield self.get_observation(condition_bit, active, lines), r, t, i
 
     def reset(self):
         self.iterator = self.generator()
@@ -210,71 +206,12 @@ class Env(gym.Env, ABC):
     def step(self, action):
         return self.iterator.send(action)
 
-    def _step(self, action):
-        i = {}
-        if self.t == 0:
-            num_if = self.lines.count(If)
-            num_else = self.lines.count(Else)
-            num_while = self.lines.count(While)
-            num_subtask = self.lines.count(lambda l: type(l) is Subtask)
-            i.update(
-                if_lines=num_if,
-                else_lines=num_else,
-                while_lines=num_while,
-                nesting_depth=self.get_nesting_depth(),
-                num_edges=2 * (num_if + num_else + num_while) + num_subtask,
-            )
-            keys = {
-                (If, EndIf): "if clause length",
-                (If, Else): "if-else clause length",
-                (Else, EndIf): "else clause length",
-                (While, EndWhile): "while clause length",
-            }
-            for k, v in self.average_interval():
-                i[keys[k]] = v
-
-        t = (not self.evaluating) and self.t > self.time_limit
-        if (not self.evaluating) and self.no_op_limit and self.n > self.no_op_limit:
-            self.failing = True
-        current_line = len(self.lines) if self.active is None else self.active
-        if self.active is None:
-            t = True
-            i.update(success_line=current_line)
-        elif action < self.num_subtasks:
-            self.t += 1
-            if action != self.lines[self.active].id:
-                i.update(failure_line=current_line, success_line=current_line - 1)
-                self.failing = True
-                if not self.delayed_reward:
-                    t = True
-            self.condition_bit = abs(
-                self.condition_bit - int(self.random.rand() < self.flip_prob)
-            )
-
-            def next_subtask():
-                active = self.line_iterator.send(self.condition_bit)
-                if active is None or type(self.lines[active]) is Subtask:
-                    return active
-                else:
-                    return next_subtask()
-
-            self.active = next_subtask()
-        elif self.no_op_limit:
-            self.n += 1
-        else:
-            self.t += 1
-        if t:
-            i.update(termination_line=current_line)
-
-        r = int(t) * int(not self.failing)
-        return self.get_observation(), r, t, i
-
-    def average_interval(self):
+    def average_interval(self, lines):
         intervals = defaultdict(lambda: [None])
         pairs = [(If, EndIf), (While, EndWhile)]
-        if Else in self.lines:
+        if Else in lines:
             pairs.extend([(If, Else), (Else, EndIf)])
-        for line in self.lines:
+        for line in lines:
             for start, stop in pairs:
                 if line is start:
                     intervals[start, stop][-1] = 0
@@ -288,16 +225,16 @@ class Env(gym.Env, ABC):
             if values:
                 yield keys, sum(values) / len(values)
 
-    def get_observation(self):
-        padded = self.lines + [Padding] * (self.n_lines - len(self.lines))
+    def get_observation(self, condition_bit, active, lines):
+        padded = lines + [Padding] * (self.n_lines - len(lines))
         lines = [
             t.id if type(t) is Subtask else self.num_subtasks + self.line_types.index(t)
             for t in padded
         ]
         obs = Obs(
-            condition=self.condition_bit,
+            condition=condition_bit,
             lines=lines,
-            active=self.n_lines if self.active is None else self.active,
+            active=self.n_lines if active is None else active,
         )
         if self.baseline:
             obs = OrderedDict(
@@ -312,10 +249,10 @@ class Env(gym.Env, ABC):
     def seed(self, seed=None):
         assert self.seed == seed
 
-    def get_nesting_depth(self):
+    def get_nesting_depth(self, lines):
         max_depth = 0
         depth = 0
-        for line in self.lines:
+        for line in lines:
             if line in [If, While]:
                 depth += 1
             if line in [EndIf, EndWhile]:
@@ -419,16 +356,16 @@ class Env(gym.Env, ABC):
             condition_bit = yield (None if i >= len(lines) else i)
 
     def line_strings(self, index, level):
-        if index == len(self.lines):
+        if index == len(lines):
             return
-        line = self.lines[index]
+        line = lines[index]
         if line in [Else, EndIf, EndWhile]:
             level -= 1
-        if index == self.active and index == self.last.selected:
+        if index == active and index == self.last.selected:
             pre = "+ "
         elif index == self.last.selected:
             pre = "- "
-        elif index == self.active:
+        elif index == active:
             pre = "| "
         else:
             pre = "  "
@@ -444,8 +381,8 @@ class Env(gym.Env, ABC):
     def render(self, mode="human", pause=True):
         for i, string in enumerate(self.line_strings(index=0, level=1)):
             print(f"{i}{string}")
-        print("Condition:", self.condition_bit)
-        print("Failing:", self.failing)
+        print("Condition:", condition_bit)
+        print("Failing:", failing)
         print(self.last)
         if pause:
             input("pause")
