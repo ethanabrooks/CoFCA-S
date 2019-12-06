@@ -207,12 +207,6 @@ class Env(gym.Env, ABC):
         r = int(t) * int(not self.failing)
         return self.get_observation(), r, t, i
 
-    def line_generator(self):
-        i = 0
-        while True:
-            i = self.next(i)
-            yield i
-
     def average_interval(self):
         intervals = defaultdict(lambda: [None])
         pairs = [(If, EndIf), (While, EndWhile)]
@@ -346,6 +340,18 @@ class Env(gym.Env, ABC):
                 yield current, prev  # False: EndWhile -> While
                 yield current, prev  # True: EndWhile -> While
                 return
+
+    def line_generator(self):
+        i = 0
+        while True:
+            evaluation = self.evaluate_condition(i)
+            if self.lines[i] is If:
+                self.if_evaluations.append(evaluation)
+            i = self.line_transitions[i][evaluation]
+            if i >= len(self.lines):
+                yield None
+            if type(self.lines[i]) is Subtask:
+                yield i
 
     def next(self, i=None):
         if i is None:
