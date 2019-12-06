@@ -129,8 +129,9 @@ class Env(gym.Env, ABC):
             self.line_transitions[_from].append(_to)
         self.if_evaluations = []
         self.active = 0
+        self.line_iterator = self.line_generator()
         if not type(self.lines[self.active]) is Subtask:
-            self.active = self.next()
+            self.active = next(self.line_iterator)
         action = yield self.get_observation()
         while True:
             if self.baseline:
@@ -195,7 +196,7 @@ class Env(gym.Env, ABC):
             self.condition_bit = abs(
                 self.condition_bit - int(self.random.rand() < self.flip_prob)
             )
-            self.active = self.next()
+            self.active = next(self.line_iterator)
         elif self.no_op_limit:
             self.n += 1
         else:
@@ -205,6 +206,12 @@ class Env(gym.Env, ABC):
 
         r = int(t) * int(not self.failing)
         return self.get_observation(), r, t, i
+
+    def line_generator(self):
+        i = 0
+        while True:
+            i = self.next(i)
+            yield i
 
     def average_interval(self):
         intervals = defaultdict(lambda: [None])
