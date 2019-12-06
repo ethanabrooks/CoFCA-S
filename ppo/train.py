@@ -171,7 +171,9 @@ class TrainBase(abc.ABC):
             # self.envs.evaluate()
             eval_masks = torch.zeros(num_processes, 1, device=self.device)
             eval_counter = Counter()
+            print("Making eval envs...")
             envs = self.make_eval_envs()
+            print("Made eval envs.")
             envs.to(self.device)
             with self.agent.recurrent_module.evaluating():
                 eval_recurrent_hidden_states = torch.zeros(
@@ -180,6 +182,7 @@ class TrainBase(abc.ABC):
                     device=self.device,
                 )
 
+                print("Running eval epoch...")
                 eval_result = self.run_epoch(
                     obs=envs.reset(),
                     rnn_hxs=eval_recurrent_hidden_states,
@@ -192,6 +195,7 @@ class TrainBase(abc.ABC):
                     rollouts=None,
                     envs=envs,
                 )
+                print("Ran eval epoch.")
             eval_result = {f"eval_{k}": v for k, v in eval_result.items()}
         else:
             eval_result = {}
@@ -232,7 +236,9 @@ class TrainBase(abc.ABC):
                 ).detach()
 
             self.rollouts.compute_returns(next_value=next_value)
+            print("Performing update...")
             train_results = self.ppo.update(self.rollouts)
+            print("Performed update.")
             self.rollouts.after_update()
             if log_progress is not None:
                 log_progress.update()
