@@ -15,6 +15,7 @@ Last = namedtuple("Last", "action active reward terminal selected")
 
 class Env(gym.Env, ABC):
     pairs = {If: EndIf, Else: EndIf, While: EndWhile}
+    line_types = [If, Else, EndIf, While, EndWhile, Subtask, Padding]
 
     def __init__(
         self,
@@ -49,15 +50,9 @@ class Env(gym.Env, ABC):
         self.random, self.seed = seeding.np_random(seed)
         self.time_limit = time_limit
         self.flip_prob = flip_prob
-
         self.baseline = baseline
-        self.last = None
         self.evaluating = evaluating
-        self.active_line = None
-        self.choices = None
-        self.target = None
         self._render = None
-        self.line_types = [If, Else, EndIf, While, EndWhile, Subtask, Padding]
         if baseline:
             raise NotImplementedError
             self.action_space = spaces.Discrete(self.num_subtasks + 1)
@@ -82,19 +77,9 @@ class Env(gym.Env, ABC):
                     active=spaces.Discrete(self.n_lines + 1),
                 )
             )
-        self.eval_action_space = spaces.MultiDiscrete(
-            np.array([self.num_subtasks + 1, 2 * self.eval_lines])
-        )
-        step = None
-        n = None
 
     def generator(self):
-        self.last = Last(
-            action=None, selected=0, active=None, reward=None, terminal=None
-        )
         failing = False
-        choices = []
-        target = []
         step = 0
         n = 0
         eval_condition_size = self.eval_condition_size and self.evaluating
@@ -122,7 +107,7 @@ class Env(gym.Env, ABC):
         line_transitions = defaultdict(list)
         for _from, _to in self.get_transitions(iter(enumerate(lines)), []):
             line_transitions[_from].append(_to)
-        active = 0
+        active = selected = 0
         line_iterator = self.line_generator(lines, line_transitions)
         next(line_iterator)
         while not (active is None or type(lines[active]) is Subtask):
@@ -136,9 +121,9 @@ class Env(gym.Env, ABC):
                 line = lines[index]
                 if line in [Else, EndIf, EndWhile]:
                     level -= 1
-                if index == active and index == self.last.selected:
+                if index == active and index == selected:
                     pre = "+ "
-                elif index == self.last.selected:
+                elif index == selected:
                     pre = "- "
                 elif index == active:
                     pre = "| "
@@ -158,7 +143,6 @@ class Env(gym.Env, ABC):
                     print(f"{i}{string}")
                 print("Condition:", condition_bit)
                 print("Failing:", failing)
-                print(self.last)
 
             self._render = render
 
@@ -166,7 +150,7 @@ class Env(gym.Env, ABC):
                 selected = None
             else:
                 action, delta = action
-                selected = (self.last.selected + delta - self.n_lines) % self.n_lines
+                selected = (selected + delta - self.n_lines) % self.n_lines
             i = {}
             if step == 0:
                 num_if = lines.count(If)
@@ -223,9 +207,6 @@ class Env(gym.Env, ABC):
                 i.update(termination_line=current_line)
 
             r = int(t) * int(not failing)
-            self.last = Last(
-                action=action, active=active, reward=r, terminal=t, selected=selected
-            )
             action = yield self.get_observation(condition_bit, active, lines), r, t, i
 
     def reset(self):
