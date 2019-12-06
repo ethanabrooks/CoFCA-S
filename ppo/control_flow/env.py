@@ -344,7 +344,10 @@ class Env(gym.Env, ABC):
     def line_generator(self):
         i = 0
         while True:
-            evaluation = self.evaluate_condition(i)
+            if self.lines[i] is Else:
+                evaluation = not self.if_evaluations.pop()
+            else:
+                evaluation = bool(self.condition_bit)
             if self.lines[i] is If:
                 self.if_evaluations.append(evaluation)
             i = self.line_transitions[i][evaluation]
@@ -352,33 +355,6 @@ class Env(gym.Env, ABC):
                 yield None
             if type(self.lines[i]) is Subtask:
                 yield i
-
-    def next(self, i=None):
-        if i is None:
-            i = self.active
-        evaluation = self.evaluate_condition(i)
-        if self.lines[i] is If:
-            self.if_evaluations.append(evaluation)
-        i = self.line_transitions[i][evaluation]
-        if i >= len(self.lines):
-            return None
-        if type(self.lines[i]) is not Subtask:
-            return self.next(i)
-        return i
-
-    def evaluate_condition(self, i=None):
-        if i is None:
-            i = self.active
-        if self.lines[i] is Else:
-            return not self.if_evaluations.pop()
-        return bool(self.condition_bit)
-
-    # def train(self):
-    #     self.evaluating = False
-    #
-    # def evaluate(self):
-    #     self.evaluating = True
-    #     # TODO: need to change observation size
 
     def line_strings(self, index, level):
         if index == len(self.lines):
