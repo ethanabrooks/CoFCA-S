@@ -90,7 +90,7 @@ class Recurrence(nn.Module):
         for _ in range(num_encoding_layers - 1):
             layers.extend([init_(nn.Linear(in_size, hidden_size)), activation])
             in_size = hidden_size
-        out_size = self.ne * n_p if self.no_scan else self.ne
+        out_size = self.ne * 2 * self.train_lines if self.no_scan else self.ne
         self.mlp2 = nn.Sequential(*layers, init_(nn.Linear(in_size, out_size)))
 
         self.stuff = init_(nn.Linear(hidden_size, 1))
@@ -98,11 +98,13 @@ class Recurrence(nn.Module):
         self.actor = Categorical(hidden_size, n_a)
         self.attention = Categorical(hidden_size, n_a)
         self._state_sizes = RecurrentState(
-            a=1, a_probs=n_a, p=1, p_probs=None, w=1, v=1, h=hidden_size
+            a=1, a_probs=n_a, p=1, p_probs=2 * self.train_lines, w=1, v=1, h=hidden_size
         )
 
     @property
     def state_sizes(self):
+        if self.no_scan:
+            return self._state_sizes
         return self._state_sizes._replace(p_probs=2 * self.n_lines)
 
     @property
@@ -172,7 +174,7 @@ class Recurrence(nn.Module):
         G, H = self.task_encoder(rolled)
         H = H.transpose(0, 1).reshape(nl, N, -1)
         if self.no_scan:
-            P = self.mlp2(H).view(nl, N, nl * 2, self.ne).softmax(2)
+            P = self.mlp2(H).view(nl, N, -1, self.ne).softmax(2)
         else:
             G = G.view(nl, N, nl, 2, self.hidden_size)
             B = self.mlp2(G)
