@@ -105,6 +105,7 @@ class Env(gym.Env, ABC):
         prev, active = 0, next_subtask(None)
         i = {}
         t = False
+        action = None
         while True:
 
             def line_strings(index, level):
@@ -135,6 +136,7 @@ class Env(gym.Env, ABC):
                     print(f"{i}{string}")
                 print("Condition:", condition_bit)
                 print("Failing:", failing)
+                print("Action:", action)
 
             self._render = render
 

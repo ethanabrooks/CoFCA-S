@@ -229,7 +229,8 @@ class Recurrence(nn.Module):
             p_dist = FixedCategorical(probs=p)
             # p_probs = torch.round(p_dist.probs * 10).flatten()
             self.sample_new(W[t], p_dist)
-            w = w + W[t].clone() - nl
+            half = p_dist.probs.size(-1) // 2 if self.no_scan else nl
+            w = w + W[t].clone() - half
             w = torch.clamp(w, min=0, max=nl - 1)
             yield RecurrentState(
                 a=A[t],
