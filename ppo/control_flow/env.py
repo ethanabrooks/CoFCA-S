@@ -102,8 +102,8 @@ class Env(gym.Env, ABC):
             return a
 
         selected = 0
-        active = next_subtask(None)
-        i = None
+        prev, active = 0, next_subtask(None)
+        i = {}
         t = False
         while True:
 
@@ -140,6 +140,9 @@ class Env(gym.Env, ABC):
 
             success = active is None
             r = int(t) * int(not failing)
+            if success:
+                i.update(success_line=len(lines))
+
             action = yield self.get_observation(condition_bit, active, lines), r, t, i
             t = success or (not self.evaluating and step == self.time_limit)
 
@@ -150,25 +153,6 @@ class Env(gym.Env, ABC):
                 selected = (selected + delta - self.n_lines) % self.n_lines
             i = self.get_task_info(lines) if step == 0 else {}
 
-            # if action == self.num_subtasks:
-            #     n += 1
-            #     r = 0
-            #     t = self.no_op_limit and n == self.no_op_limit
-            # else:
-            #     success = active is None
-            #     if not (failing or success):
-            #         failing = action != lines[active].id
-            #
-            #     i = {}
-            #     if success:
-            #         i.update(success_line=len(lines))
-            #     elif failing:
-            #         i.update(success_line=prev, failure_line=active)
-            #
-            #     if self.random.rand() < self.flip_prob:
-            #         condition_bit = int(not condition_bit)
-            #
-            #     prev, active = active, next_subtask(condition_bit)
             if action == self.num_subtasks:
                 n += 1
                 if (not self.evaluating) and self.no_op_limit and n == self.no_op_limit:
@@ -176,6 +160,7 @@ class Env(gym.Env, ABC):
             elif active is not None:
                 if action != lines[active].id:
                     failing = True
+                    i.update(sucess_line=prev, failure_line=active)
                 step += 1
                 condition_bit = abs(
                     condition_bit - int(self.random.rand() < self.flip_prob)
