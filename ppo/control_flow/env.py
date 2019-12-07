@@ -103,7 +103,8 @@ class Env(gym.Env, ABC):
 
         selected = 0
         active = next_subtask(None)
-        r = t = i = None
+        t = False
+        i = None
         while True:
 
             def line_strings(index, level):
@@ -136,6 +137,8 @@ class Env(gym.Env, ABC):
                 print("Failing:", failing)
 
             self._render = render
+
+            r = int(t) * int(not failing)
             action = yield self.get_observation(condition_bit, active, lines), r, t, i
 
             if self.baseline:
@@ -189,8 +192,6 @@ class Env(gym.Env, ABC):
                 step += 1
             if t:
                 i.update(termination_line=current_line)
-
-            r = int(t) * int(not failing)
 
     def build_lines(self, eval_condition_size):
         if self.evaluating:
