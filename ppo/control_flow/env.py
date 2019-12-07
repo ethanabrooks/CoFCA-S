@@ -142,6 +142,27 @@ class Env(gym.Env, ABC):
                 action, delta = action
                 selected = (selected + delta - self.n_lines) % self.n_lines
             i = self.get_task_info(lines) if step == 0 else {}
+
+            # if action == self.num_subtasks:
+            #     n += 1
+            #     r = 0
+            #     t = self.no_op_limit and n == self.no_op_limit
+            # else:
+            #     success = active is None
+            #     if not (failing or success):
+            #         failing = action != lines[active].id
+            #
+            #     i = {}
+            #     if success:
+            #         i.update(success_line=len(lines))
+            #     elif failing:
+            #         i.update(success_line=prev, failure_line=active)
+            #
+            #     if self.random.rand() < self.flip_prob:
+            #         condition_bit = int(not condition_bit)
+            #
+            #     prev, active = active, next_subtask(condition_bit)
+
             t = (not self.evaluating) and step > self.time_limit
             if (not self.evaluating) and self.no_op_limit and n > self.no_op_limit:
                 failing = True
