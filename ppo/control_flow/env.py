@@ -108,9 +108,15 @@ class Env(gym.Env, ABC):
         for _from, _to in self.get_transitions(iter(enumerate(lines)), []):
             line_transitions[_from].append(_to)
         line_iterator = self.line_generator(lines, line_transitions)
-        active = selected = line_iterator.send(None)
-        while not (active is None or type(lines[active]) is Subtask):
-            active = line_iterator.send(condition_bit)
+
+        def next_subtask(bit=condition_bit):
+            a = line_iterator.send(bit)
+            while not (a is None or type(lines[a]) is Subtask):
+                a = line_iterator.send(condition_bit)
+            return a
+
+        selected = 0
+        active = next_subtask(None)
         action = yield self.get_observation(condition_bit, active, lines)
         while True:
 
@@ -190,9 +196,7 @@ class Env(gym.Env, ABC):
                     condition_bit - int(self.random.rand() < self.flip_prob)
                 )
 
-                active = line_iterator.send(condition_bit)
-                while not (active is None or type(lines[active]) is Subtask):
-                    active = line_iterator.send(condition_bit)
+                active = next_subtask()
             elif self.no_op_limit:
                 n += 1
             else:
