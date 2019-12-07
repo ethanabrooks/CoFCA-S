@@ -1,3 +1,4 @@
+from gym.spaces import Box
 from rl_utils import hierarchical_parse_args
 
 import ppo.agent

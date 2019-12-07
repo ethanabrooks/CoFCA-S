@@ -36,11 +36,18 @@ class Env(gym.Env, ABC):
         baseline=False,
     ):
         super().__init__()
-        self.image_size = image_size
+        self.use_image = image_size is not None
         self.no_op_limit = no_op_limit
         self.eval_condition_size = eval_condition_size
         self.max_nesting_depth = max_nesting_depth
         self.num_subtasks = num_subtasks
+        self.image_size = image_size
+        self.image_shape = (
+            4 + len(self.line_types) + num_subtasks,
+            image_size,
+            image_size,
+        )
+
         self.terminate_on_failure = terminate_on_failure
         self.eval_lines = eval_lines
         self.min_lines = min_lines
@@ -58,6 +65,7 @@ class Env(gym.Env, ABC):
         self.iterator = None
         self._render = None
         if baseline:
+            NotImplementedError
             self.action_space = spaces.Discrete(self.num_subtasks + 1)
             n_line_types = len(self.line_types) + num_subtasks
             self.observation_space = spaces.Dict(
@@ -74,7 +82,9 @@ class Env(gym.Env, ABC):
             self.observation_space = spaces.Dict(
                 dict(
                     condition=spaces.Discrete(2),
-                    lines=spaces.MultiDiscrete(
+                    lines=spaces.Box(low=0, high=1, shape=self.image_shape)
+                    if self.use_image
+                    else spaces.MultiDiscrete(
                         np.array([len(self.line_types) + num_subtasks] * self.n_lines)
                     ),
                     active=spaces.Discrete(self.n_lines + 1),
@@ -196,14 +206,7 @@ class Env(gym.Env, ABC):
         return lines
 
     def build_task_image(self, lines):
-        raise NotImplementedError
-        image = np.zeros(
-            (
-                4 + len(self.line_types) + self.num_subtasks,
-                self.image_size,
-                self.image_size,
-            )
-        )
+        image = np.zeros(self.image_shape)
         points = np.round(
             (self.image_size - 1) * self.random.random((len(lines) + 1, 2))
         ).astype(int)
@@ -212,11 +215,11 @@ class Env(gym.Env, ABC):
             r, c = skimage.draw.circle(*p, 1)
             image[d, r, c] = 1
 
-        draw_circle(points[0], d=-2)
+        draw_circle(points[0], d=-2)  # mark start
         for point, line in zip(points, lines):
             depth = 2 + self.line_to_int(line)
             draw_circle(point, d=depth)
-        draw_circle(points[-1], d=-1)
+        draw_circle(points[-1], d=-1)  # mark end
 
         np.set_printoptions(threshold=10000, linewidth=100000)
         for bit in (0, 1):
@@ -230,19 +233,37 @@ class Env(gym.Env, ABC):
                         yield prev, len(lines)
                         return
                     yield prev, curr
+                    if bit and lines[prev] is EndWhile:
+                        assert lines[curr] is While
+                        for _ in range(2):
+                            curr = line_iterator.send(False)  # prevent forever loop
+                            if curr is None:
+                                return
 
             for n, (_from, _to) in enumerate(edges()):
-                print(n)
                 rr, cc, val = skimage.draw.line_aa(*points[_from], *points[_to])
-                image[bit, rr, cc] = val
-                print(np.round(10 * image[bit]))
+                image[bit, rr, cc] = val * np.linspace(0.1, 1, val.size)
 
-        # TODO: how to give direction to edges?
-        # TODO: how to do truthy edges, given that while loops will loop forever?
-
-        import ipdb
-
-        ipdb.set_trace()
+        # from PIL import Image
+        # from matplotlib import cm
+        #
+        # n = image[2:].shape[0]
+        # grade = np.linspace(0.1, 1, n).reshape((n, 1, 1))
+        # myarray = (grade * image[2:]).sum(0)
+        # im = Image.fromarray(np.uint8(cm.gist_earth(myarray) * 255))
+        # im.save("/tmp/nodes.png")
+        #
+        # myarray = image[0]
+        # im = Image.fromarray(np.uint8(cm.gist_earth(myarray) * 255))
+        # im.save("/tmp/false.png")
+        # myarray = image[1]
+        # im = Image.fromarray(np.uint8(cm.gist_earth(myarray) * 255))
+        # im.save("/tmp/truth.png")
+        #
+        # from pprint import pprint
+        #
+        # pprint(lines)
+        # exit()
         return image
 
     def line_to_int(self, line):
@@ -265,14 +286,17 @@ class Env(gym.Env, ABC):
         elif n == 1:
             return [Subtask]
         line_types = [Subtask]
-        if n > len(active_conditions) + 2 and (
+        enough_space = n > len(active_conditions) + 2
+        if enough_space and (
             max_nesting_depth is None or nesting_depth < max_nesting_depth
         ):
             line_types += [If, While]
         if active_conditions and last is Subtask:
             last_condition = active_conditions[-1]
             if last_condition is If:
-                line_types += [Else, EndIf]
+                line_types += [EndIf]
+            if last_condition is If and enough_space:
+                line_types += [Else]
             elif last_condition is Else:
                 line_types += [EndIf]
             elif last_condition is While:
@@ -349,11 +373,11 @@ class Env(gym.Env, ABC):
                 return
 
     def get_observation(self, condition_bit, active, lines):
-        if self.image_size is None:
+        if self.use_image:
+            lines = self.build_task_image(lines)
+        else:
             padded = lines + [Padding] * (self.n_lines - len(lines))
             lines = [self.line_to_int(p) for p in padded]
-        else:
-            lines = self.build_task_image(lines)
 
         obs = Obs(
             condition=condition_bit,
