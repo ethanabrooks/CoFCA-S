@@ -52,9 +52,9 @@ class Env(gym.Env, ABC):
         self.flip_prob = flip_prob
         self.baseline = baseline
         self.evaluating = evaluating
+        self.iterator = None
         self._render = None
         if baseline:
-            raise NotImplementedError
             self.action_space = spaces.Discrete(self.num_subtasks + 1)
             n_line_types = len(self.line_types) + num_subtasks
             self.observation_space = spaces.Dict(
@@ -77,6 +77,13 @@ class Env(gym.Env, ABC):
                     active=spaces.Discrete(self.n_lines + 1),
                 )
             )
+
+    def reset(self):
+        self.iterator = self.generator()
+        return next(self.iterator)
+
+    def step(self, action):
+        return self.iterator.send(action)
 
     def generator(self):
         failing = False
@@ -163,28 +170,6 @@ class Env(gym.Env, ABC):
             r = int(t) * int(not failing)
             action = yield self.get_observation(condition_bit, active, lines), r, t, i
 
-    def get_task_info(self, lines):
-        num_if = lines.count(If)
-        num_else = lines.count(Else)
-        num_while = lines.count(While)
-        num_subtask = lines.count(lambda l: type(l) is Subtask)
-        i = dict(
-            if_lines=num_if,
-            else_lines=num_else,
-            while_lines=num_while,
-            nesting_depth=self.get_nesting_depth(lines),
-            num_edges=2 * (num_if + num_else + num_while) + num_subtask,
-        )
-        keys = {
-            (If, EndIf): "if clause length",
-            (If, Else): "if-else clause length",
-            (Else, EndIf): "else clause length",
-            (While, EndWhile): "while clause length",
-        }
-        for k, v in self.average_interval(lines):
-            i[keys[k]] = v
-        return i
-
     def build_lines(self, eval_condition_size):
         if self.evaluating:
             assert self.eval_lines is not None
@@ -207,67 +192,6 @@ class Env(gym.Env, ABC):
             for line in lines
         ]
         return lines
-
-    def reset(self):
-        self.iterator = self.generator()
-        return next(self.iterator)
-
-    def step(self, action):
-        return self.iterator.send(action)
-
-    def average_interval(self, lines):
-        intervals = defaultdict(lambda: [None])
-        pairs = [(If, EndIf), (While, EndWhile)]
-        if Else in lines:
-            pairs.extend([(If, Else), (Else, EndIf)])
-        for line in lines:
-            for start, stop in pairs:
-                if line is start:
-                    intervals[start, stop][-1] = 0
-                if line is stop:
-                    intervals[start, stop].append(None)
-            for k, (*_, value) in intervals.items():
-                if value is not None:
-                    intervals[k][-1] += 1
-        for keys, values in intervals.items():
-            values = [v for v in values if v]
-            if values:
-                yield keys, sum(values) / len(values)
-
-    def get_observation(self, condition_bit, active, lines):
-        padded = lines + [Padding] * (self.n_lines - len(lines))
-        lines = [
-            t.id if type(t) is Subtask else self.num_subtasks + self.line_types.index(t)
-            for t in padded
-        ]
-        obs = Obs(
-            condition=condition_bit,
-            lines=lines,
-            active=self.n_lines if active is None else active,
-        )
-        if self.baseline:
-            obs = OrderedDict(
-                condition=obs.condition, lines=self.eye[obs.lines].flatten()
-            )
-        else:
-            obs = obs._asdict()
-        if not self.evaluating:
-            assert self.observation_space.contains(obs)
-        return obs
-
-    def seed(self, seed=None):
-        assert self.seed == seed
-
-    def get_nesting_depth(self, lines):
-        max_depth = 0
-        depth = 0
-        for line in lines:
-            if line in [If, While]:
-                depth += 1
-            if line in [EndIf, EndWhile]:
-                depth -= 1
-            max_depth = max(depth, max_depth)
-        return max_depth
 
     def get_lines(
         self, n, active_conditions, last=None, nesting_depth=0, max_nesting_depth=None
@@ -312,6 +236,22 @@ class Env(gym.Env, ABC):
         )
         return [line_type] + get_lines
 
+    def line_generator(self, lines):
+        line_transitions = defaultdict(list)
+        for _from, _to in self.get_transitions(iter(enumerate(lines)), []):
+            line_transitions[_from].append(_to)
+        i = 0
+        if_evaluations = []
+        while True:
+            condition_bit = yield (None if i >= len(lines) else i)
+            if lines[i] is Else:
+                evaluation = not if_evaluations.pop()
+            else:
+                evaluation = bool(condition_bit)
+            if lines[i] is If:
+                if_evaluations.append(evaluation)
+            i = line_transitions[i][evaluation]
+
     def get_transitions(self, lines_iter, previous):
         while True:  # stops at StopIteration
             try:
@@ -349,21 +289,83 @@ class Env(gym.Env, ABC):
                 yield current, prev  # True: EndWhile -> While
                 return
 
-    def line_generator(self, lines):
-        line_transitions = defaultdict(list)
-        for _from, _to in self.get_transitions(iter(enumerate(lines)), []):
-            line_transitions[_from].append(_to)
-        i = 0
-        if_evaluations = []
-        while True:
-            condition_bit = yield (None if i >= len(lines) else i)
-            if lines[i] is Else:
-                evaluation = not if_evaluations.pop()
-            else:
-                evaluation = bool(condition_bit)
-            if lines[i] is If:
-                if_evaluations.append(evaluation)
-            i = line_transitions[i][evaluation]
+    def get_observation(self, condition_bit, active, lines):
+        padded = lines + [Padding] * (self.n_lines - len(lines))
+        lines = [
+            t.id if type(t) is Subtask else self.num_subtasks + self.line_types.index(t)
+            for t in padded
+        ]
+        obs = Obs(
+            condition=condition_bit,
+            lines=lines,
+            active=self.n_lines if active is None else active,
+        )
+        if self.baseline:
+            obs = OrderedDict(
+                condition=obs.condition, lines=self.eye[obs.lines].flatten()
+            )
+        else:
+            obs = obs._asdict()
+        if not self.evaluating:
+            assert self.observation_space.contains(obs)
+        return obs
+
+    def get_task_info(self, lines):
+        num_if = lines.count(If)
+        num_else = lines.count(Else)
+        num_while = lines.count(While)
+        num_subtask = lines.count(lambda l: type(l) is Subtask)
+        i = dict(
+            if_lines=num_if,
+            else_lines=num_else,
+            while_lines=num_while,
+            nesting_depth=self.get_nesting_depth(lines),
+            num_edges=2 * (num_if + num_else + num_while) + num_subtask,
+        )
+        keys = {
+            (If, EndIf): "if clause length",
+            (If, Else): "if-else clause length",
+            (Else, EndIf): "else clause length",
+            (While, EndWhile): "while clause length",
+        }
+        for k, v in self.average_interval(lines):
+            i[keys[k]] = v
+        return i
+
+    @staticmethod
+    def average_interval(lines):
+        intervals = defaultdict(lambda: [None])
+        pairs = [(If, EndIf), (While, EndWhile)]
+        if Else in lines:
+            pairs.extend([(If, Else), (Else, EndIf)])
+        for line in lines:
+            for start, stop in pairs:
+                if line is start:
+                    intervals[start, stop][-1] = 0
+                if line is stop:
+                    intervals[start, stop].append(None)
+            for k, (*_, value) in intervals.items():
+                if value is not None:
+                    intervals[k][-1] += 1
+        for keys, values in intervals.items():
+            values = [v for v in values if v]
+            if values:
+                yield keys, sum(values) / len(values)
+
+    @staticmethod
+    def get_nesting_depth(lines):
+        max_depth = 0
+        depth = 0
+        for line in lines:
+            if line in [If, While]:
+                depth += 1
+            if line in [EndIf, EndWhile]:
+                depth -= 1
+            max_depth = max(depth, max_depth)
+        return max_depth
+
+    def seed(self, seed=None):
+        assert self.seed == seed
 
     def render(self, mode="human", pause=True):
         self._render()
