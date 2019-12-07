@@ -107,11 +107,16 @@ class Env(gym.Env, ABC):
         line_transitions = defaultdict(list)
         for _from, _to in self.get_transitions(iter(enumerate(lines)), []):
             line_transitions[_from].append(_to)
-        active = selected = 0
         line_iterator = self.line_generator(lines, line_transitions)
-        next(line_iterator)
-        while not (active is None or type(lines[active]) is Subtask):
-            active = line_iterator.send(condition_bit)
+
+        def next_subtask(bit=condition_bit):
+            a = line_iterator.send(bit)
+            if a is None or type(lines[a]) is Subtask:
+                return a
+            return next_subtask()
+
+        active = next_subtask(None)
+        selected = 0
         action = yield self.get_observation(condition_bit, active, lines)
         while True:
 
@@ -190,13 +195,6 @@ class Env(gym.Env, ABC):
                 condition_bit = abs(
                     condition_bit - int(self.random.rand() < self.flip_prob)
                 )
-
-                def next_subtask():
-                    active = line_iterator.send(condition_bit)
-                    if active is None or type(lines[active]) is Subtask:
-                        return active
-                    else:
-                        return next_subtask()
 
                 active = next_subtask()
             elif self.no_op_limit:
@@ -352,10 +350,10 @@ class Env(gym.Env, ABC):
 
     @staticmethod
     def line_generator(lines, line_transitions):
-        condition_bit = yield
         i = 0
         if_evaluations = []
         while True:
+            condition_bit = yield (None if i >= len(lines) else i)
             if lines[i] is Else:
                 evaluation = not if_evaluations.pop()
             else:
@@ -363,7 +361,6 @@ class Env(gym.Env, ABC):
             if lines[i] is If:
                 if_evaluations.append(evaluation)
             i = line_transitions[i][evaluation]
-            condition_bit = yield (None if i >= len(lines) else i)
 
     def render(self, mode="human", pause=True):
         self._render()
