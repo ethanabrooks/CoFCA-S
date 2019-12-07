@@ -84,33 +84,11 @@ class Env(gym.Env, ABC):
         n = 0
         eval_condition_size = self.eval_condition_size and self.evaluating
         condition_bit = 0 if eval_condition_size else self.random.randint(0, 2)
-        if self.evaluating:
-            assert self.eval_lines is not None
-            n_lines = self.eval_lines
-        else:
-            n_lines = self.random.random_integers(self.min_lines, self.max_lines)
-        if eval_condition_size:
-            line0 = self.random.choice([While, If])
-            edge_length = self.random.random_integers(
-                self.max_lines, self.eval_lines - 1
-            )
-            lines = [line0] + [Subtask] * (edge_length - 2)
-            lines += [EndWhile if line0 is While else EndIf, Subtask]
-        else:
-            lines = self.get_lines(
-                n_lines, active_conditions=[], max_nesting_depth=self.max_nesting_depth
-            )
-        lines = [
-            Subtask(self.random.choice(self.num_subtasks)) if line is Subtask else line
-            for line in lines
-        ]
-        line_transitions = defaultdict(list)
-        for _from, _to in self.get_transitions(iter(enumerate(lines)), []):
-            line_transitions[_from].append(_to)
-        line_iterator = self.line_generator(lines, line_transitions)
+        lines = self.build_lines(eval_condition_size)
+        line_iterator = self.line_generator(lines)
 
-        def next_subtask(bit=condition_bit):
-            a = line_iterator.send(bit)
+        def next_subtask(msg=condition_bit):
+            a = line_iterator.send(msg)
             while not (a is None or type(lines[a]) is Subtask):
                 a = line_iterator.send(condition_bit)
             return a
@@ -141,7 +119,7 @@ class Env(gym.Env, ABC):
                     yield f"{indent}{line.__name__}"
                 if line in [If, While, Else]:
                     level += 1
-                yield from self.line_strings(index + 1, level)
+                yield from line_strings(index + 1, level)
 
             def render():
                 for i, string in enumerate(line_strings(index=0, level=1)):
@@ -156,28 +134,7 @@ class Env(gym.Env, ABC):
             else:
                 action, delta = action
                 selected = (selected + delta - self.n_lines) % self.n_lines
-            i = {}
-            if step == 0:
-                num_if = lines.count(If)
-                num_else = lines.count(Else)
-                num_while = lines.count(While)
-                num_subtask = lines.count(lambda l: type(l) is Subtask)
-                i.update(
-                    if_lines=num_if,
-                    else_lines=num_else,
-                    while_lines=num_while,
-                    nesting_depth=self.get_nesting_depth(lines),
-                    num_edges=2 * (num_if + num_else + num_while) + num_subtask,
-                )
-                keys = {
-                    (If, EndIf): "if clause length",
-                    (If, Else): "if-else clause length",
-                    (Else, EndIf): "else clause length",
-                    (While, EndWhile): "while clause length",
-                }
-                for k, v in self.average_interval(lines):
-                    i[keys[k]] = v
-
+            i = self.get_task_info(lines) if step == 0 else {}
             t = (not self.evaluating) and step > self.time_limit
             if (not self.evaluating) and self.no_op_limit and n > self.no_op_limit:
                 failing = True
@@ -195,7 +152,6 @@ class Env(gym.Env, ABC):
                 condition_bit = abs(
                     condition_bit - int(self.random.rand() < self.flip_prob)
                 )
-
                 active = next_subtask()
             elif self.no_op_limit:
                 n += 1
@@ -206,6 +162,51 @@ class Env(gym.Env, ABC):
 
             r = int(t) * int(not failing)
             action = yield self.get_observation(condition_bit, active, lines), r, t, i
+
+    def get_task_info(self, lines):
+        num_if = lines.count(If)
+        num_else = lines.count(Else)
+        num_while = lines.count(While)
+        num_subtask = lines.count(lambda l: type(l) is Subtask)
+        i = dict(
+            if_lines=num_if,
+            else_lines=num_else,
+            while_lines=num_while,
+            nesting_depth=self.get_nesting_depth(lines),
+            num_edges=2 * (num_if + num_else + num_while) + num_subtask,
+        )
+        keys = {
+            (If, EndIf): "if clause length",
+            (If, Else): "if-else clause length",
+            (Else, EndIf): "else clause length",
+            (While, EndWhile): "while clause length",
+        }
+        for k, v in self.average_interval(lines):
+            i[keys[k]] = v
+        return i
+
+    def build_lines(self, eval_condition_size):
+        if self.evaluating:
+            assert self.eval_lines is not None
+            n_lines = self.eval_lines
+        else:
+            n_lines = self.random.random_integers(self.min_lines, self.max_lines)
+        if eval_condition_size:
+            line0 = self.random.choice([While, If])
+            edge_length = self.random.random_integers(
+                self.max_lines, self.eval_lines - 1
+            )
+            lines = [line0] + [Subtask] * (edge_length - 2)
+            lines += [EndWhile if line0 is While else EndIf, Subtask]
+        else:
+            lines = self.get_lines(
+                n_lines, active_conditions=[], max_nesting_depth=self.max_nesting_depth
+            )
+        lines = [
+            Subtask(self.random.choice(self.num_subtasks)) if line is Subtask else line
+            for line in lines
+        ]
+        return lines
 
     def reset(self):
         self.iterator = self.generator()
@@ -348,8 +349,10 @@ class Env(gym.Env, ABC):
                 yield current, prev  # True: EndWhile -> While
                 return
 
-    @staticmethod
-    def line_generator(lines, line_transitions):
+    def line_generator(self, lines):
+        line_transitions = defaultdict(list)
+        for _from, _to in self.get_transitions(iter(enumerate(lines)), []):
+            line_transitions[_from].append(_to)
         i = 0
         if_evaluations = []
         while True:
