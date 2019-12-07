@@ -42,7 +42,7 @@ def bandit_args():
     parsers.env.add_argument("--num-subtasks", type=int, default=12)
     parsers.env.add_argument("--no-op-limit", type=int)
     parsers.env.add_argument("--flip-prob", type=float, required=True)
-    parsers.env.add_argument("--delayed-reward", action="store_true")
+    parsers.env.add_argument("--terminate-on-failure", action="store_true")
     parsers.env.add_argument("--eval-condition-size", action="store_true")
     parsers.env.add_argument("--max-nesting-depth", type=int)
     parsers.agent.add_argument("--debug", action="store_true")
