@@ -103,6 +103,8 @@ class Env(gym.Env, ABC):
 
         selected = 0
         prev, active = 0, next_subtask(None)
+        if active is None:
+            yield from self.generator()
         i = {}
         t = False
         while True:
