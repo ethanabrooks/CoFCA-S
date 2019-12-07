@@ -137,9 +137,7 @@ class Env(gym.Env, ABC):
 
             self._render = render
 
-            training = not self.evaluating
-            success = active is None
-            t = success or (training and step == self.time_limit)
+            t = active is None or (not self.evaluating and step == self.time_limit)
             r = int(t) * int(not failing)
             action = yield self.get_observation(condition_bit, active, lines), r, t, i
 
@@ -150,9 +148,6 @@ class Env(gym.Env, ABC):
                 selected = (selected + delta - self.n_lines) % self.n_lines
             i = self.get_task_info(lines) if step == 0 else {}
 
-            failing = (not success and action != lines[active].id) or (
-                training and self.no_op_limit and n > self.no_op_limit
-            )
             # if action == self.num_subtasks:
             #     n += 1
             #     r = 0
@@ -173,13 +168,17 @@ class Env(gym.Env, ABC):
             #
             #     prev, active = active, next_subtask(condition_bit)
 
-            current_line = len(lines) if success else active
-            if success:
+            if (not self.evaluating) and self.no_op_limit and n > self.no_op_limit:
+                failing = True
+            current_line = len(lines) if active is None else active
+            if active is None:
+                t = True
                 i.update(success_line=current_line)
             elif action < self.num_subtasks:
                 step += 1
                 if action != lines[active].id:
                     i.update(failure_line=current_line, success_line=current_line - 1)
+                    failing = True
                     if self.terminate_on_failure:
                         t = True
                 condition_bit = abs(
@@ -190,6 +189,8 @@ class Env(gym.Env, ABC):
                 n += 1
             else:
                 step += 1
+            if t:
+                i.update(termination_line=current_line)
 
     def build_lines(self, eval_condition_size):
         if self.evaluating:
