@@ -172,13 +172,9 @@ class Env(gym.Env, ABC):
 
             if (not self.evaluating) and self.no_op_limit and n > self.no_op_limit:
                 failing = True
-            current_line = len(lines) if success else active
-            if success:
-                i.update(success_line=current_line)
-            elif action < self.num_subtasks:
+            if not success and action < self.num_subtasks:
                 step += 1
                 if action != lines[active].id:
-                    i.update(failure_line=current_line, success_line=current_line - 1)
                     failing = True
                 condition_bit = abs(
                     condition_bit - int(self.random.rand() < self.flip_prob)
