@@ -104,6 +104,7 @@ class Env(gym.Env, ABC):
         selected = 0
         active = next_subtask(None)
         i = None
+        t = False
         while True:
 
             def line_strings(index, level):
@@ -138,9 +139,9 @@ class Env(gym.Env, ABC):
             self._render = render
 
             success = active is None
-            t = success or (not self.evaluating and step == self.time_limit)
             r = int(t) * int(not failing)
             action = yield self.get_observation(condition_bit, active, lines), r, t, i
+            t = success or (not self.evaluating and step == self.time_limit)
 
             if self.baseline:
                 selected = None
