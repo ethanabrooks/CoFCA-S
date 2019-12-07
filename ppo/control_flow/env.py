@@ -111,9 +111,9 @@ class Env(gym.Env, ABC):
 
         def next_subtask(bit=condition_bit):
             a = line_iterator.send(bit)
-            if a is None or type(lines[a]) is Subtask:
-                return a
-            return next_subtask()
+            while not (a is None or type(lines[a]) is Subtask):
+                a = line_iterator.send(condition_bit)
+            return a
 
         selected = 0
         active = next_subtask(None)
