@@ -169,21 +169,18 @@ class Env(gym.Env, ABC):
             #         condition_bit = int(not condition_bit)
             #
             #     prev, active = active, next_subtask(condition_bit)
-
-            if (not self.evaluating) and self.no_op_limit and n > self.no_op_limit:
-                failing = True
-            if not success and action < self.num_subtasks:
-                step += 1
+            if action == self.num_subtasks:
+                n += 1
+                if (not self.evaluating) and self.no_op_limit and n == self.no_op_limit:
+                    failing = True
+            elif active is not None:
                 if action != lines[active].id:
                     failing = True
+                step += 1
                 condition_bit = abs(
                     condition_bit - int(self.random.rand() < self.flip_prob)
                 )
-                active = next_subtask()
-            elif self.no_op_limit:
-                n += 1
-            else:
-                step += 1
+                prev, active = active, next_subtask()
 
     def build_lines(self, eval_condition_size):
         if self.evaluating:
