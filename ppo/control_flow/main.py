@@ -45,6 +45,7 @@ def bandit_args():
     parsers.env.add_argument("--terminate-on-failure", action="store_true")
     parsers.env.add_argument("--eval-condition-size", action="store_true")
     parsers.env.add_argument("--max-nesting-depth", type=int)
+    parsers.env.add_argument("--image-size", type=int)
     parsers.agent.add_argument("--debug", action="store_true")
     parsers.agent.add_argument("--no-scan", action="store_true")
     parsers.agent.add_argument("--no-roll", action="store_true")

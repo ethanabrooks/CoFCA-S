@@ -2,6 +2,7 @@ from abc import ABC
 from collections import defaultdict, namedtuple, OrderedDict
 
 import numpy as np
+import skimage.draw
 from gym.utils import seeding
 from gym.vector.utils import spaces
 from rl_utils import hierarchical_parse_args, gym
@@ -31,9 +32,11 @@ class Env(gym.Env, ABC):
         eval_condition_size,
         no_op_limit,
         evaluating,
+        image_size,
         baseline=False,
     ):
         super().__init__()
+        self.image_size = image_size
         self.no_op_limit = no_op_limit
         self.eval_condition_size = eval_condition_size
         self.max_nesting_depth = max_nesting_depth
@@ -160,10 +163,10 @@ class Env(gym.Env, ABC):
                 if (not self.evaluating) and self.no_op_limit and n == self.no_op_limit:
                     failing = True
             elif active is not None:
+                step += 1
                 if action != lines[active].id:
                     failing = True
                     i.update(sucess_line=prev, failure_line=active)
-                step += 1
                 condition_bit = abs(
                     condition_bit - int(self.random.rand() < self.flip_prob)
                 )
@@ -191,6 +194,63 @@ class Env(gym.Env, ABC):
             for line in lines
         ]
         return lines
+
+    def build_task_image(self, lines):
+        raise NotImplementedError
+        image = np.zeros(
+            (
+                4 + len(self.line_types) + self.num_subtasks,
+                self.image_size,
+                self.image_size,
+            )
+        )
+        points = np.round(
+            (self.image_size - 1) * self.random.random((len(lines) + 1, 2))
+        ).astype(int)
+
+        def draw_circle(p, d):
+            r, c = skimage.draw.circle(*p, 1)
+            image[d, r, c] = 1
+
+        draw_circle(points[0], d=-2)
+        for point, line in zip(points, lines):
+            depth = 2 + self.line_to_int(line)
+            draw_circle(point, d=depth)
+        draw_circle(points[-1], d=-1)
+
+        np.set_printoptions(threshold=10000, linewidth=100000)
+        for bit in (0, 1):
+
+            def edges():
+                line_iterator = self.line_generator(lines)
+                curr = next(line_iterator)
+                while True:
+                    prev, curr = curr, line_iterator.send(bit)
+                    if curr is None:
+                        yield prev, len(lines)
+                        return
+                    yield prev, curr
+
+            for n, (_from, _to) in enumerate(edges()):
+                print(n)
+                rr, cc, val = skimage.draw.line_aa(*points[_from], *points[_to])
+                image[bit, rr, cc] = val
+                print(np.round(10 * image[bit]))
+
+        # TODO: how to give direction to edges?
+        # TODO: how to do truthy edges, given that while loops will loop forever?
+
+        import ipdb
+
+        ipdb.set_trace()
+        return image
+
+    def line_to_int(self, line):
+        return (
+            line.id
+            if type(line) is Subtask
+            else self.num_subtasks + self.line_types.index(line)
+        )
 
     def get_lines(
         self, n, active_conditions, last=None, nesting_depth=0, max_nesting_depth=None
@@ -289,11 +349,12 @@ class Env(gym.Env, ABC):
                 return
 
     def get_observation(self, condition_bit, active, lines):
-        padded = lines + [Padding] * (self.n_lines - len(lines))
-        lines = [
-            t.id if type(t) is Subtask else self.num_subtasks + self.line_types.index(t)
-            for t in padded
-        ]
+        if self.image_size is None:
+            padded = lines + [Padding] * (self.n_lines - len(lines))
+            lines = [self.line_to_int(p) for p in padded]
+        else:
+            lines = self.build_task_image(lines)
+
         obs = Obs(
             condition=condition_bit,
             lines=lines,
