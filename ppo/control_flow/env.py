@@ -80,7 +80,8 @@ class Env(gym.Env, ABC):
 
     def reset(self):
         self.iterator = self.generator()
-        return next(self.iterator)
+        s, r, t, i = next(self.iterator)
+        return s
 
     def step(self, action):
         return self.iterator.send(action)
@@ -102,7 +103,7 @@ class Env(gym.Env, ABC):
 
         selected = 0
         active = next_subtask(None)
-        action = yield self.get_observation(condition_bit, active, lines)
+        r = t = i = None
         while True:
 
             def line_strings(index, level):
@@ -135,6 +136,7 @@ class Env(gym.Env, ABC):
                 print("Failing:", failing)
 
             self._render = render
+            action = yield self.get_observation(condition_bit, active, lines), r, t, i
 
             if self.baseline:
                 selected = None
@@ -189,7 +191,6 @@ class Env(gym.Env, ABC):
                 i.update(termination_line=current_line)
 
             r = int(t) * int(not failing)
-            action = yield self.get_observation(condition_bit, active, lines), r, t, i
 
     def build_lines(self, eval_condition_size):
         if self.evaluating:
