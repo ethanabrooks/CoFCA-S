@@ -103,7 +103,6 @@ class Env(gym.Env, ABC):
 
         selected = 0
         active = next_subtask(None)
-        t = False
         i = None
         while True:
 
@@ -138,6 +137,7 @@ class Env(gym.Env, ABC):
 
             self._render = render
 
+            t = active is None or (not self.evaluating and step == self.time_limit)
             r = int(t) * int(not failing)
             action = yield self.get_observation(condition_bit, active, lines), r, t, i
 
@@ -168,7 +168,6 @@ class Env(gym.Env, ABC):
             #
             #     prev, active = active, next_subtask(condition_bit)
 
-            t = (not self.evaluating) and step > self.time_limit
             if (not self.evaluating) and self.no_op_limit and n > self.no_op_limit:
                 failing = True
             current_line = len(lines) if active is None else active
