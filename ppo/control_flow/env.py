@@ -10,8 +10,9 @@ from rl_utils import hierarchical_parse_args, gym
 from ppo import keyboard_control
 from ppo.control_flow.lines import If, Else, EndIf, While, EndWhile, Subtask, Padding
 
-Obs = namedtuple("Obs", "active condition lines")
+Obs = namedtuple("Obs", "active obs lines")
 Last = namedtuple("Last", "action active reward terminal selected")
+State = namedtuple("State", "obs condition done")
 
 
 class Env(gym.Env, ABC):
@@ -20,30 +21,30 @@ class Env(gym.Env, ABC):
 
     def __init__(
         self,
-        seed,
         min_lines,
         max_lines,
-        eval_lines,
         flip_prob,
-        time_limit,
         terminate_on_failure,
         num_subtasks,
         max_nesting_depth,
         eval_condition_size,
         no_op_limit,
-        evaluating,
         image_size,
+        seed=0,
+        eval_lines=None,
+        time_limit=100,
+        evaluating=False,
         baseline=False,
     ):
         super().__init__()
         self.use_image = image_size is not None
         self.no_op_limit = no_op_limit
-        self.eval_condition_size = eval_condition_size
+        self._eval_condition_size = eval_condition_size
         self.max_nesting_depth = max_nesting_depth
         self.num_subtasks = num_subtasks
         self.image_size = image_size
         self.image_shape = (
-            4 + len(self.line_types) + num_subtasks,
+            num_subtasks + 5,  # 5: true/false edges, start/middle/end node,
             image_size,
             image_size,
         )
@@ -70,7 +71,7 @@ class Env(gym.Env, ABC):
             n_line_types = len(self.line_types) + num_subtasks
             self.observation_space = spaces.Dict(
                 dict(
-                    condition=spaces.Discrete(2),
+                    obs=spaces.Discrete(2),
                     lines=spaces.MultiBinary(n_line_types * self.n_lines),
                 )
             )
@@ -81,7 +82,7 @@ class Env(gym.Env, ABC):
             )
             self.observation_space = spaces.Dict(
                 dict(
-                    condition=spaces.Discrete(2),
+                    obs=spaces.Discrete(2),
                     lines=spaces.Box(low=0, high=1, shape=self.image_shape)
                     if self.use_image
                     else spaces.MultiDiscrete(
@@ -103,23 +104,25 @@ class Env(gym.Env, ABC):
         failing = False
         step = 0
         n = 0
-        eval_condition_size = self.eval_condition_size and self.evaluating
-        condition_bit = 0 if eval_condition_size else self.random.randint(0, 2)
-        lines = self.build_lines(eval_condition_size)
+        lines = self.build_lines()
         line_iterator = self.line_generator(lines)
+        state_iterator = self.state_generator(lines)
+        state = next(state_iterator)
 
-        def next_subtask(msg=condition_bit):
+        def next_subtask(msg=state.condition):
             a = line_iterator.send(msg)
             while not (a is None or type(lines[a]) is Subtask):
-                a = line_iterator.send(condition_bit)
+                a = line_iterator.send(state.condition)
             return a
 
         selected = 0
         prev, active = 0, next_subtask(None)
-        i = {}
-        t = False
+        info = {}
+        term = False
         action = None
         while True:
+            success = active is None
+            reward = int(term) * int(not failing)
 
             def line_strings(index, level):
                 if index == len(lines):
@@ -147,26 +150,31 @@ class Env(gym.Env, ABC):
             def render():
                 for i, string in enumerate(line_strings(index=0, level=1)):
                     print(f"{i}{string}")
-                print("Condition:", condition_bit)
                 print("Failing:", failing)
                 print("Action:", action)
+                print("Reward", reward)
+                print("Obs:")
+                self.print_obs(state.obs)
 
             self._render = render
 
-            success = active is None
-            r = int(t) * int(not failing)
             if success:
-                i.update(success_line=len(lines))
+                info.update(success_line=len(lines))
 
-            action = yield self.get_observation(condition_bit, active, lines), r, t, i
-            t = success or (not self.evaluating and step == self.time_limit)
+            action = (
+                yield self.get_observation(state.obs, active, lines),
+                reward,
+                term,
+                info,
+            )
+            term = success or (not self.evaluating and step == self.time_limit)
 
             if self.baseline:
                 selected = None
             else:
                 action, delta = action
                 selected = (selected + delta - self.n_lines) % self.n_lines
-            i = self.get_task_info(lines) if step == 0 else {}
+            info = self.get_task_info(lines) if step == 0 else {}
 
             if action == self.num_subtasks:
                 n += 1
@@ -176,19 +184,22 @@ class Env(gym.Env, ABC):
                 step += 1
                 if action != lines[active].id:
                     failing = True
-                    i.update(sucess_line=prev, failure_line=active)
-                condition_bit = abs(
-                    condition_bit - int(self.random.rand() < self.flip_prob)
-                )
-                prev, active = active, next_subtask()
+                    info.update(sucess_line=prev, failure_line=active)
+                state = state_iterator.send(action)
+                if state.done:
+                    prev, active = active, next_subtask()
 
-    def build_lines(self, eval_condition_size):
+    @property
+    def eval_condition_size(self):
+        return self._eval_condition_size and self.evaluating
+
+    def build_lines(self):
         if self.evaluating:
             assert self.eval_lines is not None
             n_lines = self.eval_lines
         else:
             n_lines = self.random.random_integers(self.min_lines, self.max_lines)
-        if eval_condition_size:
+        if self.eval_condition_size:
             line0 = self.random.choice([While, If])
             edge_length = self.random.random_integers(
                 self.max_lines, self.eval_lines - 1
@@ -212,12 +223,14 @@ class Env(gym.Env, ABC):
         ).astype(int)
 
         def draw_circle(p, d):
-            r, c = skimage.draw.circle(*p, 1)
+            r, c = skimage.draw.circle(*p, 2)
+            r = np.minimum(r, self.image_size - 1)
+            c = np.minimum(c, self.image_size - 1)
             image[d, r, c] = 1
 
         draw_circle(points[0], d=-2)  # mark start
         for point, line in zip(points, lines):
-            depth = 2 + self.line_to_int(line)
+            depth = 2 + min(self.line_to_int(line), self.num_subtasks)
             draw_circle(point, d=depth)
         draw_circle(points[-1], d=-1)  # mark end
 
@@ -244,26 +257,22 @@ class Env(gym.Env, ABC):
                 rr, cc, val = skimage.draw.line_aa(*points[_from], *points[_to])
                 image[bit, rr, cc] = val * np.linspace(0.1, 1, val.size)
 
-        # from PIL import Image
-        # from matplotlib import cm
-        #
-        # n = image[2:].shape[0]
-        # grade = np.linspace(0.1, 1, n).reshape((n, 1, 1))
-        # myarray = (grade * image[2:]).sum(0)
-        # im = Image.fromarray(np.uint8(cm.gist_earth(myarray) * 255))
-        # im.save("/tmp/nodes.png")
-        #
-        # myarray = image[0]
-        # im = Image.fromarray(np.uint8(cm.gist_earth(myarray) * 255))
-        # im.save("/tmp/false.png")
-        # myarray = image[1]
-        # im = Image.fromarray(np.uint8(cm.gist_earth(myarray) * 255))
-        # im.save("/tmp/truth.png")
-        #
-        # from pprint import pprint
-        #
-        # pprint(lines)
-        # exit()
+        from PIL import Image
+        from matplotlib import cm
+
+        n = image[2:].shape[0]
+        grade = np.linspace(0.1, 1, n).reshape((n, 1, 1))
+        myarray = (grade * image[2:]).sum(0)
+        im = Image.fromarray(np.uint8(cm.gist_gray(myarray) * 255))
+        im.save("/tmp/nodes.png")
+
+        myarray = image[0]
+        im = Image.fromarray(np.uint8(cm.gist_gray(myarray) * 255))
+        im.save("/tmp/false.png")
+        myarray = image[1]
+        im = Image.fromarray(np.uint8(cm.gist_gray(myarray) * 255))
+        im.save("/tmp/truth.png")
+
         return image
 
     def line_to_int(self, line):
@@ -326,7 +335,7 @@ class Env(gym.Env, ABC):
         i = 0
         if_evaluations = []
         while True:
-            condition_bit = yield (None if i >= len(lines) else i)
+            condition_bit = yield None if i >= len(lines) else i
             if lines[i] is Else:
                 evaluation = not if_evaluations.pop()
             else:
@@ -372,7 +381,15 @@ class Env(gym.Env, ABC):
                 yield current, prev  # True: EndWhile -> While
                 return
 
-    def get_observation(self, condition_bit, active, lines):
+    def state_generator(self, lines) -> State:
+        condition_bit = 0 if self.eval_condition_size else self.random.randint(0, 2)
+        while True:
+            yield State(obs=condition_bit, condition=condition_bit, done=True)
+            condition_bit = abs(
+                condition_bit - int(self.random.rand() < self.flip_prob)
+            )
+
+    def get_observation(self, obs, active, lines):
         if self.use_image:
             lines = self.build_task_image(lines)
         else:
@@ -380,19 +397,19 @@ class Env(gym.Env, ABC):
             lines = [self.line_to_int(p) for p in padded]
 
         obs = Obs(
-            condition=condition_bit,
-            lines=lines,
-            active=self.n_lines if active is None else active,
+            obs=obs, lines=lines, active=self.n_lines if active is None else active
         )
         if self.baseline:
-            obs = OrderedDict(
-                condition=obs.condition, lines=self.eye[obs.lines].flatten()
-            )
+            obs = OrderedDict(obs=obs.obs, lines=self.eye[obs.lines].flatten())
         else:
             obs = obs._asdict()
         if not self.evaluating:
             assert self.observation_space.contains(obs)
         return obs
+
+    @staticmethod
+    def print_obs(obs):
+        print(obs)
 
     def get_task_info(self, lines):
         num_if = lines.count(If)
@@ -457,20 +474,24 @@ class Env(gym.Env, ABC):
             input("pause")
 
 
+def build_parser(p):
+    p.add_argument("--min-lines", type=int, required=True)
+    p.add_argument("--max-lines", type=int, required=True)
+    p.add_argument("--num-subtasks", type=int, default=12)
+    p.add_argument("--no-op-limit", type=int)
+    p.add_argument("--flip-prob", type=float, default=0.5)
+    p.add_argument("--terminate-on-failure", action="store_true")
+    p.add_argument("--eval-condition-size", action="store_true")
+    p.add_argument("--max-nesting-depth", type=int)
+    p.add_argument("--image-size", type=int)
+    return p
+
+
 if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--seed", default=0, type=int)
-    parser.add_argument("--min-lines", default=6, type=int)
-    parser.add_argument("--max-lines", default=6, type=int)
-    parser.add_argument("--eval-lines", type=int)
-    parser.add_argument("--time-limit", default=100, type=int)
-    parser.add_argument("--num-subtasks", default=12, type=int)
-    parser.add_argument("--max-nesting-depth", default=2, type=int)
-    parser.add_argument("--flip-prob", default=0.5, type=float)
-    parser.add_argument("--delayed-reward", action="store_true")
-    args = hierarchical_parse_args(parser)
+    args = hierarchical_parse_args(build_parser(parser))
 
     def action_fn(string):
         try:

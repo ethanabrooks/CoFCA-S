@@ -68,7 +68,8 @@ class Recurrence(nn.Module):
             in_channels=d,
             channels=[hidden_size, 2 * hidden_size, 2 * hidden_size],
             kernel_sizes=[8, 4, 3],
-            strides=[4, 2, 1],
+            # strides=[4, 2, 1],
+            strides=[6, 3, 1],
             paddings=[0, 1, 1],
         )
 
@@ -189,6 +190,7 @@ class Recurrence(nn.Module):
 
         # build memory
         lines = inputs.lines.view(T, N, *self.obs_spaces.lines.shape)[0]
+        M = self.task_embedding(lines).view(N)
         import ipdb
 
         ipdb.set_trace()
