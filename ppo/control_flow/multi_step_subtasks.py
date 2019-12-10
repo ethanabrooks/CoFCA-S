@@ -43,6 +43,7 @@ class Env(ppo.control_flow.env.Env):
         print("Condition:", condition)
 
     def state_generator(self, lines) -> State:
+        assert self.max_nesting_depth == 1
         objects = self.targets + self.non_targets
         ice = objects.index("ice")
         agent_pos = self.random.randint(0, self.world_size, size=2)
