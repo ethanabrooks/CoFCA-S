@@ -183,6 +183,7 @@ class Env(gym.Env, ABC):
             elif active is not None:
                 step += 1
                 if action != lines[active].id:
+                    # TODO: this should only be evaluated when done
                     failing = True
                     info.update(sucess_line=prev, failure_line=active)
                 state = state_iterator.send(action)
