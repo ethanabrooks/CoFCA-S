@@ -4,6 +4,7 @@ from contextlib import contextmanager
 import numpy as np
 import torch
 import torch.nn.functional as F
+from gym.spaces import Box
 from torch import nn as nn
 
 from ppo.control_flow.env import Obs
@@ -50,19 +51,19 @@ class Recurrence(nn.Module):
         self.no_pointer = no_pointer
         self.no_roll = no_roll
         self.no_scan = no_scan or no_pointer  # no scan if no pointer
-        obs_spaces = Obs(**observation_space.spaces)
+        self.obs_spaces = Obs(**observation_space.spaces)
         self.action_size = 2
         self.debug = debug
         self.hidden_size = hidden_size
 
         self._evaluating = False
-        self._obs_sections = Obs(*[int(np.prod(s.shape)) for s in obs_spaces])
+        self._obs_sections = Obs(*[int(np.prod(s.shape)) for s in self.obs_spaces])
         self.eval_lines = eval_lines
         self.train_lines = self._obs_sections.lines
 
         # networks
         self.ne = num_edges
-        n_lt = int(obs_spaces.lines.nvec[0])
+        n_lt = int(self.obs_spaces.lines.nvec[0])
         n_a, n_p = map(int, action_space.nvec)
         self.n_a = n_a
         self.embed_task = nn.Embedding(n_lt, hidden_size)
@@ -70,13 +71,28 @@ class Recurrence(nn.Module):
         self.task_encoder = nn.GRU(
             hidden_size, hidden_size, bidirectional=True, batch_first=True
         )
+        self.obs_is_image = type(self.obs_spaces.obs) is Box
+        if self.obs_is_image:
+            self.conv = self.build_conv(
+                in_channels=self.obs_spaces.obs.shape[0],
+                channels=[hidden_size, hidden_size, hidden_size],
+                kernel_sizes=[3, 3, 3],
+                # kernel_sizes=[8, 4, 3],
+                strides=[1, 2, 2],
+                # strides=[4, 2, 1],
+                paddings=[1, 1, 1],
+            )
+
         if no_pointer:
             in_size = 3 * hidden_size
         elif include_action:
             in_size = 2 * hidden_size
         else:
             in_size = hidden_size
-        in_size += self.obs_sections.obs
+        if self.obs_is_image:
+            in_size += hidden_size
+        else:
+            in_size += self.obs_sections.obs
         self.gru = nn.GRUCell(in_size, hidden_size)
 
         layers = []
@@ -100,6 +116,42 @@ class Recurrence(nn.Module):
         self._state_sizes = RecurrentState(
             a=1, a_probs=n_a, p=1, p_probs=2 * self.train_lines, w=1, v=1, h=hidden_size
         )
+
+    # from https://github.com/astooke/rlpyt/blob/75e96cda433626868fd2a30058be67b99bbad810/rlpyt/models/conv2d.py#L10
+    def build_conv(
+        self,
+        in_channels,
+        channels,
+        kernel_sizes,
+        strides,
+        paddings=None,
+        nonlinearity=torch.nn.ReLU,  # Module, not Functional.
+        use_maxpool=False,  # if True: convs use stride 1, maxpool downsample.
+    ):
+        if paddings is None:
+            paddings = [0 for _ in range(len(channels))]
+        assert len(channels) == len(kernel_sizes) == len(strides) == len(paddings)
+        in_channels = [in_channels] + channels[:-1]
+        ones = [1 for _ in range(len(strides))]
+        if use_maxpool:
+            maxp_strides = strides
+            strides = ones
+        else:
+            maxp_strides = ones
+        conv_layers = [
+            torch.nn.Conv2d(
+                in_channels=ic, out_channels=oc, kernel_size=k, stride=s, padding=p
+            )
+            for (ic, oc, k, s, p) in zip(
+                in_channels, channels, kernel_sizes, strides, paddings
+            )
+        ]
+        sequence = []
+        for conv_layer, maxp_stride in zip(conv_layers, maxp_strides):
+            sequence.extend([conv_layer, nonlinearity()])
+            if maxp_stride > 1:
+                sequence.append(torch.nn.MaxPool2d(maxp_stride))  # No padding.
+        return nn.Sequential(*sequence)
 
     @property
     def state_sizes(self):
@@ -159,6 +211,10 @@ class Recurrence(nn.Module):
 
         # parse non-action inputs
         inputs = self.parse_inputs(inputs)
+        if self.obs_is_image:
+            inputs = inputs._replace(
+                obs=inputs.obs.view(T, N, *self.obs_spaces.obs.shape)
+            )
 
         # build memory
         lines = inputs.lines.view(T, N, self.obs_sections.lines).long()[0, :, :]
@@ -212,7 +268,10 @@ class Recurrence(nn.Module):
 
         for t in range(T):
             self.print("w", w)
-            x = [inputs.obs[t], H.sum(0) if self.no_pointer else M[R, w]]
+            obs = inputs.obs[t]
+            if self.obs_is_image:
+                obs = self.conv(obs).view(N, -1)
+            x = [obs, H.sum(0) if self.no_pointer else M[R, w]]
             if self.no_pointer or self.include_action:
                 x += [self.embed_action(A[t - 1].clone())]
             h = self.gru(torch.cat(x, dim=-1), h)

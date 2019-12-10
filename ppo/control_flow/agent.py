@@ -20,14 +20,9 @@ class Agent(ppo.agent.Agent, NNBase):
     def __init__(self, entropy_coef, recurrent, observation_space, **network_args):
         nn.Module.__init__(self)
         self.entropy_coef = entropy_coef
-        if isinstance(observation_space["lines"], Box):
-            self.recurrent_module = ppo.control_flow.cnn_recurrence.Recurrence(
-                observation_space=observation_space, **network_args
-            )
-        else:
-            self.recurrent_module = ppo.control_flow.recurrence.Recurrence(
-                observation_space=observation_space, **network_args
-            )
+        self.recurrent_module = ppo.control_flow.recurrence.Recurrence(
+            observation_space=observation_space, **network_args
+        )
 
     @property
     def recurrent_hidden_state_size(self):

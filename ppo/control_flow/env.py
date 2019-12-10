@@ -2,7 +2,8 @@ from abc import ABC
 from collections import defaultdict, namedtuple, OrderedDict
 
 import numpy as np
-import skimage.draw
+
+# import skimage.draw
 from gym.utils import seeding
 from gym.vector.utils import spaces
 from rl_utils import hierarchical_parse_args, gym
@@ -29,7 +30,6 @@ class Env(gym.Env, ABC):
         max_nesting_depth,
         eval_condition_size,
         no_op_limit,
-        image_size,
         seed=0,
         eval_lines=None,
         time_limit=100,
@@ -37,17 +37,10 @@ class Env(gym.Env, ABC):
         baseline=False,
     ):
         super().__init__()
-        self.use_image = image_size is not None
         self.no_op_limit = no_op_limit
         self._eval_condition_size = eval_condition_size
         self.max_nesting_depth = max_nesting_depth
         self.num_subtasks = num_subtasks
-        self.image_size = image_size
-        self.image_shape = (
-            num_subtasks + 5,  # 5: true/false edges, start/middle/end node,
-            image_size,
-            image_size,
-        )
 
         self.terminate_on_failure = terminate_on_failure
         self.eval_lines = eval_lines
@@ -83,9 +76,7 @@ class Env(gym.Env, ABC):
             self.observation_space = spaces.Dict(
                 dict(
                     obs=spaces.Discrete(2),
-                    lines=spaces.Box(low=0, high=1, shape=self.image_shape)
-                    if self.use_image
-                    else spaces.MultiDiscrete(
+                    lines=spaces.MultiDiscrete(
                         np.array([len(self.line_types) + num_subtasks] * self.n_lines)
                     ),
                     active=spaces.Discrete(self.n_lines + 1),
@@ -172,7 +163,7 @@ class Env(gym.Env, ABC):
             if self.baseline:
                 selected = None
             else:
-                action, delta = action
+                action, delta = map(int, action)
                 selected = (selected + delta - self.n_lines) % self.n_lines
             info = self.get_task_info(lines) if step == 0 else {}
 
@@ -391,11 +382,8 @@ class Env(gym.Env, ABC):
             )
 
     def get_observation(self, obs, active, lines):
-        if self.use_image:
-            lines = self.build_task_image(lines)
-        else:
-            padded = lines + [Padding] * (self.n_lines - len(lines))
-            lines = [self.line_to_int(p) for p in padded]
+        padded = lines + [Padding] * (self.n_lines - len(lines))
+        lines = [self.line_to_int(p) for p in padded]
 
         obs = Obs(
             obs=obs, lines=lines, active=self.n_lines if active is None else active
@@ -484,7 +472,6 @@ def build_parser(p):
     p.add_argument("--terminate-on-failure", action="store_true")
     p.add_argument("--eval-condition-size", action="store_true")
     p.add_argument("--max-nesting-depth", type=int)
-    p.add_argument("--image-size", type=int)
     return p
 
 

@@ -34,10 +34,9 @@ class Env(ppo.control_flow.env.Env):
         for i, row in enumerate(obs):
             string = ""
             for j, col in enumerate(row):
-                cropped = sorted(col * (1 + np.arange(col.size)), reverse=True)[
-                    :grid_size
-                ]
-                string += "".join(chars[x] for x in cropped) + "|"
+                number = col * (1 + np.arange(col.size))
+                crop = sorted(number, reverse=True)[:grid_size]
+                string += "".join(chars[x] for x in crop) + "|"
             print(string)
             print("-" * len(string))
         print("Condition:", condition)
