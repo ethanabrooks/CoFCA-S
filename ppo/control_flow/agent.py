@@ -1,5 +1,6 @@
 import torch
 import torch.jit
+from gym.spaces import Box
 from torch import nn as nn
 from torch.nn import functional as F
 
@@ -10,15 +11,25 @@ from ppo.agent import AgentValues, NNBase
 from ppo.control_flow.baselines import oh_et_al
 from ppo.control_flow.recurrence import RecurrentState
 import ppo.control_flow.recurrence
+import ppo.control_flow.multi_step.recurrence
 import ppo.control_flow.simple
 from ppo.distributions import FixedCategorical
 
 
 class Agent(ppo.agent.Agent, NNBase):
-    def __init__(self, entropy_coef, recurrent, **network_args):
+    def __init__(self, entropy_coef, recurrent, observation_space, **network_args):
         nn.Module.__init__(self)
         self.entropy_coef = entropy_coef
-        self.recurrent_module = ppo.control_flow.recurrence.Recurrence(**network_args)
+        multi_step = type(observation_space.spaces["obs"]) is Box
+        self.recurrent_module = (
+            ppo.control_flow.multi_step.recurrence.Recurrence(
+                observation_space=observation_space, **network_args
+            )
+            if multi_step
+            else ppo.control_flow.recurrence.Recurrence(
+                observation_space=observation_space, **network_args
+            )
+        )
 
     @property
     def recurrent_hidden_state_size(self):
