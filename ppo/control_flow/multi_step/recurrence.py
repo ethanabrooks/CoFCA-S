@@ -1,17 +1,11 @@
-from collections import namedtuple
-from contextlib import contextmanager
-
-import numpy as np
 import torch
 import torch.nn.functional as F
-from gym.spaces import Box
 from torch import nn as nn
-import ppo.control_flow.recurrence
 
-from ppo.control_flow.env import Obs
-from ppo.distributions import Categorical, FixedCategorical
-from ppo.road_closures.recurrence import RecurrentState
+import ppo.control_flow.recurrence
+from ppo.distributions import FixedCategorical
 from ppo.utils import init_
+from ppo.control_flow.recurrence import RecurrentState
 
 
 class Recurrence(ppo.control_flow.recurrence.Recurrence):
@@ -45,6 +39,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
 
         # parse non-action inputs
         inputs = self.parse_inputs(inputs)
+        inputs = inputs._replace(obs=inputs.obs.view(T, N, *self.obs_spaces.obs.shape))
 
         # build memory
         lines = inputs.lines.view(T, N, self.obs_sections.lines).long()[0, :, :]
