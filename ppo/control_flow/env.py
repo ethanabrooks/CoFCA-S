@@ -96,7 +96,7 @@ class Env(gym.Env, ABC):
         failing = False
         step = 0
         n = 0
-        state_iterator = self.state_generator(None)
+        state_iterator = self.state_generator(None)  # TODO: replace None with lines
         state = next(state_iterator)
         lines = self.build_lines()
         line_iterator = self.line_generator(lines)
@@ -175,7 +175,8 @@ class Env(gym.Env, ABC):
                     info.update(sucess_line=prev, failure_line=active)
                 step += 1
                 state = state_iterator.send(action)
-                prev, active = active, next_subtask()
+                if state.done:
+                    prev, active = active, next_subtask()
 
     @property
     def eval_condition_size(self):
