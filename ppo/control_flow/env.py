@@ -98,13 +98,11 @@ class Env(gym.Env, ABC):
         condition_bit = 0 if self.eval_condition_size else self.random.randint(0, 2)
         lines = self.build_lines()
         line_iterator = self.line_generator(lines)
-        state_iterator = self.state_generator(lines)
-        state = next(state_iterator)
 
-        def next_subtask(msg=state.condition):
+        def next_subtask(msg=condition_bit):
             a = line_iterator.send(msg)
             while not (a is None or type(lines[a]) is Subtask):
-                a = line_iterator.send(state.condition)
+                a = line_iterator.send(condition_bit)
             return a
 
         selected = 0
@@ -150,7 +148,7 @@ class Env(gym.Env, ABC):
                 info.update(success_line=len(lines))
 
             action = (
-                yield self.get_observation(state.obs, active, lines),
+                yield self.get_observation(condition_bit, active, lines),
                 reward,
                 term,
                 info,
@@ -368,20 +366,16 @@ class Env(gym.Env, ABC):
                 yield current, prev  # True: EndWhile -> While
                 return
 
-    def state_generator(self, lines) -> State:
-        condition_bit = 0 if self.eval_condition_size else self.random.randint(0, 2)
-        while True:
-            yield State(obs=condition_bit, condition=condition_bit, done=True)
-            condition_bit = abs(
-                condition_bit - int(self.random.rand() < self.flip_prob)
-            )
-
-    def get_observation(self, obs, active, lines):
+    def get_observation(self, condition_bit, active, lines):
         padded = lines + [Padding] * (self.n_lines - len(lines))
-        lines = [self.line_to_int(p) for p in padded]
-
+        lines = [
+            t.id if type(t) is Subtask else self.num_subtasks + self.line_types.index(t)
+            for t in padded
+        ]
         obs = Obs(
-            obs=obs, lines=lines, active=self.n_lines if active is None else active
+            obs=condition_bit,
+            lines=lines,
+            active=self.n_lines if active is None else active,
         )
         if self.baseline:
             obs = OrderedDict(obs=obs.obs, lines=self.eye[obs.lines].flatten())
