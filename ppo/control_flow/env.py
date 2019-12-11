@@ -96,7 +96,7 @@ class Env(gym.Env, ABC):
         failing = False
         step = 0
         n = 0
-        state_iterator = self.state_generator(None, self.random)
+        state_iterator = self.state_generator(None)
         state = next(state_iterator)
         lines = self.build_lines()
         line_iterator = self.line_generator(lines)
@@ -174,7 +174,7 @@ class Env(gym.Env, ABC):
                     failing = True
                     info.update(sucess_line=prev, failure_line=active)
                 step += 1
-                state = state_iterator.send(self.random)
+                state = state_iterator.send(action)
                 prev, active = active, next_subtask()
 
     @property
@@ -366,11 +366,13 @@ class Env(gym.Env, ABC):
                 yield current, prev  # True: EndWhile -> While
                 return
 
-    def state_generator(self, lines, r) -> State:
-        condition_bit = 0 if self.eval_condition_size else r.randint(0, 2)
+    def state_generator(self, lines) -> State:
+        condition_bit = 0 if self.eval_condition_size else self.random.randint(0, 2)
         while True:
             yield State(obs=condition_bit, condition=condition_bit, done=True)
-            condition_bit = abs(condition_bit - int(r.rand() < self.flip_prob))
+            condition_bit = abs(
+                condition_bit - int(self.random.rand() < self.flip_prob)
+            )
 
     def get_observation(self, obs, active, lines):
         padded = lines + [Padding] * (self.n_lines - len(lines))
