@@ -95,10 +95,10 @@ class Env(gym.Env, ABC):
         failing = False
         step = 0
         n = 0
-        state_iterator = self.state_generator(None)  # TODO: replace None with lines
-        state = next(state_iterator)
         lines = self.build_lines()
         line_iterator = self.line_generator(lines)
+        state_iterator = self.state_generator(lines)
+        state = next(state_iterator)
 
         def next_subtask(msg=state.condition):
             a = line_iterator.send(msg)
@@ -287,14 +287,17 @@ class Env(gym.Env, ABC):
         elif n == 1:
             return [Subtask]
         line_types = [Subtask]
-        if n > len(active_conditions) + 2 and (
+        enough_space = n > len(active_conditions) + 2
+        if enough_space and (
             max_nesting_depth is None or nesting_depth < max_nesting_depth
         ):
             line_types += [If, While]
         if active_conditions and last is Subtask:
             last_condition = active_conditions[-1]
             if last_condition is If:
-                line_types += [Else, EndIf]
+                line_types += [EndIf]
+            if last_condition is If and enough_space:
+                line_types += [Else]
             elif last_condition is Else:
                 line_types += [EndIf]
             elif last_condition is While:
