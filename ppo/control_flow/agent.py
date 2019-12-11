@@ -1,28 +1,35 @@
 import torch
 import torch.jit
+from gym.spaces import Box
 from torch import nn as nn
 from torch.nn import functional as F
 
 import ppo.agent
 from ppo.agent import AgentValues, NNBase
-from ppo.distributions import FixedCategorical
 
 # noinspection PyMissingConstructor
 from ppo.control_flow.baselines import oh_et_al
-from ppo.control_flow.recurrence import RecurrentState, Recurrence
+from ppo.control_flow.recurrence import RecurrentState
+import ppo.control_flow.recurrence
+import ppo.control_flow.multi_step.recurrence
+import ppo.control_flow.simple
+from ppo.distributions import FixedCategorical
 
 
 class Agent(ppo.agent.Agent, NNBase):
-    def __init__(self, entropy_coef, recurrent, baseline, a_equals_p, **network_args):
+    def __init__(self, entropy_coef, recurrent, observation_space, **network_args):
         nn.Module.__init__(self)
-        self.a_equals_p = a_equals_p
         self.entropy_coef = entropy_coef
-        if baseline == "oh-et-al":
-            self.recurrent_module = oh_et_al.Recurrence(**network_args)
-        else:
-            self.recurrent_module = Recurrence(
-                **network_args, baseline=baseline == "no-attention"
+        multi_step = type(observation_space.spaces["obs"]) is Box
+        self.recurrent_module = (
+            ppo.control_flow.multi_step.recurrence.Recurrence(
+                observation_space=observation_space, **network_args
             )
+            if multi_step
+            else ppo.control_flow.recurrence.Recurrence(
+                observation_space=observation_space, **network_args
+            )
+        )
 
     @property
     def recurrent_hidden_state_size(self):
@@ -38,20 +45,17 @@ class Agent(ppo.agent.Agent, NNBase):
             inputs.view(N, -1), rnn_hxs, masks, action=action
         )
         rm = self.recurrent_module
-        hx = RecurrentState(*rm.parse_hidden(all_hxs))
+        hx = rm.parse_hidden(all_hxs)
         a_dist = FixedCategorical(hx.a_probs)
-        action_log_probs = a_dist.log_probs(hx.a)
-        entropy = a_dist.entropy().mean()
-        action = torch.cat([hx.a, hx.a], dim=-1)
-        # p_dist = FixedCategorical(hx.p_probs)
-        # if self.a_equals_p:
-        # action_log_probs = p_dist.log_probs(hx.p)
-        # entropy = p_dist.entropy().mean()
-        # action = torch.cat([hx.a, hx.p], dim=-1)
-        # else:
-        #     action_log_probs = a_dist.log_probs(hx.a) + p_dist.log_probs(hx.p)
-        #     entropy = (a_dist.entropy() + p_dist.entropy()).mean()
-        #     action = torch.cat([hx.a, hx.p], dim=-1)
+        if rm.no_pointer:
+            action_log_probs = a_dist.log_probs(hx.a)
+            entropy = a_dist.entropy().mean()
+            action = F.pad(hx.a, [0, 1])
+        else:
+            p_dist = FixedCategorical(hx.p_probs)
+            action_log_probs = a_dist.log_probs(hx.a) + p_dist.log_probs(hx.p)
+            entropy = (a_dist.entropy() + p_dist.entropy()).mean()
+            action = torch.cat([hx.a, hx.p], dim=-1)
         return AgentValues(
             value=hx.v,
             action=action,

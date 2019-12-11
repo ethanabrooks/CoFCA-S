@@ -71,13 +71,25 @@ class Recurrence(nn.Module):
         self.task_encoder = nn.GRU(
             hidden_size, hidden_size, bidirectional=True, batch_first=True
         )
+        self.obs_is_image = type(self.obs_spaces.obs) is Box
+        if self.obs_is_image:
+            d = self.obs_spaces.obs.shape[0]
+            self.conv = nn.Sequential(
+                nn.BatchNorm2d(d),
+                nn.Conv2d(d, hidden_size, kernel_size=3, padding=1),
+                nn.MaxPool2d(self.obs_spaces.obs.shape[1:]),
+                nn.ReLU(),
+            )
         if no_pointer:
             in_size = 3 * hidden_size
         elif include_action:
             in_size = 2 * hidden_size
         else:
             in_size = hidden_size
-        in_size += self.obs_sections.obs
+        if self.obs_is_image:
+            in_size += hidden_size
+        else:
+            in_size += self.obs_sections.obs
         self.gru = nn.GRUCell(in_size, hidden_size)
 
         layers = []
@@ -198,6 +210,10 @@ class Recurrence(nn.Module):
 
         # parse non-action inputs
         inputs = self.parse_inputs(inputs)
+        if self.obs_is_image:
+            inputs = inputs._replace(
+                obs=inputs.obs.view(T, N, *self.obs_spaces.obs.shape)
+            )
 
         # build memory
         lines = inputs.lines.view(T, N, self.obs_sections.lines).long()[0, :, :]
@@ -252,12 +268,19 @@ class Recurrence(nn.Module):
         for t in range(T):
             self.print("p", p)
             obs = inputs.obs[t]
+            if self.obs_is_image:
+                obs = self.conv(obs).view(N, -1)
             x = [obs, H.sum(0) if self.no_pointer else M[R, p]]
             if self.no_pointer or self.include_action:
                 x += [self.embed_action(A[t - 1].clone())]
             h = self.gru(torch.cat(x, dim=-1), h)
             z = F.relu(self.zeta(h))
-            a_dist = self.actor(z)
+
+            def gate(gate, new, old):
+                old = torch.zeros_like(new).scatter(1, old.unsqueeze(1), 1)
+                return FixedCategorical(probs=gate * new + (1 - gate) * old)
+
+            a_dist = gate(self.a_gate(z), self.actor(z).probs, A[t - 1])
             self.sample_new(A[t], a_dist)
             u = self.upsilon(z).softmax(dim=-1)
             self.print("o", torch.round(10 * u))
@@ -266,7 +289,7 @@ class Recurrence(nn.Module):
             self.print(torch.round(10 * w)[0, half1:])
             self.print(torch.round(10 * w)[0, :half1])
             d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
-            p_dist = FixedCategorical(probs=d_probs)
+            p_dist = gate(self.p_gate(z), d_probs, torch.zeros_like(R))
             # p_probs = torch.round(p_dist.probs * 10).flatten()
             self.sample_new(D[t], p_dist)
             half = p_dist.probs.size(-1) // 2 if self.no_scan else nl

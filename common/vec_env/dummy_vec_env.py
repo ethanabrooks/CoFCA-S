@@ -123,3 +123,6 @@ class DummyVecEnv(VecEnv):
         #     return self.envs[0].render(mode=mode)
         # else:
         #     return super().render(mode=mode)
+
+    def close_extras(self):
+        pass

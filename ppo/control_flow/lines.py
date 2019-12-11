@@ -19,7 +19,8 @@ class EndWhile:
 
 
 class Subtask:
-    pass
+    def __init__(self, id):
+        self.id = id
 
 
 class Padding:

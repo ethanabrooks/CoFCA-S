@@ -1,2 +1,2 @@
-* should c be attention-weighted?
-* make f recurrent
+* fix refactor incrementally
+* use separate eval rollout
