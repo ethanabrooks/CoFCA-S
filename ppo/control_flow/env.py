@@ -1,6 +1,5 @@
 from abc import ABC
 from collections import defaultdict, namedtuple, OrderedDict
-from copy import deepcopy
 
 import numpy as np
 
@@ -150,7 +149,7 @@ class Env(gym.Env, ABC):
                 info.update(success_line=len(lines))
 
             action = (
-                yield self.get_observation(state.condition, active, lines),
+                yield self.get_observation(state.obs, active, lines),
                 reward,
                 term,
                 info,
@@ -169,11 +168,11 @@ class Env(gym.Env, ABC):
                 if (not self.evaluating) and self.no_op_limit and n == self.no_op_limit:
                     failing = True
             elif active is not None:
+                step += 1
                 if action != lines[active].id:
                     # TODO: this should only be evaluated when done
                     failing = True
                     info.update(sucess_line=prev, failure_line=active)
-                step += 1
                 state = state_iterator.send(action)
                 if state.done:
                     prev, active = active, next_subtask()
