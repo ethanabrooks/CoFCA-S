@@ -110,7 +110,10 @@ class Env(gym.Env, ABC):
         prev, active = 0, next_subtask(None)
         info = {}
         term = False
+        action = None
         while True:
+            success = active is None
+            reward = int(term) * int(not failing)
 
             def line_strings(index, level):
                 if index == len(lines):
@@ -138,13 +141,14 @@ class Env(gym.Env, ABC):
             def render():
                 for i, string in enumerate(line_strings(index=0, level=1)):
                     print(f"{i}{string}")
-                print("Condition:", state.condition)
                 print("Failing:", failing)
+                print("Action:", action)
+                print("Reward", reward)
+                print("Obs:")
+                self.print_obs(state.obs)
 
             self._render = render
 
-            success = active is None
-            reward = int(term) * int(not failing)
             if success:
                 info.update(success_line=len(lines))
 
