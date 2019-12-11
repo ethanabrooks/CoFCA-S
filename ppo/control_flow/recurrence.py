@@ -95,6 +95,18 @@ class Recurrence(nn.Module):
             a=1, a_probs=n_a, d=1, d_probs=2 * self.train_lines, p=1, v=1, h=hidden_size
         )
 
+        # TODO: delete
+
+        d = self.obs_spaces.obs.shape[0]
+        self.conv = nn.Sequential(
+            nn.BatchNorm2d(d),
+            nn.Conv2d(d, hidden_size, kernel_size=3, padding=1),
+            nn.MaxPool2d(self.obs_spaces.obs.shape[1:]),
+            nn.ReLU(),
+        )
+        self.p_gate = nn.Sequential(init_(nn.Linear(hidden_size, 1)), nn.Sigmoid())
+        self.a_gate = nn.Sequential(init_(nn.Linear(hidden_size, 1)), nn.Sigmoid())
+
     @property
     def gru_in_size(self):
         if self.no_pointer:
@@ -222,6 +234,12 @@ class Recurrence(nn.Module):
                 x += [self.embed_action(A[t - 1].clone())]
             h = self.gru(torch.cat(x, dim=-1), h)
             z = F.relu(self.zeta(h))
+
+            def gate(gate, new, old):
+                old = torch.zeros_like(new).scatter(1, old.unsqueeze(1), 1)
+                return FixedCategorical(probs=gate * new + (1 - gate) * old)
+
+            # a_dist = gate(self.a_gate(z), self.actor(z).probs, A[t - 1])
             a_dist = self.actor(z)
             self.sample_new(A[t], a_dist)
             u = self.upsilon(z).softmax(dim=-1)
