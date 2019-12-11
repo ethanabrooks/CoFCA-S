@@ -11,7 +11,7 @@ from ppo.control_flow.env import Obs
 from ppo.distributions import Categorical, FixedCategorical
 from ppo.utils import init_
 
-RecurrentState = namedtuple("RecurrentState", "a d w v h a_probs d_probs")
+RecurrentState = namedtuple("RecurrentState", "a d p v h a_probs d_probs")
 
 
 def batch_conv1d(inputs, weights):
@@ -99,7 +99,7 @@ class Recurrence(nn.Module):
         self.actor = Categorical(hidden_size, n_a)
         self.attention = Categorical(hidden_size, n_a)
         self._state_sizes = RecurrentState(
-            a=1, a_probs=n_a, d=1, d_probs=2 * self.train_lines, w=1, v=1, h=hidden_size
+            a=1, a_probs=n_a, d=1, d_probs=2 * self.train_lines, p=1, v=1, h=hidden_size
         )
 
     @property
@@ -204,7 +204,7 @@ class Recurrence(nn.Module):
             _x.squeeze_(0)
 
         h = hx.h
-        w = hx.w.long().squeeze(-1)
+        p = hx.p.long().squeeze(-1)
         a = hx.a.long().squeeze(-1)
         a[new_episode] = 0
         R = torch.arange(N, device=rnn_hxs.device)
@@ -212,8 +212,8 @@ class Recurrence(nn.Module):
         D = torch.cat([actions[:, :, 1], hx.d.view(1, N)], dim=0).long()
 
         for t in range(T):
-            self.print("w", w)
-            x = [inputs.obs[t], H.sum(0) if self.no_pointer else M[R, w]]
+            self.print("p", p)
+            x = [inputs.obs[t], H.sum(0) if self.no_pointer else M[R, p]]
             if self.no_pointer or self.include_action:
                 x += [self.embed_action(A[t - 1].clone())]
             h = self.gru(torch.cat(x, dim=-1), h)
@@ -222,20 +222,20 @@ class Recurrence(nn.Module):
             self.sample_new(A[t], a_dist)
             u = self.upsilon(z).softmax(dim=-1)
             self.print("o", torch.round(10 * u))
-            g = P[w, R]
+            g = P[p, R]
             half1 = g.size(1) // 2
             self.print(torch.round(10 * g)[0, half1:])
             self.print(torch.round(10 * g)[0, :half1])
             d_dist = FixedCategorical(probs=(g @ u.unsqueeze(-1)).squeeze(-1))
             # d_probs = torch.round(p_dist.probs * 10).flatten()
             self.sample_new(D[t], d_dist)
-            w = w + D[t].clone() - nl
-            w = torch.clamp(w, min=0, max=nl - 1)
+            p = p + D[t].clone() - nl
+            p = torch.clamp(p, min=0, max=nl - 1)
             yield RecurrentState(
                 a=A[t],
                 v=self.critic(z),
                 h=h,
-                w=w,
+                p=p,
                 a_probs=a_dist.probs,
                 d=D[t],
                 d_probs=d_dist.probs,
