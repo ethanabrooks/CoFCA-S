@@ -18,7 +18,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             nn.MaxPool2d(self.obs_spaces.obs.shape[1:]),
             nn.ReLU(),
         )
-        self.d_gate = nn.Sequential(init_(nn.Linear(hidden_size, 1)), nn.Sigmoid())
+        self.p_gate = nn.Sequential(init_(nn.Linear(hidden_size, 1)), nn.Sigmoid())
         self.a_gate = nn.Sequential(init_(nn.Linear(hidden_size, 1)), nn.Sigmoid())
 
     @property
@@ -105,7 +105,8 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
                 old = torch.zeros_like(new).scatter(1, old.unsqueeze(1), 1)
                 return FixedCategorical(probs=gate * new + (1 - gate) * old)
 
-            a_dist = gate(self.a_gate(z), self.actor(z).probs, A[t - 1])
+            # a_dist = gate(self.a_gate(z), self.actor(z).probs, A[t - 1])
+            a_dist = self.actor(z)
             self.sample_new(A[t], a_dist)
             u = self.upsilon(z).softmax(dim=-1)
             self.print("o", torch.round(10 * u))
@@ -113,8 +114,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             half1 = w.size(1) // 2
             self.print(torch.round(10 * w)[0, half1:])
             self.print(torch.round(10 * w)[0, :half1])
-            d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
-            d_dist = gate(self.d_gate(z), d_probs, Z)
+            d_dist = FixedCategorical(probs=((w @ u.unsqueeze(-1)).squeeze(-1)))
             # p_probs = torch.round(p_dist.probs * 10).flatten()
             self.sample_new(D[t], d_dist)
             half = d_dist.probs.size(-1) // 2
