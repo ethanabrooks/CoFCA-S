@@ -9,7 +9,7 @@ from rl_utils import hierarchical_parse_args, gym
 from ppo import keyboard_control
 from ppo.control_flow.lines import If, Else, EndIf, While, EndWhile, Subtask, Padding
 
-Obs = namedtuple("Obs", "active condition lines")
+Obs = namedtuple("Obs", "active lines obs")
 Last = namedtuple("Last", "action active reward terminal selected")
 
 
@@ -68,7 +68,7 @@ class Env(gym.Env, ABC):
             n_line_types = len(self.line_types) + num_subtasks
             self.observation_space = spaces.Dict(
                 dict(
-                    condition=spaces.Discrete(2),
+                    obs=spaces.Discrete(2),
                     lines=spaces.MultiBinary(n_line_types * self.n_lines),
                 )
             )
@@ -79,7 +79,7 @@ class Env(gym.Env, ABC):
             )
             self.observation_space = spaces.Dict(
                 dict(
-                    condition=spaces.Discrete(2),
+                    obs=spaces.Discrete(2),
                     lines=spaces.MultiDiscrete(
                         np.array([len(self.line_types) + num_subtasks] * self.n_lines)
                     ),
@@ -240,14 +240,12 @@ class Env(gym.Env, ABC):
             for t in padded
         ]
         obs = Obs(
-            condition=self.condition_bit,
+            obs=self.condition_bit,
             lines=lines,
             active=self.n_lines if self.active is None else self.active,
         )
         if self.baseline:
-            obs = OrderedDict(
-                condition=obs.condition, lines=self.eye[obs.lines].flatten()
-            )
+            obs = OrderedDict(obs=obs.obs, lines=self.eye[obs.lines].flatten())
         else:
             obs = obs._asdict()
         if not self.evaluating:

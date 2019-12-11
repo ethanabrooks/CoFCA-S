@@ -76,7 +76,7 @@ class Recurrence(nn.Module):
             in_size = 2 * hidden_size
         else:
             in_size = hidden_size
-        in_size += self.obs_sections.condition
+        in_size += self.obs_sections.obs
         self.gru = nn.GRUCell(in_size, hidden_size)
 
         layers = []
@@ -210,7 +210,7 @@ class Recurrence(nn.Module):
 
         for t in range(T):
             self.print("w", w)
-            x = [inputs.condition[t], H.sum(0) if self.no_pointer else M[R, w]]
+            x = [inputs.obs[t], H.sum(0) if self.no_pointer else M[R, w]]
             if self.no_pointer or self.include_action:
                 x += [self.embed_action(A[t - 1].clone())]
             h = self.gru(torch.cat(x, dim=-1), h)
