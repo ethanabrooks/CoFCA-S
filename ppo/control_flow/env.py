@@ -11,7 +11,7 @@ from rl_utils import hierarchical_parse_args, gym
 from ppo import keyboard_control
 from ppo.control_flow.lines import If, Else, EndIf, While, EndWhile, Subtask, Padding
 
-Obs = namedtuple("Obs", "active obs lines")
+Obs = namedtuple("Obs", "active lines obs")
 Last = namedtuple("Last", "action active reward terminal selected")
 State = namedtuple("State", "obs condition done")
 
@@ -25,6 +25,7 @@ class Env(gym.Env, ABC):
         min_lines,
         max_lines,
         flip_prob,
+        time_limit,
         terminate_on_failure,
         num_subtasks,
         max_nesting_depth,
@@ -41,7 +42,6 @@ class Env(gym.Env, ABC):
         self._eval_condition_size = eval_condition_size
         self.max_nesting_depth = max_nesting_depth
         self.num_subtasks = num_subtasks
-
         self.terminate_on_failure = terminate_on_failure
         self.eval_lines = eval_lines
         self.min_lines = min_lines
@@ -220,11 +220,46 @@ class Env(gym.Env, ABC):
             c = np.minimum(c, self.image_size - 1)
             image[d, r, c] = 1
 
-        draw_circle(points[0], d=-2)  # mark start
-        for point, line in zip(points, lines):
-            depth = 2 + min(self.line_to_int(line), self.num_subtasks)
-            draw_circle(point, d=depth)
-        draw_circle(points[-1], d=-1)  # mark end
+    def _step(self, action):
+        i = {}
+        if self.t == 0:
+            num_if = self.lines.count(If)
+            num_else = self.lines.count(Else)
+            num_while = self.lines.count(While)
+            num_subtask = self.lines.count(lambda l: type(l) is Subtask)
+            i.update(
+                if_lines=num_if,
+                else_lines=num_else,
+                while_lines=num_while,
+                nesting_depth=self.get_nesting_depth(),
+                num_edges=2 * (num_if + num_else + num_while) + num_subtask,
+            )
+            keys = {
+                (If, EndIf): "if clause length",
+                (If, Else): "if-else clause length",
+                (Else, EndIf): "else clause length",
+                (While, EndWhile): "while clause length",
+            }
+            for k, v in self.average_interval():
+                i[keys[k]] = v
+
+        t = (not self.evaluating) and self.t > self.time_limit
+        if (not self.evaluating) and self.no_op_limit and self.n > self.no_op_limit:
+            self.failing = True
+        current_line = len(self.lines) if self.active is None else self.active
+        if self.active is None:
+            t = True
+            i.update(success_line=current_line)
+        elif action < self.num_subtasks:
+            self.t += 1
+            if action != self.lines[self.active].id:
+                i.update(failure_line=current_line, success_line=current_line - 1)
+                self.failing = True
+                if self.terminate_on_failure:
+                    t = True
+            self.condition_bit = abs(
+                self.condition_bit - int(self.random.rand() < self.flip_prob)
+            )
 
         np.set_printoptions(threshold=10000, linewidth=100000)
         for bit in (0, 1):
@@ -252,11 +287,24 @@ class Env(gym.Env, ABC):
         from PIL import Image
         from matplotlib import cm
 
-        n = image[2:].shape[0]
-        grade = np.linspace(0.1, 1, n).reshape((n, 1, 1))
-        myarray = (grade * image[2:]).sum(0)
-        im = Image.fromarray(np.uint8(cm.gist_gray(myarray) * 255))
-        im.save("/tmp/nodes.png")
+    def get_observation(self):
+        padded = self.lines + [Padding] * (self.n_lines - len(self.lines))
+        lines = [
+            t.id if type(t) is Subtask else self.num_subtasks + self.line_types.index(t)
+            for t in padded
+        ]
+        obs = Obs(
+            obs=self.condition_bit,
+            lines=lines,
+            active=self.n_lines if self.active is None else self.active,
+        )
+        if self.baseline:
+            obs = OrderedDict(obs=obs.obs, lines=self.eye[obs.lines].flatten())
+        else:
+            obs = obs._asdict()
+        if not self.evaluating:
+            assert self.observation_space.contains(obs)
+        return obs
 
         myarray = image[0]
         im = Image.fromarray(np.uint8(cm.gist_gray(myarray) * 255))

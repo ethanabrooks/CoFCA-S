@@ -85,8 +85,6 @@ class Recurrence(nn.Module):
             layers.extend([init_(nn.Linear(hidden_size, hidden_size)), activation])
         self.zeta = nn.Sequential(*layers)
         self.upsilon = init_(nn.Linear(hidden_size, self.ne))
-        self.p_gate = nn.Sequential(init_(nn.Linear(hidden_size, 1)), nn.Sigmoid())
-        self.a_gate = nn.Sequential(init_(nn.Linear(hidden_size, 1)), nn.Sigmoid())
 
         layers = []
         in_size = (2 if self.no_scan else 1) * hidden_size
@@ -265,8 +263,7 @@ class Recurrence(nn.Module):
             half1 = w.size(1) // 2
             self.print(torch.round(10 * w)[0, half1:])
             self.print(torch.round(10 * w)[0, :half1])
-            d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
-            p_dist = FixedCategorical(probs=d_probs)
+            p_dist = FixedCategorical(probs=((w @ u.unsqueeze(-1)).squeeze(-1)))
             # p_probs = torch.round(p_dist.probs * 10).flatten()
             self.sample_new(D[t], p_dist)
             half = p_dist.probs.size(-1) // 2 if self.no_scan else nl
