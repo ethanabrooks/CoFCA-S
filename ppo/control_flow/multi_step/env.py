@@ -80,7 +80,7 @@ class Env(ppo.control_flow.env.Env):
         done = False
         while True:
             subtask_id = yield State(
-                obs=build_world(), condition=condition_bit, done=True  # TODO: done
+                obs=build_world(), condition=condition_bit, done=done
             )
             done = False
             act, tgt = self.unravel_id(subtask_id)
