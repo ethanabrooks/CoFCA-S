@@ -4,6 +4,7 @@ from contextlib import contextmanager
 import numpy as np
 import torch
 import torch.nn.functional as F
+from gym.spaces import Box
 from torch import nn as nn
 
 from ppo.control_flow.env import Obs
@@ -50,19 +51,19 @@ class Recurrence(nn.Module):
         self.no_pointer = no_pointer
         self.no_roll = no_roll
         self.no_scan = no_scan or no_pointer  # no scan if no pointer
-        obs_spaces = Obs(**observation_space.spaces)
+        self.obs_spaces = Obs(**observation_space.spaces)
         self.action_size = 2
         self.debug = debug
         self.hidden_size = hidden_size
 
         self._evaluating = False
-        self._obs_sections = Obs(*[int(np.prod(s.shape)) for s in obs_spaces])
+        self._obs_sections = Obs(*[int(np.prod(s.shape)) for s in self.obs_spaces])
         self.eval_lines = eval_lines
         self.train_lines = self._obs_sections.lines
 
         # networks
         self.ne = num_edges
-        n_lt = int(obs_spaces.lines.nvec[0])
+        n_lt = int(self.obs_spaces.lines.nvec[0])
         n_a, n_p = map(int, action_space.nvec)
         self.n_a = n_a
         self.embed_task = nn.Embedding(n_lt, hidden_size)
