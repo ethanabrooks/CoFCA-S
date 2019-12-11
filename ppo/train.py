@@ -5,9 +5,13 @@ import os
 import re
 import sys
 import time
+from collections import Counter, defaultdict
+from pathlib import Path
+from typing import Dict
 
 import gym
 import numpy as np
+import psutil
 import torch
 from gym.wrappers import TimeLimit
 from tensorboardX import SummaryWriter
@@ -38,6 +42,7 @@ class TrainBase(abc.ABC):
         normalize,
         log_interval,
         eval_interval,
+        no_eval,
         use_gae,
         tau,
         ppo_args,
@@ -82,7 +87,21 @@ class TrainBase(abc.ABC):
             add_timestep=add_timestep,
             render=render,
             synchronous=True if render else synchronous,
-            evaluation=False)
+            evaluation=False,
+            num_processes=num_processes,
+            time_limit=time_limit,
+        )
+        self.make_eval_envs = functools.partial(
+            self.make_vec_envs,
+            **env_args,
+            seed=seed,
+            gamma=(gamma if normalize else None),
+            render=render,
+            synchronous=True if render else synchronous,
+            evaluation=True,
+            num_processes=num_processes,
+            time_limit=time_limit,
+        )
 
         self.agent = self.build_agent(envs, **agent_args)
         rollouts = RolloutStorage(
@@ -116,6 +135,7 @@ class TrainBase(abc.ABC):
             eval_steps=eval_steps,
             log_interval=log_interval,
             eval_interval=eval_interval,
+            no_eval=no_eval,
             use_tqdm=use_tqdm,
             success_reward=success_reward,
         )
@@ -135,36 +155,45 @@ class TrainBase(abc.ABC):
         eval_steps,
         log_interval,
         eval_interval,
+        no_eval,
         success_reward,
         use_tqdm,
     ):
-        if eval_interval:
+        if eval_interval and not no_eval:
             # vec_norm = get_vec_normalize(eval_envs)
             # if vec_norm is not None:
             #     vec_norm.eval()
             #     vec_norm.ob_rms = get_vec_normalize(envs).ob_rms
-            self.envs.evaluate()
-            eval_recurrent_hidden_states = torch.zeros(
-                num_processes,
-                self.agent.recurrent_hidden_state_size,
-                device=self.device,
-            )
+
+            # self.envs.evaluate()
             eval_masks = torch.zeros(num_processes, 1, device=self.device)
             eval_counter = Counter()
-            eval_result = self.run_epoch(
-                obs=self.envs.reset(),
-                rnn_hxs=eval_recurrent_hidden_states,
-                masks=eval_masks,
-                num_steps=eval_steps,
-                # max(num_steps, time_limit) if time_limit else num_steps,
-                counter=eval_counter,
-                success_reward=success_reward,
-                use_tqdm=use_tqdm,
-            )
+            envs = self.make_eval_envs()
+            envs.to(self.device)
+            with self.agent.recurrent_module.evaluating():
+                eval_recurrent_hidden_states = torch.zeros(
+                    num_processes,
+                    self.agent.recurrent_hidden_state_size,
+                    device=self.device,
+                )
+
+                eval_result = self.run_epoch(
+                    obs=envs.reset(),
+                    rnn_hxs=eval_recurrent_hidden_states,
+                    masks=eval_masks,
+                    num_steps=eval_steps,
+                    # max(num_steps, time_limit) if time_limit else num_steps,
+                    counter=eval_counter,
+                    success_reward=success_reward,
+                    use_tqdm=use_tqdm,
+                    rollouts=None,
+                    envs=envs,
+                )
+            envs.close()
             eval_result = {f"eval_{k}": v for k, v in eval_result.items()}
         else:
             eval_result = {}
-        self.envs.train()
+        # self.envs.train()
         obs = self.envs.reset()
         self.rollouts.obs[0].copy_(obs)
         tick = time.time()
@@ -189,6 +218,8 @@ class TrainBase(abc.ABC):
                 counter=self.counter,
                 success_reward=success_reward,
                 use_tqdm=False,
+                rollouts=self.rollouts,
+                envs=self.envs,
             )
             with torch.no_grad():
                 next_value = self.agent.get_value(
@@ -219,7 +250,16 @@ class TrainBase(abc.ABC):
                 )
 
     def run_epoch(
-        self, obs, rnn_hxs, masks, num_steps, counter, success_reward, use_tqdm
+        self,
+        obs,
+        rnn_hxs,
+        masks,
+        num_steps,
+        counter,
+        success_reward,
+        use_tqdm,
+        rollouts,
+        envs,
     ):
         # noinspection PyTypeChecker
         episode_counter = defaultdict(list)
@@ -231,7 +271,7 @@ class TrainBase(abc.ABC):
                 act = self.agent(inputs=obs, rnn_hxs=rnn_hxs, masks=masks)  # type: AgentValues
 
             # Observe reward and next obs
-            obs, reward, done, infos = self.envs.step(act.action)
+            obs, reward, done, infos = envs.step(act.action)
 
             for d in infos:
                 for k, v in d.items():
@@ -304,7 +344,34 @@ class TrainBase(abc.ABC):
 
         return env
 
-        envs = [functools.partial(self.make_env, rank=i, **kwargs) for i in range(num_processes)]
+    def make_vec_envs(
+        self,
+        num_processes,
+        gamma,
+        render,
+        synchronous,
+        env_id,
+        add_timestep,
+        seed,
+        evaluation,
+        time_limit,
+        num_frame_stack=None,
+        **env_args,
+    ):
+        envs = [
+            functools.partial(  # thunk
+                self.make_env,
+                rank=i,
+                env_id=env_id,
+                add_timestep=add_timestep,
+                seed=seed,
+                evaluation=evaluation,
+                time_limit=time_limit,
+                evaluating=evaluation,
+                **env_args,
+            )
+            for i in range(num_processes)
+        ]
 
         if len(envs) == 1 or sys.platform == "darwin" or synchronous:
             envs = DummyVecEnv(envs, render=render)
