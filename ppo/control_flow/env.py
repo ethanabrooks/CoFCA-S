@@ -2,6 +2,8 @@ from abc import ABC
 from collections import defaultdict, namedtuple, OrderedDict
 
 import numpy as np
+
+# import skimage.draw
 from gym.utils import seeding
 from gym.vector.utils import spaces
 from rl_utils import hierarchical_parse_args, gym
@@ -11,10 +13,12 @@ from ppo.control_flow.lines import If, Else, EndIf, While, EndWhile, Subtask, Pa
 
 Obs = namedtuple("Obs", "active lines obs")
 Last = namedtuple("Last", "action active reward terminal selected")
+State = namedtuple("State", "obs condition done")
 
 
 class Env(gym.Env, ABC):
     pairs = {If: EndIf, Else: EndIf, While: EndWhile}
+    line_types = [If, Else, EndIf, While, EndWhile, Subtask, Padding]
 
     def __init__(
         self,
@@ -309,6 +313,22 @@ class Env(gym.Env, ABC):
         )
         return [line_type] + get_lines
 
+    def line_generator(self, lines):
+        line_transitions = defaultdict(list)
+        for _from, _to in self.get_transitions(iter(enumerate(lines)), []):
+            line_transitions[_from].append(_to)
+        i = 0
+        if_evaluations = []
+        while True:
+            condition_bit = yield None if i >= len(lines) else i
+            if lines[i] is Else:
+                evaluation = not if_evaluations.pop()
+            else:
+                evaluation = bool(condition_bit)
+            if lines[i] is If:
+                if_evaluations.append(evaluation)
+            i = line_transitions[i][evaluation]
+
     def get_transitions(self, lines_iter, previous):
         while True:  # stops at StopIteration
             try:
@@ -394,20 +414,23 @@ class Env(gym.Env, ABC):
             input("pause")
 
 
+def build_parser(p):
+    p.add_argument("--min-lines", type=int, required=True)
+    p.add_argument("--max-lines", type=int, required=True)
+    p.add_argument("--num-subtasks", type=int, default=12)
+    p.add_argument("--no-op-limit", type=int)
+    p.add_argument("--flip-prob", type=float, default=0.5)
+    p.add_argument("--terminate-on-failure", action="store_true")
+    p.add_argument("--eval-condition-size", action="store_true")
+    p.add_argument("--max-nesting-depth", type=int)
+    return p
+
+
 if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--seed", default=0, type=int)
-    parser.add_argument("--min-lines", default=6, type=int)
-    parser.add_argument("--max-lines", default=6, type=int)
-    parser.add_argument("--eval-lines", type=int)
-    parser.add_argument("--time-limit", default=100, type=int)
-    parser.add_argument("--num-subtasks", default=12, type=int)
-    parser.add_argument("--max-nesting-depth", default=2, type=int)
-    parser.add_argument("--flip-prob", default=0.5, type=float)
-    parser.add_argument("--delayed-reward", action="store_true")
-    args = hierarchical_parse_args(parser)
+    args = hierarchical_parse_args(build_parser(parser))
 
     def action_fn(string):
         try:
