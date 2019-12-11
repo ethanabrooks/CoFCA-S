@@ -96,14 +96,15 @@ class Env(gym.Env, ABC):
         failing = False
         step = 0
         n = 0
-        r2 = deepcopy(self.random)
-        condition_bit = 0 if self.eval_condition_size else r2.randint(0, 2)
+        # r2 = deepcopy(self.random)
+        # condition_bit = 0 if self.eval_condition_size else r2.randint(0, 2)
         state_iterator = self.state_generator(None, self.random)
         state = next(state_iterator)
-        if state.condition != condition_bit:
-            import ipdb
-
-            ipdb.set_trace()
+        condition_bit = state.condition
+        # if state.condition != condition_bit:
+        #     import ipdb
+        #
+        #     ipdb.set_trace()
         lines = self.build_lines()
         line_iterator = self.line_generator(lines)
 
@@ -180,13 +181,11 @@ class Env(gym.Env, ABC):
                     failing = True
                     info.update(sucess_line=prev, failure_line=active)
                 step += 1
-                r2 = deepcopy(self.random)
-                condition_bit = abs(condition_bit - int(r2.rand() < self.flip_prob))
+                # r2 = deepcopy(self.random)
+                # condition_bit = abs(condition_bit - int(r2.rand() < self.flip_prob))
                 state = state_iterator.send(self.random)
-                if state.condition != condition_bit:
-                    import ipdb
-
-                    ipdb.set_trace()
+                condition_bit = state.condition
+                # if state.condition != condition_bit:
                 prev, active = active, next_subtask()
 
     @property
