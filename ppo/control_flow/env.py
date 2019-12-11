@@ -38,9 +38,10 @@ class Env(gym.Env, ABC):
     ):
         super().__init__()
         self.no_op_limit = no_op_limit
-        self.eval_condition_size = eval_condition_size
+        self._eval_condition_size = eval_condition_size
         self.max_nesting_depth = max_nesting_depth
         self.num_subtasks = num_subtasks
+
         self.terminate_on_failure = terminate_on_failure
         self.eval_lines = eval_lines
         self.min_lines = min_lines
@@ -58,6 +59,7 @@ class Env(gym.Env, ABC):
         self.iterator = None
         self._render = None
         if baseline:
+            NotImplementedError
             self.action_space = spaces.Discrete(self.num_subtasks + 1)
             n_line_types = len(self.line_types) + num_subtasks
             self.observation_space = spaces.Dict(
@@ -93,9 +95,8 @@ class Env(gym.Env, ABC):
         failing = False
         step = 0
         n = 0
-        eval_condition_size = self.eval_condition_size and self.evaluating
-        condition_bit = 0 if eval_condition_size else self.random.randint(0, 2)
-        lines = self.build_lines(eval_condition_size)
+        condition_bit = 0 if self.eval_condition_size else self.random.randint(0, 2)
+        lines = self.build_lines()
         line_iterator = self.line_generator(lines)
 
         def next_subtask(msg=condition_bit):
@@ -106,8 +107,8 @@ class Env(gym.Env, ABC):
 
         selected = 0
         prev, active = 0, next_subtask(None)
-        i = {}
-        t = False
+        info = {}
+        term = False
         while True:
 
             def line_strings(index, level):
@@ -142,19 +143,24 @@ class Env(gym.Env, ABC):
             self._render = render
 
             success = active is None
-            r = int(t) * int(not failing)
+            r = int(term) * int(not failing)
             if success:
-                i.update(success_line=len(lines))
+                info.update(success_line=len(lines))
 
-            action = yield self.get_observation(condition_bit, active, lines), r, t, i
-            t = success or (not self.evaluating and step == self.time_limit)
+            action = (
+                yield self.get_observation(condition_bit, active, lines),
+                r,
+                term,
+                info,
+            )
+            term = success or (not self.evaluating and step == self.time_limit)
 
             if self.baseline:
                 selected = None
             else:
                 action, delta = action
                 selected = (selected + delta - self.n_lines) % self.n_lines
-            i = self.get_task_info(lines) if step == 0 else {}
+            info = self.get_task_info(lines) if step == 0 else {}
 
             if action == self.num_subtasks:
                 n += 1
@@ -163,20 +169,24 @@ class Env(gym.Env, ABC):
             elif active is not None:
                 if action != lines[active].id:
                     failing = True
-                    i.update(sucess_line=prev, failure_line=active)
+                    info.update(sucess_line=prev, failure_line=active)
                 step += 1
                 condition_bit = abs(
                     condition_bit - int(self.random.rand() < self.flip_prob)
                 )
                 prev, active = active, next_subtask()
 
-    def build_lines(self, eval_condition_size):
+    @property
+    def eval_condition_size(self):
+        return self._eval_condition_size and self.evaluating
+
+    def build_lines(self):
         if self.evaluating:
             assert self.eval_lines is not None
             n_lines = self.eval_lines
         else:
             n_lines = self.random.random_integers(self.min_lines, self.max_lines)
-        if eval_condition_size:
+        if self.eval_condition_size:
             line0 = self.random.choice([While, If])
             edge_length = self.random.random_integers(
                 self.max_lines, self.eval_lines - 1
