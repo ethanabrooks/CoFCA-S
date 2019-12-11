@@ -97,8 +97,8 @@ class Env(gym.Env, ABC):
         step = 0
         n = 0
         r2 = deepcopy(self.random)
-        condition_bit = 0 if self.eval_condition_size else self.random.randint(0, 2)
-        state_iterator = self.state_generator(None, r2)
+        condition_bit = 0 if self.eval_condition_size else r2.randint(0, 2)
+        state_iterator = self.state_generator(None, self.random)
         state = next(state_iterator)
         if state.condition != condition_bit:
             import ipdb
@@ -181,10 +181,8 @@ class Env(gym.Env, ABC):
                     info.update(sucess_line=prev, failure_line=active)
                 step += 1
                 r2 = deepcopy(self.random)
-                condition_bit = abs(
-                    condition_bit - int(self.random.rand() < self.flip_prob)
-                )
-                state = state_iterator.send(r2)
+                condition_bit = abs(condition_bit - int(r2.rand() < self.flip_prob))
+                state = state_iterator.send(self.random)
                 if state.condition != condition_bit:
                     import ipdb
 
