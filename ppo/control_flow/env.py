@@ -22,18 +22,18 @@ class Env(gym.Env, ABC):
 
     def __init__(
         self,
-        seed,
         min_lines,
         max_lines,
-        eval_lines,
         flip_prob,
-        time_limit,
         terminate_on_failure,
         num_subtasks,
         max_nesting_depth,
         eval_condition_size,
         no_op_limit,
-        evaluating,
+        seed=0,
+        eval_lines=None,
+        time_limit=100,
+        evaluating=False,
         baseline=False,
     ):
         super().__init__()
