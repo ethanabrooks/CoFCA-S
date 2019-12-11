@@ -71,14 +71,7 @@ class Recurrence(nn.Module):
         self.task_encoder = nn.GRU(
             hidden_size, hidden_size, bidirectional=True, batch_first=True
         )
-        if no_pointer:
-            in_size = 3 * hidden_size
-        elif include_action:
-            in_size = 2 * hidden_size
-        else:
-            in_size = hidden_size
-        in_size += self.obs_sections.obs
-        self.gru = nn.GRUCell(in_size, hidden_size)
+        self.gru = nn.GRUCell(self.gru_in_size, hidden_size)
 
         layers = []
         for _ in range(num_layers):
@@ -101,6 +94,16 @@ class Recurrence(nn.Module):
         self._state_sizes = RecurrentState(
             a=1, a_probs=n_a, d=1, d_probs=2 * self.train_lines, p=1, v=1, h=hidden_size
         )
+
+    @property
+    def gru_in_size(self):
+        if self.no_pointer:
+            in_size = 3 * self.hidden_size
+        elif self.include_action:
+            in_size = 2 * self.hidden_size
+        else:
+            in_size = self.hidden_size
+        return in_size + self.obs_sections.obs
 
     @property
     def state_sizes(self):
