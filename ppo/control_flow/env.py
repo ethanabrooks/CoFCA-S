@@ -95,16 +95,15 @@ class Env(gym.Env, ABC):
         failing = False
         step = 0
         n = 0
-        condition_bit = 0 if self.eval_condition_size else self.random.randint(0, 2)
         lines = self.build_lines()
         line_iterator = self.line_generator(lines)
         state_iterator = self.state_generator(lines)
         state = next(state_iterator)
 
-        def next_subtask(msg=condition_bit):
+        def next_subtask(msg=state.condition):
             a = line_iterator.send(msg)
             while not (a is None or type(lines[a]) is Subtask):
-                a = line_iterator.send(condition_bit)
+                a = line_iterator.send(state.condition)
             return a
 
         selected = 0
@@ -150,7 +149,7 @@ class Env(gym.Env, ABC):
                 info.update(success_line=len(lines))
 
             action = (
-                yield self.get_observation(condition_bit, active, lines),
+                yield self.get_observation(state.obs, active, lines),
                 reward,
                 term,
                 info,
@@ -169,15 +168,14 @@ class Env(gym.Env, ABC):
                 if (not self.evaluating) and self.no_op_limit and n == self.no_op_limit:
                     failing = True
             elif active is not None:
+                step += 1
                 if action != lines[active].id:
                     # TODO: this should only be evaluated when done
                     failing = True
                     info.update(sucess_line=prev, failure_line=active)
-                step += 1
-                condition_bit = abs(
-                    condition_bit - int(self.random.rand() < self.flip_prob)
-                )
-                prev, active = active, next_subtask()
+                state = state_iterator.send(action)
+                if state.done:
+                    prev, active = active, next_subtask()
 
     @property
     def eval_condition_size(self):
