@@ -1,5 +1,6 @@
 from abc import ABC
 from collections import defaultdict, namedtuple, OrderedDict
+from copy import deepcopy
 
 import numpy as np
 
@@ -95,11 +96,16 @@ class Env(gym.Env, ABC):
         failing = False
         step = 0
         n = 0
+        r2 = deepcopy(self.random)
         condition_bit = 0 if self.eval_condition_size else self.random.randint(0, 2)
+        state_iterator = self.state_generator(None, r2)
+        state = next(state_iterator)
+        if state.condition != condition_bit:
+            import ipdb
+
+            ipdb.set_trace()
         lines = self.build_lines()
         line_iterator = self.line_generator(lines)
-        state_iterator = self.state_generator(lines)
-        state = next(state_iterator)
 
         def next_subtask(msg=condition_bit):
             a = line_iterator.send(msg)
@@ -174,9 +180,15 @@ class Env(gym.Env, ABC):
                     failing = True
                     info.update(sucess_line=prev, failure_line=active)
                 step += 1
+                r2 = deepcopy(self.random)
                 condition_bit = abs(
                     condition_bit - int(self.random.rand() < self.flip_prob)
                 )
+                state = state_iterator.send(r2)
+                if state.condition != condition_bit:
+                    import ipdb
+
+                    ipdb.set_trace()
                 prev, active = active, next_subtask()
 
     @property
@@ -368,13 +380,11 @@ class Env(gym.Env, ABC):
                 yield current, prev  # True: EndWhile -> While
                 return
 
-    def state_generator(self, lines) -> State:
-        condition_bit = 0 if self.eval_condition_size else self.random.randint(0, 2)
+    def state_generator(self, lines, r) -> State:
+        condition_bit = 0 if self.eval_condition_size else r.randint(0, 2)
         while True:
             yield State(obs=condition_bit, condition=condition_bit, done=True)
-            condition_bit = abs(
-                condition_bit - int(self.random.rand() < self.flip_prob)
-            )
+            condition_bit = abs(condition_bit - int(r.rand() < self.flip_prob))
 
     def get_observation(self, obs, active, lines):
         padded = lines + [Padding] * (self.n_lines - len(lines))
