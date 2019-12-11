@@ -24,7 +24,7 @@ class Env(gym.Env, ABC):
         eval_lines,
         flip_prob,
         time_limit,
-        delayed_reward,
+        terminate_on_failure,
         num_subtasks,
         max_nesting_depth,
         eval_condition_size,
@@ -37,7 +37,7 @@ class Env(gym.Env, ABC):
         self.eval_condition_size = eval_condition_size
         self.max_nesting_depth = max_nesting_depth
         self.num_subtasks = num_subtasks
-        self.delayed_reward = delayed_reward
+        self.terminate_on_failure = terminate_on_failure
         self.eval_lines = eval_lines
         self.min_lines = min_lines
         self.max_lines = max_lines
@@ -190,7 +190,7 @@ class Env(gym.Env, ABC):
             if action != self.lines[self.active].id:
                 i.update(failure_line=current_line, success_line=current_line - 1)
                 self.failing = True
-                if not self.delayed_reward:
+                if self.terminate_on_failure:
                     t = True
             self.condition_bit = abs(
                 self.condition_bit - int(self.random.rand() < self.flip_prob)
