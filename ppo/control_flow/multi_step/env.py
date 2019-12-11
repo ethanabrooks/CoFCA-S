@@ -22,9 +22,9 @@ class Env(ppo.control_flow.env.Env):
             self.world_size,
             self.world_size,
         )
-        self.observation_space.spaces.update(
-            obs=spaces.Box(low=0, high=1, shape=self.world_shape)
-        )
+        # self.observation_space.spaces.update(
+        #     obs=spaces.Box(low=0, high=1, shape=self.world_shape)
+        # )
 
     def print_obs(self, obs):
         condition = obs[-1].mean()
@@ -80,7 +80,7 @@ class Env(ppo.control_flow.env.Env):
         done = False
         while True:
             subtask_id = yield State(
-                obs=build_world(), condition=condition_bit, done=True  # TODO: done
+                obs=condition_bit, condition=condition_bit, done=True  # TODO: done
             )
             done = False
             act, tgt = self.unravel_id(subtask_id)
