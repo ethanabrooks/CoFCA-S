@@ -92,7 +92,7 @@ class Recurrence(nn.Module):
             layers.extend([init_(nn.Linear(in_size, hidden_size)), activation])
             in_size = hidden_size
         out_size = self.ne * n_p if self.no_scan else self.ne
-        self.mlp2 = nn.Sequential(*layers, init_(nn.Linear(in_size, out_size)))
+        self.beta = nn.Sequential(*layers, init_(nn.Linear(in_size, out_size)))
 
         self.stuff = init_(nn.Linear(hidden_size, 1))
         self.critic = init_(nn.Linear(hidden_size, 1))
@@ -173,10 +173,10 @@ class Recurrence(nn.Module):
         G, H = self.task_encoder(rolled)
         H = H.transpose(0, 1).reshape(nl, N, -1)
         if self.no_scan:
-            P = self.mlp2(H).view(nl, N, nl * 2, self.ne).softmax(2)
+            P = self.beta(H).view(nl, N, nl * 2, self.ne).softmax(2)
         else:
             G = G.view(nl, N, nl, 2, self.hidden_size)
-            B = self.mlp2(G)
+            B = self.beta(G)
             # arange = 0.05 * torch.zeros(15).float()
             # arange[0] = 1
             # B[:, :, :, 0] = arange.view(1, 1, -1, 1)
