@@ -96,22 +96,15 @@ class Env(gym.Env, ABC):
         failing = False
         step = 0
         n = 0
-        # r2 = deepcopy(self.random)
-        # condition_bit = 0 if self.eval_condition_size else r2.randint(0, 2)
         state_iterator = self.state_generator(None, self.random)
         state = next(state_iterator)
-        condition_bit = state.condition
-        # if state.condition != condition_bit:
-        #     import ipdb
-        #
-        #     ipdb.set_trace()
         lines = self.build_lines()
         line_iterator = self.line_generator(lines)
 
-        def next_subtask(msg=condition_bit):
+        def next_subtask(msg=state.condition):
             a = line_iterator.send(msg)
             while not (a is None or type(lines[a]) is Subtask):
-                a = line_iterator.send(condition_bit)
+                a = line_iterator.send(state.condition)
             return a
 
         selected = 0
@@ -146,7 +139,7 @@ class Env(gym.Env, ABC):
             def render():
                 for i, string in enumerate(line_strings(index=0, level=1)):
                     print(f"{i}{string}")
-                print("Condition:", condition_bit)
+                print("Condition:", state.condition)
                 print("Failing:", failing)
 
             self._render = render
@@ -157,7 +150,7 @@ class Env(gym.Env, ABC):
                 info.update(success_line=len(lines))
 
             action = (
-                yield self.get_observation(condition_bit, active, lines),
+                yield self.get_observation(state.condition, active, lines),
                 reward,
                 term,
                 info,
@@ -181,11 +174,7 @@ class Env(gym.Env, ABC):
                     failing = True
                     info.update(sucess_line=prev, failure_line=active)
                 step += 1
-                # r2 = deepcopy(self.random)
-                # condition_bit = abs(condition_bit - int(r2.rand() < self.flip_prob))
                 state = state_iterator.send(self.random)
-                condition_bit = state.condition
-                # if state.condition != condition_bit:
                 prev, active = active, next_subtask()
 
     @property
