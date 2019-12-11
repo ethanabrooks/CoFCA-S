@@ -104,7 +104,8 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
                 old = torch.zeros_like(new).scatter(1, old.unsqueeze(1), 1)
                 return FixedCategorical(probs=gate * new + (1 - gate) * old)
 
-            a_dist = gate(self.a_gate(z), self.actor(z).probs, A[t - 1])
+            # a_dist = gate(self.a_gate(z), self.actor(z).probs, A[t - 1])
+            a_dist = self.actor(z)
             self.sample_new(A[t], a_dist)
             u = self.upsilon(z).softmax(dim=-1)
             self.print("o", torch.round(10 * u))

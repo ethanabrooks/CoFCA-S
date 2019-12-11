@@ -4,7 +4,6 @@ from contextlib import contextmanager
 import numpy as np
 import torch
 import torch.nn.functional as F
-from gym.spaces import Box
 from torch import nn as nn
 
 from ppo.control_flow.env import Obs
