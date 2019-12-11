@@ -213,7 +213,8 @@ class Recurrence(nn.Module):
 
         for t in range(T):
             self.print("p", p)
-            x = [inputs.obs[t], H.sum(0) if self.no_pointer else M[R, p]]
+            obs = inputs.obs[t]
+            x = [obs, H.sum(0) if self.no_pointer else M[R, p]]
             if self.no_pointer or self.include_action:
                 x += [self.embed_action(A[t - 1].clone())]
             h = self.gru(torch.cat(x, dim=-1), h)
@@ -222,11 +223,11 @@ class Recurrence(nn.Module):
             self.sample_new(A[t], a_dist)
             u = self.upsilon(z).softmax(dim=-1)
             self.print("o", torch.round(10 * u))
-            g = P[p, R]
-            half1 = g.size(1) // 2
-            self.print(torch.round(10 * g)[0, half1:])
-            self.print(torch.round(10 * g)[0, :half1])
-            p_dist = FixedCategorical(probs=((g @ u.unsqueeze(-1)).squeeze(-1)))
+            w = P[p, R]
+            half1 = w.size(1) // 2
+            self.print(torch.round(10 * w)[0, half1:])
+            self.print(torch.round(10 * w)[0, :half1])
+            p_dist = FixedCategorical(probs=((w @ u.unsqueeze(-1)).squeeze(-1)))
             # p_probs = torch.round(p_dist.probs * 10).flatten()
             self.sample_new(D[t], p_dist)
             p = p + D[t].clone() - nl
