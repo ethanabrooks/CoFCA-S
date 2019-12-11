@@ -143,13 +143,13 @@ class Env(gym.Env, ABC):
             self._render = render
 
             success = active is None
-            r = int(term) * int(not failing)
+            reward = int(term) * int(not failing)
             if success:
                 info.update(success_line=len(lines))
 
             action = (
                 yield self.get_observation(condition_bit, active, lines),
-                r,
+                reward,
                 term,
                 info,
             )
@@ -158,7 +158,7 @@ class Env(gym.Env, ABC):
             if self.baseline:
                 selected = None
             else:
-                action, delta = action
+                action, delta = map(int, action)
                 selected = (selected + delta - self.n_lines) % self.n_lines
             info = self.get_task_info(lines) if step == 0 else {}
 
@@ -168,6 +168,7 @@ class Env(gym.Env, ABC):
                     failing = True
             elif active is not None:
                 if action != lines[active].id:
+                    # TODO: this should only be evaluated when done
                     failing = True
                     info.update(sucess_line=prev, failure_line=active)
                 step += 1
@@ -202,6 +203,72 @@ class Env(gym.Env, ABC):
             for line in lines
         ]
         return lines
+
+    def build_task_image(self, lines):
+        image = np.zeros(self.image_shape)
+        points = np.round(
+            (self.image_size - 1) * self.random.random((len(lines) + 1, 2))
+        ).astype(int)
+
+        def draw_circle(p, d):
+            r, c = skimage.draw.circle(*p, 2)
+            r = np.minimum(r, self.image_size - 1)
+            c = np.minimum(c, self.image_size - 1)
+            image[d, r, c] = 1
+
+        draw_circle(points[0], d=-2)  # mark start
+        for point, line in zip(points, lines):
+            depth = 2 + min(self.line_to_int(line), self.num_subtasks)
+            draw_circle(point, d=depth)
+        draw_circle(points[-1], d=-1)  # mark end
+
+        np.set_printoptions(threshold=10000, linewidth=100000)
+        for bit in (0, 1):
+
+            def edges():
+                line_iterator = self.line_generator(lines)
+                curr = next(line_iterator)
+                while True:
+                    prev, curr = curr, line_iterator.send(bit)
+                    if curr is None:
+                        yield prev, len(lines)
+                        return
+                    yield prev, curr
+                    if bit and lines[prev] is EndWhile:
+                        assert lines[curr] is While
+                        for _ in range(2):
+                            curr = line_iterator.send(False)  # prevent forever loop
+                            if curr is None:
+                                return
+
+            for n, (_from, _to) in enumerate(edges()):
+                rr, cc, val = skimage.draw.line_aa(*points[_from], *points[_to])
+                image[bit, rr, cc] = val * np.linspace(0.1, 1, val.size)
+
+        from PIL import Image
+        from matplotlib import cm
+
+        n = image[2:].shape[0]
+        grade = np.linspace(0.1, 1, n).reshape((n, 1, 1))
+        myarray = (grade * image[2:]).sum(0)
+        im = Image.fromarray(np.uint8(cm.gist_gray(myarray) * 255))
+        im.save("/tmp/nodes.png")
+
+        myarray = image[0]
+        im = Image.fromarray(np.uint8(cm.gist_gray(myarray) * 255))
+        im.save("/tmp/false.png")
+        myarray = image[1]
+        im = Image.fromarray(np.uint8(cm.gist_gray(myarray) * 255))
+        im.save("/tmp/truth.png")
+
+        return image
+
+    def line_to_int(self, line):
+        return (
+            line.id
+            if type(line) is Subtask
+            else self.num_subtasks + self.line_types.index(line)
+        )
 
     def get_lines(
         self, n, active_conditions, last=None, nesting_depth=0, max_nesting_depth=None
@@ -253,7 +320,7 @@ class Env(gym.Env, ABC):
         i = 0
         if_evaluations = []
         while True:
-            condition_bit = yield (None if i >= len(lines) else i)
+            condition_bit = yield None if i >= len(lines) else i
             if lines[i] is Else:
                 evaluation = not if_evaluations.pop()
             else:
@@ -317,6 +384,10 @@ class Env(gym.Env, ABC):
         if not self.evaluating:
             assert self.observation_space.contains(obs)
         return obs
+
+    @staticmethod
+    def print_obs(obs):
+        print(obs)
 
     def get_task_info(self, lines):
         num_if = lines.count(If)
