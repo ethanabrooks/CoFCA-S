@@ -98,6 +98,8 @@ class Env(gym.Env, ABC):
         condition_bit = 0 if self.eval_condition_size else self.random.randint(0, 2)
         lines = self.build_lines()
         line_iterator = self.line_generator(lines)
+        state_iterator = self.state_generator(lines)
+        state = next(state_iterator)
 
         def next_subtask(msg=condition_bit):
             a = line_iterator.send(msg)
@@ -366,16 +368,20 @@ class Env(gym.Env, ABC):
                 yield current, prev  # True: EndWhile -> While
                 return
 
-    def get_observation(self, condition_bit, active, lines):
+    def state_generator(self, lines) -> State:
+        condition_bit = 0 if self.eval_condition_size else self.random.randint(0, 2)
+        while True:
+            yield State(obs=condition_bit, condition=condition_bit, done=True)
+            condition_bit = abs(
+                condition_bit - int(self.random.rand() < self.flip_prob)
+            )
+
+    def get_observation(self, obs, active, lines):
         padded = lines + [Padding] * (self.n_lines - len(lines))
-        lines = [
-            t.id if type(t) is Subtask else self.num_subtasks + self.line_types.index(t)
-            for t in padded
-        ]
+        lines = [self.line_to_int(p) for p in padded]
+
         obs = Obs(
-            obs=condition_bit,
-            lines=lines,
-            active=self.n_lines if active is None else active,
+            obs=obs, lines=lines, active=self.n_lines if active is None else active
         )
         if self.baseline:
             obs = OrderedDict(obs=obs.obs, lines=self.eye[obs.lines].flatten())
