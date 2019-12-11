@@ -71,17 +71,17 @@ class Recurrence(nn.Module):
         self.task_encoder = nn.GRU(
             hidden_size, hidden_size, bidirectional=True, batch_first=True
         )
-        self.obs_is_image = type(self.obs_spaces.obs) is Box
-        if self.obs_is_image:
-            self.conv = self.build_conv(
-                in_channels=self.obs_spaces.obs.shape[0],
-                channels=[hidden_size, hidden_size, hidden_size],
-                kernel_sizes=[3, 3, 3],
-                # kernel_sizes=[8, 4, 3],
-                strides=[1, 2, 2],
-                # strides=[4, 2, 1],
-                paddings=[1, 1, 1],
-            )
+        # self.obs_is_image = type(self.obs_spaces.obs) is Box
+        # if self.obs_is_image:
+        #     self.conv = self.build_conv(
+        #         in_channels=self.obs_spaces.obs.shape[0],
+        #         channels=[hidden_size, hidden_size, hidden_size],
+        #         kernel_sizes=[3, 3, 3],
+        #         # kernel_sizes=[8, 4, 3],
+        #         strides=[1, 2, 2],
+        #         # strides=[4, 2, 1],
+        #         paddings=[1, 1, 1],
+        #     )
 
         if no_pointer:
             in_size = 3 * hidden_size
@@ -89,10 +89,7 @@ class Recurrence(nn.Module):
             in_size = 2 * hidden_size
         else:
             in_size = hidden_size
-        if self.obs_is_image:
-            in_size += hidden_size
-        else:
-            in_size += self.obs_sections.obs
+        in_size += self.obs_sections.obs
         self.gru = nn.GRUCell(in_size, hidden_size)
 
         layers = []
@@ -211,10 +208,10 @@ class Recurrence(nn.Module):
 
         # parse non-action inputs
         inputs = self.parse_inputs(inputs)
-        if self.obs_is_image:
-            inputs = inputs._replace(
-                obs=inputs.obs.view(T, N, *self.obs_spaces.obs.shape)
-            )
+        # if self.obs_is_image:
+        #     inputs = inputs._replace(
+        #         obs=inputs.obs.view(T, N, *self.obs_spaces.obs.shape)
+        #     )
 
         # build memory
         lines = inputs.lines.view(T, N, self.obs_sections.lines).long()[0, :, :]
@@ -269,8 +266,8 @@ class Recurrence(nn.Module):
         for t in range(T):
             self.print("w", w)
             obs = inputs.obs[t]
-            if self.obs_is_image:
-                obs = self.conv(obs).view(N, -1)
+            # if self.obs_is_image:
+            #     obs = self.conv(obs).view(N, -1)
             x = [obs, H.sum(0) if self.no_pointer else M[R, w]]
             if self.no_pointer or self.include_action:
                 x += [self.embed_action(A[t - 1].clone())]
