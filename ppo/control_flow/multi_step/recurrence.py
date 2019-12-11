@@ -29,7 +29,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             in_size = 2 * self.hidden_size
         else:
             in_size = self.hidden_size
-        return in_size + self.hidden_size
+        return in_size + self.obs_sections.obs
 
     def inner_loop(self, inputs, rnn_hxs):
         T, N, dim = inputs.shape
@@ -39,7 +39,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
 
         # parse non-action inputs
         inputs = self.parse_inputs(inputs)
-        inputs = inputs._replace(obs=inputs.obs.view(T, N, *self.obs_spaces.obs.shape))
+        # inputs = inputs._replace(obs=inputs.obs.view(T, N, *self.obs_spaces.obs.shape))
 
         # build memory
         lines = inputs.lines.view(T, N, self.obs_sections.lines).long()[0, :, :]
@@ -94,8 +94,8 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
 
         for t in range(T):
             self.print("p", p)
-            obs = self.conv(inputs.obs[t]).view(N, -1)
-            x = [obs, H.sum(0) if self.no_pointer else M[R, p]]
+            # obs = self.conv(inputs.obs[t]).view(N, -1)
+            x = [inputs.obs[t], H.sum(0) if self.no_pointer else M[R, p]]
             if self.no_pointer or self.include_action:
                 x += [self.embed_action(A[t - 1].clone())]
             h = self.gru(torch.cat(x, dim=-1), h)
