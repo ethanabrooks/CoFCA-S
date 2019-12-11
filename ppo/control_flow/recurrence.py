@@ -11,7 +11,7 @@ from ppo.control_flow.env import Obs
 from ppo.distributions import Categorical, FixedCategorical
 from ppo.utils import init_
 
-RecurrentState = namedtuple("RecurrentState", "a d p v h a_probs p_probs")
+RecurrentState = namedtuple("RecurrentState", "a d p v h a_probs d_probs")
 
 
 def batch_conv1d(inputs, weights):
@@ -99,14 +99,14 @@ class Recurrence(nn.Module):
         self.actor = Categorical(hidden_size, n_a)
         self.attention = Categorical(hidden_size, n_a)
         self._state_sizes = RecurrentState(
-            a=1, a_probs=n_a, d=1, p_probs=2 * self.train_lines, p=1, v=1, h=hidden_size
+            a=1, a_probs=n_a, d=1, d_probs=2 * self.train_lines, p=1, v=1, h=hidden_size
         )
 
     @property
     def state_sizes(self):
         if self.no_scan:
             return self._state_sizes
-        return self._state_sizes._replace(p_probs=2 * self.n_lines)
+        return self._state_sizes._replace(d_probs=2 * self.n_lines)
 
     @property
     def obs_sections(self):
@@ -227,10 +227,10 @@ class Recurrence(nn.Module):
             half1 = w.size(1) // 2
             self.print(torch.round(10 * w)[0, half1:])
             self.print(torch.round(10 * w)[0, :half1])
-            p_dist = FixedCategorical(probs=((w @ u.unsqueeze(-1)).squeeze(-1)))
+            d_dist = FixedCategorical(probs=((w @ u.unsqueeze(-1)).squeeze(-1)))
             # p_probs = torch.round(p_dist.probs * 10).flatten()
-            self.sample_new(D[t], p_dist)
-            half = p_dist.probs.size(-1) // 2 if self.no_scan else nl
+            self.sample_new(D[t], d_dist)
+            half = d_dist.probs.size(-1) // 2
             p = p + D[t].clone() - half
             p = torch.clamp(p, min=0, max=nl - 1)
             yield RecurrentState(
@@ -240,5 +240,5 @@ class Recurrence(nn.Module):
                 p=p,
                 a_probs=a_dist.probs,
                 d=D[t],
-                p_probs=p_dist.probs,
+                d_probs=d_dist.probs,
             )
