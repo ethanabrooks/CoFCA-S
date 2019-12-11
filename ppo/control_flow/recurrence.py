@@ -83,8 +83,8 @@ class Recurrence(nn.Module):
         layers = []
         for _ in range(num_layers):
             layers.extend([init_(nn.Linear(hidden_size, hidden_size)), activation])
-        self.mlp = nn.Sequential(*layers)
-        self.option = init_(nn.Linear(hidden_size, self.ne))
+        self.zeta = nn.Sequential(*layers)
+        self.upsilon = init_(nn.Linear(hidden_size, self.ne))
 
         layers = []
         in_size = (2 if self.no_scan else 1) * hidden_size
@@ -151,9 +151,9 @@ class Recurrence(nn.Module):
             print(*args, **kwargs)
 
     def inner_loop(self, inputs, rnn_hxs):
-        T, N, D = inputs.shape
+        T, N, dim = inputs.shape
         inputs, actions = torch.split(
-            inputs.detach(), [D - self.action_size, self.action_size], dim=2
+            inputs.detach(), [dim - self.action_size, self.action_size], dim=2
         )
 
         # parse non-action inputs
@@ -207,7 +207,7 @@ class Recurrence(nn.Module):
         a[new_episode] = 0
         R = torch.arange(N, device=rnn_hxs.device)
         A = torch.cat([actions[:, :, 0], hx.a.view(1, N)], dim=0).long()
-        W = torch.cat([actions[:, :, 1], hx.p.view(1, N)], dim=0).long()
+        D = torch.cat([actions[:, :, 1], hx.p.view(1, N)], dim=0).long()
 
         for t in range(T):
             self.print("w", w)
@@ -215,20 +215,20 @@ class Recurrence(nn.Module):
             if self.no_pointer or self.include_action:
                 x += [self.embed_action(A[t - 1].clone())]
             h = self.gru(torch.cat(x, dim=-1), h)
-            z = F.relu(self.mlp(h))
+            z = F.relu(self.zeta(h))
             a_dist = self.actor(z)
             self.sample_new(A[t], a_dist)
-            o = self.option(z).softmax(dim=-1)
-            self.print("o", torch.round(10 * o))
+            u = self.upsilon(z).softmax(dim=-1)
+            self.print("o", torch.round(10 * u))
             g = P[w, R]
             half1 = g.size(1) // 2
             self.print(torch.round(10 * g)[0, half1:])
             self.print(torch.round(10 * g)[0, :half1])
-            p = (g @ o.unsqueeze(-1)).squeeze(-1)
+            p = (g @ u.unsqueeze(-1)).squeeze(-1)
             p_dist = FixedCategorical(probs=p)
             # p_probs = torch.round(p_dist.probs * 10).flatten()
-            self.sample_new(W[t], p_dist)
-            w = w + W[t].clone() - nl
+            self.sample_new(D[t], p_dist)
+            w = w + D[t].clone() - nl
             w = torch.clamp(w, min=0, max=nl - 1)
             yield RecurrentState(
                 a=A[t],
@@ -236,6 +236,6 @@ class Recurrence(nn.Module):
                 h=h,
                 w=w,
                 a_probs=a_dist.probs,
-                p=W[t],
+                p=D[t],
                 p_probs=p_dist.probs,
             )
