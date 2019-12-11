@@ -176,6 +176,8 @@ class Recurrence(nn.Module):
         rolled = torch.cat(rolled, dim=0)
         G, H = self.task_encoder(rolled)
         H = H.transpose(0, 1).reshape(nl, N, -1)
+        last = torch.zeros(nl, N, 2 * nl, self.ne, device=rnn_hxs.device)
+        last[:, :, -1] = 1
         if self.no_scan:
             P = self.beta(H).view(nl, N, -1, self.ne).softmax(2)
         else:
@@ -188,8 +190,6 @@ class Recurrence(nn.Module):
             f, b = torch.unbind(B.sigmoid(), dim=3)
             B = torch.stack([f, b.flip(2)], dim=-2)
             B = B.view(nl, N, 2 * nl, self.ne)
-            last = torch.zeros_like(B)
-            last[:, :, -1] = 1
             zero_last = (1 - last) * B
             B = zero_last + last  # this ensures that the last B is 1
             rolled = torch.roll(zero_last, shifts=1, dims=2)

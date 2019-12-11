@@ -88,6 +88,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         a = hx.a.long().squeeze(-1)
         a[new_episode] = 0
         R = torch.arange(N, device=rnn_hxs.device)
+        Z = torch.zeros_like(R)
         A = torch.cat([actions[:, :, 0], hx.a.view(1, N)], dim=0).long()
         D = torch.cat([actions[:, :, 1], hx.d.view(1, N)], dim=0).long()
 
@@ -112,9 +113,8 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             half1 = w.size(1) // 2
             self.print(torch.round(10 * w)[0, half1:])
             self.print(torch.round(10 * w)[0, :half1])
-            d_dist = gate(
-                self.d_gate(z), ((w @ u.unsqueeze(-1)).squeeze(-1)), torch.zeros_like(R)
-            )
+            d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
+            d_dist = gate(self.d_gate(z), d_probs, Z)
             # p_probs = torch.round(p_dist.probs * 10).flatten()
             self.sample_new(D[t], d_dist)
             half = d_dist.probs.size(-1) // 2
