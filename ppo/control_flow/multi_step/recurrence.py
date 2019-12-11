@@ -11,7 +11,7 @@ from ppo.control_flow.env import Obs
 from ppo.distributions import Categorical, FixedCategorical
 from ppo.utils import init_
 
-RecurrentState = namedtuple("RecurrentState", "a d p v h a_probs p_probs")
+RecurrentState = namedtuple("RecurrentState", "a d p v h a_probs d_probs")
 
 
 def batch_conv1d(inputs, weights):
@@ -71,25 +71,13 @@ class Recurrence(nn.Module):
         self.task_encoder = nn.GRU(
             hidden_size, hidden_size, bidirectional=True, batch_first=True
         )
-        self.obs_is_image = type(self.obs_spaces.obs) is Box
-        if self.obs_is_image:
-            d = self.obs_spaces.obs.shape[0]
-            self.conv = nn.Sequential(
-                nn.BatchNorm2d(d),
-                nn.Conv2d(d, hidden_size, kernel_size=3, padding=1),
-                nn.MaxPool2d(self.obs_spaces.obs.shape[1:]),
-                nn.ReLU(),
-            )
         if no_pointer:
             in_size = 3 * hidden_size
         elif include_action:
             in_size = 2 * hidden_size
         else:
             in_size = hidden_size
-        if self.obs_is_image:
-            in_size += hidden_size
-        else:
-            in_size += self.obs_sections.obs
+        in_size += self.obs_sections.obs
         self.gru = nn.GRUCell(in_size, hidden_size)
 
         layers = []
@@ -97,8 +85,6 @@ class Recurrence(nn.Module):
             layers.extend([init_(nn.Linear(hidden_size, hidden_size)), activation])
         self.zeta = nn.Sequential(*layers)
         self.upsilon = init_(nn.Linear(hidden_size, self.ne))
-        self.p_gate = nn.Sequential(init_(nn.Linear(hidden_size, 1)), nn.Sigmoid())
-        self.a_gate = nn.Sequential(init_(nn.Linear(hidden_size, 1)), nn.Sigmoid())
 
         layers = []
         in_size = (2 if self.no_scan else 1) * hidden_size
@@ -113,50 +99,14 @@ class Recurrence(nn.Module):
         self.actor = Categorical(hidden_size, n_a)
         self.attention = Categorical(hidden_size, n_a)
         self._state_sizes = RecurrentState(
-            a=1, a_probs=n_a, d=1, p_probs=2 * self.train_lines, p=1, v=1, h=hidden_size
+            a=1, a_probs=n_a, d=1, d_probs=2 * self.train_lines, p=1, v=1, h=hidden_size
         )
-
-    # from https://github.com/astooke/rlpyt/blob/75e96cda433626868fd2a30058be67b99bbad810/rlpyt/models/conv2d.py#L10
-    def build_conv(
-        self,
-        in_channels,
-        channels,
-        kernel_sizes,
-        strides,
-        paddings=None,
-        nonlinearity=torch.nn.ReLU,  # Module, not Functional.
-        use_maxpool=False,  # if True: convs use stride 1, maxpool downsample.
-    ):
-        if paddings is None:
-            paddings = [0 for _ in range(len(channels))]
-        assert len(channels) == len(kernel_sizes) == len(strides) == len(paddings)
-        in_channels = [in_channels] + channels[:-1]
-        ones = [1 for _ in range(len(strides))]
-        if use_maxpool:
-            maxp_strides = strides
-            strides = ones
-        else:
-            maxp_strides = ones
-        conv_layers = [
-            torch.nn.Conv2d(
-                in_channels=ic, out_channels=oc, kernel_size=k, stride=s, padding=p
-            )
-            for (ic, oc, k, s, p) in zip(
-                in_channels, channels, kernel_sizes, strides, paddings
-            )
-        ]
-        sequence = []
-        for conv_layer, maxp_stride in zip(conv_layers, maxp_strides):
-            sequence.extend([conv_layer, nonlinearity()])
-            if maxp_stride > 1:
-                sequence.append(torch.nn.MaxPool2d(maxp_stride))  # No padding.
-        return nn.Sequential(*sequence)
 
     @property
     def state_sizes(self):
         if self.no_scan:
             return self._state_sizes
-        return self._state_sizes._replace(p_probs=2 * self.n_lines)
+        return self._state_sizes._replace(d_probs=2 * self.n_lines)
 
     @property
     def obs_sections(self):
@@ -210,10 +160,6 @@ class Recurrence(nn.Module):
 
         # parse non-action inputs
         inputs = self.parse_inputs(inputs)
-        if self.obs_is_image:
-            inputs = inputs._replace(
-                obs=inputs.obs.view(T, N, *self.obs_spaces.obs.shape)
-            )
 
         # build memory
         lines = inputs.lines.view(T, N, self.obs_sections.lines).long()[0, :, :]
@@ -268,19 +214,12 @@ class Recurrence(nn.Module):
         for t in range(T):
             self.print("p", p)
             obs = inputs.obs[t]
-            if self.obs_is_image:
-                obs = self.conv(obs).view(N, -1)
             x = [obs, H.sum(0) if self.no_pointer else M[R, p]]
             if self.no_pointer or self.include_action:
                 x += [self.embed_action(A[t - 1].clone())]
             h = self.gru(torch.cat(x, dim=-1), h)
             z = F.relu(self.zeta(h))
-
-            def gate(gate, new, old):
-                old = torch.zeros_like(new).scatter(1, old.unsqueeze(1), 1)
-                return FixedCategorical(probs=gate * new + (1 - gate) * old)
-
-            a_dist = gate(self.a_gate(z), self.actor(z).probs, A[t - 1])
+            a_dist = self.actor(z)
             self.sample_new(A[t], a_dist)
             u = self.upsilon(z).softmax(dim=-1)
             self.print("o", torch.round(10 * u))
@@ -288,11 +227,10 @@ class Recurrence(nn.Module):
             half1 = w.size(1) // 2
             self.print(torch.round(10 * w)[0, half1:])
             self.print(torch.round(10 * w)[0, :half1])
-            d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
-            p_dist = gate(self.p_gate(z), d_probs, torch.zeros_like(R))
+            d_dist = FixedCategorical(probs=((w @ u.unsqueeze(-1)).squeeze(-1)))
             # p_probs = torch.round(p_dist.probs * 10).flatten()
-            self.sample_new(D[t], p_dist)
-            half = p_dist.probs.size(-1) // 2 if self.no_scan else nl
+            self.sample_new(D[t], d_dist)
+            half = d_dist.probs.size(-1) // 2
             p = p + D[t].clone() - half
             p = torch.clamp(p, min=0, max=nl - 1)
             yield RecurrentState(
@@ -302,5 +240,5 @@ class Recurrence(nn.Module):
                 p=p,
                 a_probs=a_dist.probs,
                 d=D[t],
-                p_probs=p_dist.probs,
+                d_probs=d_dist.probs,
             )
