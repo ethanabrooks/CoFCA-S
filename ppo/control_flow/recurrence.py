@@ -85,8 +85,6 @@ class Recurrence(nn.Module):
             layers.extend([init_(nn.Linear(hidden_size, hidden_size)), activation])
         self.zeta = nn.Sequential(*layers)
         self.upsilon = init_(nn.Linear(hidden_size, self.ne))
-        self.p_gate = nn.Sequential(init_(nn.Linear(hidden_size, 1)), nn.Sigmoid())
-        self.a_gate = nn.Sequential(init_(nn.Linear(hidden_size, 1)), nn.Sigmoid())
 
         layers = []
         in_size = (2 if self.no_scan else 1) * hidden_size
@@ -103,42 +101,6 @@ class Recurrence(nn.Module):
         self._state_sizes = RecurrentState(
             a=1, a_probs=n_a, d=1, p_probs=2 * self.train_lines, p=1, v=1, h=hidden_size
         )
-
-    # from https://github.com/astooke/rlpyt/blob/75e96cda433626868fd2a30058be67b99bbad810/rlpyt/models/conv2d.py#L10
-    def build_conv(
-        self,
-        in_channels,
-        channels,
-        kernel_sizes,
-        strides,
-        paddings=None,
-        nonlinearity=torch.nn.ReLU,  # Module, not Functional.
-        use_maxpool=False,  # if True: convs use stride 1, maxpool downsample.
-    ):
-        if paddings is None:
-            paddings = [0 for _ in range(len(channels))]
-        assert len(channels) == len(kernel_sizes) == len(strides) == len(paddings)
-        in_channels = [in_channels] + channels[:-1]
-        ones = [1 for _ in range(len(strides))]
-        if use_maxpool:
-            maxp_strides = strides
-            strides = ones
-        else:
-            maxp_strides = ones
-        conv_layers = [
-            torch.nn.Conv2d(
-                in_channels=ic, out_channels=oc, kernel_size=k, stride=s, padding=p
-            )
-            for (ic, oc, k, s, p) in zip(
-                in_channels, channels, kernel_sizes, strides, paddings
-            )
-        ]
-        sequence = []
-        for conv_layer, maxp_stride in zip(conv_layers, maxp_strides):
-            sequence.extend([conv_layer, nonlinearity()])
-            if maxp_stride > 1:
-                sequence.append(torch.nn.MaxPool2d(maxp_stride))  # No padding.
-        return nn.Sequential(*sequence)
 
     @property
     def state_sizes(self):
@@ -265,8 +227,7 @@ class Recurrence(nn.Module):
             half1 = w.size(1) // 2
             self.print(torch.round(10 * w)[0, half1:])
             self.print(torch.round(10 * w)[0, :half1])
-            d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
-            p_dist = FixedCategorical(probs=d_probs)
+            p_dist = FixedCategorical(probs=((w @ u.unsqueeze(-1)).squeeze(-1)))
             # p_probs = torch.round(p_dist.probs * 10).flatten()
             self.sample_new(D[t], p_dist)
             half = p_dist.probs.size(-1) // 2 if self.no_scan else nl
