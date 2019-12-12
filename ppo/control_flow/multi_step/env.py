@@ -5,7 +5,7 @@ from rl_utils import hierarchical_parse_args
 import ppo.control_flow.env
 from ppo import keyboard_control
 from ppo.control_flow.env import build_parser, State
-from ppo.control_flow.lines import Subtask, While, EndWhile
+from ppo.control_flow.lines import While, EndWhile, Subtask
 
 
 class Env(ppo.control_flow.env.Env):
@@ -26,6 +26,10 @@ class Env(ppo.control_flow.env.Env):
             obs=spaces.Box(low=0, high=1, shape=self.world_shape)
         )
 
+    def subtask_str(self, subtask: Subtask):
+        i, o = self.unravel_id(subtask.id)
+        return f"Subtask {subtask.id}: {self.interactions[i]} {self.targets[o]}"
+
     def print_obs(self, obs):
         condition = obs[-1].mean()
         obs = obs[:-1].transpose(1, 2, 0).astype(int)
@@ -44,9 +48,11 @@ class Env(ppo.control_flow.env.Env):
     def state_generator(self, lines) -> State:
         assert self.max_nesting_depth == 1
         objects = self.targets + self.non_targets
-        ice = objects.index("ice")
         agent_pos = self.random.randint(0, self.world_size, size=2)
-        agent_id = objects.index("agent")
+        ice = objects.index("ice")
+        agent = objects.index("agent")
+        state_iterator = super().state_generator(lines)
+        state = next(state_iterator)
 
         def assign_positions(bit):
             line_iterator = self.line_generator(lines)
@@ -69,32 +75,26 @@ class Env(ppo.control_flow.env.Env):
 
         def build_world():
             world = np.zeros(self.world_shape)
-            for o, p in positions + [(agent_id, agent_pos)]:
+            for o, p in positions + [(agent, agent_pos)]:
                 world[tuple((o, *p))] = 1
-            world[-1] = condition_bit
+            world[-1] = state.condition
             return world
 
-        condition_iterator = super().state_generator(lines)
         positions = list(assign_positions(True)) + list(assign_positions(False))
-        condition_bit = next(condition_iterator).condition
-        done = False
         while True:
-            subtask_id = yield State(
-                obs=build_world(), condition=condition_bit, done=done
-            )
-            done = False
-            act, tgt = self.unravel_id(subtask_id)
-            pair = tgt, tuple(agent_pos)
+            subtask_id = yield state._replace(obs=build_world())
+            ac, ob = self.unravel_id(subtask_id)
+            pair = ob, tuple(agent_pos)
             if pair in positions:  # standing on the desired object
-                if self.interactions[act] == "pickup":
+                if self.interactions[ac] == "pickup":
                     positions.remove(pair)
-                elif self.interactions[act] == "transform":
+                elif self.interactions[ac] == "transform":
                     positions.remove(pair)
                     positions.append((ice, tuple(agent_pos)))
-                condition_bit, _, _ = next(condition_iterator)
-                done = True
+                if subtask_id == lines[state.curr].id:
+                    state = next(state_iterator)
             else:
-                candidates = [np.array(p) for o, p in positions if o == tgt]
+                candidates = [np.array(p) for o, p in positions if o == ob]
                 if candidates:
                     nearest = min(candidates, key=lambda k: np.sum(agent_pos - k))
                     agent_pos += np.clip(nearest - agent_pos, -1, 1)
