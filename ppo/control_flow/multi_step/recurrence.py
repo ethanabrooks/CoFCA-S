@@ -94,8 +94,8 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
 
         for t in range(T):
             self.print("p", p)
-            # obs = self.conv(inputs.obs[t]).view(N, -1)
-            x = [inputs.obs[t], H.sum(0) if self.no_pointer else M[R, p]]
+            obs = self.conv(inputs.obs[t]).view(N, -1)
+            x = [obs, H.sum(0) if self.no_pointer else M[R, p]]
             if self.no_pointer or self.include_action:
                 x += [self.embed_action(A[t - 1].clone())]
             h = self.gru(torch.cat(x, dim=-1), h)
