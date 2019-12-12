@@ -131,7 +131,7 @@ class Env(gym.Env, ABC):
                     pre = "  "
                 indent = pre * level
                 if type(line) is Subtask:
-                    yield f"{indent}Subtask {line.id}"
+                    yield f"{indent}{self.subtask_str(line)}"
                 else:
                     yield f"{indent}{line.__name__}"
                 if line in [If, While, Else]:

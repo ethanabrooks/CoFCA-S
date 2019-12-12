@@ -5,7 +5,7 @@ from rl_utils import hierarchical_parse_args
 import ppo.control_flow.env
 from ppo import keyboard_control
 from ppo.control_flow.env import build_parser, State
-from ppo.control_flow.lines import Subtask, While, EndWhile
+from ppo.control_flow.lines import While, EndWhile, Subtask
 
 
 class Env(ppo.control_flow.env.Env):

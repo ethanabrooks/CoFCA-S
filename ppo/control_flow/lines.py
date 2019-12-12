@@ -19,7 +19,7 @@ class EndWhile:
 
 
 class Subtask:
-    def __init__(self, id):
+    def __init__(self, id: int):
         self.id = id
 
 

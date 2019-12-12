@@ -18,7 +18,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         #     nn.MaxPool2d(self.obs_spaces.obs.shape[1:]),
         #     nn.ReLU(),
         # )
-        # self.p_gate = nn.Sequential(init_(nn.Linear(hidden_size, 1)), nn.Sigmoid())
+        # self.d_gate = nn.Sequential(init_(nn.Linear(hidden_size, 1)), nn.Sigmoid())
         # self.a_gate = nn.Sequential(init_(nn.Linear(hidden_size, 1)), nn.Sigmoid())
 
     @property
@@ -39,6 +39,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
 
         # parse non-action inputs
         inputs = self.parse_inputs(inputs)
+        # inputs = inputs._replace(obs=inputs.obs.view(T, N, *self.obs_spaces.obs.shape))
 
         # build memory
         lines = inputs.lines.view(T, N, self.obs_sections.lines).long()[0, :, :]
@@ -87,13 +88,14 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         a = hx.a.long().squeeze(-1)
         a[new_episode] = 0
         R = torch.arange(N, device=rnn_hxs.device)
+        Z = torch.zeros_like(R)
         A = torch.cat([actions[:, :, 0], hx.a.view(1, N)], dim=0).long()
         D = torch.cat([actions[:, :, 1], hx.d.view(1, N)], dim=0).long()
 
         for t in range(T):
             self.print("p", p)
-            obs = inputs.obs[t]
-            x = [obs, H.sum(0) if self.no_pointer else M[R, p]]
+            # obs = self.conv(inputs.obs[t]).view(N, -1)
+            x = [inputs.obs[t], H.sum(0) if self.no_pointer else M[R, p]]
             if self.no_pointer or self.include_action:
                 x += [self.embed_action(A[t - 1].clone())]
             h = self.gru(torch.cat(x, dim=-1), h)
