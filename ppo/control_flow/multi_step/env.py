@@ -52,6 +52,8 @@ class Env(ppo.control_flow.env.Env):
         ice = objects.index("ice")
         agent_pos = self.random.randint(0, self.world_size, size=2)
         agent_id = objects.index("agent")
+        state_iterator = super().state_generator(lines)
+        state = next(state_iterator)
 
         def assign_positions(bit):
             line_iterator = self.line_generator(lines)
@@ -72,16 +74,15 @@ class Env(ppo.control_flow.env.Env):
                         if curr is None:
                             return
 
-        def build_world():
+        def build_world(condition_bit):
             world = np.zeros(self.world_shape)
             for o, p in positions + [(agent_id, agent_pos)]:
                 world[tuple((o, *p))] = 1
             world[-1] = condition_bit
             return world
 
-        state_iterator = super().state_generator(lines)
         positions = list(assign_positions(True)) + list(assign_positions(False))
-        for state in state_iterator:
+        while True:
             subtask_id = yield state._replace(obs=state.obs * np.ones((1, 1, 1)))
             ac, ob = self.unravel_id(subtask_id)
             pair = ob, tuple(agent_pos)
@@ -91,6 +92,7 @@ class Env(ppo.control_flow.env.Env):
                 elif self.interactions[ac] == "transform":
                     positions.remove(pair)
                     positions.append((ice, tuple(agent_pos)))
+                state = next(state_iterator)
             else:
                 candidates = [np.array(p) for o, p in positions if o == ob]
                 if candidates:
