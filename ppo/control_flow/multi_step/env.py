@@ -41,6 +41,7 @@ class Env(ppo.control_flow.env.Env):
             print("-" * len(string))
         print("Condition:", condition)
 
+    """
     def state_generator(self, lines) -> State:
         assert self.max_nesting_depth == 1
         objects = self.targets + self.non_targets
@@ -98,6 +99,7 @@ class Env(ppo.control_flow.env.Env):
                 if candidates:
                     nearest = min(candidates, key=lambda k: np.sum(agent_pos - k))
                     agent_pos += np.clip(nearest - agent_pos, -1, 1)
+    """
 
     def unravel_id(self, subtask_id):
         i = subtask_id // len(self.targets)
