@@ -1,4 +1,3 @@
-import itertools
 from abc import ABC
 from collections import defaultdict, namedtuple, OrderedDict
 
@@ -38,7 +37,6 @@ class Env(gym.Env, ABC):
         baseline=False,
     ):
         super().__init__()
-        self.terminate_on_failure = terminate_on_failure
         self.no_op_limit = no_op_limit
         self._eval_condition_size = eval_condition_size
         self.max_nesting_depth = max_nesting_depth
@@ -81,6 +79,7 @@ class Env(gym.Env, ABC):
                     lines=spaces.MultiDiscrete(
                         np.array([len(self.line_types) + num_subtasks] * self.n_lines)
                     ),
+                    active=spaces.Discrete(self.n_lines + 1),
                 )
             )
 
@@ -278,7 +277,6 @@ class Env(gym.Env, ABC):
             return []
         if n == len(active_conditions):
             lines = [self.pairs[c] for c in reversed(active_conditions)]
-            # noinspection PyTypeChecker
             return lines + [Subtask for _ in range(n - len(lines))]
         elif n == 1:
             return [Subtask]
