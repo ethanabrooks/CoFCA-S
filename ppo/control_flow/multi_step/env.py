@@ -48,11 +48,9 @@ class Env(ppo.control_flow.env.Env):
     def state_generator(self, lines) -> State:
         assert self.max_nesting_depth == 1
         objects = self.targets + self.non_targets
-        agent_pos = self.random.randint(0, self.world_size, size=2)
         ice = objects.index("ice")
-        agent = objects.index("agent")
-        state_iterator = super().state_generator(lines)
-        state = next(state_iterator)
+        agent_pos = self.random.randint(0, self.world_size, size=2)
+        agent_id = objects.index("agent")
 
         def assign_positions(bit):
             line_iterator = self.line_generator(lines)
@@ -73,14 +71,16 @@ class Env(ppo.control_flow.env.Env):
                         if curr is None:
                             return
 
-        def build_world():
+        def build_world(condition_bit):
             world = np.zeros(self.world_shape)
-            for o, p in positions + [(agent, agent_pos)]:
+            for o, p in positions + [(agent_id, agent_pos)]:
                 world[tuple((o, *p))] = 1
-            world[-1] = state.condition
+            world[-1] = condition_bit
             return world
 
+        state_iterator = super().state_generator(lines)
         positions = list(assign_positions(True)) + list(assign_positions(False))
+        state = next(state_iterator)
         while True:
             subtask_id = yield state._replace(obs=build_world())
             ac, ob = self.unravel_id(subtask_id)
