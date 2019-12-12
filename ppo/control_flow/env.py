@@ -282,10 +282,10 @@ class Env(gym.Env, ABC):
             return [Subtask]
         line_types = [Subtask]
         enough_space = n > len(active_conditions) + 2
-        # if enough_space and (
-        # max_nesting_depth is None or nesting_depth < max_nesting_depth
-        # ):
-        # line_types += [If, While]
+        if enough_space and (
+            max_nesting_depth is None or nesting_depth < max_nesting_depth
+        ):
+            line_types += [If, While]
         if active_conditions and last is Subtask:
             last_condition = active_conditions[-1]
             if last_condition is If:
