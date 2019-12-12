@@ -27,6 +27,10 @@ class Env(ppo.control_flow.env.Env):
             obs=spaces.Box(low=0, high=1, shape=self.world_shape)
         )
 
+    def subtask_str(self, subtask: Subtask):
+        i, o = self.unravel_id(subtask.id)
+        return f"Subtask {subtask.id}: {self.interactions[i]} {self.targets[o]}"
+
     def print_obs(self, obs):
         condition = obs[-1].mean()
         obs = obs[:-1].transpose(1, 2, 0).astype(int)
@@ -90,18 +94,18 @@ class Env(ppo.control_flow.env.Env):
                 obs=condition_bit, condition=condition_bit, done=True  # TODO: done
             )
             done = False
-            act, tgt = self.unravel_id(subtask_id)
-            pair = tgt, tuple(agent_pos)
+            ac, ob = self.unravel_id(subtask_id)
+            pair = ob, tuple(agent_pos)
             if pair in positions:  # standing on the desired object
-                if self.interactions[act] == "pickup":
+                if self.interactions[ac] == "pickup":
                     positions.remove(pair)
-                elif self.interactions[act] == "transform":
+                elif self.interactions[ac] == "transform":
                     positions.remove(pair)
                     positions.append((ice, tuple(agent_pos)))
                 condition_bit, _, _ = next(condition_iterator)
                 done = True
             else:
-                candidates = [np.array(p) for o, p in positions if o == tgt]
+                candidates = [np.array(p) for o, p in positions if o == ob]
                 if candidates:
                     nearest = min(candidates, key=lambda k: np.sum(agent_pos - k))
                     agent_pos += np.clip(nearest - agent_pos, -1, 1)
