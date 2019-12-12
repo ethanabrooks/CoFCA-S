@@ -171,6 +171,10 @@ class Env(gym.Env, ABC):
                     info.update(sucess_line=state.prev, failure_line=state.curr)
                 state = state_iterator.send(action)
 
+    @staticmethod
+    def subtask_str(subtask: Subtask):
+        return f"Subtask {subtask.id}"
+
     @property
     def eval_condition_size(self):
         return self._eval_condition_size and self.evaluating
