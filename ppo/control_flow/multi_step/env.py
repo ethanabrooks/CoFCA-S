@@ -18,13 +18,14 @@ class Env(ppo.control_flow.env.Env):
         super().__init__(num_subtasks=num_subtasks, **kwargs)
         self.world_size = world_size
         self.world_shape = (
-            len(self.targets + self.non_targets) + 1,  # last channel for condition
+            # TODO: len(self.targets + self.non_targets) + 1,  # last channel for condition
+            1,
             self.world_size,
             self.world_size,
         )
-        # self.observation_space.spaces.update(
-        #     obs=spaces.Box(low=0, high=1, shape=self.world_shape)
-        # )
+        self.observation_space.spaces.update(
+            obs=spaces.Box(low=0, high=1, shape=self.world_shape)
+        )
 
     def print_obs(self, obs):
         condition = obs[-1].mean()
@@ -40,6 +41,11 @@ class Env(ppo.control_flow.env.Env):
             print(string)
             print("-" * len(string))
         print("Condition:", condition)
+
+    def state_generator(self, lines) -> State:
+        state_iterator = super().state_generator(lines)
+        for state in state_iterator:
+            yield state._replace(obs=state.obs * np.ones((1, 1, 1)))
 
     """
     def state_generator(self, lines) -> State:
