@@ -11,6 +11,7 @@ from typing import Dict
 
 import gym
 import numpy as np
+import psutil
 import torch
 from gym.wrappers import TimeLimit
 from tensorboardX import SummaryWriter
@@ -192,6 +193,7 @@ class TrainBase(abc.ABC):
                     rollouts=None,
                     envs=envs,
                 )
+            envs.close()
             eval_result = {f"eval_{k}": v for k, v in eval_result.items()}
         else:
             eval_result = {}
