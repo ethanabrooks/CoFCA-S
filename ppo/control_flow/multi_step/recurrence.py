@@ -18,7 +18,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             nn.MaxPool2d(self.obs_spaces.obs.shape[1:]),
             nn.ReLU(),
         )
-        self.p_gate = nn.Sequential(init_(nn.Linear(hidden_size, 1)), nn.Sigmoid())
+        self.d_gate = nn.Sequential(init_(nn.Linear(hidden_size, 1)), nn.Sigmoid())
         self.a_gate = nn.Sequential(init_(nn.Linear(hidden_size, 1)), nn.Sigmoid())
 
     @property
@@ -54,6 +54,8 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         rolled = torch.cat(rolled, dim=0)
         G, H = self.task_encoder(rolled)
         H = H.transpose(0, 1).reshape(nl, N, -1)
+        last = torch.zeros(nl, N, 2 * nl, self.ne, device=rnn_hxs.device)
+        last[:, :, -1] = 1
         if self.no_scan:
             P = self.beta(H).view(nl, N, -1, self.ne).softmax(2)
         else:
@@ -66,8 +68,6 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             f, b = torch.unbind(B.sigmoid(), dim=3)
             B = torch.stack([f, b.flip(2)], dim=-2)
             B = B.view(nl, N, 2 * nl, self.ne)
-            last = torch.zeros_like(B)
-            last[:, :, -1] = 1
             zero_last = (1 - last) * B
             B = zero_last + last  # this ensures that the last B is 1
             rolled = torch.roll(zero_last, shifts=1, dims=2)
@@ -100,13 +100,12 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
                 x += [self.embed_action(A[t - 1].clone())]
             h = self.gru(torch.cat(x, dim=-1), h)
             z = F.relu(self.zeta(h))
+            a_dist = self.actor(z)
 
             def gate(gate, new, old):
                 old = torch.zeros_like(new).scatter(1, old.unsqueeze(1), 1)
                 return FixedCategorical(probs=gate * new + (1 - gate) * old)
 
-            # a_dist = gate(self.a_gate(z), self.actor(z).probs, A[t - 1])
-            a_dist = self.actor(z)
             self.sample_new(A[t], a_dist)
             u = self.upsilon(z).softmax(dim=-1)
             self.print("o", torch.round(10 * u))
