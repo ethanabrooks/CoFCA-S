@@ -11,15 +11,15 @@ from ppo.control_flow.recurrence import RecurrentState
 class Recurrence(ppo.control_flow.recurrence.Recurrence):
     def __init__(self, hidden_size, **kwargs):
         super().__init__(hidden_size=hidden_size, **kwargs)
-        # d = self.obs_spaces.obs.shape[0]
-        # self.conv = nn.Sequential(
-        #     nn.BatchNorm2d(d),
-        #     nn.Conv2d(d, hidden_size, kernel_size=3, padding=1),
-        #     nn.MaxPool2d(self.obs_spaces.obs.shape[1:]),
-        #     nn.ReLU(),
-        # )
-        # self.d_gate = nn.Sequential(init_(nn.Linear(hidden_size, 1)), nn.Sigmoid())
-        # self.a_gate = nn.Sequential(init_(nn.Linear(hidden_size, 1)), nn.Sigmoid())
+        d = self.obs_spaces.obs.shape[0]
+        self.conv = nn.Sequential(
+            nn.BatchNorm2d(d),
+            nn.Conv2d(d, hidden_size, kernel_size=3, padding=1),
+            nn.MaxPool2d(self.obs_spaces.obs.shape[1:]),
+            nn.ReLU(),
+        )
+        self.d_gate = nn.Sequential(init_(nn.Linear(hidden_size, 1)), nn.Sigmoid())
+        self.a_gate = nn.Sequential(init_(nn.Linear(hidden_size, 1)), nn.Sigmoid())
 
     @property
     def gru_in_size(self):
