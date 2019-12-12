@@ -13,7 +13,7 @@ from ppo.control_flow.lines import If, Else, EndIf, While, EndWhile, Subtask, Pa
 
 Obs = namedtuple("Obs", "active lines obs")
 Last = namedtuple("Last", "action active reward terminal selected")
-State = namedtuple("State", "obs condition done")
+State = namedtuple("State", "obs condition prev curr")
 
 
 class Env(gym.Env, ABC):
@@ -96,23 +96,15 @@ class Env(gym.Env, ABC):
         step = 0
         n = 0
         lines = self.build_lines()
-        line_iterator = self.line_generator(lines)
         state_iterator = self.state_generator(lines)
         state = next(state_iterator)
 
-        def next_subtask(msg=state.condition):
-            a = line_iterator.send(msg)
-            while not (a is None or type(lines[a]) is Subtask):
-                a = line_iterator.send(state.condition)
-            return a
-
         selected = 0
-        prev, active = 0, next_subtask(None)
         info = {}
         term = False
         action = None
         while True:
-            success = active is None
+            success = state.curr is None
             reward = int(term) * int(not failing)
 
             def line_strings(index, level):
@@ -121,11 +113,11 @@ class Env(gym.Env, ABC):
                 line = lines[index]
                 if line in [Else, EndIf, EndWhile]:
                     level -= 1
-                if index == active and index == selected:
+                if index == state.curr and index == selected:
                     pre = "+ "
                 elif index == selected:
                     pre = "- "
-                elif index == active:
+                elif index == state.curr:
                     pre = "| "
                 else:
                     pre = "  "
@@ -153,7 +145,7 @@ class Env(gym.Env, ABC):
                 info.update(success_line=len(lines))
 
             action = (
-                yield self.get_observation(state.obs, active, lines),
+                yield self.get_observation(state.obs, state.curr, lines),
                 reward,
                 term,
                 info,
@@ -171,15 +163,13 @@ class Env(gym.Env, ABC):
                 n += 1
                 if (not self.evaluating) and self.no_op_limit and n == self.no_op_limit:
                     failing = True
-            elif active is not None:
+            elif state.curr is not None:
                 step += 1
-                if action != lines[active].id:
+                if action != lines[state.curr].id:
                     # TODO: this should only be evaluated when done
                     failing = True
-                    info.update(sucess_line=prev, failure_line=active)
+                    info.update(sucess_line=state.prev, failure_line=state.curr)
                 state = state_iterator.send(action)
-                if state.done:
-                    prev, active = active, next_subtask()
 
     @property
     def eval_condition_size(self):
@@ -374,12 +364,24 @@ class Env(gym.Env, ABC):
                 return
 
     def state_generator(self, lines) -> State:
+        line_iterator = self.line_generator(lines)
         condition_bit = 0 if self.eval_condition_size else self.random.randint(0, 2)
+
+        def next_subtask(msg=condition_bit):
+            a = line_iterator.send(msg)
+            while not (a is None or type(lines[a]) is Subtask):
+                a = line_iterator.send(condition_bit)
+            return a
+
+        prev, curr = 0, next_subtask(None)
         while True:
-            yield State(obs=condition_bit, condition=condition_bit, done=True)
+            yield State(
+                obs=condition_bit, condition=condition_bit, prev=prev, curr=curr
+            )
             condition_bit = abs(
                 condition_bit - int(self.random.rand() < self.flip_prob)
             )
+            prev, curr = curr, next_subtask()
 
     def get_observation(self, obs, active, lines):
         padded = lines + [Padding] * (self.n_lines - len(lines))
