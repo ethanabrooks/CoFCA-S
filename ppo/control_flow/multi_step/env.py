@@ -50,7 +50,7 @@ class Env(ppo.control_flow.env.Env):
         assert self.max_nesting_depth == 1
         objects = self.targets + self.non_targets
         ice = objects.index("ice")
-        agent_pos = np.zeros(2)  # TODO: self.random.randint(0, self.world_size, size=2)
+        agent_pos = self.random.randint(0, self.world_size, size=2)
         agent_id = objects.index("agent")
 
         def assign_positions(bit):
@@ -59,8 +59,7 @@ class Env(ppo.control_flow.env.Env):
             while True:
                 if type(lines[curr]) is Subtask:
                     _, o = self.unravel_id(lines[curr].id)
-                    p = np.zeros(2)
-                    # TODO: self.random.randint(0, self.world_size, size=2)
+                    p = self.random.randint(0, self.world_size, size=2)
                     yield o, tuple(p)
                 prev, curr = curr, line_iterator.send(bit)
                 if curr is None:
@@ -82,8 +81,6 @@ class Env(ppo.control_flow.env.Env):
 
         state_iterator = super().state_generator(lines)
         positions = list(assign_positions(True)) + list(assign_positions(False))
-        # condition_iterator = super().state_generator(lines)
-        # condition_bit = next(condition_iterator).condition
         for state in state_iterator:
             subtask_id = yield state._replace(obs=state.obs * np.ones((1, 1, 1)))
             ac, ob = self.unravel_id(subtask_id)
@@ -94,7 +91,6 @@ class Env(ppo.control_flow.env.Env):
                 elif self.interactions[ac] == "transform":
                     positions.remove(pair)
                     positions.append((ice, tuple(agent_pos)))
-                # condition_bit, _, _ = next(condition_iterator)
             else:
                 candidates = [np.array(p) for o, p in positions if o == ob]
                 if candidates:
