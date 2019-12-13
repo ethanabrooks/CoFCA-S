@@ -82,7 +82,7 @@ class Env(ppo.control_flow.env.Env):
         positions = list(assign_positions(True)) + list(assign_positions(False))
         state = next(state_iterator)
         while True:
-            subtask_id = yield state._replace(obs=build_world())
+            subtask_id = yield state._replace(obs=build_world(state.condition))
             ac, ob = self.unravel_id(subtask_id)
             pair = ob, tuple(agent_pos)
             if pair in positions:  # standing on the desired object
