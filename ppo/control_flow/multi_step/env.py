@@ -86,19 +86,22 @@ class Env(ppo.control_flow.env.Env):
             subtask_id = yield state._replace(obs=state.obs * np.ones((1, 1, 1)))
             ac, ob = self.unravel_id(subtask_id)
             pair = ob, tuple(agent_pos)
+            correct_id = subtask_id == lines[state.curr].id
             if pair in positions:  # standing on the desired object
                 if self.interactions[ac] == "pickup":
                     positions.remove(pair)
                 elif self.interactions[ac] == "transform":
                     positions.remove(pair)
                     positions.append((ice, tuple(agent_pos)))
-                if subtask_id == lines[state.curr].id:
+                if correct_id:
                     state = next(state_iterator)
             else:
                 candidates = [np.array(p) for o, p in positions if o == ob]
                 if candidates:
                     nearest = min(candidates, key=lambda k: np.sum(agent_pos - k))
                     agent_pos += np.clip(nearest - agent_pos, -1, 1)
+                elif correct_id:
+                    state = next(state_iterator)
 
     def unravel_id(self, subtask_id):
         i = subtask_id // len(self.targets)
