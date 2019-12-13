@@ -53,50 +53,33 @@ class Env(ppo.control_flow.env.Env):
         agent_pos = self.random.randint(0, self.world_size, size=2)
         agent_id = objects.index("agent")
 
-        def assign_positions(bit):
-            line_iterator = self.line_generator(lines)
-            prev, curr = 0, next(line_iterator)
-            while True:
-                if type(lines[curr]) is Subtask:
-                    _, o = self.unravel_id(lines[curr].id)
-                    p = self.random.randint(0, self.world_size, size=2)
-                    yield o, tuple(p)
-                prev, curr = curr, line_iterator.send(bit)
-                if curr is None:
-                    return
-                if bit and lines[prev] is EndWhile:
-                    assert lines[curr] is While
-                    for _ in range(2):
-                        # prevent forever loop
-                        prev, curr = curr, line_iterator.send(False)
-                        if curr is None:
-                            return
-
         def build_world(condition_bit):
             world = np.zeros(self.world_shape)
-            for o, p in positions + [(agent_id, agent_pos)]:
+            for o, p in object_pos + [(agent_id, agent_pos)]:
                 world[tuple((o, *p))] = 1
             world[-1] = condition_bit
             return world
 
         state_iterator = super().state_generator(lines)
-        positions = list(assign_positions(True)) + list(assign_positions(False))
+        ids = [self.unravel_id(line.id) for line in lines if type(line) is Subtask]
+        positions = self.random.randint(0, self.world_size, size=(len(ids), 2))
+        object_pos = [(o, tuple(pos)) for (i, o), pos in zip(ids, positions)]
         state = next(state_iterator)
         while True:
             subtask_id = yield state._replace(obs=state.obs * np.ones((1, 1, 1)))
             ac, ob = self.unravel_id(subtask_id)
             pair = ob, tuple(agent_pos)
             correct_id = subtask_id == lines[state.curr].id
-            if pair in positions:  # standing on the desired object
+            if pair in object_pos:  # standing on the desired object
                 if self.interactions[ac] == "pickup":
-                    positions.remove(pair)
+                    object_pos.remove(pair)
                 elif self.interactions[ac] == "transform":
-                    positions.remove(pair)
-                    positions.append((ice, tuple(agent_pos)))
+                    object_pos.remove(pair)
+                    object_pos.append((ice, tuple(agent_pos)))
                 if correct_id:
                     state = next(state_iterator)
             else:
-                candidates = [np.array(p) for o, p in positions if o == ob]
+                candidates = [np.array(p) for o, p in object_pos if o == ob]
                 if candidates:
                     nearest = min(candidates, key=lambda k: np.sum(agent_pos - k))
                     agent_pos += np.clip(nearest - agent_pos, -1, 1)
