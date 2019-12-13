@@ -24,12 +24,12 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
     @property
     def gru_in_size(self):
         if self.no_pointer:
-            in_size = 3 * self.hidden_size
-        elif self.include_action:
             in_size = 2 * self.hidden_size
-        else:
+        elif self.include_action:
             in_size = self.hidden_size
-        return in_size + self.obs_sections.obs
+        else:
+            in_size = 0
+        return in_size + self.encoder_hidden_size + self.obs_sections.obs
 
     def inner_loop(self, inputs, rnn_hxs):
         T, N, dim = inputs.shape
@@ -44,7 +44,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         # build memory
         lines = inputs.lines.view(T, N, self.obs_sections.lines).long()[0, :, :]
         M = self.embed_task(lines.view(-1)).view(
-            *lines.shape, self.hidden_size
+            *lines.shape, self.encoder_hidden_size
         )  # n_batch, n_lines, hidden_size
 
         rolled = []
@@ -59,7 +59,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         if self.no_scan:
             P = self.beta(H).view(nl, N, -1, self.ne).softmax(2)
         else:
-            G = G.view(nl, N, nl, 2, self.hidden_size)
+            G = G.view(nl, N, nl, 2, self.encoder_hidden_size)
             B = self.beta(G)
             # arange = 0.05 * torch.zeros(15).float()
             # arange[0] = 1

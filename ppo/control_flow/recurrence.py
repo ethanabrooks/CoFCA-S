@@ -36,6 +36,7 @@ class Recurrence(nn.Module):
         eval_lines,
         activation,
         hidden_size,
+        encoder_hidden_size,
         num_layers,
         num_edges,
         num_encoding_layers,
@@ -54,6 +55,7 @@ class Recurrence(nn.Module):
         self.action_size = 2
         self.debug = debug
         self.hidden_size = hidden_size
+        self.encoder_hidden_size = encoder_hidden_size
 
         self._evaluating = False
         self._obs_sections = Obs(*[int(np.prod(s.shape)) for s in self.obs_spaces])
@@ -65,10 +67,13 @@ class Recurrence(nn.Module):
         n_lt = int(self.obs_spaces.lines.nvec[0])
         n_a, n_p = map(int, action_space.nvec)
         self.n_a = n_a
-        self.embed_task = nn.Embedding(n_lt, hidden_size)
+        self.embed_task = nn.Embedding(n_lt, encoder_hidden_size)
         self.embed_action = nn.Embedding(n_a, hidden_size)
         self.task_encoder = nn.GRU(
-            hidden_size, hidden_size, bidirectional=True, batch_first=True
+            encoder_hidden_size,
+            encoder_hidden_size,
+            bidirectional=True,
+            batch_first=True,
         )
         self.gru = nn.GRUCell(self.gru_in_size, hidden_size)
 
@@ -79,10 +84,10 @@ class Recurrence(nn.Module):
         self.upsilon = init_(nn.Linear(hidden_size, self.ne))
 
         layers = []
-        in_size = (2 if self.no_scan else 1) * hidden_size
+        in_size = (2 if self.no_scan else 1) * encoder_hidden_size
         for _ in range(num_encoding_layers - 1):
-            layers.extend([init_(nn.Linear(in_size, hidden_size)), activation])
-            in_size = hidden_size
+            layers.extend([init_(nn.Linear(in_size, encoder_hidden_size)), activation])
+            in_size = encoder_hidden_size
         out_size = self.ne * 2 * self.train_lines if self.no_scan else self.ne
         self.beta = nn.Sequential(*layers, init_(nn.Linear(in_size, out_size)))
 
@@ -97,12 +102,12 @@ class Recurrence(nn.Module):
     @property
     def gru_in_size(self):
         if self.no_pointer:
-            in_size = 3 * self.hidden_size
-        elif self.include_action:
             in_size = 2 * self.hidden_size
-        else:
+        elif self.include_action:
             in_size = self.hidden_size
-        return in_size + self.obs_sections.obs
+        else:
+            in_size = 0
+        return in_size + self.encoder_hidden_size + self.obs_sections.obs
 
     @property
     def state_sizes(self):
@@ -166,7 +171,7 @@ class Recurrence(nn.Module):
         # build memory
         lines = inputs.lines.view(T, N, self.obs_sections.lines).long()[0, :, :]
         M = self.embed_task(lines.view(-1)).view(
-            *lines.shape, self.hidden_size
+            *lines.shape, self.encoder_hidden_size
         )  # n_batch, n_lines, hidden_size
 
         rolled = []
@@ -181,7 +186,7 @@ class Recurrence(nn.Module):
         if self.no_scan:
             P = self.beta(H).view(nl, N, -1, self.ne).softmax(2)
         else:
-            G = G.view(nl, N, nl, 2, self.hidden_size)
+            G = G.view(nl, N, nl, 2, self.encoder_hidden_size)
             B = self.beta(G)
             # arange = 0.05 * torch.zeros(15).float()
             # arange[0] = 1
