@@ -20,15 +20,15 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         )
         self.gate = nn.Sequential(init_(nn.Linear(hidden_size, 1)), nn.Sigmoid())
 
-    @property
-    def gru_in_size(self):
-        if self.no_pointer:
-            in_size = 3 * self.hidden_size
-        elif self.include_action:
-            in_size = 2 * self.hidden_size
-        else:
-            in_size = self.hidden_size
-        return in_size + self.obs_sections.obs
+    # @property
+    # def gru_in_size(self):
+    # if self.no_pointer:
+    # in_size = 3 * self.hidden_size
+    # elif self.include_action:
+    # in_size = 2 * self.hidden_size
+    # else:
+    # in_size = self.hidden_size
+    # return in_size + self.obs_sections.obs
 
     def inner_loop(self, inputs, rnn_hxs):
         T, N, dim = inputs.shape
@@ -43,7 +43,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         # build memory
         lines = inputs.lines.view(T, N, self.obs_sections.lines).long()[0, :, :]
         M = self.embed_task(lines.view(-1)).view(
-            *lines.shape, self.hidden_size
+            *lines.shape, self.encoder_hidden_size
         )  # n_batch, n_lines, hidden_size
 
         rolled = []
@@ -58,7 +58,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         if self.no_scan:
             P = self.beta(H).view(nl, N, -1, self.ne).softmax(2)
         else:
-            G = G.view(nl, N, nl, 2, self.hidden_size)
+            G = G.view(nl, N, nl, 2, self.encoder_hidden_size)
             B = self.beta(G)
             # arange = 0.05 * torch.zeros(15).float()
             # arange[0] = 1
@@ -99,13 +99,12 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
                 x += [self.embed_action(A[t - 1].clone())]
             h = self.gru(torch.cat(x, dim=-1), h)
             z = F.relu(self.zeta(h))
-            g = self.gate(z)
+            a_dist = self.actor(z)
 
-            def gate(new, old):
+            def gate(gate, new, old):
                 old = torch.zeros_like(new).scatter(1, old.unsqueeze(1), 1)
-                return FixedCategorical(probs=g * new + (1 - g) * old)
+                return FixedCategorical(probs=gate * new + (1 - gate) * old)
 
-            a_dist = gate(self.actor(z).probs, A[t - 1])
             self.sample_new(A[t], a_dist)
             u = self.upsilon(z).softmax(dim=-1)
             self.print("o", torch.round(10 * u))
@@ -113,8 +112,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             half1 = w.size(1) // 2
             self.print(torch.round(10 * w)[0, half1:])
             self.print(torch.round(10 * w)[0, :half1])
-            d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
-            d_dist = gate(d_probs, Z)
+            d_dist = FixedCategorical(probs=((w @ u.unsqueeze(-1)).squeeze(-1)))
             # p_probs = torch.round(p_dist.probs * 10).flatten()
             self.sample_new(D[t], d_dist)
             half = d_dist.probs.size(-1) // 2
