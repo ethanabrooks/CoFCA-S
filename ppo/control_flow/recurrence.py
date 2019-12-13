@@ -45,8 +45,10 @@ class Recurrence(nn.Module):
         no_roll,
         no_pointer,
         include_action,
+        clamp_p,
     ):
         super().__init__()
+        self.clamp_p = clamp_p
         self.include_action = include_action
         self.no_pointer = no_pointer
         self.no_roll = no_roll
@@ -237,9 +239,12 @@ class Recurrence(nn.Module):
             d_dist = FixedCategorical(probs=((w @ u.unsqueeze(-1)).squeeze(-1)))
             # p_probs = torch.round(p_dist.probs * 10).flatten()
             self.sample_new(D[t], d_dist)
-            half = d_dist.probs.size(-1) // 2
-            p = p + D[t].clone() - half
-            p = torch.clamp(p, min=0, max=nl - 1)
+            n_p = d_dist.probs.size(-1)
+            p = p + D[t].clone() - n_p // 2
+            if self.clamp_p:
+                p = torch.clamp(p, min=0, max=n_p - 1)
+            else:
+                p = p % n_p
             yield RecurrentState(
                 a=A[t],
                 v=self.critic(z),

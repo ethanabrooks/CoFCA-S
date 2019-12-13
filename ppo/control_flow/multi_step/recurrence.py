@@ -21,16 +21,6 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         self.d_gate = nn.Sequential(init_(nn.Linear(hidden_size, 1)), nn.Sigmoid())
         self.a_gate = nn.Sequential(init_(nn.Linear(hidden_size, 1)), nn.Sigmoid())
 
-    @property
-    def gru_in_size(self):
-        if self.no_pointer:
-            in_size = 2 * self.hidden_size
-        elif self.include_action:
-            in_size = self.hidden_size
-        else:
-            in_size = 0
-        return in_size + self.encoder_hidden_size + self.obs_sections.obs
-
     def inner_loop(self, inputs, rnn_hxs):
         T, N, dim = inputs.shape
         inputs, actions = torch.split(
