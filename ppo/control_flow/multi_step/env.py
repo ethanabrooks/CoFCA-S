@@ -76,15 +76,13 @@ class Env(ppo.control_flow.env.Env):
                 elif self.interactions[ac] == "transform":
                     object_pos.remove(pair)
                     object_pos.append((ice, tuple(agent_pos)))
-                if correct_id:
-                    state = next(state_iterator)
             else:
                 candidates = [np.array(p) for o, p in object_pos if o == ob]
                 if candidates:
                     nearest = min(candidates, key=lambda k: np.sum(agent_pos - k))
                     agent_pos += np.clip(nearest - agent_pos, -1, 1)
-                elif correct_id:
-                    state = next(state_iterator)
+            if correct_id:
+                state = next(state_iterator)
 
     def unravel_id(self, subtask_id):
         i = subtask_id // len(self.targets)
