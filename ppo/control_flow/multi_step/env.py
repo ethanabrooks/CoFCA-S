@@ -18,8 +18,7 @@ class Env(ppo.control_flow.env.Env):
         super().__init__(num_subtasks=num_subtasks, **kwargs)
         self.world_size = world_size
         self.world_shape = (
-            # TODO: len(self.targets + self.non_targets) + 1,  # last channel for condition
-            1,
+            len(self.targets + self.non_targets) + 1,  # last channel for condition
             self.world_size,
             self.world_size,
         )
@@ -66,7 +65,7 @@ class Env(ppo.control_flow.env.Env):
         object_pos = [(o, tuple(pos)) for (i, o), pos in zip(ids, positions)]
         state = next(state_iterator)
         while True:
-            subtask_id = yield state._replace(obs=state.obs * np.ones((1, 1, 1)))
+            subtask_id = yield state._replace(obs=build_world(state.condition))
             ac, ob = self.unravel_id(subtask_id)
             pair = ob, tuple(agent_pos)
             correct_id = subtask_id == lines[state.curr].id
