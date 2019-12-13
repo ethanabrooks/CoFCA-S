@@ -44,7 +44,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         # build memory
         lines = inputs.lines.view(T, N, self.obs_sections.lines).long()[0, :, :]
         M = self.embed_task(lines.view(-1)).view(
-            *lines.shape, self.hidden_size
+            *lines.shape, self.encoder_hidden_size
         )  # n_batch, n_lines, hidden_size
 
         rolled = []
@@ -59,7 +59,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         if self.no_scan:
             P = self.beta(H).view(nl, N, -1, self.ne).softmax(2)
         else:
-            G = G.view(nl, N, nl, 2, self.hidden_size)
+            G = G.view(nl, N, nl, 2, self.encoder_hidden_size)
             B = self.beta(G)
             # arange = 0.05 * torch.zeros(15).float()
             # arange[0] = 1

@@ -389,7 +389,7 @@ class Env(gym.Env, ABC):
             condition_bit = abs(
                 condition_bit - int(self.random.rand() < self.flip_prob)
             )
-            prev, curr = 0, next_subtask(None)
+            prev, curr = curr, next_subtask()
 
     def get_observation(self, obs, active, lines):
         padded = lines + [Padding] * (self.n_lines - len(lines))

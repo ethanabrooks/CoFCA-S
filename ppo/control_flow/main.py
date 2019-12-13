@@ -52,6 +52,8 @@ def bandit_args():
     parsers.agent.add_argument("--no-roll", action="store_true")
     parsers.agent.add_argument("--no-pointer", action="store_true")
     parsers.agent.add_argument("--include-action", action="store_true")
+    parsers.agent.add_argument("--clamp-p", action="store_true")
+    parsers.agent.add_argument("--encoder-hidden-size", type=int, required=True)
     parsers.agent.add_argument("--num-encoding-layers", type=int, required=True)
     parsers.agent.add_argument("--num-edges", type=int, required=True)
     return parser
