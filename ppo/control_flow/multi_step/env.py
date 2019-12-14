@@ -82,7 +82,7 @@ class Env(ppo.control_flow.env.Env):
                 if candidates:
                     nearest = min(candidates, key=lambda k: np.sum(agent_pos - k))
                     agent_pos += np.clip(nearest - agent_pos, -1, 1)
-                elif correct_id:
+                if correct_id:
                     state = next(state_iterator)
 
     def unravel_id(self, subtask_id):
