@@ -13,22 +13,23 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         super().__init__(hidden_size=hidden_size, **kwargs)
         d = self.obs_spaces.obs.shape[0]
         self.conv = nn.Sequential(
-            nn.BatchNorm2d(d),
             nn.Conv2d(d, hidden_size, kernel_size=3, padding=1),
             nn.MaxPool2d(self.obs_spaces.obs.shape[1:]),
             nn.ReLU(),
         )
-        self.gate = nn.Sequential(init_(nn.Linear(hidden_size, 1)), nn.Sigmoid())
+        self.d_gate = nn.Sequential(init_(nn.Linear(hidden_size, 1)), nn.Sigmoid())
+        self.a_gate = nn.Sequential(init_(nn.Linear(hidden_size, 1)), nn.Sigmoid())
 
-    # @property
-    # def gru_in_size(self):
-    # if self.no_pointer:
-    # in_size = 3 * self.hidden_size
-    # elif self.include_action:
-    # in_size = 2 * self.hidden_size
-    # else:
-    # in_size = self.hidden_size
-    # return in_size + self.obs_sections.obs
+    @property
+    def gru_in_size(self):
+        in_size = self.hidden_size
+        if self.no_pointer:
+            in_size += 2 * self.hidden_size
+        else:
+            in_size += self.encoder_hidden_size
+        if self.no_pointer or self.include_action:
+            in_size += self.hidden_size
+        return in_size
 
     def inner_loop(self, inputs, rnn_hxs):
         T, N, dim = inputs.shape
@@ -38,7 +39,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
 
         # parse non-action inputs
         inputs = self.parse_inputs(inputs)
-        # inputs = inputs._replace(obs=inputs.obs.view(T, N, *self.obs_spaces.obs.shape))
+        inputs = inputs._replace(obs=inputs.obs.view(T, N, *self.obs_spaces.obs.shape))
 
         # build memory
         lines = inputs.lines.view(T, N, self.obs_sections.lines).long()[0, :, :]
@@ -93,18 +94,18 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
 
         for t in range(T):
             self.print("p", p)
-            # obs = self.conv(inputs.obs[t]).view(N, -1)
-            x = [inputs.obs[t], H.sum(0) if self.no_pointer else M[R, p]]
+            obs = self.conv(inputs.obs[t]).view(N, -1)
+            x = [obs, H.sum(0) if self.no_pointer else M[R, p]]
             if self.no_pointer or self.include_action:
                 x += [self.embed_action(A[t - 1].clone())]
             h = self.gru(torch.cat(x, dim=-1), h)
             z = F.relu(self.zeta(h))
-            a_dist = self.actor(z)
 
             def gate(gate, new, old):
                 old = torch.zeros_like(new).scatter(1, old.unsqueeze(1), 1)
                 return FixedCategorical(probs=gate * new + (1 - gate) * old)
 
+            a_dist = gate(self.a_gate(z), self.actor(z).probs, A[t - 1])
             self.sample_new(A[t], a_dist)
             u = self.upsilon(z).softmax(dim=-1)
             self.print("o", torch.round(10 * u))
@@ -112,12 +113,16 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             half1 = w.size(1) // 2
             self.print(torch.round(10 * w)[0, half1:])
             self.print(torch.round(10 * w)[0, :half1])
-            d_dist = FixedCategorical(probs=((w @ u.unsqueeze(-1)).squeeze(-1)))
+            d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
+            d_dist = gate(self.d_gate(z), d_probs, Z)
             # p_probs = torch.round(p_dist.probs * 10).flatten()
             self.sample_new(D[t], d_dist)
-            half = d_dist.probs.size(-1) // 2
-            p = p + D[t].clone() - half
-            p = torch.clamp(p, min=0, max=nl - 1)
+            n_p = d_dist.probs.size(-1)
+            p = p + D[t].clone() - n_p // 2
+            if self.clamp_p:
+                p = torch.clamp(p, min=0, max=nl - 1)
+            else:
+                p = p % nl
             yield RecurrentState(
                 a=A[t],
                 v=self.critic(z),
