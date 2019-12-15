@@ -20,12 +20,12 @@ class Agent(ppo.agent.Agent, NNBase):
     def __init__(self, entropy_coef, recurrent, observation_space, **network_args):
         nn.Module.__init__(self)
         self.entropy_coef = entropy_coef
-        multi_step = type(observation_space.spaces["obs"]) is Box
+        self.multi_step = type(observation_space.spaces["obs"]) is Box
         self.recurrent_module = (
             ppo.control_flow.multi_step.recurrence.Recurrence(
                 observation_space=observation_space, **network_args
             )
-            if multi_step
+            if self.multi_step
             else ppo.control_flow.recurrence.Recurrence(
                 observation_space=observation_space, **network_args
             )
@@ -56,11 +56,14 @@ class Agent(ppo.agent.Agent, NNBase):
             action_log_probs = a_dist.log_probs(hx.a) + d_dist.log_probs(hx.d)
             entropy = (a_dist.entropy() + d_dist.entropy()).mean()
             action = torch.cat([hx.a, hx.d], dim=-1)
+        aux_loss = -self.entropy_coef * entropy
+        if self.multi_step:
+            aux_loss += rm.gate_coef * (hx.a_gate + hx.d_gate).mean()
         return AgentValues(
             value=hx.v,
             action=action,
             action_log_probs=action_log_probs,
-            aux_loss=-self.entropy_coef * entropy,
+            aux_loss=aux_loss,
             dist=None,
             rnn_hxs=last_hx,
             log=dict(entropy=entropy),
