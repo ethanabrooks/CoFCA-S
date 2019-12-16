@@ -160,7 +160,7 @@ class Env(gym.Env, ABC):
                 selected = None
             else:
                 action, delta = map(int, action)
-                selected = (selected + delta - self.n_lines) % self.n_lines
+                selected = min(self.n_lines, max(0, selected + delta - self.n_lines))
             info = self.get_task_info(lines) if step == 0 else {}
 
             if action == self.num_subtasks:
