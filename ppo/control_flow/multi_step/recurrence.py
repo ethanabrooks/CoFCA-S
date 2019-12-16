@@ -79,17 +79,22 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         rolled = torch.cat(rolled, dim=0)
         G, H = self.task_encoder(rolled)
         H = H.transpose(0, 1).reshape(nl, N, -1)
-        last = self.last.expand(nl, N, 2 * nl, -1)
+        last = torch.zeros(nl, N, 2 * nl, self.ne, device=rnn_hxs.device)
+        last[:, :, -1] = 1
+        first = torch.zeros(nl, N, nl, 2, self.ne, device=rnn_hxs.device)
+        first[:, :, 0] = 1
         if self.no_scan:
             P = self.beta(H).view(nl, N, -1, self.ne).softmax(2)
         else:
             G = G.view(nl, N, nl, 2, self.encoder_hidden_size)
-            B = self.beta(G)
-            # arange = 0.05 * torch.zeros(15).float()
+            B = self.beta(G).sigmoid()
+            # arange = torch.zeros(6).float()
             # arange[0] = 1
-            # B[:, :, :, 0] = arange.view(1, 1, -1, 1)
-            # B[:, :, :, 1] = arange.flip(0).view(1, 1, -1, 1)
-            f, b = torch.unbind(B.sigmoid(), dim=3)
+            # arange[1] = 1
+            # B[:, :, :, 0] = 1  # arange.view(1, 1, -1, 1)
+            # B[:, :, :, 1] = 0
+            B = B * (1 - first.view(nl, N, nl, 2, -1))
+            f, b = torch.unbind(B, dim=3)
             B = torch.stack([f, b.flip(2)], dim=-2)
             B = B.view(nl, N, 2 * nl, self.ne)
             zero_last = (1 - last) * B
@@ -100,7 +105,6 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             P = P.view(nl, N, nl, 2, self.ne)
             f, b = torch.unbind(P, dim=3)
             P = torch.cat([b.flip(2), f], dim=2)
-            P = P.roll(shifts=(-1, 1), dims=(0, 2))
 
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
@@ -144,7 +148,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             d_dist = gate(d_gate, d_probs, ones * half)
             # p_probs = torch.round(p_dist.probs * 10).flatten()
             self.sample_new(D[t], d_dist)
-            p = p + D[t].clone() + 1  # TODO- half
+            p = p + D[t].clone() - half
             if self.clamp_p:
                 p = torch.clamp(p, min=0, max=nl - 1)
             else:
