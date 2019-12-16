@@ -81,8 +81,6 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         H = H.transpose(0, 1).reshape(nl, N, -1)
         last = torch.zeros(nl, N, 2 * nl, self.ne, device=rnn_hxs.device)
         last[:, :, -1] = 1
-        first = torch.zeros(nl, N, nl, 2, self.ne, device=rnn_hxs.device)
-        first[:, :, 0] = 1
         if self.no_scan:
             P = self.beta(H).view(nl, N, -1, self.ne).softmax(2)
         else:
@@ -92,10 +90,9 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             # arange[0] = 1
             # arange[1] = 1
             # B[:, :, :, 0] = 1  # arange.view(1, 1, -1, 1)
-            # B[:, :, :, 1] = 0
-            B = B * (1 - first.view(nl, N, nl, 2, -1))
+            # B[:, :, :, 1] = 1
             f, b = torch.unbind(B, dim=3)
-            B = torch.stack([f, b.flip(2)], dim=-2)
+            B = torch.stack([f.roll(shifts=-1, dims=2), b.flip(2)], dim=-2)
             B = B.view(nl, N, 2 * nl, self.ne)
             zero_last = (1 - last) * B
             B = zero_last + last  # this ensures that the last B is 1
@@ -104,7 +101,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             P = B * C
             P = P.view(nl, N, nl, 2, self.ne)
             f, b = torch.unbind(P, dim=3)
-            P = torch.cat([b.flip(2), f], dim=2)
+            P = torch.cat([b.flip(2), f.roll(shifts=1, dims=2)], dim=2)
 
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
