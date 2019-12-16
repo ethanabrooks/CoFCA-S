@@ -133,12 +133,16 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             self.print("a_gate", torch.round(10 * a_gate))
             a_dist = gate(a_gate, self.actor(z).probs, A[t - 1])
             self.sample_new(A[t], a_dist)
+            A[t, :] = p
             u = self.upsilon(z).softmax(dim=-1)
             w = P[p, R]
             half1 = w.size(1) // 2
             d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
             n_p = d_probs.size(-1)
             half = n_p // 2
+            d_probs = torch.zeros_like(d_probs).scatter(
+                1, (ones * half).unsqueeze(1) + 1, 1
+            )  # TODO
             d_gate = self.d_gate(z)
             self.print("d_gate", torch.round(10 * d_gate))
             d_dist = gate(d_gate, d_probs, ones * half)
