@@ -124,7 +124,6 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
                 x += [self.embed_action(A[t - 1].clone())]
             h = self.gru(torch.cat(x, dim=-1), h)
             z = F.relu(self.zeta(h))
-            a_dist = self.actor(z)
 
             def gate(gate, new, old):
                 old = torch.zeros_like(new).scatter(1, old.unsqueeze(1), 1)
