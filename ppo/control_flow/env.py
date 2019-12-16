@@ -167,6 +167,7 @@ class Env(gym.Env, ABC):
                 n += 1
                 if (not self.evaluating) and self.no_op_limit and n == self.no_op_limit:
                     failing = True
+                    term = True
             elif state.curr is not None:
                 step += 1
                 if action != lines[state.curr].id:
