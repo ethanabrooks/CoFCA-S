@@ -58,6 +58,7 @@ class Agent(ppo.agent.Agent, NNBase):
             action = torch.cat([hx.a, hx.d], dim=-1)
         aux_loss = -self.entropy_coef * entropy
         if self.multi_step:
+            assert rm.gate_coef is not None
             aux_loss += rm.gate_coef * (hx.a_gate + hx.d_gate).mean()
         return AgentValues(
             value=hx.v,

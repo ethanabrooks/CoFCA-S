@@ -27,6 +27,8 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         self._state_sizes = RecurrentState(
             **self._state_sizes._asdict(), a_gate=1, d_gate=1
         )
+        ones = torch.ones(1, dtype=torch.long)
+        self.register_buffer("ones", ones)
 
     @property
     def gru_in_size(self):
@@ -77,8 +79,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         rolled = torch.cat(rolled, dim=0)
         G, H = self.task_encoder(rolled)
         H = H.transpose(0, 1).reshape(nl, N, -1)
-        last = torch.zeros(nl, N, 2 * nl, self.ne, device=rnn_hxs.device)
-        last[:, :, -1] = 1
+        last = self.last.expand(nl, N, 2 * nl, -1)
         if self.no_scan:
             P = self.beta(H).view(nl, N, -1, self.ne).softmax(2)
         else:
@@ -111,7 +112,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         a = hx.a.long().squeeze(-1)
         a[new_episode] = 0
         R = torch.arange(N, device=rnn_hxs.device)
-        Z = torch.zeros_like(R)
+        ones = self.ones.expand_as(R)
         A = torch.cat([actions[:, :, 0], hx.a.view(1, N)], dim=0).long()
         D = torch.cat([actions[:, :, 1], hx.d.view(1, N)], dim=0).long()
 
@@ -129,21 +130,21 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
                 return FixedCategorical(probs=gate * new + (1 - gate) * old)
 
             a_gate = self.a_gate(z)
+            self.print("a_gate", torch.round(10 * a_gate))
             a_dist = gate(a_gate, self.actor(z).probs, A[t - 1])
             self.sample_new(A[t], a_dist)
             u = self.upsilon(z).softmax(dim=-1)
-            self.print("o", torch.round(10 * u))
             w = P[p, R]
             half1 = w.size(1) // 2
-            self.print(torch.round(10 * w)[0, half1:])
-            self.print(torch.round(10 * w)[0, :half1])
             d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
+            n_p = d_probs.size(-1)
+            half = n_p // 2
             d_gate = self.d_gate(z)
-            d_dist = gate(d_gate, d_probs, Z)
+            self.print("d_gate", torch.round(10 * d_gate))
+            d_dist = gate(d_gate, d_probs, ones * half)
             # p_probs = torch.round(p_dist.probs * 10).flatten()
             self.sample_new(D[t], d_dist)
-            n_p = d_dist.probs.size(-1)
-            p = p + D[t].clone() - n_p // 2
+            p = p + D[t].clone() - half
             if self.clamp_p:
                 p = torch.clamp(p, min=0, max=nl - 1)
             else:
