@@ -53,10 +53,8 @@ class Agent(ppo.agent.Agent, NNBase):
             action = F.pad(hx.a, [0, 1])
         else:
             d_dist = FixedCategorical(hx.d_probs)
-            action_log_probs = d_dist.log_probs(hx.d)  # TODO
-            entropy = (d_dist.entropy()).mean()  # TODO
-            # action_log_probs = a_dist.log_probs(hx.a) + d_dist.log_probs(hx.d)
-            # entropy = (a_dist.entropy() + d_dist.entropy()).mean()
+            action_log_probs = a_dist.log_probs(hx.a) + d_dist.log_probs(hx.d)
+            entropy = (a_dist.entropy() + d_dist.entropy()).mean()
             action = torch.cat([hx.a, hx.d], dim=-1)
         aux_loss = -self.entropy_coef * entropy
         if self.multi_step:
