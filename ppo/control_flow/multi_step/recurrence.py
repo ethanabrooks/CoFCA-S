@@ -150,7 +150,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             dg = DG[t].unsqueeze(-1).float()
             d_dist = gate(dg, d_probs, ones * half)
             self.sample_new(D[t], d_dist)
-            p = p + D[t].clone() - half
+            p = p + D[t].clone() + 1  # TODO - half
             if self.clamp_p:
                 p = torch.clamp(p, min=0, max=nl - 1)
             else:

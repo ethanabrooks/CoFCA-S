@@ -90,7 +90,8 @@ class Recurrence(nn.Module):
         for _ in range(num_encoding_layers - 1):
             layers.extend([init_(nn.Linear(in_size, encoder_hidden_size)), activation])
             in_size = encoder_hidden_size
-        out_size = self.ne * 2 * self.train_lines if self.no_scan else self.ne
+        # TODO: out_size = self.ne * 2 * self.train_lines if self.no_scan else self.ne
+        out_size = self.ne * 2 if self.no_scan else self.ne
         self.beta = nn.Sequential(*layers, init_(nn.Linear(in_size, out_size)))
 
         self.stuff = init_(nn.Linear(hidden_size, 1))
@@ -98,7 +99,15 @@ class Recurrence(nn.Module):
         self.actor = Categorical(hidden_size, n_a)
         self.attention = Categorical(hidden_size, n_a)
         self._state_sizes = RecurrentState(
-            a=1, a_probs=n_a, d=1, d_probs=2 * self.train_lines, p=1, v=1, h=hidden_size
+            a=1,
+            a_probs=n_a,
+            d=1,
+            d_probs=2
+            # TODO * self.train_lines
+            ,
+            p=1,
+            v=1,
+            h=hidden_size,
         )
         nl = self.obs_sections.lines
         last = torch.zeros(1, 1, 1, self.ne)
@@ -243,7 +252,7 @@ class Recurrence(nn.Module):
             # p_probs = torch.round(p_dist.probs * 10).flatten()
             self.sample_new(D[t], d_dist)
             n_p = d_dist.probs.size(-1)
-            p = p + D[t].clone() - n_p // 2
+            p = p + D[t].clone() + 1  # TODO - n_p // 2
             if self.clamp_p:
                 p = torch.clamp(p, min=0, max=n_p - 1)
             else:
