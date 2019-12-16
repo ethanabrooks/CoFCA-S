@@ -71,7 +71,7 @@ class Env(gym.Env, ABC):
             self.eye = np.eye(n_line_types)
         else:
             self.action_space = spaces.MultiDiscrete(
-                np.array([self.num_subtasks + 1, 2 * self.n_lines, 2])
+                np.array([self.num_subtasks + 1, 2 * self.n_lines])
             )
             self.observation_space = spaces.Dict(
                 dict(
@@ -159,7 +159,7 @@ class Env(gym.Env, ABC):
             if self.baseline:
                 selected = None
             else:
-                action, delta, _ = map(int, action)
+                action, delta = map(int, action[:2])
                 selected = min(self.n_lines, max(0, selected + delta - self.n_lines))
             info = self.get_task_info(lines) if step == 0 else {}
 

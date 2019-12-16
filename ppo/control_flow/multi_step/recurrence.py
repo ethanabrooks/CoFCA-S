@@ -9,13 +9,16 @@ from ppo.distributions import FixedCategorical, Categorical
 from ppo.utils import init_
 import numpy as np
 
-RecurrentState = namedtuple("RecurrentState", "a d g p v h a_probs d_probs  g_probs")
+RecurrentState = namedtuple(
+    "RecurrentState", "a d ag dg p v h a_probs d_probs ag_probs dg_probs"
+)
 
 
 class Recurrence(ppo.control_flow.recurrence.Recurrence):
     def __init__(self, hidden_size, gate_coef, **kwargs):
         super().__init__(hidden_size=hidden_size, **kwargs)
         self.gate_coef = gate_coef
+        self.action_size = 4
         d = self.obs_spaces.obs.shape[0]
         self.conv = nn.Sequential(
             nn.Conv2d(d, hidden_size, kernel_size=3, padding=1),
@@ -23,9 +26,9 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             nn.ReLU(),
         )
         self.d_gate = Categorical(hidden_size, 2)
-        self.a_gate = nn.Sequential(init_(nn.Linear(hidden_size, 1)), nn.Sigmoid())
+        self.a_gate = Categorical(hidden_size, 2)
         self._state_sizes = RecurrentState(
-            **self._state_sizes._asdict(), g_probs=2, g=1
+            **self._state_sizes._asdict(), ag_probs=2, dg_probs=2, ag=1, dg=1
         )
         ones = torch.ones(1, dtype=torch.long)
         self.register_buffer("ones", ones)
@@ -115,7 +118,8 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         ones = self.ones.expand_as(R)
         A = torch.cat([actions[:, :, 0], hx.a.view(1, N)], dim=0).long()
         D = torch.cat([actions[:, :, 1], hx.d.view(1, N)], dim=0).long()
-        G = torch.cat([actions[:, :, 2], hx.g.view(1, N)], dim=0).long()
+        AG = torch.cat([actions[:, :, 2], hx.ag.view(1, N)], dim=0).long()
+        DG = torch.cat([actions[:, :, 3], hx.dg.view(1, N)], dim=0).long()
 
         for t in range(T):
             self.print("p", p)
@@ -130,10 +134,10 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
                 old = torch.zeros_like(new).scatter(1, old.unsqueeze(1), 1)
                 return FixedCategorical(probs=gate * new + (1 - gate) * old)
 
-            g_dist = self.d_gate(z)
-            self.sample_new(G[t], g_dist)
-            g = G[t].unsqueeze(-1).float()
-            a_dist = gate(g, self.actor(z).probs, A[t - 1])
+            a_gate = self.a_gate(z)
+            self.sample_new(AG[t], a_gate)
+            ag = AG[t].unsqueeze(-1).float()
+            a_dist = gate(ag, self.actor(z).probs, A[t - 1])
             self.sample_new(A[t], a_dist)
             u = self.upsilon(z).softmax(dim=-1)
             w = P[p, R]
@@ -144,9 +148,10 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             d_probs = torch.zeros_like(d_probs).scatter(
                 1, (ones * half).unsqueeze(1) + 1, 1
             )  # TODO
-            # self.print("d_gate", torch.round(10 * d_gate))
-            d_dist = gate(g, d_probs, ones * half)
-            # p_probs = torch.round(p_dist.probs * 10).flatten()
+            d_gate = self.d_gate(z)
+            self.sample_new(DG[t], d_gate)
+            dg = DG[t].unsqueeze(-1).float()
+            d_dist = gate(dg, d_probs, ones * half)
             self.sample_new(D[t], d_dist)
             p = p + D[t].clone() - half
             if self.clamp_p:
@@ -161,6 +166,8 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
                 a_probs=a_dist.probs,
                 d=D[t],
                 d_probs=d_dist.probs,
-                g_probs=g_dist.probs,
-                g=G[t],
+                ag_probs=a_gate.probs,
+                dg_probs=d_gate.probs,
+                ag=ag,
+                dg=dg,
             )

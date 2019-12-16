@@ -54,7 +54,7 @@ class Recurrence(nn.Module):
         self.no_roll = no_roll
         self.no_scan = no_scan or no_pointer  # no scan if no pointer
         self.obs_spaces = Obs(**observation_space.spaces)
-        self.action_size = 3  # TODO
+        self.action_size = 2
         self.debug = debug
         self.hidden_size = hidden_size
         self.encoder_hidden_size = encoder_hidden_size
@@ -67,7 +67,7 @@ class Recurrence(nn.Module):
         # networks
         self.ne = num_edges
         n_lt = int(self.obs_spaces.lines.nvec[0])
-        n_a, n_p, _ = map(int, action_space.nvec)
+        n_a, n_p = map(int, action_space.nvec[:2])
         self.n_a = n_a
         self.embed_task = nn.Embedding(n_lt, encoder_hidden_size)
         self.embed_action = nn.Embedding(n_a, hidden_size)

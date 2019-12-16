@@ -52,8 +52,9 @@ class Agent(ppo.agent.Agent, NNBase):
             entropy = a_dist.entropy().mean()
             action = F.pad(hx.a, [0, 1])
         else:
-            dists = [FixedCategorical(p) for p in [hx.a_probs, hx.d_probs, hx.g_probs]]
-            X = [hx.a, hx.d, hx.g]
+            probs = [hx.a_probs, hx.d_probs, hx.ag_probs, hx.dg_probs]
+            X = [hx.a, hx.d, hx.ag, hx.dg]
+            dists = [FixedCategorical(p) for p in probs]
             action_log_probs = sum(dist.log_probs(x) for dist, x in zip(dists, X))
             entropy = sum([dist.entropy() for dist in dists]).mean()
             # action_log_probs = a_dist.log_probs(hx.a) + d_dist.log_probs(hx.d)
@@ -62,7 +63,7 @@ class Agent(ppo.agent.Agent, NNBase):
         aux_loss = -self.entropy_coef * entropy
         if self.multi_step:
             assert rm.gate_coef is not None
-            aux_loss += rm.gate_coef * hx.g_probs[:, 1].mean()
+            aux_loss += rm.gate_coef * (hx.ag_probs + hx.dg_probs)[:, 1].mean()
         return AgentValues(
             value=hx.v,
             action=action,
