@@ -52,17 +52,17 @@ class Agent(ppo.agent.Agent, NNBase):
             entropy = a_dist.entropy().mean()
             action = F.pad(hx.a, [0, 1])
         else:
-            d_dist = FixedCategorical(hx.d_probs)
-            g_dist = FixedCategorical(hx.g_probs)
-            action_log_probs = d_dist.log_probs(hx.d) + g_dist.log_probs(hx.g)  # TODO
-            entropy = (d_dist.entropy() + g_dist.entropy()).mean()  # TODO
+            dists = [FixedCategorical(p) for p in [hx.a_probs, hx.d_probs, hx.g_probs]]
+            X = [hx.a, hx.d, hx.g]
+            action_log_probs = sum(dist.log_probs(x) for dist, x in zip(dists, X))
+            entropy = sum([dist.entropy() for dist in dists]).mean()
             # action_log_probs = a_dist.log_probs(hx.a) + d_dist.log_probs(hx.d)
             # entropy = (a_dist.entropy() + d_dist.entropy()).mean()
-            action = torch.cat([hx.a, hx.d, hx.g], dim=-1)
+            action = torch.cat(X, dim=-1)
         aux_loss = -self.entropy_coef * entropy
         if self.multi_step:
             assert rm.gate_coef is not None
-            aux_loss += rm.gate_coef * (hx.a_gate + hx.g_probs[:, 1]).mean()
+            aux_loss += rm.gate_coef * hx.g_probs[:, 1].mean()
         return AgentValues(
             value=hx.v,
             action=action,
