@@ -160,13 +160,14 @@ class Env(gym.Env, ABC):
                 selected = None
             else:
                 action, delta = map(int, action)
-                selected = (selected + delta - self.n_lines) % self.n_lines
+                selected = min(self.n_lines, max(0, selected + delta - self.n_lines))
             info = self.get_task_info(lines) if step == 0 else {}
 
             if action == self.num_subtasks:
                 n += 1
                 if (not self.evaluating) and self.no_op_limit and n == self.no_op_limit:
                     failing = True
+                    term = True
             elif state.curr is not None:
                 step += 1
                 if action != lines[state.curr].id:
@@ -286,10 +287,10 @@ class Env(gym.Env, ABC):
             return [Subtask]
         line_types = [Subtask]
         enough_space = n > len(active_conditions) + 2
-        if enough_space and (
-            max_nesting_depth is None or nesting_depth < max_nesting_depth
-        ):
-            line_types += [If, While]
+        # if enough_space and (
+        # max_nesting_depth is None or nesting_depth < max_nesting_depth
+        # ):
+        # line_types += [If, While]
         if active_conditions and last is Subtask:
             last_condition = active_conditions[-1]
             if last_condition is If:
