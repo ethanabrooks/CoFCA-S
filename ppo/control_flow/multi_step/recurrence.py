@@ -140,13 +140,11 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
                 old = torch.zeros_like(new).scatter(1, old.unsqueeze(1), 1)
                 return FixedCategorical(probs=gate * new + (1 - gate) * old)
 
-            a_gate = FixedCategorical(probs=ag_probs)
+            a_gate = self.a_gate(z)
             self.sample_new(AG[t], a_gate)
             ag = AG[t].unsqueeze(-1).float()
             a_dist = gate(ag, self.actor(z).probs, A[t - 1])
             self.sample_new(A[t], a_dist)
-            ag_probs = self.a_gate(z).probs
-
             u = self.upsilon(z).softmax(dim=-1)
             w = P[p, R]
             d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
@@ -169,7 +167,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
                 a_probs=a_dist.probs,
                 d=D[t],
                 d_probs=d_dist.probs,
-                ag_probs=ag_probs,
+                ag_probs=a_gate.probs,
                 dg_probs=d_gate.probs,
                 ag=a_gate.probs[:, 1],
                 dg=d_gate.probs[:, 1],
