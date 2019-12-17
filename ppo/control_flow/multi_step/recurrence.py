@@ -115,8 +115,9 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
 
         h = hx.h
         p = hx.p.long().squeeze(-1)
-        a = hx.a.long().squeeze(-1)
-        a[new_episode] = 0
+        hx.a[new_episode] = self.n_a - 1
+        ag_probs = hx.ag_probs
+        ag_probs[new_episode, 1] = 1
         R = torch.arange(N, device=rnn_hxs.device)
         ones = self.ones.expand_as(R)
         A = torch.cat([actions[:, :, 0], hx.a.view(1, N)], dim=0).long()
