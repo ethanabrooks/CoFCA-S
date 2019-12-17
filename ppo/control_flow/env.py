@@ -287,20 +287,23 @@ class Env(gym.Env, ABC):
             return [Subtask]
         line_types = [Subtask]
         enough_space = n > len(active_conditions) + 2
-        # if enough_space and (
-        # max_nesting_depth is None or nesting_depth < max_nesting_depth
-        # ):
-        # line_types += [If, While]
+        if enough_space and (
+            max_nesting_depth is None or nesting_depth < max_nesting_depth
+        ):
+            line_types += [If]  # TODO: , While]
         if active_conditions and last is Subtask:
             last_condition = active_conditions[-1]
             if last_condition is If:
                 line_types += [EndIf]
+            """
+            TODO
             if last_condition is If and enough_space:
                 line_types += [Else]
             elif last_condition is Else:
                 line_types += [EndIf]
             elif last_condition is While:
                 line_types += [EndWhile]
+            """
         line_type = self.random.choice(line_types)
         if line_type in [If, While]:
             active_conditions = active_conditions + [line_type]
