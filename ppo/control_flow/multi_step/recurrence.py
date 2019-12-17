@@ -174,6 +174,6 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
                 d_probs=d_dist.probs,
                 ag_probs=a_gate.probs,
                 dg_probs=d_gate.probs,
-                ag=a_gate.probs[:, 1],
-                dg=d_gate.probs[:, 1],
+                ag=ag,
+                dg=dg,
             )
