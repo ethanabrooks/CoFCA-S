@@ -159,10 +159,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             d_dist = gate(dg, d_probs, ones * half)
             self.sample_new(D[t], d_dist)
             p = p + D[t].clone() - half
-            if self.clamp_p:
-                p = torch.clamp(p, min=0, max=nl - 1)
-            else:
-                p = p % nl
+            p = torch.clamp(p, min=0, max=nl - 1)
 
             yield RecurrentState(
                 a=A[t],
