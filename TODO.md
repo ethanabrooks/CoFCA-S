@@ -1,2 +1,4 @@
-* fix refactor incrementally
-* use separate eval rollout
+* implement curriculum
+* get gates synced up
+* implement complex conditionals
+* make it impossible for pointer to remain in place without using gates
