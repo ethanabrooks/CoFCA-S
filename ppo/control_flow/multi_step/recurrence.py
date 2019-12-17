@@ -147,6 +147,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             a_dist = gate(ag, self.actor(z).probs, A[t - 1])
             self.sample_new(A[t], a_dist)
             u = self.upsilon(z).softmax(dim=-1)
+            self.print("u", torch.round(100 * u))
             w = P[p, R]
             d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
             d_gate = self.d_gate(z)
