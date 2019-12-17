@@ -90,8 +90,7 @@ class Recurrence(nn.Module):
         for _ in range(num_encoding_layers - 1):
             layers.extend([init_(nn.Linear(in_size, encoder_hidden_size)), activation])
             in_size = encoder_hidden_size
-        # TODO: out_size = self.ne * 2 * self.train_lines if self.no_scan else self.ne
-        out_size = self.ne * 2 if self.no_scan else self.ne
+        out_size = self.ne * 2 * self.train_lines if self.no_scan else self.ne
         self.beta = nn.Sequential(*layers, init_(nn.Linear(in_size, out_size)))
 
         self.stuff = init_(nn.Linear(hidden_size, 1))

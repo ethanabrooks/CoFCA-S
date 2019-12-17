@@ -173,7 +173,7 @@ class Env(gym.Env, ABC):
                 if action != lines[state.curr].id:
                     # TODO: this should only be evaluated when done
                     failing = True
-                    info.update(sucess_line=state.prev, failure_line=state.curr)
+                    info.update(success_line=state.prev, failure_line=state.curr)
                 state = state_iterator.send(action)
 
     @staticmethod

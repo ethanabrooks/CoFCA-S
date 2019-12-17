@@ -86,6 +86,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         last[:, :, -1] = 1
         if self.no_scan:
             P = self.beta(H).view(nl, N, -1, self.ne).softmax(2)
+            half = P.size(2) // 2
         else:
             G = G.view(nl, N, nl, 2, self.encoder_hidden_size)
             B = self.beta(G).sigmoid()
@@ -104,6 +105,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             P = B * C
             P = P.view(nl, N, nl, 2, self.ne)
             f, b = torch.unbind(P, dim=3)
+            half = b.size(2)
             P = torch.cat([b.flip(2), f.roll(shifts=1, dims=2)], dim=2)
 
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
@@ -142,10 +144,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             self.sample_new(A[t], a_dist)
             u = self.upsilon(z).softmax(dim=-1)
             w = P[p, R]
-            half1 = w.size(1) // 2
             d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
-            n_p = d_probs.size(-1)
-            half = n_p // 2
             d_gate = self.d_gate(z)
             self.sample_new(DG[t], d_gate)
             dg = DG[t].unsqueeze(-1).float()
@@ -156,6 +155,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
                 p = torch.clamp(p, min=0, max=nl - 1)
             else:
                 p = p % nl
+
             yield RecurrentState(
                 a=A[t],
                 v=self.critic(z),
