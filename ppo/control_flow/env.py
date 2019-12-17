@@ -8,8 +8,10 @@ from gym.utils import seeding
 from gym.vector.utils import spaces
 from rl_utils import hierarchical_parse_args, gym
 
+
 from ppo import keyboard_control
 from ppo.control_flow.lines import If, Else, EndIf, While, EndWhile, Subtask, Padding
+from ppo.utils import RED, RESET
 
 Obs = namedtuple("Obs", "active lines obs")
 Last = namedtuple("Last", "action active reward terminal selected")
