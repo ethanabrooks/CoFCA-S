@@ -173,6 +173,7 @@ class Env(gym.Env, ABC):
                 if self.no_op_limit and n == self.no_op_limit:
                     failing = True
                     term = True
+                    info.update(regret=1)
             elif state.curr is not None:
                 step += 1
                 if action != lines[state.curr].id:
@@ -427,6 +428,7 @@ class Env(gym.Env, ABC):
             while_lines=num_while,
             nesting_depth=self.get_nesting_depth(lines),
             num_edges=2 * (num_if + num_else + num_while) + num_subtask,
+            regret=0,
         )
         keys = {
             (If, EndIf): "if clause length",
