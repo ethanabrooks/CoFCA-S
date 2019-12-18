@@ -46,14 +46,11 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
 
     @property
     def gru_in_size(self):
-        in_size = self.hidden_size
+        in_size = 2 * self.hidden_size
         if self.no_pointer:
-            in_size += 2 * self.hidden_size
+            return in_size + 2 * self.hidden_size
         else:
-            in_size += self.encoder_hidden_size
-        if self.no_pointer or self.include_action:
-            in_size += self.hidden_size
-        return in_size
+            return in_size + self.encoder_hidden_size
 
     def pack(self, hxs):
         def pack():
