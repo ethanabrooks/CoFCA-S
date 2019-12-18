@@ -132,7 +132,8 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             obs = (
                 self.conv(inputs.obs[t].permute(0, 2, 3, 1))
                 .view(N, -1, self.hidden_size)
-                .sum(dim=1)
+                .max(dim=1)
+                .values
             )
             x = [
                 obs,
