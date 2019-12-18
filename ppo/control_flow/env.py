@@ -108,11 +108,6 @@ class Env(gym.Env, ABC):
         while True:
             success = state.curr is None
             reward = int(term) * int(not failing)
-            term = (
-                success
-                or ((self.evaluating or self.terminate_on_failure) and failing)
-                or (not self.evaluating and step == self.time_limit)
-            )
 
             def line_strings(index, level):
                 if index == len(lines):
@@ -159,6 +154,11 @@ class Env(gym.Env, ABC):
                 reward,
                 term,
                 info,
+            )
+            term = (
+                success
+                or (self.terminate_on_failure and failing)
+                or (not self.evaluating and step == self.time_limit)
             )
 
             if self.baseline:
