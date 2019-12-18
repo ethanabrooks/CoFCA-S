@@ -8,8 +8,10 @@ from gym.utils import seeding
 from gym.vector.utils import spaces
 from rl_utils import hierarchical_parse_args, gym
 
+
 from ppo import keyboard_control
 from ppo.control_flow.lines import If, Else, EndIf, While, EndWhile, Subtask, Padding
+from ppo.utils import RED, RESET
 
 Obs = namedtuple("Obs", "active lines obs")
 Last = namedtuple("Last", "action active reward terminal selected")
@@ -131,12 +133,15 @@ class Env(gym.Env, ABC):
                 yield from line_strings(index + 1, level)
 
             def render():
+                if failing:
+                    print(RED)
                 for i, string in enumerate(line_strings(index=0, level=1)):
                     print(f"{i}{string}")
                 print("Failing:", failing)
                 print("Action:", action)
                 print("Reward", reward)
                 print("Obs:")
+                print(RESET)
                 self.print_obs(state.obs)
 
             self._render = render
@@ -165,7 +170,7 @@ class Env(gym.Env, ABC):
 
             if action == self.num_subtasks:
                 n += 1
-                if (not self.evaluating) and self.no_op_limit and n == self.no_op_limit:
+                if self.no_op_limit and n == self.no_op_limit:
                     failing = True
                     term = True
             elif state.curr is not None:
@@ -173,7 +178,7 @@ class Env(gym.Env, ABC):
                 if action != lines[state.curr].id:
                     # TODO: this should only be evaluated when done
                     failing = True
-                    info.update(sucess_line=state.prev, failure_line=state.curr)
+                    info.update(success_line=state.prev, failure_line=state.curr)
                 state = state_iterator.send(action)
 
     @staticmethod
@@ -287,10 +292,10 @@ class Env(gym.Env, ABC):
             return [Subtask]
         line_types = [Subtask]
         enough_space = n > len(active_conditions) + 2
-        # if enough_space and (
-        # max_nesting_depth is None or nesting_depth < max_nesting_depth
-        # ):
-        # line_types += [If, While]
+        if enough_space and (
+            max_nesting_depth is None or nesting_depth < max_nesting_depth
+        ):
+            line_types += [If, While]
         if active_conditions and last is Subtask:
             last_condition = active_conditions[-1]
             if last_condition is If:

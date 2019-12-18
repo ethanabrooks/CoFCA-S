@@ -101,10 +101,6 @@ class Recurrence(nn.Module):
         self._state_sizes = RecurrentState(
             a=1, a_probs=n_a, d=1, d_probs=2 * self.train_lines, p=1, v=1, h=hidden_size
         )
-        nl = self.obs_sections.lines
-        last = torch.zeros(1, 1, 1, self.ne)
-        last[:, :, -1] = 1
-        self.register_buffer("last", last)
 
     @property
     def gru_in_size(self):
@@ -188,7 +184,8 @@ class Recurrence(nn.Module):
         rolled = torch.cat(rolled, dim=0)
         G, H = self.task_encoder(rolled)
         H = H.transpose(0, 1).reshape(nl, N, -1)
-        last = self.last.expand(-1, N, -1, -1)
+        last = torch.zeros(nl, N, 2 * nl, self.ne, device=rnn_hxs.device)
+        last[:, :, -1] = 1
         if self.no_scan:
             P = self.beta(H).view(nl, N, -1, self.ne).softmax(2)
         else:
