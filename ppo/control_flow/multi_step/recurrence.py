@@ -10,15 +10,25 @@ from ppo.utils import init_
 import numpy as np
 
 RecurrentState = namedtuple(
-    "RecurrentState", "a d ag dg p v h a_probs d_probs ag_probs dg_probs"
+    "RecurrentState", "a d ag dg p v h h2 a_probs d_probs ag_probs dg_probs"
 )
 
 
 class Recurrence(ppo.control_flow.recurrence.Recurrence):
-    def __init__(self, hidden_size, gate_coef, **kwargs):
-        super().__init__(hidden_size=hidden_size, **kwargs)
+    def __init__(self, hidden_size, gate_coef, num_layers, activation, **kwargs):
+        super().__init__(
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            activation=activation,
+            **kwargs
+        )
         self.gate_coef = gate_coef
         self.action_size = 4
+        self.gru2 = nn.GRUCell(self.gru_in_size, hidden_size)
+        layers = []
+        for _ in range(num_layers):
+            layers.extend([init_(nn.Linear(hidden_size, hidden_size)), activation])
+        self.zeta2 = nn.Sequential(*layers)
         d = self.obs_spaces.obs.shape[0]
         self.conv = nn.Sequential(
             # nn.Conv2d(d, hidden_size, kernel_size=3, padding=1),
@@ -29,7 +39,12 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         self.d_gate = Categorical(hidden_size, 2)
         self.a_gate = Categorical(hidden_size, 2)
         self._state_sizes = RecurrentState(
-            **self._state_sizes._asdict(), ag_probs=2, dg_probs=2, ag=1, dg=1
+            **self._state_sizes._asdict(),
+            h2=hidden_size,
+            ag_probs=2,
+            dg_probs=2,
+            ag=1,
+            dg=1
         )
         ones = torch.ones(1, dtype=torch.long)
         self.register_buffer("ones", ones)
@@ -116,6 +131,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             _x.squeeze_(0)
 
         h = hx.h
+        h2 = hx.h2
         p = hx.p.long().squeeze(-1)
         hx.a[new_episode] = self.n_a - 1
         ag_probs = hx.ag_probs
@@ -147,11 +163,6 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
                 old = torch.zeros_like(new).scatter(1, old.unsqueeze(1), 1)
                 return FixedCategorical(probs=gate * new + (1 - gate) * old)
 
-            a_gate = self.a_gate(z)
-            self.sample_new(AG[t], a_gate)
-            ag = AG[t].unsqueeze(-1).float()
-            a_dist = gate(ag, self.actor(z).probs, A[t - 1])
-            self.sample_new(A[t], a_dist)
             u = self.upsilon(z).softmax(dim=-1)
             self.print("u", torch.round(100 * u))
             w = P[p, R]
@@ -161,21 +172,32 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             dg = DG[t].unsqueeze(-1).float()
             self.print("dg prob", torch.round(100 * d_gate.probs[:, 1]))
             self.print("dg", dg)
-            self.print("ag prob", torch.round(100 * a_gate.probs[:, 1]))
-            self.print("ag", ag)
             d_dist = gate(dg, d_probs, ones * half)
             self.print("d_probs", torch.round(100 * d_probs)[:, half:])
             self.sample_new(D[t], d_dist)
             p = p + D[t].clone() - half
-            if self.clamp_p:
-                p = torch.clamp(p, min=0, max=nl - 1)
-            else:
-                p = p % nl
+            p = torch.clamp(p, min=0, max=nl - 1)
+
+            x = [
+                obs,
+                H.sum(0) if self.no_pointer else M[R, p],  # updated p
+                self.embed_action(A[t - 1].clone()),
+            ]
+            h2 = self.gru(torch.cat(x, dim=-1), h2)
+            z = F.relu(self.zeta2(h))
+            a_gate = self.a_gate(z)
+            self.sample_new(AG[t], a_gate)
+            ag = AG[t].unsqueeze(-1).float()
+            a_dist = gate(ag, self.actor(z).probs, A[t - 1])
+            self.sample_new(A[t], a_dist)
+            self.print("ag prob", torch.round(100 * a_gate.probs[:, 1]))
+            self.print("ag", ag)
 
             yield RecurrentState(
                 a=A[t],
                 v=self.critic(z),
                 h=h,
+                h2=h2,
                 p=p,
                 a_probs=a_dist.probs,
                 d=D[t],
