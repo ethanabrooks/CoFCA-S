@@ -110,7 +110,7 @@ class Env(gym.Env, ABC):
             reward = int(term) * int(not failing)
             term = (
                 success
-                or (self.terminate_on_failure and failing)
+                or ((self.evaluating or self.terminate_on_failure) and failing)
                 or (not self.evaluating and step == self.time_limit)
             )
 
