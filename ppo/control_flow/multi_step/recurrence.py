@@ -100,7 +100,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             half = P.size(2) // 2
         else:
             G = G.view(nl, N, nl, 2, self.encoder_hidden_size)
-            B = self.beta(G).sigmoid()
+            B = bb = self.beta(G).sigmoid()
             # arange = torch.zeros(6).float()
             # arange[0] = 1
             # arange[1] = 1
@@ -159,6 +159,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
                 return FixedCategorical(probs=gate * new + (1 - gate) * old)
 
             u = self.upsilon(z).softmax(dim=-1)
+            self.print("bb", torch.round(100 * bb[p, R, :, 0]))
             self.print("u", torch.round(100 * u))
             w = P[p, R]
             d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
