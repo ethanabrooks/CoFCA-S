@@ -24,11 +24,6 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         )
         self.gate_coef = gate_coef
         self.action_size = 4
-        self.gru2 = nn.GRUCell(self.gru_in_size, hidden_size)
-        layers = []
-        for _ in range(num_layers):
-            layers.extend([init_(nn.Linear(hidden_size, hidden_size)), activation])
-        self.zeta2 = nn.Sequential(*layers)
         d = self.obs_spaces.obs.shape[0]
         self.conv = nn.Sequential(
             # nn.Conv2d(d, hidden_size, kernel_size=3, padding=1),
@@ -184,7 +179,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
                 self.embed_action(A[t - 1].clone()),
             ]
             h2 = self.gru(torch.cat(x, dim=-1), h2)
-            z = F.relu(self.zeta2(h))
+            z = F.relu(self.zeta(h))
             a_gate = self.a_gate(z)
             self.sample_new(AG[t], a_gate)
             ag = AG[t].unsqueeze(-1).float()
