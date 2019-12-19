@@ -4,6 +4,7 @@ from contextlib import contextmanager
 import numpy as np
 import torch
 import torch.nn.functional as F
+from gym import spaces
 from torch import nn as nn
 
 from ppo.control_flow.env import Obs
@@ -28,6 +29,10 @@ def batch_conv1d(inputs, weights):
     return padded[:, 1:-1]
 
 
+def get_obs_sections(obs_spaces):
+    return Obs(*[int(np.prod(s.shape)) for s in obs_spaces])
+
+
 class Recurrence(nn.Module):
     def __init__(
         self,
@@ -45,10 +50,8 @@ class Recurrence(nn.Module):
         no_roll,
         no_pointer,
         include_action,
-        clamp_p,
     ):
         super().__init__()
-        self.clamp_p = clamp_p
         self.include_action = include_action
         self.no_pointer = no_pointer
         self.no_roll = no_roll
@@ -59,17 +62,15 @@ class Recurrence(nn.Module):
         self.hidden_size = hidden_size
         self.encoder_hidden_size = encoder_hidden_size
 
-        self._evaluating = False
-        self._obs_sections = Obs(*[int(np.prod(s.shape)) for s in self.obs_spaces])
+        self.obs_sections = get_obs_sections(self.obs_spaces)
         self.eval_lines = eval_lines
-        self.train_lines = self._obs_sections.lines
+        self.train_lines = len(self.obs_spaces.lines.nvec)
 
         # networks
         self.ne = num_edges
-        n_lt = int(self.obs_spaces.lines.nvec[0])
         n_a, n_p = map(int, action_space.nvec[:2])
         self.n_a = n_a
-        self.embed_task = nn.Embedding(n_lt, encoder_hidden_size)
+        self.embed_task = self.build_embed_task(encoder_hidden_size)
         self.embed_action = nn.Embedding(n_a, hidden_size)
         self.task_encoder = nn.GRU(
             encoder_hidden_size,
@@ -97,9 +98,12 @@ class Recurrence(nn.Module):
         self.critic = init_(nn.Linear(hidden_size, 1))
         self.actor = Categorical(hidden_size, n_a)
         self.attention = Categorical(hidden_size, n_a)
-        self._state_sizes = RecurrentState(
+        self.state_sizes = RecurrentState(
             a=1, a_probs=n_a, d=1, d_probs=2 * self.train_lines, p=1, v=1, h=hidden_size
         )
+
+    def build_embed_task(self, hidden_size):
+        return nn.Embedding(len(self.obs_spaces.lines.nvec), hidden_size)
 
     @property
     def gru_in_size(self):
@@ -111,25 +115,27 @@ class Recurrence(nn.Module):
             in_size = 0
         return in_size + self.encoder_hidden_size + self.obs_sections.obs
 
-    @property
-    def state_sizes(self):
-        if self.no_scan:
-            return self._state_sizes
-        return self._state_sizes._replace(d_probs=2 * self.n_lines)
-
-    @property
-    def obs_sections(self):
-        return self._obs_sections._replace(lines=self.n_lines)
-
-    @property
-    def n_lines(self):
-        return (1 + self.eval_lines) if self._evaluating else self.train_lines
-
+    # noinspection PyProtectedMember
     @contextmanager
     def evaluating(self):
-        self._evaluating = True
+        obs_spaces = self.obs_spaces
+        obs_sections = self.obs_sections
+        state_sizes = self.state_sizes
+        n_lines = self.eval_lines + 1
+        eval_lines_space = self.eval_lines_space(n_lines, obs_spaces.lines)
+        self.obs_spaces = obs_spaces._replace(lines=eval_lines_space)
+        self.obs_sections = get_obs_sections(self.obs_spaces)
+        self.state_sizes = state_sizes._replace(d_probs=2 * n_lines)
         yield self
-        self._evaluating = False
+        self.obs_spaces = obs_spaces
+        self.obs_sections = obs_sections
+        self.state_sizes = state_sizes
+
+    @staticmethod
+    def eval_lines_space(n_eval_lines, train_lines_space):
+        return spaces.MultiDiscrete(
+            np.repeat(train_lines_space.nvec[0], repeats=n_eval_lines)
+        )
 
     @staticmethod
     def sample_new(x, dist):
@@ -241,10 +247,7 @@ class Recurrence(nn.Module):
             self.sample_new(D[t], d_dist)
             n_p = d_dist.probs.size(-1)
             p = p + D[t].clone() - n_p // 2
-            if self.clamp_p:
-                p = torch.clamp(p, min=0, max=n_p - 1)
-            else:
-                p = p % n_p
+            p = torch.clamp(p, min=0, max=n_p - 1)
             yield RecurrentState(
                 a=A[t],
                 v=self.critic(z),

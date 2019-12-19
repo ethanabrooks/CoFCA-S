@@ -18,14 +18,25 @@ from ppo.distributions import FixedCategorical
 
 class Agent(ppo.agent.Agent, NNBase):
     def __init__(
-        self, entropy_coef, recurrent, observation_space, include_action, **network_args
+        self,
+        entropy_coef,
+        recurrent,
+        observation_space,
+        include_action,
+        use_conv,
+        gate_coef,
+        **network_args
     ):
         nn.Module.__init__(self)
         self.entropy_coef = entropy_coef
         self.multi_step = type(observation_space.spaces["obs"]) is Box
         self.recurrent_module = (
             ppo.control_flow.multi_step.recurrence.Recurrence(
-                include_action=True, observation_space=observation_space, **network_args
+                include_action=True,
+                observation_space=observation_space,
+                use_conv=use_conv,
+                gate_coef=gate_coef,
+                **network_args
             )
             if self.multi_step
             else ppo.control_flow.recurrence.Recurrence(
