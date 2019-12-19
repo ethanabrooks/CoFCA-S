@@ -35,6 +35,10 @@ class Env(ppo.control_flow.env.Env):
             # ),
         )
 
+    def subtask_str(self, subtask: Subtask):
+        i, o = self.unravel_id(subtask.id)
+        return f"Subtask {subtask.id}: {self.interactions[i]} {self.targets[o]}"
+
     def print_obs(self, obs):
         condition = obs[-1].mean()
         obs = obs[:-1].transpose(1, 2, 0).astype(int)
