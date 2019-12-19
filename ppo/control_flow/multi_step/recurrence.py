@@ -39,8 +39,8 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             self.conv = nn.Sequential(init_(nn.Linear(d, hidden_size)), nn.ReLU())
         self.d_gate = Categorical(hidden_size, 2)
         self.a_gate = Categorical(hidden_size, 2)
-        self._state_sizes = RecurrentState(
-            **self._state_sizes._asdict(),
+        self.state_sizes = RecurrentState(
+            **self.state_sizes._asdict(),
             h2=hidden_size,
             ag_probs=2,
             dg_probs=2,
@@ -95,13 +95,14 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         inputs = inputs._replace(obs=inputs.obs.view(T, N, *self.obs_spaces.obs.shape))
 
         # build memory
-        lines = inputs.lines.view(T, N, self.obs_sections.lines).long()[0, :, :]
-        M = self.embed_task(lines.view(-1)).view(
-            *lines.shape, self.encoder_hidden_size
+        nl = len(self.obs_spaces.lines.nvec)
+        lines = inputs.lines.view(T, N, *self.obs_spaces.lines.shape)
+        lines = lines.long()[0, :, :]  # + self.offset
+        M = self.embed_task(lines.view(-1, self.obs_spaces.lines.nvec[0].size)).view(
+            *lines.shape[:2], self.encoder_hidden_size
         )  # n_batch, n_lines, hidden_size
 
         rolled = []
-        nl = self.obs_sections.lines
         for i in range(nl):
             rolled.append(M if self.no_roll else torch.roll(M, shifts=-i, dims=1))
         rolled = torch.cat(rolled, dim=0)
