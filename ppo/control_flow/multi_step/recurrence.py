@@ -2,6 +2,7 @@ from collections import namedtuple
 
 import torch
 import torch.nn.functional as F
+from gym import spaces
 from torch import nn as nn
 
 import ppo.control_flow.recurrence
@@ -15,7 +16,9 @@ RecurrentState = namedtuple(
 
 
 class Recurrence(ppo.control_flow.recurrence.Recurrence):
-    def __init__(self, hidden_size, gate_coef, num_layers, activation, **kwargs):
+    def __init__(
+        self, hidden_size, gate_coef, num_layers, activation, use_conv, **kwargs
+    ):
         super().__init__(
             hidden_size=hidden_size,
             num_layers=num_layers,
@@ -25,12 +28,15 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         self.gate_coef = gate_coef
         self.action_size = 4
         d = self.obs_spaces.obs.shape[0]
-        self.conv = nn.Sequential(
-            # nn.Conv2d(d, hidden_size, kernel_size=3, padding=1),
-            # nn.MaxPool2d(self.obs_spaces.obs.shape[1:]),
-            init_(nn.Linear(d, hidden_size)),
-            nn.ReLU(),
-        )
+        self.use_conv = use_conv
+        if self.use_conv:
+            self.conv = nn.Sequential(
+                nn.Conv2d(d, hidden_size, kernel_size=3, padding=1),
+                nn.MaxPool2d(self.obs_spaces.obs.shape[1:]),
+                nn.ReLU(),
+            )
+        else:
+            self.conv = nn.Sequential(init_(nn.Linear(d, hidden_size)), nn.ReLU())
         self.d_gate = Categorical(hidden_size, 2)
         self.a_gate = Categorical(hidden_size, 2)
         self._state_sizes = RecurrentState(
@@ -43,6 +49,11 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         )
         ones = torch.ones(1, dtype=torch.long)
         self.register_buffer("ones", ones)
+        # offset = torch.tensor([[0, self.obs_spaces.lines.nvec[0, 0]]])
+        # self.register_buffer("offset", offset)
+
+    # def build_embed_task(self, hidden_size):
+    #     return nn.EmbeddingBag(self.obs_spaces.lines.nvec[0].sum(), hidden_size)
 
     @property
     def gru_in_size(self):
@@ -51,6 +62,12 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             return in_size + 2 * self.hidden_size
         else:
             return in_size + self.encoder_hidden_size
+
+    # @staticmethod
+    # def eval_lines_space(n_eval_lines, train_lines_space):
+    #     return spaces.MultiDiscrete(
+    #         np.repeat(train_lines_space.nvec[:1], repeats=n_eval_lines, axis=0)
+    #     )
 
     def pack(self, hxs):
         def pack():
@@ -137,12 +154,15 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
 
         for t in range(T):
             self.print("p", p)
-            obs = (
-                self.conv(inputs.obs[t].permute(0, 2, 3, 1))
-                .view(N, -1, self.hidden_size)
-                .max(dim=1)
-                .values
-            )
+            if self.use_conv:
+                obs = self.conv(inputs.obs[t]).view(N, -1)
+            else:
+                obs = (
+                    self.conv(inputs.obs[t].permute(0, 2, 3, 1))
+                    .view(N, -1, self.hidden_size)
+                    .max(dim=1)
+                    .values
+                )
             x = [
                 obs,
                 H.sum(0) if self.no_pointer else M[R, p],
