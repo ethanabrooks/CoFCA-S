@@ -30,9 +30,9 @@ class Env(ppo.control_flow.env.Env):
         )
         self.observation_space.spaces.update(
             obs=spaces.Box(low=0, high=1, shape=self.world_shape),
-            # lines=spaces.MultiDiscrete(
-            #     np.array([[len(self.line_types), num_subtasks]] * self.n_lines)
-            # ),
+            lines=spaces.MultiDiscrete(
+                np.array([[len(self.line_types), num_subtasks]] * self.n_lines)
+            ),
         )
 
     def subtask_str(self, subtask: Subtask):
@@ -54,11 +54,11 @@ class Env(ppo.control_flow.env.Env):
             print("-" * len(string))
         print("Condition:", condition)
 
-    # def format_line(self, line):
-    #     if type(line) is Subtask:
-    #         return [self.line_types.index(Subtask), line.id]
-    #     else:
-    #         return [self.line_types.index(line), 0]
+    def format_line(self, line):
+        if type(line) is Subtask:
+            return [self.line_types.index(Subtask), line.id]
+        else:
+            return [self.line_types.index(line), 0]
 
     def state_generator(self, lines) -> State:
         assert self.max_nesting_depth == 1
