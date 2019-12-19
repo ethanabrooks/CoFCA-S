@@ -108,6 +108,7 @@ class Env(gym.Env, ABC):
         while True:
             success = state.curr is None
             reward = int(term) * int(not failing)
+            info.update(regret=1 if term and failing else 0)
 
             def line_strings(index, level):
                 if index == len(lines):
@@ -170,7 +171,7 @@ class Env(gym.Env, ABC):
 
             if action == self.num_subtasks:
                 n += 1
-                if self.no_op_limit and n == self.no_op_limit:
+                if not self.evaluating and self.no_op_limit and n == self.no_op_limit:
                     failing = True
                     term = True
             elif state.curr is not None:
@@ -226,7 +227,7 @@ class Env(gym.Env, ABC):
 
         draw_circle(points[0], d=-2)  # mark start
         for point, line in zip(points, lines):
-            depth = 2 + min(self.line_to_int(line), self.num_subtasks)
+            depth = 2 + min(self.format_line(line), self.num_subtasks)
             draw_circle(point, d=depth)
         draw_circle(points[-1], d=-1)  # mark end
 
@@ -271,7 +272,7 @@ class Env(gym.Env, ABC):
 
         return image
 
-    def line_to_int(self, line):
+    def format_line(self, line):
         return (
             line.id
             if type(line) is Subtask
@@ -399,8 +400,7 @@ class Env(gym.Env, ABC):
 
     def get_observation(self, obs, active, lines):
         padded = lines + [Padding] * (self.n_lines - len(lines))
-        lines = [self.line_to_int(p) for p in padded]
-
+        lines = [self.format_line(p) for p in padded]
         obs = Obs(
             obs=obs, lines=lines, active=self.n_lines if active is None else active
         )
