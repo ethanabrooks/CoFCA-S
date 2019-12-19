@@ -2,6 +2,7 @@ from collections import namedtuple
 
 import torch
 import torch.nn.functional as F
+from gym import spaces
 from torch import nn as nn
 
 import ppo.control_flow.recurrence
@@ -38,8 +39,8 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             self.conv = nn.Sequential(init_(nn.Linear(d, hidden_size)), nn.ReLU())
         self.d_gate = Categorical(hidden_size, 2)
         self.a_gate = Categorical(hidden_size, 2)
-        self._state_sizes = RecurrentState(
-            **self._state_sizes._asdict(),
+        self.state_sizes = RecurrentState(
+            **self.state_sizes._asdict(),
             h2=hidden_size,
             ag_probs=2,
             dg_probs=2,
@@ -48,6 +49,11 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         )
         ones = torch.ones(1, dtype=torch.long)
         self.register_buffer("ones", ones)
+        offset = torch.tensor([[0, self.obs_spaces.lines.nvec[0, 0]]])
+        self.register_buffer("offset", offset)
+
+    def build_embed_task(self, hidden_size):
+        return nn.EmbeddingBag(self.obs_spaces.lines.nvec[0].sum(), hidden_size)
 
     @property
     def gru_in_size(self):
@@ -56,6 +62,12 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             return in_size + 2 * self.hidden_size
         else:
             return in_size + self.encoder_hidden_size
+
+    @staticmethod
+    def eval_lines_space(n_eval_lines, train_lines_space):
+        return spaces.MultiDiscrete(
+            np.repeat(train_lines_space.nvec[:1], repeats=n_eval_lines, axis=0)
+        )
 
     def pack(self, hxs):
         def pack():
@@ -83,13 +95,14 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         inputs = inputs._replace(obs=inputs.obs.view(T, N, *self.obs_spaces.obs.shape))
 
         # build memory
-        lines = inputs.lines.view(T, N, self.obs_sections.lines).long()[0, :, :]
-        M = self.embed_task(lines.view(-1)).view(
-            *lines.shape, self.encoder_hidden_size
+        nl = len(self.obs_spaces.lines.nvec)
+        lines = inputs.lines.view(T, N, nl, 2)
+        lines = lines.long()[0, :, :] + self.offset
+        M = self.embed_task(lines.view(-1, 2)).view(
+            *lines.shape[:2], self.encoder_hidden_size
         )  # n_batch, n_lines, hidden_size
 
         rolled = []
-        nl = self.obs_sections.lines
         for i in range(nl):
             rolled.append(M if self.no_roll else torch.roll(M, shifts=-i, dims=1))
         rolled = torch.cat(rolled, dim=0)

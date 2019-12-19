@@ -1,3 +1,5 @@
+from collections import OrderedDict
+
 import numpy as np
 from gym import spaces
 from rl_utils import hierarchical_parse_args
@@ -5,7 +7,8 @@ from rl_utils import hierarchical_parse_args
 import ppo.control_flow.env
 from ppo import keyboard_control
 from ppo.control_flow.env import build_parser, State
-from ppo.control_flow.lines import While, EndWhile, Subtask
+from ppo.control_flow.lines import While, EndWhile, Subtask, Padding
+from ppo.control_flow.env import Obs
 
 
 class Env(ppo.control_flow.env.Env):
@@ -26,12 +29,11 @@ class Env(ppo.control_flow.env.Env):
             np.array([self.num_subtasks + 1, 2 * self.n_lines, 2, 2])
         )
         self.observation_space.spaces.update(
-            obs=spaces.Box(low=0, high=1, shape=self.world_shape)
+            obs=spaces.Box(low=0, high=1, shape=self.world_shape),
+            lines=spaces.MultiDiscrete(
+                np.array([[len(self.line_types), num_subtasks]] * self.n_lines)
+            ),
         )
-
-    def subtask_str(self, subtask: Subtask):
-        i, o = self.unravel_id(subtask.id)
-        return f"Subtask {subtask.id}: {self.interactions[i]} {self.targets[o]}"
 
     def print_obs(self, obs):
         condition = obs[-1].mean()
@@ -47,6 +49,12 @@ class Env(ppo.control_flow.env.Env):
             print(string)
             print("-" * len(string))
         print("Condition:", condition)
+
+    def format_line(self, line):
+        if type(line) is Subtask:
+            return [self.line_types.index(Subtask), line.id]
+        else:
+            return [self.line_types.index(line), 0]
 
     def state_generator(self, lines) -> State:
         assert self.max_nesting_depth == 1
