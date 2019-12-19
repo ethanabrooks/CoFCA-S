@@ -78,11 +78,11 @@ class VecEnv(ABC):
          - infos: a sequence of info objects
         """
 
-    def close_extras(self):
-        """
-        Clean up the  extra resources, beyond what's in this base class.
-        Only runs when not self.closed.
-        """
+    # def close_extras(self):
+    # """
+    # Clean up the  extra resources, beyond what's in this base class.
+    # Only runs when not self.closed.
+    # """
 
     def close(self):
         if self.closed:

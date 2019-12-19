@@ -1,2 +1,4 @@
-* should c be attention-weighted?
-* make f recurrent
+* get gates synced up
+* implement complex conditionals
+* somehow deal with nondeterminism of convolutions
+* get auxiliary loss working?

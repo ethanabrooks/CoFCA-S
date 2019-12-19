@@ -1,37 +1,38 @@
+from gym.spaces import Box
 from rl_utils import hierarchical_parse_args
 
 import ppo.agent
 import ppo.control_flow.agent
 import ppo.control_flow.env
+import ppo.control_flow.multi_step.env
 from ppo import control_flow
 from ppo.arguments import build_parser
 from ppo.train import Train
 
 
-def main(log_dir, baseline, seed, **kwargs):
+def main(log_dir, seed, eval_lines, **kwargs):
     class _Train(Train):
         def build_agent(self, envs, debug=False, **agent_args):
-            if baseline == "default":
-                return ppo.agent.Agent(
-                    obs_shape=envs.observation_space.shape,
-                    action_space=envs.action_space,
-                    **agent_args,
-                )
-            elif baseline == "oh-et-al":
-                raise NotImplementedError
+            obs_space = envs.observation_space
             return ppo.control_flow.agent.Agent(
-                observation_space=envs.observation_space,
+                observation_space=obs_space,
                 action_space=envs.action_space,
+                eval_lines=eval_lines,
                 debug=debug,
-                baseline=baseline,
                 **agent_args,
             )
 
         @staticmethod
-        def make_env(seed, rank, evaluation, env_id, add_timestep, **env_args):
-            return control_flow.env.Env(
-                **env_args, baseline=baseline == "default", seed=seed + rank
+        def make_env(
+            seed, rank, evaluation, env_id, add_timestep, world_size, **env_args
+        ):
+            args = dict(
+                **env_args, eval_lines=eval_lines, baseline=False, seed=seed + rank
             )
+            if world_size is None:
+                return control_flow.env.Env(**args)
+            else:
+                return control_flow.multi_step.env.Env(**args, world_size=world_size)
 
     _Train(**kwargs, seed=seed, log_dir=log_dir).run()
 
@@ -42,20 +43,19 @@ def bandit_args():
     parser.add_argument("--no-tqdm", dest="use_tqdm", action="store_false")
     parser.add_argument("--time-limit", type=int)
     parser.add_argument("--eval-steps", type=int)
+    parser.add_argument("--eval-lines", type=int, required=True)
     parser.add_argument("--no-eval", action="store_true")
-    parser.add_argument("--baseline", choices=["oh-et-al", "default", "no-attention"])
-    parsers.env.add_argument("--min-lines", type=int, required=True)
-    parsers.env.add_argument("--max-lines", type=int, required=True)
-    parsers.env.add_argument("--num-subtasks", type=int, default=12)
-    parsers.env.add_argument("--eval-lines", type=int)
-    parsers.env.add_argument("--flip-prob", type=float, required=True)
-    parsers.env.add_argument("--delayed-reward", action="store_true")
-    parsers.env.add_argument("--max-nesting-depth", type=int)
+    ppo.control_flow.env.build_parser(parsers.env)
+    parsers.env.add_argument("--world-size", type=int)
     parsers.agent.add_argument("--debug", action="store_true")
-    parsers.agent.add_argument("--w-equals-active", action="store_true")
+    parsers.agent.add_argument("--no-scan", action="store_true")
+    parsers.agent.add_argument("--no-roll", action="store_true")
+    parsers.agent.add_argument("--no-pointer", action="store_true")
+    parsers.agent.add_argument("--include-action", action="store_true")
+    parsers.agent.add_argument("--encoder-hidden-size", type=int, required=True)
     parsers.agent.add_argument("--num-encoding-layers", type=int, required=True)
     parsers.agent.add_argument("--num-edges", type=int, required=True)
-    parsers.agent.add_argument("--reduceG", choices="first sum mean max".split())
+    parsers.agent.add_argument("--gate-coef", type=float)
     return parser
 
 
