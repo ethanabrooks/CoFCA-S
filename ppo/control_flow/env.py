@@ -171,7 +171,7 @@ class Env(gym.Env, ABC):
 
             if action == self.num_subtasks:
                 n += 1
-                if self.no_op_limit and n == self.no_op_limit:
+                if not self.evaluating and self.no_op_limit and n == self.no_op_limit:
                     failing = True
                     term = True
             elif state.curr is not None:
