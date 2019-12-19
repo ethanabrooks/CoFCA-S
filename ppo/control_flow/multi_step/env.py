@@ -11,7 +11,7 @@ from ppo.control_flow.lines import While, EndWhile, Subtask
 class Env(ppo.control_flow.env.Env):
     targets = ["pig", "sheep", "cat", "greenbot"]
     non_targets = ["ice", "agent"]
-    interactions = ["pickup", "transform"]  # , "visit"]
+    interactions = ["visit", "pickup", "transform"]
 
     def __init__(self, world_size, num_subtasks, **kwargs):
         assert num_subtasks == len(self.targets) * len(self.interactions)
