@@ -27,11 +27,6 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         )
         self.gate_coef = gate_coef
         self.action_size = 4
-        self.gru2 = nn.GRUCell(self.gru_in_size, hidden_size)
-        layers = []
-        for _ in range(num_layers):
-            layers.extend([init_(nn.Linear(hidden_size, hidden_size)), activation])
-        self.zeta2 = nn.Sequential(*layers)
         d = self.obs_spaces.obs.shape[0]
         self.use_conv = use_conv
         if self.use_conv:
