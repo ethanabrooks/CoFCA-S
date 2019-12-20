@@ -46,18 +46,19 @@ class Env(ppo.control_flow.env.Env):
         chars = [" "] + [o for o, *_ in self.targets + self.non_targets]
         for i, row in enumerate(obs):
             string = ""
-            for j, col in enumerate(row):
-                number = col * (1 + np.arange(col.size))
+            for j, channel in enumerate(row):
+                int_ids = 1 + np.arange(channel.size)
+                number = channel * int_ids
                 crop = sorted(number, reverse=True)[:grid_size]
                 string += "".join(chars[x] for x in crop) + "|"
             print(string)
             print("-" * len(string))
 
     def format_line(self, line):
-        if type(line) is type:
+        if line is Padding:
             return [self.line_types.index(line), 0]
         else:
-            return [self.line_types.index(Subtask), line.id]
+            return [self.line_types.index(type(line)), line.id]
 
     def state_generator(self, lines) -> State:
         assert self.max_nesting_depth == 1
@@ -72,9 +73,10 @@ class Env(ppo.control_flow.env.Env):
                 world[tuple((o, *p))] = 1
             return world
 
-        # state_iterator = super().state_generator(lines)
         line_iterator = self.line_generator(lines)
         ids = [self.unravel_id(line.id) for line in lines if type(line) is Subtask]
+        positions = self.random.randint(0, self.world_size, size=(len(ids), 2))
+        object_pos = [(o, tuple(pos)) for (i, o), pos in zip(ids, positions)]
 
         def evaluate_line(l):
             if l is None:
@@ -82,7 +84,8 @@ class Env(ppo.control_flow.env.Env):
             if type(lines[l]) is Subtask:
                 return 1
             else:
-                return any(o == lines[l].id for i, o in ids)
+                _, tgt = self.unravel_id(lines[l].id)
+                return any(o == tgt for o, _ in object_pos)
 
         def next_subtask(l):
             l = line_iterator.send(evaluate_line(l))
@@ -90,8 +93,6 @@ class Env(ppo.control_flow.env.Env):
                 l = line_iterator.send(evaluate_line(l))
             return l
 
-        positions = self.random.randint(0, self.world_size, size=(len(ids), 2))
-        object_pos = [(o, tuple(pos)) for (i, o), pos in zip(ids, positions)]
         prev, curr = 0, next_subtask(None)
         while True:
             subtask_id = yield State(
