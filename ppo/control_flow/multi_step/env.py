@@ -1,5 +1,3 @@
-from collections import OrderedDict
-
 import numpy as np
 from gym import spaces
 from rl_utils import hierarchical_parse_args
@@ -7,8 +5,7 @@ from rl_utils import hierarchical_parse_args
 import ppo.control_flow.env
 from ppo import keyboard_control
 from ppo.control_flow.env import build_parser, State
-from ppo.control_flow.lines import While, EndWhile, Subtask, Padding
-from ppo.control_flow.env import Obs
+from ppo.control_flow.lines import Subtask, Padding, Line
 
 
 class Env(ppo.control_flow.env.Env):
@@ -21,7 +18,7 @@ class Env(ppo.control_flow.env.Env):
         super().__init__(num_subtasks=num_subtasks, **kwargs)
         self.world_size = world_size
         self.world_shape = (
-            len(self.targets + self.non_targets) + 1,  # last channel for condition
+            len(self.targets + self.non_targets),
             self.world_size,
             self.world_size,
         )
@@ -35,13 +32,16 @@ class Env(ppo.control_flow.env.Env):
             ),
         )
 
-    def subtask_str(self, subtask: Subtask):
-        i, o = self.unravel_id(subtask.id)
-        return f"Subtask {subtask.id}: {self.interactions[i]} {self.targets[o]}"
+    def line_str(self, line: Line):
+        i, o = self.unravel_id(line.id)
+        if isinstance(line, Subtask):
+            description = f"{self.interactions[i]} {self.targets[o]}"
+        else:
+            description = self.targets[o]
+        return f"{line}: {description}"
 
     def print_obs(self, obs):
-        condition = obs[-1].mean()
-        obs = obs[:-1].transpose(1, 2, 0).astype(int)
+        obs = obs.transpose(1, 2, 0).astype(int)
         grid_size = obs.astype(int).sum(-1).max()  # max objects per grid
         chars = [" "] + [o for o, *_ in self.targets + self.non_targets]
         for i, row in enumerate(obs):
@@ -52,13 +52,12 @@ class Env(ppo.control_flow.env.Env):
                 string += "".join(chars[x] for x in crop) + "|"
             print(string)
             print("-" * len(string))
-        print("Condition:", condition)
 
     def format_line(self, line):
-        if type(line) is Subtask:
-            return [self.line_types.index(Subtask), line.id]
-        else:
+        if type(line) is type:
             return [self.line_types.index(line), 0]
+        else:
+            return [self.line_types.index(Subtask), line.id]
 
     def state_generator(self, lines) -> State:
         assert self.max_nesting_depth == 1
@@ -67,20 +66,37 @@ class Env(ppo.control_flow.env.Env):
         agent_pos = self.random.randint(0, self.world_size, size=2)
         agent_id = objects.index("agent")
 
-        def build_world(condition_bit):
+        def build_world():
             world = np.zeros(self.world_shape)
             for o, p in object_pos + [(agent_id, agent_pos)]:
                 world[tuple((o, *p))] = 1
-            world[-1] = condition_bit
             return world
 
-        state_iterator = super().state_generator(lines)
+        # state_iterator = super().state_generator(lines)
+        line_iterator = self.line_generator(lines)
         ids = [self.unravel_id(line.id) for line in lines if type(line) is Subtask]
+
+        def evaluate_line(l):
+            if l is None:
+                return None
+            if type(lines[l]) is Subtask:
+                return 1
+            else:
+                return any(o == lines[l].id for i, o in ids)
+
+        def next_subtask(l):
+            l = line_iterator.send(evaluate_line(l))
+            while not (l is None or type(lines[l]) is Subtask):
+                l = line_iterator.send(evaluate_line(l))
+            return l
+
         positions = self.random.randint(0, self.world_size, size=(len(ids), 2))
         object_pos = [(o, tuple(pos)) for (i, o), pos in zip(ids, positions)]
-        state = next(state_iterator)
+        prev, curr = 0, next_subtask(None)
         while True:
-            subtask_id = yield state._replace(obs=build_world(state.condition))
+            subtask_id = yield State(
+                obs=build_world(), condition=None, prev=prev, curr=curr
+            )
             ac, ob = self.unravel_id(subtask_id)
 
             def pair():
@@ -89,23 +105,34 @@ class Env(ppo.control_flow.env.Env):
             def on_object():
                 return pair() in object_pos  # standing on the desired object
 
-            correct_id = subtask_id == lines[state.curr].id
+            correct_id = subtask_id == lines[curr].id
             interaction = self.interactions[ac]
             if on_object() and interaction in ("pickup", "transform"):
                 object_pos.remove(pair())
                 if interaction == "transform":
                     object_pos.append((ice, tuple(agent_pos)))
-                state = next(state_iterator)
+                prev, curr = curr, next_subtask(curr)
             else:
                 candidates = [np.array(p) for o, p in object_pos if o == ob]
                 if candidates:
-                    nearest = min(candidates, key=lambda k: np.sum(agent_pos - k))
+                    nearest = min(
+                        candidates, key=lambda k: np.sum(np.abs(agent_pos - k))
+                    )
                     agent_pos += np.clip(nearest - agent_pos, -1, 1)
                     if on_object() and interaction == "visit":
-                        state = next(state_iterator)
+                        prev, curr = curr, next_subtask(curr)
                 elif correct_id:
                     # subtask is impossible
-                    state = next(state_iterator)
+                    prev, curr = curr, next_subtask(curr)
+
+    def build_lines(self):
+        lines = super().build_lines()
+        return [
+            line(self.random.choice(self.num_subtasks))
+            if type(line) not in (Subtask, Padding)
+            else line
+            for line in lines
+        ]
 
     def unravel_id(self, subtask_id):
         i = subtask_id // len(self.targets)

@@ -10,7 +10,16 @@ from rl_utils import hierarchical_parse_args, gym
 
 
 from ppo import keyboard_control
-from ppo.control_flow.lines import If, Else, EndIf, While, EndWhile, Subtask, Padding
+from ppo.control_flow.lines import (
+    If,
+    Else,
+    EndIf,
+    While,
+    EndWhile,
+    Subtask,
+    Padding,
+    Line,
+)
 from ppo.utils import RED, RESET
 
 Obs = namedtuple("Obs", "active lines obs")
@@ -114,7 +123,7 @@ class Env(gym.Env, ABC):
                 if index == len(lines):
                     return
                 line = lines[index]
-                if line in [Else, EndIf, EndWhile]:
+                if type(line) in [Else, EndIf, EndWhile]:
                     level -= 1
                 if index == state.curr and index == selected:
                     pre = "+ "
@@ -125,11 +134,12 @@ class Env(gym.Env, ABC):
                 else:
                     pre = "  "
                 indent = pre * level
-                if type(line) is Subtask:
-                    yield f"{indent}{self.subtask_str(line)}"
-                else:
-                    yield f"{indent}{line.__name__}"
-                if line in [If, While, Else]:
+                # if type(line) is Subtask:
+                yield f"{indent}{self.line_str(line)}"
+                # else:
+                #     yield f"{indent}{line.__name__}"
+                # if line in [If, While, Else]:
+                if type(line) in [If, While, Else]:
                     level += 1
                 yield from line_strings(index + 1, level)
 
@@ -183,8 +193,9 @@ class Env(gym.Env, ABC):
                 state = state_iterator.send(action)
 
     @staticmethod
-    def subtask_str(subtask: Subtask):
-        return f"Subtask {subtask.id}"
+    def line_str(line: Line):
+        raise NotImplemented
+        return f"Subtask {line.id}"
 
     @property
     def eval_condition_size(self):
@@ -207,11 +218,10 @@ class Env(gym.Env, ABC):
             lines = self.get_lines(
                 n_lines, active_conditions=[], max_nesting_depth=self.max_nesting_depth
             )
-        lines = [
+        return [
             Subtask(self.random.choice(self.num_subtasks)) if line is Subtask else line
             for line in lines
         ]
-        return lines
 
     def build_task_image(self, lines):
         image = np.zeros(self.image_shape)
@@ -347,28 +357,28 @@ class Env(gym.Env, ABC):
                 current, line = next(lines_iter)
             except StopIteration:
                 return
-            if line is EndIf or type(line) is Subtask:
+            if type(line) is EndIf or type(line) is Subtask:
                 yield current, current + 1  # False
                 yield current, current + 1  # True
-            if line is If:
+            if type(line) is If:
                 yield from self.get_transitions(
                     lines_iter, previous + [current]
                 )  # from = If
-            elif line is Else:
+            elif type(line) is Else:
                 prev = previous[-1]
                 yield prev, current  # False: If -> Else
                 yield prev, prev + 1  # True: If -> If + 1
                 previous[-1] = current
-            elif line is EndIf:
+            elif type(line) is EndIf:
                 prev = previous[-1]
                 yield prev, current  # False: If/Else -> EndIf
                 yield prev, prev + 1  # True: If/Else -> If/Else + 1
                 return
-            elif line is While:
+            elif type(line) is While:
                 yield from self.get_transitions(
                     lines_iter, previous + [current]
                 )  # from = While
-            elif line is EndWhile:
+            elif type(line) is EndWhile:
                 prev = previous[-1]
                 # While
                 yield prev, current + 1  # False: While -> EndWhile + 1
@@ -463,9 +473,9 @@ class Env(gym.Env, ABC):
         max_depth = 0
         depth = 0
         for line in lines:
-            if line in [If, While]:
+            if type(line) in [If, While]:
                 depth += 1
-            if line in [EndIf, EndWhile]:
+            if type(line) in [EndIf, EndWhile]:
                 depth -= 1
             max_depth = max(depth, max_depth)
         return max_depth
