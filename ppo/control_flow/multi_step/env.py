@@ -11,11 +11,13 @@ from ppo.control_flow.lines import Subtask, Padding, Line, While, If
 class Env(ppo.control_flow.env.Env):
     subtask_objects = ["pig", "sheep", "cat", "greenbot"]
     other_objects = ["ice", "agent"]
-    line_objects = subtask_objects + ["monkey"]
-    world_objects = subtask_objects + other_objects + ["monkey"]
+    line_objects = [x for x in subtask_objects]
+    world_objects = subtask_objects + other_objects
     interactions = ["visit", "pickup", "transform"]
 
-    def __init__(self, world_size, num_subtasks, **kwargs):
+    def __init__(self, world_size, num_subtasks, use_monkey, **kwargs):
+        if use_monkey:
+            self.line_objects.append("monkey")
         assert num_subtasks == len(self.subtask_objects) * len(self.interactions)
         super().__init__(num_subtasks=num_subtasks, **kwargs)
         self.world_size = world_size
