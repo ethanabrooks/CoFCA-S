@@ -20,7 +20,7 @@ from ppo.control_flow.lines import (
     Padding,
     Line,
 )
-from ppo.utils import RED, RESET
+from ppo.utils import RED, RESET, GREEN
 
 Obs = namedtuple("Obs", "active lines obs")
 Last = namedtuple("Last", "action active reward terminal selected")
@@ -146,6 +146,8 @@ class Env(gym.Env, ABC):
             def render():
                 if failing:
                     print(RED)
+                elif reward == 1:
+                    print(GREEN)
                 for i, string in enumerate(line_strings(index=0, level=1)):
                     print(f"{i}{string}")
                 print("Failing:", failing)
