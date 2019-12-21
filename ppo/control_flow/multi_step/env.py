@@ -1,3 +1,5 @@
+from collections import Counter
+
 import numpy as np
 from gym import spaces
 from rl_utils import hierarchical_parse_args
@@ -5,7 +7,7 @@ from rl_utils import hierarchical_parse_args
 import ppo.control_flow.env
 from ppo import keyboard_control
 from ppo.control_flow.env import build_parser, State
-from ppo.control_flow.lines import Subtask, Padding, Line, While, If
+from ppo.control_flow.lines import Subtask, Padding, Line, While, If, EndWhile
 
 
 class Env(ppo.control_flow.env.Env):
@@ -91,6 +93,7 @@ class Env(ppo.control_flow.env.Env):
         ]
         positions = self.random.randint(0, self.world_size, size=(len(line_strings), 2))
         object_pos = [(o, tuple(pos)) for (i, o), pos in zip(line_strings, positions)]
+        while_count = Counter()
 
         def evaluate_line(l):
             if l is None:
@@ -104,6 +107,9 @@ class Env(ppo.control_flow.env.Env):
         def next_subtask(l):
             l = line_iterator.send(evaluate_line(l))
             while not (l is None or type(lines[l]) is Subtask):
+                if type(lines[l]) is While:
+                    _, o = self.parse_id(lines[l].id)
+                    while_count[l] += 1
                 l = line_iterator.send(evaluate_line(l))
             return l
 
@@ -138,6 +144,10 @@ class Env(ppo.control_flow.env.Env):
                 elif correct_id:
                     # subtask is impossible
                     prev, curr = curr, next_subtask(curr)
+            for line, count in while_count.items():
+                if count > 4:
+                    _, obj = self.parse_id(line)
+                    object_pos = [(o, p) for o, p in object_pos if o != obj]
 
     def build_lines(self):
         num_line_ids = len(self.interactions) * len(self.line_objects)
