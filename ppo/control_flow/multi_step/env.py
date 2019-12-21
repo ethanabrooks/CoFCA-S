@@ -1,4 +1,4 @@
-from collections import Counter
+from collections import Counter, defaultdict
 
 import numpy as np
 from gym import spaces
@@ -15,7 +15,7 @@ class Env(ppo.control_flow.env.Env):
     other_objects = ["ice", "agent"]
     line_objects = [x for x in subtask_objects]
     world_objects = subtask_objects + other_objects
-    interactions = ["visit", "pickup", "transform"]
+    interactions = ["pickup", "transform", "visit"]
 
     def __init__(self, world_size, num_subtasks, **kwargs):
         assert num_subtasks == len(self.subtask_objects) * len(self.interactions)
@@ -85,12 +85,32 @@ class Env(ppo.control_flow.env.Env):
                 world[tuple((self.world_objects.index(o), *p))] = 1
             return world
 
-        line_iterator = self.line_generator(lines)
-        line_strings = [
-            self.parse_id(line.id) for line in lines if type(line) is Subtask
+        line_io = [self.parse_id(line.id) for line in lines if type(line) is Subtask]
+        line_pos = self.random.randint(0, self.world_size, size=(len(line_io), 2))
+        object_pos = [
+            (o, tuple(pos)) for (interaction, o), pos in zip(line_io, line_pos)
         ]
-        positions = self.random.randint(0, self.world_size, size=(len(line_strings), 2))
-        object_pos = [(o, tuple(pos)) for (i, o), pos in zip(line_strings, positions)]
+
+        while_blocks = defaultdict(list)  # while line: child subtasks
+        active_whiles = []
+        for interaction, line in enumerate(lines):
+            if type(line) is While:
+                active_whiles += [interaction]
+            elif type(line) is EndWhile:
+                active_whiles.pop()
+            elif active_whiles and type(line) is Subtask:
+                while_blocks[active_whiles[-1]] += [interaction]
+        for while_line, block in while_blocks.items():
+            l = self.random.choice(block)
+            i = self.random.choice(2)
+            assert self.interactions[i] in ("pickup", "transform")
+            _, obj = self.parse_id(lines[while_line].id)
+            o = self.line_objects.index(obj)
+            line_id = o * len(self.interactions) + i
+            assert self.parse_id(line_id) in (("pickup", obj), ("transform", obj))
+            lines[l] = Subtask(line_id)
+
+        line_iterator = self.line_generator(lines)
         while_count = Counter()
 
         def evaluate_line(l):
@@ -155,9 +175,9 @@ class Env(ppo.control_flow.env.Env):
             for line in (super().build_lines())
         ]
 
-    def parse_id(self, id):
-        i = id % len(self.interactions)
-        o = id // len(self.interactions)
+    def parse_id(self, line_id):
+        i = line_id % len(self.interactions)
+        o = line_id // len(self.interactions)
         return self.interactions[i], self.line_objects[o]
 
 
