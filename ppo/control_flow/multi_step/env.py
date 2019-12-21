@@ -101,40 +101,45 @@ class Env(ppo.control_flow.env.Env):
             elif active_whiles and type(line) is Subtask:
                 while_blocks[active_whiles[-1]] += [interaction]
         for while_line, block in while_blocks.items():
+            _, obj = self.parse_id(lines[while_line].id)
             l = self.random.choice(block)
             i = self.random.choice(2)
             assert self.interactions[i] in ("pickup", "transform")
-            _, obj = self.parse_id(lines[while_line].id)
             o = self.line_objects.index(obj)
             line_id = o * len(self.interactions) + i
             assert self.parse_id(line_id) in (("pickup", obj), ("transform", obj))
             lines[l] = Subtask(line_id)
 
         line_iterator = self.line_generator(lines)
-        while_count = Counter()
+        condition_evaluations = defaultdict(list)
 
         def evaluate_line(l):
             if l is None:
                 return None
-            if type(lines[l]) is Subtask:
+            line = lines[l]
+            if type(line) is Subtask:
                 return 1
             else:
-                _, tgt = self.parse_id(lines[l].id)
-                return any(o == tgt for o, _ in object_pos)
+                _, tgt = self.parse_id(line.id)
+                evaluation = any(o == tgt for o, _ in object_pos)
+                if type(line) in (If, While):
+                    condition_evaluations[type(line)] += [evaluation]
+                return evaluation
 
         def next_subtask(l):
             l = line_iterator.send(evaluate_line(l))
             while not (l is None or type(lines[l]) is Subtask):
-                if type(lines[l]) is While:
-                    _, o = self.parse_id(lines[l].id)
-                    while_count[l] += 1
                 l = line_iterator.send(evaluate_line(l))
             return l
 
         prev, curr = 0, next_subtask(None)
         while True:
             subtask_id = yield State(
-                obs=build_world(), condition=None, prev=prev, curr=curr
+                obs=build_world(),
+                condition=None,
+                prev=prev,
+                curr=curr,
+                condition_evaluations=condition_evaluations,
             )
             interaction, obj = self.parse_id(subtask_id)
 
@@ -161,10 +166,6 @@ class Env(ppo.control_flow.env.Env):
                 elif correct_id:
                     # subtask is impossible
                     prev, curr = curr, next_subtask(curr)
-            for line, count in while_count.items():
-                if count > 4:
-                    _, obj = self.parse_id(line)
-                    object_pos = [(o, p) for o, p in object_pos if o != obj]
 
     def build_lines(self):
         num_line_ids = len(self.interactions) * len(self.line_objects)
