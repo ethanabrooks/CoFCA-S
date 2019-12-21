@@ -125,8 +125,9 @@ class Env(ppo.control_flow.env.Env):
                 return pair() in object_pos  # standing on the desired object
 
             correct_id = subtask_id == lines[curr].id
-            if on_object() and interaction in ("pickup", "transform"):
-                object_pos.remove(pair())
+            if on_object():
+                if interaction in ("pickup", "transform"):
+                    object_pos.remove(pair())
                 if interaction == "transform":
                     object_pos.append(("ice", tuple(agent_pos)))
                 prev, curr = curr, next_subtask(curr)
@@ -137,8 +138,6 @@ class Env(ppo.control_flow.env.Env):
                         candidates, key=lambda k: np.sum(np.abs(agent_pos - k))
                     )
                     agent_pos += np.clip(nearest - agent_pos, -1, 1)
-                    if on_object() and interaction == "visit":
-                        prev, curr = curr, next_subtask(curr)
                 elif correct_id:
                     # subtask is impossible
                     prev, curr = curr, next_subtask(curr)
