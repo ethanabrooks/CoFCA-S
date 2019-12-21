@@ -109,6 +109,10 @@ class Env(ppo.control_flow.env.Env):
             line_id = o * len(self.interactions) + i
             assert self.parse_id(line_id) in (("pickup", obj), ("transform", obj))
             lines[l] = Subtask(line_id)
+            if self.random.random() < 0.5 and obj in self.world_objects:
+                object_pos += [
+                    (obj, tuple(self.random.randint(0, self.world_size, size=2)))
+                ]
 
         line_iterator = self.line_generator(lines)
         condition_evaluations = defaultdict(list)
