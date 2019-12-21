@@ -292,7 +292,7 @@ class Train(abc.ABC):
             # Observe reward and next obs
             obs, reward, done, infos = self.envs.step(act.action)
             #print(self.envs.action_space)
-            print("action: ", act.action, "obs: ", obs, " rew: ", reward, " done: ", done, " infos: ", infos)
+            #print("action: ", act.action, "obs: ", obs, " rew: ", reward, " done: ", done, " infos: ", infos)
             for d in infos:
                 for k, v in d.items():
                     episode_counter.update({k: float(v) / num_steps / len(infos)})
