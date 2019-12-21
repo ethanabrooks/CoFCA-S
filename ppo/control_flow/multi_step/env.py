@@ -17,9 +17,7 @@ class Env(ppo.control_flow.env.Env):
     world_objects = subtask_objects + other_objects
     interactions = ["visit", "pickup", "transform"]
 
-    def __init__(self, world_size, num_subtasks, use_monkey, **kwargs):
-        if use_monkey:
-            self.line_objects.append("monkey")
+    def __init__(self, world_size, num_subtasks, **kwargs):
         assert num_subtasks == len(self.subtask_objects) * len(self.interactions)
         super().__init__(num_subtasks=num_subtasks, **kwargs)
         self.world_size = world_size
