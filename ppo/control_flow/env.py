@@ -24,7 +24,7 @@ from ppo.utils import RED, RESET, GREEN
 
 Obs = namedtuple("Obs", "active lines obs")
 Last = namedtuple("Last", "action active reward terminal selected")
-State = namedtuple("State", "obs condition prev curr")
+State = namedtuple("State", "obs condition prev curr condition_evaluations")
 
 
 class Env(gym.Env, ABC):
@@ -118,6 +118,11 @@ class Env(gym.Env, ABC):
             success = state.curr is None
             reward = int(term) * int(not failing)
             info.update(regret=1 if term and failing else 0)
+            if term:
+                info.update(
+                    if_evaluations=state.condition_evaluations[If],
+                    while_evaluations=state.condition_evaluations[While],
+                )
 
             def line_strings(index, level):
                 if index == len(lines):
@@ -194,7 +199,7 @@ class Env(gym.Env, ABC):
                 state = state_iterator.send(action)
 
     @staticmethod
-    def line_str(line):
+    def line_str(line: Line):
         raise NotImplemented
         return f"Subtask {line.id}"
 
@@ -395,15 +400,22 @@ class Env(gym.Env, ABC):
         condition_evaluations = defaultdict(list)
 
         def next_subtask(msg=condition_bit):
-            a = line_iterator.send(msg)
-            while not (a is None or type(lines[a]) is Subtask):
-                a = line_iterator.send(condition_bit)
-            return a
+            l = line_iterator.send(msg)
+            while not (l is None or type(lines[l]) is Subtask):
+                line = lines[l]
+                if type(line) in (If, While):
+                    condition_evaluations[type(line)] += [condition_bit]
+                l = line_iterator.send(condition_bit)
+            return l
 
         prev, curr = 0, next_subtask(None)
         while True:
             yield State(
-                obs=condition_bit, condition=condition_bit, prev=prev, curr=curr
+                obs=condition_bit,
+                condition=condition_bit,
+                prev=prev,
+                curr=curr,
+                condition_evaluations=condition_evaluations,
             )
             condition_bit = abs(
                 condition_bit - int(self.random.rand() < self.flip_prob)
