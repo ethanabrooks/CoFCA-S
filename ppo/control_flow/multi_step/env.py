@@ -75,14 +75,11 @@ class Env(ppo.control_flow.env.Env):
         else:
             i, o = self.parse_id(line.id)
             line_type = self.line_types.index(type(line))
-            if type(line) is Subtask:
-                return [
-                    line_type,
-                    1 + self.interactions.index(i),
-                    1 + self.line_objects.index(o),
-                ]
-            else:
-                return [line_type, 0, 0]
+            return [
+                line_type,
+                1 + self.interactions.index(i) if type(line) is Subtask else 0,
+                1 + self.line_objects.index(o),
+            ]
 
     def state_generator(self, lines) -> State:
         assert self.max_nesting_depth == 1
