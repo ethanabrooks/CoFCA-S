@@ -17,7 +17,14 @@ RecurrentState = namedtuple(
 
 class Recurrence(ppo.control_flow.recurrence.Recurrence):
     def __init__(
-        self, hidden_size, gate_coef, num_layers, activation, use_conv, **kwargs
+        self,
+        hidden_size,
+        gate_coef,
+        num_layers,
+        activation,
+        use_conv,
+        num_conv_layers,
+        **kwargs
     ):
         super().__init__(
             hidden_size=hidden_size,
@@ -27,16 +34,20 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         )
         self.gate_coef = gate_coef
         self.action_size = 4
-        d = self.obs_spaces.obs.shape[0]
         self.use_conv = use_conv
-        if self.use_conv:
-            self.conv = nn.Sequential(
-                nn.Conv2d(d, hidden_size, kernel_size=3, padding=1),
-                nn.MaxPool2d(self.obs_spaces.obs.shape[1:]),
-                nn.ReLU(),
+        layers = []
+        in_size = self.obs_spaces.obs.shape[0]
+        for _ in range(num_conv_layers + 1):
+            layer = (
+                nn.Conv2d(in_size, hidden_size, kernel_size=3, padding=1)
+                if use_conv
+                else init_(nn.Linear(in_size, hidden_size))
             )
-        else:
-            self.conv = nn.Sequential(init_(nn.Linear(d, hidden_size)), nn.ReLU())
+            layers += [layer, nn.ReLU()]
+            in_size = hidden_size
+        if use_conv:
+            layers += [nn.MaxPool2d(self.obs_spaces.obs.shape[1:])]
+        self.conv = nn.Sequential(*layers)
         self.d_gate = Categorical(hidden_size, 2)
         self.a_gate = Categorical(hidden_size, 2)
         self.state_sizes = RecurrentState(
