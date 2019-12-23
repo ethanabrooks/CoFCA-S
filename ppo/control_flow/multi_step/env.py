@@ -11,9 +11,9 @@ from ppo.control_flow.lines import Subtask, Padding, Line, While, If, EndWhile
 
 
 class Env(ppo.control_flow.env.Env):
-    subtask_objects = ["pig", "sheep", "cat"]
+    subtask_objects = ["pig", "sheep", "cat", "greenbot"]
     other_objects = ["ice", "agent"]
-    line_objects = subtask_objects + ["greenbot"]
+    line_objects = subtask_objects + ["monkey"]
     world_objects = subtask_objects + other_objects
     interactions = ["pickup", "transform", "visit"]
 
