@@ -15,7 +15,7 @@ class Env(ppo.control_flow.env.Env):
     other_objects = ["ice", "agent"]
     line_objects = subtask_objects + ["monkey"]
     world_objects = subtask_objects + other_objects
-    interactions = ["visit", "pickup", "transform"]
+    interactions = ["pickup", "transform", "visit"]
 
     def __init__(self, world_size, num_subtasks, **kwargs):
         assert num_subtasks == len(self.subtask_objects) * len(self.interactions)
