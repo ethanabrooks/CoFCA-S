@@ -160,10 +160,10 @@ class Env(ppo.control_flow.env.Env):
                     # subtask is impossible
                     state = next(state_iterator)
 
-    def parse_id(self, subtask_id):
-        i = subtask_id // len(self.subtask_objects)
-        o = subtask_id % len(self.subtask_objects)
-        return self.interactions[i], self.subtask_objects[o]
+    def parse_id(self, line_id):
+        i = line_id % len(self.interactions)
+        o = line_id // len(self.interactions)
+        return self.interactions[i], self.line_objects[o]
 
 
 if __name__ == "__main__":
