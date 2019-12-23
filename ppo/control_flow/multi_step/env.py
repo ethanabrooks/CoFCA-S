@@ -114,7 +114,7 @@ class Env(ppo.control_flow.env.Env):
             i = self.random.choice(2)
             assert self.interactions[i] in ("pickup", "transform")
             o = self.line_objects.index(obj)
-            line_id = i * len(self.subtask_objects) + o
+            line_id = o * len(self.interactions) + i
             assert self.parse_id(line_id) in (("pickup", obj), ("transform", obj))
             lines[l] = Subtask(line_id)
             # if self.random.random() < 0.5 and obj in self.world_objects:
@@ -194,8 +194,8 @@ class Env(ppo.control_flow.env.Env):
         ]
 
     def parse_id(self, subtask_id):
-        i = subtask_id // len(self.subtask_objects)
-        o = subtask_id % len(self.subtask_objects)
+        i = subtask_id % len(self.interactions)
+        o = subtask_id // len(self.interactions)
         return self.interactions[i], self.subtask_objects[o]
 
 
