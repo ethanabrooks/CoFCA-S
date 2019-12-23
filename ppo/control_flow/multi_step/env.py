@@ -21,7 +21,12 @@ class Env(ppo.control_flow.env.Env):
         assert num_subtasks == len(self.subtask_objects) * len(self.interactions)
         super().__init__(num_subtasks=num_subtasks, **kwargs)
         self.world_size = world_size
-        self.world_shape = (len(self.world_objects), self.world_size, self.world_size)
+        self.world_shape = (
+            len(self.subtask_objects + self.other_objects)
+            + 1,  # last channel for condition
+            self.world_size,
+            self.world_size,
+        )
         self.action_space = spaces.MultiDiscrete(
             np.array([self.num_subtasks + 1, 2 * self.n_lines, 2, 2])
         )
