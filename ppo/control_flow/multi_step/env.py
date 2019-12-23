@@ -116,9 +116,9 @@ class Env(ppo.control_flow.env.Env):
             i = self.random.choice(2)
             assert self.interactions[i] in ("pickup", "transform")
             o = self.line_objects.index(obj)
-            line_id = o * len(self.interactions) + i
-            # assert self.parse_id(line_id) in (("pickup", obj), ("transform", obj))
-            # lines[l] = Subtask(line_id)
+            line_id = i * len(self.subtask_objects) + o
+            assert self.parse_id(line_id) in (("pickup", obj), ("transform", obj))
+            lines[l] = Subtask(line_id)
             # if self.random.random() < 0.5 and obj in self.world_objects:
             #     object_pos += [
             #         (obj, tuple(self.random.randint(0, self.world_size, size=2)))
