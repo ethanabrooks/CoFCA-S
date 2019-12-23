@@ -45,19 +45,18 @@ class Env(ppo.control_flow.env.Env):
             return f"{line}"
 
     def print_obs(self, obs):
-        condition = obs[-1].mean()
-        obs = obs[:-1].transpose(1, 2, 0).astype(int)
+        obs = obs.transpose(1, 2, 0).astype(int)
         grid_size = obs.astype(int).sum(-1).max()  # max objects per grid
-        chars = [" "] + [o for o, *_ in self.subtask_objects + self.other_objects]
+        chars = [" "] + [o for o, *_ in self.world_objects]
         for i, row in enumerate(obs):
             string = ""
-            for j, col in enumerate(row):
-                number = col * (1 + np.arange(col.size))
+            for j, channel in enumerate(row):
+                int_ids = 1 + np.arange(channel.size)
+                number = channel * int_ids
                 crop = sorted(number, reverse=True)[:grid_size]
                 string += "".join(chars[x] for x in crop) + "|"
             print(string)
             print("-" * len(string))
-        print("Condition:", condition)
 
     def preprocess_line(self, line):
         if type(line) is Subtask:
