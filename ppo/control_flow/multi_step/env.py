@@ -13,7 +13,7 @@ from ppo.control_flow.lines import Subtask, Padding, Line, While, If, EndWhile
 class Env(ppo.control_flow.env.Env):
     subtask_objects = ["pig", "sheep", "cat", "greenbot"]
     other_objects = ["ice", "agent"]
-    line_objects = subtask_objects + ["monkey"]
+    line_objects = subtask_objects  # + ["monkey"]
     world_objects = subtask_objects + other_objects
     interactions = ["pickup", "transform", "visit"]
 
@@ -32,16 +32,26 @@ class Env(ppo.control_flow.env.Env):
         self.observation_space.spaces.update(
             obs=spaces.Box(low=0, high=1, shape=self.world_shape),
             lines=spaces.MultiDiscrete(
-                np.array([[len(self.line_types), num_subtasks]] * self.n_lines)
+                np.array(
+                    [
+                        [
+                            len(self.line_types),
+                            1 + len(self.interactions) * len(self.line_objects),
+                        ]
+                    ]
+                    * self.n_lines
+                )
             ),
         )
 
     def line_str(self, line: Line):
+        i, o = self.parse_id(line.id)
         if isinstance(line, Subtask):
-            i, o = self.parse_id(line.id)
             return f"{line}: {i} {o}"
+        elif isinstance(line, (If, While)):
+            return f"{line}: {o}"
         else:
-            return line.__name__
+            return f"{line}"
 
     def print_obs(self, obs):
         print("condition:", int(np.mean(obs[-1])))
@@ -59,10 +69,12 @@ class Env(ppo.control_flow.env.Env):
             print("-" * len(string))
 
     def preprocess_line(self, line):
-        if type(line) is Subtask:
-            return [self.line_types.index(Subtask), line.id]
+        if line is Padding:
+            return [self.line_types.index(Padding), 0]
+        elif type(line) is Subtask:
+            return [self.line_types.index(type(line)), 1 + line.id]
         else:
-            return [self.line_types.index(line), 0]
+            return [self.line_types.index(type(line)), 0]
 
     def state_generator(self, lines) -> State:
         assert self.max_nesting_depth == 1
@@ -97,7 +109,7 @@ class Env(ppo.control_flow.env.Env):
             assert self.interactions[i] in ("pickup", "transform")
             o = self.line_objects.index(obj)
             line_id = o * len(self.interactions) + i
-            assert self.parse_id(line_id) in (("pickup", obj), ("transform", obj))
+            # assert self.parse_id(line_id) in (("pickup", obj), ("transform", obj))
             # lines[l] = Subtask(line_id)
             # if self.random.random() < 0.5 and obj in self.world_objects:
             #     object_pos += [
@@ -165,6 +177,15 @@ class Env(ppo.control_flow.env.Env):
                 elif correct_id:
                     # subtask is impossible
                     prev, curr = curr, next_subtask(curr)
+
+    def build_lines(self):
+        num_line_ids = len(self.interactions) * len(self.line_objects)
+        return [
+            line(self.random.randint(num_line_ids))
+            if type(line) not in (Subtask, Padding)
+            else line
+            for line in (super().build_lines())
+        ]
 
     def parse_id(self, subtask_id):
         i = subtask_id // len(self.subtask_objects)

@@ -128,7 +128,7 @@ class Env(gym.Env, ABC):
                 if index == len(lines):
                     return
                 line = lines[index]
-                if line in [Else, EndIf, EndWhile]:
+                if type(line) in [Else, EndIf, EndWhile]:
                     level -= 1
                 if index == state.curr and index == selected:
                     pre = "+ "
@@ -144,7 +144,7 @@ class Env(gym.Env, ABC):
                 # else:
                 #     yield f"{indent}{line.__name__}"
                 # if line in [If, While, Else]:
-                if (line) in [If, While, Else]:
+                if type(line) in [If, While, Else]:
                     level += 1
                 yield from line_strings(index + 1, level)
 
@@ -350,11 +350,11 @@ class Env(gym.Env, ABC):
         if_evaluations = []
         while True:
             condition_bit = yield None if i >= len(lines) else i
-            if lines[i] is Else:
+            if type(lines[i]) is Else:
                 evaluation = not if_evaluations.pop()
             else:
                 evaluation = bool(condition_bit)
-            if lines[i] is If:
+            if type(lines[i]) is If:
                 if_evaluations.append(evaluation)
             i = line_transitions[i][evaluation]
 
@@ -364,28 +364,28 @@ class Env(gym.Env, ABC):
                 current, line = next(lines_iter)
             except StopIteration:
                 return
-            if line is EndIf or type(line) is Subtask:
+            if type(line) is EndIf or type(line) is Subtask:
                 yield current, current + 1  # False
                 yield current, current + 1  # True
-            if line is If:
+            if type(line) is If:
                 yield from self.get_transitions(
                     lines_iter, previous + [current]
                 )  # from = If
-            elif line is Else:
+            elif type(line) is Else:
                 prev = previous[-1]
                 yield prev, current  # False: If -> Else
                 yield prev, prev + 1  # True: If -> If + 1
                 previous[-1] = current
-            elif line is EndIf:
+            elif type(line) is EndIf:
                 prev = previous[-1]
                 yield prev, current  # False: If/Else -> EndIf
                 yield prev, prev + 1  # True: If/Else -> If/Else + 1
                 return
-            elif line is While:
+            elif type(line) is While:
                 yield from self.get_transitions(
                     lines_iter, previous + [current]
                 )  # from = While
-            elif line is EndWhile:
+            elif type(line) is EndWhile:
                 prev = previous[-1]
                 # While
                 yield prev, current + 1  # False: While -> EndWhile + 1
@@ -488,9 +488,9 @@ class Env(gym.Env, ABC):
         max_depth = 0
         depth = 0
         for line in lines:
-            if line in [If, While]:
+            if type(line) in [If, While]:
                 depth += 1
-            if line in [EndIf, EndWhile]:
+            if type(line) in [EndIf, EndWhile]:
                 depth -= 1
             max_depth = max(depth, max_depth)
         return max_depth
