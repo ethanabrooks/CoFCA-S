@@ -49,7 +49,8 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         )
         ones = torch.ones(1, dtype=torch.long)
         self.register_buffer("ones", ones)
-        offset = torch.tensor([[0, self.obs_spaces.lines.nvec[0, 0]]])
+        line_nvec = torch.tensor(self.obs_spaces.lines.nvec[0, :-1])
+        offset = F.pad(line_nvec.cumsum(0), [1, 0])
         self.register_buffer("offset", offset)
 
     def build_embed_task(self, hidden_size):
