@@ -103,7 +103,7 @@ class Recurrence(nn.Module):
         )
 
     def build_embed_task(self, hidden_size):
-        return nn.Embedding(self.obs_spaces.lines.nvec[0], hidden_size)
+        return nn.Embedding(len(self.obs_spaces.lines.nvec), hidden_size)
 
     @property
     def gru_in_size(self):

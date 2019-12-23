@@ -34,6 +34,11 @@ def main(log_dir, seed, eval_lines, **kwargs):
             else:
                 return control_flow.multi_step.env.Env(**args, world_size=world_size)
 
+        def make_vec_envs(self, use_monkey, **kwargs):
+            if use_monkey:
+                control_flow.multi_step.env.Env.line_objects.append("monkey")
+            return super().make_vec_envs(**kwargs)
+
     _Train(**kwargs, seed=seed, log_dir=log_dir).run()
 
 
@@ -47,6 +52,7 @@ def bandit_args():
     parser.add_argument("--no-eval", action="store_true")
     ppo.control_flow.env.build_parser(parsers.env)
     parsers.env.add_argument("--world-size", type=int)
+    parsers.env.add_argument("--use-monkey", action="store_true")
     parsers.agent.add_argument("--debug", action="store_true")
     parsers.agent.add_argument("--no-scan", action="store_true")
     parsers.agent.add_argument("--no-roll", action="store_true")

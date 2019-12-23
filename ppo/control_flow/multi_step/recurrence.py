@@ -49,11 +49,12 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         )
         ones = torch.ones(1, dtype=torch.long)
         self.register_buffer("ones", ones)
-        # offset = torch.tensor([[0, self.obs_spaces.lines.nvec[0, 0]]])
-        # self.register_buffer("offset", offset)
+        line_nvec = torch.tensor(self.obs_spaces.lines.nvec[0, :-1])
+        offset = F.pad(line_nvec.cumsum(0), [1, 0])
+        self.register_buffer("offset", offset)
 
-    # def build_embed_task(self, hidden_size):
-    #     return nn.EmbeddingBag(self.obs_spaces.lines.nvec[0].sum(), hidden_size)
+    def build_embed_task(self, hidden_size):
+        return nn.EmbeddingBag(self.obs_spaces.lines.nvec[0].sum(), hidden_size)
 
     @property
     def gru_in_size(self):
@@ -63,11 +64,11 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         else:
             return in_size + self.encoder_hidden_size
 
-    # @staticmethod
-    # def eval_lines_space(n_eval_lines, train_lines_space):
-    #     return spaces.MultiDiscrete(
-    #         np.repeat(train_lines_space.nvec[:1], repeats=n_eval_lines, axis=0)
-    #     )
+    @staticmethod
+    def eval_lines_space(n_eval_lines, train_lines_space):
+        return spaces.MultiDiscrete(
+            np.repeat(train_lines_space.nvec[:1], repeats=n_eval_lines, axis=0)
+        )
 
     def pack(self, hxs):
         def pack():
@@ -97,7 +98,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         # build memory
         nl = len(self.obs_spaces.lines.nvec)
         lines = inputs.lines.view(T, N, *self.obs_spaces.lines.shape)
-        lines = lines.long()[0, :, :]  # + self.offset
+        lines = lines.long()[0, :, :] + self.offset
         M = self.embed_task(lines.view(-1, self.obs_spaces.lines.nvec[0].size)).view(
             *lines.shape[:2], self.encoder_hidden_size
         )  # n_batch, n_lines, hidden_size
