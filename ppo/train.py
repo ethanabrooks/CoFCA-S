@@ -272,10 +272,9 @@ class TrainBase(abc.ABC):
 
             # Observe reward and next obs
             obs, reward, done, infos = envs.step(act.action)
-
             for d in infos:
                 for k, v in d.items():
-                    episode_counter[k] += [float(v)]
+                    episode_counter[k] += v if type(v) is list else [float(v)]
 
             # track rewards
             counter['reward'] += reward.numpy()

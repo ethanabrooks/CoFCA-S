@@ -24,18 +24,13 @@ setup(
         "bin/show-best",
         "bin/reproduce",
     ],
-    entry_points=dict(
-        console_scripts=[
-            "oh-et-al=ppo.oh_et_al.main:cli",
-            "picture-hanging=ppo.picture_hanging.main:cli",
-        ]
-    ),
+    entry_points=dict(console_scripts=["ppo=ppo.main:cli", "exp=ppo.main:exp_cli"]),
     install_requires=[
-        "ray[debug]",
-        "tensorboardX",
-        "tensorflow",
-        "opencv-python",
-        "psutil",
-        "requests",
+        "ray[debug]==0.7.3",
+        "tensorboardX==1.8",
+        "tensorflow>=1.15",
+        "opencv-python==4.1.0.25",
+        "psutil==5.6.3",
+        "requests==2.22.0",
     ],
 )
