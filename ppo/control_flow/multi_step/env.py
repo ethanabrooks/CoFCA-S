@@ -1,4 +1,4 @@
-from collections import OrderedDict
+from collections import Counter, defaultdict
 
 import numpy as np
 from gym import spaces
@@ -7,8 +7,7 @@ from rl_utils import hierarchical_parse_args
 import ppo.control_flow.env
 from ppo import keyboard_control
 from ppo.control_flow.env import build_parser, State
-from ppo.control_flow.lines import While, EndWhile, Subtask, Padding
-from ppo.control_flow.env import Obs
+from ppo.control_flow.lines import Subtask, Padding, Line, While, If, EndWhile
 
 
 class Env(ppo.control_flow.env.Env):
@@ -36,9 +35,14 @@ class Env(ppo.control_flow.env.Env):
             ),
         )
 
-    def subtask_str(self, subtask: Subtask):
-        i, o = self.unravel_id(subtask.id)
-        return f"Subtask {subtask.id}: {self.interactions[i]} {self.subtask_objects[o]}"
+    def line_str(self, line: Line):
+        i, o = self.parse_id(line.id)
+        if isinstance(line, Subtask):
+            return f"{line}: {i} {o}"
+        elif isinstance(line, (If, While)):
+            return f"{line}: {o}"
+        else:
+            return f"{line}"
 
     def print_obs(self, obs):
         condition = obs[-1].mean()
