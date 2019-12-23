@@ -13,6 +13,8 @@ from ppo.control_flow.lines import Subtask, Padding, Line, While, If, EndWhile
 class Env(ppo.control_flow.env.Env):
     subtask_objects = ["pig", "sheep", "cat", "greenbot"]
     other_objects = ["ice", "agent"]
+    line_objects = subtask_objects + ["monkey"]
+    world_objects = subtask_objects + other_objects
     interactions = ["visit", "pickup", "transform"]
 
     def __init__(self, world_size, num_subtasks, **kwargs):
@@ -67,25 +69,24 @@ class Env(ppo.control_flow.env.Env):
     def state_generator(self, lines) -> State:
         assert self.max_nesting_depth == 1
         objects = self.subtask_objects + self.other_objects
-        ice = objects.index("ice")
         agent_pos = self.random.randint(0, self.world_size, size=2)
-        agent_id = objects.index("agent")
 
         def build_world(condition_bit):
             world = np.zeros(self.world_shape)
-            for o, p in object_pos + [(agent_id, agent_pos)]:
+            for obj, p in object_pos + [("agent", agent_pos)]:
+                o = self.world_objects.index(obj)
                 world[tuple((o, *p))] = 1
             world[-1] = condition_bit
             return world
 
         state_iterator = super().state_generator(lines)
-        ids = [self.unravel_id(line.id) for line in lines if type(line) is Subtask]
-        positions = self.random.randint(0, self.world_size, size=(len(ids), 2))
-        object_pos = [(o, tuple(pos)) for (i, o), pos in zip(ids, positions)]
+        line_str = [self.parse_id(line.id) for line in lines if type(line) is Subtask]
+        line_pos = self.random.randint(0, self.world_size, size=(len(line_str), 2))
+        object_pos = [(o, tuple(pos)) for (i, o), pos in zip(line_str, line_pos)]
         state = next(state_iterator)
         while True:
             subtask_id = yield state._replace(obs=build_world(state.condition))
-            ac, ob = self.unravel_id(subtask_id)
+            interaction, ob = self.parse_id(subtask_id)
 
             def pair():
                 return ob, tuple(agent_pos)
@@ -94,11 +95,10 @@ class Env(ppo.control_flow.env.Env):
                 return pair() in object_pos  # standing on the desired object
 
             correct_id = subtask_id == lines[state.curr].id
-            interaction = self.interactions[ac]
             if on_object() and interaction in ("pickup", "transform"):
                 object_pos.remove(pair())
                 if interaction == "transform":
-                    object_pos.append((ice, tuple(agent_pos)))
+                    object_pos.append(("ice", tuple(agent_pos)))
                 state = next(state_iterator)
             else:
                 candidates = [np.array(p) for o, p in object_pos if o == ob]
@@ -111,10 +111,10 @@ class Env(ppo.control_flow.env.Env):
                     # subtask is impossible
                     state = next(state_iterator)
 
-    def unravel_id(self, subtask_id):
+    def parse_id(self, subtask_id):
         i = subtask_id // len(self.subtask_objects)
         o = subtask_id % len(self.subtask_objects)
-        return i, o
+        return self.interactions[i], self.subtask_objects[o]
 
 
 if __name__ == "__main__":
