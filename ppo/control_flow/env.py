@@ -10,7 +10,16 @@ from rl_utils import hierarchical_parse_args, gym
 
 
 from ppo import keyboard_control
-from ppo.control_flow.lines import If, Else, EndIf, While, EndWhile, Subtask, Padding
+from ppo.control_flow.lines import (
+    If,
+    Else,
+    EndIf,
+    While,
+    EndWhile,
+    Subtask,
+    Padding,
+    Line,
+)
 from ppo.utils import RED, RESET, GREEN
 
 Obs = namedtuple("Obs", "active lines obs")
