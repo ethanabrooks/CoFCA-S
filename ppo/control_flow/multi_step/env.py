@@ -12,16 +12,17 @@ from ppo.control_flow.env import Obs
 
 
 class Env(ppo.control_flow.env.Env):
-    targets = ["pig", "sheep", "cat", "greenbot"]
-    non_targets = ["ice", "agent"]
+    subtask_objects = ["pig", "sheep", "cat", "greenbot"]
+    other_objects = ["ice", "agent"]
     interactions = ["visit", "pickup", "transform"]
 
     def __init__(self, world_size, num_subtasks, **kwargs):
-        assert num_subtasks == len(self.targets) * len(self.interactions)
+        assert num_subtasks == len(self.subtask_objects) * len(self.interactions)
         super().__init__(num_subtasks=num_subtasks, **kwargs)
         self.world_size = world_size
         self.world_shape = (
-            len(self.targets + self.non_targets) + 1,  # last channel for condition
+            len(self.subtask_objects + self.other_objects)
+            + 1,  # last channel for condition
             self.world_size,
             self.world_size,
         )
@@ -37,13 +38,13 @@ class Env(ppo.control_flow.env.Env):
 
     def subtask_str(self, subtask: Subtask):
         i, o = self.unravel_id(subtask.id)
-        return f"Subtask {subtask.id}: {self.interactions[i]} {self.targets[o]}"
+        return f"Subtask {subtask.id}: {self.interactions[i]} {self.subtask_objects[o]}"
 
     def print_obs(self, obs):
         condition = obs[-1].mean()
         obs = obs[:-1].transpose(1, 2, 0).astype(int)
         grid_size = obs.astype(int).sum(-1).max()  # max objects per grid
-        chars = [" "] + [o for o, *_ in self.targets + self.non_targets]
+        chars = [" "] + [o for o, *_ in self.subtask_objects + self.other_objects]
         for i, row in enumerate(obs):
             string = ""
             for j, col in enumerate(row):
@@ -62,7 +63,7 @@ class Env(ppo.control_flow.env.Env):
 
     def state_generator(self, lines) -> State:
         assert self.max_nesting_depth == 1
-        objects = self.targets + self.non_targets
+        objects = self.subtask_objects + self.other_objects
         ice = objects.index("ice")
         agent_pos = self.random.randint(0, self.world_size, size=2)
         agent_id = objects.index("agent")
@@ -108,8 +109,8 @@ class Env(ppo.control_flow.env.Env):
                     state = next(state_iterator)
 
     def unravel_id(self, subtask_id):
-        i = subtask_id // len(self.targets)
-        o = subtask_id % len(self.targets)
+        i = subtask_id // len(self.subtask_objects)
+        o = subtask_id % len(self.subtask_objects)
         return i, o
 
 
