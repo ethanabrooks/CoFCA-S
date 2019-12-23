@@ -76,13 +76,11 @@ class Env(ppo.control_flow.env.Env):
             world[-1] = condition_bit
             return world
 
-        state_iterator = super().state_generator(lines)
         line_io = [self.parse_id(line.id) for line in lines if type(line) is Subtask]
         line_pos = self.random.randint(0, self.world_size, size=(len(line_io), 2))
         object_pos = [
             (o, tuple(pos)) for (interaction, o), pos in zip(line_io, line_pos)
         ]
-        state = next(state_iterator)
 
         while_blocks = defaultdict(list)  # while line: child subtasks
         active_whiles = []
@@ -95,8 +93,8 @@ class Env(ppo.control_flow.env.Env):
                 while_blocks[active_whiles[-1]] += [interaction]
         for while_line, block in while_blocks.items():
             _, obj = self.parse_id(lines[while_line].id)
-            l = 0  # self.random.choice(block)
-            i = 0  # self.random.choice(2)
+            l = self.random.choice(block)
+            i = self.random.choice(2)
             assert self.interactions[i] in ("pickup", "transform")
             o = self.line_objects.index(obj)
             line_id = o * len(self.interactions) + i
@@ -109,6 +107,7 @@ class Env(ppo.control_flow.env.Env):
 
         line_iterator = self.line_generator(lines)
         condition_evaluations = defaultdict(list)
+        condition_bit = 0 if self.eval_condition_size else self.random.randint(0, 2)
 
         def evaluate_line(l):
             if l is None:
@@ -117,8 +116,9 @@ class Env(ppo.control_flow.env.Env):
             if type(line) is Subtask:
                 return 1
             else:
-                _, tgt = self.parse_id(line.id)
-                evaluation = any(o == tgt for o, _ in object_pos)
+                # _, tgt = self.parse_id(line.id)
+                # evaluation = any(o == tgt for o, _ in object_pos)
+                evaluation = condition_bit
                 if type(line) in (If, While):
                     condition_evaluations[type(line)] += [evaluation]
                 return evaluation
@@ -129,9 +129,18 @@ class Env(ppo.control_flow.env.Env):
                 l = line_iterator.send(evaluate_line(l))
             return l
 
-        # prev, curr = 0, next_subtask(None)
+        prev, curr = 0, next_subtask(None)
         while True:
-            subtask_id = yield state._replace(obs=build_world(state.condition))
+            subtask_id = yield State(
+                obs=build_world(condition_bit),
+                condition=None,
+                prev=prev,
+                curr=curr,
+                condition_evaluations=condition_evaluations,
+            )
+            condition_bit = abs(
+                condition_bit - int(self.random.rand() < self.flip_prob)
+            )
             interaction, obj = self.parse_id(subtask_id)
 
             def pair():
@@ -140,14 +149,13 @@ class Env(ppo.control_flow.env.Env):
             def on_object():
                 return pair() in object_pos  # standing on the desired object
 
-            curr = state.curr
             correct_id = subtask_id == lines[curr].id
             if on_object():
                 if interaction in ("pickup", "transform"):
                     object_pos.remove(pair())
                 if interaction == "transform":
                     object_pos.append(("ice", tuple(agent_pos)))
-                state = next(state_iterator)
+                prev, curr = curr, next_subtask(curr)
             else:
                 candidates = [np.array(p) for o, p in object_pos if o == obj]
                 if candidates:
@@ -157,7 +165,7 @@ class Env(ppo.control_flow.env.Env):
                     agent_pos += np.clip(nearest - agent_pos, -1, 1)
                 elif correct_id:
                     # subtask is impossible
-                    state = next(state_iterator)
+                    prev, curr = curr, next_subtask(curr)
 
     def parse_id(self, subtask_id):
         i = subtask_id // len(self.subtask_objects)
