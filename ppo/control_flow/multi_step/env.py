@@ -54,7 +54,7 @@ class Env(ppo.control_flow.env.Env):
             print("-" * len(string))
         print("Condition:", condition)
 
-    def format_line(self, line):
+    def preprocess_line(self, line):
         if type(line) is Subtask:
             return [self.line_types.index(Subtask), line.id]
         else:

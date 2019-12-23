@@ -1,5 +1,5 @@
 from abc import ABC
-from collections import defaultdict, namedtuple, OrderedDict
+from collections import defaultdict, namedtuple, OrderedDict, Counter
 
 import numpy as np
 
@@ -11,7 +11,7 @@ from rl_utils import hierarchical_parse_args, gym
 
 from ppo import keyboard_control
 from ppo.control_flow.lines import If, Else, EndIf, While, EndWhile, Subtask, Padding
-from ppo.utils import RED, RESET
+from ppo.utils import RED, RESET, GREEN
 
 Obs = namedtuple("Obs", "active lines obs")
 Last = namedtuple("Last", "action active reward terminal selected")
@@ -136,6 +136,8 @@ class Env(gym.Env, ABC):
             def render():
                 if failing:
                     print(RED)
+                elif reward == 1:
+                    print(GREEN)
                 for i, string in enumerate(line_strings(index=0, level=1)):
                     print(f"{i}{string}")
                 print("Failing:", failing)
@@ -183,8 +185,9 @@ class Env(gym.Env, ABC):
                 state = state_iterator.send(action)
 
     @staticmethod
-    def subtask_str(subtask: Subtask):
-        return f"Subtask {subtask.id}"
+    def line_str(line):
+        raise NotImplemented
+        return f"Subtask {line.id}"
 
     @property
     def eval_condition_size(self):
@@ -207,11 +210,10 @@ class Env(gym.Env, ABC):
             lines = self.get_lines(
                 n_lines, active_conditions=[], max_nesting_depth=self.max_nesting_depth
             )
-        lines = [
+        return [
             Subtask(self.random.choice(self.num_subtasks)) if line is Subtask else line
             for line in lines
         ]
-        return lines
 
     def build_task_image(self, lines):
         image = np.zeros(self.image_shape)
@@ -227,7 +229,7 @@ class Env(gym.Env, ABC):
 
         draw_circle(points[0], d=-2)  # mark start
         for point, line in zip(points, lines):
-            depth = 2 + min(self.format_line(line), self.num_subtasks)
+            depth = 2 + min(self.preprocess_line(line), self.num_subtasks)
             draw_circle(point, d=depth)
         draw_circle(points[-1], d=-1)  # mark end
 
@@ -272,7 +274,7 @@ class Env(gym.Env, ABC):
 
         return image
 
-    def format_line(self, line):
+    def preprocess_line(self, line):
         return (
             line.id
             if type(line) is Subtask
@@ -381,6 +383,7 @@ class Env(gym.Env, ABC):
     def state_generator(self, lines) -> State:
         line_iterator = self.line_generator(lines)
         condition_bit = 0 if self.eval_condition_size else self.random.randint(0, 2)
+        condition_evaluations = defaultdict(list)
 
         def next_subtask(msg=condition_bit):
             a = line_iterator.send(msg)
@@ -400,7 +403,7 @@ class Env(gym.Env, ABC):
 
     def get_observation(self, obs, active, lines):
         padded = lines + [Padding] * (self.n_lines - len(lines))
-        lines = [self.format_line(p) for p in padded]
+        lines = [self.preprocess_line(p) for p in padded]
         obs = Obs(
             obs=obs, lines=lines, active=self.n_lines if active is None else active
         )
