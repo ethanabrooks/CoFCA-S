@@ -68,22 +68,69 @@ class Env(ppo.control_flow.env.Env):
 
     def state_generator(self, lines) -> State:
         assert self.max_nesting_depth == 1
-        objects = self.subtask_objects + self.other_objects
         agent_pos = self.random.randint(0, self.world_size, size=2)
 
         def build_world(condition_bit):
             world = np.zeros(self.world_shape)
-            for obj, p in object_pos + [("agent", agent_pos)]:
-                o = self.world_objects.index(obj)
-                world[tuple((o, *p))] = 1
+            for o, p in object_pos + [("agent", agent_pos)]:
+                world[tuple((self.world_objects.index(o), *p))] = 1
             world[-1] = condition_bit
             return world
 
         state_iterator = super().state_generator(lines)
-        line_str = [self.parse_id(line.id) for line in lines if type(line) is Subtask]
-        line_pos = self.random.randint(0, self.world_size, size=(len(line_str), 2))
-        object_pos = [(o, tuple(pos)) for (i, o), pos in zip(line_str, line_pos)]
+        line_io = [self.parse_id(line.id) for line in lines if type(line) is Subtask]
+        line_pos = self.random.randint(0, self.world_size, size=(len(line_io), 2))
+        object_pos = [
+            (o, tuple(pos)) for (interaction, o), pos in zip(line_io, line_pos)
+        ]
         state = next(state_iterator)
+
+        while_blocks = defaultdict(list)  # while line: child subtasks
+        active_whiles = []
+        for interaction, line in enumerate(lines):
+            if type(line) is While:
+                active_whiles += [interaction]
+            elif type(line) is EndWhile:
+                active_whiles.pop()
+            elif active_whiles and type(line) is Subtask:
+                while_blocks[active_whiles[-1]] += [interaction]
+        for while_line, block in while_blocks.items():
+            _, obj = self.parse_id(lines[while_line].id)
+            l = 0  # self.random.choice(block)
+            i = 0  # self.random.choice(2)
+            assert self.interactions[i] in ("pickup", "transform")
+            o = self.line_objects.index(obj)
+            line_id = o * len(self.interactions) + i
+            assert self.parse_id(line_id) in (("pickup", obj), ("transform", obj))
+            # lines[l] = Subtask(line_id)
+            # if self.random.random() < 0.5 and obj in self.world_objects:
+            #     object_pos += [
+            #         (obj, tuple(self.random.randint(0, self.world_size, size=2)))
+            #     ]
+
+        line_iterator = self.line_generator(lines)
+        condition_evaluations = defaultdict(list)
+
+        def evaluate_line(l):
+            if l is None:
+                return None
+            line = lines[l]
+            if type(line) is Subtask:
+                return 1
+            else:
+                _, tgt = self.parse_id(line.id)
+                evaluation = any(o == tgt for o, _ in object_pos)
+                if type(line) in (If, While):
+                    condition_evaluations[type(line)] += [evaluation]
+                return evaluation
+
+        def next_subtask(l):
+            l = line_iterator.send(evaluate_line(l))
+            while not (l is None or type(lines[l]) is Subtask):
+                l = line_iterator.send(evaluate_line(l))
+            return l
+
+        # prev, curr = 0, next_subtask(None)
         while True:
             subtask_id = yield state._replace(obs=build_world(state.condition))
             interaction, ob = self.parse_id(subtask_id)
