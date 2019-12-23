@@ -13,7 +13,7 @@ from ppo.control_flow.lines import Subtask, Padding, Line, While, If, EndWhile
 class Env(ppo.control_flow.env.Env):
     subtask_objects = ["pig", "sheep", "cat", "greenbot"]
     other_objects = ["ice", "agent"]
-    line_objects = subtask_objects + ["monkey"]
+    line_objects = subtask_objects  # + ["monkey"]
     world_objects = subtask_objects + other_objects
     interactions = ["pickup", "transform", "visit"]
 
@@ -112,7 +112,7 @@ class Env(ppo.control_flow.env.Env):
             assert self.interactions[i] in ("pickup", "transform")
             o = self.line_objects.index(obj)
             line_id = o * len(self.interactions) + i
-            assert self.parse_id(line_id) in (("pickup", obj), ("transform", obj))
+            # assert self.parse_id(line_id) in (("pickup", obj), ("transform", obj))
             # lines[l] = Subtask(line_id)
             # if self.random.random() < 0.5 and obj in self.world_objects:
             #     object_pos += [
@@ -189,9 +189,9 @@ class Env(ppo.control_flow.env.Env):
             for line in (super().build_lines())
         ]
 
-    def parse_id(self, line_id):
-        i = line_id % len(self.interactions)
-        o = line_id // len(self.interactions)
+    def parse_id(self, subtask_id):
+        i = subtask_id // len(self.line_objects)
+        o = subtask_id % len(self.line_objects)
         return self.interactions[i], self.line_objects[o]
 
 
