@@ -21,11 +21,7 @@ class Env(ppo.control_flow.env.Env):
         assert num_subtasks == len(self.subtask_objects) * len(self.interactions)
         super().__init__(num_subtasks=num_subtasks, **kwargs)
         self.world_size = world_size
-        self.world_shape = (
-            len(self.world_objects) + 1,  # last channel for condition
-            self.world_size,
-            self.world_size,
-        )
+        self.world_shape = (len(self.world_objects), self.world_size, self.world_size)
         self.action_space = spaces.MultiDiscrete(
             np.array([self.num_subtasks + 1, 2 * self.n_lines, 2, 2])
         )
@@ -55,8 +51,7 @@ class Env(ppo.control_flow.env.Env):
             return f"{line}"
 
     def print_obs(self, obs):
-        print("condition:", int(np.mean(obs[-1])))
-        obs = obs[:-1].transpose(1, 2, 0).astype(int)
+        obs = obs.transpose(1, 2, 0).astype(int)
         grid_size = obs.astype(int).sum(-1).max()  # max objects per grid
         chars = [" "] + [o for o, *_ in self.world_objects]
         for i, row in enumerate(obs):
@@ -85,12 +80,10 @@ class Env(ppo.control_flow.env.Env):
         assert self.max_nesting_depth == 1
         agent_pos = self.random.randint(0, self.world_size, size=2)
 
-        def build_world(condition_bit):
+        def build_world():
             world = np.zeros(self.world_shape)
             for o, p in object_pos + [("agent", agent_pos)]:
                 world[tuple((self.world_objects.index(o), *p))] = 1
-            rand_pos = self.random.randint(0, self.world_size, size=2)
-            world[(-1, *rand_pos)] = condition_bit
             return world
 
         line_io = [self.parse_id(line.id) for line in lines if type(line) is Subtask]
@@ -124,7 +117,6 @@ class Env(ppo.control_flow.env.Env):
 
         line_iterator = self.line_generator(lines)
         condition_evaluations = defaultdict(list)
-        condition_bit = 0 if self.eval_condition_size else self.random.randint(0, 2)
 
         def evaluate_line(l):
             if l is None:
@@ -133,9 +125,8 @@ class Env(ppo.control_flow.env.Env):
             if type(line) is Subtask:
                 return 1
             else:
-                # _, tgt = self.parse_id(line.id)
-                # evaluation = any(o == tgt for o, _ in object_pos)
-                evaluation = condition_bit
+                _, tgt = self.parse_id(line.id)
+                evaluation = any(o == tgt for o, _ in object_pos)
                 if type(line) in (If, While):
                     condition_evaluations[type(line)] += [evaluation]
                 return evaluation
@@ -149,14 +140,11 @@ class Env(ppo.control_flow.env.Env):
         prev, curr = 0, next_subtask(None)
         while True:
             subtask_id = yield State(
-                obs=build_world(condition_bit),
+                obs=build_world(),
                 condition=None,
                 prev=prev,
                 curr=curr,
                 condition_evaluations=condition_evaluations,
-            )
-            condition_bit = abs(
-                condition_bit - int(self.random.rand() < self.flip_prob)
             )
             interaction, obj = self.parse_id(subtask_id)
 
