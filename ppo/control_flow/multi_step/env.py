@@ -150,7 +150,9 @@ class Env(ppo.control_flow.env.Env):
             else:
                 candidates = [np.array(p) for o, p in object_pos if o == ob]
                 if candidates:
-                    nearest = min(candidates, key=lambda k: np.sum(agent_pos - k))
+                    nearest = min(
+                        candidates, key=lambda k: np.sum(np.abs(agent_pos - k))
+                    )
                     agent_pos += np.clip(nearest - agent_pos, -1, 1)
                     if on_object() and interaction == "visit":
                         state = next(state_iterator)
