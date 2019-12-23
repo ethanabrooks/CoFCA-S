@@ -28,7 +28,15 @@ class Env(ppo.control_flow.env.Env):
         self.observation_space.spaces.update(
             obs=spaces.Box(low=0, high=1, shape=self.world_shape),
             lines=spaces.MultiDiscrete(
-                np.array([[len(self.line_types), num_subtasks]] * self.n_lines)
+                np.array(
+                    [
+                        [
+                            len(self.line_types),
+                            1 + len(self.interactions) * len(self.line_objects),
+                        ]
+                    ]
+                    * self.n_lines
+                )
             ),
         )
 
@@ -56,10 +64,12 @@ class Env(ppo.control_flow.env.Env):
             print("-" * len(string))
 
     def preprocess_line(self, line):
-        if type(line) is Subtask:
-            return [self.line_types.index(Subtask), line.id]
+        if line is Padding:
+            return [self.line_types.index(Padding), 0]
+        elif type(line) is Subtask:
+            return [self.line_types.index(type(line)), 1 + line.id]
         else:
-            return [self.line_types.index(line), 0]
+            return [self.line_types.index(type(line)), 0]
 
     def state_generator(self, lines) -> State:
         assert self.max_nesting_depth == 1
@@ -162,6 +172,15 @@ class Env(ppo.control_flow.env.Env):
                 elif correct_id:
                     # subtask is impossible
                     prev, curr = curr, next_subtask(curr)
+
+    def build_lines(self):
+        num_line_ids = len(self.interactions) * len(self.line_objects)
+        return [
+            line(self.random.randint(num_line_ids))
+            if type(line) not in (Subtask, Padding)
+            else line
+            for line in (super().build_lines())
+        ]
 
     def parse_id(self, line_id):
         i = line_id % len(self.interactions)
