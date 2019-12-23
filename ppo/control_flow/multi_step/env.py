@@ -92,7 +92,8 @@ class Env(ppo.control_flow.env.Env):
             world = np.zeros(self.world_shape)
             for o, p in object_pos + [("agent", agent_pos)]:
                 world[tuple((self.world_objects.index(o), *p))] = 1
-            world[-1] = condition_bit
+            rand_pos = self.random.randint(0, self.world_size, size=2)
+            world[(-1, *rand_pos)] = condition_bit
             return world
 
         line_io = [self.parse_id(line.id) for line in lines if type(line) is Subtask]
