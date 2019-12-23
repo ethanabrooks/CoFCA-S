@@ -22,8 +22,7 @@ class Env(ppo.control_flow.env.Env):
         super().__init__(num_subtasks=num_subtasks, **kwargs)
         self.world_size = world_size
         self.world_shape = (
-            len(self.subtask_objects + self.other_objects)
-            + 1,  # last channel for condition
+            len(self.world_objects) + 1,  # last channel for condition
             self.world_size,
             self.world_size,
         )
