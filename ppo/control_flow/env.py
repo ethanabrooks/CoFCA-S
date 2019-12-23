@@ -144,7 +144,7 @@ class Env(gym.Env, ABC):
                 # else:
                 #     yield f"{indent}{line.__name__}"
                 # if line in [If, While, Else]:
-                if type(line) in [If, While, Else]:
+                if (line) in [If, While, Else]:
                     level += 1
                 yield from line_strings(index + 1, level)
 

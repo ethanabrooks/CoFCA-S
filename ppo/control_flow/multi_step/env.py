@@ -38,16 +38,15 @@ class Env(ppo.control_flow.env.Env):
         )
 
     def line_str(self, line: Line):
-        i, o = self.parse_id(line.id)
         if isinstance(line, Subtask):
+            i, o = self.parse_id(line.id)
             return f"{line}: {i} {o}"
-        elif isinstance(line, (If, While)):
-            return f"{line}: {o}"
         else:
-            return f"{line}"
+            return line.__name__
 
     def print_obs(self, obs):
-        obs = obs.transpose(1, 2, 0).astype(int)
+        print("condition:", int(np.mean(obs[-1])))
+        obs = obs[:-1].transpose(1, 2, 0).astype(int)
         grid_size = obs.astype(int).sum(-1).max()  # max objects per grid
         chars = [" "] + [o for o, *_ in self.world_objects]
         for i, row in enumerate(obs):
