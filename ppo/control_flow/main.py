@@ -1,4 +1,3 @@
-from gym.spaces import Box
 from rl_utils import hierarchical_parse_args
 
 import ppo.agent
@@ -59,6 +58,7 @@ def bandit_args():
     ppo.control_flow.env.build_parser(parsers.env)
     parsers.env.add_argument("--world-size", type=int)
     parsers.env.add_argument("--use-monkey", action="store_true")
+    parsers.env.add_argument("--add-while-obj-prob", type=float, required=True)
     parsers.agent.add_argument("--debug", action="store_true")
     parsers.agent.add_argument("--no-scan", action="store_true")
     parsers.agent.add_argument("--no-roll", action="store_true")

@@ -18,9 +18,10 @@ class Env(ppo.control_flow.env.Env):
     world_objects = subtask_objects + other_objects
     interactions = ["pickup", "transform", "visit"]
 
-    def __init__(self, world_size, num_subtasks, **kwargs):
+    def __init__(self, world_size, num_subtasks, add_while_obj_prob, **kwargs):
         num_subtasks = len(self.subtask_objects) * len(self.interactions)
         super().__init__(num_subtasks=num_subtasks, **kwargs)
+        self.add_while_obj_prob = add_while_obj_prob
         self.world_size = world_size
         self.world_shape = (len(self.world_objects), self.world_size, self.world_size)
         self.action_space = spaces.MultiDiscrete(
@@ -111,7 +112,10 @@ class Env(ppo.control_flow.env.Env):
             line_id = o * len(self.interactions) + i
             assert self.parse_id(line_id) in (("pickup", obj), ("transform", obj))
             lines[l] = Subtask(line_id)
-            if self.random.random() < 0.5 and obj in self.world_objects:
+            if (
+                self.random.random() < self.add_while_obj_prob
+                and obj in self.world_objects
+            ):
                 object_pos += [
                     (obj, tuple(self.random.randint(0, self.world_size, size=2)))
                 ]
