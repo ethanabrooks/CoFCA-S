@@ -175,7 +175,7 @@ class Env(gym.Env, ABC):
             )
             term = (
                 success
-                or (self.terminate_on_failure and failing)
+                or ((self.evaluating or self.terminate_on_failure) and failing)
                 or (not self.evaluating and step == self.time_limit)
             )
 
@@ -433,8 +433,8 @@ class Env(gym.Env, ABC):
             obs = OrderedDict(obs=obs.obs, lines=self.eye[obs.lines].flatten())
         else:
             obs = obs._asdict()
-        if not self.evaluating:
-            assert self.observation_space.contains(obs)
+        # if not self.evaluating:
+        #     assert self.observation_space.contains(obs)
         return obs
 
     @staticmethod
