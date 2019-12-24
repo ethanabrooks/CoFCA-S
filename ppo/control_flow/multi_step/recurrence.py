@@ -17,8 +17,16 @@ RecurrentState = namedtuple(
 
 class Recurrence(ppo.control_flow.recurrence.Recurrence):
     def __init__(
-        self, hidden_size, gate_coef, num_layers, activation, **kwargs
+        self,
+        hidden_size,
+        gate_coef,
+        num_layers,
+        activation,
+        conv_hidden_size,
+        kernel_size,
+        **kwargs
     ):
+        self.conv_hidden_size = conv_hidden_size
         super().__init__(
             hidden_size=hidden_size,
             num_layers=num_layers,
@@ -28,12 +36,28 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         self.gate_coef = gate_coef
         self.action_size = 4
         d = self.obs_spaces.obs.shape[0]
-        self.conv = nn.Sequential(
-            nn.Conv2d(d, hidden_size, kernel_size=2, padding=0),
+        layers = [
+            nn.Conv2d(
+                d,
+                conv_hidden_size,
+                kernel_size=kernel_size,
+                stride=2 if kernel_size == 2 else 1,
+                padding=0,
+            ),
             nn.ReLU(),
-            # nn.Conv2d(hidden_size, hidden_size, kernel_size=2, padding=0),
-            # nn.ReLU(),
-        )
+        ]
+        # if kernel_size < 4:
+            # layers += [
+                # nn.Conv2d(
+                    # conv_hidden_size,
+                    # conv_hidden_size,
+                    # kernel_size=2,
+                    # stride=2,
+                    # padding=0,
+                # ),
+                # nn.ReLU(),
+            # ]
+        self.conv = nn.Sequential(*layers)
         self.d_gate = Categorical(hidden_size, 2)
         self.a_gate = Categorical(hidden_size, 2)
         self.state_sizes = RecurrentState(
@@ -55,7 +79,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
 
     @property
     def gru_in_size(self):
-        in_size = 2 * self.hidden_size
+        in_size = self.hidden_size + self.conv_hidden_size
         if self.no_pointer:
             return in_size + 2 * self.hidden_size
         else:
