@@ -17,7 +17,14 @@ RecurrentState = namedtuple(
 
 class Recurrence(ppo.control_flow.recurrence.Recurrence):
     def __init__(
-        self, hidden_size, gate_coef, num_layers, activation, kernel_size, **kwargs
+        self,
+        hidden_size,
+        gate_coef,
+        num_layers,
+        activation,
+        use_conv,
+        num_conv_layers,
+        **kwargs
     ):
         super().__init__(
             hidden_size=hidden_size,
@@ -27,23 +34,30 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         )
         self.gate_coef = gate_coef
         self.action_size = 4
-        d = self.obs_spaces.obs.shape[0]
-        layers = [
-            nn.Conv2d(
-                d,
-                hidden_size,
-                kernel_size=kernel_size,
-                stride=2 if kernel_size == 2 else 1,
-                padding=0,
-            ),
-            nn.ReLU(),
-        ]
-        if kernel_size < 4:
-            layers += [
-                nn.Conv2d(hidden_size, hidden_size, kernel_size=2, stride=2, padding=0),
-                nn.ReLU(),
-            ]
+<<<<<<< HEAD
+        self.use_conv = use_conv
+        layers = []
+        in_size = self.obs_spaces.obs.shape[0]
+        for _ in range(num_conv_layers + 1):
+            layer = (
+                nn.Conv2d(in_size, hidden_size, kernel_size=3, padding=1)
+                if use_conv
+                else init_(nn.Linear(in_size, hidden_size))
+            )
+            layers += [layer, nn.ReLU()]
+            in_size = hidden_size
+        if use_conv:
+            layers += [nn.MaxPool2d(self.obs_spaces.obs.shape[1:])]
         self.conv = nn.Sequential(*layers)
+=======
+        d = self.obs_spaces.obs.shape[0]
+        self.conv = nn.Sequential(
+            nn.Conv2d(d, hidden_size, kernel_size=2, padding=0),
+            nn.ReLU(),
+            # nn.Conv2d(hidden_size, hidden_size, kernel_size=2, padding=0),
+            # nn.ReLU(),
+        )
+>>>>>>> random-bit
         self.d_gate = Categorical(hidden_size, 2)
         self.a_gate = Categorical(hidden_size, 2)
         self.state_sizes = RecurrentState(

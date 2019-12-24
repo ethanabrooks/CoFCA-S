@@ -32,6 +32,7 @@ def main(log_dir, seed, eval_lines, **kwargs):
             if world_size is None:
                 return control_flow.env.Env(**args)
             else:
+                assert world_size == 4
                 return control_flow.multi_step.env.Env(**args, world_size=world_size)
 
     _Train(**kwargs, seed=seed, log_dir=log_dir).run()
@@ -52,10 +53,9 @@ def bandit_args():
     parsers.agent.add_argument("--no-roll", action="store_true")
     parsers.agent.add_argument("--no-pointer", action="store_true")
     parsers.agent.add_argument("--include-action", action="store_true")
-    parsers.agent.add_argument("--use-conv", action="store_true")
     parsers.agent.add_argument("--encoder-hidden-size", type=int, required=True)
     parsers.agent.add_argument("--num-encoding-layers", type=int, required=True)
-    parsers.agent.add_argument("--num-conv-layers", type=int, required=True)
+    parsers.agent.add_argument("--kernel-size", type=int, required=True)
     parsers.agent.add_argument("--num-edges", type=int, required=True)
     parsers.agent.add_argument("--gate-coef", type=float)
     return parser

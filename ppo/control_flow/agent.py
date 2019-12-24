@@ -23,7 +23,6 @@ class Agent(ppo.agent.Agent, NNBase):
         recurrent,
         observation_space,
         include_action,
-        use_conv,
         gate_coef,
         **network_args
     ):
@@ -34,7 +33,6 @@ class Agent(ppo.agent.Agent, NNBase):
             ppo.control_flow.multi_step.recurrence.Recurrence(
                 include_action=True,
                 observation_space=observation_space,
-                use_conv=use_conv,
                 gate_coef=gate_coef,
                 **network_args
             )
