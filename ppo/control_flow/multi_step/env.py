@@ -32,8 +32,8 @@ class Env(ppo.control_flow.env.Env):
                     [
                         [
                             len(self.line_types),
-                            len(self.interactions),
-                            len(self.line_objects),
+                            1 + len(self.interactions),
+                            1 + len(self.line_objects),
                         ]
                     ]
                     * self.n_lines
@@ -66,13 +66,14 @@ class Env(ppo.control_flow.env.Env):
 
     def preprocess_line(self, line):
         if line is Padding:
-            return [self.line_types.index(line), 0, 0]
+            return [self.line_types.index(Padding), 0, 0]
         else:
             i, o = self.parse_id(line.id)
+            line_type = self.line_types.index(type(line))
             return [
-                self.line_types.index(type(line)),
-                self.interactions.index(i),
-                self.line_objects.index(o),
+                line_type,
+                1 + self.interactions.index(i) if type(line) is Subtask else 0,
+                1 + self.line_objects.index(o),
             ]
 
     def state_generator(self, lines) -> State:
@@ -109,6 +110,10 @@ class Env(ppo.control_flow.env.Env):
             line_id = o * len(self.interactions) + i
             assert self.parse_id(line_id) in (("pickup", obj), ("transform", obj))
             lines[l] = Subtask(line_id)
+            if self.random.random() < 0.5 and obj in self.world_objects:
+                object_pos += [
+                    (obj, tuple(self.random.randint(0, self.world_size, size=2)))
+                ]
 
         line_iterator = self.line_generator(lines)
         condition_evaluations = defaultdict(list)
