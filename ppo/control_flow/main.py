@@ -1,4 +1,3 @@
-from gym.spaces import Box
 from rl_utils import hierarchical_parse_args
 
 import ppo.agent
@@ -7,6 +6,7 @@ import ppo.control_flow.env
 import ppo.control_flow.multi_step.env
 from ppo import control_flow
 from ppo.arguments import build_parser
+from ppo.control_flow.multi_step.env import Env
 from ppo.train import Train
 
 
@@ -33,7 +33,17 @@ def main(log_dir, seed, eval_lines, **kwargs):
                 return control_flow.env.Env(**args)
             else:
                 assert world_size == 4
-                return control_flow.multi_step.env.Env(**args, world_size=world_size)
+                return Env(**args, world_size=world_size)
+
+        def make_vec_envs(self, use_monkey, **kwargs):
+            if use_monkey:
+                if "monkey" not in Env.line_objects:
+                    Env.line_objects.append("monkey")
+            elif "greenbot" in Env.subtask_objects:
+                Env.subtask_objects.remove("greenbot")
+                Env.world_objects.remove("greenbot")
+
+            return super().make_vec_envs(**kwargs)
 
     _Train(**kwargs, seed=seed, log_dir=log_dir).run()
 
@@ -48,6 +58,8 @@ def bandit_args():
     parser.add_argument("--no-eval", action="store_true")
     ppo.control_flow.env.build_parser(parsers.env)
     parsers.env.add_argument("--world-size", type=int)
+    parsers.env.add_argument("--use-monkey", action="store_true")
+    parsers.env.add_argument("--add-while-obj-prob", type=float, required=True)
     parsers.agent.add_argument("--debug", action="store_true")
     parsers.agent.add_argument("--no-scan", action="store_true")
     parsers.agent.add_argument("--no-roll", action="store_true")
