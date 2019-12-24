@@ -1,2 +1,4 @@
-* fix refactor incrementally
-* use separate eval rollout
+* get gates synced up
+* implement complex conditionals
+* somehow deal with nondeterminism of convolutions
+* get auxiliary loss working?

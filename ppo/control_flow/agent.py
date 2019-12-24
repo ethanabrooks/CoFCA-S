@@ -17,17 +17,30 @@ from ppo.distributions import FixedCategorical
 
 
 class Agent(ppo.agent.Agent, NNBase):
-    def __init__(self, entropy_coef, recurrent, observation_space, **network_args):
+    def __init__(
+        self,
+        entropy_coef,
+        recurrent,
+        observation_space,
+        include_action,
+        gate_coef,
+        **network_args
+    ):
         nn.Module.__init__(self)
         self.entropy_coef = entropy_coef
-        multi_step = type(observation_space.spaces["obs"]) is Box
+        self.multi_step = type(observation_space.spaces["obs"]) is Box
         self.recurrent_module = (
             ppo.control_flow.multi_step.recurrence.Recurrence(
-                observation_space=observation_space, **network_args
+                include_action=True,
+                observation_space=observation_space,
+                gate_coef=gate_coef,
+                **network_args
             )
-            if multi_step
+            if self.multi_step
             else ppo.control_flow.recurrence.Recurrence(
-                observation_space=observation_space, **network_args
+                include_action=include_action,
+                observation_space=observation_space,
+                **network_args
             )
         )
 
@@ -52,15 +65,23 @@ class Agent(ppo.agent.Agent, NNBase):
             entropy = a_dist.entropy().mean()
             action = F.pad(hx.a, [0, 1])
         else:
-            d_dist = FixedCategorical(hx.d_probs)
-            action_log_probs = a_dist.log_probs(hx.a) + d_dist.log_probs(hx.d)
-            entropy = (a_dist.entropy() + d_dist.entropy()).mean()
-            action = torch.cat([hx.a, hx.d], dim=-1)
+            probs = [hx.a_probs, hx.d_probs, hx.ag_probs, hx.dg_probs]
+            X = [hx.a, hx.d, hx.ag, hx.dg]
+            dists = [FixedCategorical(p) for p in probs]
+            action_log_probs = sum(dist.log_probs(x) for dist, x in zip(dists, X))
+            entropy = sum([dist.entropy() for dist in dists]).mean()
+            # action_log_probs = a_dist.log_probs(hx.a) + d_dist.log_probs(hx.d)
+            # entropy = (a_dist.entropy() + d_dist.entropy()).mean()
+            action = torch.cat(X, dim=-1)
+        aux_loss = -self.entropy_coef * entropy
+        if self.multi_step:
+            assert rm.gate_coef is not None
+            aux_loss += rm.gate_coef * (hx.ag_probs + hx.dg_probs)[:, 1].mean()
         return AgentValues(
             value=hx.v,
             action=action,
             action_log_probs=action_log_probs,
-            aux_loss=-self.entropy_coef * entropy,
+            aux_loss=aux_loss,
             dist=None,
             rnn_hxs=last_hx,
             log=dict(entropy=entropy),
