@@ -1,0 +1,9 @@
+#!/usr/bin/env zsh
+set -e
+
+cmd=$(runs lookup command $1 --porcelain)
+cmd=$(echo $cmd \
+  | sed 's/num-processes="[0-9]*"/num-processes="1"/' \
+  | sed 's/log-dir=\("\{0,1\}\)\([^ "]*\)\("\{0,1\}\)/load-path=\1\2\/checkpoint.pt\3/')
+echo "$cmd $2"
+eval "$cmd $2"
