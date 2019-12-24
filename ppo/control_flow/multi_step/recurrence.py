@@ -17,7 +17,7 @@ RecurrentState = namedtuple(
 
 class Recurrence(ppo.control_flow.recurrence.Recurrence):
     def __init__(
-        self, hidden_size, gate_coef, num_layers, activation, use_conv, **kwargs
+        self, hidden_size, gate_coef, num_layers, activation, **kwargs
     ):
         super().__init__(
             hidden_size=hidden_size,

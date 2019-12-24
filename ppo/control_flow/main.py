@@ -7,6 +7,7 @@ import ppo.control_flow.env
 import ppo.control_flow.multi_step.env
 from ppo import control_flow
 from ppo.arguments import build_parser
+from ppo.control_flow.multi_step.env import Env
 from ppo.train import Train
 
 
@@ -52,7 +53,6 @@ def bandit_args():
     parsers.agent.add_argument("--no-roll", action="store_true")
     parsers.agent.add_argument("--no-pointer", action="store_true")
     parsers.agent.add_argument("--include-action", action="store_true")
-    parsers.agent.add_argument("--use-conv", action="store_true")
     parsers.agent.add_argument("--encoder-hidden-size", type=int, required=True)
     parsers.agent.add_argument("--num-encoding-layers", type=int, required=True)
     parsers.agent.add_argument("--num-edges", type=int, required=True)
