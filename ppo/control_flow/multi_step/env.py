@@ -1,4 +1,4 @@
-from collections import Counter, defaultdict
+from collections import defaultdict
 from copy import copy
 
 import numpy as np
@@ -9,6 +9,22 @@ import ppo.control_flow.env
 from ppo import keyboard_control
 from ppo.control_flow.env import build_parser, State
 from ppo.control_flow.lines import Subtask, Padding, Line, While, If, EndWhile
+
+
+def clip(a, b, pair_min, pair_max):
+    return min(pair_max, max(pair_min, a)), min(pair_max, max(pair_min, b))
+
+
+def sum_pair(a, b):
+    return a + b
+
+
+def minus_pair(a, b, c, d):
+    return a - c, b - d
+
+
+def abs_pair(a, b):
+    return abs(a), abs(b)
 
 
 class Env(ppo.control_flow.env.Env):
@@ -167,12 +183,13 @@ class Env(ppo.control_flow.env.Env):
                     object_pos.append(("ice", tuple(agent_pos)))
                 prev, curr = curr, next_subtask(curr)
             else:
-                candidates = [np.array(p) for o, p in object_pos if o == obj]
+                candidates = [p for o, p in object_pos if o == obj]
                 if candidates:
                     nearest = min(
-                        candidates, key=lambda k: np.sum(np.abs(agent_pos - k))
+                        candidates,
+                        key=lambda k: sum_pair(*abs_pair(*minus_pair(*agent_pos, *k))),
                     )
-                    agent_pos += np.clip(nearest - agent_pos, -1, 1)
+                    agent_pos += clip(*minus_pair(*nearest, *agent_pos), -1, 1)
                 elif correct_id:
                     # subtask is impossible
                     prev, curr = curr, next_subtask(curr)
