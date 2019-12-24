@@ -23,6 +23,8 @@ setup(
         "bin/dbg1",
         "bin/show-best",
         "bin/reproduce",
+        "bin/correlate",
+        "bin/crawl_and_correlate",
     ],
     entry_points=dict(console_scripts=["ppo=ppo.main:cli", "exp=ppo.main:exp_cli"]),
     install_requires=[
