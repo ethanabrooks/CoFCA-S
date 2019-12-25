@@ -54,15 +54,15 @@ def main(log_dir, seed, max_lines, eval_lines, **kwargs):
                 Env.world_objects.remove("greenbot")
 
             # noinspection PyAttributeOutsideInit
-            self.make_vec_envs_thunk = functools.partial(
-                super().make_vec_envs, **kwargs
-            )
             return super().make_vec_envs(min_lines=min_lines, **kwargs)
+
+        def build_envs_thunk(self, min_lines, **kwargs):
+            return functools.partial(self.make_vec_envs, **kwargs)
 
         def increment_envs(self):
             # noinspection PyAttributeOutsideInit
             self.n_lines = min(self.n_lines + 1, max_lines)
-            return self.make_vec_envs_thunk(min_lines=self.n_lines)
+            return self.envs_thunk(min_lines=self.n_lines)
 
         def get_save_dict(self):
             return dict(n_lines=self.n_lines, **super().get_save_dict())

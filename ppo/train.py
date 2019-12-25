@@ -85,7 +85,7 @@ class TrainBase(abc.ABC):
             self.device = self.get_device()
         # print("Using device", self.device)
 
-        self.envs = self.make_vec_envs(
+        args = dict(
             **env_args,
             seed=seed,
             gamma=(gamma if normalize else None),
@@ -95,6 +95,8 @@ class TrainBase(abc.ABC):
             num_processes=num_processes,
             time_limit=time_limit,
         )
+        self.envs = self.make_vec_envs(**args)
+        self.envs_thunk = self.build_envs_thunk(**args)
         self.make_eval_envs = functools.partial(
             self.make_vec_envs,
             **env_args,
@@ -459,6 +461,10 @@ class TrainBase(abc.ABC):
     @abc.abstractmethod
     def get_device(self):
         raise NotImplementedError
+
+    @staticmethod
+    def build_envs_thunk(**kwargs):
+        return None
 
 
 class Train(TrainBase):
