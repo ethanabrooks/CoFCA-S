@@ -144,22 +144,48 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             half = P.size(2) // 2
         else:
             G = G.view(nl, N, nl, 2, self.encoder_hidden_size)
-            B = bb = self.beta(G).sigmoid()
-            ff, bb = torch.unbind(B, dim=3)
-            ff = torch.unbind(ff, dim=0)
-            bb = torch.unbind(bb, dim=0)
-            P = []
+            B = self.beta(G).sigmoid()
+            ff, bb = (torch.unbind(x, dim=0) for x in torch.unbind(B, dim=3))
+            # P = []
+            # P_ = []
+            succ_probs = []
             for i, (f, b) in enumerate(zip(ff, bb)):
-                succ_prob = torch.cat([f[:, :-i], b[:, -i:].flip(1)], dim=1)
-                last = torch.zeros_like(succ_prob)
-                last[:, -1] = 1 - succ_prob[:, -1]
-                SS_hat = succ_prob + last
-                last[:, -1] = 1
-                fail_prob = torch.roll(1 - SS_hat + last, shifts=1, dims=1)
-                total_fail_prob = torch.cumprod(fail_prob, dim=1)
-                p = total_fail_prob * SS_hat
-                P.append(torch.roll(p, shifts=i, dims=1))
-            P = torch.stack(P, dim=0)
+                _f = f[:, :-i]
+                _b = b[:, -i:]
+                print(_f[0])
+                succ_prob = torch.cat([_f, _b.flip(1)], dim=1)
+                succ_probs.append(succ_prob)
+                # last = torch.zeros_like(succ_prob)
+                # last[:, -1] = 1 - succ_prob[:, -1]
+                # succ_prob_ = succ_prob + last
+                # last[:, -1] = 1
+                # fail_prob = torch.roll(1 - succ_prob_ + last, shifts=1, dims=1)
+                # fail_prob_ = torch.cumprod(fail_prob, dim=1)
+                # p = fail_prob_ * succ_prob_
+                # P_.append(p)
+                # P.append(torch.roll(p, shifts=i, dims=1))
+            # P = torch.stack(P, dim=0)
+            # P_ = torch.stack(P_, dim=0)
+            succ_probs = torch.stack(succ_probs, dim=0)
+            succ_probs2 = []
+            for i, b in enumerate(B):
+                _f = b[:, :-i, 0]
+                _b = b[:, -i:, 1]
+                succ_probs2.append(torch.cat([_f, _b.flip(1)], dim=1))
+            succ_probs2 = torch.stack(succ_probs2, dim=0)
+
+            last = torch.zeros_like(succ_probs)
+            last[:, :, -1] = 1 - succ_probs[:, :, -1]
+            succ_probs_ = succ_probs + last
+            last[:, :, -1] = 1
+            fail_probs = torch.roll(1 - succ_probs_ + last, shifts=1, dims=2)
+            fail_probs_ = torch.cumprod(fail_probs, dim=2)
+            Ps = fail_probs_ * succ_probs_
+
+            Ps_ = []
+            for i, p in enumerate(torch.unbind(Ps, dim=0)):
+                Ps_.append(torch.roll(p, shifts=i, dims=1))
+            P = torch.stack(Ps_, dim=0)
 
             # arange = torch.zeros(6).float()
             # arange[0] = 1

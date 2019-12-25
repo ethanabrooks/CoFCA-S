@@ -62,6 +62,9 @@ class Recurrence(nn.Module):
         self.state_sizes = RecurrentState(
             a=1, a_probs=n_a, d=1, d_probs=None, p=1, v=1, h=hidden_size
         )
+        self.obs_spaces = None
+        self.obs_sections = None
+        self.train_lines = None
         self.set_obs_space(observation_space)
 
         self.action_size = 2
