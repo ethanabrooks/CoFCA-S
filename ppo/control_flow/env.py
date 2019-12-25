@@ -433,8 +433,8 @@ class Env(gym.Env, ABC):
             obs = OrderedDict(obs=obs.obs, lines=self.eye[obs.lines].flatten())
         else:
             obs = obs._asdict()
-        # if not self.evaluating:
-        #     assert self.observation_space.contains(obs)
+        if not self.evaluating:
+            assert self.observation_space.contains(obs)
         return obs
 
     @staticmethod

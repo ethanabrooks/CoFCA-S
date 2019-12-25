@@ -21,9 +21,14 @@ class Env(ppo.control_flow.env.Env):
     def __init__(self, world_size, num_subtasks, add_while_obj_prob, **kwargs):
         num_subtasks = len(self.subtask_objects) * len(self.interactions)
         super().__init__(num_subtasks=num_subtasks, **kwargs)
+        # self.time_limit = world_size
+        # self.n_lines = 2
         self.add_while_obj_prob = add_while_obj_prob
         self.world_size = world_size
         self.world_shape = (len(self.world_objects), self.world_size, self.world_size)
+        self.set_spaces()
+
+    def set_spaces(self):
         self.action_space = spaces.MultiDiscrete(
             np.array([self.num_subtasks + 1, 2 * self.n_lines, 2, 2])
         )
@@ -190,6 +195,11 @@ class Env(ppo.control_flow.env.Env):
         i = line_id % len(self.interactions)
         o = line_id // len(self.interactions)
         return self.interactions[i], self.line_objects[o]
+
+    def increment_curriculum(self):
+        self.n_lines = min(self.n_lines + 1, self.max_lines)
+        self.time_limit = self.world_size * self.n_lines
+        self.set_spaces()
 
 
 if __name__ == "__main__":
