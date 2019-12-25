@@ -211,9 +211,11 @@ class Recurrence(nn.Module):
             f, b = torch.unbind(B.sigmoid(), dim=3)
             B = torch.stack([f, b.flip(2)], dim=-2)
             B = B.view(nl, N, 2 * nl, self.ne)
+            # noinspection PyTypeChecker
             zero_last = (1 - last) * B
             B = zero_last + self.last  # this ensures that the last B is 1
             rolled = torch.roll(zero_last, shifts=1, dims=2)
+            # noinspection PyTypeChecker
             C = torch.cumprod(1 - rolled, dim=2)
             P = B * C
             P = P.view(nl, N, nl, 2, self.ne)

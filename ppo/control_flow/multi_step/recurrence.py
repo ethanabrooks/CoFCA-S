@@ -146,10 +146,13 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             f, b = torch.unbind(B, dim=3)
             B = torch.stack([f, b.flip(2)], dim=-2)
             B = B.view(nl, N, 2 * nl, self.ne)
-            B = (1 - last).flip(2) * B  # this ensures the first B is 0
+            # noinspection PyTypeChecker
+            B = torch.flip(1 - last, (2,)) * B  # this ensures the first B is 0
+            # noinspection PyTypeChecker
             zero_last = (1 - last) * B
             B = zero_last + last  # this ensures that the last B is 1
             rolled = torch.roll(zero_last, shifts=1, dims=2)
+            # noinspection PyTypeChecker
             C = torch.cumprod(1 - rolled, dim=2)
             P = B * C
             P = P.view(nl, N, nl, 2, self.ne)
@@ -191,7 +194,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
                 return FixedCategorical(probs=gate * new + (1 - gate) * old)
 
             u = self.upsilon(z).softmax(dim=-1)
-            self.print("bb", torch.round(100 * bb[p, R, :, 0]))
+            # self.print("bb", torch.round(100 * bb[p, R, :, 0]))
             self.print("u", torch.round(100 * u))
             w = P[p, R]
             d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
