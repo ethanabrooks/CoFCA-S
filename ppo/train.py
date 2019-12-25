@@ -437,6 +437,8 @@ class TrainBase(abc.ABC):
 
     def _save(self, checkpoint_dir):
         save_dict = self.get_save_dict()
+        print("save_dict n_lines", save_dict["n_lines"])
+        print("self.n_lines", self.n_lines)
         save_path = Path(checkpoint_dir, "checkpoint.pt")
         torch.save(save_dict, save_path)
         print(f"Saved parameters to {save_path}")
