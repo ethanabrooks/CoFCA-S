@@ -70,7 +70,7 @@ def main(log_dir, seed, max_lines, eval_lines, **kwargs):
             result = super().run_epoch(**kwargs)
             if "rewards" in result and result["rewards"]:
                 result.update(
-                    cumulative_reward=self.n_lines + np.mean(result["rewards"])
+                    cumulative_reward=self.n_lines - 1 + np.mean(result["rewards"])
                 )
             return result
 
