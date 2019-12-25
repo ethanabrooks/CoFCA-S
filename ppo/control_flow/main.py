@@ -32,7 +32,6 @@ def main(log_dir, seed, eval_lines, **kwargs):
             if world_size is None:
                 return control_flow.env.Env(**args)
             else:
-                assert world_size == 4
                 return Env(**args, world_size=world_size)
 
         def make_vec_envs(self, use_monkey, **kwargs):

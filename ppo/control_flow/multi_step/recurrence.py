@@ -46,17 +46,17 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             ),
             nn.ReLU(),
         ]
-        if kernel_size < 4:
-            layers += [
-                nn.Conv2d(
-                    conv_hidden_size,
-                    conv_hidden_size,
-                    kernel_size=2,
-                    stride=2,
-                    padding=0,
-                ),
-                nn.ReLU(),
-            ]
+        # if kernel_size < 4:
+            # layers += [
+                # nn.Conv2d(
+                    # conv_hidden_size,
+                    # conv_hidden_size,
+                    # kernel_size=2,
+                    # stride=2,
+                    # padding=0,
+                # ),
+                # nn.ReLU(),
+            # ]
         self.conv = nn.Sequential(*layers)
         self.d_gate = Categorical(hidden_size, 2)
         self.a_gate = Categorical(hidden_size, 2)
