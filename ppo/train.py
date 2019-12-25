@@ -263,6 +263,7 @@ class TrainBase(abc.ABC):
                 print("Incrementing!")
                 # noinspection PyAttributeOutsideInit
                 self.envs = self.increment_envs()
+                self.envs.to(self.device)
                 self.agent.increment_curriculum()
                 # noinspection PyAttributeOutsideInit
                 self.rollouts = self.rollouts.increment_curriculum(
