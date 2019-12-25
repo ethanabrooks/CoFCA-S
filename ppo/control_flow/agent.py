@@ -44,8 +44,8 @@ class Agent(ppo.agent.Agent, NNBase):
             )
         )
 
-    def increment_curriculum(self):
-        self.recurrent_module.increment_curriculum()
+    def set_obs_space(self, obs_space):
+        self.recurrent_module.set_obs_space(obs_space)
 
     @property
     def recurrent_hidden_state_size(self):

@@ -179,7 +179,7 @@ class TrainBase(abc.ABC):
             eval_counter = Counter()
             envs = self.make_eval_envs()
             envs.to(self.device)
-            with self.agent.recurrent_module.evaluating():
+            with self.agent.recurrent_module.evaluating(envs.observation_space):
                 eval_recurrent_hidden_states = torch.zeros(
                     num_processes,
                     self.agent.recurrent_hidden_state_size,
@@ -267,7 +267,7 @@ class TrainBase(abc.ABC):
                 self.envs.close()
                 self.envs = self.increment_envs()
                 self.envs.to(self.device)
-                self.agent.increment_curriculum()
+                self.agent.set_obs_space(self.envs.observation_space)
                 # noinspection PyAttributeOutsideInit
                 self.rollouts = self.rollouts.increment_curriculum(
                     obs_space=self.envs.observation_space,
