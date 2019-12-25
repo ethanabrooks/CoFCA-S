@@ -276,6 +276,10 @@ class TrainBase(abc.ABC):
                 )
                 self.rollouts.to(self.device)
                 obs = self.envs.reset()
+                if obs.size(-1) != sum(self.agent.recurrent_module.obs_sections):
+                    import ipdb
+
+                    ipdb.set_trace()
                 self.rollouts.obs[0].copy_(obs)
 
     def increment_envs(self):
