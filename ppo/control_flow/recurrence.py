@@ -57,20 +57,23 @@ class Recurrence(nn.Module):
         self.no_pointer = no_pointer
         self.no_roll = no_roll
         self.no_scan = no_scan or no_pointer  # no scan if no pointer
-        self.obs_spaces = Obs(**observation_space.spaces)
+        n_a, n_p = map(int, action_space.nvec[:2])
+
+        self.state_sizes = RecurrentState(
+            a=1, a_probs=n_a, d=1, d_probs=None, p=1, v=1, h=hidden_size
+        )
+        self.set_obs_space(observation_space)
+
         self.action_size = 2
         self.debug = debug
         self.hidden_size = hidden_size
         self.encoder_hidden_size = encoder_hidden_size
 
-        self.obs_sections = get_obs_sections(self.obs_spaces)
         self.eval_lines = eval_lines
         self.max_train_lines = max_train_lines
-        self.train_lines = len(self.obs_spaces.lines.nvec)
 
         # networks
         self.ne = num_edges
-        n_a, n_p = map(int, action_space.nvec[:2])
         self.n_a = n_a
         self.embed_task = self.build_embed_task(encoder_hidden_size)
         self.embed_action = nn.Embedding(n_a, hidden_size)
@@ -100,9 +103,6 @@ class Recurrence(nn.Module):
         self.critic = init_(nn.Linear(hidden_size, 1))
         self.actor = Categorical(hidden_size, n_a)
         self.attention = Categorical(hidden_size, n_a)
-        self.state_sizes = RecurrentState(
-            a=1, a_probs=n_a, d=1, d_probs=2 * self.train_lines, p=1, v=1, h=hidden_size
-        )
 
     def build_embed_task(self, hidden_size):
         return nn.Embedding(len(self.obs_spaces.lines.nvec), hidden_size)

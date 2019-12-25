@@ -213,11 +213,6 @@ class Env(ppo.control_flow.env.Env):
         o = line_id // len(self.interactions)
         return self.interactions[i], self.line_objects[o]
 
-    # def increment_curriculum(self):
-    #     self.n_lines = min(self.n_lines + 1, self.max_lines + 1)
-    #     self.time_limit = self.world_size * self.n_lines
-    #     self.set_spaces()
-
 
 if __name__ == "__main__":
     import argparse

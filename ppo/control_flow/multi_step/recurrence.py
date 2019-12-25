@@ -24,8 +24,10 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         activation,
         conv_hidden_size,
         kernel_size,
+        forward_first,
         **kwargs
     ):
+        self.forward_first = forward_first
         self.conv_hidden_size = conv_hidden_size
         super().__init__(
             hidden_size=hidden_size,
@@ -76,6 +78,11 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
 
     def build_embed_task(self, hidden_size):
         return nn.EmbeddingBag(self.obs_spaces.lines.nvec[0].sum(), hidden_size)
+
+    def set_obs_space(self, obs_space):
+        super().set_obs_space(obs_space)
+        # noinspection PyProtectedMember
+        self.state_sizes = self.state_sizes._replace(d_probs=self.train_lines)
 
     @property
     def gru_in_size(self):
@@ -138,27 +145,42 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         else:
             G = G.view(nl, N, nl, 2, self.encoder_hidden_size)
             B = bb = self.beta(G).sigmoid()
+            ff, bb = torch.unbind(B, dim=3)
+            ff = torch.unbind(ff, dim=0)
+            bb = torch.unbind(bb, dim=0)
+            P = []
+            for i, (f, b) in enumerate(zip(ff, bb)):
+                succ_prob = torch.cat([f[:, :-i], b[:, -i:].flip(1)], dim=1)
+                last = torch.zeros_like(succ_prob)
+                last[:, -1] = 1 - succ_prob[:, -1]
+                SS_hat = succ_prob + last
+                last[:, -1] = 1
+                fail_prob = torch.roll(1 - SS_hat + last, shifts=1, dims=1)
+                total_fail_prob = torch.cumprod(fail_prob, dim=1)
+                p = total_fail_prob * SS_hat
+                P.append(torch.roll(p, shifts=i, dims=1))
+            P = torch.stack(P, dim=0)
+
             # arange = torch.zeros(6).float()
             # arange[0] = 1
             # arange[1] = 1
             # B[:, :, :, 0] = 0  # arange.view(1, 1, -1, 1)
             # B[:, :, :, 1] = 1
-            f, b = torch.unbind(B, dim=3)
-            B = torch.stack([f, b.flip(2)], dim=-2)
-            B = B.view(nl, N, 2 * nl, self.ne)
-            # noinspection PyTypeChecker
-            B = torch.flip(1 - last, (2,)) * B  # this ensures the first B is 0
-            # noinspection PyTypeChecker
-            zero_last = (1 - last) * B
-            B = zero_last + last  # this ensures that the last B is 1
-            rolled = torch.roll(zero_last, shifts=1, dims=2)
-            # noinspection PyTypeChecker
-            C = torch.cumprod(1 - rolled, dim=2)
-            P = B * C
-            P = P.view(nl, N, nl, 2, self.ne)
-            f, b = torch.unbind(P, dim=3)
-            half = b.size(2)
-            P = torch.cat([b.flip(2), f], dim=2)
+            # B = torch.stack([f, b.flip(2)], dim=-2)
+            # B = B.view(nl, N, 2 * nl, self.ne)
+            # # noinspection PyTypeChecker
+            # B = torch.flip(1 - last, (2,)) * B  # this ensures the first B is 0
+            # # noinspection PyTypeChecker
+            # zero_last = (1 - last) * B
+            # B = zero_last + last  # this ensures that the last B is 1
+            # rolled = torch.roll(zero_last, shifts=1, dims=2)
+            # # noinspection PyTypeChecker
+            # C = torch.cumprod(1 - rolled, dim=2)
+            # P = B * C
+            # P = P.view(nl, N, nl, 2, self.ne)
+            # f, b = torch.unbind(P, dim=3)
+            # half = b.size(2)
+            # P = torch.cat([b.flip(2), f], dim=2)
 
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
@@ -203,10 +225,10 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             dg = DG[t].unsqueeze(-1).float()
             self.print("dg prob", torch.round(100 * d_gate.probs[:, 1]))
             self.print("dg", dg)
-            d_dist = gate(dg, d_probs, ones * half)
-            self.print("d_probs", torch.round(100 * d_probs)[:, half:])
+            d_dist = gate(dg, d_probs, p)
+            # self.print("d_probs", torch.round(100 * d_probs)[:, half:])
             self.sample_new(D[t], d_dist)
-            p = p + D[t].clone() - half
+            p = D[t].clone()
             p = torch.clamp(p, min=0, max=nl - 1)
 
             x = [

@@ -103,6 +103,7 @@ def bandit_args():
     parsers.agent.add_argument("--no-scan", action="store_true")
     parsers.agent.add_argument("--no-roll", action="store_true")
     parsers.agent.add_argument("--no-pointer", action="store_true")
+    parsers.agent.add_argument("--forward-first", action="store_true")
     parsers.agent.add_argument("--include-action", action="store_true")
     parsers.agent.add_argument("--conv-hidden-size", type=int, required=True)
     parsers.agent.add_argument("--encoder-hidden-size", type=int, required=True)
