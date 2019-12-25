@@ -64,6 +64,14 @@ def main(log_dir, seed, max_lines, eval_lines, **kwargs):
             self.n_lines = min(self.n_lines + 1, max_lines)
             return self.make_vec_envs_thunk(min_lines=self.n_lines)
 
+        def get_save_dict(self):
+            return dict(n_lines=self.n_lines, **super().get_save_dict())
+
+        def _restore(self, checkpoint):
+            state_dict = super()._restore(checkpoint)
+            self.n_lines = state_dict["n_lines"]
+            return state_dict
+
     _Train(**kwargs, seed=seed, log_dir=log_dir).run()
 
 

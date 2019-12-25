@@ -428,16 +428,20 @@ class TrainBase(abc.ABC):
         return envs
 
     def _save(self, checkpoint_dir):
+        save_dict = self.get_save_dict()
+        save_path = Path(checkpoint_dir, "checkpoint.pt")
+        torch.save(save_dict, save_path)
+        print(f"Saved parameters to {save_path}")
+        return str(save_path)
+
+    def get_save_dict(self):
         modules = dict(
             optimizer=self.ppo.optimizer, agent=self.agent
         )  # type: Dict[str, torch.nn.Module]
         # if isinstance(self.envs.venv, VecNormalize):
         #     modules.update(vec_normalize=self.envs.venv)
         state_dict = {name: module.state_dict() for name, module in modules.items()}
-        save_path = Path(checkpoint_dir, "checkpoint.pt")
-        torch.save(dict(step=self.i, **state_dict), save_path)
-        print(f"Saved parameters to {save_path}")
-        return str(save_path)
+        return dict(step=self.i, **state_dict)
 
     def _restore(self, checkpoint):
         load_path = checkpoint
@@ -448,6 +452,7 @@ class TrainBase(abc.ABC):
         # if isinstance(self.envs.venv, VecNormalize):
         #     self.envs.venv.load_state_dict(state_dict["vec_normalize"])
         print(f"Loaded parameters from {load_path}.")
+        return state_dict
 
     @abc.abstractmethod
     def get_device(self):
