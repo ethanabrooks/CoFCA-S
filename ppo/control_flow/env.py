@@ -117,10 +117,7 @@ class Env(gym.Env, ABC):
         while True:
             success = state.curr is None
             reward = int(term) * int(not failing)
-            info.update(
-                regret=1 if term and failing else 0,
-                cumulative_reward=reward + self.n_lines,
-            )
+            info.update(regret=1 if term and failing else 0)
             if term:
                 info.update(**state.info)
                 #     if_evaluations=state.condition_evaluations[If],

@@ -66,6 +66,14 @@ def main(log_dir, seed, max_lines, eval_lines, **kwargs):
         def build_envs_thunk(self, min_lines, **kwargs):
             return functools.partial(self.make_vec_envs, **kwargs)
 
+        def run_epoch(self, **kwargs):
+            result = super().run_epoch(**kwargs)
+            if "rewards" in result and result["rewards"]:
+                result.update(
+                    cumulative_reward=self.n_lines + np.mean(result["rewards"])
+                )
+            return result
+
         def increment_envs(self):
             self.n_lines = min(self.n_lines + 1, max_lines)
             return self.envs_thunk(min_lines=self.n_lines)
