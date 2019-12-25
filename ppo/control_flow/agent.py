@@ -44,6 +44,9 @@ class Agent(ppo.agent.Agent, NNBase):
             )
         )
 
+    def increment_curriculum(self):
+        self.recurrent_module.increment_curriculum()
+
     @property
     def recurrent_hidden_state_size(self):
         return sum(self.recurrent_module.state_sizes)

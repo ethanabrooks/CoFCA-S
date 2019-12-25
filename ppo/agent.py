@@ -85,6 +85,9 @@ class Agent(nn.Module):
         value, _, _ = self.recurrent_module(inputs, rnn_hxs, masks)
         return value
 
+    def increment_curriculum(self):
+        pass
+
 
 class NNBase(nn.Module):
     def __init__(self, recurrent: bool, recurrent_input_size, hidden_size):

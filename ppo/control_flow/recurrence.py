@@ -39,6 +39,7 @@ class Recurrence(nn.Module):
         observation_space,
         action_space,
         eval_lines,
+        max_train_lines,
         activation,
         hidden_size,
         encoder_hidden_size,
@@ -64,6 +65,7 @@ class Recurrence(nn.Module):
 
         self.obs_sections = get_obs_sections(self.obs_spaces)
         self.eval_lines = eval_lines
+        self.max_train_lines = max_train_lines
         self.train_lines = len(self.obs_spaces.lines.nvec)
 
         # networks
@@ -128,21 +130,21 @@ class Recurrence(nn.Module):
         self.state_sizes = state_sizes
 
     def increment_curriculum(self):
-        self.train_lines += 1
+        self.train_lines = min(self.train_lines + 1, self.max_train_lines + 1)
         self.set_n_lines(self.train_lines)
 
     def set_n_lines(self, n_lines):
-        eval_lines_space = self.eval_lines_space(n_lines, self.obs_spaces.lines)
+        lines_space = self.get_lines_space(n_lines, self.obs_spaces.lines)
         # noinspection PyProtectedMember
-        self.obs_spaces = self.obs_spaces._replace(lines=eval_lines_space)
+        self.obs_spaces = self.obs_spaces._replace(lines=lines_space)
         self.obs_sections = get_obs_sections(self.obs_spaces)
         # noinspection PyProtectedMember
         self.state_sizes = self.state_sizes._replace(d_probs=2 * n_lines)
 
     @staticmethod
-    def eval_lines_space(n_eval_lines, train_lines_space):
+    def get_lines_space(n_eval_lines, train_lines_space):
         return spaces.MultiDiscrete(
-            np.repeat(train_lines_space.nvec[0], repeats=n_eval_lines)
+            np.repeat(train_lines_space.nvec[:1], repeats=n_eval_lines, axis=0)
         )
 
     @staticmethod

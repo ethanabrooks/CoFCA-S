@@ -55,6 +55,7 @@ class TrainBase(abc.ABC):
         env_args,
         success_reward,
         use_tqdm,
+        increment_at,
     ):
         # Properly restrict pytorch to not consume extra resources.
         #  - https://github.com/pytorch/pytorch/issues/975
@@ -142,6 +143,7 @@ class TrainBase(abc.ABC):
             no_eval=no_eval,
             use_tqdm=use_tqdm,
             success_reward=success_reward,
+            increment_at=increment_at,
         )
         self.train_iterator = self.make_train_iterator()
 
@@ -162,6 +164,7 @@ class TrainBase(abc.ABC):
         no_eval,
         success_reward,
         use_tqdm,
+        increment_at,
     ):
         if eval_interval and not no_eval:
             # vec_norm = get_vec_normalize(eval_envs)
@@ -182,6 +185,7 @@ class TrainBase(abc.ABC):
                 )
 
                 eval_result = self.run_epoch(
+                    evaluating=True,
                     obs=envs.reset(),
                     rnn_hxs=eval_recurrent_hidden_states,
                     masks=eval_masks,
@@ -215,6 +219,7 @@ class TrainBase(abc.ABC):
                 log_progress = tqdm(total=log_interval, desc="next log")
             self.i += 1
             epoch_counter = self.run_epoch(
+                evaluating=False,
                 obs=self.rollouts.obs[0],
                 rnn_hxs=self.rollouts.recurrent_hidden_states[0],
                 masks=self.rollouts.masks[0],
@@ -253,9 +258,28 @@ class TrainBase(abc.ABC):
                         **eval_result,
                     )
                 )
+            success_rate = np.mean(epoch_counter["success"])
+            if increment_at is not None and success_rate >= increment_at:
+                print("Incrementing!")
+                # noinspection PyAttributeOutsideInit
+                self.envs = self.increment_envs()
+                self.agent.increment_curriculum()
+                # noinspection PyAttributeOutsideInit
+                self.rollouts = self.rollouts.increment_curriculum(
+                    obs_space=self.envs.observation_space,
+                    action_space=self.envs.action_space,
+                    recurrent_hidden_state_size=self.agent.recurrent_hidden_state_size,
+                )
+                self.rollouts.to(self.device)
+                obs = self.envs.reset()
+                self.rollouts.obs[0].copy_(obs)
+
+    def increment_envs(self):
+        raise NotImplemented
 
     def run_epoch(
         self,
+        evaluating,
         obs,
         rnn_hxs,
         masks,

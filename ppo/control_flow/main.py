@@ -1,4 +1,7 @@
+import functools
+
 from rl_utils import hierarchical_parse_args
+import numpy as np
 
 import ppo.agent
 import ppo.control_flow.agent
@@ -7,16 +10,18 @@ import ppo.control_flow.multi_step.env
 from ppo import control_flow
 from ppo.arguments import build_parser
 from ppo.control_flow.multi_step.env import Env
+from ppo.storage import RolloutStorage
 from ppo.train import Train
 
 
-def main(log_dir, seed, eval_lines, **kwargs):
+def main(log_dir, seed, max_lines, eval_lines, **kwargs):
     class _Train(Train):
         def build_agent(self, envs, debug=False, **agent_args):
             obs_space = envs.observation_space
             return ppo.control_flow.agent.Agent(
                 observation_space=obs_space,
                 action_space=envs.action_space,
+                max_train_lines=max_lines,
                 eval_lines=eval_lines,
                 debug=debug,
                 **agent_args,
@@ -27,14 +32,20 @@ def main(log_dir, seed, eval_lines, **kwargs):
             seed, rank, evaluation, env_id, add_timestep, world_size, **env_args
         ):
             args = dict(
-                **env_args, eval_lines=eval_lines, baseline=False, seed=seed + rank
+                **env_args,
+                eval_lines=eval_lines,
+                max_lines=max_lines,
+                baseline=False,
+                seed=seed + rank,
             )
             if world_size is None:
                 return control_flow.env.Env(**args)
             else:
                 return Env(**args, world_size=world_size)
 
-        def make_vec_envs(self, use_monkey, **kwargs):
+        def make_vec_envs(self, use_monkey, min_lines, **kwargs):
+            # noinspection PyAttributeOutsideInit
+            self.n_lines = min_lines
             if use_monkey:
                 if "monkey" not in Env.line_objects:
                     Env.line_objects.append("monkey")
@@ -42,7 +53,16 @@ def main(log_dir, seed, eval_lines, **kwargs):
                 Env.subtask_objects.remove("greenbot")
                 Env.world_objects.remove("greenbot")
 
-            return super().make_vec_envs(**kwargs)
+            # noinspection PyAttributeOutsideInit
+            self.make_vec_envs_thunk = functools.partial(
+                super().make_vec_envs, **kwargs
+            )
+            return super().make_vec_envs(min_lines=min_lines, **kwargs)
+
+        def increment_envs(self):
+            # noinspection PyAttributeOutsideInit
+            self.n_lines = min(self.n_lines + 1, max_lines)
+            return self.make_vec_envs_thunk(min_lines=self.n_lines)
 
     _Train(**kwargs, seed=seed, log_dir=log_dir).run()
 
@@ -55,6 +75,7 @@ def bandit_args():
     parser.add_argument("--eval-steps", type=int)
     parser.add_argument("--eval-lines", type=int, required=True)
     parser.add_argument("--no-eval", action="store_true")
+    parser.add_argument("--max-lines", type=int, required=True)
     ppo.control_flow.env.build_parser(parsers.env)
     parsers.env.add_argument("--world-size", type=int)
     parsers.env.add_argument("--use-monkey", action="store_true")

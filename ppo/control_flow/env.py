@@ -213,7 +213,7 @@ class Env(gym.Env, ABC):
             assert self.eval_lines is not None
             n_lines = self.eval_lines
         else:
-            n_lines = self.random.random_integers(self.min_lines, self.max_lines)
+            n_lines = self.get_train_n_lines()
         if self.eval_condition_size:
             line0 = self.random.choice([While, If])
             edge_length = self.random.random_integers(
@@ -229,6 +229,9 @@ class Env(gym.Env, ABC):
             Subtask(self.random.choice(self.num_subtasks)) if line is Subtask else line
             for line in lines
         ]
+
+    def get_train_n_lines(self):
+        return self.random.random_integers(self.min_lines, self.max_lines)
 
     def build_task_image(self, lines):
         image = np.zeros(self.image_shape)
@@ -506,7 +509,6 @@ class Env(gym.Env, ABC):
 
 def build_parser(p):
     p.add_argument("--min-lines", type=int, required=True)
-    p.add_argument("--max-lines", type=int, required=True)
     p.add_argument("--num-subtasks", type=int, default=12)
     p.add_argument("--no-op-limit", type=int)
     p.add_argument("--flip-prob", type=float, default=0.5)

@@ -43,6 +43,7 @@ class RolloutStorage(object):
         self.use_gae = use_gae
         self.gamma = gamma
         self.tau = tau
+        self.num_processes = num_processes
         self.obs = torch.zeros(num_steps + 1, num_processes, *buffer_shape(obs_space))
 
         self.recurrent_hidden_states = torch.zeros(
@@ -63,6 +64,20 @@ class RolloutStorage(object):
 
         self.num_steps = num_steps
         self.step = 0
+
+    def increment_curriculum(
+        self, obs_space, action_space, recurrent_hidden_state_size
+    ):
+        return RolloutStorage(
+            num_steps=self.num_steps,
+            num_processes=self.num_processes,
+            obs_space=obs_space,
+            action_space=action_space,
+            recurrent_hidden_state_size=recurrent_hidden_state_size,
+            use_gae=self.use_gae,
+            gamma=self.gamma,
+            tau=self.tau,
+        )
 
     def to(self, device):
         self.obs = self.obs.to(device)
