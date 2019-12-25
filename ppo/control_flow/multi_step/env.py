@@ -19,8 +19,15 @@ class Env(ppo.control_flow.env.Env):
     interactions = ["pickup", "transform", "visit"]
 
     def __init__(
-        self, world_size, num_subtasks, min_lines, add_while_obj_prob, **kwargs
+        self,
+        world_size,
+        num_subtasks,
+        min_lines,
+        add_while_obj_prob,
+        soft_increment,
+        **kwargs,
     ):
+        self.soft_increment = soft_increment
         num_subtasks = len(self.subtask_objects) * len(self.interactions)
         super().__init__(num_subtasks=num_subtasks, min_lines=min_lines, **kwargs)
         if not self.evaluating:
@@ -196,7 +203,10 @@ class Env(ppo.control_flow.env.Env):
         ]
 
     def get_train_n_lines(self):
-        return self.n_lines - 1
+        if self.soft_increment:
+            return self.random.randint(max(1, self.n_lines - 2), self.n_lines)
+        else:
+            return self.n_lines - 1
 
     def parse_id(self, line_id):
         i = line_id % len(self.interactions)
