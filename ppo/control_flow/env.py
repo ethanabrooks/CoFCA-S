@@ -514,7 +514,6 @@ class Env(gym.Env, ABC):
 
 
 def build_parser(p):
-    p.add_argument("--min-lines", type=int, required=True)
     p.add_argument("--num-subtasks", type=int, default=12)
     p.add_argument("--no-op-limit", type=int)
     p.add_argument("--flip-prob", type=float, default=0.5)

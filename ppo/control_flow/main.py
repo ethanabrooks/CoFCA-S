@@ -10,12 +10,20 @@ import ppo.control_flow.multi_step.env
 from ppo import control_flow
 from ppo.arguments import build_parser
 from ppo.control_flow.multi_step.env import Env
-from ppo.storage import RolloutStorage
 from ppo.train import Train
+import torch
 
 
 def main(log_dir, seed, max_lines, eval_lines, **kwargs):
     class _Train(Train):
+        def __init__(self, min_lines, load_path, env_args, **kwargs):
+            if load_path:
+                self.n_lines = torch.load(load_path)["n_lines"]
+            else:
+                self.n_lines = min_lines
+            env_args.update(min_lines=min_lines)
+            super().__init__(**kwargs, env_args=env_args, load_path=load_path)
+
         def build_agent(self, envs, debug=False, **agent_args):
             obs_space = envs.observation_space
             return ppo.control_flow.agent.Agent(
@@ -43,9 +51,8 @@ def main(log_dir, seed, max_lines, eval_lines, **kwargs):
             else:
                 return Env(**args, world_size=world_size)
 
-        def make_vec_envs(self, use_monkey, min_lines, **kwargs):
+        def make_vec_envs(self, use_monkey, **kwargs):
             # noinspection PyAttributeOutsideInit
-            self.n_lines = min_lines
             if use_monkey:
                 if "monkey" not in Env.line_objects:
                     Env.line_objects.append("monkey")
@@ -54,23 +61,17 @@ def main(log_dir, seed, max_lines, eval_lines, **kwargs):
                 Env.world_objects.remove("greenbot")
 
             # noinspection PyAttributeOutsideInit
-            return super().make_vec_envs(min_lines=min_lines, **kwargs)
+            return super().make_vec_envs(**kwargs)
 
         def build_envs_thunk(self, min_lines, **kwargs):
             return functools.partial(self.make_vec_envs, **kwargs)
 
         def increment_envs(self):
-            # noinspection PyAttributeOutsideInit
             self.n_lines = min(self.n_lines + 1, max_lines)
             return self.envs_thunk(min_lines=self.n_lines)
 
         def get_save_dict(self):
             return dict(n_lines=self.n_lines, **super().get_save_dict())
-
-        def _restore(self, checkpoint):
-            state_dict = super()._restore(checkpoint)
-            self.n_lines = state_dict["n_lines"]
-            return state_dict
 
     _Train(**kwargs, seed=seed, log_dir=log_dir).run()
 
@@ -83,6 +84,7 @@ def bandit_args():
     parser.add_argument("--eval-steps", type=int)
     parser.add_argument("--eval-lines", type=int, required=True)
     parser.add_argument("--no-eval", action="store_true")
+    parser.add_argument("--min-lines", type=int, required=True)
     parser.add_argument("--max-lines", type=int, required=True)
     ppo.control_flow.env.build_parser(parsers.env)
     parsers.env.add_argument("--world-size", type=int)

@@ -452,14 +452,13 @@ class TrainBase(abc.ABC):
         return dict(step=self.i, **state_dict)
 
     def _restore(self, checkpoint):
-        load_path = checkpoint
-        state_dict = torch.load(load_path, map_location=self.device)
+        state_dict = torch.load(checkpoint, map_location=self.device)
         self.agent.load_state_dict(state_dict["agent"])
         self.ppo.optimizer.load_state_dict(state_dict["optimizer"])
         self.i = state_dict.get("step", -1) + 1
         # if isinstance(self.envs.venv, VecNormalize):
         #     self.envs.venv.load_state_dict(state_dict["vec_normalize"])
-        print(f"Loaded parameters from {load_path}.")
+        print(f"Loaded parameters from {checkpoint}.")
         return state_dict
 
     @abc.abstractmethod
