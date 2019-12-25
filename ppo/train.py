@@ -262,6 +262,7 @@ class TrainBase(abc.ABC):
             if increment_at is not None and success_rate >= increment_at:
                 print("Incrementing!")
                 # noinspection PyAttributeOutsideInit
+                self.envs.close()
                 self.envs = self.increment_envs()
                 self.envs.to(self.device)
                 self.agent.increment_curriculum()
