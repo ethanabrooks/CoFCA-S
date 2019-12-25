@@ -24,7 +24,7 @@ from ppo.utils import RED, RESET, GREEN
 
 Obs = namedtuple("Obs", "active lines obs")
 Last = namedtuple("Last", "action active reward terminal selected")
-State = namedtuple("State", "obs condition prev curr condition_evaluations")
+State = namedtuple("State", "obs condition prev curr info")
 
 
 class Env(gym.Env, ABC):
@@ -119,10 +119,10 @@ class Env(gym.Env, ABC):
             reward = int(term) * int(not failing)
             info.update(regret=1 if term and failing else 0)
             if term:
-                info.update(
-                    if_evaluations=state.condition_evaluations[If],
-                    while_evaluations=state.condition_evaluations[While],
-                )
+                info.update(**state.info)
+                #     if_evaluations=state.condition_evaluations[If],
+                #     while_evaluations=state.condition_evaluations[While],
+                # )
 
             def line_strings(index, level):
                 if index == len(lines):
@@ -419,7 +419,10 @@ class Env(gym.Env, ABC):
                 condition=condition_bit,
                 prev=prev,
                 curr=curr,
-                condition_evaluations=condition_evaluations,
+                info=dict(
+                    if_evaluations=condition_evaluations[If],
+                    while_evaluations=condition_evaluations[While],
+                ),
             )
             condition_bit = abs(
                 condition_bit - int(self.random.rand() < self.flip_prob)

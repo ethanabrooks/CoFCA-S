@@ -154,7 +154,11 @@ class Env(ppo.control_flow.env.Env):
                 condition=None,
                 prev=prev,
                 curr=curr,
-                condition_evaluations=condition_evaluations,
+                info=dict(
+                    if_evaluations=condition_evaluations[If],
+                    while_evaluations=condition_evaluations[While],
+                    n_lines=self.n_lines - 1,  # don't count padding
+                ),
             )
             interaction, obj = self.parse_id(subtask_id)
 
