@@ -41,6 +41,7 @@ class Env(gym.Env, ABC):
         max_nesting_depth,
         eval_condition_size,
         no_op_limit,
+        use_failing,
         seed=0,
         eval_lines=None,
         time_limit=100,
@@ -48,6 +49,7 @@ class Env(gym.Env, ABC):
         baseline=False,
     ):
         super().__init__()
+        self.use_failing = use_failing
         self.no_op_limit = no_op_limit
         self._eval_condition_size = eval_condition_size
         self.max_nesting_depth = max_nesting_depth
@@ -116,8 +118,12 @@ class Env(gym.Env, ABC):
         action = None
         while True:
             success = state.curr is None
-            reward = int(success)
-            info.update(regret=1 if term and not success else 0)
+            if self.use_failing:
+                reward = int(term) * int(not failing)
+                info.update(regret=1 if term and failing else 0)
+            else:
+                reward = int(success)
+                info.update(regret=1 if term and not success else 0)
             if term:
                 info.update(
                     if_evaluations=state.condition_evaluations[If],
