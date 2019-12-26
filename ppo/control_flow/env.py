@@ -42,9 +42,10 @@ class Env(gym.Env, ABC):
         eval_condition_size,
         no_op_limit,
         use_failing,
+        time_limit,
         seed=0,
         eval_lines=None,
-        time_limit=100,
+        time_limit_scale=1,
         evaluating=False,
         baseline=False,
     ):
@@ -65,7 +66,7 @@ class Env(gym.Env, ABC):
             self.n_lines = max_lines
         self.n_lines += 1
         self.random, self.seed = seeding.np_random(seed)
-        self.time_limit = time_limit
+        self.time_limit_scale = time_limit_scale
         self.flip_prob = flip_prob
         self.baseline = baseline
         self.evaluating = evaluating
@@ -109,6 +110,7 @@ class Env(gym.Env, ABC):
         step = 0
         n = 0
         lines = self.build_lines()
+        time_limit = self.world_size * len(lines) * self.time_limit_scale
         state_iterator = self.state_generator(lines)
         state = next(state_iterator)
 
@@ -180,8 +182,14 @@ class Env(gym.Env, ABC):
             )
             term = (
                 success
-                or ((self.evaluating or self.terminate_on_failure) and failing)
-                or (not self.evaluating and step == self.time_limit)
+                or (
+                    (
+                        (self.evaluating and self.use_failing)
+                        or self.terminate_on_failure
+                    )
+                    and failing
+                )
+                or (not self.evaluating and step >= time_limit)
             )
 
             if self.baseline:
