@@ -147,12 +147,18 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             zeros = torch.zeros_like(f)
             zeros[:, :, 0] = f[:, :, 0]
             f = f - zeros  # zero out first
-            zeros[:, :, 0] = 1 - b[:, :, 0]
-            b = b + zeros  # make last b = 1
             zeros[:, :, 0] = 0
+            b = b.flip(2)
+            triu = torch.triu(torch.ones(nl, nl, device=rnn_hxs.device)).view(
+                nl, 1, nl, 1
+            )
+            b = b * triu
+            f = f * triu.flip(2)
+            zeros[:, :, -1] = 1 - b[:, :, -1]
+            b = b + zeros  # make last b = 1
             zeros[:, :, -1] = 1 - f[:, :, -1]
             f = f + zeros  # make last f = 1
-            B = torch.cat([f, b.flip(2)], dim=-1)
+            B = torch.cat([f, b], dim=-1)
             C = torch.roll(1 - B, shifts=1, dims=2)
             zeros = torch.zeros_like(B)
             zeros[:, :, 0] = 1
