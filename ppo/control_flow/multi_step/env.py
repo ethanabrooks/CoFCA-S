@@ -143,6 +143,7 @@ class Env(ppo.control_flow.env.Env):
                 l = line_iterator.send(evaluate_line(l))
             return l
 
+        possible_objects = [o for o, _ in object_pos]
         prev, curr = 0, next_subtask(None)
         while True:
             subtask_id = yield State(
@@ -164,6 +165,8 @@ class Env(ppo.control_flow.env.Env):
             if on_object():
                 if interaction in ("pickup", "transform"):
                     object_pos.remove(pair())
+                    if correct_id:
+                        possible_objects.remove(obj)
                 if interaction == "transform":
                     object_pos.append(("ice", tuple(agent_pos)))
                 prev, curr = curr, next_subtask(curr)
@@ -174,7 +177,7 @@ class Env(ppo.control_flow.env.Env):
                         candidates, key=lambda k: np.sum(np.abs(agent_pos - k))
                     )
                     agent_pos += np.clip(nearest - agent_pos, -1, 1)
-                elif correct_id:
+                elif correct_id and obj not in possible_objects:
                     # subtask is impossible
                     prev, curr = curr, next_subtask(curr)
 
