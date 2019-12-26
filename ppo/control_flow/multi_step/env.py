@@ -154,7 +154,7 @@ class Env(ppo.control_flow.env.Env):
                 _, o = self.parse_id(lines[l].id)
                 n = get_nearest(o)
                 if n is not None:
-                    times["to_complete"] = np.max(np.abs(agent_pos - n))
+                    times["to_complete"] = 1 + np.max(np.abs(agent_pos - n))
                     times["on_subtask"] = 0
             return l
 
@@ -167,7 +167,7 @@ class Env(ppo.control_flow.env.Env):
                 prev=prev,
                 curr=curr,
                 condition_evaluations=condition_evaluations,
-                term=times["on_subask"] - times["to_complete"] > self.time_to_waste,
+                term=times["on_subtask"] - times["to_complete"] > self.time_to_waste,
             )
             times["on_subtask"] += 1
             interaction, obj = self.parse_id(subtask_id)
