@@ -193,6 +193,9 @@ class Env(gym.Env, ABC):
                 step += 1
                 if action != lines[state.curr].id:
                     # TODO: this should only be evaluated when done
+                    import ipdb
+
+                    ipdb.set_trace()
                     failing = True
                     info.update(success_line=state.prev, failure_line=state.curr)
                 state = state_iterator.send(action)
@@ -496,7 +499,7 @@ class Env(gym.Env, ABC):
     def seed(self, seed=None):
         assert self.seed == seed
 
-    def render(self, mode="human", pause=True):
+    def render(self, mode="human", pause=False):
         self._render()
         if pause:
             input("pause")

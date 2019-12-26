@@ -138,6 +138,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         else:
             G = G.view(nl, N, nl, 2, self.encoder_hidden_size)
             B = bb = self.beta(G).sigmoid()
+            B[:, :, :, 1] = 1
             # arange = torch.zeros(6).float()
             # arange[0] = 1
             # arange[1] = 1
@@ -198,16 +199,26 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
                 return FixedCategorical(probs=gate * new + (1 - gate) * old)
 
             u = self.upsilon(z).softmax(dim=-1)
+            # self.print("bb", torch.round(100 * bb[p, R, :, 1]))
             # self.print("bb", torch.round(100 * bb[p, R, :, 0]))
-            self.print("u", torch.round(100 * u))
             w = P[p, R]
-            d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
+            print("w", torch.round(100 * w)[:, nl - 1 : nl + 8])
             d_gate = self.d_gate(z)
             self.sample_new(DG[t], d_gate)
             dg = DG[t].unsqueeze(-1).float()
+            if torch.any(dg == 1):
+                try:
+                    u_max = int(input("go:"))
+                    u[:] = 0
+                    u[:, u_max] = 1
+                except ValueError:
+                    pass
+            d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
+            self.print("u", torch.round(100 * u))
             self.print("dg prob", torch.round(100 * d_gate.probs[:, 1]))
             self.print("dg", dg)
             d_dist = gate(dg, d_probs, ones * nl)
+            self.print("d_probs", torch.round(100 * d_probs)[:, :nl])
             self.print("d_probs", torch.round(100 * d_probs)[:, nl:])
             self.sample_new(D[t], d_dist)
             p = p + D[t].clone() - nl
