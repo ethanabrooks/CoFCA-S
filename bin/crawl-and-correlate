@@ -8,4 +8,4 @@ echo $crawl_cmd
 eval ${crawl_cmd}
 
 
-zsh ${0:a:h}/correlate.zsh "$dir/%" "$tag"
+zsh ${0:a:h}/correlate "$dir/%" "$tag"

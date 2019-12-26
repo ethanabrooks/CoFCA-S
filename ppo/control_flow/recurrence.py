@@ -121,15 +121,23 @@ class Recurrence(nn.Module):
         obs_spaces = self.obs_spaces
         obs_sections = self.obs_sections
         state_sizes = self.state_sizes
-        n_lines = self.eval_lines + 1
-        eval_lines_space = self.eval_lines_space(n_lines, obs_spaces.lines)
-        self.obs_spaces = obs_spaces._replace(lines=eval_lines_space)
-        self.obs_sections = get_obs_sections(self.obs_spaces)
-        self.state_sizes = state_sizes._replace(d_probs=2 * n_lines)
+        self.set_n_lines(self.eval_lines + 1)
         yield self
         self.obs_spaces = obs_spaces
         self.obs_sections = obs_sections
         self.state_sizes = state_sizes
+
+    def increment_curriculum(self):
+        self.train_lines += 1
+        self.set_n_lines(self.train_lines)
+
+    def set_n_lines(self, n_lines):
+        eval_lines_space = self.eval_lines_space(n_lines, self.obs_spaces.lines)
+        # noinspection PyProtectedMember
+        self.obs_spaces = self.obs_spaces._replace(lines=eval_lines_space)
+        self.obs_sections = get_obs_sections(self.obs_spaces)
+        # noinspection PyProtectedMember
+        self.state_sizes = self.state_sizes._replace(d_probs=2 * n_lines)
 
     @staticmethod
     def eval_lines_space(n_eval_lines, train_lines_space):
@@ -203,9 +211,11 @@ class Recurrence(nn.Module):
             f, b = torch.unbind(B.sigmoid(), dim=3)
             B = torch.stack([f, b.flip(2)], dim=-2)
             B = B.view(nl, N, 2 * nl, self.ne)
+            # noinspection PyTypeChecker
             zero_last = (1 - last) * B
             B = zero_last + self.last  # this ensures that the last B is 1
             rolled = torch.roll(zero_last, shifts=1, dims=2)
+            # noinspection PyTypeChecker
             C = torch.cumprod(1 - rolled, dim=2)
             P = B * C
             P = P.view(nl, N, nl, 2, self.ne)
