@@ -18,7 +18,10 @@ class Env(ppo.control_flow.env.Env):
     world_objects = subtask_objects + other_objects
     interactions = ["pickup", "transform", "visit"]
 
-    def __init__(self, world_size, num_subtasks, add_while_obj_prob, **kwargs):
+    def __init__(
+        self, world_size, add_while_obj_prob, time_to_waste, num_subtasks, **kwargs
+    ):
+        self.time_to_waste = time_to_waste
         num_subtasks = len(self.subtask_objects) * len(self.interactions)
         super().__init__(num_subtasks=num_subtasks, **kwargs)
         self.add_while_obj_prob = add_while_obj_prob
@@ -144,6 +147,7 @@ class Env(ppo.control_flow.env.Env):
             return l
 
         possible_objects = [o for o, _ in object_pos]
+        time_wasted = 0
         prev, curr = 0, next_subtask(None)
         while True:
             subtask_id = yield State(
@@ -152,6 +156,7 @@ class Env(ppo.control_flow.env.Env):
                 prev=prev,
                 curr=curr,
                 condition_evaluations=condition_evaluations,
+                term=time_wasted > self.time_to_waste,
             )
             interaction, obj = self.parse_id(subtask_id)
 
@@ -162,6 +167,8 @@ class Env(ppo.control_flow.env.Env):
                 return pair() in object_pos  # standing on the desired object
 
             correct_id = subtask_id == lines[curr].id
+            if not correct_id:
+                time_wasted += 1
             if on_object():
                 if interaction in ("pickup", "transform"):
                     object_pos.remove(pair())

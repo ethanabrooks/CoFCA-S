@@ -24,7 +24,7 @@ from ppo.utils import RED, RESET, GREEN
 
 Obs = namedtuple("Obs", "active lines obs")
 Last = namedtuple("Last", "action active reward terminal selected")
-State = namedtuple("State", "obs condition prev curr condition_evaluations")
+State = namedtuple("State", "obs condition prev curr condition_evaluations term")
 
 
 class Env(gym.Env, ABC):
@@ -41,16 +41,13 @@ class Env(gym.Env, ABC):
         max_nesting_depth,
         eval_condition_size,
         no_op_limit,
-        use_failing,
         time_limit,
         seed=0,
         eval_lines=None,
-        time_limit_scale=1,
         evaluating=False,
         baseline=False,
     ):
         super().__init__()
-        self.use_failing = use_failing
         self.no_op_limit = no_op_limit
         self._eval_condition_size = eval_condition_size
         self.max_nesting_depth = max_nesting_depth
@@ -66,7 +63,6 @@ class Env(gym.Env, ABC):
             self.n_lines = max_lines
         self.n_lines += 1
         self.random, self.seed = seeding.np_random(seed)
-        self.time_limit_scale = time_limit_scale
         self.flip_prob = flip_prob
         self.baseline = baseline
         self.evaluating = evaluating
@@ -106,11 +102,9 @@ class Env(gym.Env, ABC):
         return self.iterator.send(action)
 
     def generator(self):
-        failing = False
         step = 0
         n = 0
         lines = self.build_lines()
-        time_limit = self.world_size * len(lines) * self.time_limit_scale
         state_iterator = self.state_generator(lines)
         state = next(state_iterator)
 
@@ -120,12 +114,8 @@ class Env(gym.Env, ABC):
         action = None
         while True:
             success = state.curr is None
-            if self.use_failing:
-                reward = int(term) * int(not failing)
-                info.update(regret=1 if term and failing else 0)
-            else:
-                reward = int(success)
-                info.update(regret=1 if term and not success else 0)
+            reward = int(success)
+            info.update(regret=1 if term and not success else 0)
             if term:
                 info.update(
                     if_evaluations=state.condition_evaluations[If],
@@ -157,10 +147,8 @@ class Env(gym.Env, ABC):
                 yield from line_strings(index + 1, level)
 
             def render():
-                if failing:
-                    print(RED)
-                elif reward == 1:
-                    print(GREEN)
+                if term:
+                    print(GREEN if success else RED)
                 for i, string in enumerate(line_strings(index=0, level=1)):
                     print(f"{i}{string}")
                 print("Action:", action)
@@ -174,14 +162,7 @@ class Env(gym.Env, ABC):
             if success:
                 info.update(success_line=len(lines))
 
-            if self.use_failing:
-                term = (
-                    success
-                    or ((self.evaluating or self.terminate_on_failure) and failing)
-                    or (not self.evaluating and step >= time_limit)
-                )
-            else:
-                term = success or step >= time_limit
+            term = success or state.term
 
             action = (
                 yield self.get_observation(state.obs, state.curr, lines),
@@ -207,13 +188,10 @@ class Env(gym.Env, ABC):
                     )
                     reached_no_op_limit = n == no_op_limit
                 if reached_no_op_limit:
-                    failing = True
                     term = True
             elif state.curr is not None:
                 step += 1
                 if action != lines[state.curr].id:
-                    # TODO: this should only be evaluated when done
-                    failing = True
                     info.update(success_line=state.prev, failure_line=state.curr)
                 state = state_iterator.send(action)
 
@@ -435,6 +413,7 @@ class Env(gym.Env, ABC):
                 prev=prev,
                 curr=curr,
                 condition_evaluations=condition_evaluations,
+                term=False,
             )
             condition_bit = abs(
                 condition_bit - int(self.random.rand() < self.flip_prob)
