@@ -113,7 +113,8 @@ class Env(ppo.control_flow.env.Env):
             assert self.parse_id(line_id) in (("pickup", obj), ("transform", obj))
             lines[l] = Subtask(line_id)
             if (
-                self.random.random() < self.add_while_obj_prob
+                not self.evaluating
+                and self.random.random() < self.add_while_obj_prob
                 and obj in self.world_objects
             ):
                 object_pos += [
