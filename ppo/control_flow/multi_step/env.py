@@ -179,7 +179,7 @@ class Env(ppo.control_flow.env.Env):
                     agent_pos += np.clip(nearest - agent_pos, -1, 1)
                 elif correct_id and obj not in possible_objects:
                     # subtask is impossible
-                    prev, curr = curr, next_subtask(curr)
+                    prev, curr = curr, None
 
     def build_lines(self):
         num_line_ids = len(self.interactions) * len(self.line_objects)
