@@ -16,7 +16,7 @@ class Env(ppo.control_flow.env.Env):
     other_objects = ["ice", "agent"]
     line_objects = copy(subtask_objects)
     world_objects = subtask_objects + other_objects
-    interactions = ["pickup", "transform", "visit"]
+    interactions = ["pickup", "transform"]  # , "visit"]
 
     def __init__(self, world_size, num_subtasks, add_while_obj_prob, **kwargs):
         num_subtasks = len(self.subtask_objects) * len(self.interactions)
