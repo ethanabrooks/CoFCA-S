@@ -206,7 +206,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             self.print("d_probs", torch.round(100 * d_probs)[:, nl:])
             self.sample_new(D[t], d_dist)
             p = p + D[t].clone() - nl
-            p = torch.clamp(p, min=0, max=nl - 1)
+            p = torch.clamp(p, min=0, max=nl - (2 if self.nl_2 else 1))
 
             x = [
                 obs,
