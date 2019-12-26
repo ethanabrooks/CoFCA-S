@@ -1,4 +1,4 @@
 * implement curriculum that uses add-while-obj-prob
-* dont add while obj if evaluating
-* bring in changes incrementally on rldl12
 * take out failure
+* curriculum based on speed
+* curriculum based on world-size
