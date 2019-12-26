@@ -77,6 +77,7 @@ def bandit_args():
     parsers.agent.add_argument("--num-edges", type=int, required=True)
     parsers.agent.add_argument("--gate-coef", type=float)
     parsers.agent.add_argument("--no-op-coef", type=float)
+    parsers.agent.add_argument("--nl-2", type=bool)
     return parser
 
 

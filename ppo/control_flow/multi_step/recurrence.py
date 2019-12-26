@@ -24,8 +24,10 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         activation,
         conv_hidden_size,
         kernel_size,
+        nl_2,
         **kwargs
     ):
+        self.nl_2 = nl_2
         self.conv_hidden_size = conv_hidden_size
         super().__init__(
             hidden_size=hidden_size,
@@ -209,7 +211,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             self.print("d_probs", torch.round(100 * d_probs)[:, nl:])
             self.sample_new(D[t], d_dist)
             p = p + D[t].clone() - nl
-            p = torch.clamp(p, min=0, max=nl - 1)
+            p = torch.clamp(p, min=0, max=nl - (2 if self.nl_2 else 1))
 
             x = [
                 obs,
