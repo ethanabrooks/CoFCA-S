@@ -126,6 +126,7 @@ class Env(ppo.control_flow.env.Env):
 
         line_iterator = self.line_generator(lines)
         condition_evaluations = defaultdict(list)
+        times = Counter(on_subtask=0, to_complete=0)
 
         def evaluate_line(l):
             if l is None:
@@ -140,14 +141,24 @@ class Env(ppo.control_flow.env.Env):
                     condition_evaluations[type(line)] += [evaluation]
                 return evaluation
 
+        def get_nearest(to):
+            candidates = [np.array(p) for o, p in object_pos if o == to]
+            if candidates:
+                return min(candidates, key=lambda k: np.sum(np.abs(agent_pos - k)))
+
         def next_subtask(l):
             l = line_iterator.send(evaluate_line(l))
             while not (l is None or type(lines[l]) is Subtask):
                 l = line_iterator.send(evaluate_line(l))
+            if l is not None:
+                _, o = self.parse_id(lines[l].id)
+                n = get_nearest(o)
+                if n is not None:
+                    times["to_complete"] = np.max(np.abs(agent_pos - n))
+                    times["on_subtask"] = 0
             return l
 
         possible_objects = [o for o, _ in object_pos]
-        time_wasted = 0
         prev, curr = 0, next_subtask(None)
         while True:
             subtask_id = yield State(
@@ -156,8 +167,9 @@ class Env(ppo.control_flow.env.Env):
                 prev=prev,
                 curr=curr,
                 condition_evaluations=condition_evaluations,
-                term=time_wasted > self.time_to_waste,
+                term=times["on_subask"] - times["to_complete"] > self.time_to_waste,
             )
+            times["on_subtask"] += 1
             interaction, obj = self.parse_id(subtask_id)
 
             def pair():
@@ -167,8 +179,6 @@ class Env(ppo.control_flow.env.Env):
                 return pair() in object_pos  # standing on the desired object
 
             correct_id = subtask_id == lines[curr].id
-            if not correct_id:
-                time_wasted += 1
             if on_object():
                 if interaction in ("pickup", "transform"):
                     object_pos.remove(pair())
@@ -179,11 +189,8 @@ class Env(ppo.control_flow.env.Env):
                 if correct_id:
                     prev, curr = curr, next_subtask(curr)
             else:
-                candidates = [np.array(p) for o, p in object_pos if o == obj]
-                if candidates:
-                    nearest = min(
-                        candidates, key=lambda k: np.sum(np.abs(agent_pos - k))
-                    )
+                nearest = get_nearest(obj)
+                if nearest is not None:
                     agent_pos += np.clip(nearest - agent_pos, -1, 1)
                 elif correct_id and obj not in possible_objects:
                     # subtask is impossible
