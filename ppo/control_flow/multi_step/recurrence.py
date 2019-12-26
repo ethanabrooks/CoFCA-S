@@ -130,8 +130,6 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         rolled = torch.cat(rolled, dim=0)
         G, H = self.task_encoder(rolled)
         H = H.transpose(0, 1).reshape(nl, N, -1)
-        last = torch.zeros(nl, N, 2 * nl, self.ne, device=rnn_hxs.device)
-        last[:, :, -1] = 1
         if self.no_scan:
             P = self.beta(H).view(nl, N, -1, self.ne).softmax(2)
             half = P.size(2) // 2
@@ -144,21 +142,25 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             # B[:, :, :, 0] = 0  # arange.view(1, 1, -1, 1)
             # B[:, :, :, 1] = 1
             f, b = torch.unbind(B, dim=3)
-            B = torch.stack([f, b.flip(2)], dim=-2)
-            B = B.view(nl, N, 2 * nl, self.ne)
+            zeros = torch.zeros_like(f)
+            zeros[:, :, 0] = f[:, :, 0]
+            f = f - zeros  # zero out first
+            zeros[:, :, 0] = 1 - b[:, :, 0]
+            b = b + zeros  # make last b = 1
+            zeros[:, :, 0] = 0
+            zeros[:, :, -1] = 1 - f[:, :, -1]
+            f = f + zeros  # make last f = 1
+            B = torch.cat([f, b.flip(2)], dim=-1)
+            C = torch.roll(1 - B, shifts=1, dims=2)
+            zeros = torch.zeros_like(B)
+            zeros[:, :, 0] = 1
+            C = C + zeros
             # noinspection PyTypeChecker
-            B = torch.flip(1 - last, (2,)) * B  # this ensures the first B is 0
-            # noinspection PyTypeChecker
-            zero_last = (1 - last) * B
-            B = zero_last + last  # this ensures that the last B is 1
-            rolled = torch.roll(zero_last, shifts=1, dims=2)
-            # noinspection PyTypeChecker
-            C = torch.cumprod(1 - rolled, dim=2)
+            C = torch.cumprod(C, dim=2)
             P = B * C
-            P = P.view(nl, N, nl, 2, self.ne)
-            f, b = torch.unbind(P, dim=3)
-            half = b.size(2)
-            P = torch.cat([b.flip(2), f], dim=2)
+            P = F.pad(P, [0, 0, nl, 0])
+            f, b = torch.split(P, self.ne, dim=-1)
+            P = torch.cat([b.flip(2), f], dim=-1)
 
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
@@ -203,10 +205,10 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             dg = DG[t].unsqueeze(-1).float()
             self.print("dg prob", torch.round(100 * d_gate.probs[:, 1]))
             self.print("dg", dg)
-            d_dist = gate(dg, d_probs, ones * half)
-            self.print("d_probs", torch.round(100 * d_probs)[:, half:])
+            d_dist = gate(dg, d_probs, ones * nl)
+            self.print("d_probs", torch.round(100 * d_probs)[:, nl:])
             self.sample_new(D[t], d_dist)
-            p = p + D[t].clone() - half
+            p = p + D[t].clone() - nl
             p = torch.clamp(p, min=0, max=nl - 1)
 
             x = [

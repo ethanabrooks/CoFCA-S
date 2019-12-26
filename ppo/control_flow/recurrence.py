@@ -84,7 +84,7 @@ class Recurrence(nn.Module):
         for _ in range(num_layers):
             layers.extend([init_(nn.Linear(hidden_size, hidden_size)), activation])
         self.zeta = nn.Sequential(*layers)
-        self.upsilon = init_(nn.Linear(hidden_size, self.ne))
+        self.upsilon = init_(nn.Linear(hidden_size, 2 * self.ne))
 
         layers = []
         in_size = (2 if self.no_scan else 1) * encoder_hidden_size
