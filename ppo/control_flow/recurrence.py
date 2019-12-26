@@ -117,32 +117,27 @@ class Recurrence(nn.Module):
 
     # noinspection PyProtectedMember
     @contextmanager
-    def evaluating(self):
+    def evaluating(self, eval_obs_space):
         obs_spaces = self.obs_spaces
         obs_sections = self.obs_sections
         state_sizes = self.state_sizes
-        self.set_n_lines(self.eval_lines + 1)
+        self.set_obs_space(eval_obs_space)
         yield self
         self.obs_spaces = obs_spaces
         self.obs_sections = obs_sections
         self.state_sizes = state_sizes
 
-    def increment_curriculum(self):
-        self.train_lines += 1
-        self.set_n_lines(self.train_lines)
-
-    def set_n_lines(self, n_lines):
-        eval_lines_space = self.eval_lines_space(n_lines, self.obs_spaces.lines)
-        # noinspection PyProtectedMember
-        self.obs_spaces = self.obs_spaces._replace(lines=eval_lines_space)
+    def set_obs_space(self, obs_space):
+        self.obs_spaces = Obs(**obs_space.spaces)
         self.obs_sections = get_obs_sections(self.obs_spaces)
+        self.train_lines = len(self.obs_spaces.lines.nvec)
         # noinspection PyProtectedMember
-        self.state_sizes = self.state_sizes._replace(d_probs=2 * n_lines)
+        self.state_sizes = self.state_sizes._replace(d_probs=2 * self.train_lines)
 
     @staticmethod
-    def eval_lines_space(n_eval_lines, train_lines_space):
+    def get_lines_space(n_eval_lines, train_lines_space):
         return spaces.MultiDiscrete(
-            np.repeat(train_lines_space.nvec[0], repeats=n_eval_lines)
+            np.repeat(train_lines_space.nvec[:1], repeats=n_eval_lines, axis=0)
         )
 
     @staticmethod
