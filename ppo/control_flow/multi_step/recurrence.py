@@ -177,7 +177,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             succ_probs = []
             for i, (f, b) in enumerate(unbound):
                 f = f[:, :-i]
-                b = b[:, -i:].flip(1)
+                b = b[:, -i:]  # .flip(1)
                 fb = [f, b] if self.forward_first else [b, f]
                 succ_probs.append(torch.cat(fb, dim=1))
             succ_probs = torch.stack(succ_probs, dim=0)
