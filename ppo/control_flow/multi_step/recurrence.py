@@ -47,16 +47,16 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             nn.ReLU(),
         ]
         # if kernel_size < 4:
-            # layers += [
-                # nn.Conv2d(
-                    # conv_hidden_size,
-                    # conv_hidden_size,
-                    # kernel_size=2,
-                    # stride=2,
-                    # padding=0,
-                # ),
-                # nn.ReLU(),
-            # ]
+        # layers += [
+        # nn.Conv2d(
+        # conv_hidden_size,
+        # conv_hidden_size,
+        # kernel_size=2,
+        # stride=2,
+        # padding=0,
+        # ),
+        # nn.ReLU(),
+        # ]
         self.conv = nn.Sequential(*layers)
         self.d_gate = Categorical(hidden_size, 2)
         self.a_gate = Categorical(hidden_size, 2)
@@ -191,7 +191,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
                 return FixedCategorical(probs=gate * new + (1 - gate) * old)
 
             u = self.upsilon(z).softmax(dim=-1)
-            self.print("bb", torch.round(100 * bb[p, R, :, 0]))
+            # self.print("bb", torch.round(100 * bb[p, R, :, 0]))
             self.print("u", torch.round(100 * u))
             w = P[p, R]
             d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
@@ -200,10 +200,10 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             dg = DG[t].unsqueeze(-1).float()
             self.print("dg prob", torch.round(100 * d_gate.probs[:, 1]))
             self.print("dg", dg)
-            d_dist = gate(dg, d_probs, ones * half)
-            self.print("d_probs", torch.round(100 * d_probs)[:, half:])
+            d_dist = gate(dg, d_probs, ones * nl)
+            self.print("d_probs", torch.round(100 * d_probs)[:, nl:])
             self.sample_new(D[t], d_dist)
-            p = p + D[t].clone() - half
+            p = p + D[t].clone() - nl
             p = torch.clamp(p, min=0, max=nl - 1)
 
             x = [
