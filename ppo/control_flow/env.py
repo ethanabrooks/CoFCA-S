@@ -174,12 +174,6 @@ class Env(gym.Env, ABC):
             if success:
                 info.update(success_line=len(lines))
 
-            action = (
-                yield self.get_observation(state.obs, state.curr, lines),
-                reward,
-                term,
-                info,
-            )
             if self.use_failing:
                 term = (
                     success
@@ -188,6 +182,13 @@ class Env(gym.Env, ABC):
                 )
             else:
                 term = success or step >= time_limit
+
+            action = (
+                yield self.get_observation(state.obs, state.curr, lines),
+                reward,
+                term,
+                info,
+            )
 
             if self.baseline:
                 selected = None
