@@ -169,7 +169,8 @@ class Env(ppo.control_flow.env.Env):
                         possible_objects.remove(obj)
                 if interaction == "transform":
                     object_pos.append(("ice", tuple(agent_pos)))
-                prev, curr = curr, next_subtask(curr)
+                if correct_id:
+                    prev, curr = curr, next_subtask(curr)
             else:
                 candidates = [np.array(p) for o, p in object_pos if o == obj]
                 if candidates:
