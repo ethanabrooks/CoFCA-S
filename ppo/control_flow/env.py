@@ -24,7 +24,7 @@ from ppo.utils import RED, RESET, GREEN
 
 Obs = namedtuple("Obs", "active lines obs")
 Last = namedtuple("Last", "action active reward terminal selected")
-State = namedtuple("State", "obs condition prev curr info")
+State = namedtuple("State", "obs condition prev curr condition_evaluations")
 
 
 class Env(gym.Env, ABC):
@@ -119,10 +119,10 @@ class Env(gym.Env, ABC):
             reward = int(term) * int(not failing)
             info.update(regret=1 if term and failing else 0)
             if term:
-                info.update(**state.info)
-                #     if_evaluations=state.condition_evaluations[If],
-                #     while_evaluations=state.condition_evaluations[While],
-                # )
+                info.update(
+                    if_evaluations=state.condition_evaluations[If],
+                    while_evaluations=state.condition_evaluations[While],
+                )
 
             def line_strings(index, level):
                 if index == len(lines):
@@ -213,7 +213,7 @@ class Env(gym.Env, ABC):
             assert self.eval_lines is not None
             n_lines = self.eval_lines
         else:
-            n_lines = self.get_train_n_lines()
+            n_lines = self.random.random_integers(self.min_lines, self.max_lines)
         if self.eval_condition_size:
             line0 = self.random.choice([While, If])
             edge_length = self.random.random_integers(
@@ -229,9 +229,6 @@ class Env(gym.Env, ABC):
             Subtask(self.random.choice(self.num_subtasks)) if line is Subtask else line
             for line in lines
         ]
-
-    def get_train_n_lines(self):
-        return self.random.random_integers(self.min_lines, self.max_lines)
 
     def build_task_image(self, lines):
         image = np.zeros(self.image_shape)
@@ -419,10 +416,7 @@ class Env(gym.Env, ABC):
                 condition=condition_bit,
                 prev=prev,
                 curr=curr,
-                info=dict(
-                    if_evaluations=condition_evaluations[If],
-                    while_evaluations=condition_evaluations[While],
-                ),
+                condition_evaluations=condition_evaluations,
             )
             condition_bit = abs(
                 condition_bit - int(self.random.rand() < self.flip_prob)
@@ -511,6 +505,8 @@ class Env(gym.Env, ABC):
 
 
 def build_parser(p):
+    p.add_argument("--min-lines", type=int, required=True)
+    p.add_argument("--max-lines", type=int, required=True)
     p.add_argument("--num-subtasks", type=int, default=12)
     p.add_argument("--no-op-limit", type=int)
     p.add_argument("--flip-prob", type=float, default=0.5)

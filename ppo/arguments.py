@@ -19,7 +19,6 @@ def build_parser():
         description="RL", formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
     parser.add_argument("--run-id", help=" ")
-    parser.add_argument("--increment-at", type=float)
     parser.add_argument(
         "--gamma", type=float, default=0.99, help="discount factor for rewards"
     )
@@ -64,12 +63,7 @@ def build_parser():
         "--eval-interval", type=int, help="eval interval, one eval per n updates"
     )
     parser.add_argument("--load-path", type=Path)
-    parser.add_argument(
-        "--log-dir",
-        type=Path,
-        default=Path("/tmp/ppo"),
-        help="directory to save agent logs",
-    )
+    parser.add_argument("--log-dir", type=Path, help="directory to save agent logs")
     parser.add_argument(
         "--no-cuda", dest="cuda", action="store_false", help="enables CUDA training"
     )

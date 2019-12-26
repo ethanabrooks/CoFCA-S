@@ -55,7 +55,6 @@ class TrainBase(abc.ABC):
         env_args,
         success_reward,
         use_tqdm,
-        increment_at,
     ):
         # Properly restrict pytorch to not consume extra resources.
         #  - https://github.com/pytorch/pytorch/issues/975
@@ -85,7 +84,7 @@ class TrainBase(abc.ABC):
             self.device = self.get_device()
         # print("Using device", self.device)
 
-        args = dict(
+        self.envs = self.make_vec_envs(
             **env_args,
             seed=seed,
             gamma=(gamma if normalize else None),
@@ -95,8 +94,6 @@ class TrainBase(abc.ABC):
             num_processes=num_processes,
             time_limit=time_limit,
         )
-        self.envs = self.make_vec_envs(**args)
-        self.envs_thunk = self.build_envs_thunk(**args)
         self.make_eval_envs = functools.partial(
             self.make_vec_envs,
             **env_args,
@@ -145,7 +142,6 @@ class TrainBase(abc.ABC):
             no_eval=no_eval,
             use_tqdm=use_tqdm,
             success_reward=success_reward,
-            increment_at=increment_at,
         )
         self.train_iterator = self.make_train_iterator()
 
@@ -166,7 +162,6 @@ class TrainBase(abc.ABC):
         no_eval,
         success_reward,
         use_tqdm,
-        increment_at,
     ):
         if eval_interval and not no_eval:
             # vec_norm = get_vec_normalize(eval_envs)
@@ -179,7 +174,7 @@ class TrainBase(abc.ABC):
             eval_counter = Counter()
             envs = self.make_eval_envs()
             envs.to(self.device)
-            with self.agent.recurrent_module.evaluating(envs.observation_space):
+            with self.agent.recurrent_module.evaluating():
                 eval_recurrent_hidden_states = torch.zeros(
                     num_processes,
                     self.agent.recurrent_hidden_state_size,
@@ -187,7 +182,6 @@ class TrainBase(abc.ABC):
                 )
 
                 eval_result = self.run_epoch(
-                    evaluating=True,
                     obs=envs.reset(),
                     rnn_hxs=eval_recurrent_hidden_states,
                     masks=eval_masks,
@@ -221,7 +215,6 @@ class TrainBase(abc.ABC):
                 log_progress = tqdm(total=log_interval, desc="next log")
             self.i += 1
             epoch_counter = self.run_epoch(
-                evaluating=False,
                 obs=self.rollouts.obs[0],
                 rnn_hxs=self.rollouts.recurrent_hidden_states[0],
                 masks=self.rollouts.masks[0],
@@ -260,34 +253,9 @@ class TrainBase(abc.ABC):
                         **eval_result,
                     )
                 )
-            success_rate = np.mean(epoch_counter["success"])
-            if increment_at is not None and success_rate >= increment_at:
-                print("Incrementing!")
-                # noinspection PyAttributeOutsideInit
-                self.envs.close()
-                self.envs = self.increment_envs()
-                self.envs.to(self.device)
-                self.agent.set_obs_space(self.envs.observation_space)
-                # noinspection PyAttributeOutsideInit
-                self.rollouts = self.rollouts.increment_curriculum(
-                    obs_space=self.envs.observation_space,
-                    action_space=self.envs.action_space,
-                    recurrent_hidden_state_size=self.agent.recurrent_hidden_state_size,
-                )
-                self.rollouts.to(self.device)
-                obs = self.envs.reset()
-                if obs.size(-1) != sum(self.agent.recurrent_module.obs_sections):
-                    import ipdb
-
-                    ipdb.set_trace()
-                self.rollouts.obs[0].copy_(obs)
-
-    def increment_envs(self):
-        raise NotImplemented
 
     def run_epoch(
         self,
-        evaluating,
         obs,
         rnn_hxs,
         masks,
@@ -436,40 +404,30 @@ class TrainBase(abc.ABC):
         return envs
 
     def _save(self, checkpoint_dir):
-        save_dict = self.get_save_dict()
-        print("save_dict n_lines", save_dict["n_lines"])
-        print("self.n_lines", self.n_lines)
-        save_path = Path(checkpoint_dir, "checkpoint.pt")
-        torch.save(save_dict, save_path)
-        print(f"Saved parameters to {save_path}")
-        return str(save_path)
-
-    def get_save_dict(self):
         modules = dict(
             optimizer=self.ppo.optimizer, agent=self.agent
         )  # type: Dict[str, torch.nn.Module]
         # if isinstance(self.envs.venv, VecNormalize):
         #     modules.update(vec_normalize=self.envs.venv)
         state_dict = {name: module.state_dict() for name, module in modules.items()}
-        return dict(step=self.i, **state_dict)
+        save_path = Path(checkpoint_dir, "checkpoint.pt")
+        torch.save(dict(step=self.i, **state_dict), save_path)
+        print(f"Saved parameters to {save_path}")
+        return str(save_path)
 
     def _restore(self, checkpoint):
-        state_dict = torch.load(checkpoint, map_location=self.device)
+        load_path = checkpoint
+        state_dict = torch.load(load_path, map_location=self.device)
         self.agent.load_state_dict(state_dict["agent"])
         self.ppo.optimizer.load_state_dict(state_dict["optimizer"])
         self.i = state_dict.get("step", -1) + 1
         # if isinstance(self.envs.venv, VecNormalize):
         #     self.envs.venv.load_state_dict(state_dict["vec_normalize"])
-        print(f"Loaded parameters from {checkpoint}.")
-        return state_dict
+        print(f"Loaded parameters from {load_path}.")
 
     @abc.abstractmethod
     def get_device(self):
         raise NotImplementedError
-
-    @staticmethod
-    def build_envs_thunk(**kwargs):
-        return None
 
 
 class Train(TrainBase):

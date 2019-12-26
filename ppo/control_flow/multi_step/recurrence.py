@@ -69,7 +69,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             dg_probs=2,
             ag=1,
             dg=1
-        )
+        )._replace(d_probs=self.train_lines)
         ones = torch.ones(1, dtype=torch.long)
         self.register_buffer("ones", ones)
         line_nvec = torch.tensor(self.obs_spaces.lines.nvec[0, :-1])
@@ -78,11 +78,6 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
 
     def build_embed_task(self, hidden_size):
         return nn.EmbeddingBag(self.obs_spaces.lines.nvec[0].sum(), hidden_size)
-
-    def set_obs_space(self, obs_space):
-        super().set_obs_space(obs_space)
-        # noinspection PyProtectedMember
-        self.state_sizes = self.state_sizes._replace(d_probs=self.train_lines)
 
     @property
     def gru_in_size(self):

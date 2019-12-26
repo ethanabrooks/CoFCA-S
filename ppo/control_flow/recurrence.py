@@ -39,7 +39,6 @@ class Recurrence(nn.Module):
         observation_space,
         action_space,
         eval_lines,
-        max_train_lines,
         activation,
         hidden_size,
         encoder_hidden_size,
@@ -57,26 +56,19 @@ class Recurrence(nn.Module):
         self.no_pointer = no_pointer
         self.no_roll = no_roll
         self.no_scan = no_scan or no_pointer  # no scan if no pointer
-        n_a, n_p = map(int, action_space.nvec[:2])
-
-        self.state_sizes = RecurrentState(
-            a=1, a_probs=n_a, d=1, d_probs=None, p=1, v=1, h=hidden_size
-        )
-        self.obs_spaces = None
-        self.obs_sections = None
-        self.train_lines = None
-        self.set_obs_space(observation_space)
-
+        self.obs_spaces = Obs(**observation_space.spaces)
         self.action_size = 2
         self.debug = debug
         self.hidden_size = hidden_size
         self.encoder_hidden_size = encoder_hidden_size
 
+        self.obs_sections = get_obs_sections(self.obs_spaces)
         self.eval_lines = eval_lines
-        self.max_train_lines = max_train_lines
+        self.train_lines = len(self.obs_spaces.lines.nvec)
 
         # networks
         self.ne = num_edges
+        n_a, n_p = map(int, action_space.nvec[:2])
         self.n_a = n_a
         self.embed_task = self.build_embed_task(encoder_hidden_size)
         self.embed_action = nn.Embedding(n_a, hidden_size)
@@ -106,6 +98,9 @@ class Recurrence(nn.Module):
         self.critic = init_(nn.Linear(hidden_size, 1))
         self.actor = Categorical(hidden_size, n_a)
         self.attention = Categorical(hidden_size, n_a)
+        self.state_sizes = RecurrentState(
+            a=1, a_probs=n_a, d=1, d_probs=2 * self.train_lines, p=1, v=1, h=hidden_size
+        )
 
     def build_embed_task(self, hidden_size):
         return nn.Embedding(len(self.obs_spaces.lines.nvec), hidden_size)
@@ -122,27 +117,32 @@ class Recurrence(nn.Module):
 
     # noinspection PyProtectedMember
     @contextmanager
-    def evaluating(self, eval_obs_space):
+    def evaluating(self):
         obs_spaces = self.obs_spaces
         obs_sections = self.obs_sections
         state_sizes = self.state_sizes
-        self.set_obs_space(eval_obs_space)
+        self.set_n_lines(self.eval_lines + 1)
         yield self
         self.obs_spaces = obs_spaces
         self.obs_sections = obs_sections
         self.state_sizes = state_sizes
 
-    def set_obs_space(self, obs_space):
-        self.obs_spaces = Obs(**obs_space.spaces)
-        self.obs_sections = get_obs_sections(self.obs_spaces)
-        self.train_lines = len(self.obs_spaces.lines.nvec)
+    def increment_curriculum(self):
+        self.train_lines += 1
+        self.set_n_lines(self.train_lines)
+
+    def set_n_lines(self, n_lines):
+        eval_lines_space = self.eval_lines_space(n_lines, self.obs_spaces.lines)
         # noinspection PyProtectedMember
-        self.state_sizes = self.state_sizes._replace(d_probs=2 * self.train_lines)
+        self.obs_spaces = self.obs_spaces._replace(lines=eval_lines_space)
+        self.obs_sections = get_obs_sections(self.obs_spaces)
+        # noinspection PyProtectedMember
+        self.state_sizes = self.state_sizes._replace(d_probs=2 * n_lines)
 
     @staticmethod
-    def get_lines_space(n_eval_lines, train_lines_space):
+    def eval_lines_space(n_eval_lines, train_lines_space):
         return spaces.MultiDiscrete(
-            np.repeat(train_lines_space.nvec[:1], repeats=n_eval_lines, axis=0)
+            np.repeat(train_lines_space.nvec[0], repeats=n_eval_lines)
         )
 
     @staticmethod

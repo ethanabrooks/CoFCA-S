@@ -16,23 +16,13 @@ class Env(ppo.control_flow.env.Env):
     other_objects = ["ice", "agent"]
     line_objects = copy(subtask_objects)
     world_objects = subtask_objects + other_objects
-    interactions = ["pickup", "transform"]  # , "visit"]
+    interactions = ["pickup", "transform", "visit"]
 
-    def __init__(
-        self,
-        world_size,
-        num_subtasks,
-        min_lines,
-        add_while_obj_prob,
-        soft_increment,
-        **kwargs,
-    ):
-        self.soft_increment = soft_increment
+    def __init__(self, world_size, num_subtasks, add_while_obj_prob, **kwargs):
         num_subtasks = len(self.subtask_objects) * len(self.interactions)
-        super().__init__(num_subtasks=num_subtasks, min_lines=min_lines, **kwargs)
-        if not self.evaluating:
-            self.n_lines = min_lines + 1
-        self.time_limit = world_size * self.n_lines
+        super().__init__(num_subtasks=num_subtasks, **kwargs)
+        # self.time_limit = world_size
+        # self.n_lines = 2
         self.add_while_obj_prob = add_while_obj_prob
         self.world_size = world_size
         self.world_shape = (len(self.world_objects), self.world_size, self.world_size)
@@ -161,11 +151,7 @@ class Env(ppo.control_flow.env.Env):
                 condition=None,
                 prev=prev,
                 curr=curr,
-                info=dict(
-                    if_evaluations=condition_evaluations[If],
-                    while_evaluations=condition_evaluations[While],
-                    n_lines=self.n_lines - 1,  # don't count padding
-                ),
+                condition_evaluations=condition_evaluations,
             )
             interaction, obj = self.parse_id(subtask_id)
 
@@ -202,16 +188,15 @@ class Env(ppo.control_flow.env.Env):
             for line in (super().build_lines())
         ]
 
-    def get_train_n_lines(self):
-        if self.soft_increment:
-            return self.random.randint(max(1, self.n_lines - 2), self.n_lines)
-        else:
-            return self.n_lines - 1
-
     def parse_id(self, line_id):
         i = line_id % len(self.interactions)
         o = line_id // len(self.interactions)
         return self.interactions[i], self.line_objects[o]
+
+    def increment_curriculum(self):
+        self.n_lines = min(self.n_lines + 1, self.max_lines)
+        self.time_limit = self.world_size * self.n_lines
+        self.set_spaces()
 
 
 if __name__ == "__main__":
