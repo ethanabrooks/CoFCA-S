@@ -24,8 +24,10 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         activation,
         conv_hidden_size,
         kernel_size,
+        nl_2,
         **kwargs
     ):
+        self.nl_2 = nl_2
         self.conv_hidden_size = conv_hidden_size
         super().__init__(
             hidden_size=hidden_size,
