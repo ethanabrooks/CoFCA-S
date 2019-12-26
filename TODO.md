@@ -1,4 +1,4 @@
-* get gates synced up
-* implement complex conditionals
-* somehow deal with nondeterminism of convolutions
-* get auxiliary loss working?
+* try adding no-op loss
+* what happens if we only fail on final action?
+* try interpolating f and b for half-na
+* try curriculum based on world-size

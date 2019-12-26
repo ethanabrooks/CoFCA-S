@@ -25,8 +25,10 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         conv_hidden_size,
         kernel_size,
         forward_first,
+        zero_current,
         **kwargs
     ):
+        self.zero_current = zero_current
         self.forward_first = forward_first
         self.conv_hidden_size = conv_hidden_size
         super().__init__(
@@ -136,66 +138,33 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         rolled = torch.cat(rolled, dim=0)
         G, H = self.task_encoder(rolled)
         H = H.transpose(0, 1).reshape(nl, N, -1)
-        # last = torch.zeros(nl, N, 2 * nl, self.ne, device=rnn_hxs.device)
-        # last[:, :, -1] = 1
         if self.no_scan:
             P = self.beta(H).view(nl, N, -1, self.ne).softmax(2)
             half = P.size(2) // 2
         else:
             G = G.view(nl, N, nl, 2, self.encoder_hidden_size)
             B = self.beta(G).sigmoid()
-            # ff, bb = (torch.unbind(x, dim=0) for x in torch.unbind(B, dim=3))
-            # P = []
-            # P_ = []
-            # succ_probs = []
-            # for i, (f, b) in enumerate(zip(ff, bb)):
-            #     succ_prob = torch.cat([f[:, :-i], b[:, -i:].flip(1)], dim=1)
-            #     succ_probs.append(succ_prob)
-            # last = torch.zeros_like(succ_prob)
-            # last[:, -1] = 1 - succ_prob[:, -1]
-            # succ_prob_ = succ_prob + last
-            # last[:, -1] = 1
-            # fail_prob = torch.roll(1 - succ_prob_ + last, shifts=1, dims=1)
-            # fail_prob_ = torch.cumprod(fail_prob, dim=1)
-            # p = fail_prob_ * succ_prob_
-            # P_.append(p)
-            # P.append(torch.roll(p, shifts=i, dims=1))
-            # P = torch.stack(P, dim=0)
-            # P_ = torch.stack(P_, dim=0)
-            # succ_probs = torch.stack(succ_probs, dim=0)
-
-            # succ_prob_ = []
-            # for i, x in enumerate(torch.unbind(B, dim=0)):
-            #     f = x[:, :-i, 0]
-            #     b = x[:, -i:, 1].flip(1)
-            #     print(f[0])
-            #     succ_prob_.append(torch.cat([torch.cat([f, b], dim=1)]))
-            # succ_probs = torch.stack(succ_prob_, dim=0)
-
             permuted = B.permute(0, 3, 1, 2, 4)
             unbound = torch.unbind(permuted, dim=0)
             succ_probs = []
             for i, (f, b) in enumerate(unbound):
                 f = f[:, :-i]
                 b = b[:, -i:].flip(1)
-                fb = [f, b] if self.forward_first else [b, f]
-                succ_probs.append(torch.cat(fb, dim=1))
+                fb = torch.cat([f, b] if self.forward_first else [b, f], dim=1)
+                succ_probs.append(fb)
             succ_probs = torch.stack(succ_probs, dim=0)
 
-            # succ_probs2 = []
-            # for i, b in enumerate(B):
-            #     _f = b[:, :-i, 0]
-            #     _b = b[:, -i:, 1]
-            #     succ_probs2.append(torch.cat([_f, _b.flip(1)], dim=1))
-            # succ_probs2 = torch.stack(succ_probs2, dim=0)
-
-            last = torch.zeros_like(succ_probs)
-            last[:, :, -1] = 1 - succ_probs[:, :, -1]
-            succ_probs_ = succ_probs + last
-            last[:, :, -1] = 1
-            fail_probs = torch.roll(1 - succ_probs_ + last, shifts=1, dims=2)
-            fail_probs_ = torch.cumprod(fail_probs, dim=2)
-            P = fail_probs_ * succ_probs_
+            zeros = torch.zeros_like(succ_probs)
+            zeros[:, :, -1] = 1 - succ_probs[:, :, -1]
+            succ_probs = succ_probs + zeros
+            if self.zero_current:
+                zeros[:, :, -1] = 0
+                zeros[:, :, 0] = succ_probs[:, :, 0]
+                succ_probs = succ_probs - zeros
+            zeros[:, :, -1] = 1
+            fail_probs = torch.roll(1 - succ_probs + zeros, shifts=1, dims=2)
+            fail_probs = torch.cumprod(fail_probs, dim=2)
+            P = fail_probs * succ_probs
 
             P = torch.stack(
                 [
