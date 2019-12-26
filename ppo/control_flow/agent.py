@@ -24,9 +24,11 @@ class Agent(ppo.agent.Agent, NNBase):
         observation_space,
         include_action,
         gate_coef,
+        no_op_coef,
         **network_args
     ):
         nn.Module.__init__(self)
+        self.no_op_coef = no_op_coef
         self.entropy_coef = entropy_coef
         self.multi_step = type(observation_space.spaces["obs"]) is Box
         self.recurrent_module = (
