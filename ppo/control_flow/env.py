@@ -115,6 +115,10 @@ class Env(gym.Env, ABC):
         while True:
             success = state.curr is None
             reward = int(success)
+            if success:
+                info.update(success_line=len(lines))
+
+            term = success or state.term
             info.update(regret=1 if term and not success else 0)
             if term:
                 info.update(
@@ -158,11 +162,6 @@ class Env(gym.Env, ABC):
                 self.print_obs(state.obs)
 
             self._render = render
-
-            if success:
-                info.update(success_line=len(lines))
-
-            term = success or state.term
 
             action = (
                 yield self.get_observation(state.obs, state.curr, lines),
