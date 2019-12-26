@@ -180,17 +180,14 @@ class Env(gym.Env, ABC):
                 term,
                 info,
             )
-            term = (
-                success
-                or (
-                    (
-                        (self.evaluating and self.use_failing)
-                        or self.terminate_on_failure
-                    )
-                    and failing
+            if self.use_failing:
+                term = (
+                    success
+                    or ((self.evaluating or self.terminate_on_failure) and failing)
+                    or (not self.evaluating and step >= time_limit)
                 )
-                or (not self.evaluating and step >= time_limit)
-            )
+            else:
+                term = success or step >= time_limit
 
             if self.baseline:
                 selected = None
