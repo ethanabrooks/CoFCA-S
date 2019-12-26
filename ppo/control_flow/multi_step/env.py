@@ -157,14 +157,16 @@ class Env(ppo.control_flow.env.Env):
 
         possible_objects = [o for o, _ in object_pos]
         prev, curr = 0, next_subtask(None)
+        term = False
         while True:
+            term |= times["on_subtask"] - times["to_complete"] > self.time_to_waste
             subtask_id = yield State(
                 obs=build_world(),
                 condition=None,
                 prev=prev,
                 curr=curr,
                 condition_evaluations=condition_evaluations,
-                term=times["on_subtask"] - times["to_complete"] > self.time_to_waste,
+                term=term,
             )
             times["on_subtask"] += 1
             interaction, obj = self.parse_id(subtask_id)
@@ -181,6 +183,8 @@ class Env(ppo.control_flow.env.Env):
                     object_pos.remove(pair())
                     if correct_id:
                         possible_objects.remove(obj)
+                    else:
+                        term = True
                 if interaction == "transform":
                     object_pos.append(("ice", tuple(agent_pos)))
                 if correct_id:
