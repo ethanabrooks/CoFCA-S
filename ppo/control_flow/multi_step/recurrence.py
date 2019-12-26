@@ -165,13 +165,23 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             # P_ = torch.stack(P_, dim=0)
             # succ_probs = torch.stack(succ_probs, dim=0)
 
-            succ_probs = torch.stack(
-                [
-                    torch.cat([torch.cat([x[:, :-i, 0], x[:, -i:, 1].flip(1)], dim=1)])
-                    for i, x in enumerate(torch.unbind(B, dim=0))
-                ],
-                dim=0,
-            )
+            # succ_prob_ = []
+            # for i, x in enumerate(torch.unbind(B, dim=0)):
+            #     f = x[:, :-i, 0]
+            #     b = x[:, -i:, 1].flip(1)
+            #     print(f[0])
+            #     succ_prob_.append(torch.cat([torch.cat([f, b], dim=1)]))
+            # succ_probs = torch.stack(succ_prob_, dim=0)
+
+            permuted = B.permute(0, 3, 1, 2, 4)
+            unbound = torch.unbind(permuted, dim=0)
+            succ_probs = []
+            for i, (f, b) in enumerate(unbound):
+                f = f[:, :-i]
+                b = b[:, -i:].flip(1)
+                fb = [f, b] if self.forward_first else [b, f]
+                succ_probs.append(torch.cat(fb, dim=1))
+            succ_probs = torch.stack(succ_probs, dim=0)
 
             # succ_probs2 = []
             # for i, b in enumerate(B):
