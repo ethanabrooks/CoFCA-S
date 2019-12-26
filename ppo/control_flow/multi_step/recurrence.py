@@ -148,9 +148,12 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             unbound = torch.unbind(permuted, dim=0)
             succ_probs = []
             for i, (f, b) in enumerate(unbound):
-                f = f[:, :-i]
-                b = b[:, -i:].flip(1)
-                fb = torch.cat([f, b] if self.forward_first else [b, f], dim=1)
+                if i == 0:
+                    fb = f
+                else:
+                    f = f[:, :-i]
+                    b = b[:, -i:].flip(1)
+                    fb = torch.cat([f, b] if self.forward_first else [b, f], dim=1)
                 succ_probs.append(fb)
             succ_probs = torch.stack(succ_probs, dim=0)
 
