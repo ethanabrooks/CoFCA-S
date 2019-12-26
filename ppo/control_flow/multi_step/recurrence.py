@@ -76,6 +76,10 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         offset = F.pad(line_nvec.cumsum(0), [1, 0])
         self.register_buffer("offset", offset)
 
+    def set_n_lines(self, n_lines):
+        super().set_n_lines(n_lines)
+        self.state_sizes = self.state_sizes._replace(d_probs=n_lines)
+
     def build_embed_task(self, hidden_size):
         return nn.EmbeddingBag(self.obs_spaces.lines.nvec[0].sum(), hidden_size)
 
