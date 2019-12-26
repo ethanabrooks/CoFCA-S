@@ -17,8 +17,18 @@ RecurrentState = namedtuple(
 
 class Recurrence(ppo.control_flow.recurrence.Recurrence):
     def __init__(
-        self, hidden_size, gate_coef, num_layers, activation, use_conv, **kwargs
+        self,
+        hidden_size,
+        gate_coef,
+        num_layers,
+        activation,
+        conv_hidden_size,
+        kernel_size,
+        nl_2,
+        **kwargs
     ):
+        self.nl_2 = nl_2
+        self.conv_hidden_size = conv_hidden_size
         super().__init__(
             hidden_size=hidden_size,
             num_layers=num_layers,
@@ -28,15 +38,28 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         self.gate_coef = gate_coef
         self.action_size = 4
         d = self.obs_spaces.obs.shape[0]
-        self.use_conv = use_conv
-        if self.use_conv:
-            self.conv = nn.Sequential(
-                nn.Conv2d(d, hidden_size, kernel_size=3, padding=1),
-                nn.MaxPool2d(self.obs_spaces.obs.shape[1:]),
-                nn.ReLU(),
-            )
-        else:
-            self.conv = nn.Sequential(init_(nn.Linear(d, hidden_size)), nn.ReLU())
+        layers = [
+            nn.Conv2d(
+                d,
+                conv_hidden_size,
+                kernel_size=kernel_size,
+                stride=2 if kernel_size == 2 else 1,
+                padding=0,
+            ),
+            nn.ReLU(),
+        ]
+        # if kernel_size < 4:
+        # layers += [
+        # nn.Conv2d(
+        # conv_hidden_size,
+        # conv_hidden_size,
+        # kernel_size=2,
+        # stride=2,
+        # padding=0,
+        # ),
+        # nn.ReLU(),
+        # ]
+        self.conv = nn.Sequential(*layers)
         self.d_gate = Categorical(hidden_size, 2)
         self.a_gate = Categorical(hidden_size, 2)
         self.state_sizes = RecurrentState(
@@ -49,25 +72,26 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         )
         ones = torch.ones(1, dtype=torch.long)
         self.register_buffer("ones", ones)
-        # offset = torch.tensor([[0, self.obs_spaces.lines.nvec[0, 0]]])
-        # self.register_buffer("offset", offset)
+        line_nvec = torch.tensor(self.obs_spaces.lines.nvec[0, :-1])
+        offset = F.pad(line_nvec.cumsum(0), [1, 0])
+        self.register_buffer("offset", offset)
 
-    # def build_embed_task(self, hidden_size):
-    #     return nn.EmbeddingBag(self.obs_spaces.lines.nvec[0].sum(), hidden_size)
+    def build_embed_task(self, hidden_size):
+        return nn.EmbeddingBag(self.obs_spaces.lines.nvec[0].sum(), hidden_size)
 
     @property
     def gru_in_size(self):
-        in_size = 2 * self.hidden_size
+        in_size = self.hidden_size + self.conv_hidden_size
         if self.no_pointer:
             return in_size + 2 * self.hidden_size
         else:
             return in_size + self.encoder_hidden_size
 
-    # @staticmethod
-    # def eval_lines_space(n_eval_lines, train_lines_space):
-    #     return spaces.MultiDiscrete(
-    #         np.repeat(train_lines_space.nvec[:1], repeats=n_eval_lines, axis=0)
-    #     )
+    @staticmethod
+    def eval_lines_space(n_eval_lines, train_lines_space):
+        return spaces.MultiDiscrete(
+            np.repeat(train_lines_space.nvec[:1], repeats=n_eval_lines, axis=0)
+        )
 
     def pack(self, hxs):
         def pack():
@@ -97,7 +121,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         # build memory
         nl = len(self.obs_spaces.lines.nvec)
         lines = inputs.lines.view(T, N, *self.obs_spaces.lines.shape)
-        lines = lines.long()[0, :, :]  # + self.offset
+        lines = lines.long()[0, :, :] + self.offset
         M = self.embed_task(lines.view(-1, self.obs_spaces.lines.nvec[0].size)).view(
             *lines.shape[:2], self.encoder_hidden_size
         )  # n_batch, n_lines, hidden_size
@@ -108,8 +132,6 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         rolled = torch.cat(rolled, dim=0)
         G, H = self.task_encoder(rolled)
         H = H.transpose(0, 1).reshape(nl, N, -1)
-        last = torch.zeros(nl, N, 2 * nl, self.ne, device=rnn_hxs.device)
-        last[:, :, -1] = 1
         if self.no_scan:
             P = self.beta(H).view(nl, N, -1, self.ne).softmax(2)
             half = P.size(2) // 2
@@ -122,18 +144,25 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             # B[:, :, :, 0] = 0  # arange.view(1, 1, -1, 1)
             # B[:, :, :, 1] = 1
             f, b = torch.unbind(B, dim=3)
-            B = torch.stack([f, b.flip(2)], dim=-2)
-            B = B.view(nl, N, 2 * nl, self.ne)
-            B = (1 - last).flip(2) * B  # this ensures the first B is 0
-            zero_last = (1 - last) * B
-            B = zero_last + last  # this ensures that the last B is 1
-            rolled = torch.roll(zero_last, shifts=1, dims=2)
-            C = torch.cumprod(1 - rolled, dim=2)
+            zeros = torch.zeros_like(f)
+            zeros[:, :, 0] = f[:, :, 0]
+            f = f - zeros  # zero out first
+            zeros[:, :, 0] = 1 - b[:, :, 0]
+            b = b + zeros  # make last b = 1
+            zeros[:, :, 0] = 0
+            zeros[:, :, -1] = 1 - f[:, :, -1]
+            f = f + zeros  # make last f = 1
+            B = torch.cat([f, b.flip(2)], dim=-1)
+            C = torch.roll(1 - B, shifts=1, dims=2)
+            zeros = torch.zeros_like(B)
+            zeros[:, :, 0] = 1
+            C = C + zeros
+            # noinspection PyTypeChecker
+            C = torch.cumprod(C, dim=2)
             P = B * C
-            P = P.view(nl, N, nl, 2, self.ne)
-            f, b = torch.unbind(P, dim=3)
-            half = b.size(2)
-            P = torch.cat([b.flip(2), f], dim=2)
+            P = F.pad(P, [0, 0, nl, 0])
+            f, b = torch.split(P, self.ne, dim=-1)
+            P = torch.cat([b.flip(2), f], dim=-1)
 
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
@@ -155,15 +184,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
 
         for t in range(T):
             self.print("p", p)
-            if self.use_conv:
-                obs = self.conv(inputs.obs[t]).view(N, -1)
-            else:
-                obs = (
-                    self.conv(inputs.obs[t].permute(0, 2, 3, 1))
-                    .view(N, -1, self.hidden_size)
-                    .max(dim=1)
-                    .values
-                )
+            obs = self.conv(inputs.obs[t]).view(N, -1)
             x = [
                 obs,
                 H.sum(0) if self.no_pointer else M[R, p],
@@ -177,7 +198,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
                 return FixedCategorical(probs=gate * new + (1 - gate) * old)
 
             u = self.upsilon(z).softmax(dim=-1)
-            self.print("bb", torch.round(100 * bb[p, R, :, 0]))
+            # self.print("bb", torch.round(100 * bb[p, R, :, 0]))
             self.print("u", torch.round(100 * u))
             w = P[p, R]
             d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
@@ -186,11 +207,11 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             dg = DG[t].unsqueeze(-1).float()
             self.print("dg prob", torch.round(100 * d_gate.probs[:, 1]))
             self.print("dg", dg)
-            d_dist = gate(dg, d_probs, ones * half)
-            self.print("d_probs", torch.round(100 * d_probs)[:, half:])
+            d_dist = gate(dg, d_probs, ones * nl)
+            self.print("d_probs", torch.round(100 * d_probs)[:, nl:])
             self.sample_new(D[t], d_dist)
-            p = p + D[t].clone() - half
-            p = torch.clamp(p, min=0, max=nl - 1)
+            p = p + D[t].clone() - nl
+            p = torch.clamp(p, min=0, max=nl - (2 if self.nl_2 else 1))
 
             x = [
                 obs,

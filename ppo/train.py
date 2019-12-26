@@ -174,7 +174,7 @@ class TrainBase(abc.ABC):
             eval_counter = Counter()
             envs = self.make_eval_envs()
             envs.to(self.device)
-            with self.agent.recurrent_module.evaluating():
+            with self.agent.recurrent_module.evaluating(envs.observation_space):
                 eval_recurrent_hidden_states = torch.zeros(
                     num_processes,
                     self.agent.recurrent_hidden_state_size,
@@ -279,10 +279,9 @@ class TrainBase(abc.ABC):
 
             # Observe reward and next obs
             obs, reward, done, infos = envs.step(act.action)
-
             for d in infos:
                 for k, v in d.items():
-                    episode_counter[k] += [float(v)]
+                    episode_counter[k] += v if type(v) is list else [float(v)]
 
             # track rewards
             counter["reward"] += reward.numpy()

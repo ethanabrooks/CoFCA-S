@@ -1,5 +1,5 @@
 from abc import ABC
-from collections import defaultdict, namedtuple, OrderedDict
+from collections import defaultdict, namedtuple, OrderedDict, Counter
 
 import numpy as np
 
@@ -10,12 +10,21 @@ from rl_utils import hierarchical_parse_args, gym
 
 
 from ppo import keyboard_control
-from ppo.control_flow.lines import If, Else, EndIf, While, EndWhile, Subtask, Padding
-from ppo.utils import RED, RESET
+from ppo.control_flow.lines import (
+    If,
+    Else,
+    EndIf,
+    While,
+    EndWhile,
+    Subtask,
+    Padding,
+    Line,
+)
+from ppo.utils import RED, RESET, GREEN
 
 Obs = namedtuple("Obs", "active lines obs")
 Last = namedtuple("Last", "action active reward terminal selected")
-State = namedtuple("State", "obs condition prev curr")
+State = namedtuple("State", "obs condition prev curr condition_evaluations")
 
 
 class Env(gym.Env, ABC):
@@ -31,7 +40,6 @@ class Env(gym.Env, ABC):
         num_subtasks,
         max_nesting_depth,
         eval_condition_size,
-        no_op_limit,
         seed=0,
         eval_lines=None,
         time_limit=100,
@@ -39,7 +47,6 @@ class Env(gym.Env, ABC):
         baseline=False,
     ):
         super().__init__()
-        self.no_op_limit = no_op_limit
         self._eval_condition_size = eval_condition_size
         self.max_nesting_depth = max_nesting_depth
         self.num_subtasks = num_subtasks
@@ -109,12 +116,17 @@ class Env(gym.Env, ABC):
             success = state.curr is None
             reward = int(term) * int(not failing)
             info.update(regret=1 if term and failing else 0)
+            if term:
+                info.update(
+                    if_evaluations=state.condition_evaluations[If],
+                    while_evaluations=state.condition_evaluations[While],
+                )
 
             def line_strings(index, level):
                 if index == len(lines):
                     return
                 line = lines[index]
-                if line in [Else, EndIf, EndWhile]:
+                if type(line) in [Else, EndIf, EndWhile]:
                     level -= 1
                 if index == state.curr and index == selected:
                     pre = "+ "
@@ -125,17 +137,20 @@ class Env(gym.Env, ABC):
                 else:
                     pre = "  "
                 indent = pre * level
-                if type(line) is Subtask:
-                    yield f"{indent}{self.subtask_str(line)}"
-                else:
-                    yield f"{indent}{line.__name__}"
-                if line in [If, While, Else]:
+                # if type(line) is Subtask:
+                yield f"{indent}{self.line_str(line)}"
+                # else:
+                #     yield f"{indent}{line.__name__}"
+                # if line in [If, While, Else]:
+                if type(line) in [If, While, Else]:
                     level += 1
                 yield from line_strings(index + 1, level)
 
             def render():
                 if failing:
                     print(RED)
+                elif reward == 1:
+                    print(GREEN)
                 for i, string in enumerate(line_strings(index=0, level=1)):
                     print(f"{i}{string}")
                 print("Failing:", failing)
@@ -158,7 +173,7 @@ class Env(gym.Env, ABC):
             )
             term = (
                 success
-                or (self.terminate_on_failure and failing)
+                or ((self.evaluating or self.terminate_on_failure) and failing)
                 or (not self.evaluating and step == self.time_limit)
             )
 
@@ -171,7 +186,7 @@ class Env(gym.Env, ABC):
 
             if action == self.num_subtasks:
                 n += 1
-                if not self.evaluating and self.no_op_limit and n == self.no_op_limit:
+                if not self.evaluating and n == len(lines):
                     failing = True
                     term = True
             elif state.curr is not None:
@@ -183,8 +198,9 @@ class Env(gym.Env, ABC):
                 state = state_iterator.send(action)
 
     @staticmethod
-    def subtask_str(subtask: Subtask):
-        return f"Subtask {subtask.id}"
+    def line_str(line: Line):
+        raise NotImplemented
+        return f"Subtask {line.id}"
 
     @property
     def eval_condition_size(self):
@@ -207,11 +223,10 @@ class Env(gym.Env, ABC):
             lines = self.get_lines(
                 n_lines, active_conditions=[], max_nesting_depth=self.max_nesting_depth
             )
-        lines = [
+        return [
             Subtask(self.random.choice(self.num_subtasks)) if line is Subtask else line
             for line in lines
         ]
-        return lines
 
     def build_task_image(self, lines):
         image = np.zeros(self.image_shape)
@@ -227,7 +242,7 @@ class Env(gym.Env, ABC):
 
         draw_circle(points[0], d=-2)  # mark start
         for point, line in zip(points, lines):
-            depth = 2 + min(self.format_line(line), self.num_subtasks)
+            depth = 2 + min(self.preprocess_line(line), self.num_subtasks)
             draw_circle(point, d=depth)
         draw_circle(points[-1], d=-1)  # mark end
 
@@ -272,7 +287,7 @@ class Env(gym.Env, ABC):
 
         return image
 
-    def format_line(self, line):
+    def preprocess_line(self, line):
         return (
             line.id
             if type(line) is Subtask
@@ -333,11 +348,11 @@ class Env(gym.Env, ABC):
         if_evaluations = []
         while True:
             condition_bit = yield None if i >= len(lines) else i
-            if lines[i] is Else:
+            if type(lines[i]) is Else:
                 evaluation = not if_evaluations.pop()
             else:
                 evaluation = bool(condition_bit)
-            if lines[i] is If:
+            if type(lines[i]) is If:
                 if_evaluations.append(evaluation)
             i = line_transitions[i][evaluation]
 
@@ -347,28 +362,28 @@ class Env(gym.Env, ABC):
                 current, line = next(lines_iter)
             except StopIteration:
                 return
-            if line is EndIf or type(line) is Subtask:
+            if type(line) is EndIf or type(line) is Subtask:
                 yield current, current + 1  # False
                 yield current, current + 1  # True
-            if line is If:
+            if type(line) is If:
                 yield from self.get_transitions(
                     lines_iter, previous + [current]
                 )  # from = If
-            elif line is Else:
+            elif type(line) is Else:
                 prev = previous[-1]
                 yield prev, current  # False: If -> Else
                 yield prev, prev + 1  # True: If -> If + 1
                 previous[-1] = current
-            elif line is EndIf:
+            elif type(line) is EndIf:
                 prev = previous[-1]
                 yield prev, current  # False: If/Else -> EndIf
                 yield prev, prev + 1  # True: If/Else -> If/Else + 1
                 return
-            elif line is While:
+            elif type(line) is While:
                 yield from self.get_transitions(
                     lines_iter, previous + [current]
                 )  # from = While
-            elif line is EndWhile:
+            elif type(line) is EndWhile:
                 prev = previous[-1]
                 # While
                 yield prev, current + 1  # False: While -> EndWhile + 1
@@ -381,17 +396,25 @@ class Env(gym.Env, ABC):
     def state_generator(self, lines) -> State:
         line_iterator = self.line_generator(lines)
         condition_bit = 0 if self.eval_condition_size else self.random.randint(0, 2)
+        condition_evaluations = defaultdict(list)
 
         def next_subtask(msg=condition_bit):
-            a = line_iterator.send(msg)
-            while not (a is None or type(lines[a]) is Subtask):
-                a = line_iterator.send(condition_bit)
-            return a
+            l = line_iterator.send(msg)
+            while not (l is None or type(lines[l]) is Subtask):
+                line = lines[l]
+                if type(line) in (If, While):
+                    condition_evaluations[type(line)] += [condition_bit]
+                l = line_iterator.send(condition_bit)
+            return l
 
         prev, curr = 0, next_subtask(None)
         while True:
             yield State(
-                obs=condition_bit, condition=condition_bit, prev=prev, curr=curr
+                obs=condition_bit,
+                condition=condition_bit,
+                prev=prev,
+                curr=curr,
+                condition_evaluations=condition_evaluations,
             )
             condition_bit = abs(
                 condition_bit - int(self.random.rand() < self.flip_prob)
@@ -400,7 +423,7 @@ class Env(gym.Env, ABC):
 
     def get_observation(self, obs, active, lines):
         padded = lines + [Padding] * (self.n_lines - len(lines))
-        lines = [self.format_line(p) for p in padded]
+        lines = [self.preprocess_line(p) for p in padded]
         obs = Obs(
             obs=obs, lines=lines, active=self.n_lines if active is None else active
         )
@@ -408,8 +431,8 @@ class Env(gym.Env, ABC):
             obs = OrderedDict(obs=obs.obs, lines=self.eye[obs.lines].flatten())
         else:
             obs = obs._asdict()
-        if not self.evaluating:
-            assert self.observation_space.contains(obs)
+        # if not self.evaluating:
+        #     assert self.observation_space.contains(obs)
         return obs
 
     @staticmethod
@@ -463,9 +486,9 @@ class Env(gym.Env, ABC):
         max_depth = 0
         depth = 0
         for line in lines:
-            if line in [If, While]:
+            if type(line) in [If, While]:
                 depth += 1
-            if line in [EndIf, EndWhile]:
+            if type(line) in [EndIf, EndWhile]:
                 depth -= 1
             max_depth = max(depth, max_depth)
         return max_depth
@@ -483,7 +506,6 @@ def build_parser(p):
     p.add_argument("--min-lines", type=int, required=True)
     p.add_argument("--max-lines", type=int, required=True)
     p.add_argument("--num-subtasks", type=int, default=12)
-    p.add_argument("--no-op-limit", type=int)
     p.add_argument("--flip-prob", type=float, default=0.5)
     p.add_argument("--terminate-on-failure", action="store_true")
     p.add_argument("--eval-condition-size", action="store_true")
