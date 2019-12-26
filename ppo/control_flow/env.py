@@ -116,8 +116,8 @@ class Env(gym.Env, ABC):
         action = None
         while True:
             success = state.curr is None
-            reward = int(term) * int(not failing)
-            info.update(regret=1 if term and failing else 0)
+            reward = int(success)
+            info.update(regret=1 if term and not success else 0)
             if term:
                 info.update(
                     if_evaluations=state.condition_evaluations[If],
@@ -155,7 +155,6 @@ class Env(gym.Env, ABC):
                     print(GREEN)
                 for i, string in enumerate(line_strings(index=0, level=1)):
                     print(f"{i}{string}")
-                print("Failing:", failing)
                 print("Action:", action)
                 print("Reward", reward)
                 print("Obs:")
