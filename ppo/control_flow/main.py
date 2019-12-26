@@ -62,8 +62,8 @@ def bandit_args():
     parser.add_argument("--no-eval", action="store_true")
     ppo.control_flow.env.build_parser(parsers.env)
     parsers.env.add_argument("--world-size", type=int)
-    parsers.env.add_argument("--use-monkey", type=bool, default=False)
-    parsers.env.add_argument("--use-visit", type=bool, default=False)
+    parsers.env.add_argument("--use-monkey", type=int, default=False)
+    parsers.env.add_argument("--use-visit", type=int, default=False)
     parsers.env.add_argument("--add-while-obj-prob", type=float, required=True)
     parsers.agent.add_argument("--debug", action="store_true")
     parsers.agent.add_argument("--no-scan", action="store_true")
@@ -77,7 +77,7 @@ def bandit_args():
     parsers.agent.add_argument("--num-edges", type=int, required=True)
     parsers.agent.add_argument("--gate-coef", type=float)
     parsers.agent.add_argument("--no-op-coef", type=float)
-    parsers.agent.add_argument("--nl-2", type=bool)
+    parsers.agent.add_argument("--nl-2", type=int)
     return parser
 
 
