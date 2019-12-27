@@ -220,6 +220,9 @@ class Env(gym.Env, ABC):
             lines = self.get_lines(
                 n_lines, active_conditions=[], max_nesting_depth=self.max_nesting_depth
             )
+        return list(self.assign_line_ids(lines))
+
+    def assign_line_ids(self, lines):
         return [
             Subtask(self.random.choice(self.num_subtasks)) if line is Subtask else line
             for line in lines

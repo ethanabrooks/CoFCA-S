@@ -43,9 +43,7 @@ def main(log_dir, seed, eval_lines, **kwargs):
                 safe_remove(Env.interactions, "visit")
 
             if not use_monkey:
-                safe_remove(Env.line_objects, "monkey")
-                safe_remove(Env.subtask_objects, "greenbot")
-                safe_remove(Env.world_objects, "greenbot")
+                safe_remove(Env.subtask_objects, "monkey")
 
             return super().make_vec_envs(**kwargs)
 
@@ -64,6 +62,7 @@ def bandit_args():
     parsers.env.add_argument("--use-monkey", type=int, required=True)
     parsers.env.add_argument("--use-visit", type=int, required=True)
     parsers.env.add_argument("--max-while-objects", type=float, required=True)
+    parsers.env.add_argument("--num-excluded-objects", type=int, required=True)
     parsers.env.add_argument("--time-to-waste", type=int, required=True)
     parsers.agent.add_argument("--debug", action="store_true")
     parsers.agent.add_argument("--no-scan", action="store_true")
