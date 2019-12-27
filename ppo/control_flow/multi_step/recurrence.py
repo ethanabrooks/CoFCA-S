@@ -25,8 +25,10 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         conv_hidden_size,
         kernel_size,
         nl_2,
+        gate_h,
         **kwargs
     ):
+        self.gate_h = gate_h
         self.nl_2 = nl_2
         self.conv_hidden_size = conv_hidden_size
         super().__init__(
@@ -185,8 +187,8 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
                 H.sum(0) if self.no_pointer else M[R, p],
                 self.embed_action(A[t - 1].clone()),
             ]
-            h = self.gru(torch.cat(x, dim=-1), h)
-            z = F.relu(self.zeta(h))
+            h_ = self.gru(torch.cat(x, dim=-1), h)
+            z = F.relu(self.zeta(h_))
 
             def gate(gate, new, old):
                 old = torch.zeros_like(new).scatter(1, old.unsqueeze(1), 1)
@@ -213,8 +215,8 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
                 H.sum(0) if self.no_pointer else M[R, p],  # updated p
                 self.embed_action(A[t - 1].clone()),
             ]
-            h2 = self.gru(torch.cat(x, dim=-1), h2)
-            z = F.relu(self.zeta(h2))
+            h2_ = self.gru(torch.cat(x, dim=-1), h2)
+            z = F.relu(self.zeta(h2_))
             a_gate = self.a_gate(z)
             self.sample_new(AG[t], a_gate)
             ag = AG[t].unsqueeze(-1).float()
@@ -222,6 +224,13 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             self.sample_new(A[t], a_dist)
             self.print("ag prob", torch.round(100 * a_gate.probs[:, 1]))
             self.print("ag", ag)
+
+            if self.gate_h:
+                h = dg * h_ + (1 - dg) * h
+                h2 = ag * h2_ + (1 - ag) * h2
+            else:
+                h = h_
+                h2 = h2_
 
             yield RecurrentState(
                 a=A[t],
