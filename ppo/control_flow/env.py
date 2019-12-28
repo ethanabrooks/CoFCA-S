@@ -353,11 +353,11 @@ class Env(gym.Env, ABC):
         if_evaluations = []
         while True:
             condition_bit = yield None if i >= len(lines) else i
-            if lines[i] is Else:
+            if type(lines[i]) is Else:
                 evaluation = not if_evaluations.pop()
             else:
                 evaluation = bool(condition_bit)
-            if lines[i] is If:
+            if type(lines[i]) is If:
                 if_evaluations.append(evaluation)
             i = line_transitions[i][evaluation]
 
