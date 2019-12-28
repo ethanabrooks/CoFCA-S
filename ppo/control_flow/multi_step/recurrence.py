@@ -248,12 +248,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
 
         for t in range(T):
             self.print("p", p)
-            obs = (
-                self.conv(inputs.obs[t].permute(0, 2, 3, 1))
-                .view(N, -1, self.hidden_size)
-                .max(dim=1)
-                .values
-            )
+            obs = self.conv(inputs.obs[t]).view(N, -1)
             x = [
                 obs,
                 H.sum(0) if self.no_pointer else M[R, p],

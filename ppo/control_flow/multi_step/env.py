@@ -98,14 +98,23 @@ class Env(ppo.control_flow.env.Env):
     def preprocess_line(self, line):
         if line is Padding:
             return [self.line_types.index(Padding), 0, 0]
+        elif type(line) is Else:
+            return [self.line_types.index(Else), 0, 0]
         else:
+            return [self.line_types.index(Else), 0, 0]
             i, o = self.parse_id(line.id)
-            line_type = self.line_types.index(type(line))
-            return [
-                line_type,
-                1 + self.interactions.index(i) if type(line) is Subtask else 0,
-                1 + self.line_objects.index(o),
-            ]
+            if type(line) in (If, While):
+                return [
+                    self.line_types.index(type(line)),
+                    0,
+                    1 + self.line_objects.index(o),
+                ]
+            else:
+                return [
+                    self.line_types.index(type(line)),
+                    1 + self.interactions.index(i),
+                    1 + self.line_objects.index(o),
+                ]
 
     def state_generator(self, lines) -> State:
         assert self.max_nesting_depth == 1
