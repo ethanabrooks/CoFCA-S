@@ -17,8 +17,19 @@ class Env(ppo.control_flow.env.Env):
     world_objects = subtask_objects + other_objects
     interactions = ["pickup", "transform", "visit"]
 
-    def __init__(self, world_size, num_subtasks, **kwargs):
-        assert num_subtasks == len(self.subtask_objects) * len(self.interactions)
+    def __init__(
+        self,
+        world_size,
+        max_while_objects,
+        time_to_waste,
+        num_subtasks,
+        num_excluded_objects,
+        **kwargs,
+    ):
+        self.num_excluded_objects = num_excluded_objects
+        self.max_while_objects = max_while_objects
+        self.time_to_waste = time_to_waste
+        num_subtasks = len(self.subtask_objects) * len(self.interactions)
         super().__init__(num_subtasks=num_subtasks, **kwargs)
         self.world_size = world_size
         self.world_shape = (len(self.world_objects), self.world_size, self.world_size)
