@@ -129,6 +129,7 @@ class Env(ppo.control_flow.env.Env):
 
         line_iterator = self.line_generator(lines)
         condition_evaluations = defaultdict(list)
+        times = Counter(on_subtask=0, to_complete=0)
 
         def evaluate_line(l):
             if l is None:
@@ -143,10 +144,21 @@ class Env(ppo.control_flow.env.Env):
                     condition_evaluations[type(line)] += [evaluation]
                 return evaluation
 
+        def get_nearest(to):
+            candidates = [np.array(p) for o, p in object_pos if o == to]
+            if candidates:
+                return min(candidates, key=lambda k: np.sum(np.abs(agent_pos - k)))
+
         def next_subtask(l):
             l = line_iterator.send(evaluate_line(l))
             while not (l is None or type(lines[l]) is Subtask):
                 l = line_iterator.send(evaluate_line(l))
+            if l is not None:
+                _, o = self.parse_id(lines[l].id)
+                n = get_nearest(o)
+                if n is not None:
+                    times["to_complete"] = 1 + np.max(np.abs(agent_pos - n))
+                    times["on_subtask"] = 0
             return l
 
         prev, curr = 0, next_subtask(None)
@@ -158,6 +170,7 @@ class Env(ppo.control_flow.env.Env):
                 curr=curr,
                 condition_evaluations=condition_evaluations,
             )
+            times["on_subtask"] += 1
             interaction, obj = self.parse_id(subtask_id)
 
             def pair():
