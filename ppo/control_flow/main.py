@@ -1,4 +1,3 @@
-from gym.spaces import Box
 from rl_utils import hierarchical_parse_args
 
 import ppo.agent
@@ -7,6 +6,7 @@ import ppo.control_flow.env
 import ppo.control_flow.multi_step.env
 from ppo import control_flow
 from ppo.arguments import build_parser
+from ppo.control_flow.multi_step.env import Env
 from ppo.train import Train
 
 
@@ -32,11 +32,19 @@ def main(log_dir, seed, eval_lines, **kwargs):
             if world_size is None:
                 return control_flow.env.Env(**args)
             else:
-                return control_flow.multi_step.env.Env(**args, world_size=world_size)
+                return Env(**args, world_size=world_size)
 
-        def make_vec_envs(self, use_monkey, **kwargs):
-            if use_monkey:
-                control_flow.multi_step.env.Env.line_objects.append("monkey")
+        def make_vec_envs(self, use_monkey, use_visit, **kwargs):
+            def safe_remove(l, x):
+                if x in l:
+                    l.remove(x)
+
+            if not use_visit:
+                safe_remove(Env.interactions, "visit")
+
+            if not use_monkey:
+                safe_remove(Env.subtask_objects, "monkey")
+
             return super().make_vec_envs(**kwargs)
 
     _Train(**kwargs, seed=seed, log_dir=log_dir).run()
@@ -53,6 +61,7 @@ def bandit_args():
     ppo.control_flow.env.build_parser(parsers.env)
     parsers.env.add_argument("--world-size", type=int)
     parsers.env.add_argument("--use-monkey", type=int, required=True)
+    parsers.env.add_argument("--use-visit", type=int, required=True)
     parsers.env.add_argument("--max-while-objects", type=float, required=True)
     parsers.env.add_argument("--num-excluded-objects", type=int, required=True)
     parsers.env.add_argument("--time-to-waste", type=int, required=True)
