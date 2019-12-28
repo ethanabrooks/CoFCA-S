@@ -8,13 +8,13 @@ from rl_utils import hierarchical_parse_args
 import ppo.control_flow.env
 from ppo import keyboard_control
 from ppo.control_flow.env import build_parser, State
-from ppo.control_flow.lines import Subtask, Padding, Line, While, If, EndWhile
+from ppo.control_flow.lines import Subtask, Padding, Line, While, If, EndWhile, Else
 
 
 class Env(ppo.control_flow.env.Env):
     subtask_objects = ["pig", "sheep", "cat", "greenbot"]
     other_objects = ["ice", "agent"]
-    line_objects = [x for x in subtask_objects] + ["monkey"]
+    line_objects = subtask_objects + ["monkey"]
     world_objects = subtask_objects + other_objects
     interactions = ["pickup", "transform", "visit"]
 
@@ -52,6 +52,22 @@ class Env(ppo.control_flow.env.Env):
                 )
             ),
         )
+
+        self.subtask_id_to_tuple = {}
+        self.subtask_id_to_strings = {}
+        self.subtask_strings_to_id = {}
+        self.line_id_to_strings = {}
+        self.line_strings_to_id = {}
+        for i, interaction in enumerate(self.interactions):
+            for o, obj in enumerate(self.subtask_objects):
+                subtask_id = o * len(self.interactions) + i
+                self.subtask_id_to_tuple[subtask_id] = i, o
+                self.subtask_id_to_strings[subtask_id] = interaction, obj
+                self.subtask_strings_to_id[interaction, obj] = subtask_id
+            for o, obj in enumerate(self.line_objects):
+                line_id = o * len(self.interactions) + i
+                self.line_id_to_strings[line_id] = interaction, obj
+                self.line_strings_to_id[interaction, obj] = line_id
 
     def line_str(self, line: Line):
         i, o = self.parse_id(line.id)
