@@ -28,6 +28,8 @@ setup(
         "bin/crawl.zsh",
         "bin/correlate",
         "bin/crawl-and-correlate",
+        "bin/wtf.zsh",
+        "bin/remove-log.zsh",
     ],
     entry_points=dict(console_scripts=["ppo=ppo.main:cli", "exp=ppo.main:exp_cli"]),
     install_requires=[
