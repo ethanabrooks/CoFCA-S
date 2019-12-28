@@ -40,7 +40,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         self.gate_coef = gate_coef
         self.action_size = 4
         d = self.obs_spaces.obs.shape[0]
-        self.conv = nn.Sequential(init_(nn.Linear(d, hidden_size)), nn.ReLU())
+        self.conv = nn.Sequential(init_(nn.Linear(d, conv_hidden_size)), nn.ReLU())
         self.d_gate = Categorical(hidden_size, 2)
         self.a_gate = Categorical(hidden_size, 2)
         self.state_sizes = RecurrentState(
@@ -162,7 +162,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             self.print("p", p)
             obs = (
                 self.conv(inputs.obs[t].permute(0, 2, 3, 1))
-                .view(N, -1, self.hidden_size)
+                .view(N, -1, self.conv_hidden_size)
                 .max(dim=1)
                 .values
             )
