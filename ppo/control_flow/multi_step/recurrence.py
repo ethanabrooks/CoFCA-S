@@ -62,7 +62,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
 
     @property
     def gru_in_size(self):
-        in_size = 2 * self.hidden_size
+        in_size = self.hidden_size + self.conv_hidden_size
         if self.no_pointer:
             return in_size + 2 * self.hidden_size
         else:
@@ -179,7 +179,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
                 return FixedCategorical(probs=gate * new + (1 - gate) * old)
 
             u = self.upsilon(z).softmax(dim=-1)
-            self.print("bb", torch.round(100 * bb[p, R, :, 0]))
+            # self.print("bb", torch.round(100 * bb[p, R, :, 0]))
             self.print("u", torch.round(100 * u))
             w = P[p, R]
             d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
@@ -188,11 +188,11 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             dg = DG[t].unsqueeze(-1).float()
             self.print("dg prob", torch.round(100 * d_gate.probs[:, 1]))
             self.print("dg", dg)
-            d_dist = gate(dg, d_probs, ones * half)
-            self.print("d_probs", torch.round(100 * d_probs)[:, half:])
+            d_dist = gate(dg, d_probs, ones * nl)
+            self.print("d_probs", torch.round(100 * d_probs)[:, nl:])
             self.sample_new(D[t], d_dist)
-            p = p + D[t].clone() - half
-            p = torch.clamp(p, min=0, max=nl - 1)
+            p = p + D[t].clone() - nl
+            p = torch.clamp(p, min=0, max=nl - (2 if self.nl_2 else 1))
 
             x = [
                 obs,

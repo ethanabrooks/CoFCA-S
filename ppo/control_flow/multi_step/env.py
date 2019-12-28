@@ -1,4 +1,5 @@
 from collections import Counter, defaultdict
+from copy import copy
 
 import numpy as np
 from gym import spaces
@@ -77,7 +78,7 @@ class Env(ppo.control_flow.env.Env):
 
     def preprocess_line(self, line):
         if line is Padding:
-            return [self.line_types.index(line), 0, 0]
+            return [self.line_types.index(Padding), 0, 0]
         else:
             i, o = self.parse_id(line.id)
             return [
