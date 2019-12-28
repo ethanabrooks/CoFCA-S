@@ -161,6 +161,7 @@ class Env(ppo.control_flow.env.Env):
                     times["on_subtask"] = 0
             return l
 
+        possible_objects = [o for o, _ in object_pos]
         prev, curr = 0, next_subtask(None)
         while True:
             subtask_id = yield State(
@@ -183,6 +184,10 @@ class Env(ppo.control_flow.env.Env):
             if on_object():
                 if interaction in ("pickup", "transform"):
                     object_pos.remove(pair())
+                    if correct_id:
+                        possible_objects.remove(obj)
+                    else:
+                        term = True
                 if interaction == "transform":
                     object_pos.append(("ice", tuple(agent_pos)))
                 prev, curr = curr, next_subtask(curr)
