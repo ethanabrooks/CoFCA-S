@@ -178,13 +178,14 @@ class Env(ppo.control_flow.env.Env):
                     # subtask is impossible
                     prev, curr = curr, next_subtask(curr)
 
-    def build_lines(self):
+    def assign_line_ids(self, lines):
+        lines = super().assign_line_ids(lines)
         num_line_ids = len(self.interactions) * len(self.line_objects)
         return [
             line(self.random.randint(num_line_ids))
             if type(line) not in (Subtask, Padding)
             else line
-            for line in (super().build_lines())
+            for line in lines
         ]
 
     def parse_id(self, line_id):
