@@ -214,7 +214,8 @@ class Env(ppo.control_flow.env.Env):
                         term = True
                 if interaction == "transform":
                     object_pos.append(("ice", tuple(agent_pos)))
-                prev, curr = curr, next_subtask(curr)
+                if correct_id:
+                    prev, curr = curr, next_subtask(curr)
             else:
                 nearest = get_nearest(obj)
                 if nearest is not None:
