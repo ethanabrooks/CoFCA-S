@@ -174,7 +174,8 @@ class Env(ppo.control_flow.env.Env):
             while not (l is None or type(lines[l]) is Subtask):
                 l = line_iterator.send(evaluate_line(l))
             if l is not None:
-                _, o = self.parse_id(lines[l].id)
+                assert type(lines[l]) is Subtask
+                _, o = self.subtask_id_to_strings[lines[l].id]
                 n = get_nearest(o)
                 if n is not None:
                     times["to_complete"] = 1 + np.max(np.abs(agent_pos - n))
@@ -195,7 +196,7 @@ class Env(ppo.control_flow.env.Env):
                 term=term,
             )
             times["on_subtask"] += 1
-            interaction, obj = self.parse_id(subtask_id)
+            interaction, obj = self.subtask_id_to_strings[subtask_id]
 
             def pair():
                 return obj, tuple(agent_pos)
