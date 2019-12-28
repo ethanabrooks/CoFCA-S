@@ -194,11 +194,8 @@ class Env(ppo.control_flow.env.Env):
                     object_pos.append(("ice", tuple(agent_pos)))
                 prev, curr = curr, next_subtask(curr)
             else:
-                candidates = [np.array(p) for o, p in object_pos if o == obj]
-                if candidates:
-                    nearest = min(
-                        candidates, key=lambda k: np.sum(np.abs(agent_pos - k))
-                    )
+                nearest = get_nearest(obj)
+                if nearest is not None:
                     agent_pos += np.clip(nearest - agent_pos, -1, 1)
                 elif correct_id:
                     # subtask is impossible
