@@ -133,7 +133,7 @@ class Env(ppo.control_flow.env.Env):
             elif active_whiles and type(line) is Subtask:
                 while_blocks[active_whiles[-1]] += [interaction]
         for while_line, block in while_blocks.items():
-            _, obj = self.parse_id(lines[while_line].id)
+            _, obj = self.line_id_to_strings[lines[while_line].id]
             l = self.random.choice(block)
             i = self.random.choice(2)
             assert self.interactions[i] in ("pickup", "transform")
