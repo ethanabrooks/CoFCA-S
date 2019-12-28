@@ -209,6 +209,13 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             self.print("ag prob", torch.round(100 * a_gate.probs[:, 1]))
             self.print("ag", ag)
 
+            if self.gate_h:
+                h = dg * h_ + (1 - dg) * h
+                h2 = ag * h2_ + (1 - ag) * h2
+            # else:
+            # h = h_
+            # h2 = h2_
+
             yield RecurrentState(
                 a=A[t],
                 v=self.critic(z),
