@@ -185,14 +185,8 @@ class Env(gym.Env, ABC):
 
             if action == self.num_subtasks:
                 n += 1
-                if self.evaluating or self.no_op_limit is None:
-                    reached_no_op_limit = False
-                else:
-                    no_op_limit = (
-                        len(lines) if self.no_op_limit < 0 else self.no_op_limit
-                    )
-                    reached_no_op_limit = n == no_op_limit
-                if reached_no_op_limit:
+                if not self.evaluating and self.no_op_limit and n == self.no_op_limit:
+                    failing = True
                     term = True
             elif state.curr is not None:
                 step += 1
