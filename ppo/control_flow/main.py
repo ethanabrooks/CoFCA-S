@@ -34,31 +34,36 @@ def main(log_dir, seed, eval_lines, **kwargs):
             else:
                 return Env(**args, world_size=world_size)
 
-        def make_vec_envs(self, use_monkey, **kwargs):
-            if use_monkey:
-                if "monkey" not in Env.line_objects:
-                    Env.line_objects.append("monkey")
-            elif "greenbot" in Env.subtask_objects:
-                Env.subtask_objects.remove("greenbot")
-                Env.world_objects.remove("greenbot")
+        def make_vec_envs(self, use_monkey, use_visit, **kwargs):
+            def safe_remove(l, x):
+                if x in l:
+                    l.remove(x)
+
+            if not use_visit:
+                safe_remove(Env.interactions, "visit")
+
+            if not use_monkey:
+                safe_remove(Env.subtask_objects, "monkey")
 
             return super().make_vec_envs(**kwargs)
 
-    _Train(**kwargs, seed=seed, log_dir=log_dir).run()
+    _Train(**kwargs, seed=seed, log_dir=log_dir, time_limit=None).run()
 
 
 def bandit_args():
     parsers = build_parser()
     parser = parsers.main
     parser.add_argument("--no-tqdm", dest="use_tqdm", action="store_false")
-    parser.add_argument("--time-limit", type=int)
     parser.add_argument("--eval-steps", type=int)
     parser.add_argument("--eval-lines", type=int, required=True)
     parser.add_argument("--no-eval", action="store_true")
     ppo.control_flow.env.build_parser(parsers.env)
     parsers.env.add_argument("--world-size", type=int)
-    parsers.env.add_argument("--use-monkey", action="store_true")
-    parsers.env.add_argument("--add-while-obj-prob", type=float, required=True)
+    parsers.env.add_argument("--use-monkey", type=int, required=True)
+    parsers.env.add_argument("--use-visit", type=int, required=True)
+    parsers.env.add_argument("--max-while-objects", type=float, required=True)
+    parsers.env.add_argument("--num-excluded-objects", type=int, required=True)
+    parsers.env.add_argument("--time-to-waste", type=int, required=True)
     parsers.agent.add_argument("--debug", action="store_true")
     parsers.agent.add_argument("--no-scan", action="store_true")
     parsers.agent.add_argument("--no-roll", action="store_true")
@@ -70,7 +75,10 @@ def bandit_args():
     parsers.agent.add_argument("--num-encoding-layers", type=int, required=True)
     parsers.agent.add_argument("--kernel-size", type=int, required=True)
     parsers.agent.add_argument("--num-edges", type=int, required=True)
-    parsers.agent.add_argument("--gate-coef", type=float)
+    parsers.agent.add_argument("--gate-coef", type=float, required=True)
+    parsers.agent.add_argument("--no-op-coef", type=float, required=True)
+    parsers.agent.add_argument("--nl-2", type=int, required=True)
+    parsers.agent.add_argument("--gate-h", type=int, required=True)
     return parser
 
 

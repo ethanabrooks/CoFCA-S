@@ -14,11 +14,22 @@ from ppo.control_flow.lines import Subtask, Padding, Line, While, If, EndWhile
 class Env(ppo.control_flow.env.Env):
     subtask_objects = ["pig", "sheep", "cat", "greenbot"]
     other_objects = ["ice", "agent"]
-    line_objects = copy(subtask_objects)
+    line_objects = [x for x in subtask_objects] + ["monkey"]
     world_objects = subtask_objects + other_objects
     interactions = ["pickup", "transform"]  # , "visit"]
 
-    def __init__(self, world_size, num_subtasks, add_while_obj_prob, **kwargs):
+    def __init__(
+        self,
+        world_size,
+        max_while_objects,
+        time_to_waste,
+        num_subtasks,
+        num_excluded_objects,
+        **kwargs,
+    ):
+        self.num_excluded_objects = num_excluded_objects
+        self.max_while_objects = max_while_objects
+        self.time_to_waste = time_to_waste
         num_subtasks = len(self.subtask_objects) * len(self.interactions)
         super().__init__(num_subtasks=num_subtasks, **kwargs)
         # self.time_limit = world_size
@@ -111,20 +122,18 @@ class Env(ppo.control_flow.env.Env):
             i = self.random.choice(2)
             assert self.interactions[i] in ("pickup", "transform")
             o = self.line_objects.index(obj)
-            line_id = o * len(self.interactions) + i
+            line_id = self.ravel_ids(i, o)
             assert self.parse_id(line_id) in (("pickup", obj), ("transform", obj))
             lines[l] = Subtask(line_id)
-            if (
-                self.random.random() < self.add_while_obj_prob
-                and obj in self.world_objects
-            ):
-                object_pos += [
-                    (obj, tuple(self.random.randint(0, self.world_size, size=2)))
-                ]
+            if not self.evaluating and obj in self.world_objects:
+                num_obj = self.random.randint(self.max_while_objects + 1)
+                if num_obj:
+                    pos = self.random.randint(0, self.world_size, size=(num_obj, 2))
+                    object_pos += [(obj, tuple(p)) for p in pos]
 
         line_iterator = self.line_generator(lines)
         condition_evaluations = defaultdict(list)
-        condition_bit = 0 if self.eval_condition_size else self.random.randint(0, 2)
+        times = Counter(on_subtask=0, to_complete=0)
 
         def evaluate_line(l):
             if l is None:
@@ -139,21 +148,37 @@ class Env(ppo.control_flow.env.Env):
                     condition_evaluations[type(line)] += [evaluation]
                 return evaluation
 
+        def get_nearest(to):
+            candidates = [np.array(p) for o, p in object_pos if o == to]
+            if candidates:
+                return min(candidates, key=lambda k: np.sum(np.abs(agent_pos - k)))
+
         def next_subtask(l):
             l = line_iterator.send(evaluate_line(l))
             while not (l is None or type(lines[l]) is Subtask):
                 l = line_iterator.send(evaluate_line(l))
+            if l is not None:
+                _, o = self.parse_id(lines[l].id)
+                n = get_nearest(o)
+                if n is not None:
+                    times["to_complete"] = 1 + np.max(np.abs(agent_pos - n))
+                    times["on_subtask"] = 0
             return l
 
+        possible_objects = [o for o, _ in object_pos]
         prev, curr = 0, next_subtask(None)
+        term = False
         while True:
+            term |= times["on_subtask"] - times["to_complete"] > self.time_to_waste
             subtask_id = yield State(
                 obs=build_world(),
                 condition=None,
                 prev=prev,
                 curr=curr,
                 condition_evaluations=condition_evaluations,
+                term=term,
             )
+            times["on_subtask"] += 1
             interaction, obj = self.parse_id(subtask_id)
 
             def pair():
@@ -166,27 +191,34 @@ class Env(ppo.control_flow.env.Env):
             if on_object():
                 if interaction in ("pickup", "transform"):
                     object_pos.remove(pair())
+                    if correct_id:
+                        possible_objects.remove(obj)
+                    else:
+                        term = True
                 if interaction == "transform":
                     object_pos.append(("ice", tuple(agent_pos)))
-                prev, curr = curr, next_subtask(curr)
-            else:
-                candidates = [np.array(p) for o, p in object_pos if o == obj]
-                if candidates:
-                    nearest = min(
-                        candidates, key=lambda k: np.sum(np.abs(agent_pos - k))
-                    )
-                    agent_pos += np.clip(nearest - agent_pos, -1, 1)
-                elif correct_id:
-                    # subtask is impossible
+                if correct_id:
                     prev, curr = curr, next_subtask(curr)
+            else:
+                nearest = get_nearest(obj)
+                if nearest is not None:
+                    agent_pos += np.clip(nearest - agent_pos, -1, 1)
+                elif correct_id and obj not in possible_objects:
+                    # subtask is impossible
+                    prev, curr = curr, None
+                    term = True
 
-    def build_lines(self):
+    def ravel_ids(self, i, o):
+        return o * len(self.interactions) + i
+
+    def assign_line_ids(self, lines):
+        lines = super().assign_line_ids(lines)
         num_line_ids = len(self.interactions) * len(self.line_objects)
         return [
             line(self.random.randint(num_line_ids))
             if type(line) not in (Subtask, Padding)
             else line
-            for line in (super().build_lines())
+            for line in lines
         ]
 
     def parse_id(self, line_id):

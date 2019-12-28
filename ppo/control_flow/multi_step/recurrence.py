@@ -24,10 +24,12 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         activation,
         conv_hidden_size,
         kernel_size,
-        forward_first,
+        nl_2,
+        gate_h,
         **kwargs
     ):
-        self.forward_first = forward_first
+        self.gate_h = gate_h
+        self.nl_2 = nl_2
         self.conv_hidden_size = conv_hidden_size
         super().__init__(
             hidden_size=hidden_size,
@@ -269,11 +271,11 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             dg = DG[t].unsqueeze(-1).float()
             self.print("dg prob", torch.round(100 * d_gate.probs[:, 1]))
             self.print("dg", dg)
-            d_dist = gate(dg, d_probs, p)
-            # self.print("d_probs", torch.round(100 * d_probs)[:, half:])
+            d_dist = gate(dg, d_probs, ones * nl)
+            self.print("d_probs", torch.round(100 * d_probs)[:, nl:])
             self.sample_new(D[t], d_dist)
-            p = D[t].clone()
-            # p = torch.clamp(p, min=0, max=nl - 1)
+            p = p + D[t].clone() - nl
+            p = torch.clamp(p, min=0, max=nl - (2 if self.nl_2 else 1))
 
             x = [
                 obs,
@@ -281,7 +283,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
                 self.embed_action(A[t - 1].clone()),
             ]
             h2 = self.gru(torch.cat(x, dim=-1), h2)
-            z = F.relu(self.zeta(h))
+            z = F.relu(self.zeta(h2))
             a_gate = self.a_gate(z)
             self.sample_new(AG[t], a_gate)
             ag = AG[t].unsqueeze(-1).float()
@@ -289,6 +291,13 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             self.sample_new(A[t], a_dist)
             self.print("ag prob", torch.round(100 * a_gate.probs[:, 1]))
             self.print("ag", ag)
+
+            if self.gate_h:
+                h = dg * h_ + (1 - dg) * h
+                h2 = ag * h2_ + (1 - ag) * h2
+            # else:
+            # h = h_
+            # h2 = h2_
 
             yield RecurrentState(
                 a=A[t],
