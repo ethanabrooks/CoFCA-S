@@ -321,9 +321,9 @@ class Env(gym.Env, ABC):
             last_condition = active_conditions[-1]
             if last_condition is If:
                 line_types += [EndIf]
-            if last_condition is If and enough_space:
-                line_types += [Else]
-            elif last_condition is Else:
+            # if last_condition is If and enough_space:
+            # line_types += [Else]
+            if last_condition is Else:
                 line_types += [EndIf]
             elif last_condition is While:
                 line_types += [EndWhile]
@@ -353,11 +353,11 @@ class Env(gym.Env, ABC):
         if_evaluations = []
         while True:
             condition_bit = yield None if i >= len(lines) else i
-            if lines[i] is Else:
+            if type(lines[i]) is Else:
                 evaluation = not if_evaluations.pop()
             else:
                 evaluation = bool(condition_bit)
-            if lines[i] is If:
+            if type(lines[i]) is If:
                 if_evaluations.append(evaluation)
             i = line_transitions[i][evaluation]
 
