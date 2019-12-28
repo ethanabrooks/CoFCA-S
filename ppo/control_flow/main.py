@@ -75,10 +75,10 @@ def bandit_args():
     parsers.agent.add_argument("--num-encoding-layers", type=int, required=True)
     parsers.agent.add_argument("--kernel-size", type=int, required=True)
     parsers.agent.add_argument("--num-edges", type=int, required=True)
-    parsers.agent.add_argument("--gate-coef", type=float)
-    parsers.agent.add_argument("--no-op-coef", type=float)
-    parsers.agent.add_argument("--nl-2", type=int)
-    parsers.agent.add_argument("--gate-h", type=int)
+    parsers.agent.add_argument("--gate-coef", type=float, required=True)
+    parsers.agent.add_argument("--no-op-coef", type=float, required=True)
+    parsers.agent.add_argument("--nl-2", type=int, required=True)
+    parsers.agent.add_argument("--gate-h", type=int, required=True)
     return parser
 
 
