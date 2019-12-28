@@ -4,6 +4,8 @@
 * curriculum based on world-size
 * refactor recurrence, breaking up each task and rolling separately.
 
+* use the convolutional architecture
+* change line indexing for if/else/while
 * base action on h2
 * replace `time_limit` with `time_to_waste`
 * set no_op_limit to len(lines)
