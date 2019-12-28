@@ -63,7 +63,6 @@ class Env(gym.Env, ABC):
             self.n_lines = max_lines
         self.n_lines += 1
         self.random, self.seed = seeding.np_random(seed)
-        self.time_limit = time_limit
         self.flip_prob = flip_prob
         self.baseline = baseline
         self.evaluating = evaluating
@@ -103,7 +102,6 @@ class Env(gym.Env, ABC):
         return self.iterator.send(action)
 
     def generator(self):
-        failing = False
         step = 0
         n = 0
         lines = self.build_lines()
@@ -116,8 +114,12 @@ class Env(gym.Env, ABC):
         action = None
         while True:
             success = state.curr is None
-            reward = int(term) * int(not failing)
-            info.update(regret=1 if term and failing else 0)
+            reward = int(success)
+            if success:
+                info.update(success_line=len(lines))
+
+            term = success or state.term
+            info.update(regret=1 if term and not success else 0)
             if term:
                 info.update(
                     if_evaluations=state.condition_evaluations[If],
@@ -161,19 +163,11 @@ class Env(gym.Env, ABC):
 
             self._render = render
 
-            if success:
-                info.update(success_line=len(lines))
-
             action = (
                 yield self.get_observation(state.obs, state.curr, lines),
                 reward,
                 term,
                 info,
-            )
-            term = (
-                success
-                or (self.terminate_on_failure and failing)
-                or (not self.evaluating and step == self.time_limit)
             )
 
             if self.baseline:
@@ -194,8 +188,6 @@ class Env(gym.Env, ABC):
             elif state.curr is not None:
                 step += 1
                 if action != lines[state.curr].id:
-                    # TODO: this should only be evaluated when done
-                    failing = True
                     info.update(success_line=state.prev, failure_line=state.curr)
                 state = state_iterator.send(action)
 

@@ -217,14 +217,16 @@ class Env(ppo.control_flow.env.Env):
                         term = True
                 if interaction == "transform":
                     object_pos.append(("ice", tuple(agent_pos)))
-                prev, curr = curr, next_subtask(curr)
+                if correct_id:
+                    prev, curr = curr, next_subtask(curr)
             else:
                 nearest = get_nearest(obj)
                 if nearest is not None:
                     agent_pos += np.clip(nearest - agent_pos, -1, 1)
-                elif correct_id:
+                elif correct_id and obj not in possible_objects:
                     # subtask is impossible
-                    prev, curr = curr, next_subtask(curr)
+                    prev, curr = curr, None
+                    term = True
 
     def assign_line_ids(self, lines):
         num_objects = len(self.subtask_objects)

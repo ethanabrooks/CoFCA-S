@@ -47,14 +47,13 @@ def main(log_dir, seed, eval_lines, **kwargs):
 
             return super().make_vec_envs(**kwargs)
 
-    _Train(**kwargs, seed=seed, log_dir=log_dir).run()
+    _Train(**kwargs, seed=seed, log_dir=log_dir, time_limit=None).run()
 
 
 def bandit_args():
     parsers = build_parser()
     parser = parsers.main
     parser.add_argument("--no-tqdm", dest="use_tqdm", action="store_false")
-    parser.add_argument("--time-limit", type=int)
     parser.add_argument("--eval-steps", type=int)
     parser.add_argument("--eval-lines", type=int, required=True)
     parser.add_argument("--no-eval", action="store_true")
