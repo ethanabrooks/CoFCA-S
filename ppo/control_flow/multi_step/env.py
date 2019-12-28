@@ -172,6 +172,7 @@ class Env(ppo.control_flow.env.Env):
                 prev=prev,
                 curr=curr,
                 condition_evaluations=condition_evaluations,
+                term=term,
             )
             times["on_subtask"] += 1
             interaction, obj = self.parse_id(subtask_id)

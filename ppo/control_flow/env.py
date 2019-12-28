@@ -24,7 +24,7 @@ from ppo.utils import RED, RESET, GREEN
 
 Obs = namedtuple("Obs", "active lines obs")
 Last = namedtuple("Last", "action active reward terminal selected")
-State = namedtuple("State", "obs condition prev curr condition_evaluations")
+State = namedtuple("State", "obs condition prev curr condition_evaluations term")
 
 
 class Env(gym.Env, ABC):
@@ -417,6 +417,7 @@ class Env(gym.Env, ABC):
                 prev=prev,
                 curr=curr,
                 condition_evaluations=condition_evaluations,
+                term=False,
             )
             condition_bit = abs(
                 condition_bit - int(self.random.rand() < self.flip_prob)
