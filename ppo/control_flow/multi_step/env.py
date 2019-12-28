@@ -98,7 +98,6 @@ class Env(ppo.control_flow.env.Env):
         elif type(line) is Else:
             return [self.line_types.index(Else), 0, 0]
         else:
-            return [self.line_types.index(Else), 0, 0]
             i, o = self.parse_id(line.id)
             if type(line) in (If, While):
                 return [
