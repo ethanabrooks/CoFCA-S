@@ -11,6 +11,22 @@ from ppo.control_flow.env import build_parser, State
 from ppo.control_flow.lines import Subtask, Padding, Line, While, If, EndWhile, Else
 
 
+def clip(a, b, pair_min, pair_max):
+    return min(pair_max, max(pair_min, a)), min(pair_max, max(pair_min, b))
+
+
+def sum_pair(a, b):
+    return a + b
+
+
+def minus_pair(a, b, c, d):
+    return a - c, b - d
+
+
+def abs_pair(a, b):
+    return abs(a), abs(b)
+
+
 class Env(ppo.control_flow.env.Env):
     subtask_objects = ["pig", "sheep", "cat", "greenbot"]
     other_objects = ["ice", "agent"]

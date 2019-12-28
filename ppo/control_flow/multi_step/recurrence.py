@@ -123,9 +123,9 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         # parse non-action inputs
         inputs = self.parse_inputs(inputs)
         inputs = inputs._replace(obs=inputs.obs.view(T, N, *self.obs_spaces.obs.shape))
+        nl = len(self.obs_spaces.lines.nvec)
 
         # build memory
-        nl = len(self.obs_spaces.lines.nvec)
         lines = inputs.lines.view(T, N, *self.obs_spaces.lines.shape)
         lines = lines.long()[0, :, :] + self.offset
         M = self.embed_task(lines.view(-1, self.obs_spaces.lines.nvec[0].size)).view(
@@ -229,6 +229,48 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             # P = torch.cat([b.flip(2), f], dim=2)
 
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
+
+        if not new_episode.any():
+            M = self.M
+            P = self.P
+        else:
+            M = self.M = self.embed_task(
+                lines.view(-1, self.obs_spaces.lines.nvec[0].size)
+            ).view(
+                *lines.shape[:2], self.encoder_hidden_size
+            )  # n_batch, n_lines, hidden_size
+            rolled = []
+            for i in range(nl):
+                rolled.append(M if self.no_roll else torch.roll(M, shifts=-i, dims=1))
+            rolled = torch.cat(rolled, dim=0)
+            G, H = self.task_encoder(rolled)
+            H = H.transpose(0, 1).reshape(nl, N, -1)
+            last = torch.zeros(nl, N, 2 * nl, self.ne, device=rnn_hxs.device)
+            last[:, :, -1] = 1
+            if self.no_scan:
+                P = self.beta(H).view(nl, N, -1, self.ne).softmax(2)
+            else:
+                G = G.view(nl, N, nl, 2, self.encoder_hidden_size)
+                B = bb = self.beta(G).sigmoid()
+                # arange = torch.zeros(6).float()
+                # arange[0] = 1
+                # arange[1] = 1
+                # B[:, :, :, 0] = 0  # arange.view(1, 1, -1, 1)
+                # B[:, :, :, 1] = 1
+                f, b = torch.unbind(B, dim=3)
+                B = torch.stack([f, b.flip(2)], dim=-2)
+                B = B.view(nl, N, 2 * nl, self.ne)
+                B = (1 - last).flip(2) * B  # this ensures the first B is 0
+                zero_last = (1 - last) * B
+                B = zero_last + last  # this ensures that the last B is 1
+                rolled = torch.roll(zero_last, shifts=1, dims=2)
+                C = torch.cumprod(1 - rolled, dim=2)
+                P = B * C
+                P = P.view(nl, N, nl, 2, self.ne)
+                f, b = torch.unbind(P, dim=3)
+                P = self.P = torch.cat([b.flip(2), f], dim=2)
+
+        half = P.size(2) // 2
         hx = self.parse_hidden(rnn_hxs)
         for _x in hx:
             _x.squeeze_(0)
@@ -251,7 +293,8 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             obs = self.conv(inputs.obs[t]).view(N, -1)
             x = [
                 obs,
-                H.sum(0) if self.no_pointer else M[R, p],
+                # H.sum(0) if self.no_pointer else
+                M[R, p],
                 self.embed_action(A[t - 1].clone()),
             ]
             h = self.gru(torch.cat(x, dim=-1), h)
@@ -279,7 +322,8 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
 
             x = [
                 obs,
-                H.sum(0) if self.no_pointer else M[R, p],  # updated p
+                # H.sum(0) if self.no_pointer else
+                M[R, p],  # updated p
                 self.embed_action(A[t - 1].clone()),
             ]
             h2 = self.gru(torch.cat(x, dim=-1), h2)
