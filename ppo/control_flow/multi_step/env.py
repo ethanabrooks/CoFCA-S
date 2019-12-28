@@ -163,7 +163,9 @@ class Env(ppo.control_flow.env.Env):
 
         possible_objects = [o for o, _ in object_pos]
         prev, curr = 0, next_subtask(None)
+        term = False
         while True:
+            term |= times["on_subtask"] - times["to_complete"] > self.time_to_waste
             subtask_id = yield State(
                 obs=build_world(),
                 condition=None,
