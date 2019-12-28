@@ -44,8 +44,8 @@ class Env(ppo.control_flow.env.Env):
                     [
                         [
                             len(self.line_types),
-                            len(self.interactions),
-                            len(self.line_objects),
+                            1 + len(self.interactions),
+                            1 + len(self.line_objects),
                         ]
                     ]
                     * self.n_lines
@@ -95,13 +95,23 @@ class Env(ppo.control_flow.env.Env):
     def preprocess_line(self, line):
         if line is Padding:
             return [self.line_types.index(Padding), 0, 0]
+        elif type(line) is Else:
+            return [self.line_types.index(Else), 0, 0]
         else:
+            return [self.line_types.index(Else), 0, 0]
             i, o = self.parse_id(line.id)
-            return [
-                self.line_types.index(type(line)),
-                self.interactions.index(i),
-                self.line_objects.index(o),
-            ]
+            if type(line) in (If, While):
+                return [
+                    self.line_types.index(type(line)),
+                    0,
+                    1 + self.line_objects.index(o),
+                ]
+            else:
+                return [
+                    self.line_types.index(type(line)),
+                    1 + self.interactions.index(i),
+                    1 + self.line_objects.index(o),
+                ]
 
     def state_generator(self, lines) -> State:
         assert self.max_nesting_depth == 1
