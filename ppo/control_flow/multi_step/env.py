@@ -117,7 +117,7 @@ class Env(ppo.control_flow.env.Env):
             i = self.random.choice(2)
             assert self.interactions[i] in ("pickup", "transform")
             o = self.line_objects.index(obj)
-            line_id = o * len(self.interactions) + i
+            line_id = self.ravel_ids(i, o)
             assert self.parse_id(line_id) in (("pickup", obj), ("transform", obj))
             lines[l] = Subtask(line_id)
 
@@ -177,6 +177,9 @@ class Env(ppo.control_flow.env.Env):
                 elif correct_id:
                     # subtask is impossible
                     prev, curr = curr, next_subtask(curr)
+
+    def ravel_ids(self, i, o):
+        return o * len(self.interactions) + i
 
     def assign_line_ids(self, lines):
         lines = super().assign_line_ids(lines)
