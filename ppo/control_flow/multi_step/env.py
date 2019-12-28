@@ -113,7 +113,11 @@ class Env(ppo.control_flow.env.Env):
                 world[tuple((self.world_objects.index(o), *p))] = 1
             return world
 
-        line_io = [self.parse_id(line.id) for line in lines if type(line) is Subtask]
+        line_io = [
+            self.subtask_id_to_strings[line.id]
+            for line in lines
+            if type(line) is Subtask
+        ]
         line_pos = self.random.randint(0, self.world_size, size=(len(line_io), 2))
         object_pos = [
             (o, tuple(pos)) for (interaction, o), pos in zip(line_io, line_pos)
