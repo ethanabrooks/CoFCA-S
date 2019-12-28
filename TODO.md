@@ -1,4 +1,5 @@
-* get gates synced up
-* implement complex conditionals
-* somehow deal with nondeterminism of convolutions
-* get auxiliary loss working?
+* implement curriculum that uses add-while-obj-prob
+* take out failure
+* curriculum based on speed
+* curriculum based on world-size
+* refactor recurrence, breaking up each task and rolling separately.
