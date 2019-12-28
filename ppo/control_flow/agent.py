@@ -25,9 +25,11 @@ class Agent(ppo.agent.Agent, NNBase):
         include_action,
         use_conv,
         gate_coef,
+        no_op_coef,
         **network_args
     ):
         nn.Module.__init__(self)
+        self.no_op_coef = no_op_coef
         self.entropy_coef = entropy_coef
         self.multi_step = type(observation_space.spaces["obs"]) is Box
         self.recurrent_module = (
@@ -78,7 +80,11 @@ class Agent(ppo.agent.Agent, NNBase):
         aux_loss = -self.entropy_coef * entropy
         if self.multi_step:
             assert rm.gate_coef is not None
-            aux_loss += rm.gate_coef * (hx.ag_probs + hx.dg_probs)[:, 1].mean()
+            assert self.no_op_coef is not None
+            aux_loss += (
+                rm.gate_coef * (hx.ag_probs + hx.dg_probs)[:, 1].mean()
+                + self.no_op_coef * hx.a_probs[:, -1].mean()
+            )
         return AgentValues(
             value=hx.v,
             action=action,
