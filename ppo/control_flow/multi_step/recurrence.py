@@ -216,7 +216,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
                 self.embed_action(A[t - 1].clone()),
             ]
             h2 = self.gru(torch.cat(x, dim=-1), h2)
-            z = F.relu(self.zeta(h))
+            z = F.relu(self.zeta(h2))
             a_gate = self.a_gate(z)
             self.sample_new(AG[t], a_gate)
             ag = AG[t].unsqueeze(-1).float()
