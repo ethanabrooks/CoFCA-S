@@ -199,7 +199,7 @@ class Env(ppo.control_flow.env.Env):
                 term=term,
             )
             times["on_subtask"] += 1
-            interaction, obj = self.parse_id(subtask_id)
+            interaction, obj = self.subtask_id_to_strings[subtask_id]
 
             def pair():
                 return obj, tuple(agent_pos)
