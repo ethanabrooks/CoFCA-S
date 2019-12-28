@@ -70,11 +70,11 @@ class Env(ppo.control_flow.env.Env):
                 self.line_strings_to_id[interaction, obj] = line_id
 
     def line_str(self, line: Line):
-        i, o = self.parse_id(line.id)
         if isinstance(line, Subtask):
+            i, o = self.subtask_id_to_strings[line.id]
             return f"{line}: {i} {o}"
         elif isinstance(line, (If, While)):
-            return f"{line}: {o}"
+            return f"{line}: {self.line_objects[line.id]}"
         else:
             return f"{line}"
 
