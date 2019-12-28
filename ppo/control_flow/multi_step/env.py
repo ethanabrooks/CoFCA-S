@@ -121,6 +121,11 @@ class Env(ppo.control_flow.env.Env):
             line_id = self.ravel_ids(i, o)
             assert self.parse_id(line_id) in (("pickup", obj), ("transform", obj))
             lines[l] = Subtask(line_id)
+            if not self.evaluating and obj in self.world_objects:
+                num_obj = self.random.randint(self.max_while_objects + 1)
+                if num_obj:
+                    pos = self.random.randint(0, self.world_size, size=(num_obj, 2))
+                    object_pos += [(obj, tuple(p)) for p in pos]
 
         line_iterator = self.line_generator(lines)
         condition_evaluations = defaultdict(list)
