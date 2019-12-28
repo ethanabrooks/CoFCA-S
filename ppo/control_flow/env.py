@@ -41,9 +41,9 @@ class Env(gym.Env, ABC):
         max_nesting_depth,
         eval_condition_size,
         no_op_limit,
+        time_limit,
         seed=0,
         eval_lines=None,
-        time_limit=100,
         evaluating=False,
         baseline=False,
     ):
