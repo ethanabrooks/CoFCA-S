@@ -134,12 +134,15 @@ class Env(ppo.control_flow.env.Env):
                 while_blocks[active_whiles[-1]] += [interaction]
         for while_line, block in while_blocks.items():
             _, obj = self.line_id_to_strings[lines[while_line].id]
+            if obj not in self.subtask_objects:
+                continue
             l = self.random.choice(block)
             i = self.random.choice(2)
-            assert self.interactions[i] in ("pickup", "transform")
-            o = self.line_objects.index(obj)
-            line_id = self.ravel_ids(i, o)
-            assert self.parse_id(line_id) in (("pickup", obj), ("transform", obj))
+            line_id = self.line_strings_to_id[("pickup", "transform")[i], obj]
+            assert self.subtask_id_to_strings[line_id] in (
+                ("pickup", obj),
+                ("transform", obj),
+            )
             lines[l] = Subtask(line_id)
             if not self.evaluating and obj in self.world_objects:
                 num_obj = self.random.randint(self.max_while_objects + 1)
