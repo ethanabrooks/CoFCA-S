@@ -8,13 +8,13 @@ from rl_utils import hierarchical_parse_args
 import ppo.control_flow.env
 from ppo import keyboard_control
 from ppo.control_flow.env import build_parser, State
-from ppo.control_flow.lines import Subtask, Padding, Line, While, If, EndWhile, Else
+from ppo.control_flow.lines import Subtask, Padding, Line, While, If, EndWhile
 
 
 class Env(ppo.control_flow.env.Env):
     subtask_objects = ["pig", "sheep", "cat", "greenbot"]
     other_objects = ["ice", "agent"]
-    line_objects = subtask_objects + ["monkey"]
+    line_objects = [x for x in subtask_objects] + ["monkey"]
     world_objects = subtask_objects + other_objects
     interactions = ["pickup", "transform", "visit"]
 
@@ -44,8 +44,8 @@ class Env(ppo.control_flow.env.Env):
                     [
                         [
                             len(self.line_types),
-                            1 + len(self.interactions),
-                            1 + len(self.line_objects),
+                            len(self.interactions),
+                            len(self.line_objects),
                         ]
                     ]
                     * self.n_lines
@@ -53,28 +53,12 @@ class Env(ppo.control_flow.env.Env):
             ),
         )
 
-        self.subtask_id_to_tuple = {}
-        self.subtask_id_to_strings = {}
-        self.subtask_strings_to_id = {}
-        self.line_id_to_strings = {}
-        self.line_strings_to_id = {}
-        for i, interaction in enumerate(self.interactions):
-            for o, obj in enumerate(self.subtask_objects):
-                subtask_id = o * len(self.interactions) + i
-                self.subtask_id_to_tuple[subtask_id] = i, o
-                self.subtask_id_to_strings[subtask_id] = interaction, obj
-                self.subtask_strings_to_id[interaction, obj] = subtask_id
-            for o, obj in enumerate(self.line_objects):
-                line_id = o * len(self.interactions) + i
-                self.line_id_to_strings[line_id] = interaction, obj
-                self.line_strings_to_id[interaction, obj] = line_id
-
     def line_str(self, line: Line):
+        i, o = self.parse_id(line.id)
         if isinstance(line, Subtask):
-            i, o = self.subtask_id_to_strings[line.id]
             return f"{line}: {i} {o}"
         elif isinstance(line, (If, While)):
-            return f"{line}: {self.line_objects[line.id]}"
+            return f"{line}: {o}"
         else:
             return f"{line}"
 
@@ -94,16 +78,14 @@ class Env(ppo.control_flow.env.Env):
 
     def preprocess_line(self, line):
         if line is Padding:
-            line_type = self.line_types.index(Padding)
+            return [self.line_types.index(Padding), 0, 0]
         else:
-            line_type = self.line_types.index(type(line))
-        if type(line) is Subtask:
-            i, o = self.subtask_id_to_tuple[line.id]
-            return [line_type, 1 + i, 1 + o]
-        if line is Padding or type(line) is Else:
-            return [line_type, 0, 0]
-
-        return [line_type, 0, 1 + line.id]
+            i, o = self.parse_id(line.id)
+            return [
+                self.line_types.index(type(line)),
+                self.interactions.index(i),
+                self.line_objects.index(o),
+            ]
 
     def state_generator(self, lines) -> State:
         assert self.max_nesting_depth == 1
@@ -115,11 +97,7 @@ class Env(ppo.control_flow.env.Env):
                 world[tuple((self.world_objects.index(o), *p))] = 1
             return world
 
-        line_io = [
-            self.subtask_id_to_strings[line.id]
-            for line in lines
-            if type(line) is Subtask
-        ]
+        line_io = [self.parse_id(line.id) for line in lines if type(line) is Subtask]
         line_pos = self.random.randint(0, self.world_size, size=(len(line_io), 2))
         object_pos = [
             (o, tuple(pos)) for (interaction, o), pos in zip(line_io, line_pos)
@@ -135,14 +113,13 @@ class Env(ppo.control_flow.env.Env):
             elif active_whiles and type(line) is Subtask:
                 while_blocks[active_whiles[-1]] += [interaction]
         for while_line, block in while_blocks.items():
-            _, obj = self.line_id_to_strings[lines[while_line].id]
+            _, obj = self.parse_id(lines[while_line].id)
             l = self.random.choice(block)
             i = self.random.choice(2)
-            line_id = self.line_strings_to_id[("pickup", "transform")[i], obj]
-            assert self.subtask_id_to_strings[line_id] in (
-                ("pickup", obj),
-                ("transform", obj),
-            )
+            assert self.interactions[i] in ("pickup", "transform")
+            o = self.line_objects.index(obj)
+            line_id = self.ravel_ids(i, o)
+            assert self.parse_id(line_id) in (("pickup", obj), ("transform", obj))
             lines[l] = Subtask(line_id)
             if not self.evaluating and obj in self.world_objects:
                 num_obj = self.random.randint(self.max_while_objects + 1)
@@ -161,7 +138,7 @@ class Env(ppo.control_flow.env.Env):
             if type(line) is Subtask:
                 return 1
             else:
-                tgt = self.line_objects[line.id]
+                _, tgt = self.parse_id(line.id)
                 evaluation = any(o == tgt for o, _ in object_pos)
                 if type(line) in (If, While):
                     condition_evaluations[type(line)] += [evaluation]
@@ -177,8 +154,7 @@ class Env(ppo.control_flow.env.Env):
             while not (l is None or type(lines[l]) is Subtask):
                 l = line_iterator.send(evaluate_line(l))
             if l is not None:
-                assert type(lines[l]) is Subtask
-                _, o = self.subtask_id_to_strings[lines[l].id]
+                _, o = self.parse_id(lines[l].id)
                 n = get_nearest(o)
                 if n is not None:
                     times["to_complete"] = 1 + np.max(np.abs(agent_pos - n))
@@ -199,7 +175,7 @@ class Env(ppo.control_flow.env.Env):
                 term=term,
             )
             times["on_subtask"] += 1
-            interaction, obj = self.subtask_id_to_strings[subtask_id]
+            interaction, obj = self.parse_id(subtask_id)
 
             def pair():
                 return obj, tuple(agent_pos)
@@ -228,29 +204,23 @@ class Env(ppo.control_flow.env.Env):
                     prev, curr = curr, None
                     term = True
 
+    def ravel_ids(self, i, o):
+        return o * len(self.interactions) + i
+
     def assign_line_ids(self, lines):
-        num_objects = len(self.subtask_objects)
-        excluded = self.random.randint(num_objects, size=self.num_excluded_objects)
-        # print("excluding:")
-        # for i in excluded:
-        # print(self.line_objects[i])
-        included_object_ids = [i for i in range(num_objects) if i not in excluded]
+        lines = super().assign_line_ids(lines)
+        num_line_ids = len(self.interactions) * len(self.line_objects)
+        return [
+            line(self.random.randint(num_line_ids))
+            if type(line) not in (Subtask, Padding)
+            else line
+            for line in lines
+        ]
 
-        interaction_ids = self.random.choice(len(self.interactions), size=len(lines))
-        object_ids = self.random.choice(len(included_object_ids), size=len(lines))
-        line_ids = self.random.choice(len(self.line_objects), size=len(lines))
-
-        for line, line_id, interaction_id, object_id in zip(
-            lines, line_ids, interaction_ids, object_ids
-        ):
-            if line is Subtask:
-                subtask_id = self.subtask_strings_to_id[
-                    self.interactions[interaction_id],
-                    self.subtask_objects[included_object_ids[object_id]],
-                ]
-                yield Subtask(subtask_id)
-            else:
-                yield line(line_id)
+    def parse_id(self, line_id):
+        i = line_id % len(self.interactions)
+        o = line_id // len(self.interactions)
+        return self.interactions[i], self.line_objects[o]
 
 
 if __name__ == "__main__":
