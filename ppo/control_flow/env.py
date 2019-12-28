@@ -24,7 +24,7 @@ from ppo.utils import RED, RESET, GREEN
 
 Obs = namedtuple("Obs", "active lines obs")
 Last = namedtuple("Last", "action active reward terminal selected")
-State = namedtuple("State", "obs condition prev curr condition_evaluations")
+State = namedtuple("State", "obs condition prev curr condition_evaluations term")
 
 
 class Env(gym.Env, ABC):
@@ -41,9 +41,9 @@ class Env(gym.Env, ABC):
         max_nesting_depth,
         eval_condition_size,
         no_op_limit,
+        time_limit,
         seed=0,
         eval_lines=None,
-        time_limit=100,
         evaluating=False,
         baseline=False,
     ):
@@ -149,13 +149,10 @@ class Env(gym.Env, ABC):
                 yield from line_strings(index + 1, level)
 
             def render():
-                if failing:
-                    print(RED)
-                elif reward == 1:
-                    print(GREEN)
+                if term:
+                    print(GREEN if success else RED)
                 for i, string in enumerate(line_strings(index=0, level=1)):
                     print(f"{i}{string}")
-                print("Failing:", failing)
                 print("Action:", action)
                 print("Reward", reward)
                 print("Obs:")
@@ -188,7 +185,10 @@ class Env(gym.Env, ABC):
 
             if action == self.num_subtasks:
                 n += 1
-                if not self.evaluating and self.no_op_limit and n == self.no_op_limit:
+                no_op_limit = self.no_op_limit
+                if self.no_op_limit is not None and self.no_op_limit < 0:
+                    no_op_limit = len(lines)
+                if not self.evaluating and n == no_op_limit:
                     failing = True
                     term = True
             elif state.curr is not None:
@@ -225,6 +225,9 @@ class Env(gym.Env, ABC):
             lines = self.get_lines(
                 n_lines, active_conditions=[], max_nesting_depth=self.max_nesting_depth
             )
+        return list(self.assign_line_ids(lines))
+
+    def assign_line_ids(self, lines):
         return [
             Subtask(self.random.choice(self.num_subtasks)) if line is Subtask else line
             for line in lines
@@ -318,9 +321,9 @@ class Env(gym.Env, ABC):
             last_condition = active_conditions[-1]
             if last_condition is If:
                 line_types += [EndIf]
-            if last_condition is If and enough_space:
-                line_types += [Else]
-            elif last_condition is Else:
+            # if last_condition is If and enough_space:
+            # line_types += [Else]
+            if last_condition is Else:
                 line_types += [EndIf]
             elif last_condition is While:
                 line_types += [EndWhile]
@@ -417,6 +420,7 @@ class Env(gym.Env, ABC):
                 prev=prev,
                 curr=curr,
                 condition_evaluations=condition_evaluations,
+                term=False,
             )
             condition_bit = abs(
                 condition_bit - int(self.random.rand() < self.flip_prob)

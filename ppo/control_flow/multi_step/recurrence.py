@@ -24,8 +24,12 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         activation,
         conv_hidden_size,
         kernel_size,
+        nl_2,
+        gate_h,
         **kwargs
     ):
+        self.gate_h = gate_h
+        self.nl_2 = nl_2
         self.conv_hidden_size = conv_hidden_size
         super().__init__(
             hidden_size=hidden_size,
@@ -36,28 +40,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         self.gate_coef = gate_coef
         self.action_size = 4
         d = self.obs_spaces.obs.shape[0]
-        layers = [
-            nn.Conv2d(
-                d,
-                conv_hidden_size,
-                kernel_size=kernel_size,
-                stride=2 if kernel_size == 2 else 1,
-                padding=0,
-            ),
-            nn.ReLU(),
-        ]
-        # if kernel_size < 4:
-            # layers += [
-                # nn.Conv2d(
-                    # conv_hidden_size,
-                    # conv_hidden_size,
-                    # kernel_size=2,
-                    # stride=2,
-                    # padding=0,
-                # ),
-                # nn.ReLU(),
-            # ]
-        self.conv = nn.Sequential(*layers)
+        self.conv = nn.Sequential(init_(nn.Linear(d, conv_hidden_size)), nn.ReLU())
         self.d_gate = Categorical(hidden_size, 2)
         self.a_gate = Categorical(hidden_size, 2)
         self.state_sizes = RecurrentState(
@@ -182,7 +165,12 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
 
         for t in range(T):
             self.print("p", p)
-            obs = self.conv(inputs.obs[t]).view(N, -1)
+            obs = (
+                self.conv(inputs.obs[t].permute(0, 2, 3, 1))
+                .view(N, -1, self.conv_hidden_size)
+                .max(dim=1)
+                .values
+            )
             x = [
                 obs,
                 # H.sum(0) if self.no_pointer else
@@ -206,11 +194,11 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             dg = DG[t].unsqueeze(-1).float()
             self.print("dg prob", torch.round(100 * d_gate.probs[:, 1]))
             self.print("dg", dg)
-            d_dist = gate(dg, d_probs, ones * half)
-            self.print("d_probs", torch.round(100 * d_probs)[:, half:])
+            d_dist = gate(dg, d_probs, ones * nl)
+            self.print("d_probs", torch.round(100 * d_probs)[:, nl:])
             self.sample_new(D[t], d_dist)
-            p = p + D[t].clone() - half
-            p = torch.clamp(p, min=0, max=nl - 1)
+            p = p + D[t].clone() - nl
+            p = torch.clamp(p, min=0, max=nl - (2 if self.nl_2 else 1))
 
             x = [
                 obs,
@@ -227,6 +215,13 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             self.sample_new(A[t], a_dist)
             self.print("ag prob", torch.round(100 * a_gate.probs[:, 1]))
             self.print("ag", ag)
+
+            if self.gate_h:
+                h = dg * h_ + (1 - dg) * h
+                h2 = ag * h2_ + (1 - ag) * h2
+            # else:
+            # h = h_
+            # h2 = h2_
 
             yield RecurrentState(
                 a=A[t],
