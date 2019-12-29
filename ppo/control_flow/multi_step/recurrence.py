@@ -208,14 +208,18 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             ]
             h = self.gru(torch.cat(x, dim=-1), h)
             z = F.relu(self.zeta(h))
+            d_gate = self.d_gate(z)
+            self.sample_new(DG[t], d_gate)
+            a_gate = self.a_gate(z)
+            self.sample_new(AG[t], a_gate)
 
+            h2_ = self.gru(torch.cat(x, dim=-1), h2)
+            z = F.relu(self.zeta(h2_))
             u = self.upsilon(z).softmax(dim=-1)
             # self.print("bb", torch.round(100 * bb[p, R, :, 0]))
             self.print("u", torch.round(100 * u))
             w = P[p, R]
             d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
-            d_gate = self.d_gate(z)
-            self.sample_new(DG[t], d_gate)
             dg = DG[t].unsqueeze(-1).float()
             self.print("dg prob", torch.round(100 * d_gate.probs[:, 1]))
             self.print("dg", dg)
@@ -225,15 +229,6 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             p = p + D[t].clone() - nl
             p = torch.clamp(p, min=0, max=nl - (2 if self.nl_2 else 1))
 
-            x = [
-                obs,
-                H.sum(0) if self.no_pointer else M[R, p],  # updated p
-                self.embed_action(A[t - 1].clone()),
-            ]
-            h2 = self.gru(torch.cat(x, dim=-1), h2)
-            z = F.relu(self.zeta(h))
-            a_gate = self.a_gate(z)
-            self.sample_new(AG[t], a_gate)
             ag = AG[t].unsqueeze(-1).float()
             a_dist = gate(ag, self.actor(z).probs, A[t - 1])
             self.sample_new(A[t], a_dist)
@@ -241,11 +236,9 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             self.print("ag", ag)
 
             if self.gate_h:
-                h = dg * h_ + (1 - dg) * h
-                h2 = ag * h2_ + (1 - ag) * h2
-            # else:
-            # h = h_
-            # h2 = h2_
+                h2 = dg * h2_ + (1 - dg) * h2
+            else:
+                h2 = h2_
 
             yield RecurrentState(
                 a=A[t],
