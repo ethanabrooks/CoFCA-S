@@ -199,8 +199,8 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
                 H.sum(0) if self.no_pointer else M[R, p],  # updated p
                 self.embed_action(A[t - 1].clone()),
             ]
-            h2_ = self.gru(torch.cat(x, dim=-1), h2)
-            z = F.relu(self.zeta(h2_))
+            h2 = self.gru(torch.cat(x, dim=-1), h2)
+            z = F.relu(self.zeta(h))
             a_gate = self.a_gate(z)
             self.sample_new(AG[t], a_gate)
             ag = AG[t].unsqueeze(-1).float()
