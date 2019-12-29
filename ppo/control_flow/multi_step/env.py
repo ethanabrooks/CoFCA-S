@@ -229,9 +229,9 @@ class Env(ppo.control_flow.env.Env):
                 nearest = get_nearest(obj)
                 if nearest is not None:
                     agent_pos += np.clip(nearest - agent_pos, -1, 1)
-                elif correct_id:
+                elif correct_id and obj not in possible_objects:
                     # subtask is impossible
-                    prev, curr = curr, next_subtask(curr)
+                    prev, curr = curr, None
 
     def ravel_ids(self, i, o):
         return o * len(self.interactions) + i
