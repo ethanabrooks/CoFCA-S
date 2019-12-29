@@ -217,8 +217,8 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             self.print("ag prob", torch.round(100 * a_gate.probs[:, 1]))
             self.print("ag", ag)
 
-            h_ = self.gru(torch.cat(x, dim=-1), h)
-            z = F.relu(self.zeta(h_))
+            h = self.gru(torch.cat(x, dim=-1), h)
+            z = F.relu(self.zeta(h))
             u = self.upsilon(z).softmax(dim=-1)
             # self.print("bb", torch.round(100 * bb[p, R, :, 0]))
             self.print("u", torch.round(100 * u))
@@ -237,8 +237,9 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
 
             if self.gate_h:
                 h = dg * h_ + (1 - dg) * h
-            else:
-                h = h_
+                h2 = ag * h2_ + (1 - ag) * h2
+            # else:
+            # h = h_
             # h2 = h2_
 
             yield RecurrentState(
