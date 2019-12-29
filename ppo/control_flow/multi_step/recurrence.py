@@ -15,6 +15,11 @@ RecurrentState = namedtuple(
 )
 
 
+def gate(g, new, old):
+    old = torch.zeros_like(new).scatter(1, old.unsqueeze(1), 1)
+    return FixedCategorical(probs=g * new + (1 - g) * old)
+
+
 class Recurrence(ppo.control_flow.recurrence.Recurrence):
     def __init__(
         self,
@@ -23,6 +28,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         num_layers,
         activation,
         conv_hidden_size,
+        use_conv,
         kernel_size,
         nl_2,
         gate_h,
@@ -31,6 +37,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         self.gate_h = gate_h
         self.nl_2 = nl_2
         self.conv_hidden_size = conv_hidden_size
+        self.use_conv = use_conv
         super().__init__(
             hidden_size=hidden_size,
             num_layers=num_layers,
@@ -173,10 +180,6 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             ]
             h = self.gru(torch.cat(x, dim=-1), h)
             z = F.relu(self.zeta(h))
-
-            def gate(gate, new, old):
-                old = torch.zeros_like(new).scatter(1, old.unsqueeze(1), 1)
-                return FixedCategorical(probs=gate * new + (1 - gate) * old)
 
             u = self.upsilon(z).softmax(dim=-1)
             # self.print("bb", torch.round(100 * bb[p, R, :, 0]))
