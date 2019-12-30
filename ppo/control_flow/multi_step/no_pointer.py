@@ -98,11 +98,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
 
     @property
     def gru_in_size(self):
-        return (
-            self.conv_hidden_size
-            + self.hidden_size
-            + self.train_lines * self.encoder_hidden_size
-        )
+        return self.conv_hidden_size + 2 * self.encoder_hidden_size + self.hidden_size
 
     @staticmethod
     def eval_lines_space(n_eval_lines, train_lines_space):
@@ -169,9 +165,8 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
                     .max(dim=1)
                     .values
                 )
-            x = [obs, M.view(N, -1), self.embed_action(A[t - 1].clone())]
-            X = torch.cat(x, dim=-1)
-            h = self.gru(X, h)
+            x = [obs, H, self.embed_action(A[t - 1].clone())]
+            h = self.gru(torch.cat(x, dim=-1), h)
             z = F.relu(self.zeta(h))
             a_gate = self.a_gate(z)
             self.sample_new(AG[t], a_gate)
