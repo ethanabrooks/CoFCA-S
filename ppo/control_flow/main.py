@@ -69,6 +69,7 @@ def bandit_args():
     parsers.agent.add_argument("--no-op-coef", type=float)
     parsers.agent.add_argument("--nl-2", type=int)
     parsers.agent.add_argument("--gate-h", type=int)
+    parsers.agent.add_argument("--use-conv", type=int, required=True)
     return parser
 
 
