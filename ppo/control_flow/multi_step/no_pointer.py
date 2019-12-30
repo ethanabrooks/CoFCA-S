@@ -75,6 +75,10 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
 
         self.d_gate = Categorical(hidden_size, 2)
         self.a_gate = Categorical(hidden_size, 2)
+        self.actor = Categorical(hidden_size, self.n_a - 1)
+        self.state_sizes = self.state_sizes._replace(
+            a_probs=self.state_sizes.a_probs - 1
+        )
         self.state_sizes = RecurrentState(
             **self.state_sizes._asdict(),
             h2=hidden_size,
@@ -95,8 +99,8 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
     @property
     def gru_in_size(self):
         return (
-            self.conv_hidden_size
-            + self.hidden_size
+            # self.conv_hidden_size
+            self.hidden_size
             + self.train_lines * self.encoder_hidden_size
         )
 
@@ -165,14 +169,17 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
                     .max(dim=1)
                     .values
                 )
-            x = [obs, M.view(N, -1), self.embed_action(A[t - 1].clone())]
+            # x = [obs, M.view(N, -1), self.embed_action(A[t - 1].clone())]
+            x = [M.view(N, -1), self.embed_action(A[t - 1].clone())]
             X = torch.cat(x, dim=-1)
             h = self.gru(X, h)
             z = F.relu(self.zeta(h))
             a_gate = self.a_gate(z)
             self.sample_new(AG[t], a_gate)
             ag = AG[t].unsqueeze(-1).float()
-            a_dist = gate(ag, self.actor(z).probs, A[t - 1])
+            # a_dist = gate(ag, self.actor(z).probs, A[t - 1])
+            # self.sample_new(A[t], a_dist)
+            a_dist = self.actor(z)
             self.sample_new(A[t], a_dist)
             self.print("ag prob", torch.round(100 * a_gate.probs[:, 1]))
             self.print("ag", ag)
