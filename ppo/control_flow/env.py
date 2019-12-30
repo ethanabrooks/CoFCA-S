@@ -313,9 +313,9 @@ class Env(gym.Env, ABC):
             last_condition = active_conditions[-1]
             if last_condition is If:
                 line_types += [EndIf]
-            # if last_condition is If and enough_space:
-            # line_types += [Else]
-            if last_condition is Else:
+            if last_condition is If and enough_space:
+                line_types += [Else]
+            elif last_condition is Else:
                 line_types += [EndIf]
             elif last_condition is While:
                 line_types += [EndWhile]
