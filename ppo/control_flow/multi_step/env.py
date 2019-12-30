@@ -25,6 +25,7 @@ class Env(ppo.control_flow.env.Env):
         time_to_waste,
         num_subtasks,
         num_excluded_objects,
+        virtual_world_size,
         **kwargs,
     ):
         self.num_excluded_objects = num_excluded_objects
@@ -33,6 +34,7 @@ class Env(ppo.control_flow.env.Env):
         num_subtasks = len(self.subtask_objects) * len(self.interactions)
         super().__init__(num_subtasks=num_subtasks, **kwargs)
         self.world_size = world_size
+        self.virtual_world_size = virtual_world_size
         self.world_shape = (len(self.world_objects), self.world_size, self.world_size)
         self.action_space = spaces.MultiDiscrete(
             np.array([self.num_subtasks + 1, 2 * self.n_lines, 2, 2])
@@ -101,11 +103,15 @@ class Env(ppo.control_flow.env.Env):
 
     def state_generator(self, lines) -> State:
         assert self.max_nesting_depth == 1
-        agent_pos = self.random.randint(0, self.world_size, size=2)
+        agent_pos = self.random.randint(0, self.virtual_world_size, size=2)
+        offset = self.random.randint(
+            1 + self.world_size - self.virtual_world_size, size=2
+        )
 
         def build_world():
             world = np.zeros(self.world_shape)
             for o, p in object_pos + [("agent", agent_pos)]:
+                p = np.array(p) + offset
                 world[tuple((self.world_objects.index(o), *p))] = 1
             return world
 
@@ -114,7 +120,9 @@ class Env(ppo.control_flow.env.Env):
             for line in lines
             if type(line) is Subtask
         ]
-        line_pos = self.random.randint(0, self.world_size, size=(len(line_io), 2))
+        line_pos = self.random.randint(
+            0, self.virtual_world_size, size=(len(line_io), 2)
+        )
         object_pos = [
             (o, tuple(pos)) for (interaction, o), pos in zip(line_io, line_pos)
         ]
@@ -143,7 +151,9 @@ class Env(ppo.control_flow.env.Env):
             if not self.evaluating and obj in self.world_objects:
                 num_obj = self.random.randint(self.max_while_objects + 1)
                 if num_obj:
-                    pos = self.random.randint(0, self.world_size, size=(num_obj, 2))
+                    pos = self.random.randint(
+                        0, self.virtual_world_size, size=(num_obj, 2)
+                    )
                     object_pos += [(obj, tuple(p)) for p in pos]
 
         line_iterator = self.line_generator(lines)
