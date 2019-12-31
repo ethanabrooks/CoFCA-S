@@ -1,4 +1,5 @@
 from collections import namedtuple
+from contextlib import contextmanager
 
 import torch
 import torch.nn.functional as F
@@ -98,11 +99,19 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             ag=1,
             dg=1,
         )
-        ones = torch.ones(1, dtype=torch.long)
-        self.register_buffer("ones", ones)
+
         line_nvec = torch.tensor(self.obs_spaces.lines.nvec[0, :-1])
         offset = F.pad(line_nvec.cumsum(0), [1, 0])
         self.register_buffer("offset", offset)
+
+    # noinspection PyProtectedMember
+    @contextmanager
+    def evaluating(self, eval_obs_space):
+        with super().evaluating(eval_obs_space) as self:
+            self.state_sizes = self.state_sizes._replace(
+                p=len(eval_obs_space.spaces["lines"].nvec)
+            )
+            yield self
 
     def build_embed_task(self, hidden_size):
         return nn.EmbeddingBag(self.obs_spaces.lines.nvec[0].sum(), hidden_size)
