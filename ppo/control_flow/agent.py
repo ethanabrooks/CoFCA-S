@@ -84,19 +84,16 @@ class Agent(ppo.agent.Agent, NNBase):
         a_dist = FixedCategorical(hx.a_probs)
         probs = [hx.a_probs, hx.d_probs, hx.ag_probs, hx.dg_probs]
         X = [hx.a, hx.d, hx.ag, hx.dg]
-        dists = [FixedCategorical(p) for p in probs]
-        if type(rm) in (
-            ppo.control_flow.multi_step.oh_et_al.Recurrence,
-            ppo.control_flow.multi_step.no_pointer.Recurrence,
-        ):
+        if type(rm) is (ppo.control_flow.multi_step.no_pointer.Recurrence,):
             action_log_probs = a_dist.log_probs(hx.a)
             entropy = a_dist.entropy().mean()
             aux_loss = 0
         else:
+            dists = [FixedCategorical(p) for p in probs]
+            if type(rm) is ppo.control_flow.multi_step.oh_et_al.Recurrence:
+                dists = dists[:1] + dists[2:]
             action_log_probs = sum(dist.log_probs(x) for dist, x in zip(dists, X))
             entropy = sum([dist.entropy() for dist in dists]).mean()
-            # action_log_probs = a_dist.log_probs(hx.a) + d_dist.log_probs(hx.d)
-            # entropy = (a_dist.entropy() + d_dist.entropy()).mean()
             assert rm.gate_coef is not None
             assert self.no_op_coef is not None
             aux_loss = (
