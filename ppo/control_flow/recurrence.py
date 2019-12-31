@@ -117,7 +117,8 @@ class Recurrence(nn.Module):
         self.obs_sections = get_obs_sections(self.obs_spaces)
         self.train_lines = len(self.obs_spaces.lines.nvec)
         # noinspection PyProtectedMember
-        self.state_sizes = self.state_sizes._replace(d_probs=2 * self.train_lines)
+        if not self.no_scan:
+            self.state_sizes = self.state_sizes._replace(d_probs=2 * self.train_lines)
 
     @staticmethod
     def get_lines_space(n_eval_lines, train_lines_space):
