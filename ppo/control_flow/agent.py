@@ -7,12 +7,11 @@ from torch.nn import functional as F
 import ppo.agent
 from ppo.agent import AgentValues, NNBase
 
-# noinspection PyMissingConstructor
-from ppo.control_flow.baselines import oh_et_al
 from ppo.control_flow.recurrence import RecurrentState
 import ppo.control_flow.recurrence
 import ppo.control_flow.multi_step.recurrence
 import ppo.control_flow.multi_step.no_pointer
+import ppo.control_flow.multi_step.oh_et_al
 import ppo.control_flow.simple
 from ppo.distributions import FixedCategorical
 
@@ -26,7 +25,7 @@ class Agent(ppo.agent.Agent, NNBase):
         include_action,
         gate_coef,
         no_op_coef,
-        no_pointer,
+        baseline,
         **network_args
     ):
         nn.Module.__init__(self)
@@ -34,27 +33,36 @@ class Agent(ppo.agent.Agent, NNBase):
         self.entropy_coef = entropy_coef
         self.multi_step = type(observation_space.spaces["obs"]) is Box
         if self.multi_step:
-            if no_pointer:
+            if baseline == "no-pointer":
                 self.recurrent_module = ppo.control_flow.multi_step.no_pointer.Recurrence(
                     include_action=True,
                     observation_space=observation_space,
                     gate_coef=gate_coef,
-                    no_pointer=no_pointer,
+                    no_pointer=True,
+                    **network_args
+                )
+            elif baseline == "oh-et-al":
+                self.recurrent_module = ppo.control_flow.multi_step.oh_et_al.Recurrence(
+                    include_action=True,
+                    observation_space=observation_space,
+                    gate_coef=gate_coef,
+                    no_pointer=True,
                     **network_args
                 )
             else:
+                assert baseline is None
                 self.recurrent_module = ppo.control_flow.multi_step.recurrence.Recurrence(
                     include_action=True,
                     observation_space=observation_space,
                     gate_coef=gate_coef,
-                    no_pointer=no_pointer,
+                    no_pointer=False,
                     **network_args
                 )
         else:
             self.recurrent_module = ppo.control_flow.recurrence.Recurrence(
                 include_action=include_action,
                 observation_space=observation_space,
-                no_pointer=no_pointer,
+                no_pointer=False,
                 **network_args
             )
 
@@ -77,23 +85,26 @@ class Agent(ppo.agent.Agent, NNBase):
         probs = [hx.a_probs, hx.d_probs, hx.ag_probs, hx.dg_probs]
         X = [hx.a, hx.d, hx.ag, hx.dg]
         dists = [FixedCategorical(p) for p in probs]
-        if rm.no_pointer:
+        if type(rm) in (
+            ppo.control_flow.multi_step.oh_et_al.Recurrence,
+            ppo.control_flow.multi_step.no_pointer.Recurrence,
+        ):
             action_log_probs = a_dist.log_probs(hx.a)
             entropy = a_dist.entropy().mean()
+            aux_loss = 0
         else:
             action_log_probs = sum(dist.log_probs(x) for dist, x in zip(dists, X))
             entropy = sum([dist.entropy() for dist in dists]).mean()
             # action_log_probs = a_dist.log_probs(hx.a) + d_dist.log_probs(hx.d)
             # entropy = (a_dist.entropy() + d_dist.entropy()).mean()
-        action = torch.cat(X, dim=-1)
-        aux_loss = -self.entropy_coef * entropy
-        if self.multi_step:
             assert rm.gate_coef is not None
             assert self.no_op_coef is not None
-            aux_loss += (
+            aux_loss = (
                 rm.gate_coef * (hx.ag_probs + hx.dg_probs)[:, 1].mean()
                 + self.no_op_coef * hx.a_probs[:, -1].mean()
             )
+        action = torch.cat(X, dim=-1)
+        aux_loss -= self.entropy_coef * entropy
         return AgentValues(
             value=hx.v,
             action=action,

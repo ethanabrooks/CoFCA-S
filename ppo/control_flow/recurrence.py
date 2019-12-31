@@ -14,21 +14,6 @@ from ppo.utils import init_
 RecurrentState = namedtuple("RecurrentState", "a d p v h a_probs d_probs")
 
 
-def batch_conv1d(inputs, weights):
-    outputs = []
-    # one convolution per instance
-    n = inputs.shape[0]
-    for i in range(n):
-        x = inputs[i]
-        w = weights[i]
-        convolved = F.conv1d(x.reshape(1, 1, -1), w.reshape(1, 1, -1), padding=2)
-        outputs.append(convolved.squeeze(0))
-    padded = torch.cat(outputs)
-    padded[:, 1] = padded[:, 1] + padded[:, 0]
-    padded[:, -2] = padded[:, -2] + padded[:, -1]
-    return padded[:, 1:-1]
-
-
 def get_obs_sections(obs_spaces):
     return Obs(*[int(np.prod(s.shape)) for s in obs_spaces])
 
