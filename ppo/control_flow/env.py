@@ -36,7 +36,6 @@ class Env(gym.Env, ABC):
         min_lines,
         max_lines,
         flip_prob,
-        terminate_on_failure,
         num_subtasks,
         max_nesting_depth,
         eval_condition_size,
@@ -53,7 +52,6 @@ class Env(gym.Env, ABC):
         self.max_nesting_depth = max_nesting_depth
         self.num_subtasks = num_subtasks
 
-        self.terminate_on_failure = terminate_on_failure
         self.eval_lines = eval_lines
         self.min_lines = min_lines
         self.max_lines = max_lines
@@ -506,7 +504,6 @@ def build_parser(p):
     p.add_argument("--num-subtasks", type=int, default=12)
     p.add_argument("--no-op-limit", type=int)
     p.add_argument("--flip-prob", type=float, default=0.5)
-    p.add_argument("--terminate-on-failure", action="store_true")
     p.add_argument("--eval-condition-size", action="store_true")
     p.add_argument("--max-nesting-depth", type=int)
     return p
