@@ -5,6 +5,7 @@ import ppo.agent
 import ppo.control_flow.agent
 import ppo.control_flow.env
 import ppo.control_flow.multi_step.env
+import ppo.control_flow.multi_step.simple2
 from ppo import control_flow
 from ppo.arguments import build_parser
 from ppo.train import Train
@@ -12,13 +13,31 @@ from ppo.train import Train
 
 def main(log_dir, seed, eval_lines, **kwargs):
     class _Train(Train):
-        def build_agent(self, envs, debug=False, **agent_args):
+        def build_agent(self, envs, baseline=None, debug=False, **agent_args):
             obs_space = envs.observation_space
+            if baseline == "simple":
+                del agent_args["no_scan"]
+                del agent_args["no_roll"]
+                del agent_args["include_action"]
+                del agent_args["num_encoding_layers"]
+                del agent_args["kernel_size"]
+                del agent_args["num_edges"]
+                del agent_args["gate_coef"]
+                del agent_args["no_op_coef"]
+                del agent_args["nl_2"]
+                del agent_args["gate_h"]
+                del agent_args["use_conv"]
+                return ppo.control_flow.multi_step.simple2.Agent(
+                    observation_space=obs_space,
+                    action_space=envs.action_space,
+                    **agent_args,
+                )
             return ppo.control_flow.agent.Agent(
                 observation_space=obs_space,
                 action_space=envs.action_space,
                 eval_lines=eval_lines,
                 debug=debug,
+                baseline=baseline,
                 **agent_args,
             )
 

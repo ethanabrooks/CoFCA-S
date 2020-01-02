@@ -66,30 +66,18 @@ class Env(gym.Env, ABC):
         self.evaluating = evaluating
         self.iterator = None
         self._render = None
-        if baseline:
-            NotImplementedError
-            self.action_space = spaces.Discrete(self.num_subtasks + 1)
-            n_line_types = len(self.line_types) + num_subtasks
-            self.observation_space = spaces.Dict(
-                dict(
-                    obs=spaces.Discrete(2),
-                    lines=spaces.MultiBinary(n_line_types * self.n_lines),
-                )
+        self.action_space = spaces.MultiDiscrete(
+            np.array([self.num_subtasks + 1, 2 * self.n_lines])
+        )
+        self.observation_space = spaces.Dict(
+            dict(
+                obs=spaces.Discrete(2),
+                lines=spaces.MultiDiscrete(
+                    np.array([len(self.line_types) + num_subtasks] * self.n_lines)
+                ),
+                active=spaces.Discrete(self.n_lines + 1),
             )
-            self.eye = np.eye(n_line_types)
-        else:
-            self.action_space = spaces.MultiDiscrete(
-                np.array([self.num_subtasks + 1, 2 * self.n_lines])
-            )
-            self.observation_space = spaces.Dict(
-                dict(
-                    obs=spaces.Discrete(2),
-                    lines=spaces.MultiDiscrete(
-                        np.array([len(self.line_types) + num_subtasks] * self.n_lines)
-                    ),
-                    active=spaces.Discrete(self.n_lines + 1),
-                )
-            )
+        )
 
     def reset(self):
         self.iterator = self.generator()
