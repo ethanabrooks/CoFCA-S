@@ -5,7 +5,7 @@ import ppo.agent
 import ppo.control_flow.agent
 import ppo.control_flow.env
 import ppo.control_flow.multi_step.env
-import ppo.control_flow.multi_step.simple2
+import ppo.control_flow.multi_step.simple
 from ppo import control_flow
 from ppo.arguments import build_parser
 from ppo.train import Train
@@ -27,7 +27,7 @@ def main(log_dir, seed, eval_lines, **kwargs):
                 del agent_args["nl_2"]
                 del agent_args["gate_h"]
                 del agent_args["use_conv"]
-                return ppo.control_flow.multi_step.simple2.Agent(
+                return ppo.control_flow.multi_step.simple.Agent(
                     observation_space=obs_space,
                     action_space=envs.action_space,
                     **agent_args,
