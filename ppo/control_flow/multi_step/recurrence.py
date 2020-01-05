@@ -143,6 +143,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         if self.no_scan:
             H = H.transpose(0, 1).reshape(nl, N, -1)
             P = self.beta(H).view(nl, N, -1, self.ne).softmax(2)
+            half = P.size(2) // 2
         else:
             G = G.view(nl, N, nl, 2, self.encoder_hidden_size)
             B = bb = self.beta(G).sigmoid()
@@ -165,6 +166,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             P = P.view(nl, N, nl, 2, self.ne)
             f, b = torch.unbind(P, dim=3)
             P = torch.cat([b.flip(2), f], dim=2)
+            half = nl
 
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
@@ -213,10 +215,10 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             dg = DG[t].unsqueeze(-1).float()
             self.print("dg prob", torch.round(100 * d_gate.probs[:, 1]))
             self.print("dg", dg)
-            d_dist = gate(dg, d_probs, ones * nl)
-            self.print("d_probs", torch.round(100 * d_probs)[:, nl:])
+            d_dist = gate(dg, d_probs, ones * half)
+            self.print("d_probs", torch.round(100 * d_probs)[:, half:])
             self.sample_new(D[t], d_dist)
-            p = p + D[t].clone() - nl
+            p = p + D[t].clone() - half
             p = torch.clamp(p, min=0, max=nl - (2 if self.nl_2 else 1))
 
             ag = AG[t].unsqueeze(-1).float()
