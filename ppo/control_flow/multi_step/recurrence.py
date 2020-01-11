@@ -135,39 +135,6 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             *lines.shape[:2], self.encoder_hidden_size
         )  # n_batch, n_lines, hidden_size
 
-        rolled = []
-        for i in range(nl):
-            rolled.append(M if self.no_roll else torch.roll(M, shifts=-i, dims=1))
-        rolled = torch.cat(rolled, dim=0)
-        G, H = self.task_encoder(rolled)
-        if self.no_scan:
-            H = H.transpose(0, 1).reshape(nl, N, -1)
-            P = self.beta(H).view(nl, N, -1, self.ne).softmax(2)
-            half = P.size(2) // 2
-        else:
-            G = G.view(nl, N, nl, 2, self.encoder_hidden_size)
-            B = bb = self.beta(G).sigmoid()
-            # arange = torch.zeros(6).float()
-            # arange[0] = 1
-            # arange[1] = 1
-            # B[:, :, :, 0] = 0  # arange.view(1, 1, -1, 1)
-            # B[:, :, :, 1] = 1
-            f, b = torch.unbind(B, dim=3)
-            B = torch.stack([f, b.flip(2)], dim=-2)
-            B = B.view(nl, N, 2 * nl, self.ne)
-            last = torch.zeros(nl, N, 2 * nl, self.ne, device=rnn_hxs.device)
-            last[:, :, -1] = 1
-            B = (1 - last).flip(2) * B  # this ensures the first B is 0
-            zero_last = (1 - last) * B
-            B = zero_last + last  # this ensures that the last B is 1
-            rolled = torch.roll(zero_last, shifts=1, dims=2)
-            C = torch.cumprod(1 - rolled, dim=2)
-            P = B * C
-            P = P.view(nl, N, nl, 2, self.ne)
-            f, b = torch.unbind(P, dim=3)
-            P = torch.cat([b.flip(2), f], dim=2)
-            half = nl
-
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
         for _x in hx:
@@ -210,8 +177,46 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             u = self.upsilon(z).softmax(dim=-1)
             # self.print("bb", torch.round(100 * bb[p, R, :, 0]))
             self.print("u", torch.round(100 * u))
-            w = P[p, R]
-            d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
+
+            rolled = []
+            for i, _p in enumerate(p):
+                rolled.append(
+                    M[i]
+                    if self.no_roll
+                    else torch.roll(M[i], shifts=-_p.item(), dims=1)
+                )
+
+            rolled = torch.stack(rolled, dim=0)
+            G, H = self.task_encoder(rolled)
+            if self.no_scan:
+                H = H.transpose(0, 1).reshape(nl, N, -1)
+                P = self.beta(H).view(nl, N, -1, self.ne).softmax(2)
+                half = P.size(2) // 2
+            else:
+                G = G.view(N, nl, 2, self.encoder_hidden_size)
+                B = bb = self.beta(G).sigmoid()
+                # arange = torch.zeros(6).float()
+                # arange[0] = 1
+                # arange[1] = 1
+                # B[:, :, :, 0] = 0  # arange.view(1, 1, -1, 1)
+                # B[:, :, :, 1] = 1
+                f, b = torch.unbind(B, dim=2)
+                B = torch.stack([f, b.flip(1)], dim=1)
+                B = B.view(N, 2 * nl, self.ne)
+                last = torch.zeros_like(B)
+                last[:, -1] = 1
+                B = (1 - last).flip(1) * B  # this ensures the first B is 0
+                zero_last = (1 - last) * B
+                B = zero_last + last  # this ensures that the last B is 1
+                rolled = torch.roll(zero_last, shifts=1, dims=1)
+                C = torch.cumprod(1 - rolled, dim=1)
+                P = B * C
+                P = P.view(N, nl, 2, self.ne)
+                f, b = torch.unbind(P, dim=2)
+                P = torch.cat([b.flip(1), f], dim=1)
+                half = nl
+
+            d_probs = (P @ u.unsqueeze(-1)).squeeze(-1)
             dg = DG[t].unsqueeze(-1).float()
             self.print("dg prob", torch.round(100 * d_gate.probs[:, 1]))
             self.print("dg", dg)
