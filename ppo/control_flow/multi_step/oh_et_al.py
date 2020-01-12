@@ -187,7 +187,6 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             x = [obs, r, self.embed_action(A[t - 1].clone())]
             h_cat = torch.cat([h, h2], dim=-1)
             h_cat2 = self.gru(torch.cat(x, dim=-1), h_cat)
-            h_size = self.hidden_size // 2
             z = F.relu(self.zeta(h_cat2))
             d_gate = self.d_gate(z)
             a_gate = self.a_gate(z)
@@ -202,6 +201,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             self.sample_new(A[t], a_dist)
             # self.print("ag prob", torch.round(100 * a_gate.probs[:, 1]))
 
+            h_size = self.hidden_size // 2
             h_, h2 = torch.split(h_cat2, [h_size, h_size], dim=-1)
             h = d_gate * h_ + (1 - d_gate) * h_
 

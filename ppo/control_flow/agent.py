@@ -91,7 +91,11 @@ class Agent(ppo.agent.Agent, NNBase):
         ):
             action_log_probs = a_dist.log_probs(hx.a)
             entropy = a_dist.entropy().mean()
-            aux_loss = 0
+            if rm is ppo.control_flow.multi_step.oh_et_al:
+                assert rm.gate_coef is not None
+                aux_loss = rm.gate_coef * (hx.ag + hx.dg)
+            else:
+                aux_loss = 0
         else:
             action_log_probs = sum(dist.log_probs(x) for dist, x in zip(dists, X))
             entropy = sum([dist.entropy() for dist in dists]).mean()
