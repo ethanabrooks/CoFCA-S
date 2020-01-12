@@ -12,11 +12,10 @@ from ppo.control_flow.lines import Subtask, Padding, Line, While, If, EndWhile, 
 
 
 class Env(ppo.control_flow.env.Env):
-    subtask_objects = ["pig", "sheep", "cat", "greenbot"]
-    other_objects = ["ice", "agent"]
-    line_objects = [x for x in subtask_objects]
-    world_objects = subtask_objects + other_objects
-    interactions = ["pickup", "transform", "visit"]
+    line_objects = ["wood", "gold", "iron"]
+    other_objects = ["merchant", "agent"]
+    world_objects = line_objects + other_objects
+    interactions = ["mine", "place", "bridge", "sell"]
 
     def __init__(
         self,
@@ -30,7 +29,7 @@ class Env(ppo.control_flow.env.Env):
         self.num_excluded_objects = num_excluded_objects
         self.max_while_objects = max_while_objects
         self.time_to_waste = time_to_waste
-        num_subtasks = len(self.subtask_objects) * len(self.interactions)
+        num_subtasks = len(self.line_objects) * len(self.interactions)
         super().__init__(num_subtasks=num_subtasks, **kwargs)
         self.world_size = world_size
         self.world_shape = (len(self.world_objects), self.world_size, self.world_size)
@@ -58,7 +57,7 @@ class Env(ppo.control_flow.env.Env):
         self.subtask_id_to_strings = {}
         self.subtask_strings_to_id = {}
         for i, interaction in enumerate(self.interactions):
-            for o, obj in enumerate(self.subtask_objects):
+            for o, obj in enumerate(self.line_objects):
                 subtask_id = o * len(self.interactions) + i
                 self.subtask_id_to_tuple[subtask_id] = i, o
                 self.subtask_tuple_to_id[i, o] = subtask_id
