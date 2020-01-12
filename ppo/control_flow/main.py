@@ -72,6 +72,7 @@ def bandit_args():
     ppo.control_flow.env.build_parser(parsers.env)
     parsers.env.add_argument("--world-size", type=int)
     parsers.env.add_argument("--use-monkey", type=int, required=True)
+    parsers.env.add_argument("--subtasks-only", type=int, required=True)
     parsers.env.add_argument("--max-while-objects", type=float, required=True)
     parsers.env.add_argument("--num-excluded-objects", type=int, required=True)
     parsers.env.add_argument("--time-to-waste", type=int, required=True)

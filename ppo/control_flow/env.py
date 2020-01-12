@@ -41,12 +41,14 @@ class Env(gym.Env, ABC):
         eval_condition_size,
         no_op_limit,
         time_limit,
+        subtasks_only,
         seed=0,
         eval_lines=None,
         evaluating=False,
         baseline=False,
     ):
         super().__init__()
+        self.subtasks_only = subtasks_only
         self.no_op_limit = no_op_limit
         self._eval_condition_size = eval_condition_size
         self.max_nesting_depth = max_nesting_depth
@@ -291,8 +293,10 @@ class Env(gym.Env, ABC):
             return [Subtask]
         line_types = [Subtask]
         enough_space = n > len(active_conditions) + 2
-        if enough_space and (
-            max_nesting_depth is None or nesting_depth < max_nesting_depth
+        if (
+            enough_space
+            and (max_nesting_depth is None or nesting_depth < max_nesting_depth)
+            and not self.subtasks_only
         ):
             line_types += [If, While]
         if active_conditions and last is Subtask:
