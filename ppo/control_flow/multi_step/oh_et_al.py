@@ -54,12 +54,12 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         self.conv_hidden_size = conv_hidden_size
         self.use_conv = use_conv
         super().__init__(
-            hidden_size=hidden_size,
+            hidden_size=2 * hidden_size,
             num_layers=num_layers,
             activation=activation,
             **kwargs,
         )
-        self.upsilon = init_(nn.Linear(hidden_size, 3))
+        self.upsilon = init_(nn.Linear(2 * hidden_size, 3))
         self.gate_coef = gate_coef
         self.action_size = 4
         d = self.obs_spaces.obs.shape[0]
@@ -89,10 +89,12 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         else:
             self.conv = nn.Sequential(init_(nn.Linear(d, conv_hidden_size)), nn.ReLU())
 
-        self.d_gate = nn.Sequential(init_(nn.Linear(hidden_size, 1)), nn.Sigmoid())
-        self.a_gate = nn.Sequential(init_(nn.Linear(hidden_size, 1)), nn.Sigmoid())
+        self.d_gate = nn.Sequential(init_(nn.Linear(2 * hidden_size, 1)), nn.Sigmoid())
+        self.a_gate = nn.Sequential(init_(nn.Linear(2 * hidden_size, 1)), nn.Sigmoid())
         self.state_sizes = RecurrentState(
-            **self.state_sizes._replace(p=self.train_lines)._asdict(),
+            **self.state_sizes._replace(p=self.train_lines)
+            ._replace(h=hidden_size)
+            ._asdict(),
             h2=hidden_size,
             ag_probs=0,
             dg_probs=0,
@@ -183,14 +185,12 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
                 )
             r = (p.unsqueeze(1) @ M).squeeze(1)
             x = [obs, r, self.embed_action(A[t - 1].clone())]
-            h = self.gru(torch.cat(x, dim=-1), h)
-            z = F.relu(self.zeta(h))
+            h_cat = torch.cat([h, h2], dim=-1)
+            h_cat2 = self.gru(torch.cat(x, dim=-1), h_cat)
+            h_size = self.hidden_size // 2
+            z = F.relu(self.zeta(h_cat2))
             d_gate = self.d_gate(z)
             a_gate = self.a_gate(z)
-
-            h2_ = self.gru(torch.cat(x, dim=-1), h2)
-            z = F.relu(self.zeta(h2_))
-            h2 = d_gate * h2_ + (1 - d_gate) * h2
 
             l = self.upsilon(z).softmax(dim=-1)
             p_ = batch_conv1d(p, l)
@@ -201,6 +201,9 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             a_dist = gate(a_gate, a_probs, old)
             self.sample_new(A[t], a_dist)
             # self.print("ag prob", torch.round(100 * a_gate.probs[:, 1]))
+
+            h_, h2 = torch.split(h_cat2, [h_size, h_size], dim=-1)
+            h = d_gate * h_ + (1 - d_gate) * h_
 
             yield RecurrentState(
                 a=A[t],
