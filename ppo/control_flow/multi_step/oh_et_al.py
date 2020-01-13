@@ -194,9 +194,6 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             l = self.upsilon(z).softmax(dim=-1)
             l = torch.zeros_like(l)
             l[:, 0] = 1
-            import ipdb
-
-            ipdb.set_trace()
             p_ = batch_conv1d(p, l)
             p = d_gate * p_ + (1 - d_gate) * p
 
