@@ -197,7 +197,9 @@ class Env(ppo.control_flow.env.Env):
         line_io = [line.id for line in lines if type(line) is Subtask]
         line_pos = self.random.randint(0, self.world_size, size=(len(line_io), 2))
         object_pos = [
-            (o, tuple(pos)) for (interaction, o), pos in zip(line_io, line_pos)
+            (o, tuple(pos))
+            for (interaction, o), pos in zip(line_io, line_pos)
+            if o != "water"
         ]
 
         # prevent infinite loops
