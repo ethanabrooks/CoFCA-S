@@ -1,5 +1,5 @@
 class Line:
-    def __init__(self, id: int):
+    def __init__(self, id):
         self.id = id
 
     def __str__(self):
