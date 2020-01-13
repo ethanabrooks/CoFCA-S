@@ -208,10 +208,10 @@ class Env(gym.Env, ABC):
         return list(self.assign_line_ids(lines))
 
     def assign_line_ids(self, lines):
-        return [
-            Subtask(self.random.choice(self.num_subtasks)) if line is Subtask else line
-            for line in lines
-        ]
+        for line in lines:
+            yield Subtask(
+                self.random.choice(self.num_subtasks)
+            ) if line is Subtask else line
 
     def build_task_image(self, lines):
         image = np.zeros(self.image_shape)
