@@ -153,6 +153,7 @@ class Recurrence(nn.Module):
         return RecurrentState(*torch.split(hx, self.state_sizes, dim=-1))
 
     def print(self, *args, **kwargs):
+        args = [torch.round(100 * a) if type(a) is torch.Tensor else a for a in args]
         if self.debug:
             print(*args, **kwargs)
 
