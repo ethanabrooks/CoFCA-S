@@ -13,10 +13,9 @@ from ppo.control_flow.lines import Subtask, Padding, Line, While, If, EndWhile, 
 
 
 class Env(ppo.control_flow.env.Env):
-    subtask_objects = ["pig", "sheep", "cat", "greenbot"]
+    objects = ["pig", "sheep", "cat", "greenbot"]
     other_objects = ["ice", "agent"]
-    line_objects = [x for x in subtask_objects]
-    world_objects = subtask_objects + other_objects
+    world_objects = objects + other_objects
     interactions = ["pickup", "transform", "visit"]
 
     def __init__(
@@ -31,7 +30,7 @@ class Env(ppo.control_flow.env.Env):
         self.num_excluded_objects = num_excluded_objects
         self.max_while_objects = max_while_objects
         self.time_to_waste = time_to_waste
-        num_subtasks = len(self.subtask_objects) * len(self.interactions)
+        num_subtasks = len(self.objects) * len(self.interactions)
         super().__init__(num_subtasks=num_subtasks, **kwargs)
         self.world_size = world_size
         self.world_shape = (len(self.world_objects), self.world_size, self.world_size)
@@ -46,7 +45,7 @@ class Env(ppo.control_flow.env.Env):
                         [
                             len(self.line_types),
                             1 + len(self.interactions),
-                            1 + len(self.line_objects),
+                            1 + len(self.objects),
                         ]
                     ]
                     * self.n_lines
@@ -59,7 +58,7 @@ class Env(ppo.control_flow.env.Env):
         self.subtask_id_to_strings = {}
         self.subtask_strings_to_id = {}
         for i, interaction in enumerate(self.interactions):
-            for o, obj in enumerate(self.subtask_objects):
+            for o, obj in enumerate(self.objects):
                 subtask_id = o * len(self.interactions) + i
                 self.subtask_id_to_tuple[subtask_id] = i, o
                 self.subtask_tuple_to_id[i, o] = subtask_id
@@ -71,7 +70,7 @@ class Env(ppo.control_flow.env.Env):
             i, o = self.subtask_id_to_strings[line.id]
             return f"{line}: {i} {o}"
         elif isinstance(line, (If, While)):
-            return f"{line}: {self.line_objects[line.id]}"
+            return f"{line}: {self.objects[line.id]}"
         else:
             return f"{line}"
 
@@ -133,7 +132,7 @@ class Env(ppo.control_flow.env.Env):
                 while_blocks[active_whiles[-1]] += [interaction]
         for while_line, block in while_blocks.items():
             o = lines[while_line].id
-            obj = self.line_objects[o]
+            obj = self.objects[o]
             l = self.random.choice(block)
             i = self.random.choice(2)
             assert self.interactions[i] in ("pickup", "transform")
@@ -160,7 +159,7 @@ class Env(ppo.control_flow.env.Env):
             if type(line) is Subtask:
                 return 1
             else:
-                evaluation = any(o == self.line_objects[line.id] for o, _ in object_pos)
+                evaluation = any(o == self.objects[line.id] for o, _ in object_pos)
                 if type(line) in (If, While):
                     condition_evaluations[type(line)] += [evaluation]
                 return evaluation
@@ -226,7 +225,7 @@ class Env(ppo.control_flow.env.Env):
                     prev, curr = curr, None
 
     def assign_line_ids(self, lines):
-        num_objects = len(self.line_objects)
+        num_objects = len(self.objects)
         excluded = self.random.randint(num_objects, size=self.num_excluded_objects)
         # print("excluding:")
         # for i in excluded:
@@ -235,7 +234,7 @@ class Env(ppo.control_flow.env.Env):
 
         interaction_ids = self.random.choice(len(self.interactions), size=len(lines))
         object_ids = self.random.choice(len(included_object_ids), size=len(lines))
-        line_ids = self.random.choice(len(self.line_objects), size=len(lines))
+        line_ids = self.random.choice(len(self.objects), size=len(lines))
 
         for line, line_id, interaction_id, object_id in zip(
             lines, line_ids, interaction_ids, object_ids
