@@ -190,6 +190,8 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             z = F.relu(self.zeta(h_cat2))
             d_gate = self.d_gate(z)
             a_gate = self.a_gate(z)
+            self.print("d_gate", d_gate)
+            self.print("a_gate", a_gate)
 
             l = self.upsilon(z).softmax(dim=-1)
             l = torch.zeros_like(l)
