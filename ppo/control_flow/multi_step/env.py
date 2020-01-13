@@ -1,5 +1,4 @@
 from collections import Counter, defaultdict
-from copy import copy
 
 import numpy as np
 from gym import spaces

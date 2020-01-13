@@ -192,6 +192,11 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             a_gate = self.a_gate(z)
 
             l = self.upsilon(z).softmax(dim=-1)
+            l = torch.zeros_like(l)
+            l[:, 0] = 1
+            import ipdb
+
+            ipdb.set_trace()
             p_ = batch_conv1d(p, l)
             p = d_gate * p_ + (1 - d_gate) * p
 
@@ -199,7 +204,6 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             old = torch.zeros_like(a_probs).scatter(1, A[t - 1].unsqueeze(1), 1)
             a_dist = gate(a_gate, a_probs, old)
             self.sample_new(A[t], a_dist)
-            # self.print("ag prob", torch.round(100 * a_gate.probs[:, 1]))
 
             h_size = self.hidden_size // 2
             h_, h2 = torch.split(h_cat2, [h_size, h_size], dim=-1)
