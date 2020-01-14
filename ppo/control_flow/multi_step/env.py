@@ -89,6 +89,7 @@ class Env(ppo.control_flow.env.Env):
             print(string)
             print("-" * len(string))
 
+    @functools.lru_cache(maxsize=200)
     def preprocess_line(self, line):
         if line is Padding:
             return [self.line_types.index(Padding), 0, 0]
@@ -105,7 +106,7 @@ class Env(ppo.control_flow.env.Env):
         agent_pos = self.random.randint(0, self.world_size, size=2)
         offset = self.random.randint(1 + self.world_size - self.world_size, size=2)
 
-        def build_world():
+        def world_array():
             world = np.zeros(self.world_shape)
             for o, p in object_pos + [("agent", agent_pos)]:
                 p = np.array(p) + offset
@@ -153,7 +154,7 @@ class Env(ppo.control_flow.env.Env):
         while True:
             term |= times["on_subtask"] - times["to_complete"] > self.time_to_waste
             subtask_id = yield State(
-                obs=build_world(),
+                obs=world_array(),
                 condition=None,
                 prev=prev,
                 curr=curr,
