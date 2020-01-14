@@ -37,7 +37,7 @@ class Env(ppo.control_flow.env.Env):
             yield "bridge", "water"
             yield "sell", "merchant"
 
-        self.subtask_id_to_strings = list(enumerate(subtasks()))
+        self.subtask_id_to_strings = list(subtasks())
         num_subtasks = len(self.subtask_id_to_strings)
         super().__init__(num_subtasks=num_subtasks, **kwargs)
         self.world_size = world_size
@@ -54,7 +54,7 @@ class Env(ppo.control_flow.env.Env):
                         [
                             len(self.line_types),
                             1 + len(self.interactions),
-                            1 + len(self.world_objects),
+                            1 + len(self.objects),
                         ]
                     ]
                     * self.n_lines
@@ -93,14 +93,11 @@ class Env(ppo.control_flow.env.Env):
             return [self.line_types.index(Else), 0, 0]
         elif type(line) is Subtask:
             i, o = line.id
-            i, o = self.interactions.index(i), self.world_objects.index(o)
+            i, o = self.interactions.index(i), self.objects.index(o)
             return [self.line_types.index(Subtask), i + 1, o + 1]
         else:
-            return [
-                self.line_types.index(type(line)),
-                0,
-                1 + self.world_objects.index(line.id),
-            ]
+            o = self.objects.index(line.id)
+            return [self.line_types.index(type(line)), 0, o + 1]
 
     def state_generator(self, lines) -> State:
         assert self.max_nesting_depth == 1
