@@ -16,10 +16,10 @@ class Env(ppo.control_flow.env.Env):
     objects = ["pig", "sheep", "cat", "greenbot"]
     other_objects = ["ice", "agent"]
     world_objects = objects + other_objects
-    pickup = "pickup"
-    transform = "transform"
-    visit = "visit"
-    interactions = [pickup, transform, visit]
+    mine = 0
+    bridge = 1
+    sell = 2
+    interactions = [mine, bridge, sell]
 
     def __init__(
         self,
@@ -174,13 +174,13 @@ class Env(ppo.control_flow.env.Env):
                 (interaction, obj) if type(lines[curr]) is Subtask else obj
             )
             if on_object():
-                if interaction in (self.pickup, self.transform):
+                if interaction in (self.mine, self.bridge):
                     object_pos.remove(pair())
                     if correct_id:
                         possible_objects.remove(obj)
                     else:
                         term = True
-                if interaction == self.transform:
+                if interaction == self.bridge:
                     object_pos.append(("ice", tuple(agent_pos)))
                 if correct_id:
                     prev, curr = curr, next_subtask(curr)
@@ -216,7 +216,7 @@ class Env(ppo.control_flow.env.Env):
             obj = lines[while_line].id
             l = self.random.choice(block)
             i = self.random.choice(2)
-            assert self.interactions[i] in (self.pickup, self.transform)
+            assert self.interactions[i] in (self.mine, self.bridge)
             line_id = self.interactions[i], obj
             lines[l] = Subtask(line_id)
             if not self.evaluating and obj in self.world_objects:
