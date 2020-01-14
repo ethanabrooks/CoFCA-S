@@ -16,15 +16,15 @@ class Env(ppo.control_flow.env.Env):
     wood = "wood"
     gold = "gold"
     iron = "iron"
-    objects = [wood, gold, iron]
     merchant = "merchant"
     water = "water"
     bridge = "bridge"
     agent = "agent"
-    other_objects = [merchant, water, bridge, agent]
-    world_objects = objects + other_objects
     mine = "mine"
     sell = "sell"
+    objects = [wood, gold, iron, merchant, water]
+    other_objects = [bridge, agent]
+    world_objects = objects + other_objects
     interactions = [mine, bridge, sell]  # place
 
     def __init__(
@@ -186,7 +186,7 @@ class Env(ppo.control_flow.env.Env):
                         object_pos.remove(pair())
                     elif interaction == self.bridge:
                         object_pos.remove(pair())
-                        object_pos.append(self.bridge, tuple(agent_pos))
+                        object_pos.append((self.bridge, tuple(agent_pos)))
                     elif interaction == self.sell:
                         pass  # eventually this will affect inventory
                     prev, curr = curr, next_subtask(curr)
