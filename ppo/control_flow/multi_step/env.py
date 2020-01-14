@@ -234,7 +234,9 @@ class Env(ppo.control_flow.env.Env):
         # print("excluding:")
         # for i in excluded:
         # print(self.line_objects[i])
-        included_object_ids = [i for i in range(num_objects) if i not in excluded]
+        included_object_ids = [
+            o for i, o in enumerate(self.objects) if i not in excluded
+        ]
 
         interaction_ids = self.random.choice(len(self.interactions), size=len(lines))
         object_ids = self.random.choice(len(included_object_ids), size=len(lines))
@@ -244,9 +246,11 @@ class Env(ppo.control_flow.env.Env):
             lines, line_ids, interaction_ids, object_ids
         ):
             if line is Subtask:
-                subtask_id = self.subtask_tuple_to_id[
-                    interaction_id, included_object_ids[object_id]
-                ]
+                subtask_id = (
+                    self.interactions[interaction_id],
+                    included_object_ids[object_id],
+                )
+                subtask_id = self.subtask_strings_to_id[subtask_id]
                 yield Subtask(subtask_id)
             else:
                 yield line(line_id)
