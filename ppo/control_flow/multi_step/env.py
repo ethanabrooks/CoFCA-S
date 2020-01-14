@@ -170,10 +170,9 @@ class Env(ppo.control_flow.env.Env):
             def on_object():
                 return pair() in object_pos  # standing on the desired object
 
-            if type(lines[curr]) is Subtask:
-                correct_id = (interaction, obj) == lines[curr].id
-            else:
-                correct_id = subtask_id == lines[curr].id
+            correct_id = lines[curr].id == (
+                (interaction, obj) if type(lines[curr]) is Subtask else obj
+            )
             if on_object():
                 if interaction in (self.pickup, self.transform):
                     object_pos.remove(pair())
