@@ -71,7 +71,7 @@ class Env(ppo.control_flow.env.Env):
             i, o = line.id
             return f"{line}: {i} {o}"
         elif isinstance(line, (If, While)):
-            return f"{line}: {self.objects[line.id]}"
+            return f"{line}: {line.id}"
         else:
             return f"{line}"
 
@@ -96,12 +96,12 @@ class Env(ppo.control_flow.env.Env):
         elif type(line) is Else:
             return [self.line_types.index(Else), 0, 0]
         elif type(line) is Subtask:
-            _i, _o = line.id
-            i = self.interactions.index(_i)
-            o = self.objects.index(_o)
+            i, o = line.id
+            i, o = self.interactions.index(i), self.objects.index(o)
             return [self.line_types.index(Subtask), i + 1, o + 1]
         else:
-            return [self.line_types.index(type(line)), 0, line.id + 1]
+            o = self.objects.index(line.id)
+            return [self.line_types.index(type(line)), 0, o + 1]
 
     def state_generator(self, lines) -> State:
         assert self.max_nesting_depth == 1
@@ -127,7 +127,7 @@ class Env(ppo.control_flow.env.Env):
             if type(line) is Subtask:
                 return 1
             else:
-                evaluation = any(o == self.objects[line.id] for o, _ in object_pos)
+                evaluation = any(o == line.id for o, _ in object_pos)
                 if type(line) in (If, While):
                     condition_evaluations[type(line)] += [evaluation]
                 return evaluation
@@ -211,8 +211,7 @@ class Env(ppo.control_flow.env.Env):
             elif active_whiles and type(line) is Subtask:
                 while_blocks[active_whiles[-1]] += [interaction]
         for while_line, block in while_blocks.items():
-            o = lines[while_line].id
-            obj = self.objects[o]
+            obj = lines[while_line].id
             l = self.random.choice(block)
             i = self.random.choice(2)
             assert self.interactions[i] in ("pickup", "transform")
@@ -249,7 +248,7 @@ class Env(ppo.control_flow.env.Env):
                 )
                 yield Subtask(subtask_id)
             else:
-                yield line(line_id)
+                yield line(self.objects[line_id])
 
 
 if __name__ == "__main__":
