@@ -96,7 +96,9 @@ class Env(ppo.control_flow.env.Env):
         elif type(line) is Else:
             return [self.line_types.index(Else), 0, 0]
         elif type(line) is Subtask:
-            i, o = self.subtask_id_to_tuple[self.subtask_strings_to_id[line.id]]
+            _i, _o = line.id
+            i = self.interactions.index(_i)
+            o = self.objects.index(_o)
             return [self.line_types.index(Subtask), i + 1, o + 1]
         else:
             return [self.line_types.index(type(line)), 0, line.id + 1]
