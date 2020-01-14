@@ -74,9 +74,7 @@ class Env(ppo.control_flow.env.Env):
     def line_str(self, line: Line):
         if isinstance(line, Subtask):
             i, o = line.id
-            return f"{line}: {i} {o}"
-        elif isinstance(line, (If, While)):
-            return f"{line}: {line.id}"
+            return f"{i} {o}"
         else:
             return f"{line}"
 
@@ -194,6 +192,7 @@ class Env(ppo.control_flow.env.Env):
                     term = True
             else:
                 nearest = get_nearest(obj)
+                print(correct_id, obj not in possible_objects)
                 if nearest is not None:
                     agent_pos += np.clip(nearest - agent_pos, -1, 1)
                 elif correct_id and obj not in possible_objects:
