@@ -43,7 +43,7 @@ class Env(ppo.control_flow.env.Env):
         self.world_shape = (len(self.world_objects), self.world_size, self.world_size)
 
         self.action_space = spaces.MultiDiscrete(
-            np.array([self.num_subtasks + 1, 2 * self.n_lines, 2, 2])
+            np.array([num_subtasks + 1, 2 * self.n_lines, 2, 2])
         )
         self.observation_space.spaces.update(
             obs=spaces.Box(low=0, high=1, shape=self.world_shape),
@@ -191,11 +191,16 @@ class Env(ppo.control_flow.env.Env):
                     prev, curr = curr, None
 
     def populate_world(self, lines):
+        # place subtask objects
         line_io = [line.id for line in lines if type(line) is Subtask]
         line_pos = self.random.randint(0, self.world_size, size=(len(line_io), 2))
         object_pos = [
-            (o, tuple(pos)) for (interaction, o), pos in zip(line_io, line_pos)
+            (o, tuple(pos))
+            for (interaction, o), pos in zip(line_io, line_pos)
+            if o != "water"
         ]
+
+        # prevent infinite loops
         while_blocks = defaultdict(list)  # while line: child subtasks
         active_whiles = []
         for interaction, line in enumerate(lines):
