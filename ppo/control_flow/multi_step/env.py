@@ -54,17 +54,12 @@ class Env(ppo.control_flow.env.Env):
             ),
         )
 
-        self.subtask_id_to_tuple = {}
-        self.subtask_tuple_to_id = {}
-        self.subtask_id_to_strings = {}
-        self.subtask_strings_to_id = {}
-        for i, interaction in enumerate(self.interactions):
-            for o, obj in enumerate(self.objects):
-                subtask_id = o * len(self.interactions) + i
-                self.subtask_id_to_tuple[subtask_id] = i, o
-                self.subtask_tuple_to_id[i, o] = subtask_id
-                self.subtask_id_to_strings[subtask_id] = interaction, obj
-                self.subtask_strings_to_id[interaction, obj] = subtask_id
+        def subtasks():
+            for interaction in self.interactions:
+                for obj in self.objects:
+                    yield interaction, obj
+
+        self.subtask_id_to_strings = list(subtasks())
 
     def line_str(self, line: Line):
         if isinstance(line, Subtask):
