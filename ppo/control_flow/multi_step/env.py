@@ -175,15 +175,21 @@ class Env(ppo.control_flow.env.Env):
             def on_object():
                 return pair() in object_pos  # standing on the desired object
 
+            def remove_obj():
+                i, o = pair()
+                object_pos.remove((i, o))
+                if correct_id and o in possible_objects:
+                    possible_objects.remove(o)
+
             correct_id = lines[curr].id == (
                 (interaction, obj) if type(lines[curr]) is Subtask else obj
             )
             if on_object():
                 if correct_id:
                     if interaction == self.mine:
-                        object_pos.remove(pair())
+                        remove_obj()
                     elif interaction == self.bridge:
-                        object_pos.remove(pair())
+                        remove_obj()
                         object_pos.append((self.bridge, tuple(agent_pos)))
                     elif interaction == self.sell:
                         pass  # eventually this will affect inventory
@@ -192,7 +198,6 @@ class Env(ppo.control_flow.env.Env):
                     term = True
             else:
                 nearest = get_nearest(obj)
-                print(correct_id, obj not in possible_objects)
                 if nearest is not None:
                     agent_pos += np.clip(nearest - agent_pos, -1, 1)
                 elif correct_id and obj not in possible_objects:
