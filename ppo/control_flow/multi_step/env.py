@@ -13,10 +13,19 @@ from ppo.control_flow.lines import Subtask, Padding, Line, While, If, EndWhile, 
 
 
 class Env(ppo.control_flow.env.Env):
-    objects = ["wood", "gold", "iron"]
-    other_objects = ["merchant", "water", "bridge", "agent"]
+    wood = "wood"
+    gold = "gold"
+    iron = "iron"
+    objects = [wood, gold, iron]
+    merchant = "merchant"
+    water = "water"
+    bridge = "bridge"
+    agent = "agent"
+    other_objects = [merchant, water, bridge, agent]
     world_objects = objects + other_objects
-    interactions = ["mine", "bridge", "sell"]  # place
+    mine = "mine"
+    sell = "sell"
+    interactions = [mine, bridge, sell]  # place
 
     def __init__(
         self,
@@ -33,9 +42,9 @@ class Env(ppo.control_flow.env.Env):
 
         def subtasks():
             for o in self.objects:
-                yield "mine", o
-            yield "bridge", "water"
-            yield "sell", "merchant"
+                yield self.mine, o
+            yield self.bridge, self.water
+            yield self.sell, self.merchant
 
         self.subtask_id_to_strings = list(subtasks())
         num_subtasks = len(self.subtask_id_to_strings)
@@ -106,7 +115,7 @@ class Env(ppo.control_flow.env.Env):
 
         def world_array():
             world = np.zeros(self.world_shape)
-            for o, p in object_pos + [("agent", agent_pos)]:
+            for o, p in object_pos + [(self.agent, agent_pos)]:
                 p = np.array(p) + offset
                 world[tuple((self.world_objects.index(o), *p))] = 1
             return world
@@ -171,12 +180,12 @@ class Env(ppo.control_flow.env.Env):
             correct_id = (interaction, obj) == lines[curr].id
             if on_object():
                 if correct_id:
-                    if interaction == "mine":
+                    if interaction == self.mine:
                         object_pos.remove(pair())
-                    elif interaction == "bridge":
+                    elif interaction == self.bridge:
                         object_pos.remove(pair())
-                        object_pos.append("bridge", tuple(agent_pos))
-                    elif interaction == "sell":
+                        object_pos.append(self.bridge, tuple(agent_pos))
+                    elif interaction == self.sell:
                         pass  # eventually this will affect inventory
                     prev, curr = curr, next_subtask(curr)
                 else:
@@ -196,7 +205,7 @@ class Env(ppo.control_flow.env.Env):
         object_pos = [
             (o, tuple(pos))
             for (interaction, o), pos in zip(line_io, line_pos)
-            if o != "water"
+            if o != self.water
         ]
 
         # prevent infinite loops
@@ -211,7 +220,7 @@ class Env(ppo.control_flow.env.Env):
                 while_blocks[active_whiles[-1]] += [interaction]
         for while_line, block in while_blocks.items():
             obj = lines[while_line].id
-            line_id = "mine", obj
+            line_id = self.mine, obj
             l = self.random.choice(block)
             lines[l] = Subtask(line_id)
             if not self.evaluating and obj in self.world_objects:
@@ -224,7 +233,7 @@ class Env(ppo.control_flow.env.Env):
         x = self.random.randint(0, self.world_size)
         vertical = self.random.randint(2)
         for i in range(0, self.world_size):
-            object_pos += [("water", (x, i) if vertical else (i, x))]
+            object_pos += [(self.water, (x, i) if vertical else (i, x))]
 
         return object_pos
 
@@ -242,12 +251,12 @@ class Env(ppo.control_flow.env.Env):
         ):
             if line is Subtask:
                 interaction = self.interactions[interaction_id]
-                if interaction == "mine":
+                if interaction == self.mine:
                     subtask_id = interaction, included_objects[obj_id]
-                elif interaction == "bridge":
-                    subtask_id = interaction, "water"
-                elif interaction == "sell":
-                    subtask_id = interaction, "merchant"
+                elif interaction == self.bridge:
+                    subtask_id = interaction, self.water
+                elif interaction == self.sell:
+                    subtask_id = interaction, self.merchant
                 else:
                     raise RuntimeError
                 yield Subtask(subtask_id)
