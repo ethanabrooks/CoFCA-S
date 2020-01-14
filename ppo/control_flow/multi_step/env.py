@@ -17,9 +17,9 @@ class Env(ppo.control_flow.env.Env):
     agent = "agent"
     other_objects = ["ice", agent]
     world_objects = objects + other_objects
-    mine = 0
-    bridge = 1
-    sell = 2
+    mine = "mine"
+    bridge = "bridge"
+    sell = "sell"
     interactions = [mine, bridge, sell]
 
     def __init__(
