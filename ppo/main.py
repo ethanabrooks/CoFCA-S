@@ -42,11 +42,10 @@ class _Train(Train):
         self.last_save = time.time()  # dummy save
 
     def run(self):
-        print("enter")
         for _ in itertools.count():
-            print("in0")
             for result in self.make_train_iterator():
-                print("in")
+                print("New tensorboard entry")
+                print("Result: ", result)
                 if self.writer is not None:
                     total_num_steps = (self.i + 1) * self.num_processes * self.num_steps
                     for k, v in k_scalar_pairs(**result):
@@ -59,7 +58,6 @@ class _Train(Train):
                 ):
                     self._save(str(self.log_dir))
                     self.last_save = time.time()
-                    print("in")
 
     def get_device(self):
         match = re.search("\d+$", self.run_id)

@@ -193,34 +193,42 @@ class Train(abc.ABC):
         success_reward,
         use_tqdm,
     ):
+        print("STARTED1")
 
         if eval_interval:
             # vec_norm = get_vec_normalize(eval_envs)
             # if vec_norm is not None:
             #     vec_norm.eval()
-            #     vec_norm.ob_rms = get_vec_normalize(envs).ob_rms
+            #     vec_norm.ob_rms = get_vec_normalize(envs).ob_rmsi
+            print("STARTED2")
             self.envs.evaluate()
+            print("STARTED3")
             eval_recurrent_hidden_states = torch.zeros(
                 num_processes,
                 self.agent.recurrent_hidden_state_size,
                 device=self.device,
             )
+            print("STARTED4")
             eval_masks = torch.zeros(num_processes, 1, device=self.device)
             eval_counter = Counter()
+            print("Num steps: ", num_steps)
+            print("Time limit: ", time_limit)
             eval_result = self.run_epoch(
                 obs=self.envs.reset(),
                 rnn_hxs=eval_recurrent_hidden_states,
                 masks=eval_masks,
-                num_steps=time_limit,
-                # max(num_steps, time_limit) if time_limit else num_steps,
+                #num_steps=time_limit,
+                num_steps = num_steps,
+                #max(num_steps, time_limit) if time_limit else num_steps,
                 counter=eval_counter,
                 success_reward=success_reward,
                 use_tqdm=use_tqdm,
             )
+            print("PASSED")
             eval_result = {f"eval_{k}": v for k, v in eval_result.items()}
         else:
             eval_result = {}
-
+        print("FINISH3")
         self.envs.train()
         obs = self.envs.reset()
         self.rollouts.obs[0].copy_(obs)
@@ -293,6 +301,7 @@ class Train(abc.ABC):
             obs, reward, done, infos = self.envs.step(act.action)
             #print(self.envs.action_space)
             #print("action: ", act.action, "obs: ", obs, " rew: ", reward, " done: ", done, " infos: ", infos)
+            #print("reward: ", reward)
             for d in infos:
                 for k, v in d.items():
                     episode_counter.update({k: float(v) / num_steps / len(infos)})
