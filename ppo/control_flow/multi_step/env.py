@@ -68,7 +68,7 @@ class Env(ppo.control_flow.env.Env):
 
     def line_str(self, line: Line):
         if isinstance(line, Subtask):
-            i, o = self.subtask_id_to_strings[self.subtask_strings_to_id[line.id]]
+            i, o = line.id
             return f"{line}: {i} {o}"
         elif isinstance(line, (If, While)):
             return f"{line}: {self.objects[line.id]}"
@@ -141,9 +141,7 @@ class Env(ppo.control_flow.env.Env):
                 l = line_iterator.send(evaluate_line(l))
             if l is not None:
                 assert type(lines[l]) is Subtask
-                _, o = self.subtask_id_to_strings[
-                    self.subtask_strings_to_id[lines[l].id]
-                ]
+                _, o = lines[l].id
                 n = get_nearest(o)
                 if n is not None:
                     times["to_complete"] = 1 + np.max(np.abs(agent_pos - n))
@@ -196,11 +194,7 @@ class Env(ppo.control_flow.env.Env):
                     prev, curr = curr, None
 
     def populate_world(self, lines):
-        line_io = [
-            self.subtask_id_to_strings[self.subtask_strings_to_id[line.id]]
-            for line in lines
-            if type(line) is Subtask
-        ]
+        line_io = [line.id for line in lines if type(line) is Subtask]
         line_pos = self.random.randint(0, self.world_size, size=(len(line_io), 2))
         object_pos = [
             (o, tuple(pos)) for (interaction, o), pos in zip(line_io, line_pos)
