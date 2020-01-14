@@ -34,6 +34,7 @@ class Env(ppo.control_flow.env.Env):
         super().__init__(num_subtasks=num_subtasks, **kwargs)
         self.world_size = world_size
         self.world_shape = (len(self.world_objects), self.world_size, self.world_size)
+
         self.action_space = spaces.MultiDiscrete(
             np.array([self.num_subtasks + 1, 2 * self.n_lines, 2, 2])
         )
@@ -111,43 +112,7 @@ class Env(ppo.control_flow.env.Env):
                 world[tuple((self.world_objects.index(o), *p))] = 1
             return world
 
-        line_io = [
-            self.subtask_id_to_strings[line.id]
-            for line in lines
-            if type(line) is Subtask
-        ]
-        line_pos = self.random.randint(0, self.world_size, size=(len(line_io), 2))
-        object_pos = [
-            (o, tuple(pos)) for (interaction, o), pos in zip(line_io, line_pos)
-        ]
-
-        while_blocks = defaultdict(list)  # while line: child subtasks
-        active_whiles = []
-        for interaction, line in enumerate(lines):
-            if type(line) is While:
-                active_whiles += [interaction]
-            elif type(line) is EndWhile:
-                active_whiles.pop()
-            elif active_whiles and type(line) is Subtask:
-                while_blocks[active_whiles[-1]] += [interaction]
-        for while_line, block in while_blocks.items():
-            o = lines[while_line].id
-            obj = self.objects[o]
-            l = self.random.choice(block)
-            i = self.random.choice(2)
-            assert self.interactions[i] in ("pickup", "transform")
-            line_id = self.subtask_strings_to_id[self.interactions[i], obj]
-            assert self.subtask_id_to_strings[line_id] in (
-                ("pickup", obj),
-                ("transform", obj),
-            )
-            lines[l] = Subtask(line_id)
-            if not self.evaluating and obj in self.world_objects:
-                num_obj = self.random.randint(self.max_while_objects + 1)
-                if num_obj:
-                    pos = self.random.randint(0, self.world_size, size=(num_obj, 2))
-                    object_pos += [(obj, tuple(p)) for p in pos]
-
+        object_pos = self.populate_world(lines)
         line_iterator = self.line_generator(lines)
         condition_evaluations = defaultdict(list)
         times = Counter(on_subtask=0, to_complete=0)
@@ -223,6 +188,44 @@ class Env(ppo.control_flow.env.Env):
                 elif correct_id and obj not in possible_objects:
                     # subtask is impossible
                     prev, curr = curr, None
+
+    def populate_world(self, lines):
+        line_io = [
+            self.subtask_id_to_strings[line.id]
+            for line in lines
+            if type(line) is Subtask
+        ]
+        line_pos = self.random.randint(0, self.world_size, size=(len(line_io), 2))
+        object_pos = [
+            (o, tuple(pos)) for (interaction, o), pos in zip(line_io, line_pos)
+        ]
+        while_blocks = defaultdict(list)  # while line: child subtasks
+        active_whiles = []
+        for interaction, line in enumerate(lines):
+            if type(line) is While:
+                active_whiles += [interaction]
+            elif type(line) is EndWhile:
+                active_whiles.pop()
+            elif active_whiles and type(line) is Subtask:
+                while_blocks[active_whiles[-1]] += [interaction]
+        for while_line, block in while_blocks.items():
+            o = lines[while_line].id
+            obj = self.objects[o]
+            l = self.random.choice(block)
+            i = self.random.choice(2)
+            assert self.interactions[i] in ("pickup", "transform")
+            line_id = self.subtask_strings_to_id[self.interactions[i], obj]
+            assert self.subtask_id_to_strings[line_id] in (
+                ("pickup", obj),
+                ("transform", obj),
+            )
+            lines[l] = Subtask(line_id)
+            if not self.evaluating and obj in self.world_objects:
+                num_obj = self.random.randint(self.max_while_objects + 1)
+                if num_obj:
+                    pos = self.random.randint(0, self.world_size, size=(num_obj, 2))
+                    object_pos += [(obj, tuple(p)) for p in pos]
+        return object_pos
 
     def assign_line_ids(self, lines):
         num_objects = len(self.objects)
