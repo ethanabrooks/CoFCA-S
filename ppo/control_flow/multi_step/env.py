@@ -14,7 +14,8 @@ from ppo.control_flow.lines import Subtask, Padding, Line, While, If, EndWhile, 
 
 class Env(ppo.control_flow.env.Env):
     objects = ["pig", "sheep", "cat", "greenbot"]
-    other_objects = ["ice", "agent"]
+    agent = "agent"
+    other_objects = ["ice", agent]
     world_objects = objects + other_objects
     mine = 0
     bridge = 1
@@ -108,7 +109,7 @@ class Env(ppo.control_flow.env.Env):
 
         def world_array():
             world = np.zeros(self.world_shape)
-            for o, p in object_pos + [("agent", agent_pos)]:
+            for o, p in object_pos + [(self.agent, agent_pos)]:
                 p = np.array(p) + offset
                 world[tuple((self.world_objects.index(o), *p))] = 1
             return world
