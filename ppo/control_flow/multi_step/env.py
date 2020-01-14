@@ -171,7 +171,7 @@ class Env(ppo.control_flow.env.Env):
                 return pair() in object_pos  # standing on the desired object
 
             if type(lines[curr]) is Subtask:
-                correct_id = subtask_id == self.subtask_strings_to_id[lines[curr].id]
+                correct_id = interaction, obj == lines[curr].id
             else:
                 correct_id = subtask_id == lines[curr].id
             if on_object():
