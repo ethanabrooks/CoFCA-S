@@ -30,7 +30,14 @@ class Env(ppo.control_flow.env.Env):
         self.num_excluded_objects = num_excluded_objects
         self.max_while_objects = max_while_objects
         self.time_to_waste = time_to_waste
-        num_subtasks = len(self.objects) * len(self.interactions)
+
+        def subtasks():
+            for interaction in self.interactions:
+                for obj in self.objects:
+                    yield interaction, obj
+
+        self.subtask_id_to_strings = list(subtasks())
+        num_subtasks = len(self.subtask_id_to_strings)
         super().__init__(num_subtasks=num_subtasks, **kwargs)
         self.world_size = world_size
         self.world_shape = (len(self.world_objects), self.world_size, self.world_size)
@@ -53,13 +60,6 @@ class Env(ppo.control_flow.env.Env):
                 )
             ),
         )
-
-        def subtasks():
-            for interaction in self.interactions:
-                for obj in self.objects:
-                    yield interaction, obj
-
-        self.subtask_id_to_strings = list(subtasks())
 
     def line_str(self, line: Line):
         if isinstance(line, Subtask):
