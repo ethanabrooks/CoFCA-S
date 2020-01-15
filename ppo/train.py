@@ -44,7 +44,9 @@ def hierarchical_parse_args(parser: argparse.ArgumentParser,
         **kwargs
     }
     """
-    args = parser.parse_args(["--block-space", "(0,0)(0,0)(0.418,0.418)(1,1)(0,0)(0,0)(0,0)", "--steps-per-action=300", "--geofence=.5", "--goal-space", "(0,0)(0,0)(.418,.418)", "--use-dof", "arm_flex_joint", "--use-dof", "hand_l_proximal_joint", "--use-dof", "hand_r_proximal_joint", "--use-dof", "wrist_flex_joint", "--use-dof", "arm_roll_joint", "--use-dof", "wrist_roll_joint", "--use-dof", "slide_x", "--use-dof", "slide_y", "--n-blocks=1"])
+    args = parser.parse_args(["--block-space", "(0,0)(0,0)(0.418,0.418)(1,1)(0,0)(0,0)(0,0)", "--steps-per-action=300", "--geofence=.5", "--goal-space", "(0,0)(0,0)(.418,.418)", "--use-dof", "arm_flex_joint", "--use-dof", "hand_l_proximal_joint", "--use-dof", "hand_r_proximal_joint", "--use-dof", "wrist_flex_joint", "--use-dof", "arm_roll_joint", 
+    "--use-dof", "wrist_roll_joint", "--use-dof", "slide_x", "--use-dof", "slide_y", "--render","--n-blocks=1"])
+
 
     def key_value_pairs(group):
         for action in group._group_actions:
@@ -193,22 +195,19 @@ class Train(abc.ABC):
         success_reward,
         use_tqdm,
     ):
-        print("STARTED1")
+        
 
         if eval_interval:
             # vec_norm = get_vec_normalize(eval_envs)
             # if vec_norm is not None:
             #     vec_norm.eval()
             #     vec_norm.ob_rms = get_vec_normalize(envs).ob_rmsi
-            print("STARTED2")
             self.envs.evaluate()
-            print("STARTED3")
             eval_recurrent_hidden_states = torch.zeros(
                 num_processes,
                 self.agent.recurrent_hidden_state_size,
                 device=self.device,
             )
-            print("STARTED4")
             eval_masks = torch.zeros(num_processes, 1, device=self.device)
             eval_counter = Counter()
             print("Num steps: ", num_steps)
@@ -224,11 +223,11 @@ class Train(abc.ABC):
                 success_reward=success_reward,
                 use_tqdm=use_tqdm,
             )
-            print("PASSED")
+            
             eval_result = {f"eval_{k}": v for k, v in eval_result.items()}
         else:
             eval_result = {}
-        print("FINISH3")
+        
         self.envs.train()
         obs = self.envs.reset()
         self.rollouts.obs[0].copy_(obs)
@@ -424,7 +423,8 @@ class Train(abc.ABC):
             for i in range(num_processes)
         ]
 
-        print("num processes: ", num_processes)
+        
+        print("HI")
 
         if len(envs) == 1 or sys.platform == "darwin" or synchronous:
             envs = DummyVecEnv(envs, render=render)
