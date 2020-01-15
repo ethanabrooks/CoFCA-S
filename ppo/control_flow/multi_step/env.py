@@ -13,18 +13,19 @@ from ppo.control_flow.lines import Subtask, Padding, Line, While, If, EndWhile, 
 
 
 class Env(ppo.control_flow.env.Env):
-    iron = "iron"
-    gold = "gold"
     wood = "wood"
+    gold = "gold"
+    iron = "iron"
     merchant = "merchant"
+    water = "water"
+    bridge = "bridge"
     agent = "agent"
     mine = "mine"
-    bridge = "bridge"
     sell = "sell"
-    objects = [wood, iron, gold, merchant]
+    objects = [wood, gold, iron, merchant, water]
     other_objects = [bridge, agent]
     world_objects = objects + other_objects
-    interactions = [mine, bridge, sell]
+    interactions = [mine, bridge, sell]  # place
 
     def __init__(
         self,
@@ -204,7 +205,7 @@ class Env(ppo.control_flow.env.Env):
         object_pos = [
             (o, tuple(pos))
             for (interaction, o), pos in zip(line_io, line_pos)
-            if o != "water"
+            if o != self.water
         ]
 
         # prevent infinite loops
@@ -229,6 +230,13 @@ class Env(ppo.control_flow.env.Env):
                 if num_obj:
                     pos = self.random.randint(0, self.world_size, size=(num_obj, 2))
                     object_pos += [(obj, tuple(p)) for p in pos]
+
+        # river
+        x = self.random.randint(0, self.world_size)
+        vertical = self.random.randint(2)
+        for i in range(0, self.world_size):
+            object_pos += [(self.water, (x, i) if vertical else (i, x))]
+
         return object_pos
 
     def assign_line_ids(self, lines):
