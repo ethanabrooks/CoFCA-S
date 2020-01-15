@@ -360,7 +360,7 @@ class Train(abc.ABC):
         #setting up the action with the appropiate bounds
 
         #forward, backwards, right, left, up, down, rotate claw clockwise, rotate claw counterclockwise, open/close claws
-        env.action_space = spaces.Discrete(10)
+        env.action_space = spaces.Discrete(11)
         #env.action_space = spaces.Box(low = low, high = high, dtype=np.int32)
         low = np.array([-np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf])
         high = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])

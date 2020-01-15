@@ -23,6 +23,8 @@ class Agent(nn.Module):
         entropy_coef,
         **network_args,
     ):
+        print("Obs shape: ", obs_shape)
+        print("Action_shape: ", action_space)
         super(Agent, self).__init__()
         self.entropy_coef = entropy_coef
         if len(obs_shape) == 3:
