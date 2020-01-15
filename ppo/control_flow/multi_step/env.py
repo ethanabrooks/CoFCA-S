@@ -13,17 +13,16 @@ from ppo.control_flow.lines import Subtask, Padding, Line, While, If, EndWhile, 
 
 
 class Env(ppo.control_flow.env.Env):
-    pig = "pig"
-    sheep = "sheep"
-    cat = "cat"
-    greenbot = "greenbot"
+    iron = "iron"
+    gold = "gold"
+    wood = "wood"
+    merchant = "merchant"
     agent = "agent"
-    ice = "ice"
     mine = "mine"
     bridge = "bridge"
     sell = "sell"
-    objects = [pig, sheep, cat, greenbot]
-    other_objects = [ice, agent]
+    objects = [wood, iron, gold, merchant]
+    other_objects = [bridge, agent]
     world_objects = objects + other_objects
     interactions = [mine, bridge, sell]
 
@@ -187,7 +186,7 @@ class Env(ppo.control_flow.env.Env):
                     else:
                         term = True
                 if interaction == self.bridge:
-                    object_pos.append((self.ice, tuple(agent_pos)))
+                    object_pos.append((self.bridge, tuple(agent_pos)))
                 if correct_id:
                     prev, curr = curr, next_subtask(curr)
             else:
