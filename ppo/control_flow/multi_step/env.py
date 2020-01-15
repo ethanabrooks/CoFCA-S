@@ -41,9 +41,10 @@ class Env(ppo.control_flow.env.Env):
         self.time_to_waste = time_to_waste
 
         def subtasks():
-            for interaction in self.interactions:
-                for obj in self.objects:
-                    yield interaction, obj
+            for o in self.objects:
+                yield self.mine, o
+            yield self.bridge, self.water
+            yield self.sell, self.merchant
 
         self.subtask_id_to_strings = list(subtasks())
         num_subtasks = len(self.subtask_id_to_strings)
