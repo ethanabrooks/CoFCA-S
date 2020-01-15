@@ -24,7 +24,7 @@ from ppo.utils import RED, RESET, GREEN
 
 Obs = namedtuple("Obs", "active lines obs")
 Last = namedtuple("Last", "action active reward terminal selected")
-State = namedtuple("State", "obs condition prev curr condition_evaluations")
+State = namedtuple("State", "obs condition prev curr condition_evaluations term")
 
 
 class Env(gym.Env, ABC):
@@ -36,22 +36,24 @@ class Env(gym.Env, ABC):
         min_lines,
         max_lines,
         flip_prob,
-        terminate_on_failure,
         num_subtasks,
         max_nesting_depth,
         eval_condition_size,
+        no_op_limit,
+        time_limit,
+        subtasks_only,
         seed=0,
         eval_lines=None,
-        time_limit=100,
         evaluating=False,
         baseline=False,
     ):
         super().__init__()
+        self.subtasks_only = subtasks_only
+        self.no_op_limit = no_op_limit
         self._eval_condition_size = eval_condition_size
         self.max_nesting_depth = max_nesting_depth
         self.num_subtasks = num_subtasks
 
-        self.terminate_on_failure = terminate_on_failure
         self.eval_lines = eval_lines
         self.min_lines = min_lines
         self.max_lines = max_lines
@@ -61,36 +63,23 @@ class Env(gym.Env, ABC):
             self.n_lines = max_lines
         self.n_lines += 1
         self.random, self.seed = seeding.np_random(seed)
-        self.time_limit = time_limit
         self.flip_prob = flip_prob
         self.baseline = baseline
         self.evaluating = evaluating
         self.iterator = None
         self._render = None
-        if baseline:
-            NotImplementedError
-            self.action_space = spaces.Discrete(self.num_subtasks + 1)
-            n_line_types = len(self.line_types) + num_subtasks
-            self.observation_space = spaces.Dict(
-                dict(
-                    obs=spaces.Discrete(2),
-                    lines=spaces.MultiBinary(n_line_types * self.n_lines),
-                )
+        self.action_space = spaces.MultiDiscrete(
+            np.array([self.num_subtasks + 1, 2 * self.n_lines])
+        )
+        self.observation_space = spaces.Dict(
+            dict(
+                obs=spaces.Discrete(2),
+                lines=spaces.MultiDiscrete(
+                    np.array([len(self.line_types) + num_subtasks] * self.n_lines)
+                ),
+                active=spaces.Discrete(self.n_lines + 1),
             )
-            self.eye = np.eye(n_line_types)
-        else:
-            self.action_space = spaces.MultiDiscrete(
-                np.array([self.num_subtasks + 1, 2 * self.n_lines])
-            )
-            self.observation_space = spaces.Dict(
-                dict(
-                    obs=spaces.Discrete(2),
-                    lines=spaces.MultiDiscrete(
-                        np.array([len(self.line_types) + num_subtasks] * self.n_lines)
-                    ),
-                    active=spaces.Discrete(self.n_lines + 1),
-                )
-            )
+        )
 
     def reset(self):
         self.iterator = self.generator()
@@ -101,7 +90,6 @@ class Env(gym.Env, ABC):
         return self.iterator.send(action)
 
     def generator(self):
-        failing = False
         step = 0
         n = 0
         lines = self.build_lines()
@@ -114,8 +102,12 @@ class Env(gym.Env, ABC):
         action = None
         while True:
             success = state.curr is None
-            reward = int(term) * int(not failing)
-            info.update(regret=1 if term and failing else 0)
+            reward = int(success)
+            if success:
+                info.update(success_line=len(lines))
+
+            term = success or state.term
+            info.update(regret=1 if term and not success else 0)
             if term:
                 info.update(
                     if_evaluations=state.condition_evaluations[If],
@@ -147,13 +139,10 @@ class Env(gym.Env, ABC):
                 yield from line_strings(index + 1, level)
 
             def render():
-                if failing:
-                    print(RED)
-                elif reward == 1:
-                    print(GREEN)
+                if term:
+                    print(GREEN if success else RED)
                 for i, string in enumerate(line_strings(index=0, level=1)):
                     print(f"{i}{string}")
-                print("Failing:", failing)
                 print("Action:", action)
                 print("Reward", reward)
                 print("Obs:")
@@ -162,19 +151,11 @@ class Env(gym.Env, ABC):
 
             self._render = render
 
-            if success:
-                info.update(success_line=len(lines))
-
             action = (
                 yield self.get_observation(state.obs, state.curr, lines),
                 reward,
                 term,
                 info,
-            )
-            term = (
-                success
-                or ((self.evaluating or self.terminate_on_failure) and failing)
-                or (not self.evaluating and step == self.time_limit)
             )
 
             if self.baseline:
@@ -186,17 +167,15 @@ class Env(gym.Env, ABC):
 
             if action == self.num_subtasks:
                 n += 1
-                if not self.evaluating and n == len(lines):
+                no_op_limit = self.no_op_limit
+                if self.no_op_limit is not None and self.no_op_limit < 0:
+                    no_op_limit = len(lines)
+                if not self.evaluating and n == no_op_limit:
                     failing = True
                     term = True
             elif state.curr is not None:
                 step += 1
                 if action != lines[state.curr].id:
-                    # TODO: this should only be evaluated when done
-                    import ipdb
-
-                    ipdb.set_trace()
-                    failing = True
                     info.update(success_line=state.prev, failure_line=state.curr)
                 state = state_iterator.send(action)
 
@@ -226,10 +205,13 @@ class Env(gym.Env, ABC):
             lines = self.get_lines(
                 n_lines, active_conditions=[], max_nesting_depth=self.max_nesting_depth
             )
-        return [
-            Subtask(self.random.choice(self.num_subtasks)) if line is Subtask else line
-            for line in lines
-        ]
+        return list(self.assign_line_ids(lines))
+
+    def assign_line_ids(self, lines):
+        for line in lines:
+            yield Subtask(
+                self.random.choice(self.num_subtasks)
+            ) if line is Subtask else line
 
     def build_task_image(self, lines):
         image = np.zeros(self.image_shape)
@@ -311,8 +293,10 @@ class Env(gym.Env, ABC):
             return [Subtask]
         line_types = [Subtask]
         enough_space = n > len(active_conditions) + 2
-        if enough_space and (
-            max_nesting_depth is None or nesting_depth < max_nesting_depth
+        if (
+            enough_space
+            and (max_nesting_depth is None or nesting_depth < max_nesting_depth)
+            and not self.subtasks_only
         ):
             line_types += [If, While]
         if active_conditions and last is Subtask:
@@ -418,6 +402,7 @@ class Env(gym.Env, ABC):
                 prev=prev,
                 curr=curr,
                 condition_evaluations=condition_evaluations,
+                term=False,
             )
             condition_bit = abs(
                 condition_bit - int(self.random.rand() < self.flip_prob)
@@ -509,8 +494,8 @@ def build_parser(p):
     p.add_argument("--min-lines", type=int, required=True)
     p.add_argument("--max-lines", type=int, required=True)
     p.add_argument("--num-subtasks", type=int, default=12)
+    p.add_argument("--no-op-limit", type=int)
     p.add_argument("--flip-prob", type=float, default=0.5)
-    p.add_argument("--terminate-on-failure", action="store_true")
     p.add_argument("--eval-condition-size", action="store_true")
     p.add_argument("--max-nesting-depth", type=int)
     return p
