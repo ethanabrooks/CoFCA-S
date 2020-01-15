@@ -74,7 +74,7 @@ class Env(ppo.control_flow.env.Env):
     def line_str(self, line: Line):
         if isinstance(line, Subtask):
             i, o = line.id
-            return f"{i} {o}"
+            return f"Subtask {self.subtask_id_to_strings.index(line.id)}: {i} {o}"
         else:
             return f"{line}"
 
