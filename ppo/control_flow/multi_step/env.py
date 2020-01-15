@@ -246,14 +246,19 @@ class Env(ppo.control_flow.env.Env):
         object_ids = self.random.choice(len(included_objects), size=len(lines))
         line_ids = self.random.choice(len(self.objects), size=len(lines))
 
-        for line, line_id, interaction_id, object_id in zip(
+        for line, line_id, interaction_id, obj_id in zip(
             lines, line_ids, interaction_ids, object_ids
         ):
             if line is Subtask:
-                subtask_id = (
-                    self.interactions[interaction_id],
-                    included_objects[object_id],
-                )
+                interaction = self.interactions[interaction_id]
+                if interaction == self.mine:
+                    subtask_id = interaction, included_objects[obj_id]
+                elif interaction == self.bridge:
+                    subtask_id = interaction, self.water
+                elif interaction == self.sell:
+                    subtask_id = interaction, self.merchant
+                else:
+                    raise RuntimeError
                 yield Subtask(subtask_id)
             else:
                 yield line(self.objects[line_id])
