@@ -147,7 +147,6 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         else:
             G = G.view(nl, N, nl, 2, self.encoder_hidden_size)
             B = bb = self.beta(G).sigmoid()
-            B[:, :, :, 1] = 1
             # arange = torch.zeros(6).float()
             # arange[0] = 1
             # arange[1] = 1
@@ -209,20 +208,11 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             h2_ = self.gru(torch.cat(x, dim=-1), h2)
             z = F.relu(self.zeta(h2_))
             u = self.upsilon(z).softmax(dim=-1)
-            # self.print("bb", torch.round(100 * bb[p, R, :, 1]))
             # self.print("bb", torch.round(100 * bb[p, R, :, 0]))
+            self.print("u", torch.round(100 * u))
             w = P[p, R]
             d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
             dg = DG[t].unsqueeze(-1).float()
-            if torch.any(dg == 1):
-                try:
-                    u_max = int(input("go:"))
-                    u[:] = 0
-                    u[:, u_max] = 1
-                except ValueError:
-                    pass
-            d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
-            self.print("u", torch.round(100 * u))
             self.print("dg prob", torch.round(100 * d_gate.probs[:, 1]))
             self.print("dg", dg)
             d_dist = gate(dg, d_probs, ones * half)
