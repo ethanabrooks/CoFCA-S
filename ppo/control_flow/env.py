@@ -41,6 +41,7 @@ class Env(gym.Env, ABC):
         eval_condition_size,
         no_op_limit,
         time_limit,
+        analyze_mistakes,
         subtasks_only,
         break_on_fail,
         seed=0,
@@ -49,6 +50,7 @@ class Env(gym.Env, ABC):
         baseline=False,
     ):
         super().__init__()
+        self.analyze_mistakes = analyze_mistakes
         self.break_on_fail = break_on_fail
         self.subtasks_only = subtasks_only
         self.no_op_limit = no_op_limit
@@ -97,6 +99,18 @@ class Env(gym.Env, ABC):
         lines = self.build_lines()
         state_iterator = self.state_generator(lines)
         state = next(state_iterator)
+        entered_while_blocks = []
+
+        def get_block(l):
+            block_type = None
+            l1 = None
+            for l2, line in enumerate(lines):
+                if type(line) in (Else, EndIf, EndWhile) and l < l2:
+                    return block_type, (l1, l2)
+                if type(line) in (If, Else, While):
+                    block_type = type(line)
+                    l1 = l2
+            return None, (None, None)
 
         selected = 0
         info = {}
@@ -114,6 +128,40 @@ class Env(gym.Env, ABC):
                     import ipdb
 
                     ipdb.set_trace()
+                if self.analyze_mistakes:
+                    selected_block, (
+                        selected_block_start,
+                        selected_block_end,
+                    ) = get_block(selected)
+                    curr_block, (curr_block_start, curr_block_end) = get_block(
+                        state.curr
+                    )
+                    info.update(
+                        failed_to_enter_if=0,
+                        failed_to_enter_else=0,
+                        mistakenly_enterred_if=0,
+                        mistakenly_enterred_else=0,
+                        failed_to_reenter_while=0,
+                        failed_to_enter_while=0,
+                        mistakenly_entered_while=0,
+                    )
+                    if curr_block is If and curr_block_end < selected:
+                        info.update(failed_to_enter_if=1)
+                    elif curr_block is Else and selected_block_end == curr_block_start:
+                        info.update(failed_to_enter_else=1)
+                    elif selected_block is If and selected_block_end < state.curr:
+                        info.update(mistakenly_enterred_if=1)
+                    elif curr_block is Else and selected_block_end == curr_block_start:
+                        assert selected_block is If
+                        info.update(mistakenly_enterred_else=1)
+                    elif curr_block is While and curr_block_end < selected:
+                        if curr_block in entered_while_blocks:
+                            info.update(failed_to_reenter_while=1)
+                        else:
+                            info.update(failed_to_enter_while=1)
+                    elif selected_block is While and selected_block_end < state.curr:
+                        info.update(mistakenly_entered_while=1)
+
             info.update(regret=1 if term and not success else 0)
             if term:
                 info.update(
@@ -167,6 +215,7 @@ class Env(gym.Env, ABC):
 
             if self.baseline:
                 selected = None
+                delta = 0
             else:
                 action, delta = map(int, action[:2])
                 selected = min(self.n_lines, max(0, selected + delta - self.n_lines))
@@ -178,13 +227,16 @@ class Env(gym.Env, ABC):
                 if self.no_op_limit is not None and self.no_op_limit < 0:
                     no_op_limit = len(lines)
                 if not self.evaluating and n == no_op_limit:
-                    failing = True
                     term = True
             elif state.curr is not None:
                 step += 1
                 if action != lines[state.curr].id:
                     info.update(success_line=state.prev, failure_line=state.curr)
                 state = state_iterator.send(action)
+                if self.analyze_mistakes and delta > 0 and state.curr is not None:
+                    block_type, block = get_block(state.curr)
+                    if block_type is While:
+                        entered_while_blocks += [block]
 
     @staticmethod
     def line_str(line: Line):
