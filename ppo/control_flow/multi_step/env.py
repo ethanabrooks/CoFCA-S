@@ -230,10 +230,11 @@ class Env(ppo.control_flow.env.Env):
                     object_pos += [(obj, tuple(p)) for p in pos]
 
         # river
-        x = self.random.randint(0, self.world_size)
-        vertical = self.random.randint(2)
-        for i in range(0, self.world_size):
-            object_pos += [(self.water, (x, i) if vertical else (i, x))]
+        if any(o == self.water for _, o in line_io):
+            x = self.random.randint(0, self.world_size)
+            vertical = self.random.randint(2)
+            for i in range(0, self.world_size):
+                object_pos += [(self.water, (x, i) if vertical else (i, x))]
 
         return object_pos
 
