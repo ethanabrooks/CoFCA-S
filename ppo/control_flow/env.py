@@ -42,12 +42,14 @@ class Env(gym.Env, ABC):
         no_op_limit,
         time_limit,
         subtasks_only,
+        break_on_fail,
         seed=0,
         eval_lines=None,
         evaluating=False,
         baseline=False,
     ):
         super().__init__()
+        self.break_on_fail = break_on_fail
         self.subtasks_only = subtasks_only
         self.no_op_limit = no_op_limit
         self._eval_condition_size = eval_condition_size
@@ -107,6 +109,11 @@ class Env(gym.Env, ABC):
                 info.update(success_line=len(lines))
 
             term = success or state.term
+            if term and not success:
+                if self.break_on_fail:
+                    import ipdb
+
+                    ipdb.set_trace()
             info.update(regret=1 if term and not success else 0)
             if term:
                 info.update(
