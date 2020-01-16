@@ -36,24 +36,24 @@ class Env(gym.Env, ABC):
         min_lines,
         max_lines,
         flip_prob,
-        terminate_on_failure,
         num_subtasks,
         max_nesting_depth,
         eval_condition_size,
         no_op_limit,
         time_limit,
+        subtasks_only,
         seed=0,
         eval_lines=None,
         evaluating=False,
         baseline=False,
     ):
         super().__init__()
+        self.subtasks_only = subtasks_only
         self.no_op_limit = no_op_limit
         self._eval_condition_size = eval_condition_size
         self.max_nesting_depth = max_nesting_depth
         self.num_subtasks = num_subtasks
 
-        self.terminate_on_failure = terminate_on_failure
         self.eval_lines = eval_lines
         self.min_lines = min_lines
         self.max_lines = max_lines
@@ -68,30 +68,18 @@ class Env(gym.Env, ABC):
         self.evaluating = evaluating
         self.iterator = None
         self._render = None
-        if baseline:
-            NotImplementedError
-            self.action_space = spaces.Discrete(self.num_subtasks + 1)
-            n_line_types = len(self.line_types) + num_subtasks
-            self.observation_space = spaces.Dict(
-                dict(
-                    obs=spaces.Discrete(2),
-                    lines=spaces.MultiBinary(n_line_types * self.n_lines),
-                )
+        self.action_space = spaces.MultiDiscrete(
+            np.array([self.num_subtasks + 1, 2 * self.n_lines])
+        )
+        self.observation_space = spaces.Dict(
+            dict(
+                obs=spaces.Discrete(2),
+                lines=spaces.MultiDiscrete(
+                    np.array([len(self.line_types) + num_subtasks] * self.n_lines)
+                ),
+                active=spaces.Discrete(self.n_lines + 1),
             )
-            self.eye = np.eye(n_line_types)
-        else:
-            self.action_space = spaces.MultiDiscrete(
-                np.array([self.num_subtasks + 1, 2 * self.n_lines])
-            )
-            self.observation_space = spaces.Dict(
-                dict(
-                    obs=spaces.Discrete(2),
-                    lines=spaces.MultiDiscrete(
-                        np.array([len(self.line_types) + num_subtasks] * self.n_lines)
-                    ),
-                    active=spaces.Discrete(self.n_lines + 1),
-                )
-            )
+        )
 
     def reset(self):
         self.iterator = self.generator()
@@ -220,10 +208,10 @@ class Env(gym.Env, ABC):
         return list(self.assign_line_ids(lines))
 
     def assign_line_ids(self, lines):
-        return [
-            Subtask(self.random.choice(self.num_subtasks)) if line is Subtask else line
-            for line in lines
-        ]
+        for line in lines:
+            yield Subtask(
+                self.random.choice(self.num_subtasks)
+            ) if line is Subtask else line
 
     def build_task_image(self, lines):
         image = np.zeros(self.image_shape)
@@ -305,8 +293,10 @@ class Env(gym.Env, ABC):
             return [Subtask]
         line_types = [Subtask]
         enough_space = n > len(active_conditions) + 2
-        if enough_space and (
-            max_nesting_depth is None or nesting_depth < max_nesting_depth
+        if (
+            enough_space
+            and (max_nesting_depth is None or nesting_depth < max_nesting_depth)
+            and not self.subtasks_only
         ):
             line_types += [If, While]
         if active_conditions and last is Subtask:
@@ -506,7 +496,6 @@ def build_parser(p):
     p.add_argument("--num-subtasks", type=int, default=12)
     p.add_argument("--no-op-limit", type=int)
     p.add_argument("--flip-prob", type=float, default=0.5)
-    p.add_argument("--terminate-on-failure", action="store_true")
     p.add_argument("--eval-condition-size", action="store_true")
     p.add_argument("--max-nesting-depth", type=int)
     return p

@@ -1,3 +1,4 @@
+import functools
 from collections import Counter, defaultdict
 from copy import copy
 
@@ -12,11 +13,19 @@ from ppo.control_flow.lines import Subtask, Padding, Line, While, If, EndWhile, 
 
 
 class Env(ppo.control_flow.env.Env):
-    subtask_objects = ["pig", "sheep", "cat", "greenbot"]
-    other_objects = ["ice", "agent"]
-    line_objects = [x for x in subtask_objects]
-    world_objects = subtask_objects + other_objects
-    interactions = ["pickup", "transform", "visit"]
+    wood = "wood"
+    gold = "gold"
+    iron = "iron"
+    merchant = "merchant"
+    water = "water"
+    bridge = "bridge"
+    agent = "agent"
+    mine = "mine"
+    sell = "sell"
+    objects = [wood, gold, iron, merchant, water]
+    other_objects = [bridge, agent]
+    world_objects = objects + other_objects
+    interactions = [mine, bridge, sell]  # place
 
     def __init__(
         self,
@@ -30,12 +39,20 @@ class Env(ppo.control_flow.env.Env):
         self.num_excluded_objects = num_excluded_objects
         self.max_while_objects = max_while_objects
         self.time_to_waste = time_to_waste
-        num_subtasks = len(self.subtask_objects) * len(self.interactions)
+
+        def subtasks():
+            for interaction in self.interactions:
+                for obj in self.objects:
+                    yield interaction, obj
+
+        self.subtask_id_to_strings = list(subtasks())
+        num_subtasks = len(self.subtask_id_to_strings)
         super().__init__(num_subtasks=num_subtasks, **kwargs)
         self.world_size = world_size
         self.world_shape = (len(self.world_objects), self.world_size, self.world_size)
+
         self.action_space = spaces.MultiDiscrete(
-            np.array([self.num_subtasks + 1, 2 * self.n_lines, 2, 2])
+            np.array([num_subtasks + 1, 2 * self.n_lines, 2, 2])
         )
         self.observation_space.spaces.update(
             obs=spaces.Box(low=0, high=1, shape=self.world_shape),
@@ -45,7 +62,7 @@ class Env(ppo.control_flow.env.Env):
                         [
                             len(self.line_types),
                             1 + len(self.interactions),
-                            1 + len(self.line_objects),
+                            1 + len(self.objects),
                         ]
                     ]
                     * self.n_lines
@@ -53,24 +70,12 @@ class Env(ppo.control_flow.env.Env):
             ),
         )
 
-        self.subtask_id_to_tuple = {}
-        self.subtask_tuple_to_id = {}
-        self.subtask_id_to_strings = {}
-        self.subtask_strings_to_id = {}
-        for i, interaction in enumerate(self.interactions):
-            for o, obj in enumerate(self.subtask_objects):
-                subtask_id = o * len(self.interactions) + i
-                self.subtask_id_to_tuple[subtask_id] = i, o
-                self.subtask_tuple_to_id[i, o] = subtask_id
-                self.subtask_id_to_strings[subtask_id] = interaction, obj
-                self.subtask_strings_to_id[interaction, obj] = subtask_id
-
     def line_str(self, line: Line):
         if isinstance(line, Subtask):
-            i, o = self.subtask_id_to_strings[line.id]
+            i, o = line.id
             return f"{line}: {i} {o}"
         elif isinstance(line, (If, While)):
-            return f"{line}: {self.line_objects[line.id]}"
+            return f"{line}: {line.id}"
         else:
             return f"{line}"
 
@@ -88,64 +93,33 @@ class Env(ppo.control_flow.env.Env):
             print(string)
             print("-" * len(string))
 
+    @functools.lru_cache(maxsize=200)
     def preprocess_line(self, line):
         if line is Padding:
             return [self.line_types.index(Padding), 0, 0]
         elif type(line) is Else:
             return [self.line_types.index(Else), 0, 0]
         elif type(line) is Subtask:
-            i, o = self.subtask_id_to_tuple[line.id]
+            i, o = line.id
+            i, o = self.interactions.index(i), self.objects.index(o)
             return [self.line_types.index(Subtask), i + 1, o + 1]
         else:
-            return [self.line_types.index(type(line)), 0, line.id + 1]
+            o = self.objects.index(line.id)
+            return [self.line_types.index(type(line)), 0, o + 1]
 
     def state_generator(self, lines) -> State:
         assert self.max_nesting_depth == 1
         agent_pos = self.random.randint(0, self.world_size, size=2)
+        offset = self.random.randint(1 + self.world_size - self.world_size, size=2)
 
-        def build_world():
+        def world_array():
             world = np.zeros(self.world_shape)
-            for o, p in object_pos + [("agent", agent_pos)]:
+            for o, p in object_pos + [(self.agent, agent_pos)]:
+                p = np.array(p) + offset
                 world[tuple((self.world_objects.index(o), *p))] = 1
             return world
 
-        line_io = [
-            self.subtask_id_to_strings[line.id]
-            for line in lines
-            if type(line) is Subtask
-        ]
-        line_pos = self.random.randint(0, self.world_size, size=(len(line_io), 2))
-        object_pos = [
-            (o, tuple(pos)) for (interaction, o), pos in zip(line_io, line_pos)
-        ]
-
-        while_blocks = defaultdict(list)  # while line: child subtasks
-        active_whiles = []
-        for interaction, line in enumerate(lines):
-            if type(line) is While:
-                active_whiles += [interaction]
-            elif type(line) is EndWhile:
-                active_whiles.pop()
-            elif active_whiles and type(line) is Subtask:
-                while_blocks[active_whiles[-1]] += [interaction]
-        for while_line, block in while_blocks.items():
-            o = lines[while_line].id
-            obj = self.line_objects[o]
-            l = self.random.choice(block)
-            i = self.random.choice(2)
-            assert self.interactions[i] in ("pickup", "transform")
-            line_id = self.subtask_strings_to_id[self.interactions[i], obj]
-            assert self.subtask_id_to_strings[line_id] in (
-                ("pickup", obj),
-                ("transform", obj),
-            )
-            lines[l] = Subtask(line_id)
-            if not self.evaluating and obj in self.world_objects:
-                num_obj = self.random.randint(self.max_while_objects + 1)
-                if num_obj:
-                    pos = self.random.randint(0, self.world_size, size=(num_obj, 2))
-                    object_pos += [(obj, tuple(p)) for p in pos]
-
+        object_pos = self.populate_world(lines)
         line_iterator = self.line_generator(lines)
         condition_evaluations = defaultdict(list)
         times = Counter(on_subtask=0, to_complete=0)
@@ -157,7 +131,7 @@ class Env(ppo.control_flow.env.Env):
             if type(line) is Subtask:
                 return 1
             else:
-                evaluation = any(o == self.line_objects[line.id] for o, _ in object_pos)
+                evaluation = any(o == line.id for o, _ in object_pos)
                 if type(line) in (If, While):
                     condition_evaluations[type(line)] += [evaluation]
                 return evaluation
@@ -173,7 +147,7 @@ class Env(ppo.control_flow.env.Env):
                 l = line_iterator.send(evaluate_line(l))
             if l is not None:
                 assert type(lines[l]) is Subtask
-                _, o = self.subtask_id_to_strings[lines[l].id]
+                _, o = lines[l].id
                 n = get_nearest(o)
                 if n is not None:
                     times["to_complete"] = 1 + np.max(np.abs(agent_pos - n))
@@ -186,7 +160,7 @@ class Env(ppo.control_flow.env.Env):
         while True:
             term |= times["on_subtask"] - times["to_complete"] > self.time_to_waste
             subtask_id = yield State(
-                obs=build_world(),
+                obs=world_array(),
                 condition=None,
                 prev=prev,
                 curr=curr,
@@ -202,16 +176,18 @@ class Env(ppo.control_flow.env.Env):
             def on_object():
                 return pair() in object_pos  # standing on the desired object
 
-            correct_id = subtask_id == lines[curr].id
+            correct_id = lines[curr].id == (
+                (interaction, obj) if type(lines[curr]) is Subtask else obj
+            )
             if on_object():
-                if interaction in ("pickup", "transform"):
+                if interaction in (self.mine, self.bridge):
                     object_pos.remove(pair())
                     if correct_id:
                         possible_objects.remove(obj)
                     else:
                         term = True
-                if interaction == "transform":
-                    object_pos.append(("ice", tuple(agent_pos)))
+                if interaction == self.bridge:
+                    object_pos.append((self.bridge, tuple(agent_pos)))
                 if correct_id:
                     prev, curr = curr, next_subtask(curr)
             else:
@@ -222,28 +198,65 @@ class Env(ppo.control_flow.env.Env):
                     # subtask is impossible
                     prev, curr = curr, None
 
+    def populate_world(self, lines):
+        # place subtask objects
+        line_io = [line.id for line in lines if type(line) is Subtask]
+        line_pos = self.random.randint(0, self.world_size, size=(len(line_io), 2))
+        object_pos = [
+            (o, tuple(pos))
+            for (interaction, o), pos in zip(line_io, line_pos)
+            if o != self.water
+        ]
+
+        # prevent infinite loops
+        while_blocks = defaultdict(list)  # while line: child subtasks
+        active_whiles = []
+        for interaction, line in enumerate(lines):
+            if type(line) is While:
+                active_whiles += [interaction]
+            elif type(line) is EndWhile:
+                active_whiles.pop()
+            elif active_whiles and type(line) is Subtask:
+                while_blocks[active_whiles[-1]] += [interaction]
+        for while_line, block in while_blocks.items():
+            obj = lines[while_line].id
+            line_id = self.mine, obj
+            l = self.random.choice(block)
+            lines[l] = Subtask(line_id)
+            if not self.evaluating and obj in self.world_objects:
+                num_obj = self.random.randint(self.max_while_objects + 1)
+                if num_obj:
+                    pos = self.random.randint(0, self.world_size, size=(num_obj, 2))
+                    object_pos += [(obj, tuple(p)) for p in pos]
+
+        # river
+        x = self.random.randint(0, self.world_size)
+        vertical = self.random.randint(2)
+        for i in range(0, self.world_size):
+            object_pos += [(self.water, (x, i) if vertical else (i, x))]
+
+        return object_pos
+
     def assign_line_ids(self, lines):
-        num_objects = len(self.line_objects)
+        num_objects = len(self.objects)
         excluded = self.random.randint(num_objects, size=self.num_excluded_objects)
-        # print("excluding:")
-        # for i in excluded:
-        # print(self.line_objects[i])
-        included_object_ids = [i for i in range(num_objects) if i not in excluded]
+        included_objects = [o for i, o in enumerate(self.objects) if i not in excluded]
 
         interaction_ids = self.random.choice(len(self.interactions), size=len(lines))
-        object_ids = self.random.choice(len(included_object_ids), size=len(lines))
-        line_ids = self.random.choice(len(self.line_objects), size=len(lines))
+        object_ids = self.random.choice(len(included_objects), size=len(lines))
+        line_ids = self.random.choice(len(self.objects), size=len(lines))
 
         for line, line_id, interaction_id, object_id in zip(
             lines, line_ids, interaction_ids, object_ids
         ):
             if line is Subtask:
-                subtask_id = self.subtask_tuple_to_id[
-                    interaction_id, included_object_ids[object_id]
-                ]
+                subtask_id = (
+                    self.interactions[interaction_id],
+                    included_objects[object_id],
+                )
                 yield Subtask(subtask_id)
             else:
-                yield line(line_id)
+                yield line(self.objects[line_id])
 
 
 if __name__ == "__main__":
