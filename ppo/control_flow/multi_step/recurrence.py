@@ -208,15 +208,14 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             h2_ = self.gru(torch.cat(x, dim=-1), h2)
             z = F.relu(self.zeta(h2_))
             u = self.upsilon(z).softmax(dim=-1)
-            # self.print("bb", torch.round(100 * bb[p, R, :, 0]))
-            self.print("u", torch.round(100 * u))
+            self.print("u", u)
             w = P[p, R]
             d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
             dg = DG[t].unsqueeze(-1).float()
-            self.print("dg prob", torch.round(100 * d_gate.probs[:, 1]))
+            self.print("dg prob", d_gate.probs[:, 1])
             self.print("dg", dg)
             d_dist = gate(dg, d_probs, ones * half)
-            self.print("d_probs", torch.round(100 * d_probs)[:, half:])
+            self.print("d_probs", d_probs[:, half:])
             self.sample_new(D[t], d_dist)
             p = p + D[t].clone() - half
             p = torch.clamp(p, min=0, max=nl - (2 if self.nl_2 else 1))
@@ -224,7 +223,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             ag = AG[t].unsqueeze(-1).float()
             a_dist = gate(ag, self.actor(z).probs, A[t - 1])
             self.sample_new(A[t], a_dist)
-            self.print("ag prob", torch.round(100 * a_gate.probs[:, 1]))
+            self.print("ag prob", a_gate.probs[:, 1])
             self.print("ag", ag)
 
             if self.gate_h:
