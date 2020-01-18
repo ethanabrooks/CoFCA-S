@@ -260,13 +260,12 @@ class Env(ppo.control_flow.env.Env):
             lines, line_ids, interaction_ids, object_ids
         ):
             if line is Subtask:
+                interaction = self.interactions[interaction_id]
                 obj = included_objects[object_id]
                 if obj == self.water:
                     interaction = self.bridge
                 elif obj == self.merchant:
                     interaction = self.sell
-                else:
-                    interaction = self.mine
                 subtask_id = (interaction, included_objects[object_id])
                 yield Subtask(subtask_id)
             else:
