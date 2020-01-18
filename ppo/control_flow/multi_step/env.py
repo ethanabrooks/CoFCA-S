@@ -29,12 +29,12 @@ class Env(ppo.control_flow.env.Env):
     water = "water"
     bridge = "bridge"
     agent = "agent"
-    mine = "mine"
-    sell = "sell"
+    interact = "interact"
+    visit = "visit"
     objects = [wood, gold, iron, merchant, water]
     other_objects = [bridge, agent]
     world_objects = objects + other_objects
-    interactions = [mine, bridge, sell]  # place
+    interactions = [interact, visit]  # place
 
     def __init__(
         self,
@@ -189,14 +189,14 @@ class Env(ppo.control_flow.env.Env):
                 (interaction, obj) if type(lines[curr]) is Subtask else obj
             )
             if on_object():
-                if interaction in (self.mine, self.bridge):
+                if interaction == self.interact:
                     object_pos.remove(pair())
                     if correct_id:
                         possible_objects.remove(obj)
                     else:
                         term = True
-                if interaction == self.bridge:
-                    object_pos.append((self.bridge, tuple(agent_pos)))
+                    if obj == self.water:
+                        object_pos.append((self.bridge, tuple(agent_pos)))
                 if correct_id:
                     prev, curr = curr, next_subtask(curr)
             else:
@@ -229,7 +229,7 @@ class Env(ppo.control_flow.env.Env):
                 while_blocks[active_whiles[-1]] += [interaction]
         for while_line, block in while_blocks.items():
             obj = lines[while_line].id
-            line_id = self.mine, obj
+            line_id = self.interact, obj
             l = self.random.choice(block)
             lines[l] = Subtask(line_id)
             if not self.evaluating and obj in self.world_objects:
@@ -260,13 +260,10 @@ class Env(ppo.control_flow.env.Env):
             lines, line_ids, interaction_ids, object_ids
         ):
             if line is Subtask:
-                interaction = self.interactions[interaction_id]
-                obj = included_objects[object_id]
-                if obj == self.water:
-                    interaction = self.bridge
-                elif obj == self.merchant:
-                    interaction = self.sell
-                subtask_id = (interaction, included_objects[object_id])
+                subtask_id = (
+                    self.interactions[interaction_id],
+                    included_objects[object_id],
+                )
                 yield Subtask(subtask_id)
             else:
                 yield line(self.objects[line_id])
