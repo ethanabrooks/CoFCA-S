@@ -22,7 +22,7 @@ from ppo.control_flow.lines import (
 )
 from ppo.utils import RED, RESET, GREEN
 
-Obs = namedtuple("Obs", "active lines obs")
+Obs = namedtuple("Obs", "length lines obs")
 Last = namedtuple("Last", "action active reward terminal selected")
 State = namedtuple("State", "obs condition prev curr condition_evaluations term")
 
@@ -81,7 +81,7 @@ class Env(gym.Env, ABC):
                 lines=spaces.MultiDiscrete(
                     np.array([len(self.line_types) + num_subtasks] * self.n_lines)
                 ),
-                active=spaces.Discrete(self.n_lines + 1),
+                length=spaces.Discrete(self.n_lines + 1),
             )
         )
 
@@ -206,12 +206,7 @@ class Env(gym.Env, ABC):
 
             self._render = render
 
-            action = (
-                yield self.get_observation(state.obs, state.curr, lines),
-                reward,
-                term,
-                info,
-            )
+            action = (yield self.get_observation(state.obs, lines), reward, term, info)
 
             if self.baseline:
                 selected = None
@@ -468,12 +463,11 @@ class Env(gym.Env, ABC):
             )
             prev, curr = curr, next_subtask()
 
-    def get_observation(self, obs, active, lines):
+    def get_observation(self, obs, lines):
+        length = len(lines)
         padded = lines + [Padding] * (self.n_lines - len(lines))
         lines = [self.preprocess_line(p) for p in padded]
-        obs = Obs(
-            obs=obs, lines=lines, active=self.n_lines if active is None else active
-        )
+        obs = Obs(obs=obs, lines=lines, length=length)
         if self.baseline:
             obs = OrderedDict(obs=obs.obs, lines=self.eye[obs.lines].flatten())
         else:

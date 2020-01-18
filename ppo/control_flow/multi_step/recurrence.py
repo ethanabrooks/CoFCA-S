@@ -126,6 +126,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         # parse non-action inputs
         inputs = self.parse_inputs(inputs)
         inputs = inputs._replace(obs=inputs.obs.view(T, N, *self.obs_spaces.obs.shape))
+        length = inputs.length.long().squeeze()
 
         # build memory
         nl = len(self.obs_spaces.lines.nvec)
@@ -181,6 +182,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         ag_probs[new_episode, 1] = 1
         R = torch.arange(N, device=rnn_hxs.device)
         ones = self.ones.expand_as(R)
+        zeros = torch.zeros_like(ones)
         A = torch.cat([actions[:, :, 0], hx.a.view(1, N)], dim=0).long()
         D = torch.cat([actions[:, :, 1], hx.d.view(1, N)], dim=0).long()
         AG = torch.cat([actions[:, :, 2], hx.ag.view(1, N)], dim=0).long()
@@ -218,7 +220,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             self.print("d_probs", d_probs[:, half:])
             self.sample_new(D[t], d_dist)
             p = p + D[t].clone() - half
-            p = torch.clamp(p, min=0, max=nl - (2 if self.nl_2 else 1))
+            p = torch.min(torch.max(p, zeros), length[t])
 
             ag = AG[t].unsqueeze(-1).float()
             a_dist = gate(ag, self.actor(z).probs, A[t - 1])

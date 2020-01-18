@@ -261,7 +261,6 @@ class Env(ppo.control_flow.env.Env):
         ):
             if line is Subtask:
                 obj = included_objects[object_id]
-                interaction = self.interactions[interaction_id]
                 if obj == self.water:
                     interaction = self.bridge
                 elif obj == self.merchant:
