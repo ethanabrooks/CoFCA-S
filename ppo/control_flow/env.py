@@ -198,6 +198,7 @@ class Env(gym.Env, ABC):
                     print(GREEN if success else RED)
                 for i, string in enumerate(line_strings(index=0, level=1)):
                     print(f"{i}{string}")
+                print("Selected:", selected)
                 print("Action:", action)
                 print("Reward", reward)
                 print("Obs:")
