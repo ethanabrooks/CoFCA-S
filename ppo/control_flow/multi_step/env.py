@@ -266,8 +266,6 @@ class Env(ppo.control_flow.env.Env):
                     interaction = self.bridge
                 elif obj == self.merchant:
                     interaction = self.sell
-                else:
-                    interaction = self.mine
                 subtask_id = (interaction, included_objects[object_id])
                 yield Subtask(subtask_id)
             else:
