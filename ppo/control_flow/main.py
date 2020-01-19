@@ -53,7 +53,7 @@ def main(log_dir, seed, eval_lines, **kwargs):
             else:
                 return control_flow.multi_step.env.Env(**args, world_size=world_size)
 
-    _Train(**kwargs, seed=seed, log_dir=log_dir, time_limit=None).run()
+    _Train(**kwargs, seed=seed, log_dir=log_dir).run()
 
 
 def bandit_args():
@@ -66,6 +66,8 @@ def bandit_args():
     ppo.control_flow.env.build_parser(parsers.env)
     parsers.env.add_argument("--world-size", type=int)
     parsers.env.add_argument("--subtasks-only", action="store_true")
+    parsers.env.add_argument("--break-on-fail", action="store_true")
+    parsers.env.add_argument("--analyze-mistakes", action="store_true")
     parsers.env.add_argument("--max-while-objects", type=float, required=True)
     parsers.env.add_argument("--num-excluded-objects", type=int, required=True)
     parsers.env.add_argument("--time-to-waste", type=int, required=True)

@@ -9,7 +9,16 @@ from rl_utils import hierarchical_parse_args
 import ppo.control_flow.env
 from ppo import keyboard_control
 from ppo.control_flow.env import build_parser, State
-from ppo.control_flow.lines import Subtask, Padding, Line, While, If, EndWhile, Else
+from ppo.control_flow.lines import (
+    Subtask,
+    Padding,
+    Line,
+    While,
+    If,
+    EndWhile,
+    Else,
+    EndIf,
+)
 
 
 class Env(ppo.control_flow.env.Env):
@@ -70,22 +79,6 @@ class Env(ppo.control_flow.env.Env):
                 )
             ),
         )
-
-        self.subtask_id_to_tuple = {}
-        self.subtask_id_to_strings = {}
-        self.subtask_strings_to_id = {}
-        self.line_id_to_strings = {}
-        self.line_strings_to_id = {}
-        for i, interaction in enumerate(self.interactions):
-            for o, obj in enumerate(self.subtask_objects):
-                subtask_id = o * len(self.interactions) + i
-                self.subtask_id_to_tuple[subtask_id] = i, o
-                self.subtask_id_to_strings[subtask_id] = interaction, obj
-                self.subtask_strings_to_id[interaction, obj] = subtask_id
-            for o, obj in enumerate(self.line_objects):
-                line_id = o * len(self.interactions) + i
-                self.line_id_to_strings[line_id] = interaction, obj
-                self.line_strings_to_id[interaction, obj] = line_id
 
     def line_str(self, line: Line):
         if isinstance(line, Subtask):
@@ -247,10 +240,11 @@ class Env(ppo.control_flow.env.Env):
                     object_pos += [(obj, tuple(p)) for p in pos]
 
         # river
-        x = self.random.randint(0, self.world_size)
-        vertical = self.random.randint(2)
-        for i in range(0, self.world_size):
-            object_pos += [(self.water, (x, i) if vertical else (i, x))]
+        if any(o == self.water for _, o in line_io):
+            x = self.random.randint(0, self.world_size)
+            vertical = self.random.randint(2)
+            for i in range(0, self.world_size):
+                object_pos += [(self.water, (x, i) if vertical else (i, x))]
 
         return object_pos
 
@@ -267,23 +261,17 @@ class Env(ppo.control_flow.env.Env):
             lines, line_ids, interaction_ids, object_ids
         ):
             if line is Subtask:
-                interaction = self.interactions[interaction_id]
-                if interaction == self.mine:
-                    subtask_id = interaction, included_objects[obj_id]
-                elif interaction == self.bridge:
-                    subtask_id = interaction, self.water
-                elif interaction == self.sell:
-                    subtask_id = interaction, self.merchant
+                obj = included_objects[object_id]
+                if obj == self.water:
+                    interaction = self.bridge
+                elif obj == self.merchant:
+                    interaction = self.sell
                 else:
-                    raise RuntimeError
+                    interaction = self.mine
+                subtask_id = (interaction, included_objects[object_id])
                 yield Subtask(subtask_id)
             else:
                 yield line(self.objects[line_id])
-
-    def increment_curriculum(self):
-        self.n_lines = min(self.n_lines + 1, self.max_lines)
-        self.time_limit = self.world_size * self.n_lines
-        self.set_spaces()
 
 
 if __name__ == "__main__":
