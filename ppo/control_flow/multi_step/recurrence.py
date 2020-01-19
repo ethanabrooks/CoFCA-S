@@ -48,28 +48,33 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         self.action_size = 4
         d = self.obs_spaces.obs.shape[0]
         if use_conv:
-            layers = [
-                nn.Conv2d(
-                    d,
-                    conv_hidden_size,
-                    kernel_size=kernel_size,
-                    stride=2 if kernel_size == 2 else 1,
-                    padding=0,
-                ),
+            # layers = [
+            #     nn.Conv2d(
+            #         d,
+            #         conv_hidden_size,
+            #         kernel_size=kernel_size,
+            #         stride=2 if kernel_size == 2 else 1,
+            #         padding=0,
+            #     ),
+            #     nn.ReLU(),
+            # ]
+            # if kernel_size < 4:
+            #     layers += [
+            #         nn.Conv2d(
+            #             conv_hidden_size,
+            #             conv_hidden_size,
+            #             kernel_size=2,
+            #             stride=2,
+            #             padding=0,
+            #         ),
+            #         nn.ReLU(),
+            #     ]
+            self.conv = nn.Sequential(
+                nn.Conv2d(d, conv_hidden_size, kernel_size=3),
                 nn.ReLU(),
-            ]
-            if kernel_size < 4:
-                layers += [
-                    nn.Conv2d(
-                        conv_hidden_size,
-                        conv_hidden_size,
-                        kernel_size=2,
-                        stride=2,
-                        padding=0,
-                    ),
-                    nn.ReLU(),
-                ]
-            self.conv = nn.Sequential(*layers)
+                nn.Conv2d(conv_hidden_size, conv_hidden_size, kernel_size=4),
+                nn.ReLU(),
+            )
         else:
             self.conv = nn.Sequential(init_(nn.Linear(d, conv_hidden_size)), nn.ReLU())
 
