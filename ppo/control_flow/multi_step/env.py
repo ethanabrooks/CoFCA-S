@@ -9,7 +9,16 @@ from rl_utils import hierarchical_parse_args
 import ppo.control_flow.env
 from ppo import keyboard_control
 from ppo.control_flow.env import build_parser, State
-from ppo.control_flow.lines import Subtask, Padding, Line, While, If, EndWhile, Else
+from ppo.control_flow.lines import (
+    Subtask,
+    Padding,
+    Line,
+    While,
+    If,
+    EndWhile,
+    Else,
+    EndIf,
+)
 
 
 class Env(ppo.control_flow.env.Env):
@@ -20,12 +29,12 @@ class Env(ppo.control_flow.env.Env):
     water = "water"
     bridge = "bridge"
     agent = "agent"
-    mine = "mine"
-    sell = "sell"
+    interact = "interact"
+    visit = "visit"
     objects = [wood, gold, iron, merchant, water]
     other_objects = [bridge, agent]
     world_objects = objects + other_objects
-    interactions = [mine, bridge, sell]  # place
+    interactions = [interact, visit]  # place
 
     def __init__(
         self,
@@ -74,7 +83,7 @@ class Env(ppo.control_flow.env.Env):
     def line_str(self, line: Line):
         if isinstance(line, Subtask):
             i, o = line.id
-            return f"{line}: {i} {o}"
+            return f"Subtask {self.subtask_id_to_strings.index(line.id)}: {line.id}"
         elif isinstance(line, (If, While)):
             return f"{line}: {line.id}"
         else:
@@ -181,14 +190,14 @@ class Env(ppo.control_flow.env.Env):
                 (interaction, obj) if type(lines[curr]) is Subtask else obj
             )
             if on_object():
-                if interaction in (self.mine, self.bridge):
+                if interaction == self.interact:
                     object_pos.remove(pair())
                     if correct_id:
                         possible_objects.remove(obj)
                     else:
                         term = True
-                if interaction == self.bridge:
-                    object_pos.append((self.bridge, tuple(agent_pos)))
+                    if obj == self.water:
+                        object_pos.append((self.bridge, tuple(agent_pos)))
                 if correct_id:
                     prev, curr = curr, next_subtask(curr)
             else:
@@ -221,7 +230,7 @@ class Env(ppo.control_flow.env.Env):
                 while_blocks[active_whiles[-1]] += [interaction]
         for while_line, block in while_blocks.items():
             obj = lines[while_line].id
-            line_id = self.mine, obj
+            line_id = self.interact, obj
             l = self.random.choice(block)
             lines[l] = Subtask(line_id)
             if not self.evaluating and obj in self.world_objects:
@@ -231,10 +240,11 @@ class Env(ppo.control_flow.env.Env):
                     object_pos += [(obj, tuple(p)) for p in pos]
 
         # river
-        x = self.random.randint(0, self.world_size)
-        vertical = self.random.randint(2)
-        for i in range(0, self.world_size):
-            object_pos += [(self.water, (x, i) if vertical else (i, x))]
+        if any(o == self.water for _, o in line_io):
+            x = self.random.randint(0, self.world_size)
+            vertical = self.random.randint(2)
+            for i in range(0, self.world_size):
+                object_pos += [(self.water, (x, i) if vertical else (i, x))]
 
         return object_pos
 
