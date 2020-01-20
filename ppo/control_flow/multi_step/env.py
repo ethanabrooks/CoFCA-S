@@ -50,10 +50,9 @@ class Env(ppo.control_flow.env.Env):
         self.time_to_waste = time_to_waste
 
         def subtasks():
-            for o in self.objects:
-                yield self.mine, o
-            yield self.bridge, self.water
-            yield self.sell, self.merchant
+            for interaction in self.interactions:
+                for obj in self.objects:
+                    yield interaction, obj
 
         self.subtask_id_to_strings = list(subtasks())
         num_subtasks = len(self.subtask_id_to_strings)
@@ -257,19 +256,14 @@ class Env(ppo.control_flow.env.Env):
         object_ids = self.random.choice(len(included_objects), size=len(lines))
         line_ids = self.random.choice(len(self.objects), size=len(lines))
 
-        for line, line_id, interaction_id, obj_id in zip(
+        for line, line_id, interaction_id, object_id in zip(
             lines, line_ids, interaction_ids, object_ids
         ):
             if line is Subtask:
-                interaction = self.interactions[interaction_id]
-                if interaction == self.mine:
-                    subtask_id = interaction, included_objects[obj_id]
-                elif interaction == self.bridge:
-                    subtask_id = interaction, self.water
-                elif interaction == self.sell:
-                    subtask_id = interaction, self.merchant
-                else:
-                    raise RuntimeError
+                subtask_id = (
+                    self.interactions[interaction_id],
+                    included_objects[object_id],
+                )
                 yield Subtask(subtask_id)
             else:
                 yield line(self.objects[line_id])
