@@ -78,6 +78,8 @@ class Agent(ppo.agent.Agent, NNBase):
         hx = rm.parse_hidden(all_hxs)
         a_dist = FixedCategorical(hx.a_probs)
         probs = [hx.a_probs, hx.d_probs, hx.ag_probs, hx.dg_probs]
+        X = [hx.a, hx.d, hx.ag, hx.dg]
+        dists = [FixedCategorical(p) for p in probs]
         if type(rm) in (
             ppo.control_flow.multi_step.oh_et_al.Recurrence,
             ppo.control_flow.multi_step.no_pointer.Recurrence,
@@ -90,8 +92,6 @@ class Agent(ppo.agent.Agent, NNBase):
             else:
                 aux_loss = 0
         else:
-            X = [hx.a, hx.d, hx.ag, hx.dg]
-            dists = [FixedCategorical(p) for p in probs]
             action_log_probs = sum(dist.log_probs(x) for dist, x in zip(dists, X))
             entropy = sum([dist.entropy() for dist in dists]).mean()
             # action_log_probs = a_dist.log_probs(hx.a) + d_dist.log_probs(hx.d)
