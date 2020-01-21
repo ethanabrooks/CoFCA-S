@@ -8,11 +8,14 @@ from gym import spaces
 from torch import nn as nn
 
 from ppo.control_flow.env import Obs
-from ppo.control_flow.multi_step.recurrence import get_obs_sections
 from ppo.distributions import Categorical, FixedCategorical
 from ppo.utils import init_
 
 RecurrentState = namedtuple("RecurrentState", "a d p v h a_probs d_probs")
+
+
+def get_obs_sections(obs_spaces):
+    return Obs(*[int(np.prod(s.shape)) for s in obs_spaces])
 
 
 class Recurrence(nn.Module):
