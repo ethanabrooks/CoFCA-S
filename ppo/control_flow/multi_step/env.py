@@ -48,6 +48,7 @@ class Env(ppo.control_flow.env.Env):
         self.num_excluded_objects = num_excluded_objects
         self.max_while_objects = max_while_objects
         self.time_to_waste = time_to_waste
+        self.time_remaining = None
 
         def subtasks():
             for obj in self.objects:
@@ -124,7 +125,7 @@ class Env(ppo.control_flow.env.Env):
         agent_pos = self.random.randint(0, self.world_size, size=2)
         offset = self.random.randint(1 + self.world_size - self.world_size, size=2)
 
-        def world_array():
+        def get_obs():
             world = np.zeros(self.world_shape)
             for o, p in object_pos + [(self.agent, agent_pos)]:
                 p = np.array(p) + offset
@@ -134,7 +135,7 @@ class Env(ppo.control_flow.env.Env):
         object_pos = self.populate_world(lines)
         line_iterator = self.line_generator(lines)
         condition_evaluations = defaultdict(list)
-        times = Counter(on_subtask=0, to_complete=0)
+        self.time_remaining = self.time_to_waste
 
         def evaluate_line(l):
             if l is None:
@@ -162,24 +163,23 @@ class Env(ppo.control_flow.env.Env):
                 _, o = lines[l].id
                 n = get_nearest(o)
                 if n is not None:
-                    times["to_complete"] = 1 + np.max(np.abs(agent_pos - n))
-                    times["on_subtask"] = 0
+                    self.time_remaining += 1 + np.max(np.abs(agent_pos - n))
             return l
 
         possible_objects = [o for o, _ in object_pos]
         prev, curr = 0, next_subtask(None)
         term = False
         while True:
-            term |= times["on_subtask"] - times["to_complete"] > self.time_to_waste
+            term |= not self.time_remaining
             subtask_id = yield State(
-                obs=world_array(),
+                obs=get_obs(),
                 condition=None,
                 prev=prev,
                 curr=curr,
                 condition_evaluations=condition_evaluations,
                 term=term,
             )
-            times["on_subtask"] += 1
+            self.time_remaining -= 1
             interaction, obj = self.subtasks[subtask_id]
 
             def pair():

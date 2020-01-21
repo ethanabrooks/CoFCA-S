@@ -96,7 +96,6 @@ class Agent(ppo.agent.Agent, NNBase):
                 assert type(rm) is ppo.control_flow.recurrence.Recurrence
                 probs = [hx.a_probs, hx.d_probs]
                 X = [hx.a, hx.d]
-                aux_loss = 0
             dists = [FixedCategorical(p) for p in probs]
             action_log_probs = sum(dist.log_probs(x) for dist, x in zip(dists, X))
             entropy = sum([dist.entropy() for dist in dists]).mean()
