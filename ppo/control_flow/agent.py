@@ -89,7 +89,7 @@ class Agent(ppo.agent.Agent, NNBase):
             else:
                 aux_loss = 0
         else:
-            if type(rm) is ppo.control_flow.multi_step.recurrence.Recurrence:
+            if self.multi_step:
                 X = [hx.a, hx.d, hx.ag, hx.dg]
                 probs = [hx.a_probs, hx.d_probs, hx.ag_probs, hx.dg_probs]
             else:
@@ -102,12 +102,15 @@ class Agent(ppo.agent.Agent, NNBase):
             entropy = sum([dist.entropy() for dist in dists]).mean()
             # action_log_probs = a_dist.log_probs(hx.a) + d_dist.log_probs(hx.d)
             # entropy = (a_dist.entropy() + d_dist.entropy()).mean()
-            assert rm.gate_coef is not None
-            assert self.no_op_coef is not None
-            aux_loss = (
-                rm.gate_coef * (hx.ag_probs + hx.dg_probs)[:, 1].mean()
-                + self.no_op_coef * hx.a_probs[:, -1].mean()
-            )
+            if self.multi_step:
+                assert rm.gate_coef is not None
+                assert self.no_op_coef is not None
+                aux_loss = (
+                    rm.gate_coef * (hx.ag_probs + hx.dg_probs)[:, 1].mean()
+                    + self.no_op_coef * hx.a_probs[:, -1].mean()
+                )
+            else:
+                aux_loss = 0
         action = torch.cat(X, dim=-1)
         aux_loss -= self.entropy_coef * entropy
         return AgentValues(
