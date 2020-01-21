@@ -243,8 +243,7 @@ class Env(gym.Env, ABC):
 
     @staticmethod
     def line_str(line: Line):
-        raise NotImplemented
-        return f"Subtask {line.id}"
+        return str(line)
 
     @property
     def eval_condition_size(self):
@@ -461,15 +460,16 @@ class Env(gym.Env, ABC):
             self.time_remaining += 1
             return l
 
+        action = None
         prev, curr = 0, next_subtask(None)
         while True:
-            yield State(
+            action = yield State(
                 obs=condition_bit,
                 condition=condition_bit,
                 prev=prev,
                 curr=curr,
                 condition_evaluations=condition_evaluations,
-                term=not self.time_remaining,
+                term=not self.time_remaining or (action is not None and action != curr),
             )
             self.time_remaining -= 1
             condition_bit = abs(
