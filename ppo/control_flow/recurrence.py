@@ -91,11 +91,8 @@ class Recurrence(nn.Module):
             in_size = encoder_hidden_size
         out_size = self.ne * 2 * self.train_lines if self.no_scan else self.ne
         self.beta = nn.Sequential(*layers, init_(nn.Linear(in_size, out_size)))
-
-        self.stuff = init_(nn.Linear(hidden_size, 1))
         self.critic = init_(nn.Linear(hidden_size, 1))
         self.actor = Categorical(hidden_size, n_a)
-        self.attention = Categorical(hidden_size, n_a)
         self.state_sizes = RecurrentState(
             a=1,
             a_probs=n_a,
