@@ -99,11 +99,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
 
     @property
     def gru_in_size(self):
-        in_size = self.hidden_size + self.conv_hidden_size
-        if self.no_pointer:
-            return in_size + 2 * self.hidden_size
-        else:
-            return in_size + self.encoder_hidden_size
+        return self.hidden_size + self.conv_hidden_size + self.encoder_hidden_size
 
     @staticmethod
     def eval_lines_space(n_eval_lines, train_lines_space):

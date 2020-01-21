@@ -33,14 +33,10 @@ class Recurrence(nn.Module):
         debug,
         no_scan,
         no_roll,
-        no_pointer,
-        include_action,
     ):
         super().__init__()
-        self.include_action = include_action
-        self.no_pointer = no_pointer
         self.no_roll = no_roll
-        self.no_scan = no_scan or no_pointer  # no scan if no pointer
+        self.no_scan = no_scan
         self.obs_spaces = Obs(**observation_space.spaces)
         self.action_size = 2
         self.debug = debug

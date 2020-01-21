@@ -22,7 +22,6 @@ class Agent(ppo.agent.Agent, NNBase):
         entropy_coef,
         recurrent,
         observation_space,
-        include_action,
         gate_coef,
         no_op_coef,
         baseline,
@@ -35,35 +34,31 @@ class Agent(ppo.agent.Agent, NNBase):
         if self.multi_step:
             if baseline == "no-pointer":
                 self.recurrent_module = ppo.control_flow.multi_step.no_pointer.Recurrence(
-                    include_action=True,
                     observation_space=observation_space,
                     gate_coef=gate_coef,
-                    no_pointer=True,
                     **network_args
                 )
             elif baseline == "oh-et-al":
                 self.recurrent_module = ppo.control_flow.multi_step.oh_et_al.Recurrence(
-                    include_action=True,
                     observation_space=observation_space,
                     gate_coef=gate_coef,
-                    no_pointer=True,
                     **network_args
                 )
             else:
                 assert baseline is None
                 self.recurrent_module = ppo.control_flow.multi_step.recurrence.Recurrence(
-                    include_action=True,
                     observation_space=observation_space,
                     gate_coef=gate_coef,
-                    no_pointer=False,
                     **network_args
                 )
         else:
+            del network_args["conv_hidden_size"]
+            del network_args["kernel_size"]
+            del network_args["nl_2"]
+            del network_args["gate_h"]
+            del network_args["use_conv"]
             self.recurrent_module = ppo.control_flow.recurrence.Recurrence(
-                include_action=include_action,
-                observation_space=observation_space,
-                no_pointer=False,
-                **network_args
+                observation_space=observation_space, **network_args
             )
 
     @property
