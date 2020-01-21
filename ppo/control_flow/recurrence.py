@@ -85,7 +85,7 @@ class Recurrence(nn.Module):
 
     @property
     def gru_in_size(self):
-        return 1 + 2 * self.hidden_size
+        return 1 + self.hidden_size + self.encoder_hidden_size
 
     # noinspection PyProtectedMember
     @contextmanager
