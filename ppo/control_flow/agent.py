@@ -31,38 +31,31 @@ class Agent(ppo.agent.Agent, NNBase):
         nn.Module.__init__(self)
         self.no_op_coef = no_op_coef
         self.entropy_coef = entropy_coef
-        self.multi_step = type(observation_space.spaces["obs"]) is Box
-        if self.multi_step:
-            if baseline == "no-pointer":
-                self.recurrent_module = ppo.control_flow.multi_step.no_pointer.Recurrence(
-                    include_action=True,
-                    observation_space=observation_space,
-                    gate_coef=gate_coef,
-                    no_pointer=True,
-                    **network_args
-                )
-            elif baseline == "oh-et-al":
-                self.recurrent_module = ppo.control_flow.multi_step.oh_et_al.Recurrence(
-                    include_action=True,
-                    observation_space=observation_space,
-                    gate_coef=gate_coef,
-                    no_pointer=True,
-                    **network_args
-                )
-            else:
-                assert baseline is None
-                self.recurrent_module = ppo.control_flow.multi_step.recurrence.Recurrence(
-                    include_action=True,
-                    observation_space=observation_space,
-                    gate_coef=gate_coef,
-                    no_pointer=False,
-                    **network_args
-                )
-        else:
-            self.recurrent_module = ppo.control_flow.recurrence.Recurrence(
-                include_action=include_action,
+        multi_step = type(observation_space.spaces["obs"]) is Box
+        if baseline == "no-pointer":
+            self.recurrent_module = ppo.control_flow.multi_step.no_pointer.Recurrence(
+                include_action=True,
                 observation_space=observation_space,
+                gate_coef=gate_coef,
+                no_pointer=True,
+                **network_args
+            )
+        elif baseline == "oh-et-al":
+            self.recurrent_module = ppo.control_flow.multi_step.oh_et_al.Recurrence(
+                include_action=True,
+                observation_space=observation_space,
+                gate_coef=gate_coef,
+                no_pointer=True,
+                **network_args
+            )
+        else:
+            assert baseline is None
+            self.recurrent_module = ppo.control_flow.multi_step.recurrence.Recurrence(
+                include_action=True,
+                observation_space=observation_space,
+                gate_coef=gate_coef,
                 no_pointer=False,
+                multi_step=multi_step,
                 **network_args
             )
 

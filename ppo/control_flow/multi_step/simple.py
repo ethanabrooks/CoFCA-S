@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 from ppo.agent import AgentValues, MLPBase
 from ppo.control_flow.env import Obs
-from ppo.control_flow.recurrence import get_obs_sections
+from ppo.control_flow.multi_step.recurrence import get_obs_sections
 from ppo.distributions import Categorical
 from ppo.utils import init_
 
