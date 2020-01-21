@@ -55,7 +55,7 @@ def main(log_dir, seed, eval_lines, **kwargs):
             else:
                 return control_flow.multi_step.env.Env(**args, world_size=world_size)
 
-    _Train(**kwargs, seed=seed, log_dir=log_dir, time_limit=None).run()
+    _Train(**kwargs, seed=seed, log_dir=log_dir).run()
 
 
 def bandit_args():
