@@ -4,27 +4,38 @@ from contextlib import contextmanager
 import numpy as np
 import torch
 import torch.nn.functional as F
-from gym import spaces
 from torch import nn as nn
 
 from ppo.control_flow.env import Obs
-from ppo.control_flow.multi_step.recurrence import get_obs_sections
-from ppo.distributions import Categorical, FixedCategorical
+from ppo.distributions import FixedCategorical, Categorical
 from ppo.utils import init_
 
-RecurrentState = namedtuple("RecurrentState", "a d p v h a_probs d_probs")
+RecurrentState = namedtuple(
+    "RecurrentState", "a d ag dg p v h h2 a_probs d_probs ag_probs dg_probs"
+)
+
+
+def gate(g, new, old):
+    old = torch.zeros_like(new).scatter(1, old.unsqueeze(1), 1)
+    return FixedCategorical(probs=g * new + (1 - g) * old)
 
 
 class Recurrence(nn.Module):
     def __init__(
         self,
+        hidden_size,
+        gate_coef,
+        num_layers,
+        activation,
+        conv_hidden_size,
+        use_conv,
+        kernel_size,
+        nl_2,
+        gate_h,
         observation_space,
         action_space,
         eval_lines,
-        activation,
-        hidden_size,
         encoder_hidden_size,
-        num_layers,
         num_edges,
         num_encoding_layers,
         debug,
@@ -32,8 +43,13 @@ class Recurrence(nn.Module):
         no_roll,
         no_pointer,
         include_action,
+        multi_step,
     ):
         super().__init__()
+        self.gate_h = gate_h
+        self.nl_2 = nl_2
+        self.conv_hidden_size = conv_hidden_size
+        self.use_conv = use_conv
         self.include_action = include_action
         self.no_pointer = no_pointer
         self.no_roll = no_roll
@@ -81,21 +97,50 @@ class Recurrence(nn.Module):
         self.actor = Categorical(hidden_size, n_a)
         self.attention = Categorical(hidden_size, n_a)
         self.state_sizes = RecurrentState(
-            a=1, a_probs=n_a, d=1, d_probs=2 * self.train_lines, p=1, v=1, h=hidden_size
+            a=1,
+            a_probs=n_a,
+            d=1,
+            d_probs=2 * self.train_lines,
+            p=1,
+            v=1,
+            h=hidden_size,
+            h2=hidden_size,
+            ag_probs=2,
+            dg_probs=2,
+            ag=1,
+            dg=1,
         )
+        self.gate_coef = gate_coef
+        self.action_size = 4
+        d = self.obs_spaces.obs.shape[0]
+        if use_conv:
+            self.conv = nn.Sequential(
+                nn.Conv2d(d, conv_hidden_size, kernel_size=3),
+                nn.ReLU(),
+                nn.Conv2d(conv_hidden_size, conv_hidden_size, kernel_size=4),
+                nn.ReLU(),
+            )
+        else:
+            self.conv = nn.Sequential(init_(nn.Linear(d, conv_hidden_size)), nn.ReLU())
+
+        self.d_gate = Categorical(hidden_size, 2)
+        self.a_gate = Categorical(hidden_size, 2)
+        ones = torch.ones(1, dtype=torch.long)
+        self.register_buffer("ones", ones)
+        line_nvec = torch.tensor(self.obs_spaces.lines.nvec[0, :-1])
+        offset = F.pad(line_nvec.cumsum(0), [1, 0])
+        self.register_buffer("offset", offset)
 
     def build_embed_task(self, hidden_size):
-        return nn.Embedding(len(self.obs_spaces.lines.nvec), hidden_size)
+        return nn.EmbeddingBag(self.obs_spaces.lines.nvec[0].sum(), hidden_size)
 
     @property
     def gru_in_size(self):
+        in_size = self.hidden_size + self.conv_hidden_size
         if self.no_pointer:
-            in_size = 2 * self.hidden_size
-        elif self.include_action:
-            in_size = self.hidden_size
+            return in_size + 2 * self.hidden_size
         else:
-            in_size = 0
-        return in_size + self.encoder_hidden_size + self.obs_sections.obs
+            return in_size + self.encoder_hidden_size
 
     # noinspection PyProtectedMember
     @contextmanager
@@ -116,12 +161,6 @@ class Recurrence(nn.Module):
         # noinspection PyProtectedMember
         if not self.no_scan:
             self.state_sizes = self.state_sizes._replace(d_probs=2 * self.train_lines)
-
-    @staticmethod
-    def get_lines_space(n_eval_lines, train_lines_space):
-        return spaces.MultiDiscrete(
-            np.repeat(train_lines_space.nvec[:1], repeats=n_eval_lines, axis=0)
-        )
 
     @staticmethod
     def sample_new(x, dist):
@@ -167,45 +206,48 @@ class Recurrence(nn.Module):
 
         # parse non-action inputs
         inputs = self.parse_inputs(inputs)
+        inputs = inputs._replace(obs=inputs.obs.view(T, N, *self.obs_spaces.obs.shape))
 
         # build memory
-        lines = inputs.lines.view(T, N, self.obs_sections.lines).long()[0, :, :]
-        M = self.embed_task(lines.view(-1)).view(
-            *lines.shape, self.encoder_hidden_size
+        nl = len(self.obs_spaces.lines.nvec)
+        lines = inputs.lines.view(T, N, *self.obs_spaces.lines.shape)
+        lines = lines.long()[0, :, :] + self.offset
+        M = self.embed_task(lines.view(-1, self.obs_spaces.lines.nvec[0].size)).view(
+            *lines.shape[:2], self.encoder_hidden_size
         )  # n_batch, n_lines, hidden_size
 
         rolled = []
-        nl = self.obs_sections.lines
         for i in range(nl):
             rolled.append(M if self.no_roll else torch.roll(M, shifts=-i, dims=1))
         rolled = torch.cat(rolled, dim=0)
         G, H = self.task_encoder(rolled)
-        H = H.transpose(0, 1).reshape(nl, N, -1)
-        last = torch.zeros(nl, N, 2 * nl, self.ne, device=rnn_hxs.device)
-        last[:, :, -1] = 1
         if self.no_scan:
+            H = H.transpose(0, 1).reshape(nl, N, -1)
             P = self.beta(H).view(nl, N, -1, self.ne).softmax(2)
+            half = P.size(2) // 2
         else:
             G = G.view(nl, N, nl, 2, self.encoder_hidden_size)
-            B = self.beta(G)
-            # arange = 0.05 * torch.zeros(15).float()
+            B = bb = self.beta(G).sigmoid()
+            # arange = torch.zeros(6).float()
             # arange[0] = 1
-            # B[:, :, :, 0] = arange.view(1, 1, -1, 1)
-            # B[:, :, :, 1] = arange.flip(0).view(1, 1, -1, 1)
-            f, b = torch.unbind(B.sigmoid(), dim=3)
+            # arange[1] = 1
+            # B[:, :, :, 0] = 0  # arange.view(1, 1, -1, 1)
+            # B[:, :, :, 1] = 1
+            f, b = torch.unbind(B, dim=3)
             B = torch.stack([f, b.flip(2)], dim=-2)
             B = B.view(nl, N, 2 * nl, self.ne)
-            # noinspection PyTypeChecker
+            last = torch.zeros(nl, N, 2 * nl, self.ne, device=rnn_hxs.device)
+            last[:, :, -1] = 1
+            B = (1 - last).flip(2) * B  # this ensures the first B is 0
             zero_last = (1 - last) * B
-            B = zero_last + self.last  # this ensures that the last B is 1
+            B = zero_last + last  # this ensures that the last B is 1
             rolled = torch.roll(zero_last, shifts=1, dims=2)
-            # noinspection PyTypeChecker
             C = torch.cumprod(1 - rolled, dim=2)
             P = B * C
             P = P.view(nl, N, nl, 2, self.ne)
             f, b = torch.unbind(P, dim=3)
             P = torch.cat([b.flip(2), f], dim=2)
-            P = P.roll(shifts=(-1, 1), dims=(0, 2))
+            half = nl
 
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
@@ -213,41 +255,78 @@ class Recurrence(nn.Module):
             _x.squeeze_(0)
 
         h = hx.h
+        h2 = hx.h2
         p = hx.p.long().squeeze(-1)
-        a = hx.a.long().squeeze(-1)
-        a[new_episode] = 0
+        hx.a[new_episode] = self.n_a - 1
+        ag_probs = hx.ag_probs
+        ag_probs[new_episode, 1] = 1
         R = torch.arange(N, device=rnn_hxs.device)
+        ones = self.ones.expand_as(R)
         A = torch.cat([actions[:, :, 0], hx.a.view(1, N)], dim=0).long()
         D = torch.cat([actions[:, :, 1], hx.d.view(1, N)], dim=0).long()
+        AG = torch.cat([actions[:, :, 2], hx.ag.view(1, N)], dim=0).long()
+        DG = torch.cat([actions[:, :, 3], hx.dg.view(1, N)], dim=0).long()
 
         for t in range(T):
             self.print("p", p)
-            obs = inputs.obs[t]
-            x = [obs, H.sum(0) if self.no_pointer else M[R, p]]
-            if self.no_pointer or self.include_action:
-                x += [self.embed_action(A[t - 1].clone())]
+            if self.use_conv:
+                obs = self.conv(inputs.obs[t]).view(N, -1)
+            else:
+                obs = (
+                    self.conv(inputs.obs[t].permute(0, 2, 3, 1))
+                    .view(N, -1, self.conv_hidden_size)
+                    .max(dim=1)
+                    .values
+                )
+            x = [obs, M[R, p], self.embed_action(A[t - 1].clone())]
             h = self.gru(torch.cat(x, dim=-1), h)
             z = F.relu(self.zeta(h))
-            a_dist = self.actor(z)
-            self.sample_new(A[t], a_dist)
+            d_gate = self.d_gate(z)
+            self.sample_new(DG[t], d_gate)
+            a_gate = self.a_gate(z)
+            self.sample_new(AG[t], a_gate)
+
+            h2_ = self.gru(torch.cat(x, dim=-1), h2)
+            z = F.relu(self.zeta(h2_))
             u = self.upsilon(z).softmax(dim=-1)
-            self.print("o", torch.round(10 * u))
+            self.print("u", u)
             w = P[p, R]
-            half1 = w.size(1) // 2
-            self.print(torch.round(10 * w)[0, half1:])
-            self.print(torch.round(10 * w)[0, :half1])
-            d_dist = FixedCategorical(probs=((w @ u.unsqueeze(-1)).squeeze(-1)))
-            # p_probs = torch.round(p_dist.probs * 10).flatten()
+            d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
+            dg = DG[t].unsqueeze(-1).float()
+            self.print("dg prob", d_gate.probs[:, 1])
+            self.print("dg", dg)
+            d_dist = gate(dg, d_probs, ones * half)
+            self.print("d_probs", d_probs[:, half:])
             self.sample_new(D[t], d_dist)
-            n_p = d_dist.probs.size(-1)
-            p = p + D[t].clone() - n_p // 2
-            p = torch.clamp(p, min=0, max=n_p - 1)
+            p = p + D[t].clone() - half
+            p = torch.clamp(p, min=0, max=nl - (2 if self.nl_2 else 1))
+
+            ag = AG[t].unsqueeze(-1).float()
+            a_dist = gate(ag, self.actor(z).probs, A[t - 1])
+            self.sample_new(A[t], a_dist)
+            self.print("ag prob", a_gate.probs[:, 1])
+            self.print("ag", ag)
+
+            if self.gate_h:
+                h2 = dg * h2_ + (1 - dg) * h2
+            else:
+                h2 = h2_
+
             yield RecurrentState(
                 a=A[t],
                 v=self.critic(z),
                 h=h,
+                h2=h2,
                 p=p,
                 a_probs=a_dist.probs,
                 d=D[t],
                 d_probs=d_dist.probs,
+                ag_probs=a_gate.probs,
+                dg_probs=d_gate.probs,
+                ag=ag,
+                dg=dg,
             )
+
+
+def get_obs_sections(obs_spaces):
+    return Obs(*[int(np.prod(s.shape)) for s in obs_spaces])

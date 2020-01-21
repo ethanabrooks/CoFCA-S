@@ -9,7 +9,7 @@ from ppo.agent import AgentValues, NNBase
 
 from ppo.control_flow.recurrence import RecurrentState
 import ppo.control_flow.recurrence
-import ppo.control_flow.multi_step.recurrence
+import ppo.control_flow.recurrence
 import ppo.control_flow.multi_step.no_pointer
 import ppo.control_flow.multi_step.oh_et_al
 import ppo.control_flow.simple
@@ -50,7 +50,7 @@ class Agent(ppo.agent.Agent, NNBase):
             )
         else:
             assert baseline is None
-            self.recurrent_module = ppo.control_flow.multi_step.recurrence.Recurrence(
+            self.recurrent_module = ppo.control_flow.recurrence.Recurrence(
                 include_action=True,
                 observation_space=observation_space,
                 gate_coef=gate_coef,
