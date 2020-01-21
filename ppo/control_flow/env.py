@@ -269,9 +269,12 @@ class Env(gym.Env, ABC):
 
     def assign_line_ids(self, lines):
         for line in lines:
-            yield Subtask(
-                self.random.choice(self.num_subtasks)
-            ) if line is Subtask else line
+            if line is Subtask:
+                yield Subtask(self.random.choice(self.num_subtasks))
+            elif line is Padding:
+                yield line
+            else:
+                yield line(self.line_types.index(line))
 
     def build_task_image(self, lines):
         image = np.zeros(self.image_shape)
@@ -333,11 +336,11 @@ class Env(gym.Env, ABC):
         return image
 
     def preprocess_line(self, line):
-        return (
-            line.id
-            if type(line) is Subtask
-            else self.num_subtasks + self.line_types.index(line)
-        )
+        if line is Padding:
+            return self.line_types.index(Padding)
+        if type(line) is Subtask:
+            return line.id
+        return self.num_subtasks + line.id
 
     def get_lines(
         self, n, active_conditions, last=None, nesting_depth=0, max_nesting_depth=None
