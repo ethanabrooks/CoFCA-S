@@ -221,17 +221,17 @@ class Recurrence(nn.Module):
             a_dist = self.actor(z)
             self.sample_new(A[t], a_dist)
             u = self.upsilon(z).softmax(dim=-1)
-            self.print("o", torch.round(10 * u))
+            self.print("u", u)
             w = P[p, R]
             half1 = w.size(1) // 2
-            self.print(torch.round(10 * w)[0, half1:])
-            self.print(torch.round(10 * w)[0, :half1])
+            self.print(w[0, half1:])
+            self.print(w[0, :half1])
             d_dist = FixedCategorical(probs=((w @ u.unsqueeze(-1)).squeeze(-1)))
             # p_probs = torch.round(p_dist.probs * 10).flatten()
             self.sample_new(D[t], d_dist)
             n_p = d_dist.probs.size(-1)
             p = p + D[t].clone() - n_p // 2
-            p = torch.clamp(p, min=0, max=n_p - 1)
+            p = torch.clamp(p, min=0, max=M.size(1) - 1)
             yield RecurrentState(
                 a=A[t],
                 v=self.critic(z),

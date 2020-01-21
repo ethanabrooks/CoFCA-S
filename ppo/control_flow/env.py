@@ -40,7 +40,7 @@ class Env(gym.Env, ABC):
         max_nesting_depth,
         eval_condition_size,
         no_op_limit,
-        time_limit,
+        time_to_waste,
         analyze_mistakes,
         subtasks_only,
         break_on_fail,
@@ -57,6 +57,8 @@ class Env(gym.Env, ABC):
         self._eval_condition_size = eval_condition_size
         self.max_nesting_depth = max_nesting_depth
         self.num_subtasks = num_subtasks
+        self.time_to_waste = time_to_waste
+        self.time_remaining = None
 
         self.eval_lines = eval_lines
         self.min_lines = min_lines
@@ -447,6 +449,7 @@ class Env(gym.Env, ABC):
         line_iterator = self.line_generator(lines)
         condition_bit = 0 if self.eval_condition_size else self.random.randint(0, 2)
         condition_evaluations = defaultdict(list)
+        self.time_remaining = self.time_to_waste
 
         def next_subtask(msg=condition_bit):
             l = line_iterator.send(msg)
@@ -455,6 +458,7 @@ class Env(gym.Env, ABC):
                 if type(line) in (If, While):
                     condition_evaluations[type(line)] += [condition_bit]
                 l = line_iterator.send(condition_bit)
+            self.time_remaining += 1
             return l
 
         prev, curr = 0, next_subtask(None)
@@ -465,8 +469,9 @@ class Env(gym.Env, ABC):
                 prev=prev,
                 curr=curr,
                 condition_evaluations=condition_evaluations,
-                term=False,
+                term=not self.time_remaining,
             )
+            self.time_remaining -= 1
             condition_bit = abs(
                 condition_bit - int(self.random.rand() < self.flip_prob)
             )
