@@ -18,7 +18,6 @@ def main(log_dir, seed, eval_lines, **kwargs):
             if baseline == "simple":
                 del agent_args["no_scan"]
                 del agent_args["no_roll"]
-                del agent_args["include_action"]
                 del agent_args["num_encoding_layers"]
                 del agent_args["kernel_size"]
                 del agent_args["num_edges"]
@@ -49,6 +48,9 @@ def main(log_dir, seed, eval_lines, **kwargs):
                 **env_args, eval_lines=eval_lines, baseline=False, seed=seed + rank
             )
             if world_size is None:
+                del args["max_while_objects"]
+                del args["num_excluded_objects"]
+                del args["time_to_waste"]
                 return control_flow.env.Env(**args)
             else:
                 return control_flow.multi_step.env.Env(**args, world_size=world_size)
@@ -66,6 +68,8 @@ def bandit_args():
     ppo.control_flow.env.build_parser(parsers.env)
     parsers.env.add_argument("--world-size", type=int)
     parsers.env.add_argument("--subtasks-only", action="store_true")
+    parsers.env.add_argument("--break-on-fail", action="store_true")
+    parsers.env.add_argument("--analyze-mistakes", action="store_true")
     parsers.env.add_argument("--max-while-objects", type=float, required=True)
     parsers.env.add_argument("--num-excluded-objects", type=int, required=True)
     parsers.env.add_argument("--time-to-waste", type=int, required=True)
@@ -73,7 +77,6 @@ def bandit_args():
     parsers.agent.add_argument("--no-scan", action="store_true")
     parsers.agent.add_argument("--no-roll", action="store_true")
     parsers.agent.add_argument("--baseline")
-    parsers.agent.add_argument("--include-action", action="store_true")
     parsers.agent.add_argument("--conv-hidden-size", type=int, required=True)
     parsers.agent.add_argument("--encoder-hidden-size", type=int, required=True)
     parsers.agent.add_argument("--num-encoding-layers", type=int, required=True)

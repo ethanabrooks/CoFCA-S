@@ -48,28 +48,33 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         self.action_size = 4
         d = self.obs_spaces.obs.shape[0]
         if use_conv:
-            layers = [
-                nn.Conv2d(
-                    d,
-                    conv_hidden_size,
-                    kernel_size=kernel_size,
-                    stride=2 if kernel_size == 2 else 1,
-                    padding=0,
-                ),
+            # layers = [
+            #     nn.Conv2d(
+            #         d,
+            #         conv_hidden_size,
+            #         kernel_size=kernel_size,
+            #         stride=2 if kernel_size == 2 else 1,
+            #         padding=0,
+            #     ),
+            #     nn.ReLU(),
+            # ]
+            # if kernel_size < 4:
+            #     layers += [
+            #         nn.Conv2d(
+            #             conv_hidden_size,
+            #             conv_hidden_size,
+            #             kernel_size=2,
+            #             stride=2,
+            #             padding=0,
+            #         ),
+            #         nn.ReLU(),
+            #     ]
+            self.conv = nn.Sequential(
+                nn.Conv2d(d, conv_hidden_size, kernel_size=3),
                 nn.ReLU(),
-            ]
-            if kernel_size < 4:
-                layers += [
-                    nn.Conv2d(
-                        conv_hidden_size,
-                        conv_hidden_size,
-                        kernel_size=2,
-                        stride=2,
-                        padding=0,
-                    ),
-                    nn.ReLU(),
-                ]
-            self.conv = nn.Sequential(*layers)
+                nn.Conv2d(conv_hidden_size, conv_hidden_size, kernel_size=4),
+                nn.ReLU(),
+            )
         else:
             self.conv = nn.Sequential(init_(nn.Linear(d, conv_hidden_size)), nn.ReLU())
 
@@ -139,100 +144,8 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             *lines.shape[:2], self.encoder_hidden_size
         )  # n_batch, n_lines, hidden_size
 
-        rolled = []
-        for i in range(nl):
-            rolled.append(M if self.no_roll else torch.roll(M, shifts=-i, dims=1))
-        rolled = torch.cat(rolled, dim=0)
-        G, H = self.task_encoder(rolled)
-        if self.no_scan:
-            H = H.transpose(0, 1).reshape(nl, N, -1)
-            P = self.beta(H).view(nl, N, -1, self.ne).softmax(2)
-            half = P.size(2) // 2
-        else:
-            G = G.view(nl, N, nl, 2, self.encoder_hidden_size)
-            B = self.beta(G).sigmoid()
-            # ff, bb = (torch.unbind(x, dim=0) for x in torch.unbind(B, dim=3))
-            # P = []
-            # P_ = []
-            # succ_probs = []
-            # for i, (f, b) in enumerate(zip(ff, bb)):
-            #     succ_prob = torch.cat([f[:, :-i], b[:, -i:].flip(1)], dim=1)
-            #     succ_probs.append(succ_prob)
-            # last = torch.zeros_like(succ_prob)
-            # last[:, -1] = 1 - succ_prob[:, -1]
-            # succ_prob_ = succ_prob + last
-            # last[:, -1] = 1
-            # fail_prob = torch.roll(1 - succ_prob_ + last, shifts=1, dims=1)
-            # fail_prob_ = torch.cumprod(fail_prob, dim=1)
-            # p = fail_prob_ * succ_prob_
-            # P_.append(p)
-            # P.append(torch.roll(p, shifts=i, dims=1))
-            # P = torch.stack(P, dim=0)
-            # P_ = torch.stack(P_, dim=0)
-            # succ_probs = torch.stack(succ_probs, dim=0)
-
-            # succ_prob_ = []
-            # for i, x in enumerate(torch.unbind(B, dim=0)):
-            #     f = x[:, :-i, 0]
-            #     b = x[:, -i:, 1].flip(1)
-            #     print(f[0])
-            #     succ_prob_.append(torch.cat([torch.cat([f, b], dim=1)]))
-            # succ_probs = torch.stack(succ_prob_, dim=0)
-
-            permuted = B.permute(0, 3, 1, 2, 4)
-            unbound = torch.unbind(permuted, dim=0)
-            succ_probs = []
-            for i, (f, b) in enumerate(unbound):
-                f = f[:, :-i]
-                b = b[:, -i:]  # .flip(1)
-                fb = [f, b] if self.forward_first else [b, f]
-                succ_probs.append(torch.cat(fb, dim=1))
-            succ_probs = torch.stack(succ_probs, dim=0)
-
-            # succ_probs2 = []
-            # for i, b in enumerate(B):
-            #     _f = b[:, :-i, 0]
-            #     _b = b[:, -i:, 1]
-            #     succ_probs2.append(torch.cat([_f, _b.flip(1)], dim=1))
-            # succ_probs2 = torch.stack(succ_probs2, dim=0)
-
-            last = torch.zeros_like(succ_probs)
-            last[:, :, -1] = 1 - succ_probs[:, :, -1]
-            succ_probs_ = succ_probs + last
-            last[:, :, -1] = 1
-            fail_probs = torch.roll(1 - succ_probs_ + last, shifts=1, dims=2)
-            fail_probs_ = torch.cumprod(fail_probs, dim=2)
-            P = fail_probs_ * succ_probs_
-
-            P = torch.stack(
-                [
-                    torch.roll(p, shifts=i, dims=1)
-                    for i, p in enumerate(torch.unbind(P, dim=0))
-                ],
-                dim=0,
-            )
-
-            # arange = torch.zeros(6).float()
-            # arange[0] = 1
-            # arange[1] = 1
-            # B[:, :, :, 0] = 0  # arange.view(1, 1, -1, 1)
-            # B[:, :, :, 1] = 1
-            f, b = torch.unbind(B, dim=3)
-            B = torch.stack([f, b.flip(2)], dim=-2)
-            B = B.view(nl, N, 2 * nl, self.ne)
-            last = torch.zeros(nl, N, 2 * nl, self.ne, device=rnn_hxs.device)
-            last[:, :, -1] = 1
-            B = (1 - last).flip(2) * B  # this ensures the first B is 0
-            zero_last = (1 - last) * B
-            B = zero_last + last  # this ensures that the last B is 1
-            rolled = torch.roll(zero_last, shifts=1, dims=2)
-            C = torch.cumprod(1 - rolled, dim=2)
-            P = B * C
-            P = P.view(nl, N, nl, 2, self.ne)
-            f, b = torch.unbind(P, dim=3)
-            P = torch.cat([b.flip(2), f], dim=2)
-            half = nl
-
+        P = self.build_P(M, N, rnn_hxs.device, nl)
+        half = P.size(2) // 2 if self.no_scan else nl
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
 
         if not new_episode.any():
@@ -286,7 +199,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         hx.a[new_episode] = self.n_a - 1
         ag_probs = hx.ag_probs
         ag_probs[new_episode, 1] = 1
-        R = torch.arange(N, device=rnn_hxs.device)
+        R = torch.arange(N, device=(rnn_hxs.device))
         ones = self.ones.expand_as(R)
         A = torch.cat([actions[:, :, 0], hx.a.view(1, N)], dim=0).long()
         D = torch.cat([actions[:, :, 1], hx.d.view(1, N)], dim=0).long()
@@ -315,15 +228,14 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             h2_ = self.gru(torch.cat(x, dim=-1), h2)
             z = F.relu(self.zeta(h2_))
             u = self.upsilon(z).softmax(dim=-1)
-            # self.print("bb", torch.round(100 * bb[p, R, :, 0]))
-            self.print("u", torch.round(100 * u))
+            self.print("u", u)
             w = P[p, R]
             d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
             dg = DG[t].unsqueeze(-1).float()
-            self.print("dg prob", torch.round(100 * d_gate.probs[:, 1]))
+            self.print("dg prob", d_gate.probs[:, 1])
             self.print("dg", dg)
             d_dist = gate(dg, d_probs, ones * half)
-            self.print("d_probs", torch.round(100 * d_probs)[:, half:])
+            self.print("d_probs", d_probs[:, half:])
             self.sample_new(D[t], d_dist)
             p = p + D[t].clone() - half
             p = torch.clamp(p, min=0, max=nl - (2 if self.nl_2 else 1))
@@ -331,7 +243,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             ag = AG[t].unsqueeze(-1).float()
             a_dist = gate(ag, self.actor(z).probs, A[t - 1])
             self.sample_new(A[t], a_dist)
-            self.print("ag prob", torch.round(100 * a_gate.probs[:, 1]))
+            self.print("ag prob", a_gate.probs[:, 1])
             self.print("ag", ag)
 
             if self.gate_h:
