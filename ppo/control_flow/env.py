@@ -251,12 +251,12 @@ class Env(gym.Env, ABC):
                     term = True
             elif state.ptr is not None:
                 step += 1
-                if action != lines[state.ptr].id:
-                    info.update(success_line=state.prev, failure_line=state.ptr)
-                state = state_iterator.send(action)
-                if delta > 0 and state.ptr is not None:
+                if action == lines[state.ptr].id:
                     visited_by_agent.append(agent_ptr)
                     visited_by_env.append(state.ptr)
+                else:
+                    info.update(success_line=state.prev, failure_line=state.ptr)
+                state = state_iterator.send(action)
 
     @staticmethod
     def line_str(line: Line):
