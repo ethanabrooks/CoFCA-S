@@ -133,11 +133,10 @@ class Env(gym.Env, ABC):
 
                     ipdb.set_trace()
                 if self.analyze_mistakes:
-                    selected_block, (
-                        selected_block_start,
-                        selected_block_end,
-                    ) = get_block(agent_ptr)
-                    ptr_block, (ptr_block_start, ptr_block_end) = get_block(state.ptr)
+                    agent_block, (agent_block_start, agent_block_end) = get_block(
+                        agent_ptr
+                    )
+                    env_block, (env_block_start, env_block_end) = get_block(state.ptr)
                     info.update(
                         failed_to_enter_if=0,
                         failed_to_enter_else=0,
@@ -149,30 +148,34 @@ class Env(gym.Env, ABC):
                         mistakenly_entered_while=0,
                         mistakenly_advanced=0,
                         failed_to_keep_up=0,
+                        mistaken_id=0,
                     )
                     if (
-                        ptr_block is If
+                        env_block is If
                         and state.ptr < agent_ptr
                         and state.ptr not in visited_by_agent
                     ):
                         info.update(failed_to_enter_if=1)
-                    elif ptr_block is Else and selected_block_end == ptr_block_start:
+                    elif env_block is Else and (
+                        (state.ptr < agent_ptr and state.ptr not in visited_by_agent)
+                        or (agent_block_end == env_block_start)
+                    ):
                         info.update(failed_to_enter_else=1)
                     elif (
-                        selected_block is If
+                        agent_block is If
                         and agent_ptr < state.ptr
                         and agent_ptr not in visited_by_env
                     ):
                         info.update(mistakenly_enterred_if=1)
-                    elif ptr_block is Else and selected_block_end == ptr_block_start:
-                        assert selected_block is If
+                    elif agent_block is Else and agent_block_end == env_block_start:
+                        assert env_block is If
                         info.update(mistakenly_enterred_else=1)
-                    elif ptr_block is While and ptr_block_end < agent_ptr:
+                    elif env_block is While and state.ptr < agent_ptr:
                         if state.ptr in visited_by_agent:
                             info.update(failed_to_reenter_while=1)
                         else:
                             info.update(failed_to_enter_while=1)
-                    elif selected_block is While and selected_block_end < state.ptr:
+                    elif agent_block is While and agent_block_end < state.ptr:
                         if agent_ptr in visited_by_env:
                             info.update(mistakenly_reentered_while=1)
                         else:
@@ -181,6 +184,8 @@ class Env(gym.Env, ABC):
                         info.update(mistakenly_advanced=1)
                     elif agent_ptr < state.ptr:
                         info.update(failed_to_keep_up=1)
+                    else:
+                        info.update(mistaken_id=1)
 
             info.update(regret=1 if term and not success else 0)
             if term:
