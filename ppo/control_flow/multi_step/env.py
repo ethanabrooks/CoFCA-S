@@ -1,6 +1,5 @@
 import functools
-from collections import Counter, defaultdict
-from copy import copy
+from collections import defaultdict
 
 import numpy as np
 from gym import spaces
@@ -9,16 +8,7 @@ from rl_utils import hierarchical_parse_args
 import ppo.control_flow.env
 from ppo import keyboard_control
 from ppo.control_flow.env import build_parser, State
-from ppo.control_flow.lines import (
-    Subtask,
-    Padding,
-    Line,
-    While,
-    If,
-    EndWhile,
-    Else,
-    EndIf,
-)
+from ppo.control_flow.lines import Subtask, Padding, Line, While, If, EndWhile, Else
 
 
 class Env(ppo.control_flow.env.Env):

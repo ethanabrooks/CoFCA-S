@@ -9,9 +9,12 @@ from ppo.agent import AgentValues, NNBase
 
 from ppo.control_flow.recurrence import RecurrentState
 import ppo.control_flow.recurrence
-import ppo.control_flow.multi_step.recurrence
+import ppo.control_flow.multi_step.abstract_recurrence
 import ppo.control_flow.multi_step.no_pointer
 import ppo.control_flow.multi_step.oh_et_al
+import ppo.control_flow.multi_step.ours
+import ppo.control_flow.no_pointer
+import ppo.control_flow.oh_et_al
 import ppo.control_flow.simple
 from ppo.distributions import FixedCategorical
 
@@ -31,32 +34,29 @@ class Agent(ppo.agent.Agent, NNBase):
         self.no_op_coef = no_op_coef
         self.entropy_coef = entropy_coef
         self.multi_step = type(observation_space.spaces["obs"]) is Box
-        if self.multi_step:
-            if baseline == "no-pointer":
-                self.recurrent_module = ppo.control_flow.multi_step.no_pointer.Recurrence(
-                    observation_space=observation_space,
-                    gate_coef=gate_coef,
-                    **network_args
-                )
-            elif baseline == "oh-et-al":
-                self.recurrent_module = ppo.control_flow.multi_step.oh_et_al.Recurrence(
-                    observation_space=observation_space,
-                    gate_coef=gate_coef,
-                    **network_args
-                )
-            else:
-                assert baseline is None
-                self.recurrent_module = ppo.control_flow.multi_step.recurrence.Recurrence(
-                    observation_space=observation_space,
-                    gate_coef=gate_coef,
-                    **network_args
-                )
-        else:
+        if not self.multi_step:
             del network_args["conv_hidden_size"]
-            del network_args["kernel_size"]
             del network_args["nl_2"]
             del network_args["gate_h"]
             del network_args["use_conv"]
+        if baseline == "no-pointer":
+            self.recurrent_module = (
+                ppo.control_flow.multi_step.no_pointer.Recurrence
+                if self.multi_step
+                else ppo.control_flow.no_pointer.Recurrence
+            )(observation_space=observation_space, **network_args)
+        elif baseline == "oh-et-al":
+            self.recurrent_module = (
+                ppo.control_flow.multi_step.oh_et_al.Recurrence
+                if self.multi_step
+                else ppo.control_flow.no_pointer.Recurrence
+            )(observation_space=observation_space, gate_coef=gate_coef, **network_args)
+        elif self.multi_step:
+            assert baseline is None
+            self.recurrent_module = ppo.control_flow.multi_step.ours.Recurrence(
+                observation_space=observation_space, gate_coef=gate_coef, **network_args
+            )
+        else:
             self.recurrent_module = ppo.control_flow.recurrence.Recurrence(
                 observation_space=observation_space, **network_args
             )
@@ -76,42 +76,39 @@ class Agent(ppo.agent.Agent, NNBase):
         )
         rm = self.recurrent_module
         hx = rm.parse_hidden(all_hxs)
-        a_dist = FixedCategorical(hx.a_probs)
-        if self.multi_step:
+        t = type(rm)
+        pad = hx.a
+        if t in (
+            ppo.control_flow.oh_et_al.Recurrence,
+            ppo.control_flow.no_pointer.Recurrence,
+        ):
+            X = [hx.a, pad, pad]
+            probs = [hx.a_probs]
+        elif t is ppo.control_flow.recurrence.Recurrence:
+            X = [hx.a, hx.d, hx.p]
+            probs = [hx.a_probs, hx.d_probs]
+        elif t is ppo.control_flow.multi_step.no_pointer.Recurrence:
+            X = [hx.a, pad, pad, pad, pad]
+            probs = [hx.a_probs]
+        elif t is ppo.control_flow.multi_step.oh_et_al.Recurrence:
+            X = [hx.a, hx.ag, hx.dg, pad, pad]
+            probs = [hx.a_probs, hx.ag_probs, hx.dg_probs]
+        elif t is ppo.control_flow.multi_step.ours.Recurrence:
             X = [hx.a, hx.d, hx.ag, hx.dg, hx.p]
             probs = [hx.a_probs, hx.d_probs, hx.ag_probs, hx.dg_probs]
         else:
-            assert type(rm) is ppo.control_flow.recurrence.Recurrence
-            X = [hx.a, hx.d, hx.p]
-            probs = [hx.a_probs, hx.d_probs]
-        if type(rm) in (
-            ppo.control_flow.multi_step.oh_et_al.Recurrence,
-            ppo.control_flow.multi_step.no_pointer.Recurrence,
-        ):
-            action_log_probs = a_dist.log_probs(hx.a)
-            entropy = a_dist.entropy().mean()
-            if type(rm) is ppo.control_flow.multi_step.oh_et_al:
-                assert rm.gate_coef is not None
-                aux_loss = rm.gate_coef * (hx.ag + hx.dg)
-            else:
-                aux_loss = 0
-        else:
-            dists = [FixedCategorical(p) for p in probs]
-            action_log_probs = sum(dist.log_probs(x) for dist, x in zip(dists, X))
-            entropy = sum([dist.entropy() for dist in dists]).mean()
-            # action_log_probs = a_dist.log_probs(hx.a) + d_dist.log_probs(hx.d)
-            # entropy = (a_dist.entropy() + d_dist.entropy()).mean()
-            if self.multi_step:
-                assert rm.gate_coef is not None
-                assert self.no_op_coef is not None
-                aux_loss = (
-                    rm.gate_coef * (hx.ag_probs + hx.dg_probs)[:, 1].mean()
-                    + self.no_op_coef * hx.a_probs[:, -1].mean()
-                )
-            else:
-                aux_loss = 0
+            raise RuntimeError
+        dists = [FixedCategorical(p) for p in probs]
+        action_log_probs = sum(dist.log_probs(x) for dist, x in zip(dists, X))
+        entropy = sum([dist.entropy() for dist in dists]).mean()
+        aux_loss = (
+            self.no_op_coef * hx.a_probs[:, -1].mean() - self.entropy_coef * entropy
+        )
+        try:
+            aux_loss += rm.gate_coef * (hx.ag_probs + hx.dg_probs)[:, 1].mean()
+        except AttributeError:
+            pass
         action = torch.cat(X, dim=-1)
-        aux_loss -= self.entropy_coef * entropy
         return AgentValues(
             value=hx.v,
             action=action,

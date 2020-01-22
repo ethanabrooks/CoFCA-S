@@ -19,7 +19,6 @@ def main(log_dir, seed, eval_lines, **kwargs):
                 del agent_args["no_scan"]
                 del agent_args["no_roll"]
                 del agent_args["num_encoding_layers"]
-                del agent_args["kernel_size"]
                 del agent_args["num_edges"]
                 del agent_args["gate_coef"]
                 del agent_args["no_op_coef"]
@@ -81,7 +80,6 @@ def bandit_args():
     parsers.agent.add_argument("--conv-hidden-size", type=int, required=True)
     parsers.agent.add_argument("--encoder-hidden-size", type=int, required=True)
     parsers.agent.add_argument("--num-encoding-layers", type=int, required=True)
-    parsers.agent.add_argument("--kernel-size", type=int, required=True)
     parsers.agent.add_argument("--num-edges", type=int, required=True)
     parsers.agent.add_argument("--gate-coef", type=float, required=True)
     parsers.agent.add_argument("--no-op-coef", type=float, required=True)
