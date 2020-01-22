@@ -262,8 +262,7 @@ class Env(gym.Env, ABC):
 
     @staticmethod
     def line_str(line: Line):
-        raise NotImplemented
-        return f"Subtask {line.id}"
+        return str(line)
 
     @property
     def eval_condition_size(self):
@@ -479,16 +478,17 @@ class Env(gym.Env, ABC):
                 l = line_iterator.send(condition_bit)
             self.time_remaining += 1
             return l
-
+        action = None
         prev, ptr = 0, next_subtask(None)
         while True:
-            yield State(
+            failure = False if None in (action, ptr) else action != lines[ptr].id
+            action = yield State(
                 obs=condition_bit,
                 condition=condition_bit,
                 prev=prev,
                 ptr=ptr,
                 condition_evaluations=condition_evaluations,
-                term=not self.time_remaining,
+                term=not self.time_remaining or failure,
             )
             self.time_remaining -= 1
             condition_bit = abs(
