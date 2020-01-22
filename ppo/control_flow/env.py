@@ -102,8 +102,8 @@ class Env(gym.Env, ABC):
         lines = self.build_lines()
         state_iterator = self.state_generator(lines)
         state = next(state_iterator)
-        visited_by_env = []
-        visited_by_agent = []
+        visited_by_env = set()
+        visited_by_agent = set()
 
         def get_block(l):
             block_type = None
@@ -252,8 +252,8 @@ class Env(gym.Env, ABC):
             elif state.ptr is not None:
                 step += 1
                 if action == lines[state.ptr].id:
-                    visited_by_agent.append(agent_ptr)
-                    visited_by_env.append(state.ptr)
+                    visited_by_agent.add(agent_ptr)
+                    visited_by_env.add(state.ptr)
                 else:
                     info.update(success_line=state.prev, failure_line=state.ptr)
                 state = state_iterator.send(action)
