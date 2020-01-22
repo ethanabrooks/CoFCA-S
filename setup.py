@@ -23,6 +23,13 @@ setup(
         "bin/dbg1",
         "bin/show-best",
         "bin/reproduce",
+        "bin/lookup-command.zsh",
+        "bin/log-to-load.zsh",
+        "bin/crawl.zsh",
+        "bin/correlate",
+        "bin/crawl-and-correlate",
+        "bin/wtf.zsh",
+        "bin/remove-log.zsh",
     ],
     entry_points=dict(console_scripts=["ppo=ppo.main:cli", "exp=ppo.main:exp_cli"]),
     install_requires=[

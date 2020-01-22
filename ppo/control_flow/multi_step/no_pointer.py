@@ -47,38 +47,37 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         self.gate_coef = gate_coef
         d = self.obs_spaces.obs.shape[0]
         if use_conv:
-            # layers = [
-            #     nn.Conv2d(
-            #         d,
-            #         conv_hidden_size,
-            #         kernel_size=kernel_size,
-            #         stride=2 if kernel_size == 2 else 1,
-            #         padding=0,
-            #     ),
-            #     nn.ReLU(),
-            # ]
-            # if kernel_size < 4:
-            #     layers += [
-            #         nn.Conv2d(
-            #             conv_hidden_size,
-            #             conv_hidden_size,
-            #             kernel_size=2,
-            #             stride=2,
-            #             padding=0,
-            #         ),
-            #         nn.ReLU(),
-            #     ]
-            self.conv = nn.Sequential(
-                nn.Conv2d(d, conv_hidden_size, kernel_size=3),
+            layers = [
+                nn.Conv2d(
+                    d,
+                    conv_hidden_size,
+                    kernel_size=kernel_size,
+                    stride=2 if kernel_size == 2 else 1,
+                    padding=0,
+                ),
                 nn.ReLU(),
-                nn.Conv2d(conv_hidden_size, conv_hidden_size, kernel_size=4),
-                nn.ReLU(),
-            )
+            ]
+            if kernel_size < 4:
+                layers += [
+                    nn.Conv2d(
+                        conv_hidden_size,
+                        conv_hidden_size,
+                        kernel_size=2,
+                        stride=2,
+                        padding=0,
+                    ),
+                    nn.ReLU(),
+                ]
+            self.conv = nn.Sequential(*layers)
         else:
             self.conv = nn.Sequential(init_(nn.Linear(d, conv_hidden_size)), nn.ReLU())
 
         self.d_gate = Categorical(hidden_size, 2)
         self.a_gate = Categorical(hidden_size, 2)
+        self.actor = Categorical(hidden_size, self.n_a - 1)
+        self.state_sizes = self.state_sizes._replace(
+            a_probs=self.state_sizes.a_probs - 1
+        )
         self.state_sizes = RecurrentState(
             **self.state_sizes._asdict(),
             h2=hidden_size,
@@ -98,7 +97,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
 
     @property
     def gru_in_size(self):
-        return self.hidden_size + self.conv_hidden_size + self.encoder_hidden_size
+        return self.conv_hidden_size + 2 * self.encoder_hidden_size + self.hidden_size
 
     @staticmethod
     def eval_lines_space(n_eval_lines, train_lines_space):
@@ -139,28 +138,23 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             *lines.shape[:2], self.encoder_hidden_size
         )  # n_batch, n_lines, hidden_size
 
-        P = self.build_P(M, N, rnn_hxs.device, nl)
-        half = P.size(2) // 2 if self.no_scan else nl
+        G, H = self.task_encoder(M)
+        H = H.transpose(0, 1).reshape(N, -1)
+
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
         for _x in hx:
             _x.squeeze_(0)
 
         h = hx.h
-        h2 = hx.h2
-        p = hx.p.long().squeeze(-1)
         hx.a[new_episode] = self.n_a - 1
         ag_probs = hx.ag_probs
         ag_probs[new_episode, 1] = 1
-        R = torch.arange(N, device=(rnn_hxs.device))
-        ones = self.ones.expand_as(R)
         A = torch.cat([actions[:, :, 0], hx.a.view(1, N)], dim=0).long()
         D = torch.cat([actions[:, :, 1], hx.d.view(1, N)], dim=0).long()
         AG = torch.cat([actions[:, :, 2], hx.ag.view(1, N)], dim=0).long()
-        DG = torch.cat([actions[:, :, 3], hx.dg.view(1, N)], dim=0).long()
 
         for t in range(T):
-            self.print("p", p)
             if self.use_conv:
                 obs = self.conv(inputs.obs[t]).view(N, -1)
             else:
@@ -170,51 +164,30 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
                     .max(dim=1)
                     .values
                 )
-            x = [obs, M[R, p], self.embed_action(A[t - 1].clone())]
+            x = [obs, H, self.embed_action(A[t - 1].clone())]
             h = self.gru(torch.cat(x, dim=-1), h)
             z = F.relu(self.zeta(h))
-            d_gate = self.d_gate(z)
-            self.sample_new(DG[t], d_gate)
             a_gate = self.a_gate(z)
             self.sample_new(AG[t], a_gate)
-
-            h2_ = self.gru(torch.cat(x, dim=-1), h2)
-            z = F.relu(self.zeta(h2_))
-            u = self.upsilon(z).softmax(dim=-1)
-            self.print("u", u)
-            w = P[p, R]
-            d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
-            dg = DG[t].unsqueeze(-1).float()
-            self.print("dg prob", d_gate.probs[:, 1])
-            self.print("dg", dg)
-            d_dist = gate(dg, d_probs, ones * half)
-            self.print("d_probs", d_probs[:, half:])
-            self.sample_new(D[t], d_dist)
-            p = p + D[t].clone() - half
-            p = torch.clamp(p, min=0, max=M.size(1) - 1)
-
             ag = AG[t].unsqueeze(-1).float()
-            a_dist = gate(ag, self.actor(z).probs, A[t - 1])
+            # a_dist = gate(ag, self.actor(z).probs, A[t - 1])
+            # self.sample_new(A[t], a_dist)
+            a_dist = self.actor(z)
             self.sample_new(A[t], a_dist)
-            self.print("ag prob", a_gate.probs[:, 1])
+            self.print("ag prob", torch.round(100 * a_gate.probs[:, 1]))
             self.print("ag", ag)
-
-            if self.gate_h:
-                h2 = dg * h2_ + (1 - dg) * h2
-            else:
-                h2 = h2_
 
             yield RecurrentState(
                 a=A[t],
                 v=self.critic(z),
                 h=h,
-                h2=h2,
-                p=p,
+                h2=hx.h2,
+                p=hx.p,
                 a_probs=a_dist.probs,
                 d=D[t],
-                d_probs=d_dist.probs,
+                d_probs=hx.d_probs,
                 ag_probs=a_gate.probs,
-                dg_probs=d_gate.probs,
+                dg_probs=hx.dg_probs,
                 ag=ag,
-                dg=dg,
+                dg=hx.dg,
             )
