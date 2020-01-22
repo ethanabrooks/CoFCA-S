@@ -482,21 +482,24 @@ class Env(gym.Env, ABC):
 
         action = None
         prev, ptr = 0, next_subtask(None)
+        term = False
         while True:
-            failure = False if None in (action, ptr) else action != lines[ptr].id
             action = yield State(
                 obs=condition_bit,
                 condition=condition_bit,
                 prev=prev,
                 ptr=ptr,
                 condition_evaluations=condition_evaluations,
-                term=not self.time_remaining or failure,
+                term=term,
             )
-            self.time_remaining -= 1
-            condition_bit = abs(
-                condition_bit - int(self.random.rand() < self.flip_prob)
-            )
-            prev, ptr = ptr, next_subtask()
+            if not self.time_remaining or action != lines[ptr].id:
+                term = True
+            else:
+                self.time_remaining -= 1
+                condition_bit = abs(
+                    condition_bit - int(self.random.rand() < self.flip_prob)
+                )
+                prev, ptr = ptr, next_subtask()
 
     def get_observation(self, obs, active, lines):
         padded = lines + [Padding] * (self.n_lines - len(lines))
