@@ -47,10 +47,10 @@ def main(log_dir, seed, eval_lines, **kwargs):
             args = dict(
                 **env_args, eval_lines=eval_lines, baseline=False, seed=seed + rank
             )
+            del args["time_limit"]
             if world_size is None:
                 del args["max_while_objects"]
                 del args["num_excluded_objects"]
-                del args["time_to_waste"]
                 return control_flow.env.Env(**args)
             else:
                 return control_flow.multi_step.env.Env(**args, world_size=world_size)

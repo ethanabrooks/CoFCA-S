@@ -192,7 +192,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             self.print("d_probs", d_probs[:, half:])
             self.sample_new(D[t], d_dist)
             p = p + D[t].clone() - half
-            p = torch.clamp(p, min=0, max=nl - (2 if self.nl_2 else 1))
+            p = torch.clamp(p, min=0, max=M.size(1) - 1)
 
             ag = AG[t].unsqueeze(-1).float()
             a_dist = gate(ag, self.actor(z).probs, A[t - 1])

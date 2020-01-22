@@ -40,15 +40,12 @@ class Env(ppo.control_flow.env.Env):
         self,
         world_size,
         max_while_objects,
-        time_to_waste,
         num_subtasks,
         num_excluded_objects,
         **kwargs,
     ):
         self.num_excluded_objects = num_excluded_objects
         self.max_while_objects = max_while_objects
-        self.time_to_waste = time_to_waste
-        self.time_remaining = None
 
         def subtasks():
             for obj in self.objects:
