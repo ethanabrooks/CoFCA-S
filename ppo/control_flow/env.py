@@ -236,9 +236,11 @@ class Env(gym.Env, ABC):
 
             if self.baseline:
                 agent_ptr = None
-                delta = 0
             else:
                 action, delta = map(int, action[:2])
+                if action != self.num_subtasks:
+                    visited_by_agent.add(agent_ptr)
+                    visited_by_env.add(state.ptr)
                 agent_ptr = min(self.n_lines, max(0, agent_ptr + delta - self.n_lines))
             info = self.get_task_info(lines) if step == 0 else {}
 
@@ -251,10 +253,7 @@ class Env(gym.Env, ABC):
                     term = True
             elif state.ptr is not None:
                 step += 1
-                if action == lines[state.ptr].id:
-                    visited_by_agent.add(agent_ptr)
-                    visited_by_env.add(state.ptr)
-                else:
+                if action != lines[state.ptr].id:
                     info.update(success_line=state.prev, failure_line=state.ptr)
                 state = state_iterator.send(action)
 
