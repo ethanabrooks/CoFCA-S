@@ -180,9 +180,6 @@ class Env(gym.Env, ABC):
                         info.update(mistakenly_advanced=1)
                     elif agent_ptr < state.ptr:
                         info.update(failed_to_keep_up=1)
-                    import ipdb
-
-                    ipdb.set_trace()
 
             info.update(regret=1 if term and not success else 0)
             if term:
