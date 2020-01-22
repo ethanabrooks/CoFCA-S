@@ -99,13 +99,16 @@ class Env(gym.Env, ABC):
         lines = self.build_lines()
         state_iterator = self.state_generator(lines)
         state = next(state_iterator)
-        entered_while_blocks = []
+        correct_while_blocks = []
+        selected_while_blocks = []
+        correct_if_blocks = []
+        selected_if_blocks = []
 
         def get_block(l):
             block_type = None
             l1 = None
             for l2, line in enumerate(lines):
-                if type(line) in (Else, EndIf, EndWhile) and l < l2:
+                if type(line) in (Else, EndIf, EndWhile) and l1 < l < l2:
                     return block_type, (l1, l2)
                 if type(line) in (If, Else, While):
                     block_type = type(line)
@@ -143,24 +146,49 @@ class Env(gym.Env, ABC):
                         mistakenly_enterred_else=0,
                         failed_to_reenter_while=0,
                         failed_to_enter_while=0,
+                        mistakenly_reentered_while=0,
                         mistakenly_entered_while=0,
+                        mistakenly_advanced=0,
+                        failed_to_keep_up=0,
                     )
-                    if curr_block is If and curr_block_end < selected:
+                    if (
+                        curr_block is If
+                        and state.curr < selected
+                        and (curr_block_start, curr_block_end) not in selected_if_blocks
+                    ):
                         info.update(failed_to_enter_if=1)
                     elif curr_block is Else and selected_block_end == curr_block_start:
                         info.update(failed_to_enter_else=1)
-                    elif selected_block is If and selected_block_end < state.curr:
+                    elif (
+                        selected_block is If
+                        and selected < state.curr
+                        and (selected_block_start, selected_block_end)
+                        not in correct_if_blocks
+                    ):
                         info.update(mistakenly_enterred_if=1)
                     elif curr_block is Else and selected_block_end == curr_block_start:
                         assert selected_block is If
                         info.update(mistakenly_enterred_else=1)
                     elif curr_block is While and curr_block_end < selected:
-                        if curr_block in entered_while_blocks:
+                        if (curr_block_start, curr_block_end) in selected_while_blocks:
                             info.update(failed_to_reenter_while=1)
                         else:
                             info.update(failed_to_enter_while=1)
                     elif selected_block is While and selected_block_end < state.curr:
-                        info.update(mistakenly_entered_while=1)
+                        if (
+                            selected_block_start,
+                            selected_block_end,
+                        ) in correct_while_blocks:
+                            info.update(mistakenly_reentered_while=1)
+                        else:
+                            info.update(mistakenly_entered_while=1)
+                    elif state.curr < selected:
+                        info.update(mistakenly_advanced=1)
+                    elif selected < state.curr:
+                        info.update(failed_to_keep_up=1)
+                    import ipdb
+
+                    ipdb.set_trace()
 
             info.update(regret=1 if term and not success else 0)
             if term:
@@ -237,7 +265,14 @@ class Env(gym.Env, ABC):
                 if self.analyze_mistakes and delta > 0 and state.curr is not None:
                     block_type, block = get_block(state.curr)
                     if block_type is While:
-                        entered_while_blocks += [block]
+                        correct_while_blocks += [block]
+                    if block_type is If:
+                        correct_if_blocks += [block]
+                    block_type, block = get_block(selected)
+                    if block_type is While:
+                        selected_while_blocks += [block]
+                    if block_type is If:
+                        selected_if_blocks += [block]
 
     @staticmethod
     def line_str(line: Line):
