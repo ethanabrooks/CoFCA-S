@@ -59,7 +59,7 @@ class Env(ppo.control_flow.env.Env):
         self.world_shape = (len(self.world_objects), self.world_size, self.world_size)
 
         self.action_space = spaces.MultiDiscrete(
-            np.array([num_subtasks + 1, 2 * self.n_lines, 2, 2])
+            np.array([num_subtasks + 1, 2 * self.n_lines, 2, 2, self.n_lines])
         )
         self.observation_space.spaces.update(
             obs=spaces.Box(low=0, high=1, shape=self.world_shape),

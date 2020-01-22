@@ -38,7 +38,7 @@ class Recurrence(nn.Module):
         self.no_roll = no_roll
         self.no_scan = no_scan
         self.obs_spaces = Obs(**observation_space.spaces)
-        self.action_size = 2
+        self.action_size = action_space.nvec.size
         self.debug = debug
         self.hidden_size = hidden_size
         self.encoder_hidden_size = encoder_hidden_size

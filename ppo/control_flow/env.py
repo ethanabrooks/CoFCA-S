@@ -76,7 +76,7 @@ class Env(gym.Env, ABC):
         self.iterator = None
         self._render = None
         self.action_space = spaces.MultiDiscrete(
-            np.array([self.num_subtasks + 1, 2 * self.n_lines])
+            np.array([self.num_subtasks + 1, 2 * self.n_lines, self.n_lines])
         )
         self.observation_space = spaces.Dict(
             dict(
@@ -242,11 +242,10 @@ class Env(gym.Env, ABC):
             if self.baseline:
                 agent_ptr = None
             else:
-                action, delta = map(int, action[:2])
+                action, agent_ptr = int(action[0]), int(action[-1])
                 if action != self.num_subtasks:
                     visited_by_agent.add(agent_ptr)
                     visited_by_env.add(state.ptr)
-                agent_ptr = min(self.n_lines, max(0, agent_ptr + delta - self.n_lines))
             info = self.get_task_info(lines) if step == 0 else {}
 
             if action == self.num_subtasks:
@@ -484,7 +483,6 @@ class Env(gym.Env, ABC):
             self.time_remaining += 1
             return l
 
-        action = None
         prev, ptr = 0, next_subtask(None)
         term = False
         while True:
