@@ -1,3 +1,4 @@
+import functools
 from abc import ABC
 from collections import defaultdict, namedtuple, OrderedDict, Counter
 
@@ -352,12 +353,13 @@ class Env(gym.Env, ABC):
 
         return image
 
+    @functools.lru_cache(maxsize=120)
     def preprocess_line(self, line):
         if line is Padding:
             return self.line_types.index(Padding)
         if type(line) is Subtask:
             return line.id
-        return self.num_subtasks + line.id
+        return self.num_subtasks + self.line_types.index(type(line))
 
     def get_lines(
         self, n, active_conditions, last=None, nesting_depth=0, max_nesting_depth=None
