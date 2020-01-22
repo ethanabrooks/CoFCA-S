@@ -164,7 +164,7 @@ class Env(ppo.control_flow.env.Env):
             return l
 
         possible_objects = [o for o, _ in object_pos]
-        prev, curr = 0, next_subtask(None)
+        prev, ptr = 0, next_subtask(None)
         term = False
         while True:
             term |= not self.time_remaining
@@ -172,7 +172,7 @@ class Env(ppo.control_flow.env.Env):
                 obs=get_obs(),
                 condition=None,
                 prev=prev,
-                curr=curr,
+                ptr=ptr,
                 condition_evaluations=condition_evaluations,
                 term=term,
             )
@@ -185,7 +185,7 @@ class Env(ppo.control_flow.env.Env):
             def on_object():
                 return pair() in object_pos  # standing on the desired object
 
-            correct_id = (interaction, obj) == lines[curr].id
+            correct_id = (interaction, obj) == lines[ptr].id
             if on_object():
                 if interaction in (self.mine, self.build):
                     object_pos.remove(pair())
@@ -196,14 +196,14 @@ class Env(ppo.control_flow.env.Env):
                 if interaction == self.build:
                     object_pos.append((self.bridge, tuple(agent_pos)))
                 if correct_id:
-                    prev, curr = curr, next_subtask(curr)
+                    prev, ptr = ptr, next_subtask(ptr)
             else:
                 nearest = get_nearest(obj)
                 if nearest is not None:
                     agent_pos += np.clip(nearest - agent_pos, -1, 1)
                 elif correct_id and obj not in possible_objects:
                     # subtask is impossible
-                    prev, curr = curr, None
+                    prev, ptr = ptr, None
 
     def populate_world(self, lines):
         line_io = [line.id for line in lines if type(line) is Subtask]
