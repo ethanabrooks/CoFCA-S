@@ -45,7 +45,6 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             **kwargs
         )
         self.gate_coef = gate_coef
-        self.action_size = 4
         d = self.obs_spaces.obs.shape[0]
         if use_conv:
             layers = [
