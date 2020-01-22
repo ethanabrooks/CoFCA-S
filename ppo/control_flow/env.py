@@ -356,10 +356,12 @@ class Env(gym.Env, ABC):
     @functools.lru_cache(maxsize=120)
     def preprocess_line(self, line):
         if line is Padding:
-            return self.line_types.index(Padding)
-        if type(line) is Subtask:
+            t = line
+        else:
+            t = type(line)
+        if t is Subtask:
             return line.id
-        return self.num_subtasks + self.line_types.index(type(line))
+        return self.num_subtasks + self.line_types.index(t)
 
     def get_lines(
         self, n, active_conditions, last=None, nesting_depth=0, max_nesting_depth=None
