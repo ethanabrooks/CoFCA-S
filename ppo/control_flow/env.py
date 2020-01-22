@@ -478,6 +478,7 @@ class Env(gym.Env, ABC):
                 l = line_iterator.send(condition_bit)
             self.time_remaining += 1
             return l
+
         action = None
         prev, ptr = 0, next_subtask(None)
         while True:
