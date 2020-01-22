@@ -463,13 +463,14 @@ class Env(gym.Env, ABC):
         action = None
         prev, curr = 0, next_subtask(None)
         while True:
+            failure = False if None in (action, curr) else action != lines[curr].id
             action = yield State(
                 obs=condition_bit,
                 condition=condition_bit,
                 prev=prev,
                 curr=curr,
                 condition_evaluations=condition_evaluations,
-                term=not self.time_remaining or (action is not None and action != curr),
+                term=not self.time_remaining or failure,
             )
             self.time_remaining -= 1
             condition_bit = abs(
