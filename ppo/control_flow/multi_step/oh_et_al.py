@@ -12,7 +12,7 @@ from ppo.utils import init_
 import numpy as np
 from ppo.control_flow.env import Obs
 
-RecurrentState = namedtuple("RecurrentState", "a v h h2 p ag dg a_probs")
+RecurrentState = namedtuple("RecurrentState", "a v h h2 p w ag dg a_probs")
 
 
 def gate(g, new, old):
@@ -21,13 +21,8 @@ def gate(g, new, old):
 
 class Recurrence(abstract_recurrence.Recurrence, oh_et_al.Recurrence):
     def __init__(self, hidden_size, gate_coef, conv_hidden_size, use_conv, **kwargs):
-        oh_et_al.Recurrence.__init__(
-            self,
-            hidden_size=hidden_size,
-            use_conv=use_conv,
-            conv_hidden_size=conv_hidden_size,
-            **kwargs,
-        )
+        self.conv_hidden_size = conv_hidden_size
+        oh_et_al.Recurrence.__init__(self, hidden_size=hidden_size, **kwargs)
         abstract_recurrence.Recurrence.__init__(
             self, conv_hidden_size=conv_hidden_size, use_conv=use_conv
         )
@@ -122,5 +117,6 @@ class Recurrence(abstract_recurrence.Recurrence, oh_et_al.Recurrence):
                     a_probs=a_dist.probs,
                     ag=a_gate,
                     dg=d_gate,
+                    p=p
                 )
             )
