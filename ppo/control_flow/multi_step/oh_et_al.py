@@ -4,10 +4,12 @@ import torch
 from torch import nn as nn
 
 import ppo.control_flow.multi_step.abstract_recurrence as abstract_recurrence
+from ppo.control_flow.recurrence import get_obs_sections
 import ppo.control_flow.oh_et_al as oh_et_al
 from ppo.distributions import FixedCategorical
 from ppo.utils import init_
 import numpy as np
+from ppo.control_flow.env import Obs
 
 RecurrentState = namedtuple("RecurrentState", "a v h h2 p ag dg a_probs")
 
@@ -32,6 +34,11 @@ class Recurrence(abstract_recurrence.Recurrence, oh_et_al.Recurrence):
         self.d_gate = nn.Sequential(init_(nn.Linear(2 * hidden_size, 1)), nn.Sigmoid())
         self.a_gate = nn.Sequential(init_(nn.Linear(2 * hidden_size, 1)), nn.Sigmoid())
         self.state_sizes = RecurrentState(**self.state_sizes._asdict(), ag=1, dg=1)
+
+    def set_obs_space(self, obs_space):
+        self.obs_spaces = Obs(**obs_space.spaces)
+        self.obs_sections = get_obs_sections(self.obs_spaces)
+        self.train_lines = len(self.obs_spaces.lines.nvec)
 
     def parse_hidden(self, hx: torch.Tensor) -> RecurrentState:
         return RecurrentState(*torch.split(hx, self.state_sizes, dim=-1))
