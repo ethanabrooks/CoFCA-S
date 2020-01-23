@@ -48,7 +48,7 @@ class Agent(ppo.agent.Agent, NNBase):
             self.recurrent_module = (
                 ppo.control_flow.multi_step.oh_et_al.Recurrence
                 if self.multi_step
-                else ppo.control_flow.no_pointer.Recurrence
+                else ppo.control_flow.oh_et_al.Recurrence
             )(observation_space=observation_space, **network_args)
         elif self.multi_step:
             assert baseline is None
@@ -81,7 +81,7 @@ class Agent(ppo.agent.Agent, NNBase):
             ppo.control_flow.oh_et_al.Recurrence,
             ppo.control_flow.no_pointer.Recurrence,
         ):
-            X = [hx.a, pad, pad]
+            X = [hx.a, pad, hx.p]
             probs = [hx.a_probs]
         elif t is ppo.control_flow.recurrence.Recurrence:
             X = [hx.a, hx.d, hx.p]

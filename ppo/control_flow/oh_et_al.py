@@ -26,15 +26,11 @@ def batch_conv1d(inputs, weights):
     return padded[:, 1:-1]
 
 
-RecurrentState = namedtuple("RecurrentState", "a p v h h2 a_probs")
+RecurrentState = namedtuple("RecurrentState", "a p w v h h2 a_probs")
 
 
 class Recurrence(ppo.control_flow.recurrence.Recurrence):
-    def __init__(
-        self, hidden_size, num_layers, activation, conv_hidden_size, use_conv, **kwargs
-    ):
-        self.conv_hidden_size = conv_hidden_size
-        self.use_conv = use_conv
+    def __init__(self, hidden_size, num_layers, activation, **kwargs):
         super().__init__(
             hidden_size=2 * hidden_size,
             num_layers=num_layers,
@@ -42,13 +38,11 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             **kwargs,
         )
         self.upsilon = init_(nn.Linear(2 * hidden_size, 3))
-        line_nvec = torch.tensor(self.obs_spaces.lines.nvec[0, :-1])
-        offset = F.pad(line_nvec.cumsum(0), [1, 0])
-        self.register_buffer("offset", offset)
         self.state_sizes = RecurrentState(
             a=1,
+            p=1,
             a_probs=self.state_sizes.a_probs,
-            p=len(self.obs_spaces.lines.nvec),
+            w=len(self.obs_spaces.lines.nvec),
             v=1,
             h=hidden_size,
             h2=hidden_size,
@@ -59,16 +53,9 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
     def evaluating(self, eval_obs_space):
         with super().evaluating(eval_obs_space) as self:
             self.state_sizes = self.state_sizes._replace(
-                p=len(eval_obs_space.spaces["lines"].nvec)
+                w=len(eval_obs_space.spaces["lines"].nvec)
             )
             yield self
-
-    def build_embed_task(self, hidden_size):
-        return nn.EmbeddingBag(self.obs_spaces.lines.nvec[0].sum(), hidden_size)
-
-    @property
-    def gru_in_size(self):
-        return self.hidden_size + self.conv_hidden_size + self.encoder_hidden_size
 
     @staticmethod
     def eval_lines_space(n_eval_lines, train_lines_space):
@@ -102,11 +89,8 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         inputs = inputs._replace(obs=inputs.obs.view(T, N, *self.obs_spaces.obs.shape))
 
         # build memory
-        lines = inputs.lines.view(T, N, *self.obs_spaces.lines.shape)
-        lines = lines.long()[0, :, :] + self.offset
-        M = self.embed_task(lines.view(-1, self.obs_spaces.lines.nvec[0].size)).view(
-            *lines.shape[:2], self.encoder_hidden_size
-        )  # n_batch, n_lines, hidden_size
+        M = self.build_memory(N, T, inputs)
+        indices = torch.arange(M.size(1), device=rnn_hxs.device).float()
 
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
@@ -115,22 +99,22 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
 
         h = hx.h
         h2 = hx.h2
-        p = hx.p
-        p[new_episode, 0] = 1
+        w = hx.w
+        w[new_episode, 0] = 1
         hx.a[new_episode] = self.n_a - 1
         A = torch.cat([actions[:, :, 0], hx.a.view(1, N)], dim=0).long()
 
         for t in range(T):
-            self.print("p", p)
+            self.print("w", w)
             obs = self.preprocess_obs(inputs.obs[t])
-            r = (p.unsqueeze(1) @ M).squeeze(1)
+            r = (w.unsqueeze(1) @ M).squeeze(1)
             x = [obs, r, self.embed_action(A[t - 1].clone())]
             h_cat = torch.cat([h, h2], dim=-1)
             h_cat2 = self.gru(torch.cat(x, dim=-1), h_cat)
             z = F.relu(self.zeta(h_cat2))
 
             l = self.upsilon(z).softmax(dim=-1)
-            p = batch_conv1d(p, l)
+            w = batch_conv1d(w, l)
 
             a_dist = self.actor(z)
             self.sample_new(A[t], a_dist)
@@ -138,6 +122,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             h_size = self.hidden_size // 2
             h, h2 = torch.split(h_cat2, [h_size, h_size], dim=-1)
 
+            p = torch.round(w @ indices.unsqueeze(1))
             yield RecurrentState(
-                a=A[t], p=p, v=self.critic(z), h=h, h2=h2, a_probs=a_dist.probs
+                a=A[t], w=w, v=self.critic(z), h=h, h2=h2, a_probs=a_dist.probs, p=p
             )

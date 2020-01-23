@@ -1,4 +1,5 @@
 from collections import namedtuple
+import torch.nn.functional as F
 
 import torch
 from torch import nn as nn
@@ -34,6 +35,9 @@ class Recurrence(abstract_recurrence.Recurrence, oh_et_al.Recurrence):
         self.d_gate = nn.Sequential(init_(nn.Linear(2 * hidden_size, 1)), nn.Sigmoid())
         self.a_gate = nn.Sequential(init_(nn.Linear(2 * hidden_size, 1)), nn.Sigmoid())
         self.state_sizes = RecurrentState(**self.state_sizes._asdict(), ag=1, dg=1)
+        line_nvec = torch.tensor(self.obs_spaces.lines.nvec[0, :-1])
+        offset = F.pad(line_nvec.cumsum(0), [1, 0])
+        self.register_buffer("offset", offset)
 
     def set_obs_space(self, obs_space):
         self.obs_spaces = Obs(**obs_space.spaces)
