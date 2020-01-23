@@ -27,6 +27,7 @@ def cli():
     parser.add_argument("--fname", type=str, default="plot")
     parser.add_argument("--quality", type=int)
     parser.add_argument("--dpi", type=int, default=256)
+    parser.add_argument("--print-tag", action="store_true")
     main(**vars(parser.parse_args()))
 
 
@@ -46,6 +47,7 @@ def main(
     smoothing: int,
     until_time: int,
     until_step: int,
+    print_tag: bool,
     **kwargs
 ):
     def get_values_from_path(event_path):
@@ -77,7 +79,10 @@ def main(
                 value_dict[tag].append(avg(values))
 
     for tag, values in value_dict.items():
-        print(tag_to_header(tag), avg(values), sep=",")
+        if print_tag:
+            print(tag_to_header(tag), avg(values), sep=",")
+        else:
+            print(avg(values))
 
 
 if __name__ == "__main__":
