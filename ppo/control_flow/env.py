@@ -102,8 +102,8 @@ class Env(gym.Env, ABC):
         lines = self.build_lines()
         state_iterator = self.state_generator(lines)
         state = next(state_iterator)
-        visited_by_env = set()
-        visited_by_agent = set()
+        visited_by_env = []
+        visited_by_agent = []
 
         def get_block(l):
             block_type = None
@@ -167,7 +167,13 @@ class Env(gym.Env, ABC):
                         and agent_ptr not in visited_by_env
                     ):
                         info.update(mistakenly_enterred_if=1)
-                    elif agent_block is Else and agent_block_end == env_block_start:
+                    elif (
+                        agent_block is Else
+                        and agent_ptr not in visited_by_env
+                        and (
+                            agent_ptr < state.ptr or env_block_end == agent_block_start
+                        )
+                    ):
                         assert env_block is If
                         info.update(mistakenly_enterred_else=1)
                     elif env_block is While and state.ptr < agent_ptr:
@@ -244,8 +250,8 @@ class Env(gym.Env, ABC):
             else:
                 action, agent_ptr = int(action[0]), int(action[-1])
                 if action != self.num_subtasks:
-                    visited_by_agent.add(agent_ptr)
-                    visited_by_env.add(state.ptr)
+                    visited_by_agent.append(agent_ptr)
+                    visited_by_env.append(state.ptr)
             info = self.get_task_info(lines) if step == 0 else {}
 
             if action == self.num_subtasks:
