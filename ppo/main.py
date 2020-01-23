@@ -245,7 +245,8 @@ def cli():
     parser = parsers.main
     hierarchical_parse_args(parser)
     _Train(**hierarchical_parse_args(parser)).run()
-    print('pass0')
+    
+    
 
 
 
