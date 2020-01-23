@@ -38,12 +38,16 @@ class _Train(Train):
         else:
             selfi.writer = None
 
+        
         self.setup(**kwargs, num_processes=num_processes, num_steps=num_steps)
+        
         self.last_save = time.time()  # dummy save
 
     def run(self):
         for _ in itertools.count():
+            
             for result in self.make_train_iterator():
+                
                 print("New tensorboard entry")
                 print("Result: ", result)
                 if self.writer is not None:
@@ -245,8 +249,9 @@ def cli():
     parser = parsers.main
     hierarchical_parse_args(parser)
     _Train(**hierarchical_parse_args(parser)).run()
-    
-    
+
+
+
 
 
 

@@ -44,6 +44,8 @@ def hierarchical_parse_args(parser: argparse.ArgumentParser,
         **kwargs
     }
     """
+    #args = parser.parse_args(["--block-space", "(0,0)(0,0)(0.418,0.418)(1,1)(0,0)(0,0)(0,0)", "--steps-per-action=300", "--geofence=.5", "--goal-space", "(0,0)(0,0)(.418,.418)", "--use-dof", "arm_flex_joint", "--use-dof", "hand_l_proximal_joint", "--use-dof", "hand_r_proximal_joint", "--use-dof", "wrist_flex_joint", "--use-dof", "arm_roll_joint", 
+    #"--use-dof", "wrist_roll_joint", "--use-dof", "slide_x", "--use-dof", "slide_y", "--render","--n-blocks=1"])
     args = parser.parse_args(["--block-space", "(0,0)(0,0)(0.418,0.418)(1,1)(0,0)(0,0)(0,0)", "--steps-per-action=300", "--geofence=.5", "--goal-space", "(0,0)(0,0)(.418,.418)", "--use-dof", "arm_flex_joint", "--use-dof", "hand_l_proximal_joint", "--use-dof", "hand_r_proximal_joint", "--use-dof", "wrist_flex_joint", "--use-dof", "arm_roll_joint", 
     "--use-dof", "wrist_roll_joint", "--use-dof", "slide_x", "--use-dof", "slide_y","--n-blocks=1"])
 
@@ -285,6 +287,7 @@ class Train(abc.ABC):
     def run_epoch(
         self, obs, rnn_hxs, masks, num_steps, counter, success_reward, use_tqdm
     ):
+
         # noinspection PyTypeChecker
         episode_counter = Counter(rewards=[], time_steps=[], success=[])
         iterator = range(num_steps)
@@ -301,6 +304,8 @@ class Train(abc.ABC):
             #print(self.envs.action_space)
             #print("action: ", act.action, "obs: ", obs, " rew: ", reward, " done: ", done, " infos: ", infos)
             #print("reward: ", reward)
+
+            
             for d in infos:
                 for k, v in d.items():
                     episode_counter.update({k: float(v) / num_steps / len(infos)})
@@ -310,6 +315,8 @@ class Train(abc.ABC):
             counter["time_step"] += np.ones_like(done)
             episode_rewards = counter["reward"][done]
             episode_counter["rewards"] += list(episode_rewards)
+            if done[0]:
+                print("Time step: ", counter["time_step"],  "episode_rewards = ", episode_rewards, " done: ", done)
             if success_reward is not None:
                 # noinspection PyTypeChecker
                 episode_counter["success"] += list(episode_rewards >= success_reward)
@@ -321,6 +328,7 @@ class Train(abc.ABC):
             episode_counter["time_steps"] += list(counter["time_step"][done])
             counter["reward"][done] = 0
             counter["time_step"][done] = 0
+           
 
             # If done then clean the history of observations.
             masks = torch.tensor(
@@ -359,11 +367,14 @@ class Train(abc.ABC):
         
         #setting up the action with the appropiate bounds
 
-        #forward, backwards, right, left, up, down, rotate claw clockwise, rotate claw counterclockwise, open/close claws
-        env.action_space = spaces.Discrete(11)
+        #forward, backwards, right, left, up, down, rotate claw clockwise, rotate claw counterclockwise, open/close claws, do nothing
+        #env.action_space = spaces.Discrete(11)
+        env.action_space = spaces.Discrete(2)
         #env.action_space = spaces.Box(low = low, high = high, dtype=np.int32)
-        low = np.array([-np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf])
-        high = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
+        #low = np.array([-np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf])
+        #high = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
+        low = np.array([-np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf])
+        high = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
         env.observation_space = spaces.Box(low=low, high=high, dtype = np.float32)
         #bounds = self.model.actuator_ctrlrange.copy()
         #low = bounds[:, 0]
@@ -423,7 +434,6 @@ class Train(abc.ABC):
             for i in range(num_processes)
         ]
 
-        
 
         if len(envs) == 1 or sys.platform == "darwin" or synchronous:
             envs = DummyVecEnv(envs, render=render)
