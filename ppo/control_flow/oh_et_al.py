@@ -1,5 +1,7 @@
 from collections import namedtuple
 from contextlib import contextmanager
+from ppo.control_flow.env import Obs
+from ppo.control_flow.recurrence import get_obs_sections
 
 import numpy as np
 import torch
@@ -56,6 +58,11 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
                 w=len(eval_obs_space.spaces["lines"].nvec)
             )
             yield self
+
+    def set_obs_space(self, obs_space):
+        self.obs_spaces = Obs(**obs_space.spaces)
+        self.obs_sections = get_obs_sections(self.obs_spaces)
+        self.train_lines = len(self.obs_spaces.lines.nvec)
 
     @staticmethod
     def eval_lines_space(n_eval_lines, train_lines_space):
