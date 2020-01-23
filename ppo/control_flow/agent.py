@@ -90,7 +90,7 @@ class Agent(ppo.agent.Agent, NNBase):
             X = [hx.a, pad, pad, pad, pad]
             probs = [hx.a_probs]
         elif t is ppo.control_flow.multi_step.oh_et_al.Recurrence:
-            X = [hx.a, pad, pad, pad, pad]
+            X = [hx.a, pad, pad, pad, hx.p]
             probs = [hx.a_probs]
         elif t is ppo.control_flow.multi_step.ours.Recurrence:
             X = [hx.a, hx.d, hx.ag, hx.dg, hx.p]

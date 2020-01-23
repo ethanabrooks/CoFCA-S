@@ -78,14 +78,15 @@ class Recurrence(abstract_recurrence.Recurrence, oh_et_al.Recurrence):
 
         h = hx.h
         h2 = hx.h2
-        p = hx.p
-        p[new_episode, 0] = 1
+        w = hx.w
+        w[new_episode, 0] = 1
         hx.a[new_episode] = self.n_a - 1
         A = torch.cat([actions[:, :, 0], hx.a.view(1, N)], dim=0).long()
+        indices = torch.arange(M.size(1), device=rnn_hxs.device).float()
 
         for t in range(T):
             obs = self.preprocess_obs(inputs.obs[t])
-            r = (p.unsqueeze(1) @ M).squeeze(1)
+            r = (w.unsqueeze(1) @ M).squeeze(1)
             x = [obs, r, self.embed_action(A[t - 1].clone())]
             h_cat = torch.cat([h, h2], dim=-1)
             h_cat2 = self.gru(torch.cat(x, dim=-1), h_cat)
@@ -94,8 +95,8 @@ class Recurrence(abstract_recurrence.Recurrence, oh_et_al.Recurrence):
             a_gate = self.a_gate(z)
 
             l = self.upsilon(z).softmax(dim=-1)
-            p_ = oh_et_al.batch_conv1d(p, l)
-            p = d_gate * p_ + (1 - d_gate) * p
+            w_ = oh_et_al.batch_conv1d(w, l)
+            w = d_gate * w_ + (1 - d_gate) * w
 
             a_probs = self.actor(z).probs
             old = torch.zeros_like(a_probs).scatter(1, A[t - 1].unsqueeze(1), 1)
@@ -107,16 +108,17 @@ class Recurrence(abstract_recurrence.Recurrence, oh_et_al.Recurrence):
             h_, h2 = torch.split(h_cat2, [h_size, h_size], dim=-1)
             h = d_gate * h_ + (1 - d_gate) * h_
 
+            p = torch.round(w @ indices.unsqueeze(1))
             yield (
                 RecurrentState(
                     a=A[t],
                     v=self.critic(z),
                     h=h,
-                    p=p,
+                    w=w,
                     h2=h2,
                     a_probs=a_dist.probs,
                     ag=a_gate,
                     dg=d_gate,
-                    p=p
+                    p=p,
                 )
             )
