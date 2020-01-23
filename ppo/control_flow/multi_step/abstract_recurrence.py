@@ -8,17 +8,11 @@ from ppo.utils import init_
 
 
 class Recurrence:
-    def __init__(self, hidden_size, conv_hidden_size, use_conv, nl_2, gate_h):
+    def __init__(self, conv_hidden_size, use_conv, nl_2, gate_h):
         self.gate_h = gate_h
         self.nl_2 = nl_2
         self.conv_hidden_size = conv_hidden_size
         self.use_conv = use_conv
-        # super().__init__(
-        #     hidden_size=hidden_size,
-        #     num_layers=num_layers,
-        #     activation=activation,
-        #     **kwargs
-        # )
         d = self.obs_spaces.obs.shape[0]
         if use_conv:
             # layers = [

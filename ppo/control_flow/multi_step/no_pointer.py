@@ -9,7 +9,6 @@ class Recurrence(abstract_recurrence.Recurrence, no_pointer.Recurrence):
         abstract_recurrence.Recurrence.__init__(
             self,
             conv_hidden_size=conv_hidden_size,
-            hidden_size=hidden_size,
             use_conv=use_conv,
             nl_2=nl_2,
             gate_h=gate_h,

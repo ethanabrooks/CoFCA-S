@@ -18,7 +18,6 @@ class Recurrence(abstract_recurrence.Recurrence, oh_et_al.Recurrence):
         )
         abstract_recurrence.Recurrence.__init__(
             self,
-            hidden_size=hidden_size,
             gate_coef=gate_coef,
             conv_hidden_size=conv_hidden_size,
             use_conv=use_conv,

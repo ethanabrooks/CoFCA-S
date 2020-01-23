@@ -6,7 +6,7 @@ import torch.nn.functional as F
 import ppo.control_flow.multi_step.abstract_recurrence as abstract_recurrence
 import ppo.control_flow.recurrence as recurrence
 from ppo.control_flow.recurrence import RecurrentState
-from ppo.distributions import FixedCategorical
+from ppo.distributions import FixedCategorical, Categorical
 import numpy as np
 
 RecurrentState = namedtuple(
@@ -20,9 +20,29 @@ def gate(g, new, old):
 
 
 class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
-    def __init__(self, gate_coef, **kwargs):
+    def __init__(
+        self, hidden_size, conv_hidden_size, use_conv, nl_2, gate_h, gate_coef, **kwargs
+    ):
         self.gate_coef = gate_coef
-        super().__init__(**kwargs)
+        self.conv_hidden_size = conv_hidden_size
+        recurrence.Recurrence.__init__(self, hidden_size=hidden_size, **kwargs)
+        abstract_recurrence.Recurrence.__init__(
+            self,
+            conv_hidden_size=conv_hidden_size,
+            use_conv=use_conv,
+            nl_2=nl_2,
+            gate_h=gate_h,
+        )
+        self.d_gate = Categorical(hidden_size, 2)
+        self.a_gate = Categorical(hidden_size, 2)
+        self.state_sizes = RecurrentState(
+            **self.state_sizes._asdict(),
+            h2=hidden_size,
+            ag_probs=2,
+            dg_probs=2,
+            ag=1,
+            dg=1
+        )
 
     def pack(self, hxs):
         def pack():
