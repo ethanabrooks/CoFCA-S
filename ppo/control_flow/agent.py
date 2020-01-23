@@ -38,6 +38,7 @@ class Agent(ppo.agent.Agent, NNBase):
             del network_args["use_conv"]
             del network_args["gate_coef"]
         if baseline == "no-pointer":
+            del network_args["gate_coef"]
             self.recurrent_module = (
                 ppo.control_flow.multi_step.no_pointer.Recurrence
                 if self.multi_step
