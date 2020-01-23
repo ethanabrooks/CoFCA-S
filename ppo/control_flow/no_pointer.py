@@ -1,20 +1,11 @@
-from collections import namedtuple
-
+import numpy as np
 import torch
 import torch.nn.functional as F
 from gym import spaces
 from torch import nn as nn
 
 import ppo.control_flow.recurrence
-from ppo.distributions import FixedCategorical, Categorical
 from ppo.control_flow.recurrence import RecurrentState
-from ppo.utils import init_
-import numpy as np
-
-
-def gate(g, new, old):
-    old = torch.zeros_like(new).scatter(1, old.unsqueeze(1), 1)
-    return FixedCategorical(probs=g * new + (1 - g) * old)
 
 
 class Recurrence(ppo.control_flow.recurrence.Recurrence):
@@ -86,13 +77,3 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
                 d=hx.d,
                 d_probs=hx.d_probs,
             )
-
-    def build_memory(self, N, T, inputs):
-        lines = inputs.lines.view(T, N, self.obs_sections.lines).long()[0, :, :]
-        return self.embed_task(lines.view(-1)).view(
-            *lines.shape, self.encoder_hidden_size
-        )  # n_batch, n_lines, hidden_size
-
-    @staticmethod
-    def preprocess_obs(obs):
-        return obs.unsqueeze(-1)

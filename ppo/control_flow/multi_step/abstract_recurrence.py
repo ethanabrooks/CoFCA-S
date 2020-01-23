@@ -8,9 +8,7 @@ from ppo.utils import init_
 
 
 class Recurrence:
-    def __init__(self, conv_hidden_size, use_conv, nl_2, gate_h):
-        self.gate_h = gate_h
-        self.nl_2 = nl_2
+    def __init__(self, conv_hidden_size, use_conv):
         self.conv_hidden_size = conv_hidden_size
         self.use_conv = use_conv
         d = self.obs_spaces.obs.shape[0]

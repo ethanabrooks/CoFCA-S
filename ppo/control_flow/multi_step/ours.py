@@ -5,7 +5,6 @@ import torch.nn.functional as F
 
 import ppo.control_flow.multi_step.abstract_recurrence as abstract_recurrence
 import ppo.control_flow.recurrence as recurrence
-from ppo.control_flow.recurrence import RecurrentState
 from ppo.distributions import FixedCategorical, Categorical
 import numpy as np
 
@@ -20,18 +19,12 @@ def gate(g, new, old):
 
 
 class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
-    def __init__(
-        self, hidden_size, conv_hidden_size, use_conv, nl_2, gate_h, gate_coef, **kwargs
-    ):
+    def __init__(self, hidden_size, conv_hidden_size, use_conv, gate_coef, **kwargs):
         self.gate_coef = gate_coef
         self.conv_hidden_size = conv_hidden_size
         recurrence.Recurrence.__init__(self, hidden_size=hidden_size, **kwargs)
         abstract_recurrence.Recurrence.__init__(
-            self,
-            conv_hidden_size=conv_hidden_size,
-            use_conv=use_conv,
-            nl_2=nl_2,
-            gate_h=gate_h,
+            self, conv_hidden_size=conv_hidden_size, use_conv=use_conv
         )
         self.d_gate = Categorical(hidden_size, 2)
         self.a_gate = Categorical(hidden_size, 2)
@@ -124,12 +117,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             self.sample_new(A[t], a_dist)
             self.print("ag prob", a_gate.probs[:, 1])
             self.print("ag", ag)
-
-            if self.gate_h:
-                h2 = dg * h2_ + (1 - dg) * h2
-            else:
-                h2 = h2_
-
+            h2 = dg * h2_ + (1 - dg) * h2
             yield RecurrentState(
                 a=A[t],
                 v=self.critic(z),

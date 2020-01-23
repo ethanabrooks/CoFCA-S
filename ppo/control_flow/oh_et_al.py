@@ -1,20 +1,14 @@
 from collections import namedtuple
 from contextlib import contextmanager
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 from gym import spaces
 from torch import nn as nn
 
 import ppo.control_flow.recurrence
-from ppo.distributions import FixedCategorical, Categorical
-from ppo.road_closures.recurrence import RecurrentState
 from ppo.utils import init_
-import numpy as np
-
-
-def gate(g, new, old):
-    return FixedCategorical(probs=g * new + (1 - g) * old)
 
 
 def batch_conv1d(inputs, weights):
@@ -32,22 +26,13 @@ def batch_conv1d(inputs, weights):
     return padded[:, 1:-1]
 
 
+RecurrentState = namedtuple("RecurrentState", "a p v h h2 a_probs")
+
+
 class Recurrence(ppo.control_flow.recurrence.Recurrence):
     def __init__(
-        self,
-        hidden_size,
-        gate_coef,
-        num_layers,
-        activation,
-        conv_hidden_size,
-        use_conv,
-        kernel_size,
-        nl_2,
-        gate_h,
-        **kwargs,
+        self, hidden_size, num_layers, activation, conv_hidden_size, use_conv, **kwargs
     ):
-        self.gate_h = gate_h
-        self.nl_2 = nl_2
         self.conv_hidden_size = conv_hidden_size
         self.use_conv = use_conv
         super().__init__(
@@ -57,50 +42,17 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             **kwargs,
         )
         self.upsilon = init_(nn.Linear(2 * hidden_size, 3))
-        self.gate_coef = gate_coef
-        d = self.obs_spaces.obs.shape[0]
-        if use_conv:
-            layers = [
-                nn.Conv2d(
-                    d,
-                    conv_hidden_size,
-                    kernel_size=kernel_size,
-                    stride=2 if kernel_size == 2 else 1,
-                    padding=0,
-                ),
-                nn.ReLU(),
-            ]
-            if kernel_size < 4:
-                layers += [
-                    nn.Conv2d(
-                        conv_hidden_size,
-                        conv_hidden_size,
-                        kernel_size=2,
-                        stride=2,
-                        padding=0,
-                    ),
-                    nn.ReLU(),
-                ]
-            self.conv = nn.Sequential(*layers)
-        else:
-            self.conv = nn.Sequential(init_(nn.Linear(d, conv_hidden_size)), nn.ReLU())
-
-        self.d_gate = nn.Sequential(init_(nn.Linear(2 * hidden_size, 1)), nn.Sigmoid())
-        self.a_gate = nn.Sequential(init_(nn.Linear(2 * hidden_size, 1)), nn.Sigmoid())
-        self.state_sizes = RecurrentState(
-            **self.state_sizes._replace(p=self.train_lines)
-            ._replace(h=hidden_size)
-            ._asdict(),
-            h2=hidden_size,
-            ag_probs=0,
-            dg_probs=0,
-            ag=1,
-            dg=1,
-        )
-
         line_nvec = torch.tensor(self.obs_spaces.lines.nvec[0, :-1])
         offset = F.pad(line_nvec.cumsum(0), [1, 0])
         self.register_buffer("offset", offset)
+        self.state_sizes = RecurrentState(
+            a=1,
+            a_probs=self.state_sizes.a_probs,
+            p=len(self.obs_spaces.lines.nvec),
+            v=1,
+            h=hidden_size,
+            h2=hidden_size,
+        )
 
     # noinspection PyProtectedMember
     @contextmanager
@@ -170,48 +122,22 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
 
         for t in range(T):
             self.print("p", p)
-            if self.use_conv:
-                obs = self.conv(inputs.obs[t]).view(N, -1)
-            else:
-                obs = (
-                    self.conv(inputs.obs[t].permute(0, 2, 3, 1))
-                    .view(N, -1, self.conv_hidden_size)
-                    .max(dim=1)
-                    .values
-                )
+            obs = self.preprocess_obs(inputs.obs[t])
             r = (p.unsqueeze(1) @ M).squeeze(1)
             x = [obs, r, self.embed_action(A[t - 1].clone())]
             h_cat = torch.cat([h, h2], dim=-1)
             h_cat2 = self.gru(torch.cat(x, dim=-1), h_cat)
             z = F.relu(self.zeta(h_cat2))
-            d_gate = self.d_gate(z)
-            a_gate = self.a_gate(z)
 
             l = self.upsilon(z).softmax(dim=-1)
-            p_ = batch_conv1d(p, l)
-            p = d_gate * p_ + (1 - d_gate) * p
+            p = batch_conv1d(p, l)
 
-            a_probs = self.actor(z).probs
-            old = torch.zeros_like(a_probs).scatter(1, A[t - 1].unsqueeze(1), 1)
-            a_dist = gate(a_gate, a_probs, old)
+            a_dist = self.actor(z)
             self.sample_new(A[t], a_dist)
-            # self.print("ag prob", torch.round(100 * a_gate.probs[:, 1]))
 
             h_size = self.hidden_size // 2
-            h_, h2 = torch.split(h_cat2, [h_size, h_size], dim=-1)
-            h = d_gate * h_ + (1 - d_gate) * h_
+            h, h2 = torch.split(h_cat2, [h_size, h_size], dim=-1)
 
             yield RecurrentState(
-                a=A[t],
-                v=self.critic(z),
-                h=h,
-                h2=h2,
-                p=p,
-                a_probs=a_dist.probs,
-                d=hx.d,
-                d_probs=hx.d_probs,
-                ag_probs=hx.ag_probs,
-                dg_probs=hx.dg_probs,
-                ag=hx.ag,
-                dg=hx.dg,
+                a=A[t], p=p, v=self.critic(z), h=h, h2=h2, a_probs=a_dist.probs
             )

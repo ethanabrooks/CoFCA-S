@@ -3,15 +3,11 @@ import ppo.control_flow.no_pointer as no_pointer
 
 
 class Recurrence(abstract_recurrence.Recurrence, no_pointer.Recurrence):
-    def __init__(self, hidden_size, conv_hidden_size, use_conv, nl_2, gate_h, **kwargs):
+    def __init__(self, hidden_size, conv_hidden_size, use_conv, **kwargs):
         self.conv_hidden_size = conv_hidden_size
         no_pointer.Recurrence.__init__(self, hidden_size=hidden_size, **kwargs)
         abstract_recurrence.Recurrence.__init__(
-            self,
-            conv_hidden_size=conv_hidden_size,
-            use_conv=use_conv,
-            nl_2=nl_2,
-            gate_h=gate_h,
+            self, conv_hidden_size=conv_hidden_size, use_conv=use_conv
         )
 
     @property

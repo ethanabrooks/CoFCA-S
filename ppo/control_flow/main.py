@@ -22,8 +22,6 @@ def main(log_dir, seed, eval_lines, **kwargs):
                 del agent_args["num_edges"]
                 del agent_args["gate_coef"]
                 del agent_args["no_op_coef"]
-                del agent_args["nl_2"]
-                del agent_args["gate_h"]
                 del agent_args["use_conv"]
                 return ppo.control_flow.multi_step.simple.Agent(
                     observation_space=obs_space,
@@ -83,8 +81,6 @@ def bandit_args():
     parsers.agent.add_argument("--num-edges", type=int, required=True)
     parsers.agent.add_argument("--gate-coef", type=float, required=True)
     parsers.agent.add_argument("--no-op-coef", type=float, required=True)
-    parsers.agent.add_argument("--nl-2", type=int, required=True)
-    parsers.agent.add_argument("--gate-h", type=int, required=True)
     parsers.agent.add_argument("--use-conv", type=int, required=True)
     return parser
 
