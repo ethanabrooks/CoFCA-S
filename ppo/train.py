@@ -315,8 +315,8 @@ class Train(abc.ABC):
             counter["time_step"] += np.ones_like(done)
             episode_rewards = counter["reward"][done]
             episode_counter["rewards"] += list(episode_rewards)
-            if done[0]:
-                print("Time step: ", counter["time_step"],  "episode_rewards = ", episode_rewards, " done: ", done)
+            #if done[0]:
+            #    print("Time step: ", counter["time_step"],  "episode_rewards = ", episode_rewards, " done: ", done)
             if success_reward is not None:
                 # noinspection PyTypeChecker
                 episode_counter["success"] += list(episode_rewards >= success_reward)
@@ -369,7 +369,7 @@ class Train(abc.ABC):
 
         #forward, backwards, right, left, up, down, rotate claw clockwise, rotate claw counterclockwise, open/close claws, do nothing
         #env.action_space = spaces.Discrete(11)
-        env.action_space = spaces.Discrete(2)
+        env.action_space = spaces.Discrete(4)
         #env.action_space = spaces.Box(low = low, high = high, dtype=np.int32)
         #low = np.array([-np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf])
         #high = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
@@ -380,7 +380,7 @@ class Train(abc.ABC):
         #low = bounds[:, 0]
         #high = bounds[:, 1]
         #env.action_space = spaces.Box(low=low, high=high, dtype=np.float32)
-        env = gym.make(env_id)
+        #env = gym.make(env_id)
         is_atari = hasattr(gym.envs, "atari") and isinstanice(
             env.unwrapped, gym.envs.atari.atari_env.AtariEnv
         )
