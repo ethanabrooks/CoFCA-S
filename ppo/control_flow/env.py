@@ -174,7 +174,6 @@ class Env(gym.Env, ABC):
                             agent_ptr < state.ptr or env_block_end == agent_block_start
                         )
                     ):
-                        assert env_block is If
                         info.update(mistakenly_enterred_else=1)
                     elif env_block is While and state.ptr < agent_ptr:
                         if state.ptr in visited_by_agent:
