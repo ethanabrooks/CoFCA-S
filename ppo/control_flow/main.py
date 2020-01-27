@@ -4,8 +4,8 @@ from rl_utils import hierarchical_parse_args
 import ppo.agent
 import ppo.control_flow.agent
 import ppo.control_flow.env
-import ppo.control_flow.multi_step.env
-import ppo.control_flow.multi_step.simple
+import ppo.control_flow.gridworld.env
+import ppo.control_flow.gridworld.simple
 from ppo import control_flow
 from ppo.arguments import build_parser
 from ppo.train import Train
@@ -23,7 +23,7 @@ def main(log_dir, seed, eval_lines, **kwargs):
                 del agent_args["gate_coef"]
                 del agent_args["no_op_coef"]
                 del agent_args["use_conv"]
-                return ppo.control_flow.multi_step.simple.Agent(
+                return ppo.control_flow.gridworld.simple.Agent(
                     observation_space=obs_space,
                     action_space=envs.action_space,
                     **agent_args,
@@ -51,7 +51,7 @@ def main(log_dir, seed, eval_lines, **kwargs):
                 del args["temporal_extension"]
                 return control_flow.env.Env(**args)
             else:
-                return control_flow.multi_step.env.Env(**args)
+                return control_flow.gridworld.env.Env(**args)
 
     _Train(**kwargs, seed=seed, log_dir=log_dir, time_limit=None).run()
 

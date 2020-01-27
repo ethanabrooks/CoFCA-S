@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import torch
 from torch import nn as nn
 
-import ppo.control_flow.multi_step.abstract_recurrence as abstract_recurrence
+import ppo.control_flow.gridworld.abstract_recurrence as abstract_recurrence
 from ppo.control_flow.recurrence import get_obs_sections
 import ppo.control_flow.oh_et_al as oh_et_al
 from ppo.distributions import FixedCategorical
