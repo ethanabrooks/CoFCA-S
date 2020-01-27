@@ -39,37 +39,35 @@ def main(log_dir, seed, eval_lines, **kwargs):
 
         @staticmethod
         def make_env(
-            seed, rank, evaluation, env_id, add_timestep, world_size, **env_args
+            seed, rank, evaluation, env_id, add_timestep, gridworld, **env_args
         ):
             args = dict(
                 **env_args, eval_lines=eval_lines, baseline=False, seed=seed + rank
             )
             del args["time_limit"]
-            if world_size is None:
+            if not gridworld:
                 del args["max_while_objects"]
                 del args["num_excluded_objects"]
                 return control_flow.env.Env(**args)
             else:
-                return control_flow.multi_step.env.Env(**args, world_size=world_size)
+                return control_flow.multi_step.env.Env(**args)
 
-    _Train(**kwargs, seed=seed, log_dir=log_dir).run()
+    _Train(**kwargs, seed=seed, log_dir=log_dir, time_limit=None).run()
 
 
-def bandit_args():
+def control_flow_args():
     parsers = build_parser()
     parser = parsers.main
     parser.add_argument("--no-tqdm", dest="use_tqdm", action="store_false")
-    parser.add_argument("--time-limit", type=int)
     parser.add_argument("--eval-steps", type=int)
     parser.add_argument("--eval-lines", type=int, required=True)
     parser.add_argument("--no-eval", action="store_true")
     ppo.control_flow.env.build_parser(parsers.env)
-    parsers.env.add_argument("--world-size", type=int)
+    parsers.env.add_argument("--gridworld", action="store_true")
     parsers.env.add_argument("--subtasks-only", action="store_true")
     parsers.env.add_argument("--break-on-fail", action="store_true")
-    parsers.env.add_argument("--analyze-mistakes", action="store_true")
-    parsers.env.add_argument("--max-while-objects", type=float, required=True)
-    parsers.env.add_argument("--num-excluded-objects", type=int, required=True)
+    parsers.env.add_argument("--max-while-objects", type=float, default=2)
+    parsers.env.add_argument("--num-excluded-objects", type=int, default=2)
     parsers.env.add_argument("--time-to-waste", type=int, required=True)
     parsers.agent.add_argument("--debug", action="store_true")
     parsers.agent.add_argument("--no-scan", action="store_true")
@@ -86,4 +84,4 @@ def bandit_args():
 
 
 if __name__ == "__main__":
-    main(**hierarchical_parse_args(bandit_args()))
+    main(**hierarchical_parse_args(control_flow_args()))
