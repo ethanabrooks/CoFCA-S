@@ -15,7 +15,6 @@ import ppo.control_flow.gridworld.oh_et_al
 import ppo.control_flow.gridworld.ours
 import ppo.control_flow.no_pointer
 import ppo.control_flow.oh_et_al
-import ppo.control_flow.simple
 from ppo.distributions import FixedCategorical
 
 

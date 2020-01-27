@@ -5,25 +5,25 @@ import ppo.agent
 import ppo.control_flow.agent
 import ppo.control_flow.env
 import ppo.control_flow.gridworld.env
-import ppo.control_flow.gridworld.simple
+import ppo.control_flow.gridworld.gru
+import ppo.control_flow.gridworld.one_line
 from ppo import control_flow
 from ppo.arguments import build_parser
 from ppo.train import Train
 
 
-def main(log_dir, seed, eval_lines, **kwargs):
+def main(log_dir, seed, eval_lines, one_line, **kwargs):
     class _Train(Train):
         def build_agent(self, envs, baseline=None, debug=False, **agent_args):
             obs_space = envs.observation_space
-            if baseline == "simple":
+            if baseline == "simple" or one_line:
                 del agent_args["no_scan"]
                 del agent_args["no_roll"]
                 del agent_args["num_encoding_layers"]
                 del agent_args["num_edges"]
                 del agent_args["gate_coef"]
                 del agent_args["no_op_coef"]
-                del agent_args["use_conv"]
-                return ppo.control_flow.gridworld.simple.Agent(
+                return ppo.control_flow.gridworld.gru.Agent(
                     observation_space=obs_space,
                     action_space=envs.action_space,
                     **agent_args,
@@ -33,7 +33,6 @@ def main(log_dir, seed, eval_lines, **kwargs):
                 action_space=envs.action_space,
                 eval_lines=eval_lines,
                 debug=debug,
-                baseline=baseline,
                 **agent_args,
             )
 
@@ -41,11 +40,11 @@ def main(log_dir, seed, eval_lines, **kwargs):
         def make_env(
             seed, rank, evaluation, env_id, add_timestep, gridworld, **env_args
         ):
-            args = dict(
-                **env_args, eval_lines=eval_lines, baseline=False, seed=seed + rank
-            )
+            args = dict(**env_args, eval_lines=eval_lines, seed=seed + rank)
             del args["time_limit"]
-            if not gridworld:
+            if one_line:
+                return control_flow.gridworld.one_line.Env(**args)
+            elif not gridworld:
                 del args["max_while_objects"]
                 del args["num_excluded_objects"]
                 del args["temporal_extension"]
@@ -63,6 +62,7 @@ def control_flow_args():
     parser.add_argument("--eval-steps", type=int)
     parser.add_argument("--eval-lines", type=int, required=True)
     parser.add_argument("--no-eval", action="store_true")
+    parser.add_argument("--one-line", action="store_true")
     ppo.control_flow.env.build_parser(parsers.env)
     parsers.env.add_argument("--gridworld", action="store_true")
     parsers.env.add_argument("--subtasks-only", action="store_true")

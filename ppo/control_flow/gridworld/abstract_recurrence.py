@@ -7,8 +7,9 @@ from torch import nn as nn
 from ppo.utils import init_
 
 
-class Recurrence:
+class Recurrence(nn.Module):
     def __init__(self, conv_hidden_size, use_conv):
+        super().__init__()
         self.conv_hidden_size = conv_hidden_size
         self.use_conv = use_conv
         d = self.obs_spaces.obs.shape[0]

@@ -109,34 +109,32 @@ class Env(ppo.control_flow.env.Env):
                 self.objects.index(line.id) + 1,
             ]
 
+    def world_array(self, object_pos, agent_pos):
+        world = np.zeros(self.world_shape)
+        for o, p in object_pos + [(self.agent, agent_pos)]:
+            p = np.array(p)
+            world[tuple((self.world_objects.index(o), *p))] = 1
+        return world
+
+    @staticmethod
+    def evaluate_line(line, object_pos, condition_evaluations):
+        if line is None:
+            return None
+        if type(line) is Subtask:
+            return 1
+        else:
+            evaluation = any(o == line.id for o, _ in object_pos)
+            if type(line) in (If, While):
+                condition_evaluations[type(line)] += [evaluation]
+            return evaluation
+
     def state_generator(self, lines) -> State:
         assert self.max_nesting_depth == 1
         agent_pos = self.random.randint(0, self.world_size, size=2)
-        offset = self.random.randint(1 + self.world_size - self.world_size, size=2)
-
-        def get_obs():
-            world = np.zeros(self.world_shape)
-            for o, p in object_pos + [(self.agent, agent_pos)]:
-                p = np.array(p) + offset
-                world[tuple((self.world_objects.index(o), *p))] = 1
-            return world
-
         object_pos = self.populate_world(lines)
         line_iterator = self.line_generator(lines)
         condition_evaluations = defaultdict(list)
         self.time_remaining = self.time_to_waste
-
-        def evaluate_line(l):
-            if l is None:
-                return None
-            line = lines[l]
-            if type(line) is Subtask:
-                return 1
-            else:
-                evaluation = any(o == line.id for o, _ in object_pos)
-                if type(line) in (If, While):
-                    condition_evaluations[type(line)] += [evaluation]
-                return evaluation
 
         def get_nearest(to):
             candidates = [np.array(p) for o, p in object_pos if o == to]
@@ -144,9 +142,13 @@ class Env(ppo.control_flow.env.Env):
                 return min(candidates, key=lambda k: np.sum(np.abs(agent_pos - k)))
 
         def next_subtask(l):
-            l = line_iterator.send(evaluate_line(l))
+            l = line_iterator.send(
+                self.evaluate_line(lines[l], object_pos, condition_evaluations)
+            )
             while not (l is None or type(lines[l]) is Subtask):
-                l = line_iterator.send(evaluate_line(l))
+                l = line_iterator.send(
+                    self.evaluate_line(lines[l], object_pos, condition_evaluations)
+                )
             if l is not None:
                 assert type(lines[l]) is Subtask
                 _, o = lines[l].id
@@ -161,7 +163,7 @@ class Env(ppo.control_flow.env.Env):
         while True:
             term |= not self.time_remaining
             subtask_id = yield State(
-                obs=get_obs(),
+                obs=self.world_array(object_pos, agent_pos),
                 condition=None,
                 prev=prev,
                 ptr=ptr,
