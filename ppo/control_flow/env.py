@@ -448,6 +448,8 @@ class Env(gym.Env, ABC):
                     else:
                         self.loops -= 1
                     l = line_iterator.send(self.loops > 0)
+                    if self.loops == 0:
+                        self.loops = None
                 else:
                     l = line_iterator.send(condition_bit)
             self.time_remaining += 1
