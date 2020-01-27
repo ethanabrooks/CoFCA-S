@@ -48,6 +48,7 @@ def main(log_dir, seed, eval_lines, **kwargs):
             if not gridworld:
                 del args["max_while_objects"]
                 del args["num_excluded_objects"]
+                del args["temporal_extension"]
                 return control_flow.env.Env(**args)
             else:
                 return control_flow.multi_step.env.Env(**args)
@@ -66,6 +67,9 @@ def control_flow_args():
     parsers.env.add_argument("--gridworld", action="store_true")
     parsers.env.add_argument("--subtasks-only", action="store_true")
     parsers.env.add_argument("--break-on-fail", action="store_true")
+    parsers.env.add_argument(
+        "--no-temporal-extension", dest="temporal_extension", action="store_false"
+    )
     parsers.env.add_argument("--max-while-objects", type=float, default=2)
     parsers.env.add_argument("--num-excluded-objects", type=int, default=2)
     parsers.env.add_argument("--time-to-waste", type=int, required=True)
