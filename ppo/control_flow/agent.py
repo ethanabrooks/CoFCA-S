@@ -9,10 +9,10 @@ from ppo.agent import AgentValues, NNBase
 
 from ppo.control_flow.recurrence import RecurrentState
 import ppo.control_flow.recurrence
-import ppo.control_flow.multi_step.abstract_recurrence
-import ppo.control_flow.multi_step.no_pointer
-import ppo.control_flow.multi_step.oh_et_al
-import ppo.control_flow.multi_step.ours
+import ppo.control_flow.gridworld.abstract_recurrence
+import ppo.control_flow.gridworld.no_pointer
+import ppo.control_flow.gridworld.oh_et_al
+import ppo.control_flow.gridworld.ours
 import ppo.control_flow.no_pointer
 import ppo.control_flow.oh_et_al
 import ppo.control_flow.simple
@@ -40,19 +40,19 @@ class Agent(ppo.agent.Agent, NNBase):
         if baseline == "no-pointer":
             del network_args["gate_coef"]
             self.recurrent_module = (
-                ppo.control_flow.multi_step.no_pointer.Recurrence
+                ppo.control_flow.gridworld.no_pointer.Recurrence
                 if self.multi_step
                 else ppo.control_flow.no_pointer.Recurrence
             )(observation_space=observation_space, **network_args)
         elif baseline == "oh-et-al":
             self.recurrent_module = (
-                ppo.control_flow.multi_step.oh_et_al.Recurrence
+                ppo.control_flow.gridworld.oh_et_al.Recurrence
                 if self.multi_step
                 else ppo.control_flow.oh_et_al.Recurrence
             )(observation_space=observation_space, **network_args)
         elif self.multi_step:
             assert baseline is None
-            self.recurrent_module = ppo.control_flow.multi_step.ours.Recurrence(
+            self.recurrent_module = ppo.control_flow.gridworld.ours.Recurrence(
                 observation_space=observation_space, **network_args
             )
         else:
@@ -86,13 +86,13 @@ class Agent(ppo.agent.Agent, NNBase):
         elif t is ppo.control_flow.recurrence.Recurrence:
             X = [hx.a, hx.d, hx.p]
             probs = [hx.a_probs, hx.d_probs]
-        elif t is ppo.control_flow.multi_step.no_pointer.Recurrence:
+        elif t is ppo.control_flow.gridworld.no_pointer.Recurrence:
             X = [hx.a, pad, pad, pad, pad]
             probs = [hx.a_probs]
-        elif t is ppo.control_flow.multi_step.oh_et_al.Recurrence:
+        elif t is ppo.control_flow.gridworld.oh_et_al.Recurrence:
             X = [hx.a, pad, pad, pad, hx.p]
             probs = [hx.a_probs]
-        elif t is ppo.control_flow.multi_step.ours.Recurrence:
+        elif t is ppo.control_flow.gridworld.ours.Recurrence:
             X = [hx.a, hx.d, hx.ag, hx.dg, hx.p]
             probs = [hx.a_probs, hx.d_probs, hx.ag_probs, hx.dg_probs]
         else:
