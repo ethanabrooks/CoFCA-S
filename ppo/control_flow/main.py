@@ -41,9 +41,7 @@ def main(log_dir, seed, eval_lines, **kwargs):
         def make_env(
             seed, rank, evaluation, env_id, add_timestep, world_size, **env_args
         ):
-            args = dict(
-                **env_args, eval_lines=eval_lines, baseline=False, seed=seed + rank
-            )
+            args = dict(**env_args, eval_lines=eval_lines, seed=seed + rank)
             del args["time_limit"]
             if world_size is None:
                 del args["max_while_objects"]
