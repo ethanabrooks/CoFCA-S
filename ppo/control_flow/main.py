@@ -39,16 +39,16 @@ def main(log_dir, seed, eval_lines, **kwargs):
 
         @staticmethod
         def make_env(
-            seed, rank, evaluation, env_id, add_timestep, world_size, **env_args
+            seed, rank, evaluation, env_id, add_timestep, gridworld, **env_args
         ):
             args = dict(**env_args, eval_lines=eval_lines, seed=seed + rank)
             del args["time_limit"]
-            if world_size is None:
+            if not gridworld:
                 del args["max_while_objects"]
                 del args["num_excluded_objects"]
                 return control_flow.env.Env(**args)
             else:
-                return control_flow.gridworld.env.Env(**args, world_size=world_size)
+                return control_flow.gridworld.env.Env(**args)
 
     _Train(**kwargs, seed=seed, log_dir=log_dir).run()
 
@@ -62,7 +62,7 @@ def bandit_args():
     parser.add_argument("--eval-lines", type=int, required=True)
     parser.add_argument("--no-eval", action="store_true")
     ppo.control_flow.env.build_parser(parsers.env)
-    parsers.env.add_argument("--world-size", type=int)
+    parsers.env.add_argument("--gridworld", action="store_true")
     parsers.env.add_argument("--subtasks-only", action="store_true")
     parsers.env.add_argument("--break-on-fail", action="store_true")
     parsers.env.add_argument("--max-while-objects", type=float, required=True)

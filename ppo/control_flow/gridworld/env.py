@@ -28,10 +28,10 @@ class Env(ppo.control_flow.env.Env):
 
     def __init__(
         self,
-        world_size,
         max_while_objects,
         num_subtasks,
         num_excluded_objects,
+        world_size=6,
         **kwargs,
     ):
         self.num_excluded_objects = num_excluded_objects
