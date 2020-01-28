@@ -31,9 +31,11 @@ class Env(ppo.control_flow.env.Env):
         max_while_objects,
         num_subtasks,
         num_excluded_objects,
+        temporal_extension,
         world_size=6,
         **kwargs,
     ):
+        self.temporal_extension = temporal_extension
         self.num_excluded_objects = num_excluded_objects
         self.max_while_objects = max_while_objects
 
@@ -175,17 +177,23 @@ class Env(ppo.control_flow.env.Env):
             interaction, obj = self.subtasks[subtask_id]
 
             def pair():
-                return obj, tuple(agent_pos)
+                return (
+                    obj,
+                    tuple(agent_pos)
+                    if self.temporal_extension
+                    else next((p for o, p in object_pos if o == obj), None),
+                )
 
             def on_object():
                 return pair() in object_pos  # standing on the desired object
 
             correct_id = (interaction, obj) == lines[ptr].id
-            if on_object():
+            if on_object() or not self.temporal_extension:
                 if interaction in (self.mine, self.build):
-                    object_pos.remove(pair())
-                    if correct_id:
-                        possible_objects.remove(obj)
+                    if pair() in object_pos:
+                        object_pos.remove(pair())
+                        if correct_id:
+                            possible_objects.remove(obj)
                     else:
                         term = True
                 if interaction == self.build:
