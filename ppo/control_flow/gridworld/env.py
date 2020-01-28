@@ -196,6 +196,9 @@ class Env(ppo.control_flow.env.Env):
                             possible_objects.remove(obj)
                         else:
                             term = True
+                    else:
+                        # subtask is impossible
+                        prev, ptr = ptr, None
                 if interaction == self.build:
                     object_pos.append((self.bridge, tuple(agent_pos)))
                 if correct_id:
