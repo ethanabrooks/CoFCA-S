@@ -31,9 +31,11 @@ class Env(ppo.control_flow.env.Env):
         max_while_objects,
         num_subtasks,
         num_excluded_objects,
+        temporal_extension,
         world_size=6,
         **kwargs,
     ):
+        self.temporal_extension = temporal_extension
         self.num_excluded_objects = num_excluded_objects
         self.max_while_objects = max_while_objects
 

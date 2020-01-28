@@ -65,6 +65,9 @@ def bandit_args():
     parsers.env.add_argument("--gridworld", action="store_true")
     parsers.env.add_argument("--subtasks-only", action="store_true")
     parsers.env.add_argument("--break-on-fail", action="store_true")
+    parsers.env.add_argument(
+        "--no-temporal-extension", dest="temporal_extension", action="store_false"
+    )
     parsers.env.add_argument("--max-while-objects", type=float, required=True)
     parsers.env.add_argument("--num-excluded-objects", type=int, required=True)
     parsers.env.add_argument("--time-to-waste", type=int, required=True)
