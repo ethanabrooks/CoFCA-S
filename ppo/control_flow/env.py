@@ -1,3 +1,4 @@
+import functools
 from abc import ABC
 from collections import defaultdict, namedtuple, OrderedDict, Counter
 
@@ -24,7 +25,7 @@ from ppo.utils import RED, RESET, GREEN
 
 Obs = namedtuple("Obs", "active lines obs")
 Last = namedtuple("Last", "action active reward terminal selected")
-State = namedtuple("State", "obs condition prev curr condition_evaluations term")
+State = namedtuple("State", "obs condition prev ptr condition_evaluations term")
 
 
 class Env(gym.Env, ABC):
@@ -40,23 +41,22 @@ class Env(gym.Env, ABC):
         max_nesting_depth,
         eval_condition_size,
         no_op_limit,
-        time_limit,
-        analyze_mistakes,
+        time_to_waste,
         subtasks_only,
         break_on_fail,
         seed=0,
         eval_lines=None,
         evaluating=False,
-        baseline=False,
     ):
         super().__init__()
-        self.analyze_mistakes = analyze_mistakes
         self.break_on_fail = break_on_fail
         self.subtasks_only = subtasks_only
         self.no_op_limit = no_op_limit
         self._eval_condition_size = eval_condition_size
         self.max_nesting_depth = max_nesting_depth
         self.num_subtasks = num_subtasks
+        self.time_to_waste = time_to_waste
+        self.time_remaining = None
 
         self.eval_lines = eval_lines
         self.min_lines = min_lines
@@ -68,12 +68,11 @@ class Env(gym.Env, ABC):
         self.n_lines += 1
         self.random, self.seed = seeding.np_random(seed)
         self.flip_prob = flip_prob
-        self.baseline = baseline
         self.evaluating = evaluating
         self.iterator = None
         self._render = None
         self.action_space = spaces.MultiDiscrete(
-            np.array([self.num_subtasks + 1, 2 * self.n_lines])
+            np.array([self.num_subtasks + 1, 2 * self.n_lines, self.n_lines])
         )
         self.observation_space = spaces.Dict(
             dict(
@@ -99,25 +98,15 @@ class Env(gym.Env, ABC):
         lines = self.build_lines()
         state_iterator = self.state_generator(lines)
         state = next(state_iterator)
-        entered_while_blocks = []
+        visited_by_env = []
+        visited_by_agent = []
 
-        def get_block(l):
-            block_type = None
-            l1 = None
-            for l2, line in enumerate(lines):
-                if type(line) in (Else, EndIf, EndWhile) and l < l2:
-                    return block_type, (l1, l2)
-                if type(line) in (If, Else, While):
-                    block_type = type(line)
-                    l1 = l2
-            return None, (None, None)
-
-        selected = 0
+        agent_ptr = 0
         info = {}
         term = False
         action = None
         while True:
-            success = state.curr is None
+            success = state.ptr is None
             reward = int(success)
             if success:
                 info.update(success_line=len(lines))
@@ -128,39 +117,16 @@ class Env(gym.Env, ABC):
                     import ipdb
 
                     ipdb.set_trace()
-                if self.analyze_mistakes:
-                    selected_block, (
-                        selected_block_start,
-                        selected_block_end,
-                    ) = get_block(selected)
-                    curr_block, (curr_block_start, curr_block_end) = get_block(
-                        state.curr
+
+                info.update(
+                    self.analyze_mistakes(
+                        agent_ptr=agent_ptr,
+                        env_ptr=state.ptr,
+                        visited_by_agent=visited_by_agent,
+                        visited_by_env=visited_by_env,
+                        lines=lines,
                     )
-                    info.update(
-                        failed_to_enter_if=0,
-                        failed_to_enter_else=0,
-                        mistakenly_enterred_if=0,
-                        mistakenly_enterred_else=0,
-                        failed_to_reenter_while=0,
-                        failed_to_enter_while=0,
-                        mistakenly_entered_while=0,
-                    )
-                    if curr_block is If and curr_block_end < selected:
-                        info.update(failed_to_enter_if=1)
-                    elif curr_block is Else and selected_block_end == curr_block_start:
-                        info.update(failed_to_enter_else=1)
-                    elif selected_block is If and selected_block_end < state.curr:
-                        info.update(mistakenly_enterred_if=1)
-                    elif curr_block is Else and selected_block_end == curr_block_start:
-                        assert selected_block is If
-                        info.update(mistakenly_enterred_else=1)
-                    elif curr_block is While and curr_block_end < selected:
-                        if curr_block in entered_while_blocks:
-                            info.update(failed_to_reenter_while=1)
-                        else:
-                            info.update(failed_to_enter_while=1)
-                    elif selected_block is While and selected_block_end < state.curr:
-                        info.update(mistakenly_entered_while=1)
+                )
 
             info.update(regret=1 if term and not success else 0)
             if term:
@@ -175,11 +141,11 @@ class Env(gym.Env, ABC):
                 line = lines[index]
                 if type(line) in [Else, EndIf, EndWhile]:
                     level -= 1
-                if index == state.curr and index == selected:
+                if index == state.ptr and index == agent_ptr:
                     pre = "+ "
-                elif index == selected:
+                elif index == agent_ptr:
                     pre = "- "
-                elif index == state.curr:
+                elif index == state.ptr:
                     pre = "| "
                 else:
                     pre = "  "
@@ -198,7 +164,7 @@ class Env(gym.Env, ABC):
                     print(GREEN if success else RED)
                 for i, string in enumerate(line_strings(index=0, level=1)):
                     print(f"{i}{string}")
-                print("Selected:", selected)
+                print("Selected:", agent_ptr)
                 print("Action:", action)
                 print("Reward", reward)
                 print("Obs:")
@@ -208,18 +174,16 @@ class Env(gym.Env, ABC):
             self._render = render
 
             action = (
-                yield self.get_observation(state.obs, state.curr, lines),
+                yield self.get_observation(state.obs, state.ptr, lines),
                 reward,
                 term,
                 info,
             )
 
-            if self.baseline:
-                selected = None
-                delta = 0
-            else:
-                action, delta = map(int, action[:2])
-                selected = min(self.n_lines, max(0, selected + delta - self.n_lines))
+            action, agent_ptr = int(action[0]), int(action[-1])
+            if action != self.num_subtasks:
+                visited_by_agent.append(agent_ptr)
+                visited_by_env.append(state.ptr)
             info = self.get_task_info(lines) if step == 0 else {}
 
             if action == self.num_subtasks:
@@ -229,20 +193,81 @@ class Env(gym.Env, ABC):
                     no_op_limit = len(lines)
                 if not self.evaluating and n == no_op_limit:
                     term = True
-            elif state.curr is not None:
+            elif state.ptr is not None:
                 step += 1
-                if action != lines[state.curr].id:
-                    info.update(success_line=state.prev, failure_line=state.curr)
+                if action != lines[state.ptr].id:
+                    info.update(success_line=state.prev, failure_line=state.ptr)
                 state = state_iterator.send(action)
-                if self.analyze_mistakes and delta > 0 and state.curr is not None:
-                    block_type, block = get_block(state.curr)
-                    if block_type is While:
-                        entered_while_blocks += [block]
+
+    def analyze_mistakes(
+        self, agent_ptr, env_ptr, visited_by_agent, visited_by_env, lines
+    ):
+        def get_block(l):
+            block_type = None
+            l1 = None
+            for l2, line in enumerate(lines):
+                if type(line) in (Else, EndIf, EndWhile) and l1 < l < l2:
+                    return block_type, (l1, l2)
+                if type(line) in (If, Else, While):
+                    block_type = type(line)
+                    l1 = l2
+            return None, (None, None)
+
+        agent_block, (agent_block_start, agent_block_end) = get_block(agent_ptr)
+        env_block, (env_block_start, env_block_end) = get_block(env_ptr)
+        info = dict(
+            failed_to_enter_if=0,
+            failed_to_enter_else=0,
+            mistakenly_enterred_if=0,
+            mistakenly_enterred_else=0,
+            failed_to_reenter_while=0,
+            failed_to_enter_while=0,
+            mistakenly_reentered_while=0,
+            mistakenly_entered_while=0,
+            mistakenly_advanced=0,
+            failed_to_keep_up=0,
+            mistaken_id=0,
+        )
+        if env_block is If and env_ptr < agent_ptr and env_ptr not in visited_by_agent:
+            info.update(failed_to_enter_if=1)
+        elif env_block is Else and (
+            (env_ptr < agent_ptr and env_ptr not in visited_by_agent)
+            or (agent_block_end == env_block_start)
+        ):
+            info.update(failed_to_enter_else=1)
+        elif (
+            agent_block is If
+            and agent_ptr < env_ptr
+            and agent_ptr not in visited_by_env
+        ):
+            info.update(mistakenly_enterred_if=1)
+        elif (
+            agent_block is Else
+            and agent_ptr not in visited_by_env
+            and (agent_ptr < env_ptr or env_block_end == agent_block_start)
+        ):
+            info.update(mistakenly_enterred_else=1)
+        elif env_block is While and env_ptr < agent_ptr:
+            if env_ptr in visited_by_agent:
+                info.update(failed_to_reenter_while=1)
+            else:
+                info.update(failed_to_enter_while=1)
+        elif agent_block is While and agent_block_end < env_ptr:
+            if agent_ptr in visited_by_env:
+                info.update(mistakenly_reentered_while=1)
+            else:
+                info.update(mistakenly_entered_while=1)
+        elif env_ptr < agent_ptr:
+            info.update(mistakenly_advanced=1)
+        elif agent_ptr < env_ptr:
+            info.update(failed_to_keep_up=1)
+        else:
+            info.update(mistaken_id=1)
+        return info
 
     @staticmethod
     def line_str(line: Line):
-        raise NotImplemented
-        return f"Subtask {line.id}"
+        return str(line)
 
     @property
     def eval_condition_size(self):
@@ -299,18 +324,18 @@ class Env(gym.Env, ABC):
 
             def edges():
                 line_iterator = self.line_generator(lines)
-                curr = next(line_iterator)
+                ptr = next(line_iterator)
                 while True:
-                    prev, curr = curr, line_iterator.send(bit)
-                    if curr is None:
+                    prev, ptr = ptr, line_iterator.send(bit)
+                    if ptr is None:
                         yield prev, len(lines)
                         return
-                    yield prev, curr
+                    yield prev, ptr
                     if bit and lines[prev] is EndWhile:
-                        assert lines[curr] is While
+                        assert lines[ptr] is While
                         for _ in range(2):
-                            curr = line_iterator.send(False)  # prevent forever loop
-                            if curr is None:
+                            ptr = line_iterator.send(False)  # prevent forever loop
+                            if ptr is None:
                                 return
 
             for n, (_from, _to) in enumerate(edges()):
@@ -335,12 +360,15 @@ class Env(gym.Env, ABC):
 
         return image
 
+    @functools.lru_cache(maxsize=120)
     def preprocess_line(self, line):
         if line is Padding:
-            return self.line_types.index(Padding)
-        if type(line) is Subtask:
+            t = line
+        else:
+            t = type(line)
+        if t is Subtask:
             return line.id
-        return self.num_subtasks + line.id
+        return self.num_subtasks + self.line_types.index(t)
 
     def get_lines(
         self, n, active_conditions, last=None, nesting_depth=0, max_nesting_depth=None
@@ -447,6 +475,7 @@ class Env(gym.Env, ABC):
         line_iterator = self.line_generator(lines)
         condition_bit = 0 if self.eval_condition_size else self.random.randint(0, 2)
         condition_evaluations = defaultdict(list)
+        self.time_remaining = self.time_to_waste
 
         def next_subtask(msg=condition_bit):
             l = line_iterator.send(msg)
@@ -455,36 +484,35 @@ class Env(gym.Env, ABC):
                 if type(line) in (If, While):
                     condition_evaluations[type(line)] += [condition_bit]
                 l = line_iterator.send(condition_bit)
+            self.time_remaining += 1
             return l
 
-        prev, curr = 0, next_subtask(None)
+        prev, ptr = 0, next_subtask(None)
+        term = False
         while True:
-            yield State(
+            action = yield State(
                 obs=condition_bit,
                 condition=condition_bit,
                 prev=prev,
-                curr=curr,
+                ptr=ptr,
                 condition_evaluations=condition_evaluations,
-                term=False,
+                term=term,
             )
-            condition_bit = abs(
-                condition_bit - int(self.random.rand() < self.flip_prob)
-            )
-            prev, curr = curr, next_subtask()
+            if not self.time_remaining or action != lines[ptr].id:
+                term = True
+            else:
+                self.time_remaining -= 1
+                condition_bit = abs(
+                    condition_bit - int(self.random.rand() < self.flip_prob)
+                )
+                prev, ptr = ptr, next_subtask()
 
     def get_observation(self, obs, active, lines):
         padded = lines + [Padding] * (self.n_lines - len(lines))
         lines = [self.preprocess_line(p) for p in padded]
-        obs = Obs(
+        return Obs(
             obs=obs, lines=lines, active=self.n_lines if active is None else active
-        )
-        if self.baseline:
-            obs = OrderedDict(obs=obs.obs, lines=self.eye[obs.lines].flatten())
-        else:
-            obs = obs._asdict()
-        # if not self.evaluating:
-        #     assert self.observation_space.contains(obs)
-        return obs
+        )._asdict()
 
     @staticmethod
     def print_obs(obs):
@@ -576,4 +604,4 @@ if __name__ == "__main__":
         except ValueError:
             return
 
-    keyboard_control.run(Env(**args, baseline=False), action_fn=action_fn)
+    keyboard_control.run(Env(**args), action_fn=action_fn)

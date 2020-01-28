@@ -38,7 +38,7 @@ class Recurrence(nn.Module):
         self.no_roll = no_roll
         self.no_scan = no_scan
         self.obs_spaces = Obs(**observation_space.spaces)
-        self.action_size = 2
+        self.action_size = action_space.nvec.size
         self.debug = debug
         self.hidden_size = hidden_size
         self.encoder_hidden_size = encoder_hidden_size
@@ -85,7 +85,7 @@ class Recurrence(nn.Module):
 
     @property
     def gru_in_size(self):
-        return 1 + 3 * self.hidden_size
+        return 1 + self.hidden_size + self.encoder_hidden_size
 
     # noinspection PyProtectedMember
     @contextmanager
@@ -193,10 +193,7 @@ class Recurrence(nn.Module):
 
         # build memory
         nl = len(self.obs_spaces.lines.nvec)
-        lines = inputs.lines.view(T, N, self.obs_sections.lines).long()[0, :, :]
-        M = self.embed_task(lines.view(-1)).view(
-            *lines.shape, self.encoder_hidden_size
-        )  # n_batch, n_lines, hidden_size
+        M = self.build_memory(N, T, inputs)
 
         P = self.build_P(M, N, rnn_hxs.device, nl)
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
@@ -221,17 +218,17 @@ class Recurrence(nn.Module):
             a_dist = self.actor(z)
             self.sample_new(A[t], a_dist)
             u = self.upsilon(z).softmax(dim=-1)
-            self.print("o", torch.round(10 * u))
+            self.print("u", u)
             w = P[p, R]
             half1 = w.size(1) // 2
-            self.print(torch.round(10 * w)[0, half1:])
-            self.print(torch.round(10 * w)[0, :half1])
+            self.print(w[0, half1:])
+            self.print(w[0, :half1])
             d_dist = FixedCategorical(probs=((w @ u.unsqueeze(-1)).squeeze(-1)))
             # p_probs = torch.round(p_dist.probs * 10).flatten()
             self.sample_new(D[t], d_dist)
             n_p = d_dist.probs.size(-1)
             p = p + D[t].clone() - n_p // 2
-            p = torch.clamp(p, min=0, max=n_p - 1)
+            p = torch.clamp(p, min=0, max=M.size(1) - 1)
             yield RecurrentState(
                 a=A[t],
                 v=self.critic(z),
@@ -241,3 +238,13 @@ class Recurrence(nn.Module):
                 d=D[t],
                 d_probs=d_dist.probs,
             )
+
+    def build_memory(self, N, T, inputs):
+        lines = inputs.lines.view(T, N, self.obs_sections.lines).long()[0]
+        return self.embed_task(lines.view(-1)).view(
+            *lines.shape, self.encoder_hidden_size
+        )  # n_batch, n_lines, hidden_size
+
+    @staticmethod
+    def preprocess_obs(obs):
+        return obs.unsqueeze(-1)
