@@ -33,6 +33,7 @@ def main(log_dir, seed, eval_lines, one_line, **kwargs):
                 action_space=envs.action_space,
                 eval_lines=eval_lines,
                 debug=debug,
+                baseline=baseline,
                 **agent_args,
             )
 

@@ -142,9 +142,12 @@ class Env(ppo.control_flow.env.Env):
                 return min(candidates, key=lambda k: np.sum(np.abs(agent_pos - k)))
 
         def next_subtask(l):
-            l = line_iterator.send(
-                self.evaluate_line(lines[l], object_pos, condition_evaluations)
-            )
+            if l is None:
+                l = line_iterator.send(None)
+            else:
+                l = line_iterator.send(
+                    self.evaluate_line(lines[l], object_pos, condition_evaluations)
+                )
             while not (l is None or type(lines[l]) is Subtask):
                 l = line_iterator.send(
                     self.evaluate_line(lines[l], object_pos, condition_evaluations)
