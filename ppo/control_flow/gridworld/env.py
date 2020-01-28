@@ -112,7 +112,7 @@ class Env(ppo.control_flow.env.Env):
         agent_pos = self.random.randint(0, self.world_size, size=2)
         offset = self.random.randint(1 + self.world_size - self.world_size, size=2)
 
-        def get_obs():
+        def world_array():
             world = np.zeros(self.world_shape)
             for o, p in object_pos + [(self.agent, agent_pos)]:
                 p = np.array(p) + offset
@@ -159,7 +159,7 @@ class Env(ppo.control_flow.env.Env):
         while True:
             term |= not self.time_remaining
             subtask_id = yield State(
-                obs=get_obs(),
+                obs=world_array(),
                 condition=None,
                 prev=prev,
                 ptr=ptr,
