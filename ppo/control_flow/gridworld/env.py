@@ -177,7 +177,12 @@ class Env(ppo.control_flow.env.Env):
             interaction, obj = self.subtasks[subtask_id]
 
             def pair():
-                return obj, tuple(agent_pos)
+                return (
+                    obj,
+                    tuple(agent_pos)
+                    if self.temporal_extension
+                    else next((p for o, p in object_pos if o == obj), None),
+                )
 
             def on_object():
                 return pair() in object_pos  # standing on the desired object
