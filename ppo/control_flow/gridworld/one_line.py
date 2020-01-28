@@ -1,4 +1,4 @@
-from collections import defaultdict
+from collections import defaultdict, Counter
 
 from gym.spaces import Discrete, MultiDiscrete
 
@@ -16,9 +16,24 @@ class Env(ppo.control_flow.gridworld.env.Env):
         self.action_space = MultiDiscrete(2 * np.ones(2))
 
     def state_generator(self, lines):
-        object_pos = self.populate_world(lines)
+        object_pos, lines = self.populate_world(lines)
+        running_count = Counter()
+        for o, _ in object_pos:
+            running_count[o] += 1
+        passing = self.random.choice(2)
         o = self.objects[int(self.random.choice(len(self.objects)))]
-        self.line = line = (If, While)[int(self.random.choice(2))](id=o)
+        line_type = (If, While)[int(self.random.choice(2))]
+        if line_type is If:
+            count_plus_1 = min(self.max_comparison_number, running_count[o] + 1)
+            comparison_number = (
+                self.random.randint(0, count_plus_1)
+                if passing
+                else self.random.randint(count_plus_1, self.max_comparison_number + 1)
+            )
+        else:
+            assert line_type is While
+            comparison_number = running_count[o] + 1
+        self.line = line = line_type((comparison_number, o))
         agent_pos = self.random.randint(0, self.world_size, size=2)
 
         condition_evaluations = defaultdict(list)
@@ -41,6 +56,9 @@ class Env(ppo.control_flow.gridworld.env.Env):
             term=True,
         )
         raise RuntimeError
+
+    def get_observation(self, obs, active, lines):
+        return super().get_observation(obs, active, [self.line])
 
     def render(self, mode="human", pause=True):
         self._render()

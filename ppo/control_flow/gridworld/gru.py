@@ -11,7 +11,7 @@ from ppo.utils import init_
 import ppo.control_flow.gridworld.abstract_recurrence
 
 
-class Agent(ppo.control_flow.gridworld.abstract_recurrence.Recurrence):
+class Agent(ppo.control_flow.gridworld.abstract_recurrence.Recurrence, nn.Module):
     def __init__(
         self,
         observation_space,
@@ -31,6 +31,7 @@ class Agent(ppo.control_flow.gridworld.abstract_recurrence.Recurrence):
         self.encoder_hidden_size = encoder_hidden_size
         self.obs_sections = get_obs_sections(self.obs_spaces)
         self.train_lines = len(self.obs_spaces.lines.nvec)
+        nn.Module.__init__(self)
         super().__init__(conv_hidden_size=conv_hidden_size, use_conv=use_conv)
 
         # networks
