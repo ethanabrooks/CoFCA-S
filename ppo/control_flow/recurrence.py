@@ -11,7 +11,7 @@ from ppo.control_flow.env import Obs
 from ppo.distributions import Categorical, FixedCategorical
 from ppo.utils import init_
 
-RecurrentState = namedtuple("RecurrentState", "a d p v h a_probs d_probs")
+RecurrentState = namedtuple("RecurrentState", "a d u p v h a_probs d_probs")
 
 
 def get_obs_sections(obs_spaces):
@@ -77,7 +77,14 @@ class Recurrence(nn.Module):
         self.critic = init_(nn.Linear(hidden_size, 1))
         self.actor = Categorical(hidden_size, n_a)
         self.state_sizes = RecurrentState(
-            a=1, a_probs=n_a, d=1, d_probs=2 * self.train_lines, p=1, v=1, h=hidden_size
+            a=1,
+            a_probs=n_a,
+            d=1,
+            d_probs=2 * self.train_lines,
+            u=self.ne,
+            p=1,
+            v=1,
+            h=hidden_size,
         )
 
     def build_embed_task(self, hidden_size):
@@ -85,7 +92,7 @@ class Recurrence(nn.Module):
 
     @property
     def gru_in_size(self):
-        return 1 + self.hidden_size + self.encoder_hidden_size
+        return 1 + self.hidden_size + self.encoder_hidden_size + self.ne
 
     # noinspection PyProtectedMember
     @contextmanager
@@ -182,6 +189,16 @@ class Recurrence(nn.Module):
             P = torch.cat([b.flip(2), f], dim=2)
         return P
 
+    def build_memory(self, N, T, inputs):
+        lines = inputs.lines.view(T, N, self.obs_sections.lines).long()[0]
+        return self.embed_task(lines.view(-1)).view(
+            *lines.shape, self.encoder_hidden_size
+        )  # n_batch, n_lines, hidden_size
+
+    @staticmethod
+    def preprocess_obs(obs):
+        return obs.unsqueeze(-1)
+
     def inner_loop(self, inputs, rnn_hxs):
         T, N, dim = inputs.shape
         inputs, actions = torch.split(
@@ -205,6 +222,7 @@ class Recurrence(nn.Module):
         p = hx.p.long().squeeze(-1)
         a = hx.a.long().squeeze(-1)
         a[new_episode] = 0
+        u = hx.u
         R = torch.arange(N, device=rnn_hxs.device)
         A = torch.cat([actions[:, :, 0], hx.a.view(1, N)], dim=0).long()
         D = torch.cat([actions[:, :, 1], hx.d.view(1, N)], dim=0).long()
@@ -212,7 +230,7 @@ class Recurrence(nn.Module):
         for t in range(T):
             self.print("p", p)
             obs = inputs.obs[t]
-            x = [obs, M[R, p], self.embed_action(A[t - 1].clone())]
+            x = [obs, M[R, p], self.embed_action(A[t - 1].clone()), u]
             h = self.gru(torch.cat(x, dim=-1), h)
             z = F.relu(self.zeta(h))
             a_dist = self.actor(z)
@@ -231,6 +249,7 @@ class Recurrence(nn.Module):
             p = torch.clamp(p, min=0, max=M.size(1) - 1)
             yield RecurrentState(
                 a=A[t],
+                u=u,
                 v=self.critic(z),
                 h=h,
                 p=p,
@@ -238,13 +257,3 @@ class Recurrence(nn.Module):
                 d=D[t],
                 d_probs=d_dist.probs,
             )
-
-    def build_memory(self, N, T, inputs):
-        lines = inputs.lines.view(T, N, self.obs_sections.lines).long()[0]
-        return self.embed_task(lines.view(-1)).view(
-            *lines.shape, self.encoder_hidden_size
-        )  # n_batch, n_lines, hidden_size
-
-    @staticmethod
-    def preprocess_obs(obs):
-        return obs.unsqueeze(-1)
