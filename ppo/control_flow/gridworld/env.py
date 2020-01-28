@@ -63,7 +63,7 @@ class Env(ppo.control_flow.env.Env):
                     [
                         [
                             len(self.line_types),
-                            1 + len(self.interactions) + self.max_comparison_number,
+                            1 + len(self.interactions) + len(self.objects),
                             1 + len(self.objects),
                         ]
                     ]
@@ -76,8 +76,8 @@ class Env(ppo.control_flow.env.Env):
         if isinstance(line, Subtask):
             return f"Subtask {self.subtasks.index(line.id)}: {line.id}"
         elif isinstance(line, (If, While)):
-            c, o = line.id
-            return f"{line}: {c} <= {o}"
+            o1, o2 = line.id
+            return f"{line}: count[{o1}] <= count[{o2}]"
         else:
             return f"{line}"
 
@@ -102,15 +102,11 @@ class Env(ppo.control_flow.env.Env):
             i, o = self.interactions.index(i), self.objects.index(o)
             return [self.line_types.index(Subtask), i + 1, o + 1]
         elif type(line) in (While, If):
-            c, o = line.id
-            if 1 + len(self.interactions) + c == 17:
-                import ipdb
-
-                ipdb.set_trace()
+            o1, o2 = line.id
             return [
                 self.line_types.index(type(line)),
-                1 + len(self.interactions) + c,
-                self.objects.index(o) + 1,
+                1 + len(self.interactions) + o1,
+                self.objects.index(o2) + 1,
             ]
         else:
             return [self.line_types.index(type(line)), 0, 0]
@@ -127,9 +123,10 @@ class Env(ppo.control_flow.env.Env):
         if line is None:
             return None
         elif type(line) in (While, If):
-            c, o = line.id
-            count = sum(1 for _o, _ in object_pos if _o == o)
-            evaluation = c <= count
+            o1, o2 = line.id
+            count1 = sum(1 for o, _ in object_pos if o == o1)
+            count2 = sum(1 for o, _ in object_pos if o == o2)
+            evaluation = count1 < count2
             if type(line) in (If, While):
                 condition_evaluations[type(line)] += [evaluation]
             return evaluation
@@ -269,26 +266,35 @@ class Env(ppo.control_flow.env.Env):
 
         running_count = copy.deepcopy(object_count)
         line_iterator = line_generator(passing_values)
+        comparison_object_idxs = self.random.choice(3, size=len(lines))
 
         for l, passing in zip(line_iterator, passing_values):
             line = lines[l]
             line_type = type(line)
             if line_type is If:
-                count_plus_1 = min(
-                    self.max_comparison_number, running_count[line.id] + 1
-                )
-                comparison_number = (
-                    self.random.randint(0, count_plus_1)
+                i = comparison_object_idxs[l]
+                comparison_obj = [o for o in self.objects if o is not line.id][i]
+                line.id = (
+                    (comparison_obj, line.id)
                     if passing
-                    else self.random.randint(
-                        count_plus_1, self.max_comparison_number + 1
-                    )
+                    and running_count[comparison_obj] < running_count[line.id]
+                    else (line.id, comparison_obj)
                 )
-                line.id = (comparison_number, line.id)
             elif line_type is While:
                 if not passing:
-                    comparison_number = running_count[line.id] + 1
-                    line.id = (comparison_number, line.id)
+                    next_smallest = None
+                    for obj, count in running_count.items():
+                        if obj != line.id:
+                            next_smallest_count = running_count[next_smallest]
+                            if next_smallest is None:
+                                next_smallest = obj
+                            elif (
+                                running_count[line.id] <= next_smallest_count
+                                and count < next_smallest_count
+                            ):
+                                next_smallest = obj
+                            elif next_smallest_count < count <= running_count[line.id]:
+                                line.id = (next_smallest, line.id)
             elif line_type is Subtask:
                 i, o = line.id
                 if i in (self.mine, self.bridge):
