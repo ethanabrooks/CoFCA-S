@@ -50,7 +50,6 @@ class Env(gym.Env, ABC):
         seed=0,
         eval_lines=None,
         evaluating=False,
-        baseline=False,
     ):
         super().__init__()
         self.max_loops = max_loops
@@ -74,7 +73,6 @@ class Env(gym.Env, ABC):
         self.n_lines += 1
         self.random, self.seed = seeding.np_random(seed)
         self.flip_prob = flip_prob
-        self.baseline = baseline
         self.evaluating = evaluating
         self.iterator = None
         self._render = None
@@ -198,13 +196,10 @@ class Env(gym.Env, ABC):
                 info,
             )
 
-            if self.baseline:
-                agent_ptr = None
-            else:
-                action, agent_ptr = int(action[0]), int(action[-1])
-                if action != self.num_subtasks:
-                    visited_by_agent.append(agent_ptr)
-                    visited_by_env.append(state.ptr)
+            action, agent_ptr = int(action[0]), int(action[-1])
+            if action != self.num_subtasks:
+                visited_by_agent.append(agent_ptr)
+                visited_by_env.append(state.ptr)
             info = self.get_task_info(lines) if step == 0 else {}
 
             if action == self.num_subtasks:
@@ -434,7 +429,7 @@ class Env(gym.Env, ABC):
     def state_generator(self, lines) -> State:
         line_iterator = self.line_generator(lines)
         condition_bit = (
-            0 if self.eval_condition_size else self.random.randint(self.max_loops + 1)
+            0 if self.eval_condition_size else self.random.choice(2)
         )
         condition_evaluations = defaultdict(list)
         self.time_remaining = self.time_to_waste
@@ -482,16 +477,9 @@ class Env(gym.Env, ABC):
     def get_observation(self, obs, active, lines):
         padded = lines + [Padding(0)] * (self.n_lines - len(lines))
         lines = [self.preprocess_line(p) for p in padded]
-        obs = Obs(
+        return Obs(
             obs=obs, lines=lines, active=self.n_lines if active is None else active
-        )
-        if self.baseline:
-            obs = OrderedDict(obs=obs.obs, lines=self.eye[obs.lines].flatten())
-        else:
-            obs = obs._asdict()
-        # if not self.evaluating:
-        #     assert self.observation_space.contains(obs)
-        return obs
+        )._asdict()
 
     @staticmethod
     def print_obs(obs):
@@ -584,4 +572,4 @@ if __name__ == "__main__":
         except ValueError:
             return
 
-    keyboard_control.run(Env(**args, baseline=False), action_fn=action_fn)
+    keyboard_control.run(Env(**args), action_fn=action_fn)
