@@ -177,25 +177,19 @@ class Env(ppo.control_flow.env.Env):
             interaction, obj = self.subtasks[subtask_id]
 
             def pair():
-                return (
-                    obj,
-                    tuple(agent_pos)
-                    if self.temporal_extension
-                    else next((p for o, p in object_pos if o == obj), None),
-                )
+                return obj, tuple(agent_pos), None
 
             def on_object():
                 return pair() in object_pos  # standing on the desired object
 
             correct_id = (interaction, obj) == lines[ptr].id
-            if on_object() or not self.temporal_extension:
+            if on_object():
                 if interaction in (self.mine, self.build):
-                    if pair() in object_pos:
-                        object_pos.remove(pair())
-                        if correct_id:
-                            possible_objects.remove(obj)
-                        else:
-                            term = True
+                    object_pos.remove(pair())
+                    if correct_id:
+                        possible_objects.remove(obj)
+                    else:
+                        term = True
                 if interaction == self.build:
                     object_pos.append((self.bridge, tuple(agent_pos)))
                 if correct_id:
@@ -203,7 +197,10 @@ class Env(ppo.control_flow.env.Env):
             else:
                 nearest = get_nearest(obj)
                 if nearest is not None:
-                    agent_pos += np.clip(nearest - agent_pos, -1, 1)
+                    delta = nearest - agent_pos
+                    if self.temporal_extension:
+                        delta = np.clip(delta, -1, 1)
+                    agent_pos += delta
                 elif correct_id and obj not in possible_objects:
                     # subtask is impossible
                     prev, ptr = ptr, None
