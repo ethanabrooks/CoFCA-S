@@ -190,12 +190,12 @@ class Env(ppo.control_flow.env.Env):
             correct_id = (interaction, obj) == lines[ptr].id
             if on_object() or not self.temporal_extension:
                 if interaction in (self.mine, self.build):
-                    assert pair() in object_pos
-                    object_pos.remove(pair())
-                    if correct_id:
-                        possible_objects.remove(obj)
-                    else:
-                        term = True
+                    if pair() in object_pos:
+                        object_pos.remove(pair())
+                        if correct_id:
+                            possible_objects.remove(obj)
+                        else:
+                            term = True
                 if interaction == self.build:
                     object_pos.append((self.bridge, tuple(agent_pos)))
                 if correct_id:
