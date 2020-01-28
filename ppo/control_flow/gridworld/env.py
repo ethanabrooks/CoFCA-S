@@ -188,7 +188,7 @@ class Env(ppo.control_flow.env.Env):
                 return pair() in object_pos  # standing on the desired object
 
             correct_id = (interaction, obj) == lines[ptr].id
-            if on_object():
+            if on_object() or not self.temporal_extension:
                 if interaction in (self.mine, self.build):
                     object_pos.remove(pair())
                     if correct_id:
