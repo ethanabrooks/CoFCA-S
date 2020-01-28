@@ -101,17 +101,6 @@ class Env(gym.Env, ABC):
         visited_by_env = []
         visited_by_agent = []
 
-        def get_block(l):
-            block_type = None
-            l1 = None
-            for l2, line in enumerate(lines):
-                if type(line) in (Else, EndIf, EndWhile) and l1 < l < l2:
-                    return block_type, (l1, l2)
-                if type(line) in (If, Else, While):
-                    block_type = type(line)
-                    l1 = l2
-            return None, (None, None)
-
         agent_ptr = 0
         info = {}
         term = False
