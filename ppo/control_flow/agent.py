@@ -55,6 +55,7 @@ class Agent(ppo.agent.Agent, NNBase):
                 observation_space=observation_space, **network_args
             )
         else:
+            del network_args["num_conv_layers"]
             self.recurrent_module = ppo.control_flow.recurrence.Recurrence(
                 observation_space=observation_space, **network_args
             )
