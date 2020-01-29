@@ -157,18 +157,21 @@ class Env(ppo.control_flow.env.Env):
                 _, o = lines[l].id
                 n = get_nearest(o)
                 if n is not None:
-                    self.time_remaining += 1 + np.max(np.abs(agent_pos - n))
+                    self.time_remaining += 1 + (
+                        np.max(np.abs(agent_pos - n)) if self.temporal_extension else 1
+                    )
             return l
 
         possible_objects = [o for o, _ in object_pos]
         prev, ptr = 0, next_subtask(None)
         term = False
         while True:
-            if not self.time_remaining and self.break_on_fail:
+            out_of_time = not (self.time_remaining or self.evaluating)
+            if out_of_time and self.break_on_fail:
                 import ipdb
 
                 ipdb.set_trace()
-            term |= not self.time_remaining
+            term |= out_of_time
             subtask_id = yield State(
                 obs=self.world_array(object_pos, agent_pos),
                 condition=None,

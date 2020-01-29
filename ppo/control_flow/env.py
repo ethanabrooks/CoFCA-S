@@ -494,7 +494,7 @@ class Env(gym.Env, ABC):
                 condition_evaluations=condition_evaluations,
                 term=term,
             )
-            if not self.time_remaining or action != lines[ptr].id:
+            if not (self.time_remaining or self.evaluating) or action != lines[ptr].id:
                 term = True
                 if self.break_on_fail:
                     import ipdb
