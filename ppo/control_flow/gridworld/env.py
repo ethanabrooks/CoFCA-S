@@ -164,6 +164,10 @@ class Env(ppo.control_flow.env.Env):
         prev, ptr = 0, next_subtask(None)
         term = False
         while True:
+            if not self.time_remaining and self.break_on_fail:
+                import ipdb
+
+                ipdb.set_trace()
             term |= not self.time_remaining
             subtask_id = yield State(
                 obs=self.world_array(object_pos, agent_pos),
@@ -190,6 +194,10 @@ class Env(ppo.control_flow.env.Env):
                         possible_objects.remove(obj)
                     else:
                         term = True
+                        if self.break_on_fail:
+                            import ipdb
+
+                            ipdb.set_trace()
                 if interaction == self.build:
                     object_pos.append((self.bridge, tuple(agent_pos)))
                 if correct_id:

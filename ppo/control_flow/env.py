@@ -113,11 +113,6 @@ class Env(gym.Env, ABC):
 
             term = success or state.term
             if term and not success:
-                if self.break_on_fail:
-                    import ipdb
-
-                    ipdb.set_trace()
-
                 info.update(
                     self.analyze_mistakes(
                         agent_ptr=agent_ptr,
@@ -167,6 +162,7 @@ class Env(gym.Env, ABC):
                 print("Selected:", agent_ptr)
                 print("Action:", action)
                 print("Reward", reward)
+                print("Time remaining", self.time_remaining)
                 print("Obs:")
                 print(RESET)
                 self.print_obs(state.obs)
@@ -500,6 +496,10 @@ class Env(gym.Env, ABC):
             )
             if not self.time_remaining or action != lines[ptr].id:
                 term = True
+                if self.break_on_fail:
+                    import ipdb
+
+                    ipdb.set_trace()
             else:
                 self.time_remaining -= 1
                 condition_bit = abs(
