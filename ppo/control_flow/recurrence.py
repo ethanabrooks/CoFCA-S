@@ -92,7 +92,7 @@ class Recurrence(nn.Module):
 
     @property
     def gru_in_size(self):
-        return 1 + self.hidden_size + self.encoder_hidden_size + self.ne
+        return 1 + self.encoder_hidden_size + self.ne
 
     # noinspection PyProtectedMember
     @contextmanager
@@ -230,7 +230,7 @@ class Recurrence(nn.Module):
         for t in range(T):
             self.print("p", p)
             obs = inputs.obs[t]
-            x = [obs, M[R, p], self.embed_action(A[t - 1].clone()), u]
+            x = [obs, M[R, p], u]
             h = self.gru(torch.cat(x, dim=-1), h)
             z = F.relu(self.zeta(h))
             a_dist = self.actor(z)
