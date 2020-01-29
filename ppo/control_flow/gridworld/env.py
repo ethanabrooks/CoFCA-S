@@ -105,7 +105,7 @@ class Env(ppo.control_flow.env.Env):
             o1, o2 = line.id
             return [
                 self.line_types.index(type(line)),
-                1 + len(self.interactions) + o1,
+                1 + len(self.interactions) + self.objects.index(o1),
                 self.objects.index(o2) + 1,
             ]
         else:
@@ -261,7 +261,14 @@ class Env(ppo.control_flow.env.Env):
             except StopIteration:
                 break
 
-        running_count = copy.deepcopy(object_count)
+        for line in lines:
+            if type(line) is Subtask:
+                i, o = line.id
+                object_count[o] = max(1, object_count[o])
+
+        running_count = {
+            k: object_count[k] if k in object_count else 0 for k in self.objects
+        }
         line_iterator = line_generator(passing_values)
         comparison_object_idxs = self.random.choice(3, size=len(lines))
 
@@ -282,16 +289,20 @@ class Env(ppo.control_flow.env.Env):
                     next_smallest = None
                     for obj, count in running_count.items():
                         if obj != line.id:
-                            next_smallest_count = running_count[next_smallest]
                             if next_smallest is None:
                                 next_smallest = obj
                             elif (
-                                running_count[line.id] <= next_smallest_count
-                                and count < next_smallest_count
+                                running_count[line.id] <= running_count[next_smallest]
+                                and count < running_count[next_smallest]
                             ):
                                 next_smallest = obj
-                            elif next_smallest_count < count <= running_count[line.id]:
-                                line.id = (next_smallest, line.id)
+                            elif (
+                                running_count[next_smallest]
+                                < count
+                                <= running_count[line.id]
+                            ):
+                                next_smallest = obj
+                    line.id = (next_smallest, line.id)
             elif line_type is Subtask:
                 i, o = line.id
                 if i in (self.mine, self.bridge):
