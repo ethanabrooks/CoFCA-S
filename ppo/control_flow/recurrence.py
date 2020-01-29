@@ -33,8 +33,10 @@ class Recurrence(nn.Module):
         debug,
         no_scan,
         no_roll,
+        feed_u,
     ):
         super().__init__()
+        self.feed_u = feed_u
         self.no_roll = no_roll
         self.no_scan = no_scan
         self.obs_spaces = Obs(**observation_space.spaces)
@@ -52,7 +54,7 @@ class Recurrence(nn.Module):
         n_a, n_p = map(int, action_space.nvec[:2])
         self.n_a = n_a
         self.embed_task = self.build_embed_task(encoder_hidden_size)
-        self.embed_action = nn.Embedding(n_a, hidden_size)
+        self.embed_action = nn.Embedding(2 * self.train_lines, hidden_size)
         self.task_encoder = nn.GRU(
             encoder_hidden_size,
             encoder_hidden_size,
@@ -92,7 +94,7 @@ class Recurrence(nn.Module):
 
     @property
     def gru_in_size(self):
-        return 1 + self.encoder_hidden_size + self.ne
+        return 1 + self.encoder_hidden_size + (self.ne if self.feed_u else 1)
 
     # noinspection PyProtectedMember
     @contextmanager
@@ -230,7 +232,11 @@ class Recurrence(nn.Module):
         for t in range(T):
             self.print("p", p)
             obs = inputs.obs[t]
-            x = [obs, M[R, p], u]
+            x = [
+                obs,
+                M[R, p],
+                u if self.feed_u else D[t - 1].clone().unsqueeze(-1).float(),
+            ]
             h = self.gru(torch.cat(x, dim=-1), h)
             z = F.relu(self.zeta(h))
             a_dist = self.actor(z)
