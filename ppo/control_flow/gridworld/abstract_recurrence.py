@@ -8,7 +8,7 @@ from ppo.utils import init_
 
 
 class Recurrence:
-    def __init__(self, conv_hidden_size, use_conv):
+    def __init__(self, conv_hidden_size, use_conv, num_conv_layers):
         self.conv_hidden_size = conv_hidden_size
         self.use_conv = use_conv
         d = self.obs_spaces.obs.shape[0]
@@ -41,7 +41,12 @@ class Recurrence:
                 nn.ReLU(),
             )
         else:
-            self.conv = nn.Sequential(init_(nn.Linear(d, conv_hidden_size)), nn.ReLU())
+            layers = []
+            in_size = d
+            for _ in range(num_conv_layers):
+                layers += [init_(nn.Linear(in_size, conv_hidden_size)), nn.ReLU()]
+                in_size = conv_hidden_size
+            self.conv = nn.Sequential(*layers)
         ones = torch.ones(1, dtype=torch.long)
         self.register_buffer("ones", ones)
         line_nvec = torch.tensor(self.obs_spaces.lines.nvec[0, :-1])
