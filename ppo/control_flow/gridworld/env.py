@@ -37,6 +37,7 @@ class Env(ppo.control_flow.env.Env):
         world_size=6,
         **kwargs,
     ):
+        self.num_objects = 20
         self.temporal_extension = temporal_extension
         self.num_excluded_objects = num_excluded_objects
         self.max_while_objects = max_while_objects
@@ -232,6 +233,7 @@ class Env(ppo.control_flow.env.Env):
             if self.max_while_objects:
                 objects += [o2] * int(self.random.choice(int(self.max_while_objects)))
 
+        objects = list(itertools.islice(itertools.cycle(objects), self.num_objects))
         pos_arrays = self.random.randint(self.world_size, size=(len(objects), 2))
         object_pos = [(o, tuple(a)) for o, a in zip(objects, pos_arrays)]
         return object_pos, lines
