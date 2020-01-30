@@ -369,7 +369,7 @@ class Train(abc.ABC):
 
         #forward, backwards, right, left, up, down, rotate claw clockwise, rotate claw counterclockwise, open/close claws, do nothing
         #env.action_space = spaces.Discrete(11)
-        env.action_space = spaces.Discrete(4)
+        env.action_space = spaces.Discrete(6)
         #env.action_space = spaces.Box(low = low, high = high, dtype=np.int32)
         #low = np.array([-np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf])
         #high = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
