@@ -8,7 +8,16 @@ from rl_utils import hierarchical_parse_args
 import ppo.control_flow.env
 from ppo import keyboard_control
 from ppo.control_flow.env import build_parser, State
-from ppo.control_flow.lines import Subtask, Padding, Line, While, If, EndWhile, Else
+from ppo.control_flow.lines import (
+    Subtask,
+    Padding,
+    Line,
+    While,
+    If,
+    EndWhile,
+    Else,
+    Loop,
+)
 
 
 class Env(ppo.control_flow.env.Env):
@@ -38,6 +47,7 @@ class Env(ppo.control_flow.env.Env):
         self.temporal_extension = temporal_extension
         self.num_excluded_objects = num_excluded_objects
         self.max_while_objects = max_while_objects
+        self.loops = None
 
         def subtasks():
             for obj in self.objects:
@@ -60,7 +70,7 @@ class Env(ppo.control_flow.env.Env):
                     [
                         [
                             len(self.line_types),
-                            1 + len(self.interactions),
+                            1 + len(self.interactions) + self.max_loops,
                             1 + len(self.objects),
                         ]
                     ]
@@ -94,10 +104,12 @@ class Env(ppo.control_flow.env.Env):
 
     @functools.lru_cache(maxsize=200)
     def preprocess_line(self, line):
-        if line is Padding:
+        if type(line) is Padding:
             return [self.line_types.index(Padding), 0, 0]
         elif type(line) is Else:
             return [self.line_types.index(Else), 0, 0]
+        elif type(line) is Loop:
+            return [self.line_types.index(Loop), len(self.interactions) + line.id, 0]
         elif type(line) is Subtask:
             i, o = line.id
             i, o = self.interactions.index(i), self.objects.index(o)
@@ -117,9 +129,11 @@ class Env(ppo.control_flow.env.Env):
         return world
 
     @staticmethod
-    def evaluate_line(line, object_pos, condition_evaluations):
+    def evaluate_line(line, object_pos, condition_evaluations, loops):
         if line is None:
             return None
+        elif type(line) is Loop:
+            return loops > 0
         if type(line) is Subtask:
             return 1
         else:
@@ -135,6 +149,7 @@ class Env(ppo.control_flow.env.Env):
         line_iterator = self.line_generator(lines)
         condition_evaluations = defaultdict(list)
         self.time_remaining = self.time_to_waste
+        self.loops = None
 
         def get_nearest(to):
             candidates = [np.array(p) for o, p in object_pos if o == to]
@@ -142,16 +157,24 @@ class Env(ppo.control_flow.env.Env):
                 return min(candidates, key=lambda k: np.sum(np.abs(agent_pos - k)))
 
         def next_subtask(l):
-            if l is None:
-                l = line_iterator.send(None)
-            else:
-                l = line_iterator.send(
-                    self.evaluate_line(lines[l], object_pos, condition_evaluations)
-                )
-            while not (l is None or type(lines[l]) is Subtask):
-                l = line_iterator.send(
-                    self.evaluate_line(lines[l], object_pos, condition_evaluations)
-                )
+            while True:
+                if l is None:
+                    l = line_iterator.send(None)
+                else:
+                    if type(lines[l]) is Loop:
+                        if self.loops is None:
+                            self.loops = lines[l].id
+                        else:
+                            self.loops -= 1
+                    l = line_iterator.send(
+                        self.evaluate_line(
+                            lines[l], object_pos, condition_evaluations, self.loops
+                        )
+                    )
+                    if self.loops == 0:
+                        self.loops = None
+                if l is None or type(lines[l]) is Subtask:
+                    break
             if l is not None:
                 assert type(lines[l]) is Subtask
                 _, o = lines[l].id
@@ -254,6 +277,8 @@ class Env(ppo.control_flow.env.Env):
                     included_objects[object_id],
                 )
                 yield Subtask(subtask_id)
+            elif line is Loop:
+                yield Loop(self.random.randint(1, 1 + self.max_loops))
             else:
                 yield line(self.objects[line_id])
 

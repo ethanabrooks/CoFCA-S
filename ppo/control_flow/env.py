@@ -315,7 +315,7 @@ class Env(gym.Env, ABC):
             if line is Subtask:
                 yield Subtask(self.random.choice(self.num_subtasks))
             elif line is Loop:
-                yield Loop(self.random.randint(1, 3))
+                yield Loop(self.random.randint(1, 1 + self.max_loops))
             else:
                 yield line(0)
 

@@ -9,7 +9,7 @@ from ppo.distributions import FixedCategorical, Categorical
 import numpy as np
 
 RecurrentState = namedtuple(
-    "RecurrentState", "a d ag dg p v h h2 a_probs d_probs ag_probs dg_probs"
+    "RecurrentState", "a d u ag dg p v h h2 a_probs d_probs ag_probs dg_probs"
 )
 
 
@@ -29,7 +29,6 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         self.d_gate = Categorical(hidden_size, 2)
         self.a_gate = Categorical(hidden_size, 2)
         state_sizes = self.state_sizes._asdict()
-        del state_sizes["u"]
         self.state_sizes = RecurrentState(
             **state_sizes, h2=hidden_size, ag_probs=2, dg_probs=2, ag=1, dg=1
         )
@@ -73,6 +72,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         h = hx.h
         h2 = hx.h2
         p = hx.p.long().squeeze(-1)
+        u = hx.u
         hx.a[new_episode] = self.n_a - 1
         ag_probs = hx.ag_probs
         ag_probs[new_episode, 1] = 1
@@ -86,7 +86,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         for t in range(T):
             self.print("p", p)
             obs = self.preprocess_obs(inputs.obs[t])
-            x = [obs, M[R, p], self.embed_action(A[t - 1].clone())]
+            x = [obs, M[R, p], u, self.embed_action(A[t - 1].clone())]
             h = self.gru(torch.cat(x, dim=-1), h)
             z = F.relu(self.zeta(h))
             d_gate = self.d_gate(z)
@@ -119,6 +119,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 a=A[t],
                 v=self.critic(z),
                 h=h,
+                u=u,
                 h2=h2,
                 p=p,
                 a_probs=a_dist.probs,

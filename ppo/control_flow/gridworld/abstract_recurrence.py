@@ -50,7 +50,12 @@ class Recurrence:
 
     @property
     def gru_in_size(self):
-        return self.hidden_size + self.conv_hidden_size + self.encoder_hidden_size
+        return (
+            self.hidden_size
+            + self.conv_hidden_size
+            + self.encoder_hidden_size
+            + self.ne
+        )
 
     @staticmethod
     def eval_lines_space(n_eval_lines, train_lines_space):
