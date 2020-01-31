@@ -28,13 +28,10 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         )
         self.d_gate = Categorical(hidden_size, 2)
         self.a_gate = Categorical(hidden_size, 2)
+        state_sizes = self.state_sizes._asdict()
+        del state_sizes["u"]
         self.state_sizes = RecurrentState(
-            **self.state_sizes._asdict(),
-            h2=hidden_size,
-            ag_probs=2,
-            dg_probs=2,
-            ag=1,
-            dg=1
+            **state_sizes, h2=hidden_size, ag_probs=2, dg_probs=2, ag=1, dg=1
         )
 
     def pack(self, hxs):
