@@ -7,6 +7,7 @@ import ppo.control_flow.gridworld.abstract_recurrence as abstract_recurrence
 import ppo.control_flow.recurrence as recurrence
 from ppo.distributions import FixedCategorical, Categorical
 import numpy as np
+import torch.nn as nn
 
 RecurrentState = namedtuple(
     "RecurrentState", "a d u ag dg p v h h2 a_probs d_probs ag_probs dg_probs"
@@ -25,6 +26,9 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         recurrence.Recurrence.__init__(self, hidden_size=hidden_size, **kwargs)
         abstract_recurrence.Recurrence.__init__(
             self, conv_hidden_size=conv_hidden_size, use_conv=use_conv
+        )
+        self.gru2 = nn.GRUCell(
+            conv_hidden_size + self.encoder_hidden_size + self.ne, hidden_size
         )
         self.d_gate = Categorical(hidden_size, 2)
         self.a_gate = Categorical(hidden_size, 2)
@@ -76,7 +80,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         hx.a[new_episode] = self.n_a - 1
         ag_probs = hx.ag_probs
         ag_probs[new_episode, 1] = 1
-        R = torch.arange(N, device=(rnn_hxs.device))
+        R = torch.arange(N, device=rnn_hxs.device)
         ones = self.ones.expand_as(R)
         A = torch.cat([actions[:, :, 0], hx.a.view(1, N)], dim=0).long()
         D = torch.cat([actions[:, :, 1], hx.d.view(1, N)], dim=0).long()
@@ -86,7 +90,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         for t in range(T):
             self.print("p", p)
             obs = self.preprocess_obs(inputs.obs[t])
-            x = [obs, M[R, p], u, self.embed_action(A[t - 1].clone())]
+            x = [obs, M[R, p], self.embed_action(A[t - 1].clone())]
             h = self.gru(torch.cat(x, dim=-1), h)
             z = F.relu(self.zeta(h))
             d_gate = self.d_gate(z)
@@ -94,7 +98,8 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             a_gate = self.a_gate(z)
             self.sample_new(AG[t], a_gate)
 
-            h2_ = self.gru(torch.cat(x, dim=-1), h2)
+            x = [obs, M[R, p], u]
+            h2_ = self.gru2(torch.cat(x, dim=-1), h2)
             z = F.relu(self.zeta(h2_))
             u = self.upsilon(z).softmax(dim=-1)
             self.print("u", u)
