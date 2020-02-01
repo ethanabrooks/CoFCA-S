@@ -227,13 +227,18 @@ class Env(ppo.control_flow.env.Env):
             line_id = (self.mine, self.build)[i], o2
             lines[l] = Subtask(line_id)
 
-        objects = [line.id[1] for line in lines if type(line) is Subtask]
+        more_lines = self.get_lines(
+            n=self.eval_lines - len(lines),
+            active_conditions=[],
+            max_nesting_depth=self.max_nesting_depth,
+        )
+        more_lines = list(self.assign_line_ids(more_lines))
+        objects = [line.id[1] for line in lines + more_lines if type(line) is Subtask]
         for while_line, block in while_blocks.items():
             o1, o2 = lines[while_line].id
             if self.max_while_objects:
                 objects += [o2] * int(self.random.choice(int(self.max_while_objects)))
 
-        objects = list(itertools.islice(itertools.cycle(objects), self.num_objects))
         pos_arrays = self.random.randint(self.world_size, size=(len(objects), 2))
         object_pos = [(o, tuple(a)) for o, a in zip(objects, pos_arrays)]
         return object_pos, lines
