@@ -228,7 +228,7 @@ class Env(ppo.control_flow.env.Env):
             lines[l] = Subtask(line_id)
 
         more_lines = self.get_lines(
-            n=self.eval_lines - len(lines),
+            n=20 - len(lines),
             active_conditions=[],
             max_nesting_depth=self.max_nesting_depth,
         )
