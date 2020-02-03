@@ -54,7 +54,8 @@ class Env(ppo.control_flow.gridworld.env.Env):
 
     def render(self, mode="human", pause=True):
         self._render()
-        print("line:", self.line)
+        o1, o2 = self.line.id
+        print(f"line: {self.line}: count[{o1}] < count[{o2}]")
         print("choice:", self.choice)
         if pause:
             input("pause")

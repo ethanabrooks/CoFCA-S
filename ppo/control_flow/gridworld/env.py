@@ -77,7 +77,7 @@ class Env(ppo.control_flow.env.Env):
             return f"Subtask {self.subtasks.index(line.id)}: {line.id}"
         elif isinstance(line, (If, While)):
             o1, o2 = line.id
-            return f"{line}: count[{o1}] <= count[{o2}]"
+            return f"{line}: count[{o1}] < count[{o2}]"
         else:
             return f"{line}"
 
