@@ -1,3 +1,4 @@
+import gc
 from collections import namedtuple
 
 import torch
@@ -8,6 +9,8 @@ import ppo.control_flow.recurrence as recurrence
 from ppo.distributions import FixedCategorical, Categorical
 import numpy as np
 import torch.nn as nn
+
+from ppo.utils import init_
 
 RecurrentState = namedtuple(
     "RecurrentState", "a d u ag dg p v h h2 a_probs d_probs ag_probs dg_probs"
@@ -27,15 +30,22 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         abstract_recurrence.Recurrence.__init__(
             self, conv_hidden_size=conv_hidden_size, use_conv=use_conv
         )
-        self.gru2 = nn.GRUCell(
-            conv_hidden_size + self.encoder_hidden_size + self.ne, hidden_size
+        self.zeta = init_(
+            nn.Linear(2 * hidden_size + self.encoder_hidden_size, hidden_size)
         )
+        gc.collect()
+        self.zeta2 = init_(nn.Linear(hidden_size + self.conv_hidden_size, hidden_size))
+        self.gru2 = nn.GRUCell(self.encoder_hidden_size + self.ne, hidden_size)
         self.d_gate = Categorical(hidden_size, 2)
         self.a_gate = Categorical(hidden_size, 2)
         state_sizes = self.state_sizes._asdict()
         self.state_sizes = RecurrentState(
             **state_sizes, h2=hidden_size, ag_probs=2, dg_probs=2, ag=1, dg=1
         )
+
+    @property
+    def gru_in_size(self):
+        return self.conv_hidden_size
 
     def pack(self, hxs):
         def pack():
@@ -90,17 +100,17 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         for t in range(T):
             self.print("p", p)
             obs = self.preprocess_obs(inputs.obs[t])
-            x = [obs, M[R, p], self.embed_action(A[t - 1].clone())]
-            h = self.gru(torch.cat(x, dim=-1), h)
-            z = F.relu(self.zeta(h))
+            h = self.gru(obs, h)
+            zeta_inputs = [h, M[R, p], self.embed_action(A[t - 1].clone())]
+            z = F.relu(self.zeta(torch.cat(zeta_inputs, dim=-1)))
             d_gate = self.d_gate(z)
             self.sample_new(DG[t], d_gate)
             a_gate = self.a_gate(z)
             self.sample_new(AG[t], a_gate)
 
-            x = [obs, M[R, p], u]
+            x = [M[R, p], u]
             h2_ = self.gru2(torch.cat(x, dim=-1), h2)
-            z = F.relu(self.zeta(h2_))
+            z = F.relu(self.zeta2(torch.cat([h2_, obs], dim=-1)))
             u = self.upsilon(z).softmax(dim=-1)
             self.print("u", u)
             w = P[p, R]
