@@ -124,8 +124,12 @@ class Env(ppo.control_flow.env.Env):
             return None
         elif type(line) in (While, If):
             o1, o2 = line.id
-            count1 = sum(1 for o, _ in object_pos if o == o1)
-            count2 = sum(1 for o, _ in object_pos if o == o2)
+            pos_obj = defaultdict(set)
+            for o, p in object_pos:
+                pos_obj[p].add(o)
+
+            count1 = sum(1 for _, ob_set in pos_obj.items() if o1 in ob_set)
+            count2 = sum(1 for _, ob_set in pos_obj.items() if o2 in ob_set)
             evaluation = count1 < count2
             if type(line) in (If, While):
                 condition_evaluations[type(line)] += [evaluation]
