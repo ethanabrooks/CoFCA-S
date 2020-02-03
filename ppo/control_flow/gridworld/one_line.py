@@ -17,23 +17,15 @@ class Env(ppo.control_flow.gridworld.env.Env):
 
     def state_generator(self, lines):
         object_pos, lines = self.populate_world(lines)
-        running_count = Counter()
-        for o, _ in object_pos:
-            running_count[o] += 1
         passing = self.random.choice(2)
-        o = self.objects[int(self.random.choice(len(self.objects)))]
+        o1, o2 = self.random.choice(len(self.objects), size=2)
+        o1, o2 = self.objects[o1], self.objects[o2]
         line_type = (If, While)[int(self.random.choice(2))]
-        if line_type is If:
-            count_plus_1 = min(self.max_comparison_number, running_count[o] + 1)
-            comparison_number = (
-                self.random.randint(0, count_plus_1)
-                if passing
-                else self.random.randint(count_plus_1, self.max_comparison_number + 1)
-            )
-        else:
-            assert line_type is While
-            comparison_number = running_count[o] + 1
-        self.line = line = line_type((comparison_number, o))
+        count1 = sum(1 for o, _ in object_pos if o == o1)
+        count2 = sum(1 for o, _ in object_pos if o == o2)
+        self.line = line = line_type(
+            (o1, o2) if (passing and count1 < count2) else (o2, o1)
+        )
         agent_pos = self.random.randint(0, self.world_size, size=2)
 
         condition_evaluations = defaultdict(list)
