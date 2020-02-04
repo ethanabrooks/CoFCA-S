@@ -34,7 +34,6 @@ class Agent(ppo.agent.Agent, NNBase):
         self.multi_step = type(observation_space.spaces["obs"]) is Box
         if not self.multi_step:
             del network_args["conv_hidden_size"]
-            del network_args["use_conv"]
             del network_args["gate_coef"]
         if baseline == "no-pointer":
             del network_args["gate_coef"]
