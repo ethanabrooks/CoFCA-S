@@ -8,50 +8,15 @@ from ppo.utils import init_
 
 
 class Recurrence:
-    def __init__(self, conv_hidden_size, conv_architecture):
+    def __init__(self, conv_hidden_size, num_conv_layers):
         self.conv_hidden_size = conv_hidden_size
         d = self.obs_spaces.obs.shape[0]
-        if conv_architecture == 0:
-            self.conv = nn.Sequential(
-                nn.Conv2d(d, conv_hidden_size, kernel_size=2, stride=2),
-                nn.ReLU(),
-                nn.Conv2d(conv_hidden_size, conv_hidden_size, kernel_size=3),
-                nn.ReLU(),
-            )
-        elif conv_architecture == 1:
-            self.conv = nn.Sequential(
-                nn.Conv2d(d, conv_hidden_size, kernel_size=3, stride=3),
-                nn.ReLU(),
-                nn.Conv2d(conv_hidden_size, conv_hidden_size, kernel_size=2),
-                nn.ReLU(),
-            )
-        elif conv_architecture == 2:
-            self.conv = nn.Sequential(
-                nn.Conv2d(d, conv_hidden_size, kernel_size=2, stride=2),
-                nn.ReLU(),
-                nn.Conv2d(conv_hidden_size, conv_hidden_size, kernel_size=2),
-                nn.ReLU(),
-                nn.Conv2d(conv_hidden_size, conv_hidden_size, kernel_size=2),
-                nn.ReLU(),
-            )
-        elif conv_architecture == 3:
-            self.conv = nn.Sequential(
-                nn.Conv2d(d, conv_hidden_size, kernel_size=3),
-                nn.ReLU(),
-                nn.Conv2d(conv_hidden_size, conv_hidden_size, kernel_size=3),
-                nn.ReLU(),
-                nn.Conv2d(conv_hidden_size, conv_hidden_size, kernel_size=2),
-                nn.ReLU(),
-            )
-        elif conv_architecture == 4:
-            self.conv = nn.Sequential(
-                nn.Conv2d(d, conv_hidden_size, kernel_size=3),
-                nn.ReLU(),
-                nn.Conv2d(conv_hidden_size, conv_hidden_size, kernel_size=4),
-                nn.ReLU(),
-            )
-        else:
-            raise RuntimeError()
+        layers = []
+        in_size = d
+        for _ in range(num_conv_layers):
+            layers += [nn.Conv2d(in_size, conv_hidden_size, kernel_size=1), nn.ReLU()]
+            in_size = conv_hidden_size
+        self.conv = nn.Sequential(*layers, nn.AvgPool2d(kernel_size=6))
         ones = torch.ones(1, dtype=torch.long)
         self.register_buffer("ones", ones)
         line_nvec = torch.tensor(self.obs_spaces.lines.nvec[0, :-1])
@@ -60,7 +25,7 @@ class Recurrence:
 
     @property
     def gru_in_size(self):
-        return self.hidden_size + self.conv_hidden_size + self.encoder_hidden_size
+        return self.hidden_size + self.encoder_hidden_size
 
     @staticmethod
     def eval_lines_space(n_eval_lines, train_lines_space):

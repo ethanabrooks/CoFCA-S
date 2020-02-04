@@ -33,7 +33,7 @@ class Agent(ppo.control_flow.gridworld.abstract_recurrence.Recurrence, nn.Module
         self.train_lines = len(self.obs_spaces.lines.nvec)
         nn.Module.__init__(self)
         ppo.control_flow.gridworld.abstract_recurrence.Recurrence.__init__(
-            self, conv_hidden_size=conv_hidden_size, conv_architecture=conv_architecture
+            self, conv_hidden_size=conv_hidden_size, num_conv_layers=conv_architecture
         )
 
         # networks

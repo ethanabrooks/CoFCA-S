@@ -20,13 +20,15 @@ def gate(g, new, old):
 
 class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
     def __init__(
-        self, hidden_size, conv_hidden_size, gate_coef, conv_architecture, **kwargs
+        self, hidden_size, conv_hidden_size, gate_coef, num_conv_layers, **kwargs
     ):
         self.gate_coef = gate_coef
         self.conv_hidden_size = conv_hidden_size
         recurrence.Recurrence.__init__(self, hidden_size=hidden_size, **kwargs)
         abstract_recurrence.Recurrence.__init__(
-            self, conv_hidden_size=conv_hidden_size, conv_architecture=conv_architecture
+            self,
+            conv_hidden_size=self.encoder_hidden_size,
+            num_conv_layers=num_conv_layers,
         )
         self.d_gate = Categorical(hidden_size, 2)
         self.a_gate = Categorical(hidden_size, 2)
@@ -88,7 +90,8 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         for t in range(T):
             self.print("p", p)
             obs = self.preprocess_obs(inputs.obs[t])
-            x = [obs, M[R, p], self.embed_action(A[t - 1].clone())]
+            obs = obs * M[R, p]
+            x = [obs, self.embed_action(A[t - 1].clone())]
             h = self.gru(torch.cat(x, dim=-1), h)
             z = F.relu(self.zeta(h))
             d_gate = self.d_gate(z)
