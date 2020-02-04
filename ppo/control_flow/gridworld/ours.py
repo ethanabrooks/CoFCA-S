@@ -31,17 +31,22 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             self, conv_hidden_size=self.encoder_hidden_size,
         )
         self.zeta = init_(
-            nn.Linear(2 * hidden_size + self.encoder_hidden_size, hidden_size)
+            nn.Linear(
+                hidden_size + self.gru_hidden_size + self.encoder_hidden_size,
+                hidden_size,
+            )
         )
         gc.collect()
         self.encode = init_(nn.Linear(self.encoder_hidden_size, 1))
-        self.decode = init_(nn.Linear(hidden_size + 1, hidden_size))
-        self.gru2 = nn.GRUCell(1 + self.encoder_hidden_size + self.ne, hidden_size)
+        self.decode = init_(nn.Linear(self.gru_hidden_size, hidden_size))
+        self.gru2 = nn.GRUCell(
+            1 + self.encoder_hidden_size + self.ne, self.gru_hidden_size
+        )
         self.d_gate = Categorical(hidden_size, 2)
         self.a_gate = Categorical(hidden_size, 2)
         state_sizes = self.state_sizes._asdict()
         self.state_sizes = RecurrentState(
-            **state_sizes, h2=hidden_size, ag_probs=2, dg_probs=2, ag=1, dg=1
+            **state_sizes, h2=self.gru_hidden_size, ag_probs=2, dg_probs=2, ag=1, dg=1
         )
 
     @property
