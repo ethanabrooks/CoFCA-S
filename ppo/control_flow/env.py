@@ -83,7 +83,7 @@ class Env(gym.Env, ABC):
         def possible_lines():
             for i in range(num_subtasks):
                 yield Subtask(i)
-            for i in range(max_loops + 1):
+            for i in range(1, max_loops + 1):
                 yield Loop(i)
             for line_type in self.line_types:
                 if line_type not in (Subtask, Loop):
@@ -342,7 +342,7 @@ class Env(gym.Env, ABC):
             and (max_nesting_depth is None or nesting_depth < max_nesting_depth)
             and not self.subtasks_only
         ):
-            line_types += [Loop]  # [If, While, Loop]
+            line_types += [If, While, Loop]
         if active_conditions and last is Subtask:
             last_condition = active_conditions[-1]
             if last_condition is If:
