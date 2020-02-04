@@ -117,7 +117,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             obs = torch.sigmoid(self.encode(obs * M[R, p]))
             x = [obs, M[R, p], u]
             h2_ = self.gru2(torch.cat(x, dim=-1), h2)
-            z = F.relu(self.decode(torch.cat([h2_, obs], dim=-1)))
+            z = F.relu(self.decode(h2_))
             u = self.upsilon(z).softmax(dim=-1)
             self.print("u", u)
             w = P[p, R]
