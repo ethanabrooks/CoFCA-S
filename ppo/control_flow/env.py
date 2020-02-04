@@ -287,10 +287,9 @@ class Env(gym.Env, ABC):
             lines = [line0] + [Subtask] * (edge_length - 2)
             lines += [EndWhile if line0 is While else EndIf, Subtask]
         else:
-            lines = [If, Subtask, EndIf, Subtask]
-            # lines = self.get_lines(
-            # n_lines, active_conditions=[], max_nesting_depth=self.max_nesting_depth
-            # )
+            lines = self.get_lines(
+                n_lines, active_conditions=[], max_nesting_depth=self.max_nesting_depth
+            )
         return list(self.assign_line_ids(lines))
 
     def assign_line_ids(self, lines):
