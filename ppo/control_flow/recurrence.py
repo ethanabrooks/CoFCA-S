@@ -64,7 +64,7 @@ class Recurrence(nn.Module):
         self.gru = nn.GRUCell(self.gru_in_size, gru_hidden_size)
 
         layers = []
-        in_size = gru_hidden_size
+        in_size = gru_hidden_size + 1
         for _ in range(num_layers):
             layers.extend([init_(nn.Linear(in_size, hidden_size)), activation])
             in_size = hidden_size
@@ -96,7 +96,7 @@ class Recurrence(nn.Module):
 
     @property
     def gru_in_size(self):
-        return 2 + self.encoder_hidden_size + self.ne
+        return self.encoder_hidden_size
 
     # noinspection PyProtectedMember
     @contextmanager
@@ -235,9 +235,8 @@ class Recurrence(nn.Module):
         for t in range(T):
             self.print("p", p)
             obs = inputs.obs[t]
-            x = [obs, M[R, p], u, d]
-            h = self.gru(torch.cat(x, dim=-1), h)
-            z = F.relu(self.zeta(h))
+            h = self.gru(M[R, p], h)
+            z = F.relu(self.zeta(torch.cat([obs, h], dim=-1)))
             a_dist = self.actor(z)
             self.sample_new(A[t], a_dist)
             u = self.upsilon(z).softmax(dim=-1)
