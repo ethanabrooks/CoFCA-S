@@ -127,7 +127,7 @@ class Env(gym.Env, ABC):
             if success:
                 info.update(success_line=len(lines))
 
-            term = success or state.term
+            term = term or success or state.term
             if term and not success:
                 if self.break_on_fail:
                     import ipdb
@@ -204,10 +204,10 @@ class Env(gym.Env, ABC):
 
             if action == self.num_subtasks:
                 n += 1
-                no_op_limit = self.no_op_limit
+                no_op_limit = 200 if self.evaluating else self.no_op_limit
                 if self.no_op_limit is not None and self.no_op_limit < 0:
                     no_op_limit = len(lines)
-                if not self.evaluating and n == no_op_limit:
+                if n >= no_op_limit:
                     term = True
             elif state.ptr is not None:
                 step += 1
