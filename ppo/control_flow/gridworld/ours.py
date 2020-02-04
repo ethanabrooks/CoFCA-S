@@ -38,10 +38,8 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         )
         gc.collect()
         self.encode = init_(nn.Linear(self.encoder_hidden_size, 1))
-        self.decode = init_(nn.Linear(self.gru_hidden_size, hidden_size))
-        self.gru2 = nn.GRUCell(
-            1 + self.encoder_hidden_size + self.ne, self.gru_hidden_size
-        )
+        self.decode = init_(nn.Linear(1 + self.gru_hidden_size, hidden_size))
+        self.gru2 = nn.GRUCell(self.encoder_hidden_size + self.ne, self.gru_hidden_size)
         self.d_gate = Categorical(hidden_size, 2)
         self.a_gate = Categorical(hidden_size, 2)
         state_sizes = self.state_sizes._asdict()
@@ -114,10 +112,11 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             a_gate = self.a_gate(z)
             self.sample_new(AG[t], a_gate)
 
-            obs = torch.sigmoid(self.encode(obs * M[R, p]))
-            x = [obs, M[R, p], u]
+            x = [M[R, p], u]
             h2_ = self.gru2(torch.cat(x, dim=-1), h2)
-            z = F.relu(self.decode(h2_))
+            obs = torch.sigmoid(self.encode(obs * M[R, p]))
+            decode_inputs = [h2_, obs]
+            z = F.relu(self.decode(torch.cat(decode_inputs, dim=-1)))
             u = self.upsilon(z).softmax(dim=-1)
             self.print("u", u)
             w = P[p, R]
