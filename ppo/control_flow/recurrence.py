@@ -96,7 +96,7 @@ class Recurrence(nn.Module):
 
     @property
     def gru_in_size(self):
-        return 1 + self.encoder_hidden_size + self.ne
+        return 2 + self.encoder_hidden_size + self.ne
 
     # noinspection PyProtectedMember
     @contextmanager
@@ -227,6 +227,7 @@ class Recurrence(nn.Module):
         a = hx.a.long().squeeze(-1)
         a[new_episode] = 0
         u = hx.u
+        d = hx.d
         R = torch.arange(N, device=rnn_hxs.device)
         A = torch.cat([actions[:, :, 0], hx.a.view(1, N)], dim=0).long()
         D = torch.cat([actions[:, :, 1], hx.d.view(1, N)], dim=0).long()
@@ -234,7 +235,7 @@ class Recurrence(nn.Module):
         for t in range(T):
             self.print("p", p)
             obs = inputs.obs[t]
-            x = [obs, M[R, p], u]
+            x = [obs, M[R, p], u, d]
             h = self.gru(torch.cat(x, dim=-1), h)
             z = F.relu(self.zeta(h))
             a_dist = self.actor(z)
@@ -251,6 +252,7 @@ class Recurrence(nn.Module):
             n_p = d_dist.probs.size(-1)
             p = p + D[t].clone() - n_p // 2
             p = torch.clamp(p, min=0, max=M.size(1) - 1)
+            d = D[t]
             yield RecurrentState(
                 a=A[t],
                 u=u,
@@ -258,6 +260,6 @@ class Recurrence(nn.Module):
                 h=h,
                 p=p,
                 a_probs=a_dist.probs,
-                d=D[t],
+                d=d,
                 d_probs=d_dist.probs,
             )
