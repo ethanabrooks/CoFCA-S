@@ -23,19 +23,31 @@ def gate(g, new, old):
 
 
 class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
-    def __init__(self, hidden_size, conv_hidden_size, use_conv, gate_coef, **kwargs):
+    def __init__(
+        self,
+        hidden_size,
+        num_conv_layers,
+        conv_hidden_size,
+        use_conv,
+        gate_coef,
+        **kwargs
+    ):
         self.gate_coef = gate_coef
         self.conv_hidden_size = conv_hidden_size
         recurrence.Recurrence.__init__(self, hidden_size=hidden_size, **kwargs)
         abstract_recurrence.Recurrence.__init__(
-            self, conv_hidden_size=conv_hidden_size, use_conv=use_conv
+            self,
+            conv_hidden_size=self.encoder_hidden_size,
+            use_conv=use_conv,
+            num_conv_layers=num_conv_layers,
         )
         self.zeta = init_(
             nn.Linear(2 * hidden_size + self.encoder_hidden_size, hidden_size)
         )
         gc.collect()
-        self.zeta2 = init_(nn.Linear(hidden_size + self.conv_hidden_size, hidden_size))
-        self.gru2 = nn.GRUCell(self.encoder_hidden_size + self.ne, hidden_size)
+        self.encode = init_(nn.Linear(self.encoder_hidden_size, 1))
+        self.decode = init_(nn.Linear(hidden_size + 1, hidden_size))
+        self.gru2 = nn.GRUCell(1 + self.encoder_hidden_size + self.ne, hidden_size)
         self.d_gate = Categorical(hidden_size, 2)
         self.a_gate = Categorical(hidden_size, 2)
         state_sizes = self.state_sizes._asdict()
@@ -45,7 +57,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
 
     @property
     def gru_in_size(self):
-        return self.conv_hidden_size
+        return self.encoder_hidden_size
 
     def pack(self, hxs):
         def pack():
@@ -108,9 +120,10 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             a_gate = self.a_gate(z)
             self.sample_new(AG[t], a_gate)
 
-            x = [M[R, p], u]
+            obs = torch.sigmoid(self.encode(obs * M[R, p]))
+            x = [obs, M[R, p], u]
             h2_ = self.gru2(torch.cat(x, dim=-1), h2)
-            z = F.relu(self.zeta2(torch.cat([h2_, obs], dim=-1)))
+            z = F.relu(self.decode(torch.cat([h2_, obs], dim=-1)))
             u = self.upsilon(z).softmax(dim=-1)
             self.print("u", u)
             w = P[p, R]

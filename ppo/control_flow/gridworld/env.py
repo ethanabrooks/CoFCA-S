@@ -108,7 +108,7 @@ class Env(ppo.control_flow.env.Env):
     @functools.lru_cache(maxsize=200)
     def preprocess_line(self, line):
         if type(line) in (Else, EndIf, EndWhile, EndLoop, Padding):
-            return [self.line_types.index(line), 0, 0, 0]
+            return [self.line_types.index(type(line)), 0, 0, 0]
         elif type(line) is Loop:
             return [self.line_types.index(Loop), 0, 0, line.id]
         elif type(line) is Subtask:
