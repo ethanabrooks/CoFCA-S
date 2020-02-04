@@ -23,23 +23,12 @@ def gate(g, new, old):
 
 
 class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
-    def __init__(
-        self,
-        hidden_size,
-        num_conv_layers,
-        conv_hidden_size,
-        use_conv,
-        gate_coef,
-        **kwargs
-    ):
+    def __init__(self, hidden_size, conv_hidden_size, use_conv, gate_coef, **kwargs):
         self.gate_coef = gate_coef
         self.conv_hidden_size = conv_hidden_size
         recurrence.Recurrence.__init__(self, hidden_size=hidden_size, **kwargs)
         abstract_recurrence.Recurrence.__init__(
-            self,
-            conv_hidden_size=self.encoder_hidden_size,
-            use_conv=use_conv,
-            num_conv_layers=num_conv_layers,
+            self, conv_hidden_size=self.encoder_hidden_size, use_conv=use_conv
         )
         self.zeta = init_(
             nn.Linear(2 * hidden_size + self.encoder_hidden_size, hidden_size)

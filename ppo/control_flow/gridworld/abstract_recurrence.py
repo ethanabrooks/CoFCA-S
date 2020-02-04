@@ -8,17 +8,40 @@ from ppo.utils import init_
 
 
 class Recurrence:
-    def __init__(self, conv_hidden_size, use_conv, num_conv_layers):
+    def __init__(self, conv_hidden_size, use_conv):
         self.conv_hidden_size = conv_hidden_size
         self.use_conv = use_conv
         d = self.obs_spaces.obs.shape[0]
-        layers = []
-        in_size = d
-        for _ in range(num_conv_layers):
-            layers += [nn.Conv2d(in_size, conv_hidden_size, kernel_size=1), nn.ReLU()]
-            in_size = conv_hidden_size
-        self.conv = nn.Sequential(*layers, nn.AvgPool2d(kernel_size=6))
-
+        if use_conv:
+            # layers = [
+            #     nn.Conv2d(
+            #         d,
+            #         conv_hidden_size,
+            #         kernel_size=kernel_size,
+            #         stride=2 if kernel_size == 2 else 1,
+            #         padding=0,
+            #     ),
+            #     nn.ReLU(),
+            # ]
+            # if kernel_size < 4:
+            #     layers += [
+            #         nn.Conv2d(
+            #             conv_hidden_size,
+            #             conv_hidden_size,
+            #             kernel_size=2,
+            #             stride=2,
+            #             padding=0,
+            #         ),
+            #         nn.ReLU(),
+            #     ]
+            self.conv = nn.Sequential(
+                nn.Conv2d(d, conv_hidden_size, kernel_size=3),
+                nn.ReLU(),
+                nn.Conv2d(conv_hidden_size, conv_hidden_size, kernel_size=4),
+                nn.ReLU(),
+            )
+        else:
+            self.conv = nn.Sequential(init_(nn.Linear(d, conv_hidden_size)), nn.ReLU())
         ones = torch.ones(1, dtype=torch.long)
         self.register_buffer("ones", ones)
         line_nvec = torch.tensor(self.obs_spaces.lines.nvec[0, :-1])
