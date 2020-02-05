@@ -32,8 +32,6 @@ class LSTMCell(nn.Module):
 
         gates = self.x2h(x) + self.h2h(hx)
 
-        gates = gates.squeeze()
-
         in_gate, forget_gate, new_cx, out_gate = gates.chunk(4, 1)
 
         in_gate = torch.sigmoid(in_gate)
