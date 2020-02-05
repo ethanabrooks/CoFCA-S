@@ -120,6 +120,8 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             h = self.gru(obs, h)
             zeta_inputs = [h, M[R, p], self.embed_action(A[t - 1].clone())]
             z = F.relu(self.zeta(torch.cat(zeta_inputs, dim=-1)))
+            # then put M back in gru
+            # then put A back in gru
             d_gate = self.d_gate(z)
             self.sample_new(DG[t], d_gate)
             a_gate = self.a_gate(z)
@@ -128,7 +130,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             x = [M[R, p], u]
             (hy_, cy_), gru_gate = self.gru2(torch.cat(x, dim=-1), (hy, cy))
             obs = obs * M[R, p]
-            decode_inputs = [hy_, obs]
+            decode_inputs = [hy_, obs]  # first put obs back in gru2
             z = F.relu(self.zeta2(torch.cat(decode_inputs, dim=-1)))
             u = self.upsilon(z).softmax(dim=-1)
             self.print("u", u)
