@@ -41,8 +41,9 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             )
         )
         gc.collect()
-        self.encode = init_(nn.Linear(self.encoder_hidden_size, 1))
-        self.decode = init_(nn.Linear(1 + self.gru_hidden_size, hidden_size))
+        self.zeta2 = init_(
+            nn.Linear(self.encoder_hidden_size + self.gru_hidden_size, hidden_size)
+        )
         self.gru2 = LSTMCell(self.encoder_hidden_size + self.ne, self.gru_hidden_size)
         self.d_gate = Categorical(hidden_size, 2)
         self.a_gate = Categorical(hidden_size, 2)
@@ -126,9 +127,9 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
 
             x = [M[R, p], u]
             (hy_, cy_), gru_gate = self.gru2(torch.cat(x, dim=-1), (hy, cy))
-            obs = torch.sigmoid(self.encode(obs * M[R, p]))
+            obs = obs * M[R, p]
             decode_inputs = [hy_, obs]
-            z = F.relu(self.decode(torch.cat(decode_inputs, dim=-1)))
+            z = F.relu(self.zeta2(torch.cat(decode_inputs, dim=-1)))
             u = self.upsilon(z).softmax(dim=-1)
             self.print("u", u)
             w = P[p, R]
