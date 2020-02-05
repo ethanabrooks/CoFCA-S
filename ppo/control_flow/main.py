@@ -5,7 +5,7 @@ import ppo.agent
 import ppo.control_flow.agent
 import ppo.control_flow.env
 import ppo.control_flow.gridworld.env
-import ppo.control_flow.gridworld.gru
+import ppo.control_flow.gridworld.minimal
 import ppo.control_flow.gridworld.one_line
 from ppo import control_flow
 from ppo.arguments import build_parser
@@ -23,7 +23,7 @@ def main(log_dir, seed, eval_lines, one_line, **kwargs):
                 del agent_args["num_edges"]
                 del agent_args["gate_coef"]
                 del agent_args["no_op_coef"]
-                return ppo.control_flow.gridworld.gru.Agent(
+                return ppo.control_flow.gridworld.minimal.Agent(
                     observation_space=obs_space,
                     action_space=envs.action_space,
                     **agent_args,
