@@ -105,6 +105,10 @@ class Agent(ppo.agent.Agent, NNBase):
             aux_loss += rm.gate_coef * (hx.ag_probs + hx.dg_probs)[:, 1].mean()
         except AttributeError:
             pass
+        try:
+            aux_loss += (rm.gru_gate_coef * hx.gru_gate).mean()
+        except AttributeError:
+            pass
         action = torch.cat(X, dim=-1)
         return AgentValues(
             value=hx.v,

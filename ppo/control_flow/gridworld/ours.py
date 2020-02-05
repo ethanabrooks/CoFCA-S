@@ -1,19 +1,20 @@
 import gc
 from collections import namedtuple
 
+import numpy as np
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 
 import ppo.control_flow.gridworld.abstract_recurrence as abstract_recurrence
 import ppo.control_flow.recurrence as recurrence
+from ppo.control_flow.lstm import LSTMCell
 from ppo.distributions import FixedCategorical, Categorical
-import numpy as np
-import torch.nn as nn
-
 from ppo.utils import init_
 
 RecurrentState = namedtuple(
-    "RecurrentState", "a d u ag dg p v h h2 a_probs d_probs ag_probs dg_probs"
+    "RecurrentState",
+    "a d u ag dg p v h hy cy a_probs d_probs ag_probs dg_probs gru_gate",
 )
 
 
@@ -23,7 +24,10 @@ def gate(g, new, old):
 
 
 class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
-    def __init__(self, hidden_size, conv_hidden_size, gate_coef, **kwargs):
+    def __init__(
+        self, hidden_size, conv_hidden_size, gate_coef, gru_gate_coef, **kwargs
+    ):
+        self.gru_gate_coef = gru_gate_coef
         self.gate_coef = gate_coef
         self.conv_hidden_size = conv_hidden_size
         recurrence.Recurrence.__init__(self, hidden_size=hidden_size, **kwargs)
@@ -39,12 +43,19 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         gc.collect()
         self.encode = init_(nn.Linear(self.encoder_hidden_size, 1))
         self.decode = init_(nn.Linear(1 + self.gru_hidden_size, hidden_size))
-        self.gru2 = nn.GRUCell(self.encoder_hidden_size + self.ne, self.gru_hidden_size)
+        self.gru2 = LSTMCell(self.encoder_hidden_size + self.ne, self.gru_hidden_size)
         self.d_gate = Categorical(hidden_size, 2)
         self.a_gate = Categorical(hidden_size, 2)
         state_sizes = self.state_sizes._asdict()
         self.state_sizes = RecurrentState(
-            **state_sizes, h2=self.gru_hidden_size, ag_probs=2, dg_probs=2, ag=1, dg=1
+            **state_sizes,
+            hy=self.gru_hidden_size,
+            cy=self.gru_hidden_size,
+            ag_probs=2,
+            dg_probs=2,
+            ag=1,
+            dg=1,
+            gru_gate=self.gru_hidden_size
         )
 
     @property
@@ -88,7 +99,8 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             _x.squeeze_(0)
 
         h = hx.h
-        h2 = hx.h2
+        hy = hx.hy
+        cy = hx.cy
         p = hx.p.long().squeeze(-1)
         u = hx.u
         hx.a[new_episode] = self.n_a - 1
@@ -113,9 +125,9 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             self.sample_new(AG[t], a_gate)
 
             x = [M[R, p], u]
-            h2_ = self.gru2(torch.cat(x, dim=-1), h2)
+            (hy_, cy_), gru_gate = self.gru2(torch.cat(x, dim=-1), (hy, cy))
             obs = torch.sigmoid(self.encode(obs * M[R, p]))
-            decode_inputs = [h2_, obs]
+            decode_inputs = [hy_, obs]
             z = F.relu(self.decode(torch.cat(decode_inputs, dim=-1)))
             u = self.upsilon(z).softmax(dim=-1)
             self.print("u", u)
@@ -135,13 +147,15 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             self.sample_new(A[t], a_dist)
             self.print("ag prob", a_gate.probs[:, 1])
             self.print("ag", ag)
-            h2 = dg * h2_ + (1 - dg) * h2
+            hy = dg * hy_ + (1 - dg) * hy
+            cy = dg * cy_ + (1 - dg) * cy
             yield RecurrentState(
                 a=A[t],
                 v=self.critic(z),
                 h=h,
                 u=u,
-                h2=h2,
+                hy=hy,
+                cy=cy,
                 p=p,
                 a_probs=a_dist.probs,
                 d=D[t],
@@ -150,4 +164,5 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 dg_probs=d_gate.probs,
                 ag=ag,
                 dg=dg,
+                gru_gate=gru_gate,
             )
