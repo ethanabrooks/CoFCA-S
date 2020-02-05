@@ -152,7 +152,7 @@ class Env(ppo.control_flow.env.Env):
         object_pos = self.populate_world(lines)
         line_iterator = self.line_generator(lines)
         condition_evaluations = defaultdict(list)
-        self.time_remaining = self.time_to_waste
+        self.time_remaining = 200 if self.evaluating else self.time_to_waste
         self.loops = None
 
         def get_nearest(to):

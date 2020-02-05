@@ -28,7 +28,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         self.conv_hidden_size = conv_hidden_size
         recurrence.Recurrence.__init__(self, hidden_size=hidden_size, **kwargs)
         abstract_recurrence.Recurrence.__init__(
-            self, conv_hidden_size=self.encoder_hidden_size,
+            self, conv_hidden_size=self.encoder_hidden_size
         )
         self.zeta = init_(
             nn.Linear(
