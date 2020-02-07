@@ -34,12 +34,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         abstract_recurrence.Recurrence.__init__(
             self, conv_hidden_size=self.encoder_hidden_size
         )
-        self.zeta = init_(
-            nn.Linear(
-                hidden_size + self.gru_hidden_size + self.encoder_hidden_size,
-                hidden_size,
-            )
-        )
+        self.zeta = init_(nn.Linear(self.gru_hidden_size, hidden_size,))
         gc.collect()
         self.zeta2 = init_(nn.Linear(self.gru_hidden_size, hidden_size))
         self.gru2 = LSTMCell(
@@ -61,7 +56,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
 
     @property
     def gru_in_size(self):
-        return self.encoder_hidden_size
+        return 2 * self.hidden_size + self.encoder_hidden_size
 
     def pack(self, hxs):
         def pack():
@@ -117,11 +112,9 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         for t in range(T):
             self.print("p", p)
             obs = self.preprocess_obs(inputs.obs[t])
-            h = self.gru(obs, h)
-            zeta_inputs = [h, M[R, p], self.embed_action(A[t - 1].clone())]
-            z = F.relu(self.zeta(torch.cat(zeta_inputs, dim=-1)))
-            # then put M back in gru
-            # then put A back in gru
+            X = [h, M[R, p], self.embed_action(A[t - 1].clone())]
+            h = self.gru(torch.cat(X, dim=-1), h)
+            z = F.relu(self.zeta(h))
             d_gate = self.d_gate(z)
             self.sample_new(DG[t], d_gate)
             a_gate = self.a_gate(z)
