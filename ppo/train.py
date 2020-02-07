@@ -299,9 +299,10 @@ class Train(abc.ABC):
                     inputs=obs, rnn_hxs=rnn_hxs, masks=masks
                 )  # type: AgentValues
 
+            
+
             # Observe reward and next obs
             obs, reward, done, infos = self.envs.step(act.action)
-            #print(self.envs.action_space)
             #print("action: ", act.action, "obs: ", obs, " rew: ", reward, " done: ", done, " infos: ", infos)
             #print("reward: ", reward)
 
@@ -367,19 +368,10 @@ class Train(abc.ABC):
         
         #setting up the action with the appropiate bounds
 
-        #forward, backwards, right, left, up, down, rotate claw clockwise, rotate claw counterclockwise, open/close claws, do nothing
-        #env.action_space = spaces.Discrete(11)
-        env.action_space = spaces.Discrete(6)
-        #env.action_space = spaces.Box(low = low, high = high, dtype=np.int32)
-        #low = np.array([-np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf])
-        #high = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
-        low = np.array([-np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf])
-        high = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
-        env.observation_space = spaces.Box(low=low, high=high, dtype = np.float32)
-        #bounds = self.model.actuator_ctrlrange.copy()
-        #low = bounds[:, 0]
-        #high = bounds[:, 1]
-        #env.action_space = spaces.Box(low=low, high=high, dtype=np.float32)
+
+        env.action_space = spaces.Box(low = -np.inf, high = np.inf, shape = (3,), dtype = np.float32)
+        env.observation_space = spaces.Box(low=-np.inf, high=np.inf,shape = (6,),  dtype = np.float32)
+
         #env = gym.make(env_id)
         is_atari = hasattr(gym.envs, "atari") and isinstanice(
             env.unwrapped, gym.envs.atari.atari_env.AtariEnv

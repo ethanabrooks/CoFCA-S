@@ -51,6 +51,8 @@ class Agent(nn.Module):
             raise NotImplementedError
         self.continuous = isinstance(action_space, Box)
 
+        
+
     @property
     def is_recurrent(self):
         return self.recurrent_module.is_recurrent
@@ -70,6 +72,8 @@ class Agent(nn.Module):
                 action = dist.mode()
             else:
                 action = dist.sample()
+
+        
 
         action_log_probs = dist.log_probs(action)
         entropy = dist.entropy().mean()
