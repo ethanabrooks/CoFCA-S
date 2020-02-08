@@ -293,7 +293,7 @@ class Env(gym.Env, ABC):
             if line is Subtask:
                 yield Subtask(self.random.choice(self.num_subtasks))
             elif line is Padding:
-                yield line
+                yield line(0)
             else:
                 yield line(self.line_types.index(line))
 
@@ -508,7 +508,7 @@ class Env(gym.Env, ABC):
                 prev, ptr = ptr, next_subtask()
 
     def get_observation(self, obs, active, lines):
-        padded = lines + [Padding] * (self.n_lines - len(lines))
+        padded = lines + [Padding(0)] * (self.n_lines - len(lines))
         lines = [self.preprocess_line(p) for p in padded]
         return Obs(
             obs=obs, lines=lines, active=self.n_lines if active is None else active
@@ -588,7 +588,10 @@ def build_parser(p):
     p.add_argument("--no-op-limit", type=int)
     p.add_argument("--flip-prob", type=float, default=0.5)
     p.add_argument("--eval-condition-size", action="store_true")
-    p.add_argument("--max-nesting-depth", type=int)
+    p.add_argument("--max-nesting-depth", type=int, default=1)
+    p.add_argument("--time-to-waste", type=int, required=True)
+    p.add_argument("--subtasks-only", action="store_true")
+    p.add_argument("--break-on-fail", action="store_true")
     return p
 
 

@@ -66,14 +66,11 @@ def control_flow_args():
     parser.add_argument("--one-line", action="store_true")
     ppo.control_flow.env.build_parser(parsers.env)
     parsers.env.add_argument("--gridworld", action="store_true")
-    parsers.env.add_argument("--subtasks-only", action="store_true")
-    parsers.env.add_argument("--break-on-fail", action="store_true")
     parsers.env.add_argument(
         "--no-temporal-extension", dest="temporal_extension", action="store_false"
     )
     parsers.env.add_argument("--max-while-objects", type=float, default=2)
     parsers.env.add_argument("--num-excluded-objects", type=int, default=2)
-    parsers.env.add_argument("--time-to-waste", type=int, required=True)
     parsers.agent.add_argument("--debug", action="store_true")
     parsers.agent.add_argument("--no-scan", action="store_true")
     parsers.agent.add_argument("--no-roll", action="store_true")
@@ -81,10 +78,10 @@ def control_flow_args():
     parsers.agent.add_argument("--conv-hidden-size", type=int, required=True)
     parsers.agent.add_argument("--encoder-hidden-size", type=int, required=True)
     parsers.agent.add_argument("--num-encoding-layers", type=int, required=True)
+    parsers.agent.add_argument("--num-conv-layers", type=int, required=True)
     parsers.agent.add_argument("--num-edges", type=int, required=True)
     parsers.agent.add_argument("--gate-coef", type=float, required=True)
     parsers.agent.add_argument("--no-op-coef", type=float, required=True)
-    parsers.agent.add_argument("--use-conv", type=int, required=True)
     return parser
 
 

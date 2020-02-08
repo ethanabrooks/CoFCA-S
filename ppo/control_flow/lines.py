@@ -30,5 +30,5 @@ class Subtask(Line):
     pass
 
 
-class Padding:
+class Padding(Line):
     pass
