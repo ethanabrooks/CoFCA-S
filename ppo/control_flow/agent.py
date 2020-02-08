@@ -34,7 +34,6 @@ class Agent(ppo.agent.Agent, NNBase):
         self.multi_step = type(observation_space.spaces["obs"]) is Box
         if not self.multi_step:
             del network_args["conv_hidden_size"]
-            del network_args["use_conv"]
             del network_args["gate_coef"]
         if baseline == "no-pointer":
             del network_args["gate_coef"]
@@ -105,6 +104,10 @@ class Agent(ppo.agent.Agent, NNBase):
         )
         try:
             aux_loss += rm.gate_coef * (hx.ag_probs + hx.dg_probs)[:, 1].mean()
+        except AttributeError:
+            pass
+        try:
+            aux_loss += (rm.gru_gate_coef * hx.gru_gate).mean()
         except AttributeError:
             pass
         action = torch.cat(X, dim=-1)

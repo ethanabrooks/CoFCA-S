@@ -27,6 +27,7 @@ class Recurrence(nn.Module):
         activation,
         hidden_size,
         encoder_hidden_size,
+        gru_hidden_size,
         num_layers,
         num_edges,
         num_encoding_layers,
@@ -42,6 +43,7 @@ class Recurrence(nn.Module):
         self.debug = debug
         self.hidden_size = hidden_size
         self.encoder_hidden_size = encoder_hidden_size
+        self.gru_hidden_size = gru_hidden_size
 
         self.obs_sections = get_obs_sections(self.obs_spaces)
         self.eval_lines = eval_lines
@@ -59,11 +61,13 @@ class Recurrence(nn.Module):
             bidirectional=True,
             batch_first=True,
         )
-        self.gru = nn.GRUCell(self.gru_in_size, hidden_size)
+        self.gru = nn.GRUCell(self.gru_in_size, gru_hidden_size)
 
         layers = []
+        in_size = gru_hidden_size + 1
         for _ in range(num_layers):
-            layers.extend([init_(nn.Linear(hidden_size, hidden_size)), activation])
+            layers.extend([init_(nn.Linear(in_size, hidden_size)), activation])
+            in_size = hidden_size
         self.zeta = nn.Sequential(*layers)
         self.upsilon = init_(nn.Linear(hidden_size, self.ne))
 
@@ -84,7 +88,7 @@ class Recurrence(nn.Module):
             u=self.ne,
             p=1,
             v=1,
-            h=hidden_size,
+            h=gru_hidden_size,
         )
 
     def build_embed_task(self, hidden_size):
@@ -92,7 +96,7 @@ class Recurrence(nn.Module):
 
     @property
     def gru_in_size(self):
-        return 1 + self.hidden_size + self.encoder_hidden_size + self.ne
+        return self.encoder_hidden_size + self.ne
 
     # noinspection PyProtectedMember
     @contextmanager
@@ -223,6 +227,7 @@ class Recurrence(nn.Module):
         a = hx.a.long().squeeze(-1)
         a[new_episode] = 0
         u = hx.u
+        d = hx.d
         R = torch.arange(N, device=rnn_hxs.device)
         A = torch.cat([actions[:, :, 0], hx.a.view(1, N)], dim=0).long()
         D = torch.cat([actions[:, :, 1], hx.d.view(1, N)], dim=0).long()
@@ -230,9 +235,8 @@ class Recurrence(nn.Module):
         for t in range(T):
             self.print("p", p)
             obs = inputs.obs[t]
-            x = [obs, M[R, p], self.embed_action(A[t - 1].clone()), u]
-            h = self.gru(torch.cat(x, dim=-1), h)
-            z = F.relu(self.zeta(h))
+            h = self.gru(torch.cat([M[R, p], u], dim=-1), h)
+            z = F.relu(self.zeta(torch.cat([obs, h], dim=-1)))
             a_dist = self.actor(z)
             self.sample_new(A[t], a_dist)
             u = self.upsilon(z).softmax(dim=-1)
@@ -247,6 +251,7 @@ class Recurrence(nn.Module):
             n_p = d_dist.probs.size(-1)
             p = p + D[t].clone() - n_p // 2
             p = torch.clamp(p, min=0, max=M.size(1) - 1)
+            d = D[t]
             yield RecurrentState(
                 a=A[t],
                 u=u,
@@ -254,6 +259,6 @@ class Recurrence(nn.Module):
                 h=h,
                 p=p,
                 a_probs=a_dist.probs,
-                d=D[t],
+                d=d,
                 d_probs=d_dist.probs,
             )

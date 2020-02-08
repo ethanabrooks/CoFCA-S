@@ -10,7 +10,18 @@ from rl_utils import hierarchical_parse_args
 import ppo.control_flow.env
 from ppo import keyboard_control
 from ppo.control_flow.env import build_parser, State
-from ppo.control_flow.lines import Subtask, Padding, Line, While, If, EndWhile, Else
+from ppo.control_flow.lines import (
+    Subtask,
+    Padding,
+    Line,
+    While,
+    If,
+    EndWhile,
+    Else,
+    EndIf,
+    Loop,
+    EndLoop,
+)
 
 
 class Env(ppo.control_flow.env.Env):
@@ -41,6 +52,7 @@ class Env(ppo.control_flow.env.Env):
         self.temporal_extension = temporal_extension
         self.num_excluded_objects = num_excluded_objects
         self.max_while_objects = max_while_objects
+        self.loops = None
 
         def subtasks():
             for obj in self.objects:
@@ -65,6 +77,7 @@ class Env(ppo.control_flow.env.Env):
                             len(self.line_types),
                             1 + len(self.interactions) + len(self.objects),
                             1 + len(self.objects),
+                            1 + self.max_loops,
                         ]
                     ]
                     * self.n_lines
@@ -97,19 +110,23 @@ class Env(ppo.control_flow.env.Env):
 
     @functools.lru_cache(maxsize=200)
     def preprocess_line(self, line):
-        if type(line) is Subtask:
+        if type(line) in (Else, EndIf, EndWhile, EndLoop, Padding):
+            return [self.line_types.index(type(line)), 0, 0, 0]
+        elif type(line) is Loop:
+            return [self.line_types.index(Loop), 0, 0, line.id]
+        elif type(line) is Subtask:
             i, o = line.id
             i, o = self.interactions.index(i), self.objects.index(o)
-            return [self.line_types.index(Subtask), i + 1, o + 1]
+            return [self.line_types.index(Subtask), i + 1, o + 1, 0]
         elif type(line) in (While, If):
-            o1, o2 = line.id
             return [
                 self.line_types.index(type(line)),
-                1 + len(self.interactions) + self.objects.index(o1),
-                self.objects.index(o2) + 1,
+                0,
+                self.objects.index(line.id) + 1,
+                0,
             ]
         else:
-            return [self.line_types.index(type(line)), 0, 0]
+            raise RuntimeError()
 
     def world_array(self, object_pos, agent_pos):
         world = np.zeros(self.world_shape)
@@ -119,21 +136,21 @@ class Env(ppo.control_flow.env.Env):
         return world
 
     @staticmethod
-    def evaluate_line(line, object_pos, condition_evaluations):
+    def evaluate_line(line, object_pos, condition_evaluations, loops):
         if line is None:
             return None
+        elif type(line) is Loop:
+            return loops > 0
         elif type(line) in (While, If):
             o1, o2 = line.id
             pos_obj = defaultdict(set)
             for o, p in object_pos:
                 pos_obj[p].add(o)
 
-            count1 = sum(1 for _, ob_set in pos_obj.items() if o1 in ob_set)
-            count2 = sum(1 for _, ob_set in pos_obj.items() if o2 in ob_set)
-            evaluation = count1 < count2
-            if type(line) in (If, While):
-                condition_evaluations[type(line)] += [evaluation]
-            return evaluation
+                count1 = sum(1 for _, ob_set in pos_obj.items() if o1 in ob_set)
+                count2 = sum(1 for _, ob_set in pos_obj.items() if o2 in ob_set)
+                evaluation = count1 < count2
+
         else:
             return 1
 
@@ -143,7 +160,8 @@ class Env(ppo.control_flow.env.Env):
         object_pos, lines = self.populate_world(lines)
         line_iterator = self.line_generator(lines)
         condition_evaluations = defaultdict(list)
-        self.time_remaining = self.time_to_waste
+        self.time_remaining = 200 if self.evaluating else self.time_to_waste
+        self.loops = None
 
         def get_nearest(to):
             candidates = [np.array(p) for o, p in object_pos if o == to]
@@ -151,16 +169,24 @@ class Env(ppo.control_flow.env.Env):
                 return min(candidates, key=lambda k: np.sum(np.abs(agent_pos - k)))
 
         def next_subtask(l):
-            if l is None:
-                l = line_iterator.send(None)
-            else:
-                l = line_iterator.send(
-                    self.evaluate_line(lines[l], object_pos, condition_evaluations)
-                )
-            while not (l is None or type(lines[l]) is Subtask):
-                l = line_iterator.send(
-                    self.evaluate_line(lines[l], object_pos, condition_evaluations)
-                )
+            while True:
+                if l is None:
+                    l = line_iterator.send(None)
+                else:
+                    if type(lines[l]) is Loop:
+                        if self.loops is None:
+                            self.loops = lines[l].id
+                        else:
+                            self.loops -= 1
+                    l = line_iterator.send(
+                        self.evaluate_line(
+                            lines[l], object_pos, condition_evaluations, self.loops
+                        )
+                    )
+                    if self.loops == 0:
+                        self.loops = None
+                if l is None or type(lines[l]) is Subtask:
+                    break
             if l is not None:
                 assert type(lines[l]) is Subtask
                 _, o = lines[l].id
@@ -248,7 +274,30 @@ class Env(ppo.control_flow.env.Env):
             max_nesting_depth=self.max_nesting_depth,
         )
         more_lines = list(self.assign_line_ids(more_lines))
+        loop_obj = []
+        loop_count = 0
+        for i, line in enumerate(lines + more_lines):
+            if type(line) is While:
+                active_whiles += [i]
+            elif type(line) is EndWhile:
+                active_whiles.pop()
+            elif type(line) is Loop:
+                active_loops += [line]
+            elif type(line) is EndLoop:
+                active_loops.pop()
+            elif type(line) is Subtask:
+                if active_whiles:
+                    while_blocks[active_whiles[-1]] += [i]
+                if active_loops:
+                    _i, _o = line.id
+                    loop_num = active_loops[-1].id
+                    loop_obj += [(_o, loop_num)]
+                    loop_count += loop_num
+
+
         objects = [line.id[1] for line in lines + more_lines if type(line) is Subtask]
+        for o, c in loop_obj:
+            objects += [o] * c
         for while_line, block in while_blocks.items():
             o1, o2 = lines[while_line].id
             if self.max_while_objects:
@@ -274,6 +323,8 @@ class Env(ppo.control_flow.env.Env):
                     self.objects[object_id],
                 )
                 yield Subtask(subtask_id)
+            elif line is Loop:
+                yield Loop(self.random.randint(1, 1 + self.max_loops))
             else:
                 alt_objects = [o for i, o in enumerate(self.objects) if i != object_id]
                 yield line_type((alt_objects[alt_object_id], self.objects[object_id]))

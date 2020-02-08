@@ -20,6 +20,8 @@ from ppo.control_flow.lines import (
     Subtask,
     Padding,
     Line,
+    Loop,
+    EndLoop,
 )
 from ppo.utils import RED, RESET, GREEN
 
@@ -29,8 +31,8 @@ State = namedtuple("State", "obs condition prev ptr condition_evaluations term")
 
 
 class Env(gym.Env, ABC):
-    pairs = {If: EndIf, Else: EndIf, While: EndWhile}
-    line_types = [If, Else, EndIf, While, EndWhile, Subtask, Padding]
+    pairs = {If: EndIf, Else: EndIf, While: EndWhile, Loop: EndLoop}
+    line_types = [If, Else, EndIf, While, EndWhile, EndLoop, Subtask, Padding, Loop]
 
     def __init__(
         self,
@@ -44,11 +46,13 @@ class Env(gym.Env, ABC):
         time_to_waste,
         subtasks_only,
         break_on_fail,
+        max_loops,
         seed=0,
         eval_lines=None,
         evaluating=False,
     ):
         super().__init__()
+        self.max_loops = max_loops
         self.break_on_fail = break_on_fail
         self.subtasks_only = subtasks_only
         self.no_op_limit = no_op_limit
@@ -58,6 +62,7 @@ class Env(gym.Env, ABC):
         self.time_to_waste = time_to_waste
         self.time_remaining = None
 
+        self.loops = None
         self.eval_lines = eval_lines
         self.min_lines = min_lines
         self.max_lines = max_lines
@@ -74,11 +79,22 @@ class Env(gym.Env, ABC):
         self.action_space = spaces.MultiDiscrete(
             np.array([self.num_subtasks + 1, 2 * self.n_lines, self.n_lines])
         )
+
+        def possible_lines():
+            for i in range(num_subtasks):
+                yield Subtask(i)
+            for i in range(1, max_loops + 1):
+                yield Loop(i)
+            for line_type in self.line_types:
+                if line_type not in (Subtask, Loop):
+                    yield line_type(0)
+
+        self.possible_lines = list(possible_lines())
         self.observation_space = spaces.Dict(
             dict(
                 obs=spaces.Discrete(2),
                 lines=spaces.MultiDiscrete(
-                    np.array([len(self.line_types) + num_subtasks] * self.n_lines)
+                    np.array([len(self.possible_lines)] * self.n_lines)
                 ),
                 active=spaces.Discrete(self.n_lines + 1),
             )
@@ -111,7 +127,7 @@ class Env(gym.Env, ABC):
             if success:
                 info.update(success_line=len(lines))
 
-            term = success or state.term
+            term = term or success or state.term
             if term and not success:
                 info.update(
                     self.analyze_mistakes(
@@ -134,8 +150,6 @@ class Env(gym.Env, ABC):
                 if index == len(lines):
                     return
                 line = lines[index]
-                if type(line) in [Else, EndIf, EndWhile]:
-                    level -= 1
                 if index == state.ptr and index == agent_ptr:
                     pre = "+ "
                 elif index == agent_ptr:
@@ -144,14 +158,16 @@ class Env(gym.Env, ABC):
                     pre = "| "
                 else:
                     pre = "  "
+                if line.depth_change < 0:
+                    level += line.depth_change
                 indent = pre * level
+                if line.depth_change > 0:
+                    level += line.depth_change
                 # if type(line) is Subtask:
                 yield f"{indent}{self.line_str(line)}"
                 # else:
                 #     yield f"{indent}{line.__name__}"
                 # if line in [If, While, Else]:
-                if type(line) in [If, While, Else]:
-                    level += 1
                 yield from line_strings(index + 1, level)
 
             def render():
@@ -184,10 +200,10 @@ class Env(gym.Env, ABC):
 
             if action == self.num_subtasks:
                 n += 1
-                no_op_limit = self.no_op_limit
+                no_op_limit = 200 if self.evaluating else self.no_op_limit
                 if self.no_op_limit is not None and self.no_op_limit < 0:
                     no_op_limit = len(lines)
-                if not self.evaluating and n == no_op_limit:
+                if n >= no_op_limit:
                     term = True
             elif state.ptr is not None:
                 step += 1
@@ -263,7 +279,9 @@ class Env(gym.Env, ABC):
 
     @staticmethod
     def line_str(line: Line):
-        return str(line)
+        if type(line) in (Subtask, Loop):
+            return str(line)
+        return line.__class__.__name__
 
     @property
     def eval_condition_size(self):
@@ -283,7 +301,7 @@ class Env(gym.Env, ABC):
             lines = [line0] + [Subtask] * (edge_length - 2)
             lines += [EndWhile if line0 is While else EndIf, Subtask]
         else:
-            lines = self.get_lines(
+            lines = self.choose_line_types(
                 n_lines, active_conditions=[], max_nesting_depth=self.max_nesting_depth
             )
         return list(self.assign_line_ids(lines))
@@ -292,81 +310,16 @@ class Env(gym.Env, ABC):
         for line in lines:
             if line is Subtask:
                 yield Subtask(self.random.choice(self.num_subtasks))
-            elif line is Padding:
-                yield line(0)
+            elif line is Loop:
+                yield Loop(self.random.randint(1, 1 + self.max_loops))
             else:
-                yield line(self.line_types.index(line))
-
-    def build_task_image(self, lines):
-        image = np.zeros(self.image_shape)
-        points = np.round(
-            (self.image_size - 1) * self.random.random((len(lines) + 1, 2))
-        ).astype(int)
-
-        def draw_circle(p, d):
-            r, c = skimage.draw.circle(*p, 2)
-            r = np.minimum(r, self.image_size - 1)
-            c = np.minimum(c, self.image_size - 1)
-            image[d, r, c] = 1
-
-        draw_circle(points[0], d=-2)  # mark start
-        for point, line in zip(points, lines):
-            depth = 2 + min(self.preprocess_line(line), self.num_subtasks)
-            draw_circle(point, d=depth)
-        draw_circle(points[-1], d=-1)  # mark end
-
-        np.set_printoptions(threshold=10000, linewidth=100000)
-        for bit in (0, 1):
-
-            def edges():
-                line_iterator = self.line_generator(lines)
-                ptr = next(line_iterator)
-                while True:
-                    prev, ptr = ptr, line_iterator.send(bit)
-                    if ptr is None:
-                        yield prev, len(lines)
-                        return
-                    yield prev, ptr
-                    if bit and lines[prev] is EndWhile:
-                        assert lines[ptr] is While
-                        for _ in range(2):
-                            ptr = line_iterator.send(False)  # prevent forever loop
-                            if ptr is None:
-                                return
-
-            for n, (_from, _to) in enumerate(edges()):
-                rr, cc, val = skimage.draw.line_aa(*points[_from], *points[_to])
-                image[bit, rr, cc] = val * np.linspace(0.1, 1, val.size)
-
-        from PIL import Image
-        from matplotlib import cm
-
-        n = image[2:].shape[0]
-        grade = np.linspace(0.1, 1, n).reshape((n, 1, 1))
-        myarray = (grade * image[2:]).sum(0)
-        im = Image.fromarray(np.uint8(cm.gist_gray(myarray) * 255))
-        im.save("/tmp/nodes.png")
-
-        myarray = image[0]
-        im = Image.fromarray(np.uint8(cm.gist_gray(myarray) * 255))
-        im.save("/tmp/false.png")
-        myarray = image[1]
-        im = Image.fromarray(np.uint8(cm.gist_gray(myarray) * 255))
-        im.save("/tmp/truth.png")
-
-        return image
+                yield line(0)
 
     @functools.lru_cache(maxsize=120)
     def preprocess_line(self, line):
-        if line is Padding:
-            t = line
-        else:
-            t = type(line)
-        if t is Subtask:
-            return line.id
-        return self.num_subtasks + self.line_types.index(t)
+        return self.possible_lines.index(line)
 
-    def get_lines(
+    def choose_line_types(
         self, n, active_conditions, last=None, nesting_depth=0, max_nesting_depth=None
     ):
         if n < 0:
@@ -385,7 +338,7 @@ class Env(gym.Env, ABC):
             and (max_nesting_depth is None or nesting_depth < max_nesting_depth)
             and not self.subtasks_only
         ):
-            line_types += [If, While]
+            line_types += [If, While, Loop]
         if active_conditions and last is Subtask:
             last_condition = active_conditions[-1]
             if last_condition is If:
@@ -396,16 +349,18 @@ class Env(gym.Env, ABC):
                 line_types += [EndIf]
             elif last_condition is While:
                 line_types += [EndWhile]
+            elif last_condition is Loop:
+                line_types += [EndLoop]
         line_type = self.random.choice(line_types)
-        if line_type in [If, While]:
+        if line_type in [If, While, Loop]:
             active_conditions = active_conditions + [line_type]
             nesting_depth += 1
         elif line_type is Else:
             active_conditions = active_conditions[:-1] + [line_type]
-        elif line_type in [EndIf, EndWhile]:
+        elif line_type in [EndIf, EndWhile, EndLoop]:
             active_conditions = active_conditions[:-1]
             nesting_depth -= 1
-        get_lines = self.get_lines(
+        get_lines = self.choose_line_types(
             n - 1,
             active_conditions=active_conditions,
             last=line_type,
@@ -453,11 +408,11 @@ class Env(gym.Env, ABC):
                 yield prev, current  # False: If/Else -> EndIf
                 yield prev, prev + 1  # True: If/Else -> If/Else + 1
                 return
-            elif type(line) is While:
+            elif type(line) in (While, Loop):
                 yield from self.get_transitions(
                     lines_iter, previous + [current]
                 )  # from = While
-            elif type(line) is EndWhile:
+            elif type(line) in (EndWhile, EndLoop):
                 prev = previous[-1]
                 # While
                 yield prev, current + 1  # False: While -> EndWhile + 1
@@ -469,9 +424,10 @@ class Env(gym.Env, ABC):
 
     def state_generator(self, lines) -> State:
         line_iterator = self.line_generator(lines)
-        condition_bit = 0 if self.eval_condition_size else self.random.randint(0, 2)
+        condition_bit = 0 if self.eval_condition_size else self.random.choice(2)
         condition_evaluations = defaultdict(list)
         self.time_remaining = self.time_to_waste
+        self.loops = None
 
         def next_subtask(msg=condition_bit):
             l = line_iterator.send(msg)
@@ -479,7 +435,16 @@ class Env(gym.Env, ABC):
                 line = lines[l]
                 if type(line) in (If, While):
                     condition_evaluations[type(line)] += [condition_bit]
-                l = line_iterator.send(condition_bit)
+                if type(line) is Loop:
+                    if self.loops is None:
+                        self.loops = line.id
+                    else:
+                        self.loops -= 1
+                    l = line_iterator.send(self.loops > 0)
+                    if self.loops == 0:
+                        self.loops = None
+                else:
+                    l = line_iterator.send(condition_bit)
             self.time_remaining += 1
             return l
 
@@ -535,6 +500,7 @@ class Env(gym.Env, ABC):
             (If, Else): "if-else clause length",
             (Else, EndIf): "else clause length",
             (While, EndWhile): "while clause length",
+            (Loop, EndLoop): "loop clause length",
         }
         for k, v in self.average_interval(lines):
             i[keys[k]] = v
@@ -543,7 +509,7 @@ class Env(gym.Env, ABC):
     @staticmethod
     def average_interval(lines):
         intervals = defaultdict(lambda: [None])
-        pairs = [(If, EndIf), (While, EndWhile)]
+        pairs = [(If, EndIf), (While, EndWhile), (Loop, EndLoop)]
         if Else in lines:
             pairs.extend([(If, Else), (Else, EndIf)])
         for line in lines:
@@ -565,11 +531,7 @@ class Env(gym.Env, ABC):
         max_depth = 0
         depth = 0
         for line in lines:
-            if type(line) in [If, While]:
-                depth += 1
-            if type(line) in [EndIf, EndWhile]:
-                depth -= 1
-            max_depth = max(depth, max_depth)
+            max_depth = max(line.depth_change, max_depth)
         return max_depth
 
     def seed(self, seed=None):
@@ -585,13 +547,14 @@ def build_parser(p):
     p.add_argument("--min-lines", type=int, required=True)
     p.add_argument("--max-lines", type=int, required=True)
     p.add_argument("--num-subtasks", type=int, default=12)
+    p.add_argument("--max-loops", type=int, default=2)
     p.add_argument("--no-op-limit", type=int)
     p.add_argument("--flip-prob", type=float, default=0.5)
     p.add_argument("--eval-condition-size", action="store_true")
-    p.add_argument("--max-nesting-depth", type=int, default=1)
-    p.add_argument("--time-to-waste", type=int, required=True)
+    p.add_argument("--max-nesting-depth", type=int)
     p.add_argument("--subtasks-only", action="store_true")
     p.add_argument("--break-on-fail", action="store_true")
+    p.add_argument("--time-to-waste", type=int, required=True)
     return p
 
 
