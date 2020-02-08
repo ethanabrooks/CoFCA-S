@@ -25,22 +25,24 @@ def gate(g, new, old):
 
 class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
     def __init__(
-        self,
-        hidden_size,
-        conv_hidden_size,
-        gate_coef,
-        gru_gate_coef,
-        num_conv_layers,
-        **kwargs
+<<<<<<< HEAD
+        self, hidden_size, conv_hidden_size, gate_coef, num_conv_layers, **kwargs
+    ):
+=======
+        self, hidden_size, conv_hidden_size, gate_coef, gru_gate_coef, **kwargs
     ):
         self.gru_gate_coef = gru_gate_coef
+>>>>>>> loops
         self.gate_coef = gate_coef
         self.conv_hidden_size = conv_hidden_size
         recurrence.Recurrence.__init__(self, hidden_size=hidden_size, **kwargs)
         abstract_recurrence.Recurrence.__init__(
+<<<<<<< HEAD
             self,
             conv_hidden_size=self.encoder_hidden_size,
             num_conv_layers=num_conv_layers,
+=======
+            self, conv_hidden_size=self.encoder_hidden_size
         )
         self.zeta = init_(
             nn.Linear(
@@ -52,6 +54,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         self.zeta2 = init_(nn.Linear(self.gru_hidden_size, hidden_size))
         self.gru2 = LSTMCell(
             2 * self.encoder_hidden_size + self.ne, self.gru_hidden_size
+>>>>>>> loops
         )
         self.d_gate = Categorical(hidden_size, 2)
         self.a_gate = Categorical(hidden_size, 2)
@@ -125,11 +128,18 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         for t in range(T):
             self.print("p", p)
             obs = self.preprocess_obs(inputs.obs[t])
+<<<<<<< HEAD
+            obs = obs * M[R, p]
+            x = [obs, self.embed_action(A[t - 1].clone())]
+            h = self.gru(torch.cat(x, dim=-1), h)
+            z = F.relu(self.zeta(h))
+=======
             h = self.gru(obs, h)
             zeta_inputs = [h, M[R, p], self.embed_action(A[t - 1].clone())]
             z = F.relu(self.zeta(torch.cat(zeta_inputs, dim=-1)))
             # then put M back in gru
             # then put A back in gru
+>>>>>>> loops
             d_gate = self.d_gate(z)
             self.sample_new(DG[t], d_gate)
             a_gate = self.a_gate(z)
