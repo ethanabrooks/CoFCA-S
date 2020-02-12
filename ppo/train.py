@@ -46,9 +46,8 @@ def hierarchical_parse_args(parser: argparse.ArgumentParser,
     """
     #args = parser.parse_args(["--block-space", "(0,0)(0,0)(0.418,0.418)(1,1)(0,0)(0,0)(0,0)", "--steps-per-action=300", "--geofence=.5", "--goal-space", "(0,0)(0,0)(.418,.418)", "--use-dof", "arm_flex_joint", "--use-dof", "hand_l_proximal_joint", "--use-dof", "hand_r_proximal_joint", "--use-dof", "wrist_flex_joint", "--use-dof", "arm_roll_joint", 
     #"--use-dof", "wrist_roll_joint", "--use-dof", "slide_x", "--use-dof", "slide_y", "--render","--n-blocks=1"])
-    args = parser.parse_args(["--block-space", "(0,0)(0,0)(0.418,0.418)(1,1)(0,0)(0,0)(0,0)", "--steps-per-action=300", "--geofence=.5", "--goal-space", "(0,0)(0,0)(.418,.418)", "--use-dof", "arm_flex_joint", "--use-dof", "hand_l_proximal_joint", "--use-dof", "hand_r_proximal_joint", "--use-dof", "wrist_flex_joint", "--use-dof", "arm_roll_joint", 
+    args = parser.parse_args(["--block-space", "(0,0)(0,0)(0.418,0.418)(1,1)(0,0)(0,0)(0,0)", "--steps-per-action=1", "--geofence=.5", "--goal-space", "(0,0)(0,0)(.418,.418)", "--use-dof", "arm_flex_joint", "--use-dof", "hand_l_proximal_joint", "--use-dof", "hand_r_proximal_joint", "--use-dof", "wrist_flex_joint", "--use-dof", "arm_roll_joint", 
     "--use-dof", "wrist_roll_joint", "--use-dof", "slide_x", "--use-dof", "slide_y","--n-blocks=1"])
-
 
     def key_value_pairs(group):
         for action in group._group_actions:
@@ -125,7 +124,7 @@ class Train(abc.ABC):
             torch.backends.cudnn.benchmark = False
             torch.backends.cudnn.deterministic = True
         torch.set_num_threads(1)
-
+        
         self.device = "cpu"
         if cuda:
             self.device = self.get_device()
@@ -140,6 +139,7 @@ class Train(abc.ABC):
             evaluation=False,
             num_processes=num_processes,
             time_limit=time_limit,
+            num_steps = num_steps
         )
 
         self.envs.to(self.device)
@@ -302,15 +302,17 @@ class Train(abc.ABC):
             
 
             # Observe reward and next obs
+            #print("PPO action: ", act.action)
+            #print("PPO num steps: ", num_steps) 
             obs, reward, done, infos = self.envs.step(act.action)
             #print("action: ", act.action, "obs: ", obs, " rew: ", reward, " done: ", done, " infos: ", infos)
             #print("reward: ", reward)
-
+            
             
             for d in infos:
                 for k, v in d.items():
                     episode_counter.update({k: float(v) / num_steps / len(infos)})
-
+            
             # track rewards
             counter["reward"] += reward.numpy()
             counter["time_step"] += np.ones_like(done)
@@ -329,6 +331,8 @@ class Train(abc.ABC):
             episode_counter["time_steps"] += list(counter["time_step"][done])
             counter["reward"][done] = 0
             counter["time_step"][done] = 0
+            #print("TIme counter step ppo: ", counter["time_step"])
+            #print("Episode counter time step: ", episode_counter["time_steps"])
            
 
             # If done then clean the history of observations.
@@ -356,7 +360,7 @@ class Train(abc.ABC):
 
 
     @staticmethod
-    def make_env(env_id, seed, rank, add_timestep, time_limit, evaluation):
+    def make_env(env_id, seed, rank, add_timestep, time_limit, evaluation, num_steps):
         parser = argparse.ArgumentParser()
         wrapper_parser = parser.add_argument_group('wrapper_args')
         env_parser = parser.add_argument_group('env_args')
@@ -364,8 +368,7 @@ class Train(abc.ABC):
         hsr.util.add_wrapper_args(wrapper_parser)
         args = hierarchical_parse_args(parser)
         env = hsr.util.env_wrapper(get_env)(**args)
-
-        
+        env.steps_per_episode = num_steps
         #setting up the action with the appropiate bounds
 
 
@@ -410,6 +413,7 @@ class Train(abc.ABC):
         evaluation,
         time_limit,
         num_frame_stack=None,
+        num_steps = None,
         **env_args,
     ):
         envs = [
@@ -421,6 +425,7 @@ class Train(abc.ABC):
                 seed=seed,
                 evaluation=evaluation,
                 time_limit=time_limit,
+                num_steps = num_steps,
                 **env_args,
             )
             for i in range(num_processes)
