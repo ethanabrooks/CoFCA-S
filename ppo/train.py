@@ -372,7 +372,7 @@ class Train(abc.ABC):
         #setting up the action with the appropiate bounds
 
 
-        env.action_space = spaces.Box(low = -np.inf, high = np.inf, shape = (3,), dtype = np.float32)
+        env.action_space = spaces.Box(low = -np.inf, high = np.inf, shape = (4,), dtype = np.float32)
         env.observation_space = spaces.Box(low=-np.inf, high=np.inf,shape = (6,),  dtype = np.float32)
 
         #env = gym.make(env_id)
