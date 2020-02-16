@@ -1,4 +1,7 @@
+from pathlib import Path
+
 from gym.spaces import Box
+import numpy as np
 from rl_utils import hierarchical_parse_args
 
 import ppo.agent
@@ -10,6 +13,10 @@ import ppo.control_flow.gridworld.one_line
 from ppo import control_flow
 from ppo.arguments import build_parser
 from ppo.train import Train
+
+INSTRUCTIONS = "instructions"
+ACTIONS = "actions"
+SUCCESS = "success"
 
 
 def main(log_dir, seed, eval_lines, one_line, **kwargs):
@@ -52,6 +59,31 @@ def main(log_dir, seed, eval_lines, one_line, **kwargs):
                 return control_flow.env.Env(**args)
             else:
                 return control_flow.gridworld.env.Env(**args)
+
+        def process_infos(self, episode_counter, infos):
+            super().process_infos(episode_counter, infos)
+            for d in infos:
+                if "instruction" in d:
+                    episode_counter[INSTRUCTIONS].append(d["instruction"])
+                    episode_counter[ACTIONS].append(d[ACTIONS])
+
+        def log_result(self, result: dict):
+            if INSTRUCTIONS in result:
+                instructions = [
+                    np.array(x, dtype=int) for x in result.pop(INSTRUCTIONS)
+                ]
+                np.savez(Path(self.log_dir, INSTRUCTIONS), *instructions)
+            if ACTIONS in result:
+                actions = [np.array(x, dtype=int) for x in result.pop(ACTIONS)]
+                np.savez(Path(self.log_dir, ACTIONS), *actions)
+            if SUCCESS in result:
+                np.save(
+                    Path(self.log_dir, SUCCESS), np.array(result[SUCCESS], dtype=int)
+                )
+            import ipdb
+
+            ipdb.set_trace()
+            super().log_result(result)
 
     _Train(**kwargs, seed=seed, log_dir=log_dir, time_limit=None).run()
 

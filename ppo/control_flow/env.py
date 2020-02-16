@@ -114,8 +114,7 @@ class Env(gym.Env, ABC):
         lines = self.build_lines()
         state_iterator = self.state_generator(lines)
         state = next(state_iterator)
-        visited_by_env = []
-        visited_by_agent = []
+        actions = []
 
         agent_ptr = 0
         info = {}
@@ -125,23 +124,19 @@ class Env(gym.Env, ABC):
             success = state.ptr is None
             reward = int(success)
             if success:
-                info.update(success_line=len(lines))
+                info.update(success_line=len(lines), actions=actions)
 
             term = term or success or state.term
-            if term and not success:
-                if self.break_on_fail:
+            if term:
+                if not success and self.break_on_fail:
                     import ipdb
 
                     ipdb.set_trace()
 
                 info.update(
-                    self.analyze_mistakes(
-                        agent_ptr=agent_ptr,
-                        env_ptr=state.ptr,
-                        visited_by_agent=visited_by_agent,
-                        visited_by_env=visited_by_env,
-                        lines=lines,
-                    )
+                    instruction=[self.preprocess_line(l) for l in lines],
+                    actions=actions,
+                    success=success,
                 )
 
             info.update(regret=1 if term and not success else 0)
@@ -195,11 +190,8 @@ class Env(gym.Env, ABC):
                 term,
                 info,
             )
-
+            actions += [action]
             action, agent_ptr = int(action[0]), int(action[-1])
-            if action != self.num_subtasks:
-                visited_by_agent.append(agent_ptr)
-                visited_by_env.append(state.ptr)
             info = self.get_task_info(lines) if step == 0 else {}
 
             if action == self.num_subtasks:
@@ -214,72 +206,6 @@ class Env(gym.Env, ABC):
                 if action != lines[state.ptr].id:
                     info.update(success_line=state.prev, failure_line=state.ptr)
                 state = state_iterator.send(action)
-
-    def analyze_mistakes(
-        self, agent_ptr, env_ptr, visited_by_agent, visited_by_env, lines
-    ):
-        def get_block(l):
-            block_type = None
-            l1 = None
-            for l2, line in enumerate(lines):
-                if type(line) in (Else, EndIf, EndWhile) and l1 < l < l2:
-                    return block_type, (l1, l2)
-                if type(line) in (If, Else, While):
-                    block_type = type(line)
-                    l1 = l2
-            return None, (None, None)
-
-        agent_block, (agent_block_start, agent_block_end) = get_block(agent_ptr)
-        env_block, (env_block_start, env_block_end) = get_block(env_ptr)
-        info = dict(
-            failed_to_enter_if=0,
-            failed_to_enter_else=0,
-            mistakenly_enterred_if=0,
-            mistakenly_enterred_else=0,
-            failed_to_reenter_while=0,
-            failed_to_enter_while=0,
-            mistakenly_reentered_while=0,
-            mistakenly_entered_while=0,
-            mistakenly_advanced=0,
-            failed_to_keep_up=0,
-            mistaken_id=0,
-        )
-        if env_block is If and env_ptr < agent_ptr and env_ptr not in visited_by_agent:
-            info.update(failed_to_enter_if=1)
-        elif env_block is Else and (
-            (env_ptr < agent_ptr and env_ptr not in visited_by_agent)
-            or (agent_block_end == env_block_start)
-        ):
-            info.update(failed_to_enter_else=1)
-        elif (
-            agent_block is If
-            and agent_ptr < env_ptr
-            and agent_ptr not in visited_by_env
-        ):
-            info.update(mistakenly_enterred_if=1)
-        elif (
-            agent_block is Else
-            and agent_ptr not in visited_by_env
-            and (agent_ptr < env_ptr or env_block_end == agent_block_start)
-        ):
-            info.update(mistakenly_enterred_else=1)
-        elif env_block is While and env_ptr < agent_ptr:
-            if env_ptr in visited_by_agent:
-                info.update(failed_to_reenter_while=1)
-            else:
-                info.update(failed_to_enter_while=1)
-        elif agent_block is While and agent_block_end < env_ptr:
-            if agent_ptr in visited_by_env:
-                info.update(mistakenly_reentered_while=1)
-            else:
-                info.update(mistakenly_entered_while=1)
-        elif env_ptr < agent_ptr:
-            info.update(mistakenly_advanced=1)
-        elif agent_ptr < env_ptr:
-            info.update(failed_to_keep_up=1)
-        else:
-            info.update(mistaken_id=1)
-        return info
 
     @staticmethod
     def line_str(line: Line):
