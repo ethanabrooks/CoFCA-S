@@ -353,17 +353,27 @@ class Env(gym.Env, ABC):
 
     def state_generator(self, lines) -> State:
         line_iterator = self.line_generator(lines)
-        condition_bit = 0 if self.eval_condition_size else self.random.randint(0, 2)
-        condition_evaluations = defaultdict(list)
+        condition_bit = 0 if self.eval_condition_size else self.random.choice(2)
+        condition_evaluations = []
         self.time_remaining = self.time_to_waste
+        self.loops = None
 
         def next_subtask(msg=condition_bit):
             l = line_iterator.send(msg)
             while not (l is None or type(lines[l]) is Subtask):
                 line = lines[l]
                 if type(line) in (If, While):
-                    condition_evaluations[type(line)] += [condition_bit]
-                l = line_iterator.send(condition_bit)
+                    condition_evaluations.append(condition_bit)
+                if type(line) is Loop:
+                    if self.loops is None:
+                        self.loops = line.id
+                    else:
+                        self.loops -= 1
+                    l = line_iterator.send(self.loops > 0)
+                    if self.loops == 0:
+                        self.loops = None
+                else:
+                    l = line_iterator.send(condition_bit)
             self.time_remaining += 1
             return l
 
