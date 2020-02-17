@@ -20,8 +20,6 @@ from ppo.control_flow.lines import (
     Subtask,
     Padding,
     Line,
-    Loop,
-    EndLoop,
 )
 from ppo.utils import RED, RESET, GREEN
 
@@ -31,8 +29,8 @@ State = namedtuple("State", "obs condition prev ptr condition_evaluations term")
 
 
 class Env(gym.Env, ABC):
-    pairs = {If: EndIf, Else: EndIf, While: EndWhile, Loop: EndLoop}
-    line_types = [If, Else, EndIf, While, EndWhile, EndLoop, Subtask, Padding, Loop]
+    pairs = {If: EndIf, Else: EndIf, While: EndWhile}
+    line_types = [If, Else, EndIf, While, EndWhile, Subtask, Padding]
 
     def __init__(
         self,
@@ -63,7 +61,6 @@ class Env(gym.Env, ABC):
         self.time_to_waste = time_to_waste
         self.time_remaining = None
 
-        self.loops = None
         self.eval_lines = eval_lines
         self.min_lines = min_lines
         self.max_lines = max_lines
