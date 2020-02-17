@@ -29,9 +29,17 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         self.conv_hidden_size = conv_hidden_size
         recurrence.Recurrence.__init__(self, hidden_size=hidden_size, **kwargs)
         abstract_recurrence.Recurrence.__init__(
-            self, conv_hidden_size=conv_hidden_size, num_conv_layers=num_conv_layers,
+            self,
+            conv_hidden_size=self.encoder_hidden_size,
+            num_conv_layers=num_conv_layers,
         )
-        self.linear = init_(nn.Linear(conv_hidden_size, self.enc))
+        self.linear1 = nn.Sequential(
+            init_(nn.Linear(self.encoder_hidden_size, self.conv_hidden_size)), nn.ReLU()
+        )
+        self.linear2 = nn.Sequential(
+            init_(nn.Linear(self.conv_hidden_size, 1)), nn.Sigmoid()
+        )
+        self.gru2 = nn.GRUCell(1 + self.encoder_hidden_size, self.hidden_size)
         self.d_gate = Categorical(hidden_size, 2)
         self.a_gate = Categorical(hidden_size, 2)
         state_sizes = self.state_sizes._asdict()
@@ -100,8 +108,12 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             self.sample_new(DG[t], d_gate)
             a_gate = self.a_gate(z)
             self.sample_new(AG[t], a_gate)
+            DG[t] = 1  # TODO
+            AG[t] = 1  # TODO
 
-            h2_ = self.gru(torch.cat(x, dim=-1), h2)
+            obs = self.linear2(obs * self.linear1(M[R, p]))
+            x = [obs, M[R, p]]
+            h2_ = self.gru2(torch.cat(x, dim=-1), h2)
             z = F.relu(self.zeta(h2_))
             u = self.upsilon(z).softmax(dim=-1)
             self.print("u", u)

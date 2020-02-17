@@ -73,7 +73,7 @@ def control_flow_args():
     parsers.agent.add_argument("--conv-hidden-size", type=int, required=True)
     parsers.agent.add_argument("--encoder-hidden-size", type=int, required=True)
     parsers.agent.add_argument("--num-encoding-layers", type=int, required=True)
-    parsers.agent.add_argument("--num-conv-layers", type=int, required=True)
+    parsers.agent.add_argument("--num-conv-layers", type=int, default=1)
     parsers.agent.add_argument("--num-edges", type=int, required=True)
     parsers.agent.add_argument("--gate-coef", type=float, required=True)
     parsers.agent.add_argument("--no-op-coef", type=float, required=True)
