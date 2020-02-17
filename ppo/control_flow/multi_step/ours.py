@@ -3,7 +3,7 @@ from collections import namedtuple
 import torch
 import torch.nn.functional as F
 
-import ppo.control_flow.gridworld.abstract_recurrence as abstract_recurrence
+import ppo.control_flow.multi_step.abstract_recurrence as abstract_recurrence
 import ppo.control_flow.recurrence as recurrence
 from ppo.distributions import FixedCategorical, Categorical
 import numpy as np

@@ -2,13 +2,13 @@ from collections import defaultdict, Counter
 
 from gym.spaces import Discrete, MultiDiscrete
 
-import ppo.control_flow.gridworld.env
+import ppo.control_flow.multi_step.env
 from ppo.control_flow.env import State
 from ppo.control_flow.lines import If, While
 import numpy as np
 
 
-class Env(ppo.control_flow.gridworld.env.Env):
+class Env(ppo.control_flow.multi_step.env.Env):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.line = None

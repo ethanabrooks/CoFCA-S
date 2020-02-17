@@ -8,10 +8,10 @@ from ppo.control_flow.env import Obs
 from ppo.control_flow.recurrence import get_obs_sections
 from ppo.distributions import Categorical
 from ppo.utils import init_
-import ppo.control_flow.gridworld.abstract_recurrence
+import ppo.control_flow.multi_step.abstract_recurrence
 
 
-class Agent(ppo.control_flow.gridworld.abstract_recurrence.Recurrence, nn.Module):
+class Agent(ppo.control_flow.multi_step.abstract_recurrence.Recurrence, nn.Module):
     def __init__(
         self,
         observation_space,
@@ -32,7 +32,7 @@ class Agent(ppo.control_flow.gridworld.abstract_recurrence.Recurrence, nn.Module
         self.obs_sections = get_obs_sections(self.obs_spaces)
         self.train_lines = len(self.obs_spaces.lines.nvec)
         nn.Module.__init__(self)
-        ppo.control_flow.gridworld.abstract_recurrence.Recurrence.__init__(
+        ppo.control_flow.multi_step.abstract_recurrence.Recurrence.__init__(
             self, conv_hidden_size=conv_hidden_size, num_conv_layers=conv_architecture
         )
 

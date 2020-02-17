@@ -1,4 +1,4 @@
-import ppo.control_flow.gridworld.abstract_recurrence as abstract_recurrence
+import ppo.control_flow.multi_step.abstract_recurrence as abstract_recurrence
 import ppo.control_flow.no_pointer as no_pointer
 
 
