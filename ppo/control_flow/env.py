@@ -224,7 +224,7 @@ class Env(gym.Env, ABC):
             lines = [line0] + [Subtask] * (edge_length - 2)
             lines += [EndWhile if line0 is While else EndIf, Subtask]
         else:
-            lines = self.get_lines(
+            lines = self.choose_line_types(
                 n_lines, active_conditions=[], max_nesting_depth=self.max_nesting_depth
             )
         return list(self.assign_line_ids(lines))
@@ -307,7 +307,7 @@ class Env(gym.Env, ABC):
             return line.id
         return self.num_subtasks + self.line_types.index(t)
 
-    def get_lines(
+    def choose_line_types(
         self, n, active_conditions, last=None, nesting_depth=0, max_nesting_depth=None
     ):
         if n < 0:
@@ -346,7 +346,7 @@ class Env(gym.Env, ABC):
         elif line_type in [EndIf, EndWhile]:
             active_conditions = active_conditions[:-1]
             nesting_depth -= 1
-        get_lines = self.get_lines(
+        get_lines = self.choose_line_types(
             n - 1,
             active_conditions=active_conditions,
             last=line_type,
