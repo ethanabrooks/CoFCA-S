@@ -41,7 +41,7 @@ def main(log_dir, seed, eval_lines, one_line, **kwargs):
         def make_env(
             seed, rank, evaluation, env_id, add_timestep, gridworld, **env_args
         ):
-            args = dict(**env_args, eval_lines=eval_lines, seed=seed + rank)
+            args = dict(**env_args, eval_lines=eval_lines, seed=seed + rank, rank=rank)
             del args["time_limit"]
             if one_line:
                 return control_flow.gridworld.one_line.Env(**args)
@@ -65,12 +65,9 @@ def control_flow_args():
     parser.add_argument("--no-eval", action="store_true")
     parser.add_argument("--one-line", action="store_true")
     ppo.control_flow.env.build_parser(parsers.env)
-    parsers.env.add_argument("--gridworld", action="store_true")
-    parsers.env.add_argument(
-        "--no-temporal-extension", dest="temporal_extension", action="store_false"
-    )
-    parsers.env.add_argument("--max-while-objects", type=float, default=2)
-    parsers.env.add_argument("--num-excluded-objects", type=int, default=2)
+    parsers.env.add_argument("--world-size", type=int)
+    parsers.env.add_argument("--max-while-objects", type=float, required=True)
+    parsers.env.add_argument("--num-excluded-objects", type=int, required=True)
     parsers.agent.add_argument("--debug", action="store_true")
     parsers.agent.add_argument("--no-scan", action="store_true")
     parsers.agent.add_argument("--no-roll", action="store_true")
