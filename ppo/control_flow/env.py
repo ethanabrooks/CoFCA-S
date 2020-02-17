@@ -105,104 +105,43 @@ class Env(gym.Env, ABC):
         lines = self.build_lines()
         state_iterator = self.state_generator(lines)
         state = next(state_iterator)
-        visited_by_env = set()
-        visited_by_agent = set()
-
-        def get_block(l):
-            block_type = None
-            l1 = None
-            for l2, line in enumerate(lines):
-                if type(line) in (Else, EndIf, EndWhile) and l1 < l < l2:
-                    return block_type, (l1, l2)
-                if type(line) in (If, Else, While):
-                    block_type = type(line)
-                    l1 = l2
-            return None, (None, None)
+        actions = []
+        program_counter = []
+        evaluations = []
 
         agent_ptr = 0
         info = {}
         term = False
         action = None
         while True:
+            if state.ptr is not None:
+                program_counter.append(state.ptr)
             success = state.ptr is None
             reward = int(success)
             if success:
                 info.update(success_line=len(lines))
 
-            term = success or state.term
-            if term and not success:
-                if self.break_on_fail:
+            term = term or success or state.term
+            if term:
+                if not success and self.break_on_fail:
                     import ipdb
 
                     ipdb.set_trace()
-                if self.analyze_mistakes:
-                    agent_block, (agent_block_start, agent_block_end) = get_block(
-                        agent_ptr
-                    )
-                    env_block, (env_block_start, env_block_end) = get_block(state.ptr)
+
+                if False:
                     info.update(
-                        failed_to_enter_if=0,
-                        failed_to_enter_else=0,
-                        mistakenly_enterred_if=0,
-                        mistakenly_enterred_else=0,
-                        failed_to_reenter_while=0,
-                        failed_to_enter_while=0,
-                        mistakenly_reentered_while=0,
-                        mistakenly_entered_while=0,
-                        mistakenly_advanced=0,
-                        failed_to_keep_up=0,
-                        mistaken_id=0,
+                        instruction=[self.preprocess_line(l) for l in lines],
+                        actions=actions,
+                        program_counter=program_counter,
+                        evaluations=evaluations,
                     )
-                    if (
-                        env_block is If
-                        and state.ptr < agent_ptr
-                        and state.ptr not in visited_by_agent
-                    ):
-                        info.update(failed_to_enter_if=1)
-                    elif env_block is Else and (
-                        (state.ptr < agent_ptr and state.ptr not in visited_by_agent)
-                        or (agent_block_end == env_block_start)
-                    ):
-                        info.update(failed_to_enter_else=1)
-                    elif (
-                        agent_block is If
-                        and agent_ptr < state.ptr
-                        and agent_ptr not in visited_by_env
-                    ):
-                        info.update(mistakenly_enterred_if=1)
-                    elif agent_block is Else and agent_block_end == env_block_start:
-                        assert env_block is If
-                        info.update(mistakenly_enterred_else=1)
-                    elif env_block is While and state.ptr < agent_ptr:
-                        if state.ptr in visited_by_agent:
-                            info.update(failed_to_reenter_while=1)
-                        else:
-                            info.update(failed_to_enter_while=1)
-                    elif agent_block is While and agent_block_end < state.ptr:
-                        if agent_ptr in visited_by_env:
-                            info.update(mistakenly_reentered_while=1)
-                        else:
-                            info.update(mistakenly_entered_while=1)
-                    elif state.ptr < agent_ptr:
-                        info.update(mistakenly_advanced=1)
-                    elif agent_ptr < state.ptr:
-                        info.update(failed_to_keep_up=1)
-                    else:
-                        info.update(mistaken_id=1)
 
             info.update(regret=1 if term and not success else 0)
-            if term:
-                info.update(
-                    if_evaluations=state.condition_evaluations[If],
-                    while_evaluations=state.condition_evaluations[While],
-                )
 
             def line_strings(index, level):
                 if index == len(lines):
                     return
                 line = lines[index]
-                if type(line) in [Else, EndIf, EndWhile]:
-                    level -= 1
                 if index == state.ptr and index == agent_ptr:
                     pre = "+ "
                 elif index == agent_ptr:
@@ -211,14 +150,16 @@ class Env(gym.Env, ABC):
                     pre = "| "
                 else:
                     pre = "  "
+                if line.depth_change < 0:
+                    level += line.depth_change
                 indent = pre * level
+                if line.depth_change > 0:
+                    level += line.depth_change
                 # if type(line) is Subtask:
                 yield f"{indent}{self.line_str(line)}"
                 # else:
                 #     yield f"{indent}{line.__name__}"
                 # if line in [If, While, Else]:
-                if type(line) in [If, While, Else]:
-                    level += 1
                 yield from line_strings(index + 1, level)
 
             def render():
@@ -241,15 +182,9 @@ class Env(gym.Env, ABC):
                 term,
                 info,
             )
-
-            if self.baseline:
-                agent_ptr = None
-            else:
-                action, agent_ptr = int(action[0]), int(action[-1])
-                if action != self.num_subtasks:
-                    visited_by_agent.add(agent_ptr)
-                    visited_by_env.add(state.ptr)
-            info = self.get_task_info(lines) if step == 0 else {}
+            actions += [list(action.astype(int))]
+            action, agent_ptr = int(action[0]), int(action[-1])
+            info = {}
 
             if action == self.num_subtasks:
                 n += 1
@@ -263,6 +198,7 @@ class Env(gym.Env, ABC):
                 if action != lines[state.ptr].id:
                     info.update(success_line=state.prev, failure_line=state.ptr)
                 state = state_iterator.send(action)
+                evaluations.extend(state.condition_evaluations)
 
     @staticmethod
     def line_str(line: Line):
