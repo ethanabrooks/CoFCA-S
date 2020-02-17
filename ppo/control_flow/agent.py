@@ -15,7 +15,6 @@ import ppo.control_flow.multi_step.oh_et_al
 import ppo.control_flow.multi_step.ours
 import ppo.control_flow.no_pointer
 import ppo.control_flow.oh_et_al
-import ppo.control_flow.simple
 from ppo.distributions import FixedCategorical
 
 
@@ -35,9 +34,9 @@ class Agent(ppo.agent.Agent, NNBase):
         self.multi_step = type(observation_space.spaces["obs"]) is Box
         if not self.multi_step:
             del network_args["conv_hidden_size"]
-            del network_args["use_conv"]
             del network_args["gate_coef"]
         if baseline == "no-pointer":
+            del network_args["gate_coef"]
             self.recurrent_module = (
                 ppo.control_flow.multi_step.no_pointer.Recurrence
                 if self.multi_step
@@ -47,7 +46,7 @@ class Agent(ppo.agent.Agent, NNBase):
             self.recurrent_module = (
                 ppo.control_flow.multi_step.oh_et_al.Recurrence
                 if self.multi_step
-                else ppo.control_flow.no_pointer.Recurrence
+                else ppo.control_flow.oh_et_al.Recurrence
             )(observation_space=observation_space, **network_args)
         elif self.multi_step:
             assert baseline is None
@@ -80,7 +79,7 @@ class Agent(ppo.agent.Agent, NNBase):
             ppo.control_flow.oh_et_al.Recurrence,
             ppo.control_flow.no_pointer.Recurrence,
         ):
-            X = [hx.a, pad, pad]
+            X = [hx.a, pad, hx.p]
             probs = [hx.a_probs]
         elif t is ppo.control_flow.recurrence.Recurrence:
             X = [hx.a, hx.d, hx.p]
@@ -89,7 +88,7 @@ class Agent(ppo.agent.Agent, NNBase):
             X = [hx.a, pad, pad, pad, pad]
             probs = [hx.a_probs]
         elif t is ppo.control_flow.multi_step.oh_et_al.Recurrence:
-            X = [hx.a, pad, pad, pad, pad]
+            X = [hx.a, pad, pad, pad, hx.p]
             probs = [hx.a_probs]
         elif t is ppo.control_flow.multi_step.ours.Recurrence:
             X = [hx.a, hx.d, hx.ag, hx.dg, hx.p]
@@ -104,6 +103,10 @@ class Agent(ppo.agent.Agent, NNBase):
         )
         try:
             aux_loss += rm.gate_coef * (hx.ag_probs + hx.dg_probs)[:, 1].mean()
+        except AttributeError:
+            pass
+        try:
+            aux_loss += (rm.gru_gate_coef * hx.gru_gate).mean()
         except AttributeError:
             pass
         action = torch.cat(X, dim=-1)
