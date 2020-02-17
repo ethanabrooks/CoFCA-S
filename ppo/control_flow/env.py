@@ -202,7 +202,9 @@ class Env(gym.Env, ABC):
 
     @staticmethod
     def line_str(line: Line):
-        return str(line)
+        if type(line) in (Subtask, Loop):
+            return str(line)
+        return line.__class__.__name__
 
     @property
     def eval_condition_size(self):
