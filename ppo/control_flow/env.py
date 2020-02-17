@@ -20,6 +20,8 @@ from ppo.control_flow.lines import (
     Subtask,
     Padding,
     Line,
+    Loop,
+    EndLoop,
 )
 from ppo.utils import RED, RESET, GREEN
 
@@ -61,6 +63,7 @@ class Env(gym.Env, ABC):
         self.time_to_waste = time_to_waste
         self.time_remaining = None
 
+        self.loops = None
         self.eval_lines = eval_lines
         self.min_lines = min_lines
         self.max_lines = max_lines
