@@ -236,66 +236,7 @@ class Env(gym.Env, ABC):
             elif line is Padding:
                 yield line
             else:
-                yield line(self.line_types.index(line))
-
-    def build_task_image(self, lines):
-        image = np.zeros(self.image_shape)
-        points = np.round(
-            (self.image_size - 1) * self.random.random((len(lines) + 1, 2))
-        ).astype(int)
-
-        def draw_circle(p, d):
-            r, c = skimage.draw.circle(*p, 2)
-            r = np.minimum(r, self.image_size - 1)
-            c = np.minimum(c, self.image_size - 1)
-            image[d, r, c] = 1
-
-        draw_circle(points[0], d=-2)  # mark start
-        for point, line in zip(points, lines):
-            depth = 2 + min(self.preprocess_line(line), self.num_subtasks)
-            draw_circle(point, d=depth)
-        draw_circle(points[-1], d=-1)  # mark end
-
-        np.set_printoptions(threshold=10000, linewidth=100000)
-        for bit in (0, 1):
-
-            def edges():
-                line_iterator = self.line_generator(lines)
-                ptr = next(line_iterator)
-                while True:
-                    prev, ptr = ptr, line_iterator.send(bit)
-                    if ptr is None:
-                        yield prev, len(lines)
-                        return
-                    yield prev, ptr
-                    if bit and lines[prev] is EndWhile:
-                        assert lines[ptr] is While
-                        for _ in range(2):
-                            ptr = line_iterator.send(False)  # prevent forever loop
-                            if ptr is None:
-                                return
-
-            for n, (_from, _to) in enumerate(edges()):
-                rr, cc, val = skimage.draw.line_aa(*points[_from], *points[_to])
-                image[bit, rr, cc] = val * np.linspace(0.1, 1, val.size)
-
-        from PIL import Image
-        from matplotlib import cm
-
-        n = image[2:].shape[0]
-        grade = np.linspace(0.1, 1, n).reshape((n, 1, 1))
-        myarray = (grade * image[2:]).sum(0)
-        im = Image.fromarray(np.uint8(cm.gist_gray(myarray) * 255))
-        im.save("/tmp/nodes.png")
-
-        myarray = image[0]
-        im = Image.fromarray(np.uint8(cm.gist_gray(myarray) * 255))
-        im.save("/tmp/false.png")
-        myarray = image[1]
-        im = Image.fromarray(np.uint8(cm.gist_gray(myarray) * 255))
-        im.save("/tmp/truth.png")
-
-        return image
+                yield line(0)
 
     @functools.lru_cache(maxsize=120)
     def preprocess_line(self, line):
