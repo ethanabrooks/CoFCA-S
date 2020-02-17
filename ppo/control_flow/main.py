@@ -39,19 +39,19 @@ def main(log_dir, seed, eval_lines, one_line, **kwargs):
 
         @staticmethod
         def make_env(
-            seed, rank, evaluation, env_id, add_timestep, gridworld, **env_args
+            seed, rank, evaluation, env_id, add_timestep, world_size, **env_args
         ):
             args = dict(**env_args, eval_lines=eval_lines, seed=seed + rank)
             del args["time_limit"]
             if one_line:
                 return control_flow.multi_step.one_line.Env(**args)
-            elif not gridworld:
+            elif not world_size:
                 del args["max_while_objects"]
                 del args["num_excluded_objects"]
                 del args["temporal_extension"]
                 return control_flow.env.Env(**args)
             else:
-                return control_flow.multi_step.env.Env(**args)
+                return control_flow.multi_step.env.Env(**args, world_size=world_size)
 
     _Train(**kwargs, seed=seed, log_dir=log_dir, time_limit=None).run()
 
@@ -65,12 +65,7 @@ def control_flow_args():
     parser.add_argument("--no-eval", action="store_true")
     parser.add_argument("--one-line", action="store_true")
     ppo.control_flow.env.build_parser(parsers.env)
-    parsers.env.add_argument("--multi_step", action="store_true")
-    parsers.env.add_argument(
-        "--no-temporal-extension", dest="temporal_extension", action="store_false"
-    )
-    parsers.env.add_argument("--max-while-objects", type=float, default=2)
-    parsers.env.add_argument("--num-excluded-objects", type=int, default=2)
+    ppo.control_flow.multi_step.env.build_parser(parsers.env)
     parsers.agent.add_argument("--debug", action="store_true")
     parsers.agent.add_argument("--no-scan", action="store_true")
     parsers.agent.add_argument("--no-roll", action="store_true")

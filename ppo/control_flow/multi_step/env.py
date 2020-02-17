@@ -9,7 +9,7 @@ from rl_utils import hierarchical_parse_args
 
 import ppo.control_flow.env
 from ppo import keyboard_control
-from ppo.control_flow.env import build_parser, State
+from ppo.control_flow.env import State
 from ppo.control_flow.lines import Subtask, Padding, Line, While, If, EndWhile, Else
 
 
@@ -34,7 +34,7 @@ class Env(ppo.control_flow.env.Env):
         num_subtasks,
         num_excluded_objects,
         temporal_extension,
-        world_size=6,
+        world_size,
         **kwargs,
     ):
         self.num_objects = 20
@@ -166,7 +166,9 @@ class Env(ppo.control_flow.env.Env):
                 _, o = lines[l].id
                 n = get_nearest(o)
                 if n is not None:
-                    self.time_remaining += 1 + np.max(np.abs(agent_pos - n))
+                    self.time_remaining += 1
+                    if self.temporal_extension:
+                        self.time_remaining += np.max(np.abs(agent_pos - n))
             return l
 
         possible_objects = [o for o, _ in object_pos]
@@ -192,7 +194,26 @@ class Env(ppo.control_flow.env.Env):
                 return pair() in object_pos  # standing on the desired object
 
             correct_id = (interaction, obj) == lines[ptr].id
-            if on_object():
+            if not self.temporal_extension:
+                if correct_id and obj not in possible_objects:
+                    # subtask is impossible
+                    prev, ptr = ptr, None
+                else:
+                    nearest = get_nearest(obj)
+                    if nearest is not None:
+                        nearest = tuple(nearest)
+                        if interaction in (self.mine, self.build):
+                            object_pos.remove((obj, nearest))
+                            if correct_id:
+                                possible_objects.remove(obj)
+                            else:
+                                term = True
+                        if interaction == self.build:
+                            object_pos.append((self.bridge, nearest))
+                        if correct_id:
+                            prev, ptr = ptr, next_subtask(ptr)
+
+            elif on_object():
                 if interaction in (self.mine, self.build):
                     object_pos.remove(pair())
                     if correct_id:
@@ -207,8 +228,7 @@ class Env(ppo.control_flow.env.Env):
                 nearest = get_nearest(obj)
                 if nearest is not None:
                     delta = nearest - agent_pos
-                    if self.temporal_extension:
-                        delta = np.clip(delta, -1, 1)
+                    delta = np.clip(delta, -1, 1)
                     agent_pos += delta
                 elif correct_id and obj not in possible_objects:
                     # subtask is impossible
@@ -268,14 +288,22 @@ class Env(ppo.control_flow.env.Env):
                 yield line_type((alt_objects[alt_object_id], self.objects[object_id]))
 
 
+def build_parser(parser):
+    parser.add_argument("--world-size", type=int, default=6)
+    parser.add_argument(
+        "--no-temporal-extension", dest="temporal_extension", action="store_false"
+    )
+    parser.add_argument("--max-while-objects", type=float, default=2)
+    parser.add_argument("--num-excluded-objects", type=int, default=2)
+
+
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser()
-    parser = build_parser(parser)
-    parser.add_argument("--world-size", default=4, type=int)
-    parser.add_argument("--seed", default=0, type=int)
-    args = hierarchical_parse_args(parser)
+    PARSER = argparse.ArgumentParser()
+    PARSER = ppo.control_flow.env.build_parser(PARSER)
+    build_parser(PARSER)
+    ARGS = hierarchical_parse_args(PARSER)
 
     def action_fn(string):
         try:
@@ -284,8 +312,5 @@ if __name__ == "__main__":
             return
 
     keyboard_control.run(
-        Env(
-            **args, max_while_objects=2, num_excluded_objects=2, temporal_extension=True
-        ),
-        action_fn=action_fn,
+        Env(**ARGS), action_fn=action_fn,
     )

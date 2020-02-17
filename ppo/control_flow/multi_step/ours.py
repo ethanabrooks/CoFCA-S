@@ -2,11 +2,14 @@ from collections import namedtuple
 
 import torch
 import torch.nn.functional as F
+import torch.nn as nn
 
 import ppo.control_flow.multi_step.abstract_recurrence as abstract_recurrence
 import ppo.control_flow.recurrence as recurrence
 from ppo.distributions import FixedCategorical, Categorical
 import numpy as np
+
+from ppo.utils import init_
 
 RecurrentState = namedtuple(
     "RecurrentState", "a d ag dg p v h h2 a_probs d_probs ag_probs dg_probs"
@@ -26,10 +29,9 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         self.conv_hidden_size = conv_hidden_size
         recurrence.Recurrence.__init__(self, hidden_size=hidden_size, **kwargs)
         abstract_recurrence.Recurrence.__init__(
-            self,
-            conv_hidden_size=self.encoder_hidden_size,
-            num_conv_layers=num_conv_layers,
+            self, conv_hidden_size=conv_hidden_size, num_conv_layers=num_conv_layers,
         )
+        self.linear = init_(nn.Linear(conv_hidden_size, self.enc))
         self.d_gate = Categorical(hidden_size, 2)
         self.a_gate = Categorical(hidden_size, 2)
         state_sizes = self.state_sizes._asdict()

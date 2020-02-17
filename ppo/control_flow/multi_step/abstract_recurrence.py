@@ -27,7 +27,9 @@ class Recurrence:
                     nn.ReLU(),
                 ]
                 in_size = conv_hidden_size
-            self.conv = nn.Sequential(*layers, nn.AvgPool2d(kernel_size=6))
+            self.conv = nn.Sequential(
+                *layers, nn.AvgPool2d(kernel_size=self.obs_spaces.obs.shape[1:])
+            )
         ones = torch.ones(1, dtype=torch.long)
         self.register_buffer("ones", ones)
         line_nvec = torch.tensor(self.obs_spaces.lines.nvec[0, :-1])
