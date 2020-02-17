@@ -114,37 +114,38 @@ class Env(gym.Env, ABC):
         lines = self.build_lines()
         state_iterator = self.state_generator(lines)
         state = next(state_iterator)
-        visited_by_env = []
-        visited_by_agent = []
+        actions = []
+        program_counter = []
+        evaluations = []
 
         agent_ptr = 0
         info = {}
         term = False
         action = None
         while True:
+            if state.ptr is not None:
+                program_counter.append(state.ptr)
             success = state.ptr is None
             reward = int(success)
             if success:
                 info.update(success_line=len(lines))
 
             term = term or success or state.term
-            if term and not success:
-                info.update(
-                    self.analyze_mistakes(
-                        agent_ptr=agent_ptr,
-                        env_ptr=state.ptr,
-                        visited_by_agent=visited_by_agent,
-                        visited_by_env=visited_by_env,
-                        lines=lines,
+            if term:
+                if not success and self.break_on_fail:
+                    import ipdb
+
+                    ipdb.set_trace()
+
+                if False:
+                    info.update(
+                        instruction=[self.preprocess_line(l) for l in lines],
+                        actions=actions,
+                        program_counter=program_counter,
+                        evaluations=evaluations,
                     )
-                )
 
             info.update(regret=1 if term and not success else 0)
-            if term:
-                info.update(
-                    if_evaluations=state.condition_evaluations[If],
-                    while_evaluations=state.condition_evaluations[While],
-                )
 
             def line_strings(index, level):
                 if index == len(lines):
@@ -191,12 +192,9 @@ class Env(gym.Env, ABC):
                 term,
                 info,
             )
-
+            actions += [list(action.astype(int))]
             action, agent_ptr = int(action[0]), int(action[-1])
-            if action != self.num_subtasks:
-                visited_by_agent.append(agent_ptr)
-                visited_by_env.append(state.ptr)
-            info = self.get_task_info(lines) if step == 0 else {}
+            info = {}
 
             if action == self.num_subtasks:
                 n += 1
@@ -210,6 +208,7 @@ class Env(gym.Env, ABC):
                 if action != lines[state.ptr].id:
                     info.update(success_line=state.prev, failure_line=state.ptr)
                 state = state_iterator.send(action)
+                evaluations.extend(state.condition_evaluations)
 
     def analyze_mistakes(
         self, agent_ptr, env_ptr, visited_by_agent, visited_by_env, lines

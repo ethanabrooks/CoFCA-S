@@ -88,7 +88,7 @@ class Agent(ppo.agent.Agent, NNBase):
         elif t is ppo.control_flow.gridworld.no_pointer.Recurrence:
             X = [hx.a, pad, pad, pad, pad]
             probs = [hx.a_probs]
-        elif t is ppo.control_flow.gridworld.oh_et_al.Recurrence:
+        elif t is ppo.control_flow.multi_step.oh_et_al.Recurrence:
             X = [hx.a, pad, pad, pad, hx.p]
             probs = [hx.a_probs]
         elif t is ppo.control_flow.gridworld.ours.Recurrence:
