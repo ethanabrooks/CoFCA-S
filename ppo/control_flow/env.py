@@ -31,8 +31,8 @@ State = namedtuple("State", "obs condition prev ptr condition_evaluations term")
 
 
 class Env(gym.Env, ABC):
-    pairs = {If: EndIf, Else: EndIf, While: EndWhile, Loop: EndLoop}
-    line_types = [If, Else, EndIf, While, EndWhile, EndLoop, Subtask, Padding, Loop]
+    pairs = {If: EndIf, Else: EndIf, While: EndWhile}
+    line_types = [If, Else, EndIf, While, EndWhile, Subtask, Padding]
 
     def __init__(
         self,
@@ -81,22 +81,11 @@ class Env(gym.Env, ABC):
         self.action_space = spaces.MultiDiscrete(
             np.array([self.num_subtasks + 1, 2 * self.n_lines, self.n_lines])
         )
-
-        def possible_lines():
-            for i in range(num_subtasks):
-                yield Subtask(i)
-            for i in range(1, max_loops + 1):
-                yield Loop(i)
-            for line_type in self.line_types:
-                if line_type not in (Subtask, Loop):
-                    yield line_type(0)
-
-        self.possible_lines = list(possible_lines())
         self.observation_space = spaces.Dict(
             dict(
                 obs=spaces.Discrete(2),
                 lines=spaces.MultiDiscrete(
-                    np.array([len(self.possible_lines)] * self.n_lines)
+                    np.array([len(self.line_types) + num_subtasks] * self.n_lines)
                 ),
                 active=spaces.Discrete(self.n_lines + 1),
             )
@@ -132,9 +121,9 @@ class Env(gym.Env, ABC):
             if success:
                 info.update(success_line=len(lines))
 
-            term = term or success or state.term
-            if term:
-                if not success and self.break_on_fail:
+            term = success or state.term
+            if term and not success:
+                if self.break_on_fail:
                     import ipdb
 
                     ipdb.set_trace()
@@ -199,10 +188,10 @@ class Env(gym.Env, ABC):
 
             if action == self.num_subtasks:
                 n += 1
-                no_op_limit = 200 if self.evaluating else self.no_op_limit
+                no_op_limit = self.no_op_limit
                 if self.no_op_limit is not None and self.no_op_limit < 0:
                     no_op_limit = len(lines)
-                if n >= no_op_limit:
+                if not self.evaluating and n == no_op_limit:
                     term = True
             elif state.ptr is not None:
                 step += 1
@@ -244,14 +233,20 @@ class Env(gym.Env, ABC):
         for line in lines:
             if line is Subtask:
                 yield Subtask(self.random.choice(self.num_subtasks))
-            elif line is Loop:
-                yield Loop(self.random.randint(1, 1 + self.max_loops))
+            elif line is Padding:
+                yield line
             else:
                 yield line(0)
 
     @functools.lru_cache(maxsize=120)
     def preprocess_line(self, line):
-        return self.possible_lines.index(line)
+        if line is Padding:
+            t = line
+        else:
+            t = type(line)
+        if t is Subtask:
+            return line.id
+        return self.num_subtasks + self.line_types.index(t)
 
     def choose_line_types(
         self, n, active_conditions, last=None, nesting_depth=0, max_nesting_depth=None
