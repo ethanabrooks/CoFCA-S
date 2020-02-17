@@ -8,10 +8,10 @@ from ppo.control_flow.env import Obs
 from ppo.control_flow.recurrence import get_obs_sections
 from ppo.distributions import Categorical
 from ppo.utils import init_
-import ppo.control_flow.gridworld.abstract_recurrence
+import ppo.control_flow.multi_step.abstract_recurrence
 
 
-class Agent(ppo.control_flow.gridworld.abstract_recurrence.Recurrence):
+class Agent(ppo.control_flow.multi_step.abstract_recurrence.Recurrence):
     def __init__(
         self,
         observation_space,

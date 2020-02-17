@@ -7,9 +7,9 @@ from rl_utils import hierarchical_parse_args
 import ppo.agent
 import ppo.control_flow.agent
 import ppo.control_flow.env
-import ppo.control_flow.gridworld.env
-import ppo.control_flow.gridworld.minimal
-import ppo.control_flow.gridworld.one_line
+import ppo.control_flow.multi_step.env
+import ppo.control_flow.multi_step.minimal
+import ppo.control_flow.multi_step.one_line
 from ppo import control_flow
 from ppo.arguments import build_parser
 from ppo.train import Train
@@ -29,7 +29,7 @@ def main(log_dir, seed, eval_lines, one_line, **kwargs):
                 del agent_args["num_edges"]
                 del agent_args["gate_coef"]
                 del agent_args["no_op_coef"]
-                return ppo.control_flow.gridworld.minimal.Agent(
+                return ppo.control_flow.multi_step.minimal.Agent(
                     observation_space=obs_space,
                     action_space=envs.action_space,
                     **agent_args,
@@ -50,14 +50,14 @@ def main(log_dir, seed, eval_lines, one_line, **kwargs):
             args = dict(**env_args, eval_lines=eval_lines, seed=seed + rank, rank=rank)
             del args["time_limit"]
             if one_line:
-                return control_flow.gridworld.one_line.Env(**args)
+                return control_flow.multi_step.one_line.Env(**args)
             elif not gridworld:
                 del args["max_while_objects"]
                 del args["num_excluded_objects"]
                 del args["temporal_extension"]
                 return control_flow.env.Env(**args)
             else:
-                return control_flow.gridworld.env.Env(**args)
+                return control_flow.multi_step.env.Env(**args)
 
         def process_infos(self, episode_counter, infos):
             for d in infos:
@@ -94,7 +94,7 @@ def control_flow_args():
     parser.add_argument("--no-eval", action="store_true")
     parser.add_argument("--one-line", action="store_true")
     ppo.control_flow.env.build_parser(parsers.env)
-    parsers.env.add_argument("--gridworld", action="store_true")
+    parsers.env.add_argument("--multi_step", action="store_true")
     parsers.env.add_argument(
         "--no-temporal-extension", dest="temporal_extension", action="store_false"
     )

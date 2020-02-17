@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-import ppo.control_flow.gridworld.abstract_recurrence as abstract_recurrence
+import ppo.control_flow.multi_step.abstract_recurrence as abstract_recurrence
 import ppo.control_flow.recurrence as recurrence
 from ppo.control_flow.lstm import LSTMCell
 from ppo.distributions import FixedCategorical, Categorical
