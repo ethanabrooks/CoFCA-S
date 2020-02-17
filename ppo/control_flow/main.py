@@ -14,15 +14,14 @@ from ppo import control_flow
 from ppo.arguments import build_parser
 from ppo.train import Train
 
-INSTRUCTIONS = "instructions"
-ACTIONS = "actions"
-SUCCESS = "success"
+NAMES = ["instruction", "actions", "program_counter", "evaluations"]
 
 
 def main(log_dir, seed, eval_lines, one_line, **kwargs):
     class _Train(Train):
         def build_agent(self, envs, baseline=None, debug=False, **agent_args):
             obs_space = envs.observation_space
+            agent_args.update(log_dir=log_dir)
             if baseline == "simple" or one_line:
                 del agent_args["no_scan"]
                 del agent_args["no_roll"]
@@ -48,7 +47,7 @@ def main(log_dir, seed, eval_lines, one_line, **kwargs):
         def make_env(
             seed, rank, evaluation, env_id, add_timestep, gridworld, **env_args
         ):
-            args = dict(**env_args, eval_lines=eval_lines, seed=seed + rank)
+            args = dict(**env_args, eval_lines=eval_lines, seed=seed + rank, rank=rank)
             del args["time_limit"]
             if one_line:
                 return control_flow.gridworld.one_line.Env(**args)
@@ -61,28 +60,26 @@ def main(log_dir, seed, eval_lines, one_line, **kwargs):
                 return control_flow.gridworld.env.Env(**args)
 
         def process_infos(self, episode_counter, infos):
-            super().process_infos(episode_counter, infos)
             for d in infos:
-                if "instruction" in d:
-                    episode_counter[INSTRUCTIONS].append(d["instruction"])
-                    episode_counter[ACTIONS].append(d[ACTIONS])
+                for name in NAMES:
+                    if name in d:
+                        episode_counter[name].append(d.pop(name))
+            super().process_infos(episode_counter, infos)
 
         def log_result(self, result: dict):
-            if INSTRUCTIONS in result:
-                instructions = [
-                    np.array(x, dtype=int) for x in result.pop(INSTRUCTIONS)
-                ]
-                np.savez(Path(self.log_dir, INSTRUCTIONS), *instructions)
-            if ACTIONS in result:
-                actions = [np.array(x, dtype=int) for x in result.pop(ACTIONS)]
-                np.savez(Path(self.log_dir, ACTIONS), *actions)
-            if SUCCESS in result:
-                np.save(
-                    Path(self.log_dir, SUCCESS), np.array(result[SUCCESS], dtype=int)
-                )
-            import ipdb
+            for name in NAMES:
+                if name in result:
+                    arrays = [
+                        np.array(x, dtype=int)
+                        for x in result.pop(name)
+                        if x is not None
+                    ]
+                    np.savez(Path(self.log_dir, name), *arrays)
 
-            ipdb.set_trace()
+            if "rewards" in result:
+                success = result["rewards"]
+                np.save(Path(self.log_dir, "successes"), success)
+
             super().log_result(result)
 
     _Train(**kwargs, seed=seed, log_dir=log_dir, time_limit=None).run()

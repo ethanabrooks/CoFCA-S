@@ -1,5 +1,6 @@
 import gc
 from collections import namedtuple
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -25,8 +26,9 @@ def gate(g, new, old):
 
 class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
     def __init__(
-        self, hidden_size, conv_hidden_size, gate_coef, gru_gate_coef, **kwargs
+        self, hidden_size, conv_hidden_size, gate_coef, gru_gate_coef, log_dir, **kwargs
     ):
+        self.log_dir = log_dir
         self.gru_gate_coef = gru_gate_coef
         self.gate_coef = gate_coef
         self.conv_hidden_size = conv_hidden_size
@@ -95,6 +97,9 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         M = self.build_memory(N, T, inputs)
 
         P = self.build_P(M, N, rnn_hxs.device, nl)
+        if self.log_dir:
+            torch.save(P[:, 0], str(Path(self.log_dir, "P.torch")))
+
         half = P.size(2) // 2 if self.no_scan else nl
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)

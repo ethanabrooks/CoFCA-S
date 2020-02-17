@@ -143,7 +143,7 @@ class Env(ppo.control_flow.env.Env):
         else:
             evaluation = any(o == line.id for o, _ in object_pos)
             if type(line) in (If, While):
-                condition_evaluations[type(line)] += [evaluation]
+                condition_evaluations += [evaluation]
             return evaluation
 
     def state_generator(self, lines) -> State:
@@ -151,7 +151,7 @@ class Env(ppo.control_flow.env.Env):
         agent_pos = self.random.randint(0, self.world_size, size=2)
         object_pos = self.populate_world(lines)
         line_iterator = self.line_generator(lines)
-        condition_evaluations = defaultdict(list)
+        condition_evaluations = []
         self.time_remaining = 200 if self.evaluating else self.time_to_waste
         self.loops = None
 

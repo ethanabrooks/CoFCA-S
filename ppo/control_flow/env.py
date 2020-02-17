@@ -47,11 +47,13 @@ class Env(gym.Env, ABC):
         subtasks_only,
         break_on_fail,
         max_loops,
+        rank,
         seed=0,
         eval_lines=None,
         evaluating=False,
     ):
         super().__init__()
+        self.rank = rank
         self.max_loops = max_loops
         self.break_on_fail = break_on_fail
         self.subtasks_only = subtasks_only
@@ -115,16 +117,20 @@ class Env(gym.Env, ABC):
         state_iterator = self.state_generator(lines)
         state = next(state_iterator)
         actions = []
+        program_counter = []
+        evaluations = []
 
         agent_ptr = 0
         info = {}
         term = False
         action = None
         while True:
+            if state.ptr is not None:
+                program_counter.append(state.ptr)
             success = state.ptr is None
             reward = int(success)
             if success:
-                info.update(success_line=len(lines), actions=actions)
+                info.update(success_line=len(lines))
 
             term = term or success or state.term
             if term:
@@ -133,18 +139,15 @@ class Env(gym.Env, ABC):
 
                     ipdb.set_trace()
 
-                info.update(
-                    instruction=[self.preprocess_line(l) for l in lines],
-                    actions=actions,
-                    success=success,
-                )
+                if self.rank == 0:
+                    info.update(
+                        instruction=[self.preprocess_line(l) for l in lines],
+                        actions=actions,
+                        program_counter=program_counter,
+                        evaluations=evaluations,
+                    )
 
             info.update(regret=1 if term and not success else 0)
-            if term:
-                info.update(
-                    if_evaluations=state.condition_evaluations[If],
-                    while_evaluations=state.condition_evaluations[While],
-                )
 
             def line_strings(index, level):
                 if index == len(lines):
@@ -190,9 +193,9 @@ class Env(gym.Env, ABC):
                 term,
                 info,
             )
-            actions += [action]
+            actions += [list(action.astype(int))]
             action, agent_ptr = int(action[0]), int(action[-1])
-            info = self.get_task_info(lines) if step == 0 else {}
+            info = {}
 
             if action == self.num_subtasks:
                 n += 1
@@ -206,6 +209,7 @@ class Env(gym.Env, ABC):
                 if action != lines[state.ptr].id:
                     info.update(success_line=state.prev, failure_line=state.ptr)
                 state = state_iterator.send(action)
+                evaluations.extend(state.condition_evaluations)
 
     @staticmethod
     def line_str(line: Line):
@@ -355,7 +359,7 @@ class Env(gym.Env, ABC):
     def state_generator(self, lines) -> State:
         line_iterator = self.line_generator(lines)
         condition_bit = 0 if self.eval_condition_size else self.random.choice(2)
-        condition_evaluations = defaultdict(list)
+        condition_evaluations = []
         self.time_remaining = self.time_to_waste
         self.loops = None
 
@@ -364,7 +368,7 @@ class Env(gym.Env, ABC):
             while not (l is None or type(lines[l]) is Subtask):
                 line = lines[l]
                 if type(line) in (If, While):
-                    condition_evaluations[type(line)] += [condition_bit]
+                    condition_evaluations.append(condition_bit)
                 if type(line) is Loop:
                     if self.loops is None:
                         self.loops = line.id
@@ -408,29 +412,6 @@ class Env(gym.Env, ABC):
     @staticmethod
     def print_obs(obs):
         print(obs)
-
-    def get_task_info(self, lines):
-        num_if = lines.count(If)
-        num_else = lines.count(Else)
-        num_while = lines.count(While)
-        num_subtask = lines.count(lambda l: type(l) is Subtask)
-        i = dict(
-            if_lines=num_if,
-            else_lines=num_else,
-            while_lines=num_while,
-            nesting_depth=self.get_nesting_depth(lines),
-            num_edges=2 * (num_if + num_else + num_while) + num_subtask,
-        )
-        keys = {
-            (If, EndIf): "if clause length",
-            (If, Else): "if-else clause length",
-            (Else, EndIf): "else clause length",
-            (While, EndWhile): "while clause length",
-            (Loop, EndLoop): "loop clause length",
-        }
-        for k, v in self.average_interval(lines):
-            i[keys[k]] = v
-        return i
 
     @staticmethod
     def average_interval(lines):
