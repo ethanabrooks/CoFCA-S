@@ -400,16 +400,9 @@ class Env(gym.Env, ABC):
     def get_observation(self, obs, active, lines):
         padded = lines + [Padding] * (self.n_lines - len(lines))
         lines = [self.preprocess_line(p) for p in padded]
-        obs = Obs(
+        return Obs(
             obs=obs, lines=lines, active=self.n_lines if active is None else active
-        )
-        if self.baseline:
-            obs = OrderedDict(obs=obs.obs, lines=self.eye[obs.lines].flatten())
-        else:
-            obs = obs._asdict()
-        # if not self.evaluating:
-        #     assert self.observation_space.contains(obs)
-        return obs
+        )._asdict()
 
     @staticmethod
     def print_obs(obs):
