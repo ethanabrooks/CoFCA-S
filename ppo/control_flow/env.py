@@ -44,16 +44,17 @@ class Env(gym.Env, ABC):
         eval_condition_size,
         no_op_limit,
         time_to_waste,
-        analyze_mistakes,
         subtasks_only,
         break_on_fail,
+        max_loops,
+        rank,
         seed=0,
         eval_lines=None,
         evaluating=False,
-        baseline=False,
     ):
         super().__init__()
-        self.analyze_mistakes = analyze_mistakes
+        self.rank = rank
+        self.max_loops = max_loops
         self.break_on_fail = break_on_fail
         self.subtasks_only = subtasks_only
         self.no_op_limit = no_op_limit
@@ -74,7 +75,6 @@ class Env(gym.Env, ABC):
         self.n_lines += 1
         self.random, self.seed = seeding.np_random(seed)
         self.flip_prob = flip_prob
-        self.baseline = baseline
         self.evaluating = evaluating
         self.iterator = None
         self._render = None
@@ -128,7 +128,7 @@ class Env(gym.Env, ABC):
 
                     ipdb.set_trace()
 
-                if False:
+                if self.rank == 0:
                     info.update(
                         instruction=[self.preprocess_line(l) for l in lines],
                         actions=actions,
@@ -449,10 +449,14 @@ def build_parser(p):
     p.add_argument("--min-lines", type=int, required=True)
     p.add_argument("--max-lines", type=int, required=True)
     p.add_argument("--num-subtasks", type=int, default=12)
+    p.add_argument("--max-loops", type=int, default=2)
     p.add_argument("--no-op-limit", type=int)
     p.add_argument("--flip-prob", type=float, default=0.5)
     p.add_argument("--eval-condition-size", action="store_true")
     p.add_argument("--max-nesting-depth", type=int)
+    p.add_argument("--subtasks-only", action="store_true")
+    p.add_argument("--break-on-fail", action="store_true")
+    p.add_argument("--time-to-waste", type=int, required=True)
     return p
 
 
@@ -468,4 +472,4 @@ if __name__ == "__main__":
         except ValueError:
             return
 
-    keyboard_control.run(Env(**args, baseline=False), action_fn=action_fn)
+    keyboard_control.run(Env(**args), action_fn=action_fn)

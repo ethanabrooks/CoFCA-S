@@ -41,9 +41,7 @@ def main(log_dir, seed, eval_lines, **kwargs):
         def make_env(
             seed, rank, evaluation, env_id, add_timestep, world_size, **env_args
         ):
-            args = dict(
-                **env_args, eval_lines=eval_lines, baseline=False, seed=seed + rank
-            )
+            args = dict(**env_args, eval_lines=eval_lines, seed=seed + rank, rank=rank)
             del args["time_limit"]
             if world_size is None:
                 del args["max_while_objects"]
@@ -65,12 +63,8 @@ def bandit_args():
     parser.add_argument("--no-eval", action="store_true")
     ppo.control_flow.env.build_parser(parsers.env)
     parsers.env.add_argument("--world-size", type=int)
-    parsers.env.add_argument("--subtasks-only", action="store_true")
-    parsers.env.add_argument("--break-on-fail", action="store_true")
-    parsers.env.add_argument("--analyze-mistakes", action="store_true")
     parsers.env.add_argument("--max-while-objects", type=float, required=True)
     parsers.env.add_argument("--num-excluded-objects", type=int, required=True)
-    parsers.env.add_argument("--time-to-waste", type=int, required=True)
     parsers.agent.add_argument("--debug", action="store_true")
     parsers.agent.add_argument("--no-scan", action="store_true")
     parsers.agent.add_argument("--no-roll", action="store_true")
