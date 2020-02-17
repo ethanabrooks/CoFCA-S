@@ -25,22 +25,24 @@ def gate(g, new, old):
 
 class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
     def __init__(
-        self,
-        hidden_size,
-        conv_hidden_size,
-        gate_coef,
-        gru_gate_coef,
-        num_conv_layers,
-        **kwargs
+<<<<<<< HEAD
+        self, hidden_size, conv_hidden_size, gate_coef, num_conv_layers, **kwargs
+    ):
+=======
+        self, hidden_size, conv_hidden_size, gate_coef, gru_gate_coef, **kwargs
     ):
         self.gru_gate_coef = gru_gate_coef
+>>>>>>> loops
         self.gate_coef = gate_coef
         self.conv_hidden_size = conv_hidden_size
         recurrence.Recurrence.__init__(self, hidden_size=hidden_size, **kwargs)
         abstract_recurrence.Recurrence.__init__(
+<<<<<<< HEAD
             self,
             conv_hidden_size=self.encoder_hidden_size,
             num_conv_layers=num_conv_layers,
+=======
+            self, conv_hidden_size=self.encoder_hidden_size
         )
         self.zeta = init_(
             nn.Linear(
@@ -52,6 +54,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         self.zeta2 = init_(nn.Linear(self.gru_hidden_size, hidden_size))
         self.gru2 = LSTMCell(
             2 * self.encoder_hidden_size + self.ne, self.gru_hidden_size
+>>>>>>> loops
         )
         self.d_gate = Categorical(hidden_size, 2)
         self.a_gate = Categorical(hidden_size, 2)
@@ -95,7 +98,6 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         # parse non-action inputs
         inputs = self.parse_inputs(inputs)
         inputs = inputs._replace(obs=inputs.obs.view(T, N, *self.obs_spaces.obs.shape))
-        nl = len(self.obs_spaces.lines.nvec)
 
         # build memory
         nl = len(self.obs_spaces.lines.nvec)
@@ -104,48 +106,6 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         P = self.build_P(M, N, rnn_hxs.device, nl)
         half = P.size(2) // 2 if self.no_scan else nl
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
-
-        if not new_episode.any():
-            M = self.M
-            P = self.P
-        else:
-            M = self.M = self.embed_task(
-                lines.view(-1, self.obs_spaces.lines.nvec[0].size)
-            ).view(
-                *lines.shape[:2], self.encoder_hidden_size
-            )  # n_batch, n_lines, hidden_size
-            rolled = []
-            for i in range(nl):
-                rolled.append(M if self.no_roll else torch.roll(M, shifts=-i, dims=1))
-            rolled = torch.cat(rolled, dim=0)
-            G, H = self.task_encoder(rolled)
-            H = H.transpose(0, 1).reshape(nl, N, -1)
-            last = torch.zeros(nl, N, 2 * nl, self.ne, device=rnn_hxs.device)
-            last[:, :, -1] = 1
-            if self.no_scan:
-                P = self.beta(H).view(nl, N, -1, self.ne).softmax(2)
-            else:
-                G = G.view(nl, N, nl, 2, self.encoder_hidden_size)
-                B = bb = self.beta(G).sigmoid()
-                # arange = torch.zeros(6).float()
-                # arange[0] = 1
-                # arange[1] = 1
-                # B[:, :, :, 0] = 0  # arange.view(1, 1, -1, 1)
-                # B[:, :, :, 1] = 1
-                f, b = torch.unbind(B, dim=3)
-                B = torch.stack([f, b.flip(2)], dim=-2)
-                B = B.view(nl, N, 2 * nl, self.ne)
-                B = (1 - last).flip(2) * B  # this ensures the first B is 0
-                zero_last = (1 - last) * B
-                B = zero_last + last  # this ensures that the last B is 1
-                rolled = torch.roll(zero_last, shifts=1, dims=2)
-                C = torch.cumprod(1 - rolled, dim=2)
-                P = B * C
-                P = P.view(nl, N, nl, 2, self.ne)
-                f, b = torch.unbind(P, dim=3)
-                P = self.P = torch.cat([b.flip(2), f], dim=2)
-
-        half = P.size(2) // 2
         hx = self.parse_hidden(rnn_hxs)
         for _x in hx:
             _x.squeeze_(0)
@@ -168,11 +128,18 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         for t in range(T):
             self.print("p", p)
             obs = self.preprocess_obs(inputs.obs[t])
+<<<<<<< HEAD
+            obs = obs * M[R, p]
+            x = [obs, self.embed_action(A[t - 1].clone())]
+            h = self.gru(torch.cat(x, dim=-1), h)
+            z = F.relu(self.zeta(h))
+=======
             h = self.gru(obs, h)
             zeta_inputs = [h, M[R, p], self.embed_action(A[t - 1].clone())]
             z = F.relu(self.zeta(torch.cat(zeta_inputs, dim=-1)))
             # then put M back in gru
             # then put A back in gru
+>>>>>>> loops
             d_gate = self.d_gate(z)
             self.sample_new(DG[t], d_gate)
             a_gate = self.a_gate(z)
