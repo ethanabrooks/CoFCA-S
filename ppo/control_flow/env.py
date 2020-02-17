@@ -224,7 +224,7 @@ class Env(gym.Env, ABC):
             lines = [line0] + [Subtask] * (edge_length - 2)
             lines += [EndWhile if line0 is While else EndIf, Subtask]
         else:
-            lines = self.get_lines(
+            lines = self.choose_line_types(
                 n_lines, active_conditions=[], max_nesting_depth=self.max_nesting_depth
             )
         return list(self.assign_line_ids(lines))
@@ -248,7 +248,7 @@ class Env(gym.Env, ABC):
             return line.id
         return self.num_subtasks + self.line_types.index(t)
 
-    def get_lines(
+    def choose_line_types(
         self, n, active_conditions, last=None, nesting_depth=0, max_nesting_depth=None
     ):
         if n < 0:
@@ -278,16 +278,18 @@ class Env(gym.Env, ABC):
                 line_types += [EndIf]
             elif last_condition is While:
                 line_types += [EndWhile]
+            elif last_condition is Loop:
+                line_types += [EndLoop]
         line_type = self.random.choice(line_types)
-        if line_type in [If, While]:
+        if line_type in [If, While, Loop]:
             active_conditions = active_conditions + [line_type]
             nesting_depth += 1
         elif line_type is Else:
             active_conditions = active_conditions[:-1] + [line_type]
-        elif line_type in [EndIf, EndWhile]:
+        elif line_type in [EndIf, EndWhile, EndLoop]:
             active_conditions = active_conditions[:-1]
             nesting_depth -= 1
-        get_lines = self.get_lines(
+        get_lines = self.choose_line_types(
             n - 1,
             active_conditions=active_conditions,
             last=line_type,
@@ -335,11 +337,11 @@ class Env(gym.Env, ABC):
                 yield prev, current  # False: If/Else -> EndIf
                 yield prev, prev + 1  # True: If/Else -> If/Else + 1
                 return
-            elif type(line) is While:
+            elif type(line) in (While, Loop):
                 yield from self.get_transitions(
                     lines_iter, previous + [current]
                 )  # from = While
-            elif type(line) is EndWhile:
+            elif type(line) in (EndWhile, EndLoop):
                 prev = previous[-1]
                 # While
                 yield prev, current + 1  # False: While -> EndWhile + 1
