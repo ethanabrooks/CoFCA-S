@@ -121,7 +121,7 @@ class Env(ppo.control_flow.env.Env):
 
         object_pos = self.populate_world(lines)
         line_iterator = self.line_generator(lines)
-        condition_evaluations = []
+        condition_evaluations = defaultdict(list)
         self.time_remaining = self.time_to_waste
 
         def evaluate_line(l):
@@ -133,7 +133,7 @@ class Env(ppo.control_flow.env.Env):
             else:
                 evaluation = any(o == line.id for o, _ in object_pos)
                 if type(line) in (If, While):
-                    condition_evaluations.append(evaluation)
+                    condition_evaluations[type(line)] += [evaluation]
                 return evaluation
 
         def get_nearest(to):

@@ -1,7 +1,4 @@
-from pathlib import Path
-
 from gym.spaces import Box
-import numpy as np
 from rl_utils import hierarchical_parse_args
 
 import ppo.agent
@@ -13,15 +10,12 @@ from ppo import control_flow
 from ppo.arguments import build_parser
 from ppo.train import Train
 
-NAMES = ["instruction", "actions", "program_counter", "evaluations"]
 
-
-def main(log_dir, seed, eval_lines, one_line, **kwargs):
+def main(log_dir, seed, eval_lines, **kwargs):
     class _Train(Train):
         def build_agent(self, envs, baseline=None, debug=False, **agent_args):
             obs_space = envs.observation_space
-            # agent_args.update(log_dir=log_dir)
-            if baseline == "simple" or one_line:
+            if baseline == "simple":
                 del agent_args["no_scan"]
                 del agent_args["no_roll"]
                 del agent_args["num_encoding_layers"]
@@ -45,62 +39,32 @@ def main(log_dir, seed, eval_lines, one_line, **kwargs):
 
         @staticmethod
         def make_env(
-            seed, rank, evaluation, env_id, add_timestep, gridworld, **env_args
+            seed, rank, evaluation, env_id, add_timestep, world_size, **env_args
         ):
             args = dict(**env_args, eval_lines=eval_lines, seed=seed + rank, rank=rank)
             del args["time_limit"]
-            if one_line:
-                return control_flow.multi_step.one_line.Env(**args)
-            elif not gridworld:
+            if world_size is None:
                 del args["max_while_objects"]
                 del args["num_excluded_objects"]
-                del args["temporal_extension"]
                 return control_flow.env.Env(**args)
             else:
-                del args["temporal_extension"]
-                return control_flow.multi_step.env.Env(**args, world_size=6)
+                return control_flow.multi_step.env.Env(**args, world_size=world_size)
 
-        def process_infos(self, episode_counter, infos):
-            for d in infos:
-                for name in NAMES:
-                    if name in d:
-                        episode_counter[name].append(d.pop(name))
-            super().process_infos(episode_counter, infos)
-
-        def log_result(self, result: dict):
-            for name in NAMES:
-                if name in result:
-                    arrays = [
-                        np.array(x, dtype=int)
-                        for x in result.pop(name)
-                        if x is not None
-                    ]
-                    np.savez(Path(self.log_dir, name), *arrays)
-
-            if "rewards" in result:
-                success = result["rewards"]
-                np.save(Path(self.log_dir, "successes"), success)
-
-            super().log_result(result)
-
-    _Train(**kwargs, seed=seed, log_dir=log_dir, time_limit=None).run()
+    _Train(**kwargs, seed=seed, log_dir=log_dir).run()
 
 
-def control_flow_args():
+def bandit_args():
     parsers = build_parser()
     parser = parsers.main
     parser.add_argument("--no-tqdm", dest="use_tqdm", action="store_false")
+    parser.add_argument("--time-limit", type=int)
     parser.add_argument("--eval-steps", type=int)
     parser.add_argument("--eval-lines", type=int, required=True)
     parser.add_argument("--no-eval", action="store_true")
-    parser.add_argument("--one-line", action="store_true")
     ppo.control_flow.env.build_parser(parsers.env)
-    parsers.env.add_argument("--gridworld", action="store_true")
-    parsers.env.add_argument(
-        "--no-temporal-extension", dest="temporal_extension", action="store_false"
-    )
-    parsers.env.add_argument("--max-while-objects", type=float, default=2)
-    parsers.env.add_argument("--num-excluded-objects", type=int, default=2)
+    parsers.env.add_argument("--world-size", type=int)
+    parsers.env.add_argument("--max-while-objects", type=float, required=True)
+    parsers.env.add_argument("--num-excluded-objects", type=int, required=True)
     parsers.agent.add_argument("--debug", action="store_true")
     parsers.agent.add_argument("--no-scan", action="store_true")
     parsers.agent.add_argument("--no-roll", action="store_true")
@@ -116,4 +80,4 @@ def control_flow_args():
 
 
 if __name__ == "__main__":
-    main(**hierarchical_parse_args(control_flow_args()))
+    main(**hierarchical_parse_args(bandit_args()))
