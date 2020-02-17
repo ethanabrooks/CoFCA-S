@@ -408,32 +408,10 @@ class Env(gym.Env, ABC):
     def print_obs(obs):
         print(obs)
 
-    def get_task_info(self, lines):
-        num_if = lines.count(If)
-        num_else = lines.count(Else)
-        num_while = lines.count(While)
-        num_subtask = lines.count(lambda l: type(l) is Subtask)
-        i = dict(
-            if_lines=num_if,
-            else_lines=num_else,
-            while_lines=num_while,
-            nesting_depth=self.get_nesting_depth(lines),
-            num_edges=2 * (num_if + num_else + num_while) + num_subtask,
-        )
-        keys = {
-            (If, EndIf): "if clause length",
-            (If, Else): "if-else clause length",
-            (Else, EndIf): "else clause length",
-            (While, EndWhile): "while clause length",
-        }
-        for k, v in self.average_interval(lines):
-            i[keys[k]] = v
-        return i
-
     @staticmethod
     def average_interval(lines):
         intervals = defaultdict(lambda: [None])
-        pairs = [(If, EndIf), (While, EndWhile)]
+        pairs = [(If, EndIf), (While, EndWhile), (Loop, EndLoop)]
         if Else in lines:
             pairs.extend([(If, Else), (Else, EndIf)])
         for line in lines:
@@ -455,11 +433,7 @@ class Env(gym.Env, ABC):
         max_depth = 0
         depth = 0
         for line in lines:
-            if type(line) in [If, While]:
-                depth += 1
-            if type(line) in [EndIf, EndWhile]:
-                depth -= 1
-            max_depth = max(depth, max_depth)
+            max_depth = max(line.depth_change, max_depth)
         return max_depth
 
     def seed(self, seed=None):
