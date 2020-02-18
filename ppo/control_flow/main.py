@@ -9,6 +9,7 @@ import ppo.control_flow.agent
 import ppo.control_flow.env
 import ppo.control_flow.multi_step.env
 import ppo.control_flow.multi_step.minimal
+import ppo.control_flow.multi_step.one_line
 from ppo import control_flow
 from ppo.arguments import build_parser
 from ppo.train import Train
