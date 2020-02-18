@@ -8,7 +8,18 @@ from rl_utils import hierarchical_parse_args
 import ppo.control_flow.env
 from ppo import keyboard_control
 from ppo.control_flow.env import build_parser, State
-from ppo.control_flow.lines import Subtask, Padding, Line, While, If, EndWhile, Else
+from ppo.control_flow.lines import (
+    Subtask,
+    Padding,
+    Line,
+    While,
+    If,
+    EndWhile,
+    Else,
+    EndIf,
+    Loop,
+    EndLoop,
+)
 
 
 class Env(ppo.control_flow.env.Env):
@@ -28,14 +39,17 @@ class Env(ppo.control_flow.env.Env):
 
     def __init__(
         self,
-        world_size,
         max_while_objects,
         num_subtasks,
         num_excluded_objects,
+        temporal_extension,
+        world_size=6,
         **kwargs,
     ):
+        self.temporal_extension = temporal_extension
         self.num_excluded_objects = num_excluded_objects
         self.max_while_objects = max_while_objects
+        self.loops = None
 
         def subtasks():
             for obj in self.objects:
@@ -190,7 +204,10 @@ class Env(ppo.control_flow.env.Env):
             else:
                 nearest = get_nearest(obj)
                 if nearest is not None:
-                    agent_pos += np.clip(nearest - agent_pos, -1, 1)
+                    delta = nearest - agent_pos
+                    if self.temporal_extension:
+                        delta = np.clip(delta, -1, 1)
+                    agent_pos += delta
                 elif correct_id and obj not in possible_objects:
                     # subtask is impossible
                     prev, ptr = ptr, None
@@ -223,6 +240,7 @@ class Env(ppo.control_flow.env.Env):
                 if num_obj:
                     pos = self.random.randint(0, self.world_size, size=(num_obj, 2))
                     object_pos += [(obj, tuple(p)) for p in pos]
+
         return object_pos
 
     def assign_line_ids(self, lines):

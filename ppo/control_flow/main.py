@@ -54,10 +54,8 @@ def main(log_dir, seed, eval_lines, one_line, **kwargs):
             elif not gridworld:
                 del args["max_while_objects"]
                 del args["num_excluded_objects"]
-                del args["temporal_extension"]
                 return control_flow.env.Env(**args)
             else:
-                del args["temporal_extension"]
                 return control_flow.multi_step.env.Env(**args, world_size=6)
 
         def process_infos(self, episode_counter, infos):
