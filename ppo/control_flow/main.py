@@ -8,7 +8,7 @@ import ppo.agent
 import ppo.control_flow.agent
 import ppo.control_flow.env
 import ppo.control_flow.multi_step.env
-import ppo.control_flow.multi_step.simple
+import ppo.control_flow.multi_step.minimal
 from ppo import control_flow
 from ppo.arguments import build_parser
 from ppo.train import Train
@@ -29,7 +29,7 @@ def main(log_dir, seed, eval_lines, one_line, **kwargs):
                 del agent_args["gate_coef"]
                 del agent_args["no_op_coef"]
                 del agent_args["use_conv"]
-                return ppo.control_flow.multi_step.simple.Agent(
+                return ppo.control_flow.multi_step.minimal.Agent(
                     observation_space=obs_space,
                     action_space=envs.action_space,
                     **agent_args,
