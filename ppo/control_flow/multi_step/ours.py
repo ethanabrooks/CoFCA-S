@@ -29,9 +29,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         self.conv_hidden_size = conv_hidden_size
         recurrence.Recurrence.__init__(self, hidden_size=hidden_size, **kwargs)
         abstract_recurrence.Recurrence.__init__(
-            self,
-            conv_hidden_size=self.encoder_hidden_size,
-            num_conv_layers=num_conv_layers,
+            self, conv_hidden_size=conv_hidden_size, num_conv_layers=num_conv_layers
         )
         self.linear1 = nn.Sequential(
             init_(nn.Linear(self.encoder_hidden_size, self.conv_hidden_size)), nn.ReLU()
@@ -100,19 +98,19 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         for t in range(T):
             self.print("p", p)
             obs = self.preprocess_obs(inputs.obs[t])
-            obs = obs * M[R, p]
-            x = [obs, self.embed_action(A[t - 1].clone())]
-            h = self.gru(torch.cat(x, dim=-1), h)
-            z = F.relu(self.zeta(h))
-            d_gate = self.d_gate(z)
-            self.sample_new(DG[t], d_gate)
-            a_gate = self.a_gate(z)
-            self.sample_new(AG[t], a_gate)
+            # obs = obs * self.linear1(M[R, p])
+            # x = [obs, self.embed_action(A[t - 1].clone())]
+            # h = self.gru(torch.cat(x, dim=-1), h)
+            # z = F.relu(self.zeta(h))
+            # d_gate = self.d_gate(z)
+            # self.sample_new(DG[t], d_gate)
+            # a_gate = self.a_gate(z)
+            # self.sample_new(AG[t], a_gate)
             DG[t] = 1  # TODO
             AG[t] = 1  # TODO
 
-            obs = self.linear2(obs * self.linear1(M[R, p]))
             self.print(obs * self.linear1(M[R, p]))
+            obs = self.linear2(obs * self.linear1(M[R, p]))
             x = [obs, M[R, p]]
             self.print("obs", obs)
             h2_ = self.gru2(torch.cat(x, dim=-1), h2)
@@ -145,8 +143,8 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 a_probs=a_dist.probs,
                 d=D[t],
                 d_probs=d_dist.probs,
-                ag_probs=a_gate.probs,
-                dg_probs=d_gate.probs,
+                ag_probs=hx.ag_probs,  # a_gate.probs,
+                dg_probs=hx.dg_probs,  # d_gate.probs,
                 ag=ag,
                 dg=dg,
             )
