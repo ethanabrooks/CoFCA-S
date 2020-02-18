@@ -121,6 +121,27 @@ class Env(ppo.control_flow.env.Env):
                 self.objects.index(line.id) + 1,
             ]
 
+    def world_array(self, object_pos, agent_pos):
+        world = np.zeros(self.world_shape)
+        for o, p in object_pos + [(self.agent, agent_pos)]:
+            p = np.array(p)
+            world[tuple((self.world_objects.index(o), *p))] = 1
+        return world
+
+    @staticmethod
+    def evaluate_line(line, object_pos, condition_evaluations):
+        if line is None:
+            return None
+        elif type(line) is Loop:
+            return loops > 0
+        if type(line) is Subtask:
+            return 1
+        else:
+            evaluation = any(o == line.id for o, _ in object_pos)
+            if type(line) in (If, While):
+                condition_evaluations += [evaluation]
+            return evaluation
+
     def state_generator(self, lines) -> State:
         assert self.max_nesting_depth == 1
         agent_pos = self.random.randint(0, self.world_size, size=2)
