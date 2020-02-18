@@ -112,7 +112,9 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             AG[t] = 1  # TODO
 
             obs = self.linear2(obs * self.linear1(M[R, p]))
+            self.print(obs * self.linear1(M[R, p]))
             x = [obs, M[R, p]]
+            self.print("obs", obs)
             h2_ = self.gru2(torch.cat(x, dim=-1), h2)
             z = F.relu(self.zeta(h2_))
             u = self.upsilon(z).softmax(dim=-1)
@@ -120,10 +122,10 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             w = P[p, R]
             d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
             dg = DG[t].unsqueeze(-1).float()
-            self.print("dg prob", d_gate.probs[:, 1])
-            self.print("dg", dg)
+            # self.print("dg prob", d_gate.probs[:, 1])
+            # self.print("dg", dg)
             d_dist = gate(dg, d_probs, ones * half)
-            self.print("d_probs", d_probs[:, half:])
+            # self.print("d_probs", d_probs[:, half:])
             self.sample_new(D[t], d_dist)
             p = p + D[t].clone() - half
             p = torch.clamp(p, min=0, max=M.size(1) - 1)
@@ -131,8 +133,8 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             ag = AG[t].unsqueeze(-1).float()
             a_dist = gate(ag, self.actor(z).probs, A[t - 1])
             self.sample_new(A[t], a_dist)
-            self.print("ag prob", a_gate.probs[:, 1])
-            self.print("ag", ag)
+            # self.print("ag prob", a_gate.probs[:, 1])
+            # self.print("ag", ag)
             h2 = dg * h2_ + (1 - dg) * h2
             yield RecurrentState(
                 a=A[t],
