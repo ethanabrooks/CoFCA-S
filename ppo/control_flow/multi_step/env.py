@@ -92,7 +92,7 @@ class Env(ppo.control_flow.env.Env):
 
     @functools.lru_cache(maxsize=200)
     def preprocess_line(self, line):
-        if line is Padding:
+        if type(line) is Padding:
             return [self.line_types.index(Padding), 0, 0]
         elif type(line) is Else:
             return [self.line_types.index(Else), 0, 0]

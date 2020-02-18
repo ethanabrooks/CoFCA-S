@@ -403,7 +403,7 @@ class Env(gym.Env, ABC):
                 prev, ptr = ptr, next_subtask()
 
     def get_observation(self, obs, active, lines):
-        padded = lines + [Padding] * (self.n_lines - len(lines))
+        padded = lines + [Padding(0)] * (self.n_lines - len(lines))
         lines = [self.preprocess_line(p) for p in padded]
         return Obs(
             obs=obs, lines=lines, active=self.n_lines if active is None else active
