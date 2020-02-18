@@ -74,6 +74,7 @@ class Env(ppo.control_flow.env.Env):
                             len(self.line_types),
                             1 + len(self.interactions),
                             1 + len(self.objects),
+                            1 + self.max_loops,
                         ]
                     ]
                     * self.n_lines
@@ -106,20 +107,23 @@ class Env(ppo.control_flow.env.Env):
 
     @functools.lru_cache(maxsize=200)
     def preprocess_line(self, line):
-        if type(line) is Padding:
-            return [self.line_types.index(Padding), 0, 0]
-        elif type(line) is Else:
-            return [self.line_types.index(Else), 0, 0]
+        if type(line) in (Else, EndIf, EndWhile, EndLoop, Padding):
+            return [self.line_types.index(type(line)), 0, 0, 0]
+        elif type(line) is Loop:
+            return [self.line_types.index(Loop), 0, 0, line.id]
         elif type(line) is Subtask:
             i, o = line.id
             i, o = self.interactions.index(i), self.objects.index(o)
-            return [self.line_types.index(Subtask), i + 1, o + 1]
-        else:
+            return [self.line_types.index(Subtask), i + 1, o + 1, 0]
+        elif type(line) in (While, If):
             return [
                 self.line_types.index(type(line)),
                 0,
                 self.objects.index(line.id) + 1,
+                0,
             ]
+        else:
+            raise RuntimeError()
 
     def world_array(self, object_pos, agent_pos):
         world = np.zeros(self.world_shape)
@@ -148,7 +152,7 @@ class Env(ppo.control_flow.env.Env):
         object_pos = self.populate_world(lines)
         line_iterator = self.line_generator(lines)
         condition_evaluations = []
-        self.time_remaining = self.time_to_waste
+        self.time_remaining = 200 if self.evaluating else self.time_to_waste
         self.loops = None
 
         def get_nearest(to):
