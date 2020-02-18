@@ -21,7 +21,7 @@ def main(log_dir, seed, eval_lines, one_line, **kwargs):
     class _Train(Train):
         def build_agent(self, envs, baseline=None, debug=False, **agent_args):
             obs_space = envs.observation_space
-            # agent_args.update(log_dir=log_dir)
+            agent_args.update(log_dir=log_dir)
             if baseline == "simple" or one_line:
                 del agent_args["no_scan"]
                 del agent_args["no_roll"]
