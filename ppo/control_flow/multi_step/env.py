@@ -129,7 +129,7 @@ class Env(ppo.control_flow.env.Env):
         return world
 
     @staticmethod
-    def evaluate_line(line, object_pos, condition_evaluations):
+    def evaluate_line(line, object_pos, condition_evaluations, loops):
         if line is None:
             return None
         elif type(line) is Loop:
@@ -139,7 +139,7 @@ class Env(ppo.control_flow.env.Env):
         else:
             evaluation = any(o == line.id for o, _ in object_pos)
             if type(line) in (If, While):
-                condition_evaluations += [evaluation]
+                condition_evaluations.append(evaluation)
             return evaluation
 
     def state_generator(self, lines) -> State:
@@ -168,9 +168,24 @@ class Env(ppo.control_flow.env.Env):
                 return min(candidates, key=lambda k: np.sum(np.abs(agent_pos - k)))
 
         def next_subtask(l):
-            l = line_iterator.send(evaluate_line(l))
-            while not (l is None or type(lines[l]) is Subtask):
-                l = line_iterator.send(evaluate_line(l))
+            while True:
+                if l is None:
+                    l = line_iterator.send(None)
+                else:
+                    if type(lines[l]) is Loop:
+                        if self.loops is None:
+                            self.loops = lines[l].id
+                        else:
+                            self.loops -= 1
+                    l = line_iterator.send(
+                        self.evaluate_line(
+                            lines[l], object_pos, condition_evaluations, self.loops
+                        )
+                    )
+                    if self.loops == 0:
+                        self.loops = None
+                if l is None or type(lines[l]) is Subtask:
+                    break
             if l is not None:
                 assert type(lines[l]) is Subtask
                 _, o = lines[l].id
