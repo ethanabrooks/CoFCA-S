@@ -236,13 +236,31 @@ class Env(ppo.control_flow.env.Env):
         ]
         while_blocks = defaultdict(list)  # while line: child subtasks
         active_whiles = []
-        for interaction, line in enumerate(lines):
+        active_loops = []
+        loop_obj = []
+        loop_count = 0
+        for i, line in enumerate(lines):
             if type(line) is While:
-                active_whiles += [interaction]
+                active_whiles += [i]
             elif type(line) is EndWhile:
                 active_whiles.pop()
-            elif active_whiles and type(line) is Subtask:
-                while_blocks[active_whiles[-1]] += [interaction]
+            elif type(line) is Loop:
+                active_loops += [line]
+            elif type(line) is EndLoop:
+                active_loops.pop()
+            elif type(line) is Subtask:
+                if active_whiles:
+                    while_blocks[active_whiles[-1]] += [i]
+                if active_loops:
+                    _i, _o = line.id
+                    loop_num = active_loops[-1].id
+                    loop_obj += [(_o, loop_num)]
+                    loop_count += loop_num
+
+        pos = self.random.randint(0, self.world_size, size=(loop_count, 2))
+        obj = (o for o, c in loop_obj for _ in range(c))
+        object_pos += [(o, tuple(p)) for o, p in zip(obj, pos)]
+
         for while_line, block in while_blocks.items():
             obj = lines[while_line].id
             l = self.random.choice(block)
@@ -278,6 +296,8 @@ class Env(ppo.control_flow.env.Env):
                     included_objects[object_id],
                 )
                 yield Subtask(subtask_id)
+            elif line is Loop:
+                yield Loop(self.random.randint(1, 1 + self.max_loops))
             else:
                 yield line(self.objects[line_id])
 
