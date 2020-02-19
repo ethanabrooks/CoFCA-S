@@ -32,7 +32,8 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             self, conv_hidden_size=conv_hidden_size, num_conv_layers=num_conv_layers
         )
         self.linear1 = nn.Sequential(
-            init_(nn.Linear(self.encoder_hidden_size, self.conv_hidden_size)), nn.ReLU()
+            init_(nn.Linear(self.encoder_hidden_size, self.conv_hidden_size)),
+            nn.Sigmoid(),
         )
         self.linear2 = nn.Sequential(
             init_(nn.Linear(self.conv_hidden_size, 1)), nn.Sigmoid()
@@ -109,6 +110,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             DG[t] = 1  # TODO
             AG[t] = 1  # TODO
 
+            self.print("obs", obs)
             self.print(obs * self.linear1(M[R, p]))
             obs = self.linear2(obs * self.linear1(M[R, p]))
             x = [obs, M[R, p]]

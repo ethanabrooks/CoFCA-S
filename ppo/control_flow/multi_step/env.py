@@ -311,6 +311,4 @@ if __name__ == "__main__":
         except ValueError:
             return
 
-    keyboard_control.run(
-        Env(**ARGS), action_fn=action_fn,
-    )
+    keyboard_control.run(Env(**ARGS), action_fn=action_fn)
