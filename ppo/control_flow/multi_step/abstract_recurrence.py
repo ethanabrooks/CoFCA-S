@@ -57,5 +57,7 @@ class Recurrence:
         )  # n_batch, n_lines, hidden_size
 
     def preprocess_obs(self, obs):
-        N = obs.size(0)
-        return self.conv(obs).view(N, -1)
+        return obs.sum(-1).sum(-1).repeat(1, 2)
+
+        # N = obs.size(0)
+        # return self.conv(obs).view(N, -1)
