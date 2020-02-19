@@ -67,7 +67,7 @@ def main(log_dir, seed, eval_lines, one_line, **kwargs):
             super().process_infos(episode_counter, infos)
 
         def log_result(self, result: dict):
-            for name in NAMES:
+            for name in NAMES + ["eval_" + n for n in NAMES]:
                 if name in result:
                     arrays = [
                         np.array(x, dtype=int)
