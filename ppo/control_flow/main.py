@@ -94,7 +94,7 @@ def control_flow_args():
     parser.add_argument("--no-eval", action="store_true")
     parser.add_argument("--one-line", action="store_true")
     ppo.control_flow.env.build_parser(parsers.env)
-    parsers.env.add_argument("--multi_step", action="store_true")
+    parsers.env.add_argument("--gridworld", action="store_true")
     parsers.env.add_argument(
         "--no-temporal-extension", dest="temporal_extension", action="store_false"
     )
