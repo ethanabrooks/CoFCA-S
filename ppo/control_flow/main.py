@@ -67,7 +67,7 @@ def main(log_dir, seed, eval_lines, one_line, **kwargs):
             super().process_infos(episode_counter, infos)
 
         def log_result(self, result: dict):
-            for name in NAMES:
+            for name in NAMES + ["eval_" + n for n in NAMES]:
                 if name in result:
                     arrays = [
                         np.array(x, dtype=int)
@@ -105,10 +105,12 @@ def control_flow_args():
     parsers.agent.add_argument("--no-roll", action="store_true")
     parsers.agent.add_argument("--baseline")
     parsers.agent.add_argument("--conv-hidden-size", type=int, required=True)
+    parsers.agent.add_argument("--gru-hidden-size", type=int, required=True)
     parsers.agent.add_argument("--encoder-hidden-size", type=int, required=True)
     parsers.agent.add_argument("--num-encoding-layers", type=int, required=True)
     parsers.agent.add_argument("--num-edges", type=int, required=True)
     parsers.agent.add_argument("--gate-coef", type=float, required=True)
+    parsers.agent.add_argument("--gru-gate-coef", type=float, required=True)
     parsers.agent.add_argument("--no-op-coef", type=float, required=True)
     return parser
 

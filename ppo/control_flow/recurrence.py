@@ -11,7 +11,7 @@ from ppo.control_flow.env import Obs
 from ppo.distributions import Categorical, FixedCategorical
 from ppo.utils import init_
 
-RecurrentState = namedtuple("RecurrentState", "a d p v h a_probs d_probs")
+RecurrentState = namedtuple("RecurrentState", "a d u p v h a_probs d_probs")
 
 
 def get_obs_sections(obs_spaces):
@@ -27,6 +27,7 @@ class Recurrence(nn.Module):
         activation,
         hidden_size,
         encoder_hidden_size,
+        gru_hidden_size,
         num_layers,
         num_edges,
         num_encoding_layers,
@@ -44,6 +45,7 @@ class Recurrence(nn.Module):
         self.debug = debug
         self.hidden_size = hidden_size
         self.encoder_hidden_size = encoder_hidden_size
+        self.gru_hidden_size = gru_hidden_size
 
         self.obs_sections = get_obs_sections(self.obs_spaces)
         self.eval_lines = eval_lines
@@ -61,11 +63,13 @@ class Recurrence(nn.Module):
             bidirectional=True,
             batch_first=True,
         )
-        self.gru = nn.GRUCell(self.gru_in_size, hidden_size)
+        self.gru = nn.GRUCell(self.gru_in_size, gru_hidden_size)
 
         layers = []
+        in_size = gru_hidden_size + 1
         for _ in range(num_layers):
-            layers.extend([init_(nn.Linear(hidden_size, hidden_size)), activation])
+            layers.extend([init_(nn.Linear(in_size, hidden_size)), activation])
+            in_size = hidden_size
         self.zeta = nn.Sequential(*layers)
         self.upsilon = init_(nn.Linear(hidden_size, self.ne))
 
@@ -79,7 +83,14 @@ class Recurrence(nn.Module):
         self.critic = init_(nn.Linear(hidden_size, 1))
         self.actor = Categorical(hidden_size, n_a)
         self.state_sizes = RecurrentState(
-            a=1, a_probs=n_a, d=1, d_probs=2 * self.train_lines, p=1, v=1, h=hidden_size
+            a=1,
+            a_probs=n_a,
+            d=1,
+            d_probs=2 * self.train_lines,
+            u=self.ne,
+            p=1,
+            v=1,
+            h=gru_hidden_size,
         )
 
     def build_embed_task(self, hidden_size):
@@ -87,7 +98,7 @@ class Recurrence(nn.Module):
 
     @property
     def gru_in_size(self):
-        return 1 + self.hidden_size + self.encoder_hidden_size
+        return self.encoder_hidden_size + self.ne
 
     # noinspection PyProtectedMember
     @contextmanager
@@ -184,6 +195,16 @@ class Recurrence(nn.Module):
             P = torch.cat([b.flip(2), f], dim=2)
         return P
 
+    def build_memory(self, N, T, inputs):
+        lines = inputs.lines.view(T, N, self.obs_sections.lines).long()[0]
+        return self.embed_task(lines.view(-1)).view(
+            *lines.shape, self.encoder_hidden_size
+        )  # n_batch, n_lines, hidden_size
+
+    @staticmethod
+    def preprocess_obs(obs):
+        return obs.unsqueeze(-1)
+
     def inner_loop(self, inputs, rnn_hxs):
         T, N, dim = inputs.shape
         inputs, actions = torch.split(
@@ -207,6 +228,8 @@ class Recurrence(nn.Module):
         p = hx.p.long().squeeze(-1)
         a = hx.a.long().squeeze(-1)
         a[new_episode] = 0
+        u = hx.u
+        d = hx.d
         R = torch.arange(N, device=rnn_hxs.device)
         A = torch.cat([actions[:, :, 0], hx.a.view(1, N)], dim=0).long()
         D = torch.cat([actions[:, :, 1], hx.d.view(1, N)], dim=0).long()
@@ -214,9 +237,8 @@ class Recurrence(nn.Module):
         for t in range(T):
             self.print("p", p)
             obs = inputs.obs[t]
-            x = [obs, M[R, p], self.embed_action(A[t - 1].clone())]
-            h = self.gru(torch.cat(x, dim=-1), h)
-            z = F.relu(self.zeta(h))
+            h = self.gru(torch.cat([M[R, p], u], dim=-1), h)
+            z = F.relu(self.zeta(torch.cat([obs, h], dim=-1)))
             a_dist = self.actor(z)
             self.sample_new(A[t], a_dist)
             u = self.upsilon(z).softmax(dim=-1)
@@ -231,13 +253,15 @@ class Recurrence(nn.Module):
             n_p = d_dist.probs.size(-1)
             p = p + D[t].clone() - n_p // 2
             p = torch.clamp(p, min=0, max=M.size(1) - 1)
+            d = D[t]
             yield RecurrentState(
                 a=A[t],
+                u=u,
                 v=self.critic(z),
                 h=h,
                 p=p,
                 a_probs=a_dist.probs,
-                d=D[t],
+                d=d,
                 d_probs=d_dist.probs,
             )
 
