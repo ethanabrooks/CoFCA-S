@@ -294,30 +294,41 @@ class Train(abc.ABC):
         iterator = range(num_steps)
         if use_tqdm:
             iterator = tqdm(iterator, desc="evaluating")
+
         for step in iterator:
             with torch.no_grad():
                 act = self.agent(
                     inputs=obs, rnn_hxs=rnn_hxs, masks=masks
                 )  # type: AgentValues
 
-            
 
             # Observe reward and next obs
             obs, reward, done, infos = self.envs.step(act.action)
             #print("action: ", act.action, "obs: ", obs, " rew: ", reward, " done: ", done, " infos: ", infos)
+            #print("Count: ", count)
 
             
             
             for d in infos:
                 for k, v in d.items():
                     episode_counter.update({k: float(v) / num_steps / len(infos)})
+
             
             # track rewards
             counter["reward"] += reward.numpy()
+            counter["reward"] = counter['reward'] >= 1.0
+            counter["reward"] = counter["reward"].astype(float)
+            #print(counter['reward'])
+            #print(episode_counter)
             counter["time_step"] += np.ones_like(done)
             episode_rewards = counter["reward"][done]
-            episode_counter["rewards"] += list(episode_rewards)
+            #episode_counter["rewards"] += list(episode_rewards)
+            episode_counter["rewards"] = list(counter["reward"])
+            #print(episode_counter["rewards"])
+            #print(episode_counter["rewards"])
 
+            #print(counter["reward"])
+            #print("Episode rewards", episode_counter[])
             if success_reward is not None:
                 # noinspection PyTypeChecker
                 episode_counter["success"] += list(episode_rewards >= success_reward)
@@ -344,12 +355,14 @@ class Train(abc.ABC):
                     rewards=reward,
                     masks=masks,
                 )
-        print("Reward average: ", np.mean(episode_counter['rewards']))
-        print("Log probs: ", act.action_log_probs)
-        print("Masks: ", masks)
-        print("rnn_hxs: ", act.rnn_hxs)
-        print("Values: ", act.value)
-        print(episode_counter)
+        #print("Reward average: ", np.mean(episode_counter['rewards']))
+        #print("Reward sum: ", np.sum(episode_counter['rewards']))
+        #print("Log probs: ", act.action_log_probs)
+        #print("Masks: ", masks)
+        #print("rnn_hxs: ", act.rnn_hxs)
+        #print("Values: ", act.value)
+        #print("Len: ",len(episode_counter['rewards']))
+        print("Rewards: ", episode_counter)
         return dict(episode_counter)
 
     @staticmethod
