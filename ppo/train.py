@@ -274,6 +274,7 @@ class Train(abc.ABC):
                 # print(f"Writing to {self.logdir}")
                 fps = total_num_steps / (time.time() - tick)
                 tick = time.time()
+
                 yield dict(
                     k_scalar_pairs(
                         tick=tick,
@@ -331,8 +332,7 @@ class Train(abc.ABC):
             episode_counter["time_steps"] += list(counter["time_step"][done])
             counter["reward"][done] = 0
             counter["time_step"][done] = 0
-            #print("TIme counter step ppo: ", counter["time_step"])
-            #print("Episode counter time step: ", episode_counter["time_steps"])
+
            
 
             # If done then clean the history of observations.
@@ -350,7 +350,8 @@ class Train(abc.ABC):
                     rewards=reward,
                     masks=masks,
                 )
-
+        print("Reward average: ", np.mean(episode_counter['rewards']))
+        print(episode_counter)
         return dict(episode_counter)
 
     @staticmethod
@@ -472,8 +473,8 @@ class Train(abc.ABC):
         self.agent.load_state_dict(state_dict["agent"])
         self.ppo.optimizer.load_state_dict(state_dict["optimizer"])
         self.i = state_dict.get("step", -1) + 1
-        # if isinstance(self.envs.venv, VecNormalize):
-        #     self.envs.venv.load_state_dict(state_dict["vec_normalize"])
+        #if isinstance(self.envs.venv, VecNormalize):
+        #    self.envs.venv.load_state_dict(state_dict["vec_normalize"])
         print(f"Loaded parameters from {load_path}.")
 
     @abc.abstractmethod
