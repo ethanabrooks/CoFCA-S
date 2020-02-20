@@ -303,11 +303,9 @@ class Train(abc.ABC):
             
 
             # Observe reward and next obs
-            #print("PPO action: ", act.action)
-            #print("PPO num steps: ", num_steps) 
             obs, reward, done, infos = self.envs.step(act.action)
             #print("action: ", act.action, "obs: ", obs, " rew: ", reward, " done: ", done, " infos: ", infos)
-            #print("reward: ", reward)
+
             
             
             for d in infos:
@@ -319,15 +317,11 @@ class Train(abc.ABC):
             counter["time_step"] += np.ones_like(done)
             episode_rewards = counter["reward"][done]
             episode_counter["rewards"] += list(episode_rewards)
-            #if done[0]:
-            #    print("Time step: ", counter["time_step"],  "episode_rewards = ", episode_rewards, " done: ", done)
+
             if success_reward is not None:
                 # noinspection PyTypeChecker
                 episode_counter["success"] += list(episode_rewards >= success_reward)
-                # if np.any(episode_rewards < self.success_reward):
-                #     import ipdb
-                #
-                #     ipdb.set_trace()
+
 
             episode_counter["time_steps"] += list(counter["time_step"][done])
             counter["reward"][done] = 0
@@ -351,6 +345,10 @@ class Train(abc.ABC):
                     masks=masks,
                 )
         print("Reward average: ", np.mean(episode_counter['rewards']))
+        print("Log probs: ", act.action_log_probs)
+        print("Masks: ", masks)
+        print("rnn_hxs: ", act.rnn_hxs)
+        print("Values: ", act.value)
         print(episode_counter)
         return dict(episode_counter)
 
