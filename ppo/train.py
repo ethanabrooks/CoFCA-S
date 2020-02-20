@@ -48,7 +48,7 @@ def hierarchical_parse_args(parser: argparse.ArgumentParser,
     #"--use-dof", "wrist_roll_joint", "--use-dof", "slide_x", "--use-dof", "slide_y", "--render","--n-blocks=1"])
     args = parser.parse_args(["--block-space", "(0,0)(0,0)(0.418,0.418)(1,1)(0,0)(0,0)(0,0)", "--steps-per-action=30", "--geofence=.5", "--goal-space", \
         "(0,0)(0,0)(.418,.418)", "--use-dof", "arm_flex_joint", "--use-dof", "hand_l_proximal_joint", "--use-dof", "hand_r_proximal_joint", "--use-dof", \
-            "wrist_flex_joint", "--use-dof", "arm_roll_joint", "--use-dof", "wrist_roll_joint", "--use-dof", "slide_x", "--use-dof", "slide_y","--n-blocks=1", "--render-freq=1"]) 
+            "wrist_flex_joint", "--use-dof", "arm_roll_joint", "--use-dof", "wrist_roll_joint", "--use-dof", "slide_x", "--use-dof", "slide_y","--n-blocks=1"]) 
 
 
     def key_value_pairs(group):
@@ -206,7 +206,7 @@ class Train(abc.ABC):
             # if vec_norm is not None:
             #     vec_norm.eval()
             #     vec_norm.ob_rms = get_vec_normalize(envs).ob_rmsi
-            self.envs.evaluate()
+            #self.envs.evaluate()
             eval_recurrent_hidden_states = torch.zeros(
                 num_processes,
                 self.agent.recurrent_hidden_state_size,
@@ -274,6 +274,7 @@ class Train(abc.ABC):
                 # print(f"Writing to {self.logdir}")
                 fps = total_num_steps / (time.time() - tick)
                 tick = time.time()
+
                 yield dict(
                     k_scalar_pairs(
                         tick=tick,
@@ -331,8 +332,7 @@ class Train(abc.ABC):
             episode_counter["time_steps"] += list(counter["time_step"][done])
             counter["reward"][done] = 0
             counter["time_step"][done] = 0
-            #print("TIme counter step ppo: ", counter["time_step"])
-            #print("Episode counter time step: ", episode_counter["time_steps"])
+
            
 
             # If done then clean the history of observations.
@@ -350,7 +350,8 @@ class Train(abc.ABC):
                     rewards=reward,
                     masks=masks,
                 )
-
+        print("Reward average: ", np.mean(episode_counter['rewards']))
+        print(episode_counter)
         return dict(episode_counter)
 
     @staticmethod
@@ -472,8 +473,8 @@ class Train(abc.ABC):
         self.agent.load_state_dict(state_dict["agent"])
         self.ppo.optimizer.load_state_dict(state_dict["optimizer"])
         self.i = state_dict.get("step", -1) + 1
-        # if isinstance(self.envs.venv, VecNormalize):
-        #     self.envs.venv.load_state_dict(state_dict["vec_normalize"])
+        #if isinstance(self.envs.venv, VecNormalize):
+        #    self.envs.venv.load_state_dict(state_dict["vec_normalize"])
         print(f"Loaded parameters from {load_path}.")
 
     @abc.abstractmethod
