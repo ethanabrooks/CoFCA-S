@@ -380,14 +380,14 @@ class Train(abc.ABC):
         hsr.util.add_wrapper_args(wrapper_parser)
         args = hierarchical_parse_args(parser)
         env = hsr.util.env_wrapper(get_env)(**args)
-        env.steps_per_episode = num_steps
+        #env.steps_per_episode = num_steps
         #setting up the action with the appropiate bounds
 
 
         env.action_space = spaces.Box(low = -1, high = .1, shape = (4,), dtype = np.float32)
         env.observation_space = spaces.Box(low=-np.inf, high=np.inf,shape = (6,),  dtype = np.float32)
 
-        env = gym.make(env_id)
+        #env = gym.make(env_id)
         is_atari = hasattr(gym.envs, "atari") and isinstanice(
             env.unwrapped, gym.envs.atari.atari_env.AtariEnv
         )
