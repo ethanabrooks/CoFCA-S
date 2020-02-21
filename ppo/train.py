@@ -316,8 +316,8 @@ class Train(abc.ABC):
             
             # track rewards
             counter["reward"] += reward.numpy()
-            counter["reward"] = counter['reward'] >= 1.0
-            counter["reward"] = counter["reward"].astype(float)
+            #counter["reward"] = counter['reward'] >= 1.0
+            #counter["reward"] = counter["reward"].astype(float)
             #print(counter['reward'])
             #print(episode_counter)
             counter["time_step"] += np.ones_like(done)
@@ -380,7 +380,7 @@ class Train(abc.ABC):
         hsr.util.add_wrapper_args(wrapper_parser)
         args = hierarchical_parse_args(parser)
         env = hsr.util.env_wrapper(get_env)(**args)
-        env.steps_per_episode = num_steps
+        #env.steps_per_episode = num_steps
         #setting up the action with the appropiate bounds
 
 
