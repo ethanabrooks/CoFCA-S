@@ -48,7 +48,7 @@ def hierarchical_parse_args(parser: argparse.ArgumentParser,
     #"--use-dof", "wrist_roll_joint", "--use-dof", "slide_x", "--use-dof", "slide_y", "--render","--n-blocks=1"])
     args = parser.parse_args(["--block-space", "(0,0)(0,0)(0.418,0.418)(1,1)(0,0)(0,0)(0,0)", "--steps-per-action=30", "--geofence=.5", "--goal-space", \
         "(0,0)(0,0)(.418,.418)", "--use-dof", "arm_flex_joint", "--use-dof", "hand_l_proximal_joint", "--use-dof", "hand_r_proximal_joint", "--use-dof", \
-            "wrist_flex_joint", "--use-dof", "arm_roll_joint", "--use-dof", "wrist_roll_joint", "--use-dof", "slide_x", "--use-dof", "slide_y","--n-blocks=1", "--render-freq=1"]) 
+            "wrist_flex_joint", "--use-dof", "arm_roll_joint", "--use-dof", "wrist_roll_joint", "--use-dof", "slide_x", "--use-dof", "slide_y","--n-blocks=1"]) 
 
 
     def key_value_pairs(group):
