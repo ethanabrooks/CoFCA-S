@@ -228,7 +228,7 @@ class Env(gym.Env, ABC):
         else:
             n_lines = self.random.random_integers(self.min_lines, self.max_lines)
         if self.eval_condition_size:
-            line0 = self.random.choice([While, If])
+            line0 = self.random.choice([While, If, Loop])
             edge_length = self.random.random_integers(
                 self.max_lines, self.eval_lines - 1
             )
