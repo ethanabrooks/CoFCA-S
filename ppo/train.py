@@ -48,7 +48,7 @@ def hierarchical_parse_args(parser: argparse.ArgumentParser,
     #"--use-dof", "wrist_roll_joint", "--use-dof", "slide_x", "--use-dof", "slide_y", "--render","--n-blocks=1"])
     args = parser.parse_args(["--block-space", "(0,0)(0,0)(0.418,0.418)(1,1)(0,0)(0,0)(0,0)", "--steps-per-action=30", "--geofence=.5", "--goal-space", \
         "(0,0)(0,0)(.418,.418)", "--use-dof", "arm_flex_joint", "--use-dof", "hand_l_proximal_joint", "--use-dof", "hand_r_proximal_joint", "--use-dof", \
-            "wrist_flex_joint", "--use-dof", "arm_roll_joint", "--use-dof", "wrist_roll_joint", "--use-dof", "slide_x", "--use-dof", "slide_y","--n-blocks=1"]) 
+            "wrist_flex_joint", "--use-dof", "arm_roll_joint", "--use-dof", "wrist_roll_joint", "--use-dof", "slide_x", "--use-dof", "slide_y","--n-blocks=1", "--render-freq=1"]) 
 
 
     def key_value_pairs(group):
@@ -321,9 +321,9 @@ class Train(abc.ABC):
             #print(counter['reward'])
             #print(episode_counter)
             counter["time_step"] += np.ones_like(done)
-            #episode_rewards = counter["reward"][done]
-            #episode_counter["rewards"] += list(episode_rewards)
-            episode_counter["rewards"] = list(counter["reward"])
+            episode_rewards = counter["reward"][done]
+            episode_counter["rewards"] += list(episode_rewards)
+            #episode_counter["rewards"] = list(counter["reward"])
             #print(episode_counter["rewards"])
             #print(episode_counter["rewards"])
 
@@ -385,7 +385,7 @@ class Train(abc.ABC):
 
 
         env.action_space = spaces.Box(low = -1, high = .1, shape = (4,), dtype = np.float32)
-        env.observation_space = spaces.Box(low=-np.inf, high=np.inf,shape = (13,),  dtype = np.float32)
+        env.observation_space = spaces.Box(low=-np.inf, high=np.inf,shape = (6,),  dtype = np.float32)
 
         #env = gym.make(env_id)
         is_atari = hasattr(gym.envs, "atari") and isinstanice(
