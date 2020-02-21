@@ -37,7 +37,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         )
         self.zeta = init_(
             nn.Linear(
-                hidden_size + self.gru_hidden_size + self.encoder_hidden_size,
+                hidden_size + self.gru_hidden_size + 2 * self.encoder_hidden_size,
                 hidden_size,
             )
         )
@@ -123,8 +123,8 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         for t in range(T):
             self.print("p", p)
             obs = self.preprocess_obs(inputs.obs[t])
-            h = self.gru(obs, h)
-            zeta_inputs = [h, M[R, p], self.embed_action(A[t - 1].clone())]
+            # h = self.gru(obs, h)
+            zeta_inputs = [h, M[R, p], obs, self.embed_action(A[t - 1].clone())]
             z = F.relu(self.zeta(torch.cat(zeta_inputs, dim=-1)))
             # then put M back in gru
             # then put A back in gru
