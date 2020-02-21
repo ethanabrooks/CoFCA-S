@@ -316,11 +316,12 @@ class Train(abc.ABC):
             
             # track rewards
             counter["reward"] += reward.numpy()
-            
+            counter["reward"] = counter['reward'] >= 1.0
+            counter["reward"] = counter["reward"].astype(float)
             #print(counter['reward'])
             #print(episode_counter)
             counter["time_step"] += np.ones_like(done)
-            episode_rewards = counter["reward"][done]
+            #episode_rewards = counter["reward"][done]
             #episode_counter["rewards"] += list(episode_rewards)
             episode_counter["rewards"] = list(counter["reward"])
             #print(episode_counter["rewards"])
