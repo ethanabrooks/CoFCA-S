@@ -290,6 +290,7 @@ class Train(abc.ABC):
     ):
 
         # noinspection PyTypeChecker
+        test = np.zeros(50)
         episode_counter = Counter(rewards=[], time_steps=[], success=[])
         iterator = range(num_steps)
         if use_tqdm:
@@ -316,7 +317,7 @@ class Train(abc.ABC):
             
             # track rewards
             counter["reward"] += reward.numpy()
-            #counter["reward"] = counter['reward'] >= 1.0
+            test += reward.numpy()
             #counter["reward"] = counter["reward"].astype(float)
             #print(counter['reward'])
             #print(episode_counter)
@@ -362,7 +363,10 @@ class Train(abc.ABC):
         #print("rnn_hxs: ", act.rnn_hxs)
         #print("Values: ", act.value)
         #print("Len: ",len(episode_counter['rewards']))
-        print("Rewards: ", episode_counter)
+        test = test >= 1
+        print("Reward realistic: ", np.mean(test))
+        print("Reward: ", np.mean(episode_counter["rewards"]))
+        #print("Rewards: ", episode_counter)
         return dict(episode_counter)
 
     @staticmethod
