@@ -46,6 +46,14 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         self.state_sizes = RecurrentState(
             **state_sizes, h2=hidden_size, ag_probs=2, dg_probs=2, ag=1, dg=1
         )
+        d = conv_hidden_size
+        debug_embedding = torch.eye(d * 2)
+        self.debug_embedding1 = nn.Embedding.from_pretrained(
+            F.pad(debug_embedding[:d], (0, 0, 1, 0))
+        )
+        self.debug_embedding2 = nn.Embedding.from_pretrained(
+            F.pad(debug_embedding[d:], (0, 0, 1, 0))
+        )
 
     def pack(self, hxs):
         def pack():
@@ -75,6 +83,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         # build memory
         nl = len(self.obs_spaces.lines.nvec)
         M = self.build_memory(N, T, inputs)
+        lines = inputs.lines.view(T, N, *self.obs_spaces.lines.shape)
 
         P = self.build_P(M, N, rnn_hxs.device, nl)
         half = P.size(2) // 2 if self.no_scan else nl
@@ -110,10 +119,21 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             DG[t] = 1  # TODO
             AG[t] = 1  # TODO
 
+            obs = (
+                self.debug_embedding1(lines[t, R, p, 2].long())
+                + self.debug_embedding2(lines[t, R, p, 3].long())
+            ) * obs
             self.print("obs", obs)
-            self.print(obs * self.linear1(M[R, p]))
-            obs = self.linear2(obs * self.linear1(M[R, p]))
+            linear1 = torch.ones_like(obs) * 10
+            linear1[:, : int(linear1.shape[1] / 2)] = -13
+            obs = obs * linear1
+            self.print("obs", obs)
+            obs = obs.sum(-1, keepdim=True).sigmoid().round()
+            # self.print(obs * self.linear1(M[R, p]))
+            # obs = self.linear2(obs).detach()
             x = [obs, M[R, p]]
+            self.print("self.linear1(M[R, p])", (self.linear1(M[R, p])))
+            self.print("obs * self.linear1(M[R, p])", (obs * self.linear1(M[R, p])))
             self.print("obs", obs)
             h2_ = self.gru2(torch.cat(x, dim=-1), h2)
             z = F.relu(self.zeta(h2_))

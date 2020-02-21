@@ -63,7 +63,8 @@ class Env(ppo.control_flow.env.Env):
                     [
                         [
                             len(self.line_types),
-                            1 + len(self.interactions) + len(self.objects),
+                            1 + len(self.interactions),
+                            1 + len(self.objects),
                             1 + len(self.objects),
                         ]
                     ]
@@ -100,16 +101,17 @@ class Env(ppo.control_flow.env.Env):
         if type(line) is Subtask:
             i, o = line.id
             i, o = self.interactions.index(i), self.objects.index(o)
-            return [self.line_types.index(Subtask), i + 1, o + 1]
+            return [self.line_types.index(Subtask), i + 1, o + 1, 0]
         elif type(line) in (While, If):
             o1, o2 = line.id
             return [
                 self.line_types.index(type(line)),
-                1 + len(self.interactions) + self.objects.index(o1),
-                self.objects.index(o2) + 1,
+                1 + len(self.interactions),
+                1 + self.objects.index(o1),
+                1 + self.objects.index(o2),
             ]
         else:
-            return [self.line_types.index(type(line)), 0, 0]
+            return [self.line_types.index(type(line)), 0, 0, 0]
 
     def world_array(self, object_pos, agent_pos):
         world = np.zeros(self.world_shape)
