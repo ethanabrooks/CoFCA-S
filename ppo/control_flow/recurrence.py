@@ -62,8 +62,10 @@ class Recurrence(nn.Module):
         self.gru = nn.GRUCell(self.gru_in_size, hidden_size)
 
         layers = []
-        for _ in range(num_layers):
-            layers.extend([init_(nn.Linear(hidden_size, hidden_size)), activation])
+        in_size = 1 + hidden_size
+        for _ in range(num_layers + 1):
+            layers.extend([init_(nn.Linear(in_size, hidden_size)), activation])
+            in_size = hidden_size
         self.zeta = nn.Sequential(*layers)
         self.upsilon = init_(nn.Linear(hidden_size, self.ne))
 

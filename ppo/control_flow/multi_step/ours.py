@@ -38,7 +38,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         self.linear2 = nn.Sequential(
             init_(nn.Linear(self.conv_hidden_size, 1)), nn.Sigmoid()
         )
-        self.gru2 = nn.GRUCell(1 + self.encoder_hidden_size, self.hidden_size)
+        self.gru2 = nn.GRUCell(self.encoder_hidden_size, self.hidden_size)
         self.d_gate = Categorical(hidden_size, 2)
         self.a_gate = Categorical(hidden_size, 2)
         state_sizes = self.state_sizes._asdict()
@@ -119,6 +119,15 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             DG[t] = 1  # TODO
             AG[t] = 1  # TODO
 
+            self.print(
+                "self.debug_embedding1(lines[t, R, p, 2])",
+                self.debug_embedding1(lines[t, R, p, 2].long()),
+            )
+            self.print(
+                "self.debug_embedding1(lines[t, R, p, 3])",
+                self.debug_embedding1(lines[t, R, p, 3].long()),
+            )
+            self.print("obs", obs)
             obs = (
                 self.debug_embedding1(lines[t, R, p, 2].long())
                 + self.debug_embedding2(lines[t, R, p, 3].long())
@@ -131,12 +140,11 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             obs = obs.sum(-1, keepdim=True).sigmoid().round()
             # self.print(obs * self.linear1(M[R, p]))
             # obs = self.linear2(obs).detach()
-            x = [obs, M[R, p]]
             self.print("self.linear1(M[R, p])", (self.linear1(M[R, p])))
             self.print("obs * self.linear1(M[R, p])", (obs * self.linear1(M[R, p])))
             self.print("obs", obs)
-            h2_ = self.gru2(torch.cat(x, dim=-1), h2)
-            z = F.relu(self.zeta(h2_))
+            h2_ = self.gru2(M[R, p], h2)
+            z = F.relu(self.zeta(torch.cat([h2_, obs], dim=-1)))
             u = self.upsilon(z).softmax(dim=-1)
             self.print("u", u)
             w = P[p, R]
@@ -145,7 +153,8 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             # self.print("dg prob", d_gate.probs[:, 1])
             # self.print("dg", dg)
             d_dist = gate(dg, d_probs, ones * half)
-            # self.print("d_probs", d_probs[:, half:])
+            self.print("d_probs", d_probs[:, :half])
+            self.print("d_probs", d_probs[:, half:])
             self.sample_new(D[t], d_dist)
             p = p + D[t].clone() - half
             p = torch.clamp(p, min=0, max=M.size(1) - 1)
