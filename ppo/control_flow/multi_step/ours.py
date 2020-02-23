@@ -35,9 +35,6 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             init_(nn.Linear(self.encoder_hidden_size, self.conv_hidden_size)),
             nn.Sigmoid(),
         )
-        self.linear2 = nn.Sequential(
-            init_(nn.Linear(self.conv_hidden_size, 1)), nn.Sigmoid()
-        )
         self.gru2 = nn.GRUCell(
             1 + self.encoder_hidden_size + self.hidden_size, self.hidden_size
         )
@@ -56,6 +53,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         self.debug_embedding2 = nn.Embedding.from_pretrained(
             F.pad(debug_embedding[d:], (0, 0, 1, 0))
         )
+        self.linear2 = nn.Sequential(init_(nn.Linear(d * 2, 1)), nn.Sigmoid())
 
     def pack(self, hxs):
         def pack():
@@ -135,13 +133,10 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 + self.debug_embedding2(lines[t, R, p, 3].long())
             ) * obs
             self.print("obs", obs)
-            linear1 = torch.ones_like(obs) * 10
-            linear1[:, : int(linear1.shape[1] / 2)] = -13
-            obs = obs * linear1
-            self.print("obs", obs)
-            obs = obs.sum(-1, keepdim=True).sigmoid().round()
+            # obs = obs.sum(-1, keepdim=True).sigmoid().round()
             # self.print(obs * self.linear1(M[R, p]))
-            # obs = self.linear2(obs).detach()
+            obs = self.linear2(obs)
+            x = [obs, M[R, p]]
             self.print("self.linear1(M[R, p])", (self.linear1(M[R, p])))
             self.print("obs * self.linear1(M[R, p])", (obs * self.linear1(M[R, p])))
             self.print("obs", obs)
