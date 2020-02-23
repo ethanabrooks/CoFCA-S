@@ -38,7 +38,9 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         self.linear2 = nn.Sequential(
             init_(nn.Linear(self.conv_hidden_size, 1)), nn.Sigmoid()
         )
-        self.gru2 = nn.GRUCell(self.encoder_hidden_size, self.hidden_size)
+        self.gru2 = nn.GRUCell(
+            1 + self.encoder_hidden_size + self.hidden_size, self.hidden_size
+        )
         self.d_gate = Categorical(hidden_size, 2)
         self.a_gate = Categorical(hidden_size, 2)
         state_sizes = self.state_sizes._asdict()
@@ -143,8 +145,9 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             self.print("self.linear1(M[R, p])", (self.linear1(M[R, p])))
             self.print("obs * self.linear1(M[R, p])", (obs * self.linear1(M[R, p])))
             self.print("obs", obs)
-            h2_ = self.gru2(M[R, p], h2)
-            z = F.relu(self.zeta(torch.cat([h2_, obs], dim=-1)))
+            x = [obs, M[R, p], self.embed_action(A[t - 1].clone())]
+            h2_ = self.gru2(torch.cat(x, dim=-1), h2)
+            z = F.relu(self.zeta(h2_))
             u = self.upsilon(z).softmax(dim=-1)
             self.print("u", u)
             w = P[p, R]
