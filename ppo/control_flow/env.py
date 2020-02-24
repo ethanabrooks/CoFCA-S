@@ -140,14 +140,13 @@ class Env(gym.Env, ABC):
 
                     ipdb.set_trace()
 
-                if self.rank == 0:
-                    info.update(
-                        instruction=[self.preprocess_line(l) for l in lines],
-                        actions=actions,
-                        program_counter=program_counter,
-                        evaluations=evaluations,
-                        observations=observations,
-                    )
+                info.update(
+                    instruction=[self.preprocess_line(l) for l in lines],
+                    actions=actions,
+                    program_counter=program_counter,
+                    evaluations=evaluations,
+                    observations=observations,
+                )
 
             info.update(regret=1 if term and not success else 0)
 

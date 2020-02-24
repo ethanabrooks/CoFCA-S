@@ -46,6 +46,7 @@ class Recurrence(nn.Module):
         self.hidden_size = hidden_size
         self.encoder_hidden_size = encoder_hidden_size
         self.gru_hidden_size = gru_hidden_size
+        self.P_save_name = None
 
         self.obs_sections = get_obs_sections(self.obs_spaces)
         self.eval_lines = eval_lines
@@ -107,7 +108,9 @@ class Recurrence(nn.Module):
         obs_sections = self.obs_sections
         state_sizes = self.state_sizes
         self.set_obs_space(eval_obs_space)
+        self.P_save_name = "eval_P.torch"
         yield self
+        self.P_save_name = "P.torch"
         self.obs_spaces = obs_spaces
         self.obs_sections = obs_sections
         self.state_sizes = state_sizes
