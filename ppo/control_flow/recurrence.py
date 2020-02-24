@@ -33,8 +33,10 @@ class Recurrence(nn.Module):
         debug,
         no_scan,
         no_roll,
+        log_dir,
     ):
         super().__init__()
+        self.log_dir = log_dir
         self.no_roll = no_roll
         self.no_scan = no_scan
         self.obs_spaces = Obs(**observation_space.spaces)

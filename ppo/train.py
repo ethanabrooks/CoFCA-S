@@ -238,20 +238,12 @@ class TrainBase(abc.ABC):
             self.rollouts.after_update()
             if log_progress is not None:
                 log_progress.update()
-            # print(self.i, self.i % self.log_interval)
             if self.i % log_interval == 0:
                 total_num_steps = log_interval * num_processes * num_steps
-                # print(f"Writing to {self.logdir}")
                 fps = total_num_steps / (time.time() - tick)
                 tick = time.time()
                 yield dict(
-                    k_scalar_pairs(
-                        tick=tick,
-                        fps=fps,
-                        **epoch_counter,
-                        **train_results,
-                        **eval_result,
-                    )
+                    tick=tick, fps=fps, **epoch_counter, **train_results, **eval_result,
                 )
 
     def run_epoch(
@@ -279,9 +271,7 @@ class TrainBase(abc.ABC):
 
             # Observe reward and next obs
             obs, reward, done, infos = envs.step(act.action)
-            for d in infos:
-                for k, v in d.items():
-                    episode_counter[k] += v if type(v) is list else [float(v)]
+            self.process_infos(episode_counter, infos)
 
             # track rewards
             counter["reward"] += reward.numpy()
@@ -291,10 +281,6 @@ class TrainBase(abc.ABC):
             if success_reward is not None:
                 # noinspection PyTypeChecker
                 episode_counter["success"] += list(episode_rewards >= success_reward)
-                # if np.any(episode_rewards < self.success_reward):
-                #     import ipdb
-                #
-                #     ipdb.set_trace()
 
             episode_counter["time_steps"] += list(counter["time_step"][done])
             counter["reward"][done] = 0
@@ -317,6 +303,12 @@ class TrainBase(abc.ABC):
                 )
 
         return dict(episode_counter)
+
+    @staticmethod
+    def process_infos(episode_counter, infos):
+        for d in infos:
+            for k, v in d.items():
+                episode_counter[k] += v if type(v) is list else [float(v)]
 
     @staticmethod
     def build_agent(envs, **agent_args):
@@ -456,9 +448,7 @@ class Train(TrainBase):
         for _ in itertools.count():
             for result in self.make_train_iterator():
                 if self.writer is not None:
-                    total_num_steps = (self.i + 1) * self.num_processes * self.num_steps
-                    for k, v in k_scalar_pairs(**result):
-                        self.writer.add_scalar(k, v, total_num_steps)
+                    self.log_result(result)
 
                 if (
                     self.log_dir
@@ -467,6 +457,11 @@ class Train(TrainBase):
                 ):
                     self._save(str(self.log_dir))
                     self.last_save = time.time()
+
+    def log_result(self, result):
+        total_num_steps = (self.i + 1) * self.num_processes * self.num_steps
+        for k, v in k_scalar_pairs(**result):
+            self.writer.add_scalar(k, v, total_num_steps)
 
     def get_device(self):
         match = re.search("\d+$", self.run_id)

@@ -134,7 +134,7 @@ class Env(ppo.control_flow.env.Env):
             count2 = sum(1 for _, ob_set in pos_obj.items() if o2 in ob_set)
             evaluation = count1 < count2
             if type(line) in (If, While):
-                condition_evaluations[type(line)] += [evaluation]
+                condition_evaluations.append(evaluation)
             return evaluation
         else:
             return 1
@@ -144,7 +144,7 @@ class Env(ppo.control_flow.env.Env):
         agent_pos = self.random.randint(0, self.world_size, size=2)
         object_pos, lines = self.populate_world(lines)
         line_iterator = self.line_generator(lines)
-        condition_evaluations = defaultdict(list)
+        condition_evaluations = []
         self.time_remaining = self.time_to_waste
 
         def get_nearest(to):
@@ -253,7 +253,7 @@ class Env(ppo.control_flow.env.Env):
             line_id = (self.mine, self.build)[i], o2
             lines[l] = Subtask(line_id)
 
-        more_lines = self.get_lines(
+        more_lines = self.choose_line_types(
             n=20 - len(lines),
             active_conditions=[],
             max_nesting_depth=self.max_nesting_depth,
