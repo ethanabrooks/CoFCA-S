@@ -125,7 +125,7 @@ class Env(gym.Env, ABC):
         term = False
         action = None
         while True:
-            if state.ptr is not None and self.rank == 0:
+            if state.ptr is not None:
                 program_counter.append(state.ptr)
             success = state.ptr is None
             reward = int(success)
@@ -139,14 +139,13 @@ class Env(gym.Env, ABC):
 
                     ipdb.set_trace()
 
-                if self.rank == 0:
-                    info.update(
-                        instruction=[self.preprocess_line(l) for l in lines],
-                        actions=actions,
-                        program_counter=program_counter,
-                        evaluations=evaluations,
-                        observations=observations,
-                    )
+                info.update(
+                    instruction=[self.preprocess_line(l) for l in lines],
+                    actions=actions,
+                    program_counter=program_counter,
+                    evaluations=evaluations,
+                    observations=observations,
+                )
 
             info.update(regret=1 if term and not success else 0)
 
@@ -188,12 +187,10 @@ class Env(gym.Env, ABC):
 
             self._render = render
             obs = self.get_observation(state.obs, state.ptr, lines)
-            if self.rank == 0:
-                observations.append(obs["obs"])
+            observations.append(obs["obs"])
 
             action = (yield obs, reward, term, info)
-            if self.rank == 0:
-                actions += [list(action.astype(int))]
+            actions += [list(action.astype(int))]
             action, agent_ptr = int(action[0]), int(action[-1])
             info = {}
 
@@ -209,8 +206,7 @@ class Env(gym.Env, ABC):
                 if action != lines[state.ptr].id:
                     info.update(success_line=state.prev, failure_line=state.ptr)
                 state = state_iterator.send(action)
-                if self.rank == 0:
-                    evaluations.extend(state.condition_evaluations)
+                evaluations.extend(state.condition_evaluations)
 
     @staticmethod
     def line_str(line: Line):

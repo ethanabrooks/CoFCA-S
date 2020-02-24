@@ -10,6 +10,7 @@ from ppo.distributions import FixedCategorical, Categorical
 import numpy as np
 
 from ppo.utils import init_
+from pathlib import Path
 
 RecurrentState = namedtuple(
     "RecurrentState", "a d ag dg p v h h2 a_probs d_probs ag_probs dg_probs"
@@ -86,6 +87,9 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         lines = inputs.lines.view(T, N, *self.obs_spaces.lines.shape)
 
         P = self.build_P(M, N, rnn_hxs.device, nl)
+        if self.log_dir:
+            torch.save(P, str(Path(self.log_dir, self.P_save_name)))
+
         half = P.size(2) // 2 if self.no_scan else nl
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
