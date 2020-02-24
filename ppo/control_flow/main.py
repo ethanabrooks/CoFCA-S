@@ -14,7 +14,7 @@ from ppo import control_flow
 from ppo.arguments import build_parser
 from ppo.train import Train
 
-NAMES = ["instruction", "actions", "program_counter", "evaluations"]
+NAMES = ["instruction", "actions", "program_counter", "evaluations", "observations"]
 
 
 def main(log_dir, seed, eval_lines, one_line, **kwargs):
