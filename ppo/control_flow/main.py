@@ -45,7 +45,7 @@ def main(log_dir, seed, eval_lines, one_line, **kwargs):
 
         @staticmethod
         def make_env(
-            seed, rank, evaluation, env_id, add_timestep, gridworld, **env_args
+            seed, rank, evaluation, env_id, add_timestep, world_size, **env_args
         ):
             args = dict(**env_args, eval_lines=eval_lines, seed=seed + rank, rank=rank)
             del args["time_limit"]

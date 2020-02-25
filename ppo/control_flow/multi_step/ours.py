@@ -6,12 +6,16 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.nn as nn
 
 import ppo.control_flow.multi_step.abstract_recurrence as abstract_recurrence
 import ppo.control_flow.recurrence as recurrence
 from ppo.control_flow.lstm import LSTMCell
 from ppo.distributions import FixedCategorical, Categorical
 from ppo.utils import init_
+
+from ppo.utils import init_
+from pathlib import Path
 
 RecurrentState = namedtuple(
     "RecurrentState",
@@ -61,6 +65,15 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             dg=1,
             gru_gate=self.gru_hidden_size
         )
+        d = conv_hidden_size
+        debug_embedding = torch.eye(d * 2)
+        self.debug_embedding1 = nn.Embedding.from_pretrained(
+            F.pad(debug_embedding[:d], (0, 0, 1, 0))
+        )
+        self.debug_embedding2 = nn.Embedding.from_pretrained(
+            F.pad(debug_embedding[d:], (0, 0, 1, 0))
+        )
+        self.linear2 = nn.Sequential(init_(nn.Linear(d * 2, 1)), nn.Sigmoid())
 
     @property
     def gru_in_size(self):
@@ -94,6 +107,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         # build memory
         nl = len(self.obs_spaces.lines.nvec)
         M = self.build_memory(N, T, inputs)
+        lines = inputs.lines.view(T, N, *self.obs_spaces.lines.shape)
 
         P = self.build_P(M, N, rnn_hxs.device, nl)
         if self.log_dir:
@@ -142,9 +156,10 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             w = P[p, R]
             d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
             dg = DG[t].unsqueeze(-1).float()
-            self.print("dg prob", d_gate.probs[:, 1])
-            self.print("dg", dg)
+            # self.print("dg prob", d_gate.probs[:, 1])
+            # self.print("dg", dg)
             d_dist = gate(dg, d_probs, ones * half)
+            self.print("d_probs", d_probs[:, :half])
             self.print("d_probs", d_probs[:, half:])
             self.sample_new(D[t], d_dist)
             p = p + D[t].clone() - half
@@ -168,8 +183,8 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 a_probs=a_dist.probs,
                 d=D[t],
                 d_probs=d_dist.probs,
-                ag_probs=a_gate.probs,
-                dg_probs=d_gate.probs,
+                ag_probs=hx.ag_probs,  # a_gate.probs,
+                dg_probs=hx.dg_probs,  # d_gate.probs,
                 ag=ag,
                 dg=dg,
                 gru_gate=gru_gate,
