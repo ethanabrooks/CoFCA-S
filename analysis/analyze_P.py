@@ -26,16 +26,22 @@ def compute_jump(instruction, dest, _from, backward) -> int:
     raise NotImplementedError
 
 
-def compute_cross_entropy(P: torch.Tensor, instruction: np.ndarray) -> float:
-    def compute_with_ptr(ptr: int, done: List[int]) -> float:
+def compute_cross_entropy(P: np.ndarray, instruction: np.ndarray) -> float:
+    assert P.shape[:2] == (1, 1)
+    P = np.squeeze(P)
+    done = []
+
+    def compute_with_ptr(ptr: int) -> float:
+
         if ptr in done or ptr >= len(instruction):
             return 0
+        done.append(ptr)
         # print(f"ptr: {ptr}")
 
-        def cross_entropy(jump: int) -> float:
-            p = P[ptr].T  # type: ignore
-            no_op = P.size(1) // 2
-            j = torch.tensor([jump + no_op] * P.size(-1)).cuda()
+        def cross_entropy(jump: int, _P: torch.Tensor) -> float:
+            p = _P[ptr].T  # type: ignore
+            no_op = _P.size(1) // 2
+            j = torch.tensor([jump + no_op] * _P.size(-1))
             return F.cross_entropy(p, j, reduction="none").min().item()
 
         def cross_entropy_with_dest(dest: L, backward: bool) -> float:
@@ -58,7 +64,7 @@ def compute_cross_entropy(P: torch.Tensor, instruction: np.ndarray) -> float:
                 # dest does not exist (e.g. else)
                 return 0
             return min(
-                (cross_entropy(jump) + compute_with_ptr(ptr + jump, done=done + [ptr]))
+                (cross_entropy(jump, torch.tensor(P)) + compute_with_ptr(ptr + jump))
                 for jump in (jump, jump + 1)
             )
 
@@ -71,21 +77,22 @@ def compute_cross_entropy(P: torch.Tensor, instruction: np.ndarray) -> float:
         )
         return backward_cross_entropy + forward_cross_entropy
 
-    return compute_with_ptr(0, done=[])
+    return compute_with_ptr(0)
 
 
 def main(root: Path, path: Path) -> None:
     path = Path(root, path)
     print("loading P...")
-    Ps = torch.load(Path(path, "eval_P.torch"))
+    Ps = np.load(Path(path, "eval_P.npz"))
     print("loading instructions...")
     instructions = np.load(Path(path, "eval_instruction.npz"))
+    assert len(Ps) == len(instructions)
 
     def compute_cross_entropies() -> Generator[float, None, None]:
-        for args in tqdm(zip(Ps.unbind(dim=1), instructions.values())):
+        for args in tqdm(zip(Ps.values(), instructions.values()), total=len(Ps)):
             yield compute_cross_entropy(*args)
 
-    print(list(compute_cross_entropies()))
+    print(np.mean(list(compute_cross_entropies())))
 
 
 if __name__ == "__main__":
