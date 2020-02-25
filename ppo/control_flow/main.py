@@ -78,11 +78,10 @@ def main(log_dir, seed, eval_lines, one_line, **kwargs):
             names = NAMES + ["P"]
             for name in names + ["eval_" + n for n in names]:
                 if name in result:
-                    arrays = [
-                        np.array(x, dtype=int)
-                        for x in result.pop(name)
-                        if x is not None
-                    ]
+                    arrays = [x for x in result.pop(name) if x is not None]
+                    if "P" not in name:
+                        arrays = [np.array(x, dtype=int) for x in arrays]
+
                     np.savez(Path(self.log_dir, name), *arrays)
 
             if "rewards" in result:
