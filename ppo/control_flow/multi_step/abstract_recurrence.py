@@ -12,24 +12,13 @@ class Recurrence:
         self.conv_hidden_size = conv_hidden_size
         d = self.obs_spaces.obs.shape[0]
         layers = []
-        if num_conv_layers <= 0:
-            self.conv = nn.Sequential(
-                nn.Conv2d(d, conv_hidden_size, kernel_size=3),
-                nn.ReLU(),
-                nn.Conv2d(conv_hidden_size, conv_hidden_size, kernel_size=4),
-                nn.ReLU(),
-            )
-        else:
-            in_size = d
-            for _ in range(num_conv_layers):
-                layers += [
-                    nn.Conv2d(in_size, conv_hidden_size, kernel_size=1),
-                    nn.ReLU(),
-                ]
-                in_size = conv_hidden_size
-            self.conv = nn.Sequential(
-                *layers, nn.AvgPool2d(kernel_size=self.obs_spaces.obs.shape[1:])
-            )
+        in_size = d
+        for _ in range(num_conv_layers):
+            layers += [nn.Conv2d(in_size, conv_hidden_size, kernel_size=1), nn.ReLU()]
+            in_size = conv_hidden_size
+        self.conv = nn.Sequential(
+            *layers, nn.AvgPool2d(kernel_size=self.obs_spaces.obs.shape[1:])
+        )
         ones = torch.ones(1, dtype=torch.long)
         self.register_buffer("ones", ones)
         line_nvec = torch.tensor(self.obs_spaces.lines.nvec[0, :-1])

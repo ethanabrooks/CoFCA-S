@@ -23,7 +23,10 @@ def gate(g, new, old):
 
 
 class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
-    def __init__(self, hidden_size, conv_hidden_size, gate_coef, **kwargs):
+    def __init__(
+        self, hidden_size, conv_hidden_size, gate_coef, gru_gate_coef, **kwargs
+    ):
+        self.gru_gate_coef = gru_gate_coef
         self.gate_coef = gate_coef
         self.conv_hidden_size = conv_hidden_size
         recurrence.Recurrence.__init__(self, hidden_size=hidden_size, **kwargs)

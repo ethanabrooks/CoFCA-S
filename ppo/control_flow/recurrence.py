@@ -27,6 +27,7 @@ class Recurrence(nn.Module):
         activation,
         hidden_size,
         encoder_hidden_size,
+        gru_hidden_size,
         num_layers,
         num_edges,
         num_encoding_layers,
@@ -44,7 +45,7 @@ class Recurrence(nn.Module):
         self.debug = debug
         self.hidden_size = hidden_size
         self.encoder_hidden_size = encoder_hidden_size
-        self.P_save_name = None
+        self.gru_hidden_size = gru_hidden_size
 
         self.obs_sections = get_obs_sections(self.obs_spaces)
         self.eval_lines = eval_lines
@@ -62,7 +63,7 @@ class Recurrence(nn.Module):
             bidirectional=True,
             batch_first=True,
         )
-        self.gru = nn.GRUCell(self.gru_in_size, hidden_size)
+        self.gru = nn.GRUCell(self.gru_in_size, gru_hidden_size)
 
         layers = []
         for _ in range(num_layers + 1):
@@ -87,7 +88,7 @@ class Recurrence(nn.Module):
             u=self.ne,
             p=1,
             v=1,
-            h=hidden_size,
+            h=gru_hidden_size,
         )
 
     def build_embed_task(self, hidden_size):
