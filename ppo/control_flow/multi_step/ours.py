@@ -15,7 +15,7 @@ from ppo.utils import init_
 
 RecurrentState = namedtuple(
     "RecurrentState",
-    "a d u ag dg p v h hy cy a_probs d_probs ag_probs dg_probs gru_gate",
+    "a d u ag dg p v h hy cy a_probs d_probs ag_probs dg_probs gru_gate P",
 )
 
 
@@ -59,7 +59,8 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             dg_probs=2,
             ag=1,
             dg=1,
-            gru_gate=self.gru_hidden_size
+            gru_gate=self.gru_hidden_size,
+            P=self.ne * 2 * self.train_lines ** 2
         )
 
     @property
@@ -173,4 +174,5 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 ag=ag,
                 dg=dg,
                 gru_gate=gru_gate,
+                P=P.transpose(0, 1),
             )
