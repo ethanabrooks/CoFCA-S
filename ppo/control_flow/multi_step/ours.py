@@ -97,8 +97,6 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         M = self.build_memory(N, T, inputs)
 
         P = self.build_P(M, N, rnn_hxs.device, nl)
-        if self.log_dir:
-            torch.save(P, str(Path(self.log_dir, self.P_save_name)))
 
         half = P.size(2) // 2 if self.no_scan else nl
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
