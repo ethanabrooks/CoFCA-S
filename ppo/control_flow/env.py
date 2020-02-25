@@ -31,8 +31,8 @@ State = namedtuple("State", "obs condition prev ptr condition_evaluations term")
 
 
 class Env(gym.Env, ABC):
-    pairs = {If: EndIf, Else: EndIf, While: EndWhile}
-    line_types = [If, Else, EndIf, While, EndWhile, Subtask, Padding]
+    pairs = {If: EndIf, Else: EndIf, While: EndWhile, Loop: EndLoop}
+    line_types = [If, Else, EndIf, While, EndWhile, Subtask, Padding, Loop, EndLoop]
 
     def __init__(
         self,
