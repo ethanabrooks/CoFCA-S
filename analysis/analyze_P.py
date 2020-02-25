@@ -5,7 +5,8 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 from enum import Enum
-from typing import Dict, Tuple, List, Generator
+from typing import Dict, Tuple, List, Generator, Optional
+from tqdm import tqdm  # type: ignore
 
 L = Enum("line", "If Else EndIf While EndWhile EndLoop Subtask Padding Loop Any")
 EDGES: Dict[L, Tuple[List[L], List[L]]] = {
@@ -26,11 +27,11 @@ def compute_jump(instruction, dest, _from, backward) -> int:
 
 
 def compute_cross_entropy(P: torch.Tensor, instruction: np.ndarray) -> float:
-    cache: Dict[int, float] = {}
+    def compute_with_ptr(ptr: int, done: List[int]) -> float:
+        if ptr in done or ptr >= len(instruction):
+            return 0
+        # print(f"ptr: {ptr}")
 
-    def compute_with_ptr(ptr):
-        if ptr in cache:
-            return cache[ptr]
         def cross_entropy(jump: int) -> float:
             p = P[ptr].T  # type: ignore
             no_op = P.size(1) // 2
@@ -38,31 +39,27 @@ def compute_cross_entropy(P: torch.Tensor, instruction: np.ndarray) -> float:
             return F.cross_entropy(p, j, reduction="none").min().item()
 
         def cross_entropy_with_dest(dest: L, backward: bool) -> float:
-            def compute_jump_to(dest: L) -> int:
+            def compute_jump_to(dest: L) -> Optional[int]:
                 if dest == L.Any:
                     assert not backward
                     return 1
                 i = torch.tensor(instruction).roll(shifts=-int(ptr), dims=0)
                 hits, = np.where(i[:, 0] == dest.value - 1)
-                if backward:
-                    return hits[-1] - len(instruction)
-                else:
-                    return hits[0]
-
-            def recurse(jump):
-                k = ptr + jump
-                import ipdb
-
-                ipdb.set_trace()
-                if k in cache:
-                    return cache[k]
-                cross_entropy = compute_with_ptr(k)
-                cache[k] = cross_entropy
-                return cross_entropy
+                if hits.size:
+                    # not empty
+                    if backward:
+                        return hits[-1] - len(instruction)
+                    else:
+                        return hits[0]
+                return None
 
             jump = compute_jump_to(dest=dest)
+            if jump is None:
+                # dest does not exist (e.g. else)
+                return 0
             return min(
-                (cross_entropy(jump) + recurse(jump)) for jump in (jump, jump + 1)
+                (cross_entropy(jump) + compute_with_ptr(ptr + jump, done=done + [ptr]))
+                for jump in (jump, jump + 1)
             )
 
         backward_edges, forward_edges = EDGES[L(instruction[ptr, 0] + 1)]
@@ -72,9 +69,9 @@ def compute_cross_entropy(P: torch.Tensor, instruction: np.ndarray) -> float:
         forward_cross_entropy = sum(
             cross_entropy_with_dest(dest, backward=False) for dest in forward_edges
         )
-        return cross_entropy
+        return backward_cross_entropy + forward_cross_entropy
 
-    return sum(map(compute_with_ptr, range(len(instructions))
+    return compute_with_ptr(0, done=[])
 
 
 def main(root: Path, path: Path) -> None:
@@ -85,7 +82,7 @@ def main(root: Path, path: Path) -> None:
     instructions = np.load(Path(path, "eval_instruction.npz"))
 
     def compute_cross_entropies() -> Generator[float, None, None]:
-        for args in zip(Ps.unbind(dim=1), instructions.values()):
+        for args in tqdm(zip(Ps.unbind(dim=1), instructions.values())):
             yield compute_cross_entropy(*args)
 
     print(list(compute_cross_entropies()))
