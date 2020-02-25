@@ -8,7 +8,7 @@ from ppo.utils import init_
 
 
 class Recurrence:
-    def __init__(self, conv_hidden_size, num_conv_layers):
+    def __init__(self, conv_hidden_size, num_conv_layers=1):
         self.conv_hidden_size = conv_hidden_size
         d = self.obs_spaces.obs.shape[0]
         layers = []
