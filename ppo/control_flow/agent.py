@@ -110,6 +110,8 @@ class Agent(ppo.agent.Agent, NNBase):
         except AttributeError:
             pass
         action = torch.cat(X, dim=-1)
+        nlines = len(rm.obs_spaces.lines.nvec)
+        P = hx.P.reshape(-1, N, nlines, 2 * nlines, rm.ne)
         return AgentValues(
             value=hx.v,
             action=action,
@@ -117,7 +119,7 @@ class Agent(ppo.agent.Agent, NNBase):
             aux_loss=aux_loss,
             dist=None,
             rnn_hxs=last_hx,
-            log=dict(entropy=entropy),
+            log=dict(entropy=entropy, P=P),
         )
 
     def _forward_gru(self, x, hxs, masks, action=None):

@@ -68,8 +68,8 @@ class PPO:
                 values = act.value
                 action_log_probs = act.action_log_probs
                 loss = act.aux_loss
-                log_values = act.log
-                logger.update(**log_values)
+                # log_values = act.log
+                # logger.update(**log_values)
 
                 if not self.aux_loss_only:
                     ratio = torch.exp(action_log_probs - sample.old_action_log_probs)

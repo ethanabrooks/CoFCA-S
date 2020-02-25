@@ -59,15 +59,24 @@ def main(log_dir, seed, eval_lines, one_line, **kwargs):
             else:
                 return control_flow.multi_step.env.Env(**args)
 
-        def process_infos(self, episode_counter, infos):
+        def process_infos(self, episode_counter, done, infos, **act_log):
+            P = act_log.pop("P")
+            P = P.transpose(0, 1)[done]
+            P = P.cpu().numpy()
+            episode_counter["P"] += np.split(P, P.shape[0])
             for d in infos:
                 for name in NAMES:
                     if name in d:
                         episode_counter[name].append(d.pop(name))
-            super().process_infos(episode_counter, infos)
+            if len(episode_counter["P"]) != len(episode_counter["instruction"]):
+                import ipdb
+
+                ipdb.set_trace()
+            super().process_infos(episode_counter, done, infos, **act_log)
 
         def log_result(self, result: dict):
-            for name in NAMES + ["eval_" + n for n in NAMES]:
+            names = NAMES + ["P"]
+            for name in names + ["eval_" + n for n in names]:
                 if name in result:
                     arrays = [
                         np.array(x, dtype=int)
