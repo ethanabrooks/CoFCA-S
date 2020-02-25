@@ -85,9 +85,10 @@ def main(log_dir, seed, eval_lines, one_line, **kwargs):
 
                     np.savez(Path(self.log_dir, name), *arrays)
 
-            if "rewards" in result:
-                success = result["rewards"]
-                np.save(Path(self.log_dir, "successes"), success)
+            for prefix in ("eval_", ""):
+                if prefix + "rewards" in result:
+                    success = result[prefix + "rewards"]
+                    np.save(Path(self.log_dir, prefix + "successes"), success)
 
             super().log_result(result)
 
