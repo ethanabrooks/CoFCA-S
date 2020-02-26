@@ -46,7 +46,9 @@ def hierarchical_parse_args(parser: argparse.ArgumentParser,
     """
     #args = parser.parse_args(["--block-space", "(0,0)(0,0)(0.418,0.418)(1,1)(0,0)(0,0)(0,0)", "--steps-per-action=300", "--geofence=.5", "--goal-space", "(0,0)(0,0)(.418,.418)", "--use-dof", "arm_flex_joint", "--use-dof", "hand_l_proximal_joint", "--use-dof", "hand_r_proximal_joint", "--use-dof", "wrist_flex_joint", "--use-dof", "arm_roll_joint", 
     #"--use-dof", "wrist_roll_joint", "--use-dof", "slide_x", "--use-dof", "slide_y", "--render","--n-blocks=1"])
-    args = parser.parse_args(["--block-space", "(0,0)(0,0)(0.418,0.418)(1,1)(0,0)(0,0)(0,0)", "--steps-per-action=30", "--geofence=.5", "--goal-space", "(0,0)(0,0)(.418,.418)", "--use-dof", "arm_flex_joint", "--use-dof", "hand_l_proximal_joint", "--use-dof", "hand_r_proximal_joint", "--use-dof", "wrist_flex_joint", "--use-dof", "arm_roll_joint", "--use-dof", "wrist_roll_joint", "--use-dof", "slide_x", "--use-dof", "slide_y","--n-blocks=1"])
+    args = parser.parse_args(["--block-space", "(0,0)(0,0)(0.418,0.418)(1,1)(0,0)(0,0)(0,0)", "--steps-per-action=30", "--geofence=.5", "--goal-space", \
+        "(0,0)(0,0)(.418,.418)", "--use-dof", "arm_flex_joint", "--use-dof", "hand_l_proximal_joint", "--use-dof", "hand_r_proximal_joint", "--use-dof", \
+            "wrist_flex_joint", "--use-dof", "arm_roll_joint", "--use-dof", "wrist_roll_joint", "--use-dof", "slide_x", "--use-dof", "slide_y","--n-blocks=1"]) 
 
 
     def key_value_pairs(group):
@@ -116,6 +118,7 @@ class Train(abc.ABC):
             cuda = False
 
         # reproducibility
+
         seed = 0
         torch.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
@@ -205,7 +208,7 @@ class Train(abc.ABC):
             # if vec_norm is not None:
             #     vec_norm.eval()
             #     vec_norm.ob_rms = get_vec_normalize(envs).ob_rmsi
-            self.envs.evaluate()
+            #self.envs.evaluate()
             eval_recurrent_hidden_states = torch.zeros(
                 num_processes,
                 self.agent.recurrent_hidden_state_size,
@@ -213,8 +216,6 @@ class Train(abc.ABC):
             )
             eval_masks = torch.zeros(num_processes, 1, device=self.device)
             eval_counter = Counter()
-            print("Num steps: ", num_steps)
-            print("Time limit: ", time_limit)
             eval_result = self.run_epoch(
                 obs=self.envs.reset(),
                 rnn_hxs=eval_recurrent_hidden_states,
@@ -276,6 +277,7 @@ class Train(abc.ABC):
                 # print(f"Writing to {self.logdir}")
                 fps = total_num_steps / (time.time() - tick)
                 tick = time.time()
+
                 yield dict(
                     k_scalar_pairs(
                         tick=tick,
@@ -291,17 +293,20 @@ class Train(abc.ABC):
     ):
 
         # noinspection PyTypeChecker
+        test = np.zeros(50)
         episode_counter = Counter(rewards=[], time_steps=[], success=[])
         iterator = range(num_steps)
         if use_tqdm:
             iterator = tqdm(iterator, desc="evaluating")
         test = np.zeros(50)
         #print("Initial observation: ", obs)
+
         for step in iterator:
             with torch.no_grad():
                 act = self.agent(
                     inputs=obs, rnn_hxs=rnn_hxs, masks=masks
                 )  # type: AgentValues
+
 
             #print("Observations: ", obs)
             #print("RNN_HXS: ", rnn_hxs)
@@ -310,39 +315,45 @@ class Train(abc.ABC):
             #print("Log probs: ", act.action_log_probs)
             #print("Value: ", act.value)
 
+
             # Observe reward and next obs
-            #print("PPO action: ", act.action)
-            #print("PPO num steps: ", num_steps) 
             obs, reward, done, infos = self.envs.step(act.action)
             #print("action: ", act.action, "obs: ", obs, " rew: ", reward, " done: ", done, " infos: ", infos)
-            #print("reward: ", reward)
+            #print("Count: ", count)
+
             
             
             for d in infos:
                 for k, v in d.items():
                     episode_counter.update({k: float(v) / num_steps / len(infos)})
+
             
             # track rewards
             counter["reward"] += reward.numpy()
             test += reward.numpy()
+
+            #counter["reward"] = counter["reward"].astype(float)
+            #print(counter['reward'])
+            #print(episode_counter)
+
             counter["time_step"] += np.ones_like(done)
             episode_rewards = counter["reward"][done]
             episode_counter["rewards"] += list(episode_rewards)
-            #if done[0]:
-            #    print("Time step: ", counter["time_step"],  "episode_rewards = ", episode_rewards, " done: ", done)
+            #episode_counter["rewards"] = list(counter["reward"])
+            #print(episode_counter["rewards"])
+            #print(episode_counter["rewards"])
+
+            #print(counter["reward"])
+            #print("Episode rewards", episode_counter[])
             if success_reward is not None:
                 # noinspection PyTypeChecker
                 episode_counter["success"] += list(episode_rewards >= success_reward)
-                # if np.any(episode_rewards < self.success_reward):
-                #     import ipdb
-                #
-                #     ipdb.set_trace()
+
 
             episode_counter["time_steps"] += list(counter["time_step"][done])
             counter["reward"][done] = 0
             counter["time_step"][done] = 0
-            #print("TIme counter step ppo: ", counter["time_step"])
-            #print("Episode counter time step: ", episode_counter["time_steps"])
+
            
 
             # If done then clean the history of o bservations.
@@ -360,13 +371,19 @@ class Train(abc.ABC):
                     rewards=reward,
                     masks=masks,
                 )
+
         test = test >= 1
         print("Reward realistic: ", np.mean(test))
         print("Reward: ", np.mean(episode_counter["rewards"]))
         #print("Means: ", np.array([env.mean for env in self.envs.venv.envs]))
-        #print("N: ", np.array([env.n for env in self.envs.venv.envs]))
+        #print("Reward average: ", np.mean(episode_counter['rewards']))
+        #print("Reward sum: ", np.sum(episode_counter['rewards']))
+        #print("Log probs: ", act.action_log_probs)
+        #print("Masks: ", masks)
+        #print("rnn_hxs: ", act.rnn_hxs)
+        #print("Values: ", act.value)
+        #print("Len: ",len(episode_counter['rewards'])
 
-        #print(episode_counter)
         return dict(episode_counter)
 
     @staticmethod
@@ -384,7 +401,7 @@ class Train(abc.ABC):
         hsr.util.add_wrapper_args(wrapper_parser)
         args = hierarchical_parse_args(parser)
         env = hsr.util.env_wrapper(get_env)(**args)
-        env.steps_per_episode = num_steps
+        #env.steps_per_episode = num_steps
         #setting up the action with the appropiate bounds
 
 
@@ -498,8 +515,8 @@ class Train(abc.ABC):
         #self.counter = state_dict["counter"]
         #self.rollouts.masks[0] = state_dict["rollouts"]
         self.i = state_dict.get("step", -1) + 1
-        # if isinstance(self.envs.venv, VecNormalize):
-        #     self.envs.venv.load_state_dict(state_dict["vec_normalize"])
+        #if isinstance(self.envs.venv, VecNormalize):
+        #    self.envs.venv.load_state_dict(state_dict["vec_normalize"])
         print(f"Loaded parameters from {load_path}.")
 
     @abc.abstractmethod
