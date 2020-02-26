@@ -80,7 +80,10 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         return hx, hx[-1:]
 
     def parse_hidden(self, hx: torch.Tensor) -> RecurrentState:
-        return RecurrentState(*torch.split(hx, self.state_sizes, dim=-1))
+        state_sizes = self.state_sizes._replace(P=0)
+        if hx.size(-1) == sum(self.state_sizes):
+            state_sizes = self.state_sizes
+        return RecurrentState(*torch.split(hx, state_sizes, dim=-1))
 
     def inner_loop(self, inputs, rnn_hxs):
         T, N, dim = inputs.shape

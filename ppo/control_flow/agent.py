@@ -60,7 +60,9 @@ class Agent(ppo.agent.Agent, NNBase):
 
     @property
     def recurrent_hidden_state_size(self):
-        return sum(self.recurrent_module.state_sizes)
+        state_sizes = self.recurrent_module.state_sizes
+        state_sizes = state_sizes._replace(P=0)
+        return sum(state_sizes)
 
     @property
     def is_recurrent(self):
@@ -112,13 +114,14 @@ class Agent(ppo.agent.Agent, NNBase):
         action = torch.cat(X, dim=-1)
         nlines = len(rm.obs_spaces.lines.nvec)
         P = hx.P.reshape(-1, N, nlines, 2 * nlines, rm.ne)
+        rnn_hxs = torch.cat(hx._replace(P=torch.tensor([], device=hx.P.device)), dim=-1)
         return AgentValues(
             value=hx.v,
             action=action,
             action_log_probs=action_log_probs,
             aux_loss=aux_loss,
             dist=None,
-            rnn_hxs=last_hx,
+            rnn_hxs=rnn_hxs,
             log=dict(entropy=entropy, P=P),
         )
 
