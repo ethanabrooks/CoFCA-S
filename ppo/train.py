@@ -118,6 +118,8 @@ class Train(abc.ABC):
             cuda = False
 
         # reproducibility
+
+        seed = 0
         torch.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
         np.random.seed(seed)
@@ -232,6 +234,7 @@ class Train(abc.ABC):
         
         self.envs.train()
         obs = self.envs.reset()
+        print("RESET: ", obs)
         self.rollouts.obs[0].copy_(obs)
         tick = time.time()
         log_progress = None
@@ -295,12 +298,22 @@ class Train(abc.ABC):
         iterator = range(num_steps)
         if use_tqdm:
             iterator = tqdm(iterator, desc="evaluating")
+        test = np.zeros(50)
+        #print("Initial observation: ", obs)
 
         for step in iterator:
             with torch.no_grad():
                 act = self.agent(
                     inputs=obs, rnn_hxs=rnn_hxs, masks=masks
                 )  # type: AgentValues
+
+
+            #print("Observations: ", obs)
+            #print("RNN_HXS: ", rnn_hxs)
+            #print("Masks: ", masks)
+            #print("Action: ", act.action)
+            #print("Log probs: ", act.action_log_probs)
+            #print("Value: ", act.value)
 
 
             # Observe reward and next obs
@@ -318,9 +331,11 @@ class Train(abc.ABC):
             # track rewards
             counter["reward"] += reward.numpy()
             test += reward.numpy()
+
             #counter["reward"] = counter["reward"].astype(float)
             #print(counter['reward'])
             #print(episode_counter)
+
             counter["time_step"] += np.ones_like(done)
             episode_rewards = counter["reward"][done]
             episode_counter["rewards"] += list(episode_rewards)
@@ -341,7 +356,7 @@ class Train(abc.ABC):
 
            
 
-            # If done then clean the history of observations.
+            # If done then clean the history of o bservations.
             masks = torch.tensor(
                 1 - done, dtype=torch.float32, device=obs.device
             ).unsqueeze(1)
@@ -356,17 +371,19 @@ class Train(abc.ABC):
                     rewards=reward,
                     masks=masks,
                 )
+
+        test = test >= 1
+        print("Reward realistic: ", np.mean(test))
+        print("Reward: ", np.mean(episode_counter["rewards"]))
+        #print("Means: ", np.array([env.mean for env in self.envs.venv.envs]))
         #print("Reward average: ", np.mean(episode_counter['rewards']))
         #print("Reward sum: ", np.sum(episode_counter['rewards']))
         #print("Log probs: ", act.action_log_probs)
         #print("Masks: ", masks)
         #print("rnn_hxs: ", act.rnn_hxs)
         #print("Values: ", act.value)
-        #print("Len: ",len(episode_counter['rewards']))
-        test = test >= 1
-        print("Reward realistic: ", np.mean(test))
-        print("Reward: ", np.mean(episode_counter["rewards"]))
-        #print("Rewards: ", episode_counter)
+        #print("Len: ",len(episode_counter['rewards'])
+
         return dict(episode_counter)
 
     @staticmethod
@@ -395,7 +412,8 @@ class Train(abc.ABC):
         is_atari = hasattr(gym.envs, "atari") and isinstanice(
             env.unwrapped, gym.envs.atari.atari_env.AtariEnv
         )
-        env.seed(seed + rank)
+        #env.seed(seed + rank)
+        env.seed(0)
         obs_shape = env.observation_space.shape
         if add_timestep and len(obs_shape) == 1 and str(env).find("TimeLimit") > -1:
             env = AddTimestep(env)
@@ -477,6 +495,11 @@ class Train(abc.ABC):
         # if isinstance(self.envs.venv, VecNormalize):
         #     modules.update(vec_normalize=self.envs.venv)
         state_dict = {name: module.state_dict() for name, module in modules.items()}
+        #state_dict["agent_obj"] = self.agent
+        #state_dict["ppo"] = self.ppo
+        #state_dict["counter"] = self.counter
+        #state_dict["rollouts"] = self.rollouts
+        #state_dict["envs"] = self.envs
         save_path = Path(checkpoint_dir, "checkpoint.pt")
         torch.save(dict(step=self.i, **state_dict), save_path)
         print(f"Saved parameters to {save_path}")
@@ -487,6 +510,10 @@ class Train(abc.ABC):
         state_dict = torch.load(load_path, map_location=self.device)
         self.agent.load_state_dict(state_dict["agent"])
         self.ppo.optimizer.load_state_dict(state_dict["optimizer"])
+        #self.agent = state_dict["agent"]
+        #self.ppo = state_dict["ppo"]
+        #self.counter = state_dict["counter"]
+        #self.rollouts.masks[0] = state_dict["rollouts"]
         self.i = state_dict.get("step", -1) + 1
         #if isinstance(self.envs.venv, VecNormalize):
         #    self.envs.venv.load_state_dict(state_dict["vec_normalize"])
