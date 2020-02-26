@@ -61,8 +61,8 @@ def main(log_dir, seed, eval_lines, one_line, **kwargs):
 
         def process_infos(self, episode_counter, done, infos, **act_log):
             P = act_log.pop("P")
-            if P.shape[1] > 0:
-                P = P.transpose(0, 1)[done]
+            P = P.transpose(0, 1)[done]
+            if P.size(0) > 0:
                 P = P.cpu().numpy()
                 episode_counter["P"] += np.split(P, P.shape[0])
             for d in infos:
