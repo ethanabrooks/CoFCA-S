@@ -371,7 +371,7 @@ class Train(abc.ABC):
                 1 - done, dtype=torch.float32, device=obs.device
             ).unsqueeze(1)
             rnn_hxs = act.rnn_hxs
-            print("Inserting obs: ", done)
+            
             if self.rollouts is not None:
                 self.rollouts.insert(
                     obs=obs,
@@ -389,9 +389,9 @@ class Train(abc.ABC):
         #print("Means: ", np.array([env.mean for env in self.envs.venv.envs]))
         #print("Reward average: ", np.mean(episode_counter['rewards']))
         #print("Reward sum: ", np.sum(episode_counter['rewards']))
-        print("Log probs: ", act.action_log_probs)
-        print("Masks: ", masks)
-        print("rnn_hxs: ", act.rnn_hxs)
+        #print("Log probs: ", act.action_log_probs)
+        #print("Masks: ", masks)
+        #print("rnn_hxs: ", act.rnn_hxs)
         #print("Values: ", act.value)
         #print("Len: ",len(episode_counter['rewards'])
 
