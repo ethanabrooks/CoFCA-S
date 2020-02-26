@@ -119,7 +119,6 @@ class Env(gym.Env, ABC):
         actions = []
         program_counter = []
         evaluations = []
-        observations = []
 
         agent_ptr = 0
         info = {}
@@ -145,7 +144,6 @@ class Env(gym.Env, ABC):
                     actions=actions,
                     program_counter=program_counter,
                     evaluations=evaluations,
-                    observations=observations,
                 )
 
             info.update(regret=1 if term and not success else 0)
@@ -188,7 +186,6 @@ class Env(gym.Env, ABC):
 
             self._render = render
             obs = self.get_observation(state.obs, state.ptr, lines)
-            observations.append(obs["obs"])
 
             action = (yield obs, reward, term, info)
             actions += [list(action.astype(int))]
