@@ -33,21 +33,25 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         self.conv_hidden_size = conv_hidden_size
         recurrence.Recurrence.__init__(self, hidden_size=hidden_size, **kwargs)
         abstract_recurrence.Recurrence.__init__(
-            self, conv_hidden_size=self.encoder_hidden_size
+            self, conv_hidden_size=self.conv_hidden_size
         )
         self.zeta = init_(
             nn.Linear(
-                hidden_size + self.gru_hidden_size + 2 * self.encoder_hidden_size,
+                hidden_size
+                + self.gru_hidden_size
+                + self.encoder_hidden_size
+                + self.conv_hidden_size,
                 hidden_size,
             )
         )
-        gc.collect()
         self.zeta2 = init_(
             nn.Linear(
-                self.encoder_hidden_size + self.gru_hidden_size + self.ne, hidden_size
+                self.gru_hidden_size + self.conv_hidden_size + self.ne, hidden_size
             )
         )
-        self.gru2 = LSTMCell(self.encoder_hidden_size, self.gru_hidden_size)
+        self.gru = LSTMCell(self.encoder_hidden_size, self.gru_hidden_size)
+        gc.collect()
+        self.linear = init_(nn.Linear(self.encoder_hidden_size, conv_hidden_size))
         self.d_gate = Categorical(hidden_size, 2)
         self.a_gate = Categorical(hidden_size, 2)
         state_sizes = self.state_sizes._asdict()
@@ -135,9 +139,9 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             a_gate = self.a_gate(z)
             self.sample_new(AG[t], a_gate)
 
-            (hy_, cy_), gru_gate = self.gru2(M[R, p], (hy, cy))
-            obs = obs * M[R, p]
-            decode_inputs = [hy_, obs, u]  # first put obs back in gru2
+            (hy_, cy_), gru_gate = self.gru(M[R, p], (hy, cy))
+            obs = obs * self.linear(M[R, p])
+            decode_inputs = [hy_, obs, u]  # first put obs back in gru
             z = F.relu(self.zeta2(torch.cat(decode_inputs, dim=-1)))
             u = self.upsilon(z).softmax(dim=-1)
             self.print("u", u)
