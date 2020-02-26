@@ -50,6 +50,7 @@ class _Train(Train):
                 
                 print("New tensorboard entry")
                 print("Result: ", result)
+
                 if self.writer is not None:
                     total_num_steps = (self.i + 1) * self.num_processes * self.num_steps
                     for k, v in k_scalar_pairs(**result):
