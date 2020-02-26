@@ -202,46 +202,6 @@ def maze_cli():
     parsers.agent.add_argument("--baseline", choices=["one-shot"])
     train_maze(**hierarchical_parse_args(parser))
 
-"""def hierarchical_parse_args(parser: argparse.ArgumentParser,
-                            include_positional=False):
-    
-    :return:
-    {
-        group1: {**kwarg.
-        group2: {**kwargs}
-        ...
-        **kwargs
-    }
-    
-    args = parser.parse_args(['--sum', '7', '-1', '42'])
-    print(args)
-
-    def key_value_pairs(group):
-        for action in group._group_actions:
-            if action.dest != 'help':
-                yield action.dest, getattr(args, action.dest, None)
-
-    def get_positionals(groups):
-        for group in groups:
-            if group.title == 'positional arguments':
-                for k, v in key_value_pairs(group):
-                    yield v
-
-    def get_nonpositionals(groups: List[argparse._ArgumentGroup]):
-        for group in groups:
-            if group.title != 'positional arguments':
-                children = key_value_pairs(group)
-                descendants = get_nonpositionals(group._action_groups)
-                yield group.title, {**dict(children), **dict(descendants)}
-
-    positional = list(get_positionals(parser._action_groups))
-    nonpositional = dict(get_nonpositionals(parser._action_groups))
-    optional = nonpositional.pop('optional arguments')
-    nonpositional = {**nonpositional, **optional}
-    if include_positional:
-        return positional, nonpositional
-    return nonpositional"""
-
 
 
 def cli():

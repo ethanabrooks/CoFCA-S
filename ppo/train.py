@@ -48,7 +48,7 @@ def hierarchical_parse_args(parser: argparse.ArgumentParser,
     #"--use-dof", "wrist_roll_joint", "--use-dof", "slide_x", "--use-dof", "slide_y", "--render","--n-blocks=1"])
     args = parser.parse_args(["--block-space", "(0,0)(0,0)(0.418,0.418)(1,1)(0,0)(0,0)(0,0)", "--steps-per-action=30", "--geofence=.5", "--goal-space", \
         "(0,0)(0,0)(.418,.418)", "--use-dof", "arm_flex_joint", "--use-dof", "hand_l_proximal_joint", "--use-dof", "hand_r_proximal_joint", "--use-dof", \
-            "wrist_flex_joint", "--use-dof", "arm_roll_joint", "--use-dof", "wrist_roll_joint", "--use-dof", "slide_x", "--use-dof", "slide_y","--n-blocks=1"]) 
+            "wrist_flex_joint", "--use-dof", "arm_roll_joint", "--use-dof", "wrist_roll_joint", "--use-dof", "slide_x", "--use-dof", "slide_y","--n-blocks=1", "--render-freq=1"]) 
 
 
     def key_value_pairs(group):
@@ -130,7 +130,6 @@ class Train(abc.ABC):
         self.device = "cpu"
         if cuda:
             self.device = self.get_device()
-        # print("Using device", self.device)
 
         self.envs = self.make_vec_envs(
             **env_args,
@@ -214,6 +213,7 @@ class Train(abc.ABC):
             )
             eval_masks = torch.zeros(num_processes, 1, device=self.device)
             eval_counter = Counter()
+            
             eval_result = self.run_epoch(
                 obs=self.envs.reset(),
                 rnn_hxs=eval_recurrent_hidden_states,
@@ -262,10 +262,15 @@ class Train(abc.ABC):
                     self.rollouts.recurrent_hidden_states[-1],
                     self.rollouts.masks[-1],
                 ).detach()
+            
 
             self.rollouts.compute_returns(next_value=next_value)
+            
+
             train_results = self.ppo.update(self.rollouts)
             self.rollouts.after_update()
+            print(self.rollouts.obs[0])
+
             if log_progress is not None:
                 log_progress.update()
             # print(self.i, self.i % self.log_interval)
@@ -288,7 +293,7 @@ class Train(abc.ABC):
     def run_epoch(
         self, obs, rnn_hxs, masks, num_steps, counter, success_reward, use_tqdm
     ):
-
+        print("First observation: ", obs)
         # noinspection PyTypeChecker
         test = np.zeros(50)
         episode_counter = Counter(rewards=[], time_steps=[], success=[])
@@ -302,12 +307,17 @@ class Train(abc.ABC):
                     inputs=obs, rnn_hxs=rnn_hxs, masks=masks
                 )  # type: AgentValues
 
-
+            
             # Observe reward and next obs
             obs, reward, done, infos = self.envs.step(act.action)
             #print("action: ", act.action, "obs: ", obs, " rew: ", reward, " done: ", done, " infos: ", infos)
             #print("Count: ", count)
-
+            print("Observations: ", obs)
+            print("RNN_HXS: ", rnn_hxs)
+            print("Masks: ", masks)
+            print("Action: ", act.action)
+            print("Log probs: ", act.action_log_probs)
+            print("Value: ", act.value)            
             
             
             for d in infos:
@@ -346,6 +356,7 @@ class Train(abc.ABC):
                 1 - done, dtype=torch.float32, device=obs.device
             ).unsqueeze(1)
             rnn_hxs = act.rnn_hxs
+            print("Inserting obs: ", done)
             if self.rollouts is not None:
                 self.rollouts.insert(
                     obs=obs,
@@ -358,14 +369,15 @@ class Train(abc.ABC):
                 )
         #print("Reward average: ", np.mean(episode_counter['rewards']))
         #print("Reward sum: ", np.sum(episode_counter['rewards']))
-        #print("Log probs: ", act.action_log_probs)
-        #print("Masks: ", masks)
-        #print("rnn_hxs: ", act.rnn_hxs)
+        print("Log probs: ", act.action_log_probs)
+        print("Masks: ", masks)
+        print("rnn_hxs: ", act.rnn_hxs)
         #print("Values: ", act.value)
         #print("Len: ",len(episode_counter['rewards']))
         test = test >= 1
         print("Reward realistic: ", np.mean(test))
         print("Reward: ", np.mean(episode_counter["rewards"]))
+        #print(self.agent.state_dict())
         #print("Rewards: ", episode_counter)
         return dict(episode_counter)
 
@@ -395,6 +407,7 @@ class Train(abc.ABC):
         is_atari = hasattr(gym.envs, "atari") and isinstanice(
             env.unwrapped, gym.envs.atari.atari_env.AtariEnv
         )
+        
         env.seed(seed + rank)
         obs_shape = env.observation_space.shape
         if add_timestep and len(obs_shape) == 1 and str(env).find("TimeLimit") > -1:
@@ -477,6 +490,11 @@ class Train(abc.ABC):
         # if isinstance(self.envs.venv, VecNormalize):
         #     modules.update(vec_normalize=self.envs.venv)
         state_dict = {name: module.state_dict() for name, module in modules.items()}
+
+        #state_dict["envs"] = self.envs
+        #state_dict["stats"] = [stat for stat in self.envs.venv.specs]
+
+
         save_path = Path(checkpoint_dir, "checkpoint.pt")
         torch.save(dict(step=self.i, **state_dict), save_path)
         print(f"Saved parameters to {save_path}")
@@ -486,6 +504,21 @@ class Train(abc.ABC):
         load_path = checkpoint
         state_dict = torch.load(load_path, map_location=self.device)
         self.agent.load_state_dict(state_dict["agent"])
+        #print(self.agent.state_dict())
+        #self.agent = state_dict["agent_obj"]
+        #self.ppo = state_dict["ppo"]
+        #self.counter = state_dict["counter"]
+        #self.rollouts.masks[0].copy_(state_dict["rollouts"].masks[-1])
+        #self.rollouts.obs[0].copy_(state_dict["rollouts"].obs[-1])
+        #self.rollouts.recurrent_hidden_states[0].copy_(state_dict["rollouts"].recurrent_hidden_states[-1])
+        #print(self.envs.venv.envs)
+        #for env, mean, n in zip(self.envs.venv.envs, state_dict["means"], state_dict["n"]) :
+        #    env.mean = mean
+        #    env.n += n
+        
+
+
+        
         self.ppo.optimizer.load_state_dict(state_dict["optimizer"])
         self.i = state_dict.get("step", -1) + 1
         #if isinstance(self.envs.venv, VecNormalize):
