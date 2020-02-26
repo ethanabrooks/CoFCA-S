@@ -22,78 +22,29 @@ EDGES: Dict[L, Tuple[List[L], List[L]]] = {
 }
 
 
-def compute_jump(instruction, dest, _from, backward) -> int:
+def classify(
+    actions: np.ndarray, instruction: np.ndarray, successes: np.ndarray
+) -> float:
+    import ipdb  # type:ignore
+
+    ipdb.set_trace()
     raise NotImplementedError
-
-
-def compute_cross_entropy(P: np.ndarray, instruction: np.ndarray) -> float:
-    assert P.shape[:2] == (1, 1)
-    P = np.squeeze(P)
-    done = []
-
-    def compute_with_ptr(ptr: int) -> float:
-
-        if ptr in done or ptr >= len(instruction):
-            return 0
-        done.append(ptr)
-        # print(f"ptr: {ptr}")
-
-        def cross_entropy(jump: int, _P: torch.Tensor) -> float:
-            p = _P[ptr].T  # type: ignore
-            no_op = _P.size(1) // 2
-            j = torch.tensor([jump + no_op] * _P.size(-1))
-            return F.cross_entropy(p, j, reduction="none").min().item()
-
-        def cross_entropy_with_dest(dest: L, backward: bool) -> float:
-            def compute_jump_to(dest: L) -> Optional[int]:
-                if dest == L.Any:
-                    assert not backward
-                    return 1
-                i = torch.tensor(instruction).roll(shifts=-int(ptr), dims=0)
-                hits, = np.where(i[:, 0] == dest.value - 1)
-                if hits.size:
-                    # not empty
-                    if backward:
-                        return hits[-1] - len(instruction)
-                    else:
-                        return hits[0]
-                return None
-
-            jump = compute_jump_to(dest=dest)
-            if jump is None:
-                # dest does not exist (e.g. else)
-                return 0
-            return min(
-                (cross_entropy(jump, torch.tensor(P)) + compute_with_ptr(ptr + jump))
-                for jump in (jump, jump + 1)
-            )
-
-        backward_edges, forward_edges = EDGES[L(instruction[ptr, 0] + 1)]
-        backward_cross_entropy = sum(
-            cross_entropy_with_dest(dest, backward=True) for dest in backward_edges
-        )
-        forward_cross_entropy = sum(
-            cross_entropy_with_dest(dest, backward=False) for dest in forward_edges
-        )
-        return backward_cross_entropy + forward_cross_entropy
-
-    return compute_with_ptr(0)
 
 
 def main(root: Path, path: Path) -> None:
     path = Path(root, path)
     actions = np.load(Path(path, "eval_actions.npz"))
     instructions = np.load(Path(path, "eval_instruction.npz"))
-    successes = np.load(Path(path, "eval
-    assert len(actions) == len(instructions)
+    successes = np.load(Path(path, "eval_successes.npy"))
+    assert len(actions) == len(instructions) == len(successes)
 
-    def classify_failures() -> Generator[float, None, None]:
+    def iterator() -> Generator[float, None, None]:
         for args in tqdm(
-            zip(actions.values(), instructions.values()), total=len(actions)
+            zip(actions.values(), instructions.values(), successes), total=len(actions)
         ):
-            yield compute_cross_entropy(*args)
+            yield classify(*args)
 
-    print(np.mean(list(compute_cross_entropies())))
+    print(list(iterator()))
 
 
 if __name__ == "__main__":
