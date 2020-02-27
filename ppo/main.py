@@ -63,6 +63,7 @@ class _Train(Train):
                 ):
                     self._save(str(self.log_dir))
                     self.last_save = time.time()
+                    print("SAVE"*500)
 
     def get_device(self):
         match = re.search("\d+$", self.run_id)
