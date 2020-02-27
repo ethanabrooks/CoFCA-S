@@ -234,7 +234,6 @@ class Train(abc.ABC):
         
         self.envs.train()
         obs = self.envs.reset()
-        print("RESET: ", obs)
         self.rollouts.obs[0].copy_(obs)
         tick = time.time()
         log_progress = None
@@ -272,7 +271,6 @@ class Train(abc.ABC):
 
             train_results = self.ppo.update(self.rollouts)
             self.rollouts.after_update()
-            print(self.rollouts.obs[0])
 
             if log_progress is not None:
                 log_progress.update()
@@ -313,24 +311,18 @@ class Train(abc.ABC):
                 )  # type: AgentValues
 
 
-            #print("Observations: ", obs)
-            #print("RNN_HXS: ", rnn_hxs)
-            #print("Masks: ", masks)
-            #print("Action: ", act.action)
-            #print("Log probs: ", act.action_log_probs)
-            #print("Value: ", act.value)
 
 
             # Observe reward and next obs
             obs, reward, done, infos = self.envs.step(act.action)
             #print("action: ", act.action, "obs: ", obs, " rew: ", reward, " done: ", done, " infos: ", infos)
             #print("Count: ", count)
-            print("Observations: ", obs)
-            print("RNN_HXS: ", rnn_hxs)
-            print("Masks: ", masks)
-            print("Action: ", act.action)
-            print("Log probs: ", act.action_log_probs)
-            print("Value: ", act.value)            
+            #print("Observations: ", obs)
+            #print("RNN_HXS: ", rnn_hxs)
+            #print("Masks: ", masks)
+            #print("Action: ", act.action)
+            #print("Log probs: ", act.action_log_probs)
+            #print("Value: ", act.value)            
             
             
             for d in infos:
@@ -412,7 +404,7 @@ class Train(abc.ABC):
         hsr.util.add_wrapper_args(wrapper_parser)
         args = hierarchical_parse_args(parser)
         env = hsr.util.env_wrapper(get_env)(**args)
-        #env.steps_per_episode = num_steps
+        env.steps_per_episode = num_steps
         #setting up the action with the appropiate bounds
 
 
