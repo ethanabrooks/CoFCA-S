@@ -57,7 +57,7 @@ class Recurrence(nn.Module):
         n_a, n_p = map(int, action_space.nvec[:2])
         self.n_a = n_a
         self.embed_task = self.build_embed_task(encoder_hidden_size)
-        self.embed_action = nn.Embedding(n_a, hidden_size)
+        self.embed_action = nn.Embedding(n_a, encoder_hidden_size)
         self.task_encoder = nn.GRU(
             encoder_hidden_size,
             encoder_hidden_size,
