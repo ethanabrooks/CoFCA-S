@@ -42,6 +42,7 @@ class Env(gym.Env, ABC):
         num_subtasks,
         max_nesting_depth,
         eval_condition_size,
+        single_control_flow_type,
         no_op_limit,
         time_to_waste,
         subtasks_only,
@@ -59,6 +60,7 @@ class Env(gym.Env, ABC):
         self.subtasks_only = subtasks_only
         self.no_op_limit = no_op_limit
         self._eval_condition_size = eval_condition_size
+        self._single_control_flow_type = single_control_flow_type
         self.max_nesting_depth = max_nesting_depth
         self.num_subtasks = num_subtasks
         self.time_to_waste = time_to_waste
@@ -216,6 +218,10 @@ class Env(gym.Env, ABC):
     def eval_condition_size(self):
         return self._eval_condition_size and self.evaluating
 
+    @property
+    def single_control_flow_type(self):
+        return self._single_control_flow_type and not self.evaluating
+
     def build_lines(self):
         if self.evaluating:
             assert self.eval_lines is not None
@@ -230,8 +236,14 @@ class Env(gym.Env, ABC):
             lines = [line0] + [Subtask] * (edge_length - 2)
             lines += [EndWhile if line0 is While else EndIf, Subtask]
         else:
+            control_flow_types = [If, While, Loop]
+            if self.single_control_flow_type:
+                control_flow_types = [np.random.choice(control_flow_types)]
             lines = self.choose_line_types(
-                n_lines, active_conditions=[], max_nesting_depth=self.max_nesting_depth
+                n_lines,
+                active_conditions=[],
+                max_nesting_depth=self.max_nesting_depth,
+                control_flow_types=control_flow_types,
             )
         return list(self.assign_line_ids(lines))
 
@@ -249,7 +261,13 @@ class Env(gym.Env, ABC):
         return self.possible_lines.index(line)
 
     def choose_line_types(
-        self, n, active_conditions, last=None, nesting_depth=0, max_nesting_depth=None
+        self,
+        n,
+        active_conditions,
+        control_flow_types,
+        last=None,
+        nesting_depth=0,
+        max_nesting_depth=None,
     ):
         if n < 0:
             return []
@@ -267,7 +285,7 @@ class Env(gym.Env, ABC):
             and (max_nesting_depth is None or nesting_depth < max_nesting_depth)
             and not self.subtasks_only
         ):
-            line_types += [If, While, Loop]
+            line_types += control_flow_types
         if active_conditions and last is Subtask:
             last_condition = active_conditions[-1]
             if last_condition is If:
@@ -292,6 +310,7 @@ class Env(gym.Env, ABC):
         get_lines = self.choose_line_types(
             n - 1,
             active_conditions=active_conditions,
+            control_flow_types=control_flow_types,
             last=line_type,
             nesting_depth=nesting_depth,
             max_nesting_depth=max_nesting_depth,
@@ -453,6 +472,7 @@ def build_parser(p):
     p.add_argument("--no-op-limit", type=int)
     p.add_argument("--flip-prob", type=float, default=0.5)
     p.add_argument("--eval-condition-size", action="store_true")
+    p.add_argument("--single-control-flow-type", action="store_true")
     p.add_argument("--max-nesting-depth", type=int)
     p.add_argument("--subtasks-only", action="store_true")
     p.add_argument("--break-on-fail", action="store_true")
