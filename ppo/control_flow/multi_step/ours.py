@@ -1,5 +1,5 @@
 import gc
-from collections import namedtuple, deque
+from collections import namedtuple
 from pathlib import Path
 
 import numpy as np
@@ -15,7 +15,7 @@ from ppo.utils import init_
 
 RecurrentState = namedtuple(
     "RecurrentState",
-    "a d u ag dg p v a_probs d_probs ag_probs dg_probs P line_history",
+    "a d u ag dg p v h hy cy a_probs d_probs ag_probs dg_probs gru_gate P",
 )
 
 
@@ -26,52 +26,45 @@ def gate(g, new, old):
 
 class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
     def __init__(
-        self,
-        hidden_size,
-        conv_hidden_size,
-        gate_coef,
-        gru_gate_coef,
-        context_size,
-        **kwargs
+        self, hidden_size, conv_hidden_size, gate_coef, gru_gate_coef, **kwargs
     ):
         self.gru_gate_coef = gru_gate_coef
         self.gate_coef = gate_coef
         self.conv_hidden_size = conv_hidden_size
-        self.context_size = context_size
         recurrence.Recurrence.__init__(self, hidden_size=hidden_size, **kwargs)
         abstract_recurrence.Recurrence.__init__(
             self, conv_hidden_size=self.conv_hidden_size
         )
         self.zeta = init_(
             nn.Linear(
-                # hidden_size
-                # self.gru_hidden_size
-                2 * self.encoder_hidden_size + self.conv_hidden_size,
+                hidden_size
+                + self.gru_hidden_size
+                + self.encoder_hidden_size
+                + self.conv_hidden_size,
                 hidden_size,
             )
         )
         self.zeta2 = init_(
             nn.Linear(
-                self.encoder_hidden_size * context_size + self.conv_hidden_size,
-                hidden_size,
+                self.gru_hidden_size + self.conv_hidden_size + self.ne, hidden_size
             )
         )
-        # self.gru = LSTMCell(self.encoder_hidden_size, self.gru_hidden_size)
-        del self.gru
+        self.gru = LSTMCell(self.encoder_hidden_size, self.gru_hidden_size)
         gc.collect()
         self.linear = init_(nn.Linear(self.encoder_hidden_size, conv_hidden_size))
         self.d_gate = Categorical(hidden_size, 2)
         self.a_gate = Categorical(hidden_size, 2)
         state_sizes = self.state_sizes._asdict()
-        del state_sizes["h"]
         self.state_sizes = RecurrentState(
             **state_sizes,
+            hy=self.gru_hidden_size,
+            cy=self.gru_hidden_size,
             ag_probs=2,
             dg_probs=2,
             ag=1,
             dg=1,
-            P=self.ne * 2 * self.train_lines ** 2,
-            line_history=self.encoder_hidden_size * context_size
+            gru_gate=self.gru_hidden_size,
+            P=self.ne * 2 * self.train_lines ** 2
         )
 
     @property
@@ -118,13 +111,11 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         for _x in hx:
             _x.squeeze_(0)
 
-        line_history = deque(
-            hx.line_history.reshape(
-                N, self.encoder_hidden_size, self.context_size
-            ).unbind(-1),
-            maxlen=self.context_size,
-        )
+        h = hx.h
+        hy = hx.hy
+        cy = hx.cy
         p = hx.p.long().squeeze(-1)
+        u = hx.u
         hx.a[new_episode] = self.n_a - 1
         ag_probs = hx.ag_probs
         ag_probs[new_episode, 1] = 1
@@ -139,7 +130,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             self.print("p", p)
             obs = self.preprocess_obs(inputs.obs[t])
             # h = self.gru(obs, h)
-            zeta_inputs = [M[R, p], obs, self.embed_action(A[t - 1].clone())]
+            zeta_inputs = [h, M[R, p], obs, self.embed_action(A[t - 1].clone())]
             z = F.relu(self.zeta(torch.cat(zeta_inputs, dim=-1)))
             # then put M back in gru
             # then put A back in gru
@@ -148,11 +139,10 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             a_gate = self.a_gate(z)
             self.sample_new(AG[t], a_gate)
 
-            # (hy_, cy_), gru_gate = self.gru(M[R, p], (hy, cy))
-            line_history.append(M[R, p])
-            line_history_tensor = torch.cat(list(line_history), dim=-1)
-            zeta_inputs = [line_history_tensor, obs]
-            z = F.relu(self.zeta2(torch.cat(zeta_inputs, dim=-1)))
+            (hy_, cy_), gru_gate = self.gru(M[R, p], (hy, cy))
+            obs = obs * self.linear(M[R, p])
+            decode_inputs = [hy_, obs, u]  # first put obs back in gru
+            z = F.relu(self.zeta2(torch.cat(decode_inputs, dim=-1)))
             u = self.upsilon(z).softmax(dim=-1)
             self.print("u", u)
             w = P[p, R]
@@ -171,12 +161,15 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             self.sample_new(A[t], a_dist)
             self.print("ag prob", a_gate.probs[:, 1])
             self.print("ag", ag)
-            # hy = dg * hy_ + (1 - dg) * hy
-            # cy = dg * cy_ + (1 - dg) * cy
+            hy = dg * hy_ + (1 - dg) * hy
+            cy = dg * cy_ + (1 - dg) * cy
             yield RecurrentState(
                 a=A[t],
                 v=self.critic(z),
+                h=h,
                 u=u,
+                hy=hy,
+                cy=cy,
                 p=p,
                 a_probs=a_dist.probs,
                 d=D[t],
@@ -185,6 +178,6 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 dg_probs=d_gate.probs,
                 ag=ag,
                 dg=dg,
+                gru_gate=gru_gate,
                 P=P.transpose(0, 1),
-                line_history=line_history_tensor,
             )

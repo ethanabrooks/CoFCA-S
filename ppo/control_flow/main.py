@@ -118,7 +118,6 @@ def control_flow_args():
     parsers.agent.add_argument("--gru-hidden-size", type=int, required=True)
     parsers.agent.add_argument("--encoder-hidden-size", type=int, required=True)
     parsers.agent.add_argument("--num-encoding-layers", type=int, required=True)
-    parsers.agent.add_argument("--context-size", type=int, required=True)
     parsers.agent.add_argument("--num-edges", type=int, required=True)
     parsers.agent.add_argument("--gate-coef", type=float, required=True)
     parsers.agent.add_argument("--gru-gate-coef", type=float, required=True)
