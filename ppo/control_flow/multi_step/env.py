@@ -20,6 +20,25 @@ from ppo.control_flow.lines import (
     Loop,
     EndLoop,
 )
+from ppo.control_flow.multi_step.subtasks import Subtask
+
+
+# @match(Subtask)
+# class perform(object):
+#     def Mine(item):
+#         raise NotImplementedError
+#
+#     def GoTo(coord):
+#         raise NotImplementedError
+#
+#     def Place(item, coord):
+#         raise NotImplementedError
+#
+#     def BuildBridge():
+#         raise NotImplementedError
+#
+#     def Sell(item):
+#         raise NotImplementedError
 
 
 class Env(ppo.control_flow.env.Env):
