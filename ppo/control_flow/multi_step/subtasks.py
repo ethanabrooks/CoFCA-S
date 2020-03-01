@@ -1,4 +1,4 @@
-from attr import attr
+import attr
 from attr.validators import in_, instance_of
 from sumtypes import sumtype, constructor
 

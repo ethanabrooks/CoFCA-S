@@ -20,7 +20,6 @@ from ppo.control_flow.lines import (
     Loop,
     EndLoop,
 )
-from ppo.control_flow.multi_step.subtasks import Subtask
 
 
 # @match(Subtask)
