@@ -17,7 +17,7 @@ class Env(ppo.control_flow.multi_step.env.Env):
 
     def state_generator(self, lines):
         object_pos = self.populate_world(lines)
-        o = self.objects[int(self.random.choice(len(self.objects)))]
+        o = self.items[int(self.random.choice(len(self.items)))]
         self.line = line = (If, While)[int(self.random.choice(2))](id=o)
         agent_pos = self.random.randint(0, self.world_size, size=2)
 
