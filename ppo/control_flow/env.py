@@ -168,7 +168,7 @@ class Env(gym.Env, ABC):
                 if line.depth_change > 0:
                     level += line.depth_change
                 # if type(line) is Subtask:
-                yield f"{indent}{self.line_str(line)}"
+                yield f"{indent}{line}"
                 # else:
                 #     yield f"{indent}{line.__name__}"
                 # if line in [If, While, Else]:
@@ -208,12 +208,6 @@ class Env(gym.Env, ABC):
                 state = state_iterator.send(action)
                 evaluations.extend(state.condition_evaluations)
 
-    @staticmethod
-    def line_str(line: Line):
-        if type(line) in (Subtask, Loop):
-            return str(line)
-        return line.__class__.__name__
-
     @property
     def eval_condition_size(self):
         return self._eval_condition_size and self.evaluating
@@ -239,11 +233,13 @@ class Env(gym.Env, ABC):
             control_flow_types = [If, While, Loop]
             if self.single_control_flow_type:
                 control_flow_types = [np.random.choice(control_flow_types)]
-            lines = self.choose_line_types(
-                n_lines,
-                active_conditions=[],
-                max_nesting_depth=self.max_nesting_depth,
-                control_flow_types=control_flow_types,
+            lines = list(
+                Line.generate_lines(
+                    n_lines,
+                    remaining_depth=self.max_nesting_depth,
+                    random=self.random,
+                    legal_lines=control_flow_types + [Subtask],
+                )
             )
         return list(self.assign_line_ids(lines))
 
@@ -259,63 +255,6 @@ class Env(gym.Env, ABC):
     @functools.lru_cache(maxsize=120)
     def preprocess_line(self, line):
         return self.possible_lines.index(line)
-
-    def choose_line_types(
-        self,
-        n,
-        active_conditions,
-        control_flow_types,
-        last=None,
-        nesting_depth=0,
-        max_nesting_depth=None,
-    ):
-        if n < 0:
-            return []
-        if n == 0:
-            return []
-        if n == len(active_conditions):
-            lines = [self.pairs[c] for c in reversed(active_conditions)]
-            return lines + [Subtask for _ in range(n - len(lines))]
-        elif n == 1:
-            return [Subtask]
-        line_types = [Subtask]
-        enough_space = n > len(active_conditions) + 2
-        if (
-            enough_space
-            and (max_nesting_depth is None or nesting_depth < max_nesting_depth)
-            and not self.subtasks_only
-        ):
-            line_types += control_flow_types
-        if active_conditions and last is Subtask:
-            last_condition = active_conditions[-1]
-            if last_condition is If:
-                line_types += [EndIf]
-            if last_condition is If and enough_space:
-                line_types += [Else]
-            elif last_condition is Else:
-                line_types += [EndIf]
-            elif last_condition is While:
-                line_types += [EndWhile]
-            elif last_condition is Loop:
-                line_types += [EndLoop]
-        line_type = self.random.choice(line_types)
-        if line_type in [If, While, Loop]:
-            active_conditions = active_conditions + [line_type]
-            nesting_depth += 1
-        elif line_type is Else:
-            active_conditions = active_conditions[:-1] + [line_type]
-        elif line_type in [EndIf, EndWhile, EndLoop]:
-            active_conditions = active_conditions[:-1]
-            nesting_depth -= 1
-        get_lines = self.choose_line_types(
-            n - 1,
-            active_conditions=active_conditions,
-            control_flow_types=control_flow_types,
-            last=line_type,
-            nesting_depth=nesting_depth,
-            max_nesting_depth=max_nesting_depth,
-        )
-        return [line_type] + get_lines
 
     def line_generator(self, lines):
         line_transitions = defaultdict(list)
