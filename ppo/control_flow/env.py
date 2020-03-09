@@ -49,11 +49,13 @@ class Env(gym.Env, ABC):
         break_on_fail,
         max_loops,
         rank,
+        control_flow_types,
         seed=0,
         eval_lines=None,
         evaluating=False,
     ):
         super().__init__()
+        self.control_flow_types = control_flow_types
         self.rank = rank
         self.max_loops = max_loops
         self.break_on_fail = break_on_fail
@@ -230,9 +232,9 @@ class Env(gym.Env, ABC):
             lines = [line0] + [Subtask] * (edge_length - 2)
             lines += [EndWhile if line0 is While else EndIf, Subtask]
         else:
-            control_flow_types = [If, While, Loop]
+            control_flow_types = self.control_flow_types
             if self.single_control_flow_type:
-                control_flow_types = [np.random.choice(control_flow_types)]
+                control_flow_types = [np.random.choice(self.control_flow_types)]
             lines = self.choose_line_types(
                 n_lines,
                 control_flow_types=control_flow_types,
@@ -471,6 +473,11 @@ def build_parser(p):
     p.add_argument("--subtasks-only", action="store_true")
     p.add_argument("--break-on-fail", action="store_true")
     p.add_argument("--time-to-waste", type=int, required=True)
+    p.add_argument(
+        "--control-flow-types",
+        nargs="*",
+        type=lambda s: dict(If=If, While=While, Else=Else).get(s),
+    )
     return p
 
 
