@@ -168,7 +168,7 @@ class Env(gym.Env, ABC):
                 if line.depth_change > 0:
                     level += line.depth_change
                 # if type(line) is Subtask:
-                yield f"{indent}{self.line_str(line)}"
+                yield f"{indent}{line}"
                 # else:
                 #     yield f"{indent}{line.__name__}"
                 # if line in [If, While, Else]:
@@ -207,12 +207,6 @@ class Env(gym.Env, ABC):
                     info.update(success_line=state.prev, failure_line=state.ptr)
                 state = state_iterator.send(action)
                 evaluations.extend(state.condition_evaluations)
-
-    @staticmethod
-    def line_str(line: Line):
-        if type(line) in (Subtask, Loop):
-            return str(line)
-        return line.__class__.__name__
 
     @property
     def eval_condition_size(self):
