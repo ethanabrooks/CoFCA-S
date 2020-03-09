@@ -31,11 +31,11 @@ class Env(ppo.control_flow.env.Env):
     agent = "agent"
     mine = "mine"
     build = "build"
-    visit = "visit"
-    objects = [wood, gold, iron, merchant]
-    other_objects = [bridge, agent]
-    world_objects = objects + other_objects
-    interactions = [mine, build, visit]
+    goto = "goto"
+    items = [wood, gold, iron, merchant]
+    terrain = [bridge, agent]
+    world_contents = items + terrain
+    behaviors = [mine, build, goto]
 
     def __init__(
         self,
@@ -52,15 +52,15 @@ class Env(ppo.control_flow.env.Env):
         self.loops = None
 
         def subtasks():
-            for obj in self.objects:
-                for interaction in self.interactions:
+            for obj in self.items:
+                for interaction in self.behaviors:
                     yield interaction, obj
 
         self.subtasks = list(subtasks())
         num_subtasks = len(self.subtasks)
         super().__init__(num_subtasks=num_subtasks, **kwargs)
         self.world_size = world_size
-        self.world_shape = (len(self.world_objects), self.world_size, self.world_size)
+        self.world_shape = (len(self.world_contents), self.world_size, self.world_size)
 
         self.action_space = spaces.MultiDiscrete(
             np.array([num_subtasks + 1, 2 * self.n_lines, 2, 2, self.n_lines])
@@ -72,8 +72,8 @@ class Env(ppo.control_flow.env.Env):
                     [
                         [
                             len(self.line_types),
-                            1 + len(self.interactions),
-                            1 + len(self.objects),
+                            1 + len(self.behaviors),
+                            1 + len(self.items),
                             1 + self.max_loops,
                         ]
                     ]
@@ -94,7 +94,7 @@ class Env(ppo.control_flow.env.Env):
     def print_obs(self, obs):
         obs = obs.transpose(1, 2, 0).astype(int)
         grid_size = obs.astype(int).sum(-1).max()  # max objects per grid
-        chars = [" "] + [o for o, *_ in self.world_objects]
+        chars = [" "] + [o for o, *_ in self.world_contents]
         for i, row in enumerate(obs):
             string = ""
             for j, channel in enumerate(row):
@@ -113,13 +113,13 @@ class Env(ppo.control_flow.env.Env):
             return [self.line_types.index(Loop), 0, 0, line.id]
         elif type(line) is Subtask:
             i, o = line.id
-            i, o = self.interactions.index(i), self.objects.index(o)
+            i, o = self.behaviors.index(i), self.items.index(o)
             return [self.line_types.index(Subtask), i + 1, o + 1, 0]
         elif type(line) in (While, If):
             return [
                 self.line_types.index(type(line)),
                 0,
-                self.objects.index(line.id) + 1,
+                self.items.index(line.id) + 1,
                 0,
             ]
         else:
@@ -129,7 +129,7 @@ class Env(ppo.control_flow.env.Env):
         world = np.zeros(self.world_shape)
         for o, p in object_pos + [(self.agent, agent_pos)]:
             p = np.array(p)
-            world[tuple((self.world_objects.index(o), *p))] = 1
+            world[tuple((self.world_contents.index(o), *p))] = 1
         return world
 
     @staticmethod
@@ -269,11 +269,11 @@ class Env(ppo.control_flow.env.Env):
             obj = lines[while_line].id
             l = self.random.choice(block)
             i = self.random.choice(2)
-            assert self.interactions[i] in (self.mine, self.build)
-            line_id = self.interactions[i], obj
+            assert self.behaviors[i] in (self.mine, self.build)
+            line_id = self.behaviors[i], obj
             assert line_id in ((self.mine, obj), (self.build, obj))
             lines[l] = Subtask(line_id)
-            if not self.evaluating and obj in self.world_objects:
+            if not self.evaluating and obj in self.world_contents:
                 num_obj = self.random.randint(self.max_while_objects + 1)
                 if num_obj:
                     pos = self.random.randint(0, self.world_size, size=(num_obj, 2))
@@ -282,28 +282,26 @@ class Env(ppo.control_flow.env.Env):
         return object_pos
 
     def assign_line_ids(self, lines):
-        excluded = self.random.randint(
-            len(self.objects), size=self.num_excluded_objects
-        )
-        included_objects = [o for i, o in enumerate(self.objects) if i not in excluded]
+        excluded = self.random.randint(len(self.items), size=self.num_excluded_objects)
+        included_objects = [o for i, o in enumerate(self.items) if i not in excluded]
 
-        interaction_ids = self.random.choice(len(self.interactions), size=len(lines))
+        interaction_ids = self.random.choice(len(self.behaviors), size=len(lines))
         object_ids = self.random.choice(len(included_objects), size=len(lines))
-        line_ids = self.random.choice(len(self.objects), size=len(lines))
+        line_ids = self.random.choice(len(self.items), size=len(lines))
 
         for line, line_id, interaction_id, object_id in zip(
             lines, line_ids, interaction_ids, object_ids
         ):
             if line is Subtask:
                 subtask_id = (
-                    self.interactions[interaction_id],
+                    self.behaviors[interaction_id],
                     included_objects[object_id],
                 )
                 yield Subtask(subtask_id)
             elif line is Loop:
                 yield Loop(self.random.randint(1, 1 + self.max_loops))
             else:
-                yield line(self.objects[line_id])
+                yield line(self.items[line_id])
 
 
 if __name__ == "__main__":
