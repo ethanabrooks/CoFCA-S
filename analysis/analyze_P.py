@@ -50,7 +50,7 @@ def compute_cross_entropy(P: np.ndarray, instruction: np.ndarray) -> float:
                     assert not backward
                     return 1
                 i = torch.tensor(instruction).roll(shifts=-int(ptr), dims=0)
-                hits, = np.where(i[:, 0] == dest.value - 1)
+                (hits,) = np.where(i[:, 0] == dest.value - 1)
                 if hits.size:
                     # not empty
                     if backward:

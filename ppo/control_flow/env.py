@@ -42,6 +42,7 @@ class Env(gym.Env, ABC):
         num_subtasks,
         max_nesting_depth,
         eval_condition_size,
+        single_control_flow_type,
         no_op_limit,
         time_to_waste,
         subtasks_only,
@@ -59,6 +60,7 @@ class Env(gym.Env, ABC):
         self.subtasks_only = subtasks_only
         self.no_op_limit = no_op_limit
         self._eval_condition_size = eval_condition_size
+        self._single_control_flow_type = single_control_flow_type
         self.max_nesting_depth = max_nesting_depth
         self.num_subtasks = num_subtasks
         self.time_to_waste = time_to_waste
@@ -215,6 +217,10 @@ class Env(gym.Env, ABC):
     @property
     def eval_condition_size(self):
         return self._eval_condition_size and self.evaluating
+
+    @property
+    def single_control_flow_type(self):
+        return self._single_control_flow_type and not self.evaluating
 
     def build_lines(self):
         if self.evaluating:
@@ -453,6 +459,7 @@ def build_parser(p):
     p.add_argument("--no-op-limit", type=int)
     p.add_argument("--flip-prob", type=float, default=0.5)
     p.add_argument("--eval-condition-size", action="store_true")
+    p.add_argument("--single-control-flow-type", action="store_true")
     p.add_argument("--max-nesting-depth", type=int)
     p.add_argument("--subtasks-only", action="store_true")
     p.add_argument("--break-on-fail", action="store_true")
