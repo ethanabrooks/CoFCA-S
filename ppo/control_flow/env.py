@@ -230,8 +230,14 @@ class Env(gym.Env, ABC):
             lines = [line0] + [Subtask] * (edge_length - 2)
             lines += [EndWhile if line0 is While else EndIf, Subtask]
         else:
+            control_flow_types = [If, While, Loop]
+            if self.single_control_flow_type:
+                control_flow_types = [np.random.choice(control_flow_types)]
             lines = self.choose_line_types(
-                n_lines, active_conditions=[], max_nesting_depth=self.max_nesting_depth
+                n_lines,
+                control_flow_types=control_flow_types,
+                active_conditions=[],
+                max_nesting_depth=self.max_nesting_depth,
             )
         return list(self.assign_line_ids(lines))
 
@@ -249,7 +255,13 @@ class Env(gym.Env, ABC):
         return self.possible_lines.index(line)
 
     def choose_line_types(
-        self, n, active_conditions, last=None, nesting_depth=0, max_nesting_depth=None
+        self,
+        n,
+        active_conditions,
+        control_flow_types,
+        last=None,
+        nesting_depth=0,
+        max_nesting_depth=None,
     ):
         if n < 0:
             return []
@@ -293,6 +305,7 @@ class Env(gym.Env, ABC):
             n - 1,
             active_conditions=active_conditions,
             last=line_type,
+            control_flow_types=control_flow_types,
             nesting_depth=nesting_depth,
             max_nesting_depth=max_nesting_depth,
         )
