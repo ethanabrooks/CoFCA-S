@@ -281,7 +281,7 @@ class Env(gym.Env, ABC):
             and (max_nesting_depth is None or nesting_depth < max_nesting_depth)
             and not self.subtasks_only
         ):
-            line_types += [If, While]
+            line_types += control_flow_types
         if active_conditions and last is Subtask:
             last_condition = active_conditions[-1]
             if last_condition is If:
