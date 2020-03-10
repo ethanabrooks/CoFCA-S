@@ -21,9 +21,15 @@ def count(
     yield np.sum(instruction[:, 0] == line_type.value - 1)
 
 
-def main(root: Path, path: Path, line_types: List[L]) -> None:
-    instruction_paths = list(Path(root, path).glob("**/eval_instruction.npz"))
-    success_paths = list(Path(root, path).glob("**/eval_successes.npy"))
+def main(root: Path, path: Path, line_types: List[L], evaluation: bool) -> None:
+    filename = "instruction.npz"
+    if evaluation:
+        filename = "eval_" + filename
+    instruction_paths = list(Path(root, path).glob("**/" + filename))
+    filename = "successes.npy"
+    if evaluation:
+        filename = "eval_" + filename
+    success_paths = list(Path(root, path).glob("**/" + filename))
     assert len(instruction_paths) == len(success_paths)
 
     for line_type in line_types:
@@ -56,4 +62,5 @@ if __name__ == "__main__":
     parser.add_argument(
         "--line-types", type=lambda s: getattr(L, s), nargs="+", required=True
     )
+    parser.add_argument("--evaluation", action="store_true")
     main(**vars(parser.parse_args()))
