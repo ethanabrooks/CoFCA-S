@@ -7,9 +7,8 @@ import numpy as np
 from numpy.random.mtrand import RandomState
 
 
-def split(n: int, p: float, random: RandomState):
-    m = random.binomial(n, p)
-    return m, n - m
+def sample(random, _min, _max, p=0.5):
+    return min(_min + random.geometric(p), _max)
 
 
 class Line:
@@ -42,7 +41,7 @@ class Line:
         # type: (int, int, RandomState, List[Type[Line]]) -> Generator[Type[Line]]
         if n == 0:
             return
-        m = 1 + random.binomial(n - 1, 0.5)
+        m = sample(random, 1, n)
         _legal_lines = [
             l
             for l in legal_lines
@@ -72,19 +71,28 @@ class If(Line):
     def generate_lines(n: int, remaining_depth: int, legal_lines: list, **kwargs):
         yield If
         yield from Line.generate_lines(
-            n - 2, remaining_depth - 1, **kwargs, legal_lines=legal_lines + [Else]
+            n - 2, remaining_depth - 1, **kwargs, legal_lines=legal_lines
         )
         yield EndIf
 
 
 class Else(Line):
-    required_lines = 2
+    required_lines = 5
     required_depth = 1
 
     @staticmethod
-    def generate_lines(n, remaining_depth, **kwargs):
+    def generate_lines(n, remaining_depth, random, **kwargs):
+        n -= 3
+        m = sample(random, 1, n)
+        yield If
+        yield from Line.generate_lines(
+            m, remaining_depth - 1, random, **kwargs,
+        )
         yield Else
-        yield from Line.generate_lines(n - 1, remaining_depth - 1, **kwargs)
+        yield from Line.generate_lines(
+            n - m, remaining_depth - 1, random, **kwargs,
+        )
+        yield EndIf
 
 
 class EndIf(Line):

@@ -243,11 +243,6 @@ class Env(gym.Env, ABC):
                     legal_lines=control_flow_types + [Subtask],
                 )
             )
-            for l in lines:
-                print(l)
-        import ipdb
-
-        ipdb.set_trace()
         return list(self.assign_line_ids(lines))
 
     def assign_line_ids(self, lines):
