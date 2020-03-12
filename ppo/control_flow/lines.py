@@ -42,7 +42,7 @@ class Line:
         # type: (int, int, RandomState, List[Type[Line]]) -> Generator[Type[Line]]
         if n == 0:
             return
-        m = random.binomial(n, 0.5)
+        m = 1 + random.binomial(n - 1, 0.5)
         _legal_lines = [
             l
             for l in legal_lines

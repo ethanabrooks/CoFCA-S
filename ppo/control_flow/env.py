@@ -240,9 +240,14 @@ class Env(gym.Env, ABC):
                     n_lines,
                     remaining_depth=self.max_nesting_depth,
                     random=self.random,
-                    legal_lines=control_flow_types + [Else],
+                    legal_lines=control_flow_types + [Subtask],
                 )
             )
+            for l in lines:
+                print(l)
+        import ipdb
+
+        ipdb.set_trace()
         return list(self.assign_line_ids(lines))
 
     def assign_line_ids(self, lines):
@@ -478,7 +483,7 @@ def build_parser(p):
     p.add_argument(
         "--control-flow-types",
         nargs="*",
-        type=lambda s: dict(If=If, While=While, Else=Else, Loop=Loop).get(s),
+        type=lambda s: dict(If=If, While=While, Else=Else, Loop=Loop,).get(s),
     )
     return p
 
