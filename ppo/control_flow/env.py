@@ -235,11 +235,13 @@ class Env(gym.Env, ABC):
             control_flow_types = self.control_flow_types
             if self.single_control_flow_type:
                 control_flow_types = [np.random.choice(self.control_flow_types)]
-            lines = self.choose_line_types(
-                n_lines,
-                control_flow_types=control_flow_types,
-                active_conditions=[],
-                max_nesting_depth=self.max_nesting_depth,
+            lines = list(
+                Line.generate_lines(
+                    n_lines,
+                    remaining_depth=self.max_nesting_depth,
+                    random=self.random,
+                    legal_lines=control_flow_types + [Else],
+                )
             )
         return list(self.assign_line_ids(lines))
 
