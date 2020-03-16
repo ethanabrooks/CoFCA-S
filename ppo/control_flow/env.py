@@ -478,7 +478,7 @@ def build_parser(p):
     p.add_argument(
         "--control-flow-types",
         nargs="*",
-        type=lambda s: dict(If=If, While=While, Else=Else, Loop=Loop,).get(s),
+        type=lambda s: dict(If=If, While=While, Else=Else, Loop=Loop).get(s),
     )
     return p
 

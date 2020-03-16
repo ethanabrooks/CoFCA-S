@@ -299,7 +299,8 @@ class Env(ppo.control_flow.env.Env):
                 )
                 yield Subtask(subtask_id)
             elif line is Loop:
-                yield Loop(self.random.randint(1, 1 + self.max_loops))
+                # yield Loop(self.random.randint(1, 1 + self.max_loops))
+                yield Loop(2)
             else:
                 yield line(self.items[line_id])
 
