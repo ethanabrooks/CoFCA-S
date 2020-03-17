@@ -7,8 +7,6 @@ import numpy as np
 from enum import Enum, auto
 from typing import Dict, Tuple, Generator, Optional, Iterable, List
 from tqdm import tqdm  # type: ignore
-
-# import matplotlib.pyplot as plt
 import zipfile
 
 
