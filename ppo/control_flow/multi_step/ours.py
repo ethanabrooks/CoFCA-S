@@ -97,6 +97,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
 
         # build memory
         nl = len(self.obs_spaces.lines.nvec)
+        lines = inputs.lines.reshape(N, -1, 4).to(rnn_hxs.device)
         M = self.build_memory(N, T, inputs)
 
         P = self.build_P(M, N, rnn_hxs.device, nl)
@@ -131,7 +132,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             # then put M back in gru
             # then put A back in gru
             d_gate = self.d_gate(z)
-            self.sample_new(DG[t], d_gate)
+            # self.sample_new(DG[t], d_gate)
             a_gate = self.a_gate(z)
             self.sample_new(AG[t], a_gate)
 
@@ -143,7 +144,8 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             self.print("u", u)
             w = P[p, R]
             d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
-            dg = DG[t].unsqueeze(-1).float()
+            # dg = DG[t].unsqueeze(-1).float()
+            dg = (lines[R, p, 0] == 6.0).unsqueeze(-1).float()
             self.print("dg prob", d_gate.probs[:, 1])
             self.print("dg", dg)
             d_dist = gate(dg, d_probs, ones * half)
