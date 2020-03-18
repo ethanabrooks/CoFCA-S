@@ -8,16 +8,29 @@ from enum import Enum, auto
 from typing import Dict, Tuple, Generator, Optional, Iterable, List
 from tqdm import tqdm  # type: ignore
 import zipfile
-from instruction_analysis import L
 
 
-def analyze_P(
-    instruction: np.ndarray, P: np.ndarray, start, stop
-) -> Generator[int, None, None]:
-    import ipdb  # type:ignore
+class L(Enum):
+    If = 1
+    Else = 2
+    EndIf = 3
+    While = 4
+    EndWhile = 5
+    EndLoop = 6
+    Subtask = 7
+    Padding = 8
+    Loop = 9
+    Any = 10
 
-    ipdb.set_trace()
+    def __eq__(self, i) -> bool:
+        return i == self.value - 1
 
+
+def count(instruction: np.ndarray, line_type: L) -> Generator[int, None, None]:
+    yield int(np.sum(line_type == instruction[:, 0]))
+
+
+def measure_length(instruction: np.ndarray, start, stop) -> Generator[int, None, None]:
     def line_type_generator():
         yield from instruction[:, 0]
 
@@ -39,24 +52,35 @@ def analyze_P(
 
 
 def generate_iterators(
-    instruction_paths: Iterable[Path],
-    P_paths: Iterable[Path],
-    pairs: Iterable[Tuple[L, L]],
+    paths: Iterable[Path], line_types: Iterable[L], pairs: Iterable[Tuple[L, L]]
 ) -> Generator[Tuple[str, List[int]], None, None]:
+    for line_type in line_types:
+        print(line_type)
+
+        def iterator() -> Generator[int, None, None]:
+            for instruction_path in tqdm(paths):
+                try:
+                    instructions = np.load(instruction_path)
+                    # successes = np.load(success_path)
+                except zipfile.BadZipFile:
+                    continue
+                # assert len(instructions) == len(successes)
+                for instruction in instructions.values():
+                    yield from count(instruction, line_type)
+
+        yield line_type.name, list(iterator())
+
     for start, stop in pairs:
         print(start)
 
         def iterator() -> Generator[int, None, None]:
-            for instruction_path, P_path in tqdm(list(zip(instruction_paths, P_paths))):
+            for instruction_path in tqdm(paths):
                 try:
                     instructions = np.load(instruction_path)
-                    Ps = np.load(P_path)
-                except zipfile.BadZipFile as e:
-                    print(e)
+                except zipfile.BadZipFile:
                     continue
-                assert len(instructions) == len(Ps)
-                for instruction, P in zip(instructions.values(), Ps.values()):
-                    yield from analyze_P(instruction, P, start, stop)
+                for instruction in instructions.values():
+                    yield from measure_length(instruction, start, stop)
 
         # counts = np.array(list(iterator()))
         # hist, _ = np.histogram(counts, bins=list(range(20)))
@@ -64,15 +88,11 @@ def generate_iterators(
 
 
 def main(root: Path, path: Path, evaluation: bool, **kwargs) -> None:
-    def get_paths(filename):
-        if evaluation:
-            filename = "eval_" + filename
-        return Path(root, path).glob("**/" + filename)
-
-    instruction_paths = list(get_paths("instruction.npz"))
-    P_paths = list(get_paths("P.npz"))
-    assert len(instruction_paths) == len(P_paths)
-    names, lists = zip(*list(generate_iterators(instruction_paths, P_paths, **kwargs)))
+    filename = "instruction.npz"
+    if evaluation:
+        filename = "eval_" + filename
+    instruction_paths = list(Path(root, path).glob("**/" + filename))
+    names, lists = zip(*list(generate_iterators(instruction_paths, **kwargs)))
     for name, array in zip(names, map(np.array, lists)):
         hist, _ = np.histogram(array, bins=list(range(20)))
         print(name, *hist, sep=",")
@@ -84,6 +104,9 @@ if __name__ == "__main__":
     parser.add_argument("--path", type=Path, required=True)
     parser.add_argument(
         "--pair", nargs=2, dest="pairs", type=lambda s: getattr(L, s), action="append"
+    )
+    parser.add_argument(
+        "--line-types", type=lambda s: getattr(L, s), nargs="+", required=True
     )
     parser.add_argument("--evaluation", action="store_true")
     main(**vars(parser.parse_args()))
