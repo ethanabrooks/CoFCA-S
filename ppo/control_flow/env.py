@@ -148,6 +148,7 @@ class Env(gym.Env, ABC):
                     actions=actions,
                     program_counter=program_counter,
                     evaluations=evaluations,
+                    success=len(lines)
                 )
 
             info.update(regret=1 if term and not success else 0)
