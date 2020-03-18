@@ -119,7 +119,6 @@ class Train(abc.ABC):
 
         # reproducibility
 
-        seed = 0
         torch.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
         np.random.seed(seed)
@@ -422,8 +421,7 @@ class Train(abc.ABC):
         is_atari = hasattr(gym.envs, "atari") and isinstanice(
             env.unwrapped, gym.envs.atari.atari_env.AtariEnv
         )
-        #env.seed(seed + rank)
-        env.seed(0)
+        env.seed(seed + rank)
         obs_shape = env.observation_space.shape
         if add_timestep and len(obs_shape) == 1 and str(env).find("TimeLimit") > -1:
             env = AddTimestep(env)
