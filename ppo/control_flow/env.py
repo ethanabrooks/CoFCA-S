@@ -219,32 +219,31 @@ class Env(gym.Env, ABC):
         return self._single_control_flow_type and not self.evaluating
 
     def build_lines(self):
-        if self.evaluating:
-            # assert self.eval_lines is not None
-            # n_lines = self.eval_lines
-            # else:
-            # n_lines = self.random.random_integers(self.min_lines, self.max_lines)
-            # if self.eval_condition_size:
-            # line0 = self.random.choice([While, If])
-            # edge_length = self.random.random_integers(
-            # self.max_lines, self.eval_lines - 1
-            # )
-            # lines = [line0] + [Subtask] * (edge_length - 2)
-            # lines += [EndWhile if line0 is While else EndIf, Subtask]
-            lines = [Subtask, Subtask, Loop, Subtask, EndLoop, Subtask]
-        else:
-            # control_flow_types = self.control_flow_types
-            # if self.single_control_flow_type:
-            # control_flow_types = [np.random.choice(self.control_flow_types)]
-            # lines = list(
-            # Line.generate_lines(
-            # n_lines,
-            # remaining_depth=self.max_nesting_depth,
-            # random=self.random,
-            # legal_lines=control_flow_types + [Subtask],
-            # )
-            # )
-            lines = [Subtask, Loop, Subtask, EndLoop, Subtask, Subtask]
+        # if self.evaluating:
+        # assert self.eval_lines is not None
+        # n_lines = self.eval_lines
+        # else:
+        # n_lines = self.random.random_integers(self.min_lines, self.max_lines)
+        # if self.eval_condition_size:
+        # line0 = self.random.choice([While, If])
+        # edge_length = self.random.random_integers(
+        # self.max_lines, self.eval_lines - 1
+        # )
+        # lines = [line0] + [Subtask] * (edge_length - 2)
+        # lines += [EndWhile if line0 is While else EndIf, Subtask]
+        # else:
+        # control_flow_types = self.control_flow_types
+        # if self.single_control_flow_type:
+        # control_flow_types = [np.random.choice(self.control_flow_types)]
+        # lines = list(
+        # Line.generate_lines(
+        # n_lines,
+        # remaining_depth=self.max_nesting_depth,
+        # random=self.random,
+        # legal_lines=control_flow_types + [Subtask],
+        # )
+        # )
+        lines = [Subtask, Subtask, Loop, Subtask, EndLoop, Subtask]
         return list(self.assign_line_ids(lines))
 
     def assign_line_ids(self, lines):
