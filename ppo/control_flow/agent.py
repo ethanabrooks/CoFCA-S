@@ -9,10 +9,10 @@ from ppo.agent import AgentValues, NNBase
 
 from ppo.control_flow.recurrence import RecurrentState
 import ppo.control_flow.recurrence
-import ppo.control_flow.gridworld.abstract_recurrence
-import ppo.control_flow.gridworld.no_pointer
-import ppo.control_flow.gridworld.oh_et_al
-import ppo.control_flow.gridworld.ours
+import ppo.control_flow.multi_step.abstract_recurrence
+import ppo.control_flow.multi_step.no_pointer
+import ppo.control_flow.multi_step.oh_et_al
+import ppo.control_flow.multi_step.ours
 import ppo.control_flow.no_pointer
 import ppo.control_flow.oh_et_al
 from ppo.distributions import FixedCategorical
@@ -38,19 +38,19 @@ class Agent(ppo.agent.Agent, NNBase):
         if baseline == "no-pointer":
             del network_args["gate_coef"]
             self.recurrent_module = (
-                ppo.control_flow.gridworld.no_pointer.Recurrence
+                ppo.control_flow.multi_step.no_pointer.Recurrence
                 if self.multi_step
                 else ppo.control_flow.no_pointer.Recurrence
             )(observation_space=observation_space, **network_args)
         elif baseline == "oh-et-al":
             self.recurrent_module = (
-                ppo.control_flow.gridworld.oh_et_al.Recurrence
+                ppo.control_flow.multi_step.oh_et_al.Recurrence
                 if self.multi_step
                 else ppo.control_flow.oh_et_al.Recurrence
             )(observation_space=observation_space, **network_args)
         elif self.multi_step:
             assert baseline is None
-            self.recurrent_module = ppo.control_flow.gridworld.ours.Recurrence(
+            self.recurrent_module = ppo.control_flow.multi_step.ours.Recurrence(
                 observation_space=observation_space, **network_args
             )
         else:
@@ -61,7 +61,9 @@ class Agent(ppo.agent.Agent, NNBase):
 
     @property
     def recurrent_hidden_state_size(self):
-        return sum(self.recurrent_module.state_sizes)
+        state_sizes = self.recurrent_module.state_sizes
+        state_sizes = state_sizes._replace(P=0)
+        return sum(state_sizes)
 
     @property
     def is_recurrent(self):
@@ -85,13 +87,13 @@ class Agent(ppo.agent.Agent, NNBase):
         elif t is ppo.control_flow.recurrence.Recurrence:
             X = [hx.a, hx.d, hx.p]
             probs = [hx.a_probs, hx.d_probs]
-        elif t is ppo.control_flow.gridworld.no_pointer.Recurrence:
+        elif t is ppo.control_flow.multi_step.no_pointer.Recurrence:
             X = [hx.a, pad, pad, pad, pad]
             probs = [hx.a_probs]
         elif t is ppo.control_flow.multi_step.oh_et_al.Recurrence:
             X = [hx.a, pad, pad, pad, hx.p]
             probs = [hx.a_probs]
-        elif t is ppo.control_flow.gridworld.ours.Recurrence:
+        elif t is ppo.control_flow.multi_step.ours.Recurrence:
             X = [hx.a, hx.d, hx.ag, hx.dg, hx.p]
             probs = [hx.a_probs, hx.d_probs, hx.ag_probs, hx.dg_probs]
         else:
@@ -111,14 +113,17 @@ class Agent(ppo.agent.Agent, NNBase):
         except AttributeError:
             pass
         action = torch.cat(X, dim=-1)
+        nlines = len(rm.obs_spaces.lines.nvec)
+        P = hx.P.reshape(-1, N, nlines, 2 * nlines, rm.ne)
+        rnn_hxs = torch.cat(hx._replace(P=torch.tensor([], device=hx.P.device)), dim=-1)
         return AgentValues(
             value=hx.v,
             action=action,
             action_log_probs=action_log_probs,
             aux_loss=aux_loss,
             dist=None,
-            rnn_hxs=last_hx,
-            log=dict(entropy=entropy),
+            rnn_hxs=rnn_hxs,
+            log=dict(entropy=entropy, P=P),
         )
 
     def _forward_gru(self, x, hxs, masks, action=None):

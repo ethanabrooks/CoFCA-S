@@ -11,7 +11,6 @@ from typing import Dict
 
 import gym
 import numpy as np
-import psutil
 import torch
 from gym.wrappers import TimeLimit
 from tensorboardX import SummaryWriter
@@ -233,20 +232,12 @@ class TrainBase(abc.ABC):
             self.rollouts.after_update()
             if log_progress is not None:
                 log_progress.update()
-            # print(self.i, self.i % self.log_interval)
             if self.i % log_interval == 0:
                 total_num_steps = log_interval * num_processes * num_steps
-                # print(f"Writing to {self.logdir}")
                 fps = total_num_steps / (time.time() - tick)
                 tick = time.time()
                 yield dict(
-                    k_scalar_pairs(
-                        tick=tick,
-                        fps=fps,
-                        **epoch_counter,
-                        **train_results,
-                        **eval_result,
-                    )
+                    tick=tick, fps=fps, **epoch_counter, **train_results, **eval_result
                 )
 
     def run_epoch(
@@ -272,20 +263,20 @@ class TrainBase(abc.ABC):
 
             # Observe reward and next obs
             obs, reward, done, infos = envs.step(act.action)
-            for d in infos:
-                for k, v in d.items():
-                    episode_counter[k] += v if type(v) is list else [float(v)]
+            self.process_infos(episode_counter, done, infos, **act.log)
 
             # track rewards
-            counter['reward'] += reward.numpy()
-            counter['time_step'] += np.ones_like(done)
-            episode_rewards = counter['reward'][done]
-            episode_counter['rewards'] += list(episode_rewards)
-            if self.success_reward is not None:
-                episode_counter['success'] += list(episode_rewards >= self.success_reward)
-            episode_counter['time_steps'] += list(counter['time_step'][done])
-            counter['reward'][done] = 0
-            counter['time_step'][done] = 0
+            counter["reward"] += reward.numpy()
+            counter["time_step"] += np.ones_like(done)
+            episode_rewards = counter["reward"][done]
+            episode_counter["rewards"] += list(episode_rewards)
+            if success_reward is not None:
+                # noinspection PyTypeChecker
+                episode_counter["success"] += list(episode_rewards >= success_reward)
+
+            episode_counter["time_steps"] += list(counter["time_step"][done])
+            counter["reward"][done] = 0
+            counter["time_step"][done] = 0
 
             # If done then clean the history of observations.
             masks = torch.tensor(1 - done, dtype=torch.float32, device=obs.device).unsqueeze(1)
@@ -301,6 +292,14 @@ class TrainBase(abc.ABC):
                     masks=masks)
 
         return dict(episode_counter)
+
+    @staticmethod
+    def process_infos(episode_counter, done, infos, **act_log):
+        for d in infos:
+            for k, v in d.items():
+                episode_counter[k] += v if type(v) is list else [float(v)]
+        for k, v in act_log.items():
+            episode_counter[k] += v if type(v) is list else [float(v)]
 
     @staticmethod
     def build_agent(envs, **agent_args):
@@ -448,9 +447,7 @@ class Train(TrainBase):
         for _ in itertools.count():
             for result in self.make_train_iterator():
                 if self.writer is not None:
-                    total_num_steps = (self.i + 1) * self.num_processes * self.num_steps
-                    for k, v in k_scalar_pairs(**result):
-                        self.writer.add_scalar(k, v, total_num_steps)
+                    self.log_result(result)
 
                 if (
                     self.log_dir
@@ -459,6 +456,11 @@ class Train(TrainBase):
                 ):
                     self._save(str(self.log_dir))
                     self.last_save = time.time()
+
+    def log_result(self, result):
+        total_num_steps = (self.i + 1) * self.num_processes * self.num_steps
+        for k, v in k_scalar_pairs(**result):
+            self.writer.add_scalar(k, v, total_num_steps)
 
     def get_device(self):
         match = re.search("\d+$", self.run_id)

@@ -1,21 +1,27 @@
+from pathlib import Path
+
 from gym.spaces import Box
+import numpy as np
 from rl_utils import hierarchical_parse_args
 
 import ppo.agent
 import ppo.control_flow.agent
 import ppo.control_flow.env
-import ppo.control_flow.gridworld.env
-import ppo.control_flow.gridworld.minimal
-import ppo.control_flow.gridworld.one_line
+import ppo.control_flow.multi_step.env
+import ppo.control_flow.multi_step.minimal
+import ppo.control_flow.multi_step.one_line
 from ppo import control_flow
 from ppo.arguments import build_parser
 from ppo.train import Train
+
+NAMES = ["instruction", "actions", "program_counter", "evaluations"]
 
 
 def main(log_dir, seed, eval_lines, one_line, **kwargs):
     class _Train(Train):
         def build_agent(self, envs, baseline=None, debug=False, **agent_args):
             obs_space = envs.observation_space
+            agent_args.update(log_dir=log_dir)
             if baseline == "simple" or one_line:
                 del agent_args["no_scan"]
                 del agent_args["no_roll"]
@@ -23,7 +29,7 @@ def main(log_dir, seed, eval_lines, one_line, **kwargs):
                 del agent_args["num_edges"]
                 del agent_args["gate_coef"]
                 del agent_args["no_op_coef"]
-                return ppo.control_flow.gridworld.minimal.Agent(
+                return ppo.control_flow.multi_step.minimal.Agent(
                     observation_space=obs_space,
                     action_space=envs.action_space,
                     **agent_args,
@@ -44,14 +50,47 @@ def main(log_dir, seed, eval_lines, one_line, **kwargs):
             args = dict(**env_args, eval_lines=eval_lines, seed=seed + rank, rank=rank)
             del args["time_limit"]
             if one_line:
-                return control_flow.gridworld.one_line.Env(**args)
+                return control_flow.multi_step.one_line.Env(**args)
             elif not gridworld:
                 del args["max_while_objects"]
                 del args["num_excluded_objects"]
                 del args["temporal_extension"]
                 return control_flow.env.Env(**args)
             else:
-                return control_flow.gridworld.env.Env(**args)
+                return control_flow.multi_step.env.Env(**args)
+
+        def process_infos(self, episode_counter, done, infos, **act_log):
+            P = act_log.pop("P")
+            P = P.transpose(0, 1)[done]
+            if P.size(0) > 0:
+                P = P.cpu().numpy()
+                episode_counter["P"] += np.split(P, P.shape[0])
+            for d in infos:
+                for name in NAMES:
+                    if name in d:
+                        episode_counter[name].append(d.pop(name))
+            if len(episode_counter["P"]) != len(episode_counter["instruction"]):
+                import ipdb
+
+                ipdb.set_trace()
+            super().process_infos(episode_counter, done, infos, **act_log)
+
+        def log_result(self, result: dict):
+            names = NAMES + ["P"]
+            for name in names + ["eval_" + n for n in names]:
+                if name in result:
+                    arrays = [x for x in result.pop(name) if x is not None]
+                    if "P" not in name:
+                        arrays = [np.array(x, dtype=int) for x in arrays]
+
+                    np.savez(Path(self.log_dir, name), *arrays)
+
+            for prefix in ("eval_", ""):
+                if prefix + "rewards" in result:
+                    success = result[prefix + "rewards"]
+                    np.save(Path(self.log_dir, prefix + "successes"), success)
+
+            super().log_result(result)
 
     _Train(**kwargs, seed=seed, log_dir=log_dir, time_limit=None).run()
 
