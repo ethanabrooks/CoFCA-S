@@ -243,7 +243,7 @@ class Env(gym.Env, ABC):
         # legal_lines=control_flow_types + [Subtask],
         # )
         # )
-        lines = [Subtask, Loop, Subtask, EndLoop, Subtask]
+        lines = [Subtask, Subtask, Loop, Subtask, EndLoop, Subtask]
         return list(self.assign_line_ids(lines))
 
     def assign_line_ids(self, lines):
