@@ -133,8 +133,6 @@ class Env(gym.Env, ABC):
                 program_counter.append(state.ptr)
             success = state.ptr is None
             reward = int(success)
-            if success:
-                info.update(success_line=len(lines))
 
             term = term or success or state.term
             if term:
@@ -148,8 +146,12 @@ class Env(gym.Env, ABC):
                     actions=actions,
                     program_counter=program_counter,
                     evaluations=evaluations,
-                    success=len(lines)
+                    success=len(lines),
                 )
+                if success:
+                    info.update(success_line=len(lines))
+                else:
+                    info.update(success_line=state.prev, failure_line=state.ptr)
 
             info.update(regret=1 if term and not success else 0)
 
@@ -206,8 +208,6 @@ class Env(gym.Env, ABC):
                     term = True
             elif state.ptr is not None:
                 step += 1
-                if action != lines[state.ptr].id:
-                    info.update(success_line=state.prev, failure_line=state.ptr)
                 state = state_iterator.send(action)
                 evaluations.extend(state.condition_evaluations)
 
