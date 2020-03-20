@@ -30,12 +30,12 @@ class Env(ppo.control_flow.env.Env):
     bridge = "bridge"
     agent = "agent"
     mine = "mine"
-    build = "build"
+    sell = "build"
     goto = "goto"
     items = [wood, gold, iron, merchant]
     terrain = [bridge, agent]
     world_contents = items + terrain
-    behaviors = [mine, build, goto]
+    behaviors = [mine, sell, goto]
 
     def __init__(
         self,
@@ -203,26 +203,29 @@ class Env(ppo.control_flow.env.Env):
             self.time_remaining -= 1
             interaction, obj = self.subtasks[subtask_id]
 
-            def pair():
-                return obj, tuple(agent_pos)
-
-            def on_object():
-                return pair() in object_pos  # standing on the desired object
+            def check_under_feet():
+                return next((o for o, p in object_pos if p == tuple(agent_pos)), None)
 
             correct_id = (interaction, obj) == lines[ptr].id
-            if on_object():
-                if interaction in (self.mine, self.build):
-                    object_pos.remove(pair())
+            object_underfoot = check_under_feet()
+            if object_underfoot:
+                if interaction in self.mine:
+                    object_pos.remove((object_underfoot, tuple(agent_pos)))
                     if correct_id:
-                        possible_objects.remove(obj)
+                        possible_objects.remove(object_underfoot)
                     else:
                         term = True
-                if interaction == self.build:
+                if interaction == self.sell and object_underfoot:
                     object_pos.append((self.bridge, tuple(agent_pos)))
-                if correct_id:
+                correct_object = object_underfoot == (
+                    self.merchant if (interaction == self.sell) else obj
+                )
+                if correct_object:
                     prev, ptr = ptr, next_subtask(ptr)
             else:
-                nearest = get_nearest(obj)
+                nearest = get_nearest(
+                    self.merchant if interaction == self.sell else obj
+                )
                 if nearest is not None:
                     delta = nearest - agent_pos
                     if self.temporal_extension:
@@ -269,9 +272,9 @@ class Env(ppo.control_flow.env.Env):
             obj = lines[while_line].id
             l = self.random.choice(block)
             i = self.random.choice(2)
-            assert self.behaviors[i] in (self.mine, self.build)
+            assert self.behaviors[i] in (self.mine, self.sell)
             line_id = self.behaviors[i], obj
-            assert line_id in ((self.mine, obj), (self.build, obj))
+            assert line_id in ((self.mine, obj), (self.sell, obj))
             lines[l] = Subtask(line_id)
             if not self.evaluating and obj in self.world_contents:
                 num_obj = self.random.randint(self.max_while_objects + 1)
