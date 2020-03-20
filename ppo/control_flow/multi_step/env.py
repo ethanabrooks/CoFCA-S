@@ -30,7 +30,7 @@ class Env(ppo.control_flow.env.Env):
     bridge = "bridge"
     agent = "agent"
     mine = "mine"
-    sell = "build"
+    sell = "sell"
     goto = "goto"
     items = [wood, gold, iron, merchant]
     terrain = [bridge, agent]
@@ -208,24 +208,20 @@ class Env(ppo.control_flow.env.Env):
 
             correct_id = (interaction, obj) == lines[ptr].id
             object_underfoot = check_under_feet()
+            if object_underfoot and interaction == self.mine:
+                object_pos.remove((object_underfoot, tuple(agent_pos)))
+            line_interaction, line_obj = lines[ptr].id
+            correct_object = self.merchant if interaction == self.sell else line_obj
             if object_underfoot:
-                if interaction in self.mine:
-                    object_pos.remove((object_underfoot, tuple(agent_pos)))
-                    if correct_id:
+                if object_underfoot == correct_object:
+                    if interaction in self.mine:
+                        object_pos.remove((object_underfoot, tuple(agent_pos)))
                         possible_objects.remove(object_underfoot)
                     else:
                         term = True
-                if interaction == self.sell and object_underfoot:
-                    object_pos.append((self.bridge, tuple(agent_pos)))
-                correct_object = object_underfoot == (
-                    self.merchant if (interaction == self.sell) else obj
-                )
-                if correct_object:
-                    prev, ptr = ptr, next_subtask(ptr)
+                prev, ptr = ptr, next_subtask(ptr)
             else:
-                nearest = get_nearest(
-                    self.merchant if interaction == self.sell else obj
-                )
+                nearest = get_nearest(correct_object)
                 if nearest is not None:
                     delta = nearest - agent_pos
                     if self.temporal_extension:
