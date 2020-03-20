@@ -87,6 +87,7 @@ class If(Line):
     @staticmethod
     def transitions(line_index, previous_condition):
         previous_condition.append(line_index)
+        yield from ()
 
 
 class Else(Line):
@@ -141,6 +142,9 @@ class EndIf(Line):
         yield prev, line_index  # False: If/Else -> EndIf
         yield prev, prev + 1  # True: If/Else -> If/Else + 1
 
+        yield line_index, line_index + 1  # False: If/Else -> If/Else + 1
+        yield line_index, line_index + 1  # True: If/Else -> If/Else + 1
+
 
 class While(Line):
     required_lines = 3
@@ -160,6 +164,7 @@ class While(Line):
     @staticmethod
     def transitions(line_index, previous_condition):
         previous_condition.append(line_index)
+        yield from ()
 
 
 class EndWhile(Line):
@@ -212,6 +217,7 @@ class Loop(Line):
     @staticmethod
     def transitions(line_index, previous_conditions):
         previous_conditions.append(line_index)
+        yield from ()
 
 
 class EndLoop(Line):

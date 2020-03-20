@@ -1,6 +1,8 @@
 import functools
 from abc import ABC
 from collections import defaultdict, namedtuple, OrderedDict, Counter
+from dataclasses import dataclass
+from typing import List, Any
 
 import numpy as np
 
@@ -237,7 +239,7 @@ class Env(gym.Env, ABC):
             if self.single_control_flow_type:
                 control_flow_types = [np.random.choice(self.control_flow_types)]
             lines = list(
-                Line.generate_lines(
+                Line.generate_types(
                     n_lines,
                     remaining_depth=self.max_nesting_depth,
                     random=self.random,
@@ -259,66 +261,9 @@ class Env(gym.Env, ABC):
     def preprocess_line(self, line):
         return self.possible_lines.index(line)
 
-    def choose_line_types(
-        self,
-        n,
-        active_conditions,
-        control_flow_types,
-        last=None,
-        nesting_depth=0,
-        max_nesting_depth=None,
-    ):
-        if n < 0:
-            return []
-        if n == 0:
-            return []
-        if n == len(active_conditions):
-            lines = [self.pairs[c] for c in reversed(active_conditions)]
-            return lines + [Subtask for _ in range(n - len(lines))]
-        elif n == 1:
-            return [Subtask]
-        line_types = [Subtask]
-        enough_space = n > len(active_conditions) + 2
-        if (
-            enough_space
-            and (max_nesting_depth is None or nesting_depth < max_nesting_depth)
-            and not self.subtasks_only
-        ):
-            line_types += control_flow_types
-        if active_conditions and last is Subtask:
-            last_condition = active_conditions[-1]
-            if last_condition is If:
-                line_types += [EndIf]
-            if last_condition is If and enough_space:
-                line_types += [Else]
-            elif last_condition is Else:
-                line_types += [EndIf]
-            elif last_condition is While:
-                line_types += [EndWhile]
-            elif last_condition is Loop:
-                line_types += [EndLoop]
-        line_type = self.random.choice(line_types)
-        if line_type in [If, While, Loop]:
-            active_conditions = active_conditions + [line_type]
-            nesting_depth += 1
-        elif line_type is Else:
-            active_conditions = active_conditions[:-1] + [line_type]
-        elif line_type in [EndIf, EndWhile, EndLoop]:
-            active_conditions = active_conditions[:-1]
-            nesting_depth -= 1
-        get_lines = self.choose_line_types(
-            n - 1,
-            active_conditions=active_conditions,
-            last=line_type,
-            control_flow_types=control_flow_types,
-            nesting_depth=nesting_depth,
-            max_nesting_depth=max_nesting_depth,
-        )
-        return [line_type] + get_lines
-
     def line_generator(self, lines):
         line_transitions = defaultdict(list)
-        for _from, _to in self.get_transitions(iter(enumerate(lines)), []):
+        for _from, _to in self.get_transitions(lines):
             line_transitions[_from].append(_to)
         i = 0
         if_evaluations = []
@@ -332,42 +277,11 @@ class Env(gym.Env, ABC):
                 if_evaluations.append(evaluation)
             i = line_transitions[i][evaluation]
 
-    def get_transitions(self, lines_iter, previous):
-        while True:  # stops at StopIteration
-            try:
-                current, line = next(lines_iter)
-            except StopIteration:
-                return
-            if type(line) is EndIf or type(line) is Subtask:
-                yield current, current + 1  # False
-                yield current, current + 1  # True
-            if type(line) is If:
-                yield from self.get_transitions(
-                    lines_iter, previous + [current]
-                )  # from = If
-            elif type(line) is Else:
-                prev = previous[-1]
-                yield prev, current  # False: If -> Else
-                yield prev, prev + 1  # True: If -> If + 1
-                previous[-1] = current
-            elif type(line) is EndIf:
-                prev = previous[-1]
-                yield prev, current  # False: If/Else -> EndIf
-                yield prev, prev + 1  # True: If/Else -> If/Else + 1
-                return
-            elif type(line) in (While, Loop):
-                yield from self.get_transitions(
-                    lines_iter, previous + [current]
-                )  # from = While
-            elif type(line) in (EndWhile, EndLoop):
-                prev = previous[-1]
-                # While
-                yield prev, current + 1  # False: While -> EndWhile + 1
-                yield prev, prev + 1  # True: While -> While + 1
-                # EndWhile
-                yield current, prev  # False: EndWhile -> While
-                yield current, prev  # True: EndWhile -> While
-                return
+    @staticmethod
+    def get_transitions(lines):
+        conditions = []
+        for i, line in enumerate(lines):
+            yield from line.transitions(i, conditions)
 
     def state_generator(self, lines) -> State:
         line_iterator = self.line_generator(lines)
@@ -415,6 +329,10 @@ class Env(gym.Env, ABC):
                 )
                 prev, ptr = ptr, next_subtask()
 
+    @functools.lru_cache(maxsize=120)
+    def preprocess_line(self, line):
+        return self.possible_lines.index(line)
+
     def get_observation(self, obs, active, lines):
         padded = lines + [Padding(0)] * (self.n_lines - len(lines))
         lines = [self.preprocess_line(p) for p in padded]
@@ -425,34 +343,6 @@ class Env(gym.Env, ABC):
     @staticmethod
     def print_obs(obs):
         print(obs)
-
-    @staticmethod
-    def average_interval(lines):
-        intervals = defaultdict(lambda: [None])
-        pairs = [(If, EndIf), (While, EndWhile), (Loop, EndLoop)]
-        if Else in lines:
-            pairs.extend([(If, Else), (Else, EndIf)])
-        for line in lines:
-            for start, stop in pairs:
-                if line is start:
-                    intervals[start, stop][-1] = 0
-                if line is stop:
-                    intervals[start, stop].append(None)
-            for k, (*_, value) in intervals.items():
-                if value is not None:
-                    intervals[k][-1] += 1
-        for keys, values in intervals.items():
-            values = [v for v in values if v]
-            if values:
-                yield keys, sum(values) / len(values)
-
-    @staticmethod
-    def get_nesting_depth(lines):
-        max_depth = 0
-        depth = 0
-        for line in lines:
-            max_depth = max(line.depth_change, max_depth)
-        return max_depth
 
     def seed(self, seed=None):
         assert self.seed == seed
