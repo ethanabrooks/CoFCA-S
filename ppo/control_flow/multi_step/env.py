@@ -208,20 +208,17 @@ class Env(ppo.control_flow.env.Env):
 
             correct_id = (interaction, obj) == lines[ptr].id
             object_underfoot = check_under_feet()
-            if object_underfoot and interaction == self.mine:
-                object_pos.remove((object_underfoot, tuple(agent_pos)))
             line_interaction, line_obj = lines[ptr].id
             correct_object = self.merchant if interaction == self.sell else line_obj
+            if object_underfoot and interaction == self.mine:
+                object_pos.remove((object_underfoot, tuple(agent_pos)))
+                if object_underfoot in possible_objects:
+                    possible_objects.remove(object_underfoot)
             if object_underfoot:
                 if object_underfoot == correct_object:
-                    if (
-                        interaction in self.mine
-                        and object_underfoot in possible_objects
-                    ):
-                        possible_objects.remove(object_underfoot)
-                    else:
-                        term = True
-                prev, ptr = ptr, next_subtask(ptr)
+                    prev, ptr = ptr, next_subtask(ptr)
+                else:
+                    term = True
             else:
                 nearest = get_nearest(correct_object)
                 if nearest is not None:
