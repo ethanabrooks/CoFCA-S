@@ -184,8 +184,19 @@ class Env(gym.Env, ABC):
             def render():
                 if term:
                     print(GREEN if success else RED)
-                for i, string in enumerate(line_strings(index=0, level=1)):
-                    print(f"{i}{string}")
+                indent = 0
+                for i, line in enumerate(lines):
+                    if i == state.ptr and i == agent_ptr:
+                        pre = "+ "
+                    elif i == agent_ptr:
+                        pre = "- "
+                    elif i == state.ptr:
+                        pre = "| "
+                    else:
+                        pre = "  "
+                    indent += line.depth_change[0]
+                    print("{:2}{}{}{}".format(i, pre, " " * indent, line))
+                    indent += line.depth_change[1]
                 print("Selected:", agent_ptr)
                 print("Action:", action)
                 print("Reward", reward)

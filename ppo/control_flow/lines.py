@@ -18,16 +18,13 @@ class Line:
     control_flow_lines = None
     required_lines = 0
     required_depth = 0
+    depth_change = None
 
     def __init__(self, id):
         self.id = id
 
     def __str__(self):
         return self.__class__.__name__
-
-    @property
-    def depth_change(self) -> Tuple[int, int]:
-        raise NotImplementedError
 
     def __eq__(self, other):
         return type(self) == type(other) and self.id == other.id
@@ -68,10 +65,7 @@ class Line:
 class If(Line):
     required_lines = 3
     required_depth = 1
-
-    @property
-    def depth_change(self) -> Tuple[int, int]:
-        return 0, 1
+    depth_change = 0, 1
 
     @staticmethod
     def generate_types(n: int, remaining_depth: int, legal_lines: list, **kwargs):
@@ -94,10 +88,7 @@ class Else(Line):
     required_lines = 5
     required_depth = 1
     condition = True
-
-    @property
-    def depth_change(self) -> Tuple[int, int]:
-        return -1, 1
+    depth_change = -1, 1
 
     @staticmethod
     def generate_types(n, remaining_depth, random, **kwargs):
@@ -123,14 +114,11 @@ class Else(Line):
 
 class EndIf(Line):
     condition = False
+    depth_change = -1, 0
 
     @property
     def terminates(self):
         return If
-
-    @property
-    def depth_change(self) -> Tuple[int, int]:
-        raise NotImplementedError
 
     @staticmethod
     def generate_types(*args, **kwargs):
@@ -150,10 +138,7 @@ class While(Line):
     required_lines = 3
     required_depth = 1
     condition = True
-
-    @property
-    def depth_change(self) -> Tuple[int, int]:
-        raise NotImplementedError
+    depth_change = 0, 1
 
     @staticmethod
     def generate_types(n: int, remaining_depth: int, **kwargs):
@@ -169,14 +154,11 @@ class While(Line):
 
 class EndWhile(Line):
     condition = False
+    depth_change = -1, 0
 
     @property
     def terminates(self):
         return While
-
-    @property
-    def depth_change(self) -> Tuple[int, int]:
-        raise NotImplementedError
 
     @staticmethod
     def generate_types(*args, **kwargs):
@@ -197,10 +179,7 @@ class Loop(Line):
     condition = True
     required_lines = 3
     required_depth = 1
-
-    @property
-    def depth_change(self) -> Tuple[int, int]:
-        raise NotImplementedError
+    depth_change = 0, 1
 
     def __str__(self):
         return f"{self.__class__.__name__} {self.id}"
@@ -222,10 +201,7 @@ class Loop(Line):
 
 class EndLoop(Line):
     condition = False
-
-    @property
-    def depth_change(self) -> Tuple[int, int]:
-        raise NotImplementedError
+    depth_change = -1, 0
 
     @staticmethod
     def generate_types(*args, **kwargs):
@@ -246,6 +222,7 @@ class Subtask(Line):
     condition = False
     required_lines = 1
     required_depth = 0
+    depth_change = 0, 0
 
     def __str__(self):
         return f"{self.__class__.__name__} {self.id}"
