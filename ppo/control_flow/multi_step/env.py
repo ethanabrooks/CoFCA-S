@@ -82,15 +82,6 @@ class Env(ppo.control_flow.env.Env):
             ),
         )
 
-    def line_str(self, line: Line):
-        if isinstance(line, Subtask):
-            i, o = line.id
-            return f"Subtask {self.subtasks.index(line.id)}: {line.id}"
-        elif isinstance(line, (If, While)):
-            return f"{line}: {line.id}"
-        else:
-            return f"{line}"
-
     def print_obs(self, obs):
         obs = obs.transpose(1, 2, 0).astype(int)
         grid_size = obs.astype(int).sum(-1).max()  # max objects per grid
@@ -203,24 +194,26 @@ class Env(ppo.control_flow.env.Env):
             self.time_remaining -= 1
             interaction, obj = self.subtasks[subtask_id]
 
-            def check_under_feet():
-                return next((o for o, p in object_pos if p == tuple(agent_pos)), None)
+            def pair():
+                return obj, tuple(agent_pos)
+
+            def on_object():
+                return pair() in object_pos  # standing on the desired object
 
             correct_id = (interaction, obj) == lines[ptr].id
-            object_underfoot = check_under_feet()
-            line_interaction, line_obj = lines[ptr].id
-            correct_object = self.merchant if interaction == self.sell else line_obj
-            if object_underfoot and interaction == self.mine:
-                object_pos.remove((object_underfoot, tuple(agent_pos)))
-                if object_underfoot in possible_objects:
-                    possible_objects.remove(object_underfoot)
-            if object_underfoot:
-                if object_underfoot == correct_object:
+            if on_object():
+                if interaction in (self.mine, self.sell):
+                    object_pos.remove(pair())
+                    if correct_id:
+                        possible_objects.remove(obj)
+                    else:
+                        term = True
+                if interaction == self.sell:
+                    object_pos.append((self.bridge, tuple(agent_pos)))
+                if correct_id:
                     prev, ptr = ptr, next_subtask(ptr)
-                else:
-                    term = True
             else:
-                nearest = get_nearest(correct_object)
+                nearest = get_nearest(obj)
                 if nearest is not None:
                     delta = nearest - agent_pos
                     if self.temporal_extension:
