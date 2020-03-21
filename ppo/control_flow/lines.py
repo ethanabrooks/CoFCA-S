@@ -92,8 +92,10 @@ class Else(Line):
 
     @staticmethod
     def generate_types(n, remaining_depth, random, **kwargs):
+        assert n >= Else.required_lines
         n -= 3
-        m = sample(random, 1, n)
+        assert n >= 2
+        m = sample(random, 1, n - 1)
         yield If
         yield from Line.generate_types(
             m, remaining_depth - 1, random, **kwargs,
