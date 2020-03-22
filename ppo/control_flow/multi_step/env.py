@@ -39,9 +39,7 @@ class Env(ppo.control_flow.env.Env):
     behaviors = [mine, sell, goto]
     line_types = list(Line.types)
 
-    def __init__(
-        self, num_subtasks, temporal_extension, world_size=6, **kwargs,
-    ):
+    def __init__(self, num_subtasks, temporal_extension, world_size=6, **kwargs):
         self.temporal_extension = temporal_extension
         self.loops = None
 
@@ -78,7 +76,7 @@ class Env(ppo.control_flow.env.Env):
 
     def print_obs(self, obs):
         obs = obs.transpose(1, 2, 0).astype(int)
-        grid_size = obs.astype(int).sum(-1).max()  # max objects per grid
+        grid_size = 2  # obs.astype(int).sum(-1).max()  # max objects per grid
         chars = [" "] + [o for o, *_ in self.world_contents]
         for i, row in enumerate(obs):
             string = ""
@@ -225,6 +223,9 @@ class Env(ppo.control_flow.env.Env):
                 line.id = line.id or index_truthiness.count(i)
             else:
                 line.id = 0
+            if sum(world.values()) > self.world_size ** 2:
+                # can't fit all objects on map
+                return self.generators()
 
         def flattened_objects():
             for i, count in world.items():
@@ -247,13 +248,14 @@ class Env(ppo.control_flow.env.Env):
             ):
                 p = np.unravel_index(p, (self.world_size, self.world_size))
                 objects[tuple(p)] = o
+
             time_remaining = 200 if self.evaluating else self.time_to_waste
             subtask_iterator = subtask_generator()
 
             def get_nearest(obj: str) -> np.ndarray:
-                candidates = [np.array(p) for p, o in objects.items() if obj in o]
-                assert candidates
-                return min(candidates, key=lambda k: np.sum(np.abs(pos - k)))
+                candidates = [np.array(p) for p, o in objects.items() if obj == o]
+                if candidates:
+                    return min(candidates, key=lambda k: np.sum(np.abs(pos - k)))
 
             def agent_generator() -> Generator[
                 Union[np.ndarray, str], Tuple[str, str], None
@@ -263,7 +265,7 @@ class Env(ppo.control_flow.env.Env):
                     new_subtask = (chosen_behavior, chosen_object) = yield move
                     if new_subtask != subtask:
                         subtask = new_subtask
-                        objective = tuple(get_nearest(chosen_object))
+                        objective = get_nearest(chosen_object)
                     if objective == tuple(pos):
                         move = chosen_behavior
                         subtask = None
@@ -274,9 +276,9 @@ class Env(ppo.control_flow.env.Env):
 
             def world_array() -> np.ndarray:
                 array = np.zeros(self.world_shape)
-                for p, object_list in objects.items():
-                    p = np.array(p)
-                    for o in object_list:
+                for p, o in objects.items():
+                    if o is not None:
+                        p = np.array(p)
                         array[tuple((self.world_contents.index(o), *p))] = 1
                 array[tuple((self.world_contents.index(self.agent), *pos))] = 1
                 return array
@@ -295,13 +297,17 @@ class Env(ppo.control_flow.env.Env):
             while True:
                 term |= not time_remaining
                 subtask_id = yield State(
-                    obs=world_array(), condition=None, prev=prev, ptr=ptr, term=term,
+                    obs=world_array(), condition=None, prev=prev, ptr=ptr, term=term
                 )
                 time_remaining -= 1
                 chosen_subtask = self.subtasks[subtask_id]
                 agent_move = agent_iterator.send(chosen_subtask)
                 tgt_move, tgt_object = lines[ptr].id
-                if tgt_object in objects[tuple(pos)] and agent_move == tgt_move:
+                if (
+                    tuple(pos) in objects
+                    and tgt_object == objects[tuple(pos)]
+                    and agent_move == tgt_move
+                ):
                     prev, ptr = ptr, next_subtask(time_remaining)
                     _, chosen_obj = lines[ptr].id
                     time_to_complete = max(get_nearest(chosen_obj) - pos)
@@ -309,7 +315,7 @@ class Env(ppo.control_flow.env.Env):
                 if type(agent_move) in (np.ndarray, tuple):
                     pos += agent_move
                 elif agent_move == self.mine:
-                    objects[tuple(pos)] = []
+                    objects[tuple(pos)] = None
                 elif agent_move == self.sell:
                     objects[tuple(pos)] = self.bridge
                 elif agent_move == self.goto:
