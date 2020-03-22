@@ -52,7 +52,6 @@ def main(log_dir, seed, eval_lines, one_line, **kwargs):
             if one_line:
                 return control_flow.multi_step.one_line.Env(**args)
             elif not gridworld:
-                del args["max_while_objects"]
                 del args["num_excluded_objects"]
                 del args["temporal_extension"]
                 return control_flow.env.Env(**args)
@@ -103,13 +102,8 @@ def control_flow_args():
     parser.add_argument("--eval-lines", type=int, required=True)
     parser.add_argument("--no-eval", action="store_true")
     parser.add_argument("--one-line", action="store_true")
-    ppo.control_flow.env.build_parser(parsers.env)
+    ppo.control_flow.multi_step.env.build_parser(parsers.env)
     parsers.env.add_argument("--gridworld", action="store_true")
-    parsers.env.add_argument(
-        "--no-temporal-extension", dest="temporal_extension", action="store_false"
-    )
-    parsers.env.add_argument("--max-while-objects", type=float, default=2)
-    parsers.env.add_argument("--num-excluded-objects", type=int, default=2)
     parsers.agent.add_argument("--debug", action="store_true")
     parsers.agent.add_argument("--no-scan", action="store_true")
     parsers.agent.add_argument("--no-roll", action="store_true")

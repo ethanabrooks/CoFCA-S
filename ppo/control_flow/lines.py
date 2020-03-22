@@ -1,4 +1,5 @@
 import functools
+from abc import ABC
 from enum import Enum
 from typing import List, Type, Generator, Tuple
 
@@ -12,10 +13,6 @@ def sample(random, _min, _max, p=0.5):
 
 class Line:
     types = None
-    legal_next_lines = None
-    expression_starts = None
-    termination = None
-    control_flow_lines = None
     required_lines = 0
     required_depth = 0
     depth_change = None
@@ -243,11 +240,8 @@ class Subtask(Line):
         yield line_index, line_index + 1
 
 
-class Padding(Line):
+class Padding(Line, ABC):
     pass
 
 
-Line.types = {Subtask, If, Else, EndIf, While, EndWhile, Loop, EndLoop}
-Line.legal_next_lines = {Subtask}
-Line.control_flow_lines = {Subtask}
-Line.expression_starts = [Subtask, If, While, Loop]
+Line.types = {Subtask, If, Else, EndIf, While, EndWhile, Loop, EndLoop, Padding}
