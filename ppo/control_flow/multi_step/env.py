@@ -130,7 +130,6 @@ class Env(ppo.control_flow.env.Env):
 
     def generators(self,) -> Tuple[Iterator[State], List[Line]]:
         line_types = self.choose_line_types()
-        line_types = [If, Subtask, EndIf, While, Subtask, EndWhile]
 
         # if there are too many while loops,
         # all items will be eliminated and tasks become impossible
