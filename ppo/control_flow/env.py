@@ -167,7 +167,7 @@ class Env(gym.Env, ABC):
                         "{:2}{}{}{}".format(i, pre, " " * indent, self.line_str(line))
                     )
                     indent += line.depth_change[1]
-                print("Selected:", agent_ptr)
+                print("Selected:", self.subtasks[agent_ptr], agent_ptr)
                 print("Action:", action)
                 print("Reward", reward)
                 print("Obs:")
