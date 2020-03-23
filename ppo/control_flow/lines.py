@@ -97,13 +97,9 @@ class Else(Line):
         assert n >= 2
         m = sample(random, 1, n - 1)
         yield If
-        yield from Line.generate_types(
-            m, remaining_depth - 1, random, **kwargs,
-        )
+        yield from Line.generate_types(m, remaining_depth - 1, random, **kwargs)
         yield Else
-        yield from Line.generate_types(
-            n - m, remaining_depth - 1, random, **kwargs,
-        )
+        yield from Line.generate_types(n - m, remaining_depth - 1, random, **kwargs)
         yield EndIf
 
     @staticmethod

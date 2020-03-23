@@ -322,7 +322,8 @@ class Env(ppo.control_flow.env.Env):
                 if (
                     tuple(pos) in objects
                     and tgt_object == objects[tuple(pos)]
-                    and np.all(agent_move == tgt_move)
+                    and agent_move is not None
+                    and tuple(agent_move) == tuple(tgt_move)
                 ):
                     prev, ptr = ptr, next_subtask(time_remaining)
                     if ptr is not None:

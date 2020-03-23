@@ -50,6 +50,8 @@ class Env(gym.Env, ABC):
         evaluating=False,
     ):
         super().__init__()
+        if Subtask not in control_flow_types:
+            control_flow_types.append(Subtask)
         self.control_flow_types = control_flow_types
         self.rank = rank
         self.max_loops = max_loops
@@ -298,7 +300,7 @@ class Env(gym.Env, ABC):
             prev, ptr = 0, next_subtask(None)
             term = False
             while True:
-                action = yield State(obs=condition_bit, prev=prev, ptr=ptr, term=term,)
+                action = yield State(obs=condition_bit, prev=prev, ptr=ptr, term=term)
                 if not self.time_remaining or action != lines[ptr].id:
                     term = True
                 else:
