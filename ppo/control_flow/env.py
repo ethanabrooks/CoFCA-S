@@ -23,7 +23,7 @@ from ppo.control_flow.lines import (
 
 Obs = namedtuple("Obs", "active lines obs")
 Last = namedtuple("Last", "action active reward terminal selected")
-State = namedtuple("State", "obs condition prev ptr  term")
+State = namedtuple("State", "obs prev ptr  term")
 
 
 class Env(gym.Env, ABC):
@@ -298,13 +298,7 @@ class Env(gym.Env, ABC):
             prev, ptr = 0, next_subtask(None)
             term = False
             while True:
-                action = yield State(
-                    obs=condition_bit,
-                    condition=condition_bit,
-                    prev=prev,
-                    ptr=ptr,
-                    term=term,
-                )
+                action = yield State(obs=condition_bit, prev=prev, ptr=ptr, term=term,)
                 if not self.time_remaining or action != lines[ptr].id:
                     term = True
                 else:
@@ -353,7 +347,7 @@ def build_parser(p):
     p.add_argument("--flip-prob", type=float, default=0.5)
     p.add_argument("--eval-condition-size", action="store_true")
     p.add_argument("--single-control-flow-type", action="store_true")
-    p.add_argument("--max-nesting-depth", type=int, default=0)
+    p.add_argument("--max-nesting-depth", type=int, default=1)
     p.add_argument("--subtasks-only", action="store_true")
     p.add_argument("--break-on-fail", action="store_true")
     p.add_argument("--time-to-waste", type=int, required=True)

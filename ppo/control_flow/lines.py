@@ -34,14 +34,14 @@ class Line:
         # type: (int, int, RandomState, List[Type[Line]]) -> Generator[Type[Line]]
         if n == 0:
             return
-        m = sample(random, 1, n)
         _legal_lines = [
             l
             for l in legal_lines
-            if l.required_lines <= m and l.required_depth <= remaining_depth
+            if l.required_lines <= n and l.required_depth <= remaining_depth
         ]
         if _legal_lines:
             line = random.choice(_legal_lines)
+            m = sample(random, line.required_lines, n)
             # line.check(m, remaining_depth)
             yield from line.generate_types(
                 m, remaining_depth, random=random, legal_lines=legal_lines
@@ -63,6 +63,9 @@ class If(Line):
     required_lines = 3
     required_depth = 1
     depth_change = 0, 1
+
+    def __str__(self):
+        return f"{self.__class__.__name__} {self.id}"
 
     @staticmethod
     def generate_types(n: int, remaining_depth: int, legal_lines: list, **kwargs):
