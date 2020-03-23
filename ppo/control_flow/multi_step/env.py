@@ -130,6 +130,7 @@ class Env(ppo.control_flow.env.Env):
 
     def generators(self,) -> Tuple[Iterator[State], List[Line]]:
         line_types = self.choose_line_types()
+        line_types = [If, Subtask, EndIf, While, Subtask, EndWhile]
 
         # if there are too many while loops,
         # all items will be eliminated and tasks become impossible
@@ -194,7 +195,7 @@ class Env(ppo.control_flow.env.Env):
             while_index[self.random.choice(list(indices))] = lines[i]
 
         # go through lines in reverse to assign ids and put objects in the world
-        existing = list(self.random.choice(self.items, size=2))
+        existing = list(self.random.choice(self.items, size=len(self.items) // 2))
         non_existing = list(set(self.items) - set(existing))
         world = Counter()
         index_truthiness = list(index_truthiness_generator())
@@ -222,9 +223,9 @@ class Env(ppo.control_flow.env.Env):
             elif type(line) is While:
                 if not line.id:
                     line.id = self.random.choice(non_existing)  # type: str
-                    if truthy:
-                        existing.append(line.id)
-                        non_existing.remove(line.id)
+                if truthy and not line.id in existing:
+                    existing.append(line.id)
+                    non_existing.remove(line.id)
             elif type(line) is Loop:
                 if line.id is None:
                     line.id = 0
