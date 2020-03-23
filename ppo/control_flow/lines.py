@@ -21,7 +21,7 @@ class Line:
         self.id = id
 
     def __str__(self):
-        return self.__class__.__name__
+        return f"{self.__class__.__name__} {self.id}"
 
     def __eq__(self, other):
         return type(self) == type(other) and self.id == other.id
@@ -63,9 +63,6 @@ class If(Line):
     required_lines = 3
     required_depth = 1
     depth_change = 0, 1
-
-    def __str__(self):
-        return f"{self.__class__.__name__} {self.id}"
 
     @staticmethod
     def generate_types(n: int, remaining_depth: int, legal_lines: list, **kwargs):
@@ -179,9 +176,6 @@ class Loop(Line):
     required_depth = 1
     depth_change = 0, 1
 
-    def __str__(self):
-        return f"{self.__class__.__name__} {self.id}"
-
     @staticmethod
     def generate_types(n: int, remaining_depth: int, **kwargs):
         yield Loop
@@ -221,9 +215,6 @@ class Subtask(Line):
     required_lines = 1
     required_depth = 0
     depth_change = 0, 0
-
-    def __str__(self):
-        return f"{self.__class__.__name__} {self.id}"
 
     @staticmethod
     def generate_types(n: int, *args, **kwargs):
