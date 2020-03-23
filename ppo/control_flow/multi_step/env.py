@@ -315,7 +315,7 @@ class Env(ppo.control_flow.env.Env):
                     import ipdb
 
                     ipdb.set_trace()
-                time_remaining += max(nearest - pos)
+                time_remaining += max(nearest - pos) + 1
             next(agent_iterator)
             while True:
                 term |= not time_remaining
@@ -339,7 +339,7 @@ class Env(ppo.control_flow.env.Env):
                         if nearest is None:
                             term = True
                         else:
-                            time_remaining += max(nearest - pos)
+                            time_remaining += max(nearest - pos) + 1
 
                 def check_fail():
                     if objects[tuple(pos)] != tgt_object:
