@@ -137,9 +137,10 @@ class Env(ppo.control_flow.env.Env):
         for line_type in line_types:
             if line_type is EndWhile:
                 while_count += 1
-            if line_type is Subtask and while_count >= len(self.items):
+            if while_count >= len(self.items) - 1:
                 # too many while_loops
                 return self.generators()
+        assert not while_count >= len(self.items) - 1  # TODO
 
         # get forward and backward transition edges
         line_transitions = defaultdict(list)
@@ -194,7 +195,11 @@ class Env(ppo.control_flow.env.Env):
             while_index[self.random.choice(list(indices))] = lines[i]
 
         # go through lines in reverse to assign ids and put objects in the world
-        existing = list(self.random.choice(self.items, size=len(self.items) // 2))
+        existing = list(
+            self.random.choice(
+                self.items, size=len(self.items) - line_types.count(While) - 1
+            )
+        )
         non_existing = list(set(self.items) - set(existing))
         world = Counter()
         index_truthiness = list(index_truthiness_generator())
@@ -294,21 +299,24 @@ class Env(ppo.control_flow.env.Env):
                 array[tuple((self.world_contents.index(self.agent), *pos))] = 1
                 return array
 
-            def next_subtask(time: int) -> Optional[int]:
-                try:
-                    p = next(subtask_iterator)
-                except StopIteration:
-                    return None
-                _, o = lines[p].id
-                time += max(get_nearest(o) - pos)
-                return p
+            term = False
+
+            def next_subtask() -> Optional[int]:
+                return next(subtask_iterator, None)
 
             subtask_iterator = subtask_generator()
             agent_iterator = agent_generator()
 
-            prev, ptr = 0, next_subtask(time_remaining)
+            prev, ptr = 0, next_subtask()
+            if ptr is not None:
+                _, o = lines[ptr].id
+                nearest = get_nearest(o)
+                if nearest is None:
+                    import ipdb
+
+                    ipdb.set_trace()
+                time_remaining += max(nearest - pos)
             next(agent_iterator)
-            term = False
             while True:
                 term |= not time_remaining
                 subtask_id = yield State(
@@ -324,11 +332,14 @@ class Env(ppo.control_flow.env.Env):
                     and agent_move is not None
                     and tuple(agent_move) == tuple(tgt_move)
                 ):
-                    prev, ptr = ptr, next_subtask(time_remaining)
+                    prev, ptr = ptr, next_subtask()
                     if ptr is not None:
-                        _, chosen_obj = lines[ptr].id
-                        time_to_complete = max(get_nearest(chosen_obj) - pos)
-                        time_remaining += time_to_complete
+                        _, o = lines[ptr].id
+                        nearest = get_nearest(o)
+                        if nearest is None:
+                            term = True
+                        else:
+                            time_remaining += max(nearest - pos)
 
                 def check_fail():
                     if objects[tuple(pos)] != tgt_object:
