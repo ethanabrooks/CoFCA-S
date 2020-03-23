@@ -146,14 +146,137 @@ class Env(ppo.control_flow.env.Env):
             return evaluation
 
     def generators(self) -> Tuple[Iterator[State], List[Line]]:
-        lines = [l(None) for l in self.choose_line_types()]
-        self.assign_line_ids(lines)
+        line_types = self.choose_line_types()
+        # if there are too many while loops,
+        # all items will be eliminated and tasks become impossible
+        while_count = 0
+        for line_type in line_types:
+            if line_type is EndWhile:
+                while_count += 1
+            if while_count >= len(self.items) - 1:
+                # too many while_loops
+                return self.generators()
+        assert not while_count >= len(self.items) - 1  # TODO
+
+        # get forward and backward transition edges
+        line_transitions = defaultdict(list)
+        reverse_transitions = defaultdict(list)
+        for _from, _to in self.get_transitions(line_types):
+            line_transitions[_from].append(_to)
+            reverse_transitions[_to].append(_from)
+
+        # get flattened generator of index, truthy values
+        def index_truthiness_generator() -> Generator[int, None, None]:
+            loop_count = 0
+            j = 0
+            if_evaluations = []
+            while j in line_transitions:
+                t = self.random.choice(2)
+
+                # make sure not to exceed max_loops
+                if line_types[j] is Loop:
+                    if loop_count == self.max_loops:
+                        t = 0
+                    if t:
+                        loop_count += 1
+                    else:
+                        loop_count = 0
+                elif line_types[j] is If:
+                    if_evaluations.append(t)
+                elif line_types[j] is Else:
+                    t = not if_evaluations[-1]
+                elif line_types[j] is EndIf:
+                    if_evaluations.pop()
+                yield j, t
+                j = line_transitions[j][int(t)]
+
+        blocks = defaultdict(list)
+        whiles = []
+        for i, line_type in enumerate(line_types):
+            if line_type is While:
+                whiles.append(i)
+            elif line_type is EndWhile:
+                whiles.pop()
+            else:
+                for w in whiles:
+                    blocks[w].append(i)
+
+        line_types = [l(None) for l in line_types]  # instantiate line types
+
+        # select line inside while blocks to be a build behavior
+        # so as to prevent infinite while loops
+        while_index = {}  # type: Dict[int, line]
+        for i, indices in blocks.items():
+            indices = set(indices) - set(while_index.keys())
+            while_index[self.random.choice(list(indices))] = line_types[i]
+
+        # go through lines in reverse to assign ids and put objects in the world
+        existing = list(
+            self.random.choice(self.items, size=len(self.items) - while_count - 1)
+        )
+        non_existing = list(set(self.items) - set(existing))
+
+        world = Counter()
+        index_truthiness = list(index_truthiness_generator())
+        for i, truthy in reversed(index_truthiness):
+            line = line_types[i]
+            if type(line) is Subtask:
+                if not line.id:
+                    subtasks = [s for s in self.subtasks]
+                    try:
+                        item = while_index[i].id
+                        assert item is not None
+                        behavior = self.mine
+                        subtasks.remove((self.mine, item))
+                    except KeyError:
+                        behavior, item = subtasks[self.random.choice(len(subtasks))]
+                    line.id = (behavior, item)
+                behavior, item = line.id
+                if not world[item] or behavior in [self.mine, self.sell]:
+                    world[item] += 1
+            elif type(line) is If:
+                if not line.id:
+                    line.id = self.random.choice(existing if truthy else non_existing)
+                if truthy and not world[line.id]:
+                    world[line.id] += 1
+            elif type(line) is While:
+                if not line.id:
+                    line.id = self.random.choice(non_existing)  # type: str
+                if truthy and not line.id in existing:
+                    existing.append(line.id)
+                    non_existing.remove(line.id)
+            elif type(line) is Loop:
+                if line.id is None:
+                    line.id = 0
+                else:
+                    line.id += 1
+            else:
+                line.id = 0
+            if sum(world.values()) > self.world_size ** 2:
+                # can't fit all objects on map
+                return self.generators()
+
+        # assign unvisited lines
+        for line in line_types:
+            if line.id is None:
+                line.id = self.subtasks[self.random.choice(len(self.subtasks))]
 
         def state_generator() -> State:
             assert self.max_nesting_depth == 1
             agent_pos = self.random.randint(0, self.world_size, size=2)
-            object_pos = self.populate_world(lines)
-            line_iterator = self.line_generator(lines)
+            objects = {}
+            flattened = [o for o, c in world.items() for _ in range(c)]
+            for o, p in zip(
+                flattened,
+                self.random.choice(
+                    self.world_size ** 2, replace=False, size=len(flattened)
+                ),
+            ):
+                p = np.unravel_index(p, (self.world_size, self.world_size))
+                objects[tuple(p)] = o
+
+            object_pos = [(o, p) for p, o in objects.items()]
+            line_iterator = self.line_generator(line_types)
             condition_evaluations = []
             self.time_remaining = 200 if self.evaluating else self.time_to_waste
             self.loops = None
@@ -168,23 +291,26 @@ class Env(ppo.control_flow.env.Env):
                     if l is None:
                         l = line_iterator.send(None)
                     else:
-                        if type(lines[l]) is Loop:
+                        if type(line_types[l]) is Loop:
                             if self.loops is None:
-                                self.loops = lines[l].id
+                                self.loops = line_types[l].id
                             else:
                                 self.loops -= 1
                         l = line_iterator.send(
                             self.evaluate_line(
-                                lines[l], object_pos, condition_evaluations, self.loops
+                                line_types[l],
+                                object_pos,
+                                condition_evaluations,
+                                self.loops,
                             )
                         )
                         if self.loops == 0:
                             self.loops = None
-                    if l is None or type(lines[l]) is Subtask:
+                    if l is None or type(line_types[l]) is Subtask:
                         break
                 if l is not None:
-                    assert type(lines[l]) is Subtask
-                    _, o = lines[l].id
+                    assert type(line_types[l]) is Subtask
+                    _, o = line_types[l].id
                     n = get_nearest(o)
                     if n is not None:
                         self.time_remaining += 1 + np.max(np.abs(agent_pos - n))
@@ -210,7 +336,7 @@ class Env(ppo.control_flow.env.Env):
                 def on_object():
                     return pair() in object_pos  # standing on the desired object
 
-                correct_id = (interaction, obj) == lines[ptr].id
+                correct_id = (interaction, obj) == line_types[ptr].id
                 if on_object():
                     if interaction in (self.mine, self.sell):
                         object_pos.remove(pair())
@@ -233,7 +359,7 @@ class Env(ppo.control_flow.env.Env):
                         # subtask is impossible
                         prev, ptr = ptr, None
 
-        return state_generator(), lines
+        return state_generator(), line_types
 
     def populate_world(self, lines):
         line_io = [line.id for line in lines if type(line) is Subtask]
