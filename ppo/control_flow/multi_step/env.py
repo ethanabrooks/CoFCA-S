@@ -73,7 +73,7 @@ class Env(ppo.control_flow.env.Env):
                 np.array(
                     [
                         [
-                            len(self.control_flow_types),
+                            len(Line.types),
                             1 + len(self.behaviors),
                             1 + len(self.items),
                             1 + self.max_loops,
@@ -190,6 +190,9 @@ class Env(ppo.control_flow.env.Env):
                 yield j, t
                 j = line_transitions[j][int(t)]
 
+        index_truthiness = list(index_truthiness_generator())
+        line_types = [l(None) for l in line_types]  # instantiate line types
+
         blocks = defaultdict(list)
         whiles = []
         for i, line_type in enumerate(line_types):
@@ -200,8 +203,6 @@ class Env(ppo.control_flow.env.Env):
             else:
                 for w in whiles:
                     blocks[w].append(i)
-
-        line_types = [l(None) for l in line_types]  # instantiate line types
 
         # select line inside while blocks to be a build behavior
         # so as to prevent infinite while loops
@@ -217,7 +218,6 @@ class Env(ppo.control_flow.env.Env):
         non_existing = list(set(self.items) - set(existing))
 
         world = Counter()
-        index_truthiness = list(index_truthiness_generator())
         for i, truthy in reversed(index_truthiness):
             line = line_types[i]
             if type(line) is Subtask:

@@ -32,6 +32,7 @@ class Line:
     @staticmethod
     def generate_types(n, remaining_depth, random, legal_lines):
         # type: (int, int, RandomState, List[Type[Line]]) -> Generator[Type[Line]]
+        assert Subtask in legal_lines
         if n == 0:
             return
         _legal_lines = [
@@ -39,6 +40,7 @@ class Line:
             for l in legal_lines
             if l.required_lines <= n and l.required_depth <= remaining_depth
         ]
+        assert Subtask in _legal_lines
         if _legal_lines:
             line = random.choice(_legal_lines)
             m = sample(random, line.required_lines, n)
