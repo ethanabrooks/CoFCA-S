@@ -114,9 +114,7 @@ class Env(gym.Env, ABC):
     def generator(self):
         step = 0
         n = 0
-        lines = [l(None) for l in self.choose_line_types()]
-        self.assign_line_ids(lines)
-        state_iterator = self.state_generator(lines)
+        state_iterator, lines = self.generators()
         state = next(state_iterator)
         actions = []
         program_counter = []
@@ -261,44 +259,74 @@ class Env(gym.Env, ABC):
         for i, line in enumerate(lines):
             yield from line.transitions(i, conditions)
 
-    def state_generator(self, lines) -> State:
-        line_iterator = self.line_generator(lines)
-        condition_bit = 0 if self.eval_condition_size else self.random.choice(2)
-        condition_evaluations = []
-        self.time_remaining = self.time_to_waste
-        self.loops = None
+    def generators(self) -> Tuple[Iterator[State], List[Line]]:
+        line_types = self.choose_line_types()
 
-        def next_subtask(msg=condition_bit):
-            l = line_iterator.send(msg)
-            while not (l is None or type(lines[l]) is Subtask):
-                line = lines[l]
-                if type(line) in (If, While):
-                    condition_evaluations.append(condition_bit)
-                if type(line) is Loop:
-                    if self.loops is None:
-                        self.loops = line.id
-                    else:
-                        self.loops -= 1
-                    l = line_iterator.send(self.loops > 0)
-                    if self.loops == 0:
-                        self.loops = None
+        def line_generator():
+            for line_type in line_types:
+                if line_type is Subtask:
+                    line_id = self.random.choice(self.num_subtasks)
+                elif line_type is Loop:
+                    line_id = self.random.randint(1, 1 + self.max_loops)
                 else:
-                    l = line_iterator.send(condition_bit)
-            self.time_remaining += 1
-            return l
+                    line_id = 0
+                yield line_type(line_id)
 
-        prev, ptr = 0, next_subtask(None)
-        term = False
-        while True:
-            action = yield State(obs=condition_bit, prev=prev, ptr=ptr, term=term,)
-            if not self.time_remaining or action != lines[ptr].id:
-                term = True
-            else:
-                self.time_remaining -= 1
-                condition_bit = abs(
-                    condition_bit - int(self.random.rand() < self.flip_prob)
-                )
-                prev, ptr = ptr, next_subtask()
+        lines = list(line_generator())  # type List[Line]
+        line_transitions = defaultdict(list)
+        for _from, _to in self.get_transitions(lines):
+            line_transitions[_from].append(_to)
+
+        def line_generator():
+            i = 0
+            if_evaluations = []
+            while True:
+                condition_bit = yield None if i >= len(lines) else i
+                if type(lines[i]) is Else:
+                    evaluation = not if_evaluations.pop()
+                else:
+                    evaluation = bool(condition_bit)
+                if type(lines[i]) is If:
+                    if_evaluations.append(evaluation)
+                i = line_transitions[i][evaluation]
+
+        def state_generator():
+            line_iterator = line_generator()
+            condition_bit = 0 if self.eval_condition_size else self.random.choice(2)
+            self.time_remaining = self.time_to_waste
+            self.loops = None
+
+            def next_subtask(msg=condition_bit):
+                l = line_iterator.send(msg)
+                while not (l is None or type(lines[l]) is Subtask):
+                    line = lines[l]
+                    if type(line) is Loop:
+                        if self.loops is None:
+                            self.loops = line.id
+                        else:
+                            self.loops -= 1
+                        l = line_iterator.send(self.loops > 0)
+                        if self.loops == 0:
+                            self.loops = None
+                    else:
+                        l = line_iterator.send(condition_bit)
+                self.time_remaining += 1
+                return l
+
+            prev, ptr = 0, next_subtask(None)
+            term = False
+            while True:
+                action = yield State(obs=condition_bit, prev=prev, ptr=ptr, term=term)
+                if not self.time_remaining or action != lines[ptr].id:
+                    term = True
+                else:
+                    self.time_remaining -= 1
+                    condition_bit = abs(
+                        condition_bit - int(self.random.rand() < self.flip_prob)
+                    )
+                    prev, ptr = ptr, next_subtask()
+
+        return state_generator(), lines
 
     @functools.lru_cache(maxsize=120)
     def preprocess_line(self, line):
