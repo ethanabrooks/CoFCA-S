@@ -39,16 +39,16 @@ class Env(ppo.control_flow.env.Env):
 
     def __init__(
         self,
-        max_while_objects,
         num_subtasks,
+        max_while_objects,
         num_excluded_objects,
         temporal_extension,
         world_size=6,
         **kwargs,
     ):
-        self.temporal_extension = temporal_extension
         self.num_excluded_objects = num_excluded_objects
         self.max_while_objects = max_while_objects
+        self.temporal_extension = temporal_extension
         self.loops = None
 
         def subtasks():
@@ -84,7 +84,7 @@ class Env(ppo.control_flow.env.Env):
 
     def print_obs(self, obs):
         obs = obs.transpose(1, 2, 0).astype(int)
-        grid_size = obs.astype(int).sum(-1).max()  # max objects per grid
+        grid_size = 2  # obs.astype(int).sum(-1).max()  # max objects per grid
         chars = [" "] + [o for o, *_ in self.world_contents]
         for i, row in enumerate(obs):
             string = ""
@@ -95,6 +95,12 @@ class Env(ppo.control_flow.env.Env):
                 string += "".join(chars[x] for x in crop) + "|"
             print(string)
             print("-" * len(string))
+
+    def line_str(self, line):
+        line = super().line_str(line)
+        if type(line) is Subtask:
+            return f"{line} {self.subtasks.index(line.id)}"
+        return line
 
     @functools.lru_cache(maxsize=200)
     def preprocess_line(self, line):
@@ -185,10 +191,8 @@ class Env(ppo.control_flow.env.Env):
             term |= not self.time_remaining
             subtask_id = yield State(
                 obs=self.world_array(object_pos, agent_pos),
-                condition=None,
                 prev=prev,
                 ptr=ptr,
-                condition_evaluations=condition_evaluations,
                 term=term,
             )
             self.time_remaining -= 1
@@ -302,12 +306,4 @@ if __name__ == "__main__":
     parser = build_parser(parser)
     parser.add_argument("--world-size", default=4, type=int)
     parser.add_argument("--seed", default=0, type=int)
-    args = hierarchical_parse_args(parser)
-
-    def action_fn(string):
-        try:
-            return int(string), 0
-        except ValueError:
-            return
-
-    keyboard_control.run(Env(**args, baseline=False), action_fn=action_fn)
+    ppo.control_flow.env.main(Env(rank=0, **hierarchical_parse_args(parser)))
