@@ -113,7 +113,8 @@ class Env(gym.Env, ABC):
     def generator(self):
         step = 0
         n = 0
-        lines = self.choose_line_types()
+        line_types = self.choose_line_types()
+        lines = list(self.assign_line_ids(line_types))
         state_iterator = self.state_generator(lines)
         state = next(state_iterator)
         actions = []
@@ -226,7 +227,7 @@ class Env(gym.Env, ABC):
                     legal_lines=line_types + [Subtask],
                 )
             )
-        return list(self.assign_line_ids(lines))
+        return lines
 
     def assign_line_ids(self, lines):
         for line in lines:
@@ -288,7 +289,7 @@ class Env(gym.Env, ABC):
         prev, ptr = 0, next_subtask(None)
         term = False
         while True:
-            action = yield State(obs=condition_bit, prev=prev, ptr=ptr, term=term,)
+            action = yield State(obs=condition_bit, prev=prev, ptr=ptr, term=term)
             if not self.time_remaining or action != lines[ptr].id:
                 term = True
             else:
