@@ -144,6 +144,11 @@ class Env(ppo.control_flow.env.Env):
                 condition_evaluations += [evaluation]
             return evaluation
 
+    def generators(self) -> Tuple[Iterator[State], List[Line]]:
+        line_types = self.choose_line_types()
+        lines = list(self.assign_line_ids(line_types))
+        return self.state_generator(lines), lines
+
     def state_generator(self, lines) -> State:
         assert self.max_nesting_depth == 1
         agent_pos = self.random.randint(0, self.world_size, size=2)
