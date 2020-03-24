@@ -51,6 +51,8 @@ class Env(gym.Env, ABC):
         evaluating=False,
     ):
         super().__init__()
+        if Subtask not in control_flow_types:
+            control_flow_types.append(Subtask)
         self.control_flow_types = control_flow_types
         self.rank = rank
         self.max_loops = max_loops
@@ -224,7 +226,7 @@ class Env(gym.Env, ABC):
                     n_lines,
                     remaining_depth=self.max_nesting_depth,
                     random=self.random,
-                    legal_lines=line_types + [Subtask],
+                    legal_lines=line_types,
                 )
             )
         return lines
