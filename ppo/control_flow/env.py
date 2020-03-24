@@ -23,7 +23,7 @@ from ppo.control_flow.lines import (
 
 Obs = namedtuple("Obs", "active lines obs")
 Last = namedtuple("Last", "action active reward terminal selected")
-State = namedtuple("State", "obs condition prev ptr condition_evaluations term")
+State = namedtuple("State", "obs prev ptr  term")
 
 
 class Env(gym.Env, ABC):
@@ -118,7 +118,6 @@ class Env(gym.Env, ABC):
         state = next(state_iterator)
         actions = []
         program_counter = []
-        evaluations = []
 
         agent_ptr = 0
         info = {}
@@ -141,7 +140,6 @@ class Env(gym.Env, ABC):
                     instruction=[self.preprocess_line(l) for l in lines],
                     actions=actions,
                     program_counter=program_counter,
-                    evaluations=evaluations,
                     success=len(lines),
                 )
                 if success:
@@ -194,7 +192,6 @@ class Env(gym.Env, ABC):
             elif state.ptr is not None:
                 step += 1
                 state = state_iterator.send(action)
-                evaluations.extend(state.condition_evaluations)
 
     @property
     def eval_condition_size(self):
@@ -295,14 +292,7 @@ class Env(gym.Env, ABC):
         prev, ptr = 0, next_subtask(None)
         term = False
         while True:
-            action = yield State(
-                obs=condition_bit,
-                condition=condition_bit,
-                prev=prev,
-                ptr=ptr,
-                condition_evaluations=condition_evaluations,
-                term=term,
-            )
+            action = yield State(obs=condition_bit, prev=prev, ptr=ptr, term=term,)
             if not self.time_remaining or action != lines[ptr].id:
                 term = True
             else:
