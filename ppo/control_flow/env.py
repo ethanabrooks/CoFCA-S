@@ -28,7 +28,7 @@ State = namedtuple("State", "obs prev ptr  term")
 
 class Env(gym.Env, ABC):
     pairs = {If: EndIf, Else: EndIf, While: EndWhile, Loop: EndLoop}
-    line_types = [If, Else, EndIf, While, EndWhile, EndLoop, Subtask, Padding, Loop]
+    line_types = list(Line.types)
 
     def __init__(
         self,
