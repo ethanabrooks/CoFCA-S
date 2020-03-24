@@ -261,9 +261,8 @@ class Env(ppo.control_flow.env.Env):
             if line.id is None:
                 line.id = self.subtasks[self.random.choice(len(self.subtasks))]
 
-        def state_generator() -> State:
-            assert self.max_nesting_depth == 1
-            agent_pos = self.random.randint(0, self.world_size, size=2)
+        def state_generator() -> Generator[State, int, None]:
+            pos = self.random.randint(self.world_size, size=2)
             objects = {}
             flattened = [o for o, c in world.items() for _ in range(c)]
             for o, p in zip(
@@ -276,62 +275,57 @@ class Env(ppo.control_flow.env.Env):
                 objects[tuple(p)] = o
 
             object_pos = [(o, p) for p, o in objects.items()]
-            line_iterator = self.line_generator(line_types)
-            condition_evaluations = []
-            self.time_remaining = 200 if self.evaluating else self.time_to_waste
+            time_remaining = 200 if self.evaluating else self.time_to_waste
             self.loops = None
 
-            def get_nearest(to):
-                candidates = [np.array(p) for o, p in object_pos if o == to]
-                if candidates:
-                    return min(candidates, key=lambda k: np.sum(np.abs(agent_pos - k)))
+            def subtask_generator() -> Generator[int, None, None]:
+                for l, _ in index_truthiness:
+                    if type(lines[l]) is Subtask:
+                        yield l
 
-            def next_subtask(l):
-                while True:
-                    if l is None:
-                        l = line_iterator.send(None)
-                    else:
-                        if type(line_types[l]) is Loop:
-                            if self.loops is None:
-                                self.loops = line_types[l].id
-                            else:
-                                self.loops -= 1
-                        l = line_iterator.send(
-                            self.evaluate_line(
-                                line_types[l],
-                                object_pos,
-                                condition_evaluations,
-                                self.loops,
-                            )
-                        )
-                        if self.loops == 0:
-                            self.loops = None
-                    if l is None or type(line_types[l]) is Subtask:
-                        break
-                if l is not None:
-                    assert type(line_types[l]) is Subtask
-                    _, o = line_types[l].id
-                    n = get_nearest(o)
-                    if n is not None:
-                        self.time_remaining += 1 + np.max(np.abs(agent_pos - n))
-                return l
+            subtask_iterator = subtask_generator()
+
+            def get_nearest(obj: str) -> np.ndarray:
+                candidates = [np.array(p) for p, o in objects.items() if obj == o]
+                if candidates:
+                    return min(candidates, key=lambda k: np.sum(np.abs(pos - k)))
 
             possible_objects = [o for o, _ in object_pos]
-            prev, ptr = 0, next_subtask(None)
             term = False
+
+            def world_array() -> np.ndarray:
+                array = np.zeros(self.world_shape)
+                for p, o in objects.items():
+                    if o is not None:
+                        p = np.array(p)
+                        array[tuple((self.world_contents.index(o), *p))] = 1
+                array[tuple((self.world_contents.index(self.agent), *pos))] = 1
+                return array
+
+            def next_subtask() -> Optional[int]:
+                return next(subtask_iterator, None)
+
+            subtask_iterator = subtask_generator()
+
+            prev, ptr = 0, next_subtask()
+            if ptr is not None:
+                _, o = lines[ptr].id
+                nearest = get_nearest(o)
+                if nearest is None:
+                    import ipdb
+
+                    ipdb.set_trace()
+                time_remaining += max(np.abs(nearest - pos)) + 1
             while True:
-                term |= not self.time_remaining
+                term |= not time_remaining
                 subtask_id = yield State(
-                    obs=self.world_array(object_pos, agent_pos),
-                    prev=prev,
-                    ptr=ptr,
-                    term=term,
+                    obs=world_array(), prev=prev, ptr=ptr, term=term
                 )
-                self.time_remaining -= 1
+                time_remaining -= 1
                 interaction, obj = self.subtasks[subtask_id]
 
                 def pair():
-                    return obj, tuple(agent_pos)
+                    return obj, tuple(pos)
 
                 def on_object():
                     return pair() in object_pos  # standing on the desired object
@@ -345,16 +339,16 @@ class Env(ppo.control_flow.env.Env):
                         else:
                             term = True
                     if interaction == self.sell:
-                        object_pos.append((self.bridge, tuple(agent_pos)))
+                        object_pos.append((self.bridge, tuple(pos)))
                     if correct_id:
-                        prev, ptr = ptr, next_subtask(ptr)
+                        prev, ptr = ptr, next_subtask()
                 else:
                     nearest = get_nearest(obj)
                     if nearest is not None:
-                        delta = nearest - agent_pos
+                        delta = nearest - pos
                         if self.temporal_extension:
                             delta = np.clip(delta, -1, 1)
-                        agent_pos += delta
+                        pos += delta
                     elif correct_id and obj not in possible_objects:
                         # subtask is impossible
                         prev, ptr = ptr, None
