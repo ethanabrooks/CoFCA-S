@@ -1,4 +1,5 @@
 import functools
+from abc import ABC
 from enum import Enum
 from typing import List, Type, Generator, Tuple
 
@@ -24,7 +25,7 @@ class Line:
         self.id = id
 
     def __str__(self):
-        return self.__class__.__name__
+        return f"{self.__class__.__name__} {self.id}"
 
     def __eq__(self, other):
         return type(self) == type(other) and self.id == other.id
@@ -183,9 +184,6 @@ class Loop(Line):
     required_depth = 1
     depth_change = 0, 1
 
-    def __str__(self):
-        return f"{self.__class__.__name__} {self.id}"
-
     @staticmethod
     def generate_types(n: int, remaining_depth: int, **kwargs):
         yield Loop
@@ -226,9 +224,6 @@ class Subtask(Line):
     required_depth = 0
     depth_change = 0, 0
 
-    def __str__(self):
-        return f"{self.__class__.__name__} {self.id}"
-
     @staticmethod
     def generate_types(n: int, *args, **kwargs):
         yield Subtask
@@ -243,7 +238,7 @@ class Subtask(Line):
         yield line_index, line_index + 1
 
 
-class Padding(Line):
+class Padding(Line, ABC):
     pass
 
 
