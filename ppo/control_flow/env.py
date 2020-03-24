@@ -113,7 +113,7 @@ class Env(gym.Env, ABC):
     def generator(self):
         step = 0
         n = 0
-        lines = self.build_lines()
+        lines = self.choose_line_types()
         state_iterator = self.state_generator(lines)
         state = next(state_iterator)
         actions = []
@@ -201,7 +201,7 @@ class Env(gym.Env, ABC):
     def single_control_flow_type(self):
         return self._single_control_flow_type and not self.evaluating
 
-    def build_lines(self):
+    def choose_line_types(self):
         if self.evaluating:
             assert self.eval_lines is not None
             n_lines = self.eval_lines
