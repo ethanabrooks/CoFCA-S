@@ -237,10 +237,6 @@ class Env(gym.Env, ABC):
             else:
                 yield line(0)
 
-    @functools.lru_cache(maxsize=120)
-    def preprocess_line(self, line):
-        return self.possible_lines.index(line)
-
     def line_generator(self, lines):
         line_transitions = defaultdict(list)
         for _from, _to in self.get_transitions(lines):
@@ -339,7 +335,7 @@ def build_parser(p):
     p.add_argument("--flip-prob", type=float, default=0.5)
     p.add_argument("--eval-condition-size", action="store_true")
     p.add_argument("--single-control-flow-type", action="store_true")
-    p.add_argument("--max-nesting-depth", type=int)
+    p.add_argument("--max-nesting-depth", type=int, default=1)
     p.add_argument("--subtasks-only", action="store_true")
     p.add_argument("--break-on-fail", action="store_true")
     p.add_argument("--time-to-waste", type=int, required=True)
