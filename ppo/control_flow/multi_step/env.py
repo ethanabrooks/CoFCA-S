@@ -191,7 +191,7 @@ class Env(ppo.control_flow.env.Env):
                 j = line_transitions[j][int(t)]
 
         index_truthiness = list(index_truthiness_generator())
-        line_types = [l(None) for l in line_types]  # instantiate line types
+        lines = [l(None) for l in line_types]  # instantiate line types
 
         blocks = defaultdict(list)
         whiles = []
@@ -209,7 +209,7 @@ class Env(ppo.control_flow.env.Env):
         while_index = {}  # type: Dict[int, line]
         for i, indices in blocks.items():
             indices = set(indices) - set(while_index.keys())
-            while_index[self.random.choice(list(indices))] = line_types[i]
+            while_index[self.random.choice(list(indices))] = lines[i]
 
         # go through lines in reverse to assign ids and put objects in the world
         existing = list(
@@ -219,7 +219,7 @@ class Env(ppo.control_flow.env.Env):
 
         world = Counter()
         for i, truthy in reversed(index_truthiness):
-            line = line_types[i]
+            line = lines[i]
             if type(line) is Subtask:
                 if not line.id:
                     subtasks = [s for s in self.subtasks]
@@ -257,7 +257,7 @@ class Env(ppo.control_flow.env.Env):
                 return self.generators()
 
         # assign unvisited lines
-        for line in line_types:
+        for line in lines:
             if line.id is None:
                 line.id = self.subtasks[self.random.choice(len(self.subtasks))]
 
@@ -336,7 +336,7 @@ class Env(ppo.control_flow.env.Env):
                 def on_object():
                     return pair() in object_pos  # standing on the desired object
 
-                correct_id = (interaction, obj) == line_types[ptr].id
+                correct_id = (interaction, obj) == lines[ptr].id
                 if on_object():
                     if interaction in (self.mine, self.sell):
                         object_pos.remove(pair())
@@ -359,7 +359,7 @@ class Env(ppo.control_flow.env.Env):
                         # subtask is impossible
                         prev, ptr = ptr, None
 
-        return state_generator(), line_types
+        return state_generator(), lines
 
     def populate_world(self, lines):
         line_io = [line.id for line in lines if type(line) is Subtask]
