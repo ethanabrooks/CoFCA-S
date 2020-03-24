@@ -113,7 +113,7 @@ class Env(gym.Env, ABC):
     def generator(self):
         step = 0
         n = 0
-        lines = self.build_lines()
+        lines = self.assign_line_ids()
         state_iterator = self.state_generator(lines)
         state = next(state_iterator)
         actions = []
@@ -201,7 +201,7 @@ class Env(gym.Env, ABC):
     def single_control_flow_type(self):
         return self._single_control_flow_type and not self.evaluating
 
-    def build_lines(self):
+    def assign_line_ids(self):
         if self.evaluating:
             assert self.eval_lines is not None
             n_lines = self.eval_lines
@@ -288,7 +288,7 @@ class Env(gym.Env, ABC):
         prev, ptr = 0, next_subtask(None)
         term = False
         while True:
-            action = yield State(obs=condition_bit, prev=prev, ptr=ptr, term=term,)
+            action = yield State(obs=condition_bit, prev=prev, ptr=ptr, term=term)
             if not self.time_remaining or action != lines[ptr].id:
                 term = True
             else:
