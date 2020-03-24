@@ -215,15 +215,15 @@ class Env(gym.Env, ABC):
             lines = [line0] + [Subtask] * (edge_length - 2)
             lines += [EndWhile if line0 is While else EndIf, Subtask]
         else:
-            control_flow_types = self.control_flow_types
+            line_types = self.control_flow_types
             if self.single_control_flow_type:
-                control_flow_types = [np.random.choice(self.control_flow_types)]
+                line_types = [np.random.choice(self.control_flow_types)]
             lines = list(
                 Line.generate_types(
                     n_lines,
                     remaining_depth=self.max_nesting_depth,
                     random=self.random,
-                    legal_lines=control_flow_types + [Subtask],
+                    legal_lines=line_types + [Subtask],
                 )
             )
         return list(self.assign_line_ids(lines))
