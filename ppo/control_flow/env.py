@@ -51,8 +51,6 @@ class Env(gym.Env, ABC):
         evaluating=False,
     ):
         super().__init__()
-        if Subtask not in control_flow_types:
-            control_flow_types.append(Subtask)
         self.control_flow_types = control_flow_types
         self.rank = rank
         self.max_loops = max_loops
@@ -348,9 +346,7 @@ def build_parser(p):
     p.add_argument(
         "--control-flow-types",
         nargs="*",
-        type=lambda s: dict(
-            Subtask=Subtask, If=If, Else=Else, While=While, Loop=Loop
-        ).get(s),
+        type=lambda s: dict(If=If, While=While, Else=Else, Loop=Loop).get(s),
     )
     return p
 
