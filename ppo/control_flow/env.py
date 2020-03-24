@@ -178,7 +178,7 @@ class Env(gym.Env, ABC):
             obs = self.get_observation(state.obs, state.ptr, lines)
 
             action = (yield obs, reward, term, info)
-            actions += [list(action.astype(int))]
+            actions.extend([int(a) for a in action])
             action, agent_ptr = int(action[0]), int(action[-1])
             info = {}
 
