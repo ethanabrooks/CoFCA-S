@@ -35,15 +35,15 @@ class Line:
         assert Subtask in legal_lines
         if n == 0:
             return
-        m = sample(random, 1, n)
         _legal_lines = [
             l
             for l in legal_lines
-            if l.required_lines <= m and l.required_depth <= remaining_depth
+            if l.required_lines <= n and l.required_depth <= remaining_depth
         ]
         assert Subtask in _legal_lines
         if _legal_lines:
             line = random.choice(_legal_lines)
+            m = sample(random, line.required_lines, n)
             # line.check(m, remaining_depth)
             yield from line.generate_types(
                 m, remaining_depth, random=random, legal_lines=legal_lines

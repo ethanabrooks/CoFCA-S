@@ -307,8 +307,8 @@ class Env(ppo.control_flow.env.Env):
 
 def build_parser(p):
     ppo.control_flow.env.build_parser(p)
-    p.env.add_argument("--max-while-objects", type=float, default=2)
-    p.env.add_argument("--num-excluded-objects", type=int, default=2)
+    p.add_argument("--max-while-objects", type=float, default=2)
+    p.add_argument("--num-excluded-objects", type=int, default=2)
     p.add_argument(
         "--no-temporal-extension", dest="temporal_extension", action="store_false"
     )
