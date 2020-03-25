@@ -279,7 +279,7 @@ class Env(ppo.control_flow.env.Env):
             self.loops = None
 
             def get_nearest(to):
-                candidates = [np.array(p) for o, p in objects.items() if o == to]
+                candidates = [np.array(p) for p, o in objects.items() if o == to]
                 if candidates:
                     return min(candidates, key=lambda k: np.sum(np.abs(agent_pos - k)))
 
