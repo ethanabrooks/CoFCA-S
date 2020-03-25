@@ -218,7 +218,7 @@ class Env(gym.Env, ABC):
         else:
             line_types = self.control_flow_types
             if self.single_control_flow_type:
-                line_types = [np.random.choice(self.control_flow_types)]
+                line_types = [self.random.choice(self.control_flow_types), Subtask]
             lines = list(
                 Line.generate_types(
                     n_lines,
@@ -336,9 +336,15 @@ class Env(gym.Env, ABC):
     def get_observation(self, obs, active, lines):
         padded = lines + [Padding(0)] * (self.n_lines - len(lines))
         lines = [self.preprocess_line(p) for p in padded]
-        return Obs(
+        obs = Obs(
             obs=obs, lines=lines, active=self.n_lines if active is None else active
         )._asdict()
+        # if not self.observation_space.contains(obs):
+        #     import ipdb
+        #
+        #     ipdb.set_trace()
+        #     self.observation_space.contains(obs)
+        return obs
 
     @staticmethod
     def print_obs(obs):
