@@ -28,7 +28,6 @@ State = namedtuple("State", "obs prev ptr  term")
 
 class Env(gym.Env, ABC):
     pairs = {If: EndIf, Else: EndIf, While: EndWhile, Loop: EndLoop}
-    line_types = [If, Else, EndIf, While, EndWhile, EndLoop, Subtask, Padding, Loop]
 
     def __init__(
         self,
@@ -103,6 +102,10 @@ class Env(gym.Env, ABC):
                 active=spaces.Discrete(self.n_lines + 1),
             )
         )
+
+    @property
+    def line_types(self):
+        return list(Line.types)
 
     def reset(self):
         self.iterator = self.generator()
