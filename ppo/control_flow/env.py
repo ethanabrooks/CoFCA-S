@@ -218,7 +218,7 @@ class Env(gym.Env, ABC):
         else:
             line_types = self.control_flow_types
             if self.single_control_flow_type:
-                line_types = [np.random.choice(self.control_flow_types)]
+                line_types = [self.random.choice(self.control_flow_types), Subtask]
             lines = list(
                 Line.generate_types(
                     n_lines,
