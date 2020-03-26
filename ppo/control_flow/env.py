@@ -2,12 +2,13 @@ import functools
 from abc import ABC
 from collections import defaultdict, namedtuple
 from typing import List, Tuple, Iterator
+
 import numpy as np
 from gym.utils import seeding
 from gym.vector.utils import spaces
 from rl_utils import hierarchical_parse_args, gym
+
 from ppo import keyboard_control
-from ppo.utils import RED, RESET, GREEN
 from ppo.control_flow.lines import (
     If,
     Else,
@@ -18,8 +19,8 @@ from ppo.control_flow.lines import (
     Padding,
     Line,
     Loop,
-    EndLoop,
 )
+from ppo.utils import RED, RESET, GREEN
 
 Obs = namedtuple("Obs", "active lines obs")
 Last = namedtuple("Last", "action active reward terminal selected")
@@ -27,9 +28,6 @@ State = namedtuple("State", "obs prev ptr  term")
 
 
 class Env(gym.Env, ABC):
-    pairs = {If: EndIf, Else: EndIf, While: EndWhile, Loop: EndLoop}
-    line_types = [If, Else, EndIf, While, EndWhile, EndLoop, Subtask, Padding, Loop]
-
     def __init__(
         self,
         min_lines,
@@ -103,6 +101,10 @@ class Env(gym.Env, ABC):
                 active=spaces.Discrete(self.n_lines + 1),
             )
         )
+
+    @property
+    def line_types(self):
+        return list(Line.types)
 
     def reset(self):
         self.iterator = self.generator()
