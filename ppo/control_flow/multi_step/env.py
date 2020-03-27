@@ -123,21 +123,16 @@ class Env(ppo.control_flow.env.Env):
         else:
             raise RuntimeError()
 
-    def world_array(self, object_pos, objects, agent_pos):
+    def world_array(self, objects, agent_pos):
         world = np.zeros(self.world_shape)
-        for o, p in object_pos + [(self.agent, agent_pos)]:
-            p = np.array(p)
-            world[tuple((self.world_contents.index(o), *p))] = 1
-        world2 = np.zeros(self.world_shape)
         for p, o in list(objects.items()) + [(agent_pos, self.agent)]:
             p = np.array(p)
-            world2[tuple((self.world_contents.index(o), *p))] = 1
-        assert np.all(world == world2)
+            world[tuple((self.world_contents.index(o), *p))] = 1
 
         return world
 
     @staticmethod
-    def evaluate_line(line, object_pos, objects, condition_evaluations, loops):
+    def evaluate_line(line, objects, condition_evaluations, loops):
         if line is None:
             return None
         elif type(line) is Loop:
@@ -145,8 +140,7 @@ class Env(ppo.control_flow.env.Env):
         if type(line) is Subtask:
             return 1
         else:
-            evaluation = any(o == line.id for o, _ in object_pos)
-            assert evaluation == (line.id in objects.values())
+            evaluation = line.id in objects.values()
             if type(line) in (If, While):
                 condition_evaluations += [evaluation]
             return evaluation
@@ -268,7 +262,6 @@ class Env(ppo.control_flow.env.Env):
                 line.id = self.subtasks[self.random.choice(len(self.subtasks))]
 
         def state_generator() -> State:
-            object_pos = []
             assert self.max_nesting_depth == 1
             agent_pos = self.random.randint(0, self.world_size, size=2)
             objects = {}
@@ -281,9 +274,6 @@ class Env(ppo.control_flow.env.Env):
             ):
                 p = np.unravel_index(p, (self.world_size, self.world_size))
                 objects[tuple(p)] = o
-                object_pos.append((o, p))
-
-            assert set(object_pos) == set([(o, p) for (p, o) in objects.items()])
 
             line_iterator = self.line_generator(lines)
             condition_evaluations = []
@@ -307,11 +297,7 @@ class Env(ppo.control_flow.env.Env):
                                 self.loops -= 1
                         l = line_iterator.send(
                             self.evaluate_line(
-                                lines[l],
-                                object_pos,
-                                objects,
-                                condition_evaluations,
-                                self.loops,
+                                lines[l], objects, condition_evaluations, self.loops,
                             )
                         )
                         if self.loops == 0:
@@ -332,7 +318,7 @@ class Env(ppo.control_flow.env.Env):
             while True:
                 term |= not self.time_remaining
                 subtask_id = yield State(
-                    obs=self.world_array(object_pos, objects, agent_pos),
+                    obs=self.world_array(objects, agent_pos),
                     prev=prev,
                     ptr=ptr,
                     term=term,
@@ -344,21 +330,18 @@ class Env(ppo.control_flow.env.Env):
                     return obj, tuple(agent_pos)
 
                 def on_object():
-                    ret_val = pair() in object_pos
-                    assert ret_val == (objects.get(tuple(agent_pos), None) == obj)
-                    return ret_val  # standing on the desired object
+                    # standing on the desired object
+                    return objects.get(tuple(agent_pos), None) == obj
 
                 correct_id = (interaction, obj) == lines[ptr].id
                 if on_object():
                     if interaction in (self.mine, self.sell):
-                        object_pos.remove(pair())
                         del objects[tuple(agent_pos)]
                         if correct_id:
                             possible_objects.remove(obj)
                         else:
                             term = True
                     if interaction == self.sell:
-                        object_pos.append((self.bridge, tuple(agent_pos)))
                         objects[tuple(agent_pos)] = self.bridge
                     if correct_id:
                         prev, ptr = ptr, next_subtask(ptr)
