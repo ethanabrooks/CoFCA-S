@@ -275,7 +275,6 @@ class Env(ppo.control_flow.env.Env):
                 p = np.unravel_index(p, (self.world_size, self.world_size))
                 objects[tuple(p)] = o
 
-            line_iterator = self.line_generator(lines)
             condition_evaluations = []
             self.time_remaining = 200 if self.evaluating else self.time_to_waste
             self.loops = None
@@ -285,25 +284,18 @@ class Env(ppo.control_flow.env.Env):
                 if candidates:
                     return min(candidates, key=lambda k: np.sum(np.abs(agent_pos - k)))
 
-            def next_subtask(l):
-                while True:
-                    if l is None:
-                        l = line_iterator.send(None)
-                    else:
-                        if type(lines[l]) is Loop:
-                            if self.loops is None:
-                                self.loops = lines[l].id
-                            else:
-                                self.loops -= 1
-                        l = line_iterator.send(
-                            self.evaluate_line(
-                                lines[l], objects, condition_evaluations, self.loops,
-                            )
-                        )
-                        if self.loops == 0:
-                            self.loops = None
-                    if l is None or type(lines[l]) is Subtask:
-                        break
+            def subtask_generator() -> Generator[int, None, None]:
+                for l, _ in index_truthiness:
+                    if type(lines[l]) is Subtask:
+                        yield l
+
+            subtask_iterator = subtask_generator()
+
+            def next_subtask():
+                try:
+                    l = next(subtask_iterator)
+                except StopIteration:
+                    return
                 if l is not None:
                     assert type(lines[l]) is Subtask
                     _, o = lines[l].id
@@ -313,7 +305,7 @@ class Env(ppo.control_flow.env.Env):
                 return l
 
             possible_objects = list(objects.values())
-            prev, ptr = 0, next_subtask(None)
+            prev, ptr = 0, next_subtask()
             term = False
             while True:
                 term |= not self.time_remaining
@@ -344,7 +336,7 @@ class Env(ppo.control_flow.env.Env):
                     if interaction == self.sell:
                         objects[tuple(agent_pos)] = self.bridge
                     if correct_id:
-                        prev, ptr = ptr, next_subtask(ptr)
+                        prev, ptr = ptr, next_subtask()
                 else:
                     nearest = get_nearest(obj)
                     if nearest is not None:
