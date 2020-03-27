@@ -38,17 +38,7 @@ class Env(ppo.control_flow.env.Env):
     world_contents = items + terrain
     behaviors = [mine, sell, goto]
 
-    def __init__(
-        self,
-        num_subtasks,
-        max_while_objects,
-        num_excluded_objects,
-        temporal_extension,
-        world_size=6,
-        **kwargs,
-    ):
-        self.num_excluded_objects = num_excluded_objects
-        self.max_while_objects = max_while_objects
+    def __init__(self, num_subtasks, temporal_extension, world_size=6, **kwargs):
         self.temporal_extension = temporal_extension
         self.loops = None
 
@@ -253,9 +243,8 @@ class Env(ppo.control_flow.env.Env):
             if line.id is None:
                 line.id = self.subtasks[self.random.choice(len(self.subtasks))]
 
-        def state_generator() -> State:
-            assert self.max_nesting_depth == 1
-            pos = self.random.randint(0, self.world_size, size=2)
+        def state_generator() -> Generator[State, int, None]:
+            pos = self.random.randint(self.world_size, size=2)
             objects = {}
             flattened = [o for o, c in world.items() for _ in range(c)]
             for o, p in zip(
@@ -299,7 +288,7 @@ class Env(ppo.control_flow.env.Env):
                         if self.temporal_extension:
                             move = np.clip(move, -1, 1)
 
-            def world_array():
+            def world_array() -> np.ndarray:
                 array = np.zeros(self.world_shape)
                 for p, o in list(objects.items()) + [(pos, self.agent)]:
                     p = np.array(p)
@@ -369,8 +358,6 @@ class Env(ppo.control_flow.env.Env):
 
 def build_parser(p):
     ppo.control_flow.env.build_parser(p)
-    p.add_argument("--max-while-objects", type=float, default=2)
-    p.add_argument("--num-excluded-objects", type=int, default=2)
     p.add_argument(
         "--no-temporal-extension", dest="temporal_extension", action="store_false"
     )

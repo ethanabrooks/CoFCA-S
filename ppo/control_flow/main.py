@@ -52,7 +52,6 @@ def main(log_dir, seed, eval_lines, one_line, **kwargs):
             if one_line:
                 return control_flow.multi_step.one_line.Env(**args)
             elif not gridworld:
-                del args["max_while_objects"]
                 del args["num_excluded_objects"]
                 del args["temporal_extension"]
                 return control_flow.env.Env(**args)

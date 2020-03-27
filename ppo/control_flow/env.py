@@ -239,22 +239,6 @@ class Env(gym.Env, ABC):
             else:
                 yield line(0)
 
-    def line_generator(self, lines):
-        line_transitions = defaultdict(list)
-        for _from, _to in self.get_transitions(lines):
-            line_transitions[_from].append(_to)
-        i = 0
-        if_evaluations = []
-        while True:
-            condition_bit = yield None if i >= len(lines) else i
-            if type(lines[i]) is Else:
-                evaluation = not if_evaluations.pop()
-            else:
-                evaluation = bool(condition_bit)
-            if type(lines[i]) is If:
-                if_evaluations.append(evaluation)
-            i = line_transitions[i][evaluation]
-
     @staticmethod
     def get_transitions(lines):
         conditions = []
