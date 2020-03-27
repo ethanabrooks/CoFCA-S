@@ -263,7 +263,7 @@ class Env(ppo.control_flow.env.Env):
 
         def state_generator() -> State:
             assert self.max_nesting_depth == 1
-            agent_pos = self.random.randint(0, self.world_size, size=2)
+            pos = self.random.randint(0, self.world_size, size=2)
             objects = {}
             flattened = [o for o, c in world.items() for _ in range(c)]
             for o, p in zip(
@@ -275,14 +275,13 @@ class Env(ppo.control_flow.env.Env):
                 p = np.unravel_index(p, (self.world_size, self.world_size))
                 objects[tuple(p)] = o
 
-            condition_evaluations = []
             self.time_remaining = 200 if self.evaluating else self.time_to_waste
             self.loops = None
 
             def get_nearest(to):
                 candidates = [(np.array(p)) for p, o in objects.items() if o == to]
                 if candidates:
-                    return min(candidates, key=lambda k: np.sum(np.abs(agent_pos - k)))
+                    return min(candidates, key=lambda k: np.sum(np.abs(pos - k)))
 
             def subtask_generator() -> Generator[int, None, None]:
                 for l, _ in index_truthiness:
@@ -301,7 +300,7 @@ class Env(ppo.control_flow.env.Env):
                     _, o = lines[l].id
                     n = get_nearest(o)
                     if n is not None:
-                        self.time_remaining += 1 + np.max(np.abs(agent_pos - n))
+                        self.time_remaining += 1 + np.max(np.abs(pos - n))
                 return l
 
             possible_objects = list(objects.values())
@@ -310,40 +309,37 @@ class Env(ppo.control_flow.env.Env):
             while True:
                 term |= not self.time_remaining
                 subtask_id = yield State(
-                    obs=self.world_array(objects, agent_pos),
-                    prev=prev,
-                    ptr=ptr,
-                    term=term,
+                    obs=self.world_array(objects, pos), prev=prev, ptr=ptr, term=term,
                 )
                 self.time_remaining -= 1
                 interaction, obj = self.subtasks[subtask_id]
 
                 def pair():
-                    return obj, tuple(agent_pos)
+                    return obj, tuple(pos)
 
                 def on_object():
                     # standing on the desired object
-                    return objects.get(tuple(agent_pos), None) == obj
+                    return objects.get(tuple(pos), None) == obj
 
                 correct_id = (interaction, obj) == lines[ptr].id
                 if on_object():
                     if interaction in (self.mine, self.sell):
-                        del objects[tuple(agent_pos)]
+                        del objects[tuple(pos)]
                         if correct_id:
                             possible_objects.remove(obj)
                         else:
                             term = True
                     if interaction == self.sell:
-                        objects[tuple(agent_pos)] = self.bridge
+                        objects[tuple(pos)] = self.bridge
                     if correct_id:
                         prev, ptr = ptr, next_subtask()
                 else:
                     nearest = get_nearest(obj)
                     if nearest is not None:
-                        delta = nearest - agent_pos
+                        delta = nearest - pos
                         if self.temporal_extension:
                             delta = np.clip(delta, -1, 1)
-                        agent_pos += delta
+                        pos += delta
                     elif correct_id and obj not in possible_objects:
                         # subtask is impossible
                         prev, ptr = ptr, None
