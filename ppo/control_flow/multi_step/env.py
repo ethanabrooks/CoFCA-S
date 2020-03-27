@@ -276,13 +276,15 @@ class Env(ppo.control_flow.env.Env):
                 objects[tuple(p)] = o
                 object_pos.append((o, p))
 
+            assert set(object_pos) == set([(o, p) for (p, o) in objects.items()])
+
             line_iterator = self.line_generator(lines)
             condition_evaluations = []
             self.time_remaining = 200 if self.evaluating else self.time_to_waste
             self.loops = None
 
             def get_nearest(to):
-                candidates = [np.array(p) for o, p in object_pos if o == to]
+                candidates = [(np.array(p)) for p, o in objects.items() if o == to]
                 if candidates:
                     return min(candidates, key=lambda k: np.sum(np.abs(agent_pos - k)))
 
@@ -313,7 +315,7 @@ class Env(ppo.control_flow.env.Env):
                         self.time_remaining += 1 + np.max(np.abs(agent_pos - n))
                 return l
 
-            possible_objects = [o for o, _ in object_pos]
+            possible_objects = list(objects.values())
             prev, ptr = 0, next_subtask(None)
             term = False
             while True:
@@ -337,12 +339,17 @@ class Env(ppo.control_flow.env.Env):
                 if on_object():
                     if interaction in (self.mine, self.sell):
                         object_pos.remove(pair())
+                        del objects[tuple(agent_pos)]
                         if correct_id:
                             possible_objects.remove(obj)
                         else:
                             term = True
                     if interaction == self.sell:
                         object_pos.append((self.bridge, tuple(agent_pos)))
+                        objects[tuple(agent_pos)] = self.bridge
+                        assert set(object_pos) == set(
+                            [(o, p) for (p, o) in objects.items()]
+                        )
                     if correct_id:
                         prev, ptr = ptr, next_subtask(ptr)
                 else:
@@ -357,55 +364,6 @@ class Env(ppo.control_flow.env.Env):
                         prev, ptr = ptr, None
 
         return state_generator(), lines
-
-    def populate_world(self, lines):
-        line_io = [line.id for line in lines if type(line) is Subtask]
-        line_pos = self.random.randint(0, self.world_size, size=(len(line_io), 2))
-        object_pos = [
-            (o, tuple(pos)) for (interaction, o), pos in zip(line_io, line_pos)
-        ]
-        while_blocks = defaultdict(list)  # while line: child subtasks
-        active_whiles = []
-        active_loops = []
-        loop_obj = []
-        loop_count = 0
-        for i, line in enumerate(lines):
-            if type(line) is While:
-                active_whiles += [i]
-            elif type(line) is EndWhile:
-                active_whiles.pop()
-            elif type(line) is Loop:
-                active_loops += [line]
-            elif type(line) is EndLoop:
-                active_loops.pop()
-            elif type(line) is Subtask:
-                if active_whiles:
-                    while_blocks[active_whiles[-1]] += [i]
-                if active_loops:
-                    _i, _o = line.id
-                    loop_num = active_loops[-1].id
-                    loop_obj += [(_o, loop_num)]
-                    loop_count += loop_num
-
-        pos = self.random.randint(0, self.world_size, size=(loop_count, 2))
-        obj = (o for o, c in loop_obj for _ in range(c))
-        object_pos += [(o, tuple(p)) for o, p in zip(obj, pos)]
-
-        for while_line, block in while_blocks.items():
-            obj = lines[while_line].id
-            l = self.random.choice(block)
-            i = self.random.choice(2)
-            assert self.behaviors[i] in (self.mine, self.sell)
-            line_id = self.behaviors[i], obj
-            assert line_id in ((self.mine, obj), (self.sell, obj))
-            lines[l] = Subtask(line_id)
-            if not self.evaluating and obj in self.world_contents:
-                num_obj = self.random.randint(self.max_while_objects + 1)
-                if num_obj:
-                    pos = self.random.randint(0, self.world_size, size=(num_obj, 2))
-                    object_pos += [(obj, tuple(p)) for p in pos]
-
-        return object_pos
 
     def assign_line_ids(self, lines):
         excluded = self.random.randint(len(self.items), size=self.num_excluded_objects)
