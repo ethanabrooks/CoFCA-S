@@ -123,14 +123,6 @@ class Env(ppo.control_flow.env.Env):
         else:
             raise RuntimeError()
 
-    def world_array(self, objects, agent_pos):
-        world = np.zeros(self.world_shape)
-        for p, o in list(objects.items()) + [(agent_pos, self.agent)]:
-            p = np.array(p)
-            world[tuple((self.world_contents.index(o), *p))] = 1
-
-        return world
-
     @staticmethod
     def evaluate_line(line, objects, condition_evaluations, loops):
         if line is None:
@@ -278,17 +270,45 @@ class Env(ppo.control_flow.env.Env):
             self.time_remaining = 200 if self.evaluating else self.time_to_waste
             self.loops = None
 
-            def get_nearest(to):
-                candidates = [(np.array(p)) for p, o in objects.items() if o == to]
-                if candidates:
-                    return min(candidates, key=lambda k: np.sum(np.abs(pos - k)))
-
             def subtask_generator() -> Generator[int, None, None]:
                 for l, _ in index_truthiness:
                     if type(lines[l]) is Subtask:
                         yield l
 
+            def get_nearest(to):
+                candidates = [(np.array(p)) for p, o in objects.items() if o == to]
+                if candidates:
+                    return min(candidates, key=lambda k: np.sum(np.abs(pos - k)))
+
+            def agent_generator() -> Generator[
+                Union[np.ndarray, str], Tuple[str, str], None
+            ]:
+                subtask, objective, move = None, None, None
+                while True:
+                    new_subtask = (chosen_behavior, chosen_object) = yield move
+                    if new_subtask != subtask:
+                        subtask = new_subtask
+                        objective = get_nearest(chosen_object)
+                    if objective is None:
+                        move = None
+                    elif np.all(objective == pos):
+                        move = chosen_behavior
+                        subtask = None
+                    else:
+                        move = np.array(objective) - pos
+                        if self.temporal_extension:
+                            move = np.clip(move, -1, 1)
+
+            def world_array():
+                array = np.zeros(self.world_shape)
+                for p, o in list(objects.items()) + [(pos, self.agent)]:
+                    p = np.array(p)
+                    array[tuple((self.world_contents.index(o), *p))] = 1
+
+                return array
+
             subtask_iterator = subtask_generator()
+            agent_iterator = agent_generator()
 
             def next_subtask():
                 try:
@@ -309,7 +329,7 @@ class Env(ppo.control_flow.env.Env):
             while True:
                 term |= not self.time_remaining
                 subtask_id = yield State(
-                    obs=self.world_array(objects, pos), prev=prev, ptr=ptr, term=term,
+                    obs=world_array(), prev=prev, ptr=ptr, term=term,
                 )
                 self.time_remaining -= 1
                 interaction, obj = self.subtasks[subtask_id]
@@ -345,28 +365,6 @@ class Env(ppo.control_flow.env.Env):
                         prev, ptr = ptr, None
 
         return state_generator(), lines
-
-    def assign_line_ids(self, lines):
-        excluded = self.random.randint(len(self.items), size=self.num_excluded_objects)
-        included_objects = [o for i, o in enumerate(self.items) if i not in excluded]
-
-        interaction_ids = self.random.choice(len(self.behaviors), size=len(lines))
-        object_ids = self.random.choice(len(included_objects), size=len(lines))
-        line_ids = self.random.choice(len(self.items), size=len(lines))
-
-        for line, line_id, interaction_id, object_id in zip(
-            lines, line_ids, interaction_ids, object_ids
-        ):
-            if line is Subtask:
-                subtask_id = (
-                    self.behaviors[interaction_id],
-                    included_objects[object_id],
-                )
-                yield Subtask(subtask_id)
-            elif line is Loop:
-                yield Loop(self.random.randint(1, 1 + self.max_loops))
-            else:
-                yield line(self.items[line_id])
 
 
 def build_parser(p):
