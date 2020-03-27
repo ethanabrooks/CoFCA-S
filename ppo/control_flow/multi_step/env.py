@@ -123,15 +123,21 @@ class Env(ppo.control_flow.env.Env):
         else:
             raise RuntimeError()
 
-    def world_array(self, object_pos, agent_pos):
+    def world_array(self, object_pos, objects, agent_pos):
         world = np.zeros(self.world_shape)
         for o, p in object_pos + [(self.agent, agent_pos)]:
             p = np.array(p)
             world[tuple((self.world_contents.index(o), *p))] = 1
+        world2 = np.zeros(self.world_shape)
+        for p, o in list(objects.items()) + [(agent_pos, self.agent)]:
+            p = np.array(p)
+            world2[tuple((self.world_contents.index(o), *p))] = 1
+        assert np.all(world == world2)
+
         return world
 
     @staticmethod
-    def evaluate_line(line, object_pos, condition_evaluations, loops):
+    def evaluate_line(line, object_pos, objects, condition_evaluations, loops):
         if line is None:
             return None
         elif type(line) is Loop:
@@ -140,6 +146,7 @@ class Env(ppo.control_flow.env.Env):
             return 1
         else:
             evaluation = any(o == line.id for o, _ in object_pos)
+            assert evaluation == (line.id in objects.values())
             if type(line) in (If, While):
                 condition_evaluations += [evaluation]
             return evaluation
@@ -300,7 +307,11 @@ class Env(ppo.control_flow.env.Env):
                                 self.loops -= 1
                         l = line_iterator.send(
                             self.evaluate_line(
-                                lines[l], object_pos, condition_evaluations, self.loops
+                                lines[l],
+                                object_pos,
+                                objects,
+                                condition_evaluations,
+                                self.loops,
                             )
                         )
                         if self.loops == 0:
@@ -321,7 +332,7 @@ class Env(ppo.control_flow.env.Env):
             while True:
                 term |= not self.time_remaining
                 subtask_id = yield State(
-                    obs=self.world_array(object_pos, agent_pos),
+                    obs=self.world_array(object_pos, objects, agent_pos),
                     prev=prev,
                     ptr=ptr,
                     term=term,
@@ -333,7 +344,9 @@ class Env(ppo.control_flow.env.Env):
                     return obj, tuple(agent_pos)
 
                 def on_object():
-                    return pair() in object_pos  # standing on the desired object
+                    ret_val = pair() in object_pos
+                    assert ret_val == (objects.get(tuple(agent_pos), None) == obj)
+                    return ret_val  # standing on the desired object
 
                 correct_id = (interaction, obj) == lines[ptr].id
                 if on_object():
@@ -347,9 +360,6 @@ class Env(ppo.control_flow.env.Env):
                     if interaction == self.sell:
                         object_pos.append((self.bridge, tuple(agent_pos)))
                         objects[tuple(agent_pos)] = self.bridge
-                        assert set(object_pos) == set(
-                            [(o, p) for (p, o) in objects.items()]
-                        )
                     if correct_id:
                         prev, ptr = ptr, next_subtask(ptr)
                 else:
