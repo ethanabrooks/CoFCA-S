@@ -274,15 +274,14 @@ class Env(ppo.control_flow.env.Env):
             ]:
                 subtask, objective, move = None, None, None
                 while True:
-                    new_subtask = (chosen_behavior, chosen_object) = yield move
-                    if new_subtask != subtask:
-                        subtask = new_subtask
-                        objective = get_nearest(chosen_object)
+                    (chosen_behavior, chosen_object) = yield move
+                    # if new_subtask != subtask:
+                    #     subtask = new_subtask
+                    objective = get_nearest(chosen_object)
                     if objective is None:
                         move = None
                     elif np.all(objective == pos):
                         move = chosen_behavior
-                        subtask = None
                     else:
                         move = np.array(objective) - pos
                         if self.temporal_extension:
@@ -298,6 +297,7 @@ class Env(ppo.control_flow.env.Env):
 
             subtask_iterator = subtask_generator()
             agent_iterator = agent_generator()
+            next(agent_iterator)
 
             def next_subtask():
                 try:
@@ -312,7 +312,6 @@ class Env(ppo.control_flow.env.Env):
                         self.time_remaining += 1 + np.max(np.abs(pos - n))
                 return l
 
-            possible_objects = list(objects.values())
             prev, ptr = 0, next_subtask()
             term = False
             while True:
@@ -321,37 +320,38 @@ class Env(ppo.control_flow.env.Env):
                     obs=world_array(), prev=prev, ptr=ptr, term=term,
                 )
                 self.time_remaining -= 1
-                interaction, obj = self.subtasks[subtask_id]
+                chosen_subtask = self.subtasks[subtask_id]
+                agent_move = agent_iterator.send(chosen_subtask)
+                tgt_move, tgt_object = lines[ptr].id
+                if (
+                    tuple(pos) in objects
+                    and tgt_object == objects[tuple(pos)]
+                    and tgt_move is self.goto
+                    or (agent_move is not None and tuple(agent_move) == tuple(tgt_move))
+                ):
+                    prev, ptr = ptr, next_subtask()
 
-                def pair():
-                    return obj, tuple(pos)
+                def check_fail():
+                    if objects[tuple(pos)] != tgt_object:
+                        return True
 
-                def on_object():
-                    # standing on the desired object
-                    return objects.get(tuple(pos), None) == obj
+                if type(agent_move) in (np.ndarray, tuple):
+                    pos += agent_move
+                    if np.any(pos >= self.world_size) or np.any(pos < 0):
+                        import ipdb
 
-                correct_id = (interaction, obj) == lines[ptr].id
-                if on_object():
-                    if interaction in (self.mine, self.sell):
-                        del objects[tuple(pos)]
-                        if correct_id:
-                            possible_objects.remove(obj)
-                        else:
-                            term = True
-                    if interaction == self.sell:
-                        objects[tuple(pos)] = self.bridge
-                    if correct_id:
-                        prev, ptr = ptr, next_subtask()
+                        ipdb.set_trace()
+
+                elif agent_move == self.mine:
+                    term = check_fail() or term
+                    del objects[tuple(pos)]
+                elif agent_move == self.sell:
+                    term = check_fail() or term
+                    objects[tuple(pos)] = self.bridge
+                elif agent_move in [self.goto, None]:
+                    pass
                 else:
-                    nearest = get_nearest(obj)
-                    if nearest is not None:
-                        delta = nearest - pos
-                        if self.temporal_extension:
-                            delta = np.clip(delta, -1, 1)
-                        pos += delta
-                    elif correct_id and obj not in possible_objects:
-                        # subtask is impossible
-                        prev, ptr = ptr, None
+                    raise RuntimeError
 
         return state_generator(), lines
 
