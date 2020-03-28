@@ -2,6 +2,7 @@ import functools
 from collections import defaultdict, Counter
 from typing import Iterator, List, Tuple, Generator, Dict
 
+
 import numpy as np
 from gym import spaces
 from rl_utils import hierarchical_parse_args
@@ -183,7 +184,7 @@ class Env(ppo.control_flow.env.Env):
                 j = line_transitions[j][int(t)]
 
         index_truthiness = list(index_truthiness_generator())
-        lines = [l(None) for l in line_types]  # instantiate line types
+        instruction_lines = [l(None) for l in line_types]  # instantiate line types
 
         # identify while blocks
         blocks = defaultdict(list)
@@ -204,77 +205,81 @@ class Env(ppo.control_flow.env.Env):
             indices = set(indices) - set(while_index.keys())
             while_index[self.random.choice(list(indices))] = i
 
-        # go through lines in reverse to assign ids and put objects in the world
-        def choose_assignments_and_existing():
-            assignments = [None for _ in range(len(lines))]
-            size = len(self.items) - while_count - 1
-            available_types = list(
-                self.random.choice(self.items, replace=False, size=size)
-            )
-            total = self.random.choice(self.world_size ** 2)
-            items = self.random.choice(available_types, size=total)
-            w = Counter(dict(zip(*np.unique(items, return_counts=True))))
-            assert 0 < len(available_types) < len(self.items)
-            for j, t in reversed(index_truthiness):
-                l = lines[j]
-                if type(l) is Subtask:
-                    if not assignments[j]:
-                        try:
-                            behavior = self.mine
-                            it = assignments[while_index[j]]
-                            assert it
-                        except KeyError:
-                            behavior = self.random.choice(self.behaviors)
-                            it = self.random.choice(available_types)
-                        assignments[j] = (behavior, it)
-                        if not w[it] or behavior in [self.mine, self.sell]:
-                            w[it] += 1
-                elif type(l) is While:
-                    if not assignments[j]:
-                        it = self.random.choice([o for o in self.items if not w[o]])
-                        assignments[j] = it
-                        if t:
-                            available_types.append(it)
+        # determine whether whiles are truthy (since last time we see
+        # noinspection PyTypeChecker
+        first_truthy = dict(reversed(index_truthiness))
 
-                yield assignments[j], Counter(w)
-                assert 0 < len(available_types) < len(self.items)
+        # choose existing and non_existing
+        size = while_count + 1
+        non_existing = list(self.random.choice(self.items, replace=False, size=size))
+        existing = [o for o in self.items if o not in non_existing]
 
-        assignments_and_existing = list(choose_assignments_and_existing())
-        for (i, truthy), (line_id, world) in zip(
-            reversed(index_truthiness), assignments_and_existing
-        ):
-            existing = []
-            non_existing = []
-            for item in self.items:
-                if world[item]:
-                    existing.append(item)
+        # assign while
+        for i, line in reversed(list(enumerate(instruction_lines))):
+            # need to go in reverse because while can modify existing
+            if type(line) is While and line.id is None:
+                line.id = item = self.random.choice(non_existing)
+                if item in non_existing and first_truthy[i]:
+                    non_existing.remove(item)
+                    # print(i, "existing", existing)
+
+        # assign Subtask
+        visited_lines = [i for i, _ in index_truthiness]
+        visited_lines_set = set(visited_lines)
+        for i, line in enumerate(instruction_lines):
+            if type(line) is Subtask:
+
+                if i in while_index and i in visited_lines_set:
+                    behavior = self.mine
+                    item = instruction_lines[while_index[i]].id
+                    assert item is not None  # need to go forward to avoid this
                 else:
-                    non_existing.append(item)
+                    behavior = self.random.choice(self.behaviors)
+                    item = self.random.choice(
+                        existing if i in visited_lines_set else non_existing
+                    )
+                line.id = (behavior, item)
 
-            line = lines[i]
-            if type(line) is If:
-                if not line.id:
-                    line.id = self.random.choice(existing if truthy else non_existing)
-            elif type(line) is Loop:
-                if line.id is None:
-                    line.id = 0
+        # populate world
+        world = Counter()
+        for i in visited_lines:
+            line = instruction_lines[i]
+            if type(line) is Subtask:
+                behavior, item = line.id
+                world[item] += 1
+                if sum(world.values()) > self.world_size ** 2:
+                    return self.generators()
+        virtual_world = Counter(world)
+
+        # assign other visited lines
+        for i, truthy in index_truthiness:
+            line = instruction_lines[i]
+            if type(line) is Subtask:
+                behavior, item = line.id
+                if behavior in (self.mine, self.sell):
+                    virtual_world[item] -= 1
+            elif type(line) is If:
+                # NOTE: this will not work if If is inside a loop
+                if truthy:
+                    sample_from = [o for o, c in virtual_world.items() if c > 0]
+                    line.id = self.random.choice(sample_from)
                 else:
-                    line.id += 1
-            elif line_id is None:
+                    sample_from = [o for o in self.items if virtual_world[o] == 0]
+                    line.id = self.random.choice(sample_from)
+            elif type(line) in (Else, EndIf, EndWhile, EndLoop, Padding):
                 line.id = 0
+            elif type(line) is Loop:
+                line.id = 0 if line.id is None else line.id + 1
             else:
-                line.id = line_id
-            if sum(world.values()) > self.world_size ** 2:
-                # can't fit all objects on map
-                return self.generators()
+                assert type(line) is While
+                assert line.id is not None
 
         # assign unvisited lines
-        for line in lines:
+        for line in instruction_lines:
             if line.id is None:
                 line.id = self.subtasks[self.random.choice(len(self.subtasks))]
 
         def state_generator() -> State:
-            x = assignments_and_existing
             assert self.max_nesting_depth == 1
             agent_pos = self.random.randint(0, self.world_size, size=2)
             objects = {}
@@ -288,7 +293,7 @@ class Env(ppo.control_flow.env.Env):
                 p = np.unravel_index(p, (self.world_size, self.world_size))
                 objects[tuple(p)] = o
 
-            line_iterator = self.line_generator(lines)
+            line_iterator = self.line_generator(instruction_lines)
             condition_evaluations = []
             self.time_remaining = 200 if self.evaluating else self.time_to_waste
             self.loops = None
@@ -300,7 +305,7 @@ class Env(ppo.control_flow.env.Env):
 
             def subtask_generator() -> Generator[int, None, None]:
                 for l, _ in index_truthiness:
-                    if type(lines[l]) is Subtask:
+                    if type(instruction_lines[l]) is Subtask:
                         yield l
 
             subtask_iterator = subtask_generator()
@@ -316,23 +321,26 @@ class Env(ppo.control_flow.env.Env):
                     if l is None:
                         l = line_iterator.send(None)
                     else:
-                        if type(lines[l]) is Loop:
+                        if type(instruction_lines[l]) is Loop:
                             if self.loops is None:
-                                self.loops = lines[l].id
+                                self.loops = instruction_lines[l].id
                             else:
                                 self.loops -= 1
                         l = line_iterator.send(
                             self.evaluate_line(
-                                lines[l], objects, condition_evaluations, self.loops
+                                instruction_lines[l],
+                                objects,
+                                condition_evaluations,
+                                self.loops,
                             )
                         )
                         if self.loops == 0:
                             self.loops = None
-                    if l is None or type(lines[l]) is Subtask:
+                    if l is None or type(instruction_lines[l]) is Subtask:
                         break
                 if l is not None:
-                    assert type(lines[l]) is Subtask
-                    _, o = lines[l].id
+                    assert type(instruction_lines[l]) is Subtask
+                    _, o = instruction_lines[l].id
                     n = get_nearest(o)
                     if n is not None:
                         self.time_remaining += 1 + np.max(np.abs(agent_pos - n))
@@ -342,10 +350,11 @@ class Env(ppo.control_flow.env.Env):
             prev, ptr = 0, next_subtask(None)
             ptr2 = next_subtask2()
             if not ptr2 == ptr:
-                for i, l in enumerate(lines):
+                for i, l in enumerate(instruction_lines):
                     print(i, l)
 
                 print(index_truthiness)
+                print(ptr, ptr2)
                 import ipdb
 
                 ipdb.set_trace()
@@ -366,7 +375,7 @@ class Env(ppo.control_flow.env.Env):
                         objects.get(tuple(agent_pos), None) == obj
                     )  # standing on the desired object
 
-                correct_id = (interaction, obj) == lines[ptr].id
+                correct_id = (interaction, obj) == instruction_lines[ptr].id
                 if on_object():
                     if interaction in (self.mine, self.sell):
                         del objects[tuple(agent_pos)]
@@ -391,7 +400,7 @@ class Env(ppo.control_flow.env.Env):
                         # subtask is impossible
                         prev, ptr = ptr, None
 
-        return state_generator(), lines
+        return state_generator(), instruction_lines
 
     def populate_world(self, lines):
         line_io = [line.id for line in lines if type(line) is Subtask]
