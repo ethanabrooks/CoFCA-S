@@ -50,6 +50,7 @@ class Env(ppo.control_flow.env.Env):
         self.max_while_objects = max_while_objects
         self.temporal_extension = temporal_extension
         self.loops = None
+        self.i = 0
 
         def subtasks():
             for obj in self.items:
@@ -145,16 +146,9 @@ class Env(ppo.control_flow.env.Env):
 
     def generators(self) -> Tuple[Iterator[State], List[Line]]:
         line_types = self.choose_line_types()
-        # if there are too many while loops,
-        # all items will be eliminated and tasks become impossible
-        while_count = 0
-        for line_type in line_types:
-            if line_type is EndWhile:
-                while_count += 1
-            if while_count >= len(self.items) - 1:
-                # too many while_loops
-                return self.generators()
-        assert not while_count >= len(self.items) - 1  # TODO
+        while_count = line_types.count(While)
+        if while_count >= len(self.items) - 1:
+            return self.generators()
 
         # get forward and backward transition edges
         line_transitions = defaultdict(list)
@@ -191,6 +185,7 @@ class Env(ppo.control_flow.env.Env):
         index_truthiness = list(index_truthiness_generator())
         lines = [l(None) for l in line_types]  # instantiate line types
 
+        # identify while blocks
         blocks = defaultdict(list)
         whiles = []
         for i, line_type in enumerate(line_types):
@@ -199,57 +194,76 @@ class Env(ppo.control_flow.env.Env):
             elif line_type is EndWhile:
                 whiles.pop()
             else:
-                for w in whiles:
-                    blocks[w].append(i)
+                for _while in whiles:
+                    blocks[_while].append(i)
 
         # select line inside while blocks to be a build behavior
         # so as to prevent infinite while loops
         while_index = {}  # type: Dict[int, line]
         for i, indices in blocks.items():
             indices = set(indices) - set(while_index.keys())
-            while_index[self.random.choice(list(indices))] = lines[i]
+            while_index[self.random.choice(list(indices))] = i
 
         # go through lines in reverse to assign ids and put objects in the world
-        existing = list(
-            self.random.choice(self.items, size=len(self.items) - while_count - 1)
-        )
-        non_existing = list(set(self.items) - set(existing))
+        def choose_assignments_and_existing():
+            assignments = [None for _ in range(len(lines))]
+            size = len(self.items) - while_count - 1
+            available_types = list(
+                self.random.choice(self.items, replace=False, size=size)
+            )
+            total = self.random.choice(self.world_size ** 2)
+            items = self.random.choice(available_types, size=total)
+            w = Counter(dict(zip(*np.unique(items, return_counts=True))))
+            assert 0 < len(available_types) < len(self.items)
+            for j, t in reversed(index_truthiness):
+                l = lines[j]
+                if type(l) is Subtask:
+                    if not assignments[j]:
+                        try:
+                            behavior = self.mine
+                            it = assignments[while_index[j]]
+                            assert it
+                        except KeyError:
+                            behavior = self.random.choice(self.behaviors)
+                            it = self.random.choice(available_types)
+                        assignments[j] = (behavior, it)
+                        if not w[it] or behavior in [self.mine, self.sell]:
+                            w[it] += 1
+                elif type(l) is While:
+                    if not assignments[j]:
+                        it = self.random.choice([o for o in self.items if not w[o]])
+                        assignments[j] = it
 
-        world = Counter()
-        for i, truthy in reversed(index_truthiness):
+                        # available_types.append(it)
+
+                yield assignments[j], Counter(w)
+                assert 0 < len(available_types) < len(self.items)
+
+        assignments_and_existing = list(choose_assignments_and_existing())
+        for (i, truthy), (line_id, world) in zip(
+            reversed(index_truthiness), assignments_and_existing
+        ):
+            existing = []
+            non_existing = []
+            for item in self.items:
+                if world[item]:
+                    existing.append(item)
+                else:
+                    non_existing.append(item)
+
             line = lines[i]
-            if type(line) is Subtask:
-                if not line.id:
-                    subtasks = [s for s in self.subtasks]
-                    try:
-                        item = while_index[i].id
-                        assert item is not None
-                        behavior = self.mine
-                        subtasks.remove((self.mine, item))
-                    except KeyError:
-                        behavior, item = subtasks[self.random.choice(len(subtasks))]
-                    line.id = (behavior, item)
-                behavior, item = line.id
-                if not world[item] or behavior in [self.mine, self.sell]:
-                    world[item] += 1
-            elif type(line) is If:
+            if type(line) is If:
                 if not line.id:
                     line.id = self.random.choice(existing if truthy else non_existing)
-                if truthy and not world[line.id]:
-                    world[line.id] += 1
-            elif type(line) is While:
-                if not line.id:
-                    line.id = self.random.choice(non_existing)  # type: str
-                if truthy and not line.id in existing:
-                    existing.append(line.id)
-                    non_existing.remove(line.id)
             elif type(line) is Loop:
                 if line.id is None:
                     line.id = 0
                 else:
                     line.id += 1
-            else:
+            elif line_id is None:
                 line.id = 0
+            else:
+                line.id = line_id
             if sum(world.values()) > self.world_size ** 2:
                 # can't fit all objects on map
                 return self.generators()
@@ -260,6 +274,7 @@ class Env(ppo.control_flow.env.Env):
                 line.id = self.subtasks[self.random.choice(len(self.subtasks))]
 
         def state_generator() -> State:
+            x = assignments_and_existing
             assert self.max_nesting_depth == 1
             agent_pos = self.random.randint(0, self.world_size, size=2)
             objects = {}
@@ -282,6 +297,19 @@ class Env(ppo.control_flow.env.Env):
                 candidates = [np.array(p) for p, o in objects.items() if o == to]
                 if candidates:
                     return min(candidates, key=lambda k: np.sum(np.abs(agent_pos - k)))
+
+            def subtask_generator() -> Generator[int, None, None]:
+                for l, _ in index_truthiness:
+                    if type(lines[l]) is Subtask:
+                        yield l
+
+            subtask_iterator = subtask_generator()
+
+            def next_subtask2():
+                try:
+                    return next(subtask_iterator)
+                except StopIteration:
+                    return
 
             def next_subtask(l):
                 while True:
@@ -312,6 +340,15 @@ class Env(ppo.control_flow.env.Env):
 
             possible_objects = [o for o, _ in objects.items()]
             prev, ptr = 0, next_subtask(None)
+            ptr2 = next_subtask2()
+            if not ptr2 == ptr:
+                for i, l in enumerate(lines):
+                    print(i, l)
+
+                print(index_truthiness)
+                import ipdb
+
+                ipdb.set_trace()
             term = False
             while True:
                 term |= not self.time_remaining
@@ -341,6 +378,8 @@ class Env(ppo.control_flow.env.Env):
                         objects[tuple(agent_pos)] = self.bridge
                     if correct_id:
                         prev, ptr = ptr, next_subtask(ptr)
+                        ptr2 = next_subtask2()
+                        assert ptr2 == ptr
                 else:
                     nearest = get_nearest(obj)
                     if nearest is not None:
