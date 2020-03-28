@@ -3,14 +3,45 @@ from enum import Enum
 from typing import List, Type, Generator, Tuple
 
 # noinspection PyShadowingBuiltins
+from adt import adt, Case
 from numpy.random.mtrand import RandomState
 
 
 import ppo.control_flow.lines as single_step
 
 
+@adt
+class Terrain:
+    BRIDGE = Case
+    AGENT = Case
+
+
+@adt
+class Item:
+    WOOD = Case
+    GOLD = Case
+    IRON = Case
+    MERCHANT = Case
+
+
+@adt
+class Subtask:
+    MINE = Case[Item]
+    SELL = Case[Item]
+    GOTO = Case[Item]
+
+
+@adt
 class Line(single_step.Line):
-    pass
+    SUBTASK = Case[Subtask]
+    IF = Case[Item]
+    ELSE = Case
+    ENDIF = Case
+    WHILE = Case[Item]
+    ENDWHILE = Case
+    LOOP = Case[int]
+    ENDLOOP = Case
+    PADDING = Case
 
 
 class Subtask(Line, single_step.Subtask):
