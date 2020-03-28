@@ -233,8 +233,8 @@ class Env(ppo.control_flow.env.Env):
                     if not assignments[j]:
                         it = self.random.choice([o for o in self.items if not w[o]])
                         assignments[j] = it
-
-                        # available_types.append(it)
+                        if t:
+                            available_types.append(it)
 
                 yield assignments[j], Counter(w)
                 assert 0 < len(available_types) < len(self.items)
