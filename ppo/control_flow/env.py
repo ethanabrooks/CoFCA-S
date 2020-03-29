@@ -230,7 +230,7 @@ class Env(gym.Env, ABC):
                     legal_lines=line_types,
                 )
             )
-        return list(self.assign_line_ids(lines))
+        return lines
 
     def assign_line_ids(self, lines):
         for line in lines:
