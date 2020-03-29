@@ -123,7 +123,6 @@ class Env(gym.Env, ABC):
         state = next(state_iterator)
         actions = []
         program_counter = []
-        evaluations = []
 
         agent_ptr = 0
         info = {}
@@ -146,7 +145,6 @@ class Env(gym.Env, ABC):
                     instruction=[self.preprocess_line(l) for l in lines],
                     actions=actions,
                     program_counter=program_counter,
-                    evaluations=evaluations,
                     success=len(lines),
                 )
                 if success:
