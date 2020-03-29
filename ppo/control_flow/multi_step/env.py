@@ -50,6 +50,7 @@ class Env(ppo.control_flow.env.Env):
         self.num_excluded_objects = num_excluded_objects
         self.max_while_objects = max_while_objects
         self.loops = None
+        self.i = 0
 
         def subtasks():
             for obj in self.items:

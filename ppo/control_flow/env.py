@@ -57,6 +57,8 @@ class Env(gym.Env, ABC):
         evaluating=False,
     ):
         super().__init__()
+        if Subtask not in control_flow_types:
+            control_flow_types.append(Subtask)
         self.control_flow_types = control_flow_types
         self.rank = rank
         self.max_loops = max_loops
@@ -109,6 +111,7 @@ class Env(gym.Env, ABC):
         )
 
     def reset(self):
+        self.i += 1
         self.iterator = self.generator()
         s, r, t, i = next(self.iterator)
         return s
@@ -119,7 +122,7 @@ class Env(gym.Env, ABC):
     def generator(self):
         step = 0
         n = 0
-        lines = self.build_lines()
+        lines = self.choose_line_types()
         state_iterator = self.state_generator(lines)
         state = next(state_iterator)
         actions = []
@@ -195,9 +198,11 @@ class Env(gym.Env, ABC):
                     else:
                         pre = "  "
                     indent += line.depth_change[0]
-                    print("{:2}{}{}{}".format(i, pre, " " * indent, line))
+                    print(
+                        "{:2}{}{}{}".format(i, pre, " " * indent, self.line_str(line))
+                    )
                     indent += line.depth_change[1]
-                print("Selected:", agent_ptr)
+                print("Selected:", self.subtasks[agent_ptr], agent_ptr)
                 print("Action:", action)
                 print("Reward", reward)
                 print("Obs:")
@@ -208,7 +213,7 @@ class Env(gym.Env, ABC):
             obs = self.get_observation(state.obs, state.ptr, lines)
 
             action = (yield obs, reward, term, info)
-            actions += [list(action.astype(int))]
+            actions.extend([int(a) for a in action])
             action, agent_ptr = int(action[0]), int(action[-1])
             info = {}
 
@@ -232,7 +237,7 @@ class Env(gym.Env, ABC):
     def single_control_flow_type(self):
         return self._single_control_flow_type and not self.evaluating
 
-    def build_lines(self):
+    def choose_line_types(self):
         if self.evaluating:
             assert self.eval_lines is not None
             n_lines = self.eval_lines
@@ -246,15 +251,15 @@ class Env(gym.Env, ABC):
             lines = [line0] + [Subtask] * (edge_length - 2)
             lines += [EndWhile if line0 is While else EndIf, Subtask]
         else:
-            control_flow_types = self.control_flow_types
+            line_types = self.control_flow_types
             if self.single_control_flow_type:
-                control_flow_types = [np.random.choice(self.control_flow_types)]
+                line_types = [self.random.choice(self.control_flow_types), Subtask]
             lines = list(
                 Line.generate_types(
                     n_lines,
                     remaining_depth=self.max_nesting_depth,
                     random=self.random,
-                    legal_lines=control_flow_types + [Subtask],
+                    legal_lines=line_types,
                 )
             )
         return list(self.assign_line_ids(lines))
@@ -347,9 +352,15 @@ class Env(gym.Env, ABC):
     def get_observation(self, obs, active, lines):
         padded = lines + [Padding(0)] * (self.n_lines - len(lines))
         lines = [self.preprocess_line(p) for p in padded]
-        return Obs(
+        obs = Obs(
             obs=obs, lines=lines, active=self.n_lines if active is None else active
         )._asdict()
+        # if not self.observation_space.contains(obs):
+        #     import ipdb
+        #
+        #     ipdb.set_trace()
+        #     self.observation_space.contains(obs)
+        return obs
 
     @staticmethod
     def print_obs(obs):
@@ -362,6 +373,10 @@ class Env(gym.Env, ABC):
         self._render()
         if pause:
             input("pause")
+
+    @staticmethod
+    def line_str(line):
+        return line
 
 
 def build_parser(p):
@@ -380,21 +395,26 @@ def build_parser(p):
     p.add_argument(
         "--control-flow-types",
         nargs="*",
-        type=lambda s: dict(If=If, While=While, Else=Else, Loop=Loop).get(s),
+        type=lambda s: dict(
+            Subtask=Subtask, If=If, Else=Else, While=While, Loop=Loop
+        ).get(s),
     )
     return p
 
 
-if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser()
-    args = hierarchical_parse_args(build_parser(parser))
-
+def main(env):
     def action_fn(string):
         try:
             return int(string), 0
         except ValueError:
             return
 
-    keyboard_control.run(Env(**args), action_fn=action_fn)
+    keyboard_control.run(env, action_fn=action_fn)
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--seed", default=0, type=int)
+    main(Env(**hierarchical_parse_args(build_parser(parser))))
