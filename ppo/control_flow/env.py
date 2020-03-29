@@ -1,18 +1,13 @@
 import functools
 from abc import ABC
-from collections import defaultdict, namedtuple, OrderedDict, Counter
-from dataclasses import dataclass
-from typing import List, Any
-
+from collections import defaultdict, namedtuple
+from typing import List, Tuple, Iterator
 import numpy as np
-
-# import skimage.draw
 from gym.utils import seeding
 from gym.vector.utils import spaces
 from rl_utils import hierarchical_parse_args, gym
-
-
 from ppo import keyboard_control
+from ppo.utils import RED, RESET, GREEN
 from ppo.control_flow.lines import (
     If,
     Else,
@@ -25,7 +20,6 @@ from ppo.control_flow.lines import (
     Loop,
     EndLoop,
 )
-from ppo.utils import RED, RESET, GREEN
 
 Obs = namedtuple("Obs", "active lines obs")
 Last = namedtuple("Last", "action active reward terminal selected")
@@ -159,30 +153,6 @@ class Env(gym.Env, ABC):
                     info.update(success_line=state.prev, failure_line=state.ptr)
 
             info.update(regret=1 if term and not success else 0)
-
-            def line_strings(index, level):
-                if index == len(lines):
-                    return
-                line = lines[index]
-                if index == state.ptr and index == agent_ptr:
-                    pre = "+ "
-                elif index == agent_ptr:
-                    pre = "- "
-                elif index == state.ptr:
-                    pre = "| "
-                else:
-                    pre = "  "
-                if line.depth_change < 0:
-                    level += line.depth_change
-                indent = pre * level
-                if line.depth_change > 0:
-                    level += line.depth_change
-                # if type(line) is Subtask:
-                yield f"{indent}{line}"
-                # else:
-                #     yield f"{indent}{line.__name__}"
-                # if line in [If, While, Else]:
-                yield from line_strings(index + 1, level)
 
             def render():
                 if term:

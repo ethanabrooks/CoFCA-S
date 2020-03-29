@@ -1,5 +1,6 @@
 import functools
-from collections import defaultdict
+from collections import defaultdict, Counter
+from typing import Iterator, List, Tuple, Generator, Dict, Union, Optional
 
 import numpy as np
 from gym import spaces
@@ -7,7 +8,7 @@ from rl_utils import hierarchical_parse_args
 
 import ppo.control_flow.env
 from ppo import keyboard_control
-from ppo.control_flow.env import build_parser, State
+from ppo.control_flow.env import State
 from ppo.control_flow.lines import (
     Subtask,
     Padding,
@@ -85,7 +86,7 @@ class Env(ppo.control_flow.env.Env):
 
     def print_obs(self, obs):
         obs = obs.transpose(1, 2, 0).astype(int)
-        grid_size = obs.astype(int).sum(-1).max()  # max objects per grid
+        grid_size = 2  # obs.astype(int).sum(-1).max()  # max objects per grid
         chars = [" "] + [o for o, *_ in self.world_contents]
         for i, row in enumerate(obs):
             string = ""
@@ -96,6 +97,12 @@ class Env(ppo.control_flow.env.Env):
                 string += "".join(chars[x] for x in crop) + "|"
             print(string)
             print("-" * len(string))
+
+    def line_str(self, line):
+        line = super().line_str(line)
+        if type(line) is Subtask:
+            return f"{line} {self.subtasks.index(line.id)}"
+        return line
 
     @functools.lru_cache(maxsize=200)
     def preprocess_line(self, line):
@@ -303,12 +310,4 @@ if __name__ == "__main__":
     parser = build_parser(parser)
     parser.add_argument("--world-size", default=4, type=int)
     parser.add_argument("--seed", default=0, type=int)
-    args = hierarchical_parse_args(parser)
-
-    def action_fn(string):
-        try:
-            return int(string), 0
-        except ValueError:
-            return
-
-    keyboard_control.run(Env(**args, baseline=False), action_fn=action_fn)
+    ppo.control_flow.env.main(Env(rank=0, **hierarchical_parse_args(parser)))
