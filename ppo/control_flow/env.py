@@ -106,6 +106,7 @@ class Env(gym.Env, ABC):
         return list(Line.types)
 
     def reset(self):
+        self.i += 1
         self.iterator = self.generator()
         s, r, t, i = next(self.iterator)
         return s
