@@ -147,7 +147,138 @@ class Env(ppo.control_flow.env.Env):
 
     def generators(self) -> Tuple[Iterator[State], List[Line]]:
         line_types = self.choose_line_types()
-        lines = list(self.assign_line_ids(line_types))
+        while_count = line_types.count(While)
+        if while_count >= len(self.items) - 1:
+            return self.generators()
+
+        # get forward and backward transition edges
+        line_transitions = defaultdict(list)
+        reverse_transitions = defaultdict(list)
+        for _from, _to in self.get_transitions(line_types):
+            line_transitions[_from].append(_to)
+            reverse_transitions[_to].append(_from)
+
+        # get flattened generator of index, truthy values
+        def index_truthiness_generator() -> Generator[int, None, None]:
+            loop_count = 0
+            j = 0
+            if_evaluations = []
+            while j in line_transitions:
+                t = self.random.choice(2)
+
+                # make sure not to exceed max_loops
+                if line_types[j] is Loop:
+                    if loop_count == self.max_loops:
+                        t = 0
+                    if t:
+                        loop_count += 1
+                    else:
+                        loop_count = 0
+                elif line_types[j] is If:
+                    if_evaluations.append(t)
+                elif line_types[j] is Else:
+                    t = not if_evaluations[-1]
+                elif line_types[j] is EndIf:
+                    if_evaluations.pop()
+                yield j, t
+                j = line_transitions[j][int(t)]
+
+        index_truthiness = list(index_truthiness_generator())
+        instruction_lines = [l(None) for l in line_types]  # instantiate line types
+
+        # identify while blocks
+        blocks = defaultdict(list)
+        whiles = []
+        for i, line_type in enumerate(line_types):
+            if line_type is While:
+                whiles.append(i)
+            elif line_type is EndWhile:
+                whiles.pop()
+            else:
+                for _while in whiles:
+                    blocks[_while].append(i)
+
+        # select line inside while blocks to be a build behavior
+        # so as to prevent infinite while loops
+        while_index = {}  # type: Dict[int, line]
+        for i, indices in blocks.items():
+            indices = set(indices) - set(while_index.keys())
+            while_index[self.random.choice(list(indices))] = i
+
+        # determine whether whiles are truthy (since last time we see
+        # noinspection PyTypeChecker
+        first_truthy = dict(reversed(index_truthiness))
+
+        # choose existing and non_existing
+        size = while_count + 1
+        non_existing = list(self.random.choice(self.items, replace=False, size=size))
+        existing = [o for o in self.items if o not in non_existing]
+
+        # assign while
+        for i, line in reversed(list(enumerate(instruction_lines))):
+            # need to go in reverse because while can modify existing
+            if type(line) is While and line.id is None:
+                line.id = item = self.random.choice(non_existing)
+                if item in non_existing and first_truthy[i]:
+                    non_existing.remove(item)
+                    # print(i, "existing", existing)
+
+        # assign Subtask
+        visited_lines = [i for i, _ in index_truthiness]
+        visited_lines_set = set(visited_lines)
+        for i, line in enumerate(instruction_lines):
+            if type(line) is Subtask:
+
+                if i in while_index and i in visited_lines_set:
+                    behavior = self.mine
+                    item = instruction_lines[while_index[i]].id
+                    assert item is not None  # need to go forward to avoid this
+                else:
+                    behavior = self.random.choice(self.behaviors)
+                    item = self.random.choice(
+                        existing if i in visited_lines_set else non_existing
+                    )
+                line.id = (behavior, item)
+
+        # populate world
+        world = Counter()
+        for i in visited_lines:
+            line = instruction_lines[i]
+            if type(line) is Subtask:
+                behavior, item = line.id
+                world[item] += 1
+                if sum(world.values()) > self.world_size ** 2:
+                    return self.generators()
+        virtual_world = Counter(world)
+
+        # assign other visited lines
+        for i, truthy in index_truthiness:
+            line = instruction_lines[i]
+            if type(line) is Subtask:
+                behavior, item = line.id
+                if behavior in (self.mine, self.sell):
+                    virtual_world[item] -= 1
+            elif type(line) is If:
+                # NOTE: this will not work if If is inside a loop
+                if truthy:
+                    sample_from = [o for o, c in virtual_world.items() if c > 0]
+                    line.id = self.random.choice(sample_from)
+                else:
+                    sample_from = [o for o in self.items if virtual_world[o] == 0]
+                    line.id = self.random.choice(sample_from)
+            elif type(line) in (Else, EndIf, EndWhile, EndLoop, Padding):
+                line.id = 0
+            elif type(line) is Loop:
+                line.id = 0 if line.id is None else line.id + 1
+            else:
+                assert type(line) is While
+                assert line.id is not None
+
+        # assign unvisited lines
+        for line in instruction_lines:
+            if line.id is None:
+                line.id = self.subtasks[self.random.choice(len(self.subtasks))]
+        lines = instruction_lines
 
         def state_generator() -> State:
             assert self.max_nesting_depth == 1
@@ -234,7 +365,6 @@ class Env(ppo.control_flow.env.Env):
                         prev, ptr = ptr, None
 
         return state_generator(), lines
-
 
     def populate_world(self, lines):
         line_io = [line.id for line in lines if type(line) is Subtask]
