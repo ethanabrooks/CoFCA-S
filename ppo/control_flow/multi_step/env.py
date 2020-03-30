@@ -283,7 +283,10 @@ class Env(ppo.control_flow.env.Env):
         def state_generator() -> State:
             assert self.max_nesting_depth == 1
             agent_pos = self.random.randint(0, self.world_size, size=2)
-            object_pos = self.populate_world(lines)
+            total = sum(world.values())
+            positions = self.random.randint(0, self.world_size, size=(total, 2))
+            objects = [o for o,c in world.items() for _ in range(c)]
+            object_pos = list(zip(objects, map(tuple, positions)))
             line_iterator = self.line_generator(lines)
             condition_evaluations = []
             self.time_remaining = 200 if self.evaluating else self.time_to_waste
