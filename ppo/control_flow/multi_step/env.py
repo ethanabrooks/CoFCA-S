@@ -211,18 +211,6 @@ class Env(ppo.control_flow.env.Env):
                     return pair() in object_pos  # standing on the desired object
 
                 correct_id = (interaction, obj) == lines[ptr].id
-
-                def get_lower_level_action():
-                    if on_object():
-                        return interaction
-                    else:
-                        nearest = get_nearest(obj)
-                        if nearest is not None:
-                            delta = nearest - agent_pos
-                            if self.temporal_extension:
-                                delta = np.clip(delta, -1, 1)
-                            return delta
-
                 if on_object():
                     if interaction in (self.mine, self.sell):
                         object_pos.remove(pair())
@@ -246,6 +234,7 @@ class Env(ppo.control_flow.env.Env):
                         prev, ptr = ptr, None
 
         return state_generator(), lines
+
 
     def populate_world(self, lines):
         line_io = [line.id for line in lines if type(line) is Subtask]
