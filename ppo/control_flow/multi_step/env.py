@@ -211,21 +211,7 @@ class Env(ppo.control_flow.env.Env):
                     return pair() in object_pos  # standing on the desired object
 
                 correct_id = (interaction, obj) == lines[ptr].id
-
-                def get_lower_level_action():
-                    if on_object():
-                        return interaction
-                    else:
-                        nearest = get_nearest(obj)
-                        if nearest is not None:
-                            delta = nearest - agent_pos
-                            if self.temporal_extension:
-                                delta = np.clip(delta, -1, 1)
-                            return delta
-
-                lower_level_action = get_lower_level_action()
                 if on_object():
-                    assert lower_level_action == interaction
                     if interaction in (self.mine, self.sell):
                         object_pos.remove(pair())
                         if correct_id:
@@ -243,7 +229,6 @@ class Env(ppo.control_flow.env.Env):
                         if self.temporal_extension:
                             delta = np.clip(delta, -1, 1)
                         agent_pos += delta
-                        assert tuple(lower_level_action) == tuple(delta)
                     elif correct_id and obj not in possible_objects:
                         # subtask is impossible
                         prev, ptr = ptr, None
