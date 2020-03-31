@@ -211,6 +211,18 @@ class Env(ppo.control_flow.env.Env):
                     return pair() in object_pos  # standing on the desired object
 
                 correct_id = (interaction, obj) == lines[ptr].id
+
+                def get_lower_level_action(o, p):
+                    if (o, tuple(p)) in object_pos:
+                        return interaction
+                    else:
+                        nearest = get_nearest(o)
+                        if nearest is not None:
+                            delta = nearest - p
+                            if self.temporal_extension:
+                                delta = np.clip(delta, -1, 1)
+                            return delta
+
                 if on_object():
                     if interaction in (self.mine, self.sell):
                         object_pos.remove(pair())
