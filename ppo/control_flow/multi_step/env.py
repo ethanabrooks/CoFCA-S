@@ -212,44 +212,37 @@ class Env(ppo.control_flow.env.Env):
 
                 correct_id = (interaction, obj) == lines[ptr].id
 
-                def get_lower_level_action():
-                    if on_object():
+                def get_lower_level_action(o, p):
+                    if (o, tuple(p)) in object_pos:
                         return interaction
                     else:
-                        nearest = get_nearest(obj)
-                        if nearest is not None:
-                            delta = nearest - agent_pos
+                        n = get_nearest(o)
+                        if n is not None:
+                            d = n - p
                             if self.temporal_extension:
-                                delta = np.clip(delta, -1, 1)
-                            return delta
+                                d = np.clip(d, -1, 1)
+                            return d
 
-                lower_level_action = get_lower_level_action()
+                lower_level_action = get_lower_level_action(obj, tuple(agent_pos))
                 if on_object():
-                    assert lower_level_action == interaction
-                    if interaction in (self.mine, self.sell):
+                    if lower_level_action in (self.mine, self.sell):
                         object_pos.remove(pair())
                         if correct_id:
                             possible_objects.remove(obj)
                         else:
                             term = True
-                    if interaction == self.sell:
+                    if lower_level_action == self.sell:
                         object_pos.append((self.bridge, tuple(agent_pos)))
                     if correct_id:
                         prev, ptr = ptr, next_subtask(ptr)
                 else:
-                    nearest = get_nearest(obj)
-                    if nearest is not None:
-                        delta = nearest - agent_pos
-                        if self.temporal_extension:
-                            delta = np.clip(delta, -1, 1)
-                        agent_pos += delta
-                        assert tuple(lower_level_action) == tuple(delta)
+                    if type(lower_level_action) is np.ndarray:
+                        agent_pos += lower_level_action
                     elif correct_id and obj not in possible_objects:
                         # subtask is impossible
                         prev, ptr = ptr, None
 
         return state_generator(), lines
-
 
     def populate_world(self, lines):
         line_io = [line.id for line in lines if type(line) is Subtask]

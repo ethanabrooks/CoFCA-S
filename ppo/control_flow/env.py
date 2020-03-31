@@ -241,10 +241,6 @@ class Env(gym.Env, ABC):
             else:
                 yield line(0)
 
-    @functools.lru_cache(maxsize=120)
-    def preprocess_line(self, line):
-        return self.possible_lines.index(line)
-
     def line_generator(self, lines):
         line_transitions = defaultdict(list)
         for _from, _to in self.get_transitions(lines):
