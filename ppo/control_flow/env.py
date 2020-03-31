@@ -103,7 +103,8 @@ class Env(gym.Env, ABC):
 
     @property
     def line_types(self):
-        return list(Line.types)
+        return [If, Else, EndIf, While, EndWhile, EndLoop, Subtask, Padding, Loop]
+        # return list(Line.types)
 
     def reset(self):
         self.i += 1
