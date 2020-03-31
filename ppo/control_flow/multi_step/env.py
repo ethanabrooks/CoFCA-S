@@ -159,9 +159,7 @@ class Env(ppo.control_flow.env.Env):
             self.loops = None
 
             def get_nearest(to):
-                candidates = [np.array(p) for o, p in object_pos if o == to]
-                if candidates:
-                    return min(candidates, key=lambda k: np.sum(np.abs(agent_pos - k)))
+                return self.get_nearest(agent_pos, to, object_pos)
 
             def next_subtask(l):
                 while True:
@@ -212,18 +210,9 @@ class Env(ppo.control_flow.env.Env):
 
                 correct_id = (interaction, obj) == lines[ptr].id
 
-                def get_lower_level_action(o, p):
-                    if (o, tuple(p)) in object_pos:
-                        return interaction
-                    else:
-                        n = get_nearest(o)
-                        if n is not None:
-                            d = n - p
-                            if self.temporal_extension:
-                                d = np.clip(d, -1, 1)
-                            return d
-
-                lower_level_action = get_lower_level_action(obj, tuple(agent_pos))
+                lower_level_action = self.get_lower_level_action(
+                    interaction, obj, tuple(agent_pos), object_pos
+                )
                 if on_object():
                     if lower_level_action in (self.mine, self.sell):
                         object_pos.remove(pair())
@@ -314,6 +303,22 @@ class Env(ppo.control_flow.env.Env):
                 yield Loop(self.random.randint(1, 1 + self.max_loops))
             else:
                 yield line(self.items[line_id])
+
+    def get_nearest(self, _from, _to, object_pos):
+        candidates = [np.array(p) for o, p in object_pos if o == _to]
+        if candidates:
+            return min(candidates, key=lambda k: np.sum(np.abs(_from - k)))
+
+    def get_lower_level_action(self, interaction, o, p, objects):
+        if (o, tuple(p)) in objects:
+            return interaction
+        else:
+            n = self.get_nearest(_from=p, _to=o, object_pos=objects)
+            if n is not None:
+                d = n - p
+                if self.temporal_extension:
+                    d = np.clip(d, -1, 1)
+                return d
 
 
 if __name__ == "__main__":
