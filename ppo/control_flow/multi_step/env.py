@@ -303,6 +303,19 @@ class Env(ppo.control_flow.env.Env):
 
         offset, orientation = self.random.choice(self.world_size, size=2)
         horizontal = orientation % 2
+        max_walls = (self.world_size // 2) ** 2
+        num_walls = self.random.choice(max_walls)
+        wall_indexes = self.random.choice(max_walls, size=num_walls, replace=False)
+        wall_positions = 2 * np.array(
+            list(
+                zip(
+                    *np.unravel_index(
+                        wall_indexes, [self.world_size // 2, self.world_size // 2]
+                    )
+                )
+            )
+        )
+
         object_pos += [
             (self.water, p)
             for p in (
@@ -310,7 +323,7 @@ class Env(ppo.control_flow.env.Env):
                 if horizontal
                 else zip([offset] * self.world_size, range(self.world_size))
             )
-        ]
+        ] + [(self.wall, tuple(p)) for p in wall_positions]
 
         return object_pos
 
