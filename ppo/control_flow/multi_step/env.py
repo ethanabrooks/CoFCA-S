@@ -123,7 +123,12 @@ class Env(ppo.control_flow.env.Env):
             i, o = self.behaviors.index(i), self.items.index(o)
             return [Line.types.index(Subtask), i + 1, o + 1, 0]
         elif type(line) in (While, If):
-            return [Line.types.index(type(line)), 0, self.items.index(line.id) + 1, 0]
+            return [
+                Line.types.index(type(line)),
+                0,
+                self.items.index(line.id) + 1,
+                0,
+            ]
         else:
             raise RuntimeError()
 
@@ -236,7 +241,13 @@ class Env(ppo.control_flow.env.Env):
 
     def populate_world(self, lines):
         line_io = [line.id for line in lines if type(line) is Subtask]
-        line_pos = self.random.randint(0, self.world_size, size=(len(line_io), 2))
+        pos_indexes = self.random.choice(
+            self.world_size ** 2, size=(len(line_io)), replace=False
+        )
+        line_pos = zip(
+            *np.unravel_index(pos_indexes, [self.world_size, self.world_size])
+        )
+
         object_pos = [
             (o, tuple(pos)) for (interaction, o), pos in zip(line_io, line_pos)
         ]
