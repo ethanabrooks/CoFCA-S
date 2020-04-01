@@ -38,7 +38,7 @@ def shortest_path(_from: X, _to: X, graph: Graph):
     prev = {_from: None}
     while True:
         if not distances:
-            return None
+            return None, None
         distance, value = min(
             [(d, v) for v, d in distances.items()]
         )  # TODO: not efficient
@@ -49,7 +49,7 @@ def shortest_path(_from: X, _to: X, graph: Graph):
                     yield v
                     v = prev[v]
 
-            return list(reversed(list(generator(value))))
+            return list(reversed(list(generator(value)))), distance
 
         explored.add(value)
         del distances[value]
@@ -75,9 +75,13 @@ def brute_force(_from: X, _to: X, graph: Graph):
 
     paths = list(get_paths(_from, explored=set()))
     if not paths:
-        return None
-    minimum = min(paths, key=lambda p: sum(d for _, d in p))
-    return [x for x, _ in minimum]
+        return None, None
+
+    def length(p):
+        return sum(d for _, d in p)
+
+    minimum = min(paths, key=length)
+    return [x for x, _ in minimum], length(minimum)
 
 
 class TestDjikstra(unittest.TestCase):
@@ -97,9 +101,9 @@ class TestDjikstra(unittest.TestCase):
             c=dict(a=3, b=1, d=1),
             d=dict(c=1, b=3),
         )
-        attempt = shortest_path(_from="a", _to="d", graph=graph)
-        self.assertEqual(attempt, brute_force(_from="a", _to="d", graph=graph))
-        self.assertEqual(attempt, ["a", "b", "c", "d",])
+        self.check_paths(
+            "a", "d", graph,
+        )
 
     def test2(self):
         """
@@ -112,9 +116,9 @@ class TestDjikstra(unittest.TestCase):
         graph = dict(
             a=dict(b=2, c=1), b=dict(a=2, d=1), c=dict(a=1, d=3), d=dict(c=3, b=1)
         )
-        attempt = shortest_path(_from="a", _to="d", graph=graph)
-        self.assertEqual(attempt, brute_force(_from="a", _to="d", graph=graph))
-        self.assertEqual(attempt, ["a", "b", "d"])
+        self.check_paths(
+            "a", "d", graph,
+        )
 
     def test_random(self):
         np.random.seed(0)
@@ -132,17 +136,20 @@ class TestDjikstra(unittest.TestCase):
             }
             with self.subTest(graph=graph):
                 _from, _to = np.random.choice(nodes, size=2)
-                self.assertEqual(
-                    get_length(
-                        path=(shortest_path(_from=_from, _to=_to, graph=graph)),
-                        graph=graph,
-                    ),
-                    get_length(
-                        path=(brute_force(_from=_from, _to=_to, graph=graph)),
-                        graph=graph,
-                    ),
-                    msg=dot_graph(graph),
-                )
+                self.check_paths(_from, _to, graph)
+
+    def check_paths(self, _from, _to, graph):
+        path1, distance1 = shortest_path(_from=_from, _to=_to, graph=graph)
+        path2, distance2 = brute_force(_from=_from, _to=_to, graph=graph)
+        self.assertEqual(
+            get_length(path=path1, graph=graph), distance1, msg=dot_graph(graph),
+        )
+        self.assertEqual(
+            get_length(path=path2, graph=graph), distance2, msg=dot_graph(graph),
+        )
+        self.assertEqual(
+            distance1, distance2, msg=dot_graph(graph),
+        )
 
 
 if __name__ == "__main__":
