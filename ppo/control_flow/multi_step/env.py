@@ -214,14 +214,12 @@ class Env(ppo.control_flow.env.Env):
                     interaction, obj, tuple(agent_pos), object_pos
                 )
                 if on_object():
-                    if lower_level_action in (self.mine, self.sell):
+                    if lower_level_action == self.mine:
                         object_pos.remove(pair())
                         if correct_id:
                             possible_objects.remove(obj)
                         else:
                             term = True
-                    if lower_level_action == self.sell:
-                        object_pos.append((self.bridge, tuple(agent_pos)))
                     if correct_id:
                         prev, ptr = ptr, next_subtask(ptr)
                 else:
@@ -310,6 +308,8 @@ class Env(ppo.control_flow.env.Env):
             return min(candidates, key=lambda k: np.sum(np.abs(_from - k)))
 
     def get_lower_level_action(self, interaction, o, p, objects):
+        if interaction == self.sell:
+            o = self.merchant
         if (o, tuple(p)) in objects:
             return interaction
         else:
