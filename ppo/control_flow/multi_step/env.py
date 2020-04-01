@@ -35,12 +35,14 @@ class Env(ppo.control_flow.env.Env):
     iron = "iron"
     merchant = "merchant"
     bridge = "bridge"
+    water = "water"
+    wall = "wall"
     agent = "agent"
     mine = "mine"
     sell = "sell"
     goto = "goto"
     items = [wood, gold, iron, merchant]
-    terrain = [bridge, agent]
+    terrain = [water, wall, bridge, agent]
     world_contents = items + terrain
     behaviors = [mine, sell, goto]
 
@@ -275,6 +277,17 @@ class Env(ppo.control_flow.env.Env):
                 if num_obj:
                     pos = self.random.randint(0, self.world_size, size=(num_obj, 2))
                     object_pos += [(obj, tuple(p)) for p in pos]
+
+        offset, orientation = self.random.choice(self.world_size, size=2)
+        horizontal = orientation % 2
+        object_pos += [
+            (self.water, p)
+            for p in (
+                zip(range(self.world_size), [offset] * self.world_size)
+                if horizontal
+                else zip([offset] * self.world_size, range(self.world_size))
+            )
+        ]
 
         return object_pos
 
