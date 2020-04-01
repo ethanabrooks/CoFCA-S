@@ -220,6 +220,8 @@ class Env(ppo.control_flow.env.Env):
                             possible_objects.remove(obj)
                         else:
                             term = True
+                    if lower_level_action == self.sell and not correct_id:
+                        term = True
                     if correct_id:
                         prev, ptr = ptr, next_subtask(ptr)
                 else:
