@@ -269,9 +269,7 @@ class Env(ppo.control_flow.env.Env):
         for while_line, block in while_blocks.items():
             obj = lines[while_line].id
             l = self.random.choice(block)
-            i = self.random.choice(2)
-            assert self.behaviors[i] in (self.mine, self.sell)
-            line_id = self.behaviors[i], obj
+            line_id = self.mine, obj
             assert line_id in ((self.mine, obj), (self.sell, obj))
             lines[l] = Subtask(line_id)
             if not self.evaluating and obj in self.world_contents:
