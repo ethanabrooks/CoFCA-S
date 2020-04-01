@@ -1,3 +1,4 @@
+import itertools
 import unittest
 from collections import defaultdict
 from typing import Dict, TypeVar, Set, List
@@ -53,13 +54,14 @@ def shortest_path(_from: X, _to: X, graph: Graph):
 
         explored.add(value)
         del distances[value]
-        for adjacent, edge_length in graph[value].items():
-            if (
-                adjacent not in explored
-                and distance + edge_length < distances[adjacent]
-            ):
-                distances[adjacent] = distance + edge_length
-                prev[adjacent] = value
+        if value in graph:
+            for adjacent, edge_length in graph[value].items():
+                if (
+                    adjacent not in explored
+                    and distance + edge_length < distances[adjacent]
+                ):
+                    distances[adjacent] = distance + edge_length
+                    prev[adjacent] = value
 
 
 def brute_force(_from: X, _to: X, graph: Graph):
@@ -123,17 +125,18 @@ class TestDjikstra(unittest.TestCase):
     def test_random(self):
         np.random.seed(0)
         alpha = ascii_lowercase[:10]
-        for _ in range(100):
+        for _ in range(1000):
             size = np.random.randint(1, len(alpha))
             nodes = np.random.choice(list(alpha), replace=False, size=size)
-            graph = {
-                f: {
-                    t: np.random.choice(10)
-                    for t, c in zip(nodes, np.random.choice(2, size=size))
-                    if c
-                }
-                for f in nodes
-            }
+
+            pairs = list(itertools.product(nodes, nodes))
+            connections = np.random.choice(2, size=len(pairs))
+            edges = np.random.choice(10, size=len(pairs))
+            graph = defaultdict(dict)
+            for (f, t), connection, edge in zip(pairs, connections, edges):
+                if connection:
+                    graph[f][t] = edge
+
             with self.subTest(graph=graph):
                 _from, _to = np.random.choice(nodes, size=2)
                 self.check_paths(_from, _to, graph)

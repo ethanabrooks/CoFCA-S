@@ -25,13 +25,20 @@ from ppo.djikstra import shortest_path
 
 def get_nearest(_from, _to, object_pos):
     candidates = [(o, p) for o, p in object_pos if o == _to]
-    graph = {tuple(_from): {tuple(p): np.sum(np.abs(p - _from)) for o, p in candidates}}
+    graph = {
+        tuple(_from): {
+            tuple(p): np.sum(np.abs(np.array(p) - np.array(_from)))
+            for o, p in candidates
+        }
+    }
     paths = [
         shortest_path(_from=tuple(_from), _to=tuple(p), graph=graph)
         for o, p in candidates
     ]
+
     if paths:
-        shortest = min(paths, key=lambda p: len(p))
+        _, path = min([(d, p) for p, d in paths])
+        return path[-1]
 
 
 class Env(ppo.control_flow.env.Env):
@@ -337,7 +344,7 @@ class Env(ppo.control_flow.env.Env):
         else:
             n = get_nearest(_from=p, _to=o, object_pos=objects)
             if n is not None:
-                d = n - p
+                d = np.array(n) - p
                 if self.temporal_extension:
                     d = np.clip(d, -1, 1)
                 return d
