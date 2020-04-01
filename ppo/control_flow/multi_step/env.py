@@ -214,14 +214,15 @@ class Env(ppo.control_flow.env.Env):
                     interaction, obj, tuple(agent_pos), object_pos
                 )
                 if on_object():
-                    if lower_level_action == self.mine:
+                    if (
+                        type(lower_level_action) is str
+                        and lower_level_action == self.mine
+                    ):
                         object_pos.remove(pair())
                         if correct_id:
                             possible_objects.remove(obj)
                         else:
                             term = True
-                    if lower_level_action == self.sell and not correct_id:
-                        term = True
                     if correct_id:
                         prev, ptr = ptr, next_subtask(ptr)
                 else:
@@ -270,7 +271,6 @@ class Env(ppo.control_flow.env.Env):
             obj = lines[while_line].id
             l = self.random.choice(block)
             line_id = self.mine, obj
-            assert line_id in ((self.mine, obj), (self.sell, obj))
             lines[l] = Subtask(line_id)
             if not self.evaluating and obj in self.world_contents:
                 num_obj = self.random.randint(self.max_while_objects + 1)
