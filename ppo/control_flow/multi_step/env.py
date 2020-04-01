@@ -1,13 +1,12 @@
 import functools
-from collections import defaultdict, Counter
-from typing import Iterator, List, Tuple, Generator, Dict, Union, Optional
+from collections import defaultdict
+from typing import Iterator, List, Tuple
 
 import numpy as np
 from gym import spaces
 from rl_utils import hierarchical_parse_args
 
 import ppo.control_flow.env
-from ppo import keyboard_control
 from ppo.control_flow.env import State
 from ppo.control_flow.lines import (
     Subtask,
@@ -21,12 +20,18 @@ from ppo.control_flow.lines import (
     Loop,
     EndLoop,
 )
+from ppo.djikstra import shortest_path
 
 
 def get_nearest(_from, _to, object_pos):
-    candidates = [np.array(p) for o, p in object_pos if o == _to]
-    if candidates:
-        return min(candidates, key=lambda k: np.sum(np.abs(_from - k)))
+    candidates = [(o, p) for o, p in object_pos if o == _to]
+    graph = {tuple(_from): {tuple(p): np.sum(np.abs(p - _from)) for o, p in candidates}}
+    paths = [
+        shortest_path(_from=tuple(_from), _to=tuple(p), graph=graph)
+        for o, p in candidates
+    ]
+    if paths:
+        shortest = min(paths, key=lambda p: len(p))
 
 
 class Env(ppo.control_flow.env.Env):
