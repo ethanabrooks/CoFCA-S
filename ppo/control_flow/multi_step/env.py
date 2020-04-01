@@ -24,9 +24,8 @@ from ppo.control_flow.lines import (
 from ppo.djikstra import shortest_path
 
 
-def get_nearest(_from, _to, objects, object_pos):
-    candidates = [(o, p) for o, p in object_pos if o == _to]
-    candidates2 = [(o, p) for p, o in objects.items() if o == _to]
+def get_nearest(_from, _to, objects):
+    candidates = [(o, p) for p, o in objects.items() if o == _to]
     graph = {
         tuple(_from): {
             tuple(p): np.sum(np.abs(np.array(p) - np.array(_from)))
@@ -146,22 +145,16 @@ class Env(ppo.control_flow.env.Env):
         else:
             raise RuntimeError()
 
-    def world_array(self, objects, object_pos, agent_pos):
+    def world_array(self, objects, agent_pos):
         world = np.zeros(self.world_shape)
-        for o, p in object_pos + [(self.agent, agent_pos)]:
-            p = np.array(p)
-            world[tuple((self.world_contents.index(o), *p))] = 1
-        world2 = np.zeros(self.world_shape)
         for p, o in list(objects.items()) + [(agent_pos, self.agent)]:
             p = np.array(p)
-            world2[tuple((self.world_contents.index(o), *p))] = 1
-
-        assert np.all(world == world2)
+            world[tuple((self.world_contents.index(o), *p))] = 1
 
         return world
 
     @staticmethod
-    def evaluate_line(line, objects, object_pos, condition_evaluations, loops):
+    def evaluate_line(line, objects, condition_evaluations, loops):
         if line is None:
             return None
         elif type(line) is Loop:
@@ -169,9 +162,7 @@ class Env(ppo.control_flow.env.Env):
         if type(line) is Subtask:
             return 1
         else:
-            evaluation = any(o == line.id for o, _ in object_pos)
-            evaluation2 = line.id in objects.values()
-            assert evaluation == evaluation2
+            evaluation = line.id in objects.values()
             if type(line) in (If, While):
                 condition_evaluations += [evaluation]
             return evaluation
@@ -183,7 +174,7 @@ class Env(ppo.control_flow.env.Env):
         def state_generator() -> State:
             assert self.max_nesting_depth == 1
             agent_pos = self.random.randint(0, self.world_size, size=2)
-            object_pos, objects = self.populate_world(lines)
+            objects = self.populate_world(lines)
 
             line_iterator = self.line_generator(lines)
             condition_evaluations = []
@@ -202,11 +193,7 @@ class Env(ppo.control_flow.env.Env):
                                 self.loops -= 1
                         l = line_iterator.send(
                             self.evaluate_line(
-                                lines[l],
-                                objects,
-                                object_pos,
-                                condition_evaluations,
-                                self.loops,
+                                lines[l], objects, condition_evaluations, self.loops,
                             )
                         )
                         if self.loops == 0:
@@ -216,21 +203,18 @@ class Env(ppo.control_flow.env.Env):
                 if l is not None:
                     assert type(lines[l]) is Subtask
                     _, o = lines[l].id
-                    n = get_nearest(
-                        _to=o, _from=agent_pos, objects=objects, object_pos=object_pos
-                    )
+                    n = get_nearest(_to=o, _from=agent_pos, objects=objects,)
                     if n is not None:
                         self.time_remaining += 1 + np.max(np.abs(agent_pos - n))
                 return l
 
-            possible_objects = [o for o, _ in object_pos]
-            possible_objects2 = list(objects.values())
+            possible_objects = list(objects.values())
             prev, ptr = 0, next_subtask(None)
             term = False
             while True:
                 term |= not self.time_remaining
                 subtask_id = yield State(
-                    obs=self.world_array(objects, object_pos, agent_pos),
+                    obs=self.world_array(objects, agent_pos),
                     prev=prev,
                     ptr=ptr,
                     term=term,
@@ -242,18 +226,15 @@ class Env(ppo.control_flow.env.Env):
                     return obj, tuple(agent_pos)
 
                 def on_object():
-                    ret = pair() in object_pos
                     try:
-                        ret2 = objects[tuple(agent_pos)] == obj
+                        return objects[tuple(agent_pos)] == obj
                     except KeyError:
-                        ret2 = False
-                    assert ret == ret2
-                    return ret  # standing on the desired object
+                        return False
 
                 correct_id = (interaction, obj) == lines[ptr].id
 
                 lower_level_action = self.get_lower_level_action(
-                    interaction, obj, tuple(agent_pos), objects, object_pos
+                    interaction, obj, tuple(agent_pos), objects,
                 )
                 if on_object():
                     if (
@@ -261,10 +242,8 @@ class Env(ppo.control_flow.env.Env):
                         and lower_level_action == self.mine
                     ):
                         del objects[tuple(agent_pos)]
-                        object_pos.remove(pair())
                         if correct_id:
                             possible_objects.remove(obj)
-                            possible_objects2.remove(obj)
                         else:
                             term = True
                     if correct_id:
@@ -273,7 +252,7 @@ class Env(ppo.control_flow.env.Env):
                     if type(lower_level_action) is np.ndarray:
                         agent_pos += lower_level_action
                     elif correct_id and obj not in possible_objects:
-                        assert obj not in possible_objects2
+                        assert obj not in possible_objects
                         # subtask is impossible
                         prev, ptr = ptr, None
 
@@ -350,13 +329,6 @@ class Env(ppo.control_flow.env.Env):
         )
         assert water_index not in positions[:, vertical_water]
 
-        object_pos = [
-            (self.wall if o is None else o, tuple(p))
-            for o, p in itertools.zip_longest(object_list, positions)
-        ] + [
-            (self.water, (i, water_index) if vertical_water else (water_index, i))
-            for i in range(self.world_size)
-        ]
         objects = {
             **{
                 tuple(p): (self.wall if o is None else o)
@@ -368,9 +340,7 @@ class Env(ppo.control_flow.env.Env):
             },
         }
 
-        assert set(object_pos) == set((o, p) for p, o in objects.items())
-
-        return object_pos, objects
+        return objects
 
     def assign_line_ids(self, lines):
         excluded = self.random.randint(len(self.items), size=self.num_excluded_objects)
@@ -394,13 +364,13 @@ class Env(ppo.control_flow.env.Env):
             else:
                 yield line(self.items[line_id])
 
-    def get_lower_level_action(self, interaction, o, p, objects, objects_pos):
+    def get_lower_level_action(self, interaction, o, p, objects):
         if interaction == self.sell:
             o = self.merchant
-        if (o, tuple(p)) in objects_pos:
+        if tuple(p) in objects and objects[tuple(p)] == o:
             return interaction
         else:
-            n = get_nearest(_from=p, _to=o, objects=objects, object_pos=objects_pos)
+            n = get_nearest(_from=p, _to=o, objects=objects)
             if n is not None:
                 d = np.array(n) - p
                 if self.temporal_extension:
