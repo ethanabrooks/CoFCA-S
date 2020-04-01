@@ -23,6 +23,12 @@ from ppo.control_flow.lines import (
 )
 
 
+def get_nearest(_from, _to, object_pos):
+    candidates = [np.array(p) for o, p in object_pos if o == _to]
+    if candidates:
+        return min(candidates, key=lambda k: np.sum(np.abs(_from - k)))
+
+
 class Env(ppo.control_flow.env.Env):
     wood = "wood"
     gold = "gold"
@@ -73,7 +79,7 @@ class Env(ppo.control_flow.env.Env):
                 np.array(
                     [
                         [
-                            len(self.line_types),
+                            len(Line.types),
                             1 + len(self.behaviors),
                             1 + len(self.items),
                             1 + self.max_loops,
@@ -107,20 +113,15 @@ class Env(ppo.control_flow.env.Env):
     @functools.lru_cache(maxsize=200)
     def preprocess_line(self, line):
         if type(line) in (Else, EndIf, EndWhile, EndLoop, Padding):
-            return [self.line_types.index(type(line)), 0, 0, 0]
+            return [Line.types.index(type(line)), 0, 0, 0]
         elif type(line) is Loop:
-            return [self.line_types.index(Loop), 0, 0, line.id]
+            return [Line.types.index(Loop), 0, 0, line.id]
         elif type(line) is Subtask:
             i, o = line.id
             i, o = self.behaviors.index(i), self.items.index(o)
-            return [self.line_types.index(Subtask), i + 1, o + 1, 0]
+            return [Line.types.index(Subtask), i + 1, o + 1, 0]
         elif type(line) in (While, If):
-            return [
-                self.line_types.index(type(line)),
-                0,
-                self.items.index(line.id) + 1,
-                0,
-            ]
+            return [Line.types.index(type(line)), 0, self.items.index(line.id) + 1, 0]
         else:
             raise RuntimeError()
 
@@ -158,9 +159,6 @@ class Env(ppo.control_flow.env.Env):
             self.time_remaining = 200 if self.evaluating else self.time_to_waste
             self.loops = None
 
-            def get_nearest(to):
-                return self.get_nearest(agent_pos, to, object_pos)
-
             def next_subtask(l):
                 while True:
                     if l is None:
@@ -183,7 +181,7 @@ class Env(ppo.control_flow.env.Env):
                 if l is not None:
                     assert type(lines[l]) is Subtask
                     _, o = lines[l].id
-                    n = get_nearest(o)
+                    n = get_nearest(_to=o, _from=agent_pos, object_pos=object_pos)
                     if n is not None:
                         self.time_remaining += 1 + np.max(np.abs(agent_pos - n))
                 return l
@@ -302,18 +300,13 @@ class Env(ppo.control_flow.env.Env):
             else:
                 yield line(self.items[line_id])
 
-    def get_nearest(self, _from, _to, object_pos):
-        candidates = [np.array(p) for o, p in object_pos if o == _to]
-        if candidates:
-            return min(candidates, key=lambda k: np.sum(np.abs(_from - k)))
-
     def get_lower_level_action(self, interaction, o, p, objects):
         if interaction == self.sell:
             o = self.merchant
         if (o, tuple(p)) in objects:
             return interaction
         else:
-            n = self.get_nearest(_from=p, _to=o, object_pos=objects)
+            n = get_nearest(_from=p, _to=o, object_pos=objects)
             if n is not None:
                 d = n - p
                 if self.temporal_extension:
