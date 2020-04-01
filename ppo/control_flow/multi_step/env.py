@@ -30,8 +30,8 @@ class Env(ppo.control_flow.env.Env):
     iron = "iron"
     merchant = "merchant"
     bridge = "bridge"
-    water = "water"
-    wall = "wall"
+    water = "stream"
+    wall = "obstruction"
     agent = "agent"
     mine = "mine"
     sell = "sell"
@@ -118,12 +118,7 @@ class Env(ppo.control_flow.env.Env):
             i, o = self.behaviors.index(i), self.items.index(o)
             return [Line.types.index(Subtask), i + 1, o + 1, 0]
         elif type(line) in (While, If):
-            return [
-                Line.types.index(type(line)),
-                0,
-                self.items.index(line.id) + 1,
-                0,
-            ]
+            return [Line.types.index(type(line)), 0, self.items.index(line.id) + 1, 0]
         else:
             raise RuntimeError()
 
@@ -175,7 +170,7 @@ class Env(ppo.control_flow.env.Env):
                                 self.loops -= 1
                         l = line_iterator.send(
                             self.evaluate_line(
-                                lines[l], objects, condition_evaluations, self.loops,
+                                lines[l], objects, condition_evaluations, self.loops
                             )
                         )
                         if self.loops == 0:
@@ -185,7 +180,7 @@ class Env(ppo.control_flow.env.Env):
                 if l is not None:
                     assert type(lines[l]) is Subtask
                     _, o = lines[l].id
-                    _, d = self.get_nearest(_to=o, _from=agent_pos, objects=objects,)
+                    _, d = self.get_nearest(_to=o, _from=agent_pos, objects=objects)
                     if d is not None:
                         self.time_remaining += 1 + d
                 return l
@@ -216,7 +211,7 @@ class Env(ppo.control_flow.env.Env):
                 correct_id = (interaction, obj) == lines[ptr].id
 
                 lower_level_action = self.get_lower_level_action(
-                    interaction, obj, tuple(agent_pos), objects,
+                    interaction, obj, tuple(agent_pos), objects
                 )
                 if on_object():
                     if (
@@ -304,16 +299,17 @@ class Env(ppo.control_flow.env.Env):
         wall_indexes = positions[:, 0] % 2 * positions[:, 1] % 2
         wall_positions = positions[wall_indexes == 1]
         object_positions = positions[wall_indexes == 0]
-        positions = np.concatenate([object_positions, wall_positions])
         num_walls = self.random.choice(len(wall_positions))
-        positions = positions[: len(object_list) + num_walls]
+        object_positions = object_positions[: len(object_list)]
+        if len(object_list) == len(object_positions):
+            wall_positions = wall_positions[:num_walls]
+        positions = np.concatenate([object_positions, wall_positions])
         water_index = self.random.choice(self.world_size)
         positions[positions[:, vertical_water] >= water_index] += np.array(
             [0, 1] if vertical_water else [1, 0]
         )
         assert water_index not in positions[:, vertical_water]
-
-        objects = {
+        return {
             **{
                 tuple(p): (self.wall if o is None else o)
                 for o, p in itertools.zip_longest(object_list, positions)
@@ -323,8 +319,6 @@ class Env(ppo.control_flow.env.Env):
                 for i in range(self.world_size)
             },
         }
-
-        return objects
 
     def assign_line_ids(self, lines):
         excluded = self.random.randint(len(self.items), size=self.num_excluded_objects)
@@ -355,12 +349,13 @@ class Env(ppo.control_flow.env.Env):
         def around(x):
             x = np.array(x)
             for offset in np.array([[0, 1], [0, -1], [1, 0], [-1, 0]]):
-                yield x + offset
+                if np.all(x + offset < self.world_size) and np.all(0 <= x + offset):
+                    yield x + offset
 
         def direct_path(start, end):
             start = np.array(start)
             while not np.all(start == end):
-                yield start
+                yield np.array(start)
                 start += np.clip(end - start, -1, 1)
 
         def obstructed(_path):
@@ -389,21 +384,23 @@ class Env(ppo.control_flow.env.Env):
                     if not obstructed(direct):
                         yield direct + [p], distance(_from, p)
                     else:
-                        graph = dict(
+                        graph = {
                             **base_graph,
                             **{
-                                tuple(x): distance(x, p)
+                                tuple(x): {p: distance(x, p)}
                                 for w in walls
                                 for x in around(w)
                                 if not obstructed(direct_path(x, p))
                             },
-                        )
+                        }
                         yield shortest_path(
                             _from=tuple(_from), _to=tuple(p), graph=graph
                         )
 
-        paths = list(shortest_paths())
-        return min(paths, key=lambda p: p[1])
+        paths = [x for x in shortest_paths() if None not in x]
+        if paths:
+            return min(paths, key=lambda p: p[1])
+        return None, None
 
     def get_lower_level_action(self, interaction, o, p, objects):
         if interaction == self.sell:
