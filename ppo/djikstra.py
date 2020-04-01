@@ -41,7 +41,7 @@ def shortest_path(_from: X, _to: X, graph: Graph):
         if not distances:
             return None, None
         distance, value = min(
-            [(d, v) for v, d in distances.items()]
+            [(d, v) for v, d in distances.items()], key=lambda p: p[0]
         )  # TODO: not efficient
         if value == _to:  # done (_to is minimum distance)
 

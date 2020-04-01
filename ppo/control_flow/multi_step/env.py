@@ -24,24 +24,6 @@ from ppo.control_flow.lines import (
 from ppo.djikstra import shortest_path
 
 
-def get_nearest(_from, _to, objects):
-    candidates = [(o, p) for p, o in objects.items() if o == _to]
-    graph = {
-        tuple(_from): {
-            tuple(p): np.sum(np.abs(np.array(p) - np.array(_from)))
-            for o, p in candidates
-        }
-    }
-    paths = [
-        shortest_path(_from=tuple(_from), _to=tuple(p), graph=graph)
-        for o, p in candidates
-    ]
-
-    if paths:
-        _, path = min([(d, p) for p, d in paths])
-        return path[-1]
-
-
 class Env(ppo.control_flow.env.Env):
     wood = "wood"
     gold = "gold"
@@ -203,9 +185,9 @@ class Env(ppo.control_flow.env.Env):
                 if l is not None:
                     assert type(lines[l]) is Subtask
                     _, o = lines[l].id
-                    n = get_nearest(_to=o, _from=agent_pos, objects=objects,)
-                    if n is not None:
-                        self.time_remaining += 1 + np.max(np.abs(agent_pos - n))
+                    _, d = self.get_nearest(_to=o, _from=agent_pos, objects=objects,)
+                    if d is not None:
+                        self.time_remaining += 1 + d
                 return l
 
             possible_objects = list(objects.values())
@@ -250,6 +232,8 @@ class Env(ppo.control_flow.env.Env):
                         prev, ptr = ptr, next_subtask(ptr)
                 else:
                     if type(lower_level_action) is np.ndarray:
+                        if self.temporal_extension:
+                            lower_level_action = np.clip(lower_level_action, -1, 1)
                         agent_pos += lower_level_action
                     elif correct_id and obj not in possible_objects:
                         assert obj not in possible_objects
@@ -364,18 +348,74 @@ class Env(ppo.control_flow.env.Env):
             else:
                 yield line(self.items[line_id])
 
+    def get_nearest(self, _from, _to, objects):
+        if _to not in objects.values():
+            return None, None
+
+        def around(x):
+            x = np.array(x)
+            for offset in np.array([[0, 1], [0, -1], [1, 0], [-1, 0]]):
+                yield x + offset
+
+        def direct_path(start, end):
+            start = np.array(start)
+            while not np.all(start == end):
+                yield start
+                start += np.clip(end - start, -1, 1)
+
+        def obstructed(_path):
+            for pos in _path:
+                pos = tuple(pos)
+                if pos in objects and objects[pos] == self.wall:
+                    return True
+            return False
+
+        def distance(start, end):
+            return np.sum(np.abs(np.array(start) - np.array(end)))
+
+        def shortest_paths():
+            walls = [p for p, o in objects.items() if o == self.wall]
+            base_graph = {
+                tuple(_from): {
+                    tuple(p): distance(_from, p)
+                    for w in walls
+                    for p in around(w)
+                    if not obstructed(direct_path(_from, p))
+                }
+            }
+            for p, o in objects.items():
+                if o == _to:  # candidate
+                    direct = list(direct_path(_from, p))
+                    if not obstructed(direct):
+                        yield direct + [p], distance(_from, p)
+                    else:
+                        graph = dict(
+                            **base_graph,
+                            **{
+                                tuple(x): distance(x, p)
+                                for w in walls
+                                for x in around(w)
+                                if not obstructed(direct_path(x, p))
+                            },
+                        )
+                        yield shortest_path(
+                            _from=tuple(_from), _to=tuple(p), graph=graph
+                        )
+
+        paths = list(shortest_paths())
+        return min(paths, key=lambda p: p[1])
+
     def get_lower_level_action(self, interaction, o, p, objects):
         if interaction == self.sell:
             o = self.merchant
         if tuple(p) in objects and objects[tuple(p)] == o:
             return interaction
         else:
-            n = get_nearest(_from=p, _to=o, objects=objects)
+            n, d = self.get_nearest(_from=p, _to=o, objects=objects)
             if n is not None:
-                d = np.array(n) - p
-                if self.temporal_extension:
-                    d = np.clip(d, -1, 1)
-                return d
+                n = list(n)
+                a, b, *_ = n
+                return np.array(b) - np.array(a)
 
 
 if __name__ == "__main__":
