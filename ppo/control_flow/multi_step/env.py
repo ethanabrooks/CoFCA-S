@@ -48,6 +48,12 @@ def get_nearest(_from, _to, objects):
         return min(candidates, key=lambda c: c[1])
 
 
+def objective(interaction, obj):
+    if interaction == Env.sell:
+        return Env.merchant
+    return obj
+
+
 class Env(ppo.control_flow.env.Env):
     wood = "wood"
     gold = "gold"
@@ -211,7 +217,7 @@ class Env(ppo.control_flow.env.Env):
                         break
                 if l is not None:
                     assert type(lines[l]) is Subtask
-                    _, o = lines[l].id
+                    o = objective(*lines[l].id)
                     nearest = get_nearest(_to=o, _from=agent_pos, objects=objects)
                     if nearest is None:
                         return None
@@ -232,42 +238,33 @@ class Env(ppo.control_flow.env.Env):
                 )
                 self.time_remaining -= 1
                 interaction, obj = self.subtasks[subtask_id]
-
-                def pair():
-                    return obj, tuple(agent_pos)
-
-                def on_object():
-                    try:
-                        return objects[tuple(agent_pos)] == obj
-                    except KeyError:
-                        return False
-
-                correct_id = (interaction, obj) == lines[ptr].id
+                tgt_interaction, tgt_obj = lines[ptr].id
+                tgt_obj = objective(*lines[ptr].id)
 
                 lower_level_action = self.get_lower_level_action(
                     interaction, obj, tuple(agent_pos), objects
                 )
-                if on_object():
-                    if (
-                        type(lower_level_action) is str
-                        and lower_level_action == self.mine
-                    ):
-                        del objects[tuple(agent_pos)]
-                        if correct_id:
-                            possible_objects.remove(obj)
-                        else:
-                            term = True
-                    if correct_id:
+                if type(lower_level_action) is str:
+                    done = (
+                        tgt_interaction == interaction
+                        and objects.get(tuple(agent_pos), None) == tgt_obj
+                    )
+                    if lower_level_action == self.mine:
+                        if tuple(agent_pos) in objects:
+                            if done:
+                                possible_objects.remove(obj)
+                            else:
+                                term = True
+                            del objects[tuple(agent_pos)]
+                    if done:
                         prev, ptr = ptr, next_subtask(ptr)
+
+                elif type(lower_level_action) is np.ndarray:
+                    if self.temporal_extension:
+                        lower_level_action = np.clip(lower_level_action, -1, 1)
+                    agent_pos += lower_level_action
                 else:
-                    if type(lower_level_action) is np.ndarray:
-                        if self.temporal_extension:
-                            lower_level_action = np.clip(lower_level_action, -1, 1)
-                        agent_pos += lower_level_action
-                    elif correct_id and obj not in possible_objects:
-                        assert obj not in possible_objects
-                        # subtask is impossible
-                        prev, ptr = ptr, None
+                    assert lower_level_action is None
 
         return state_generator(), lines
 
@@ -382,8 +379,7 @@ class Env(ppo.control_flow.env.Env):
                 yield line(self.items[line_id])
 
     def get_lower_level_action(self, interaction, obj, agent_pos, objects):
-        if interaction == self.sell:
-            obj = self.merchant
+        obj = objective(interaction, obj)
         if objects.get(tuple(agent_pos), None) == obj:
             return interaction
         else:

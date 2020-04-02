@@ -155,6 +155,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             ag = AG[t].unsqueeze(-1).float()
             a_dist = gate(ag, self.actor(z).probs, A[t - 1])
             self.sample_new(A[t], a_dist)
+            # A[:] = float(input("go:"))
             self.print("ag prob", a_gate.probs[:, 1])
             self.print("ag", ag)
             hy = dg * hy_ + (1 - dg) * hy

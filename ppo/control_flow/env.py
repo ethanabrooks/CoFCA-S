@@ -357,7 +357,7 @@ class Env(gym.Env, ABC):
     def seed(self, seed=None):
         assert self.seed == seed
 
-    def render(self, mode="human", pause=True):
+    def render(self, mode="human", pause=False):
         self._render()
         if pause:
             input("pause")
