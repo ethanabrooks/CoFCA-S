@@ -23,16 +23,33 @@ from ppo.control_flow.lines import (
 )
 from ppo.djikstra import shortest_path
 
+BLACK = "\033[30m"
+RED = "\033[31m"
+GREEN = "\033[32m"
+ORANGE = "\033[33m"
+BLUE = "\033[34m"
+PURPLE = "\033[35m"
+CYAN = "\033[36m"
+LIGHTGREY = "\033[37m"
+DARKGREY = "\033[90m"
+LIGHTRED = "\033[91m"
+LIGHTGREEN = "\033[92m"
+YELLOW = "\033[93m"
+LIGHTBLUE = "\033[94m"
+PINK = "\033[95m"
+LIGHTCYAN = "\033[96m"
+RESET = "\033[0m"
+
 
 class Env(ppo.control_flow.env.Env):
     wood = "wood"
     gold = "gold"
     iron = "iron"
     merchant = "merchant"
-    bridge = "bridge"
+    bridge = "=bridge"
     water = "stream"
-    wall = "obstruction"
-    agent = "agent"
+    wall = "#wall"
+    agent = "Agent"
     mine = "mine"
     sell = "sell"
     goto = "goto"
@@ -40,6 +57,7 @@ class Env(ppo.control_flow.env.Env):
     terrain = [water, wall, bridge, agent]
     world_contents = items + terrain
     behaviors = [mine, sell, goto]
+    colors = [RESET, GREEN, YELLOW, LIGHTGREY, PINK, BLUE, DARKGREY, RESET, RESET]
 
     def __init__(
         self,
@@ -89,16 +107,22 @@ class Env(ppo.control_flow.env.Env):
 
     def print_obs(self, obs):
         obs = obs.transpose(1, 2, 0).astype(int)
-        grid_size = 2  # obs.astype(int).sum(-1).max()  # max objects per grid
-        chars = [" "] + [o for o, *_ in self.world_contents]
+        grid_size = 3  # obs.astype(int).sum(-1).max()  # max objects per grid
+        chars = [" "] + [o for (o, *_) in self.world_contents]
         for i, row in enumerate(obs):
-            string = ""
+            colors = []
+            string = []
             for j, channel in enumerate(row):
                 int_ids = 1 + np.arange(channel.size)
                 number = channel * int_ids
                 crop = sorted(number, reverse=True)[:grid_size]
-                string += "".join(chars[x] for x in crop) + "|"
-            print(string)
+                for x in crop:
+                    colors.append(self.colors[x])
+                    string.append(chars[x])
+                colors.append(RESET)
+                string.append("|")
+                # string += "".join(self.colors[x] + chars[x] + RESET for x in crop) + "|"
+            print(*[c for p in zip(colors, string) for c in p], sep="")
             print("-" * len(string))
 
     def line_str(self, line):
