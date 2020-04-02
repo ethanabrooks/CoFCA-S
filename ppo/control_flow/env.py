@@ -102,7 +102,8 @@ class Env(gym.Env, ABC):
 
     @property
     def line_types(self):
-        return list(Line.types)
+        return [If, Else, EndIf, While, EndWhile, EndLoop, Subtask, Padding, Loop]
+        # return list(Line.types)
 
     def reset(self):
         self.i += 1
@@ -169,7 +170,8 @@ class Env(gym.Env, ABC):
                         "{:2}{}{}{}".format(i, pre, " " * indent, self.line_str(line))
                     )
                     indent += line.depth_change[1]
-                print("Selected:", self.subtasks[agent_ptr], agent_ptr)
+                if agent_ptr < len(self.subtasks):
+                    print("Selected:", self.subtasks[agent_ptr], agent_ptr)
                 print("Action:", action)
                 print("Reward", reward)
                 print("Time remaining", self.time_remaining)
@@ -239,6 +241,22 @@ class Env(gym.Env, ABC):
                 yield Loop(self.random.randint(1, 1 + self.max_loops))
             else:
                 yield line(0)
+
+    def line_generator(self, lines):
+        line_transitions = defaultdict(list)
+        for _from, _to in self.get_transitions(lines):
+            line_transitions[_from].append(_to)
+        i = 0
+        if_evaluations = []
+        while True:
+            condition_bit = yield None if i >= len(lines) else i
+            if type(lines[i]) is Else:
+                evaluation = not if_evaluations.pop()
+            else:
+                evaluation = bool(condition_bit)
+            if type(lines[i]) is If:
+                if_evaluations.append(evaluation)
+            i = line_transitions[i][evaluation]
 
     @staticmethod
     def get_transitions(lines):
