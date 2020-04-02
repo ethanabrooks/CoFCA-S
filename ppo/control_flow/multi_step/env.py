@@ -231,41 +231,38 @@ class Env(ppo.control_flow.env.Env):
                     term=term,
                 )
                 self.time_remaining -= 1
-                interaction, obj = self.subtasks[subtask_id]
-
-                def pair():
-                    return obj, tuple(agent_pos)
+                chosen_interaction, chosen_obj = self.subtasks[subtask_id]
 
                 def on_object():
                     try:
-                        return objects[tuple(agent_pos)] == obj
+                        return objects[tuple(agent_pos)] == chosen_obj
                     except KeyError:
                         return False
 
-                correct_id = (interaction, obj) == lines[ptr].id
+                correct_id = lines[ptr].id == self.subtasks[subtask_id]
 
                 lower_level_action = self.get_lower_level_action(
-                    interaction, obj, tuple(agent_pos), objects
+                    chosen_interaction, chosen_obj, tuple(agent_pos), objects
                 )
                 if on_object():
+                    if correct_id:
+                        prev, ptr = ptr, next_subtask(ptr)
                     if (
                         type(lower_level_action) is str
                         and lower_level_action == self.mine
                     ):
                         del objects[tuple(agent_pos)]
                         if correct_id:
-                            possible_objects.remove(obj)
+                            possible_objects.remove(chosen_obj)
                         else:
                             term = True
-                    if correct_id:
-                        prev, ptr = ptr, next_subtask(ptr)
                 else:
                     if type(lower_level_action) is np.ndarray:
                         if self.temporal_extension:
                             lower_level_action = np.clip(lower_level_action, -1, 1)
                         agent_pos += lower_level_action
-                    elif correct_id and obj not in possible_objects:
-                        assert obj not in possible_objects
+                    elif correct_id and chosen_obj not in possible_objects:
+                        assert chosen_obj not in possible_objects
                         # subtask is impossible
                         prev, ptr = ptr, None
 
