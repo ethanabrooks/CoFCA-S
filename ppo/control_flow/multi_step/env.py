@@ -23,6 +23,30 @@ from ppo.control_flow.lines import (
 )
 from ppo.djikstra import shortest_path
 
+BLACK = "\033[30m"
+RED = "\033[31m"
+GREEN = "\033[32m"
+ORANGE = "\033[33m"
+BLUE = "\033[34m"
+PURPLE = "\033[35m"
+CYAN = "\033[36m"
+LIGHTGREY = "\033[37m"
+DARKGREY = "\033[90m"
+LIGHTRED = "\033[91m"
+LIGHTGREEN = "\033[92m"
+YELLOW = "\033[93m"
+LIGHTBLUE = "\033[94m"
+PINK = "\033[95m"
+LIGHTCYAN = "\033[96m"
+RESET = "\033[0m"
+
+
+def get_nearest(_from, _to, objects):
+    items = [(np.array(p), o) for p, o in objects.items()]
+    candidates = [(p, np.sum(np.abs(_from - p))) for p, o in items if o == _to]
+    if candidates:
+        return min(candidates, key=lambda c: c[1])
+
 
 class Env(ppo.control_flow.env.Env):
     wood = "wood"
@@ -180,10 +204,12 @@ class Env(ppo.control_flow.env.Env):
                 if l is not None:
                     assert type(lines[l]) is Subtask
                     _, o = lines[l].id
-                    _, d = self.get_nearest(_to=o, _from=agent_pos, objects=objects)
-                    if d is not None:
-                        self.time_remaining += 1 + d
-                return l
+                    nearest = get_nearest(_to=o, _from=agent_pos, objects=objects)
+                    if nearest is None:
+                        return None
+                    _, d = nearest
+                    self.time_remaining += 1 + d
+                    return l
 
             possible_objects = list(objects.values())
             prev, ptr = 0, next_subtask(None)
@@ -347,68 +373,16 @@ class Env(ppo.control_flow.env.Env):
             else:
                 yield line(self.items[line_id])
 
-    def get_nearest(self, _from, _to, objects):
-        if _to not in objects.values():
-            return None, None
-
-        def around(x):
-            x = np.array(x)
-            for offset in np.array([[0, 1], [0, -1], [1, 0], [-1, 0]]):
-                if np.all(x + offset < self.world_size) and np.all(0 <= x + offset):
-                    yield x + offset
-
-        def direct_path(start, end):
-            start = np.array(start)
-            while not np.all(start == end):
-                yield np.array(start)
-                start += np.clip(end - start, -1, 1)
-
-        walls = [p for p, o in objects.items() if o == self.wall]
-        candidates = [p for p, o in objects.items() if o == _to]
-        graph = defaultdict(dict)
-
-        def get_object(x):
-            if x in objects:
-                return objects[x]
-            return None
-
-        def add_edge(f, t):
-            for pos in direct_path(f, t):
-                pos = tuple(pos)
-                if pos in objects and objects[pos] == self.wall:
-                    return  # obstructed
-            distance = np.sum(np.abs(np.array(f) - np.array(t)))
-            f = tuple(f)
-            t = tuple(t)
-            graph[get_object(f), f][(get_object(t), t)] = distance
-
-        for wall in walls:
-            for p in around(wall):
-                add_edge(_from, p)
-        for candidate in candidates:
-            add_edge(_from, candidate)
-            for wall in walls:
-                for p in around(wall):
-                    add_edge(p, candidate)
-
-        _from = tuple(_from)
-        return shortest_path(
-            (get_object(_from), _from),
-            graph=graph,
-            stopping_criterion=lambda p: p[0] == _to,
-        )
-
-    def get_lower_level_action(self, interaction, o, p, objects):
+    def get_lower_level_action(self, interaction, obj, agent_pos, objects):
         if interaction == self.sell:
-            o = self.merchant
-        if tuple(p) in objects and objects[tuple(p)] == o:
+            obj = self.merchant
+        if objects.get(tuple(agent_pos), None) == obj:
             return interaction
         else:
-            n, d = self.get_nearest(_from=p, _to=o, objects=objects)
-            if n is not None:
-                n = list(n)
-                (_, a), (_, b), *_ = n
-                return np.array(b) - np.array(a)
+            nearest = get_nearest(_from=agent_pos, _to=obj, objects=objects)
+            if nearest:
+                n, d = nearest
+                return n - agent_pos
 
 
 if __name__ == "__main__":
