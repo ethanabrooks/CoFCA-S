@@ -1,7 +1,7 @@
 import itertools
 import unittest
 from collections import defaultdict
-from typing import Dict, TypeVar, Set, List
+from typing import Dict, TypeVar, Set, List, Callable
 
 from string import ascii_lowercase
 import numpy as np
@@ -32,18 +32,18 @@ def get_length(path: List[X], graph: Graph):
     return sum(get_edge_lengths())
 
 
-def shortest_path(_from: X, _to: X, graph: Graph):
+def shortest_path(src: X, graph: Graph, stopping_criterion: Callable[[X], bool]):
     explored = set()
     distances = defaultdict(lambda: np.inf)
-    distances[_from] = 0
-    prev = {_from: None}
+    distances[src] = 0
+    prev = {src: None}
     while True:
         if not distances:
             return None, None
         distance, value = min(
             [(d, v) for v, d in distances.items()], key=lambda p: p[0]
         )  # TODO: not efficient
-        if value == _to:  # done (_to is minimum distance)
+        if stopping_criterion(value):  # done (_to is minimum distance)
 
             def generator(v):
                 while v is not None:
@@ -64,9 +64,9 @@ def shortest_path(_from: X, _to: X, graph: Graph):
                     prev[adjacent] = value
 
 
-def brute_force(_from: X, _to: X, graph: Graph):
+def brute_force(src: X, graph: Graph, stopping_criterion: Callable[[X], bool]):
     def get_paths(f: X, explored: Set[X]):
-        if f == _to:
+        if stopping_criterion(f):
             yield [(f, 0)]
         else:
             explored = explored | {f}
@@ -75,7 +75,7 @@ def brute_force(_from: X, _to: X, graph: Graph):
                     for path in get_paths(adjacent, explored):
                         yield [(f, edge_length)] + path
 
-    paths = list(get_paths(_from, explored=set()))
+    paths = list(get_paths(src, explored=set()))
     if not paths:
         return None, None
 
@@ -141,9 +141,16 @@ class TestDjikstra(unittest.TestCase):
                 _from, _to = np.random.choice(nodes, size=2)
                 self.check_paths(_from, _to, graph)
 
-    def check_paths(self, _from, _to, graph):
-        path1, distance1 = shortest_path(_from=_from, _to=_to, graph=graph)
-        path2, distance2 = brute_force(_from=_from, _to=_to, graph=graph)
+    def check_paths(self, src, dest, graph):
+        def stopping_criterion(x):
+            return x == dest
+
+        path1, distance1 = shortest_path(
+            src=src, graph=graph, stopping_criterion=stopping_criterion
+        )
+        path2, distance2 = brute_force(
+            src=src, graph=graph, stopping_criterion=stopping_criterion
+        )
         self.assertEqual(
             get_length(path=path1, graph=graph), distance1, msg=dot_graph(graph),
         )

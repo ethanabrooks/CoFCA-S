@@ -393,9 +393,7 @@ class Env(ppo.control_flow.env.Env):
                                 if not obstructed(direct_path(x, p))
                             },
                         }
-                        yield shortest_path(
-                            _from=tuple(_from), _to=tuple(p), graph=graph
-                        )
+                        yield shortest_path(src=tuple(_from), _to=tuple(p), graph=graph)
 
         paths = [x for x in shortest_paths() if None not in x]
         if paths:
