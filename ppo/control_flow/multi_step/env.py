@@ -150,8 +150,8 @@ class Env(ppo.control_flow.env.Env):
 
         def state_generator() -> State:
             assert self.max_nesting_depth == 1
-            agent_pos = self.random.randint(0, self.world_size, size=2)
             objects = self.populate_world(lines)
+            agent_pos = next(p for p, o in objects.items() if o == self.agent)
 
             line_iterator = self.line_generator(lines)
             condition_evaluations = []
@@ -287,7 +287,12 @@ class Env(ppo.control_flow.env.Env):
             else [self.world_size - 1, self.world_size]
         )
 
-        object_list = list(subtask_ids()) + list(loop_objects()) + list(while_objects())
+        object_list = (
+            [self.agent]
+            + list(subtask_ids())
+            + list(loop_objects())
+            + list(while_objects())
+        )
         num_random_objects = (self.world_size ** 2) - self.world_size  # for water
         object_list = object_list[:num_random_objects]
         indexes = self.random.choice(
@@ -358,47 +363,40 @@ class Env(ppo.control_flow.env.Env):
                 yield np.array(start)
                 start += np.clip(end - start, -1, 1)
 
-        def obstructed(_path):
-            for pos in _path:
+        walls = [p for p, o in objects.items() if o == self.wall]
+        candidates = [p for p, o in objects.items() if o == _to]
+        graph = defaultdict(dict)
+
+        def get_object(x):
+            if x in objects:
+                return objects[x]
+            return None
+
+        def add_edge(f, t):
+            for pos in direct_path(f, t):
                 pos = tuple(pos)
                 if pos in objects and objects[pos] == self.wall:
-                    return True
-            return False
+                    return  # obstructed
+            distance = np.sum(np.abs(np.array(f) - np.array(t)))
+            f = tuple(f)
+            t = tuple(t)
+            graph[get_object(f), f][(get_object(t), t)] = distance
 
-        def distance(start, end):
-            return np.sum(np.abs(np.array(start) - np.array(end)))
+        for wall in walls:
+            for p in around(wall):
+                add_edge(_from, p)
+        for candidate in candidates:
+            add_edge(_from, candidate)
+            for wall in walls:
+                for p in around(wall):
+                    add_edge(p, candidate)
 
-        def shortest_paths():
-            walls = [p for p, o in objects.items() if o == self.wall]
-            base_graph = {
-                tuple(_from): {
-                    tuple(p): distance(_from, p)
-                    for w in walls
-                    for p in around(w)
-                    if not obstructed(direct_path(_from, p))
-                }
-            }
-            for p, o in objects.items():
-                if o == _to:  # candidate
-                    direct = list(direct_path(_from, p))
-                    if not obstructed(direct):
-                        yield direct + [p], distance(_from, p)
-                    else:
-                        graph = {
-                            **base_graph,
-                            **{
-                                tuple(x): {p: distance(x, p)}
-                                for w in walls
-                                for x in around(w)
-                                if not obstructed(direct_path(x, p))
-                            },
-                        }
-                        yield shortest_path(src=tuple(_from), _to=tuple(p), graph=graph)
-
-        paths = [x for x in shortest_paths() if None not in x]
-        if paths:
-            return min(paths, key=lambda p: p[1])
-        return None, None
+        _from = tuple(_from)
+        return shortest_path(
+            (get_object(_from), _from),
+            graph=graph,
+            stopping_criterion=lambda p: p[0] == _to,
+        )
 
     def get_lower_level_action(self, interaction, o, p, objects):
         if interaction == self.sell:
@@ -409,7 +407,7 @@ class Env(ppo.control_flow.env.Env):
             n, d = self.get_nearest(_from=p, _to=o, objects=objects)
             if n is not None:
                 n = list(n)
-                a, b, *_ = n
+                (_, a), (_, b), *_ = n
                 return np.array(b) - np.array(a)
 
 
