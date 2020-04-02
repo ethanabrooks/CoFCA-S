@@ -232,40 +232,33 @@ class Env(ppo.control_flow.env.Env):
                 )
                 self.time_remaining -= 1
                 interaction, obj = self.subtasks[subtask_id]
-
-                def pair():
-                    return obj, tuple(agent_pos)
-
-                def on_object():
-                    try:
-                        return objects[tuple(agent_pos)] == obj
-                    except KeyError:
-                        return False
-
-                correct_id = (interaction, obj) == lines[ptr].id
+                tgt_interaction, tgt_obj = lines[ptr].id
 
                 lower_level_action = self.get_lower_level_action(
                     interaction, obj, tuple(agent_pos), objects
                 )
-                if on_object():
+                if tuple(agent_pos) in objects:
+                    correct = (
+                        objects[tuple(agent_pos)] == tgt_obj
+                        and interaction == tgt_interaction
+                    )
                     if (
                         type(lower_level_action) is str
                         and lower_level_action == self.mine
                     ):
-                        del objects[tuple(agent_pos)]
-                        if correct_id:
+                        if correct:
                             possible_objects.remove(obj)
                         else:
                             term = True
-                    if correct_id:
+                        del objects[tuple(agent_pos)]
+                    if correct:
                         prev, ptr = ptr, next_subtask(ptr)
                 else:
                     if type(lower_level_action) is np.ndarray:
                         if self.temporal_extension:
                             lower_level_action = np.clip(lower_level_action, -1, 1)
                         agent_pos += lower_level_action
-                    elif correct_id and obj not in possible_objects:
-                        assert obj not in possible_objects
+                    elif tgt_obj not in possible_objects:
                         # subtask is impossible
                         prev, ptr = ptr, None
 
