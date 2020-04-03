@@ -116,7 +116,6 @@ def control_flow_args():
     parsers.agent.add_argument("--no-roll", action="store_true")
     parsers.agent.add_argument("--baseline")
     parsers.agent.add_argument("--conv-hidden-size", type=int, required=True)
-    parsers.agent.add_argument("--lower-level-hidden-size", type=int, required=True)
     parsers.agent.add_argument("--gru-hidden-size", type=int, required=True)
     parsers.agent.add_argument("--encoder-hidden-size", type=int, required=True)
     parsers.agent.add_argument("--num-encoding-layers", type=int, required=True)
@@ -124,6 +123,10 @@ def control_flow_args():
     parsers.agent.add_argument("--gate-coef", type=float, required=True)
     parsers.agent.add_argument("--gru-gate-coef", type=float, required=True)
     parsers.agent.add_argument("--no-op-coef", type=float, required=True)
+
+    parsers.agent.add_argument("--concat", action="store_true")
+    parsers.agent.add_argument("--kernel-size", type=int, required=True)
+    parsers.agent.add_argument("--stride", type=int, required=True)
     return parser
 
 
