@@ -110,7 +110,7 @@ def control_flow_args():
     )
     parsers.env.add_argument("--max-while-objects", type=float, default=2)
     parsers.env.add_argument("--num-excluded-objects", type=int, default=2)
-    parsers.env.add_argument("--world-size", type=int)
+    parsers.env.add_argument("--world-size", type=int, required=True)
     parsers.agent.add_argument("--debug", action="store_true")
     parsers.agent.add_argument("--no-scan", action="store_true")
     parsers.agent.add_argument("--no-roll", action="store_true")
