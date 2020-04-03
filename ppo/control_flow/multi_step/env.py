@@ -66,8 +66,8 @@ class Env(ppo.control_flow.env.Env):
     mine = "mine"
     sell = "sell"
     goto = "goto"
-    items = [wood, gold, iron, merchant]
-    terrain = [water, wall, bridge, agent]
+    items = [wood, gold, iron]
+    terrain = [merchant, water, wall, bridge, agent]
     world_contents = items + terrain
     behaviors = [mine, sell, goto]
     colors = [RESET, GREEN, YELLOW, LIGHTGREY, PINK, BLUE, DARKGREY, RESET, RESET]
@@ -98,8 +98,24 @@ class Env(ppo.control_flow.env.Env):
         self.world_size = world_size
         self.world_shape = (len(self.world_contents), self.world_size, self.world_size)
 
+        def lower_level_actions():
+            yield from self.behaviors
+            for i in range(-1, 2):
+                for j in range(-1, 2):
+                    yield np.array([i, j])
+
+        self.lower_level_actions = list(lower_level_actions())
         self.action_space = spaces.MultiDiscrete(
-            np.array([num_subtasks + 1, 2 * self.n_lines, 2, 2, self.n_lines])
+            np.array(
+                [
+                    num_subtasks + 1,
+                    2 * self.n_lines,
+                    2,
+                    2,
+                    len(self.lower_level_actions),
+                    self.n_lines,
+                ]
+            )
         )
         self.observation_space.spaces.update(
             obs=spaces.Box(low=0, high=1, shape=self.world_shape),
@@ -230,29 +246,30 @@ class Env(ppo.control_flow.env.Env):
             term = False
             while True:
                 term |= not self.time_remaining
-                subtask_id = yield State(
+                subtask_id, lower_level_index = yield State(
                     obs=self.world_array(objects, agent_pos),
                     prev=prev,
                     ptr=ptr,
                     term=term,
                 )
+                # for i, a in enumerate(self.lower_level_actions):
+                # print(i, a)
+                # lower_level_index = int(input("go:"))
+                lower_level_action = self.lower_level_actions[lower_level_index]
                 self.time_remaining -= 1
                 interaction, obj = self.subtasks[subtask_id]
                 tgt_interaction, tgt_obj = lines[ptr].id
                 tgt_obj = objective(*lines[ptr].id)
 
-                lower_level_action = self.get_lower_level_action(
-                    interaction, obj, tuple(agent_pos), objects
-                )
                 if type(lower_level_action) is str:
                     done = (
-                        tgt_interaction == interaction
+                        lower_level_action == tgt_interaction
                         and objects.get(tuple(agent_pos), None) == tgt_obj
                     )
                     if lower_level_action == self.mine:
                         if tuple(agent_pos) in objects:
                             if done:
-                                possible_objects.remove(obj)
+                                possible_objects.remove(objects[tuple(agent_pos)])
                             else:
                                 term = True
                             del objects[tuple(agent_pos)]
@@ -262,7 +279,9 @@ class Env(ppo.control_flow.env.Env):
                 elif type(lower_level_action) is np.ndarray:
                     if self.temporal_extension:
                         lower_level_action = np.clip(lower_level_action, -1, 1)
-                    agent_pos += lower_level_action
+                    new_pos = agent_pos + lower_level_action
+                    if np.all(0 <= new_pos) and np.all(new_pos < self.world_size):
+                        agent_pos = new_pos
                 else:
                     assert lower_level_action is None
 
@@ -273,7 +292,10 @@ class Env(ppo.control_flow.env.Env):
             for line in lines:
                 if type(line) is Subtask:
                     _i, _o = line.id
-                    yield _o
+                    if _i == self.sell:
+                        yield self.merchant
+                    else:
+                        yield _o
 
         def loop_objects():
             active_loops = []
@@ -335,7 +357,9 @@ class Env(ppo.control_flow.env.Env):
         wall_indexes = positions[:, 0] % 2 * positions[:, 1] % 2
         wall_positions = positions[wall_indexes == 1]
         object_positions = positions[wall_indexes == 0]
-        num_walls = self.random.choice(len(wall_positions))
+        num_walls = (
+            self.random.choice(len(wall_positions)) if len(wall_positions) else 0
+        )
         object_positions = object_positions[: len(object_list)]
         if len(object_list) == len(object_positions):
             wall_positions = wall_positions[:num_walls]
