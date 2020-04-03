@@ -27,8 +27,6 @@ State = namedtuple("State", "obs prev ptr  term")
 
 
 class Env(gym.Env, ABC):
-    pairs = {If: EndIf, Else: EndIf, While: EndWhile, Loop: EndLoop}
-
     def __init__(
         self,
         min_lines,
@@ -103,7 +101,13 @@ class Env(gym.Env, ABC):
             )
         )
 
+    @property
+    def line_types(self):
+        return [If, Else, EndIf, While, EndWhile, EndLoop, Subtask, Padding, Loop]
+        # return list(Line.types)
+
     def reset(self):
+        self.i += 1
         self.iterator = self.generator()
         s, r, t, i = next(self.iterator)
         return s
@@ -167,7 +171,8 @@ class Env(gym.Env, ABC):
                         "{:2}{}{}{}".format(i, pre, " " * indent, self.line_str(line))
                     )
                     indent += line.depth_change[1]
-                print("Selected:", self.subtasks[agent_ptr], agent_ptr)
+                if agent_ptr < len(self.subtasks):
+                    print("Selected:", self.subtasks[agent_ptr], agent_ptr)
                 print("Action:", action)
                 print("Reward", reward)
                 print("Obs:")
