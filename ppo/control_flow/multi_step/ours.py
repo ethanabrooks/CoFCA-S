@@ -15,7 +15,7 @@ from ppo.utils import init_
 
 RecurrentState = namedtuple(
     "RecurrentState",
-    "a d u ag dg p v h hy cy a_probs d_probs ag_probs dg_probs gru_gate P",
+    "a d u ag dg ll p v h hy cy ll_probs a_probs d_probs ag_probs dg_probs gru_gate P",
 )
 
 
@@ -26,7 +26,13 @@ def gate(g, new, old):
 
 class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
     def __init__(
-        self, hidden_size, conv_hidden_size, gate_coef, gru_gate_coef, **kwargs
+        self,
+        hidden_size,
+        conv_hidden_size,
+        gate_coef,
+        gru_gate_coef,
+        lower_level_hidden_size,
+        **kwargs
     ):
         self.gru_gate_coef = gru_gate_coef
         self.gate_coef = gate_coef
@@ -51,6 +57,21 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         self.d_gate = Categorical(hidden_size, 2)
         self.a_gate = Categorical(hidden_size, 2)
         state_sizes = self.state_sizes._asdict()
+        self.ll_conv = nn.Conv2d(
+            in_channels=self.conv_hidden_size,
+            out_channels=lower_level_hidden_size,
+            kernel_size=3,
+            stride=2,
+            padding=1,
+        )
+        self.instruction_projector = nn.Sequential(
+            init_(nn.Linear(self.encoder_hidden_size, lower_level_hidden_size)),
+            kwargs["activation"],
+        )
+        _, h, w = kwargs["observation_space"]["obs"].shape
+        n_ll = kwargs["action_space"].nvec[4]
+        self.lower_level = Categorical(lower_level_hidden_size * (h * w) // 4, n_ll)
+        self.lower_level_hidden_size = lower_level_hidden_size
         self.state_sizes = RecurrentState(
             **state_sizes,
             hy=self.gru_hidden_size,
@@ -60,7 +81,9 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             ag=1,
             dg=1,
             gru_gate=self.gru_hidden_size,
-            P=self.ne * 2 * self.train_lines ** 2
+            P=self.ne * 2 * self.train_lines ** 2,
+            ll=1,
+            ll_probs=n_ll
         )
 
     @property
@@ -121,10 +144,22 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         D = torch.cat([actions[:, :, 1], hx.d.view(1, N)], dim=0).long()
         AG = torch.cat([actions[:, :, 2], hx.ag.view(1, N)], dim=0).long()
         DG = torch.cat([actions[:, :, 3], hx.dg.view(1, N)], dim=0).long()
+        LL = torch.cat([actions[:, :, 4], hx.ll.view(1, N)], dim=0).long()
 
         for t in range(T):
             self.print("p", p)
-            obs = self.preprocess_obs(inputs.obs[t])
+            conv_out = self.conv(inputs.obs[t].permute(0, 2, 3, 1))
+            ll_conv_out = self.ll_conv(conv_out.permute(0, 3, 1, 2))
+            instruction_projection = (
+                self.instruction_projector(M[R, p])
+                .reshape(N, 1, 1, self.lower_level_hidden_size)
+                .transpose(1, 3)
+            )
+            ll_dist = self.lower_level(
+                (ll_conv_out * instruction_projection).reshape(N, -1)
+            )
+            self.sample_new(LL[t], ll_dist)
+            obs = conv_out.view(N, -1, self.conv_hidden_size).max(dim=1).values
             # h = self.gru(obs, h)
             zeta_inputs = [h, M[R, p], obs, self.embed_action(A[t - 1].clone())]
             z = F.relu(self.zeta(torch.cat(zeta_inputs, dim=-1)))
@@ -176,4 +211,6 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 dg=dg,
                 gru_gate=gru_gate,
                 P=P.transpose(0, 1),
+                ll=LL[t],
+                ll_probs=ll_dist.probs,
             )

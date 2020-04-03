@@ -93,8 +93,8 @@ class Agent(ppo.agent.Agent, NNBase):
             X = [hx.a, pad, pad, pad, hx.p]
             probs = [hx.a_probs]
         elif t is ppo.control_flow.multi_step.ours.Recurrence:
-            X = [hx.a, hx.d, hx.ag, hx.dg, hx.p]
-            probs = [hx.a_probs, hx.d_probs, hx.ag_probs, hx.dg_probs]
+            X = [hx.a, hx.d, hx.ag, hx.dg, hx.p, hx.ll]
+            probs = [hx.a_probs, hx.d_probs, hx.ag_probs, hx.dg_probs, hx.ll_probs]
         else:
             raise RuntimeError
         dists = [FixedCategorical(p) for p in probs]

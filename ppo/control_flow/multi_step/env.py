@@ -60,8 +60,8 @@ class Env(ppo.control_flow.env.Env):
     mine = "mine"
     sell = "sell"
     goto = "goto"
-    items = [wood, gold, iron, merchant]
-    terrain = [water, wall, bridge, agent]
+    items = [wood, gold, iron]
+    terrain = [merchant, water, wall, bridge, agent]
     world_contents = items + terrain
     behaviors = [mine, sell, goto]
     colors = [RESET, GREEN, YELLOW, LIGHTGREY, PINK, BLUE, DARKGREY, RESET, RESET]
@@ -92,8 +92,24 @@ class Env(ppo.control_flow.env.Env):
         self.world_size = world_size
         self.world_shape = (len(self.world_contents), self.world_size, self.world_size)
 
+        def lower_level_actions():
+            yield from self.behaviors
+            for i in range(-1, 2):
+                for j in range(-1, 2):
+                    yield np.array([i, j])
+
+        self.lower_level_actions = list(lower_level_actions())
         self.action_space = spaces.MultiDiscrete(
-            np.array([num_subtasks + 1, 2 * self.n_lines, 2, 2, self.n_lines])
+            np.array(
+                [
+                    num_subtasks + 1,
+                    2 * self.n_lines,
+                    2,
+                    2,
+                    self.n_lines,
+                    len(self.lower_level_actions),
+                ]
+            )
         )
         self.observation_space.spaces.update(
             obs=spaces.Box(low=0, high=1, shape=self.world_shape),
@@ -224,19 +240,24 @@ class Env(ppo.control_flow.env.Env):
             term = False
             while True:
                 term |= not self.time_remaining
-                subtask_id = yield State(
+                subtask_id, lower_level_index = yield State(
                     obs=self.world_array(objects, agent_pos),
                     prev=prev,
                     ptr=ptr,
                     term=term,
                 )
+                for i, a in enumerate(self.lower_level_actions):
+                    print(i, a)
+                lower_level_index = int(input("go:"))
+                if lower_level_index > 8:
+                    import ipdb
+
+                    ipdb.set_trace()
+                lower_level_action = self.lower_level_actions[lower_level_index]
                 self.time_remaining -= 1
                 interaction, obj = self.subtasks[subtask_id]
                 tgt_interaction, tgt_obj = lines[ptr].id
 
-                lower_level_action = self.get_lower_level_action(
-                    interaction, obj, tuple(agent_pos), objects
-                )
                 if tuple(agent_pos) in objects:
                     correct = (
                         objects[tuple(agent_pos)] == tgt_obj
@@ -269,7 +290,10 @@ class Env(ppo.control_flow.env.Env):
             for line in lines:
                 if type(line) is Subtask:
                     _i, _o = line.id
-                    yield _o
+                    if _i == self.sell:
+                        yield self.merchant
+                    else:
+                        yield _o
 
         def loop_objects():
             active_loops = []
