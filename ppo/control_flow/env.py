@@ -86,7 +86,7 @@ class Env(gym.Env, ABC):
                 yield Subtask(i)
             for i in range(1, max_loops + 1):
                 yield Loop(i)
-            for line_type in self.control_flow_types:
+            for line_type in self.line_types:
                 if line_type not in (Subtask, Loop):
                     yield line_type(0)
 
@@ -376,7 +376,7 @@ def build_parser(p):
     p.add_argument("--flip-prob", type=float, default=0.5)
     p.add_argument("--eval-condition-size", action="store_true")
     p.add_argument("--single-control-flow-type", action="store_true")
-    p.add_argument("--max-nesting-depth", type=int, default=1)
+    p.add_argument("--max-nesting-depth", type=int)
     p.add_argument("--subtasks-only", action="store_true")
     p.add_argument("--break-on-fail", action="store_true")
     p.add_argument("--time-to-waste", type=int, required=True)

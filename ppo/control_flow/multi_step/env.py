@@ -68,16 +68,16 @@ class Env(ppo.control_flow.env.Env):
 
     def __init__(
         self,
-        num_subtasks,
         max_while_objects,
+        num_subtasks,
         num_excluded_objects,
         temporal_extension,
         world_size=6,
         **kwargs,
     ):
+        self.temporal_extension = temporal_extension
         self.num_excluded_objects = num_excluded_objects
         self.max_while_objects = max_while_objects
-        self.temporal_extension = temporal_extension
         self.loops = None
         self.i = 0
 
@@ -363,16 +363,16 @@ class Env(ppo.control_flow.env.Env):
         for line, line_id, interaction_id, object_id in zip(
             lines, line_ids, interaction_ids, object_ids
         ):
-            if type(line) is Subtask:
+            if line is Subtask:
                 subtask_id = (
                     self.behaviors[interaction_id],
                     included_objects[object_id],
                 )
-                line.id = subtask_id
-            elif type(line) is Loop:
-                line.id = self.random.randint(1, 1 + self.max_loops)
+                yield Subtask(subtask_id)
+            elif line is Loop:
+                yield Loop(self.random.randint(1, 1 + self.max_loops))
             else:
-                line.id = self.items[line_id]
+                yield line(self.items[line_id])
 
     def get_lower_level_action(self, interaction, obj, agent_pos, objects):
         if interaction == self.sell:
