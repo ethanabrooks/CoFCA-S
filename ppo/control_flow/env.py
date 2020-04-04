@@ -127,6 +127,7 @@ class Env(gym.Env, ABC):
         info = {}
         term = False
         action = None
+        lower_level_action = None
         while True:
             if state.ptr is not None:
                 program_counter.append(state.ptr)
@@ -174,6 +175,11 @@ class Env(gym.Env, ABC):
                 if agent_ptr < len(self.subtasks):
                     print("Selected:", self.subtasks[agent_ptr], agent_ptr)
                 print("Action:", action)
+                if lower_level_action is not None:
+                    print(
+                        "Lower Level Action:",
+                        self.lower_level_actions[lower_level_action],
+                    )
                 print("Reward", reward)
                 print("Obs:")
                 print(RESET)
@@ -184,10 +190,10 @@ class Env(gym.Env, ABC):
 
             action = (yield obs, reward, term, info)
             actions.extend([int(a) for a in action])
-            action, agent_ptr, lower_level_action = (
+            action, lower_level_action, agent_ptr, = (
                 int(action[0]),
-                int(action[3]),
                 int(action[4]),
+                int(action[5]),
             )
             info = {}
 
