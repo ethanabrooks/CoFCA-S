@@ -108,7 +108,7 @@ class Agent(ppo.agent.Agent, NNBase):
                     lower=hx.dg_probs,
                 )
             elif ll_type in ["pre-trained", "hardcoded"]:
-                probs = Action(upper=hx.a_probs, delta=hx.d_probs, ag=hx.ag_probs,)
+                probs = Action(upper=hx.a_probs, delta=hx.d_probs, ag=hx.ag_probs)
             else:
                 raise RuntimeError
         else:
@@ -119,13 +119,11 @@ class Agent(ppo.agent.Agent, NNBase):
             dist.log_probs(x) for dist, x in zip(dists, X) if dist is not None
         )
         entropy = sum([dist.entropy() for dist in dists if dist is not None]).mean()
-        aux_loss = (
-            self.no_op_coef * hx.a_probs[:, -1].mean() - self.entropy_coef * entropy
-        )
-        try:
+        aux_loss = -self.entropy_coef * entropy
+        if probs.upper is not None:
+            aux_loss += self.no_op_coef * hx.a_probs[:, -1].mean()
+        if probs.ag is not None and probs.dg is not None:
             aux_loss += rm.gate_coef * (hx.ag_probs + hx.dg_probs)[:, 1].mean()
-        except AttributeError:
-            pass
         try:
             aux_loss += (rm.gru_gate_coef * hx.gru_gate).mean()
         except AttributeError:

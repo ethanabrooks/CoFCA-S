@@ -9,6 +9,7 @@ import torch.nn.functional as F
 
 import ppo.control_flow.multi_step.abstract_recurrence as abstract_recurrence
 import ppo.control_flow.recurrence as recurrence
+from ppo.control_flow.env import Action
 from ppo.control_flow.lstm import LSTMCell
 from ppo.distributions import FixedCategorical, Categorical
 from ppo.utils import init_
@@ -150,11 +151,12 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         ag_probs[new_episode, 1] = 1
         R = torch.arange(N, device=rnn_hxs.device)
         ones = self.ones.expand_as(R)
-        A = torch.cat([actions[:, :, 0], hx.a.view(1, N)], dim=0).long()
-        D = torch.cat([actions[:, :, 1], hx.d.view(1, N)], dim=0).long()
-        AG = torch.cat([actions[:, :, 2], hx.ag.view(1, N)], dim=0).long()
-        DG = torch.cat([actions[:, :, 3], hx.dg.view(1, N)], dim=0).long()
-        LL = torch.cat([actions[:, :, 4], hx.ll.view(1, N)], dim=0).long()
+        actions = Action(*actions.unbind(dim=2))
+        A = torch.cat([actions.upper, hx.a.view(1, N)], dim=0).long()
+        D = torch.cat([actions.delta, hx.d.view(1, N)], dim=0).long()
+        AG = torch.cat([actions.ag, hx.ag.view(1, N)], dim=0).long()
+        DG = torch.cat([actions.dg, hx.dg.view(1, N)], dim=0).long()
+        LL = torch.cat([actions.lower, hx.ll.view(1, N)], dim=0).long()
 
         for t in range(T):
             self.print("p", p)
@@ -177,7 +179,6 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             self.sample_new(DG[t], d_gate)
             a_gate = self.a_gate(z)
             self.sample_new(AG[t], a_gate)
-
             (hy_, cy_), gru_gate = self.gru2(M[R, p], (hy, cy))
             decode_inputs = [hy_, obs, u]  # first put obs back in gru2
             z = F.relu(self.zeta2(torch.cat(decode_inputs, dim=-1)))
@@ -195,6 +196,10 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             p = torch.clamp(p, min=0, max=M.size(1) - 1)
 
             ag = AG[t].unsqueeze(-1).float()
+            if torch.any(AG > 1.0):
+                import ipdb
+
+                ipdb.set_trace()
             a_dist = gate(ag, self.actor(z).probs, A[t - 1])
             self.sample_new(A[t], a_dist)
             # A[:] = float(input("go:"))
