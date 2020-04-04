@@ -35,8 +35,10 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         encoder_hidden_size,
         kernel_size,
         stride,
+        lower_level,
         **kwargs
     ):
+        self.lower_level_type = lower_level
         self.concat = concat
         self.gru_gate_coef = gru_gate_coef
         self.gate_coef = gate_coef

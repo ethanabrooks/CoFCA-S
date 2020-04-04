@@ -6,6 +6,7 @@ from torch.nn import functional as F
 
 import ppo.agent
 from ppo.agent import AgentValues, NNBase
+from ppo.control_flow.env import Action
 
 from ppo.control_flow.recurrence import RecurrentState
 import ppo.control_flow.recurrence
@@ -76,7 +77,7 @@ class Agent(ppo.agent.Agent, NNBase):
         rm = self.recurrent_module
         hx = rm.parse_hidden(all_hxs)
         t = type(rm)
-        pad = hx.a
+        pad = torch.zeros_like(hx.a)
         if t in (
             ppo.control_flow.oh_et_al.Recurrence,
             ppo.control_flow.no_pointer.Recurrence,
@@ -93,13 +94,31 @@ class Agent(ppo.agent.Agent, NNBase):
             X = [hx.a, pad, pad, pad, hx.p]
             probs = [hx.a_probs]
         elif t is ppo.control_flow.multi_step.ours.Recurrence:
-            X = [hx.a, hx.d, hx.ag, hx.dg, hx.ll, hx.p]
-            probs = [hx.a_probs, hx.d_probs, hx.ag_probs, hx.dg_probs, hx.ll_probs]
+            X = Action(
+                upper=hx.a, delta=hx.d, ag=hx.ag, dg=hx.dg, lower=hx.ll, ptr=hx.p
+            )
+            ll_type = rm.lower_level_type
+            if ll_type == "train-alone":
+                probs = Action(lower=hx.ll_probs)
+            elif ll_type == "train-with-upper":
+                probs = Action(
+                    upper=hx.a_probs,
+                    delta=hx.d_probs,
+                    ag=hx.ag_probs,
+                    lower=hx.dg_probs,
+                )
+            elif ll_type in ["pre-trained", "hardcoded"]:
+                probs = Action(upper=hx.a_probs, delta=hx.d_probs, ag=hx.ag_probs,)
+            else:
+                raise RuntimeError
         else:
             raise RuntimeError
-        dists = [FixedCategorical(p) for p in probs]
-        action_log_probs = sum(dist.log_probs(x) for dist, x in zip(dists, X))
-        entropy = sum([dist.entropy() for dist in dists]).mean()
+
+        dists = Action(*[p if p is None else FixedCategorical(p) for p in probs])
+        action_log_probs = sum(
+            dist.log_probs(x) for dist, x in zip(dists, X) if dist is not None
+        )
+        entropy = sum([dist.entropy() for dist in dists if dist is not None]).mean()
         aux_loss = (
             self.no_op_coef * hx.a_probs[:, -1].mean() - self.entropy_coef * entropy
         )
@@ -111,7 +130,14 @@ class Agent(ppo.agent.Agent, NNBase):
             aux_loss += (rm.gru_gate_coef * hx.gru_gate).mean()
         except AttributeError:
             pass
+
         action = torch.cat(X, dim=-1)
+        test_actions = Action(*action[0, :])
+        for field in Action._fields:
+            x = getattr(X, field)
+            test_action = getattr(test_actions, field)
+            assert test_action.item() == x[0].item()
+
         nlines = len(rm.obs_spaces.lines.nvec)
         P = hx.P.reshape(-1, N, nlines, 2 * nlines, rm.ne)
         rnn_hxs = torch.cat(hx._replace(P=torch.tensor([], device=hx.P.device)), dim=-1)

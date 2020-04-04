@@ -17,7 +17,7 @@ from ppo.train import Train
 NAMES = ["instruction", "actions", "program_counter", "evaluations"]
 
 
-def main(log_dir, seed, eval_lines, one_line, **kwargs):
+def main(log_dir, seed, eval_lines, one_line, lower_level, **kwargs):
     class _Train(Train):
         def build_agent(self, envs, baseline=None, debug=False, **agent_args):
             obs_space = envs.observation_space
@@ -40,6 +40,7 @@ def main(log_dir, seed, eval_lines, one_line, **kwargs):
                 eval_lines=eval_lines,
                 debug=debug,
                 baseline=baseline,
+                lower_level=lower_level,
                 **agent_args,
             )
 
@@ -48,6 +49,7 @@ def main(log_dir, seed, eval_lines, one_line, **kwargs):
             seed, rank, evaluation, env_id, add_timestep, gridworld, **env_args
         ):
             args = dict(**env_args, eval_lines=eval_lines, seed=seed + rank, rank=rank)
+            args["lower_level"] = lower_level
             del args["time_limit"]
             if one_line:
                 return control_flow.multi_step.one_line.Env(**args)
@@ -103,6 +105,10 @@ def control_flow_args():
     parser.add_argument("--eval-lines", type=int, required=True)
     parser.add_argument("--no-eval", action="store_true")
     parser.add_argument("--one-line", action="store_true")
+    parser.add_argument(
+        "--lower-level",
+        choices=["train-alone", "train-with-upper", "pre-trained", "hardcoded"],
+    )
     ppo.control_flow.env.build_parser(parsers.env)
     parsers.env.add_argument("--gridworld", action="store_true")
     parsers.env.add_argument(
@@ -116,7 +122,6 @@ def control_flow_args():
     parsers.agent.add_argument("--no-roll", action="store_true")
     parsers.agent.add_argument("--baseline")
     parsers.agent.add_argument("--conv-hidden-size", type=int, required=True)
-    parsers.agent.add_argument("--lower-level-hidden-size", type=int, required=True)
     parsers.agent.add_argument("--gru-hidden-size", type=int, required=True)
     parsers.agent.add_argument("--encoder-hidden-size", type=int, required=True)
     parsers.agent.add_argument("--num-encoding-layers", type=int, required=True)

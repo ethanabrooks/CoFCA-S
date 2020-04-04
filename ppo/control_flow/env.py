@@ -24,6 +24,8 @@ from ppo.control_flow.lines import (
 Obs = namedtuple("Obs", "active lines obs")
 Last = namedtuple("Last", "action active reward terminal selected")
 State = namedtuple("State", "obs prev ptr  term")
+fields = "upper lower delta ag dg ptr".split()
+Action = namedtuple("Action", fields, defaults=(None,) * len(fields))
 
 
 class Env(gym.Env, ABC):
@@ -190,6 +192,7 @@ class Env(gym.Env, ABC):
 
             action = (yield obs, reward, term, info)
             actions.extend([int(a) for a in action])
+            action = Action(*action)
             action, lower_level_action, agent_ptr, = (
                 int(action[0]),
                 int(action[4]),
@@ -367,7 +370,7 @@ class Env(gym.Env, ABC):
     def seed(self, seed=None):
         assert self.seed == seed
 
-    def render(self, mode="human", pause=False):
+    def render(self, mode="human", pause=True):
         self._render()
         if pause:
             input("pause")

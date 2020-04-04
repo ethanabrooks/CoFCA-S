@@ -78,9 +78,11 @@ class Env(ppo.control_flow.env.Env):
         num_subtasks,
         num_excluded_objects,
         temporal_extension,
+        lower_level,
         world_size=6,
         **kwargs,
     ):
+        self.lower_level = lower_level
         self.temporal_extension = temporal_extension
         self.num_excluded_objects = num_excluded_objects
         self.max_while_objects = max_while_objects
@@ -255,9 +257,17 @@ class Env(ppo.control_flow.env.Env):
                 # for i, a in enumerate(self.lower_level_actions):
                 # print(i, a)
                 # lower_level_index = int(input("go:"))
-                lower_level_action = self.lower_level_actions[lower_level_index]
+                if self.lower_level == "hardcoded":
+                    interaction, obj = self.subtasks[subtask_id]
+                    lower_level_action = self.get_lower_level_action(
+                        interaction=interaction,
+                        obj=obj,
+                        agent_pos=agent_pos,
+                        objects=objects,
+                    )
+                else:
+                    lower_level_action = self.lower_level_actions[lower_level_index]
                 self.time_remaining -= 1
-                interaction, obj = self.subtasks[subtask_id]
                 tgt_interaction, tgt_obj = lines[ptr].id
                 tgt_obj = objective(*lines[ptr].id)
 
@@ -402,7 +412,8 @@ class Env(ppo.control_flow.env.Env):
             else:
                 yield line(self.items[line_id])
 
-    def get_lower_level_action(self, interaction, obj, agent_pos, objects):
+    @staticmethod
+    def get_lower_level_action(interaction, obj, agent_pos, objects):
         obj = objective(interaction, obj)
         if objects.get(tuple(agent_pos), None) == obj:
             return interaction
