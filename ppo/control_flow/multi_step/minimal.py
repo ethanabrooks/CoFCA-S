@@ -97,7 +97,7 @@ class Agent(ppo.control_flow.multi_step.abstract_recurrence.Recurrence):
             N, -1
         )  # n_batch, n_lines * hidden_size
         obs = (
-            self.conv(inputs.obs.permute(0, 2, 3, 1))
+            self.ll_conv(inputs.obs.permute(0, 2, 3, 1))
             .view(N, -1, self.conv_hidden_size)
             .max(dim=1)
             .values
