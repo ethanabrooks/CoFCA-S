@@ -208,7 +208,7 @@ class Env(gym.Env, ABC):
                     term = True
             elif state.ptr is not None:
                 step += 1
-                state = state_iterator.send(action)
+                state = state_iterator.send((action, lower_level_action))
 
     @property
     def eval_condition_size(self):

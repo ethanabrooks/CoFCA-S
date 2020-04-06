@@ -248,7 +248,7 @@ class Env(ppo.control_flow.env.Env):
             term = False
             while True:
                 term |= not self.time_remaining
-                subtask_id = yield State(
+                subtask_id, lower_level_index = yield State(
                     obs=self.world_array(objects, agent_pos),
                     prev=prev,
                     ptr=ptr,
@@ -272,12 +272,9 @@ class Env(ppo.control_flow.env.Env):
                 tgt_interaction, tgt_obj = lines[ptr].id
                 tgt_obj = objective(*lines[ptr].id)
 
-                lower_level_action = self.get_lower_level_action(
-                    interaction, obj, tuple(agent_pos), objects
-                )
                 if type(lower_level_action) is str:
                     done = (
-                        tgt_interaction == interaction
+                        lower_level_action == tgt_interaction
                         and objects.get(tuple(agent_pos), None) == tgt_obj
                     )
                     if lower_level_action == self.mine:
