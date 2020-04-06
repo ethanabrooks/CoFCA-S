@@ -76,7 +76,7 @@ class Agent(ppo.agent.Agent, NNBase):
         rm = self.recurrent_module
         hx = rm.parse_hidden(all_hxs)
         t = type(rm)
-        pad = hx.a
+        pad = torch.zeros_like(hx.a)
         if t in (
             ppo.control_flow.oh_et_al.Recurrence,
             ppo.control_flow.no_pointer.Recurrence,
