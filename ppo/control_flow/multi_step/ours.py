@@ -71,7 +71,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         state_sizes = self.state_sizes._asdict()
         del self.conv
         d, h, w = kwargs["observation_space"]["obs"].shape
-        stride = min(stride, kernel_size // 2)
+        stride = max(1, min(stride, kernel_size // 2))
         padding = (kernel_size // 2) % stride
         self.conv = nn.Conv2d(
             in_channels=d + self.encoder_hidden_size if concat else d,
