@@ -359,7 +359,9 @@ class Env(ppo.control_flow.env.Env):
         wall_indexes = positions[:, 0] % 2 * positions[:, 1] % 2
         wall_positions = positions[wall_indexes == 1]
         object_positions = positions[wall_indexes == 0]
-        num_walls = self.random.choice(len(wall_positions))
+        num_walls = (
+            self.random.choice(len(wall_positions)) if len(wall_positions) else 0
+        )
         object_positions = object_positions[: len(object_list)]
         if len(object_list) == len(object_positions):
             wall_positions = wall_positions[:num_walls]
@@ -402,7 +404,8 @@ class Env(ppo.control_flow.env.Env):
             else:
                 yield line(self.items[line_id])
 
-    def get_lower_level_action(self, interaction, obj, agent_pos, objects):
+    @staticmethod
+    def get_lower_level_action(interaction, obj, agent_pos, objects):
         obj = objective(interaction, obj)
         if objects.get(tuple(agent_pos), None) == obj:
             return interaction
