@@ -192,12 +192,7 @@ class Env(gym.Env, ABC):
 
             action = (yield obs, reward, term, info)
             actions.extend([int(a) for a in action])
-            action = Action(*action)
-            action, lower_level_action, agent_ptr, = (
-                int(action.upper),
-                int(action.lower),
-                int(action.ptr),
-            )
+            action, agent_ptr = int(action[0]), int(action[-1])
             info = {}
 
             if action == self.num_subtasks:
@@ -209,7 +204,7 @@ class Env(gym.Env, ABC):
                     term = True
             elif state.ptr is not None:
                 step += 1
-                state = state_iterator.send((action, lower_level_action))
+                state = state_iterator.send(action)
 
     @property
     def eval_condition_size(self):

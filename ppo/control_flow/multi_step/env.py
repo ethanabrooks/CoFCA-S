@@ -248,7 +248,7 @@ class Env(ppo.control_flow.env.Env):
             term = False
             while True:
                 term |= not self.time_remaining
-                subtask_id, lower_level_index = yield State(
+                subtask_id = yield State(
                     obs=self.world_array(objects, agent_pos),
                     prev=prev,
                     ptr=ptr,
