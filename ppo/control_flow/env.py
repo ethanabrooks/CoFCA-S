@@ -192,7 +192,12 @@ class Env(gym.Env, ABC):
 
             action = (yield obs, reward, term, info)
             actions.extend([int(a) for a in action])
-            action, agent_ptr = int(action[0]), int(action[-1])
+            action = Action(*action)
+            action, lower_level_action, agent_ptr, = (
+                int(action.upper),
+                int(action.lower),
+                int(action.ptr),
+            )
             info = {}
 
             if action == self.num_subtasks:

@@ -113,7 +113,10 @@ class Agent(ppo.agent.Agent, NNBase):
         except AttributeError:
             pass
 
-        action = torch.cat(X, dim=-1)
+        action = torch.cat(
+            Action(upper=hx.a, lower=hx.ll, delta=hx.d, ag=hx.ag, dg=hx.dg, ptr=hx.p),
+            dim=-1,
+        )
         nlines = len(rm.obs_spaces.lines.nvec)
         P = hx.P.reshape(-1, N, nlines, 2 * nlines, rm.ne)
         rnn_hxs = torch.cat(hx._replace(P=torch.tensor([], device=hx.P.device)), dim=-1)
