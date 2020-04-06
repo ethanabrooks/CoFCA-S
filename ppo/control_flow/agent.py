@@ -94,13 +94,24 @@ class Agent(ppo.agent.Agent, NNBase):
             X = [hx.a, pad, pad, pad, hx.p]
             probs = [hx.a_probs]
         elif t is ppo.control_flow.multi_step.ours.Recurrence:
-            X = [hx.a, hx.d, hx.ag, hx.dg, hx.ll, hx.p]
-            probs = [hx.a_probs, hx.d_probs, hx.ag_probs, hx.dg_probs]
+            X = Action(
+                upper=hx.a, lower=hx.ll, delta=hx.d, ag=hx.ag, dg=hx.dg, ptr=hx.p
+            )
+            probs = Action(
+                upper=hx.a_probs,
+                lower=None,
+                delta=hx.d_probs,
+                ag=hx.ag_probs,
+                dg=hx.dg_probs,
+                ptr=None,
+            )
         else:
             raise RuntimeError
-        dists = [FixedCategorical(p) for p in probs]
-        action_log_probs = sum(dist.log_probs(x) for dist, x in zip(dists, X))
-        entropy = sum([dist.entropy() for dist in dists]).mean()
+        dists = [(p if p is None else FixedCategorical(p)) for p in probs]
+        action_log_probs = sum(
+            dist.log_probs(x) for dist, x in zip(dists, X) if dist is not None
+        )
+        entropy = sum([dist.entropy() for dist in dists if dist is not None]).mean()
         aux_loss = (
             self.no_op_coef * hx.a_probs[:, -1].mean() - self.entropy_coef * entropy
         )
@@ -113,10 +124,7 @@ class Agent(ppo.agent.Agent, NNBase):
         except AttributeError:
             pass
 
-        action = torch.cat(
-            Action(upper=hx.a, lower=hx.ll, delta=hx.d, ag=hx.ag, dg=hx.dg, ptr=hx.p),
-            dim=-1,
-        )
+        action = torch.cat(X, dim=-1,)
         nlines = len(rm.obs_spaces.lines.nvec)
         P = hx.P.reshape(-1, N, nlines, 2 * nlines, rm.ne)
         rnn_hxs = torch.cat(hx._replace(P=torch.tensor([], device=hx.P.device)), dim=-1)
