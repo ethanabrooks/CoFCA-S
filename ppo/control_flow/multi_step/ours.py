@@ -138,10 +138,12 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         ag_probs[new_episode, 1] = 1
         R = torch.arange(N, device=rnn_hxs.device)
         ones = self.ones.expand_as(R)
-        A = torch.cat([actions[:, :, 0], hx.a.view(1, N)], dim=0).long()
-        D = torch.cat([actions[:, :, 1], hx.d.view(1, N)], dim=0).long()
-        AG = torch.cat([actions[:, :, 2], hx.ag.view(1, N)], dim=0).long()
-        DG = torch.cat([actions[:, :, 3], hx.dg.view(1, N)], dim=0).long()
+        actions = Action(*actions.unbind(dim=2))
+        A = torch.cat([actions.upper, hx.a.view(1, N)], dim=0).long()
+        D = torch.cat([actions.delta, hx.d.view(1, N)], dim=0).long()
+        AG = torch.cat([actions.ag, hx.ag.view(1, N)], dim=0).long()
+        DG = torch.cat([actions.dg, hx.dg.view(1, N)], dim=0).long()
+        LL = torch.cat([actions.lower, hx.ll.view(1, N)], dim=0).long()
 
         for t in range(T):
             self.print("p", p)
