@@ -24,8 +24,7 @@ from ppo.control_flow.lines import (
 Obs = namedtuple("Obs", "active lines obs")
 Last = namedtuple("Last", "action active reward terminal selected")
 State = namedtuple("State", "obs prev ptr  term")
-fields = "upper lower delta ag dg ptr".split()
-Action = namedtuple("Action", fields, defaults=(None,) * len(fields))
+Action = namedtuple("Action", "upper lower delta ag dg ptr")
 
 
 class Env(gym.Env, ABC):

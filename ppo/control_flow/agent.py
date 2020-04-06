@@ -99,13 +99,22 @@ class Agent(ppo.agent.Agent, NNBase):
             )
             ll_type = rm.lower_level_type
             if ll_type == "train-alone":
-                probs = Action(lower=hx.ll_probs)
+                probs = Action(
+                    upper=None,
+                    lower=hx.ll_probs,
+                    delta=None,
+                    ag=None,
+                    dg=None,
+                    ptr=None,
+                )
             elif ll_type == "train-with-upper":
                 probs = Action(
                     upper=hx.a_probs,
+                    lower=hx.ll_probs,
                     delta=hx.d_probs,
                     ag=hx.ag_probs,
-                    lower=hx.dg_probs,
+                    dg=hx.dg_probs,
+                    ptr=None,
                 )
             elif ll_type in ["pre-trained", "hardcoded"]:
                 probs = Action(
