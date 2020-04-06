@@ -6,6 +6,7 @@ from torch.nn import functional as F
 
 import ppo.agent
 from ppo.agent import AgentValues, NNBase
+from ppo.control_flow.env import Action
 
 from ppo.control_flow.recurrence import RecurrentState
 import ppo.control_flow.recurrence

@@ -245,6 +245,19 @@ class Env(ppo.control_flow.env.Env):
                     ptr=ptr,
                     term=term,
                 )
+                # for i, a in enumerate(self.lower_level_actions):
+                # print(i, a)
+                # lower_level_index = int(input("go:"))
+                if self.lower_level == "hardcoded":
+                    interaction, obj = self.subtasks[subtask_id]
+                    lower_level_action = self.get_lower_level_action(
+                        interaction=interaction,
+                        obj=obj,
+                        agent_pos=agent_pos,
+                        objects=objects,
+                    )
+                else:
+                    lower_level_action = self.lower_level_actions[lower_level_index]
                 self.time_remaining -= 1
                 interaction, obj = self.subtasks[subtask_id]
                 tgt_interaction, tgt_obj = lines[ptr].id
