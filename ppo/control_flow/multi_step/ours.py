@@ -9,13 +9,14 @@ import torch.nn.functional as F
 
 import ppo.control_flow.multi_step.abstract_recurrence as abstract_recurrence
 import ppo.control_flow.recurrence as recurrence
+from ppo.control_flow.env import Action
 from ppo.control_flow.lstm import LSTMCell
 from ppo.distributions import FixedCategorical, Categorical
 from ppo.utils import init_
 
 RecurrentState = namedtuple(
     "RecurrentState",
-    "a d u ag dg p v h hy cy a_probs d_probs ag_probs dg_probs gru_gate P",
+    "a d u ag dg ll p v h hy cy ll_probs a_probs d_probs ag_probs dg_probs gru_gate P",
 )
 
 
@@ -68,6 +69,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         self.d_gate = Categorical(hidden_size, 2)
         self.a_gate = Categorical(hidden_size, 2)
         state_sizes = self.state_sizes._asdict()
+        n_ll = kwargs["action_space"].nvec[4]
         self.state_sizes = RecurrentState(
             **state_sizes,
             hy=self.gru_hidden_size,
@@ -77,7 +79,9 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             ag=1,
             dg=1,
             gru_gate=self.gru_hidden_size,
-            P=self.ne * 2 * self.train_lines ** 2
+            P=self.ne * 2 * self.train_lines ** 2,
+            ll=1,
+            ll_probs=n_ll
         )
 
     @property
@@ -194,4 +198,6 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 dg=dg,
                 gru_gate=gru_gate,
                 P=P.transpose(0, 1),
+                ll=hx.ll,
+                ll_probs=hx.ll_probs,
             )
