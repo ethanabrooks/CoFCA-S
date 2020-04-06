@@ -134,19 +134,23 @@ class Agent(ppo.agent.Agent, NNBase):
             dist.log_probs(x) for dist, x in zip(dists, X) if dist is not None
         )
         entropy = sum([dist.entropy() for dist in dists if dist is not None]).mean()
-        aux_loss = (
-            self.no_op_coef * hx.a_probs[:, -1].mean() - self.entropy_coef * entropy
-        )
-        try:
+        aux_loss = -self.entropy_coef * entropy
+        if probs.upper is not None:
+            aux_loss += self.no_op_coef * hx.a_probs[:, -1].mean()
+        if probs.ag is not None and probs.dg is not None:
             aux_loss += rm.gate_coef * (hx.ag_probs + hx.dg_probs)[:, 1].mean()
-        except AttributeError:
-            pass
         try:
             aux_loss += (rm.gru_gate_coef * hx.gru_gate).mean()
         except AttributeError:
             pass
 
-        action = torch.cat(X, dim=-1,)
+        action = torch.cat(X, dim=-1)
+        test_actions = Action(*action[0, :])
+        for field in Action._fields:
+            x = getattr(X, field)
+            test_action = getattr(test_actions, field)
+            assert test_action.item() == x[0].item()
+
         nlines = len(rm.obs_spaces.lines.nvec)
         P = hx.P.reshape(-1, N, nlines, 2 * nlines, rm.ne)
         rnn_hxs = torch.cat(hx._replace(P=torch.tensor([], device=hx.P.device)), dim=-1)
