@@ -112,6 +112,7 @@ class Agent(ppo.agent.Agent, NNBase):
             aux_loss += (rm.gru_gate_coef * hx.gru_gate).mean()
         except AttributeError:
             pass
+
         action = torch.cat(X, dim=-1)
         nlines = len(rm.obs_spaces.lines.nvec)
         P = hx.P.reshape(-1, N, nlines, 2 * nlines, rm.ne)

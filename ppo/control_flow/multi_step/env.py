@@ -284,7 +284,9 @@ class Env(ppo.control_flow.env.Env):
                 elif type(lower_level_action) is np.ndarray:
                     if self.temporal_extension:
                         lower_level_action = np.clip(lower_level_action, -1, 1)
-                    agent_pos += lower_level_action
+                    new_pos = agent_pos + lower_level_action
+                    if np.all(0 <= new_pos) and np.all(new_pos < self.world_size):
+                        agent_pos = new_pos
                 else:
                     assert lower_level_action is None
 
