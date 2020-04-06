@@ -43,7 +43,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         self.concat = concat
         self.gru_gate_coef = gru_gate_coef
         self.gate_coef = gate_coef
-        self.conv_hidden_size = conv_hidden_size
+        self.conv_hidden_size = encoder_hidden_size
         recurrence.Recurrence.__init__(
             self,
             hidden_size=hidden_size,
@@ -220,6 +220,6 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 dg=dg,
                 gru_gate=gru_gate,
                 P=P.transpose(0, 1),
-                ll=hx.ll,
-                ll_probs=hx.ll_probs,
+                ll=LL[t],
+                ll_probs=ll_dist.probs,
             )
