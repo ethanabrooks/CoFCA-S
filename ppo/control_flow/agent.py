@@ -97,14 +97,27 @@ class Agent(ppo.agent.Agent, NNBase):
             X = Action(
                 upper=hx.a, lower=hx.ll, delta=hx.d, ag=hx.ag, dg=hx.dg, ptr=hx.p
             )
-            probs = Action(
-                upper=hx.a_probs,
-                lower=None,
-                delta=hx.d_probs,
-                ag=hx.ag_probs,
-                dg=hx.dg_probs,
-                ptr=None,
-            )
+            ll_type = rm.lower_level_type
+            if ll_type == "train-alone":
+                probs = Action(lower=hx.ll_probs)
+            elif ll_type == "train-with-upper":
+                probs = Action(
+                    upper=hx.a_probs,
+                    delta=hx.d_probs,
+                    ag=hx.ag_probs,
+                    lower=hx.dg_probs,
+                )
+            elif ll_type in ["pre-trained", "hardcoded"]:
+                probs = Action(
+                    upper=hx.a_probs,
+                    lower=None,
+                    delta=hx.d_probs,
+                    ag=hx.ag_probs,
+                    dg=hx.dg_probs,
+                    ptr=None,
+                )
+            else:
+                raise RuntimeError
         else:
             raise RuntimeError
         dists = [(p if p is None else FixedCategorical(p)) for p in probs]
