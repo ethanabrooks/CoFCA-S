@@ -26,12 +26,29 @@ def gate(g, new, old):
 
 class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
     def __init__(
-        self, hidden_size, conv_hidden_size, gate_coef, gru_gate_coef, **kwargs
+        self,
+        hidden_size,
+        conv_hidden_size,
+        gate_coef,
+        gru_gate_coef,
+        concat,
+        encoder_hidden_size,
+        kernel_size,
+        stride,
+        lower_level,
+        **kwargs
     ):
+        self.lower_level_type = lower_level
+        self.concat = concat
         self.gru_gate_coef = gru_gate_coef
         self.gate_coef = gate_coef
         self.conv_hidden_size = conv_hidden_size
-        recurrence.Recurrence.__init__(self, hidden_size=hidden_size, **kwargs)
+        recurrence.Recurrence.__init__(
+            self,
+            hidden_size=hidden_size,
+            encoder_hidden_size=encoder_hidden_size,
+            **kwargs
+        )
         abstract_recurrence.Recurrence.__init__(
             self, conv_hidden_size=self.encoder_hidden_size
         )

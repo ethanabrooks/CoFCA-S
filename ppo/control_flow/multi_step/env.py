@@ -78,9 +78,11 @@ class Env(ppo.control_flow.env.Env):
         num_subtasks,
         num_excluded_objects,
         temporal_extension,
+        lower_level,
         world_size=6,
         **kwargs,
     ):
+        self.lower_level = lower_level
         self.temporal_extension = temporal_extension
         self.num_excluded_objects = num_excluded_objects
         self.max_while_objects = max_while_objects
@@ -98,6 +100,13 @@ class Env(ppo.control_flow.env.Env):
         self.world_size = world_size
         self.world_shape = (len(self.world_contents), self.world_size, self.world_size)
 
+        def lower_level_actions():
+            yield from self.behaviors
+            for i in range(-1, 2):
+                for j in range(-1, 2):
+                    yield np.array([i, j])
+
+        self.lower_level_actions = list(lower_level_actions())
         self.action_space = spaces.MultiDiscrete(
             np.array([num_subtasks + 1, 2 * self.n_lines, 2, 2, self.n_lines])
         )

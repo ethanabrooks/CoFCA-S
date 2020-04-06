@@ -24,6 +24,8 @@ from ppo.control_flow.lines import (
 Obs = namedtuple("Obs", "active lines obs")
 Last = namedtuple("Last", "action active reward terminal selected")
 State = namedtuple("State", "obs prev ptr  term")
+fields = "upper lower delta ag dg ptr".split()
+Action = namedtuple("Action", fields, defaults=(None,) * len(fields))
 
 
 class Env(gym.Env, ABC):
@@ -127,6 +129,7 @@ class Env(gym.Env, ABC):
         info = {}
         term = False
         action = None
+        lower_level_action = None
         while True:
             if state.ptr is not None:
                 program_counter.append(state.ptr)
@@ -174,6 +177,11 @@ class Env(gym.Env, ABC):
                 if agent_ptr < len(self.subtasks):
                     print("Selected:", self.subtasks[agent_ptr], agent_ptr)
                 print("Action:", action)
+                if lower_level_action is not None:
+                    print(
+                        "Lower Level Action:",
+                        self.lower_level_actions[lower_level_action],
+                    )
                 print("Reward", reward)
                 print("Obs:")
                 print(RESET)
@@ -357,7 +365,7 @@ class Env(gym.Env, ABC):
     def seed(self, seed=None):
         assert self.seed == seed
 
-    def render(self, mode="human", pause=False):
+    def render(self, mode="human", pause=True):
         self._render()
         if pause:
             input("pause")
