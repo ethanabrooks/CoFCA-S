@@ -66,8 +66,8 @@ class Env(ppo.control_flow.env.Env):
     mine = "mine"
     sell = "sell"
     goto = "goto"
-    items = [wood, gold, iron, merchant]
-    terrain = [water, wall, bridge, agent]
+    items = [wood, gold, iron]
+    terrain = [merchant, water, wall, bridge, agent]
     world_contents = items + terrain
     behaviors = [mine, sell, goto]
     colors = [RESET, GREEN, YELLOW, LIGHTGREY, PINK, BLUE, DARKGREY, RESET, RESET]
@@ -268,7 +268,6 @@ class Env(ppo.control_flow.env.Env):
                 else:
                     lower_level_action = self.lower_level_actions[lower_level_index]
                 self.time_remaining -= 1
-                interaction, obj = self.subtasks[subtask_id]
                 tgt_interaction, tgt_obj = lines[ptr].id
                 tgt_obj = objective(*lines[ptr].id)
 
@@ -280,7 +279,7 @@ class Env(ppo.control_flow.env.Env):
                     if lower_level_action == self.mine:
                         if tuple(agent_pos) in objects:
                             if done:
-                                possible_objects.remove(obj)
+                                possible_objects.remove(objects[tuple(agent_pos)])
                             else:
                                 term = True
                             del objects[tuple(agent_pos)]
@@ -303,7 +302,10 @@ class Env(ppo.control_flow.env.Env):
             for line in lines:
                 if type(line) is Subtask:
                     _i, _o = line.id
-                    yield _o
+                    if _i == self.sell:
+                        yield self.merchant
+                    else:
+                        yield _o
 
         def loop_objects():
             active_loops = []
