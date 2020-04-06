@@ -69,7 +69,20 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         self.d_gate = Categorical(hidden_size, 2)
         self.a_gate = Categorical(hidden_size, 2)
         state_sizes = self.state_sizes._asdict()
+        del self.conv
+        d, h, w = kwargs["observation_space"]["obs"].shape
+        stride = min(stride, kernel_size // 2)
+        padding = (kernel_size // 2) % stride
+        self.conv = nn.Conv2d(
+            in_channels=d + self.encoder_hidden_size if concat else d,
+            out_channels=self.conv_hidden_size,
+            kernel_size=kernel_size,
+            stride=stride,
+            padding=padding,
+        )
         n_ll = kwargs["action_space"].nvec[4]
+        conv_out_size = (h + (2 * padding) - (kernel_size - 1) - 1) // stride + 1
+        self.lower_level = Categorical(self.conv_hidden_size * conv_out_size ** 2, n_ll)
         self.state_sizes = RecurrentState(
             **state_sizes,
             hy=self.gru_hidden_size,
@@ -147,7 +160,16 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
 
         for t in range(T):
             self.print("p", p)
-            obs = self.preprocess_obs(inputs.obs[t])
+            conv_in = inputs.obs[t]
+            line = M[R, p].reshape(N, self.encoder_hidden_size, 1, 1)
+            if self.concat:
+                expanded = line.expand(-1, -1, conv_in.size(2), conv_in.size(3))
+                conv_out = self.conv(torch.cat([conv_in, expanded], dim=1))
+            else:
+                conv_out = self.conv(conv_in) * line
+            ll_dist = self.lower_level(conv_out.reshape(N, -1))
+            self.sample_new(LL[t], ll_dist)
+            obs = conv_out.view(N, self.conv_hidden_size, -1).max(dim=-1).values
             # h = self.gru(obs, h)
             zeta_inputs = [h, M[R, p], obs, self.embed_action(A[t - 1].clone())]
             z = F.relu(self.zeta(torch.cat(zeta_inputs, dim=-1)))
@@ -157,9 +179,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             self.sample_new(DG[t], d_gate)
             a_gate = self.a_gate(z)
             self.sample_new(AG[t], a_gate)
-
             (hy_, cy_), gru_gate = self.gru2(M[R, p], (hy, cy))
-            obs = obs * M[R, p]
             decode_inputs = [hy_, obs, u]  # first put obs back in gru2
             z = F.relu(self.zeta2(torch.cat(decode_inputs, dim=-1)))
             u = self.upsilon(z).softmax(dim=-1)
