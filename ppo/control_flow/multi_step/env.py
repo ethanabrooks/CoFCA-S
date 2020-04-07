@@ -143,6 +143,7 @@ class Env(ppo.control_flow.env.Env):
         )
 
     def print_obs(self, obs):
+        obs, inventory = obs
         obs = obs.transpose(1, 2, 0).astype(int)
         grid_size = 3  # obs.astype(int).sum(-1).max()  # max objects per grid
         chars = [" "] + [o for (o, *_) in self.world_contents]
@@ -161,6 +162,8 @@ class Env(ppo.control_flow.env.Env):
                 # string += "".join(self.colors[x] + chars[x] + RESET for x in crop) + "|"
             print(*[c for p in zip(colors, string) for c in p], sep="")
             print("-" * len(string))
+        for i, c in zip(self.items, inventory):
+            print(i, c)
 
     def line_str(self, line):
         line = super().line_str(line)
@@ -213,6 +216,7 @@ class Env(ppo.control_flow.env.Env):
             assert self.max_nesting_depth == 1
             objects = self.populate_world(lines)
             agent_pos = next(p for p, o in objects.items() if o == self.agent)
+            del objects[tuple(agent_pos)]
 
             line_iterator = self.line_generator(lines)
             condition_evaluations = []
@@ -406,7 +410,7 @@ class Env(ppo.control_flow.env.Env):
             **{
                 tuple(p): (self.wall if o is None else o)
                 for o, p in itertools.zip_longest(object_list, positions)
-            },
+            }
         }
         assert objects[tuple(positions[0])] == self.agent
         nearest_wood = get_nearest(positions[0], self.wood, objects)
