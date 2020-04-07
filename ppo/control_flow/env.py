@@ -388,7 +388,7 @@ def build_parser(p):
     p.add_argument("--flip-prob", type=float, default=0.5)
     p.add_argument("--eval-condition-size", action="store_true")
     p.add_argument("--single-control-flow-type", action="store_true")
-    p.add_argument("--max-nesting-depth", type=int)
+    p.add_argument("--max-nesting-depth", type=int, default=1)
     p.add_argument("--subtasks-only", action="store_true")
     p.add_argument("--break-on-fail", action="store_true")
     p.add_argument("--time-to-waste", type=int, required=True)
@@ -399,15 +399,14 @@ def build_parser(p):
             Subtask=Subtask, If=If, Else=Else, While=While, Loop=Loop
         ).get(s),
     )
-    return p
 
 
 def main(env):
     def action_fn(string):
-        try:
-            return int(string), 0
-        except ValueError:
-            return
+        ll = dict(w=6, s=12, a=8, d=10, m=0, t=1, o=2, g=3, i=4).get(string, None)
+        if ll is None:
+            return None
+        return Action(upper=0, lower=ll, delta=0, dg=0, ag=0, ptr=0)
 
     keyboard_control.run(env, action_fn=action_fn)
 

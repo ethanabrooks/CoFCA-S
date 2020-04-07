@@ -1,6 +1,6 @@
 import functools
 import itertools
-from collections import defaultdict
+from collections import defaultdict, Counter
 from typing import Iterator, List, Tuple
 
 import numpy as np
@@ -101,7 +101,10 @@ class Env(ppo.control_flow.env.Env):
         self.world_shape = (len(self.world_contents), self.world_size, self.world_size)
 
         def lower_level_actions():
-            yield from self.behaviors
+            yield self.mine
+            yield self.goto
+            for item in self.items:
+                yield item
             for i in range(-1, 2):
                 for j in range(-1, 2):
                     yield np.array([i, j])
@@ -207,12 +210,14 @@ class Env(ppo.control_flow.env.Env):
             assert self.max_nesting_depth == 1
             objects = self.populate_world(lines)
             agent_pos = next(p for p, o in objects.items() if o == self.agent)
-            del objects[agent_pos]
+            objects[agent_pos] = self.wood
+            # TODO: is there a way to randomly place wood on our side of the river?
 
             line_iterator = self.line_generator(lines)
             condition_evaluations = []
             self.time_remaining = 200 if self.evaluating else self.time_to_waste
             self.loops = None
+            inventory = Counter()  # TODO: need to include this in the obs
 
             def next_subtask(l):
                 while True:
@@ -272,17 +277,33 @@ class Env(ppo.control_flow.env.Env):
                 tgt_obj = objective(*lines[ptr].id)
 
                 if type(lower_level_action) is str:
-                    done = (
-                        lower_level_action == tgt_interaction
-                        and objects.get(tuple(agent_pos), None) == tgt_obj
-                    )
                     if lower_level_action == self.mine:
+                        done = (
+                            lower_level_action == tgt_interaction
+                            and objects.get(tuple(agent_pos), None) == tgt_obj
+                        )
                         if tuple(agent_pos) in objects:
+                            standing_on = objects[tuple(agent_pos)]
+                            inventory[standing_on] += 1
                             if done:
-                                possible_objects.remove(objects[tuple(agent_pos)])
-                            else:
-                                term = True
+                                possible_objects.remove(standing_on)
                             del objects[tuple(agent_pos)]
+                    elif lower_level_action == self.goto:
+                        done = (
+                            lower_level_action == tgt_interaction
+                            and objects.get(tuple(agent_pos), None) == tgt_obj
+                        )
+                    elif lower_level_action in self.items:
+                        standing_on = objects.get(tuple(agent_pos), None)
+                        commodity = lower_level_action
+                        if (
+                            standing_on == self.merchant
+                        ):  # and inventory[commodity] > 0:
+                            # inventory[commodity] -= 1
+                            done = True
+                        else:
+                            done = False
+
                     if done:
                         prev, ptr = ptr, next_subtask(ptr)
 
@@ -290,7 +311,15 @@ class Env(ppo.control_flow.env.Env):
                     if self.temporal_extension:
                         lower_level_action = np.clip(lower_level_action, -1, 1)
                     new_pos = agent_pos + lower_level_action
-                    if np.all(0 <= new_pos) and np.all(new_pos < self.world_size):
+                    moving_into = objects.get(tuple(new_pos), None)
+                    if (
+                        np.all(0 <= new_pos)
+                        and np.all(new_pos < self.world_size)
+                        and moving_into != self.wall
+                        # and (moving_into != self.water or inventory[self.wood] > 0)
+                    ):
+                        if moving_into == self.water:
+                            inventory[self.wood] = 0
                         agent_pos = new_pos
                 else:
                     assert lower_level_action is None
@@ -304,6 +333,7 @@ class Env(ppo.control_flow.env.Env):
                     _i, _o = line.id
                     if _i == self.sell:
                         yield self.merchant
+                        yield _o
                     else:
                         yield _o
 
@@ -424,11 +454,22 @@ class Env(ppo.control_flow.env.Env):
                 return n - agent_pos
 
 
+def build_parser(p):
+    ppo.control_flow.env.build_parser(p)
+    p.add_argument(
+        "--no-temporal-extension", dest="temporal_extension", action="store_false"
+    )
+    p.add_argument("--max-while-objects", type=float, default=2)
+    p.add_argument("--num-excluded-objects", type=int, default=2)
+    p.add_argument("--world-size", type=int, required=True)
+
+
 if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser = build_parser(parser)
-    parser.add_argument("--world-size", default=4, type=int)
+    build_parser(parser)
     parser.add_argument("--seed", default=0, type=int)
-    ppo.control_flow.env.main(Env(rank=0, **hierarchical_parse_args(parser)))
+    ppo.control_flow.env.main(
+        Env(rank=0, lower_level="train-alone", **hierarchical_parse_args(parser))
+    )
