@@ -187,7 +187,7 @@ class Env(gym.Env, ABC):
                 self.print_obs(state.obs)
 
             self._render = render
-            obs = self.get_observation(state.obs, state.ptr, lines)
+            obs = self.get_observation(obs=state.obs, active=state.ptr, lines=lines)
 
             action = (yield obs, reward, term, info)
             actions.extend([int(a) for a in action])
