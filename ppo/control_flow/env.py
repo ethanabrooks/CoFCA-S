@@ -63,6 +63,7 @@ class Env(gym.Env, ABC):
         self.num_subtasks = num_subtasks
         self.time_to_waste = time_to_waste
         self.time_remaining = None
+        self.i = 0
 
         self.loops = None
         self.eval_lines = eval_lines
@@ -72,7 +73,6 @@ class Env(gym.Env, ABC):
             self.n_lines = eval_lines
         else:
             self.n_lines = max_lines
-        self.n_lines += 1
         self.random, self.seed = seeding.np_random(seed)
         self.flip_prob = flip_prob
         self.evaluating = evaluating
@@ -96,7 +96,7 @@ class Env(gym.Env, ABC):
             dict(
                 obs=spaces.Discrete(2),
                 lines=spaces.MultiDiscrete(
-                    np.array([len(self.possible_lines)] * self.n_lines)
+                    np.array([len(self.possible_lines)] * (self.n_lines + 1))
                 ),
                 active=spaces.Discrete(self.n_lines + 1),
             )
@@ -350,7 +350,7 @@ class Env(gym.Env, ABC):
         return self.possible_lines.index(line)
 
     def get_observation(self, obs, active, lines):
-        padded = lines + [Padding(0)] * (self.n_lines - len(lines))
+        padded = lines + [Padding(0)] * (self.n_lines + 1 - len(lines))
         lines = [self.preprocess_line(p) for p in padded]
         obs = Obs(
             obs=obs, lines=lines, active=self.n_lines if active is None else active

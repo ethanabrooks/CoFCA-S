@@ -88,7 +88,6 @@ class Env(ppo.control_flow.env.Env):
         self.num_excluded_objects = num_excluded_objects
         self.max_while_objects = max_while_objects
         self.loops = None
-        self.i = 0
 
         def subtasks():
             for obj in self.items:
@@ -135,7 +134,7 @@ class Env(ppo.control_flow.env.Env):
                             1 + self.max_loops,
                         ]
                     ]
-                    * self.n_lines
+                    * (self.n_lines + 1)
                 )
             ),
             inventory=spaces.MultiDiscrete(
@@ -214,14 +213,12 @@ class Env(ppo.control_flow.env.Env):
             assert self.max_nesting_depth == 1
             objects = self.populate_world(lines)
             agent_pos = next(p for p, o in objects.items() if o == self.agent)
-            objects[agent_pos] = self.wood
-            # TODO: is there a way to randomly place wood on our side of the river?
 
             line_iterator = self.line_generator(lines)
             condition_evaluations = []
             self.time_remaining = 200 if self.evaluating else self.time_to_waste
             self.loops = None
-            inventory = Counter()  # TODO: need to include this in the obs
+            inventory = Counter()
 
             def next_subtask(l):
                 while True:
@@ -300,10 +297,8 @@ class Env(ppo.control_flow.env.Env):
                     elif lower_level_action in self.items:
                         standing_on = objects.get(tuple(agent_pos), None)
                         commodity = lower_level_action
-                        if (
-                            standing_on == self.merchant
-                        ):  # and inventory[commodity] > 0:
-                            # inventory[commodity] -= 1
+                        if (standing_on == self.merchant) and inventory[commodity] > 0:
+                            inventory[commodity] -= 1
                             done = True
                         else:
                             done = False
@@ -320,7 +315,7 @@ class Env(ppo.control_flow.env.Env):
                         np.all(0 <= new_pos)
                         and np.all(new_pos < self.world_size)
                         and moving_into != self.wall
-                        # and (moving_into != self.water or inventory[self.wood] > 0)
+                        and (moving_into != self.water or inventory[self.wood] > 0)
                     ):
                         if moving_into == self.water:
                             inventory[self.wood] = 0
@@ -377,13 +372,6 @@ class Env(ppo.control_flow.env.Env):
                     for _ in range(num_obj):
                         yield obj
 
-        vertical_water = self.random.choice(2)
-        world_shape = (
-            [self.world_size, self.world_size - 1]
-            if vertical_water
-            else [self.world_size - 1, self.world_size]
-        )
-
         object_list = (
             [self.agent]
             + list(subtask_ids())
@@ -397,6 +385,12 @@ class Env(ppo.control_flow.env.Env):
             size=num_random_objects,
             replace=False,
         )
+        vertical_water = self.random.choice(2)
+        world_shape = (
+            [self.world_size, self.world_size - 1]
+            if vertical_water
+            else [self.world_size - 1, self.world_size]
+        )
         positions = np.array(list(zip(*np.unravel_index(indexes, world_shape))))
         wall_indexes = positions[:, 0] % 2 * positions[:, 1] % 2
         wall_positions = positions[wall_indexes == 1]
@@ -408,21 +402,41 @@ class Env(ppo.control_flow.env.Env):
         if len(object_list) == len(object_positions):
             wall_positions = wall_positions[:num_walls]
         positions = np.concatenate([object_positions, wall_positions])
-        water_index = self.random.choice(self.world_size)
-        positions[positions[:, vertical_water] >= water_index] += np.array(
-            [0, 1] if vertical_water else [1, 0]
-        )
-        assert water_index not in positions[:, vertical_water]
-        return {
+        objects = {
             **{
                 tuple(p): (self.wall if o is None else o)
                 for o, p in itertools.zip_longest(object_list, positions)
             },
-            **{
-                (i, water_index) if vertical_water else (water_index, i): self.water
-                for i in range(self.world_size)
-            },
         }
+        assert objects[tuple(positions[0])] == self.agent
+        nearest_wood = get_nearest(positions[0], self.wood, objects)
+        if nearest_wood:
+            agent_i, agent_j = positions[0]
+            (wood_i, wood_j), _ = nearest_wood
+            candidate_water_indices = [
+                i
+                for i in range(self.world_size)
+                if not (
+                    (agent_j <= i <= wood_j or wood_j <= i <= agent_j)
+                    if vertical_water
+                    else (agent_i <= i <= wood_i or wood_i <= i <= agent_i)
+                )
+            ]
+            if candidate_water_indices:
+                water_index = self.random.choice(candidate_water_indices)
+                positions[positions[:, vertical_water] >= water_index] += np.array(
+                    [0, 1] if vertical_water else [1, 0]
+                )
+                assert water_index not in positions[:, vertical_water]
+                objects.update(
+                    {
+                        (i, water_index)
+                        if vertical_water
+                        else (water_index, i): self.water
+                        for i in range(self.world_size)
+                    }
+                )
+        return objects
 
     def assign_line_ids(self, lines):
         excluded = self.random.randint(len(self.items), size=self.num_excluded_objects)
