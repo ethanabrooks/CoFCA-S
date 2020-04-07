@@ -218,7 +218,9 @@ class Env(ppo.control_flow.env.Env):
             agent_pos = next(p for p, o in objects.items() if o == self.agent)
             del objects[tuple(agent_pos)]
 
-            line_iterator = self.line_generator(lines)
+            line_iterator = self.line_generator(
+                lines[:1] if self.lower_level == "train-alone" else lines
+            )
             condition_evaluations = []
             self.time_remaining = 200 if self.evaluating else self.time_to_waste
             self.loops = None
