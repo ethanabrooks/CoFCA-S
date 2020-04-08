@@ -103,8 +103,7 @@ class Env(ppo.control_flow.env.Env):
         def lower_level_actions():
             yield self.mine
             yield self.goto
-            for item in self.items:
-                yield item
+            yield self.sell
             for i in range(-1, 2):
                 for j in range(-1, 2):
                     yield np.array([i, j])
@@ -306,7 +305,7 @@ class Env(ppo.control_flow.env.Env):
                             lower_level_action == tgt_interaction
                             and objects.get(tuple(agent_pos), None) == tgt_obj
                         )
-                    elif lower_level_action in self.items:
+                    elif lower_level_action == self.sell:
                         standing_on = objects.get(tuple(agent_pos), None)
                         commodity = lower_level_action
                         if (standing_on == self.merchant) and inventory[commodity] > 0:
