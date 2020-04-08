@@ -69,8 +69,10 @@ class Agent(nn.Module):
         """Size of rnn_hx."""
         return self.recurrent_module.recurrent_hidden_state_size
 
-    def forward(self, inputs, rnn_hxs, masks, deterministic=False, action=None):
-        value, actor_features, rnn_hxs = self.recurrent_module(inputs, rnn_hxs, masks)
+    def forward(self, inputs, rnn_hxs, masks, deterministic=False, action=None, p=None):
+        value, actor_features, rnn_hxs = self.recurrent_module(
+            inputs, rnn_hxs, masks, p=p
+        )
 
         dist = self.dist(actor_features)
 
@@ -359,12 +361,14 @@ class LowerLevel(NNBase):
     def output_size(self):
         return self._output_size
 
-    def forward(self, inputs, rnn_hxs, masks):
+    def forward(self, inputs, rnn_hxs, masks, p=None):
         N = inputs.size(0)
-        R = torch.arange(N, device=rnn_hxs.device)
+        R = torch.arange(N, device=inputs.device)
         inputs = Obs(*self.parse_inputs(inputs))
+        if p is None:
+            p = inputs.active
         lines = inputs.lines.reshape(N, *self.obs_spaces.lines.shape)[
-            R, inputs.active.long().flatten()
+            R, p.long().flatten()
         ]
         obs = inputs.obs.reshape(N, *self.obs_spaces.obs.shape)
         lines_embed = self.line_embed(lines.long() + self.offset)
