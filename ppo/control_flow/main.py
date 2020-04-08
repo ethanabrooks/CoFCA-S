@@ -18,7 +18,9 @@ from ppo.train import Train
 NAMES = ["instruction", "actions", "program_counter", "evaluations"]
 
 
-def main(log_dir, seed, eval_lines, one_line, lower_level, **kwargs):
+def main(
+    log_dir, seed, eval_lines, one_line, lower_level, lower_level_load_path, **kwargs
+):
     class _Train(Train):
         def build_agent(self, envs, baseline=None, debug=False, **agent_args):
             obs_space = envs.observation_space
@@ -52,6 +54,7 @@ def main(log_dir, seed, eval_lines, one_line, lower_level, **kwargs):
                 debug=debug,
                 baseline=baseline,
                 lower_level=lower_level,
+                lower_level_load_path=lower_level_load_path,
                 **agent_args,
             )
 
@@ -125,9 +128,9 @@ def control_flow_args():
     parser.add_argument("--no-eval", action="store_true")
     parser.add_argument("--one-line", action="store_true")
     parser.add_argument(
-        "--lower-level",
-        choices=["train-alone", "train-with-upper", "pre-trained", "hardcoded"],
+        "--lower-level", choices=["train-alone", "train-with-upper", "hardcoded"],
     )
+    parser.add_argument("--lower-level-load-path")
     parsers.env.add_argument("--gridworld", action="store_true")
     ppo.control_flow.multi_step.env.build_parser(parsers.env)
     parsers.agent.add_argument("--debug", action="store_true")
