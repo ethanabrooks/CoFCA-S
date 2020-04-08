@@ -139,6 +139,8 @@ class Env(gym.Env, ABC):
             reward = int(success)
 
             term = term or success or state.term
+            r = state.subtask_complete if self.lower_level == "train-alone" else reward
+            cumulative_reward += r
             if term:
                 if not success and self.break_on_fail:
                     import ipdb
@@ -156,7 +158,8 @@ class Env(gym.Env, ABC):
                 else:
                     info.update(success_line=state.prev, failure_line=state.ptr)
                 if self.lower_level == "train-alone":
-                    info.update(success=cumulative_reward / len(lines))
+                    if not (success and cumulative_reward < len(lines)):
+                        info.update(success=cumulative_reward / len(lines))
 
             info.update(regret=1 if term and not success else 0)
 
@@ -186,7 +189,8 @@ class Env(gym.Env, ABC):
                         "Lower Level Action:",
                         self.lower_level_actions[lower_level_action],
                     )
-                print("Reward", reward)
+                print("Reward", r)
+                print("Cumulative", cumulative_reward)
                 print("Obs:")
                 print(RESET)
                 self.print_obs(state.obs)
@@ -194,8 +198,6 @@ class Env(gym.Env, ABC):
             self._render = render
             obs = self.get_observation(obs=state.obs, active=state.ptr, lines=lines)
 
-            r = state.subtask_complete if self.lower_level == "train-alone" else reward
-            cumulative_reward += r
             action = (yield obs, r, term, info)
             if action.size == 1:
                 action = Action(upper=0, lower=action, delta=0, ag=0, dg=0, ptr=0)
