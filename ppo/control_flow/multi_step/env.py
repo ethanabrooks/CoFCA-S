@@ -309,7 +309,9 @@ class Env(ppo.control_flow.env.Env):
                     elif lower_level_action in self.items:
                         standing_on = objects.get(tuple(agent_pos), None)
                         commodity = lower_level_action
-                        if (standing_on == self.merchant) and inventory[commodity] > 0:
+                        if (
+                            standing_on == self.merchant
+                        ):  # and inventory[commodity] > 0:
                             inventory[commodity] -= 1
                             done = True
                         else:
@@ -327,7 +329,7 @@ class Env(ppo.control_flow.env.Env):
                         np.all(0 <= new_pos)
                         and np.all(new_pos < self.world_size)
                         and moving_into != self.wall
-                        and (moving_into != self.water or inventory[self.wood] > 0)
+                        # and (moving_into != self.water or inventory[self.wood] > 0)
                     ):
                         if moving_into == self.water:
                             inventory[self.wood] = 0
