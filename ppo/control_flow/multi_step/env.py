@@ -327,7 +327,7 @@ class Env(ppo.control_flow.env.Env):
                         np.all(0 <= new_pos)
                         and np.all(new_pos < self.world_size)
                         and moving_into != self.wall
-                        # and (moving_into != self.water or inventory[self.wood] > 0)
+                        and (moving_into != self.water or inventory[self.wood] > 0)
                     ):
                         if moving_into == self.water:
                             inventory[self.wood] = 0
