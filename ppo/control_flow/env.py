@@ -158,8 +158,12 @@ class Env(gym.Env, ABC):
                 else:
                     info.update(success_line=state.prev, failure_line=state.ptr)
                 if self.lower_level == "train-alone":
+                    lines_attempted = min(len(lines), cumulative_reward + 1)
                     if not (success and cumulative_reward < len(lines)):
-                        info.update(success=cumulative_reward / len(lines))
+                        info.update(
+                            cumulative_reward=cumulative_reward,
+                            lines_attempted=lines_attempted,
+                        )
 
             info.update(regret=1 if term and not success else 0)
 

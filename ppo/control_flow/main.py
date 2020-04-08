@@ -90,7 +90,13 @@ def main(log_dir, seed, eval_lines, one_line, lower_level, **kwargs):
             super().process_infos(episode_counter, done, infos, **act_log)
 
         def log_result(self, result: dict):
-            if lower_level != "train-alone":
+            if lower_level == "train-alone":
+                lines_attempted = sum(result["lines_attempted"])
+                if lines_attempted > 0:
+                    result["success"] = (
+                        sum(result["cumulative_reward"]) / lines_attempted
+                    )
+            else:
                 names = NAMES + ["P"]
                 for name in names + ["eval_" + n for n in names]:
                     if name in result:
