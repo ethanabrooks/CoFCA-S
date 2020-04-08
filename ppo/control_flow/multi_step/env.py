@@ -79,11 +79,9 @@ class Env(ppo.control_flow.env.Env):
         num_subtasks,
         num_excluded_objects,
         temporal_extension,
-        lower_level,
         world_size=6,
         **kwargs,
     ):
-        self.lower_level = lower_level
         self.temporal_extension = temporal_extension
         self.num_excluded_objects = num_excluded_objects
         self.max_while_objects = max_while_objects
@@ -217,13 +215,12 @@ class Env(ppo.control_flow.env.Env):
             agent_pos = next(p for p, o in objects.items() if o == self.agent)
             del objects[tuple(agent_pos)]
 
-            line_iterator = self.line_generator(
-                lines[:1] if self.lower_level == "train-alone" else lines
-            )
+            line_iterator = self.line_generator(lines)
             condition_evaluations = []
             self.time_remaining = 200 if self.evaluating else self.time_to_waste
             self.loops = None
             inventory = Counter()
+            subtask_complete = False
 
             def next_subtask(l):
                 while True:
@@ -270,7 +267,9 @@ class Env(ppo.control_flow.env.Env):
                     prev=prev,
                     ptr=ptr,
                     term=term,
+                    subtask_complete=subtask_complete,
                 )
+                subtask_complete = False
                 # for i, a in enumerate(self.lower_level_actions):
                 # print(i, a)
                 # lower_level_index = int(input("go:"))
@@ -320,6 +319,7 @@ class Env(ppo.control_flow.env.Env):
 
                     if done:
                         prev, ptr = ptr, next_subtask(ptr)
+                        subtask_complete = True
 
                 elif type(lower_level_action) is np.ndarray:
                     if self.temporal_extension:

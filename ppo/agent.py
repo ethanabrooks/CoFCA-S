@@ -361,8 +361,11 @@ class LowerLevel(NNBase):
 
     def forward(self, inputs, rnn_hxs, masks):
         N = inputs.size(0)
+        R = torch.arange(N, device=rnn_hxs.device)
         inputs = Obs(*self.parse_inputs(inputs))
-        lines = inputs.lines.reshape(N, *self.obs_spaces.lines.shape)[:, 0]
+        lines = inputs.lines.reshape(N, *self.obs_spaces.lines.shape)[
+            R, inputs.active.long().flatten()
+        ]
         obs = inputs.obs.reshape(N, *self.obs_spaces.obs.shape)
         lines_embed = self.line_embed(lines.long() + self.offset)
         obs_embed = self.conv_projection(self.conv(obs))

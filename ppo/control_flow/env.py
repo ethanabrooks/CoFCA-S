@@ -23,7 +23,7 @@ from ppo.control_flow.lines import (
 
 Obs = namedtuple("Obs", "active lines obs")
 Last = namedtuple("Last", "action active reward terminal selected")
-State = namedtuple("State", "obs prev ptr  term")
+State = namedtuple("State", "obs prev ptr term subtask_complete")
 Action = namedtuple("Action", "upper lower delta ag dg ptr")
 
 
@@ -43,12 +43,14 @@ class Env(gym.Env, ABC):
         break_on_fail,
         max_loops,
         rank,
+        lower_level,
         control_flow_types,
         seed=0,
         eval_lines=None,
         evaluating=False,
     ):
         super().__init__()
+        self.lower_level = lower_level
         if Subtask not in control_flow_types:
             control_flow_types.append(Subtask)
         self.control_flow_types = control_flow_types
@@ -124,6 +126,7 @@ class Env(gym.Env, ABC):
         actions = []
         program_counter = []
 
+        cumulative_reward = 0
         agent_ptr = 0
         info = {}
         term = False
@@ -146,12 +149,14 @@ class Env(gym.Env, ABC):
                     instruction=[self.preprocess_line(l) for l in lines],
                     actions=actions,
                     program_counter=program_counter,
-                    success=len(lines),
+                    success=success,
                 )
                 if success:
                     info.update(success_line=len(lines))
                 else:
                     info.update(success_line=state.prev, failure_line=state.ptr)
+                if self.lower_level == "train-alone":
+                    info.update(success=cumulative_reward / len(lines))
 
             info.update(regret=1 if term and not success else 0)
 
@@ -189,7 +194,9 @@ class Env(gym.Env, ABC):
             self._render = render
             obs = self.get_observation(obs=state.obs, active=state.ptr, lines=lines)
 
-            action = (yield obs, reward, term, info)
+            r = state.subtask_complete if self.lower_level == "train-alone" else reward
+            cumulative_reward += r
+            action = (yield obs, r, term, info)
             if action.size == 1:
                 action = Action(upper=0, lower=action, delta=0, ag=0, dg=0, ptr=0)
             actions.extend([int(a) for a in action])
