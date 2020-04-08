@@ -190,6 +190,8 @@ class Env(gym.Env, ABC):
             obs = self.get_observation(obs=state.obs, active=state.ptr, lines=lines)
 
             action = (yield obs, reward, term, info)
+            if action.size == 1:
+                action = Action(upper=0, lower=action, delta=0, ag=0, dg=0, ptr=0)
             actions.extend([int(a) for a in action])
             action = Action(*action)
             action, lower_level_action, agent_ptr, = (
@@ -197,6 +199,7 @@ class Env(gym.Env, ABC):
                 int(action.lower),
                 int(action.ptr),
             )
+
             info = {}
 
             if action == self.num_subtasks:
