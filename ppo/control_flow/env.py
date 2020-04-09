@@ -22,7 +22,8 @@ from ppo.control_flow.lines import (
 
 Obs = namedtuple("Obs", "active lines obs")
 Last = namedtuple("Last", "action active reward terminal selected")
-State = namedtuple("State", "obs prev ptr  term")
+State = namedtuple("State", "obs prev ptr term subtask_complete")
+Action = namedtuple("Action", "upper lower delta ag dg ptr")
 
 
 class Env(gym.Env, ABC):
@@ -41,12 +42,14 @@ class Env(gym.Env, ABC):
         break_on_fail,
         max_loops,
         rank,
+        lower_level,
         control_flow_types,
         seed=0,
         eval_lines=None,
         evaluating=False,
     ):
         super().__init__()
+        self.lower_level = lower_level
         if Subtask not in control_flow_types:
             control_flow_types.append(Subtask)
         self.control_flow_types = control_flow_types
@@ -61,6 +64,7 @@ class Env(gym.Env, ABC):
         self.num_subtasks = num_subtasks
         self.time_to_waste = time_to_waste
         self.time_remaining = None
+        self.i = 0
 
         self.loops = None
         self.eval_lines = eval_lines
@@ -70,7 +74,6 @@ class Env(gym.Env, ABC):
             self.n_lines = eval_lines
         else:
             self.n_lines = max_lines
-        self.n_lines += 1
         self.random, self.seed = seeding.np_random(seed)
         self.flip_prob = flip_prob
         self.evaluating = evaluating
@@ -94,7 +97,7 @@ class Env(gym.Env, ABC):
             dict(
                 obs=spaces.Discrete(2),
                 lines=spaces.MultiDiscrete(
-                    np.array([len(self.possible_lines)] * self.n_lines)
+                    np.array([len(self.possible_lines)] * (self.n_lines + 1))
                 ),
                 active=spaces.Discrete(self.n_lines + 1),
             )
@@ -122,6 +125,7 @@ class Env(gym.Env, ABC):
         actions = []
         program_counter = []
 
+        cumulative_reward = 0
         agent_ptr = 0
         info = {}
         term = False
@@ -134,6 +138,8 @@ class Env(gym.Env, ABC):
             reward = int(success)
 
             term = term or success or state.term
+            r = state.subtask_complete if self.lower_level == "train-alone" else reward
+            cumulative_reward += r
             if term:
                 if not success and self.break_on_fail:
                     import ipdb
@@ -144,12 +150,19 @@ class Env(gym.Env, ABC):
                     instruction=[self.preprocess_line(l) for l in lines],
                     actions=actions,
                     program_counter=program_counter,
-                    success=len(lines),
+                    success=success,
                 )
                 if success:
                     info.update(success_line=len(lines))
                 else:
                     info.update(success_line=state.prev, failure_line=state.ptr)
+                if self.lower_level == "train-alone":
+                    lines_attempted = min(len(lines), cumulative_reward + 1)
+                    if not (success and cumulative_reward < len(lines)):
+                        info.update(
+                            cumulative_reward=cumulative_reward,
+                            lines_attempted=lines_attempted,
+                        )
 
             info.update(regret=1 if term and not success else 0)
 
@@ -179,22 +192,26 @@ class Env(gym.Env, ABC):
                         "Lower Level Action:",
                         self.lower_level_actions[lower_level_action],
                     )
-                print("Reward", reward)
-                print("Time remaining", self.time_remaining)
+                print("Reward", r)
+                print("Cumulative", cumulative_reward)
                 print("Obs:")
                 print(RESET)
                 self.print_obs(state.obs)
 
             self._render = render
-            obs = self.get_observation(state.obs, state.ptr, lines)
+            obs = self.get_observation(obs=state.obs, active=state.ptr, lines=lines)
 
-            action = (yield obs, reward, term, info)
+            action = (yield obs, r, term, info)
+            if action.size == 1:
+                action = Action(upper=0, lower=action, delta=0, ag=0, dg=0, ptr=0)
             actions.extend([int(a) for a in action])
+            action = Action(*action)
             action, lower_level_action, agent_ptr, = (
-                int(action[0]),
-                int(action[4]),
-                int(action[5]),
+                int(action.upper),
+                int(action.lower),
+                int(action.ptr),
             )
+
             info = {}
 
             if action == self.num_subtasks:
@@ -348,7 +365,7 @@ class Env(gym.Env, ABC):
         return self.possible_lines.index(line)
 
     def get_observation(self, obs, active, lines):
-        padded = lines + [Padding(0)] * (self.n_lines - len(lines))
+        padded = lines + [Padding(0)] * (self.n_lines + 1 - len(lines))
         lines = [self.preprocess_line(p) for p in padded]
         obs = Obs(
             obs=obs, lines=lines, active=self.n_lines if active is None else active
@@ -367,7 +384,7 @@ class Env(gym.Env, ABC):
     def seed(self, seed=None):
         assert self.seed == seed
 
-    def render(self, mode="human", pause=False):
+    def render(self, mode="human", pause=True):
         self._render()
         if pause:
             input("pause")
@@ -397,15 +414,14 @@ def build_parser(p):
             Subtask=Subtask, If=If, Else=Else, While=While, Loop=Loop
         ).get(s),
     )
-    return p
 
 
 def main(env):
     def action_fn(string):
-        try:
-            return int(string), 0
-        except ValueError:
-            return
+        ll = dict(w=6, s=12, a=8, d=10, m=0, t=1, o=2, g=3, i=4).get(string, None)
+        if ll is None:
+            return None
+        return Action(upper=0, lower=ll, delta=0, dg=0, ag=0, ptr=0)
 
     keyboard_control.run(env, action_fn=action_fn)
 

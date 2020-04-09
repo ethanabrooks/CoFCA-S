@@ -47,12 +47,10 @@ class Recurrence:
     def build_embed_task(self, hidden_size):
         return nn.EmbeddingBag(self.obs_spaces.lines.nvec[0].sum(), hidden_size)
 
-    def build_memory(self, N, T, inputs):
+    def preprocess_embed(self, N, T, inputs):
         lines = inputs.lines.view(T, N, *self.obs_spaces.lines.shape)
         lines = lines.long()[0, :, :] + self.offset
-        return self.embed_task(lines.view(-1, self.obs_spaces.lines.nvec[0].size)).view(
-            *lines.shape[:2], self.encoder_hidden_size
-        )  # n_batch, n_lines, hidden_size
+        return lines.view(-1, self.obs_spaces.lines.nvec[0].size)
 
     def preprocess_obs(self, obs):
         N = obs.size(0)
