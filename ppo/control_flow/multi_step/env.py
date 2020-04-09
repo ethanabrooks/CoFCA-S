@@ -39,7 +39,7 @@ PINK = "\033[95m"
 LIGHTCYAN = "\033[96m"
 RESET = "\033[0m"
 
-Obs = namedtuple("Obs", "active lines obs")
+Obs = namedtuple("Obs", "active lines obs inventory")
 
 
 def get_nearest(_from, _to, objects):
@@ -141,9 +141,13 @@ class Env(ppo.control_flow.env.Env):
                     * self.n_lines
                 )
             ),
+            inventory=spaces.MultiDiscrete(
+                np.array([self.world_size ** 2] * len(self.items))
+            ),
         )
 
     def print_obs(self, obs):
+        obs, inventory = obs
         obs = obs.transpose(1, 2, 0).astype(int)
         grid_size = 3  # obs.astype(int).sum(-1).max()  # max objects per grid
         chars = [" "] + [o for (o, *_) in self.world_contents]
@@ -259,7 +263,7 @@ class Env(ppo.control_flow.env.Env):
             while True:
                 term |= not self.time_remaining
                 subtask_id, lower_level_index = yield State(
-                    obs=self.world_array(objects, agent_pos),
+                    obs=(self.world_array(objects, agent_pos), inventory),
                     prev=prev,
                     ptr=ptr,
                     term=term,
@@ -427,6 +431,17 @@ class Env(ppo.control_flow.env.Env):
                 yield Loop(self.random.randint(1, 1 + self.max_loops))
             else:
                 yield line(self.items[line_id])
+
+    def get_observation(self, obs, **kwargs):
+        obs, inventory = obs
+        obs = super().get_observation(obs=obs, **kwargs)
+        obs.update(inventory=np.array([inventory[i] for i in self.items]))
+        # if not self.observation_space.contains(obs):
+        #     import ipdb
+        #
+        #     ipdb.set_trace()
+        #     self.observation_space.contains(obs)
+        return obs
 
     @staticmethod
     def get_lower_level_action(interaction, obj, agent_pos, objects):
