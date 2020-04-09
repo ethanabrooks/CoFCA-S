@@ -71,7 +71,16 @@ class Env(ppo.control_flow.env.Env):
     terrain = [merchant, water, wall, bridge, agent]
     world_contents = items + terrain
     behaviors = [mine, sell, goto]
-    colors = [RESET, GREEN, YELLOW, LIGHTGREY, PINK, BLUE, DARKGREY, RESET, RESET]
+    colors = {
+        wood: GREEN,
+        gold: YELLOW,
+        iron: LIGHTGREY,
+        merchant: PINK,
+        wall: RESET,
+        water: BLUE,
+        bridge: RESET,
+        agent: RED,
+    }
 
     def __init__(
         self,
@@ -146,13 +155,14 @@ class Env(ppo.control_flow.env.Env):
                 number = channel * int_ids
                 crop = sorted(number, reverse=True)[:grid_size]
                 for x in crop:
-                    colors.append(self.colors[x])
+                    colors.append(self.colors[self.world_contents[x - 1]])
                     string.append(chars[x])
                 colors.append(RESET)
                 string.append("|")
-                # string += "".join(self.colors[x] + chars[x] + RESET for x in crop) + "|"
             print(*[c for p in zip(colors, string) for c in p], sep="")
             print("-" * len(string))
+        for i, c in zip(self.items, inventory):
+            print(i, c)
 
     def line_str(self, line):
         line = super().line_str(line)
