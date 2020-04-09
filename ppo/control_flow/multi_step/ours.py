@@ -79,7 +79,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             stride=stride,
             padding=padding,
         )
-        n_ll = kwargs["action_space"].nvec[4]
+        n_ll = self.action_space_nvec.lower
         conv_out_size = (h + (2 * padding) - (kernel_size - 1) - 1) // stride + 1
         self.lower_level = Categorical(self.conv_hidden_size * conv_out_size ** 2, n_ll)
         self.state_sizes = RecurrentState(
@@ -93,7 +93,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             gru_gate=self.gru_hidden_size,
             P=self.ne * 2 * self.train_lines ** 2,
             ll=1,
-            ll_probs=n_ll
+            ll_probs=n_ll,
         )
 
     @property
