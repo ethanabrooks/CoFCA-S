@@ -43,12 +43,14 @@ class Env(gym.Env, ABC):
         break_on_fail,
         max_loops,
         rank,
+        lower_level,
         control_flow_types,
         seed=0,
         eval_lines=None,
         evaluating=False,
     ):
         super().__init__()
+        self.lower_level = lower_level
         if Subtask not in control_flow_types:
             control_flow_types.append(Subtask)
         self.control_flow_types = control_flow_types
@@ -63,6 +65,7 @@ class Env(gym.Env, ABC):
         self.num_subtasks = num_subtasks
         self.time_to_waste = time_to_waste
         self.time_remaining = None
+        self.i = 0
 
         self.loops = None
         self.eval_lines = eval_lines
@@ -124,6 +127,7 @@ class Env(gym.Env, ABC):
         actions = []
         program_counter = []
 
+        cumulative_reward = 0
         agent_ptr = 0
         info = {}
         term = False
@@ -136,6 +140,8 @@ class Env(gym.Env, ABC):
             reward = int(success)
 
             term = term or success or state.term
+            r = state.subtask_complete if self.lower_level == "train-alone" else reward
+            cumulative_reward += r
             if term:
                 if not success and self.break_on_fail:
                     import ipdb
@@ -146,12 +152,19 @@ class Env(gym.Env, ABC):
                     instruction=[self.preprocess_line(l) for l in lines],
                     actions=actions,
                     program_counter=program_counter,
-                    success=len(lines),
+                    success=success,
                 )
                 if success:
                     info.update(success_line=len(lines))
                 else:
                     info.update(success_line=state.prev, failure_line=state.ptr)
+                if self.lower_level == "train-alone":
+                    lines_attempted = min(len(lines), cumulative_reward + 1)
+                    if not (success and cumulative_reward < len(lines)):
+                        info.update(
+                            cumulative_reward=cumulative_reward,
+                            lines_attempted=lines_attempted,
+                        )
 
             info.update(regret=1 if term and not success else 0)
 
@@ -181,15 +194,18 @@ class Env(gym.Env, ABC):
                         "Lower Level Action:",
                         self.lower_level_actions[lower_level_action],
                     )
-                print("Reward", reward)
+                print("Reward", r)
+                print("Cumulative", cumulative_reward)
                 print("Obs:")
                 print(RESET)
                 self.print_obs(state.obs)
 
             self._render = render
-            obs = self.get_observation(state.obs, state.ptr, lines)
+            obs = self.get_observation(obs=state.obs, active=state.ptr, lines=lines)
 
-            action = (yield obs, reward, term, info)
+            action = (yield obs, r, term, info)
+            if action.size == 1:
+                action = Action(upper=0, lower=action, delta=0, ag=0, dg=0, ptr=0)
             actions.extend([int(a) for a in action])
             action = Action(*action)
             action, lower_level_action, agent_ptr, = (
@@ -197,6 +213,7 @@ class Env(gym.Env, ABC):
                 int(action.lower),
                 int(action.ptr),
             )
+
             info = {}
 
             if action == self.num_subtasks:
@@ -388,7 +405,7 @@ def build_parser(p):
     p.add_argument("--flip-prob", type=float, default=0.5)
     p.add_argument("--eval-condition-size", action="store_true")
     p.add_argument("--single-control-flow-type", action="store_true")
-    p.add_argument("--max-nesting-depth", type=int)
+    p.add_argument("--max-nesting-depth", type=int, default=1)
     p.add_argument("--subtasks-only", action="store_true")
     p.add_argument("--break-on-fail", action="store_true")
     p.add_argument("--time-to-waste", type=int, required=True)
@@ -399,15 +416,14 @@ def build_parser(p):
             Subtask=Subtask, If=If, Else=Else, While=While, Loop=Loop
         ).get(s),
     )
-    return p
 
 
 def main(env):
     def action_fn(string):
-        try:
-            return int(string), 0
-        except ValueError:
-            return
+        ll = dict(w=6, s=12, a=8, d=10, m=0, t=1, o=2, g=3, i=4).get(string, None)
+        if ll is None:
+            return None
+        return Action(upper=0, lower=ll, delta=0, dg=0, ag=0, ptr=0)
 
     keyboard_control.run(env, action_fn=action_fn)
 

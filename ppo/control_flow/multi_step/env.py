@@ -79,16 +79,13 @@ class Env(ppo.control_flow.env.Env):
         num_subtasks,
         num_excluded_objects,
         temporal_extension,
-        lower_level,
         world_size=6,
         **kwargs,
     ):
-        self.lower_level = lower_level
         self.temporal_extension = temporal_extension
         self.num_excluded_objects = num_excluded_objects
         self.max_while_objects = max_while_objects
         self.loops = None
-        self.i = 0
 
         def subtasks():
             for obj in self.items:
