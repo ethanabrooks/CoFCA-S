@@ -429,11 +429,22 @@ class Env(ppo.control_flow.env.Env):
                 return n - agent_pos
 
 
+def build_parser(p):
+    ppo.control_flow.env.build_parser(p)
+    p.add_argument(
+        "--no-temporal-extension", dest="temporal_extension", action="store_false"
+    )
+    p.add_argument("--max-while-objects", type=float, default=2)
+    p.add_argument("--num-excluded-objects", type=int, default=2)
+    p.add_argument("--world-size", type=int, required=True)
+
+
 if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser = build_parser(parser)
-    parser.add_argument("--world-size", default=4, type=int)
+    build_parser(parser)
     parser.add_argument("--seed", default=0, type=int)
-    ppo.control_flow.env.main(Env(rank=0, **hierarchical_parse_args(parser)))
+    ppo.control_flow.env.main(
+        Env(rank=0, lower_level="train-alone", **hierarchical_parse_args(parser))
+    )

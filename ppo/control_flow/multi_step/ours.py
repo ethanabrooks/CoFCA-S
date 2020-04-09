@@ -32,15 +32,10 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         conv_hidden_size,
         gate_coef,
         gru_gate_coef,
-        concat,
         encoder_hidden_size,
-        kernel_size,
-        stride,
-        lower_level,
         **kwargs
     ):
-        self.lower_level_type = lower_level
-        self.concat = concat
+        self.lower_level_type = "hardcoded"
         self.gru_gate_coef = gru_gate_coef
         self.gate_coef = gate_coef
         self.conv_hidden_size = encoder_hidden_size
@@ -70,10 +65,11 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         self.a_gate = Categorical(hidden_size, 2)
         state_sizes = self.state_sizes._asdict()
         d, h, w = kwargs["observation_space"]["obs"].shape
-        stride = max(1, min(stride, kernel_size // 2))
+        kernel_size = 3
+        stride = max(1, min(2, kernel_size // 2))
         padding = (kernel_size // 2) % stride
         self.ll_conv = nn.Conv2d(
-            in_channels=d + self.encoder_hidden_size if concat else d,
+            in_channels=d,
             out_channels=self.conv_hidden_size,
             kernel_size=kernel_size,
             stride=stride,
@@ -161,11 +157,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             self.print("p", p)
             conv_in = inputs.obs[t]
             line = M[R, p].reshape(N, self.encoder_hidden_size, 1, 1)
-            if self.concat:
-                expanded = line.expand(-1, -1, conv_in.size(2), conv_in.size(3))
-                conv_out = self.ll_conv(torch.cat([conv_in, expanded], dim=1))
-            else:
-                conv_out = self.ll_conv(conv_in) * line
+            conv_out = self.ll_conv(conv_in) * line
             ll_dist = self.lower_level(conv_out.reshape(N, -1))
             self.sample_new(LL[t], ll_dist)
             obs = self.preprocess_obs(conv_in)
