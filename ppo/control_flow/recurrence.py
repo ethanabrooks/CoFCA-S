@@ -7,6 +7,7 @@ import torch.nn.functional as F
 from gym import spaces
 from torch import nn as nn
 
+from ppo.control_flow.env import Obs, Action
 from ppo.distributions import Categorical, FixedCategorical
 from ppo.utils import init_
 
@@ -47,13 +48,15 @@ class Recurrence(nn.Module):
         self.gru_hidden_size = gru_hidden_size
         self.P_save_name = None
 
-        self.obs_sections = get_obs_sections(self.obs_spaces)
+        self.obs_sections = self.get_obs_sections(self.obs_spaces)
         self.eval_lines = eval_lines
         self.train_lines = len(self.obs_spaces.lines.nvec)
 
         # networks
         self.ne = num_edges
-        n_a, n_p = map(int, action_space.nvec[:2])
+        self.action_space_nvec = Action(*map(int, action_space.nvec))
+        n_a = self.action_space_nvec.upper
+        n_p = self.action_space_nvec.delta
         self.n_a = n_a
         self.embed_task = self.build_embed_task(encoder_hidden_size)
         self.embed_action = nn.Embedding(n_a, hidden_size)
@@ -100,6 +103,10 @@ class Recurrence(nn.Module):
     def gru_in_size(self):
         return self.encoder_hidden_size + self.ne
 
+    @staticmethod
+    def get_obs_sections(obs_spaces):
+        return get_obs_sections(obs_spaces)
+
     # noinspection PyProtectedMember
     @contextmanager
     def evaluating(self, eval_obs_space):
@@ -116,8 +123,8 @@ class Recurrence(nn.Module):
 
     def set_obs_space(self, obs_space):
         self.obs_spaces = obs_space.spaces
-        self.obs_sections = get_obs_sections(self.obs_spaces)
-        self.train_lines = len(self.obs_spaces.lines.nvec)
+        self.obs_sections = self.get_obs_sections(self.obs_spaces)
+        self.train_lines = len(self.obs_spaces["lines"].nvec)
         # noinspection PyProtectedMember
         if not self.no_scan:
             self.state_sizes = self.state_sizes._replace(

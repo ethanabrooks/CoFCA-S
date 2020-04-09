@@ -16,7 +16,7 @@ from ppo.utils import init_
 
 RecurrentState = namedtuple(
     "RecurrentState",
-    "a d u ag dg ll p v h hy cy ll_probs a_probs d_probs ag_probs dg_probs gru_gate P",
+    "a d u ag dg p v h hy cy a_probs d_probs ag_probs dg_probs gru_gate P",
 )
 
 
@@ -30,23 +30,15 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         self,
         hidden_size,
         conv_hidden_size,
-        lower_level_hidden_size,
         gate_coef,
         gru_gate_coef,
-        concat,
         encoder_hidden_size,
-        kernel_size,
-        stride,
-        lower_level,
         observation_space,
         **kwargs,
     ):
-        self.lower_level_type = lower_level
-        self.concat = concat
         self.gru_gate_coef = gru_gate_coef
         self.gate_coef = gate_coef
-        self.conv_hidden_size = encoder_hidden_size
-        self.lower_level_hidden_size = lower_level_hidden_size
+        self.conv_hidden_size = conv_hidden_size
         observation_space = Obs(**observation_space.spaces)
         recurrence.Recurrence.__init__(
             self,
@@ -74,23 +66,6 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         self.d_gate = Categorical(hidden_size, 2)
         self.a_gate = Categorical(hidden_size, 2)
         state_sizes = self.state_sizes._asdict()
-        d, h, w = observation_space.obs.shape
-        stride = max(1, min(stride, kernel_size // 2))
-        padding = (kernel_size // 2) % stride
-        self.ll_embed_task = self.build_embed_task(lower_level_hidden_size)
-        self.ll_conv = nn.Conv2d(
-            in_channels=Obs(*self.obs_sections).inventory
-            + (d + lower_level_hidden_size if concat else d),
-            out_channels=lower_level_hidden_size,
-            kernel_size=kernel_size,
-            stride=stride,
-            padding=padding,
-        )
-        n_ll = kwargs["action_space"].nvec[4]
-        conv_out_size = (h + (2 * padding) - (kernel_size - 1) - 1) // stride + 1
-        self.lower_level = Categorical(
-            lower_level_hidden_size * conv_out_size ** 2, n_ll
-        )
         self.state_sizes = RecurrentState(
             **state_sizes,
             hy=self.gru_hidden_size,
@@ -101,13 +76,22 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             dg=1,
             gru_gate=self.gru_hidden_size,
             P=self.ne * 2 * self.train_lines ** 2,
-            ll=1,
-            ll_probs=n_ll,
         )
 
     @property
     def gru_in_size(self):
         return self.encoder_hidden_size
+
+    def get_obs_sections(self, obs_spaces):
+        try:
+            obs_spaces = Obs(**obs_spaces)
+        except TypeError:
+            pass
+        return super().get_obs_sections(obs_spaces)
+
+    def set_obs_space(self, obs_space):
+        super().set_obs_space(obs_space)
+        self.obs_spaces = Obs(**self.obs_spaces)
 
     def pack(self, hxs):
         def pack():
@@ -142,9 +126,6 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         M = self.embed_task(self.preprocess_embed(N, T, inputs)).view(
             N, -1, self.encoder_hidden_size
         )
-        llM = self.ll_embed_task(self.preprocess_embed(N, T, inputs)).view(
-            N, -1, self.lower_level_hidden_size
-        )
 
         P = self.build_P(M, N, rnn_hxs.device, nl)
 
@@ -170,29 +151,10 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         D = torch.cat([actions.delta, hx.d.view(1, N)], dim=0).long()
         AG = torch.cat([actions.ag, hx.ag.view(1, N)], dim=0).long()
         DG = torch.cat([actions.dg, hx.dg.view(1, N)], dim=0).long()
-        LL = torch.cat([actions.lower, hx.ll.view(1, N)], dim=0).long()
 
         for t in range(T):
             self.print("p", p)
-
-            conv_in = inputs.obs[t]
-            if self.lower_level_type == "train-alone":
-                p = a[t]
-            line = llM[R, p].reshape(N, -1, 1, 1)
-            inventory = (
-                inputs.inventory[t]
-                .unsqueeze(-1)
-                .unsqueeze(-1)
-                .expand(-1, -1, conv_in.size(2), conv_in.size(3))
-            )
-            if self.concat:
-                line = line.expand(-1, -1, conv_in.size(2), conv_in.size(3))
-                conv_out = self.ll_conv(torch.cat([conv_in, line, inventory], dim=1))
-            else:
-                conv_out = self.ll_conv(torch.cat([conv_in, inventory], dim=1)) * line
-            ll_dist = self.lower_level(conv_out.reshape(N, -1))
-            self.sample_new(LL[t], ll_dist)
-            obs = self.preprocess_obs(conv_in)
+            obs = self.preprocess_obs(inputs.obs[t])
             # h = self.gru(obs, h)
             zeta_inputs = [h, M[R, p], obs, self.embed_action(A[t - 1].clone())]
             z = F.relu(self.zeta(torch.cat(zeta_inputs, dim=-1)))
@@ -243,6 +205,4 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 dg=dg,
                 gru_gate=gru_gate,
                 P=P.transpose(0, 1),
-                ll=LL[t],
-                ll_probs=ll_dist.probs,
             )
