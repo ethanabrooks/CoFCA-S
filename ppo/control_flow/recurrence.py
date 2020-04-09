@@ -272,13 +272,3 @@ class Recurrence(nn.Module):
                 d=d,
                 d_probs=d_dist.probs,
             )
-
-    def build_memory(self, N, T, inputs):
-        lines = inputs.lines.view(T, N, self.obs_sections.lines).long()[0, :, :]
-        return self.embed_task(lines.view(-1)).view(
-            *lines.shape, self.encoder_hidden_size
-        )  # n_batch, n_lines, hidden_size
-
-    @staticmethod
-    def preprocess_obs(obs):
-        return obs.unsqueeze(-1)
