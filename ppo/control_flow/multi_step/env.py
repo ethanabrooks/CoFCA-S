@@ -1,6 +1,6 @@
 import functools
 import itertools
-from collections import defaultdict
+from collections import defaultdict, Counter, namedtuple
 from typing import Iterator, List, Tuple
 
 import numpy as np
@@ -21,7 +21,6 @@ from ppo.control_flow.lines import (
     Loop,
     EndLoop,
 )
-from ppo.djikstra import shortest_path
 
 BLACK = "\033[30m"
 RED = "\033[31m"
@@ -39,6 +38,8 @@ LIGHTBLUE = "\033[94m"
 PINK = "\033[95m"
 LIGHTCYAN = "\033[96m"
 RESET = "\033[0m"
+
+Obs = namedtuple("Obs", "active lines obs inventory")
 
 
 def get_nearest(_from, _to, objects):

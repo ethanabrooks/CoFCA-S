@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from gym import spaces
 from gym.spaces import Box
 import numpy as np
 from rl_utils import hierarchical_parse_args

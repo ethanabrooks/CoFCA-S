@@ -1,5 +1,6 @@
 import torch
 import torch.jit
+from gym import spaces
 from gym.spaces import Box
 from torch import nn as nn
 from torch.nn import functional as F
