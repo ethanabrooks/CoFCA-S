@@ -422,21 +422,26 @@ class Env(ppo.control_flow.env.Env):
         if len(object_list) == len(object_positions):
             wall_positions = wall_positions[:num_walls]
         positions = np.concatenate([object_positions, wall_positions])
-        water_index = self.random.choice(self.world_size)
-        positions[positions[:, vertical_water] >= water_index] += np.array(
-            [0, 1] if vertical_water else [1, 0]
-        )
-        assert water_index not in positions[:, vertical_water]
-        return {
-            **{
+        objects = {}
+        if use_water:
+            water_index = self.random.choice(self.world_size)
+            positions[positions[:, vertical_water] >= water_index] += np.array(
+                [0, 1] if vertical_water else [1, 0]
+            )
+            objects.update(
+                {
+                    (i, water_index) if vertical_water else (water_index, i): self.water
+                    for i in range(self.world_size)
+                }
+            )
+            assert water_index not in positions[:, vertical_water]
+        objects.update(
+            {
                 tuple(p): (self.wall if o is None else o)
                 for o, p in itertools.zip_longest(object_list, positions)
-            },
-            **{
-                (i, water_index) if vertical_water else (water_index, i): self.water
-                for i in range(self.world_size)
-            },
-        }
+            }
+        )
+        return objects
 
     def assign_line_ids(self, lines):
         excluded = self.random.randint(len(self.items), size=self.num_excluded_objects)
