@@ -294,11 +294,10 @@ class Env(ppo.control_flow.env.Env):
 
                 if type(lower_level_action) is str:
                     standing_on = objects.get(tuple(agent_pos), None)
+                    done = (
+                        lower_level_action == tgt_interaction and standing_on == tgt_obj
+                    )
                     if lower_level_action == self.mine:
-                        done = (
-                            lower_level_action == tgt_interaction
-                            and standing_on == tgt_obj
-                        )
                         if tuple(agent_pos) in objects:
                             if done:
                                 possible_objects.remove(standing_on)
@@ -308,18 +307,8 @@ class Env(ppo.control_flow.env.Env):
                                 inventory[standing_on] += 1
                             del objects[tuple(agent_pos)]
                     elif lower_level_action == self.sell:
-                        done = (
-                            lower_level_action == tgt_interaction
-                            and standing_on == tgt_obj
-                            and (
-                                self.lower_level == "hardcoded"
-                                or inventory[tgt_obj] > 0
-                            )
-                        )
-                    elif lower_level_action == self.goto:
-                        done = (
-                            lower_level_action == tgt_interaction
-                            and standing_on == tgt_obj
+                        done = done and (
+                            self.lower_level == "hardcoded" or inventory[tgt_obj] > 0
                         )
                     if done:
                         prev, ptr = ptr, next_subtask(ptr)
