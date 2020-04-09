@@ -292,23 +292,32 @@ class Env(ppo.control_flow.env.Env):
                 tgt_obj = objective(*lines[ptr].id)
 
                 if type(lower_level_action) is str:
-                    standing_on = objects.get(tuple(agent_pos), None)
-                    done = (
-                        lower_level_action == tgt_interaction and standing_on == tgt_obj
-                    )
                     if lower_level_action == self.mine:
+                        done = (
+                            lower_level_action == tgt_interaction
+                            and objects.get(tuple(agent_pos), None) == tgt_obj
+                        )
                         if tuple(agent_pos) in objects:
-                            if done:
-                                possible_objects.remove(standing_on)
-                            else:
-                                term = True
+                            standing_on = objects[tuple(agent_pos)]
                             if standing_on in self.items:
                                 inventory[standing_on] += 1
-                            del objects[tuple(agent_pos)]
-                    elif lower_level_action == self.sell:
-                        done = done and (
-                            self.lower_level == "hardcoded" or inventory[tgt_obj] > 0
+                                if done:
+                                    possible_objects.remove(standing_on)
+                                del objects[tuple(agent_pos)]
+                    elif lower_level_action == self.goto:
+                        done = (
+                            lower_level_action == tgt_interaction
+                            and objects.get(tuple(agent_pos), None) == tgt_obj
                         )
+                    elif lower_level_action == self.sell:
+                        standing_on = objects.get(tuple(agent_pos), None)
+                        commodity = obj
+                        if (standing_on == self.merchant) and inventory[commodity] > 0:
+                            inventory[commodity] -= 1
+                            done = True
+                        else:
+                            done = False
+
                     if done:
                         prev, ptr = ptr, next_subtask(ptr)
                         subtask_complete = True
