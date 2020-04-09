@@ -333,6 +333,8 @@ class Env(ppo.control_flow.env.Env):
                             )
                         )
                     ):
+                        if moving_into == self.water:
+                            inventory[self.wood] = 0
                         agent_pos = new_pos
                 else:
                     assert lower_level_action is None
@@ -346,6 +348,7 @@ class Env(ppo.control_flow.env.Env):
                     _i, _o = line.id
                     if _i == self.sell:
                         yield self.merchant
+                        yield _o
                     else:
                         yield _o
 
