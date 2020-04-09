@@ -249,12 +249,13 @@ class Env(ppo.control_flow.env.Env):
                         break
                 if l is not None:
                     assert type(lines[l]) is Subtask
-                    o = objective(*lines[l].id)
-                    nearest = get_nearest(_to=o, _from=agent_pos, objects=objects)
-                    if nearest is None:
+                    be, it = lines[l].id
+                    if it not in objects.values():
                         return None
-                    _, d = nearest
-                    self.time_remaining += 1 + d
+                    elif be == self.sell:
+                        if self.merchant not in objects.values():
+                            return None
+                    self.time_remaining += 2 * self.world_size
                     return l
 
             possible_objects = list(objects.values())
@@ -291,17 +292,23 @@ class Env(ppo.control_flow.env.Env):
                 tgt_obj = objective(*lines[ptr].id)
 
                 if type(lower_level_action) is str:
+                    standing_on = objects.get(tuple(agent_pos), None)
                     done = (
-                        lower_level_action == tgt_interaction
-                        and objects.get(tuple(agent_pos), None) == tgt_obj
+                        lower_level_action == tgt_interaction and standing_on == tgt_obj
                     )
                     if lower_level_action == self.mine:
                         if tuple(agent_pos) in objects:
                             if done:
-                                possible_objects.remove(objects[tuple(agent_pos)])
+                                possible_objects.remove(standing_on)
                             else:
                                 term = True
+                            if standing_on in self.items:
+                                inventory[standing_on] += 1
                             del objects[tuple(agent_pos)]
+                    elif lower_level_action == self.sell:
+                        done = done and (
+                            self.lower_level == "hardcoded" or inventory[tgt_obj] > 0
+                        )
                     if done:
                         prev, ptr = ptr, next_subtask(ptr)
                         subtask_complete = True
@@ -310,7 +317,23 @@ class Env(ppo.control_flow.env.Env):
                     if self.temporal_extension:
                         lower_level_action = np.clip(lower_level_action, -1, 1)
                     new_pos = agent_pos + lower_level_action
-                    if np.all(0 <= new_pos) and np.all(new_pos < self.world_size):
+                    moving_into = objects.get(tuple(new_pos), None)
+                    if (
+                        np.all(0 <= new_pos)
+                        and np.all(new_pos < self.world_size)
+                        and (
+                            self.lower_level == "hardcoded"
+                            or (
+                                moving_into != self.wall
+                                and (
+                                    moving_into != self.water
+                                    or inventory[self.wood] > 0
+                                )
+                            )
+                        )
+                    ):
+                        if moving_into == self.water:
+                            inventory[self.wood] = 0
                         agent_pos = new_pos
                 else:
                     assert lower_level_action is None
@@ -364,18 +387,28 @@ class Env(ppo.control_flow.env.Env):
                     for _ in range(num_obj):
                         yield obj
 
-        object_list = (
-            [self.agent]
-            + list(subtask_ids())
-            + list(loop_objects())
-            + list(while_objects())
-        )
-        num_random_objects = (self.world_size ** 2) - self.world_size  # for water
+        subtask_list = list(subtask_ids())
+        loop_list = list(loop_objects())
+        while_list = list(while_objects())
+        object_list = [self.agent] + subtask_list + loop_list + while_list
+        num_random_objects = self.world_size ** 2
+        use_water = self.wood in object_list[: num_random_objects - self.world_size]
+        if use_water:
+            # condition for stream
+            num_random_objects -= self.world_size
         object_list = object_list[:num_random_objects]
         indexes = self.random.choice(
-            self.world_size * (self.world_size - 1),
-            size=num_random_objects,
-            replace=False,
+            num_random_objects, size=num_random_objects, replace=False
+        )
+        vertical_water = self.random.choice(2)
+        world_shape = (
+            (
+                [self.world_size, self.world_size - 1]
+                if vertical_water
+                else [self.world_size - 1, self.world_size]
+            )
+            if use_water
+            else [self.world_size, self.world_size]
         )
         vertical_water = self.random.choice(2)
         world_shape = (
@@ -394,40 +427,25 @@ class Env(ppo.control_flow.env.Env):
         if len(object_list) == len(object_positions):
             wall_positions = wall_positions[:num_walls]
         positions = np.concatenate([object_positions, wall_positions])
-        objects = {
-            **{
+        objects = {}
+        if use_water:
+            water_index = self.random.choice(self.world_size)
+            positions[positions[:, vertical_water] >= water_index] += np.array(
+                [0, 1] if vertical_water else [1, 0]
+            )
+            objects.update(
+                {
+                    (i, water_index) if vertical_water else (water_index, i): self.water
+                    for i in range(self.world_size)
+                }
+            )
+            assert water_index not in positions[:, vertical_water]
+        objects.update(
+            {
                 tuple(p): (self.wall if o is None else o)
                 for o, p in itertools.zip_longest(object_list, positions)
             }
-        }
-        assert objects[tuple(positions[0])] == self.agent
-        nearest_wood = get_nearest(positions[0], self.wood, objects)
-        if nearest_wood:
-            agent_i, agent_j = positions[0]
-            (wood_i, wood_j), _ = nearest_wood
-            candidate_water_indices = [
-                i
-                for i in range(self.world_size)
-                if not (
-                    (agent_j <= i <= wood_j or wood_j <= i <= agent_j)
-                    if vertical_water
-                    else (agent_i <= i <= wood_i or wood_i <= i <= agent_i)
-                )
-            ]
-            if candidate_water_indices:
-                water_index = self.random.choice(candidate_water_indices)
-                positions[positions[:, vertical_water] >= water_index] += np.array(
-                    [0, 1] if vertical_water else [1, 0]
-                )
-                assert water_index not in positions[:, vertical_water]
-                objects.update(
-                    {
-                        (i, water_index)
-                        if vertical_water
-                        else (water_index, i): self.water
-                        for i in range(self.world_size)
-                    }
-                )
+        )
         return objects
 
     def assign_line_ids(self, lines):

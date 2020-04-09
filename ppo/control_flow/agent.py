@@ -139,9 +139,7 @@ class Agent(ppo.agent.Agent, NNBase):
             X = [hx.a, pad, pad, pad, hx.p]
             probs = [hx.a_probs]
         elif t is ppo.control_flow.multi_step.ours.Recurrence:
-            X = Action(
-                upper=hx.a, lower=hx.ll, delta=hx.d, ag=hx.ag, dg=hx.dg, ptr=hx.p
-            )
+            X = Action(upper=hx.a, lower=pad, delta=hx.d, ag=hx.ag, dg=hx.dg, ptr=hx.p)
             ll_type = self.lower_level_type
             if ll_type == "train-alone":
                 probs = Action(
