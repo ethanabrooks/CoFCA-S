@@ -107,14 +107,14 @@ class Env(ppo.control_flow.env.Env):
         self.lower_level_actions = list(lower_level_actions())
         self.action_space = spaces.MultiDiscrete(
             np.array(
-                ppo.control_flow.env.Action(
-                    upper=num_subtasks + 1,
-                    delta=2 * self.n_lines,
-                    ag=2,
-                    dg=2,
-                    lower=len(self.lower_level_actions),
-                    ptr=self.n_lines,
-                )
+                [
+                    num_subtasks + 1,
+                    2 * self.n_lines,
+                    2,
+                    2,
+                    len(self.lower_level_actions),
+                    self.n_lines,
+                ]
             )
         )
         self.observation_space.spaces.update(
