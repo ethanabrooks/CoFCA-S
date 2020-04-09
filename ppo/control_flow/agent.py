@@ -1,5 +1,6 @@
 import torch
 import torch.jit
+from gym import spaces
 from gym.spaces import Box
 from torch import nn as nn
 from torch.nn import functional as F
@@ -27,7 +28,15 @@ class Agent(ppo.agent.Agent, NNBase):
         observation_space,
         no_op_coef,
         baseline,
-        **network_args
+        lower_level_load_path,
+        lower_level_hidden_size,
+        kernel_size,
+        stride,
+        action_space,
+        concat,
+        num_conv_layers,
+        lower_level,
+        **network_args,
     ):
         nn.Module.__init__(self)
         self.no_op_coef = no_op_coef
@@ -42,22 +51,57 @@ class Agent(ppo.agent.Agent, NNBase):
                 ppo.control_flow.multi_step.no_pointer.Recurrence
                 if self.multi_step
                 else ppo.control_flow.no_pointer.Recurrence
-            )(observation_space=observation_space, **network_args)
+            )(
+                observation_space=observation_space,
+                action_space=action_space,
+                **network_args,
+            )
         elif baseline == "oh-et-al":
             self.recurrent_module = (
                 ppo.control_flow.multi_step.oh_et_al.Recurrence
                 if self.multi_step
                 else ppo.control_flow.oh_et_al.Recurrence
-            )(observation_space=observation_space, **network_args)
+            )(
+                observation_space=observation_space,
+                action_space=action_space,
+                **network_args,
+            )
         elif self.multi_step:
             assert baseline is None
             self.recurrent_module = ppo.control_flow.multi_step.ours.Recurrence(
-                observation_space=observation_space, **network_args
+                observation_space=observation_space,
+                action_space=action_space,
+                **network_args,
             )
         else:
             self.recurrent_module = ppo.control_flow.recurrence.Recurrence(
-                observation_space=observation_space, **network_args
+                observation_space=observation_space,
+                action_space=action_space,
+                **network_args,
             )
+        self.lower_level_type = "pre-trained" if lower_level_load_path else lower_level
+        self.lower_level = None
+        if lower_level_load_path is not None:
+            ll_action_space = spaces.Discrete(
+                ppo.control_flow.env.Action(*action_space.nvec).lower
+            )
+            self.lower_level = ppo.agent.Agent(
+                obs_shape=observation_space,
+                num_conv_layers=num_conv_layers,
+                recurrent=False,
+                entropy_coef=0,
+                action_space=ll_action_space,
+                hidden_size=lower_level_hidden_size,
+                kernel_size=kernel_size,
+                stride=stride,
+                lower_level=True,
+                num_layers=1,
+                activation=nn.ReLU(),
+                concat=concat,
+            )
+            state_dict = torch.load(lower_level_load_path)
+            self.lower_level.load_state_dict(state_dict["agent"])
+            print(f"Loaded lower_level from {lower_level_load_path}.")
 
     @property
     def recurrent_hidden_state_size(self):
@@ -94,27 +138,51 @@ class Agent(ppo.agent.Agent, NNBase):
             X = [hx.a, pad, pad, pad, hx.p]
             probs = [hx.a_probs]
         elif t is ppo.control_flow.multi_step.ours.Recurrence:
-            X = Action(
-                upper=hx.a, delta=hx.d, ag=hx.ag, dg=hx.dg, lower=hx.ll, ptr=hx.p
-            )
-            ll_type = rm.lower_level_type
+            X = Action(upper=hx.a, lower=None, delta=hx.d, ag=hx.ag, dg=hx.dg, ptr=hx.p)
+            ll_type = self.lower_level_type
             if ll_type == "train-alone":
-                probs = Action(lower=hx.ll_probs)
+                probs = Action(
+                    upper=None,
+                    lower=hx.ll_probs,
+                    delta=None,
+                    ag=None,
+                    dg=None,
+                    ptr=None,
+                )
             elif ll_type == "train-with-upper":
                 probs = Action(
                     upper=hx.a_probs,
+                    lower=hx.ll_probs,
                     delta=hx.d_probs,
                     ag=hx.ag_probs,
-                    lower=hx.dg_probs,
+                    dg=hx.dg_probs,
+                    ptr=None,
                 )
             elif ll_type in ["pre-trained", "hardcoded"]:
-                probs = Action(upper=hx.a_probs, delta=hx.d_probs, ag=hx.ag_probs)
+                probs = Action(
+                    upper=hx.a_probs,
+                    lower=None,
+                    delta=hx.d_probs,
+                    ag=hx.ag_probs,
+                    dg=hx.dg_probs,
+                    ptr=None,
+                )
             else:
                 raise RuntimeError
         else:
             raise RuntimeError
+        if self.lower_level:
+            if action is None:
+                lower = self.lower_level(
+                    inputs, rnn_hxs=None, masks=None, p=X.upper
+                ).action.float()
+                X = X._replace(lower=lower)
+            else:
+                X = X._replace(
+                    lower=Action(*action.unbind(1)).lower.float().unsqueeze(1)
+                )
 
-        dists = Action(*[p if p is None else FixedCategorical(p) for p in probs])
+        dists = [(p if p is None else FixedCategorical(p)) for p in probs]
         action_log_probs = sum(
             dist.log_probs(x) for dist, x in zip(dists, X) if dist is not None
         )

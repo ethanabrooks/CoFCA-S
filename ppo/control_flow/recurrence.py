@@ -7,7 +7,6 @@ import torch.nn.functional as F
 from gym import spaces
 from torch import nn as nn
 
-from ppo.control_flow.env import Obs
 from ppo.distributions import Categorical, FixedCategorical
 from ppo.utils import init_
 
@@ -15,7 +14,7 @@ RecurrentState = namedtuple("RecurrentState", "a d u p v h a_probs d_probs")
 
 
 def get_obs_sections(obs_spaces):
-    return Obs(*[int(np.prod(s.shape)) for s in obs_spaces])
+    return [int(np.prod(s.shape)) for s in obs_spaces]
 
 
 class Recurrence(nn.Module):
@@ -40,7 +39,7 @@ class Recurrence(nn.Module):
         self.log_dir = log_dir
         self.no_roll = no_roll
         self.no_scan = no_scan
-        self.obs_spaces = Obs(**observation_space.spaces)
+        self.obs_spaces = observation_space
         self.action_size = action_space.nvec.size
         self.debug = debug
         self.hidden_size = hidden_size
@@ -116,7 +115,7 @@ class Recurrence(nn.Module):
         self.state_sizes = state_sizes
 
     def set_obs_space(self, obs_space):
-        self.obs_spaces = Obs(**obs_space.spaces)
+        self.obs_spaces = obs_space.spaces
         self.obs_sections = get_obs_sections(self.obs_spaces)
         self.train_lines = len(self.obs_spaces.lines.nvec)
         # noinspection PyProtectedMember
@@ -152,7 +151,7 @@ class Recurrence(nn.Module):
         return hx, hx[-1:]
 
     def parse_inputs(self, inputs: torch.Tensor):
-        return Obs(*torch.split(inputs, self.obs_sections, dim=-1))
+        return torch.split(inputs, self.obs_sections, dim=-1)
 
     def parse_hidden(self, hx: torch.Tensor) -> RecurrentState:
         return RecurrentState(*torch.split(hx, self.state_sizes, dim=-1))
@@ -234,7 +233,6 @@ class Recurrence(nn.Module):
         a = hx.a.long().squeeze(-1)
         a[new_episode] = 0
         u = hx.u
-        d = hx.d
         R = torch.arange(N, device=rnn_hxs.device)
         A = torch.cat([actions[:, :, 0], hx.a.view(1, N)], dim=0).long()
         D = torch.cat([actions[:, :, 1], hx.d.view(1, N)], dim=0).long()
@@ -269,13 +267,3 @@ class Recurrence(nn.Module):
                 d=d,
                 d_probs=d_dist.probs,
             )
-
-    def build_memory(self, N, T, inputs):
-        lines = inputs.lines.view(T, N, self.obs_sections.lines).long()[0, :, :]
-        return self.embed_task(lines.view(-1)).view(
-            *lines.shape, self.encoder_hidden_size
-        )  # n_batch, n_lines, hidden_size
-
-    @staticmethod
-    def preprocess_obs(obs):
-        return obs.unsqueeze(-1)
