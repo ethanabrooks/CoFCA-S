@@ -4,6 +4,7 @@ from gym import spaces
 from gym.spaces import Box
 from torch import nn as nn
 from torch.nn import functional as F
+from ppo.control_flow.multi_step.env import Obs
 
 import ppo.agent
 from ppo.agent import AgentValues, NNBase
@@ -174,7 +175,7 @@ class Agent(ppo.agent.Agent, NNBase):
         if self.lower_level:
             if action is None:
                 lower = self.lower_level(
-                    inputs, rnn_hxs=None, masks=None, p=X.upper
+                    Obs(*rm.parse_inputs(inputs)), rnn_hxs=None, masks=None, p=X.upper
                 ).action.float()
                 X = X._replace(lower=lower)
             else:

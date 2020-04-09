@@ -47,7 +47,7 @@ class Recurrence(nn.Module):
         self.gru_hidden_size = gru_hidden_size
         self.P_save_name = None
 
-        self.obs_sections = get_obs_sections(self.obs_spaces)
+        self.obs_sections = self.get_obs_sections(self.obs_spaces)
         self.eval_lines = eval_lines
         self.train_lines = len(self.obs_spaces.lines.nvec)
 
@@ -100,6 +100,10 @@ class Recurrence(nn.Module):
     def gru_in_size(self):
         return self.encoder_hidden_size + self.ne
 
+    @staticmethod
+    def get_obs_sections(obs_spaces):
+        return get_obs_sections(obs_spaces)
+
     # noinspection PyProtectedMember
     @contextmanager
     def evaluating(self, eval_obs_space):
@@ -116,8 +120,8 @@ class Recurrence(nn.Module):
 
     def set_obs_space(self, obs_space):
         self.obs_spaces = obs_space.spaces
-        self.obs_sections = get_obs_sections(self.obs_spaces)
-        self.train_lines = len(self.obs_spaces.lines.nvec)
+        self.obs_sections = self.get_obs_sections(self.obs_spaces)
+        self.train_lines = len(self.obs_spaces["lines"].nvec)
         # noinspection PyProtectedMember
         if not self.no_scan:
             self.state_sizes = self.state_sizes._replace(
