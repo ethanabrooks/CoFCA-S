@@ -249,11 +249,13 @@ class Env(ppo.control_flow.env.Env):
                         break
                 if l is not None:
                     assert type(lines[l]) is Subtask
-                    o = objective(*lines[l].id)
-                    nearest = get_nearest(_to=o, _from=agent_pos, objects=objects)
-                    if nearest is None:
+                    be, it = lines[l].id
+                    if it not in objects.values():
                         return None
-                    _, d = nearest
+                    elif be == self.sell:
+                        if self.merchant not in objects.values():
+                            return None
+                    _, d = get_nearest(agent_pos, objective(be, it), objects)
                     self.time_remaining += 1 + d
                     return l
 
