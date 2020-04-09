@@ -138,7 +138,7 @@ class Env(ppo.control_flow.env.Env):
                             1 + self.max_loops,
                         ]
                     ]
-                    * (self.n_lines + 1)
+                    * self.n_lines
                 )
             ),
             inventory=spaces.MultiDiscrete(
