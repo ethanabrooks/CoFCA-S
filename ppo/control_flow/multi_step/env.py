@@ -71,7 +71,16 @@ class Env(ppo.control_flow.env.Env):
     terrain = [merchant, water, wall, bridge, agent]
     world_contents = items + terrain
     behaviors = [mine, sell, goto]
-    colors = [RESET, GREEN, YELLOW, LIGHTGREY, PINK, BLUE, DARKGREY, RESET, RESET]
+    colors = {
+        wood: GREEN,
+        gold: YELLOW,
+        iron: LIGHTGREY,
+        merchant: PINK,
+        wall: RESET,
+        water: BLUE,
+        bridge: RESET,
+        agent: RED,
+    }
 
     def __init__(
         self,
@@ -99,9 +108,7 @@ class Env(ppo.control_flow.env.Env):
         self.world_shape = (len(self.world_contents), self.world_size, self.world_size)
 
         def lower_level_actions():
-            yield self.mine
-            yield self.goto
-            yield self.sell
+            yield from self.behaviors
             for i in range(-1, 2):
                 for j in range(-1, 2):
                     yield np.array([i, j])
@@ -152,11 +159,10 @@ class Env(ppo.control_flow.env.Env):
                 number = channel * int_ids
                 crop = sorted(number, reverse=True)[:grid_size]
                 for x in crop:
-                    colors.append(self.colors[x])
+                    colors.append(self.colors[self.world_contents[x - 1]])
                     string.append(chars[x])
                 colors.append(RESET)
                 string.append("|")
-                # string += "".join(self.colors[x] + chars[x] + RESET for x in crop) + "|"
             print(*[c for p in zip(colors, string) for c in p], sep="")
             print("-" * len(string))
         for i, c in zip(self.items, inventory):
@@ -213,7 +219,7 @@ class Env(ppo.control_flow.env.Env):
             assert self.max_nesting_depth == 1
             objects = self.populate_world(lines)
             agent_pos = next(p for p, o in objects.items() if o == self.agent)
-            del objects[tuple(agent_pos)]
+            del objects[agent_pos]
 
             line_iterator = self.line_generator(lines)
             condition_evaluations = []
