@@ -352,13 +352,13 @@ class LowerLevel(NNBase):
         kernel_size,
         stride,
         concat,
-        **kwargs,
+        **_,
     ):
         self.concat = concat
         assert num_layers > 0
         H = (3 if concat else 1) * hidden_size
         super().__init__(
-            recurrent=recurrent, recurrent_input_size=H, hidden_size=hidden_size,
+            recurrent=recurrent, recurrent_input_size=H, hidden_size=hidden_size
         )
         (d, h, w) = obs_space["obs"].shape
         inventory_size = obs_space["inventory"].nvec.size

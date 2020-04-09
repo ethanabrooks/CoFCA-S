@@ -4,6 +4,7 @@ from gym import spaces
 from gym.spaces import Box
 from torch import nn as nn
 from torch.nn import functional as F
+from ppo.control_flow.multi_step.env import Obs
 
 import ppo.agent
 from ppo.agent import AgentValues, NNBase
