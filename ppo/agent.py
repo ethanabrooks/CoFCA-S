@@ -297,7 +297,7 @@ class LowerLevel(NNBase):
         assert num_layers > 0
         H = (3 if concat else 1) * hidden_size
         super().__init__(
-            recurrent=recurrent, recurrent_input_size=H, hidden_size=hidden_size,
+            recurrent=recurrent, recurrent_input_size=H, hidden_size=hidden_size
         )
         (d, h, w) = obs_space["obs"].shape
         inventory_size = obs_space["inventory"].nvec.size
@@ -364,12 +364,13 @@ class LowerLevel(NNBase):
         return self._output_size
 
     def forward(self, inputs, rnn_hxs, masks, p=None):
-        N = inputs.size(0)
-        R = torch.arange(N, device=inputs.device)
-        inputs = Obs(*self.parse_inputs(inputs))
+        if not type(inputs) is Obs:
+            inputs = Obs(*self.parse_inputs(inputs))
+        N = inputs.obs.size(0)
+        R = torch.arange(N, device=inputs.obs.device)
         if p is None:
             p = inputs.active
-        lines = inputs.lines.reshape(N, *self.obs_spaces.lines.shape)[
+        lines = inputs.lines.reshape(N, -1, self.obs_spaces.lines.shape[-1])[
             R, p.long().flatten()
         ]
         obs = inputs.obs.reshape(N, *self.obs_spaces.obs.shape)

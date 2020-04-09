@@ -11,6 +11,7 @@ import ppo.control_flow.multi_step.abstract_recurrence as abstract_recurrence
 import ppo.control_flow.recurrence as recurrence
 from ppo.control_flow.env import Action
 from ppo.control_flow.lstm import LSTMCell
+from ppo.control_flow.multi_step.env import Obs
 from ppo.distributions import FixedCategorical, Categorical
 from ppo.utils import init_
 
@@ -33,17 +34,20 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         gate_coef,
         gru_gate_coef,
         encoder_hidden_size,
-        **kwargs
+        observation_space,
+        **kwargs,
     ):
         self.lower_level_type = "hardcoded"
         self.gru_gate_coef = gru_gate_coef
         self.gate_coef = gate_coef
-        self.conv_hidden_size = encoder_hidden_size
+        self.conv_hidden_size = conv_hidden_size
+        observation_space = Obs(**observation_space.spaces)
         recurrence.Recurrence.__init__(
             self,
             hidden_size=hidden_size,
             encoder_hidden_size=encoder_hidden_size,
-            **kwargs
+            observation_space=observation_space,
+            **kwargs,
         )
         abstract_recurrence.Recurrence.__init__(
             self, conv_hidden_size=self.encoder_hidden_size
@@ -64,7 +68,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         self.d_gate = Categorical(hidden_size, 2)
         self.a_gate = Categorical(hidden_size, 2)
         state_sizes = self.state_sizes._asdict()
-        d, h, w = kwargs["observation_space"]["obs"].shape
+        d, h, w = observation_space.obs.shape
         kernel_size = 3
         stride = max(1, min(2, kernel_size // 2))
         padding = (kernel_size // 2) % stride
@@ -96,6 +100,17 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
     def gru_in_size(self):
         return self.encoder_hidden_size
 
+    def get_obs_sections(self, obs_spaces):
+        try:
+            obs_spaces = Obs(**obs_spaces)
+        except TypeError:
+            pass
+        return super().get_obs_sections(obs_spaces)
+
+    def set_obs_space(self, obs_space):
+        super().set_obs_space(obs_space)
+        self.obs_spaces = Obs(**self.obs_spaces)
+
     def pack(self, hxs):
         def pack():
             for name, size, hx in zip(
@@ -121,12 +136,14 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         )
 
         # parse non-action inputs
-        inputs = self.parse_inputs(inputs)
+        inputs = Obs(*self.parse_inputs(inputs))
         inputs = inputs._replace(obs=inputs.obs.view(T, N, *self.obs_spaces.obs.shape))
 
         # build memory
         nl = len(self.obs_spaces.lines.nvec)
-        M = self.build_memory(N, T, inputs)
+        M = self.embed_task(self.preprocess_embed(N, T, inputs)).view(
+            N, -1, self.encoder_hidden_size
+        )
 
         P = self.build_P(M, N, rnn_hxs.device, nl)
 
@@ -140,6 +157,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         hy = hx.hy
         cy = hx.cy
         p = hx.p.long().squeeze(-1)
+        a = inputs.active.long().squeeze(-1)
         u = hx.u
         hx.a[new_episode] = self.n_a - 1
         ag_probs = hx.ag_probs

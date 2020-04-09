@@ -39,7 +39,7 @@ PINK = "\033[95m"
 LIGHTCYAN = "\033[96m"
 RESET = "\033[0m"
 
-Obs = namedtuple("Obs", "active lines obs inventory")
+Obs = namedtuple("Obs", "active lines obs")
 
 
 def get_nearest(_from, _to, objects):
@@ -269,8 +269,11 @@ class Env(ppo.control_flow.env.Env):
                 # for i, a in enumerate(self.lower_level_actions):
                 # print(i, a)
                 # lower_level_index = int(input("go:"))
-                if self.lower_level == "hardcoded":
+                if self.lower_level == "train-alone":
+                    interaction, obj = lines[ptr].id
+                else:
                     interaction, obj = self.subtasks[subtask_id]
+                if self.lower_level == "hardcoded":
                     lower_level_action = self.get_lower_level_action(
                         interaction=interaction,
                         obj=obj,
@@ -297,6 +300,7 @@ class Env(ppo.control_flow.env.Env):
                             del objects[tuple(agent_pos)]
                     if done:
                         prev, ptr = ptr, next_subtask(ptr)
+                        subtask_complete = True
 
                 elif type(lower_level_action) is np.ndarray:
                     if self.temporal_extension:
