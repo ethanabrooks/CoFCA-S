@@ -243,7 +243,7 @@ class Recurrence(nn.Module):
             h = self.gru(torch.cat([M[R, p], u], dim=-1), h)
             z = F.relu(self.zeta(torch.cat([obs, h], dim=-1)))
             a_dist = self.actor(z)
-            self.sample_new(A[t], a_dist, p=True)
+            self.sample_new(A[t], a_dist)
             u = self.upsilon(z).softmax(dim=-1)
             self.print("u", u)
             w = P[p, R]

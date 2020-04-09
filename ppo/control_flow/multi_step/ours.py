@@ -16,7 +16,7 @@ from ppo.utils import init_
 
 RecurrentState = namedtuple(
     "RecurrentState",
-    "a d u ag dg ll p v h hy cy ll_probs a_probs d_probs ag_probs dg_probs gru_gate P",
+    "a d u ag dg p v h hy cy a_probs d_probs ag_probs dg_probs gru_gate P",
 )
 
 
@@ -36,8 +36,6 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         observation_space,
         **kwargs,
     ):
-        self.lower_level_type = lower_level
-        self.concat = concat
         self.gru_gate_coef = gru_gate_coef
         self.gate_coef = gate_coef
         self.conv_hidden_size = conv_hidden_size
@@ -68,20 +66,6 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         self.d_gate = Categorical(hidden_size, 2)
         self.a_gate = Categorical(hidden_size, 2)
         state_sizes = self.state_sizes._asdict()
-        del self.conv
-        d, h, w = kwargs["observation_space"]["obs"].shape
-        stride = min(stride, kernel_size // 2)
-        padding = (kernel_size // 2) % stride
-        self.conv = nn.Conv2d(
-            in_channels=d + self.encoder_hidden_size if concat else d,
-            out_channels=self.conv_hidden_size,
-            kernel_size=kernel_size,
-            stride=stride,
-            padding=padding,
-        )
-        n_ll = kwargs["action_space"].nvec[4]
-        conv_out_size = (h + (2 * padding) - (kernel_size - 1) - 1) // stride + 1
-        self.lower_level = Categorical(self.conv_hidden_size * conv_out_size ** 2, n_ll)
         self.state_sizes = RecurrentState(
             **state_sizes,
             hy=self.gru_hidden_size,
@@ -159,16 +143,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
 
         for t in range(T):
             self.print("p", p)
-            conv_in = inputs.obs[t]
-            line = M[R, p].reshape(N, self.encoder_hidden_size, 1, 1)
-            if self.concat:
-                expanded = line.expand(-1, -1, conv_in.size(2), conv_in.size(3))
-                conv_out = self.conv(torch.cat([conv_in, expanded], dim=1))
-            else:
-                conv_out = self.conv(conv_in) * line
-            ll_dist = self.lower_level(conv_out.reshape(N, -1))
-            self.sample_new(LL[t], ll_dist)
-            obs = conv_out.view(N, self.conv_hidden_size, -1).max(dim=-1).values
+            obs = self.preprocess_obs(inputs.obs[t])
             # h = self.gru(obs, h)
             zeta_inputs = [h, M[R, p], obs, self.embed_action(A[t - 1].clone())]
             z = F.relu(self.zeta(torch.cat(zeta_inputs, dim=-1)))
@@ -195,10 +170,6 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             p = torch.clamp(p, min=0, max=M.size(1) - 1)
 
             ag = AG[t].unsqueeze(-1).float()
-            if torch.any(AG > 1.0):
-                import ipdb
-
-                ipdb.set_trace()
             a_dist = gate(ag, self.actor(z).probs, A[t - 1])
             self.sample_new(A[t], a_dist)
             # A[:] = float(input("go:"))
@@ -223,6 +194,4 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 dg=dg,
                 gru_gate=gru_gate,
                 P=P.transpose(0, 1),
-                ll=LL[t],
-                ll_probs=ll_dist.probs,
             )
