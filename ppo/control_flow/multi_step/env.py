@@ -293,17 +293,28 @@ class Env(ppo.control_flow.env.Env):
                 tgt_obj = objective(*lines[ptr].id)
 
                 if type(lower_level_action) is str:
-                    done = (
-                        lower_level_action == tgt_interaction
-                        and objects.get(tuple(agent_pos), None) == tgt_obj
-                    )
+                    standing_on = objects.get(tuple(agent_pos), None)
                     if lower_level_action == self.mine:
+                        done = (
+                            lower_level_action == tgt_interaction
+                            and standing_on == tgt_obj
+                        )
                         if tuple(agent_pos) in objects:
                             if done:
                                 possible_objects.remove(objects[tuple(agent_pos)])
                             else:
                                 term = True
                             del objects[tuple(agent_pos)]
+                    elif lower_level_action == self.sell:
+                        done = (
+                            lower_level_action == tgt_interaction
+                            and standing_on == tgt_obj
+                        )
+                    elif lower_level_action == self.goto:
+                        done = (
+                            lower_level_action == tgt_interaction
+                            and standing_on == tgt_obj
+                        )
                     if done:
                         prev, ptr = ptr, next_subtask(ptr)
                         subtask_complete = True
