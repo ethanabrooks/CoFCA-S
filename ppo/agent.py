@@ -69,9 +69,11 @@ class Agent(nn.Module):
         """Size of rnn_hx."""
         return self.recurrent_module.recurrent_hidden_state_size
 
-    def forward(self, inputs, rnn_hxs, masks, deterministic=False, action=None, p=None):
+    def forward(
+        self, inputs, rnn_hxs, masks, deterministic=False, action=None, **kwargs
+    ):
         value, actor_features, rnn_hxs = self.recurrent_module(
-            inputs, rnn_hxs, masks, p=p
+            inputs, rnn_hxs, masks, **kwargs
         )
 
         dist = self.dist(actor_features)
@@ -289,13 +291,13 @@ class LowerLevel(NNBase):
         kernel_size,
         stride,
         concat,
-        **kwargs,
+        **_,
     ):
         self.concat = concat
         assert num_layers > 0
         H = (3 if concat else 1) * hidden_size
         super().__init__(
-            recurrent=recurrent, recurrent_input_size=H, hidden_size=hidden_size,
+            recurrent=recurrent, recurrent_input_size=H, hidden_size=hidden_size
         )
         (d, h, w) = obs_space["obs"].shape
         inventory_size = obs_space["inventory"].nvec.size
@@ -362,12 +364,13 @@ class LowerLevel(NNBase):
         return self._output_size
 
     def forward(self, inputs, rnn_hxs, masks, p=None):
-        N = inputs.size(0)
-        R = torch.arange(N, device=inputs.device)
-        inputs = Obs(*self.parse_inputs(inputs))
+        if not type(inputs) is Obs:
+            inputs = Obs(*self.parse_inputs(inputs))
+        N = inputs.obs.size(0)
+        R = torch.arange(N, device=inputs.obs.device)
         if p is None:
             p = inputs.active
-        lines = inputs.lines.reshape(N, *self.obs_spaces.lines.shape)[
+        lines = inputs.lines.reshape(N, -1, self.obs_spaces.lines.shape[-1])[
             R, p.long().flatten()
         ]
         obs = inputs.obs.reshape(N, *self.obs_spaces.obs.shape)
