@@ -214,6 +214,8 @@ class Env(ppo.control_flow.env.Env):
             condition_evaluations = []
             self.time_remaining = 200 if self.evaluating else self.time_to_waste
             self.loops = None
+            inventory = Counter()
+            subtask_complete = False
 
             def next_subtask(l):
                 while True:
@@ -254,7 +256,9 @@ class Env(ppo.control_flow.env.Env):
                     prev=prev,
                     ptr=ptr,
                     term=term,
+                    subtask_complete=subtask_complete,
                 )
+                subtask_complete = False
                 # for i, a in enumerate(self.lower_level_actions):
                 # print(i, a)
                 # lower_level_index = int(input("go:"))

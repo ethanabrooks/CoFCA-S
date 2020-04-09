@@ -23,7 +23,7 @@ from ppo.control_flow.lines import (
 
 Obs = namedtuple("Obs", "active lines obs")
 Last = namedtuple("Last", "action active reward terminal selected")
-State = namedtuple("State", "obs prev ptr  term")
+State = namedtuple("State", "obs prev ptr term subtask_complete")
 Action = namedtuple("Action", "upper lower delta ag dg ptr")
 
 
