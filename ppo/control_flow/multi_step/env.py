@@ -250,16 +250,11 @@ class Env(ppo.control_flow.env.Env):
                 if l is not None:
                     assert type(lines[l]) is Subtask
                     be, it = lines[l].id
-                    if be in (self.mine, self.goto):
-                        if it not in objects.values():
-                            return None
+                    if it not in objects.values():
+                        return None
                     elif be == self.sell:
-                        if (
-                            it not in objects.values()
-                            or self.merchant not in objects.values()
-                        ):
+                        if self.merchant not in objects.values():
                             return None
-
                     self.time_remaining += 2 * self.world_size
                     return l
 
