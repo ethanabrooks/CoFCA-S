@@ -301,14 +301,20 @@ class Env(ppo.control_flow.env.Env):
                         )
                         if tuple(agent_pos) in objects:
                             if done:
-                                possible_objects.remove(objects[tuple(agent_pos)])
+                                possible_objects.remove(standing_on)
                             else:
                                 term = True
+                            if standing_on in self.items:
+                                inventory[standing_on] += 1
                             del objects[tuple(agent_pos)]
                     elif lower_level_action == self.sell:
                         done = (
                             lower_level_action == tgt_interaction
                             and standing_on == tgt_obj
+                            and (
+                                self.lower_level == "hardcoded"
+                                or inventory[tgt_obj] > 0
+                            )
                         )
                     elif lower_level_action == self.goto:
                         done = (
