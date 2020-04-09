@@ -410,12 +410,6 @@ class Env(ppo.control_flow.env.Env):
             if use_water
             else [self.world_size, self.world_size]
         )
-        vertical_water = self.random.choice(2)
-        world_shape = (
-            [self.world_size, self.world_size - 1]
-            if vertical_water
-            else [self.world_size - 1, self.world_size]
-        )
         positions = np.array(list(zip(*np.unravel_index(indexes, world_shape))))
         wall_indexes = positions[:, 0] % 2 * positions[:, 1] % 2
         wall_positions = positions[wall_indexes == 1]
