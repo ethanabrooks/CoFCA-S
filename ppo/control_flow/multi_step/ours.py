@@ -82,6 +82,17 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
     def gru_in_size(self):
         return self.encoder_hidden_size
 
+    def get_obs_sections(self, obs_spaces):
+        try:
+            obs_spaces = Obs(**obs_spaces)
+        except TypeError:
+            pass
+        return super().get_obs_sections(obs_spaces)
+
+    def set_obs_space(self, obs_space):
+        super().set_obs_space(obs_space)
+        self.obs_spaces = Obs(**self.obs_spaces)
+
     def pack(self, hxs):
         def pack():
             for name, size, hx in zip(
