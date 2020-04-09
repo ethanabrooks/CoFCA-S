@@ -318,7 +318,21 @@ class Env(ppo.control_flow.env.Env):
                     if self.temporal_extension:
                         lower_level_action = np.clip(lower_level_action, -1, 1)
                     new_pos = agent_pos + lower_level_action
-                    if np.all(0 <= new_pos) and np.all(new_pos < self.world_size):
+                    moving_into = objects.get(tuple(new_pos), None)
+                    if (
+                        np.all(0 <= new_pos)
+                        and np.all(new_pos < self.world_size)
+                        and (
+                            self.lower_level == "hardcoded"
+                            or (
+                                moving_into != self.wall
+                                and (
+                                    moving_into != self.water
+                                    or inventory[self.wood] > 0
+                                )
+                            )
+                        )
+                    ):
                         agent_pos = new_pos
                 else:
                     assert lower_level_action is None
