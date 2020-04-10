@@ -387,24 +387,28 @@ class Env(ppo.control_flow.env.Env):
                     for _ in range(num_obj):
                         yield obj
 
-        object_list = (
-            [self.agent]
-            + list(subtask_ids())
-            + list(loop_objects())
-            + list(while_objects())
-        )
-        num_random_objects = (self.world_size ** 2) - self.world_size  # for water
+        subtask_list = list(subtask_ids())
+        loop_list = list(loop_objects())
+        while_list = list(while_objects())
+        object_list = [self.agent] + subtask_list + loop_list + while_list
+        num_random_objects = self.world_size ** 2
+        use_water = self.wood in object_list[: num_random_objects - self.world_size]
+        if use_water:
+            # condition for stream
+            num_random_objects -= self.world_size
         object_list = object_list[:num_random_objects]
         indexes = self.random.choice(
-            self.world_size * (self.world_size - 1),
-            size=num_random_objects,
-            replace=False,
+            num_random_objects, size=num_random_objects, replace=False
         )
         vertical_water = self.random.choice(2)
         world_shape = (
-            [self.world_size, self.world_size - 1]
-            if vertical_water
-            else [self.world_size - 1, self.world_size]
+            (
+                [self.world_size, self.world_size - 1]
+                if vertical_water
+                else [self.world_size - 1, self.world_size]
+            )
+            if use_water
+            else [self.world_size, self.world_size]
         )
         positions = np.array(list(zip(*np.unravel_index(indexes, world_shape))))
         wall_indexes = positions[:, 0] % 2 * positions[:, 1] % 2
