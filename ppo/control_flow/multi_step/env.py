@@ -223,7 +223,7 @@ class Env(ppo.control_flow.env.Env):
 
             line_iterator = self.line_generator(lines)
             condition_evaluations = []
-            self.time_remaining = 200 if self.evaluating else self.time_to_waste
+            self.time_remaining = 200 if self.evaluating else 0
             self.loops = None
             inventory = Counter()
             subtask_complete = False
@@ -256,7 +256,7 @@ class Env(ppo.control_flow.env.Env):
                         if self.merchant not in objects.values():
                             return None
                     _, d = get_nearest(agent_pos, objective(be, it), objects)
-                    self.time_remaining += 1 + d
+                    self.time_remaining += 2 * self.world_size + self.time_to_waste
                     return l
 
             possible_objects = list(objects.values())
