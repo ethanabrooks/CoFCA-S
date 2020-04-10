@@ -298,11 +298,12 @@ class Env(ppo.control_flow.env.Env):
                     )
                     if lower_level_action == self.mine:
                         if tuple(agent_pos) in objects:
-                            standing_on = objects[tuple(agent_pos)]
                             if standing_on in self.items:
-                                inventory[standing_on] += 1
-                                if done:
+                                if done or ((self.sell, standing_on) == lines[ptr].id):
                                     possible_objects.remove(standing_on)
+                                else:
+                                    term = True
+                                inventory[standing_on] += 1
                                 del objects[tuple(agent_pos)]
                     elif lower_level_action == self.goto:
                         done = (
