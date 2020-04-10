@@ -292,11 +292,11 @@ class Env(ppo.control_flow.env.Env):
                 tgt_obj = objective(*lines[ptr].id)
 
                 if type(lower_level_action) is str:
+                    standing_on = objects.get(tuple(agent_pos), None)
+                    done = (
+                        lower_level_action == tgt_interaction and standing_on == tgt_obj
+                    )
                     if lower_level_action == self.mine:
-                        done = (
-                            lower_level_action == tgt_interaction
-                            and objects.get(tuple(agent_pos), None) == tgt_obj
-                        )
                         if tuple(agent_pos) in objects:
                             standing_on = objects[tuple(agent_pos)]
                             if standing_on in self.items:
