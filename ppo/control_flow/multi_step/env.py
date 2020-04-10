@@ -305,11 +305,6 @@ class Env(ppo.control_flow.env.Env):
                                     term = True
                                 inventory[standing_on] += 1
                                 del objects[tuple(agent_pos)]
-                    elif lower_level_action == self.goto:
-                        done = (
-                            lower_level_action == tgt_interaction
-                            and objects.get(tuple(agent_pos), None) == tgt_obj
-                        )
                     elif lower_level_action == self.sell:
                         standing_on = objects.get(tuple(agent_pos), None)
                         commodity = obj
