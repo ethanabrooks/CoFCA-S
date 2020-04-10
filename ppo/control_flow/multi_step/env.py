@@ -300,7 +300,11 @@ class Env(ppo.control_flow.env.Env):
                     if lower_level_action == self.mine:
                         if tuple(agent_pos) in objects:
                             if standing_on in self.items:
-                                if done or ((self.sell, standing_on) == lines[ptr].id):
+                                if (
+                                    done
+                                    or ((self.sell, standing_on) == lines[ptr].id)
+                                    or (standing_on == self.wood)
+                                ):
                                     possible_objects.remove(standing_on)
                                 else:
                                     term = True
@@ -333,8 +337,6 @@ class Env(ppo.control_flow.env.Env):
                             )
                         )
                     ):
-                        if moving_into == self.water:
-                            inventory[self.wood] = 0
                         agent_pos = new_pos
                 else:
                     assert lower_level_action is None
@@ -391,25 +393,19 @@ class Env(ppo.control_flow.env.Env):
         subtask_list = list(subtask_ids())
         loop_list = list(loop_objects())
         while_list = list(while_objects())
-        object_list = [self.agent] + subtask_list + loop_list + while_list
-        num_random_objects = self.world_size ** 2
-        use_water = self.wood in object_list[: num_random_objects - self.world_size]
-        if use_water:
-            # condition for stream
-            num_random_objects -= self.world_size
+        object_list = (
+            [self.agent] + subtask_list + loop_list + while_list + [self.wood] * 5
+        )
+        num_random_objects = self.world_size ** 2 - self.world_size
         object_list = object_list[:num_random_objects]
         indexes = self.random.choice(
             num_random_objects, size=num_random_objects, replace=False
         )
         vertical_water = self.random.choice(2)
         world_shape = (
-            (
-                [self.world_size, self.world_size - 1]
-                if vertical_water
-                else [self.world_size - 1, self.world_size]
-            )
-            if use_water
-            else [self.world_size, self.world_size]
+            [self.world_size, self.world_size - 1]
+            if vertical_water
+            else [self.world_size - 1, self.world_size]
         )
         positions = np.array(list(zip(*np.unravel_index(indexes, world_shape))))
         wall_indexes = positions[:, 0] % 2 * positions[:, 1] % 2
@@ -422,25 +418,43 @@ class Env(ppo.control_flow.env.Env):
         if len(object_list) == len(object_positions):
             wall_positions = wall_positions[:num_walls]
         positions = np.concatenate([object_positions, wall_positions])
-        objects = {}
-        if use_water:
-            water_index = self.random.choice(self.world_size)
-            positions[positions[:, vertical_water] >= water_index] += np.array(
-                [0, 1] if vertical_water else [1, 0]
-            )
-            objects.update(
-                {
-                    (i, water_index) if vertical_water else (water_index, i): self.water
-                    for i in range(self.world_size)
-                }
-            )
-            assert water_index not in positions[:, vertical_water]
-        objects.update(
-            {
-                tuple(p): (self.wall if o is None else o)
-                for o, p in itertools.zip_longest(object_list, positions)
-            }
+        water_index = self.random.choice(self.world_size)
+        positions[positions[:, vertical_water] >= water_index] += np.array(
+            [0, 1] if vertical_water else [1, 0]
         )
+        assert water_index not in positions[:, vertical_water]
+        objects = {
+            tuple(p): (self.wall if o is None else o)
+            for o, p in itertools.zip_longest(object_list, positions)
+        }
+        assert object_list[0] == self.agent
+        agent_i, agent_j = positions[0]
+        for p, o in objects.items():
+            if o == self.wood:
+                pi, pj = p
+                if vertical_water:
+                    if (water_index < pj and water_index < agent_j) or (
+                        water_index > pj and water_index > agent_j
+                    ):
+                        return {
+                            **objects,
+                            **{
+                                (i, water_index): self.water
+                                for i in range(self.world_size)
+                            },
+                        }
+                else:
+                    if (water_index < pi and water_index < agent_i) or (
+                        water_index > pi and water_index > agent_i
+                    ):
+                        return {
+                            **objects,
+                            **{
+                                (water_index, i): self.water
+                                for i in range(self.world_size)
+                            },
+                        }
+
         return objects
 
     def assign_line_ids(self, lines):
