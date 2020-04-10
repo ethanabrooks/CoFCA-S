@@ -255,7 +255,8 @@ class Env(ppo.control_flow.env.Env):
                     elif be == self.sell:
                         if self.merchant not in objects.values():
                             return None
-                    self.time_remaining += 2 * self.world_size
+                    _, d = get_nearest(agent_pos, objective(be, it), objects)
+                    self.time_remaining += 1 + d
                     return l
 
             possible_objects = list(objects.values())
