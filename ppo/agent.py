@@ -301,8 +301,8 @@ class LowerLevel(NNBase):
         )
         (d, h, w) = obs_space["obs"].shape
         inventory_size = obs_space["inventory"].nvec.size
-        line_nvec = torch.tensor(obs_space["lines"].nvec)
-        offset = F.pad(line_nvec[0, :-1].cumsum(0), [1, 0])
+        line_nvec = torch.tensor(obs_space["lines"].nvec[0])
+        offset = F.pad(line_nvec[:-1].cumsum(0), [1, 0])
         self.register_buffer("offset", offset)
         self.obs_spaces = Obs(**obs_space.spaces)
         self.obs_sections = get_obs_sections(self.obs_spaces)
@@ -336,7 +336,7 @@ class LowerLevel(NNBase):
         self.conv_projection = nn.Sequential(
             init2(nn.Linear(h * w * hidden_size, hidden_size)), activation
         )
-        self.line_embed = nn.EmbeddingBag(line_nvec.sum(), hidden_size)
+        self.line_embed = nn.EmbeddingBag(2 * line_nvec.sum(), hidden_size)
         self.inventory_embed = nn.Sequential(
             init2(nn.Linear(inventory_size, hidden_size)), activation
         )
@@ -370,8 +370,8 @@ class LowerLevel(NNBase):
         R = torch.arange(N, device=inputs.obs.device)
         lines = inputs.lines.reshape(N, -1, self.obs_spaces.lines.shape[-1])
         if p is None:
-            p = inputs.active.clamp(min=0, max=lines.size(1) - 1).long().flatten()
-        lines = lines[R, p]
+            p = inputs.active.clamp(min=0, max=lines.size(1) - 1)
+        lines = lines[R, p.long().flatten()]
         obs = inputs.obs.reshape(N, *self.obs_spaces.obs.shape)
         lines_embed = self.line_embed(lines.long() + self.offset)
         obs_embed = self.conv_projection(self.conv(obs))
