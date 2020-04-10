@@ -306,13 +306,9 @@ class Env(ppo.control_flow.env.Env):
                                 inventory[standing_on] += 1
                                 del objects[tuple(agent_pos)]
                     elif lower_level_action == self.sell:
-                        commodity = tgt_obj
-                        if (standing_on == self.merchant) and inventory[commodity] > 0:
-                            inventory[commodity] -= 1
-                            done = True
-                        else:
-                            done = False
-
+                        done = done and (
+                            self.lower_level == "hardcoded" or inventory[tgt_obj] > 0
+                        )
                     if done:
                         prev, ptr = ptr, next_subtask(ptr)
                         subtask_complete = True
