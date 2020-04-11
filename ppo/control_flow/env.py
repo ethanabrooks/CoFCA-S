@@ -125,7 +125,7 @@ class Env(gym.Env, ABC):
         actions = []
         program_counter = []
 
-        cumulative_reward = 0
+        subtasks_complete = 0
         agent_ptr = 0
         info = {}
         term = False
@@ -135,11 +135,13 @@ class Env(gym.Env, ABC):
             if state.ptr is not None:
                 program_counter.append(state.ptr)
             success = state.ptr is None
-            reward = int(success)
 
             term = term or success or state.term
-            r = state.subtask_complete if self.lower_level == "train-alone" else reward
-            cumulative_reward += r
+            if self.lower_level == "train-alone":
+                reward = 1 if state.subtask_complete else 0
+            else:
+                reward = int(success)
+            subtasks_complete += state.subtask_complete
             if term:
                 if not success and self.break_on_fail:
                     import ipdb
@@ -157,11 +159,11 @@ class Env(gym.Env, ABC):
                 else:
                     info.update(success_line=state.prev, failure_line=state.ptr)
                 if self.lower_level == "train-alone":
-                    lines_attempted = min(len(lines), cumulative_reward + 1)
-                    if not (success and cumulative_reward < len(lines)):
+                    subtasks_attempted = min(len(lines), subtasks_complete + 1)
+                    if not (success and subtasks_complete < len(lines)):
                         info.update(
-                            cumulative_reward=cumulative_reward,
-                            lines_attempted=lines_attempted,
+                            subtasks_complete=subtasks_complete,
+                            subtasks_attempted=subtasks_attempted,
                         )
 
             info.update(regret=1 if term and not success else 0)
@@ -192,8 +194,8 @@ class Env(gym.Env, ABC):
                         "Lower Level Action:",
                         self.lower_level_actions[lower_level_action],
                     )
-                print("Reward", r)
-                print("Cumulative", cumulative_reward)
+                print("Reward", reward)
+                print("Cumulative", subtasks_complete)
                 print("Obs:")
                 print(RESET)
                 self.print_obs(state.obs)
@@ -201,7 +203,7 @@ class Env(gym.Env, ABC):
             self._render = render
             obs = self.get_observation(obs=state.obs, active=state.ptr, lines=lines)
 
-            action = (yield obs, r, term, info)
+            action = (yield obs, reward, term, info)
             if action.size == 1:
                 action = Action(upper=0, lower=action, delta=0, ag=0, dg=0, ptr=0)
             actions.extend([int(a) for a in action])
@@ -417,11 +419,13 @@ def build_parser(p):
 
 
 def main(env):
+    # for i, l in enumerate(env.lower_level_actions):
+    # print(i, l)
     def action_fn(string):
-        ll = dict(w=4, s=10, a=6, d=8, m=0, l=1, g=2,).get(string, None)
+        ll = dict(w=4, s=10, a=6, d=8, m=0, l=1, g=2).get(string, None)
         if ll is None:
             return None
-        return np.array(list(Action(upper=0, lower=ll, delta=0, dg=0, ag=0, ptr=0)))
+        return np.array(Action(upper=0, lower=ll, delta=0, dg=0, ag=0, ptr=0))
 
     keyboard_control.run(env, action_fn=action_fn)
 

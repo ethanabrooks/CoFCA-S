@@ -433,6 +433,17 @@ class Env(ppo.control_flow.env.Env):
                             and objects.get(tuple(agent_pos), None) == tgt_obj
                         )
                         if tuple(agent_pos) in objects:
+                            if (
+                                done
+                                or (
+                                    tgt_interaction == self.sell
+                                    and standing_on == tgt_obj
+                                )
+                                or standing_on == self.wood
+                            ):
+                                possible_objects.remove(standing_on)
+                            else:
+                                term = True
                             if standing_on in self.items:
                                 if (
                                     done
