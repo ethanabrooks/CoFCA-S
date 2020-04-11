@@ -44,7 +44,7 @@ Obs = namedtuple("Obs", "active lines obs inventory")
 
 def get_nearest(_from, _to, objects):
     items = [(np.array(p), o) for p, o in objects.items()]
-    candidates = [(p, np.sum(np.abs(_from - p))) for p, o in items if o == _to]
+    candidates = [(p, np.max(np.abs(_from - p))) for p, o in items if o == _to]
     if candidates:
         return min(candidates, key=lambda c: c[1])
 
@@ -285,6 +285,7 @@ class Env(ppo.control_flow.env.Env):
                         agent_pos=agent_pos,
                         objects=objects,
                     )
+                    # print("lower level action:", lower_level_action)
                 else:
                     lower_level_action = self.lower_level_actions[lower_level_index]
                 self.time_remaining -= 1
@@ -485,7 +486,8 @@ class Env(ppo.control_flow.env.Env):
     @staticmethod
     def get_lower_level_action(interaction, obj, agent_pos, objects):
         obj = objective(interaction, obj)
-        if objects.get(tuple(agent_pos), None) == obj:
+        standing_on = objects.get(tuple(agent_pos), None)
+        if standing_on == obj:
             return interaction
         else:
             nearest = get_nearest(_from=agent_pos, _to=obj, objects=objects)
