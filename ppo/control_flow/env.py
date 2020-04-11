@@ -137,13 +137,13 @@ class Env(gym.Env, ABC):
             if state.ptr is not None:
                 program_counter.append(state.ptr)
             success = state.ptr is None
+
             term = term or success or state.term
-            reward = (
-                state.subtask_complete
-                if self.lower_level == "train-alone"
-                else int(success)
-            )
-            subtasks_complete += success
+            if self.lower_level == "train-alone":
+                reward = 1 if state.subtask_complete else 0
+            else:
+                reward = int(success)
+            subtasks_complete += state.subtask_complete
             if term:
                 if not success and self.break_on_fail:
                     import ipdb
