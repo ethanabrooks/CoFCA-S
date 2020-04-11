@@ -94,10 +94,10 @@ def main(
 
         def log_result(self, result: dict):
             if lower_level == "train-alone":
-                lines_attempted = sum(result["lines_attempted"])
-                if lines_attempted > 0:
+                subtasks_attempted = sum(result["subtasks_attempted"])
+                if subtasks_attempted > 0:
                     result["success"] = (
-                        sum(result["cumulative_reward"]) / lines_attempted
+                        sum(result["subtasks_complete"]) / subtasks_attempted
                     )
             else:
                 names = NAMES + ["P"]
@@ -128,7 +128,7 @@ def control_flow_args():
     parser.add_argument("--no-eval", action="store_true")
     parser.add_argument("--one-line", action="store_true")
     parser.add_argument(
-        "--lower-level", choices=["train-alone", "train-with-upper", "hardcoded"],
+        "--lower-level", choices=["train-alone", "train-with-upper", "hardcoded"]
     )
     parser.add_argument("--lower-level-load-path")
     parsers.env.add_argument("--gridworld", action="store_true")
