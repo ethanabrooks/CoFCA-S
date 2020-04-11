@@ -223,7 +223,7 @@ class Env(ppo.control_flow.env.Env):
 
             line_iterator = self.line_generator(lines)
             condition_evaluations = []
-            self.time_remaining = 200 if self.evaluating else 0
+            self.time_remaining = 200 if self.evaluating else self.time_to_waste
             self.loops = None
             inventory = Counter()
             subtask_complete = False
