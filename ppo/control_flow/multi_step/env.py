@@ -298,7 +298,14 @@ class Env(ppo.control_flow.env.Env):
                     )
                     if lower_level_action == self.mine:
                         if tuple(agent_pos) in objects:
-                            if done:
+                            if (
+                                done
+                                or (
+                                    tgt_interaction == self.sell
+                                    and standing_on == tgt_obj
+                                )
+                                or standing_on == self.wood
+                            ):
                                 possible_objects.remove(standing_on)
                             else:
                                 term = True
