@@ -94,10 +94,10 @@ def main(
 
         def log_result(self, result: dict):
             if lower_level == "train-alone":
-                lines_attempted = sum(result["lines_attempted"])
-                if lines_attempted > 0:
+                subtasks_attempted = sum(result["subtasks_attempted"])
+                if subtasks_attempted > 0:
                     result["success"] = (
-                        sum(result["cumulative_reward"]) / lines_attempted
+                        sum(result["subtasks_complete"]) / subtasks_attempted
                     )
             else:
                 names = NAMES + ["P"]
