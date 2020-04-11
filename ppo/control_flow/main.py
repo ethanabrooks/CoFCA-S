@@ -129,6 +129,7 @@ def control_flow_args():
     parser.add_argument(
         "--lower-level", choices=["train-alone", "train-with-upper", "hardcoded"],
     )
+    parser.add_argument("--lower-level-load-path")
     parsers.env.add_argument("--gridworld", action="store_true")
     ppo.control_flow.multi_step.env.build_parser(parsers.env)
     parsers.agent.add_argument("--debug", action="store_true")

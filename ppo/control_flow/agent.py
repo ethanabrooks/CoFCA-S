@@ -30,8 +30,13 @@ class Agent(ppo.agent.Agent, NNBase):
         no_op_coef,
         baseline,
         lower_level_load_path,
+        lower_level_hidden_size,
+        kernel_size,
+        stride,
         action_space,
+        concat,
         num_conv_layers,
+        lower_level,
         **network_args,
     ):
         nn.Module.__init__(self)
@@ -76,8 +81,9 @@ class Agent(ppo.agent.Agent, NNBase):
                 action_space=action_space,
                 **network_args,
             )
+        self.lower_level_type = "pre-trained" if lower_level_load_path else lower_level
         self.lower_level = None
-        if self.recurrent_module.lower_level_type == "pre-trained":
+        if lower_level_load_path is not None:
             ll_action_space = spaces.Discrete(
                 ppo.control_flow.env.Action(*action_space.nvec).lower
             )
@@ -87,7 +93,13 @@ class Agent(ppo.agent.Agent, NNBase):
                 recurrent=False,
                 entropy_coef=0,
                 action_space=ll_action_space,
-                **network_args,
+                hidden_size=lower_level_hidden_size,
+                kernel_size=kernel_size,
+                stride=stride,
+                lower_level=True,
+                num_layers=1,
+                activation=nn.ReLU(),
+                concat=concat,
             )
             state_dict = torch.load(lower_level_load_path)
             self.lower_level.load_state_dict(state_dict["agent"])
@@ -128,10 +140,8 @@ class Agent(ppo.agent.Agent, NNBase):
             X = [hx.a, pad, pad, pad, hx.p]
             probs = [hx.a_probs]
         elif t is ppo.control_flow.multi_step.ours.Recurrence:
-            X = Action(
-                upper=hx.a, lower=hx.ll, delta=hx.d, ag=hx.ag, dg=hx.dg, ptr=hx.p
-            )
-            ll_type = rm.lower_level_type
+            X = Action(upper=hx.a, lower=pad, delta=hx.d, ag=hx.ag, dg=hx.dg, ptr=hx.p)
+            ll_type = self.lower_level_type
             if ll_type == "train-alone":
                 probs = Action(
                     upper=None,
@@ -166,7 +176,7 @@ class Agent(ppo.agent.Agent, NNBase):
         if self.lower_level:
             if action is None:
                 lower = self.lower_level(
-                    inputs, rnn_hxs=None, masks=None, p=X.upper
+                    Obs(*rm.parse_inputs(inputs)), rnn_hxs=None, masks=None, p=X.upper
                 ).action.float()
                 X = X._replace(lower=lower)
             else:

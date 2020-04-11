@@ -39,6 +39,17 @@ class Agent(nn.Module):
                 *obs_shape, recurrent=recurrent, hidden_size=hidden_size, **network_args
             )
         elif len(obs_shape) == 1:
+            self.recurrent_module = MLPBase(
+                obs_shape[0],
+                recurrent=recurrent,
+                hidden_size=hidden_size,
+                **network_args,
+            )
+        elif len(obs_shape) == 3:
+            self.recurrent_module = CNNBase(
+                *obs_shape, recurrent=recurrent, hidden_size=hidden_size, **network_args
+            )
+        elif len(obs_shape) == 1:
             self.base = MLPBase(
                 obs_shape[0], recurrent=recurrent, hidden_size=hidden_size, **network_args)
         else:
@@ -63,9 +74,11 @@ class Agent(nn.Module):
         """Size of rnn_hx."""
         return self.recurrent_module.recurrent_hidden_state_size
 
-    def forward(self, inputs, rnn_hxs, masks, deterministic=False, action=None, p=None):
+    def forward(
+        self, inputs, rnn_hxs, masks, deterministic=False, action=None, **kwargs
+    ):
         value, actor_features, rnn_hxs = self.recurrent_module(
-            inputs, rnn_hxs, masks, p=p
+            inputs, rnn_hxs, masks, **kwargs
         )
 
         dist = self.dist(actor_features)
@@ -362,8 +375,8 @@ class LowerLevel(NNBase):
         )
         (d, h, w) = obs_space["obs"].shape
         inventory_size = obs_space["inventory"].nvec.size
-        line_nvec = torch.tensor(obs_space["lines"].nvec)
-        offset = F.pad(line_nvec[0, :-1].cumsum(0), [1, 0])
+        line_nvec = torch.tensor(obs_space["lines"].nvec[0])
+        offset = F.pad(line_nvec[:-1].cumsum(0), [1, 0])
         self.register_buffer("offset", offset)
         self.obs_spaces = Obs(**obs_space.spaces)
         self.obs_sections = get_obs_sections(self.obs_spaces)
@@ -397,7 +410,7 @@ class LowerLevel(NNBase):
         self.conv_projection = nn.Sequential(
             init2(nn.Linear(h * w * hidden_size, hidden_size)), activation
         )
-        self.line_embed = nn.EmbeddingBag(line_nvec.sum(), hidden_size)
+        self.line_embed = nn.EmbeddingBag(2 * line_nvec.sum(), hidden_size)
         self.inventory_embed = nn.Sequential(
             init2(nn.Linear(inventory_size, hidden_size)), activation
         )
@@ -425,14 +438,14 @@ class LowerLevel(NNBase):
         return self._output_size
 
     def forward(self, inputs, rnn_hxs, masks, p=None):
-        N = inputs.size(0)
-        R = torch.arange(N, device=inputs.device)
-        inputs = Obs(*self.parse_inputs(inputs))
+        if not type(inputs) is Obs:
+            inputs = Obs(*self.parse_inputs(inputs))
+        N = inputs.obs.size(0)
+        R = torch.arange(N, device=inputs.obs.device)
+        lines = inputs.lines.reshape(N, -1, self.obs_spaces.lines.shape[-1])
         if p is None:
-            p = inputs.active
-        lines = inputs.lines.reshape(N, *self.obs_spaces.lines.shape)[
-            R, p.long().flatten()
-        ]
+            p = inputs.active.clamp(min=0, max=lines.size(1) - 1)
+        lines = lines[R, p.long().flatten()]
         obs = inputs.obs.reshape(N, *self.obs_spaces.obs.shape)
         lines_embed = self.line_embed(lines.long() + self.offset)
         obs_embed = self.conv_projection(self.conv(obs))

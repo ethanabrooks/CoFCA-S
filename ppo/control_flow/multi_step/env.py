@@ -83,7 +83,15 @@ class Env(ppo.control_flow.env.Env):
         agent: RED,
     }
 
-    def __init__(self, num_subtasks, temporal_extension, world_size=6, **kwargs):
+    def __init__(
+        self,
+        max_while_objects,
+        num_subtasks,
+        num_excluded_objects,
+        temporal_extension,
+        world_size=6,
+        **kwargs,
+    ):
         self.temporal_extension = temporal_extension
         self.loops = None
 
@@ -345,7 +353,7 @@ class Env(ppo.control_flow.env.Env):
 
             line_iterator = self.line_generator(lines)
             condition_evaluations = []
-            self.time_remaining = 200 if self.evaluating else self.time_to_waste
+            self.time_remaining = 200 if self.evaluating else 0
             self.loops = None
             inventory = Counter()
             subtask_complete = False
@@ -372,17 +380,13 @@ class Env(ppo.control_flow.env.Env):
                 if l is not None:
                     assert type(lines[l]) is Subtask
                     be, it = lines[l].id
-                    if be in (self.mine, self.goto):
-                        if it not in objects.values():
-                            return None
+                    if it not in objects.values():
+                        return None
                     elif be == self.sell:
-                        if (
-                            it not in objects.values()
-                            or self.merchant not in objects.values()
-                        ):
+                        if self.merchant not in objects.values():
                             return None
-
-                    self.time_remaining += 2 * self.world_size
+                    _, d = get_nearest(agent_pos, objective(be, it), objects)
+                    self.time_remaining += 2 * self.world_size + self.time_to_waste
                     return l
 
             possible_objects = list(objects.values())
@@ -416,35 +420,34 @@ class Env(ppo.control_flow.env.Env):
                     lower_level_action = self.lower_level_actions[lower_level_index]
                 self.time_remaining -= 1
                 tgt_interaction, tgt_obj = lines[ptr].id
-                tgt_obj = objective(*lines[ptr].id)
 
                 if type(lower_level_action) is str:
+                    standing_on = objects.get(tuple(agent_pos), None)
+                    done = (
+                        lower_level_action == tgt_interaction
+                        and standing_on == objective(*lines[ptr].id)
+                    )
                     if lower_level_action == self.mine:
                         done = (
                             lower_level_action == tgt_interaction
                             and objects.get(tuple(agent_pos), None) == tgt_obj
                         )
                         if tuple(agent_pos) in objects:
-                            standing_on = objects[tuple(agent_pos)]
                             if standing_on in self.items:
-                                inventory[standing_on] += 1
-                                if done:
+                                if (
+                                    done
+                                    or ((self.sell, standing_on) == lines[ptr].id)
+                                    or (standing_on == self.wood)
+                                ):
                                     possible_objects.remove(standing_on)
+                                else:
+                                    term = True
+                                inventory[standing_on] += 1
                                 del objects[tuple(agent_pos)]
-                    elif lower_level_action == self.goto:
-                        done = (
-                            lower_level_action == tgt_interaction
-                            and objects.get(tuple(agent_pos), None) == tgt_obj
-                        )
                     elif lower_level_action == self.sell:
-                        standing_on = objects.get(tuple(agent_pos), None)
-                        commodity = obj
-                        if (standing_on == self.merchant) and inventory[commodity] > 0:
-                            inventory[commodity] -= 1
-                            done = True
-                        else:
-                            done = False
-
+                        done = done and (
+                            self.lower_level == "hardcoded" or inventory[tgt_obj] > 0
+                        )
                     if done:
                         prev, ptr = ptr, next_subtask(ptr)
                         subtask_complete = True
@@ -457,8 +460,16 @@ class Env(ppo.control_flow.env.Env):
                     if (
                         np.all(0 <= new_pos)
                         and np.all(new_pos < self.world_size)
-                        and moving_into != self.wall
-                        # and (moving_into != self.water or inventory[self.wood] > 0)
+                        and (
+                            self.lower_level == "hardcoded"
+                            or (
+                                moving_into != self.wall
+                                and (
+                                    moving_into != self.water
+                                    or inventory[self.wood] > 0
+                                )
+                            )
+                        )
                     ):
                         agent_pos = new_pos
                 else:
@@ -513,18 +524,16 @@ class Env(ppo.control_flow.env.Env):
                     for _ in range(num_obj):
                         yield obj
 
+        subtask_list = list(subtask_ids())
+        loop_list = list(loop_objects())
+        while_list = list(while_objects())
         object_list = (
-            [self.agent]
-            + list(subtask_ids())
-            + list(loop_objects())
-            + list(while_objects())
+            [self.agent] + subtask_list + loop_list + while_list + [self.wood] * 5
         )
-        num_random_objects = (self.world_size ** 2) - self.world_size  # for water
+        num_random_objects = self.world_size ** 2 - self.world_size
         object_list = object_list[:num_random_objects]
         indexes = self.random.choice(
-            self.world_size * (self.world_size - 1),
-            size=num_random_objects,
-            replace=False,
+            num_random_objects, size=num_random_objects, replace=False
         )
         vertical_water = self.random.choice(2)
         world_shape = (
@@ -543,40 +552,43 @@ class Env(ppo.control_flow.env.Env):
         if len(object_list) == len(object_positions):
             wall_positions = wall_positions[:num_walls]
         positions = np.concatenate([object_positions, wall_positions])
+        water_index = self.random.choice(self.world_size)
+        positions[positions[:, vertical_water] >= water_index] += np.array(
+            [0, 1] if vertical_water else [1, 0]
+        )
+        assert water_index not in positions[:, vertical_water]
         objects = {
-            **{
-                tuple(p): (self.wall if o is None else o)
-                for o, p in itertools.zip_longest(object_list, positions)
-            }
+            tuple(p): (self.wall if o is None else o)
+            for o, p in itertools.zip_longest(object_list, positions)
         }
-        assert objects[tuple(positions[0])] == self.agent
-        nearest_wood = get_nearest(positions[0], self.wood, objects)
-        if nearest_wood:
-            agent_i, agent_j = positions[0]
-            (wood_i, wood_j), _ = nearest_wood
-            candidate_water_indices = [
-                i
-                for i in range(self.world_size)
-                if not (
-                    (agent_j <= i <= wood_j or wood_j <= i <= agent_j)
-                    if vertical_water
-                    else (agent_i <= i <= wood_i or wood_i <= i <= agent_i)
-                )
-            ]
-            if candidate_water_indices:
-                water_index = self.random.choice(candidate_water_indices)
-                positions[positions[:, vertical_water] >= water_index] += np.array(
-                    [0, 1] if vertical_water else [1, 0]
-                )
-                assert water_index not in positions[:, vertical_water]
-                objects.update(
-                    {
-                        (i, water_index)
-                        if vertical_water
-                        else (water_index, i): self.water
-                        for i in range(self.world_size)
-                    }
-                )
+        assert object_list[0] == self.agent
+        agent_i, agent_j = positions[0]
+        for p, o in objects.items():
+            if o == self.wood:
+                pi, pj = p
+                if vertical_water:
+                    if (water_index < pj and water_index < agent_j) or (
+                        water_index > pj and water_index > agent_j
+                    ):
+                        return {
+                            **objects,
+                            **{
+                                (i, water_index): self.water
+                                for i in range(self.world_size)
+                            },
+                        }
+                else:
+                    if (water_index < pi and water_index < agent_i) or (
+                        water_index > pi and water_index > agent_i
+                    ):
+                        return {
+                            **objects,
+                            **{
+                                (water_index, i): self.water
+                                for i in range(self.world_size)
+                            },
+                        }
+
         return objects
 
     def assign_line_ids(self, lines):
@@ -727,6 +739,17 @@ def build_parser(p):
         "--no-temporal-extension", dest="temporal_extension", action="store_false"
     )
     return p
+
+    def get_observation(self, obs, **kwargs):
+        obs, inventory = obs
+        obs = super().get_observation(obs=obs, **kwargs)
+        obs.update(inventory=np.array([inventory[i] for i in self.items]))
+        # if not self.observation_space.contains(obs):
+        #     import ipdb
+        #
+        #     ipdb.set_trace()
+        #     self.observation_space.contains(obs)
+        return obs
 
     def get_observation(self, obs, **kwargs):
         obs, inventory = obs

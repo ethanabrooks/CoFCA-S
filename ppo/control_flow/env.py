@@ -418,10 +418,10 @@ def build_parser(p):
 
 def main(env):
     def action_fn(string):
-        ll = dict(w=6, s=12, a=8, d=10, m=0, t=1, o=2, g=3, i=4).get(string, None)
+        ll = dict(w=4, s=10, a=6, d=8, m=0, l=1, g=2,).get(string, None)
         if ll is None:
             return None
-        return Action(upper=0, lower=ll, delta=0, dg=0, ag=0, ptr=0)
+        return np.array(list(Action(upper=0, lower=ll, delta=0, dg=0, ag=0, ptr=0)))
 
     keyboard_control.run(env, action_fn=action_fn)
 
