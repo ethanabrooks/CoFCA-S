@@ -140,7 +140,7 @@ class Env(gym.Env, ABC):
 
             term = term or success or state.term
             if self.lower_level == "train-alone":
-                reward = 1 if state.subtask_complete else 0
+                reward = 1 if state.subtask_complete else -.1
             else:
                 reward = int(success)
             subtasks_complete += state.subtask_complete
