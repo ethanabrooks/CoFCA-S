@@ -44,7 +44,7 @@ Obs = namedtuple("Obs", "active lines obs inventory")
 
 def get_nearest(_from, _to, objects):
     items = [(np.array(p), o) for p, o in objects.items()]
-    candidates = [(p, np.sum(np.abs(_from - p))) for p, o in items if o == _to]
+    candidates = [(p, np.max(np.abs(_from - p))) for p, o in items if o == _to]
     if candidates:
         return min(candidates, key=lambda c: c[1])
 
