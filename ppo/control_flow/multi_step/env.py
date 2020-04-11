@@ -309,6 +309,8 @@ class Env(ppo.control_flow.env.Env):
                         done = done and (
                             self.lower_level == "hardcoded" or inventory[tgt_obj] > 0
                         )
+                        if not done:
+                            term = True
                     if done:
                         prev, ptr = ptr, next_subtask(ptr)
                         subtask_complete = True
