@@ -44,7 +44,7 @@ Obs = namedtuple("Obs", "active lines obs inventory")
 
 def get_nearest(_from, _to, objects):
     items = [(np.array(p), o) for p, o in objects.items()]
-    candidates = [(p, np.sum(np.abs(_from - p))) for p, o in items if o == _to]
+    candidates = [(p, np.max(np.abs(_from - p))) for p, o in items if o == _to]
     if candidates:
         return min(candidates, key=lambda c: c[1])
 
@@ -255,7 +255,7 @@ class Env(ppo.control_flow.env.Env):
                     elif be == self.sell:
                         if self.merchant not in objects.values():
                             return None
-                    self.time_remaining += 2 * self.world_size + self.time_to_waste
+                    self.time_remaining += 2 * self.world_size
                     return l
 
             possible_objects = list(objects.values())
@@ -285,6 +285,7 @@ class Env(ppo.control_flow.env.Env):
                         agent_pos=agent_pos,
                         objects=objects,
                     )
+                    # print("lower level action:", lower_level_action)
                 else:
                     lower_level_action = self.lower_level_actions[lower_level_index]
                 self.time_remaining -= 1
@@ -298,13 +299,20 @@ class Env(ppo.control_flow.env.Env):
                     )
                     if lower_level_action == self.mine:
                         if tuple(agent_pos) in objects:
+                            if (
+                                done
+                                or (
+                                    tgt_interaction == self.sell
+                                    and standing_on == tgt_obj
+                                )
+                                or standing_on == self.wood
+                            ):
+                                possible_objects.remove(standing_on)
+                            else:
+                                term = True
                             if standing_on in self.items:
-                                if done or ((self.sell, standing_on) == lines[ptr].id):
-                                    possible_objects.remove(standing_on)
-                                else:
-                                    term = True
                                 inventory[standing_on] += 1
-                                del objects[tuple(agent_pos)]
+                            del objects[tuple(agent_pos)]
                     elif lower_level_action == self.sell:
                         done = done and (
                             self.lower_level == "hardcoded" or inventory[tgt_obj] > 0
@@ -478,7 +486,8 @@ class Env(ppo.control_flow.env.Env):
     @staticmethod
     def get_lower_level_action(interaction, obj, agent_pos, objects):
         obj = objective(interaction, obj)
-        if objects.get(tuple(agent_pos), None) == obj:
+        standing_on = objects.get(tuple(agent_pos), None)
+        if standing_on == obj:
             return interaction
         else:
             nearest = get_nearest(_from=agent_pos, _to=obj, objects=objects)
