@@ -289,12 +289,12 @@ class Env(ppo.control_flow.env.Env):
                     lower_level_action = self.lower_level_actions[lower_level_index]
                 self.time_remaining -= 1
                 tgt_interaction, tgt_obj = lines[ptr].id
-                tgt_obj = objective(*lines[ptr].id)
 
                 if type(lower_level_action) is str:
                     standing_on = objects.get(tuple(agent_pos), None)
                     done = (
-                        lower_level_action == tgt_interaction and standing_on == tgt_obj
+                        lower_level_action == tgt_interaction
+                        and standing_on == objective(*lines[ptr].id)
                     )
                     if lower_level_action == self.mine:
                         if tuple(agent_pos) in objects:
