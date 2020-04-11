@@ -127,7 +127,7 @@ class Env(gym.Env, ABC):
         actions = []
         program_counter = []
 
-        cumulative_reward = 0
+        subtasks_complete = 0
         agent_ptr = 0
         info = {}
         term = False
@@ -137,11 +137,13 @@ class Env(gym.Env, ABC):
             if state.ptr is not None:
                 program_counter.append(state.ptr)
             success = state.ptr is None
-            reward = int(success)
-
             term = term or success or state.term
-            r = state.subtask_complete if self.lower_level == "train-alone" else reward
-            cumulative_reward += r
+            reward = (
+                state.subtask_complete
+                if self.lower_level == "train-alone"
+                else int(success)
+            )
+            subtasks_complete += success
             if term:
                 if not success and self.break_on_fail:
                     import ipdb
@@ -159,10 +161,10 @@ class Env(gym.Env, ABC):
                 else:
                     info.update(success_line=state.prev, failure_line=state.ptr)
                 if self.lower_level == "train-alone":
-                    lines_attempted = min(len(lines), cumulative_reward + 1)
-                    if not (success and cumulative_reward < len(lines)):
+                    lines_attempted = min(len(lines), subtasks_complete + 1)
+                    if not (success and subtasks_complete < len(lines)):
                         info.update(
-                            cumulative_reward=cumulative_reward,
+                            cumulative_reward=subtasks_complete,
                             lines_attempted=lines_attempted,
                         )
 
@@ -194,8 +196,8 @@ class Env(gym.Env, ABC):
                         "Lower Level Action:",
                         self.lower_level_actions[lower_level_action],
                     )
-                print("Reward", r)
-                print("Cumulative", cumulative_reward)
+                print("Reward", reward)
+                print("Cumulative", subtasks_complete)
                 print("Obs:")
                 print(RESET)
                 self.print_obs(state.obs)
@@ -203,7 +205,7 @@ class Env(gym.Env, ABC):
             self._render = render
             obs = self.get_observation(obs=state.obs, active=state.ptr, lines=lines)
 
-            action = (yield obs, r, term, info)
+            action = (yield obs, reward, term, info)
             if action.size == 1:
                 action = Action(upper=0, lower=action, delta=0, ag=0, dg=0, ptr=0)
             actions.extend([int(a) for a in action])
