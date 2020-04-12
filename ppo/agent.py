@@ -370,8 +370,8 @@ class LowerLevel(NNBase):
         R = torch.arange(N, device=inputs.obs.device)
         lines = inputs.lines.reshape(N, -1, self.obs_spaces.lines.shape[-1])
         if p is None:
-            p = inputs.active.clamp(min=0, max=lines.size(1) - 1).long().flatten()
-        lines = lines[R, p]
+            p = inputs.active.clamp(min=0, max=lines.size(1) - 1)
+        lines = lines[R, p.long().flatten()]
         obs = inputs.obs.reshape(N, *self.obs_spaces.obs.shape)
         lines_embed = self.line_embed(lines.long() + self.offset)
         obs_embed = self.conv_projection(self.conv(obs))
