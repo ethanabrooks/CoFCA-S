@@ -343,7 +343,7 @@ class LowerLevel(NNBase):
         self.conv_projection = nn.Sequential(
             init2(nn.Linear(h * w * hidden_size, hidden_size)), activation
         )
-        self.line_embed = nn.EmbeddingBag(line_nvec.sum(), hidden_size)
+        self.line_embed = nn.EmbeddingBag(line_nvec[0].sum(), hidden_size)
         self.inventory_embed = nn.Sequential(
             init2(nn.Linear(inventory_size, hidden_size)), activation
         )
