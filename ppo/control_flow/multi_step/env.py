@@ -266,7 +266,7 @@ class Env(ppo.control_flow.env.Env):
             term = False
             while True:
                 term |= not self.time_remaining
-                subtask_id, lower_level_index = yield State(
+                agent_ptr, lower_level_index = yield State(
                     obs=(self.world_array(objects, agent_pos), inventory),
                     prev=prev,
                     ptr=ptr,
@@ -280,7 +280,8 @@ class Env(ppo.control_flow.env.Env):
                 if self.lower_level == "train-alone":
                     interaction, obj = lines[ptr].id
                 else:
-                    interaction, obj = self.subtasks[subtask_id]
+                    interaction, obj = lines[agent_ptr].id
+                    # interaction, obj = self.subtasks[subtask_id]
                 if self.lower_level == "hardcoded":
                     lower_level_action = self.get_lower_level_action(
                         interaction=interaction,

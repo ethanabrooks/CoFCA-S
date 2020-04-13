@@ -1,5 +1,6 @@
 from collections import namedtuple
 import torch.nn.functional as F
+from gym import spaces
 
 from gym.spaces import Box, Discrete
 import torch
@@ -295,6 +296,8 @@ class LowerLevel(NNBase):
         **_,
     ):
         self.concat = concat
+        if type(obs_space) is spaces.Dict:
+            obs_space = Obs(**obs_space.spaces)
         assert num_layers > 0
         H = (3 if concat else 1) * hidden_size
         super().__init__(
@@ -306,12 +309,12 @@ class LowerLevel(NNBase):
                 [Env.preprocess_line(Subtask(s)) for s in subtasks()] + [[0, 0, 0, 0]]
             ),
         )
-        (d, h, w) = obs_space["obs"].shape
-        inventory_size = obs_space["inventory"].nvec.size
-        line_nvec = torch.tensor(obs_space["lines"].nvec)
+        (d, h, w) = obs_space.obs.shape
+        inventory_size = obs_space.inventory.nvec.size
+        line_nvec = torch.tensor(obs_space.lines.nvec)
         offset = F.pad(line_nvec[0, :-1].cumsum(0), [1, 0])
         self.register_buffer("offset", offset)
-        self.obs_spaces = Obs(**obs_space.spaces)
+        self.obs_spaces = obs_space
         self.obs_sections = get_obs_sections(self.obs_spaces)
         padding = (kernel_size // 2) % stride
 

@@ -5,9 +5,12 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from gym import spaces
 
+import ppo
 import ppo.control_flow.multi_step.abstract_recurrence as abstract_recurrence
 import ppo.control_flow.recurrence as recurrence
+from ppo.agent import Agent
 from ppo.control_flow.env import Action
 from ppo.control_flow.lstm import LSTMCell
 from ppo.control_flow.multi_step.env import Obs
@@ -16,7 +19,7 @@ from ppo.utils import init_
 
 RecurrentState = namedtuple(
     "RecurrentState",
-    "a d u ag dg p v h hy cy a_probs d_probs ag_probs dg_probs gru_gate P",
+    "a l d u ag dg p v h hy cy a_probs d_probs ag_probs dg_probs gru_gate P",
 )
 
 
@@ -34,6 +37,14 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         gru_gate_coef,
         encoder_hidden_size,
         observation_space,
+        lower_level_load_path,
+        num_conv_layers,
+        lower_level_hidden_size,
+        kernel_size,
+        stride,
+        concat,
+        action_space,
+        recurrent,
         **kwargs,
     ):
         self.gru_gate_coef = gru_gate_coef
@@ -45,6 +56,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             hidden_size=hidden_size,
             encoder_hidden_size=encoder_hidden_size,
             observation_space=observation_space,
+            action_space=action_space,
             **kwargs,
         )
         abstract_recurrence.Recurrence.__init__(
@@ -75,8 +87,29 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             ag=1,
             dg=1,
             gru_gate=self.gru_hidden_size,
+            l=1,
             P=self.ne * 2 * self.train_lines ** 2,
         )
+        self.lower_level = None
+        if lower_level_load_path is not None:
+            ll_action_space = spaces.Discrete(Action(*action_space.nvec).lower)
+            self.lower_level = Agent(
+                obs_shape=observation_space,
+                num_conv_layers=num_conv_layers,
+                recurrent=recurrent,
+                entropy_coef=0,
+                action_space=ll_action_space,
+                hidden_size=lower_level_hidden_size,
+                kernel_size=kernel_size,
+                stride=stride,
+                lower_level=True,
+                num_layers=1,
+                activation=nn.ReLU(),
+                concat=concat,
+            )
+            state_dict = torch.load(lower_level_load_path, map_location="cpu")
+            self.lower_level.load_state_dict(state_dict["agent"])
+            print(f"Loaded lower_level from {lower_level_load_path}.")
 
     @property
     def gru_in_size(self):
@@ -111,14 +144,14 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             state_sizes = self.state_sizes
         return RecurrentState(*torch.split(hx, state_sizes, dim=-1))
 
-    def inner_loop(self, inputs, rnn_hxs):
-        T, N, dim = inputs.shape
-        inputs, actions = torch.split(
-            inputs.detach(), [dim - self.action_size, self.action_size], dim=2
+    def inner_loop(self, raw_inputs, rnn_hxs):
+        T, N, dim = raw_inputs.shape
+        raw_inputs, actions = torch.split(
+            raw_inputs.detach(), [dim - self.action_size, self.action_size], dim=2
         )
 
         # parse non-action inputs
-        inputs = Obs(*self.parse_inputs(inputs))
+        inputs = Obs(*self.parse_inputs(raw_inputs))
         inputs = inputs._replace(obs=inputs.obs.view(T, N, *self.obs_spaces.obs.shape))
 
         # build memory
@@ -148,6 +181,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         ones = self.ones.expand_as(R)
         actions = Action(*actions.unbind(dim=2))
         A = torch.cat([actions.upper, hx.a.view(1, N)], dim=0).long()
+        L = torch.cat([actions.lower, hx.l.view(1, N)], dim=0).long()
         D = torch.cat([actions.delta, hx.d.view(1, N)], dim=0).long()
         AG = torch.cat([actions.ag, hx.ag.view(1, N)], dim=0).long()
         DG = torch.cat([actions.dg, hx.dg.view(1, N)], dim=0).long()
@@ -184,6 +218,11 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             ag = AG[t].unsqueeze(-1).float()
             a_dist = gate(ag, self.actor(z).probs, A[t - 1])
             self.sample_new(A[t], a_dist)
+            lower = self.lower_level(
+                Obs(*self.parse_inputs(raw_inputs[t])), rnn_hxs=None, masks=None, p=p
+            ).action.squeeze(-1)
+            new = L[t] < 0
+            L[t][new] = lower[new]
             # A[:] = float(input("go:"))
             self.print("ag prob", a_gate.probs[:, 1])
             self.print("ag", ag)
@@ -191,6 +230,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             cy = dg * cy_ + (1 - dg) * cy
             yield RecurrentState(
                 a=A[t],
+                l=L[t],
                 v=self.critic(z),
                 h=h,
                 u=u,

@@ -218,7 +218,8 @@ class Env(gym.Env, ABC):
 
             info = {}
 
-            if action == self.num_subtasks or agent_ptr >= len(lines):
+            if agent_ptr >= len(lines):
+                # if action == self.num_subtasks or agent_ptr >= len(lines):
                 n += 1
                 no_op_limit = 200 if self.evaluating else self.no_op_limit
                 if self.no_op_limit is not None and self.no_op_limit < 0:
@@ -227,7 +228,7 @@ class Env(gym.Env, ABC):
                     term = True
             elif state.ptr is not None:
                 step += 1
-                state = state_iterator.send((action, lower_level_action))
+                state = state_iterator.send((agent_ptr, lower_level_action))
 
     @property
     def eval_condition_size(self):
