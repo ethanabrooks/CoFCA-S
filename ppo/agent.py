@@ -380,6 +380,7 @@ class LowerLevel(NNBase):
             p = inputs.active.clamp(min=0, max=lines.size(1) - 1)
             line = lines[R, p.long().flatten()]
         else:
+            # upper = torch.tensor([int((input("upper:")))])
             line = self.subtasks[upper.long().flatten()]
         obs = inputs.obs.reshape(N, *self.obs_spaces.obs.shape)
         lines_embed = self.line_embed(line.long() + self.offset)
