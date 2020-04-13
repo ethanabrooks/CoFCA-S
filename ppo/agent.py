@@ -1,5 +1,6 @@
 from collections import namedtuple
 import torch.nn.functional as F
+from gym import spaces
 
 from gym.spaces import Box, Discrete
 import torch
@@ -295,6 +296,8 @@ class LowerLevel(NNBase):
         **_,
     ):
         self.concat = concat
+        if type(obs_space) is spaces.Dict:
+            obs_space = Obs(**obs_space.spaces)
         assert num_layers > 0
         H = (3 if concat else 1) * hidden_size
         super().__init__(
@@ -302,14 +305,16 @@ class LowerLevel(NNBase):
         )
         self.register_buffer(
             "subtasks",
-            torch.tensor([Env.preprocess_line(Subtask(s)) for s in subtasks()]),
+            torch.tensor(
+                [Env.preprocess_line(Subtask(s)) for s in subtasks()] + [[0, 0, 0, 0]]
+            ),
         )
-        (d, h, w) = obs_space["obs"].shape
-        inventory_size = obs_space["inventory"].nvec.size
-        line_nvec = torch.tensor(obs_space["lines"].nvec)
+        (d, h, w) = obs_space.obs.shape
+        inventory_size = obs_space.inventory.nvec.size
+        line_nvec = torch.tensor(obs_space.lines.nvec)
         offset = F.pad(line_nvec[0, :-1].cumsum(0), [1, 0])
         self.register_buffer("offset", offset)
-        self.obs_spaces = Obs(**obs_space.spaces)
+        self.obs_spaces = obs_space
         self.obs_sections = get_obs_sections(self.obs_spaces)
         padding = (kernel_size // 2) % stride
 
@@ -341,7 +346,7 @@ class LowerLevel(NNBase):
         self.conv_projection = nn.Sequential(
             init2(nn.Linear(h * w * hidden_size, hidden_size)), activation
         )
-        self.line_embed = nn.EmbeddingBag(line_nvec.sum(), hidden_size)
+        self.line_embed = nn.EmbeddingBag(line_nvec[0].sum(), hidden_size)
         self.inventory_embed = nn.Sequential(
             init2(nn.Linear(inventory_size, hidden_size)), activation
         )
@@ -378,6 +383,7 @@ class LowerLevel(NNBase):
             p = inputs.active.clamp(min=0, max=lines.size(1) - 1)
             line = lines[R, p.long().flatten()]
         else:
+            # upper = torch.tensor([int((input("upper:")))])
             line = self.subtasks[upper.long().flatten()]
         obs = inputs.obs.reshape(N, *self.obs_spaces.obs.shape)
         lines_embed = self.line_embed(line.long() + self.offset)

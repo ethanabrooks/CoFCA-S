@@ -21,6 +21,9 @@ NAMES = ["instruction", "actions", "program_counter", "evaluations"]
 def main(
     log_dir, seed, eval_lines, one_line, lower_level, lower_level_load_path, **kwargs
 ):
+    if lower_level_load_path:
+        lower_level = "pre-trained"
+
     class _Train(Train):
         def build_agent(self, envs, baseline=None, debug=False, **agent_args):
             obs_space = envs.observation_space

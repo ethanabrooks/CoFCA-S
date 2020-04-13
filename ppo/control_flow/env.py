@@ -140,7 +140,7 @@ class Env(gym.Env, ABC):
 
             term = term or success or state.term
             if self.lower_level == "train-alone":
-                reward = 1 if state.subtask_complete else -.1
+                reward = 1 if state.subtask_complete else -0.1
             else:
                 reward = int(success)
             subtasks_complete += state.subtask_complete
@@ -188,8 +188,8 @@ class Env(gym.Env, ABC):
                         "{:2}{}{}{}".format(i, pre, " " * indent, self.line_str(line))
                     )
                     indent += line.depth_change[1]
-                if agent_ptr < len(self.subtasks):
-                    print("Selected:", self.subtasks[agent_ptr], agent_ptr)
+                if action and action < len(self.subtasks):
+                    print("Selected:", self.subtasks[action], action)
                 print("Action:", action)
                 if lower_level_action is not None:
                     print(
