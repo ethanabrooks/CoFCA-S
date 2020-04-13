@@ -500,8 +500,7 @@ class Env(ppo.control_flow.env.Env):
     @staticmethod
     def get_lower_level_action(interaction, obj, agent_pos, objects):
         obj = objective(interaction, obj)
-        standing_on = objects.get(tuple(agent_pos), None)
-        if standing_on == obj:
+        if objects.get(tuple(agent_pos), None) == obj:
             return interaction
         else:
             nearest = get_nearest(_from=agent_pos, _to=obj, objects=objects)
