@@ -1,18 +1,23 @@
 import torch
 import torch.jit
+from gym import spaces
 from gym.spaces import Box
 from torch import nn as nn
 from torch.nn import functional as F
+from ppo.control_flow.multi_step.env import Obs
 
 import ppo.agent
 from ppo.agent import AgentValues, NNBase
+from ppo.control_flow.env import Action
 
 from ppo.control_flow.recurrence import RecurrentState
 import ppo.control_flow.recurrence
-import ppo.control_flow.multi_step.recurrence
+import ppo.control_flow.multi_step.abstract_recurrence
 import ppo.control_flow.multi_step.no_pointer
 import ppo.control_flow.multi_step.oh_et_al
-import ppo.control_flow.simple
+import ppo.control_flow.multi_step.ours
+import ppo.control_flow.no_pointer
+import ppo.control_flow.oh_et_al
 from ppo.distributions import FixedCategorical
 
 
@@ -22,53 +27,88 @@ class Agent(ppo.agent.Agent, NNBase):
         entropy_coef,
         recurrent,
         observation_space,
-        include_action,
-        gate_coef,
         no_op_coef,
         baseline,
-        **network_args
+        lower_level_load_path,
+        lower_level_hidden_size,
+        kernel_size,
+        stride,
+        action_space,
+        concat,
+        num_conv_layers,
+        lower_level,
+        **network_args,
     ):
         nn.Module.__init__(self)
         self.no_op_coef = no_op_coef
         self.entropy_coef = entropy_coef
         self.multi_step = type(observation_space.spaces["obs"]) is Box
-        if self.multi_step:
-            if baseline == "no-pointer":
-                self.recurrent_module = ppo.control_flow.multi_step.no_pointer.Recurrence(
-                    include_action=True,
-                    observation_space=observation_space,
-                    gate_coef=gate_coef,
-                    no_pointer=True,
-                    **network_args
-                )
-            elif baseline == "oh-et-al":
-                self.recurrent_module = ppo.control_flow.multi_step.oh_et_al.Recurrence(
-                    include_action=True,
-                    observation_space=observation_space,
-                    gate_coef=gate_coef,
-                    no_pointer=True,
-                    **network_args
-                )
-            else:
-                assert baseline is None
-                self.recurrent_module = ppo.control_flow.multi_step.recurrence.Recurrence(
-                    include_action=True,
-                    observation_space=observation_space,
-                    gate_coef=gate_coef,
-                    no_pointer=False,
-                    **network_args
-                )
+        if not self.multi_step:
+            del network_args["conv_hidden_size"]
+            del network_args["gate_coef"]
+        if baseline == "no-pointer":
+            del network_args["gate_coef"]
+            self.recurrent_module = (
+                ppo.control_flow.multi_step.no_pointer.Recurrence
+                if self.multi_step
+                else ppo.control_flow.no_pointer.Recurrence
+            )(
+                observation_space=observation_space,
+                action_space=action_space,
+                **network_args,
+            )
+        elif baseline == "oh-et-al":
+            self.recurrent_module = (
+                ppo.control_flow.multi_step.oh_et_al.Recurrence
+                if self.multi_step
+                else ppo.control_flow.oh_et_al.Recurrence
+            )(
+                observation_space=observation_space,
+                action_space=action_space,
+                **network_args,
+            )
+        elif self.multi_step:
+            assert baseline is None
+            self.recurrent_module = ppo.control_flow.multi_step.ours.Recurrence(
+                observation_space=observation_space,
+                action_space=action_space,
+                **network_args,
+            )
         else:
             self.recurrent_module = ppo.control_flow.recurrence.Recurrence(
-                include_action=include_action,
                 observation_space=observation_space,
-                no_pointer=False,
-                **network_args
+                action_space=action_space,
+                **network_args,
             )
+        self.lower_level_type = "pre-trained" if lower_level_load_path else lower_level
+        self.lower_level = None
+        if lower_level_load_path is not None:
+            ll_action_space = spaces.Discrete(
+                ppo.control_flow.env.Action(*action_space.nvec).lower
+            )
+            self.lower_level = ppo.agent.Agent(
+                obs_shape=observation_space,
+                num_conv_layers=num_conv_layers,
+                recurrent=False,
+                entropy_coef=0,
+                action_space=ll_action_space,
+                hidden_size=lower_level_hidden_size,
+                kernel_size=kernel_size,
+                stride=stride,
+                lower_level=True,
+                num_layers=1,
+                activation=nn.ReLU(),
+                concat=concat,
+            )
+            state_dict = torch.load(lower_level_load_path, map_location="cpu")
+            self.lower_level.load_state_dict(state_dict["agent"])
+            print(f"Loaded lower_level from {lower_level_load_path}.")
 
     @property
     def recurrent_hidden_state_size(self):
-        return sum(self.recurrent_module.state_sizes)
+        state_sizes = self.recurrent_module.state_sizes
+        state_sizes = state_sizes._replace(P=0)
+        return sum(state_sizes)
 
     @property
     def is_recurrent(self):
@@ -81,42 +121,104 @@ class Agent(ppo.agent.Agent, NNBase):
         )
         rm = self.recurrent_module
         hx = rm.parse_hidden(all_hxs)
-        a_dist = FixedCategorical(hx.a_probs)
-        probs = [hx.a_probs, hx.d_probs, hx.ag_probs, hx.dg_probs]
-        X = [hx.a, hx.d, hx.ag, hx.dg]
-        dists = [FixedCategorical(p) for p in probs]
-        if type(rm) in (
-            ppo.control_flow.multi_step.oh_et_al.Recurrence,
-            ppo.control_flow.multi_step.no_pointer.Recurrence,
+        t = type(rm)
+        pad = torch.zeros_like(hx.a)
+        if t in (
+            ppo.control_flow.oh_et_al.Recurrence,
+            ppo.control_flow.no_pointer.Recurrence,
         ):
-            action_log_probs = a_dist.log_probs(hx.a)
-            entropy = a_dist.entropy().mean()
-            if type(rm) is ppo.control_flow.multi_step.oh_et_al:
-                assert rm.gate_coef is not None
-                aux_loss = rm.gate_coef * (hx.ag + hx.dg)
+            X = [hx.a, pad, hx.p]
+            probs = [hx.a_probs]
+        elif t is ppo.control_flow.recurrence.Recurrence:
+            X = [hx.a, hx.d, hx.p]
+            probs = [hx.a_probs, hx.d_probs]
+        elif t is ppo.control_flow.multi_step.no_pointer.Recurrence:
+            X = [hx.a, pad, pad, pad, pad]
+            probs = [hx.a_probs]
+        elif t is ppo.control_flow.multi_step.oh_et_al.Recurrence:
+            X = [hx.a, pad, pad, pad, hx.p]
+            probs = [hx.a_probs]
+        elif t is ppo.control_flow.multi_step.ours.Recurrence:
+            X = Action(upper=hx.a, lower=pad, delta=hx.d, ag=hx.ag, dg=hx.dg, ptr=hx.p)
+            ll_type = self.lower_level_type
+            if ll_type == "train-alone":
+                probs = Action(
+                    upper=None,
+                    lower=hx.ll_probs,
+                    delta=None,
+                    ag=None,
+                    dg=None,
+                    ptr=None,
+                )
+            elif ll_type == "train-with-upper":
+                probs = Action(
+                    upper=hx.a_probs,
+                    lower=hx.ll_probs,
+                    delta=hx.d_probs,
+                    ag=hx.ag_probs,
+                    dg=hx.dg_probs,
+                    ptr=None,
+                )
+            elif ll_type in ["pre-trained", "hardcoded"]:
+                probs = Action(
+                    upper=hx.a_probs,
+                    lower=None,
+                    delta=hx.d_probs,
+                    ag=hx.ag_probs,
+                    dg=hx.dg_probs,
+                    ptr=None,
+                )
             else:
-                aux_loss = 0
+                raise RuntimeError
         else:
-            action_log_probs = sum(dist.log_probs(x) for dist, x in zip(dists, X))
-            entropy = sum([dist.entropy() for dist in dists]).mean()
-            # action_log_probs = a_dist.log_probs(hx.a) + d_dist.log_probs(hx.d)
-            # entropy = (a_dist.entropy() + d_dist.entropy()).mean()
-            assert rm.gate_coef is not None
-            assert self.no_op_coef is not None
-            aux_loss = (
-                rm.gate_coef * (hx.ag_probs + hx.dg_probs)[:, 1].mean()
-                + self.no_op_coef * hx.a_probs[:, -1].mean()
-            )
+            raise RuntimeError
+        if self.lower_level:
+            if action is None:
+                lower = self.lower_level(
+                    Obs(*rm.parse_inputs(inputs)),
+                    rnn_hxs=None,
+                    masks=None,
+                    upper=X.upper,
+                ).action.float()
+                X = X._replace(lower=lower)
+            else:
+                X = X._replace(
+                    lower=Action(*action.unbind(1)).lower.float().unsqueeze(1)
+                )
+
+        dists = [(p if p is None else FixedCategorical(p)) for p in probs]
+        action_log_probs = sum(
+            dist.log_probs(x) for dist, x in zip(dists, X) if dist is not None
+        )
+        entropy = sum([dist.entropy() for dist in dists if dist is not None]).mean()
+        aux_loss = -self.entropy_coef * entropy
+        if probs.upper is not None:
+            aux_loss += self.no_op_coef * hx.a_probs[:, -1].mean()
+        if probs.ag is not None and probs.dg is not None:
+            aux_loss += rm.gate_coef * (hx.ag_probs + hx.dg_probs)[:, 1].mean()
+        try:
+            aux_loss += (rm.gru_gate_coef * hx.gru_gate).mean()
+        except AttributeError:
+            pass
+
         action = torch.cat(X, dim=-1)
-        aux_loss -= self.entropy_coef * entropy
+        test_actions = Action(*action[0, :])
+        for field in Action._fields:
+            x = getattr(X, field)
+            test_action = getattr(test_actions, field)
+            assert test_action.item() == x[0].item()
+
+        nlines = len(rm.obs_spaces.lines.nvec)
+        P = hx.P.reshape(-1, N, nlines, 2 * nlines, rm.ne)
+        rnn_hxs = torch.cat(hx._replace(P=torch.tensor([], device=hx.P.device)), dim=-1)
         return AgentValues(
             value=hx.v,
             action=action,
             action_log_probs=action_log_probs,
             aux_loss=aux_loss,
             dist=None,
-            rnn_hxs=last_hx,
-            log=dict(entropy=entropy),
+            rnn_hxs=rnn_hxs,
+            log=dict(entropy=entropy, P=P),
         )
 
     def _forward_gru(self, x, hxs, masks, action=None):

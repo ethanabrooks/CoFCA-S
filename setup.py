@@ -31,13 +31,11 @@ setup(
         "bin/wtf.zsh",
         "bin/remove-log.zsh",
     ],
-    entry_points=dict(console_scripts=["ppo=ppo.main:cli", "exp=ppo.main:exp_cli"]),
     install_requires=[
-        "ray[debug]==0.7.3",
         "tensorboardX==1.8",
         "tensorflow>=1.15",
         "opencv-python==4.1.0.25",
-        "psutil==5.6.3",
+        "psutil>=5.6.6",
         "requests==2.22.0",
     ],
 )
