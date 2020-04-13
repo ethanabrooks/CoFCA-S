@@ -188,8 +188,8 @@ class Env(gym.Env, ABC):
                         "{:2}{}{}{}".format(i, pre, " " * indent, self.line_str(line))
                     )
                     indent += line.depth_change[1]
-                if action and action < len(self.subtasks):
-                    print("Selected:", self.subtasks[action], action)
+                # if action and action < len(self.subtasks):
+                # print("Selected:", self.subtasks[action], action)
                 print("Action:", action)
                 if lower_level_action is not None:
                     print(
@@ -218,7 +218,7 @@ class Env(gym.Env, ABC):
 
             info = {}
 
-            if action == self.num_subtasks:
+            if action == self.num_subtasks or agent_ptr >= len(lines):
                 n += 1
                 no_op_limit = 200 if self.evaluating else self.no_op_limit
                 if self.no_op_limit is not None and self.no_op_limit < 0:

@@ -175,10 +175,7 @@ class Agent(ppo.agent.Agent, NNBase):
         if self.lower_level:
             if action is None:
                 lower = self.lower_level(
-                    Obs(*rm.parse_inputs(inputs)),
-                    rnn_hxs=None,
-                    masks=None,
-                    upper=X.upper,
+                    Obs(*rm.parse_inputs(inputs)), rnn_hxs=None, masks=None, p=X.ptr
                 ).action.float()
                 X = X._replace(lower=lower)
             else:

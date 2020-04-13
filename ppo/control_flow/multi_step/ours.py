@@ -177,6 +177,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             d_dist = gate(dg, d_probs, ones * half)
             self.print("d_probs", d_probs[:, half:])
             self.sample_new(D[t], d_dist)
+            # D[:] = float(input("go:")) + half
             p = p + D[t].clone() - half
             p = torch.clamp(p, min=0, max=M.size(1) - 1)
 

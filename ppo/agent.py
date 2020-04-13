@@ -370,18 +370,21 @@ class LowerLevel(NNBase):
     def output_size(self):
         return self._output_size
 
-    def forward(self, inputs, rnn_hxs, masks, upper=None):
+    def forward(self, inputs, rnn_hxs, masks, p=None):
         if not type(inputs) is Obs:
             inputs = Obs(*self.parse_inputs(inputs))
         N = inputs.obs.size(0)
         lines = inputs.lines.reshape(N, -1, self.obs_spaces.lines.shape[-1])
-        if upper is None:
+        if p is None:
             R = torch.arange(N, device=inputs.obs.device)
             p = inputs.active.clamp(min=0, max=lines.size(1) - 1)
             line = lines[R, p.long().flatten()]
         else:
             # upper = torch.tensor([int((input("upper:")))])
-            line = self.subtasks[upper.long().flatten()]
+            # line = self.subtasks[upper.long().flatten()]
+            R = torch.arange(N, device=inputs.obs.device)
+            p = p.clamp(min=0, max=lines.size(1) - 1)
+            line = lines[R, p.long().flatten()]
         obs = inputs.obs.reshape(N, *self.obs_spaces.obs.shape)
         lines_embed = self.line_embed(line.long() + self.offset)
         obs_embed = self.conv_projection(self.conv(obs))
