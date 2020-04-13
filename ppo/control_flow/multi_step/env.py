@@ -55,6 +55,12 @@ def objective(interaction, obj):
     return obj
 
 
+def subtasks():
+    for obj in Env.items:
+        for interaction in Env.behaviors:
+            yield interaction, obj
+
+
 class Env(ppo.control_flow.env.Env):
     wood = "wood"
     gold = "gold"
@@ -95,11 +101,6 @@ class Env(ppo.control_flow.env.Env):
         self.num_excluded_objects = num_excluded_objects
         self.max_while_objects = max_while_objects
         self.loops = None
-
-        def subtasks():
-            for obj in self.items:
-                for interaction in self.behaviors:
-                    yield interaction, obj
 
         self.subtasks = list(subtasks())
         num_subtasks = len(self.subtasks)
@@ -174,18 +175,19 @@ class Env(ppo.control_flow.env.Env):
             return f"{line} {self.subtasks.index(line.id)}"
         return line
 
+    @staticmethod
     @functools.lru_cache(maxsize=200)
-    def preprocess_line(self, line):
+    def preprocess_line(line):
         if type(line) in (Else, EndIf, EndWhile, EndLoop, Padding):
             return [Line.types.index(type(line)), 0, 0, 0]
         elif type(line) is Loop:
             return [Line.types.index(Loop), 0, 0, line.id]
         elif type(line) is Subtask:
             i, o = line.id
-            i, o = self.behaviors.index(i), self.items.index(o)
+            i, o = Env.behaviors.index(i), Env.items.index(o)
             return [Line.types.index(Subtask), i + 1, o + 1, 0]
         elif type(line) in (While, If):
-            return [Line.types.index(type(line)), 0, self.items.index(line.id) + 1, 0]
+            return [Line.types.index(type(line)), 0, Env.items.index(line.id) + 1, 0]
         else:
             raise RuntimeError()
 
