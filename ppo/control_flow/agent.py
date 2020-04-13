@@ -100,7 +100,7 @@ class Agent(ppo.agent.Agent, NNBase):
                 activation=nn.ReLU(),
                 concat=concat,
             )
-            state_dict = torch.load(lower_level_load_path)
+            state_dict = torch.load(lower_level_load_path, map_location="cpu")
             self.lower_level.load_state_dict(state_dict["agent"])
             print(f"Loaded lower_level from {lower_level_load_path}.")
 
