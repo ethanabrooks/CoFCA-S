@@ -302,7 +302,7 @@ class Env(ppo.control_flow.env.Env):
                     )
                     if lower_level_action == self.mine:
                         if tuple(agent_pos) in objects:
-                            if (
+                            if While in self.control_flow_types and (
                                 done
                                 or (
                                     tgt_interaction == self.sell
