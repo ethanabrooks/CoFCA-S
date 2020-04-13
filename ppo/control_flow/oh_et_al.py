@@ -115,7 +115,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
             self.print("w", w)
             obs = self.preprocess_obs(inputs.obs[t])
             r = (w.unsqueeze(1) @ M).squeeze(1)
-            x = [obs, r, self.embed_action(A[t - 1].clone())]
+            x = [obs, r, self.embed_upper(A[t - 1].clone())]
             h_cat = torch.cat([h, h2], dim=-1)
             h_cat2 = self.gru(torch.cat(x, dim=-1), h_cat)
             z = F.relu(self.zeta(h_cat2))
