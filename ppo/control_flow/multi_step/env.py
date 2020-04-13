@@ -310,7 +310,8 @@ class Env(ppo.control_flow.env.Env):
                                 )
                                 or standing_on == self.wood
                             ):
-                                possible_objects.remove(standing_on)
+                                if While in self.control_flow_types:
+                                    possible_objects.remove(standing_on)
                             else:
                                 term = True
                             if standing_on in self.items:
