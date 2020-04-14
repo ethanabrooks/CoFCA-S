@@ -344,8 +344,6 @@ class Env(ppo.control_flow.env.Env):
                             )
                         )
                     ):
-                        if moving_into == self.water:
-                            inventory[self.wood] = 0
                         agent_pos = new_pos
                 else:
                     assert lower_level_action is None
