@@ -197,6 +197,7 @@ class Env(gym.Env, ABC):
                     )
                 print("Reward", reward)
                 print("Cumulative", subtasks_complete)
+                print("Time remaining", self.time_remaining)
                 print("Obs:")
                 print(RESET)
                 self.print_obs(state.obs)
