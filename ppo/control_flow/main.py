@@ -96,13 +96,12 @@ def main(
             super().process_infos(episode_counter, done, infos, **act_log)
 
         def log_result(self, result: dict):
-            if lower_level == "train-alone":
-                subtasks_attempted = sum(result["subtasks_attempted"])
-                if subtasks_attempted > 0:
-                    result["success"] = (
-                        sum(result["subtasks_complete"]) / subtasks_attempted
-                    )
-            else:
+            subtasks_attempted = sum(result["subtasks_attempted"])
+            if subtasks_attempted > 0:
+                result["success"] = (
+                    sum(result["subtasks_complete"]) / subtasks_attempted
+                )
+            if lower_level != "train-alone":
                 names = NAMES + ["P"]
                 for name in names + ["eval_" + n for n in names]:
                     if name in result:
