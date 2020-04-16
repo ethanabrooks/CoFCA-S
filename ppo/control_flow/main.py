@@ -89,18 +89,15 @@ def main(
                     for name in NAMES:
                         if name in d:
                             episode_counter[name].append(d.pop(name))
-                if len(episode_counter["P"]) != len(episode_counter["instruction"]):
-                    import ipdb
-
-                    ipdb.set_trace()
             super().process_infos(episode_counter, done, infos, **act_log)
 
         def log_result(self, result: dict):
-            subtasks_attempted = sum(result["subtasks_attempted"])
-            if subtasks_attempted > 0:
-                result["success"] = (
-                    sum(result["subtasks_complete"]) / subtasks_attempted
-                )
+            if "subtasks_attempted" in result:
+                subtasks_attempted = sum(result["subtasks_attempted"])
+                if subtasks_attempted > 0:
+                    result["success"] = (
+                        sum(result["subtasks_complete"]) / subtasks_attempted
+                    )
             if lower_level != "train-alone":
                 names = NAMES + ["P"]
                 for name in names + ["eval_" + n for n in names]:

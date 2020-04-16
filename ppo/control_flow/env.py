@@ -186,7 +186,7 @@ class Env(gym.Env, ABC):
                         "{:2}{}{}{}".format(i, pre, " " * indent, self.line_str(line))
                     )
                     indent += line.depth_change[1]
-                if action and action < len(self.subtasks):
+                if action is not None and action < len(self.subtasks):
                     print("Selected:", self.subtasks[action], action)
                 print("Action:", action)
                 if lower_level_action is not None:
