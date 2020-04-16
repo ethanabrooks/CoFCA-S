@@ -133,6 +133,7 @@ class Env(gym.Env, ABC):
         term = False
         action = None
         lower_level_action = None
+        cumulative_reward = 0
         while True:
             if state.ptr is not None:
                 program_counter.append(state.ptr)
@@ -143,6 +144,7 @@ class Env(gym.Env, ABC):
                 reward = 1 if state.subtask_complete else -0.1
             else:
                 reward = int(success)
+            cumulative_reward += reward
             subtasks_complete += state.subtask_complete
             if term:
                 if not success and self.break_on_fail:
@@ -195,7 +197,7 @@ class Env(gym.Env, ABC):
                         self.lower_level_actions[lower_level_action],
                     )
                 print("Reward", reward)
-                print("Cumulative", subtasks_complete)
+                print("Cumulative", cumulative_reward)
                 print("Time remaining", self.time_remaining)
                 print("Obs:")
                 print(RESET)
