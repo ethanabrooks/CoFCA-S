@@ -321,11 +321,12 @@ class Env(ppo.control_flow.env.Env):
                         done = done and (
                             self.lower_level == "hardcoded" or inventory[tgt_obj] > 0
                         )
-                        if not done:
+                        if done:
+                            inventory[tgt_obj] -= 1
+                        else:
                             term = True
                     elif lower_level_action == self.goto and not done:
                         term = True
-
                     if done:
                         prev, ptr = ptr, next_subtask(ptr)
                         subtask_complete = True
@@ -350,6 +351,10 @@ class Env(ppo.control_flow.env.Env):
                         )
                     ):
                         agent_pos = new_pos
+                        if moving_into == self.water:
+                            # build bridge
+                            del objects[tuple(new_pos)]
+                            inventory[self.wood] -= 1
                 else:
                     assert lower_level_action is None
 
@@ -405,7 +410,7 @@ class Env(ppo.control_flow.env.Env):
         subtask_list = list(subtask_ids())
         loop_list = list(loop_objects())
         while_list = list(while_objects())
-        object_list = [self.agent] + subtask_list + loop_list + while_list
+        object_list = [self.agent, self.wood] + subtask_list + loop_list + while_list
         num_random_objects = self.world_size ** 2 - self.world_size
         object_list = object_list[:num_random_objects]
         indexes = self.random.choice(
