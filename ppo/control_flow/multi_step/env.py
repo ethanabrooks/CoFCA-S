@@ -258,10 +258,11 @@ class Env(ppo.control_flow.env.Env):
                         if self.merchant not in objects.values():
                             return None
                     _, d = get_nearest(agent_pos, objective(be, it), objects)
+                    time_delta = 3 * self.world_size
                     if self.lower_level == "train-alone":
-                        self.time_remaining = 2 * self.world_size
+                        self.time_remaining = time_delta
                     else:
-                        self.time_remaining += 2 * self.world_size
+                        self.time_remaining += time_delta
                     return l
 
             possible_objects = list(objects.values())
@@ -279,7 +280,10 @@ class Env(ppo.control_flow.env.Env):
                 subtask_complete = False
                 # for i, a in enumerate(self.lower_level_actions):
                 # print(i, a)
+                # try:
                 # lower_level_index = int(input("go:"))
+                # except ValueError:
+                # pass
                 if self.lower_level == "train-alone":
                     interaction, obj = lines[ptr].id
                 else:
