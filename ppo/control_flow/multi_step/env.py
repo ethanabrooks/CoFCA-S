@@ -73,10 +73,10 @@ class Env(ppo.control_flow.env.Env):
     mine = "mine"
     sell = "sell"
     goto = "goto"
-    items = [wood, gold, iron]
+    items = [wood]
     terrain = [merchant, water, wall, bridge, agent]
     world_contents = items + terrain
-    behaviors = [mine, sell, goto]
+    behaviors = [goto]
     colors = {
         wood: GREEN,
         gold: YELLOW,
@@ -448,6 +448,7 @@ class Env(ppo.control_flow.env.Env):
         }
         assert object_list[0] == self.agent
         agent_i, agent_j = positions[0]
+        return objects
         for p, o in objects.items():
             if o == self.wood:
                 pi, pj = p
