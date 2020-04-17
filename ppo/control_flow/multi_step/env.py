@@ -448,7 +448,6 @@ class Env(ppo.control_flow.env.Env):
         }
         assert object_list[0] == self.agent
         agent_i, agent_j = positions[0]
-        return objects
         for p, o in objects.items():
             if o == self.wood:
                 pi, pj = p
