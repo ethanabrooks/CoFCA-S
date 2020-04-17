@@ -490,7 +490,7 @@ class Env(ppo.control_flow.env.Env):
         ):
             if line is Subtask:
                 subtask_id = (
-                    self.behaviors[interaction_id],
+                    self.sell,  # self.behaviors[interaction_id],
                     included_objects[object_id],
                 )
                 yield Subtask(subtask_id)
