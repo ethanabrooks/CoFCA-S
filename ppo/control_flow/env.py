@@ -424,11 +424,22 @@ def build_parser(p):
 def main(env):
     # for i, l in enumerate(env.lower_level_actions):
     # print(i, l)
+    actions = [x if type(x) is str else tuple(x) for x in env.lower_level_actions]
+    mapping = dict(
+        w=(-1, 0), s=(1, 0), a=(0, -1), d=(0, 1), m=("mine"), l=("sell"), g=("goto")
+    )
+    mapping2 = {}
+    for k, v in mapping.items():
+        try:
+            mapping2[k] = actions.index(v)
+        except ValueError:
+            pass
+
     def action_fn(string):
-        ll = dict(w=4, s=10, a=6, d=8, m=0, l=1, g=2).get(string, None)
-        if ll is None:
+        action = mapping2.get(string, None)
+        if action is None:
             return None
-        return np.array(Action(upper=0, lower=ll, delta=0, dg=0, ag=0, ptr=0))
+        return np.array(Action(upper=0, lower=action, delta=0, dg=0, ag=0, ptr=0))
 
     keyboard_control.run(env, action_fn=action_fn)
 
