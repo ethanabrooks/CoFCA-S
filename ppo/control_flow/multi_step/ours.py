@@ -221,7 +221,10 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             a_dist = gate(ag, self.actor(z).probs, A[t - 1])
             self.sample_new(A[t], a_dist)
             lower = self.lower_level(
-                Obs(*self.parse_inputs(raw_inputs[t])), rnn_hxs=None, masks=None, p=p
+                Obs(*self.parse_inputs(raw_inputs[t])),
+                rnn_hxs=None,
+                masks=None,
+                upper=A[t],
             ).action.squeeze(-1)
             new = L[t] < 0
             L[t][new] = lower[new]
