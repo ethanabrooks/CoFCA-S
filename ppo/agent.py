@@ -352,7 +352,7 @@ class LowerLevel(NNBase):
         )
 
         self.mlp = nn.Sequential()
-        in_size = H
+        in_size = hidden_size if recurrent else H
         for i in range(num_layers):
             self.mlp.add_module(
                 name=f"fc{i}",
