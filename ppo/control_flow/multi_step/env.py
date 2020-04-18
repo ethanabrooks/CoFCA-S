@@ -225,7 +225,10 @@ class Env(ppo.control_flow.env.Env):
 
             line_iterator = self.line_generator(lines)
             condition_evaluations = []
-            self.time_remaining = 200 if self.evaluating else self.time_to_waste
+            if self.lower_level == "train-alone":
+                self.time_remaining = 0
+            else:
+                self.time_remaining = 200 if self.evaluating else self.time_to_waste
             self.loops = None
             inventory = Counter()
             subtask_complete = False
@@ -258,10 +261,11 @@ class Env(ppo.control_flow.env.Env):
                         if self.merchant not in objects.values():
                             return None
                     _, d = get_nearest(agent_pos, objective(be, it), objects)
+                    time_delta = 3 * self.world_size
                     if self.lower_level == "train-alone":
-                        self.time_remaining = 2 * self.world_size
+                        self.time_remaining = time_delta + self.time_to_waste
                     else:
-                        self.time_remaining += 2 * self.world_size
+                        self.time_remaining += time_delta
                     return l
 
             possible_objects = list(objects.values())
@@ -279,11 +283,15 @@ class Env(ppo.control_flow.env.Env):
                 subtask_complete = False
                 # for i, a in enumerate(self.lower_level_actions):
                 # print(i, a)
+                # try:
                 # lower_level_index = int(input("go:"))
+                # except ValueError:
+                # pass
                 if self.lower_level == "train-alone":
                     interaction, obj = lines[ptr].id
                 else:
-                    interaction, obj = self.subtasks[subtask_id]
+                    interaction, obj = lines[agent_ptr].id
+                    # interaction, obj = self.subtasks[subtask_id]
                 if self.lower_level == "hardcoded":
                     lower_level_action = self.get_lower_level_action(
                         interaction=interaction,
