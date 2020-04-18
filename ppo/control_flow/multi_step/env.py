@@ -225,7 +225,10 @@ class Env(ppo.control_flow.env.Env):
 
             line_iterator = self.line_generator(lines)
             condition_evaluations = []
-            self.time_remaining = 200 if self.evaluating else self.time_to_waste
+            if self.lower_level == "train-alone":
+                self.time_remaining = 0
+            else:
+                self.time_remaining = 200 if self.evaluating else self.time_to_waste
             self.loops = None
             inventory = Counter()
             subtask_complete = False
@@ -260,7 +263,7 @@ class Env(ppo.control_flow.env.Env):
                     _, d = get_nearest(agent_pos, objective(be, it), objects)
                     time_delta = 3 * self.world_size
                     if self.lower_level == "train-alone":
-                        self.time_remaining = time_delta
+                        self.time_remaining = time_delta + self.time_to_waste
                     else:
                         self.time_remaining += time_delta
                     return l
