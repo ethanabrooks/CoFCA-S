@@ -162,7 +162,7 @@ class Env(gym.Env, ABC):
                     info.update(success_line=len(lines))
                 else:
                     info.update(success_line=state.prev, failure_line=state.ptr)
-                subtasks_attempted = min(len(lines), subtasks_complete + 1)
+                subtasks_attempted = subtasks_complete + (not success)
                 info.update(
                     subtasks_complete=subtasks_complete,
                     subtasks_attempted=subtasks_attempted,
