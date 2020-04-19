@@ -290,8 +290,8 @@ class Env(ppo.control_flow.env.Env):
                 if self.lower_level == "train-alone":
                     interaction, obj = lines[ptr].id
                 else:
-                    interaction, obj = lines[agent_ptr].id
-                    # interaction, obj = self.subtasks[subtask_id]
+                    # interaction, obj = lines[agent_ptr].id
+                    interaction, obj = self.subtasks[subtask_id]
                 if self.lower_level == "hardcoded":
                     lower_level_action = self.get_lower_level_action(
                         interaction=interaction,

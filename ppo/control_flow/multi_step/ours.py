@@ -19,7 +19,7 @@ from ppo.utils import init_
 
 RecurrentState = namedtuple(
     "RecurrentState",
-    "a l d u ag dg p v h hy cy a_probs d_probs ag_probs dg_probs gru_gate P",
+    "a l d u ag dg p v h lh hy cy a_probs d_probs ag_probs dg_probs gru_gate P",
 )
 
 
@@ -89,6 +89,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             dg=1,
             gru_gate=self.gru_hidden_size,
             l=1,
+            lh=lower_level_hidden_size,
             P=self.ne * 2 * self.train_lines ** 2,
         )
         self.lower_level = None
@@ -220,14 +221,6 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             ag = AG[t].unsqueeze(-1).float()
             a_dist = gate(ag, self.actor(z).probs, A[t - 1])
             self.sample_new(A[t], a_dist)
-            lower = self.lower_level(
-                Obs(*self.parse_inputs(raw_inputs[t])),
-                rnn_hxs=None,
-                masks=None,
-                upper=A[t],
-            ).action.squeeze(-1)
-            new = L[t] < 0
-            L[t][new] = lower[new]
             # A[:] = float(input("go:"))
             self.print("ag prob", a_gate.probs[:, 1])
             self.print("ag", ag)
@@ -235,7 +228,8 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             cy = dg * cy_ + (1 - dg) * cy
             yield RecurrentState(
                 a=A[t],
-                l=L[t],
+                l=hx.l,
+                lh=hx.lh,
                 v=self.critic(z),
                 h=h,
                 u=u,
