@@ -150,6 +150,7 @@ class Agent(ppo.agent.Agent, NNBase):
                 hx.lh,
                 masks,
                 action=None if action is None else X.lower,
+                upper=hx.a,
             )
             X = X._replace(lower=ll_output.action.float().reshape(-1, 1))
             hx = hx._replace(lh=ll_output.rnn_hxs)
