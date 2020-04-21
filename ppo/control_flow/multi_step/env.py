@@ -94,9 +94,11 @@ class Env(ppo.control_flow.env.Env):
         num_subtasks,
         num_excluded_objects,
         temporal_extension,
+        term_on,
         world_size=6,
         **kwargs,
     ):
+        self.term_on = term_on
         self.temporal_extension = temporal_extension
         self.num_excluded_objects = num_excluded_objects
         self.max_while_objects = max_while_objects
@@ -290,8 +292,8 @@ class Env(ppo.control_flow.env.Env):
                 if self.lower_level == "train-alone":
                     interaction, obj = lines[ptr].id
                 else:
-                    interaction, obj = lines[agent_ptr].id
-                    # interaction, obj = self.subtasks[subtask_id]
+                    # interaction, obj = lines[agent_ptr].id
+                    interaction, obj = self.subtasks[subtask_id]
                 if self.lower_level == "hardcoded":
                     lower_level_action = self.get_lower_level_action(
                         interaction=interaction,
@@ -318,12 +320,13 @@ class Env(ppo.control_flow.env.Env):
                                 or (
                                     tgt_interaction == self.sell
                                     and standing_on == tgt_obj
+                                    and inventory[tgt_obj] == 0
                                 )
                                 or standing_on == self.wood
                             ):
                                 if While in self.control_flow_types:
                                     possible_objects.remove(standing_on)
-                            else:
+                            elif self.mine in self.term_on:
                                 term = True
                             if standing_on in self.items:
                                 inventory[standing_on] += 1
@@ -334,9 +337,13 @@ class Env(ppo.control_flow.env.Env):
                         )
                         if done:
                             inventory[tgt_obj] -= 1
-                        else:
+                        elif self.sell in self.term_on:
                             term = True
-                    elif lower_level_action == self.goto and not done:
+                    elif (
+                        lower_level_action == self.goto
+                        and not done
+                        and self.goto in self.term_on
+                    ):
                         term = True
                     if done:
                         prev, ptr = ptr, next_subtask(ptr)
@@ -485,7 +492,9 @@ class Env(ppo.control_flow.env.Env):
 
     def assign_line_ids(self, lines):
         excluded = self.random.randint(len(self.items), size=self.num_excluded_objects)
-        included_objects = [o for i, o in enumerate(self.items) if i not in excluded]
+        included_objects = [
+            o for i, o in enumerate(self.items) if i not in excluded and o != self.wood
+        ]
 
         interaction_ids = self.random.choice(len(self.behaviors), size=len(lines))
         object_ids = self.random.choice(len(included_objects), size=len(lines))
@@ -536,6 +545,7 @@ def build_parser(p):
     p.add_argument("--max-while-objects", type=float, default=2)
     p.add_argument("--num-excluded-objects", type=int, default=2)
     p.add_argument("--world-size", type=int, required=True)
+    p.add_argument("--term-on", nargs="*", choices=[Env.sell, Env.mine, Env.goto])
 
 
 if __name__ == "__main__":

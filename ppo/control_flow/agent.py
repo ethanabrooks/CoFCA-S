@@ -144,6 +144,17 @@ class Agent(ppo.agent.Agent, NNBase):
         else:
             raise RuntimeError
 
+        if rm.lower_level is not None:
+            ll_output = rm.lower_level(
+                Obs(*rm.parse_inputs(inputs)),
+                hx.lh,
+                masks,
+                action=None if action is None else X.lower,
+                upper=hx.a,
+            )
+            X = X._replace(lower=ll_output.action.float().reshape(-1, 1))
+            hx = hx._replace(lh=ll_output.rnn_hxs)
+
         dists = [(p if p is None else FixedCategorical(p)) for p in probs]
         action_log_probs = sum(
             dist.log_probs(x) for dist, x in zip(dists, X) if dist is not None
@@ -159,16 +170,12 @@ class Agent(ppo.agent.Agent, NNBase):
         except AttributeError:
             pass
 
-        action = torch.cat(X, dim=-1)
-        test_actions = Action(*action[0, :])
-        for field in Action._fields:
-            x = getattr(X, field)
-            test_action = getattr(test_actions, field)
-            assert test_action.item() == x[0].item()
-
         nlines = len(rm.obs_spaces.lines.nvec)
         P = hx.P.reshape(-1, N, nlines, 2 * nlines, rm.ne)
-        rnn_hxs = torch.cat(hx._replace(P=torch.tensor([], device=hx.P.device)), dim=-1)
+        rnn_hxs = torch.cat(
+            hx._replace(P=torch.tensor([], device=hx.P.device), l=X.lower), dim=-1
+        )
+        action = torch.cat(X, dim=-1)
         return AgentValues(
             value=hx.v,
             action=action,
