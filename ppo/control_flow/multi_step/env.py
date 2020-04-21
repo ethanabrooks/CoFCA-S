@@ -56,9 +56,9 @@ def objective(interaction, obj):
 
 
 def subtasks():
-    for obj in Env.items:
-        for interaction in Env.behaviors:
-            yield interaction, obj
+    yield Env.sell, Env.gold
+    yield Env.mine, Env.iron
+    yield Env.goto, Env.wood
 
 
 class Env(ppo.control_flow.env.Env):
@@ -504,10 +504,14 @@ class Env(ppo.control_flow.env.Env):
             lines, line_ids, interaction_ids, object_ids
         ):
             if line is Subtask:
-                subtask_id = (
-                    self.behaviors[interaction_id],
-                    included_objects[object_id],
-                )
+                behavior = self.behaviors[interaction_id]
+                if behavior == self.sell:
+                    item = self.gold
+                elif behavior == self.mine:
+                    item = self.iron
+                elif behavior == self.goto:
+                    item = self.wood
+                subtask_id = (behavior, item)
                 yield Subtask(subtask_id)
             elif line is Loop:
                 yield Loop(self.random.randint(1, 1 + self.max_loops))
