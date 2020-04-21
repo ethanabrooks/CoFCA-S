@@ -491,7 +491,9 @@ class Env(ppo.control_flow.env.Env):
 
     def assign_line_ids(self, lines):
         excluded = self.random.randint(len(self.items), size=self.num_excluded_objects)
-        included_objects = [o for i, o in enumerate(self.items) if i not in excluded]
+        included_objects = [
+            o for i, o in enumerate(self.items) if i not in excluded and o != self.wood
+        ]
 
         interaction_ids = self.random.choice(len(self.behaviors), size=len(lines))
         object_ids = self.random.choice(len(included_objects), size=len(lines))
