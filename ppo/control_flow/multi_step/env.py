@@ -56,9 +56,9 @@ def objective(interaction, obj):
 
 
 def subtasks():
+    yield Env.goto, Env.wood
     yield Env.sell, Env.gold
     yield Env.mine, Env.iron
-    yield Env.goto, Env.wood
 
 
 class Env(ppo.control_flow.env.Env):
