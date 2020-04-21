@@ -73,10 +73,10 @@ class Env(ppo.control_flow.env.Env):
     mine = "mine"
     sell = "sell"
     goto = "goto"
-    items = [wood]
+    items = [wood, gold, iron]
     terrain = [merchant, water, wall, bridge, agent]
     world_contents = items + terrain
-    behaviors = [mine, sell]
+    behaviors = [mine, sell, goto]
     colors = {
         wood: GREEN,
         gold: YELLOW,
@@ -505,7 +505,7 @@ class Env(ppo.control_flow.env.Env):
         ):
             if line is Subtask:
                 subtask_id = (
-                    self.sell,  # self.behaviors[interaction_id],
+                    self.behaviors[interaction_id],
                     included_objects[object_id],
                 )
                 yield Subtask(subtask_id)
