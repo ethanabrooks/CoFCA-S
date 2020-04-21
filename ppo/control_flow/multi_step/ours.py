@@ -71,7 +71,10 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         gc.collect()
         self.zeta2 = init_(
             nn.Linear(
-                hidden_size + self.encoder_hidden_size + self.gru_hidden_size + self.ne,
+                hidden_size
+                + self.encoder_hidden_size
+                + self.encoder_hidden_size
+                + self.ne,
                 hidden_size,
             )
         )
@@ -201,8 +204,13 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             self.sample_new(DG[t], d_gate)
             a_gate = self.a_gate(z)
             self.sample_new(AG[t], a_gate)
-            (hy_, cy_), gru_gate = self.gru2(M[R, p], (hy, cy))
-            decode_inputs = [hy_, obs, u, embedded_lower]  # first put obs back in gru2
+            # (hy_, cy_), gru_gate = self.gru2(M[R, p], (hy, cy))
+            decode_inputs = [
+                M[R, p],
+                obs,
+                u,
+                embedded_lower,
+            ]  # first put obs back in gru2
             z = F.relu(self.zeta2(torch.cat(decode_inputs, dim=-1)))
             u = self.upsilon(z).softmax(dim=-1)
             self.print("u", u)
@@ -224,8 +232,8 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             # A[:] = float(input("go:"))
             self.print("ag prob", a_gate.probs[:, 1])
             self.print("ag", ag)
-            hy = dg * hy_ + (1 - dg) * hy
-            cy = dg * cy_ + (1 - dg) * cy
+            # hy = dg * hy_ + (1 - dg) * hy
+            # cy = dg * cy_ + (1 - dg) * cy
             yield RecurrentState(
                 a=A[t],
                 l=hx.l,
@@ -243,6 +251,6 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 dg_probs=d_gate.probs,
                 ag=ag,
                 dg=dg,
-                gru_gate=gru_gate,
+                gru_gate=hx.gru_gate,
                 P=P.transpose(0, 1),
             )
