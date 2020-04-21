@@ -94,9 +94,11 @@ class Env(ppo.control_flow.env.Env):
         num_subtasks,
         num_excluded_objects,
         temporal_extension,
+        term_on,
         world_size=6,
         **kwargs,
     ):
+        self.term_on = term_on
         self.temporal_extension = temporal_extension
         self.num_excluded_objects = num_excluded_objects
         self.max_while_objects = max_while_objects
@@ -323,7 +325,7 @@ class Env(ppo.control_flow.env.Env):
                             ):
                                 if While in self.control_flow_types:
                                     possible_objects.remove(standing_on)
-                            else:
+                            elif self.mine in self.term_on:
                                 term = True
                             if standing_on in self.items:
                                 inventory[standing_on] += 1
@@ -334,9 +336,13 @@ class Env(ppo.control_flow.env.Env):
                         )
                         if done:
                             inventory[tgt_obj] -= 1
-                        else:
+                        elif self.sell in self.term_on:
                             term = True
-                    elif lower_level_action == self.goto and not done:
+                    elif (
+                        lower_level_action == self.goto
+                        and not done
+                        and self.goto in self.term_on
+                    ):
                         term = True
                     if done:
                         prev, ptr = ptr, next_subtask(ptr)
@@ -536,6 +542,7 @@ def build_parser(p):
     p.add_argument("--max-while-objects", type=float, default=2)
     p.add_argument("--num-excluded-objects", type=int, default=2)
     p.add_argument("--world-size", type=int, required=True)
+    p.add_argument("--term-on", nargs="*", choices=[Env.sell, Env.mine, Env.goto])
 
 
 if __name__ == "__main__":
