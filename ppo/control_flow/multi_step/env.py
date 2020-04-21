@@ -320,6 +320,7 @@ class Env(ppo.control_flow.env.Env):
                                 or (
                                     tgt_interaction == self.sell
                                     and standing_on == tgt_obj
+                                    and inventory[tgt_obj] == 0
                                 )
                                 or standing_on == self.wood
                             ):
