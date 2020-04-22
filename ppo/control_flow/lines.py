@@ -8,7 +8,7 @@ from numpy.random.mtrand import RandomState
 
 
 def sample(random, _min, _max, p=0.5):
-    return min(_min + random.geometric(p), _max)
+    return min(_min + random.geometric(p) - 1, _max)
 
 
 class Line:
