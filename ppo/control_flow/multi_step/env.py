@@ -230,6 +230,7 @@ class Env(ppo.control_flow.env.Env):
             )
         )
         extra_lines = []
+        excluded = self.random.randint(len(self.items), size=self.num_excluded_objects)
         if n_lines < self.eval_lines:
             n_lines = self.random.random_integers(1, self.eval_lines - n_lines)
             extra_lines = list(
@@ -240,8 +241,8 @@ class Env(ppo.control_flow.env.Env):
                     legal_lines=self.control_flow_types,
                 )
             )
-            extra_lines = list(self.assign_line_ids(extra_lines))
-        lines = list(self.assign_line_ids(line_types))
+            extra_lines = list(self.assign_line_ids(extra_lines, excluded))
+        lines = list(self.assign_line_ids(line_types, excluded))
 
         def state_generator() -> State:
             assert self.max_nesting_depth == 1
@@ -452,7 +453,7 @@ class Env(ppo.control_flow.env.Env):
         subtask_list = list(subtask_ids())
         loop_list = list(loop_objects())
         while_list = list(while_objects())
-        object_list = [self.agent, self.wood] + subtask_list + loop_list + while_list
+        object_list = [self.agent] + subtask_list + loop_list + while_list
         num_random_objects = self.world_size ** 2 - self.world_size
         object_list = object_list[:num_random_objects]
         indexes = self.random.choice(
@@ -514,8 +515,7 @@ class Env(ppo.control_flow.env.Env):
 
         return objects
 
-    def assign_line_ids(self, lines):
-        excluded = self.random.randint(len(self.items), size=self.num_excluded_objects)
+    def assign_line_ids(self, lines, excluded):
         included_objects = [
             o for i, o in enumerate(self.items) if i not in excluded and o != self.wood
         ]
