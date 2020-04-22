@@ -453,7 +453,13 @@ class Env(ppo.control_flow.env.Env):
         subtask_list = list(subtask_ids())
         loop_list = list(loop_objects())
         while_list = list(while_objects())
-        object_list = [self.agent] + subtask_list + loop_list + while_list
+        object_list = (
+            [self.agent]
+            + ([self.wood] if self.lower_level == "train-alone" else [])
+            + subtask_list
+            + loop_list
+            + while_list
+        )
         num_random_objects = self.world_size ** 2 - self.world_size
         object_list = object_list[:num_random_objects]
         indexes = self.random.choice(
