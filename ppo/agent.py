@@ -312,6 +312,7 @@ class LowerLevel(NNBase):
         (d, h, w) = obs_space.obs.shape
         inventory_size = obs_space.inventory.nvec.size
         line_nvec = torch.tensor(obs_space.lines.nvec)
+        line_nvec[:, 2] -= 1  # TODO: ugly hack
         offset = F.pad(line_nvec[0, :-1].cumsum(0), [1, 0])
         self.register_buffer("offset", offset)
         self.obs_spaces = obs_space

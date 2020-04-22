@@ -137,7 +137,7 @@ class Env(ppo.control_flow.env.Env):
                         [
                             len(Line.types),
                             1 + len(self.behaviors),
-                            1 + len(self.items),
+                            2 + len(self.items),
                             1 + self.max_loops,
                         ]
                     ]
@@ -180,16 +180,22 @@ class Env(ppo.control_flow.env.Env):
     @staticmethod
     @functools.lru_cache(maxsize=200)
     def preprocess_line(line):
+        def item_index(item):
+            if item == Env.water:
+                return len(Env.items)
+            else:
+                return Env.items.index(item)
+
         if type(line) in (Else, EndIf, EndWhile, EndLoop, Padding):
             return [Line.types.index(type(line)), 0, 0, 0]
         elif type(line) is Loop:
             return [Line.types.index(Loop), 0, 0, line.id]
         elif type(line) is Subtask:
             i, o = line.id
-            i, o = Env.behaviors.index(i), Env.items.index(o)
+            i, o = Env.behaviors.index(i), item_index(o)
             return [Line.types.index(Subtask), i + 1, o + 1, 0]
         elif type(line) in (While, If):
-            return [Line.types.index(type(line)), 0, Env.items.index(line.id) + 1, 0]
+            return [Line.types.index(type(line)), 0, item_index(line.id) + 1, 0]
         else:
             raise RuntimeError()
 
@@ -482,7 +488,7 @@ class Env(ppo.control_flow.env.Env):
         if len(object_list) == len(object_positions):
             wall_positions = wall_positions[:num_walls]
         positions = np.concatenate([object_positions, wall_positions])
-        water_index = self.random.choice(self.world_size)
+        water_index = self.random.randint(1, self.world_size - 1)
         positions[positions[:, vertical_water] >= water_index] += np.array(
             [0, 1] if vertical_water else [1, 0]
         )
@@ -522,13 +528,15 @@ class Env(ppo.control_flow.env.Env):
         return objects
 
     def assign_line_ids(self, lines, excluded):
+        excluded = self.random.randint(len(self.items), size=self.num_excluded_objects)
         included_objects = [
             o for i, o in enumerate(self.items) if i not in excluded and o != self.wood
         ]
 
         interaction_ids = self.random.choice(len(self.behaviors), size=len(lines))
         object_ids = self.random.choice(len(included_objects), size=len(lines))
-        line_ids = self.random.choice(len(self.items), size=len(lines))
+        line_ids = self.random.choice(len(self.items) + 1, size=len(lines))
+        items = self.items + [self.water]
 
         for line, line_id, interaction_id, object_id in zip(
             lines, line_ids, interaction_ids, object_ids
@@ -542,7 +550,7 @@ class Env(ppo.control_flow.env.Env):
             elif line is Loop:
                 yield Loop(self.random.randint(1, 1 + self.max_loops))
             else:
-                yield line(self.items[line_id])
+                yield line(items[line_id])
 
     def get_observation(self, obs, **kwargs):
         obs, inventory = obs
