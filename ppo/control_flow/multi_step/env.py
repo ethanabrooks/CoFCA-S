@@ -216,7 +216,11 @@ class Env(ppo.control_flow.env.Env):
             return evaluation
 
     def generators(self) -> Tuple[Iterator[State], List[Line]]:
-        n_lines = self.random.random_integers(self.min_lines, self.max_lines)
+        n_lines = (
+            self.eval_lines
+            if self.evaluating
+            else self.random.random_integers(self.min_lines, self.max_lines)
+        )
         line_types = list(
             Line.generate_types(
                 n_lines,
@@ -225,17 +229,19 @@ class Env(ppo.control_flow.env.Env):
                 legal_lines=self.control_flow_types,
             )
         )
-        n_lines = self.random.random_integers(1, self.eval_lines - n_lines)
-        extra_lines = list(
-            Line.generate_types(
-                n_lines,
-                remaining_depth=self.max_nesting_depth,
-                random=self.random,
-                legal_lines=self.control_flow_types,
+        extra_lines = []
+        if n_lines < self.eval_lines:
+            n_lines = self.random.random_integers(1, self.eval_lines - n_lines)
+            extra_lines = list(
+                Line.generate_types(
+                    n_lines,
+                    remaining_depth=self.max_nesting_depth,
+                    random=self.random,
+                    legal_lines=self.control_flow_types,
+                )
             )
-        )
+            extra_lines = list(self.assign_line_ids(extra_lines))
         lines = list(self.assign_line_ids(line_types))
-        extra_lines = list(self.assign_line_ids(extra_lines))
 
         def state_generator() -> State:
             assert self.max_nesting_depth == 1
