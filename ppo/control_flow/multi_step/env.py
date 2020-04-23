@@ -449,8 +449,10 @@ class Env(ppo.control_flow.env.Env):
             for while_line, block in while_blocks.items():
                 obj = lines[while_line].id
                 l = self.random.choice(block)
-                line_id = self.mine, obj
-                lines[l] = Subtask(line_id)
+                behavior = self.mine
+                if obj not in self.items:
+                    obj = lines[l].id[1]
+                lines[l].id = behavior, obj
                 if not self.evaluating and obj in self.world_contents:
                     num_obj = self.random.randint(self.max_while_objects + 1)
                     for _ in range(num_obj):
