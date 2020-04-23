@@ -537,12 +537,9 @@ class Env(ppo.control_flow.env.Env):
 
         interaction_ids = self.random.choice(len(self.behaviors), size=len(lines))
         object_ids = self.random.choice(len(included_objects), size=len(lines))
-        line_ids = self.random.choice(len(self.items) + 1, size=len(lines))
         items = self.items + [self.water]
 
-        for line, line_id, interaction_id, object_id in zip(
-            lines, line_ids, interaction_ids, object_ids
-        ):
+        for line, interaction_id, object_id in zip(lines, interaction_ids, object_ids):
             if line is Subtask:
                 subtask_id = (
                     self.behaviors[interaction_id],
@@ -551,8 +548,10 @@ class Env(ppo.control_flow.env.Env):
                 yield Subtask(subtask_id)
             elif line is Loop:
                 yield Loop(self.random.randint(1, 1 + self.max_loops))
+            elif line is While:
+                yield line(self.items[self.random.choice(len(self.items))])
             else:
-                yield line(items[line_id])
+                yield line(items[self.random.choice(len(items))])
 
     def get_observation(self, obs, **kwargs):
         obs, inventory = obs
