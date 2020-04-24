@@ -69,6 +69,9 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         self.zeta2 = init_(
             nn.Linear(conv_hidden_size + self.encoder_hidden_size, hidden_size)
         )
+        self.zeta3 = init_(
+            nn.Linear(conv_hidden_size + self.encoder_hidden_size, hidden_size)
+        )
         self.gru2 = LSTMCell(self.encoder_hidden_size, self.gru_hidden_size)
         self.d_gate = Categorical(hidden_size, 2)
         self.a_gate = Categorical(hidden_size, 2)
@@ -217,6 +220,8 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             p = torch.clamp(p, min=0, max=M.size(1) - 1)
 
             ag = AG[t].unsqueeze(-1).float()
+            decode_inputs = [M[R, p], obs]  # first put obs back in gru2
+            z = F.relu(self.zeta3(torch.cat(decode_inputs, dim=-1)))
             a_dist = gate(ag, self.actor(z).probs, A[t - 1])
             self.sample_new(A[t], a_dist)
             # A[:] = float(input("go:"))
