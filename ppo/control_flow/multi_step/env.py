@@ -236,15 +236,17 @@ class Env(ppo.control_flow.env.Env):
                 behavior, resource = line.id
                 if behavior == self.sell:
                     required = {self.merchant, resource}
-                    counts[resource] -= 1
                 elif behavior == self.mine:
-                    counts[resource] -= 1
                     required = {resource}
                 else:
                     required = {resource}
                 for resource in required:
-                    if counts[resource] < 0:
+                    if counts[resource] <= 0:
                         return False
+                if behavior in self.sell:
+                    counts[resource] -= 1
+                elif behavior == self.mine:
+                    counts[resource] -= 1
             elif type(line) is Loop:
                 loops += 1
             elif type(line) is While:
