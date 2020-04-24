@@ -216,7 +216,7 @@ class Env(ppo.control_flow.env.Env):
         if type(line) is Subtask:
             return 1
         else:
-            evaluation = counts[line.id] > 0
+            evaluation = counts[Env.iron] > counts[Env.gold]
             if type(line) in (If, While):
                 condition_evaluations += [evaluation]
             return evaluation
