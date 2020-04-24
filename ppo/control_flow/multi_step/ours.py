@@ -149,7 +149,6 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         # parse non-action inputs
         inputs = Obs(*self.parse_inputs(raw_inputs))
         inputs = inputs._replace(obs=inputs.obs.view(T, N, *self.obs_spaces.obs.shape))
-        lines = inputs.lines.view(T, N, *self.obs_spaces.lines.shape)
 
         # build memory
         nl = len(self.obs_spaces.lines.nvec)
@@ -178,7 +177,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         ones = self.ones.expand_as(R)
         actions = Action(*actions.unbind(dim=2))
         A = torch.cat([actions.upper, hx.a.view(1, N)], dim=0).long()
-        L = torch.cat([actions.lower + 1, hx.l.view(1, N)], dim=0).long()
+        L = torch.cat([actions.lower, hx.l.view(1, N)], dim=0).long()
         D = torch.cat([actions.delta, hx.d.view(1, N)], dim=0).long()
         AG = torch.cat([actions.ag, hx.ag.view(1, N)], dim=0).long()
         DG = torch.cat([actions.dg, hx.dg.view(1, N)], dim=0).long()
@@ -188,9 +187,6 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             obs = self.preprocess_obs(inputs.obs[t])
             # h = self.gru(obs, h)
             embedded_lower = self.embed_lower(L[t - 1].clone())
-            self.print("L[t]", L[t])
-            self.print("L[t-1]", L[t - 1])
-            self.print("lines[R, p]", lines[t][R, p])
             zeta_inputs = [M[R, p], obs, embedded_lower]
             z = F.relu(self.zeta(torch.cat(zeta_inputs, dim=-1)))
             # then put M back in gru
@@ -200,6 +196,8 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             a_gate = self.a_gate(z)
             self.sample_new(AG[t], a_gate)
             # (hy_, cy_), gru_gate = self.gru2(M[R, p], (hy, cy))
+            decode_inputs = [M[R, p], obs]  # first put obs back in gru2
+            z = F.relu(self.zeta2(torch.cat(decode_inputs, dim=-1)))
             u = self.upsilon(z).softmax(dim=-1)
             self.print("u", u)
             w = P[p, R]
@@ -215,8 +213,6 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             p = torch.clamp(p, min=0, max=M.size(1) - 1)
 
             ag = AG[t].unsqueeze(-1).float()
-            decode_inputs = [M[R, p], obs]  # first put obs back in gru2
-            z = F.relu(self.zeta2(torch.cat(decode_inputs, dim=-1)))
             a_dist = gate(ag, self.actor(z).probs, A[t - 1])
             self.sample_new(A[t], a_dist)
             # A[:] = float(input("go:"))
