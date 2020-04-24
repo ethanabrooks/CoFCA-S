@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from gym import spaces
 from torch import nn as nn
 
-from ppo.control_flow.env import Obs
+from ppo.control_flow.env import Obs, Action
 from ppo.distributions import Categorical, FixedCategorical
 from ppo.utils import init_
 
@@ -15,7 +15,7 @@ RecurrentState = namedtuple("RecurrentState", "a d u p v h a_probs d_probs")
 
 
 def get_obs_sections(obs_spaces):
-    return Obs(*[int(np.prod(s.shape)) for s in obs_spaces])
+    return [int(np.prod(s.shape)) for s in obs_spaces]
 
 
 class Recurrence(nn.Module):
@@ -40,23 +40,27 @@ class Recurrence(nn.Module):
         self.log_dir = log_dir
         self.no_roll = no_roll
         self.no_scan = no_scan
-        self.obs_spaces = Obs(**observation_space.spaces)
+        self.obs_spaces = observation_space
         self.action_size = action_space.nvec.size
         self.debug = debug
         self.hidden_size = hidden_size
         self.encoder_hidden_size = encoder_hidden_size
         self.gru_hidden_size = gru_hidden_size
+        self.P_save_name = None
 
-        self.obs_sections = get_obs_sections(self.obs_spaces)
+        self.obs_sections = self.get_obs_sections(self.obs_spaces)
         self.eval_lines = eval_lines
         self.train_lines = len(self.obs_spaces.lines.nvec)
 
         # networks
         self.ne = num_edges
-        n_a, n_p = map(int, action_space.nvec[:2])
+        self.action_space_nvec = Action(*map(int, action_space.nvec))
+        n_a = self.action_space_nvec.upper
+        n_p = self.action_space_nvec.delta
         self.n_a = n_a
         self.embed_task = self.build_embed_task(encoder_hidden_size)
-        self.embed_action = nn.Embedding(n_a, hidden_size)
+        self.embed_upper = nn.Embedding(n_a, hidden_size)
+        self.embed_lower = nn.Embedding(self.action_space_nvec.lower, hidden_size)
         self.task_encoder = nn.GRU(
             encoder_hidden_size,
             encoder_hidden_size,
@@ -66,8 +70,10 @@ class Recurrence(nn.Module):
         self.gru = nn.GRUCell(self.gru_in_size, gru_hidden_size)
 
         layers = []
-        for _ in range(num_layers + 1):
-            layers.extend([init_(nn.Linear(hidden_size, hidden_size)), activation])
+        in_size = gru_hidden_size + 1
+        for _ in range(num_layers):
+            layers.extend([init_(nn.Linear(in_size, hidden_size)), activation])
+            in_size = hidden_size
         self.zeta = nn.Sequential(*layers)
         self.upsilon = init_(nn.Linear(hidden_size, self.ne))
 
@@ -96,7 +102,11 @@ class Recurrence(nn.Module):
 
     @property
     def gru_in_size(self):
-        return 1 + self.hidden_size + self.encoder_hidden_size + self.ne
+        return self.encoder_hidden_size + self.ne
+
+    @staticmethod
+    def get_obs_sections(obs_spaces):
+        return get_obs_sections(obs_spaces)
 
     # noinspection PyProtectedMember
     @contextmanager
@@ -113,12 +123,14 @@ class Recurrence(nn.Module):
         self.state_sizes = state_sizes
 
     def set_obs_space(self, obs_space):
-        self.obs_spaces = Obs(**obs_space.spaces)
-        self.obs_sections = get_obs_sections(self.obs_spaces)
-        self.train_lines = len(self.obs_spaces.lines.nvec)
+        self.obs_spaces = obs_space.spaces
+        self.obs_sections = self.get_obs_sections(self.obs_spaces)
+        self.train_lines = len(self.obs_spaces["lines"].nvec)
         # noinspection PyProtectedMember
         if not self.no_scan:
-            self.state_sizes = self.state_sizes._replace(d_probs=2 * self.train_lines)
+            self.state_sizes = self.state_sizes._replace(
+                d_probs=2 * self.train_lines, P=self.ne * 2 * self.train_lines ** 2
+            )
 
     @staticmethod
     def get_lines_space(n_eval_lines, train_lines_space):
@@ -147,7 +159,7 @@ class Recurrence(nn.Module):
         return hx, hx[-1:]
 
     def parse_inputs(self, inputs: torch.Tensor):
-        return Obs(*torch.split(inputs, self.obs_sections, dim=-1))
+        return torch.split(inputs, self.obs_sections, dim=-1)
 
     def parse_hidden(self, hx: torch.Tensor) -> RecurrentState:
         return RecurrentState(*torch.split(hx, self.state_sizes, dim=-1))
@@ -236,9 +248,8 @@ class Recurrence(nn.Module):
         for t in range(T):
             self.print("p", p)
             obs = inputs.obs[t]
-            x = [obs, M[R, p], self.embed_action(A[t - 1].clone()), u]
-            h = self.gru(torch.cat(x, dim=-1), h)
-            z = F.relu(self.zeta(h))
+            h = self.gru(torch.cat([M[R, p], u], dim=-1), h)
+            z = F.relu(self.zeta(torch.cat([obs, h], dim=-1)))
             a_dist = self.actor(z)
             self.sample_new(A[t], a_dist)
             u = self.upsilon(z).softmax(dim=-1)
@@ -253,6 +264,7 @@ class Recurrence(nn.Module):
             n_p = d_dist.probs.size(-1)
             p = p + D[t].clone() - n_p // 2
             p = torch.clamp(p, min=0, max=M.size(1) - 1)
+            d = D[t]
             yield RecurrentState(
                 a=A[t],
                 u=u,
@@ -260,6 +272,6 @@ class Recurrence(nn.Module):
                 h=h,
                 p=p,
                 a_probs=a_dist.probs,
-                d=D[t],
+                d=d,
                 d_probs=d_dist.probs,
             )

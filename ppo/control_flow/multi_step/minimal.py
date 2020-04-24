@@ -11,7 +11,7 @@ from ppo.utils import init_
 import ppo.control_flow.multi_step.abstract_recurrence
 
 
-class Agent(ppo.control_flow.multi_step.abstract_recurrence.Recurrence, nn.Module):
+class Agent(ppo.control_flow.multi_step.abstract_recurrence.Recurrence):
     def __init__(
         self,
         observation_space,
@@ -21,7 +21,7 @@ class Agent(ppo.control_flow.multi_step.abstract_recurrence.Recurrence, nn.Modul
         conv_hidden_size,
         num_layers,
         entropy_coef,
-        conv_architecture,
+        use_conv,
         **network_args,
     ):
         self.obs_spaces = Obs(**observation_space.spaces)
@@ -31,10 +31,7 @@ class Agent(ppo.control_flow.multi_step.abstract_recurrence.Recurrence, nn.Modul
         self.encoder_hidden_size = encoder_hidden_size
         self.obs_sections = get_obs_sections(self.obs_spaces)
         self.train_lines = len(self.obs_spaces.lines.nvec)
-        nn.Module.__init__(self)
-        ppo.control_flow.multi_step.abstract_recurrence.Recurrence.__init__(
-            self, conv_hidden_size=conv_hidden_size, num_conv_layers=conv_architecture
-        )
+        super().__init__(conv_hidden_size=conv_hidden_size, use_conv=use_conv)
 
         # networks
         n_a = int(action_space.nvec[0])
@@ -100,7 +97,7 @@ class Agent(ppo.control_flow.multi_step.abstract_recurrence.Recurrence, nn.Modul
             N, -1
         )  # n_batch, n_lines * hidden_size
         obs = (
-            self.conv(inputs.obs.permute(0, 2, 3, 1))
+            self.ll_conv(inputs.obs.permute(0, 2, 3, 1))
             .view(N, -1, self.conv_hidden_size)
             .max(dim=1)
             .values

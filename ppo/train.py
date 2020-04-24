@@ -11,7 +11,6 @@ from typing import Dict
 
 import gym
 import numpy as np
-import psutil
 import torch
 from gym.wrappers import TimeLimit
 from tensorboardX import SummaryWriter
@@ -243,7 +242,7 @@ class TrainBase(abc.ABC):
                 fps = total_num_steps / (time.time() - tick)
                 tick = time.time()
                 yield dict(
-                    tick=tick, fps=fps, **epoch_counter, **train_results, **eval_result,
+                    tick=tick, fps=fps, **epoch_counter, **train_results, **eval_result
                 )
 
     def run_epoch(
@@ -271,7 +270,7 @@ class TrainBase(abc.ABC):
 
             # Observe reward and next obs
             obs, reward, done, infos = envs.step(act.action)
-            self.process_infos(episode_counter, infos)
+            self.process_infos(episode_counter, done, infos, **act.log)
 
             # track rewards
             counter["reward"] += reward.numpy()
@@ -305,10 +304,12 @@ class TrainBase(abc.ABC):
         return dict(episode_counter)
 
     @staticmethod
-    def process_infos(episode_counter, infos):
+    def process_infos(episode_counter, done, infos, **act_log):
         for d in infos:
             for k, v in d.items():
                 episode_counter[k] += v if type(v) is list else [float(v)]
+        for k, v in act_log.items():
+            episode_counter[k] += v if type(v) is list else [float(v)]
 
     @staticmethod
     def build_agent(envs, **agent_args):

@@ -1,16 +1,13 @@
 import functools
 from abc import ABC
-from collections import defaultdict, namedtuple, OrderedDict, Counter
-
+from collections import defaultdict, namedtuple
+from typing import List, Tuple, Iterator
 import numpy as np
-
-# import skimage.draw
 from gym.utils import seeding
 from gym.vector.utils import spaces
 from rl_utils import hierarchical_parse_args, gym
-
-
 from ppo import keyboard_control
+from ppo.utils import RED, RESET, GREEN
 from ppo.control_flow.lines import (
     If,
     Else,
@@ -23,17 +20,14 @@ from ppo.control_flow.lines import (
     Loop,
     EndLoop,
 )
-from ppo.utils import RED, RESET, GREEN
 
 Obs = namedtuple("Obs", "active lines obs")
 Last = namedtuple("Last", "action active reward terminal selected")
-State = namedtuple("State", "obs condition prev ptr condition_evaluations term")
+State = namedtuple("State", "obs prev ptr term subtask_complete")
+Action = namedtuple("Action", "upper lower delta ag dg ptr")
 
 
 class Env(gym.Env, ABC):
-    pairs = {If: EndIf, Else: EndIf, While: EndWhile, Loop: EndLoop}
-    line_types = [If, Else, EndIf, While, EndWhile, Subtask, Padding, Loop, EndLoop]
-
     def __init__(
         self,
         min_lines,
@@ -42,28 +36,38 @@ class Env(gym.Env, ABC):
         num_subtasks,
         max_nesting_depth,
         eval_condition_size,
+        single_control_flow_type,
         no_op_limit,
         time_to_waste,
         subtasks_only,
         break_on_fail,
         max_loops,
         rank,
+        lower_level,
+        control_flow_types,
         seed=0,
         eval_lines=None,
         evaluating=False,
     ):
         super().__init__()
+        self.lower_level = lower_level
+        if Subtask not in control_flow_types:
+            control_flow_types.append(Subtask)
+        self.control_flow_types = control_flow_types
         self.rank = rank
         self.max_loops = max_loops
         self.break_on_fail = break_on_fail
         self.subtasks_only = subtasks_only
         self.no_op_limit = no_op_limit
         self._eval_condition_size = eval_condition_size
+        self._single_control_flow_type = single_control_flow_type
         self.max_nesting_depth = max_nesting_depth
         self.num_subtasks = num_subtasks
         self.time_to_waste = time_to_waste
         self.time_remaining = None
+        self.i = 0
 
+        self.loops = None
         self.eval_lines = eval_lines
         self.min_lines = min_lines
         self.max_lines = max_lines
@@ -101,7 +105,13 @@ class Env(gym.Env, ABC):
             )
         )
 
+    @property
+    def line_types(self):
+        return [If, Else, EndIf, While, EndWhile, EndLoop, Subtask, Padding, Loop]
+        # return list(Line.types)
+
     def reset(self):
+        self.i += 1
         self.iterator = self.generator()
         s, r, t, i = next(self.iterator)
         return s
@@ -112,27 +122,30 @@ class Env(gym.Env, ABC):
     def generator(self):
         step = 0
         n = 0
-        lines = self.build_lines()
-        state_iterator = self.state_generator(lines)
+        state_iterator, lines = self.generators()
         state = next(state_iterator)
         actions = []
         program_counter = []
-        evaluations = []
-        observations = []
 
+        subtasks_complete = 0
         agent_ptr = 0
         info = {}
         term = False
         action = None
+        lower_level_action = None
+        cumulative_reward = 0
         while True:
             if state.ptr is not None:
                 program_counter.append(state.ptr)
             success = state.ptr is None
-            reward = int(success)
-            if success:
-                info.update(success_line=len(lines))
 
             term = term or success or state.term
+            if self.lower_level == "train-alone":
+                reward = 1 if state.subtask_complete else 0
+            else:
+                reward = int(success)
+            cumulative_reward += reward
+            subtasks_complete += state.subtask_complete
             if term:
                 if not success and self.break_on_fail:
                     import ipdb
@@ -143,55 +156,67 @@ class Env(gym.Env, ABC):
                     instruction=[self.preprocess_line(l) for l in lines],
                     actions=actions,
                     program_counter=program_counter,
-                    evaluations=evaluations,
-                    observations=observations,
+                    success=success,
+                )
+                if success:
+                    info.update(success_line=len(lines))
+                else:
+                    info.update(success_line=state.prev, failure_line=state.ptr)
+                subtasks_attempted = subtasks_complete + (not success)
+                info.update(
+                    subtasks_complete=subtasks_complete,
+                    subtasks_attempted=subtasks_attempted,
                 )
 
             info.update(regret=1 if term and not success else 0)
 
-            def line_strings(index, level):
-                if index == len(lines):
-                    return
-                line = lines[index]
-                if index == state.ptr and index == agent_ptr:
-                    pre = "+ "
-                elif index == agent_ptr:
-                    pre = "- "
-                elif index == state.ptr:
-                    pre = "| "
-                else:
-                    pre = "  "
-                if line.depth_change < 0:
-                    level += line.depth_change
-                indent = pre * level
-                if line.depth_change > 0:
-                    level += line.depth_change
-                # if type(line) is Subtask:
-                yield f"{indent}{self.line_str(line)}"
-                # else:
-                #     yield f"{indent}{line.__name__}"
-                # if line in [If, While, Else]:
-                yield from line_strings(index + 1, level)
-
             def render():
                 if term:
                     print(GREEN if success else RED)
-                for i, string in enumerate(line_strings(index=0, level=1)):
-                    print(f"{i}{string}")
-                print("Selected:", agent_ptr)
+                indent = 0
+                for i, line in enumerate(lines):
+                    if i == state.ptr and i == agent_ptr:
+                        pre = "+ "
+                    elif i == agent_ptr:
+                        pre = "- "
+                    elif i == state.ptr:
+                        pre = "| "
+                    else:
+                        pre = "  "
+                    indent += line.depth_change[0]
+                    print(
+                        "{:2}{}{}{}".format(i, pre, " " * indent, self.line_str(line))
+                    )
+                    indent += line.depth_change[1]
+                if action is not None and action < len(self.subtasks):
+                    print("Selected:", self.subtasks[action], action)
                 print("Action:", action)
+                if lower_level_action is not None:
+                    print(
+                        "Lower Level Action:",
+                        self.lower_level_actions[lower_level_action],
+                    )
                 print("Reward", reward)
+                print("Cumulative", cumulative_reward)
+                print("Time remaining", self.time_remaining)
                 print("Obs:")
                 print(RESET)
                 self.print_obs(state.obs)
 
             self._render = render
-            obs = self.get_observation(state.obs, state.ptr, lines)
-            observations.append(obs["obs"])
+            obs = self.get_observation(obs=state.obs, active=state.ptr, lines=lines)
 
             action = (yield obs, reward, term, info)
-            actions += [list(action.astype(int))]
-            action, agent_ptr = int(action[0]), int(action[-1])
+            if action.size == 1:
+                action = Action(upper=0, lower=action, delta=0, ag=0, dg=0, ptr=0)
+            actions.extend([int(a) for a in action])
+            action = Action(*action)
+            action, lower_level_action, agent_ptr, = (
+                int(action.upper),
+                int(action.lower),
+                int(action.ptr),
+            )
+
             info = {}
 
             if action == self.num_subtasks:
@@ -203,22 +228,17 @@ class Env(gym.Env, ABC):
                     term = True
             elif state.ptr is not None:
                 step += 1
-                if action != lines[state.ptr].id:
-                    info.update(success_line=state.prev, failure_line=state.ptr)
-                state = state_iterator.send(action)
-                evaluations.extend(state.condition_evaluations)
-
-    @staticmethod
-    def line_str(line: Line):
-        if type(line) in (Subtask, Loop):
-            return str(line)
-        return line.__class__.__name__
+                state = state_iterator.send((action, lower_level_action))
 
     @property
     def eval_condition_size(self):
         return self._eval_condition_size and self.evaluating
 
-    def build_lines(self):
+    @property
+    def single_control_flow_type(self):
+        return self._single_control_flow_type and not self.evaluating
+
+    def choose_line_types(self):
         if self.evaluating:
             assert self.eval_lines is not None
             n_lines = self.eval_lines
@@ -232,10 +252,18 @@ class Env(gym.Env, ABC):
             lines = [line0] + [Subtask] * (edge_length - 2)
             lines += [EndWhile if line0 is While else EndIf, Subtask]
         else:
-            lines = self.choose_line_types(
-                n_lines, active_conditions=[], max_nesting_depth=self.max_nesting_depth
+            line_types = self.control_flow_types
+            if self.single_control_flow_type:
+                line_types = [self.random.choice(self.control_flow_types), Subtask]
+            lines = list(
+                Line.generate_types(
+                    n_lines,
+                    remaining_depth=self.max_nesting_depth,
+                    random=self.random,
+                    legal_lines=line_types,
+                )
             )
-        return list(self.assign_line_ids(lines))
+        return lines
 
     def assign_line_ids(self, lines):
         for line in lines:
@@ -246,61 +274,9 @@ class Env(gym.Env, ABC):
             else:
                 yield line(0)
 
-    @functools.lru_cache(maxsize=120)
-    def preprocess_line(self, line):
-        return self.possible_lines.index(line)
-
-    def choose_line_types(
-        self, n, active_conditions, last=None, nesting_depth=0, max_nesting_depth=None
-    ):
-        if n < 0:
-            return []
-        if n == 0:
-            return []
-        if n == len(active_conditions):
-            lines = [self.pairs[c] for c in reversed(active_conditions)]
-            return lines + [Subtask for _ in range(n - len(lines))]
-        elif n == 1:
-            return [Subtask]
-        line_types = [Subtask]
-        enough_space = n > len(active_conditions) + 2
-        if (
-            enough_space
-            and (max_nesting_depth is None or nesting_depth < max_nesting_depth)
-            and not self.subtasks_only
-        ):
-            line_types += [If, While]
-        if active_conditions and last is Subtask:
-            last_condition = active_conditions[-1]
-            if last_condition is If:
-                line_types += [EndIf]
-            if last_condition is If and enough_space:
-                line_types += [Else]
-            elif last_condition is Else:
-                line_types += [EndIf]
-            elif last_condition is While:
-                line_types += [EndWhile]
-        line_type = self.random.choice(line_types)
-        if line_type in [If, While]:
-            active_conditions = active_conditions + [line_type]
-            nesting_depth += 1
-        elif line_type is Else:
-            active_conditions = active_conditions[:-1] + [line_type]
-        elif line_type in [EndIf, EndWhile]:
-            active_conditions = active_conditions[:-1]
-            nesting_depth -= 1
-        get_lines = self.choose_line_types(
-            n - 1,
-            active_conditions=active_conditions,
-            last=line_type,
-            nesting_depth=nesting_depth,
-            max_nesting_depth=max_nesting_depth,
-        )
-        return [line_type] + get_lines
-
     def line_generator(self, lines):
         line_transitions = defaultdict(list)
-        for _from, _to in self.get_transitions(iter(enumerate(lines)), []):
+        for _from, _to in self.get_transitions(lines):
             line_transitions[_from].append(_to)
         i = 0
         if_evaluations = []
@@ -314,117 +290,101 @@ class Env(gym.Env, ABC):
                 if_evaluations.append(evaluation)
             i = line_transitions[i][evaluation]
 
-    def get_transitions(self, lines_iter, previous):
-        while True:  # stops at StopIteration
-            try:
-                current, line = next(lines_iter)
-            except StopIteration:
-                return
-            if type(line) is EndIf or type(line) is Subtask:
-                yield current, current + 1  # False
-                yield current, current + 1  # True
-            if type(line) is If:
-                yield from self.get_transitions(
-                    lines_iter, previous + [current]
-                )  # from = If
-            elif type(line) is Else:
-                prev = previous[-1]
-                yield prev, current  # False: If -> Else
-                yield prev, prev + 1  # True: If -> If + 1
-                previous[-1] = current
-            elif type(line) is EndIf:
-                prev = previous[-1]
-                yield prev, current  # False: If/Else -> EndIf
-                yield prev, prev + 1  # True: If/Else -> If/Else + 1
-                return
-            elif type(line) is While:
-                yield from self.get_transitions(
-                    lines_iter, previous + [current]
-                )  # from = While
-            elif type(line) is EndWhile:
-                prev = previous[-1]
-                # While
-                yield prev, current + 1  # False: While -> EndWhile + 1
-                yield prev, prev + 1  # True: While -> While + 1
-                # EndWhile
-                yield current, prev  # False: EndWhile -> While
-                yield current, prev  # True: EndWhile -> While
-                return
+    @staticmethod
+    def get_transitions(lines):
+        conditions = []
+        for i, line in enumerate(lines):
+            yield from line.transitions(i, conditions)
 
-    def state_generator(self, lines) -> State:
-        line_iterator = self.line_generator(lines)
-        condition_bit = 0 if self.eval_condition_size else self.random.randint(0, 2)
-        condition_evaluations = defaultdict(list)
-        self.time_remaining = self.time_to_waste
+    def generators(self) -> Tuple[Iterator[State], List[Line]]:
+        line_types = self.choose_line_types()
 
-        def next_subtask(msg=condition_bit):
-            l = line_iterator.send(msg)
-            while not (l is None or type(lines[l]) is Subtask):
-                line = lines[l]
-                if type(line) in (If, While):
-                    condition_evaluations[type(line)] += [condition_bit]
-                l = line_iterator.send(condition_bit)
-            self.time_remaining += 1
-            return l
+        def line_generator():
+            for line_type in line_types:
+                if line_type is Subtask:
+                    line_id = self.random.choice(self.num_subtasks)
+                elif line_type is Loop:
+                    line_id = self.random.randint(1, 1 + self.max_loops)
+                else:
+                    line_id = 0
+                yield line_type(line_id)
 
-        prev, ptr = 0, next_subtask(None)
-        term = False
-        while True:
-            action = yield State(
-                obs=condition_bit,
-                condition=condition_bit,
-                prev=prev,
-                ptr=ptr,
-                condition_evaluations=condition_evaluations,
-                term=term,
-            )
-            if not self.time_remaining or action != lines[ptr].id:
-                term = True
-            else:
-                self.time_remaining -= 1
-                condition_bit = abs(
-                    condition_bit - int(self.random.rand() < self.flip_prob)
-                )
-                prev, ptr = ptr, next_subtask()
+        lines = list(line_generator())  # type List[Line]
+        line_transitions = defaultdict(list)
+        for _from, _to in self.get_transitions(lines):
+            line_transitions[_from].append(_to)
+
+        def line_generator():
+            i = 0
+            if_evaluations = []
+            while True:
+                condition_bit = yield None if i >= len(lines) else i
+                if type(lines[i]) is Else:
+                    evaluation = not if_evaluations.pop()
+                else:
+                    evaluation = bool(condition_bit)
+                if type(lines[i]) is If:
+                    if_evaluations.append(evaluation)
+                i = line_transitions[i][evaluation]
+
+        def state_generator():
+            line_iterator = line_generator()
+            condition_bit = 0 if self.eval_condition_size else self.random.choice(2)
+            self.time_remaining = self.time_to_waste
+            self.loops = None
+
+            def next_subtask(msg=condition_bit):
+                l = line_iterator.send(msg)
+                while not (l is None or type(lines[l]) is Subtask):
+                    line = lines[l]
+                    if type(line) is Loop:
+                        if self.loops is None:
+                            self.loops = line.id
+                        else:
+                            self.loops -= 1
+                        l = line_iterator.send(self.loops > 0)
+                        if self.loops == 0:
+                            self.loops = None
+                    else:
+                        l = line_iterator.send(condition_bit)
+                self.time_remaining += 1
+                return l
+
+            prev, ptr = 0, next_subtask(None)
+            term = False
+            while True:
+                action = yield State(obs=condition_bit, prev=prev, ptr=ptr, term=term)
+                if not self.time_remaining or action != lines[ptr].id:
+                    term = True
+                else:
+                    self.time_remaining -= 1
+                    condition_bit = abs(
+                        condition_bit - int(self.random.rand() < self.flip_prob)
+                    )
+                    prev, ptr = ptr, next_subtask()
+
+        return state_generator(), lines
+
+    @functools.lru_cache(maxsize=120)
+    def preprocess_line(self, line):
+        return self.possible_lines.index(line)
 
     def get_observation(self, obs, active, lines):
         padded = lines + [Padding(0)] * (self.n_lines - len(lines))
         lines = [self.preprocess_line(p) for p in padded]
-        return Obs(
+        obs = Obs(
             obs=obs, lines=lines, active=self.n_lines if active is None else active
         )._asdict()
+        # if not self.observation_space.contains(obs):
+        #     import ipdb
+        #
+        #     ipdb.set_trace()
+        #     self.observation_space.contains(obs)
+        return obs
 
     @staticmethod
     def print_obs(obs):
         print(obs)
-
-    @staticmethod
-    def average_interval(lines):
-        intervals = defaultdict(lambda: [None])
-        pairs = [(If, EndIf), (While, EndWhile)]
-        if Else in lines:
-            pairs.extend([(If, Else), (Else, EndIf)])
-        for line in lines:
-            for start, stop in pairs:
-                if line is start:
-                    intervals[start, stop][-1] = 0
-                if line is stop:
-                    intervals[start, stop].append(None)
-            for k, (*_, value) in intervals.items():
-                if value is not None:
-                    intervals[k][-1] += 1
-        for keys, values in intervals.items():
-            values = [v for v in values if v]
-            if values:
-                yield keys, sum(values) / len(values)
-
-    @staticmethod
-    def get_nesting_depth(lines):
-        max_depth = 0
-        depth = 0
-        for line in lines:
-            max_depth = max(line.depth_change, max_depth)
-        return max_depth
 
     def seed(self, seed=None):
         assert self.seed == seed
@@ -433,6 +393,10 @@ class Env(gym.Env, ABC):
         self._render()
         if pause:
             input("pause")
+
+    @staticmethod
+    def line_str(line):
+        return line
 
 
 def build_parser(p):
@@ -443,23 +407,46 @@ def build_parser(p):
     p.add_argument("--no-op-limit", type=int)
     p.add_argument("--flip-prob", type=float, default=0.5)
     p.add_argument("--eval-condition-size", action="store_true")
-    p.add_argument("--max-nesting-depth", type=int)
+    p.add_argument("--single-control-flow-type", action="store_true")
+    p.add_argument("--max-nesting-depth", type=int, default=1)
     p.add_argument("--subtasks-only", action="store_true")
     p.add_argument("--break-on-fail", action="store_true")
     p.add_argument("--time-to-waste", type=int, required=True)
-    return p
+    p.add_argument(
+        "--control-flow-types",
+        nargs="*",
+        type=lambda s: dict(
+            Subtask=Subtask, If=If, Else=Else, While=While, Loop=Loop
+        ).get(s),
+    )
+
+
+def main(env):
+    # for i, l in enumerate(env.lower_level_actions):
+    # print(i, l)
+    actions = [x if type(x) is str else tuple(x) for x in env.lower_level_actions]
+    mapping = dict(
+        w=(-1, 0), s=(1, 0), a=(0, -1), d=(0, 1), m=("mine"), l=("sell"), g=("goto")
+    )
+    mapping2 = {}
+    for k, v in mapping.items():
+        try:
+            mapping2[k] = actions.index(v)
+        except ValueError:
+            pass
+
+    def action_fn(string):
+        action = mapping2.get(string, None)
+        if action is None:
+            return None
+        return np.array(Action(upper=0, lower=action, delta=0, dg=0, ag=0, ptr=0))
+
+    keyboard_control.run(env, action_fn=action_fn)
 
 
 if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    args = hierarchical_parse_args(build_parser(parser))
-
-    def action_fn(string):
-        try:
-            return int(string), 0
-        except ValueError:
-            return
-
-    keyboard_control.run(Env(**args), action_fn=action_fn)
+    parser.add_argument("--seed", default=0, type=int)
+    main(Env(**hierarchical_parse_args(build_parser(parser))))

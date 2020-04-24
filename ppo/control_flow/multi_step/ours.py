@@ -1,19 +1,25 @@
+import gc
 from collections import namedtuple
 
+import numpy as np
 import torch
-import torch.nn.functional as F
 import torch.nn as nn
+import torch.nn.functional as F
+from gym import spaces
 
+import ppo
 import ppo.control_flow.multi_step.abstract_recurrence as abstract_recurrence
 import ppo.control_flow.recurrence as recurrence
+from ppo.agent import Agent
+from ppo.control_flow.env import Action
+from ppo.control_flow.lstm import LSTMCell
+from ppo.control_flow.multi_step.env import Obs
 from ppo.distributions import FixedCategorical, Categorical
-import numpy as np
-
 from ppo.utils import init_
-from pathlib import Path
 
 RecurrentState = namedtuple(
-    "RecurrentState", "a d ag dg p v h h2 a_probs d_probs ag_probs dg_probs"
+    "RecurrentState",
+    "a l d u ag dg p v h lh hy cy a_probs d_probs ag_probs dg_probs gru_gate P",
 )
 
 
@@ -24,36 +30,97 @@ def gate(g, new, old):
 
 class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
     def __init__(
-        self, hidden_size, conv_hidden_size, gate_coef, gru_gate_coef, **kwargs
+        self,
+        hidden_size,
+        conv_hidden_size,
+        gate_coef,
+        gru_gate_coef,
+        encoder_hidden_size,
+        observation_space,
+        lower_level_load_path,
+        num_conv_layers,
+        lower_level_hidden_size,
+        kernel_size,
+        stride,
+        concat,
+        action_space,
+        recurrent,
+        **kwargs,
     ):
         self.gru_gate_coef = gru_gate_coef
         self.gate_coef = gate_coef
         self.conv_hidden_size = conv_hidden_size
-        recurrence.Recurrence.__init__(self, hidden_size=hidden_size, **kwargs)
+        observation_space = Obs(**observation_space.spaces)
+        recurrence.Recurrence.__init__(
+            self,
+            hidden_size=hidden_size,
+            encoder_hidden_size=encoder_hidden_size,
+            observation_space=observation_space,
+            action_space=action_space,
+            **kwargs,
+        )
         abstract_recurrence.Recurrence.__init__(self, conv_hidden_size=conv_hidden_size)
-        self.linear1 = nn.Sequential(
-            init_(nn.Linear(self.encoder_hidden_size, self.conv_hidden_size)),
-            nn.Sigmoid(),
+        self.zeta = init_(
+            nn.Linear(
+                hidden_size + self.encoder_hidden_size + conv_hidden_size, hidden_size
+            )
         )
-        self.gru2 = nn.GRUCell(
-            1 + self.encoder_hidden_size + self.hidden_size, self.hidden_size
+        gc.collect()
+        self.zeta2 = init_(
+            nn.Linear(conv_hidden_size + self.encoder_hidden_size, hidden_size)
         )
+        self.gru2 = LSTMCell(self.encoder_hidden_size, self.gru_hidden_size)
         self.d_gate = Categorical(hidden_size, 2)
         self.a_gate = Categorical(hidden_size, 2)
         state_sizes = self.state_sizes._asdict()
-        del state_sizes["u"]
         self.state_sizes = RecurrentState(
-            **state_sizes, h2=hidden_size, ag_probs=2, dg_probs=2, ag=1, dg=1
+            **state_sizes,
+            hy=self.gru_hidden_size,
+            cy=self.gru_hidden_size,
+            ag_probs=2,
+            dg_probs=2,
+            ag=1,
+            dg=1,
+            gru_gate=self.gru_hidden_size,
+            l=1,
+            lh=lower_level_hidden_size,
+            P=self.ne * 2 * self.train_lines ** 2,
         )
-        d = conv_hidden_size
-        debug_embedding = torch.eye(d * 2)
-        self.debug_embedding1 = nn.Embedding.from_pretrained(
-            F.pad(debug_embedding[:d], (0, 0, 1, 0))
-        )
-        self.debug_embedding2 = nn.Embedding.from_pretrained(
-            F.pad(debug_embedding[d:], (0, 0, 1, 0))
-        )
-        self.linear2 = nn.Sequential(init_(nn.Linear(d * 2, 1)), nn.Sigmoid())
+        self.lower_level = None
+        if lower_level_load_path is not None:
+            ll_action_space = spaces.Discrete(Action(*action_space.nvec).lower)
+            self.lower_level = Agent(
+                obs_shape=observation_space,
+                num_conv_layers=num_conv_layers,
+                recurrent=recurrent,
+                entropy_coef=0,
+                action_space=ll_action_space,
+                hidden_size=lower_level_hidden_size,
+                kernel_size=kernel_size,
+                stride=stride,
+                lower_level=True,
+                num_layers=1,
+                activation=nn.ReLU(),
+                concat=concat,
+            )
+            state_dict = torch.load(lower_level_load_path, map_location="cpu")
+            self.lower_level.load_state_dict(state_dict["agent"])
+            print(f"Loaded lower_level from {lower_level_load_path}.")
+
+    @property
+    def gru_in_size(self):
+        return self.encoder_hidden_size
+
+    def get_obs_sections(self, obs_spaces):
+        try:
+            obs_spaces = Obs(**obs_spaces)
+        except TypeError:
+            pass
+        return super().get_obs_sections(obs_spaces)
+
+    def set_obs_space(self, obs_space):
+        super().set_obs_space(obs_space)
+        self.obs_spaces = Obs(**self.obs_spaces)
 
     def pack(self, hxs):
         def pack():
@@ -68,26 +135,28 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         return hx, hx[-1:]
 
     def parse_hidden(self, hx: torch.Tensor) -> RecurrentState:
-        return RecurrentState(*torch.split(hx, self.state_sizes, dim=-1))
+        state_sizes = self.state_sizes._replace(P=0)
+        if hx.size(-1) == sum(self.state_sizes):
+            state_sizes = self.state_sizes
+        return RecurrentState(*torch.split(hx, state_sizes, dim=-1))
 
-    def inner_loop(self, inputs, rnn_hxs):
-        T, N, dim = inputs.shape
-        inputs, actions = torch.split(
-            inputs.detach(), [dim - self.action_size, self.action_size], dim=2
+    def inner_loop(self, raw_inputs, rnn_hxs):
+        T, N, dim = raw_inputs.shape
+        raw_inputs, actions = torch.split(
+            raw_inputs.detach(), [dim - self.action_size, self.action_size], dim=2
         )
 
         # parse non-action inputs
-        inputs = self.parse_inputs(inputs)
+        inputs = Obs(*self.parse_inputs(raw_inputs))
         inputs = inputs._replace(obs=inputs.obs.view(T, N, *self.obs_spaces.obs.shape))
 
         # build memory
         nl = len(self.obs_spaces.lines.nvec)
-        M = self.build_memory(N, T, inputs)
-        lines = inputs.lines.view(T, N, *self.obs_spaces.lines.shape)
+        M = self.embed_task(self.preprocess_embed(N, T, inputs)).view(
+            N, -1, self.encoder_hidden_size
+        )
 
         P = self.build_P(M, N, rnn_hxs.device, nl)
-        if self.log_dir:
-            torch.save(P, str(Path(self.log_dir, self.P_save_name)))
 
         half = P.size(2) // 2 if self.no_scan else nl
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
@@ -96,87 +165,78 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             _x.squeeze_(0)
 
         h = hx.h
-        h2 = hx.h2
+        hy = hx.hy
+        cy = hx.cy
         p = hx.p.long().squeeze(-1)
+        a = inputs.active.long().squeeze(-1)
+        u = hx.u
         hx.a[new_episode] = self.n_a - 1
         ag_probs = hx.ag_probs
         ag_probs[new_episode, 1] = 1
-        R = torch.arange(N, device=(rnn_hxs.device))
+        R = torch.arange(N, device=rnn_hxs.device)
         ones = self.ones.expand_as(R)
-        A = torch.cat([actions[:, :, 0], hx.a.view(1, N)], dim=0).long()
-        D = torch.cat([actions[:, :, 1], hx.d.view(1, N)], dim=0).long()
-        AG = torch.cat([actions[:, :, 2], hx.ag.view(1, N)], dim=0).long()
-        DG = torch.cat([actions[:, :, 3], hx.dg.view(1, N)], dim=0).long()
+        actions = Action(*actions.unbind(dim=2))
+        A = torch.cat([actions.upper, hx.a.view(1, N)], dim=0).long()
+        L = torch.cat([actions.lower, hx.l.view(1, N)], dim=0).long()
+        D = torch.cat([actions.delta, hx.d.view(1, N)], dim=0).long()
+        AG = torch.cat([actions.ag, hx.ag.view(1, N)], dim=0).long()
+        DG = torch.cat([actions.dg, hx.dg.view(1, N)], dim=0).long()
 
         for t in range(T):
             self.print("p", p)
             obs = self.preprocess_obs(inputs.obs[t])
-            # obs = obs * self.linear1(M[R, p])
-            # x = [obs, self.embed_action(A[t - 1].clone())]
-            # h = self.gru(torch.cat(x, dim=-1), h)
-            # z = F.relu(self.zeta(h))
-            # d_gate = self.d_gate(z)
-            # self.sample_new(DG[t], d_gate)
-            # a_gate = self.a_gate(z)
-            # self.sample_new(AG[t], a_gate)
-            DG[t] = 1  # TODO
-            AG[t] = 1  # TODO
-
-            self.print(
-                "self.debug_embedding1(lines[t, R, p, 2])",
-                self.debug_embedding1(lines[t, R, p, 2].long()),
-            )
-            self.print(
-                "self.debug_embedding1(lines[t, R, p, 3])",
-                self.debug_embedding1(lines[t, R, p, 3].long()),
-            )
-            self.print("obs", obs)
-            obs = (
-                self.debug_embedding1(lines[t, R, p, 2].long())
-                + self.debug_embedding2(lines[t, R, p, 3].long())
-            ) * obs
-            self.print("obs", obs)
-            # obs = obs.sum(-1, keepdim=True).sigmoid().round()
-            # self.print(obs * self.linear1(M[R, p]))
-            obs = self.linear2(obs)
-            x = [obs, M[R, p]]
-            self.print("self.linear1(M[R, p])", (self.linear1(M[R, p])))
-            self.print("obs * self.linear1(M[R, p])", (obs * self.linear1(M[R, p])))
-            self.print("obs", obs)
-            x = [obs, M[R, p], self.embed_action(A[t - 1].clone())]
-            h2_ = self.gru2(torch.cat(x, dim=-1), h2)
-            z = F.relu(self.zeta(h2_))
+            # h = self.gru(obs, h)
+            embedded_lower = self.embed_lower(L[t - 1].clone())
+            zeta_inputs = [M[R, p], obs, embedded_lower]
+            z = F.relu(self.zeta(torch.cat(zeta_inputs, dim=-1)))
+            # then put M back in gru
+            # then put A back in gru
+            d_gate = self.d_gate(z)
+            self.sample_new(DG[t], d_gate)
+            a_gate = self.a_gate(z)
+            self.sample_new(AG[t], a_gate)
+            # (hy_, cy_), gru_gate = self.gru2(M[R, p], (hy, cy))
+            decode_inputs = [M[R, p], obs]  # first put obs back in gru2
+            z = F.relu(self.zeta2(torch.cat(decode_inputs, dim=-1)))
             u = self.upsilon(z).softmax(dim=-1)
             self.print("u", u)
             w = P[p, R]
             d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
             dg = DG[t].unsqueeze(-1).float()
-            # self.print("dg prob", d_gate.probs[:, 1])
-            # self.print("dg", dg)
+            self.print("dg prob", d_gate.probs[:, 1])
+            self.print("dg", dg)
             d_dist = gate(dg, d_probs, ones * half)
-            self.print("d_probs", d_probs[:, :half])
             self.print("d_probs", d_probs[:, half:])
             self.sample_new(D[t], d_dist)
+            # D[:] = float(input("go:")) + half
             p = p + D[t].clone() - half
             p = torch.clamp(p, min=0, max=M.size(1) - 1)
 
             ag = AG[t].unsqueeze(-1).float()
             a_dist = gate(ag, self.actor(z).probs, A[t - 1])
             self.sample_new(A[t], a_dist)
-            # self.print("ag prob", a_gate.probs[:, 1])
-            # self.print("ag", ag)
-            h2 = dg * h2_ + (1 - dg) * h2
+            # A[:] = float(input("go:"))
+            self.print("ag prob", a_gate.probs[:, 1])
+            self.print("ag", ag)
+            # hy = dg * hy_ + (1 - dg) * hy
+            # cy = dg * cy_ + (1 - dg) * cy
             yield RecurrentState(
                 a=A[t],
+                l=hx.l,
+                lh=hx.lh,
                 v=self.critic(z),
                 h=h,
-                h2=h2,
+                u=u,
+                hy=hy,
+                cy=cy,
                 p=p,
                 a_probs=a_dist.probs,
                 d=D[t],
                 d_probs=d_dist.probs,
-                ag_probs=hx.ag_probs,  # a_gate.probs,
-                dg_probs=hx.dg_probs,  # d_gate.probs,
+                ag_probs=a_gate.probs,
+                dg_probs=d_gate.probs,
                 ag=ag,
                 dg=dg,
+                gru_gate=hx.gru_gate,
+                P=P.transpose(0, 1),
             )
