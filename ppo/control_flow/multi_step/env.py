@@ -221,6 +221,25 @@ class Env(ppo.control_flow.env.Env):
                 condition_evaluations += [evaluation]
             return evaluation
 
+    def feasible(self, objects, lines):
+        line_iterator = self.line_generator(lines)
+        line = next(line_iterator)
+        resources = set(objects.values())
+        loops = 0
+        while line is not None:
+            if type(line) is Subtask:
+                behavior, resource = line.id
+                if behavior == self.sell:
+                    required = {self.merchant, resource}
+                else:
+                    required = {resource}
+                if not required.issubset(resources):
+                    return False
+            elif type(line) is Loop:
+                loops += 1
+            line_iterator.send(self.evaluate_line(line, objects, [], loops))
+        return True
+
     def generators(self) -> Tuple[Iterator[State], List[Line]]:
         n_lines = (
             self.eval_lines
@@ -321,14 +340,14 @@ class Env(ppo.control_flow.env.Env):
                 # except ValueError:
                 # pass
                 if self.lower_level == "train-alone":
-                    interaction, obj = lines[ptr].id
+                    interaction, resource = lines[ptr].id
                 else:
                     # interaction, obj = lines[agent_ptr].id
-                    interaction, obj = self.subtasks[subtask_id]
+                    interaction, resource = self.subtasks[subtask_id]
                 if self.lower_level == "hardcoded":
                     lower_level_action = self.get_lower_level_action(
                         interaction=interaction,
-                        obj=obj,
+                        resource=resource,
                         agent_pos=agent_pos,
                         objects=objects,
                     )
@@ -565,12 +584,12 @@ class Env(ppo.control_flow.env.Env):
         return obs
 
     @staticmethod
-    def get_lower_level_action(interaction, obj, agent_pos, objects):
-        obj = objective(interaction, obj)
-        if objects.get(tuple(agent_pos), None) == obj:
+    def get_lower_level_action(interaction, resource, agent_pos, objects):
+        resource = objective(interaction, resource)
+        if objects.get(tuple(agent_pos), None) == resource:
             return interaction
         else:
-            nearest = get_nearest(_from=agent_pos, _to=obj, objects=objects)
+            nearest = get_nearest(_from=agent_pos, _to=resource, objects=objects)
             if nearest:
                 n, d = nearest
                 return n - agent_pos
