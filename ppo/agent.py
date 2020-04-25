@@ -6,7 +6,7 @@ from gym.spaces import Box, Discrete
 import torch
 import torch.nn as nn
 
-from ppo.control_flow.multi_step.env import Obs, Env
+from ppo.control_flow.multi_step.env import Obs, subtasks, Env
 from ppo.control_flow.lines import Subtask
 from ppo.control_flow.recurrence import get_obs_sections
 from ppo.distributions import Categorical, DiagGaussian
@@ -281,12 +281,6 @@ class MLPBase(NNBase):
         return self.critic_linear(hidden_critic), hidden_actor, rnn_hxs
 
 
-def subtasks():
-    for obj in Env.items:
-        for interaction in Env.behaviors:
-            yield interaction, obj
-
-
 class LowerLevel(NNBase):
     def __init__(
         self,
@@ -318,6 +312,7 @@ class LowerLevel(NNBase):
         (d, h, w) = obs_space.obs.shape
         inventory_size = obs_space.inventory.nvec.size
         line_nvec = torch.tensor(obs_space.lines.nvec)
+        line_nvec[:, 2] -= 1  # TODO: ugly hack
         offset = F.pad(line_nvec[0, :-1].cumsum(0), [1, 0])
         self.register_buffer("offset", offset)
         self.obs_spaces = obs_space
@@ -390,9 +385,7 @@ class LowerLevel(NNBase):
             line = lines[R, p.long().flatten()]
         else:
             # upper = torch.tensor([int((input("upper:")))])
-            conversion = torch.tensor([2, 4, 6, 0], device=masks.device)
-            ix = conversion[upper.long().flatten()]
-            line = self.subtasks[ix]
+            line = self.subtasks[upper.long().flatten()]
         obs = inputs.obs.reshape(N, *self.obs_spaces.obs.shape)
         lines_embed = self.line_embed(line.long() + self.offset)
         obs_embed = self.conv_projection(self.conv(obs))

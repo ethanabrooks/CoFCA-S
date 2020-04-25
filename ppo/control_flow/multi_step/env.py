@@ -56,9 +56,9 @@ def objective(interaction, obj):
 
 
 def subtasks():
-    yield Env.goto, Env.wood
-    yield Env.sell, Env.gold
-    yield Env.mine, Env.iron
+    for obj in Env.items:
+        for interaction in Env.behaviors:
+            yield interaction, obj
 
 
 class Env(ppo.control_flow.env.Env):
@@ -137,7 +137,7 @@ class Env(ppo.control_flow.env.Env):
                         [
                             len(Line.types),
                             1 + len(self.behaviors),
-                            1 + len(self.items),
+                            2 + len(self.items),
                             1 + self.max_loops,
                         ]
                     ]
@@ -180,16 +180,22 @@ class Env(ppo.control_flow.env.Env):
     @staticmethod
     @functools.lru_cache(maxsize=200)
     def preprocess_line(line):
+        def item_index(item):
+            if item == Env.water:
+                return len(Env.items)
+            else:
+                return Env.items.index(item)
+
         if type(line) in (Else, EndIf, EndWhile, EndLoop, Padding):
             return [Line.types.index(type(line)), 0, 0, 0]
         elif type(line) is Loop:
             return [Line.types.index(Loop), 0, 0, line.id]
         elif type(line) is Subtask:
             i, o = line.id
-            i, o = Env.behaviors.index(i), Env.items.index(o)
+            i, o = Env.behaviors.index(i), item_index(o)
             return [Line.types.index(Subtask), i + 1, o + 1, 0]
         elif type(line) in (While, If):
-            return [Line.types.index(type(line)), 0, Env.items.index(line.id) + 1, 0]
+            return [Line.types.index(type(line)), 0, item_index(line.id) + 1, 0]
         else:
             raise RuntimeError()
 
@@ -202,7 +208,7 @@ class Env(ppo.control_flow.env.Env):
         return world
 
     @staticmethod
-    def evaluate_line(line, objects, condition_evaluations, loops):
+    def evaluate_line(line, counts, condition_evaluations, loops):
         if line is None:
             return None
         elif type(line) is Loop:
@@ -210,10 +216,46 @@ class Env(ppo.control_flow.env.Env):
         if type(line) is Subtask:
             return 1
         else:
-            evaluation = line.id in objects.values()
+            evaluation = counts[Env.iron] > counts[Env.gold]
             if type(line) in (If, While):
                 condition_evaluations += [evaluation]
             return evaluation
+
+    def feasible(self, objects, lines):
+        line_iterator = self.line_generator(lines)
+        l = next(line_iterator)
+        resources = set(objects)
+        loops = 0
+        whiles = 0
+        counts = Counter()
+        for o in objects:
+            counts[o] += 1
+        while l is not None:
+            line = lines[l]
+            if type(line) is Subtask:
+                behavior, resource = line.id
+                if behavior == self.sell:
+                    required = {self.merchant, resource}
+                elif behavior == self.mine:
+                    required = {resource}
+                else:
+                    required = {resource}
+                for resource in required:
+                    if counts[resource] <= 0:
+                        return False
+                if behavior in self.sell:
+                    counts[resource] -= 1
+                elif behavior == self.mine:
+                    counts[resource] -= 1
+            elif type(line) is Loop:
+                loops += 1
+            elif type(line) is While:
+                whiles += 1
+                if whiles == 7:
+                    return False
+            evaluation = self.evaluate_line(line, counts, [], loops)
+            l = line_iterator.send(evaluation)
+        return True
 
     def generators(self) -> Tuple[Iterator[State], List[Line]]:
         n_lines = (
@@ -229,23 +271,11 @@ class Env(ppo.control_flow.env.Env):
                 legal_lines=self.control_flow_types,
             )
         )
-        extra_lines = []
-        if n_lines < self.eval_lines:
-            n_lines = self.random.random_integers(1, self.eval_lines - n_lines)
-            extra_lines = list(
-                Line.generate_types(
-                    n_lines,
-                    remaining_depth=self.max_nesting_depth,
-                    random=self.random,
-                    legal_lines=self.control_flow_types,
-                )
-            )
-            extra_lines = list(self.assign_line_ids(extra_lines))
         lines = list(self.assign_line_ids(line_types))
 
         def state_generator() -> State:
             assert self.max_nesting_depth == 1
-            objects = self.populate_world(lines + extra_lines)
+            objects = self.populate_world(lines)
             agent_pos = next(p for p, o in objects.items() if o == self.agent)
             del objects[agent_pos]
 
@@ -269,9 +299,12 @@ class Env(ppo.control_flow.env.Env):
                                 self.loops = lines[l].id
                             else:
                                 self.loops -= 1
+                        counts = Counter()
+                        for o in objects.values():
+                            counts[o] += 1
                         l = line_iterator.send(
                             self.evaluate_line(
-                                lines[l], objects, condition_evaluations, self.loops
+                                lines[l], counts, condition_evaluations, self.loops
                             )
                         )
                         if self.loops == 0:
@@ -314,14 +347,14 @@ class Env(ppo.control_flow.env.Env):
                 # except ValueError:
                 # pass
                 if self.lower_level == "train-alone":
-                    interaction, obj = lines[ptr].id
+                    interaction, resource = lines[ptr].id
                 else:
                     # interaction, obj = lines[agent_ptr].id
-                    interaction, obj = self.subtasks[subtask_id]
+                    interaction, resource = self.subtasks[subtask_id]
                 if self.lower_level == "hardcoded":
                     lower_level_action = self.get_lower_level_action(
                         interaction=interaction,
-                        obj=obj,
+                        resource=resource,
                         agent_pos=agent_pos,
                         objects=objects,
                     )
@@ -403,60 +436,15 @@ class Env(ppo.control_flow.env.Env):
         return state_generator(), lines
 
     def populate_world(self, lines):
-        def subtask_ids():
-            for line in lines:
-                if type(line) is Subtask:
-                    _i, _o = line.id
-                    if _i == self.sell:
-                        yield self.merchant
-                        yield _o
-                    else:
-                        yield _o
-
-        def loop_objects():
-            active_loops = []
-            for i, line in enumerate(lines):
-                if type(line) is Loop:
-                    active_loops += [line]
-                elif type(line) is EndLoop:
-                    active_loops.pop()
-                elif type(line) is Subtask:
-                    if active_loops:
-                        _i, _o = line.id
-                        loop_num = active_loops[-1].id
-                        for _ in range(loop_num):
-                            yield _o
-
-        def while_objects():
-            while_blocks = defaultdict(list)  # while line: child subtasks
-            active_whiles = []
-            for i, line in enumerate(lines):
-                if type(line) is While:
-                    active_whiles += [i]
-                elif type(line) is EndWhile:
-                    active_whiles.pop()
-                elif type(line) is Subtask:
-                    if active_whiles:
-                        while_blocks[active_whiles[-1]] += [i]
-
-            for while_line, block in while_blocks.items():
-                obj = lines[while_line].id
-                l = self.random.choice(block)
-                line_id = self.mine, obj
-                lines[l] = Subtask(line_id)
-                if not self.evaluating and obj in self.world_contents:
-                    num_obj = self.random.randint(self.max_while_objects + 1)
-                    for _ in range(num_obj):
-                        yield obj
-
-        subtask_list = list(subtask_ids())
-        loop_list = list(loop_objects())
-        while_list = list(while_objects())
-        object_list = [self.agent, self.wood] + subtask_list + loop_list + while_list
-        num_random_objects = self.world_size ** 2 - self.world_size
-        object_list = object_list[:num_random_objects]
+        max_random_objects = self.world_size ** 2 - self.world_size
+        num_random_objects = np.random.choice(max_random_objects - 1)
+        object_list = [self.agent] + list(
+            self.random.choice(self.items + [self.merchant], size=num_random_objects)
+        )
+        if not self.feasible(object_list, lines):
+            return self.populate_world(lines)
         indexes = self.random.choice(
-            num_random_objects, size=num_random_objects, replace=False
+            max_random_objects, size=max_random_objects, replace=False
         )
         vertical_water = self.random.choice(2)
         world_shape = (
@@ -475,7 +463,7 @@ class Env(ppo.control_flow.env.Env):
         if len(object_list) == len(object_positions):
             wall_positions = wall_positions[:num_walls]
         positions = np.concatenate([object_positions, wall_positions])
-        water_index = self.random.choice(self.world_size)
+        water_index = self.random.randint(1, self.world_size - 1)
         positions[positions[:, vertical_water] >= water_index] += np.array(
             [0, 1] if vertical_water else [1, 0]
         )
@@ -514,33 +502,31 @@ class Env(ppo.control_flow.env.Env):
 
         return objects
 
-    def assign_line_ids(self, lines):
-        excluded = self.random.randint(len(self.items), size=self.num_excluded_objects)
-        included_objects = [
-            o for i, o in enumerate(self.items) if i not in excluded and o != self.wood
-        ]
+    def assign_line_ids(self, line_types):
+        behaviors = self.random.choice(self.behaviors, size=len(line_types))
+        items = self.random.choice(self.items, size=len(line_types))
+        while_obj = None
+        available = [x for x in self.items]
+        lines = []
 
-        interaction_ids = self.random.choice(len(self.behaviors), size=len(lines))
-        object_ids = self.random.choice(len(included_objects), size=len(lines))
-        line_ids = self.random.choice(len(self.items), size=len(lines))
-
-        for line, line_id, interaction_id, object_id in zip(
-            lines, line_ids, interaction_ids, object_ids
-        ):
-            if line is Subtask:
-                behavior = self.behaviors[interaction_id]
-                if behavior == self.sell:
-                    item = self.gold
-                elif behavior == self.mine:
-                    item = self.iron
-                elif behavior == self.goto:
-                    item = self.wood
-                subtask_id = (behavior, item)
-                yield Subtask(subtask_id)
-            elif line is Loop:
-                yield Loop(self.random.randint(1, 1 + self.max_loops))
+        for line_type, behavior, item in zip(line_types, behaviors, items):
+            if line_type is Subtask:
+                if not available:
+                    return self.assign_line_ids(line_types)
+                subtask_id = (behavior, self.random.choice(available))
+                lines += [Subtask(subtask_id)]
+            elif line_type is Loop:
+                lines += [Loop(self.random.randint(1, 1 + self.max_loops))]
+            elif line_type is While:
+                while_obj = item
+                lines += [line_type(item)]
+            elif line_type is EndWhile:
+                if while_obj in available:
+                    available.remove(while_obj)
+                while_obj = None
             else:
-                yield line(self.items[line_id])
+                lines += [line_type(self.random.choice(self.items + [self.water]))]
+        return lines
 
     def get_observation(self, obs, **kwargs):
         obs, inventory = obs
@@ -554,12 +540,12 @@ class Env(ppo.control_flow.env.Env):
         return obs
 
     @staticmethod
-    def get_lower_level_action(interaction, obj, agent_pos, objects):
-        obj = objective(interaction, obj)
-        if objects.get(tuple(agent_pos), None) == obj:
+    def get_lower_level_action(interaction, resource, agent_pos, objects):
+        resource = objective(interaction, resource)
+        if objects.get(tuple(agent_pos), None) == resource:
             return interaction
         else:
-            nearest = get_nearest(_from=agent_pos, _to=obj, objects=objects)
+            nearest = get_nearest(_from=agent_pos, _to=resource, objects=objects)
             if nearest:
                 n, d = nearest
                 return n - agent_pos

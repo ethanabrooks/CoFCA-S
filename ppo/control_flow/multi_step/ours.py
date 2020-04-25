@@ -69,6 +69,9 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         self.zeta2 = init_(
             nn.Linear(conv_hidden_size + self.encoder_hidden_size, hidden_size)
         )
+        self.zeta3 = init_(
+            nn.Linear(conv_hidden_size + self.encoder_hidden_size, hidden_size)
+        )
         self.gru2 = LSTMCell(self.encoder_hidden_size, self.gru_hidden_size)
         self.d_gate = Categorical(hidden_size, 2)
         self.a_gate = Categorical(hidden_size, 2)
@@ -149,6 +152,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         # parse non-action inputs
         inputs = Obs(*self.parse_inputs(raw_inputs))
         inputs = inputs._replace(obs=inputs.obs.view(T, N, *self.obs_spaces.obs.shape))
+        lines = inputs.lines.view(T, N, *self.obs_spaces.lines.shape)
 
         # build memory
         nl = len(self.obs_spaces.lines.nvec)
@@ -177,7 +181,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         ones = self.ones.expand_as(R)
         actions = Action(*actions.unbind(dim=2))
         A = torch.cat([actions.upper, hx.a.view(1, N)], dim=0).long()
-        L = torch.cat([actions.lower, hx.l.view(1, N)], dim=0).long()
+        L = torch.cat([actions.lower, hx.l.view(1, N) - 1], dim=0).long()
         D = torch.cat([actions.delta, hx.d.view(1, N)], dim=0).long()
         AG = torch.cat([actions.ag, hx.ag.view(1, N)], dim=0).long()
         DG = torch.cat([actions.dg, hx.dg.view(1, N)], dim=0).long()
@@ -186,7 +190,9 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             self.print("p", p)
             obs = self.preprocess_obs(inputs.obs[t])
             # h = self.gru(obs, h)
-            embedded_lower = self.embed_lower(L[t - 1].clone())
+            embedded_lower = self.embed_lower(L[t].clone())
+            self.print("L[t]", L[t])
+            self.print("lines[R, p]", lines[t][R, p])
             zeta_inputs = [M[R, p], obs, embedded_lower]
             z = F.relu(self.zeta(torch.cat(zeta_inputs, dim=-1)))
             # then put M back in gru
@@ -208,21 +214,21 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             d_dist = gate(dg, d_probs, ones * half)
             self.print("d_probs", d_probs[:, half:])
             self.sample_new(D[t], d_dist)
-            # D[:] = float(input("go:")) + half
+            # D[:] = float(input("D:")) + half
             p = p + D[t].clone() - half
             p = torch.clamp(p, min=0, max=M.size(1) - 1)
 
             ag = AG[t].unsqueeze(-1).float()
             a_dist = gate(ag, self.actor(z).probs, A[t - 1])
             self.sample_new(A[t], a_dist)
-            # A[:] = float(input("go:"))
+            # A[:] = float(input("A:"))
             self.print("ag prob", a_gate.probs[:, 1])
             self.print("ag", ag)
             # hy = dg * hy_ + (1 - dg) * hy
             # cy = dg * cy_ + (1 - dg) * cy
             yield RecurrentState(
                 a=A[t],
-                l=hx.l,
+                l=L[t],
                 lh=hx.lh,
                 v=self.critic(z),
                 h=h,

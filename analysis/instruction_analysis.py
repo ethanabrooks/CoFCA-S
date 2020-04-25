@@ -11,19 +11,19 @@ import zipfile
 
 
 class L(Enum):
+    Subtask = 0
     If = 1
     Else = 2
     EndIf = 3
     While = 4
     EndWhile = 5
-    EndLoop = 6
-    Subtask = 7
+    Loop = 6
+    EndLoop = 7
     Padding = 8
-    Loop = 9
-    Any = 10
+    Any = 9
 
     def __eq__(self, i) -> bool:
-        return i == self.value - 1
+        return i == self.value
 
 
 def count(instruction: np.ndarray, line_type: L) -> Generator[int, None, None]:
@@ -55,7 +55,7 @@ def generate_iterators(
     paths: Iterable[Path], line_types: Iterable[L], pairs: Iterable[Tuple[L, L]]
 ) -> Generator[Tuple[str, List[int]], None, None]:
     for line_type in line_types:
-        print(line_type)
+        print(line_type.name)
 
         def iterator() -> Generator[int, None, None]:
             for instruction_path in tqdm(paths):
@@ -71,7 +71,8 @@ def generate_iterators(
         yield line_type.name, list(iterator())
 
     for start, stop in pairs:
-        print(start)
+        name = f"{start.name}-{stop.name} length"
+        print(name)
 
         def iterator() -> Generator[int, None, None]:
             for instruction_path in tqdm(paths):
@@ -80,11 +81,12 @@ def generate_iterators(
                 except zipfile.BadZipFile:
                     continue
                 for instruction in instructions.values():
-                    yield from measure_length(instruction, start, stop)
+                    # yield from measure_length(instruction, start, stop)
+                    for length in measure_length(instruction, start, stop):
+                        if length is not None:
+                            yield length
 
-        # counts = np.array(list(iterator()))
-        # hist, _ = np.histogram(counts, bins=list(range(20)))
-        yield f"{start.name} length", list(iterator())
+        yield name, list(iterator())
 
 
 def main(root: Path, path: Path, evaluation: bool, **kwargs) -> None:
