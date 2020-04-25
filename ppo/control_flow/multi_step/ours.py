@@ -215,7 +215,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             d_dist = gate(dg, d_probs, ones * half)
             self.print("d_probs", d_probs[:, half:])
             self.sample_new(D[t], d_dist)
-            # D[:] = float(input("go:")) + half
+            # D[:] = float(input("D:")) + half
             p = p + D[t].clone() - half
             p = torch.clamp(p, min=0, max=M.size(1) - 1)
 
@@ -224,7 +224,8 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             z = F.relu(self.zeta3(torch.cat(decode_inputs, dim=-1)))
             a_dist = gate(ag, self.actor(z).probs, A[t - 1])
             self.sample_new(A[t], a_dist)
-            # A[:] = float(input("go:"))
+            self.print("lines[R, p]", lines[t][R, p])
+            # A[:] = float(input("A:"))
             self.print("ag prob", a_gate.probs[:, 1])
             self.print("ag", ag)
             # hy = dg * hy_ + (1 - dg) * hy
