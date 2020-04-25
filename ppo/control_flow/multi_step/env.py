@@ -144,9 +144,7 @@ class Env(ppo.control_flow.env.Env):
                     * self.n_lines
                 )
             ),
-            inventory=spaces.MultiDiscrete(
-                np.array([self.world_size ** 2] * len(self.items))
-            ),
+            inventory=spaces.MultiBinary(len(self.items)),
         )
 
     def print_obs(self, obs):
@@ -377,7 +375,6 @@ class Env(ppo.control_flow.env.Env):
                                 or (
                                     tgt_interaction == self.sell
                                     and standing_on == tgt_obj
-                                    and inventory[tgt_obj] == 0
                                 )
                                 or standing_on == self.wood
                             ):
@@ -385,8 +382,11 @@ class Env(ppo.control_flow.env.Env):
                                     possible_objects.remove(standing_on)
                             elif self.mine in self.term_on:
                                 term = True
-                            if standing_on in self.items:
-                                inventory[standing_on] += 1
+                            if (
+                                standing_on in self.items
+                                and inventory[standing_on] == 0
+                            ):
+                                inventory[standing_on] = 1
                             del objects[tuple(agent_pos)]
                     elif lower_level_action == self.sell:
                         done = done and (
