@@ -144,18 +144,6 @@ class Agent(ppo.agent.Agent, NNBase):
         else:
             raise RuntimeError
 
-        if rm.lower_level is not None:
-            ll_output = rm.lower_level(
-                Obs(*rm.parse_inputs(inputs)),
-                hx.lh,
-                masks,
-                action=None if action is None else X.lower,
-                upper=hx.a,
-                deterministic=True,
-            )
-            X = X._replace(lower=ll_output.action.float().reshape(-1, 1))
-            hx = hx._replace(lh=ll_output.rnn_hxs)
-
         dists = [(p if p is None else FixedCategorical(p)) for p in probs]
         action_log_probs = sum(
             dist.log_probs(x) for dist, x in zip(dists, X) if dist is not None
@@ -189,7 +177,21 @@ class Agent(ppo.agent.Agent, NNBase):
 
     def _forward_gru(self, x, hxs, masks, action=None):
         if action is None:
-            y = F.pad(x, [0, self.recurrent_module.action_size], "constant", -1)
+            rm = self.recurrent_module
+            if rm.lower_level is not None:
+                hx = rm.parse_hidden(hxs)
+                ll_output = rm.lower_level(
+                    x, hx.lh, masks, action=action, upper=hx.a, deterministic=True
+                )
+                action = Action(
+                    *((-torch.ones(len(x), rm.action_size, device=x.device)).unbind(1))
+                )._replace(lower=ll_output.action.float().flatten())
+                action = torch.stack(action, dim=-1)
+                hx = hx._replace(lh=ll_output.rnn_hxs)
+                hxs = torch.cat(hx, dim=-1)
+                y = torch.cat([x, action], dim=-1)
+            else:
+                y = torch.cat(x, [0, self.recurrent_module.action_size], "constant", -1)
         else:
             y = torch.cat([x, action.float()], dim=-1)
         return super()._forward_gru(y, hxs, masks)

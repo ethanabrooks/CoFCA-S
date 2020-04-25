@@ -181,7 +181,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         ones = self.ones.expand_as(R)
         actions = Action(*actions.unbind(dim=2))
         A = torch.cat([actions.upper, hx.a.view(1, N)], dim=0).long()
-        L = torch.cat([actions.lower + 1, hx.l.view(1, N)], dim=0).long()
+        L = torch.cat([actions.lower, hx.l.view(1, N) - 1], dim=0).long()
         D = torch.cat([actions.delta, hx.d.view(1, N)], dim=0).long()
         AG = torch.cat([actions.ag, hx.ag.view(1, N)], dim=0).long()
         DG = torch.cat([actions.dg, hx.dg.view(1, N)], dim=0).long()
@@ -190,9 +190,8 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             self.print("p", p)
             obs = self.preprocess_obs(inputs.obs[t])
             # h = self.gru(obs, h)
-            embedded_lower = self.embed_lower(L[t - 1].clone())
+            embedded_lower = self.embed_lower(L[t].clone())
             self.print("L[t]", L[t])
-            self.print("L[t-1]", L[t - 1])
             self.print("lines[R, p]", lines[t][R, p])
             zeta_inputs = [M[R, p], obs, embedded_lower]
             z = F.relu(self.zeta(torch.cat(zeta_inputs, dim=-1)))
@@ -220,11 +219,8 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             p = torch.clamp(p, min=0, max=M.size(1) - 1)
 
             ag = AG[t].unsqueeze(-1).float()
-            decode_inputs = [M[R, p], obs]  # first put obs back in gru2
-            z = F.relu(self.zeta3(torch.cat(decode_inputs, dim=-1)))
             a_dist = gate(ag, self.actor(z).probs, A[t - 1])
             self.sample_new(A[t], a_dist)
-            self.print("lines[R, p]", lines[t][R, p])
             # A[:] = float(input("A:"))
             self.print("ag prob", a_gate.probs[:, 1])
             self.print("ag", ag)
@@ -232,7 +228,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             # cy = dg * cy_ + (1 - dg) * cy
             yield RecurrentState(
                 a=A[t],
-                l=hx.l,
+                l=L[t],
                 lh=hx.lh,
                 v=self.critic(z),
                 h=h,
