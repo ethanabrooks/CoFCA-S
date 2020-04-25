@@ -94,13 +94,16 @@ class Env(ppo.control_flow.env.Env):
         temporal_extension,
         term_on,
         max_world_resamples,
+        max_while_loops,
         world_size=6,
         **kwargs,
     ):
         self.max_world_resamples = max_world_resamples
+        self.max_while_loops = max_while_loops
         self.term_on = term_on
         self.temporal_extension = temporal_extension
         self.loops = None
+        self.whiles = None
 
         self.subtasks = list(subtasks())
         num_subtasks = len(self.subtasks)
@@ -221,8 +224,8 @@ class Env(ppo.control_flow.env.Env):
         line_iterator = self.line_generator(lines)
         l = next(line_iterator)
         resources = set(objects)
-        loops = 0
         whiles = 0
+        loops = 0
         counts = Counter()
         for o in objects:
             counts[o] += 1
@@ -247,8 +250,8 @@ class Env(ppo.control_flow.env.Env):
                 loops += 1
             elif type(line) is While:
                 whiles += 1
-                if whiles == 7:
-                    return False
+                if whiles > self.max_while_loops:
+                    return True
             evaluation = self.evaluate_line(line, counts, [], loops)
             l = line_iterator.send(evaluation)
         return True
@@ -282,6 +285,7 @@ class Env(ppo.control_flow.env.Env):
             else:
                 self.time_remaining = 200 if self.evaluating else self.time_to_waste
             self.loops = None
+            self.whiles = 0
             inventory = Counter()
             subtask_complete = False
 
@@ -295,6 +299,10 @@ class Env(ppo.control_flow.env.Env):
                                 self.loops = lines[l].id
                             else:
                                 self.loops -= 1
+                        elif type(lines[l]) is While:
+                            self.whiles += 1
+                            if self.whiles > self.max_while_loops:
+                                return None
                         counts = Counter()
                         for o in objects.values():
                             counts[o] += 1
@@ -564,6 +572,7 @@ def build_parser(p):
         "--no-temporal-extension", dest="temporal_extension", action="store_false"
     )
     p.add_argument("--max-world-resamples", type=int, required=True)
+    p.add_argument("--max-while-loops", type=int, required=True)
     p.add_argument("--world-size", type=int, required=True)
     p.add_argument("--term-on", nargs="*", choices=[Env.sell, Env.mine, Env.goto])
 
