@@ -76,7 +76,7 @@ class Env(ppo.control_flow.env.Env):
     items = [wood, gold, iron]
     terrain = [merchant, water, wall, bridge, agent]
     world_contents = items + terrain
-    behaviors = [mine, sell, goto]
+    behaviors = [sell]
     colors = {
         wood: GREEN,
         gold: YELLOW,
