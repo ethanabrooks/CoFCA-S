@@ -437,7 +437,8 @@ class Env(ppo.control_flow.env.Env):
 
     def populate_world(self, lines):
         max_random_objects = self.world_size ** 2 - self.world_size
-        num_random_objects = np.random.choice(max_random_objects - 1)
+        num_subtask = sum(1 for l in lines if type(l) is Subtask)
+        num_random_objects = np.random.randint(num_subtask, max_random_objects - 1)
         object_list = [self.agent] + list(
             self.random.choice(self.items + [self.merchant], size=num_random_objects)
         )
@@ -508,7 +509,6 @@ class Env(ppo.control_flow.env.Env):
         while_obj = None
         available = [x for x in self.items]
         lines = []
-
         for line_type, behavior, item in zip(line_types, behaviors, items):
             if line_type is Subtask:
                 if not available:
@@ -524,6 +524,7 @@ class Env(ppo.control_flow.env.Env):
                 if while_obj in available:
                     available.remove(while_obj)
                 while_obj = None
+                lines += [EndWhile(0)]
             else:
                 lines += [line_type(self.random.choice(self.items + [self.water]))]
         return lines
