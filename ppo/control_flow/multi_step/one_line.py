@@ -1,4 +1,4 @@
-from collections import defaultdict, Counter
+from collections import defaultdict
 
 from gym.spaces import Discrete, MultiDiscrete
 
@@ -42,13 +42,9 @@ class Env(ppo.control_flow.multi_step.env.Env):
         )
         raise RuntimeError
 
-    def get_observation(self, obs, active, lines):
-        return super().get_observation(obs, active, [self.line])
-
     def render(self, mode="human", pause=True):
         self._render()
-        o1, o2 = self.line.id
-        print(f"line: {self.line}: count[{o1}] < count[{o2}]")
+        print("line:", self.line)
         print("choice:", self.choice)
         if pause:
             input("pause")

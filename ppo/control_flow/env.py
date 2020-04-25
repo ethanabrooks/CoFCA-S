@@ -131,6 +131,7 @@ class Env(gym.Env, ABC):
         term = False
         action = None
         lower_level_action = None
+        cumulative_reward = 0
         while True:
             if state.ptr is not None:
                 program_counter.append(state.ptr)
@@ -141,6 +142,7 @@ class Env(gym.Env, ABC):
                 reward = 1 if state.subtask_complete else 0
             else:
                 reward = int(success)
+            cumulative_reward += reward
             subtasks_complete += state.subtask_complete
             if term:
                 if not success and self.break_on_fail:
@@ -158,13 +160,11 @@ class Env(gym.Env, ABC):
                     info.update(success_line=len(lines))
                 else:
                     info.update(success_line=state.prev, failure_line=state.ptr)
-                if self.lower_level == "train-alone":
-                    subtasks_attempted = min(len(lines), subtasks_complete + 1)
-                    if not (success and subtasks_complete < len(lines)):
-                        info.update(
-                            subtasks_complete=subtasks_complete,
-                            subtasks_attempted=subtasks_attempted,
-                        )
+                subtasks_attempted = subtasks_complete + (not success)
+                info.update(
+                    subtasks_complete=subtasks_complete,
+                    subtasks_attempted=subtasks_attempted,
+                )
 
             info.update(regret=1 if term and not success else 0)
 
@@ -186,8 +186,8 @@ class Env(gym.Env, ABC):
                         "{:2}{}{}{}".format(i, pre, " " * indent, self.line_str(line))
                     )
                     indent += line.depth_change[1]
-                if agent_ptr < len(self.subtasks):
-                    print("Selected:", self.subtasks[agent_ptr], agent_ptr)
+                if action is not None and action < len(self.subtasks):
+                    print("Selected:", self.subtasks[action], action)
                 print("Action:", action)
                 if lower_level_action is not None:
                     print(
@@ -195,7 +195,8 @@ class Env(gym.Env, ABC):
                         self.lower_level_actions[lower_level_action],
                     )
                 print("Reward", reward)
-                print("Cumulative", subtasks_complete)
+                print("Cumulative", cumulative_reward)
+                print("Time remaining", self.time_remaining)
                 print("Obs:")
                 print(RESET)
                 self.print_obs(state.obs)
@@ -421,11 +422,22 @@ def build_parser(p):
 def main(env):
     # for i, l in enumerate(env.lower_level_actions):
     # print(i, l)
+    actions = [x if type(x) is str else tuple(x) for x in env.lower_level_actions]
+    mapping = dict(
+        w=(-1, 0), s=(1, 0), a=(0, -1), d=(0, 1), m=("mine"), l=("sell"), g=("goto")
+    )
+    mapping2 = {}
+    for k, v in mapping.items():
+        try:
+            mapping2[k] = actions.index(v)
+        except ValueError:
+            pass
+
     def action_fn(string):
-        ll = dict(w=4, s=10, a=6, d=8, m=0, l=1, g=2).get(string, None)
-        if ll is None:
+        action = mapping2.get(string, None)
+        if action is None:
             return None
-        return np.array(Action(upper=0, lower=ll, delta=0, dg=0, ag=0, ptr=0))
+        return np.array(Action(upper=0, lower=action, delta=0, dg=0, ag=0, ptr=0))
 
     keyboard_control.run(env, action_fn=action_fn)
 

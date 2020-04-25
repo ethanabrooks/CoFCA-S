@@ -25,21 +25,15 @@ class Agent(ppo.agent.Agent, NNBase):
     def __init__(
         self,
         entropy_coef,
-        recurrent,
         observation_space,
         no_op_coef,
         baseline,
-        lower_level_load_path,
-        lower_level_hidden_size,
-        kernel_size,
-        stride,
         action_space,
-        concat,
-        num_conv_layers,
         lower_level,
         **network_args,
     ):
         nn.Module.__init__(self)
+        self.lower_level_type = lower_level
         self.no_op_coef = no_op_coef
         self.entropy_coef = entropy_coef
         self.multi_step = type(observation_space.spaces["obs"]) is Box
@@ -75,35 +69,11 @@ class Agent(ppo.agent.Agent, NNBase):
                 **network_args,
             )
         else:
-            del network_args["num_conv_layers"]
             self.recurrent_module = ppo.control_flow.recurrence.Recurrence(
                 observation_space=observation_space,
                 action_space=action_space,
                 **network_args,
             )
-        self.lower_level_type = "pre-trained" if lower_level_load_path else lower_level
-        self.lower_level = None
-        if lower_level_load_path is not None:
-            ll_action_space = spaces.Discrete(
-                ppo.control_flow.env.Action(*action_space.nvec).lower
-            )
-            self.lower_level = ppo.agent.Agent(
-                obs_shape=observation_space,
-                num_conv_layers=num_conv_layers,
-                recurrent=False,
-                entropy_coef=0,
-                action_space=ll_action_space,
-                hidden_size=lower_level_hidden_size,
-                kernel_size=kernel_size,
-                stride=stride,
-                lower_level=True,
-                num_layers=1,
-                activation=nn.ReLU(),
-                concat=concat,
-            )
-            state_dict = torch.load(lower_level_load_path)
-            self.lower_level.load_state_dict(state_dict["agent"])
-            print(f"Loaded lower_level from {lower_level_load_path}.")
 
     @property
     def recurrent_hidden_state_size(self):
@@ -140,7 +110,7 @@ class Agent(ppo.agent.Agent, NNBase):
             X = [hx.a, pad, pad, pad, hx.p]
             probs = [hx.a_probs]
         elif t is ppo.control_flow.multi_step.ours.Recurrence:
-            X = Action(upper=hx.a, lower=pad, delta=hx.d, ag=hx.ag, dg=hx.dg, ptr=hx.p)
+            X = Action(upper=hx.a, lower=hx.l, delta=hx.d, ag=hx.ag, dg=hx.dg, ptr=hx.p)
             ll_type = self.lower_level_type
             if ll_type == "train-alone":
                 probs = Action(
@@ -173,16 +143,6 @@ class Agent(ppo.agent.Agent, NNBase):
                 raise RuntimeError
         else:
             raise RuntimeError
-        if self.lower_level:
-            if action is None:
-                lower = self.lower_level(
-                    Obs(*rm.parse_inputs(inputs)), rnn_hxs=None, masks=None, p=X.upper
-                ).action.float()
-                X = X._replace(lower=lower)
-            else:
-                X = X._replace(
-                    lower=Action(*action.unbind(1)).lower.float().unsqueeze(1)
-                )
 
         dists = [(p if p is None else FixedCategorical(p)) for p in probs]
         action_log_probs = sum(
@@ -199,16 +159,12 @@ class Agent(ppo.agent.Agent, NNBase):
         except AttributeError:
             pass
 
-        action = torch.cat(X, dim=-1)
-        test_actions = Action(*action[0, :])
-        for field in Action._fields:
-            x = getattr(X, field)
-            test_action = getattr(test_actions, field)
-            assert test_action.item() == x[0].item()
-
         nlines = len(rm.obs_spaces.lines.nvec)
         P = hx.P.reshape(-1, N, nlines, 2 * nlines, rm.ne)
-        rnn_hxs = torch.cat(hx._replace(P=torch.tensor([], device=hx.P.device)), dim=-1)
+        rnn_hxs = torch.cat(
+            hx._replace(P=torch.tensor([], device=hx.P.device), l=X.lower), dim=-1
+        )
+        action = torch.cat(X, dim=-1)
         return AgentValues(
             value=hx.v,
             action=action,
@@ -221,7 +177,26 @@ class Agent(ppo.agent.Agent, NNBase):
 
     def _forward_gru(self, x, hxs, masks, action=None):
         if action is None:
-            y = F.pad(x, [0, self.recurrent_module.action_size], "constant", -1)
+            rm = self.recurrent_module
+            if rm.lower_level is not None:
+                hx = rm.parse_hidden(hxs)
+                ll_output = rm.lower_level(
+                    Obs(*rm.parse_inputs(x)),
+                    hx.lh,
+                    masks,
+                    action=action,
+                    upper=hx.a,
+                    deterministic=True,
+                )
+                action = Action(
+                    *((-torch.ones(len(x), rm.action_size, device=x.device)).unbind(1))
+                )._replace(lower=ll_output.action.float().flatten())
+                action = torch.stack(action, dim=-1)
+                hx = hx._replace(lh=ll_output.rnn_hxs)
+                hxs = torch.cat(hx, dim=-1)
+                y = torch.cat([x, action], dim=-1)
+            else:
+                y = torch.cat(x, [0, self.recurrent_module.action_size], "constant", -1)
         else:
             y = torch.cat([x, action.float()], dim=-1)
         return super()._forward_gru(y, hxs, masks)

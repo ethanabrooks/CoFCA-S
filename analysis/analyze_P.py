@@ -14,28 +14,25 @@ from instruction_analysis import L
 def analyze_P(
     instruction: np.ndarray, P: np.ndarray, start, stop
 ) -> Generator[int, None, None]:
-    import ipdb  # type:ignore
-
-    ipdb.set_trace()
-
     def line_type_generator():
         yield from instruction[:, 0]
 
-    def go_to_stop(it):
+    def go_to(it, val):
         for j, i in enumerate(it):
-            if stop == i:
+            if val == i:
                 return j
-
-    def go_to_start(it):
-        for i in it:
-            if start == i:
-                return True
-        return False
 
     num_steps = None
     line_type_iterator = line_type_generator()
-    while go_to_start(line_type_iterator):
-        yield go_to_stop(line_type_iterator)
+    while True:
+        i = go_to(line_type_iterator, start)
+        if i is None:
+            break
+        half = len(P) - 1
+        ex = np.arange(len(P[i])) @ P[i] - half
+        delta = go_to(line_type_iterator, stop)
+        if delta is not None:
+            yield min(ex, key=lambda x: abs(x - delta))
 
 
 def generate_iterators(
@@ -56,11 +53,17 @@ def generate_iterators(
                     continue
                 assert len(instructions) == len(Ps)
                 for instruction, P in zip(instructions.values(), Ps.values()):
-                    yield from analyze_P(instruction, P, start, stop)
+                    if not P.shape[:2] == (1, 1):
+                        import ipdb
+
+                        ipdb.set_trace()
+                    yield from analyze_P(
+                        instruction, np.squeeze(P, axis=(0, 1)), start, stop
+                    )
 
         # counts = np.array(list(iterator()))
         # hist, _ = np.histogram(counts, bins=list(range(20)))
-        yield f"{start.name} length", list(iterator())
+        yield f"{start.name}-{stop.name} edge", list(iterator())
 
 
 def main(root: Path, path: Path, evaluation: bool, **kwargs) -> None:
@@ -74,8 +77,11 @@ def main(root: Path, path: Path, evaluation: bool, **kwargs) -> None:
     assert len(instruction_paths) == len(P_paths)
     names, lists = zip(*list(generate_iterators(instruction_paths, P_paths, **kwargs)))
     for name, array in zip(names, map(np.array, lists)):
-        hist, _ = np.histogram(array, bins=list(range(20)))
-        print(name, *hist, sep=",")
+        counts, bins = np.histogram(array)
+        print(f"{name} bins", *bins, sep=",")
+        print(f"{name} counts", *counts, sep=",")
+    for name, array in zip(names, map(np.array, lists)):
+        print(f"{name} mean", np.mean(array))
 
 
 if __name__ == "__main__":

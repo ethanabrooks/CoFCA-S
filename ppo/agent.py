@@ -1,11 +1,13 @@
 from collections import namedtuple
 import torch.nn.functional as F
+from gym import spaces
 
 from gym.spaces import Box, Discrete
 import torch
 import torch.nn as nn
 
-from ppo.control_flow.multi_step.env import Obs
+from ppo.control_flow.multi_step.env import Obs, subtasks, Env
+from ppo.control_flow.lines import Subtask
 from ppo.control_flow.recurrence import get_obs_sections
 from ppo.distributions import Categorical, DiagGaussian
 from ppo.layers import Flatten
@@ -368,17 +370,26 @@ class LowerLevel(NNBase):
         **_,
     ):
         self.concat = concat
+        if type(obs_space) is spaces.Dict:
+            obs_space = Obs(**obs_space.spaces)
         assert num_layers > 0
         H = (3 if concat else 1) * hidden_size
         super().__init__(
             recurrent=recurrent, recurrent_input_size=H, hidden_size=hidden_size
         )
-        (d, h, w) = obs_space["obs"].shape
-        inventory_size = obs_space["inventory"].nvec.size
-        line_nvec = torch.tensor(obs_space["lines"].nvec[0])
-        offset = F.pad(line_nvec[:-1].cumsum(0), [1, 0])
+        self.register_buffer(
+            "subtasks",
+            torch.tensor(
+                [Env.preprocess_line(Subtask(s)) for s in subtasks()] + [[0, 0, 0, 0]]
+            ),
+        )
+        (d, h, w) = obs_space.obs.shape
+        inventory_size = obs_space.inventory.nvec.size
+        line_nvec = torch.tensor(obs_space.lines.nvec)
+        line_nvec[:, 2] -= 1  # TODO: ugly hack
+        offset = F.pad(line_nvec[0, :-1].cumsum(0), [1, 0])
         self.register_buffer("offset", offset)
-        self.obs_spaces = Obs(**obs_space.spaces)
+        self.obs_spaces = obs_space
         self.obs_sections = get_obs_sections(self.obs_spaces)
         padding = (kernel_size // 2) % stride
 
@@ -410,13 +421,13 @@ class LowerLevel(NNBase):
         self.conv_projection = nn.Sequential(
             init2(nn.Linear(h * w * hidden_size, hidden_size)), activation
         )
-        self.line_embed = nn.EmbeddingBag(2 * line_nvec.sum(), hidden_size)
+        self.line_embed = nn.EmbeddingBag(line_nvec[0].sum(), hidden_size)
         self.inventory_embed = nn.Sequential(
             init2(nn.Linear(inventory_size, hidden_size)), activation
         )
 
         self.mlp = nn.Sequential()
-        in_size = H
+        in_size = hidden_size if recurrent else H
         for i in range(num_layers):
             self.mlp.add_module(
                 name=f"fc{i}",
@@ -437,17 +448,20 @@ class LowerLevel(NNBase):
     def output_size(self):
         return self._output_size
 
-    def forward(self, inputs, rnn_hxs, masks, p=None):
+    def forward(self, inputs, rnn_hxs, masks, upper=None):
         if not type(inputs) is Obs:
             inputs = Obs(*self.parse_inputs(inputs))
         N = inputs.obs.size(0)
-        R = torch.arange(N, device=inputs.obs.device)
         lines = inputs.lines.reshape(N, -1, self.obs_spaces.lines.shape[-1])
-        if p is None:
-            p = inputs.active.clamp(min=0, max=lines.size(1) - 1).long().flatten()
-        lines = lines[R, p]
+        if upper is None:
+            R = torch.arange(N, device=inputs.obs.device)
+            p = inputs.active.clamp(min=0, max=lines.size(1) - 1)
+            line = lines[R, p.long().flatten()]
+        else:
+            # upper = torch.tensor([int((input("upper:")))])
+            line = self.subtasks[upper.long().flatten()]
         obs = inputs.obs.reshape(N, *self.obs_spaces.obs.shape)
-        lines_embed = self.line_embed(lines.long() + self.offset)
+        lines_embed = self.line_embed(line.long() + self.offset)
         obs_embed = self.conv_projection(self.conv(obs))
         inventory_embed = self.inventory_embed(inputs.inventory)
         if self.concat:

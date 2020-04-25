@@ -21,7 +21,7 @@ class Agent(ppo.control_flow.multi_step.abstract_recurrence.Recurrence):
         conv_hidden_size,
         num_layers,
         entropy_coef,
-        conv_architecture,
+        use_conv,
         **network_args,
     ):
         self.obs_spaces = Obs(**observation_space.spaces)
@@ -31,10 +31,7 @@ class Agent(ppo.control_flow.multi_step.abstract_recurrence.Recurrence):
         self.encoder_hidden_size = encoder_hidden_size
         self.obs_sections = get_obs_sections(self.obs_spaces)
         self.train_lines = len(self.obs_spaces.lines.nvec)
-        nn.Module.__init__(self)
-        ppo.control_flow.gridworld.abstract_recurrence.Recurrence.__init__(
-            self, conv_hidden_size=conv_hidden_size, num_conv_layers=conv_architecture
-        )
+        super().__init__(conv_hidden_size=conv_hidden_size, use_conv=use_conv)
 
         # networks
         n_a = int(action_space.nvec[0])

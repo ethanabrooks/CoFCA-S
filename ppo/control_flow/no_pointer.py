@@ -62,7 +62,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
 
         for t in range(T):
             obs = self.preprocess_obs(inputs.obs[t])
-            x = [obs, H, self.embed_action(A[t - 1].clone())]
+            x = [obs, H, self.embed_upper(A[t - 1].clone())]
             h = self.gru(torch.cat(x, dim=-1), h)
             z = F.relu(self.zeta(h))
             a_dist = self.actor(z)

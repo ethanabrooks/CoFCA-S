@@ -45,7 +45,7 @@ Obs = namedtuple("Obs", "active lines obs inventory")
 
 def get_nearest(_from, _to, objects):
     items = [(np.array(p), o) for p, o in objects.items()]
-    candidates = [(p, np.sum(np.abs(_from - p))) for p, o in items if o == _to]
+    candidates = [(p, np.max(np.abs(_from - p))) for p, o in items if o == _to]
     if candidates:
         return min(candidates, key=lambda c: c[1])
 
@@ -54,6 +54,12 @@ def objective(interaction, obj):
     if interaction == Env.sell:
         return Env.merchant
     return obj
+
+
+def subtasks():
+    for obj in Env.items:
+        for interaction in Env.behaviors:
+            yield interaction, obj
 
 
 class Env(ppo.control_flow.env.Env):
@@ -71,7 +77,7 @@ class Env(ppo.control_flow.env.Env):
     items = [wood, gold, iron]
     terrain = [merchant, water, wall, bridge, agent]
     world_contents = items + terrain
-    behaviors = [mine, sell, goto]
+    behaviors = [sell, mine]
     colors = {
         wood: GREEN,
         gold: YELLOW,
@@ -89,16 +95,13 @@ class Env(ppo.control_flow.env.Env):
         num_subtasks,
         num_excluded_objects,
         temporal_extension,
+        term_on,
         world_size=6,
         **kwargs,
     ):
+        self.term_on = term_on
         self.temporal_extension = temporal_extension
         self.loops = None
-
-        def subtasks():
-            for obj in self.items:
-                for interaction in self.behaviors:
-                    yield interaction, obj
 
         self.subtasks = list(subtasks())
         num_subtasks = len(self.subtasks)
@@ -135,16 +138,14 @@ class Env(ppo.control_flow.env.Env):
                         [
                             len(Line.types),
                             1 + len(self.behaviors),
-                            1 + len(self.items),
+                            2 + len(self.items),
                             1 + self.max_loops,
                         ]
                     ]
                     * (self.n_lines + 1)
                 )
             ),
-            inventory=spaces.MultiDiscrete(
-                np.array([self.world_size ** 2] * len(self.items))
-            ),
+            inventory=spaces.MultiBinary(len(self.items)),
         )
 
     def print_obs(self, obs):
@@ -175,18 +176,25 @@ class Env(ppo.control_flow.env.Env):
             return f"{line} {self.subtasks.index(line.id)}"
         return line
 
+    @staticmethod
     @functools.lru_cache(maxsize=200)
-    def preprocess_line(self, line):
+    def preprocess_line(line):
+        def item_index(item):
+            if item == Env.water:
+                return len(Env.items)
+            else:
+                return Env.items.index(item)
+
         if type(line) in (Else, EndIf, EndWhile, EndLoop, Padding):
             return [Line.types.index(type(line)), 0, 0, 0]
         elif type(line) is Loop:
             return [Line.types.index(Loop), 0, 0, line.id]
         elif type(line) is Subtask:
             i, o = line.id
-            i, o = self.behaviors.index(i), self.items.index(o)
+            i, o = Env.behaviors.index(i), item_index(o)
             return [Line.types.index(Subtask), i + 1, o + 1, 0]
         elif type(line) in (While, If):
-            return [Line.types.index(type(line)), 0, self.items.index(line.id) + 1, 0]
+            return [Line.types.index(type(line)), 0, item_index(line.id) + 1, 0]
         else:
             raise RuntimeError()
 
@@ -199,151 +207,68 @@ class Env(ppo.control_flow.env.Env):
         return world
 
     @staticmethod
-    def evaluate_line(line, objects, condition_evaluations, loops):
+    def evaluate_line(line, counts, condition_evaluations, loops):
         if line is None:
             return None
         if type(line) is Subtask:
             return 1
         else:
-            evaluation = line.id in objects.values()
+            evaluation = counts[Env.iron] > counts[Env.gold]
             if type(line) in (If, While):
                 condition_evaluations += [evaluation]
             return evaluation
 
-    def generators(self) -> Tuple[Iterator[State], List[Line]]:
-        line_types = self.choose_line_types()
-        while_count = line_types.count(While)
-        if while_count >= len(self.items) - 1:
-            return self.generators()
-
-        # get forward and backward transition edges
-        line_transitions = defaultdict(list)
-        reverse_transitions = defaultdict(list)
-        for _from, _to in self.get_transitions(line_types):
-            line_transitions[_from].append(_to)
-            reverse_transitions[_to].append(_from)
-
-        # get flattened generator of index, truthy values
-        def index_truthiness_generator() -> Generator[int, None, None]:
-            loop_count = 0
-            j = 0
-            if_evaluations = []
-            while j in line_transitions:
-                t = self.random.choice(2)
-
-                # make sure not to exceed max_loops
-                if line_types[j] is Loop:
-                    if loop_count == self.max_loops:
-                        t = 0
-                    if t:
-                        loop_count += 1
-                    else:
-                        loop_count = 0
-                elif line_types[j] is If:
-                    if_evaluations.append(t)
-                elif line_types[j] is Else:
-                    t = not if_evaluations[-1]
-                elif line_types[j] is EndIf:
-                    if_evaluations.pop()
-                yield j, t
-                j = line_transitions[j][int(t)]
-
-        index_truthiness = list(index_truthiness_generator())
-        instruction_lines = [l(None) for l in line_types]  # instantiate line types
-
-        # identify while blocks
-        blocks = defaultdict(list)
-        whiles = []
-        for i, line_type in enumerate(line_types):
-            if line_type is While:
-                whiles.append(i)
-            elif line_type is EndWhile:
-                whiles.pop()
-            else:
-                for _while in whiles:
-                    blocks[_while].append(i)
-
-        # select line inside while blocks to be a build behavior
-        # so as to prevent infinite while loops
-        while_index = {}  # type: Dict[int, line]
-        for i, indices in blocks.items():
-            indices = set(indices) - set(while_index.keys())
-            while_index[self.random.choice(list(indices))] = i
-
-        # determine whether whiles are truthy (since last time we see
-        # noinspection PyTypeChecker
-        first_truthy = dict(reversed(index_truthiness))
-
-        # choose existing and non_existing
-        size = while_count + 1
-        non_existing = list(self.random.choice(self.items, replace=False, size=size))
-        existing = [o for o in self.items if o not in non_existing]
-
-        # assign while
-        for i, line in reversed(list(enumerate(instruction_lines))):
-            # need to go in reverse because while can modify existing
-            if type(line) is While and line.id is None:
-                line.id = item = self.random.choice(non_existing)
-                if item in non_existing and first_truthy[i]:
-                    non_existing.remove(item)
-                    # print(i, "existing", existing)
-
-        # assign Subtask
-        visited_lines = [i for i, _ in index_truthiness]
-        visited_lines_set = set(visited_lines)
-        for i, line in enumerate(instruction_lines):
+    def feasible(self, objects, lines):
+        line_iterator = self.line_generator(lines)
+        l = next(line_iterator)
+        resources = set(objects)
+        loops = 0
+        whiles = 0
+        counts = Counter()
+        for o in objects:
+            counts[o] += 1
+        while l is not None:
+            line = lines[l]
             if type(line) is Subtask:
-
-                if i in while_index and i in visited_lines_set:
-                    behavior = self.mine
-                    item = instruction_lines[while_index[i]].id
-                    assert item is not None  # need to go forward to avoid this
+                behavior, resource = line.id
+                if behavior == self.sell:
+                    required = {self.merchant, resource}
+                elif behavior == self.mine:
+                    required = {resource}
                 else:
-                    behavior = self.random.choice(self.behaviors)
-                    item = self.random.choice(
-                        existing if i in visited_lines_set else non_existing
-                    )
-                line.id = (behavior, item)
-
-        # populate world
-        world = Counter()
-        for i in visited_lines:
-            line = instruction_lines[i]
-            if type(line) is Subtask:
-                behavior, item = line.id
-                world[item] += 1
-                if sum(world.values()) > self.world_size ** 2:
-                    return self.generators()
-        virtual_world = Counter(world)
-
-        # assign other visited lines
-        for i, truthy in index_truthiness:
-            line = instruction_lines[i]
-            if type(line) is Subtask:
-                behavior, item = line.id
-                if behavior in (self.mine, self.sell):
-                    virtual_world[item] -= 1
-            elif type(line) is If:
-                # NOTE: this will not work if If is inside a loop
-                if truthy:
-                    sample_from = [o for o, c in virtual_world.items() if c > 0]
-                    line.id = self.random.choice(sample_from)
-                else:
-                    sample_from = [o for o in self.items if virtual_world[o] == 0]
-                    line.id = self.random.choice(sample_from)
-            elif type(line) in (Else, EndIf, EndWhile, EndLoop, Padding):
-                line.id = 0
+                    required = {resource}
+                for resource in required:
+                    if counts[resource] <= 0:
+                        return False
+                if behavior in self.sell:
+                    counts[resource] -= 1
+                elif behavior == self.mine:
+                    counts[resource] -= 1
             elif type(line) is Loop:
-                line.id = 0 if line.id is None else line.id + 1
-            else:
-                assert type(line) is While
-                assert line.id is not None
+                loops += 1
+            elif type(line) is While:
+                whiles += 1
+                if whiles == 7:
+                    return False
+            evaluation = self.evaluate_line(line, counts, [], loops)
+            l = line_iterator.send(evaluation)
+        return True
 
-        # assign unvisited lines
-        for line in instruction_lines:
-            if line.id is None:
-                line.id = self.subtasks[self.random.choice(len(self.subtasks))]
-        lines = instruction_lines
+    def generators(self) -> Tuple[Iterator[State], List[Line]]:
+        n_lines = (
+            self.eval_lines
+            if self.evaluating
+            else self.random.random_integers(self.min_lines, self.max_lines)
+        )
+        line_types = list(
+            Line.generate_types(
+                n_lines,
+                remaining_depth=self.max_nesting_depth,
+                random=self.random,
+                legal_lines=self.control_flow_types,
+            )
+        )
+        lines = list(self.assign_line_ids(line_types))
 
         def state_generator() -> State:
             assert self.max_nesting_depth == 1
@@ -353,7 +278,10 @@ class Env(ppo.control_flow.env.Env):
 
             line_iterator = self.line_generator(lines)
             condition_evaluations = []
-            self.time_remaining = 200 if self.evaluating else 0
+            if self.lower_level == "train-alone":
+                self.time_remaining = 0
+            else:
+                self.time_remaining = 200 if self.evaluating else self.time_to_waste
             self.loops = None
             inventory = Counter()
             subtask_complete = False
@@ -368,9 +296,12 @@ class Env(ppo.control_flow.env.Env):
                                 self.loops = lines[l].id
                             else:
                                 self.loops -= 1
+                        counts = Counter()
+                        for o in objects.values():
+                            counts[o] += 1
                         l = line_iterator.send(
                             self.evaluate_line(
-                                lines[l], objects, condition_evaluations, self.loops
+                                lines[l], counts, condition_evaluations, self.loops
                             )
                         )
                         if self.loops == 0:
@@ -386,7 +317,11 @@ class Env(ppo.control_flow.env.Env):
                         if self.merchant not in objects.values():
                             return None
                     _, d = get_nearest(agent_pos, objective(be, it), objects)
-                    self.time_remaining += 2 * self.world_size + self.time_to_waste
+                    time_delta = 3 * self.world_size
+                    if self.lower_level == "train-alone":
+                        self.time_remaining = time_delta + self.time_to_waste
+                    else:
+                        self.time_remaining += time_delta
                     return l
 
             possible_objects = list(objects.values())
@@ -404,18 +339,23 @@ class Env(ppo.control_flow.env.Env):
                 subtask_complete = False
                 # for i, a in enumerate(self.lower_level_actions):
                 # print(i, a)
+                # try:
                 # lower_level_index = int(input("go:"))
+                # except ValueError:
+                # pass
                 if self.lower_level == "train-alone":
-                    interaction, obj = lines[ptr].id
+                    interaction, resource = lines[ptr].id
                 else:
-                    interaction, obj = self.subtasks[subtask_id]
+                    # interaction, obj = lines[agent_ptr].id
+                    interaction, resource = self.subtasks[subtask_id]
                 if self.lower_level == "hardcoded":
                     lower_level_action = self.get_lower_level_action(
                         interaction=interaction,
-                        obj=obj,
+                        resource=resource,
                         agent_pos=agent_pos,
                         objects=objects,
                     )
+                    # print("lower level action:", lower_level_action)
                 else:
                     lower_level_action = self.lower_level_actions[lower_level_index]
                 self.time_remaining -= 1
@@ -441,24 +381,30 @@ class Env(ppo.control_flow.env.Env):
                                 )
                                 or standing_on == self.wood
                             ):
-                                possible_objects.remove(standing_on)
-                            else:
-                                term = True
-                            if standing_on in self.items:
-                                if (
-                                    done
-                                    or ((self.sell, standing_on) == lines[ptr].id)
-                                    or (standing_on == self.wood)
-                                ):
+                                if While in self.control_flow_types:
                                     possible_objects.remove(standing_on)
-                                else:
-                                    term = True
-                                inventory[standing_on] += 1
-                                del objects[tuple(agent_pos)]
+                            elif self.mine in self.term_on:
+                                term = True
+                            if (
+                                standing_on in self.items
+                                and inventory[standing_on] == 0
+                            ):
+                                inventory[standing_on] = 1
+                            del objects[tuple(agent_pos)]
                     elif lower_level_action == self.sell:
                         done = done and (
                             self.lower_level == "hardcoded" or inventory[tgt_obj] > 0
                         )
+                        if done:
+                            inventory[tgt_obj] -= 1
+                        elif self.sell in self.term_on:
+                            term = True
+                    elif (
+                        lower_level_action == self.goto
+                        and not done
+                        and self.goto in self.term_on
+                    ):
+                        term = True
                     if done:
                         prev, ptr = ptr, next_subtask(ptr)
                         subtask_complete = True
@@ -483,94 +429,33 @@ class Env(ppo.control_flow.env.Env):
                         )
                     ):
                         agent_pos = new_pos
+                        if moving_into == self.water:
+                            # build bridge
+                            del objects[tuple(new_pos)]
+                            inventory[self.wood] -= 1
                 else:
                     assert lower_level_action is None
 
         return state_generator(), lines
 
     def populate_world(self, lines):
-        def subtask_ids():
-            for line in lines:
-                if type(line) is Subtask:
-                    _i, _o = line.id
-                    if _i == self.sell:
-                        yield self.merchant
-                        yield _o
-                    else:
-                        yield _o
-
-        def loop_objects():
-            active_loops = []
-            for i, line in enumerate(lines):
-                if type(line) is Loop:
-                    active_loops += [line]
-                elif type(line) is EndLoop:
-                    active_loops.pop()
-                elif type(line) is Subtask:
-                    if active_loops:
-                        _i, _o = line.id
-                        loop_num = active_loops[-1].id
-                        for _ in range(loop_num):
-                            yield _o
-
-        def while_objects():
-            while_blocks = defaultdict(list)  # while line: child subtasks
-            active_whiles = []
-            for i, line in enumerate(lines):
-                if type(line) is While:
-                    active_whiles += [i]
-                elif type(line) is EndWhile:
-                    active_whiles.pop()
-                elif type(line) is Subtask:
-                    if active_whiles:
-                        while_blocks[active_whiles[-1]] += [i]
-
-            for while_line, block in while_blocks.items():
-                obj = lines[while_line].id
-                l = self.random.choice(block)
-                line_id = self.mine, obj
-                lines[l] = Subtask(line_id)
-                if not self.evaluating and obj in self.world_contents:
-                    num_obj = self.random.randint(self.max_while_objects + 1)
-                    for _ in range(num_obj):
-                        yield obj
-
-        subtask_list = list(subtask_ids())
-        loop_list = list(loop_objects())
-        while_list = list(while_objects())
-        object_list = (
-            [self.agent] + subtask_list + loop_list + while_list + [self.wood] * 5
+        max_random_objects = self.world_size ** 2
+        num_subtask = sum(1 for l in lines if type(l) is Subtask)
+        num_random_objects = np.random.randint(num_subtask, max_random_objects)
+        object_list = [self.agent] + list(
+            self.random.choice(self.items + [self.merchant], size=num_random_objects)
         )
-        num_random_objects = self.world_size ** 2 - self.world_size
-        object_list = object_list[:num_random_objects]
+        if not self.feasible(object_list, lines):
+            return self.populate_world(lines)
         indexes = self.random.choice(
-            num_random_objects, size=num_random_objects, replace=False
+            max_random_objects, size=max_random_objects, replace=False
         )
         vertical_water = self.random.choice(2)
-        world_shape = (
-            [self.world_size, self.world_size - 1]
-            if vertical_water
-            else [self.world_size - 1, self.world_size]
-        )
+        world_shape = [self.world_size, self.world_size]
         positions = np.array(list(zip(*np.unravel_index(indexes, world_shape))))
-        wall_indexes = positions[:, 0] % 2 * positions[:, 1] % 2
-        wall_positions = positions[wall_indexes == 1]
-        object_positions = positions[wall_indexes == 0]
-        num_walls = (
-            self.random.choice(len(wall_positions)) if len(wall_positions) else 0
-        )
-        object_positions = object_positions[: len(object_list)]
-        if len(object_list) == len(object_positions):
-            wall_positions = wall_positions[:num_walls]
-        positions = np.concatenate([object_positions, wall_positions])
-        water_index = self.random.choice(self.world_size)
-        positions[positions[:, vertical_water] >= water_index] += np.array(
-            [0, 1] if vertical_water else [1, 0]
-        )
-        assert water_index not in positions[:, vertical_water]
-        objects = {
+        return {
             tuple(p): (self.wall if o is None else o)
-            for o, p in itertools.zip_longest(object_list, positions)
+            for o, p in zip(object_list, positions)
         }
         assert object_list[0] == self.agent
         agent_i, agent_j = positions[0]
@@ -602,165 +487,31 @@ class Env(ppo.control_flow.env.Env):
 
         return objects
 
-    def assign_line_ids(self, lines):
-        excluded = self.random.randint(len(self.items), size=self.num_excluded_objects)
-        included_objects = [o for i, o in enumerate(self.items) if i not in excluded]
-
-        interaction_ids = self.random.choice(len(self.behaviors), size=len(lines))
-        object_ids = self.random.choice(len(included_objects), size=len(lines))
-        line_ids = self.random.choice(len(self.items), size=len(lines))
-
-        for line, line_id, interaction_id, object_id in zip(
-            lines, line_ids, interaction_ids, object_ids
-        ):
-            if line is Subtask:
-                subtask_id = (
-                    self.behaviors[interaction_id],
-                    included_objects[object_id],
-                )
-                yield Subtask(subtask_id)
-            elif line is Loop:
-                yield Loop(self.random.randint(1, 1 + self.max_loops))
+    def assign_line_ids(self, line_types):
+        behaviors = self.random.choice(self.behaviors, size=len(line_types))
+        items = self.random.choice(self.items, size=len(line_types))
+        while_obj = None
+        available = [x for x in self.items]
+        lines = []
+        for line_type, behavior, item in zip(line_types, behaviors, items):
+            if line_type is Subtask:
+                if not available:
+                    return self.assign_line_ids(line_types)
+                subtask_id = (behavior, self.random.choice(available))
+                lines += [Subtask(subtask_id)]
+            elif line_type is Loop:
+                lines += [Loop(self.random.randint(1, 1 + self.max_loops))]
+            elif line_type is While:
+                while_obj = item
+                lines += [line_type(item)]
+            elif line_type is EndWhile:
+                if while_obj in available:
+                    available.remove(while_obj)
+                while_obj = None
+                lines += [EndWhile(0)]
             else:
-                assert type(line) is While
-                assert line.id is not None
-
-        # assign unvisited lines
-        for line in instruction_lines:
-            if line.id is None:
-                line.id = self.subtasks[self.random.choice(len(self.subtasks))]
-        lines = instruction_lines
-
-        def state_generator() -> Generator[State, int, None]:
-            pos = self.random.randint(self.world_size, size=2)
-            objects = {}
-            flattened = [o for o, c in world.items() for _ in range(c)]
-            for o, p in zip(
-                flattened,
-                self.random.choice(
-                    self.world_size ** 2, replace=False, size=len(flattened)
-                ),
-            ):
-                p = np.unravel_index(p, (self.world_size, self.world_size))
-                objects[tuple(p)] = o
-
-            self.time_remaining = 200 if self.evaluating else self.time_to_waste
-            self.loops = None
-
-            def subtask_generator() -> Generator[int, None, None]:
-                for l, _ in index_truthiness:
-                    if type(lines[l]) is Subtask:
-                        yield l
-
-            def get_nearest(to):
-                candidates = [(np.array(p)) for p, o in objects.items() if o == to]
-                if candidates:
-                    return min(candidates, key=lambda k: np.sum(np.abs(pos - k)))
-
-            def agent_generator() -> Generator[
-                Union[np.ndarray, str], Tuple[str, str], None
-            ]:
-                subtask, objective, move = None, None, None
-                while True:
-                    (chosen_behavior, chosen_object) = yield move
-                    # if new_subtask != subtask:
-                    #     subtask = new_subtask
-                    objective = get_nearest(chosen_object)
-                    if objective is None:
-                        move = None
-                    elif np.all(objective == pos):
-                        move = chosen_behavior
-                    else:
-                        move = np.array(objective) - pos
-                        if self.temporal_extension:
-                            move = np.clip(move, -1, 1)
-
-            def world_array() -> np.ndarray:
-                array = np.zeros(self.world_shape)
-                for p, o in list(objects.items()) + [(pos, self.agent)]:
-                    p = np.array(p)
-                    array[tuple((self.world_contents.index(o), *p))] = 1
-
-                return array
-
-            subtask_iterator = subtask_generator()
-            agent_iterator = agent_generator()
-            next(agent_iterator)
-
-            def next_subtask():
-                try:
-                    l = next(subtask_iterator)
-                except StopIteration:
-                    return
-                if l is not None:
-                    assert type(lines[l]) is Subtask
-                    _, o = lines[l].id
-                    n = get_nearest(o)
-                    if n is not None:
-                        self.time_remaining += 1 + np.max(np.abs(pos - n))
-                return l
-
-            prev, ptr = 0, next_subtask()
-            term = False
-            while True:
-                term |= not self.time_remaining
-                subtask_id = yield State(
-                    obs=world_array(), prev=prev, ptr=ptr, term=term,
-                )
-                self.time_remaining -= 1
-                chosen_subtask = self.subtasks[subtask_id]
-                agent_move = agent_iterator.send(chosen_subtask)
-                tgt_move, tgt_object = lines[ptr].id
-                if (
-                    tuple(pos) in objects
-                    and tgt_object == objects[tuple(pos)]
-                    and tgt_move is self.goto
-                    or (agent_move is not None and tuple(agent_move) == tuple(tgt_move))
-                ):
-                    prev, ptr = ptr, next_subtask()
-
-                def check_fail():
-                    if objects[tuple(pos)] != tgt_object:
-                        return True
-
-                if type(agent_move) in (np.ndarray, tuple):
-                    pos += agent_move
-                    if np.any(pos >= self.world_size) or np.any(pos < 0):
-                        import ipdb
-
-                        ipdb.set_trace()
-
-                elif agent_move == self.mine:
-                    term = check_fail() or term
-                    del objects[tuple(pos)]
-                elif agent_move == self.sell:
-                    term = check_fail() or term
-                    objects[tuple(pos)] = self.bridge
-                elif agent_move in [self.goto, None]:
-                    pass
-                else:
-                    raise RuntimeError
-
-        return state_generator(), lines
-
-
-def build_parser(p):
-    ppo.control_flow.env.build_parser(p)
-    p.add_argument(
-        "--no-temporal-extension", dest="temporal_extension", action="store_false"
-    )
-    return p
-
-    def get_observation(self, obs, **kwargs):
-        obs, inventory = obs
-        obs = super().get_observation(obs=obs, **kwargs)
-        obs.update(inventory=np.array([inventory[i] for i in self.items]))
-        # if not self.observation_space.contains(obs):
-        #     import ipdb
-        #
-        #     ipdb.set_trace()
-        #     self.observation_space.contains(obs)
-        return obs
+                lines += [line_type(self.random.choice(self.items + [self.water]))]
+        return lines
 
     def get_observation(self, obs, **kwargs):
         obs, inventory = obs
@@ -774,12 +525,12 @@ def build_parser(p):
         return obs
 
     @staticmethod
-    def get_lower_level_action(interaction, obj, agent_pos, objects):
-        obj = objective(interaction, obj)
-        if objects.get(tuple(agent_pos), None) == obj:
+    def get_lower_level_action(interaction, resource, agent_pos, objects):
+        resource = objective(interaction, resource)
+        if objects.get(tuple(agent_pos), None) == resource:
             return interaction
         else:
-            nearest = get_nearest(_from=agent_pos, _to=obj, objects=objects)
+            nearest = get_nearest(_from=agent_pos, _to=resource, objects=objects)
             if nearest:
                 n, d = nearest
                 return n - agent_pos
@@ -793,6 +544,7 @@ def build_parser(p):
     p.add_argument("--max-while-objects", type=float, default=2)
     p.add_argument("--num-excluded-objects", type=int, default=2)
     p.add_argument("--world-size", type=int, required=True)
+    p.add_argument("--term-on", nargs="*", choices=[Env.sell, Env.mine, Env.goto])
 
 
 if __name__ == "__main__":

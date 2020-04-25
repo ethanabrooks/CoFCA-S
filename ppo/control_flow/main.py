@@ -21,6 +21,9 @@ NAMES = ["instruction", "actions", "program_counter", "evaluations"]
 def main(
     log_dir, seed, eval_lines, one_line, lower_level, lower_level_load_path, **kwargs
 ):
+    if lower_level_load_path:
+        lower_level = "pre-trained"
+
     class _Train(Train):
         def build_agent(self, envs, baseline=None, debug=False, **agent_args):
             obs_space = envs.observation_space
@@ -85,20 +88,16 @@ def main(
                     for name in NAMES:
                         if name in d:
                             episode_counter[name].append(d.pop(name))
-                if len(episode_counter["P"]) != len(episode_counter["instruction"]):
-                    import ipdb
-
-                    ipdb.set_trace()
             super().process_infos(episode_counter, done, infos, **act_log)
 
         def log_result(self, result: dict):
-            if lower_level == "train-alone":
+            if "subtasks_attempted" in result:
                 subtasks_attempted = sum(result["subtasks_attempted"])
                 if subtasks_attempted > 0:
                     result["success"] = (
                         sum(result["subtasks_complete"]) / subtasks_attempted
                     )
-            else:
+            if lower_level != "train-alone":
                 names = NAMES + ["P"]
                 for name in names + ["eval_" + n for n in names]:
                     if name in result:
@@ -146,7 +145,6 @@ def control_flow_args():
     parsers.agent.add_argument("--gate-coef", type=float, required=True)
     parsers.agent.add_argument("--gru-gate-coef", type=float, required=True)
     parsers.agent.add_argument("--no-op-coef", type=float, required=True)
-    parsers.agent.add_argument("--lower-level-load-path")
 
     parsers.agent.add_argument("--concat", action="store_true")
     parsers.agent.add_argument("--kernel-size", type=int, required=True)
