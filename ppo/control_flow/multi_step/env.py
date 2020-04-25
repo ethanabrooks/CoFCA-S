@@ -109,7 +109,11 @@ class Env(ppo.control_flow.env.Env):
         num_subtasks = len(self.subtasks)
         super().__init__(num_subtasks=num_subtasks, **kwargs)
         self.world_size = world_size
-        self.world_shape = (len(self.world_contents), self.world_size, self.world_size)
+        self.world_shape = (
+            len(self.world_contents) + 1,
+            self.world_size,
+            self.world_size,
+        )
 
         def lower_level_actions():
             yield from self.behaviors
@@ -158,7 +162,7 @@ class Env(ppo.control_flow.env.Env):
             string = []
             for j, channel in enumerate(row):
                 int_ids = 1 + np.arange(channel.size)
-                number = channel * int_ids
+                number = (channel * int_ids)[:8]  # TODO
                 crop = sorted(number, reverse=True)[:grid_size]
                 for x in crop:
                     colors.append(self.colors[self.world_contents[x - 1]])
@@ -203,7 +207,10 @@ class Env(ppo.control_flow.env.Env):
         for p, o in list(objects.items()) + [(agent_pos, self.agent)]:
             p = np.array(p)
             world[tuple((self.world_contents.index(o), *p))] = 1
-
+        counts = Counter()
+        for o in objects.values():
+            counts[o] += 1
+        world[-1] = counts[Env.iron] > counts[Env.gold]
         return world
 
     @staticmethod
