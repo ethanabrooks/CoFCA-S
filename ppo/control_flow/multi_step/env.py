@@ -76,7 +76,7 @@ class Env(ppo.control_flow.env.Env):
     items = [wood, gold, iron]
     terrain = [merchant, water, wall, bridge, agent]
     world_contents = items + terrain
-    behaviors = [sell]
+    behaviors = [sell, mine]
     colors = {
         wood: GREEN,
         gold: YELLOW,
@@ -436,9 +436,9 @@ class Env(ppo.control_flow.env.Env):
         return state_generator(), lines
 
     def populate_world(self, lines):
-        max_random_objects = self.world_size ** 2 - self.world_size
+        max_random_objects = self.world_size ** 2
         num_subtask = sum(1 for l in lines if type(l) is Subtask)
-        num_random_objects = np.random.randint(num_subtask, max_random_objects - 1)
+        num_random_objects = np.random.randint(num_subtask, max_random_objects)
         object_list = [self.agent] + list(
             self.random.choice(self.items + [self.merchant], size=num_random_objects)
         )
@@ -448,30 +448,11 @@ class Env(ppo.control_flow.env.Env):
             max_random_objects, size=max_random_objects, replace=False
         )
         vertical_water = self.random.choice(2)
-        world_shape = (
-            [self.world_size, self.world_size - 1]
-            if vertical_water
-            else [self.world_size - 1, self.world_size]
-        )
+        world_shape = [self.world_size, self.world_size]
         positions = np.array(list(zip(*np.unravel_index(indexes, world_shape))))
-        wall_indexes = positions[:, 0] % 2 * positions[:, 1] % 2
-        wall_positions = positions[wall_indexes == 1]
-        object_positions = positions[wall_indexes == 0]
-        num_walls = (
-            self.random.choice(len(wall_positions)) if len(wall_positions) else 0
-        )
-        object_positions = object_positions[: len(object_list)]
-        if len(object_list) == len(object_positions):
-            wall_positions = wall_positions[:num_walls]
-        positions = np.concatenate([object_positions, wall_positions])
-        water_index = self.random.randint(1, self.world_size - 1)
-        positions[positions[:, vertical_water] >= water_index] += np.array(
-            [0, 1] if vertical_water else [1, 0]
-        )
-        assert water_index not in positions[:, vertical_water]
-        objects = {
+        return {
             tuple(p): (self.wall if o is None else o)
-            for o, p in itertools.zip_longest(object_list, positions)
+            for o, p in zip(object_list, positions)
         }
         assert object_list[0] == self.agent
         agent_i, agent_j = positions[0]
