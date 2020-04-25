@@ -90,18 +90,16 @@ class Env(ppo.control_flow.env.Env):
 
     def __init__(
         self,
-        max_while_objects,
         num_subtasks,
-        num_excluded_objects,
         temporal_extension,
         term_on,
+        max_world_resamples,
         world_size=6,
         **kwargs,
     ):
+        self.max_world_resamples = max_world_resamples
         self.term_on = term_on
         self.temporal_extension = temporal_extension
-        self.num_excluded_objects = num_excluded_objects
-        self.max_while_objects = max_while_objects
         self.loops = None
 
         self.subtasks = list(subtasks())
@@ -435,15 +433,15 @@ class Env(ppo.control_flow.env.Env):
 
         return state_generator(), lines
 
-    def populate_world(self, lines):
+    def populate_world(self, lines, count=0):
         max_random_objects = self.world_size ** 2
         num_subtask = sum(1 for l in lines if type(l) is Subtask)
         num_random_objects = np.random.randint(num_subtask, max_random_objects - 1)
         object_list = [self.agent] + list(
             self.random.choice(self.items + [self.merchant], size=num_random_objects)
         )
-        if not self.feasible(object_list, lines):
-            return self.populate_world(lines)
+        if not self.feasible(object_list, lines) and count < self.max_world_resamples:
+            return self.populate_world(lines, count=count + 1)
         use_water = num_random_objects < max_random_objects - self.world_size
         if use_water:
             vertical_water = self.random.choice(2)
@@ -565,8 +563,7 @@ def build_parser(p):
     p.add_argument(
         "--no-temporal-extension", dest="temporal_extension", action="store_false"
     )
-    p.add_argument("--max-while-objects", type=float, default=2)
-    p.add_argument("--num-excluded-objects", type=int, default=2)
+    p.add_argument("--max-world-resamples", type=int, required=True)
     p.add_argument("--world-size", type=int, required=True)
     p.add_argument("--term-on", nargs="*", choices=[Env.sell, Env.mine, Env.goto])
 
