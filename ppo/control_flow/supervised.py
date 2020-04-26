@@ -262,9 +262,7 @@ def cli():
         default_time_to_waste=0,
     )
     network_parser = parser.add_argument_group("network_args")
-    network_parser.add_argument(
-        f"--pool-type", choices=("avg", "max", "None"),
-    )
+    network_parser.add_argument(f"--pool-type", choices=("avg", "max", "None"))
     for i in range(MAX_LAYERS):
         network_parser.add_argument(
             f"--conv-layer{i}", dest="conv_layers", action="append", type=maybe_int
