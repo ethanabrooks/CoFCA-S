@@ -573,13 +573,25 @@ class Env(ppo.control_flow.env.Env):
                 return n - agent_pos
 
 
-def build_parser(p):
-    ppo.control_flow.env.build_parser(p)
+def build_parser(
+    p, default_max_world_resamples=None, default_max_while_loops=None, **kwargs
+):
+    ppo.control_flow.env.build_parser(p, **kwargs)
     p.add_argument(
         "--no-temporal-extension", dest="temporal_extension", action="store_false"
     )
-    p.add_argument("--max-world-resamples", type=int, required=True)
-    p.add_argument("--max-while-loops", type=int, required=True)
+    p.add_argument(
+        "--max-world-resamples",
+        type=int,
+        required=default_max_world_resamples is None,
+        default=default_max_world_resamples,
+    )
+    p.add_argument(
+        "--max-while-loops",
+        type=int,
+        required=default_max_while_loops is None,
+        default=default_max_while_loops,
+    )
     p.add_argument("--world-size", type=int, required=True)
     p.add_argument("--term-on", nargs="*", choices=[Env.sell, Env.mine, Env.goto])
 

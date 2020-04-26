@@ -399,9 +399,21 @@ class Env(gym.Env, ABC):
         return line
 
 
-def build_parser(p):
-    p.add_argument("--min-lines", type=int, required=True)
-    p.add_argument("--max-lines", type=int, required=True)
+def build_parser(
+    p, default_min_lines=None, default_max_lines=None, default_time_to_waste=None
+):
+    p.add_argument(
+        "--min-lines",
+        type=int,
+        required=default_min_lines is None,
+        default=default_min_lines,
+    )
+    p.add_argument(
+        "--max-lines",
+        type=int,
+        required=default_max_lines is None,
+        default=default_max_lines,
+    )
     p.add_argument("--num-subtasks", type=int, default=12)
     p.add_argument("--max-loops", type=int, default=2)
     p.add_argument("--no-op-limit", type=int)
@@ -411,9 +423,15 @@ def build_parser(p):
     p.add_argument("--max-nesting-depth", type=int, default=1)
     p.add_argument("--subtasks-only", action="store_true")
     p.add_argument("--break-on-fail", action="store_true")
-    p.add_argument("--time-to-waste", type=int, required=True)
+    p.add_argument(
+        "--time-to-waste",
+        type=int,
+        required=default_time_to_waste is None,
+        default=default_time_to_waste,
+    )
     p.add_argument(
         "--control-flow-types",
+        default=[],
         nargs="*",
         type=lambda s: dict(
             Subtask=Subtask, If=If, Else=Else, While=While, Loop=Loop
