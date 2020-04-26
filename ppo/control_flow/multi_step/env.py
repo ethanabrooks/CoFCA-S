@@ -90,25 +90,30 @@ class Env(ppo.control_flow.env.Env):
 
     def __init__(
         self,
-        max_while_objects,
         num_subtasks,
-        num_excluded_objects,
         temporal_extension,
         term_on,
+        max_world_resamples,
+        max_while_loops,
         world_size=6,
         **kwargs,
     ):
+        self.max_world_resamples = max_world_resamples
+        self.max_while_loops = max_while_loops
         self.term_on = term_on
         self.temporal_extension = temporal_extension
-        self.num_excluded_objects = num_excluded_objects
-        self.max_while_objects = max_while_objects
         self.loops = None
+        self.whiles = None
 
         self.subtasks = list(subtasks())
         num_subtasks = len(self.subtasks)
         super().__init__(num_subtasks=num_subtasks, **kwargs)
         self.world_size = world_size
-        self.world_shape = (len(self.world_contents), self.world_size, self.world_size)
+        self.world_shape = (
+            len(self.world_contents),
+            self.world_size,
+            self.world_size,
+        )
 
         def lower_level_actions():
             yield from self.behaviors
@@ -249,8 +254,8 @@ class Env(ppo.control_flow.env.Env):
                 loops += 1
             elif type(line) is While:
                 whiles += 1
-                if whiles == 7:
-                    return False
+                if whiles > self.max_while_loops:
+                    return True
             evaluation = self.evaluate_line(line, counts, [], loops)
             l = line_iterator.send(evaluation)
         return True
@@ -284,6 +289,7 @@ class Env(ppo.control_flow.env.Env):
             else:
                 self.time_remaining = 200 if self.evaluating else self.time_to_waste
             self.loops = None
+            self.whiles = 0
             inventory = Counter()
             subtask_complete = False
 
@@ -297,6 +303,10 @@ class Env(ppo.control_flow.env.Env):
                                 self.loops = lines[l].id
                             else:
                                 self.loops -= 1
+                        elif type(lines[l]) is While:
+                            self.whiles += 1
+                            if self.whiles > self.max_while_loops:
+                                return None
                         counts = Counter()
                         for o in objects.values():
                             counts[o] += 1
@@ -435,23 +445,29 @@ class Env(ppo.control_flow.env.Env):
 
         return state_generator(), lines
 
-    def populate_world(self, lines):
-        max_random_objects = self.world_size ** 2 - self.world_size
+    def populate_world(self, lines, count=0):
+        max_random_objects = self.world_size ** 2
         num_subtask = sum(1 for l in lines if type(l) is Subtask)
-        num_random_objects = np.random.randint(num_subtask, max_random_objects - 1)
+        num_random_objects = np.random.randint(num_subtask, max_random_objects)
         object_list = [self.agent] + list(
             self.random.choice(self.items + [self.merchant], size=num_random_objects)
         )
-        if not self.feasible(object_list, lines):
-            return self.populate_world(lines)
+        if not self.feasible(object_list, lines) and count < self.max_world_resamples:
+            return self.populate_world(lines, count=count + 1)
+        use_water = num_random_objects < max_random_objects - self.world_size
+        if use_water:
+            vertical_water = self.random.choice(2)
+            world_shape = (
+                [self.world_size, self.world_size - 1]
+                if vertical_water
+                else [self.world_size - 1, self.world_size]
+            )
+        else:
+            world_shape = (self.world_size, self.world_size)
         indexes = self.random.choice(
-            max_random_objects, size=max_random_objects, replace=False
-        )
-        vertical_water = self.random.choice(2)
-        world_shape = (
-            [self.world_size, self.world_size - 1]
-            if vertical_water
-            else [self.world_size - 1, self.world_size]
+            np.prod(world_shape),
+            size=min(np.prod(world_shape), max_random_objects),
+            replace=False,
         )
         positions = np.array(list(zip(*np.unravel_index(indexes, world_shape))))
         wall_indexes = positions[:, 0] % 2 * positions[:, 1] % 2
@@ -464,42 +480,44 @@ class Env(ppo.control_flow.env.Env):
         if len(object_list) == len(object_positions):
             wall_positions = wall_positions[:num_walls]
         positions = np.concatenate([object_positions, wall_positions])
-        water_index = self.random.randint(1, self.world_size - 1)
-        positions[positions[:, vertical_water] >= water_index] += np.array(
-            [0, 1] if vertical_water else [1, 0]
-        )
-        assert water_index not in positions[:, vertical_water]
+        if use_water:
+            water_index = self.random.randint(1, self.world_size - 1)
+            positions[positions[:, vertical_water] >= water_index] += np.array(
+                [0, 1] if vertical_water else [1, 0]
+            )
+            assert water_index not in positions[:, vertical_water]
         objects = {
             tuple(p): (self.wall if o is None else o)
             for o, p in itertools.zip_longest(object_list, positions)
         }
-        assert object_list[0] == self.agent
-        agent_i, agent_j = positions[0]
-        for p, o in objects.items():
-            if o == self.wood:
-                pi, pj = p
-                if vertical_water:
-                    if (water_index < pj and water_index < agent_j) or (
-                        water_index > pj and water_index > agent_j
-                    ):
-                        return {
-                            **objects,
-                            **{
-                                (i, water_index): self.water
-                                for i in range(self.world_size)
-                            },
-                        }
-                else:
-                    if (water_index < pi and water_index < agent_i) or (
-                        water_index > pi and water_index > agent_i
-                    ):
-                        return {
-                            **objects,
-                            **{
-                                (water_index, i): self.water
-                                for i in range(self.world_size)
-                            },
-                        }
+        if use_water:
+            assert object_list[0] == self.agent
+            agent_i, agent_j = positions[0]
+            for p, o in objects.items():
+                if o == self.wood:
+                    pi, pj = p
+                    if vertical_water:
+                        if (water_index < pj and water_index < agent_j) or (
+                            water_index > pj and water_index > agent_j
+                        ):
+                            return {
+                                **objects,
+                                **{
+                                    (i, water_index): self.water
+                                    for i in range(self.world_size)
+                                },
+                            }
+                    else:
+                        if (water_index < pi and water_index < agent_i) or (
+                            water_index > pi and water_index > agent_i
+                        ):
+                            return {
+                                **objects,
+                                **{
+                                    (water_index, i): self.water
+                                    for i in range(self.world_size)
+                                },
+                            }
 
         return objects
 
@@ -557,8 +575,8 @@ def build_parser(p):
     p.add_argument(
         "--no-temporal-extension", dest="temporal_extension", action="store_false"
     )
-    p.add_argument("--max-while-objects", type=float, default=2)
-    p.add_argument("--num-excluded-objects", type=int, default=2)
+    p.add_argument("--max-world-resamples", type=int, required=True)
+    p.add_argument("--max-while-loops", type=int, required=True)
     p.add_argument("--world-size", type=int, required=True)
     p.add_argument("--term-on", nargs="*", choices=[Env.sell, Env.mine, Env.goto])
 
