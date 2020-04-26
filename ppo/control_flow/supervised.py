@@ -69,6 +69,15 @@ class Network(nn.Module):
     ):
         super().__init__()
 
+        def remove_none(xs):
+            return [x for x in xs if x is not None]
+
+        conv_layers = remove_none(conv_layers)
+        conv_kernels = remove_none(conv_kernels)
+        conv_strides = remove_none(conv_strides)
+        pool_kernels = remove_none(pool_kernels)
+        pool_strides = remove_none(pool_strides)
+
         def generate_pools(k):
             for (kernel, stride) in zip(pool_kernels, pool_strides):
                 kernel = min(k, kernel)
@@ -109,9 +118,7 @@ class Network(nn.Module):
             n_conv = min(len(conv_layers), len(conv_strides), len(conv_kernels))
             conv_iterator = generate_convolutions(k)
             try:
-                print(k)
                 k, conv = next(conv_iterator)
-                print(k)
                 yield conv
                 pool_iterator = None
                 for i in itertools.count():
@@ -119,19 +126,16 @@ class Network(nn.Module):
                         if i >= n_conv - n_pools and pool_type is not None:
                             pool_iterator = generate_pools(k)
                             k, pool = next(pool_iterator)
-                            print(k)
                             yield pool
                     else:
                         k, pool = pool_iterator.send(k)
-                        print(k)
                         yield pool
                     k, conv = conv_iterator.send(k)
-                    print(k)
                     yield conv
             except StopIteration:
                 pass
             yield Flatten()
-            yield init_(nn.Linear(k ** 2 * conv_layers[-1], 1))
+            yield init_(nn.Linear(k ** 2 * conv.out_channels, 1))
             yield nn.Sigmoid()
 
         self.net = nn.Sequential(*generate_modules(h))
@@ -207,6 +211,12 @@ def main(
         log_progress.update()
 
 
+def maybe_int(string):
+    if string == "None":
+        return None
+    return int(string)
+
+
 def cli():
     # Training settings
     parser = argparse.ArgumentParser(
@@ -253,11 +263,11 @@ def cli():
     )
     network_parser = parser.add_argument_group("network_args")
     network_parser.add_argument(
-        f"--pool-type", choices=("avg", "max"),
+        f"--pool-type", choices=("avg", "max", "None"),
     )
     for i in range(MAX_LAYERS):
         network_parser.add_argument(
-            f"--conv-layer{i}", dest="conv_layers", action="append", type=int
+            f"--conv-layer{i}", dest="conv_layers", action="append", type=maybe_int
         )
         for mod in ("conv", "pool"):
             for component in ("kernel", "stride"):
@@ -265,7 +275,7 @@ def cli():
                     f"--{mod}-{component}{i}",
                     dest=f"{mod}_{component}s",
                     action="append",
-                    type=int,
+                    type=maybe_int,
                 )
     main(**hierarchical_parse_args(parser))
 
