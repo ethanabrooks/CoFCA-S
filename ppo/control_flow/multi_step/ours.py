@@ -1,4 +1,5 @@
 import gc
+import json
 from collections import namedtuple
 
 import numpy as np
@@ -42,9 +43,8 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         lower_level_hidden_size,
         kernel_size,
         stride,
-        concat,
         action_space,
-        recurrent,
+        lower_level_config,
         **kwargs,
     ):
         self.gru_gate_coef = gru_gate_coef
@@ -59,7 +59,13 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             action_space=action_space,
             **kwargs,
         )
-        abstract_recurrence.Recurrence.__init__(self, conv_hidden_size=conv_hidden_size)
+        abstract_recurrence.Recurrence.__init__(
+            self,
+            conv_hidden_size=conv_hidden_size,
+            num_conv_layers=num_conv_layers,
+            kernel_size=kernel_size,
+            stride=stride,
+        )
         self.zeta = init_(
             nn.Linear(
                 hidden_size + self.encoder_hidden_size + conv_hidden_size, hidden_size
@@ -89,19 +95,15 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         self.lower_level = None
         if lower_level_load_path is not None:
             ll_action_space = spaces.Discrete(Action(*action_space.nvec).lower)
+            with lower_level_config as f:
+                lower_level_params = json.load(f)
             self.lower_level = Agent(
                 obs_shape=observation_space,
-                num_conv_layers=num_conv_layers,
-                recurrent=recurrent,
                 entropy_coef=0,
                 action_space=ll_action_space,
-                hidden_size=lower_level_hidden_size,
-                kernel_size=kernel_size,
-                stride=stride,
                 lower_level=True,
                 num_layers=1,
-                activation=nn.ReLU(),
-                concat=concat,
+                **lower_level_params,
             )
             state_dict = torch.load(lower_level_load_path, map_location="cpu")
             self.lower_level.load_state_dict(state_dict["agent"])

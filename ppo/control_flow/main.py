@@ -50,6 +50,8 @@ def main(
                     action_space=envs.action_space,
                     **agent_args,
                 )
+            del agent_args["concat"]
+            del agent_args["recurrent"]
             return ppo.control_flow.agent.Agent(
                 observation_space=obs_space,
                 action_space=envs.action_space,
@@ -130,6 +132,7 @@ def control_flow_args():
         "--lower-level", choices=["train-alone", "train-with-upper", "hardcoded"]
     )
     parser.add_argument("--lower-level-load-path")
+    parser.add_argument("--lower-level-config", type=Path)
     parsers.env.add_argument("--gridworld", action="store_true")
     ppo.control_flow.multi_step.env.build_parser(parsers.env)
     parsers.agent.add_argument("--debug", action="store_true")
