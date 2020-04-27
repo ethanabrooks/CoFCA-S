@@ -181,12 +181,7 @@ class Agent(ppo.agent.Agent, NNBase):
             if rm.lower_level is not None:
                 hx = rm.parse_hidden(hxs)
                 ll_output = rm.lower_level(
-                    Obs(*rm.parse_inputs(x)),
-                    hx.lh,
-                    masks,
-                    action=action,
-                    upper=hx.a,
-                    deterministic=True,
+                    Obs(*rm.parse_inputs(x)), hx.lh, masks, action=action, upper=hx.a
                 )
                 action = Action(
                     *((-torch.ones(len(x), rm.action_size, device=x.device)).unbind(1))
