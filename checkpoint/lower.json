@@ -1,6 +1,8 @@
 {
-  "--hidden-size": 128,
-  "--kernel-size": 4,
-  "--num-conv-layers": 1,
-  "--stride": 2
+  "hidden_size": 128,
+  "kernel_size": 4,
+  "num_conv_layers": 1,
+  "stride": 2,
+  "recurrent": false,
+  "concat": false
 }

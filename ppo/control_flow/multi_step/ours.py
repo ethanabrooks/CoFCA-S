@@ -40,7 +40,6 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         observation_space,
         lower_level_load_path,
         num_conv_layers,
-        lower_level_hidden_size,
         kernel_size,
         stride,
         action_space,
@@ -79,6 +78,8 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         self.d_gate = Categorical(hidden_size, 2)
         self.a_gate = Categorical(hidden_size, 2)
         state_sizes = self.state_sizes._asdict()
+        with lower_level_config.open() as f:
+            lower_level_params = json.load(f)
         self.state_sizes = RecurrentState(
             **state_sizes,
             hy=self.gru_hidden_size,
@@ -89,14 +90,12 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             dg=1,
             gru_gate=self.gru_hidden_size,
             l=1,
-            lh=lower_level_hidden_size,
+            lh=lower_level_params["hidden_size"],
             P=self.ne * 2 * self.train_lines ** 2,
         )
         self.lower_level = None
         if lower_level_load_path is not None:
             ll_action_space = spaces.Discrete(Action(*action_space.nvec).lower)
-            with lower_level_config as f:
-                lower_level_params = json.load(f)
             self.lower_level = Agent(
                 obs_shape=observation_space,
                 entropy_coef=0,

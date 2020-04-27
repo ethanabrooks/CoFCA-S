@@ -287,12 +287,12 @@ class LowerLevel(NNBase):
         hidden_size,
         num_layers,
         recurrent,
-        activation,
         obs_space,
         num_conv_layers,
         kernel_size,
         stride,
         concat,
+        activation=nn.ReLU(),
         **_,
     ):
         self.concat = concat
