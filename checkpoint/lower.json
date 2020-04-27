@@ -1,0 +1,6 @@
+{
+  "--hidden-size": 128,
+  "--kernel-size": 4,
+  "--num-conv-layers": 1,
+  "--stride": 2
+}
