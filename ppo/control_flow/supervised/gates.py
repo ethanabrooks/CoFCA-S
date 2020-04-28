@@ -26,6 +26,7 @@ from ppo.control_flow.multi_step.env import Env
 from ppo.control_flow.multi_step.env import Obs
 from ppo.layers import Flatten
 from ppo.utils import init_
+from typing import Optional
 
 MAX_LAYERS = 3
 
@@ -43,7 +44,8 @@ X = namedtuple("X", "obs line lower")
 
 
 class GridworldDataset(IterableDataset):
-    def __init__(self, lower_level_config, lower_level_load_path, **kwargs):
+    def __init__(self, lower_level_config, lower_level_load_path, render, **kwargs):
+        self.render = render
         self.env = Env(rank=0, lower_level="pretrained", **kwargs)
         with lower_level_config.open() as f:
             lower_level_params = json.load(f)
@@ -72,6 +74,8 @@ class GridworldDataset(IterableDataset):
             agent_values = self.lower_level(S, rnn_hxs=None, masks=None)
             lower = agent_values.action
             s, _, t, i = self.env.step(lower.cpu().numpy())
+            if self.render:
+                self.env.render()
             complete = i["subtask_complete"]
             if t:
                 s = self.env.reset()
@@ -220,8 +224,9 @@ def main(
     network_args: dict,
     log_interval: int,
     save_interval: int,
+    load_path: Optional[Path],
 ):
-    use_cuda = not no_cuda and torch.cuda.is_available()
+    use_cuda = not (no_cuda or load_path) and torch.cuda.is_available()
     writer = SummaryWriter(str(log_dir))
 
     torch.manual_seed(seed)
@@ -241,7 +246,7 @@ def main(
     else:
         device = "cpu"
 
-    dataset = GridworldDataset(**dataset_args)
+    dataset = GridworldDataset(**dataset_args, render=load_path is not None)
     env = dataset.env
     obs_spaces = Obs(**env.observation_space.spaces)
     obs_shape = obs_spaces.obs.shape
@@ -252,6 +257,11 @@ def main(
         action_size=action_spaces.lower,
         **network_args,
     )
+    if load_path:
+        state_dict = torch.load(load_path, map_location="cpu")
+        network.load_state_dict(state_dict)
+        batch_size = 1
+
     network = network.to(device)
     optimizer = optim.Adam(network.parameters(), lr=lr)
     network.train()
@@ -269,6 +279,8 @@ def main(
         data = X(*(x.to(device).float() for x in data))
         optimizer.zero_grad()
         output = network(data).flatten()
+        if load_path is not None:
+            print("output", output)
         loss = F.binary_cross_entropy(output, target, reduction="mean")
         total_loss += loss
         loss.backward()
@@ -342,6 +354,7 @@ def cli():
     )
     parser.add_argument("--log-dir", default="/tmp/mnist", metavar="N", help="")
     parser.add_argument("--run-id", default="", metavar="N", help="")
+    parser.add_argument("--load-path", type=Path)
     dataset_parser = parser.add_argument_group("dataset_args")
     dataset_parser.add_argument("--lower-level-config", type=Path, required=True)
     dataset_parser.add_argument("--lower-level-load-path", type=Path, required=True)
