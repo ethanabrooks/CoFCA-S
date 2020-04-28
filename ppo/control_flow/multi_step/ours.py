@@ -34,9 +34,12 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         self,
         hidden_size,
         conv_hidden_size,
+        gate_pool_stride,
+        gate_pool_kernel_size,
+        gate_hidden_size,
+        gate_conv_kernel_size,
         gate_coef,
         gru_gate_coef,
-        encoder_hidden_size,
         observation_space,
         lower_level_load_path,
         num_conv_layers,
@@ -53,7 +56,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         recurrence.Recurrence.__init__(
             self,
             hidden_size=hidden_size,
-            encoder_hidden_size=encoder_hidden_size,
+            encoder_hidden_size=gate_hidden_size,
             observation_space=observation_space,
             action_space=action_space,
             **kwargs,
@@ -65,10 +68,18 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             kernel_size=kernel_size,
             stride=stride,
         )
-        self.zeta = init_(
-            nn.Linear(
-                hidden_size + self.encoder_hidden_size + conv_hidden_size, hidden_size
-            )
+        self.zeta = init_(nn.Linear(self.encoder_hidden_size, hidden_size))
+        d, h, w = observation_space.obs.shape
+        pool_input = int((h - kernel_size) / stride + 1)
+        pool_output = int((pool_input - gate_pool_kernel_size) / gate_pool_stride + 1)
+        self.gate_conv = nn.Sequential(
+            nn.MaxPool2d(kernel_size=gate_pool_kernel_size, stride=gate_pool_stride),
+            nn.Conv2d(
+                in_channels=conv_hidden_size,
+                out_channels=gate_hidden_size,
+                kernel_size=min(pool_output, gate_conv_kernel_size),
+                stride=2,
+            ),
         )
         gc.collect()
         self.zeta2 = init_(
@@ -191,12 +202,13 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             embedded_lower = self.embed_lower(L[t].clone())
             self.print("L[t]", L[t])
             self.print("lines[R, p]", lines[t][R, p])
-            zeta_inputs = [
-                M[R, p],
-                F.max_pool2d(obs, kernel_size=obs.shape[-2:]).view(N, -1),
-                embedded_lower,
-            ]
-            z = F.relu(self.zeta(torch.cat(zeta_inputs, dim=-1)))
+            gate_obs = self.gate_conv(obs)
+            zeta_inputs = (
+                M[R, p]
+                * F.max_pool2d(gate_obs, kernel_size=gate_obs.size(-1)).view(N, -1)
+                * embedded_lower
+            )
+            z = F.relu(self.zeta(zeta_inputs))
             # then put M back in gru
             # then put A back in gru
             d_gate = self.d_gate(z)

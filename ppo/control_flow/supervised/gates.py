@@ -278,6 +278,18 @@ def main(
         target = target.to(device).float()
         data = X(*(x.to(device).float() for x in data))
         optimizer.zero_grad()
+        out0 = network.conv[0](data.obs)
+        out1 = network.conv[1](out0)
+        out2 = network.conv[2](out1)
+        out3 = network.conv[3](out2)
+        print(network.conv)
+        print(out0.shape)
+        print(out1.shape)
+        print(out2.shape)
+        print(out3.shape)
+        import ipdb
+
+        ipdb.set_trace()
         output = network(data).flatten()
         if load_path is not None:
             print("output", output)
