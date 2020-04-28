@@ -276,8 +276,12 @@ def main(
         total_loss += loss
         loss.backward()
         avg_loss = total_loss / i
-        precision = output[target == 1].sum() / output.sum()
-        recall = (1 - output)[target == 0].sum() / (1 - output).sum()
+        tp = output[target == 1].sum()
+        precision = tp / output.sum()
+        tn = (1 - output)[target == 0].sum()
+        recall = tn.sum() / (1 - output).sum()
+        tpr = tp / target.sum()
+        tnr = tn / (1 - target).sum()
         optimizer.step()
         step = i + start
         if i % log_interval == 0:
@@ -288,6 +292,12 @@ def main(
             writer.add_scalar("recall", recall, step)
             writer.add_scalar("1-precision", 1 - precision, step)
             writer.add_scalar("1-recall", 1 - recall, step)
+            writer.add_scalar("tpr", tpr, step)
+            writer.add_scalar("tnr", tnr, step)
+            writer.add_scalar("1-tpr", 1 - tpr, step)
+            writer.add_scalar("1-tnr", 1 - tnr, step)
+            writer.add_scalar("balanced_acc", (tpr + tnr) / 2, step)
+            writer.add_scalar("1-balanced_acc", 1 - (tpr + tnr) / 2, step)
 
         if i % save_interval == 0:
             torch.save(network.state_dict(), str(Path(log_dir, "network.pt")))
