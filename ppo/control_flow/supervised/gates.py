@@ -72,19 +72,16 @@ class GridworldDataset(IterableDataset):
             agent_values = self.lower_level(S, rnn_hxs=None, masks=None)
             lower = agent_values.action
             s, _, t, i = self.env.step(lower.cpu().numpy())
+            complete = i["subtask_complete"]
             if t:
                 s = self.env.reset()
             else:
                 active = S.active.long().item()
-                if active != 0:
-                    import ipdb
-
-                    ipdb.set_trace()
                 yield X(
                     obs=S.obs.squeeze(0),
                     line=S.lines.squeeze(0)[active],
                     lower=lower.squeeze(0),
-                ), i["subtask_complete"]
+                ), complete
 
     # def __len__(self):
     #     pass
@@ -353,7 +350,7 @@ def cli():
         default_max_while_loops=2,
         default_max_world_resamples=0,
         default_min_lines=1,
-        default_max_lines=1,
+        default_max_lines=20,
         default_time_to_waste=0,
     )
     network_parser = parser.add_argument_group("network_args")
