@@ -109,11 +109,7 @@ class Env(ppo.control_flow.env.Env):
         num_subtasks = len(self.subtasks)
         super().__init__(num_subtasks=num_subtasks, **kwargs)
         self.world_size = world_size
-        self.world_shape = (
-            len(self.world_contents),
-            self.world_size,
-            self.world_size,
-        )
+        self.world_shape = (len(self.world_contents), self.world_size, self.world_size)
 
         def lower_level_actions():
             yield from self.behaviors
@@ -593,7 +589,9 @@ def build_parser(
         default=default_max_while_loops,
     )
     p.add_argument("--world-size", type=int, required=True)
-    p.add_argument("--term-on", nargs="*", choices=[Env.sell, Env.mine, Env.goto])
+    p.add_argument(
+        "--term-on", nargs="+", choices=[Env.sell, Env.mine, Env.goto], required=True
+    )
 
 
 if __name__ == "__main__":
