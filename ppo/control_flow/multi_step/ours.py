@@ -97,7 +97,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         if lower_level_load_path is not None:
             ll_action_space = spaces.Discrete(Action(*action_space.nvec).lower)
             self.lower_level = Agent(
-                obs_shape=observation_space,
+                obs_spaces=observation_space,
                 entropy_coef=0,
                 action_space=ll_action_space,
                 lower_level=True,

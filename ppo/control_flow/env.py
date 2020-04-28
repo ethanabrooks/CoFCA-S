@@ -168,7 +168,10 @@ class Env(gym.Env, ABC):
                     subtasks_attempted=subtasks_attempted,
                 )
 
-            info.update(regret=1 if term and not success else 0)
+            info.update(
+                regret=1 if term and not success else 0,
+                subtask_complete=state.subtask_complete,
+            )
 
             def render():
                 if term:
@@ -415,7 +418,7 @@ def build_parser(
         default=default_max_lines,
     )
     p.add_argument("--num-subtasks", type=int, default=12)
-    p.add_argument("--max-loops", type=int, default=2)
+    p.add_argument("--max-loops", type=int, default=3)
     p.add_argument("--no-op-limit", type=int)
     p.add_argument("--flip-prob", type=float, default=0.5)
     p.add_argument("--eval-condition-size", action="store_true")

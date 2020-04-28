@@ -142,7 +142,7 @@ class Env(ppo.control_flow.env.Env):
                         [
                             len(Line.types),
                             1 + len(self.behaviors),
-                            2 + len(self.items),
+                            1 + len(self.items),
                             1 + self.max_loops,
                         ]
                     ]

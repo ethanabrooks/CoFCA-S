@@ -33,7 +33,7 @@ def main(
             if lower_level == "train-alone":
                 return ppo.agent.Agent(
                     lower_level=True,
-                    obs_shape=obs_space,
+                    obs_spaces=obs_space,
                     action_space=ll_action_space,
                     **agent_args,
                 )
