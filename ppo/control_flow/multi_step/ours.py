@@ -208,6 +208,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 * F.max_pool2d(gate_obs, kernel_size=gate_obs.size(-1)).view(N, -1)
                 * embedded_lower
             )
+
             z = F.relu(self.zeta(zeta_inputs))
             # then put M back in gru
             # then put A back in gru
@@ -215,6 +216,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             self.sample_new(DG[t], d_gate)
             a_gate = self.a_gate(z)
             self.sample_new(AG[t], a_gate)
+
             # (hy_, cy_), gru_gate = self.gru2(M[R, p], (hy, cy))
             decode_inputs = [
                 M[R, p],
@@ -227,6 +229,23 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
             dg = DG[t].unsqueeze(-1).float()
             self.print("dg prob", d_gate.probs[:, 1])
+
+            _, be, it, _ = lines[t][R, p].long().unbind(-1)  # N, 2
+            sell = (be == 2).long()
+            channel_index = 3 * sell + (it - 1) * (1 - sell)
+            channel = inputs.obs[t][R, channel_index]
+            agent_channel = inputs.obs[t][R, -1]
+            self.print("channel", channel)
+            self.print("agent_channel", agent_channel)
+            standing_on = (channel * agent_channel).view(N, -1).sum(-1, keepdim=True)
+            correct_action = ((be - 1) == L[t]).float().unsqueeze(1)
+            self.print("be", be)
+            self.print("L[t]", L[t])
+            self.print("correct_action", correct_action)
+            ag = dg = standing_on * correct_action
+            ag = 1 - dg
+            self.print("ag", ag)
+
             self.print("dg", dg)
             d_dist = gate(dg, d_probs, ones * half)
             self.print("d_probs", d_probs[:, half:])
@@ -236,9 +255,9 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             p = p + D[t].clone() - half
             p = torch.clamp(p, min=0, max=M.size(1) - 1)
 
-            ag = AG[t].unsqueeze(-1).float()
+            # ag = AG[t].unsqueeze(-1).float()
             a_dist = gate(ag, self.actor(z).probs, A[t - 1])
-            self.sample_new(A[t], a_dist)
+            # self.sample_new(A[t], a_dist)
             # A[:] = float(input("A:"))
             self.print("ag prob", a_gate.probs[:, 1])
             self.print("ag", ag)
