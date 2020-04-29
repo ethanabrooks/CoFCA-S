@@ -181,8 +181,6 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         hy = hx.hy
         cy = hx.cy
         p = hx.p.long().squeeze(-1)
-        a = inputs.active.long().squeeze(-1)
-        u = hx.u
         hx.a[new_episode] = self.n_a - 1
         ag_probs = hx.ag_probs
         ag_probs[new_episode, 1] = 1

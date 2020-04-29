@@ -135,7 +135,7 @@ class Agent(ppo.agent.Agent, NNBase):
                 probs = Action(
                     upper=hx.a_probs,
                     lower=None,
-                    delta=None,
+                    delta=hx.d_probs,
                     ag=hx.ag_probs,
                     dg=hx.dg_probs,
                     ptr=None,
