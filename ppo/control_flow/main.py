@@ -151,6 +151,11 @@ def control_flow_args():
     parsers.agent.add_argument("--gate-pool-stride", type=int, required=True)
     parsers.agent.add_argument("--gate-pool-kernel-size", type=int, required=True)
     parsers.agent.add_argument("--gate-conv-kernel-size", type=int, required=True)
+    parsers.agent.add_argument(
+        "--train-dg",
+        choices=["standing_on", "correct_action", "not_subtask"],
+        required=True,
+    )
     parsers.agent.add_argument("--concat", action="store_true")
     parsers.agent.add_argument("--kernel-size", type=int, required=True)
     parsers.agent.add_argument("--stride", type=int, required=True)
