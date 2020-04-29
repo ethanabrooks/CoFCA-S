@@ -322,7 +322,7 @@ class LowerLevel(NNBase):
         padding = (kernel_size // 2) % stride
 
         self.conv = nn.Sequential()
-        in_size = d - 1
+        in_size = d
         assert num_conv_layers > 0
         for i in range(num_conv_layers):
             self.conv.add_module(
@@ -390,7 +390,7 @@ class LowerLevel(NNBase):
             line = self.subtasks[upper.long().flatten()]
         obs = inputs.obs.reshape(N, *self.obs_spaces.obs.shape)
         lines_embed = self.line_embed(line.long() + self.offset)
-        obs_embed = self.conv_projection(self.conv(obs[:, :-1]))  # TODO
+        obs_embed = self.conv_projection(self.conv(obs))
         inventory_embed = self.inventory_embed(inputs.inventory)
         if self.concat:
             x = torch.cat([lines_embed, obs_embed, inventory_embed], dim=-1)
