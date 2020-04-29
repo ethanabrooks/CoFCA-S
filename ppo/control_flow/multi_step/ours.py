@@ -1,4 +1,5 @@
 import gc
+import json
 from collections import namedtuple
 
 import numpy as np
@@ -33,18 +34,19 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         self,
         hidden_size,
         conv_hidden_size,
+        gate_pool_stride,
+        gate_pool_kernel_size,
+        gate_hidden_size,
+        gate_conv_kernel_size,
         gate_coef,
         gru_gate_coef,
-        encoder_hidden_size,
         observation_space,
         lower_level_load_path,
         num_conv_layers,
-        lower_level_hidden_size,
         kernel_size,
         stride,
-        concat,
         action_space,
-        recurrent,
+        lower_level_config,
         **kwargs,
     ):
         self.gru_gate_coef = gru_gate_coef
@@ -54,28 +56,41 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         recurrence.Recurrence.__init__(
             self,
             hidden_size=hidden_size,
-            encoder_hidden_size=encoder_hidden_size,
+            encoder_hidden_size=gate_hidden_size,
             observation_space=observation_space,
             action_space=action_space,
             **kwargs,
         )
-        abstract_recurrence.Recurrence.__init__(self, conv_hidden_size=conv_hidden_size)
-        self.zeta = init_(
-            nn.Linear(
-                hidden_size + self.encoder_hidden_size + conv_hidden_size, hidden_size
-            )
+        abstract_recurrence.Recurrence.__init__(
+            self,
+            conv_hidden_size=conv_hidden_size,
+            num_conv_layers=num_conv_layers,
+            kernel_size=kernel_size,
+            stride=stride,
+        )
+        self.zeta = init_(nn.Linear(self.encoder_hidden_size, hidden_size))
+        d, h, w = observation_space.obs.shape
+        pool_input = int((h - kernel_size) / stride + 1)
+        pool_output = int((pool_input - gate_pool_kernel_size) / gate_pool_stride + 1)
+        self.gate_conv = nn.Sequential(
+            nn.MaxPool2d(kernel_size=gate_pool_kernel_size, stride=gate_pool_stride),
+            nn.Conv2d(
+                in_channels=conv_hidden_size,
+                out_channels=gate_hidden_size,
+                kernel_size=min(pool_output, gate_conv_kernel_size),
+                stride=2,
+            ),
         )
         gc.collect()
         self.zeta2 = init_(
-            nn.Linear(conv_hidden_size + self.encoder_hidden_size, hidden_size)
-        )
-        self.zeta3 = init_(
             nn.Linear(conv_hidden_size + self.encoder_hidden_size, hidden_size)
         )
         self.gru2 = LSTMCell(self.encoder_hidden_size, self.gru_hidden_size)
         self.d_gate = Categorical(hidden_size, 2)
         self.a_gate = Categorical(hidden_size, 2)
         state_sizes = self.state_sizes._asdict()
+        with lower_level_config.open() as f:
+            lower_level_params = json.load(f)
         self.state_sizes = RecurrentState(
             **state_sizes,
             hy=self.gru_hidden_size,
@@ -86,25 +101,19 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             dg=1,
             gru_gate=self.gru_hidden_size,
             l=1,
-            lh=lower_level_hidden_size,
+            lh=lower_level_params["hidden_size"],
             P=self.ne * 2 * self.train_lines ** 2,
         )
         self.lower_level = None
         if lower_level_load_path is not None:
             ll_action_space = spaces.Discrete(Action(*action_space.nvec).lower)
             self.lower_level = Agent(
-                obs_shape=observation_space,
-                num_conv_layers=num_conv_layers,
-                recurrent=recurrent,
+                obs_spaces=observation_space,
                 entropy_coef=0,
                 action_space=ll_action_space,
-                hidden_size=lower_level_hidden_size,
-                kernel_size=kernel_size,
-                stride=stride,
                 lower_level=True,
                 num_layers=1,
-                activation=nn.ReLU(),
-                concat=concat,
+                **lower_level_params,
             )
             state_dict = torch.load(lower_level_load_path, map_location="cpu")
             self.lower_level.load_state_dict(state_dict["agent"])
@@ -188,13 +197,18 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
 
         for t in range(T):
             self.print("p", p)
-            obs = self.preprocess_obs(inputs.obs[t])
+            obs = self.conv(inputs.obs[t])
             # h = self.gru(obs, h)
             embedded_lower = self.embed_lower(L[t].clone())
             self.print("L[t]", L[t])
             self.print("lines[R, p]", lines[t][R, p])
-            zeta_inputs = [M[R, p], obs, embedded_lower]
-            z = F.relu(self.zeta(torch.cat(zeta_inputs, dim=-1)))
+            gate_obs = self.gate_conv(obs)
+            zeta_inputs = (
+                M[R, p]
+                * F.max_pool2d(gate_obs, kernel_size=gate_obs.size(-1)).view(N, -1)
+                * embedded_lower
+            )
+            z = F.relu(self.zeta(zeta_inputs))
             # then put M back in gru
             # then put A back in gru
             d_gate = self.d_gate(z)
@@ -202,7 +216,10 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             a_gate = self.a_gate(z)
             self.sample_new(AG[t], a_gate)
             # (hy_, cy_), gru_gate = self.gru2(M[R, p], (hy, cy))
-            decode_inputs = [M[R, p], obs]  # first put obs back in gru2
+            decode_inputs = [
+                M[R, p],
+                F.avg_pool2d(obs, kernel_size=obs.shape[-2:]).view(N, -1),
+            ]  # first put obs back in gru2
             z = F.relu(self.zeta2(torch.cat(decode_inputs, dim=-1)))
             u = self.upsilon(z).softmax(dim=-1)
             self.print("u", u)

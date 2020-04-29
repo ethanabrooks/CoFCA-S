@@ -97,7 +97,7 @@ def get_freer_gpu():
     return int(np.argmax(free_memory))
 
 
-def init_(network, nonlinearity=None):
+def init_(network, nonlinearity=nn.ReLU):
     nonlinearity_str = {
         nn.Linear: "linear",
         nn.Conv1d: "conv1d",

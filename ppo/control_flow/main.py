@@ -33,7 +33,7 @@ def main(
             if lower_level == "train-alone":
                 return ppo.agent.Agent(
                     lower_level=True,
-                    obs_shape=obs_space,
+                    obs_spaces=obs_space,
                     action_space=ll_action_space,
                     **agent_args,
                 )
@@ -50,6 +50,8 @@ def main(
                     action_space=envs.action_space,
                     **agent_args,
                 )
+            del agent_args["concat"]
+            del agent_args["recurrent"]
             return ppo.control_flow.agent.Agent(
                 observation_space=obs_space,
                 action_space=envs.action_space,
@@ -132,21 +134,23 @@ def control_flow_args():
     parser.add_argument("--lower-level-load-path")
     parsers.env.add_argument("--gridworld", action="store_true")
     ppo.control_flow.multi_step.env.build_parser(parsers.env)
+    parsers.agent.add_argument("--lower-level-config", type=Path)
     parsers.agent.add_argument("--debug", action="store_true")
     parsers.agent.add_argument("--no-scan", action="store_true")
     parsers.agent.add_argument("--no-roll", action="store_true")
     parsers.agent.add_argument("--baseline")
     parsers.agent.add_argument("--conv-hidden-size", type=int, required=True)
     parsers.agent.add_argument("--gru-hidden-size", type=int, required=True)
-    parsers.agent.add_argument("--lower-level-hidden-size", type=int, required=True)
-    parsers.agent.add_argument("--encoder-hidden-size", type=int, required=True)
+    parsers.agent.add_argument("--gate-hidden-size", type=int, required=True)
     parsers.agent.add_argument("--num-encoding-layers", type=int, required=True)
     parsers.agent.add_argument("--num-conv-layers", type=int, required=True)
     parsers.agent.add_argument("--num-edges", type=int, required=True)
     parsers.agent.add_argument("--gate-coef", type=float, required=True)
     parsers.agent.add_argument("--gru-gate-coef", type=float, required=True)
     parsers.agent.add_argument("--no-op-coef", type=float, required=True)
-
+    parsers.agent.add_argument("--gate-pool-stride", type=int, required=True)
+    parsers.agent.add_argument("--gate-pool-kernel-size", type=int, required=True)
+    parsers.agent.add_argument("--gate-conv-kernel-size", type=int, required=True)
     parsers.agent.add_argument("--concat", action="store_true")
     parsers.agent.add_argument("--kernel-size", type=int, required=True)
     parsers.agent.add_argument("--stride", type=int, required=True)

@@ -8,10 +8,30 @@ from ppo.utils import init_
 
 
 class Recurrence:
-    def __init__(self, conv_hidden_size):
+    def __init__(self, conv_hidden_size, num_conv_layers, kernel_size, stride):
         self.conv_hidden_size = conv_hidden_size
-        d = self.obs_spaces.obs.shape[0]
-        self.conv = nn.Sequential(init_(nn.Linear(d, conv_hidden_size)), nn.ReLU())
+        d, h, _ = self.obs_spaces.obs.shape
+
+        def generate_convolutions(h):
+            in_size = d
+            for _ in range(num_conv_layers):
+                kernel = min(h, kernel_size)
+                padding = (kernel // 2) % stride
+                conv = init_(
+                    nn.Conv2d(
+                        in_channels=in_size,
+                        out_channels=conv_hidden_size,
+                        kernel_size=kernel,
+                        stride=stride,
+                        padding=padding,
+                    )
+                )
+                h = int((h + (2 * padding) - (kernel - 1) - 1) // stride + 1)
+                in_size = conv_hidden_size
+                yield conv
+                yield nn.ReLU()
+
+        self.conv = nn.Sequential(*generate_convolutions(h))
         ones = torch.ones(1, dtype=torch.long)
         self.register_buffer("ones", ones)
         line_nvec = torch.tensor(self.obs_spaces.lines.nvec[0, :-1])

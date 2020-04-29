@@ -24,6 +24,10 @@ class Squash(nn.Module):
 
 
 class Flatten(nn.Module):
+    def __init__(self, out_size=None):
+        super().__init__()
+        self.out_size = out_size
+
     def forward(self, x):
         return x.view(x.size(0), -1)
 

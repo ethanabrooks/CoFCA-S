@@ -1,6 +1,6 @@
 import functools
 import itertools
-from collections import defaultdict, Counter, namedtuple
+from collections import Counter, namedtuple
 from typing import Iterator, List, Tuple
 
 import numpy as np
@@ -142,7 +142,7 @@ class Env(ppo.control_flow.env.Env):
                         [
                             len(Line.types),
                             1 + len(self.behaviors),
-                            2 + len(self.items),
+                            1 + len(self.items),
                             1 + self.max_loops,
                         ]
                     ]
@@ -230,7 +230,7 @@ class Env(ppo.control_flow.env.Env):
     def feasible(self, objects, lines):
         line_iterator = self.line_generator(lines)
         l = next(line_iterator)
-        resources = set(objects)
+        loops = 0
         whiles = 0
         loops = 0
         counts = Counter()
@@ -263,6 +263,13 @@ class Env(ppo.control_flow.env.Env):
             l = line_iterator.send(evaluation)
         return True
 
+    @staticmethod
+    def count_objects(objects):
+        counts = Counter()
+        for o in objects.values():
+            counts[o] += 1
+        return counts
+
     def generators(self) -> Tuple[Iterator[State], List[Line]]:
         n_lines = (
             self.eval_lines
@@ -281,10 +288,7 @@ class Env(ppo.control_flow.env.Env):
 
         def state_generator() -> State:
             assert self.max_nesting_depth == 1
-            objects = self.populate_world(lines)
-            agent_pos = next(p for p, o in objects.items() if o == self.agent)
-            del objects[agent_pos]
-
+            agent_pos, objects = self.populate_world(lines)
             line_iterator = self.line_generator(lines)
             condition_evaluations = []
             if self.lower_level == "train-alone":
@@ -310,9 +314,7 @@ class Env(ppo.control_flow.env.Env):
                             self.whiles += 1
                             if self.whiles > self.max_while_loops:
                                 return None
-                        counts = Counter()
-                        for o in objects.values():
-                            counts[o] += 1
+                        counts = self.count_objects(objects)
                         l = line_iterator.send(
                             self.evaluate_line(
                                 lines[l], counts, condition_evaluations, self.loops
@@ -493,6 +495,8 @@ class Env(ppo.control_flow.env.Env):
             tuple(p): (self.wall if o is None else o)
             for o, p in itertools.zip_longest(object_list, positions)
         }
+        agent_pos = next(p for p, o in objects.items() if o == self.agent)
+        del objects[agent_pos]
         if use_water:
             assert object_list[0] == self.agent
             agent_i, agent_j = positions[0]
@@ -503,7 +507,7 @@ class Env(ppo.control_flow.env.Env):
                         if (water_index < pj and water_index < agent_j) or (
                             water_index > pj and water_index > agent_j
                         ):
-                            return {
+                            objects = {
                                 **objects,
                                 **{
                                     (i, water_index): self.water
@@ -514,7 +518,7 @@ class Env(ppo.control_flow.env.Env):
                         if (water_index < pi and water_index < agent_i) or (
                             water_index > pi and water_index > agent_i
                         ):
-                            return {
+                            objects = {
                                 **objects,
                                 **{
                                     (water_index, i): self.water
@@ -522,7 +526,7 @@ class Env(ppo.control_flow.env.Env):
                                 },
                             }
 
-        return objects
+        return agent_pos, objects
 
     def assign_line_ids(self, line_types):
         behaviors = self.random.choice(self.behaviors, size=len(line_types))
@@ -573,15 +577,29 @@ class Env(ppo.control_flow.env.Env):
                 return n - agent_pos
 
 
-def build_parser(p):
-    ppo.control_flow.env.build_parser(p)
+def build_parser(
+    p, default_max_world_resamples=None, default_max_while_loops=None, **kwargs
+):
+    ppo.control_flow.env.build_parser(p, **kwargs)
     p.add_argument(
         "--no-temporal-extension", dest="temporal_extension", action="store_false"
     )
-    p.add_argument("--max-world-resamples", type=int, required=True)
-    p.add_argument("--max-while-loops", type=int, required=True)
+    p.add_argument(
+        "--max-world-resamples",
+        type=int,
+        required=default_max_world_resamples is None,
+        default=default_max_world_resamples,
+    )
+    p.add_argument(
+        "--max-while-loops",
+        type=int,
+        required=default_max_while_loops is None,
+        default=default_max_while_loops,
+    )
     p.add_argument("--world-size", type=int, required=True)
-    p.add_argument("--term-on", nargs="*", choices=[Env.sell, Env.mine, Env.goto])
+    p.add_argument(
+        "--term-on", nargs="+", choices=[Env.sell, Env.mine, Env.goto], required=True
+    )
 
 
 if __name__ == "__main__":
