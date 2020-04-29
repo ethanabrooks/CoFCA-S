@@ -116,7 +116,7 @@ class Agent(ppo.agent.Agent, NNBase):
             if ll_type == "train-alone":
                 probs = Action(
                     upper=None,
-                    lower=hx.ll_probs,
+                    lower=hx.l_probs,
                     delta=None,
                     ag=None,
                     dg=None,
@@ -125,7 +125,7 @@ class Agent(ppo.agent.Agent, NNBase):
             elif ll_type == "train-with-upper":
                 probs = Action(
                     upper=hx.a_probs,
-                    lower=hx.ll_probs,
+                    lower=hx.l_probs,
                     delta=hx.d_probs,
                     ag=hx.ag_probs,
                     dg=hx.dg_probs,
