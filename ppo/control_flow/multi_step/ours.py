@@ -23,6 +23,8 @@ RecurrentState = namedtuple(
     "a l d u ag dg p v h lh hy cy a_probs d_probs ag_probs dg_probs gru_gate P",
 )
 
+ParsedInput = namedtuple("ParsedInput", "obs actions a_probs")
+
 
 def gate(g, new, old):
     old = torch.zeros_like(new).scatter(1, old.unsqueeze(1), 1)
@@ -152,20 +154,34 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             state_sizes = self.state_sizes
         return RecurrentState(*torch.split(hx, state_sizes, dim=-1))
 
-    def inner_loop(self, raw_inputs, rnn_hxs):
-        T, N, dim = raw_inputs.shape
-        raw_inputs, actions = torch.split(
-            raw_inputs.detach(), [dim - self.action_size, self.action_size], dim=2
+    def parse_input(self, x: torch.Tensor) -> ParsedInput:
+        return ParsedInput(
+            *torch.split(
+                x,
+                ParsedInput(
+                    obs=sum(self.obs_sections),
+                    actions=self.action_size,
+                    a_probs=self.state_sizes.a_probs,
+                ),
+                dim=-1,
+            )
         )
 
+    def inner_loop(self, raw_inputs, rnn_hxs):
+        T, N, dim = raw_inputs.shape
+        # raw_inputs, actions = torch.split(
+        #     raw_inputs.detach(), [dim - self.action_size, self.action_size], dim=2
+        # )
+        inputs = self.parse_input(raw_inputs)
+
         # parse non-action inputs
-        inputs = Obs(*self.parse_inputs(raw_inputs))
-        inputs = inputs._replace(obs=inputs.obs.view(T, N, *self.obs_spaces.obs.shape))
-        lines = inputs.lines.view(T, N, *self.obs_spaces.lines.shape)
+        state = Obs(*self.parse_obs(inputs.obs))
+        state = state._replace(obs=state.obs.view(T, N, *self.obs_spaces.obs.shape))
+        lines = state.lines.view(T, N, *self.obs_spaces.lines.shape)
 
         # build memory
         nl = len(self.obs_spaces.lines.nvec)
-        M = self.embed_task(self.preprocess_embed(N, T, inputs)).view(
+        M = self.embed_task(self.preprocess_embed(N, T, state)).view(
             N, -1, self.encoder_hidden_size
         )
 
@@ -174,10 +190,6 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         half = P.size(2) // 2 if self.no_scan else nl
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
-        import ipdb
-
-        ipdb.set_trace()
-        print("inner_loop", hx.a_probs)
         for _x in hx:
             _x.squeeze_(0)
 
@@ -185,14 +197,14 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         hy = hx.hy
         cy = hx.cy
         p = hx.p.long().squeeze(-1)
-        a = inputs.active.long().squeeze(-1)
+        a = state.active.long().squeeze(-1)
         u = hx.u
         hx.a[new_episode] = self.n_a - 1
         ag_probs = hx.ag_probs
         ag_probs[new_episode, 1] = 1
         R = torch.arange(N, device=rnn_hxs.device)
         ones = self.ones.expand_as(R)
-        actions = Action(*actions.unbind(dim=2))
+        actions = Action(*inputs.actions.unbind(dim=2))
         A = torch.cat([actions.upper, hx.a.view(1, N)], dim=0).long()
         L = torch.cat([actions.lower, hx.l.view(1, N) - 1], dim=0).long()
         D = torch.cat([actions.delta, hx.d.view(1, N)], dim=0).long()
@@ -201,7 +213,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
 
         for t in range(T):
             self.print("p", p)
-            obs = self.conv(inputs.obs[t])
+            obs = self.conv(state.obs[t])
             # h = self.gru(obs, h)
             embedded_lower = self.embed_lower(L[t].clone())
             self.print("L[t]", L[t])
@@ -237,8 +249,8 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             _, be, it, _ = lines[t][R, p].long().unbind(-1)  # N, 2
             sell = (be == 2).long()
             channel_index = 3 * sell + (it - 1) * (1 - sell)
-            channel = inputs.obs[t][R, channel_index]
-            agent_channel = inputs.obs[t][R, -1]
+            channel = state.obs[t][R, channel_index]
+            agent_channel = state.obs[t][R, -1]
             self.print("channel", channel)
             self.print("agent_channel", agent_channel)
             standing_on = (channel * agent_channel).view(N, -1).sum(-1, keepdim=True)
@@ -246,14 +258,19 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             self.print("be", be)
             self.print("L[t]", L[t])
             self.print("correct_action", correct_action)
-            ag = dg = standing_on * correct_action
+            dg = standing_on * correct_action
             ag = 1 - dg
+            if torch.any(ag < 0) or torch.any(dg < 0):
+                import ipdb
+
+                ipdb.set_trace()
+
             self.print("ag", ag)
 
             self.print("dg", dg)
             d_dist = gate(dg, d_probs, ones * half)
             self.print("d_probs", d_probs[:, half:])
-            self.sample_new(D[t], d_dist)
+            # self.sample_new(D[t], d_dist)
             # D[:] = float(input("D:")) + half
             D[t] = half + dg.flatten()
             p = p + D[t].clone() - half
@@ -277,7 +294,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 hy=hy,
                 cy=cy,
                 p=p,
-                a_probs=hx.a_probs,
+                a_probs=inputs.a_probs.view(N, -1),
                 d=D[t],
                 d_probs=d_dist.probs,
                 ag_probs=a_gate.probs,

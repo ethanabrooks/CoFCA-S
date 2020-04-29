@@ -136,15 +136,14 @@ class Agent(ppo.agent.Agent, NNBase):
                     upper=hx.a_probs,
                     lower=None,
                     delta=None,
-                    ag=hx.ag_probs,
-                    dg=hx.dg_probs,
+                    ag=None,  # hx.ag_probs,
+                    dg=None,  # hx.dg_probs,
                     ptr=None,
                 )
             else:
                 raise RuntimeError
         else:
             raise RuntimeError
-        print(probs.upper)
 
         dists = [(p if p is None else FixedCategorical(p)) for p in probs]
         action_log_probs = sum(
@@ -182,7 +181,7 @@ class Agent(ppo.agent.Agent, NNBase):
         N = x.size(0)
         R = torch.arange(N, device=hxs.device)
         hx = rm.parse_hidden(hxs)
-        inputs = Obs(*rm.parse_inputs(x))
+        inputs = Obs(*rm.parse_obs(x))
         line_size = 4  # TODO
         lines = inputs.lines.view(N, -1, line_size)
         pre_embed = lines.long().view(-1, line_size) + rm.offset.unsqueeze(0)
@@ -195,7 +194,6 @@ class Agent(ppo.agent.Agent, NNBase):
         z = F.relu(rm.zeta2(torch.cat(decode_inputs, dim=-1)))
         a_dist = gate(1 - hx.ag, rm.actor(z).probs, hx.a.long().flatten())
         if action is None:
-            print(a_dist.probs)
             upper = a_dist.sample()
             # line_type, be, it, _ = lines[R, hx.p.long().flatten()].unbind(-1)
             # print("*******")
@@ -204,7 +202,7 @@ class Agent(ppo.agent.Agent, NNBase):
             # upper = 3 * ((it - 1) % 3) + (be - 1)
             # print("upper", upper)
             ll_output = rm.lower_level(
-                Obs(*rm.parse_inputs(x)), hx.lh, masks, action=action, upper=upper
+                Obs(*rm.parse_obs(x)), hx.lh, masks, action=action, upper=upper
             )
             action = Action(
                 *((-torch.ones(len(x), rm.action_size, device=x.device)).unbind(1))
@@ -212,13 +210,9 @@ class Agent(ppo.agent.Agent, NNBase):
                 lower=ll_output.action.float().flatten(), upper=upper.float().flatten()
             )
             action = torch.stack(action, dim=-1)
-            print("dumb", a_dist.probs)
             hx = hx._replace(lh=ll_output.rnn_hxs)
-            y = torch.cat([x, action], dim=-1)
-        else:
-            y = torch.cat([x, action.float()], dim=-1)
-        hxs = torch.cat(hx._replace(a_probs=a_dist.probs), dim=-1)
-        print("parse_hidden", rm.parse_hidden(hxs).a_probs)
+        y = torch.cat([x, action, a_dist.probs], dim=-1)
+        hxs = torch.cat(hx, dim=-1)
         return super()._forward_gru(y, hxs, masks)
 
     def get_value(self, inputs, rnn_hxs, masks):
