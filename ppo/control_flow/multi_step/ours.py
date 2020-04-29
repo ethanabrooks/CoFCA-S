@@ -208,30 +208,62 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         for t in range(T):
             self.print("p", p)
             obs = self.conv(state.obs[t])
+            z = F.relu(
+                self.zeta2(
+                    torch.cat(
+                        [
+                            M[R, p],
+                            F.avg_pool2d(obs, kernel_size=obs.shape[-2:]).view(N, -1),
+                        ],
+                        dim=-1,
+                    )
+                )
+            )
+            # a_dist = gate(ag, self.actor(z).probs, A[t - 1])
+            a_dist = self.actor(z)
+            self.sample_new(A[t], a_dist)
+            # line_type, be, it, _ = lines[t][R, hx.p.long().flatten()].unbind(-1)
+            # A[t] = 3 * (it - 1) + (be - 1)
+            # print("*******")
+            # print(be, it)
+            # print(A[t])
+            # print("*******")
+
+            if torch.any(L[0] < 0):
+                assert torch.all(L[0] < 0)
+                ll_output = self.lower_level(
+                    Obs(**{k: v[t] for k, v in state._asdict().items()}),
+                    hx.lh,
+                    masks=None,
+                    action=None,
+                    upper=A[t],
+                )
+                L[t] = ll_output.action.flatten()
+
             # h = self.gru(obs, h)
             embedded_lower = self.embed_lower(L[t].clone())
             self.print("L[t]", L[t])
             self.print("lines[R, p]", lines[t][R, p])
             gate_obs = self.gate_conv(obs)
-            zeta_inputs = (
-                M[R, p]
-                * F.max_pool2d(gate_obs, kernel_size=gate_obs.size(-1)).view(N, -1)
-                * embedded_lower
+            z2 = F.relu(
+                self.zeta(
+                    (
+                        M[R, p]
+                        * F.max_pool2d(gate_obs, kernel_size=gate_obs.size(-1)).view(
+                            N, -1
+                        )
+                        * embedded_lower
+                    )
+                )
             )
-
-            z = F.relu(self.zeta(zeta_inputs))
             # then put M back in gru
             # then put A back in gru
-            d_gate = self.d_gate(z)
+            d_gate = self.d_gate(z2)
             self.sample_new(DG[t], d_gate)
-            a_gate = self.a_gate(z)
+            a_gate = self.a_gate(z2)
             self.sample_new(AG[t], a_gate)
             # (hy_, cy_), gru_gate = self.gru2(M[R, p], (hy, cy))
-            decode_inputs = [
-                M[R, p],
-                F.avg_pool2d(obs, kernel_size=obs.shape[-2:]).view(N, -1),
-            ]  # first put obs back in gru2
-            z = F.relu(self.zeta2(torch.cat(decode_inputs, dim=-1)))
+            # first put obs back in gru2
             u = self.upsilon(z).softmax(dim=-1)
             self.print("u", u)
             w = P[p, R]
@@ -247,8 +279,6 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             p = torch.clamp(p, min=0, max=M.size(1) - 1)
 
             ag = AG[t].unsqueeze(-1).float()
-            a_dist = gate(ag, self.actor(z).probs, A[t - 1])
-            self.sample_new(A[t], a_dist)
             # A[:] = float(input("A:"))
             self.print("ag prob", a_gate.probs[:, 1])
             self.print("ag", ag)
