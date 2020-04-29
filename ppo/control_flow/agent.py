@@ -183,7 +183,7 @@ class Agent(ppo.agent.Agent, NNBase):
                 N = x.size(0)
                 R = torch.arange(N, device=hxs.device)
                 hx = rm.parse_hidden(hxs)
-                inputs = Obs(*rm.parse_inputs(x))
+                inputs = Obs(*rm.parse_obs(x))
                 line_size = 4  # TODO
                 lines = inputs.lines.view(N, -1, line_size)
                 pre_embed = lines.long().view(-1, line_size) + rm.offset.unsqueeze(0)
@@ -197,7 +197,7 @@ class Agent(ppo.agent.Agent, NNBase):
                 a_dist = gate(1 - hx.ag, rm.actor(z).probs, hx.a.long().flatten())
                 upper = a_dist.sample()
                 ll_output = rm.lower_level(
-                    Obs(*rm.parse_inputs(x)), hx.lh, masks, action=action, upper=upper
+                    Obs(*rm.parse_obs(x)), hx.lh, masks, action=action, upper=upper
                 )
                 action = Action(
                     *((-torch.ones(len(x), rm.action_size, device=x.device)).unbind(1))

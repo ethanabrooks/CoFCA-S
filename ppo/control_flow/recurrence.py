@@ -160,7 +160,7 @@ class Recurrence(nn.Module):
         hx = torch.cat(list(pack()), dim=-1)
         return hx, hx[-1:]
 
-    def parse_inputs(self, inputs: torch.Tensor):
+    def parse_obs(self, inputs: torch.Tensor):
         return torch.split(inputs, self.obs_sections, dim=-1)
 
     def parse_hidden(self, hx: torch.Tensor) -> RecurrentState:
@@ -226,7 +226,7 @@ class Recurrence(nn.Module):
         )
 
         # parse non-action inputs
-        inputs = self.parse_inputs(inputs)
+        inputs = self.parse_obs(inputs)
 
         # build memory
         nl = len(self.obs_spaces.lines.nvec)

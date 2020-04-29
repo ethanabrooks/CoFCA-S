@@ -44,7 +44,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
         )
 
         # parse non-action inputs
-        inputs = self.parse_inputs(inputs)
+        inputs = self.parse_obs(inputs)
         inputs = inputs._replace(obs=inputs.obs.view(T, N, *self.obs_spaces.obs.shape))
 
         M = self.build_memory(N, T, inputs)
