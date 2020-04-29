@@ -20,7 +20,7 @@ from ppo.utils import init_
 
 RecurrentState = namedtuple(
     "RecurrentState",
-    "a l d u ag dg p v h lh hy cy a_probs d_probs ag_probs dg_probs gru_gate P",
+    "a l d u ag dg p v h lh hy cy l_probs a_probs d_probs ag_probs dg_probs gru_gate P",
 )
 
 ParsedInput = namedtuple("ParsedInput", "obs actions")
@@ -93,6 +93,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         state_sizes = self.state_sizes._asdict()
         with lower_level_config.open() as f:
             lower_level_params = json.load(f)
+        ll_action_space = spaces.Discrete(Action(*action_space.nvec).lower)
         self.state_sizes = RecurrentState(
             **state_sizes,
             hy=self.gru_hidden_size,
@@ -103,20 +104,19 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             dg=1,
             gru_gate=self.gru_hidden_size,
             l=1,
+            l_probs=ll_action_space.n,
             lh=lower_level_params["hidden_size"],
             P=self.ne * 2 * self.train_lines ** 2,
         )
-        self.lower_level = None
+        self.lower_level = Agent(
+            obs_spaces=observation_space,
+            entropy_coef=0,
+            action_space=ll_action_space,
+            lower_level=True,
+            num_layers=1,
+            **lower_level_params,
+        )
         if lower_level_load_path is not None:
-            ll_action_space = spaces.Discrete(Action(*action_space.nvec).lower)
-            self.lower_level = Agent(
-                obs_spaces=observation_space,
-                entropy_coef=0,
-                action_space=ll_action_space,
-                lower_level=True,
-                num_layers=1,
-                **lower_level_params,
-            )
             state_dict = torch.load(lower_level_load_path, map_location="cpu")
             self.lower_level.load_state_dict(state_dict["agent"])
             print(f"Loaded lower_level from {lower_level_load_path}.")
@@ -158,7 +158,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         return ParsedInput(
             *torch.split(
                 x,
-                ParsedInput(obs=sum(self.obs_sections), actions=self.action_size,),
+                ParsedInput(obs=sum(self.obs_sections), actions=self.action_size),
                 dim=-1,
             )
         )
@@ -208,11 +208,6 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         for t in range(T):
             self.print("p", p)
             obs = self.conv(state.obs[t])
-            # h = self.gru(obs, h)
-            self.print("L[t]", L[t])
-            self.print("lines[R, p]", lines[t][R, p])
-            gate_obs = self.gate_conv(obs)
-            # first put obs back in gru2
             z = F.relu(
                 self.zeta2(
                     torch.cat(
@@ -227,26 +222,29 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             # a_dist = gate(ag, self.actor(z).probs, A[t - 1])
             a_dist = self.actor(z)
             self.sample_new(A[t], a_dist)
-
+            a = A[t]
             # line_type, be, it, _ = lines[t][R, hx.p.long().flatten()].unbind(-1)
-            # A[t] = 3 * (it - 1) + (be - 1)
+            # a = 3 * (it - 1) + (be - 1)
             # print("*******")
             # print(be, it)
             # print(A[t])
             # print("*******")
-            # A[:] = float(input("A:"))
 
-            action = None if torch.any(L[t] < 0) else None
             ll_output = self.lower_level(
                 Obs(**{k: v[t] for k, v in state._asdict().items()}),
                 hx.lh,
                 masks=None,
-                action=action,
+                action=None,
                 upper=A[t],
             )
-            L[t] = ll_output.action.flatten()
-            embedded_lower = self.embed_lower(L[t].clone())
+            if torch.any(L[0] < 0):
+                assert torch.all(L[0] < 0)
+                L[t] = ll_output.action.flatten()
 
+            # h = self.gru(obs, h)
+            self.print("L[t]", L[t])
+            self.print("lines[R, p]", lines[t][R, p])
+            gate_obs = self.gate_conv(obs)
             z2 = F.relu(
                 self.zeta(
                     (
@@ -262,15 +260,32 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             # then put A back in gru
             d_gate = self.d_gate(z2)
             self.sample_new(DG[t], d_gate)
-            # a_gate = self.a_gate(z)
-            # self.sample_new(AG[t], a_gate)
-
+            a_gate = self.a_gate(z2)
+            self.sample_new(AG[t], a_gate)
             # (hy_, cy_), gru_gate = self.gru2(M[R, p], (hy, cy))
+            # first put obs back in gru2
             u = self.upsilon(z).softmax(dim=-1)
             self.print("u", u)
             w = P[p, R]
             d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
             dg = DG[t].unsqueeze(-1).float()
+
+            # ac, be, it, _ = lines[t][R, p].long().unbind(-1)  # N, 2
+            # sell = (be == 2).long()
+            # channel_index = 3 * sell + (it - 1) * (1 - sell)
+            # channel = state.obs[t][R, channel_index]
+            # agent_channel = state.obs[t][R, -1]
+            # self.print("channel", channel)
+            # self.print("agent_channel", agent_channel)
+            # not_subtask = (ac != 0).float()
+            # standing_on = (channel * agent_channel).view(N, -1).sum(-1, keepdim=True)
+            # correct_action = ((be - 1) == L[t]).float().unsqueeze(1)
+            # self.print("be", be)
+            # self.print("L[t]", L[t])
+            # self.print("correct_action", correct_action)
+            # dg = standing_on * correct_action + not_subtask
+            # ag = 1 - dg
+
             self.print("dg prob", d_gate.probs[:, 1])
 
             _, be, it, _ = lines[t][R, p].long().unbind(-1)  # N, 2
@@ -293,14 +308,12 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             self.print("dg", dg)
             d_dist = gate(dg, d_probs, ones * half)
             self.print("d_probs", d_probs[:, half:])
-            # self.sample_new(D[t], d_dist)
+            self.sample_new(D[t], d_dist)
             # D[:] = float(input("D:")) + half
-            D[t] = half + dg.flatten()
             p = p + D[t].clone() - half
             p = torch.clamp(p, min=0, max=M.size(1) - 1)
 
-            # ag = AG[t].unsqueeze(-1).float()
-            # self.sample_new(A[t], a_dist)
+            ag = AG[t].unsqueeze(-1).float()
             # A[:] = float(input("A:"))
             # self.print("ag prob", a_gate.probs[:, 1])
             # self.print("ag", ag)
@@ -321,6 +334,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 d_probs=d_dist.probs,
                 ag_probs=hx.ag_probs,
                 dg_probs=d_gate.probs,
+                l_probs=ll_output.dist.probs,
                 ag=ag,
                 dg=dg,
                 gru_gate=hx.gru_gate,
