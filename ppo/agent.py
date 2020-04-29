@@ -19,7 +19,7 @@ AgentValues = namedtuple('AgentValues', 'value action action_log_probs aux_loss 
 class Agent(nn.Module):
     def __init__(
         self,
-        obs_shape,
+        obs_spaces,
         action_space,
         recurrent,
         hidden_size,
@@ -31,18 +31,21 @@ class Agent(nn.Module):
         self.entropy_coef = entropy_coef
         if lower_level:
             self.recurrent_module = LowerLevel(
-                obs_space=obs_shape,
+                obs_space=obs_spaces,
                 recurrent=recurrent,
                 hidden_size=hidden_size,
                 **network_args,
             )
-        elif len(obs_shape) == 3:
+        elif len(obs_spaces) == 3:
             self.recurrent_module = CNNBase(
-                *obs_shape, recurrent=recurrent, hidden_size=hidden_size, **network_args
+                *obs_spaces,
+                recurrent=recurrent,
+                hidden_size=hidden_size,
+                **network_args,
             )
-        elif len(obs_shape) == 1:
+        elif len(obs_spaces) == 1:
             self.recurrent_module = MLPBase(
-                obs_shape[0],
+                obs_spaces[0],
                 recurrent=recurrent,
                 hidden_size=hidden_size,
                 **network_args,
@@ -361,12 +364,12 @@ class LowerLevel(NNBase):
         hidden_size,
         num_layers,
         recurrent,
-        activation,
         obs_space,
         num_conv_layers,
         kernel_size,
         stride,
         concat,
+        activation=nn.ReLU(),
         **_,
     ):
         self.concat = concat
@@ -384,9 +387,8 @@ class LowerLevel(NNBase):
             ),
         )
         (d, h, w) = obs_space.obs.shape
-        inventory_size = obs_space.inventory.nvec.size
+        inventory_size = obs_space.inventory.n
         line_nvec = torch.tensor(obs_space.lines.nvec)
-        line_nvec[:, 2] -= 1  # TODO: ugly hack
         offset = F.pad(line_nvec[0, :-1].cumsum(0), [1, 0])
         self.register_buffer("offset", offset)
         self.obs_spaces = obs_space

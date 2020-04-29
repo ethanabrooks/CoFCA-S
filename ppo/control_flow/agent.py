@@ -16,6 +16,7 @@ import ppo.control_flow.multi_step.abstract_recurrence
 import ppo.control_flow.multi_step.no_pointer
 import ppo.control_flow.multi_step.oh_et_al
 import ppo.control_flow.multi_step.ours
+from ppo.control_flow.multi_step.ours import gate
 import ppo.control_flow.no_pointer
 import ppo.control_flow.oh_et_al
 from ppo.distributions import FixedCategorical
@@ -114,11 +115,11 @@ class Agent(ppo.agent.Agent, NNBase):
             ll_type = self.lower_level_type
             if ll_type == "train-alone":
                 probs = Action(
-                    upper=None,
+                    upper=hx.a_probs,
                     lower=hx.ll_probs,
-                    delta=None,
+                    delta=hx.d_probs,
                     ag=None,
-                    dg=None,
+                    dg=hx.db_probs,
                     ptr=None,
                 )
             elif ll_type == "train-with-upper":
@@ -134,7 +135,7 @@ class Agent(ppo.agent.Agent, NNBase):
                 probs = Action(
                     upper=hx.a_probs,
                     lower=None,
-                    delta=hx.d_probs,
+                    delta=None,
                     ag=hx.ag_probs,
                     dg=hx.dg_probs,
                     ptr=None,

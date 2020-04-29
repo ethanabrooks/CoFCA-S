@@ -60,7 +60,9 @@ class Recurrence(nn.Module):
         self.n_a = n_a
         self.embed_task = self.build_embed_task(encoder_hidden_size)
         self.embed_upper = nn.Embedding(n_a, hidden_size)
-        self.embed_lower = nn.Embedding(self.action_space_nvec.lower + 1, hidden_size)
+        self.embed_lower = nn.Embedding(
+            self.action_space_nvec.lower + 1, encoder_hidden_size
+        )
         self.task_encoder = nn.GRU(
             encoder_hidden_size,
             encoder_hidden_size,
@@ -158,7 +160,7 @@ class Recurrence(nn.Module):
         hx = torch.cat(list(pack()), dim=-1)
         return hx, hx[-1:]
 
-    def parse_inputs(self, inputs: torch.Tensor):
+    def parse_obs(self, inputs: torch.Tensor):
         return torch.split(inputs, self.obs_sections, dim=-1)
 
     def parse_hidden(self, hx: torch.Tensor) -> RecurrentState:
@@ -224,7 +226,7 @@ class Recurrence(nn.Module):
         )
 
         # parse non-action inputs
-        inputs = self.parse_inputs(inputs)
+        inputs = self.parse_obs(inputs)
 
         # build memory
         nl = len(self.obs_spaces.lines.nvec)
