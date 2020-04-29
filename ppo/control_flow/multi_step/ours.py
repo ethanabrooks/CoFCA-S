@@ -232,6 +232,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             self.print("d_probs", d_probs[:, half:])
             self.sample_new(D[t], d_dist)
             # D[:] = float(input("D:")) + half
+            D[t] = half + dg.flatten()
             p = p + D[t].clone() - half
             p = torch.clamp(p, min=0, max=M.size(1) - 1)
 
