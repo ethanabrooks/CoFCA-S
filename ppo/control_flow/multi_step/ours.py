@@ -174,6 +174,10 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         half = P.size(2) // 2 if self.no_scan else nl
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
+        import ipdb
+
+        ipdb.set_trace()
+        print("inner_loop", hx.a_probs)
         for _x in hx:
             _x.squeeze_(0)
 
@@ -273,7 +277,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 hy=hy,
                 cy=cy,
                 p=p,
-                a_probs=a_dist.probs,
+                a_probs=hx.a_probs,
                 d=D[t],
                 d_probs=d_dist.probs,
                 ag_probs=a_gate.probs,

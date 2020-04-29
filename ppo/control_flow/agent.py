@@ -144,6 +144,7 @@ class Agent(ppo.agent.Agent, NNBase):
                 raise RuntimeError
         else:
             raise RuntimeError
+        print(probs.upper)
 
         dists = [(p if p is None else FixedCategorical(p)) for p in probs]
         action_log_probs = sum(
@@ -177,42 +178,47 @@ class Agent(ppo.agent.Agent, NNBase):
         )
 
     def _forward_gru(self, x, hxs, masks, action=None):
+        rm = self.recurrent_module
+        N = x.size(0)
+        R = torch.arange(N, device=hxs.device)
+        hx = rm.parse_hidden(hxs)
+        inputs = Obs(*rm.parse_inputs(x))
+        line_size = 4  # TODO
+        lines = inputs.lines.view(N, -1, line_size)
+        pre_embed = lines.long().view(-1, line_size) + rm.offset.unsqueeze(0)
+        M = rm.embed_task(pre_embed).view(N, -1, rm.encoder_hidden_size)
+        obs = rm.conv(inputs.obs.view(N, *rm.obs_spaces.obs.shape))
+        decode_inputs = [
+            M[R, hx.p.long().flatten()],
+            F.avg_pool2d(obs, kernel_size=obs.shape[-2:]).view(N, -1),
+        ]  # first put obs back in gru2
+        z = F.relu(rm.zeta2(torch.cat(decode_inputs, dim=-1)))
+        a_dist = gate(1 - hx.ag, rm.actor(z).probs, hx.a.long().flatten())
         if action is None:
-            rm = self.recurrent_module
-            if rm.lower_level is not None:
-                N = x.size(0)
-                R = torch.arange(N, device=hxs.device)
-                hx = rm.parse_hidden(hxs)
-                inputs = Obs(*rm.parse_inputs(x))
-                line_size = 4  # TODO
-                lines = inputs.lines.view(N, -1, line_size)
-                pre_embed = lines.long().view(-1, line_size) + rm.offset.unsqueeze(0)
-                M = rm.embed_task(pre_embed).view(N, -1, rm.encoder_hidden_size)
-                obs = rm.conv(inputs.obs.view(N, *rm.obs_spaces.obs.shape))
-                decode_inputs = [
-                    M[R, hx.p.long().flatten()],
-                    F.avg_pool2d(obs, kernel_size=obs.shape[-2:]).view(N, -1),
-                ]  # first put obs back in gru2
-                z = F.relu(rm.zeta2(torch.cat(decode_inputs, dim=-1)))
-                a_dist = gate(1 - hx.ag, rm.actor(z).probs, hx.a.long().flatten())
-                upper = a_dist.sample()
-                ll_output = rm.lower_level(
-                    Obs(*rm.parse_inputs(x)), hx.lh, masks, action=action, upper=upper
-                )
-                action = Action(
-                    *((-torch.ones(len(x), rm.action_size, device=x.device)).unbind(1))
-                )._replace(
-                    lower=ll_output.action.float().flatten(),
-                    upper=upper.float().flatten(),
-                )
-                action = torch.stack(action, dim=-1)
-                hx = hx._replace(lh=ll_output.rnn_hxs, a_probs=a_dist.probs)
-                hxs = torch.cat(hx, dim=-1)
-                y = torch.cat([x, action], dim=-1)
-            else:
-                y = torch.cat(x, [0, self.recurrent_module.action_size], "constant", -1)
+            print(a_dist.probs)
+            upper = a_dist.sample()
+            # line_type, be, it, _ = lines[R, hx.p.long().flatten()].unbind(-1)
+            # print("*******")
+            # print(be, it)
+            # print("*******")
+            # upper = 3 * ((it - 1) % 3) + (be - 1)
+            # print("upper", upper)
+            ll_output = rm.lower_level(
+                Obs(*rm.parse_inputs(x)), hx.lh, masks, action=action, upper=upper
+            )
+            action = Action(
+                *((-torch.ones(len(x), rm.action_size, device=x.device)).unbind(1))
+            )._replace(
+                lower=ll_output.action.float().flatten(), upper=upper.float().flatten()
+            )
+            action = torch.stack(action, dim=-1)
+            print("dumb", a_dist.probs)
+            hx = hx._replace(lh=ll_output.rnn_hxs)
+            y = torch.cat([x, action], dim=-1)
         else:
             y = torch.cat([x, action.float()], dim=-1)
+        hxs = torch.cat(hx._replace(a_probs=a_dist.probs), dim=-1)
+        print("parse_hidden", rm.parse_hidden(hxs).a_probs)
         return super()._forward_gru(y, hxs, masks)
 
     def get_value(self, inputs, rnn_hxs, masks):
