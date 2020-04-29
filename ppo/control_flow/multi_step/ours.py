@@ -222,6 +222,12 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             # a_dist = gate(ag, self.actor(z).probs, A[t - 1])
             a_dist = self.actor(z)
             self.sample_new(A[t], a_dist)
+            # line_type, be, it, _ = lines[t][R, hx.p.long().flatten()].unbind(-1)
+            # A[t] = 3 * (it - 1) + (be - 1)
+            # print("*******")
+            # print(be, it)
+            # print(A[t])
+            # print("*******")
 
             if torch.any(L[0] < 0):
                 assert torch.all(L[0] < 0)
