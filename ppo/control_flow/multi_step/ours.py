@@ -230,7 +230,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                     hx.lh,
                     masks=None,
                     action=None,
-                    upper=hx.a,
+                    upper=A[t],
                 )
                 L[t] = ll_output.action.flatten()
 
