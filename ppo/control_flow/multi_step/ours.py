@@ -208,6 +208,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 * F.max_pool2d(gate_obs, kernel_size=gate_obs.size(-1)).view(N, -1)
                 * embedded_lower
             )
+
             z = F.relu(self.zeta(zeta_inputs))
             # then put M back in gru
             # then put A back in gru
@@ -215,6 +216,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             self.sample_new(DG[t], d_gate)
             a_gate = self.a_gate(z)
             self.sample_new(AG[t], a_gate)
+
             # (hy_, cy_), gru_gate = self.gru2(M[R, p], (hy, cy))
             decode_inputs = [
                 M[R, p],
