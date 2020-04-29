@@ -206,6 +206,18 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         DG = torch.cat([actions.dg, hx.dg.view(1, N)], dim=0).long()
 
         for t in range(T):
+
+            if torch.any(L[0] < 0):
+                assert torch.all(L[0] < 0)
+                ll_output = self.lower_level(
+                    Obs(**{k: v[t] for k, v in state._asdict().items()}),
+                    hx.lh,
+                    masks=None,
+                    action=None,
+                    upper=hx.a,
+                )
+                L[t] = ll_output.action.flatten()
+
             self.print("p", p)
             obs = self.conv(state.obs[t])
             # h = self.gru(obs, h)
