@@ -242,6 +242,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 L[t] = ll_output.action.flatten()
 
             # h = self.gru(obs, h)
+            embedded_lower = self.embed_lower(L[t].clone())
             self.print("L[t]", L[t])
             self.print("lines[R, p]", lines[t][R, p])
             gate_obs = self.gate_conv(obs)
@@ -287,24 +288,6 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             # ag = 1 - dg
 
             self.print("dg prob", d_gate.probs[:, 1])
-
-            _, be, it, _ = lines[t][R, p].long().unbind(-1)  # N, 2
-            sell = (be == 2).long()
-            channel_index = 3 * sell + (it - 1) * (1 - sell)
-            channel = state.obs[t][R, channel_index]
-            agent_channel = state.obs[t][R, -1]
-            self.print("channel", channel)
-            self.print("agent_channel", agent_channel)
-            standing_on = (channel * agent_channel).view(N, -1).sum(-1, keepdim=True)
-            correct_action = ((be - 1) == L[t]).float().unsqueeze(1)
-            self.print("be", be)
-            self.print("L[t]", L[t])
-            self.print("correct_action", correct_action)
-            dg = standing_on * correct_action
-            ag = 1 - dg
-
-            self.print("ag", ag)
-
             self.print("dg", dg)
             d_dist = gate(dg, d_probs, ones * half)
             self.print("d_probs", d_probs[:, half:])
@@ -315,8 +298,8 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
 
             ag = AG[t].unsqueeze(-1).float()
             # A[:] = float(input("A:"))
-            # self.print("ag prob", a_gate.probs[:, 1])
-            # self.print("ag", ag)
+            self.print("ag prob", a_gate.probs[:, 1])
+            self.print("ag", ag)
             # hy = dg * hy_ + (1 - dg) * hy
             # cy = dg * cy_ + (1 - dg) * cy
             yield RecurrentState(
@@ -332,7 +315,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 a_probs=a_dist.probs,
                 d=D[t],
                 d_probs=d_dist.probs,
-                ag_probs=hx.ag_probs,
+                ag_probs=a_gate.probs,
                 dg_probs=d_gate.probs,
                 l_probs=ll_output.dist.probs,
                 ag=ag,
