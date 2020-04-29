@@ -16,6 +16,7 @@ import ppo.control_flow.multi_step.abstract_recurrence
 import ppo.control_flow.multi_step.no_pointer
 import ppo.control_flow.multi_step.oh_et_al
 import ppo.control_flow.multi_step.ours
+from ppo.control_flow.multi_step.ours import gate
 import ppo.control_flow.no_pointer
 import ppo.control_flow.oh_et_al
 from ppo.distributions import FixedCategorical
@@ -181,7 +182,7 @@ class Agent(ppo.agent.Agent, NNBase):
             if rm.lower_level is not None:
                 hx = rm.parse_hidden(hxs)
                 ll_output = rm.lower_level(
-                    Obs(*rm.parse_inputs(x)), hx.lh, masks, action=action, upper=hx.a
+                    Obs(*rm.parse_obs(x)), hx.lh, masks, action=action, upper=hx.a
                 )
                 action = Action(
                     *((-torch.ones(len(x), rm.action_size, device=x.device)).unbind(1))
