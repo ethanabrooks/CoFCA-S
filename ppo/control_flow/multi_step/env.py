@@ -123,7 +123,7 @@ class Env(ppo.control_flow.env.Env):
         self.action_space = spaces.MultiDiscrete(
             np.array(
                 ppo.control_flow.env.Action(
-                    upper=num_subtasks + 1,
+                    upper=num_subtasks + 2,
                     delta=2 * self.n_lines,
                     dg=2,
                     lower=len(self.lower_level_actions),
@@ -279,12 +279,11 @@ class Env(ppo.control_flow.env.Env):
         )
         lines = list(self.assign_line_ids(line_types))
         assert self.max_nesting_depth == 1
-        population = self.populate_world(lines)
-        if population is None and count < self.max_instruction_resamples:
+        agent_pos, objects, feasible = self.populate_world(lines)
+        if not feasible and count < self.max_instruction_resamples:
             return self.generators(count + 1)
 
-        def state_generator() -> State:
-            agent_pos, objects = population
+        def state_generator(agent_pos) -> State:
             line_iterator = self.line_generator(lines)
             condition_evaluations = []
             if self.lower_level == "train-alone":
@@ -323,12 +322,6 @@ class Env(ppo.control_flow.env.Env):
                 if l is not None:
                     assert type(lines[l]) is Subtask
                     be, it = lines[l].id
-                    if it not in objects.values():
-                        return None
-                    elif be == self.sell:
-                        if self.merchant not in objects.values():
-                            return None
-                    _, d = get_nearest(agent_pos, objective(be, it), objects)
                     time_delta = 3 * self.world_size
                     if self.lower_level == "train-alone":
                         self.time_remaining = time_delta + self.time_to_waste
@@ -336,8 +329,20 @@ class Env(ppo.control_flow.env.Env):
                         self.time_remaining += time_delta
                     return l
 
+            def check_impossible():
+                if ptr is None:
+                    return True
+                be, it = lines[ptr].id
+                if it not in objects.values():
+                    return True
+                elif be == self.sell:
+                    if self.merchant not in objects.values():
+                        return True
+                return False
+
             possible_objects = list(objects.values())
             prev, ptr = 0, next_subtask(None)
+            impossible = check_impossible()
             term = False
             while True:
                 term |= not self.time_remaining
@@ -357,9 +362,22 @@ class Env(ppo.control_flow.env.Env):
                 # pass
                 if self.lower_level == "train-alone":
                     interaction, resource = lines[ptr].id
-                else:
+                elif subtask_id < len(self.subtasks):
                     # interaction, obj = lines[agent_ptr].id
                     interaction, resource = self.subtasks[subtask_id]
+                else:
+                    if impossible:
+                        ptr = None  # success
+                    else:
+                        term = True  # failure
+                    yield State(
+                        obs=(self.world_array(objects, agent_pos), inventory),
+                        prev=prev,
+                        ptr=ptr,
+                        term=term,
+                        subtask_complete=subtask_complete,
+                    )
+
                 if self.lower_level == "hardcoded":
                     lower_level_action = self.get_lower_level_action(
                         interaction=interaction,
@@ -415,6 +433,7 @@ class Env(ppo.control_flow.env.Env):
                         term = True
                     if done:
                         prev, ptr = ptr, next_subtask(ptr)
+                        impossible = check_impossible()
                         subtask_complete = True
 
                 elif type(lower_level_action) is np.ndarray:
@@ -444,7 +463,7 @@ class Env(ppo.control_flow.env.Env):
                 else:
                     assert lower_level_action is None
 
-        return state_generator(), lines
+        return state_generator(agent_pos), lines
 
     def populate_world(self, lines, count=0):
         max_random_objects = self.world_size ** 2
@@ -455,9 +474,10 @@ class Env(ppo.control_flow.env.Env):
         object_list = [self.agent] + list(
             self.random.choice(self.items + [self.merchant], size=num_random_objects)
         )
+        feasible = True
         if not self.feasible(object_list, lines):
             if count >= self.max_world_resamples:
-                return None
+                feasible = False
             return self.populate_world(lines, count=count + 1)
         use_water = num_random_objects < max_random_objects - self.world_size
         if use_water:
@@ -526,7 +546,7 @@ class Env(ppo.control_flow.env.Env):
                                 },
                             }
 
-        return agent_pos, objects
+        return agent_pos, objects, feasible
 
     def assign_line_ids(self, line_types):
         behaviors = self.random.choice(self.behaviors, size=len(line_types))
