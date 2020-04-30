@@ -106,6 +106,7 @@ class Env(ppo.control_flow.env.Env):
         self.temporal_extension = temporal_extension
         self.loops = None
         self.whiles = None
+        self.impossible = None
 
         self.subtasks = list(subtasks())
         num_subtasks = len(self.subtasks)
@@ -251,7 +252,7 @@ class Env(ppo.control_flow.env.Env):
             elif type(line) is While:
                 whiles += 1
                 if whiles > self.max_while_loops:
-                    return True
+                    return False
             evaluation = self.evaluate_line(line, counts, [], loops)
             l = line_iterator.send(evaluation)
         return True
@@ -292,6 +293,7 @@ class Env(ppo.control_flow.env.Env):
                 self.time_remaining = 200 if self.evaluating else self.time_to_waste
             self.loops = None
             self.whiles = 0
+            self.impossible = False
             inventory = Counter()
             subtask_complete = False
 
@@ -322,6 +324,11 @@ class Env(ppo.control_flow.env.Env):
                 if l is not None:
                     assert type(lines[l]) is Subtask
                     be, it = lines[l].id
+                    if it not in objects.values():
+                        self.impossible = True
+                    elif be == self.sell:
+                        if self.merchant not in objects.values():
+                            self.impossible = True
                     time_delta = 3 * self.world_size
                     if self.lower_level == "train-alone":
                         self.time_remaining = time_delta + self.time_to_waste
@@ -329,20 +336,8 @@ class Env(ppo.control_flow.env.Env):
                         self.time_remaining += time_delta
                     return l
 
-            def check_impossible():
-                if ptr is None:
-                    return True
-                be, it = lines[ptr].id
-                if it not in objects.values():
-                    return True
-                elif be == self.sell:
-                    if self.merchant not in objects.values():
-                        return True
-                return False
-
             possible_objects = list(objects.values())
             prev, ptr = 0, next_subtask(None)
-            impossible = check_impossible()
             term = False
             while True:
                 term |= not self.time_remaining
@@ -366,7 +361,7 @@ class Env(ppo.control_flow.env.Env):
                     # interaction, obj = lines[agent_ptr].id
                     interaction, resource = self.subtasks[subtask_id]
                 else:
-                    if impossible:
+                    if self.impossible:
                         ptr = None  # success
                     else:
                         term = True  # failure
@@ -433,7 +428,6 @@ class Env(ppo.control_flow.env.Env):
                         term = True
                     if done:
                         prev, ptr = ptr, next_subtask(ptr)
-                        impossible = check_impossible()
                         subtask_complete = True
 
                 elif type(lower_level_action) is np.ndarray:
@@ -476,7 +470,8 @@ class Env(ppo.control_flow.env.Env):
         if not self.feasible(object_list, lines):
             if count >= self.max_world_resamples:
                 feasible = False
-            return self.populate_world(lines, count=count + 1)
+            else:
+                return self.populate_world(lines, count=count + 1)
         use_water = num_random_objects < max_random_objects - self.world_size
         if use_water:
             vertical_water = self.random.choice(2)
