@@ -94,10 +94,12 @@ class Env(ppo.control_flow.env.Env):
         temporal_extension,
         term_on,
         max_world_resamples,
+        max_instruction_resamples,
         max_while_loops,
         world_size=6,
         **kwargs,
     ):
+        self.max_instruction_resamples = max_instruction_resamples
         self.max_world_resamples = max_world_resamples
         self.max_while_loops = max_while_loops
         self.term_on = term_on
@@ -261,7 +263,7 @@ class Env(ppo.control_flow.env.Env):
             counts[o] += 1
         return counts
 
-    def generators(self) -> Tuple[Iterator[State], List[Line]]:
+    def generators(self, count=0) -> Tuple[Iterator[State], List[Line]]:
         n_lines = (
             self.eval_lines
             if self.evaluating
@@ -276,10 +278,13 @@ class Env(ppo.control_flow.env.Env):
             )
         )
         lines = list(self.assign_line_ids(line_types))
+        assert self.max_nesting_depth == 1
+        population = self.populate_world(lines)
+        if population is None and count < self.max_instruction_resamples:
+            return self.generators(count + 1)
 
         def state_generator() -> State:
-            assert self.max_nesting_depth == 1
-            agent_pos, objects = self.populate_world(lines)
+            agent_pos, objects = population
             line_iterator = self.line_generator(lines)
             condition_evaluations = []
             if self.lower_level == "train-alone":
@@ -450,7 +455,9 @@ class Env(ppo.control_flow.env.Env):
         object_list = [self.agent] + list(
             self.random.choice(self.items + [self.merchant], size=num_random_objects)
         )
-        if not self.feasible(object_list, lines) and count < self.max_world_resamples:
+        if not self.feasible(object_list, lines):
+            if count >= self.max_world_resamples:
+                return None
             return self.populate_world(lines, count=count + 1)
         use_water = num_random_objects < max_random_objects - self.world_size
         if use_water:
@@ -571,7 +578,11 @@ class Env(ppo.control_flow.env.Env):
 
 
 def build_parser(
-    p, default_max_world_resamples=None, default_max_while_loops=None, **kwargs
+    p,
+    default_max_world_resamples=None,
+    default_max_while_loops=None,
+    default_max_instruction_resamples=None,
+    **kwargs,
 ):
     ppo.control_flow.env.build_parser(p, **kwargs)
     p.add_argument(
@@ -582,6 +593,12 @@ def build_parser(
         type=int,
         required=default_max_world_resamples is None,
         default=default_max_world_resamples,
+    )
+    p.add_argument(
+        "--max-instruction-resamples",
+        type=int,
+        required=default_max_instruction_resamples is None,
+        default=default_max_instruction_resamples,
     )
     p.add_argument(
         "--max-while-loops",
