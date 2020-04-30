@@ -8,7 +8,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from gym import spaces
 
-import ppo
 import ppo.control_flow.multi_step.abstract_recurrence as abstract_recurrence
 import ppo.control_flow.recurrence as recurrence
 from ppo.agent import Agent
@@ -20,7 +19,7 @@ from ppo.utils import init_
 
 RecurrentState = namedtuple(
     "RecurrentState",
-    "a l d u ag dg p v h lh hy cy l_probs a_probs d_probs ag_probs dg_probs gru_gate P",
+    "a l d u dg p v h lh hy cy l_probs a_probs d_probs dg_probs gru_gate P",
 )
 
 ParsedInput = namedtuple("ParsedInput", "obs actions")
@@ -89,7 +88,6 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         )
         self.gru2 = LSTMCell(self.encoder_hidden_size, self.gru_hidden_size)
         self.d_gate = Categorical(hidden_size, 2)
-        self.a_gate = Categorical(hidden_size, 2)
         state_sizes = self.state_sizes._asdict()
         with lower_level_config.open() as f:
             lower_level_params = json.load(f)
@@ -98,9 +96,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             **state_sizes,
             hy=self.gru_hidden_size,
             cy=self.gru_hidden_size,
-            ag_probs=2,
             dg_probs=2,
-            ag=1,
             dg=1,
             gru_gate=self.gru_hidden_size,
             l=1,
@@ -194,15 +190,12 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         cy = hx.cy
         p = hx.p.long().squeeze(-1)
         hx.a[new_episode] = self.n_a - 1
-        ag_probs = hx.ag_probs
-        ag_probs[new_episode, 1] = 1
         R = torch.arange(N, device=rnn_hxs.device)
         ones = self.ones.expand_as(R)
         actions = Action(*inputs.actions.unbind(dim=2))
         A = torch.cat([actions.upper, hx.a.view(1, N)], dim=0).long()
         L = torch.cat([actions.lower, hx.l.view(1, N) - 1], dim=0).long()
         D = torch.cat([actions.delta, hx.d.view(1, N)], dim=0).long()
-        AG = torch.cat([actions.ag, hx.ag.view(1, N)], dim=0).long()
         DG = torch.cat([actions.dg, hx.dg.view(1, N)], dim=0).long()
 
         for t in range(T):
@@ -219,7 +212,6 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                     )
                 )
             )
-            # a_dist = gate(ag, self.actor(z).probs, A[t - 1])
             a_dist = self.actor(z)
             self.sample_new(A[t], a_dist)
             a = A[t]
@@ -261,8 +253,6 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             # then put A back in gru
             d_gate = self.d_gate(z2)
             self.sample_new(DG[t], d_gate)
-            a_gate = self.a_gate(z2)
-            self.sample_new(AG[t], a_gate)
             # (hy_, cy_), gru_gate = self.gru2(M[R, p], (hy, cy))
             # first put obs back in gru2
             u = self.upsilon(z).softmax(dim=-1)
@@ -296,10 +286,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             p = p + D[t].clone() - half
             p = torch.clamp(p, min=0, max=M.size(1) - 1)
 
-            ag = AG[t].unsqueeze(-1).float()
             # A[:] = float(input("A:"))
-            self.print("ag prob", a_gate.probs[:, 1])
-            self.print("ag", ag)
             # hy = dg * hy_ + (1 - dg) * hy
             # cy = dg * cy_ + (1 - dg) * cy
             yield RecurrentState(
@@ -315,10 +302,8 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 a_probs=a_dist.probs,
                 d=D[t],
                 d_probs=d_dist.probs,
-                ag_probs=a_gate.probs,
                 dg_probs=d_gate.probs,
                 l_probs=ll_output.dist.probs,
-                ag=ag,
                 dg=dg,
                 gru_gate=hx.gru_gate,
                 P=P.transpose(0, 1),

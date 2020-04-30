@@ -123,7 +123,6 @@ class Env(ppo.control_flow.env.Env):
                 ppo.control_flow.env.Action(
                     upper=num_subtasks + 1,
                     delta=2 * self.n_lines,
-                    ag=2,
                     dg=2,
                     lower=len(self.lower_level_actions),
                     ptr=self.n_lines,
