@@ -445,7 +445,9 @@ class Env(ppo.control_flow.env.Env):
     def populate_world(self, lines, count=0):
         max_random_objects = self.world_size ** 2
         num_subtask = sum(1 for l in lines if type(l) is Subtask)
-        num_random_objects = np.random.randint(num_subtask, max_random_objects)
+        num_random_objects = np.random.randint(
+            min(num_subtask, max_random_objects - 1), max_random_objects
+        )
         object_list = [self.agent] + list(
             self.random.choice(self.items + [self.merchant], size=num_random_objects)
         )
