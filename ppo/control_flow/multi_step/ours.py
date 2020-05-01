@@ -33,7 +33,6 @@ def gate(g, new, old):
 class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
     def __init__(
         self,
-        train_dg,
         hidden_size,
         conv_hidden_size,
         gate_pool_stride,
@@ -51,7 +50,6 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         lower_level_config,
         **kwargs,
     ):
-        self.train_dg = train_dg
         self.gru_gate_coef = gru_gate_coef
         self.gate_coef = gate_coef
         self.conv_hidden_size = conv_hidden_size
@@ -261,30 +259,23 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             self.print("u", u)
             w = P[p, R]
             d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
-            dg = DG[t].flatten().float()
+            dg = DG[t].unsqueeze(-1).float()
 
-            ac, be, it, _ = lines[t][R, p].long().unbind(-1)  # N, 2
-            sell = (be == 2).long()
-            channel_index = 3 * sell + (it - 1) * (1 - sell)
-            channel = state.obs[t][R, channel_index]
-            agent_channel = state.obs[t][R, -1]
-            self.print("channel", channel)
-            self.print("agent_channel", agent_channel)
-            not_subtask = (ac != 0).float().flatten()
-            standing_on = (channel * agent_channel).view(N, -1).sum(-1)
-            correct_action = ((be - 1) == L[t]).float()
-            self.print("be", be)
-            self.print("L[t]", L[t])
-            self.print("correct_action", correct_action)
-            if self.train_dg == "standing_on":
-                standing_on = dg
-            elif self.train_dg == "correct_action":
-                correct_action = dg
-            elif self.train_dg == "not_subtask":
-                not_subtask = dg
-            dg = torch.clamp(
-                standing_on * correct_action + not_subtask, 0, 1
-            ).unsqueeze(-1)
+            # ac, be, it, _ = lines[t][R, p].long().unbind(-1)  # N, 2
+            # sell = (be == 2).long()
+            # channel_index = 3 * sell + (it - 1) * (1 - sell)
+            # channel = state.obs[t][R, channel_index]
+            # agent_channel = state.obs[t][R, -1]
+            # self.print("channel", channel)
+            # self.print("agent_channel", agent_channel)
+            # not_subtask = (ac != 0).float()
+            # standing_on = (channel * agent_channel).view(N, -1).sum(-1, keepdim=True)
+            # correct_action = ((be - 1) == L[t]).float().unsqueeze(1)
+            # self.print("be", be)
+            # self.print("L[t]", L[t])
+            # self.print("correct_action", correct_action)
+            # dg = standing_on * correct_action + not_subtask
+            # ag = 1 - dg
 
             self.print("dg prob", d_gate.probs[:, 1])
             self.print("dg", dg)
