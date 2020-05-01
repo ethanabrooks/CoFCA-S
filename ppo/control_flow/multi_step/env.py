@@ -96,6 +96,7 @@ class Env(ppo.control_flow.env.Env):
         max_world_resamples,
         max_instruction_resamples,
         max_while_loops,
+        use_water,
         world_size=6,
         **kwargs,
     ):
@@ -107,6 +108,7 @@ class Env(ppo.control_flow.env.Env):
         self.loops = None
         self.whiles = None
         self.impossible = None
+        self.use_water = use_water
 
         self.subtasks = list(subtasks())
         num_subtasks = len(self.subtasks)
@@ -474,7 +476,9 @@ class Env(ppo.control_flow.env.Env):
                 feasible = False
             else:
                 return self.populate_world(lines, count=count + 1)
-        use_water = num_random_objects < max_random_objects - self.world_size
+        use_water = (
+            self.use_water and num_random_objects < max_random_objects - self.world_size
+        )
         if use_water:
             vertical_water = self.random.choice(2)
             world_shape = (
@@ -603,6 +607,7 @@ def build_parser(
     p.add_argument(
         "--no-temporal-extension", dest="temporal_extension", action="store_false"
     )
+    p.add_argument("--no-water", dest="use_water", action="store_false")
     p.add_argument(
         "--max-world-resamples",
         type=int,
