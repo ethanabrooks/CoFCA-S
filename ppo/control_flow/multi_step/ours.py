@@ -286,7 +286,10 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             p = p + D[t].clone() - half
             p = torch.clamp(p, min=0, max=M.size(1) - 1)
 
+            # try:
             # A[:] = float(input("A:"))
+            # except ValueError:
+            # pass
             # hy = dg * hy_ + (1 - dg) * hy
             # cy = dg * cy_ + (1 - dg) * cy
             yield RecurrentState(
