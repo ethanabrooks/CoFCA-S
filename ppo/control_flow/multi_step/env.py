@@ -348,6 +348,7 @@ class Env(ppo.control_flow.env.Env):
                     ptr=ptr,
                     term=term,
                     subtask_complete=subtask_complete,
+                    impossible=self.impossible,
                 )
                 subtask_complete = False
                 # for i, a in enumerate(self.lower_level_actions):

@@ -23,7 +23,7 @@ from ppo.control_flow.lines import (
 
 Obs = namedtuple("Obs", "active lines obs")
 Last = namedtuple("Last", "action active reward terminal selected")
-State = namedtuple("State", "obs prev ptr term subtask_complete")
+State = namedtuple("State", "obs prev ptr term subtask_complete impossible")
 Action = namedtuple("Action", "upper lower delta dg ptr")
 
 
@@ -159,7 +159,8 @@ class Env(gym.Env, ABC):
                     success=success,
                 )
                 if success:
-                    info.update(success_line=len(lines))
+                    if not state.impossible:
+                        info.update(success_line=len(lines))
                 else:
                     info.update(success_line=state.prev, failure_line=state.ptr)
                 subtasks_attempted = subtasks_complete + (not success)
