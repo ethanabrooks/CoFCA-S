@@ -124,7 +124,7 @@ class Env(ppo.control_flow.env.Env):
         self.action_space = spaces.MultiDiscrete(
             np.array(
                 ppo.control_flow.env.Action(
-                    upper=num_subtasks + 1,
+                    upper=num_subtasks + 2,
                     delta=2 * self.n_lines,
                     dg=2,
                     lower=len(self.lower_level_actions),
@@ -325,11 +325,10 @@ class Env(ppo.control_flow.env.Env):
                     assert type(lines[l]) is Subtask
                     be, it = lines[l].id
                     if it not in objects.values():
-                        return None
+                        self.impossible = True
                     elif be == self.sell:
                         if self.merchant not in objects.values():
-                            return None
-                    _, d = get_nearest(agent_pos, objective(be, it), objects)
+                            self.impossible = True
                     time_delta = 3 * self.world_size
                     if self.lower_level == "train-alone":
                         self.time_remaining = time_delta + self.time_to_waste
@@ -359,9 +358,23 @@ class Env(ppo.control_flow.env.Env):
                 # pass
                 if self.lower_level == "train-alone":
                     interaction, resource = lines[ptr].id
-                else:
+                elif subtask_id < len(self.subtasks):
                     # interaction, obj = lines[agent_ptr].id
                     interaction, resource = self.subtasks[subtask_id]
+                else:
+                    if self.impossible:
+                        ptr = None  # success
+                    else:
+                        term = True  # failure
+                    yield State(
+                        obs=(self.world_array(objects, agent_pos), inventory),
+                        prev=prev,
+                        ptr=ptr,
+                        term=term,
+                        subtask_complete=subtask_complete,
+                        impossible=self.impossible,
+                    )
+
                 if self.lower_level == "hardcoded":
                     lower_level_action = self.get_lower_level_action(
                         interaction=interaction,

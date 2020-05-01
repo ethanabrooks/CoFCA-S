@@ -223,7 +223,7 @@ class Env(gym.Env, ABC):
 
             info = {}
 
-            if action == self.num_subtasks:
+            if action > self.num_subtasks:
                 n += 1
                 no_op_limit = 200 if self.evaluating else self.no_op_limit
                 if self.no_op_limit is not None and self.no_op_limit < 0:
