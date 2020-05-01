@@ -94,16 +94,19 @@ class Env(ppo.control_flow.env.Env):
         temporal_extension,
         term_on,
         max_world_resamples,
+        max_instruction_resamples,
         max_while_loops,
         world_size=6,
         **kwargs,
     ):
+        self.max_instruction_resamples = max_instruction_resamples
         self.max_world_resamples = max_world_resamples
         self.max_while_loops = max_while_loops
         self.term_on = term_on
         self.temporal_extension = temporal_extension
         self.loops = None
         self.whiles = None
+        self.impossible = None
 
         self.subtasks = list(subtasks())
         num_subtasks = len(self.subtasks)
@@ -123,7 +126,6 @@ class Env(ppo.control_flow.env.Env):
                 ppo.control_flow.env.Action(
                     upper=num_subtasks + 1,
                     delta=2 * self.n_lines,
-                    ag=2,
                     dg=2,
                     lower=len(self.lower_level_actions),
                     ptr=self.n_lines,
@@ -250,7 +252,7 @@ class Env(ppo.control_flow.env.Env):
             elif type(line) is While:
                 whiles += 1
                 if whiles > self.max_while_loops:
-                    return True
+                    return False
             evaluation = self.evaluate_line(line, counts, [], loops)
             l = line_iterator.send(evaluation)
         return True
@@ -262,7 +264,7 @@ class Env(ppo.control_flow.env.Env):
             counts[o] += 1
         return counts
 
-    def generators(self) -> Tuple[Iterator[State], List[Line]]:
+    def generators(self, count=0) -> Tuple[Iterator[State], List[Line]]:
         n_lines = (
             self.eval_lines
             if self.evaluating
@@ -277,10 +279,12 @@ class Env(ppo.control_flow.env.Env):
             )
         )
         lines = list(self.assign_line_ids(line_types))
+        assert self.max_nesting_depth == 1
+        agent_pos, objects, feasible = self.populate_world(lines)
+        if not feasible and count < self.max_instruction_resamples:
+            return self.generators(count + 1)
 
-        def state_generator() -> State:
-            assert self.max_nesting_depth == 1
-            agent_pos, objects = self.populate_world(lines)
+        def state_generator(agent_pos) -> State:
             line_iterator = self.line_generator(lines)
             condition_evaluations = []
             if self.lower_level == "train-alone":
@@ -289,6 +293,7 @@ class Env(ppo.control_flow.env.Env):
                 self.time_remaining = 200 if self.evaluating else self.time_to_waste
             self.loops = None
             self.whiles = 0
+            self.impossible = False
             inventory = Counter()
             subtask_complete = False
 
@@ -440,17 +445,21 @@ class Env(ppo.control_flow.env.Env):
                 else:
                     assert lower_level_action is None
 
-        return state_generator(), lines
+        return state_generator(agent_pos), lines
 
     def populate_world(self, lines, count=0):
         max_random_objects = self.world_size ** 2
         num_subtask = sum(1 for l in lines if type(l) is Subtask)
-        num_random_objects = np.random.randint(num_subtask, max_random_objects)
+        num_random_objects = np.random.randint(max_random_objects)
         object_list = [self.agent] + list(
             self.random.choice(self.items + [self.merchant], size=num_random_objects)
         )
-        if not self.feasible(object_list, lines) and count < self.max_world_resamples:
-            return self.populate_world(lines, count=count + 1)
+        feasible = True
+        if not self.feasible(object_list, lines):
+            if count >= self.max_world_resamples:
+                feasible = False
+            else:
+                return self.populate_world(lines, count=count + 1)
         use_water = num_random_objects < max_random_objects - self.world_size
         if use_water:
             vertical_water = self.random.choice(2)
@@ -518,7 +527,7 @@ class Env(ppo.control_flow.env.Env):
                                 },
                             }
 
-        return agent_pos, objects
+        return agent_pos, objects, feasible
 
     def assign_line_ids(self, line_types):
         behaviors = self.random.choice(self.behaviors, size=len(line_types))
@@ -570,7 +579,11 @@ class Env(ppo.control_flow.env.Env):
 
 
 def build_parser(
-    p, default_max_world_resamples=None, default_max_while_loops=None, **kwargs
+    p,
+    default_max_world_resamples=None,
+    default_max_while_loops=None,
+    default_max_instruction_resamples=None,
+    **kwargs,
 ):
     ppo.control_flow.env.build_parser(p, **kwargs)
     p.add_argument(
@@ -581,6 +594,12 @@ def build_parser(
         type=int,
         required=default_max_world_resamples is None,
         default=default_max_world_resamples,
+    )
+    p.add_argument(
+        "--max-instruction-resamples",
+        type=int,
+        required=default_max_instruction_resamples is None,
+        default=default_max_instruction_resamples,
     )
     p.add_argument(
         "--max-while-loops",
