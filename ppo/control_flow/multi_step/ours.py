@@ -261,20 +261,20 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
             dg = DG[t].unsqueeze(-1).float()
 
-            # ac, be, it, _ = lines[t][R, p].long().unbind(-1)  # N, 2
-            # sell = (be == 2).long()
-            # channel_index = 3 * sell + (it - 1) * (1 - sell)
-            # channel = state.obs[t][R, channel_index]
-            # agent_channel = state.obs[t][R, -1]
-            # self.print("channel", channel)
-            # self.print("agent_channel", agent_channel)
-            # not_subtask = (ac != 0).float()
-            # standing_on = (channel * agent_channel).view(N, -1).sum(-1, keepdim=True)
-            # correct_action = ((be - 1) == L[t]).float().unsqueeze(1)
-            # self.print("be", be)
-            # self.print("L[t]", L[t])
-            # self.print("correct_action", correct_action)
-            # dg = standing_on * correct_action + not_subtask
+            ac, be, it, _ = lines[t][R, p].long().unbind(-1)  # N, 2
+            sell = (be == 2).long()
+            channel_index = 3 * sell + (it - 1) * (1 - sell)
+            channel = state.obs[t][R, channel_index]
+            agent_channel = state.obs[t][R, -1]
+            self.print("channel", channel)
+            self.print("agent_channel", agent_channel)
+            not_subtask = (ac != 0).float().flatten()
+            standing_on = (channel * agent_channel).view(N, -1).sum(-1)
+            correct_action = ((be - 1) == L[t]).float()
+            self.print("be", be)
+            self.print("L[t]", L[t])
+            self.print("correct_action", correct_action)
+            dg = (standing_on * correct_action + not_subtask).view(N, -1)
             # ag = 1 - dg
 
             self.print("dg prob", d_gate.probs[:, 1])
