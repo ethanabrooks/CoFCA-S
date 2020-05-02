@@ -255,7 +255,8 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             self.sample_new(DG[t], d_gate)
             # (hy_, cy_), gru_gate = self.gru2(M[R, p], (hy, cy))
             # first put obs back in gru2
-            u = self.upsilon(z).softmax(dim=-1)
+            h = self.gru(z, h)
+            u = self.upsilon(h).softmax(dim=-1)
             self.print("u", u)
             w = P[p, R]
             d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)

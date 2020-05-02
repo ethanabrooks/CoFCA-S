@@ -69,7 +69,7 @@ class Recurrence(nn.Module):
             bidirectional=True,
             batch_first=True,
         )
-        self.gru = nn.GRUCell(self.gru_in_size, gru_hidden_size)
+        self.gru = nn.GRUCell(hidden_size, gru_hidden_size)
 
         layers = []
         in_size = gru_hidden_size + 1
@@ -77,7 +77,7 @@ class Recurrence(nn.Module):
             layers.extend([init_(nn.Linear(in_size, hidden_size)), activation])
             in_size = hidden_size
         self.zeta = nn.Sequential(*layers)
-        self.upsilon = init_(nn.Linear(hidden_size, self.ne))
+        self.upsilon = init_(nn.Linear(gru_hidden_size, self.ne))
 
         layers = []
         in_size = (2 if self.no_scan else 1) * encoder_hidden_size
