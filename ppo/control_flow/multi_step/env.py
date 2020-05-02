@@ -216,10 +216,17 @@ class Env(ppo.control_flow.env.Env):
             return None
         elif type(line) is Loop:
             return loops > 0
-        if type(line) is Subtask:
+        if type(line) in (Subtask, EndLoop, EndWhile):
             return 1
         else:
-            evaluation = counts[Env.iron] > counts[Env.gold]
+            if line.id == Env.iron:
+                evaluation = counts[Env.iron] > counts[Env.gold]
+            elif line.id == Env.gold:
+                evaluation = counts[Env.gold] > counts[Env.wood]
+            elif line.id == Env.wood:
+                evaluation = counts[Env.wood] > counts[Env.iron]
+            else:
+                raise RuntimeError
             if type(line) in (If, While):
                 condition_evaluations += [evaluation]
             return evaluation
@@ -570,7 +577,7 @@ class Env(ppo.control_flow.env.Env):
                 while_obj = None
                 lines += [EndWhile(0)]
             else:
-                lines += [line_type(self.random.choice(self.items + [self.water]))]
+                lines += [line_type(self.random.choice(self.items))]
         return lines
 
     def get_observation(self, obs, **kwargs):
