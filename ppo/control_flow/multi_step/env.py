@@ -62,6 +62,24 @@ def subtasks():
             yield interaction, obj
 
 
+# @match(Subtask)
+# class perform(object):
+#     def Mine(item):
+#         raise NotImplementedError
+#
+#     def GoTo(coord):
+#         raise NotImplementedError
+#
+#     def Place(item, coord):
+#         raise NotImplementedError
+#
+#     def BuildBridge():
+#         raise NotImplementedError
+#
+#     def Sell(item):
+#         raise NotImplementedError
+
+
 class Env(ppo.control_flow.env.Env):
     wood = "wood"
     gold = "gold"

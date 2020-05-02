@@ -83,11 +83,12 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 stride=2,
             ),
         )
-        gc.collect()
         self.zeta2 = init_(
             nn.Linear(conv_hidden_size + self.encoder_hidden_size, hidden_size)
         )
-        self.gru2 = LSTMCell(self.encoder_hidden_size, self.gru_hidden_size)
+        self.gru = LSTMCell(self.encoder_hidden_size, self.gru_hidden_size)
+        gc.collect()
+        self.linear = init_(nn.Linear(self.encoder_hidden_size, conv_hidden_size))
         self.d_gate = Categorical(hidden_size, 2)
         self.a_gate = Categorical(hidden_size, 2)
         state_sizes = self.state_sizes._asdict()

@@ -82,6 +82,14 @@ class If(Line):
         previous_condition.append(line_index)
         yield from ()
 
+    @staticmethod
+    def generate_lines(n: int, remaining_depth: int, legal_lines: list, **kwargs):
+        yield If
+        yield from Line.generate_lines(
+            n - 2, remaining_depth - 1, **kwargs, legal_lines=legal_lines + [Else]
+        )
+        yield EndIf
+
 
 class Else(Line):
     required_lines = 5
@@ -130,6 +138,10 @@ class EndIf(Line):
         yield line_index, line_index + 1  # False: If/Else -> If/Else + 1
         yield line_index, line_index + 1  # True: If/Else -> If/Else + 1
 
+    @staticmethod
+    def generate_lines(*args, **kwargs):
+        raise RuntimeError
+
 
 class While(Line):
     required_lines = 3
@@ -147,6 +159,12 @@ class While(Line):
     def transitions(line_index, previous_condition):
         previous_condition.append(line_index)
         yield from ()
+
+    @staticmethod
+    def generate_lines(n: int, remaining_depth: int, **kwargs):
+        yield While
+        yield from Line.generate_lines(n - 2, remaining_depth - 1, **kwargs)
+        yield EndWhile
 
 
 class EndWhile(Line):
@@ -171,6 +189,10 @@ class EndWhile(Line):
         yield line_index, prev  # False: EndWhile -> While
         yield line_index, prev  # True: EndWhile -> While
 
+    @staticmethod
+    def generate_lines(*args, **kwargs):
+        raise RuntimeError
+
 
 class Loop(Line):
     condition = True
@@ -192,6 +214,15 @@ class Loop(Line):
         previous_conditions.append(line_index)
         yield from ()
 
+    def __str__(self):
+        return f"{self.__class__.__name__} {self.id}"
+
+    @staticmethod
+    def generate_lines(n: int, remaining_depth: int, **kwargs):
+        yield Loop
+        yield from Line.generate_lines(n - 2, remaining_depth - 1, **kwargs)
+        yield EndLoop
+
 
 class EndLoop(Line):
     condition = False
@@ -210,6 +241,10 @@ class EndLoop(Line):
         # EndWhile
         yield line_index, prev  # False: EndWhile -> While
         yield line_index, prev  # True: EndWhile -> While
+
+    @staticmethod
+    def generate_lines(*args, **kwargs):
+        raise RuntimeError
 
 
 class Subtask(Line):
