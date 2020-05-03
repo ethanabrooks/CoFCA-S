@@ -50,7 +50,6 @@ def main(
                     action_space=envs.action_space,
                     **agent_args,
                 )
-            del agent_args["concat"]
             del agent_args["recurrent"]
             return ppo.control_flow.agent.Agent(
                 observation_space=obs_space,

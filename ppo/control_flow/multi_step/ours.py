@@ -46,10 +46,12 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         num_conv_layers,
         kernel_size,
         stride,
+        concat,
         action_space,
         lower_level_config,
         **kwargs,
     ):
+        self.concat = concat
         self.gru_gate_coef = gru_gate_coef
         self.gate_coef = gate_coef
         self.conv_hidden_size = conv_hidden_size
@@ -84,8 +86,15 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         )
         gc.collect()
         self.zeta2 = init_(
-            nn.Linear(conv_hidden_size + self.encoder_hidden_size, hidden_size)
+            nn.Linear(
+                conv_hidden_size + self.encoder_hidden_size + hidden_size, hidden_size
+            )
         )
+        inventory_size = self.obs_spaces.inventory.n
+        self.embed_inventory = nn.Sequential(
+            init_(nn.Linear(inventory_size, hidden_size)), nn.ReLU()
+        )
+
         self.gru2 = LSTMCell(self.encoder_hidden_size, self.gru_hidden_size)
         self.d_gate = Categorical(hidden_size, 2)
         state_sizes = self.state_sizes._asdict()
@@ -207,6 +216,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                         [
                             M[R, p],
                             F.avg_pool2d(obs, kernel_size=obs.shape[-2:]).view(N, -1),
+                            self.embed_inventory(state.inventory[t]),
                         ],
                         dim=-1,
                     )
