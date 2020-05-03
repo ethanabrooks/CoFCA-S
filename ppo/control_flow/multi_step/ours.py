@@ -215,8 +215,8 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             a_dist = self.actor(z)
             self.sample_new(A[t], a_dist)
             a = A[t]
-            # line_type, be, it, _ = lines[t][R, hx.p.long().flatten()].unbind(-1)
-            # a = 3 * (it - 1) + (be - 1)
+            _, be, it, _ = lines[t][R, hx.p.long().flatten()].unbind(-1)
+            a = 3 * (it - 1) + (be - 1)
             # print("*******")
             # print(be, it)
             # print(A[t])
@@ -261,28 +261,29 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
             dg = DG[t].unsqueeze(-1).float()
 
-            # ac, be, it, _ = lines[t][R, p].long().unbind(-1)  # N, 2
-            # sell = (be == 2).long()
-            # channel_index = 3 * sell + (it - 1) * (1 - sell)
-            # channel = state.obs[t][R, channel_index]
-            # agent_channel = state.obs[t][R, -1]
-            # self.print("channel", channel)
-            # self.print("agent_channel", agent_channel)
-            # not_subtask = (ac != 0).float()
-            # standing_on = (channel * agent_channel).view(N, -1).sum(-1, keepdim=True)
-            # correct_action = ((be - 1) == L[t]).float().unsqueeze(1)
-            # self.print("be", be)
-            # self.print("L[t]", L[t])
-            # self.print("correct_action", correct_action)
-            # dg = standing_on * correct_action + not_subtask
-            # ag = 1 - dg
+            ac, be, it, _ = lines[t][R, p].long().unbind(-1)  # N, 2
+            sell = (be == 2).long()
+            channel_index = 3 * sell + (it - 1) * (1 - sell)
+            channel = state.obs[t][R, channel_index]
+            agent_channel = state.obs[t][R, -1]
+            self.print("channel", channel)
+            self.print("agent_channel", agent_channel)
+            not_subtask = (ac != 0).float().flatten()
+            standing_on = (channel * agent_channel).view(N, -1).sum(-1)
+            correct_action = ((be - 1) == L[t]).float()
+            self.print("be", be)
+            self.print("L[t]", L[t])
+            self.print("correct_action", correct_action)
+            dg = (standing_on * correct_action + not_subtask).unsqueeze(-1)
 
             self.print("dg prob", d_gate.probs[:, 1])
             self.print("dg", dg)
             d_dist = gate(dg, d_probs, ones * half)
             self.print("d_probs", d_probs[:, half:])
             self.sample_new(D[t], d_dist)
+
             # D[:] = float(input("D:")) + half
+            D[t] = dg.flatten() + half
             p = p + D[t].clone() - half
             p = torch.clamp(p, min=0, max=M.size(1) - 1)
 
