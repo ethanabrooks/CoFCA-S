@@ -60,9 +60,6 @@ class Recurrence(nn.Module):
         self.n_a = n_a
         self.embed_task = self.build_embed_task(encoder_hidden_size)
         self.embed_upper = nn.Embedding(n_a, hidden_size)
-        self.embed_lower = nn.Embedding(
-            self.action_space_nvec.lower + 1, encoder_hidden_size
-        )
         self.task_encoder = nn.GRU(
             encoder_hidden_size,
             encoder_hidden_size,
@@ -76,7 +73,7 @@ class Recurrence(nn.Module):
         for _ in range(num_layers):
             layers.extend([init_(nn.Linear(in_size, hidden_size)), activation])
             in_size = hidden_size
-        self.zeta = nn.Sequential(*layers)
+        self.zeta2 = nn.Sequential(*layers)
         self.upsilon = init_(nn.Linear(hidden_size, self.ne))
 
         layers = []
@@ -251,7 +248,7 @@ class Recurrence(nn.Module):
             self.print("p", p)
             obs = inputs.obs[t]
             h = self.gru(torch.cat([M[R, p], u], dim=-1), h)
-            z = F.relu(self.zeta(torch.cat([obs, h], dim=-1)))
+            z = F.relu(self.zeta2(torch.cat([obs, h], dim=-1)))
             a_dist = self.actor(z)
             self.sample_new(A[t], a_dist)
             u = self.upsilon(z).softmax(dim=-1)
