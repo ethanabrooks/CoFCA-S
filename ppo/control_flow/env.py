@@ -203,6 +203,7 @@ class Env(gym.Env, ABC):
                 print("Reward", reward)
                 print("Cumulative", cumulative_reward)
                 print("Time remaining", self.time_remaining)
+                print("Impossible:", self.impossible)
                 print("Obs:")
                 print(RESET)
                 self.print_obs(state.obs)
