@@ -216,13 +216,17 @@ class Env(ppo.control_flow.env.Env):
             return None
         elif type(line) is Loop:
             return loops > 0
-        if type(line) is Subtask:
-            return 1
-        else:
-            evaluation = counts[Env.iron] > counts[Env.gold]
-            if type(line) in (If, While):
-                condition_evaluations += [evaluation]
+        elif type(line) in (If, While):
+            if line.id == Env.iron:
+                evaluation = counts[Env.iron] > counts[Env.gold]
+            elif line.id == Env.gold:
+                evaluation = counts[Env.gold] > counts[Env.iron]
+            else:
+                raise RuntimeError
+            condition_evaluations += [evaluation]
             return evaluation
+        else:
+            return 1
 
     def feasible(self, objects, lines):
         line_iterator = self.line_generator(lines)
@@ -549,7 +553,7 @@ class Env(ppo.control_flow.env.Env):
 
     def assign_line_ids(self, line_types):
         behaviors = self.random.choice(self.behaviors, size=len(line_types))
-        items = self.random.choice(self.items, size=len(line_types))
+        items = self.random.choice([self.gold, self.iron], size=len(line_types))
         while_obj = None
         available = [x for x in self.items]
         lines = []
@@ -564,13 +568,15 @@ class Env(ppo.control_flow.env.Env):
             elif line_type is While:
                 while_obj = item
                 lines += [line_type(item)]
+            elif line_type is If:
+                lines += [line_type(item)]
             elif line_type is EndWhile:
                 if while_obj in available:
                     available.remove(while_obj)
                 while_obj = None
                 lines += [EndWhile(0)]
             else:
-                lines += [line_type(self.random.choice(self.items + [self.water]))]
+                lines += [line_type(0)]
         return lines
 
     def get_observation(self, obs, **kwargs):
