@@ -21,6 +21,7 @@ from ppo.control_flow.lines import (
     Loop,
     EndLoop,
 )
+from ppo.control_flow.multi_step.rooms import rooms
 
 BLACK = "\033[30m"
 RED = "\033[31m"
@@ -468,11 +469,18 @@ class Env(ppo.control_flow.env.Env):
         return state_generator(agent_pos), lines
 
     def populate_world(self, lines, count=0):
-        max_random_objects = self.world_size ** 2
-        num_subtask = sum(1 for l in lines if type(l) is Subtask)
-        num_random_objects = np.random.randint(max_random_objects)
-        object_list = [self.agent] + list(
-            self.random.choice(self.items + [self.merchant], size=num_random_objects)
+        room = np.array([list(r) for r in self.random.choice(rooms).split("\n")])
+        unoccupied = room == " "
+        max_random_objects = unoccupied.sum()
+        random_agent = self.agent[0] not in room
+        num_random_objects = np.random.randint(
+            1 if random_agent else 0, max_random_objects
+        )
+        object_list = list(
+            self.random.choice(
+                self.items + [self.merchant],
+                size=num_random_objects - 1 if random_agent else num_random_objects,
+            )
         )
         feasible = True
         if not self.feasible(object_list, lines):
@@ -480,75 +488,30 @@ class Env(ppo.control_flow.env.Env):
                 feasible = False
             else:
                 return self.populate_world(lines, count=count + 1)
-        use_water = (
-            self.use_water and num_random_objects < max_random_objects - self.world_size
-        )
-        if use_water:
-            vertical_water = self.random.choice(2)
-            world_shape = (
-                [self.world_size, self.world_size - 1]
-                if vertical_water
-                else [self.world_size - 1, self.world_size]
-            )
-        else:
-            world_shape = (self.world_size, self.world_size)
-        indexes = self.random.choice(
-            np.prod(world_shape),
-            size=min(np.prod(world_shape), max_random_objects),
-            replace=False,
-        )
-        positions = np.array(list(zip(*np.unravel_index(indexes, world_shape))))
-        wall_indexes = positions[:, 0] % 2 * positions[:, 1] % 2
-        wall_positions = positions[wall_indexes == 1]
-        object_positions = positions[wall_indexes == 0]
-        num_walls = (
-            self.random.choice(len(wall_positions)) if len(wall_positions) else 0
-        )
-        object_positions = object_positions[: len(object_list)]
-        if len(object_list) == len(object_positions):
-            wall_positions = wall_positions[:num_walls]
-        positions = np.concatenate([object_positions, wall_positions])
-        if use_water:
-            water_index = self.random.randint(1, self.world_size - 1)
-            positions[positions[:, vertical_water] >= water_index] += np.array(
-                [0, 1] if vertical_water else [1, 0]
-            )
-            assert water_index not in positions[:, vertical_water]
-        objects = {
-            tuple(p): (self.wall if o is None else o)
-            for o, p in itertools.zip_longest(object_list, positions)
-        }
-        agent_pos = next(p for p, o in objects.items() if o == self.agent)
-        del objects[agent_pos]
-        if use_water:
-            assert object_list[0] == self.agent
-            agent_i, agent_j = positions[0]
-            for p, o in objects.items():
-                if o == self.wood:
-                    pi, pj = p
-                    if vertical_water:
-                        if (water_index < pj and water_index < agent_j) or (
-                            water_index > pj and water_index > agent_j
-                        ):
-                            objects = {
-                                **objects,
-                                **{
-                                    (i, water_index): self.water
-                                    for i in range(self.world_size)
-                                },
-                            }
-                    else:
-                        if (water_index < pi and water_index < agent_i) or (
-                            water_index > pi and water_index > agent_i
-                        ):
-                            objects = {
-                                **objects,
-                                **{
-                                    (water_index, i): self.water
-                                    for i in range(self.world_size)
-                                },
-                            }
 
+        ij = np.stack(
+            np.meshgrid(np.arange(self.world_size), np.arange(self.world_size)), axis=-1
+        ).swapaxes(0, 1)
+        unoccupied = ij[unoccupied]
+        object_ij = list(
+            unoccupied[
+                self.random.choice(
+                    len(unoccupied), size=num_random_objects, replace=False
+                )
+            ]
+        )
+        if random_agent:
+            assert self.agent[0] not in room
+            agent_pos = object_ij.pop()
+        else:
+            assert self.agent[0] in room
+            agent_pos = ij[room == self.agent[0]][0]
+
+        occupied = room != " "
+        positions = object_ij + list(ij[occupied])
+        world_contents = {t[0]: t for t in self.world_contents}
+        object_list += [world_contents[x] for x in room[occupied]]
+        objects = {tuple(p): o for p, o in (zip(positions, object_list))}
         return agent_pos, objects, feasible
 
     def assign_line_ids(self, line_types):
