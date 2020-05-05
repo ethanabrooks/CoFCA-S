@@ -87,11 +87,12 @@ class Agent(ppo.agent.Agent, NNBase):
         return True
 
     def forward(self, inputs, rnn_hxs, masks, deterministic=False, action=None):
+        rm = self.recurrent_module
+        return rm.lower_level(inputs, rnn_hxs, masks, action=action)
         N = inputs.size(0)
         all_hxs, last_hx = self._forward_gru(
             inputs.view(N, -1), rnn_hxs, masks, action=action
         )
-        rm = self.recurrent_module
         hx = rm.parse_hidden(all_hxs)
         t = type(rm)
         pad = torch.zeros_like(hx.a)

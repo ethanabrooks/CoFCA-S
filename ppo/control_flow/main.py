@@ -80,16 +80,16 @@ def main(
                 return control_flow.multi_step.env.Env(**args)
 
         def process_infos(self, episode_counter, done, infos, **act_log):
-            if lower_level != "train-alone":
-                P = act_log.pop("P")
-                P = P.transpose(0, 1)[done]
-                if P.size(0) > 0:
-                    P = P.cpu().numpy()
-                    episode_counter["P"] += np.split(P, P.shape[0])
-                for d in infos:
-                    for name in NAMES:
-                        if name in d:
-                            episode_counter[name].append(d.pop(name))
+            # if lower_level != "train-alone":
+            #     P = act_log.pop("P")
+            #     P = P.transpose(0, 1)[done]
+            #     if P.size(0) > 0:
+            #         P = P.cpu().numpy()
+            #         episode_counter["P"] += np.split(P, P.shape[0])
+            #     for d in infos:
+            #         for name in NAMES:
+            #             if name in d:
+            #                 episode_counter[name].append(d.pop(name))
             super().process_infos(episode_counter, done, infos, **act_log)
 
         def log_result(self, result: dict):
