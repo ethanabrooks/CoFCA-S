@@ -7,6 +7,7 @@ import torch
 import torch.nn as nn
 
 from ppo.control_flow.multi_step.env import Obs, subtasks, Env
+from ppo.control_flow.env import Action
 from ppo.control_flow.lines import Subtask
 from ppo.control_flow.recurrence import get_obs_sections
 from ppo.distributions import Categorical, DiagGaussian
@@ -89,7 +90,7 @@ class Agent(nn.Module):
             else:
                 action = dist.sample()
         else:
-            action = action[:, 0]
+            action = Action(*action.unbind(-1)).lower
 
         action_log_probs = dist.log_probs(action)
         entropy = dist.entropy().mean()
