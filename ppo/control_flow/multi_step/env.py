@@ -258,7 +258,7 @@ class Env(ppo.control_flow.env.Env):
             elif type(line) is While:
                 whiles += 1
                 if whiles > self.max_while_loops:
-                    return True
+                    return False
             evaluation = self.evaluate_line(line, counts, [], loops)
             l = line_iterator.send(evaluation)
         return True
