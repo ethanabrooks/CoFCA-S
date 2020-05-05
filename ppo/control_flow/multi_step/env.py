@@ -276,9 +276,13 @@ class Env(ppo.control_flow.env.Env):
         return counts
 
     def generators(self, count=0) -> Tuple[Iterator[State], List[Line]]:
-        use_failure_buf = len(self.failure_buffer) > 0 and (
-            self.random.random() * self.max_failure_sample_prob
-            < self.success_count / self.i
+        use_failure_buf = (
+            not self.evaluating
+            and len(self.failure_buffer) > 0
+            and (
+                self.random.random()
+                < self.max_failure_sample_prob * self.success_count / self.i
+            )
         )
         if use_failure_buf:
             choice = self.random.choice(len(self.failure_buffer))

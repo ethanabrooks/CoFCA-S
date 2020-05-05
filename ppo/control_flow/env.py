@@ -132,7 +132,7 @@ class Env(gym.Env, ABC):
 
         subtasks_complete = 0
         agent_ptr = 0
-        info = dict(use_failure_buf=state.use_failure_buf)
+        info = {}
         term = False
         action = None
         lower_level_action = None
@@ -214,7 +214,6 @@ class Env(gym.Env, ABC):
 
             self._render = render
             obs = self.get_observation(obs=state.obs, active=state.ptr, lines=lines)
-
             action = (yield obs, reward, term, info)
             if action.size == 1:
                 action = Action(upper=0, lower=action, delta=0, dg=0, ptr=0)
@@ -226,7 +225,13 @@ class Env(gym.Env, ABC):
                 int(action.ptr),
             )
 
-            info = {}
+            info = dict(
+                use_failure_buf=state.use_failure_buf,
+                success_count=self.success_count,
+                episode=self.i,
+                len_failure_buffer=len(self.failure_buffer),
+                success_ratio=self.success_count / self.i,
+            )
 
             if action > self.num_subtasks:
                 n += 1
