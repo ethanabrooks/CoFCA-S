@@ -287,7 +287,10 @@ class Env(ppo.control_flow.env.Env):
         lines = list(self.assign_line_ids(line_types))
         assert self.max_nesting_depth == 1
         agent_pos, objects, feasible = self.populate_world(lines)
-        if not feasible and count < self.max_instruction_resamples:
+        if not feasible and (
+            self.max_instruction_resamples is None
+            or count < self.max_instruction_resamples
+        ):
             return self.generators(count + 1)
 
         def state_generator(agent_pos) -> State:
@@ -623,7 +626,7 @@ def build_parser(
     p.add_argument(
         "--max-instruction-resamples",
         type=int,
-        required=default_max_instruction_resamples is None,
+        required=False,
         default=default_max_instruction_resamples,
     )
     p.add_argument(
