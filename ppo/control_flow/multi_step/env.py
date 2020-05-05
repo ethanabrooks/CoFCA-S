@@ -220,7 +220,9 @@ class Env(ppo.control_flow.env.Env):
             if line.id == Env.iron:
                 evaluation = counts[Env.iron] > counts[Env.gold]
             elif line.id == Env.gold:
-                evaluation = counts[Env.gold] > counts[Env.iron]
+                evaluation = counts[Env.gold] > counts[Env.wood]
+            elif line.id == Env.wood:
+                evaluation = counts[Env.wood] > counts[Env.iron]
             else:
                 raise RuntimeError
             condition_evaluations += [evaluation]
@@ -556,7 +558,7 @@ class Env(ppo.control_flow.env.Env):
 
     def assign_line_ids(self, line_types):
         behaviors = self.random.choice(self.behaviors, size=len(line_types))
-        items = self.random.choice([self.gold, self.iron], size=len(line_types))
+        items = self.random.choice(self.items, size=len(line_types))
         while_obj = None
         available = [x for x in self.items]
         lines = []
