@@ -23,7 +23,9 @@ from ppo.control_flow.lines import (
 
 Obs = namedtuple("Obs", "active lines obs")
 Last = namedtuple("Last", "action active reward terminal selected")
-State = namedtuple("State", "obs prev ptr term subtask_complete impossible")
+State = namedtuple(
+    "State", "obs prev ptr term subtask_complete impossible use_failure_buf"
+)
 Action = namedtuple("Action", "upper lower delta dg ptr")
 
 
@@ -66,6 +68,7 @@ class Env(gym.Env, ABC):
         self.time_to_waste = time_to_waste
         self.time_remaining = None
         self.i = 0
+        self.success_count = 0
 
         self.loops = None
         self.eval_lines = eval_lines
@@ -129,7 +132,7 @@ class Env(gym.Env, ABC):
 
         subtasks_complete = 0
         agent_ptr = 0
-        info = {}
+        info = dict(use_failure_buf=state.use_failure_buf)
         term = False
         action = None
         lower_level_action = None
@@ -138,6 +141,7 @@ class Env(gym.Env, ABC):
             if state.ptr is not None:
                 program_counter.append(state.ptr)
             success = state.ptr is None
+            self.success_count += success
 
             term = term or success or state.term
             if self.lower_level == "train-alone":

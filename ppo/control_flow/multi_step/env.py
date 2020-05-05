@@ -1,6 +1,7 @@
 import functools
 import itertools
-from collections import Counter, namedtuple
+from collections import Counter, namedtuple, deque
+from copy import deepcopy
 from typing import Iterator, List, Tuple
 
 import numpy as np
@@ -97,9 +98,13 @@ class Env(ppo.control_flow.env.Env):
         max_instruction_resamples,
         max_while_loops,
         use_water,
+        max_failure_sample_prob,
+        failure_buffer_size,
         world_size=6,
         **kwargs,
     ):
+        self.max_failure_sample_prob = max_failure_sample_prob
+        self.failure_buffer = deque(maxlen=failure_buffer_size)
         self.max_instruction_resamples = max_instruction_resamples
         self.max_world_resamples = max_world_resamples
         self.max_while_loops = max_while_loops
@@ -271,29 +276,39 @@ class Env(ppo.control_flow.env.Env):
         return counts
 
     def generators(self, count=0) -> Tuple[Iterator[State], List[Line]]:
-        n_lines = (
-            self.eval_lines
-            if self.evaluating
-            else self.random.random_integers(self.min_lines, self.max_lines)
+        use_failure_buf = len(self.failure_buffer) > 0 and (
+            self.random.random() * self.max_failure_sample_prob
+            < self.success_count / self.i
         )
-        line_types = list(
-            Line.generate_types(
-                n_lines,
-                remaining_depth=self.max_nesting_depth,
-                random=self.random,
-                legal_lines=self.control_flow_types,
+        if use_failure_buf:
+            choice = self.random.choice(len(self.failure_buffer))
+            lines, objects, agent_pos = self.failure_buffer[choice]
+        else:
+            n_lines = (
+                self.eval_lines
+                if self.evaluating
+                else self.random.random_integers(self.min_lines, self.max_lines)
             )
-        )
-        lines = list(self.assign_line_ids(line_types))
-        assert self.max_nesting_depth == 1
-        agent_pos, objects, feasible = self.populate_world(lines)
-        if not feasible and (
-            self.max_instruction_resamples is None
-            or count < self.max_instruction_resamples
-        ):
-            return self.generators(count + 1)
+            line_types = list(
+                Line.generate_types(
+                    n_lines,
+                    remaining_depth=self.max_nesting_depth,
+                    random=self.random,
+                    legal_lines=self.control_flow_types,
+                )
+            )
+            lines = list(self.assign_line_ids(line_types))
+            assert self.max_nesting_depth == 1
+            agent_pos, objects, feasible = self.populate_world(lines)
+            if not feasible and (
+                self.max_instruction_resamples is None
+                or count < self.max_instruction_resamples
+            ):
+                return self.generators(count + 1)
 
         def state_generator(agent_pos) -> State:
+            initial_objects = deepcopy(objects)
+            initial_agent_pos = deepcopy(agent_pos)
             line_iterator = self.line_generator(lines)
             condition_evaluations = []
             if self.lower_level == "train-alone":
@@ -350,6 +365,9 @@ class Env(ppo.control_flow.env.Env):
             term = False
             while True:
                 term |= not self.time_remaining
+                if term and ptr is not None:
+                    self.failure_buffer.append((lines, initial_objects, agent_pos))
+
                 subtask_id, lower_level_index = yield State(
                     obs=(self.world_array(objects, agent_pos), inventory),
                     prev=prev,
@@ -357,6 +375,7 @@ class Env(ppo.control_flow.env.Env):
                     term=term,
                     subtask_complete=subtask_complete,
                     impossible=self.impossible,
+                    use_failure_buf=use_failure_buf,
                 )
                 subtask_complete = False
                 # for i, a in enumerate(self.lower_level_actions):
@@ -382,6 +401,7 @@ class Env(ppo.control_flow.env.Env):
                         term=term,
                         subtask_complete=subtask_complete,
                         impossible=self.impossible,
+                        use_failure_buf=use_failure_buf,
                     )
 
                 if self.lower_level == "hardcoded":
@@ -617,6 +637,8 @@ def build_parser(
         "--no-temporal-extension", dest="temporal_extension", action="store_false"
     )
     p.add_argument("--no-water", dest="use_water", action="store_false")
+    p.add_argument("--max-failure-sample-prob", type=float, required=True)
+    p.add_argument("--failure-buffer-size", type=int, required=True)
     p.add_argument(
         "--max-world-resamples",
         type=int,
