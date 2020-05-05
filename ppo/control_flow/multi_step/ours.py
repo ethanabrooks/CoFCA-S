@@ -62,6 +62,9 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             conv_hidden_size = hidden_size
         self.conv_hidden_size = conv_hidden_size
         observation_space = Obs(**observation_space.spaces)
+        d, h, w = observation_space.obs.shape
+        if kernel_size > h:
+            kernel_size = h
         recurrence.Recurrence.__init__(
             self,
             hidden_size=hidden_size,
@@ -90,8 +93,9 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 gate_hidden_size,
             )
         )
-        d, h, w = observation_space.obs.shape
         pool_input = int((h - kernel_size) / stride + 1)
+        if gate_pool_kernel_size > pool_input:
+            gate_pool_kernel_size = pool_input
         pool_output = int((pool_input - gate_pool_kernel_size) / gate_pool_stride + 1)
         if not concat_gate:
             gate_conv_hidden_size = gate_hidden_size
@@ -113,7 +117,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         inventory_size = self.obs_spaces.inventory.n
         inventory_hidden_size = gate_hidden_size if concat else hidden_size
         self.embed_inventory = nn.Sequential(
-            init_(nn.Linear(inventory_size, inventory_hidden_size)), nn.ReLU(),
+            init_(nn.Linear(inventory_size, inventory_hidden_size)), nn.ReLU()
         )
         self.zeta = init_(
             nn.Linear(
@@ -243,7 +247,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             obs_conv_output = F.avg_pool2d(obs, kernel_size=obs.shape[-2:]).view(N, -1)
             inventory = self.embed_inventory(state.inventory[t])
             zeta_input = (
-                torch.cat([m, obs_conv_output, inventory,], dim=-1,)
+                torch.cat([m, obs_conv_output, inventory], dim=-1)
                 if self.concat
                 else (m * obs_conv_output * inventory)
             )
@@ -281,7 +285,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             if not self.concat_gate:
                 m = self.project_m(m)
             zeta2_input = (
-                torch.cat([m, gate_conv_output, embedded_lower], dim=-1,)
+                torch.cat([m, gate_conv_output, embedded_lower], dim=-1)
                 if self.concat_gate
                 else (m * gate_conv_output * embedded_lower)
             )
