@@ -417,7 +417,7 @@ class Env(ppo.control_flow.env.Env):
                                 and inventory[standing_on] == 0
                             ):
                                 inventory[standing_on] = 1
-                            del objects[tuple(agent_pos)]
+                                del objects[tuple(agent_pos)]
                     elif lower_level_action == self.sell:
                         done = done and (
                             self.lower_level == "hardcoded" or inventory[tgt_obj] > 0
