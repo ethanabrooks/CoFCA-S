@@ -95,7 +95,6 @@ class Env(ppo.control_flow.env.Env):
         temporal_extension,
         term_on,
         max_world_resamples,
-        max_instruction_resamples,
         max_while_loops,
         use_water,
         max_failure_sample_prob,
@@ -105,14 +104,12 @@ class Env(ppo.control_flow.env.Env):
     ):
         self.max_failure_sample_prob = max_failure_sample_prob
         self.failure_buffer = deque(maxlen=failure_buffer_size)
-        self.max_instruction_resamples = max_instruction_resamples
         self.max_world_resamples = max_world_resamples
         self.max_while_loops = max_while_loops
         self.term_on = term_on
         self.temporal_extension = temporal_extension
         self.loops = None
         self.whiles = None
-        self.impossible = None
         self.use_water = use_water
 
         self.subtasks = list(subtasks())
@@ -131,7 +128,7 @@ class Env(ppo.control_flow.env.Env):
         self.action_space = spaces.MultiDiscrete(
             np.array(
                 ppo.control_flow.env.Action(
-                    upper=num_subtasks + 2,
+                    upper=num_subtasks + 1,
                     delta=2 * self.n_lines,
                     dg=2,
                     lower=len(self.lower_level_actions),
@@ -275,7 +272,7 @@ class Env(ppo.control_flow.env.Env):
             counts[o] += 1
         return counts
 
-    def generators(self, count=0) -> Tuple[Iterator[State], List[Line]]:
+    def generators(self) -> Tuple[Iterator[State], List[Line]]:
         use_failure_buf = (
             not self.evaluating
             and len(self.failure_buffer) > 0
@@ -305,11 +302,8 @@ class Env(ppo.control_flow.env.Env):
             lines = list(self.assign_line_ids(line_types))
             assert self.max_nesting_depth == 1
             agent_pos, objects, feasible = self.populate_world(lines)
-            if not feasible and (
-                self.max_instruction_resamples is None
-                or count < self.max_instruction_resamples
-            ):
-                return self.generators(count + 1)
+            if not feasible:
+                return self.generators()
 
         def state_generator(agent_pos) -> State:
             initial_objects = deepcopy(objects)
@@ -322,7 +316,6 @@ class Env(ppo.control_flow.env.Env):
                 self.time_remaining = 200 if self.evaluating else self.time_to_waste
             self.loops = None
             self.whiles = 0
-            self.impossible = False
             inventory = Counter()
             subtask_complete = False
 
@@ -353,11 +346,6 @@ class Env(ppo.control_flow.env.Env):
                 if l is not None:
                     assert type(lines[l]) is Subtask
                     be, it = lines[l].id
-                    if it not in objects.values():
-                        self.impossible = True
-                    elif be == self.sell:
-                        if self.merchant not in objects.values():
-                            self.impossible = True
                     time_delta = 3 * self.world_size
                     if self.lower_level == "train-alone":
                         self.time_remaining = time_delta + self.time_to_waste
@@ -365,7 +353,6 @@ class Env(ppo.control_flow.env.Env):
                         self.time_remaining += time_delta
                     return l
 
-            possible_objects = list(objects.values())
             prev, ptr = 0, next_subtask(None)
             term = False
             while True:
@@ -379,7 +366,6 @@ class Env(ppo.control_flow.env.Env):
                     ptr=ptr,
                     term=term,
                     subtask_complete=subtask_complete,
-                    impossible=self.impossible,
                     use_failure_buf=use_failure_buf,
                 )
                 subtask_complete = False
@@ -391,23 +377,8 @@ class Env(ppo.control_flow.env.Env):
                 # pass
                 if self.lower_level == "train-alone":
                     interaction, resource = lines[ptr].id
-                elif subtask_id < len(self.subtasks):
-                    # interaction, obj = lines[agent_ptr].id
-                    interaction, resource = self.subtasks[subtask_id]
-                else:
-                    if self.impossible:
-                        ptr = None  # success
-                    else:
-                        term = True  # failure
-                    yield State(
-                        obs=(self.world_array(objects, agent_pos), inventory),
-                        prev=prev,
-                        ptr=ptr,
-                        term=term,
-                        subtask_complete=subtask_complete,
-                        impossible=self.impossible,
-                        use_failure_buf=use_failure_buf,
-                    )
+                # interaction, obj = lines[agent_ptr].id
+                interaction, resource = self.subtasks[subtask_id]
 
                 if self.lower_level == "hardcoded":
                     lower_level_action = self.get_lower_level_action(
@@ -431,23 +402,23 @@ class Env(ppo.control_flow.env.Env):
                     if lower_level_action == self.mine:
                         if tuple(agent_pos) in objects:
                             if (
-                                done
-                                or (
-                                    tgt_interaction == self.sell
-                                    and standing_on == tgt_obj
+                                not (
+                                    done
+                                    or (
+                                        tgt_interaction == self.sell
+                                        and standing_on == tgt_obj
+                                    )
+                                    or standing_on == self.wood
                                 )
-                                or standing_on == self.wood
+                                and self.mine in self.term_on
                             ):
-                                if While in self.control_flow_types:
-                                    possible_objects.remove(standing_on)
-                            elif self.mine in self.term_on:
                                 term = True
                             if (
                                 standing_on in self.items
                                 and inventory[standing_on] == 0
                             ):
                                 inventory[standing_on] = 1
-                            del objects[tuple(agent_pos)]
+                                del objects[tuple(agent_pos)]
                     elif lower_level_action == self.sell:
                         done = done and (
                             self.lower_level == "hardcoded" or inventory[tgt_obj] > 0
@@ -631,11 +602,7 @@ class Env(ppo.control_flow.env.Env):
 
 
 def build_parser(
-    p,
-    default_max_world_resamples=None,
-    default_max_while_loops=None,
-    default_max_instruction_resamples=None,
-    **kwargs,
+    p, default_max_world_resamples=None, default_max_while_loops=None, **kwargs
 ):
     ppo.control_flow.env.build_parser(p, **kwargs)
     p.add_argument(
@@ -649,12 +616,6 @@ def build_parser(
         type=int,
         required=default_max_world_resamples is None,
         default=default_max_world_resamples,
-    )
-    p.add_argument(
-        "--max-instruction-resamples",
-        type=int,
-        required=False,
-        default=default_max_instruction_resamples,
     )
     p.add_argument(
         "--max-while-loops",
