@@ -50,7 +50,6 @@ def main(
                     action_space=envs.action_space,
                     **agent_args,
                 )
-            del agent_args["concat"]
             del agent_args["recurrent"]
             return ppo.control_flow.agent.Agent(
                 observation_space=obs_space,
@@ -140,6 +139,7 @@ def control_flow_args():
     parsers.agent.add_argument("--baseline")
     parsers.agent.add_argument("--conv-hidden-size", type=int, required=True)
     parsers.agent.add_argument("--gru-hidden-size", type=int, required=True)
+    parsers.agent.add_argument("--encoder-hidden-size", type=int, required=True)
     parsers.agent.add_argument("--gate-hidden-size", type=int, required=True)
     parsers.agent.add_argument("--num-encoding-layers", type=int, required=True)
     parsers.agent.add_argument("--num-conv-layers", type=int, required=True)
@@ -150,7 +150,9 @@ def control_flow_args():
     parsers.agent.add_argument("--gate-pool-stride", type=int, required=True)
     parsers.agent.add_argument("--gate-pool-kernel-size", type=int, required=True)
     parsers.agent.add_argument("--gate-conv-kernel-size", type=int, required=True)
+    parsers.agent.add_argument("--gate-conv-hidden-size", type=int, required=True)
     parsers.agent.add_argument("--concat", action="store_true")
+    parsers.agent.add_argument("--concat-gate", action="store_true")
     parsers.agent.add_argument("--kernel-size", type=int, required=True)
     parsers.agent.add_argument("--stride", type=int, required=True)
     return parser

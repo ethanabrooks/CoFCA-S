@@ -111,23 +111,17 @@ class Agent(ppo.agent.Agent, NNBase):
             X = [hx.a, pad, pad, pad, hx.p]
             probs = [hx.a_probs]
         elif t is ppo.control_flow.multi_step.ours.Recurrence:
-            X = Action(upper=hx.a, lower=hx.l, delta=hx.d, ag=hx.ag, dg=hx.dg, ptr=hx.p)
+            X = Action(upper=hx.a, lower=hx.l, delta=hx.d, dg=hx.dg, ptr=hx.p)
             ll_type = self.lower_level_type
             if ll_type == "train-alone":
                 probs = Action(
-                    upper=hx.a_probs,
-                    lower=hx.ll_probs,
-                    delta=hx.d_probs,
-                    ag=None,
-                    dg=hx.db_probs,
-                    ptr=None,
+                    upper=None, lower=hx.l_probs, delta=None, dg=None, ptr=None,
                 )
             elif ll_type == "train-with-upper":
                 probs = Action(
                     upper=hx.a_probs,
-                    lower=hx.ll_probs,
+                    lower=hx.l_probs,
                     delta=hx.d_probs,
-                    ag=hx.ag_probs,
                     dg=hx.dg_probs,
                     ptr=None,
                 )
@@ -135,8 +129,7 @@ class Agent(ppo.agent.Agent, NNBase):
                 probs = Action(
                     upper=hx.a_probs,
                     lower=None,
-                    delta=None,
-                    ag=hx.ag_probs,
+                    delta=hx.d_probs,
                     dg=hx.dg_probs,
                     ptr=None,
                 )
@@ -153,8 +146,8 @@ class Agent(ppo.agent.Agent, NNBase):
         aux_loss = -self.entropy_coef * entropy
         if probs.upper is not None:
             aux_loss += self.no_op_coef * hx.a_probs[:, -1].mean()
-        if probs.ag is not None and probs.dg is not None:
-            aux_loss += rm.gate_coef * (hx.ag_probs + hx.dg_probs)[:, 1].mean()
+        if probs.dg is not None:
+            aux_loss += rm.gate_coef * hx.dg_probs[:, 1].mean()
         try:
             aux_loss += (rm.gru_gate_coef * hx.gru_gate).mean()
         except AttributeError:
@@ -178,26 +171,7 @@ class Agent(ppo.agent.Agent, NNBase):
 
     def _forward_gru(self, x, hxs, masks, action=None):
         if action is None:
-            rm = self.recurrent_module
-            if rm.lower_level is not None:
-                hx = rm.parse_hidden(hxs)
-                ll_output = rm.lower_level(
-                    Obs(*rm.parse_inputs(x)),
-                    hx.lh,
-                    masks,
-                    action=action,
-                    upper=hx.a,
-                    deterministic=True,
-                )
-                action = Action(
-                    *((-torch.ones(len(x), rm.action_size, device=x.device)).unbind(1))
-                )._replace(lower=ll_output.action.float().flatten())
-                action = torch.stack(action, dim=-1)
-                hx = hx._replace(lh=ll_output.rnn_hxs)
-                hxs = torch.cat(hx, dim=-1)
-                y = torch.cat([x, action], dim=-1)
-            else:
-                y = torch.cat(x, [0, self.recurrent_module.action_size], "constant", -1)
+            y = F.pad(x, [0, self.recurrent_module.action_size], "constant", -1)
         else:
             y = torch.cat([x, action.float()], dim=-1)
         return super()._forward_gru(y, hxs, masks)

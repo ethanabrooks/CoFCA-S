@@ -22,8 +22,8 @@ from ppo.control_flow.lines import (
 
 Obs = namedtuple("Obs", "active lines obs")
 Last = namedtuple("Last", "action active reward terminal selected")
-State = namedtuple("State", "obs prev ptr term subtask_complete")
-Action = namedtuple("Action", "upper lower delta ag dg ptr")
+State = namedtuple("State", "obs prev ptr term subtask_complete impossible")
+Action = namedtuple("Action", "upper lower delta dg ptr")
 
 
 class Env(gym.Env, ABC):
@@ -157,7 +157,8 @@ class Env(gym.Env, ABC):
                     success=success,
                 )
                 if success:
-                    info.update(success_line=len(lines))
+                    if not state.impossible:
+                        info.update(success_line=len(lines))
                 else:
                     info.update(success_line=state.prev, failure_line=state.ptr)
                 subtasks_attempted = subtasks_complete + (not success)
@@ -200,6 +201,7 @@ class Env(gym.Env, ABC):
                 print("Reward", reward)
                 print("Cumulative", cumulative_reward)
                 print("Time remaining", self.time_remaining)
+                print("Impossible:", self.impossible)
                 print("Obs:")
                 print(RESET)
                 self.print_obs(state.obs)
@@ -209,7 +211,7 @@ class Env(gym.Env, ABC):
 
             action = (yield obs, reward, term, info)
             if action.size == 1:
-                action = Action(upper=0, lower=action, delta=0, ag=0, dg=0, ptr=0)
+                action = Action(upper=0, lower=action, delta=0, dg=0, ptr=0)
             actions.extend([int(a) for a in action])
             action = Action(*action)
             action, lower_level_action, agent_ptr, = (
@@ -220,7 +222,7 @@ class Env(gym.Env, ABC):
 
             info = {}
 
-            if action == self.num_subtasks:
+            if action > self.num_subtasks:
                 n += 1
                 no_op_limit = 200 if self.evaluating else self.no_op_limit
                 if self.no_op_limit is not None and self.no_op_limit < 0:
@@ -458,7 +460,7 @@ def main(env):
         action = mapping2.get(string, None)
         if action is None:
             return None
-        return np.array(Action(upper=0, lower=action, delta=0, dg=0, ag=0, ptr=0))
+        return np.array(Action(upper=0, lower=action, delta=0, dg=0, ptr=0))
 
     keyboard_control.run(env, action_fn=action_fn)
 
