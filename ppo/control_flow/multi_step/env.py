@@ -286,24 +286,26 @@ class Env(ppo.control_flow.env.Env):
             lines, objects, agent_pos = self.failure_buffer[choice]
             del self.failure_buffer[choice]
         else:
-            n_lines = (
-                self.eval_lines
-                if self.evaluating
-                else self.random.random_integers(self.min_lines, self.max_lines)
-            )
-            line_types = list(
-                Line.generate_types(
-                    n_lines,
-                    remaining_depth=self.max_nesting_depth,
-                    random=self.random,
-                    legal_lines=self.control_flow_types,
+            while True:
+                n_lines = (
+                    self.eval_lines
+                    if self.evaluating
+                    else self.random.random_integers(self.min_lines, self.max_lines)
                 )
-            )
-            lines = list(self.assign_line_ids(line_types))
-            assert self.max_nesting_depth == 1
-            agent_pos, objects, feasible = self.populate_world(lines)
-            if not feasible:
-                return self.generators()
+                line_types = list(
+                    Line.generate_types(
+                        n_lines,
+                        remaining_depth=self.max_nesting_depth,
+                        random=self.random,
+                        legal_lines=self.control_flow_types,
+                    )
+                )
+                lines = list(self.assign_line_ids(line_types))
+                assert self.max_nesting_depth == 1
+                result = self.populate_world(lines)
+                if result is not None:
+                    agent_pos, objects = result
+                    break
 
         def state_generator(agent_pos) -> State:
             initial_objects = deepcopy(objects)
@@ -465,19 +467,23 @@ class Env(ppo.control_flow.env.Env):
 
         return state_generator(agent_pos), lines
 
-    def populate_world(self, lines, count=0):
-        max_random_objects = self.world_size ** 2
-        num_subtask = sum(1 for l in lines if type(l) is Subtask)
-        num_random_objects = np.random.randint(max_random_objects)
-        object_list = [self.agent] + list(
-            self.random.choice(self.items + [self.merchant], size=num_random_objects)
-        )
-        feasible = True
-        if not self.feasible(object_list, lines):
-            if count >= self.max_world_resamples:
-                feasible = False
-            else:
-                return self.populate_world(lines, count=count + 1)
+    def populate_world(self, lines):
+        feasible = False
+        for i in range(self.max_world_resamples):
+            max_random_objects = self.world_size ** 2
+            num_random_objects = np.random.randint(max_random_objects)
+            object_list = [self.agent] + list(
+                self.random.choice(
+                    self.items + [self.merchant], size=num_random_objects
+                )
+            )
+            feasible = self.feasible(object_list, lines)
+            if feasible:
+                break
+
+        if not feasible:
+            return None
+
         use_water = (
             self.use_water and num_random_objects < max_random_objects - self.world_size
         )
@@ -547,7 +553,7 @@ class Env(ppo.control_flow.env.Env):
                                 },
                             }
 
-        return agent_pos, objects, feasible
+        return agent_pos, objects
 
     def assign_line_ids(self, line_types):
         behaviors = self.random.choice(self.behaviors, size=len(line_types))
