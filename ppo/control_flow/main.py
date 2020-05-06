@@ -30,7 +30,7 @@ def main(
             ll_action_space = spaces.Discrete(
                 ppo.control_flow.env.Action(*envs.action_space.nvec).lower
             )
-            if lower_level == "train-alone":
+            if lower_level in ["train-alone", "train-with-upper"]:
                 return ppo.agent.Agent(
                     lower_level=True,
                     obs_spaces=obs_space,
@@ -99,20 +99,20 @@ def main(
                     result["success"] = (
                         sum(result["subtasks_complete"]) / subtasks_attempted
                     )
-            if lower_level != "train-alone":
-                names = NAMES + ["P"]
-                for name in names + ["eval_" + n for n in names]:
-                    if name in result:
-                        arrays = [x for x in result.pop(name) if x is not None]
-                        if "P" not in name:
-                            arrays = [np.array(x, dtype=int) for x in arrays]
-
-                        np.savez(Path(self.log_dir, name), *arrays)
-
-                for prefix in ("eval_", ""):
-                    if prefix + "rewards" in result:
-                        success = result[prefix + "rewards"]
-                        np.save(Path(self.log_dir, prefix + "successes"), success)
+            # if lower_level != "train-alone":
+            #     names = NAMES + ["P"]
+            #     for name in names + ["eval_" + n for n in names]:
+            #         if name in result:
+            #             arrays = [x for x in result.pop(name) if x is not None]
+            #             if "P" not in name:
+            #                 arrays = [np.array(x, dtype=int) for x in arrays]
+            #
+            #             np.savez(Path(self.log_dir, name), *arrays)
+            #
+            #     for prefix in ("eval_", ""):
+            #         if prefix + "rewards" in result:
+            #             success = result[prefix + "rewards"]
+            #             np.save(Path(self.log_dir, prefix + "successes"), success)
 
             super().log_result(result)
 
