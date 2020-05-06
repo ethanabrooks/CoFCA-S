@@ -287,6 +287,7 @@ class Env(ppo.control_flow.env.Env):
         if use_failure_buf:
             choice = self.random.choice(len(self.failure_buffer))
             lines, objects, agent_pos = self.failure_buffer[choice]
+            del self.failure_buffer[choice]
         else:
             n_lines = (
                 self.eval_lines
