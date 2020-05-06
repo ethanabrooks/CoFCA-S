@@ -23,9 +23,7 @@ from ppo.control_flow.lines import (
 
 Obs = namedtuple("Obs", "active lines obs")
 Last = namedtuple("Last", "action active reward terminal selected")
-State = namedtuple(
-    "State", "obs prev ptr term subtask_complete impossible use_failure_buf"
-)
+State = namedtuple("State", "obs prev ptr term subtask_complete use_failure_buf")
 Action = namedtuple("Action", "upper lower delta dg ptr")
 
 
@@ -163,8 +161,7 @@ class Env(gym.Env, ABC):
                     success=success,
                 )
                 if success:
-                    if not state.impossible:
-                        info.update(success_line=len(lines))
+                    info.update(success_line=len(lines))
                 else:
                     info.update(success_line=state.prev, failure_line=state.ptr)
                 subtasks_attempted = subtasks_complete + (not success)
@@ -207,7 +204,6 @@ class Env(gym.Env, ABC):
                 print("Reward", reward)
                 print("Cumulative", cumulative_reward)
                 print("Time remaining", self.time_remaining)
-                print("Impossible:", self.impossible)
                 print("Obs:")
                 print(RESET)
                 self.print_obs(state.obs)
@@ -233,7 +229,7 @@ class Env(gym.Env, ABC):
                 success_ratio=self.success_count / self.i,
             )
 
-            if action > self.num_subtasks:
+            if action == self.num_subtasks:
                 n += 1
                 no_op_limit = 200 if self.evaluating else self.no_op_limit
                 if self.no_op_limit is not None and self.no_op_limit < 0:
