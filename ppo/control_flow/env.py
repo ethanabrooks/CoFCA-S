@@ -73,7 +73,7 @@ class Env(gym.Env, ABC):
         self.min_lines = min_lines
         self.max_lines = max_lines
         if evaluating:
-            self.n_lines = eval_lines
+            self.n_lines = max(eval_lines)
         else:
             self.n_lines = max_lines
         self.n_lines += 1
@@ -163,7 +163,7 @@ class Env(gym.Env, ABC):
                 if success:
                     info.update(success_line=len(lines))
                 else:
-                    info.update(success_line=state.prev, failure_line=state.ptr)
+                    info.update(success_line=state.prev)
                 subtasks_attempted = subtasks_complete + (not success)
                 info.update(
                     subtasks_complete=subtasks_complete,
@@ -210,7 +210,8 @@ class Env(gym.Env, ABC):
 
             self._render = render
             obs = self.get_observation(obs=state.obs, active=state.ptr, lines=lines)
-            action = (yield obs, reward, term, info)
+            line_specific_info = {f"{k}_{len(lines)}": v for k, v in info.items()}
+            action = (yield obs, reward, term, dict(**info, **line_specific_info))
             if action.size == 1:
                 action = Action(upper=0, lower=action, delta=0, dg=0, ptr=0)
             actions.extend([int(a) for a in action])
@@ -223,8 +224,6 @@ class Env(gym.Env, ABC):
 
             info = dict(
                 use_failure_buf=state.use_failure_buf,
-                success_count=self.success_count,
-                episode=self.i,
                 len_failure_buffer=len(self.failure_buffer),
                 success_ratio=self.success_count / self.i,
             )

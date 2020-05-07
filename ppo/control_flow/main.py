@@ -1,8 +1,7 @@
 from pathlib import Path
 
-from gym import spaces
-from gym.spaces import Box
 import numpy as np
+from gym import spaces
 from rl_utils import hierarchical_parse_args
 
 import ppo.agent
@@ -124,7 +123,7 @@ def control_flow_args():
     parser = parsers.main
     parser.add_argument("--no-tqdm", dest="use_tqdm", action="store_false")
     parser.add_argument("--eval-steps", type=int)
-    parser.add_argument("--eval-lines", type=int, required=True)
+    parser.add_argument("--eval-lines", type=int, nargs="*")
     parser.add_argument("--no-eval", action="store_true")
     parser.add_argument("--one-line", action="store_true")
     parser.add_argument(

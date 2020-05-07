@@ -288,7 +288,7 @@ class Env(ppo.control_flow.env.Env):
         else:
             while True:
                 n_lines = (
-                    self.eval_lines
+                    self.random.choice(self.eval_lines)
                     if self.evaluating
                     else self.random.random_integers(self.min_lines, self.max_lines)
                 )
