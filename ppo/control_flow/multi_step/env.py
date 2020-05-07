@@ -184,7 +184,7 @@ class Env(ppo.control_flow.env.Env):
 
     @staticmethod
     @functools.lru_cache(maxsize=200)
-    def preprocess_line(line):
+    def preprocess_line(line, **kwargs):
         def item_index(item):
             if item == Env.water:
                 return len(Env.items)
@@ -283,7 +283,7 @@ class Env(ppo.control_flow.env.Env):
         )
         if use_failure_buf:
             choice = self.random.choice(len(self.failure_buffer))
-            lines, objects, agent_pos = self.failure_buffer[choice]
+            lines, objects, _agent_pos = self.failure_buffer[choice]
             del self.failure_buffer[choice]
         else:
             while True:
@@ -304,7 +304,7 @@ class Env(ppo.control_flow.env.Env):
                 assert self.max_nesting_depth == 1
                 result = self.populate_world(lines)
                 if result is not None:
-                    agent_pos, objects = result
+                    _agent_pos, objects = result
                     break
 
         def state_generator(agent_pos) -> State:
@@ -347,7 +347,6 @@ class Env(ppo.control_flow.env.Env):
                         break
                 if l is not None:
                     assert type(lines[l]) is Subtask
-                    be, it = lines[l].id
                     time_delta = 3 * self.world_size
                     if self.lower_level == "train-alone":
                         self.time_remaining = time_delta + self.time_to_waste
@@ -360,7 +359,9 @@ class Env(ppo.control_flow.env.Env):
             while True:
                 term |= not self.time_remaining
                 if term and ptr is not None:
-                    self.failure_buffer.append((lines, initial_objects, agent_pos))
+                    self.failure_buffer.append(
+                        (lines, initial_objects, initial_agent_pos)
+                    )
 
                 subtask_id, lower_level_index = yield State(
                     obs=(self.world_array(objects, agent_pos), inventory),
@@ -465,10 +466,13 @@ class Env(ppo.control_flow.env.Env):
                 else:
                     assert lower_level_action is None
 
-        return state_generator(agent_pos), lines
+        return state_generator(_agent_pos), lines
 
     def populate_world(self, lines):
         feasible = False
+        use_water = False
+        max_random_objects = 0
+        object_list = []
         for i in range(self.max_world_resamples):
             max_random_objects = self.world_size ** 2
             num_random_objects = np.random.randint(max_random_objects)
@@ -479,14 +483,15 @@ class Env(ppo.control_flow.env.Env):
             )
             feasible = self.feasible(object_list, lines)
             if feasible:
+                use_water = (
+                    self.use_water
+                    and num_random_objects < max_random_objects - self.world_size
+                )
                 break
 
         if not feasible:
             return None
 
-        use_water = (
-            self.use_water and num_random_objects < max_random_objects - self.world_size
-        )
         if use_water:
             vertical_water = self.random.choice(2)
             world_shape = (
