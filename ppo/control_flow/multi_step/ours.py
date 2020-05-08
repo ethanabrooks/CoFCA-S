@@ -289,6 +289,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             )
             lt = (fuzz * (be - 1) + (1 - fuzz) * L[t]).long()
             self.print("fuzz", fuzz, lt)
+            dg = dg.view(N, 1)
 
             # h = self.gru(obs, h)
             embedded_lower = self.embed_lower(lt.clone())
@@ -316,7 +317,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             self.print("u", u)
             w = P[p, R]
             d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
-            dg = DG[t].unsqueeze(-1).float()
+            _dg = DG[t].unsqueeze(-1).float()
 
             self.print("dg prob", d_gate.probs[:, 1])
             self.print("dg", dg)
@@ -348,7 +349,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 d_probs=d_dist.probs,
                 dg_probs=d_gate.probs,
                 l_probs=ll_output.dist.probs,
-                dg=dg,
+                dg=_dg,
                 gru_gate=hx.gru_gate,
                 P=P.transpose(0, 1),
             )
