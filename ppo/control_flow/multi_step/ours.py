@@ -125,7 +125,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         )
 
         self.gru2 = LSTMCell(self.encoder_hidden_size, self.gru_hidden_size)
-        self.d_gate = Categorical(gate_hidden_size, 2)
+        self.d_gate = Categorical(1, 2)
         state_sizes = self.state_sizes._asdict()
         with lower_level_config.open() as f:
             lower_level_params = json.load(f)
@@ -309,7 +309,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             z2 = F.relu(self.zeta2(zeta2_input))
             # then put M back in gru
             # then put A back in gru
-            d_gate = self.d_gate(z2)
+            d_gate = self.d_gate(dg)
             self.sample_new(DG[t], d_gate)
             # (hy_, cy_), gru_gate = self.gru2(M[R, p], (hy, cy))
             # first put obs back in gru2
@@ -317,7 +317,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             self.print("u", u)
             w = P[p, R]
             d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
-            _dg = DG[t].unsqueeze(-1).float()
+            dg = DG[t].unsqueeze(-1).float()
 
             self.print("dg prob", d_gate.probs[:, 1])
             self.print("dg", dg)
@@ -349,7 +349,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 d_probs=d_dist.probs,
                 dg_probs=d_gate.probs,
                 l_probs=ll_output.dist.probs,
-                dg=_dg,
+                dg=dg,
                 gru_gate=hx.gru_gate,
                 P=P.transpose(0, 1),
             )
