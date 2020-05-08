@@ -125,7 +125,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         )
 
         self.gru2 = LSTMCell(self.encoder_hidden_size, self.gru_hidden_size)
-        self.d_gate = Categorical(2 + gate_hidden_size, 2)
+        self.d_gate = Categorical(3, 2)
         state_sizes = self.state_sizes._asdict()
         with lower_level_config.open() as f:
             lower_level_params = json.load(f)
@@ -290,6 +290,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             lt = (fuzz * (be - 1) + (1 - fuzz) * L[t]).long()
             self.print("fuzz", fuzz, lt)
             dg = dg.view(N, 1)
+            correct_action = ((be - 1) == lt).float()
 
             # h = self.gru(obs, h)
             embedded_lower = self.embed_lower(lt.clone())
@@ -310,13 +311,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             # then put M back in gru
             # then put A back in gru
             d_gate = self.d_gate(
-                torch.cat(
-                    [
-                        m * gate_conv_output,
-                        torch.stack([correct_action, not_subtask], dim=-1),
-                    ],
-                    dim=-1,
-                )
+                torch.stack([standing_on, correct_action, not_subtask], dim=-1)
             )
             self.sample_new(DG[t], d_gate)
             # (hy_, cy_), gru_gate = self.gru2(M[R, p], (hy, cy))
