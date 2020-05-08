@@ -288,6 +288,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 2, size=(len(dg),), device=rnn_hxs.device
             )
             lt = (fuzz * (be - 1) + (1 - fuzz) * L[t]).long()
+            self.print("fuzz", fuzz, lt)
 
             # h = self.gru(obs, h)
             embedded_lower = self.embed_lower(lt.clone())
