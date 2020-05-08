@@ -1,6 +1,7 @@
 import functools
 import itertools
-from collections import Counter, namedtuple
+from collections import Counter, namedtuple, deque
+from copy import deepcopy
 from typing import Iterator, List, Tuple
 
 import numpy as np
@@ -94,19 +95,22 @@ class Env(ppo.control_flow.env.Env):
         temporal_extension,
         term_on,
         max_world_resamples,
-        max_instruction_resamples,
         max_while_loops,
+        use_water,
+        max_failure_sample_prob,
+        failure_buffer_size,
         world_size=6,
         **kwargs,
     ):
-        self.max_instruction_resamples = max_instruction_resamples
+        self.max_failure_sample_prob = max_failure_sample_prob
+        self.failure_buffer = deque(maxlen=failure_buffer_size)
         self.max_world_resamples = max_world_resamples
         self.max_while_loops = max_while_loops
         self.term_on = term_on
         self.temporal_extension = temporal_extension
         self.loops = None
         self.whiles = None
-        self.impossible = None
+        self.use_water = use_water
 
         self.subtasks = list(subtasks())
         num_subtasks = len(self.subtasks)
@@ -180,7 +184,7 @@ class Env(ppo.control_flow.env.Env):
 
     @staticmethod
     @functools.lru_cache(maxsize=200)
-    def preprocess_line(line):
+    def preprocess_line(line, **kwargs):
         def item_index(item):
             if item == Env.water:
                 return len(Env.items)
@@ -214,13 +218,17 @@ class Env(ppo.control_flow.env.Env):
             return None
         elif type(line) is Loop:
             return loops > 0
-        if type(line) is Subtask:
-            return 1
-        else:
-            evaluation = counts[Env.iron] > counts[Env.gold]
-            if type(line) in (If, While):
-                condition_evaluations += [evaluation]
+        elif type(line) in (If, While):
+            if line.id == Env.iron:
+                evaluation = counts[Env.iron] > counts[Env.gold]
+            elif line.id == Env.gold:
+                evaluation = counts[Env.gold] > counts[Env.iron]
+            else:
+                raise RuntimeError
+            condition_evaluations += [evaluation]
             return evaluation
+        else:
+            return 1
 
     def feasible(self, objects, lines):
         line_iterator = self.line_generator(lines)
@@ -264,27 +272,44 @@ class Env(ppo.control_flow.env.Env):
             counts[o] += 1
         return counts
 
-    def generators(self, count=0) -> Tuple[Iterator[State], List[Line]]:
-        n_lines = (
-            self.eval_lines
-            if self.evaluating
-            else self.random.random_integers(self.min_lines, self.max_lines)
-        )
-        line_types = list(
-            Line.generate_types(
-                n_lines,
-                remaining_depth=self.max_nesting_depth,
-                random=self.random,
-                legal_lines=self.control_flow_types,
+    def generators(self) -> Tuple[Iterator[State], List[Line]]:
+        use_failure_buf = (
+            not self.evaluating
+            and len(self.failure_buffer) > 0
+            and (
+                self.random.random()
+                < self.max_failure_sample_prob * self.success_count / self.i
             )
         )
-        lines = list(self.assign_line_ids(line_types))
-        assert self.max_nesting_depth == 1
-        agent_pos, objects, feasible = self.populate_world(lines)
-        if not feasible and count < self.max_instruction_resamples:
-            return self.generators(count + 1)
+        if use_failure_buf:
+            choice = self.random.choice(len(self.failure_buffer))
+            lines, objects, _agent_pos = self.failure_buffer[choice]
+            del self.failure_buffer[choice]
+        else:
+            while True:
+                n_lines = (
+                    self.random.choice(self.eval_lines)
+                    if self.evaluating
+                    else self.random.random_integers(self.min_lines, self.max_lines)
+                )
+                line_types = list(
+                    Line.generate_types(
+                        n_lines,
+                        remaining_depth=self.max_nesting_depth,
+                        random=self.random,
+                        legal_lines=self.control_flow_types,
+                    )
+                )
+                lines = list(self.assign_line_ids(line_types))
+                assert self.max_nesting_depth == 1
+                result = self.populate_world(lines)
+                if result is not None:
+                    _agent_pos, objects = result
+                    break
 
         def state_generator(agent_pos) -> State:
+            initial_objects = deepcopy(objects)
+            initial_agent_pos = deepcopy(agent_pos)
             line_iterator = self.line_generator(lines)
             condition_evaluations = []
             if self.lower_level == "train-alone":
@@ -293,7 +318,6 @@ class Env(ppo.control_flow.env.Env):
                 self.time_remaining = 200 if self.evaluating else self.time_to_waste
             self.loops = None
             self.whiles = 0
-            self.impossible = False
             inventory = Counter()
             subtask_complete = False
 
@@ -323,13 +347,6 @@ class Env(ppo.control_flow.env.Env):
                         break
                 if l is not None:
                     assert type(lines[l]) is Subtask
-                    be, it = lines[l].id
-                    if it not in objects.values():
-                        return None
-                    elif be == self.sell:
-                        if self.merchant not in objects.values():
-                            return None
-                    _, d = get_nearest(agent_pos, objective(be, it), objects)
                     time_delta = 3 * self.world_size
                     if self.lower_level == "train-alone":
                         self.time_remaining = time_delta + self.time_to_waste
@@ -337,18 +354,22 @@ class Env(ppo.control_flow.env.Env):
                         self.time_remaining += time_delta
                     return l
 
-            possible_objects = list(objects.values())
             prev, ptr = 0, next_subtask(None)
             term = False
             while True:
                 term |= not self.time_remaining
+                if term and ptr is not None:
+                    self.failure_buffer.append(
+                        (lines, initial_objects, initial_agent_pos)
+                    )
+
                 subtask_id, lower_level_index = yield State(
                     obs=(self.world_array(objects, agent_pos), inventory),
                     prev=prev,
                     ptr=ptr,
                     term=term,
                     subtask_complete=subtask_complete,
-                    impossible=self.impossible,
+                    use_failure_buf=use_failure_buf,
                 )
                 subtask_complete = False
                 # for i, a in enumerate(self.lower_level_actions):
@@ -359,9 +380,9 @@ class Env(ppo.control_flow.env.Env):
                 # pass
                 if self.lower_level == "train-alone":
                     interaction, resource = lines[ptr].id
-                else:
-                    # interaction, obj = lines[agent_ptr].id
-                    interaction, resource = self.subtasks[subtask_id]
+                # interaction, obj = lines[agent_ptr].id
+                interaction, resource = self.subtasks[subtask_id]
+
                 if self.lower_level == "hardcoded":
                     lower_level_action = self.get_lower_level_action(
                         interaction=interaction,
@@ -391,8 +412,7 @@ class Env(ppo.control_flow.env.Env):
                                 )
                                 or standing_on == self.wood
                             ):
-                                if While in self.control_flow_types:
-                                    possible_objects.remove(standing_on)
+                                pass  # TODO
                             elif self.mine in self.term_on:
                                 term = True
                             if (
@@ -446,22 +466,32 @@ class Env(ppo.control_flow.env.Env):
                 else:
                     assert lower_level_action is None
 
-        return state_generator(agent_pos), lines
+        return state_generator(_agent_pos), lines
 
-    def populate_world(self, lines, count=0):
-        max_random_objects = self.world_size ** 2
-        num_subtask = sum(1 for l in lines if type(l) is Subtask)
-        num_random_objects = np.random.randint(max_random_objects)
-        object_list = [self.agent] + list(
-            self.random.choice(self.items + [self.merchant], size=num_random_objects)
-        )
-        feasible = True
-        if not self.feasible(object_list, lines):
-            if count >= self.max_world_resamples:
-                feasible = False
-            else:
-                return self.populate_world(lines, count=count + 1)
-        use_water = num_random_objects < max_random_objects - self.world_size
+    def populate_world(self, lines):
+        feasible = False
+        use_water = False
+        max_random_objects = 0
+        object_list = []
+        for i in range(self.max_world_resamples):
+            max_random_objects = self.world_size ** 2
+            num_random_objects = np.random.randint(max_random_objects)
+            object_list = [self.agent] + list(
+                self.random.choice(
+                    self.items + [self.merchant], size=num_random_objects
+                )
+            )
+            feasible = self.feasible(object_list, lines)
+            if feasible:
+                use_water = (
+                    self.use_water
+                    and num_random_objects < max_random_objects - self.world_size
+                )
+                break
+
+        if not feasible:
+            return None
+
         if use_water:
             vertical_water = self.random.choice(2)
             world_shape = (
@@ -528,11 +558,11 @@ class Env(ppo.control_flow.env.Env):
                                 },
                             }
 
-        return agent_pos, objects, feasible
+        return agent_pos, objects
 
     def assign_line_ids(self, line_types):
         behaviors = self.random.choice(self.behaviors, size=len(line_types))
-        items = self.random.choice(self.items, size=len(line_types))
+        items = self.random.choice([self.gold, self.iron], size=len(line_types))
         while_obj = None
         available = [x for x in self.items]
         lines = []
@@ -547,13 +577,15 @@ class Env(ppo.control_flow.env.Env):
             elif line_type is While:
                 while_obj = item
                 lines += [line_type(item)]
+            elif line_type is If:
+                lines += [line_type(item)]
             elif line_type is EndWhile:
                 if while_obj in available:
                     available.remove(while_obj)
                 while_obj = None
                 lines += [EndWhile(0)]
             else:
-                lines += [line_type(self.random.choice(self.items + [self.water]))]
+                lines += [line_type(0)]
         return lines
 
     def get_observation(self, obs, **kwargs):
@@ -580,27 +612,20 @@ class Env(ppo.control_flow.env.Env):
 
 
 def build_parser(
-    p,
-    default_max_world_resamples=None,
-    default_max_while_loops=None,
-    default_max_instruction_resamples=None,
-    **kwargs,
+    p, default_max_world_resamples=None, default_max_while_loops=None, **kwargs
 ):
     ppo.control_flow.env.build_parser(p, **kwargs)
     p.add_argument(
         "--no-temporal-extension", dest="temporal_extension", action="store_false"
     )
+    p.add_argument("--no-water", dest="use_water", action="store_false")
+    p.add_argument("--max-failure-sample-prob", type=float, required=True)
+    p.add_argument("--failure-buffer-size", type=int, required=True)
     p.add_argument(
         "--max-world-resamples",
         type=int,
         required=default_max_world_resamples is None,
         default=default_max_world_resamples,
-    )
-    p.add_argument(
-        "--max-instruction-resamples",
-        type=int,
-        required=default_max_instruction_resamples is None,
-        default=default_max_instruction_resamples,
     )
     p.add_argument(
         "--max-while-loops",
