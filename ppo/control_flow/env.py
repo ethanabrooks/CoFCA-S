@@ -161,8 +161,7 @@ class Env(gym.Env, ABC):
                     success=success,
                 )
                 if success:
-                    if not state.impossible:
-                        info.update(success_line=len(lines))
+                    info.update(success_line=len(lines))
                 else:
                     info.update(success_line=state.prev)
                 subtasks_attempted = subtasks_complete + (not success)

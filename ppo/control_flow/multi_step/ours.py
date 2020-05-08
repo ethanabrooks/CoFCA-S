@@ -113,7 +113,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         inventory_size = self.obs_spaces.inventory.n
         inventory_hidden_size = gate_hidden_size if concat else hidden_size
         self.embed_inventory = nn.Sequential(
-            init_(nn.Linear(inventory_size, inventory_hidden_size)), nn.ReLU(),
+            init_(nn.Linear(inventory_size, inventory_hidden_size)), nn.ReLU()
         )
         self.zeta = init_(
             nn.Linear(
@@ -243,7 +243,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             obs_conv_output = F.avg_pool2d(obs, kernel_size=obs.shape[-2:]).view(N, -1)
             inventory = self.embed_inventory(state.inventory[t])
             zeta_input = (
-                torch.cat([m, obs_conv_output, inventory,], dim=-1,)
+                torch.cat([m, obs_conv_output, inventory], dim=-1)
                 if self.concat
                 else (m * obs_conv_output * inventory)
             )
@@ -270,8 +270,27 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 assert torch.all(L[0] < 0)
                 L[t] = ll_output.action.flatten()
 
+            ac, be, it, _ = lines[t][R, p].long().unbind(-1)  # N, 2
+            sell = (be == 2).long()
+            channel_index = 3 * sell + (it - 1) * (1 - sell)
+            channel = state.obs[t][R, channel_index]
+            agent_channel = state.obs[t][R, -1]
+            self.print("channel", channel)
+            self.print("agent_channel", agent_channel)
+            not_subtask = (ac != 0).float().flatten()
+            standing_on = (channel * agent_channel).view(N, -1).sum(-1)
+            correct_action = ((be - 1) == L[t]).float()
+            self.print("be", be)
+            self.print("L[t]", L[t])
+            self.print("correct_action", correct_action)
+            dg = standing_on * correct_action + not_subtask
+            fuzz = (1 - dg).long() * torch.randint(
+                2, size=(len(dg),), device=rnn_hxs.device
+            )
+            lt = (fuzz * (be - 1) + (1 - fuzz) * L[t]).long()
+
             # h = self.gru(obs, h)
-            embedded_lower = self.embed_lower(L[t].clone())
+            embedded_lower = self.embed_lower(lt.clone())
             self.print("L[t]", L[t])
             self.print("lines[R, p]", lines[t][R, p])
             gate_obs = self.gate_conv(obs)
@@ -281,7 +300,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             if not self.concat_gate:
                 m = self.project_m(m)
             zeta2_input = (
-                torch.cat([m, gate_conv_output, embedded_lower], dim=-1,)
+                torch.cat([m, gate_conv_output, embedded_lower], dim=-1)
                 if self.concat_gate
                 else (m * gate_conv_output * embedded_lower)
             )
@@ -297,22 +316,6 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             w = P[p, R]
             d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
             dg = DG[t].unsqueeze(-1).float()
-
-            ac, be, it, _ = lines[t][R, p].long().unbind(-1)  # N, 2
-            sell = (be == 2).long()
-            channel_index = 3 * sell + (it - 1) * (1 - sell)
-            channel = state.obs[t][R, channel_index]
-            agent_channel = state.obs[t][R, -1]
-            self.print("channel", channel)
-            self.print("agent_channel", agent_channel)
-            not_subtask = (ac != 0).float().flatten()
-            standing_on = (channel * agent_channel).view(N, -1).sum(-1)
-            correct_action = ((be - 1) == L[t]).float()
-            self.print("be", be)
-            self.print("L[t]", L[t])
-            self.print("correct_action", correct_action)
-            dg = (standing_on * correct_action + not_subtask).view(N, -1)
-            # ag = 1 - dg
 
             self.print("dg prob", d_gate.probs[:, 1])
             self.print("dg", dg)
