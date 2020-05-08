@@ -218,17 +218,13 @@ class Env(ppo.control_flow.env.Env):
             return None
         elif type(line) is Loop:
             return loops > 0
-        elif type(line) in (If, While):
-            if line.id == Env.iron:
-                evaluation = counts[Env.iron] > counts[Env.gold]
-            elif line.id == Env.gold:
-                evaluation = counts[Env.gold] > counts[Env.iron]
-            else:
-                raise RuntimeError
-            condition_evaluations += [evaluation]
-            return evaluation
-        else:
+        if type(line) is Subtask:
             return 1
+        else:
+            evaluation = counts[Env.iron] > counts[Env.gold]
+            if type(line) in (If, While):
+                condition_evaluations += [evaluation]
+            return evaluation
 
     def feasible(self, objects, lines):
         line_iterator = self.line_generator(lines)
