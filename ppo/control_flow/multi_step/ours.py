@@ -96,7 +96,8 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         if not concat_gate:
             gate_conv_hidden_size = gate_hidden_size
             self.project_m = nn.Sequential(
-                init_(nn.Linear(self.encoder_hidden_size, gate_hidden_size)), nn.ReLU()
+                init_(nn.Linear(self.encoder_hidden_size, gate_conv_hidden_size)),
+                nn.ReLU(),
             )
         self.gate_conv = nn.Sequential(
             nn.MaxPool2d(kernel_size=gate_pool_kernel_size, stride=gate_pool_stride),
@@ -298,20 +299,22 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             self.print("L[t]", lt)
             self.print("lines[R, p]", lines[t][R, p])
             gate_obs = self.gate_conv(obs)
-            gate_conv_output = F.max_pool2d(
-                gate_obs, kernel_size=gate_obs.size(-1)
-            ).view(N, -1)
-            if not self.concat_gate:
-                m = self.project_m(m)
-            zeta2_input = (
-                torch.cat([m, gate_conv_output, embedded_lower], dim=-1)
-                if self.concat_gate
-                else (m * gate_conv_output * embedded_lower)
-            )
-            z2 = F.relu(self.zeta2(zeta2_input))
+            # gate_conv_output = F.max_pool2d(
+            # gate_obs, kernel_size=gate_obs.size(-1)
+            # ).view(N, -1)
+            # if not self.concat_gate:
+            # m = self.project_m(m)
+            # zeta2_input = (
+            # torch.cat([m, gate_conv_output, embedded_lower], dim=-1)
+            # if self.concat_gate
+            # else (m * gate_conv_output * embedded_lower)
+            # )
+            # z2 = F.relu(self.zeta2(zeta2_input))
             # then put M back in gru
             # then put A back in gru
-            standing_on = (channel * agent_channel).view(N, -1).mean(-1)
+            channel = gate_obs
+            agent_channel = gate_obs * self.project_m(M[R, p]).view(N, -1, 1, 1)
+            standing_on = (channel * agent_channel).view(N, -1).sum(-1)
             d_gate_input = torch.stack(
                 [standing_on, correct_action, not_subtask], dim=-1
             )
