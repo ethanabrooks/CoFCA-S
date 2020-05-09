@@ -311,7 +311,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             z2 = F.relu(self.zeta2(zeta2_input))
             # then put M back in gru
             # then put A back in gru
-            standing_on = (channel * agent_channel).view(N, -1).sum(-1)
+            standing_on = (channel * agent_channel).view(N, -1).mean(-1)
             d_gate_input = torch.stack(
                 [standing_on, correct_action, not_subtask], dim=-1
             )
