@@ -314,7 +314,8 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             # then put A back in gru
             channel = gate_obs
             agent_channel = gate_obs * self.project_m(M[R, p]).view(N, -1, 1, 1)
-            standing_on = (channel * agent_channel).view(N, -1).sum(-1)
+            standing_on = (channel * agent_channel).view(N,
+                    -1).sum(-1).sigmoid()
             d_gate_input = torch.stack(
                 [standing_on, correct_action, not_subtask], dim=-1
             )
