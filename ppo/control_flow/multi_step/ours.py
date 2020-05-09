@@ -275,8 +275,8 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             channel_index = 3 * sell + (it - 1) * (1 - sell)
             channel = state.obs[t][R, channel_index]
             agent_channel = state.obs[t][R, -1]
-            self.print("channel", channel)
-            self.print("agent_channel", agent_channel)
+            self.print("channel\n", channel)
+            self.print("agent_channel\n", agent_channel)
             not_subtask = (ac != 0).float().flatten()
             standing_on = (channel * agent_channel).view(N, -1).sum(-1)
             correct_action = ((be - 1) == L[t]).float()
@@ -284,7 +284,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             self.print("L[t]", L[t])
             self.print("correct_action", correct_action)
             dg = standing_on * correct_action + not_subtask
-            fuzz = (1 - dg).long() * torch.randint(
+            fuzz = (1 - standing_on).long() * torch.randint(
                 2, size=(len(dg),), device=rnn_hxs.device
             )
             lt = (fuzz * (be - 1) + (1 - fuzz) * L[t]).long()
@@ -295,6 +295,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             # h = self.gru(obs, h)
             embedded_lower = self.embed_lower(lt.clone())
             self.print("L[t]", L[t])
+            self.print("L[t]", lt)
             self.print("lines[R, p]", lines[t][R, p])
             gate_obs = self.gate_conv(obs)
             gate_conv_output = F.max_pool2d(
@@ -310,10 +311,12 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             z2 = F.relu(self.zeta2(zeta2_input))
             # then put M back in gru
             # then put A back in gru
-            standing_on = (channel * agent_channel).view(N, -1).mean(-1)
-            d_gate = self.d_gate(
-                torch.stack([standing_on, correct_action, not_subtask], dim=-1)
+            standing_on = (channel * agent_channel).view(N, -1).sum(-1)
+            d_gate_input = torch.stack(
+                [standing_on, correct_action, not_subtask], dim=-1
             )
+            self.print("standing, action, -subtask", d_gate_input)
+            d_gate = self.d_gate(d_gate_input)
             self.sample_new(DG[t], d_gate)
             # (hy_, cy_), gru_gate = self.gru2(M[R, p], (hy, cy))
             # first put obs back in gru2
@@ -329,7 +332,8 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             self.print("d_probs", d_probs[:, half:])
             self.sample_new(D[t], d_dist)
             # D[:] = float(input("D:")) + half
-            p = p + D[t].clone() - half
+            # p = p + D[t].clone() - half
+            p = p + dg.flatten().long()
             p = torch.clamp(p, min=0, max=M.size(1) - 1)
 
             # try:
