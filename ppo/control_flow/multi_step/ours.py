@@ -292,22 +292,16 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             agent_channel = obs[R, -1]
             self.print("channel", channel)
             self.print("agent_channel", agent_channel)
-            # not_subtask = (ac != 0).float().flatten()
             standing_on = (channel * agent_channel).view(N, -1).sum(-1)
-            # correct_action = ((be - 1) == L[t]).float()
-            # self.print("be", be)
-            # self.print("L[t]", L[t])
-            # self.print("correct_action", correct_action)
-            # dg = standing_on * correct_action + not_subtask
-            fuzz = (1 - standing_on).long() * torch.randint(
-                2, size=(len(standing_on),), device=rnn_hxs.device
-            )
-            lt = (fuzz * (be - 1) + (1 - fuzz) * L[t]).long()
-            # self.print("fuzz", fuzz, lt)
+            rand = torch.randint(2, size=(len(standing_on),), device=rnn_hxs.device)
+            self.print("rand", rand)
+            fuzz = (1 - standing_on).long() * rand
+            L[t] = (fuzz * (be - 1) + (1 - fuzz) * L[t]).long()
+            self.print("fuzz", fuzz, L[t])
             # correct_action = ((be - 1) == lt).float()
 
             # h = self.gru(obs, h)
-            embedded_lower = self.embed_lower(lt.clone())
+            embedded_lower = self.embed_lower(L[t].clone())
             self.print("L[t]", L[t])
             self.print("lines[R, p]", lines[t][R, p])
             conv2_input = torch.cat(
@@ -325,14 +319,19 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             z = conv2_output.view(N, self.conv3_hidden_size, -1).sum(-1)
             d_gate = self.d_gate(z)
             self.sample_new(DG[t], d_gate)
-            # (hy_, cy_), gru_gate = self.gru2(M[R, p], (hy, cy))
-            # first put obs back in gru2
 
             u = self.upsilon(z).softmax(dim=-1)
             self.print("u", u)
             w = P[p, R]
             d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
             dg = DG[t].unsqueeze(-1).float()
+
+            # not_subtask = (ac != 0).float().flatten()
+            # correct_action = ((be - 1) == lt).float()
+            # self.print("be", be)
+            # self.print("L[t]", L[t])
+            # self.print("correct_action", correct_action)
+            # dg = standing_on * correct_action + not_subtask
 
             self.print("dg prob", d_gate.probs[:, 1])
             self.print("dg", dg)
