@@ -79,22 +79,25 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                     break
                 kernel1 = min(h, kernel)
                 kernel2 = min(w, kernel)
-                padding = (kernel // 2) % stride
+                stride1 = min(kernel1, stride)
+                stride2 = min(kernel2, stride)
+                padding1 = optimal_padding(kernel1, stride1)
+                padding2 = optimal_padding(kernel2, stride2)
                 if h > 1 or w > 1:
                     yield (
                         nn.Conv2d(
                             in_channels=in_size,
                             out_channels=hidden,
                             kernel_size=(kernel1, kernel2),
-                            stride=stride,
-                            padding=padding,
+                            stride=(stride1, stride2),
+                            padding=(padding1, padding2),
                         )
                     )
                     h = conv_output_dimension(
-                        h, padding=padding, kernel=kernel, stride=stride
+                        h, padding=padding1, kernel=kernel1, stride=stride1
                     )
                     w = conv_output_dimension(
-                        w, padding=padding, kernel=kernel, stride=stride
+                        w, padding=padding2, kernel=kernel2, stride=stride2
                     )
                 else:
                     yield Flatten()
