@@ -146,9 +146,8 @@ class Agent(ppo.agent.Agent, NNBase):
         )
         entropy = sum([dist.entropy() for dist in dists if dist is not None]).mean()
         aux_loss = -self.entropy_coef * entropy
-        aux_loss += self.dg_coef * F.binary_cross_entropy(
-            hx.dg_probs[:, 1:], hx.true_dg.detach()
-        )
+        dg_loss = F.binary_cross_entropy(hx.dg_probs[:, 1:], hx.true_dg.detach())
+        aux_loss += self.dg_coef * dg_loss
         if probs.upper is not None:
             aux_loss += self.no_op_coef * hx.a_probs[:, -1].mean()
         if probs.dg is not None:
@@ -167,7 +166,7 @@ class Agent(ppo.agent.Agent, NNBase):
             aux_loss=aux_loss,
             dist=None,
             rnn_hxs=rnn_hxs,
-            log=dict(entropy=entropy, P=P),
+            log=dict(entropy=entropy, P=P, dg_loss=dg_loss.mean()),
         )
 
     def _forward_gru(self, x, hxs, masks, action=None):
