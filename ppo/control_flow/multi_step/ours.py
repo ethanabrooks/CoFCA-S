@@ -285,29 +285,29 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 assert torch.all(L[0] < 0)
                 L[t] = ll_output.action.flatten()
 
-            ac, be, it, _ = lines[t][R, p].long().unbind(-1)  # N, 2
-            sell = (be == 2).long()
-            channel_index = 3 * sell + (it - 1) * (1 - sell)
-            channel = obs[R, channel_index]
-            agent_channel = obs[R, -1]
-            self.print("channel", channel)
-            self.print("agent_channel", agent_channel)
+            # ac, be, it, _ = lines[t][R, p].long().unbind(-1)  # N, 2
+            # sell = (be == 2).long()
+            # channel_index = 3 * sell + (it - 1) * (1 - sell)
+            # channel = obs[R, channel_index]
+            # agent_channel = obs[R, -1]
+            # self.print("channel", channel)
+            # self.print("agent_channel", agent_channel)
             # not_subtask = (ac != 0).float().flatten()
-            standing_on = (channel * agent_channel).view(N, -1).sum(-1)
+            # standing_on = (channel * agent_channel).view(N, -1).sum(-1)
             # correct_action = ((be - 1) == L[t]).float()
             # self.print("be", be)
             # self.print("L[t]", L[t])
             # self.print("correct_action", correct_action)
             # dg = standing_on * correct_action + not_subtask
-            fuzz = (1 - standing_on).long() * torch.randint(
-                2, size=(len(standing_on),), device=rnn_hxs.device
-            )
-            lt = (fuzz * (be - 1) + (1 - fuzz) * L[t]).long()
+            # fuzz = (1 - dg).long() * torch.randint(
+            #     2, size=(len(dg),), device=rnn_hxs.device
+            # )
+            # lt = (fuzz * (be - 1) + (1 - fuzz) * L[t]).long()
             # self.print("fuzz", fuzz, lt)
             # correct_action = ((be - 1) == lt).float()
 
             # h = self.gru(obs, h)
-            embedded_lower = self.embed_lower(lt.clone())
+            embedded_lower = self.embed_lower(L[t].clone())
             self.print("L[t]", L[t])
             self.print("lines[R, p]", lines[t][R, p])
             conv2_input = torch.cat(
@@ -340,8 +340,8 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             self.print("d_probs", d_probs[:, half:])
             self.sample_new(D[t], d_dist)
             # D[:] = float(input("D:")) + half
-            # p = p + D[t].clone() - half
-            p = p + dg.flatten().long()
+            p = p + D[t].clone() - half
+            # p = p + dg.flatten().long()
             p = torch.clamp(p, min=0, max=M.size(1) - 1)
 
             # try:
