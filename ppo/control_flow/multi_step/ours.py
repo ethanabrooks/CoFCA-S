@@ -297,7 +297,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
 
             # h = self.gru(obs, h)
             # embedded_lower = self.embed_lower(lt.clone())
-            embedded_lower = self.embed_lower(L[t].flatten().long())
+            embedded_lower = self.embed_lower(lt.flatten().long())
             self.print("L[t]", L[t])
             self.print("lines[R, p]", lines[t][R, p])
             conv2_input = torch.cat(
