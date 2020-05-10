@@ -1,8 +1,7 @@
 from pathlib import Path
 
-from gym import spaces
-from gym.spaces import Box
 import numpy as np
+from gym import spaces
 from rl_utils import hierarchical_parse_args
 
 import ppo.agent
@@ -123,7 +122,7 @@ def control_flow_args():
     parser = parsers.main
     parser.add_argument("--no-tqdm", dest="use_tqdm", action="store_false")
     parser.add_argument("--eval-steps", type=int)
-    parser.add_argument("--eval-lines", type=int, required=True)
+    parser.add_argument("--eval-lines", type=int, nargs="*")
     parser.add_argument("--no-eval", action="store_true")
     parser.add_argument("--one-line", action="store_true")
     parser.add_argument(
@@ -137,24 +136,21 @@ def control_flow_args():
     parsers.agent.add_argument("--no-scan", action="store_true")
     parsers.agent.add_argument("--no-roll", action="store_true")
     parsers.agent.add_argument("--baseline")
-    parsers.agent.add_argument("--conv-hidden-size", type=int, required=True)
-    parsers.agent.add_argument("--gru-hidden-size", type=int, required=True)
-    parsers.agent.add_argument("--encoder-hidden-size", type=int, required=True)
-    parsers.agent.add_argument("--gate-hidden-size", type=int, required=True)
+    parsers.agent.add_argument("--m-hidden-size", type=int, required=True)
+    parsers.agent.add_argument("--embed-lower-hidden-size", type=int, required=True)
     parsers.agent.add_argument("--num-encoding-layers", type=int, required=True)
-    parsers.agent.add_argument("--num-conv-layers", type=int, required=True)
     parsers.agent.add_argument("--num-edges", type=int, required=True)
     parsers.agent.add_argument("--gate-coef", type=float, required=True)
-    parsers.agent.add_argument("--gru-gate-coef", type=float, required=True)
     parsers.agent.add_argument("--no-op-coef", type=float, required=True)
-    parsers.agent.add_argument("--gate-pool-stride", type=int, required=True)
-    parsers.agent.add_argument("--gate-pool-kernel-size", type=int, required=True)
-    parsers.agent.add_argument("--gate-conv-kernel-size", type=int, required=True)
-    parsers.agent.add_argument("--gate-conv-hidden-size", type=int, required=True)
-    parsers.agent.add_argument("--concat", action="store_true")
-    parsers.agent.add_argument("--concat-gate", action="store_true")
+    parsers.agent.add_argument("--conv-hidden-size", type=int, required=True)
     parsers.agent.add_argument("--kernel-size", type=int, required=True)
     parsers.agent.add_argument("--stride", type=int, required=True)
+    parsers.agent.add_argument("--conv2-hidden-size", type=int, required=True)
+    parsers.agent.add_argument("--kernel-size2", type=int, required=True)
+    parsers.agent.add_argument("--stride2", type=int, required=True)
+    parsers.agent.add_argument("--conv3-hidden-size", type=int, required=True)
+    parsers.agent.add_argument("--kernel-size3", type=int, required=True)
+    parsers.agent.add_argument("--stride3", type=int, required=True)
     return parser
 
 

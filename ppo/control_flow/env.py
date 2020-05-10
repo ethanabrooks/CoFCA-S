@@ -22,7 +22,7 @@ from ppo.control_flow.lines import (
 
 Obs = namedtuple("Obs", "active lines obs")
 Last = namedtuple("Last", "action active reward terminal selected")
-State = namedtuple("State", "obs prev ptr term subtask_complete impossible")
+State = namedtuple("State", "obs prev ptr term subtask_complete use_failure_buf")
 Action = namedtuple("Action", "upper lower delta dg ptr")
 
 
@@ -65,13 +65,14 @@ class Env(gym.Env, ABC):
         self.time_to_waste = time_to_waste
         self.time_remaining = None
         self.i = 0
+        self.success_count = 0
 
         self.loops = None
         self.eval_lines = eval_lines
         self.min_lines = min_lines
         self.max_lines = max_lines
         if evaluating:
-            self.n_lines = eval_lines
+            self.n_lines = max(eval_lines)
         else:
             self.n_lines = max_lines
         self.random, self.seed = seeding.np_random(seed)
@@ -136,6 +137,7 @@ class Env(gym.Env, ABC):
             if state.ptr is not None:
                 program_counter.append(state.ptr)
             success = state.ptr is None
+            self.success_count += success
 
             term = term or success or state.term
             if self.lower_level == "train-alone":
@@ -157,10 +159,9 @@ class Env(gym.Env, ABC):
                     success=success,
                 )
                 if success:
-                    if not state.impossible:
-                        info.update(success_line=len(lines))
+                    info.update(success_line=len(lines))
                 else:
-                    info.update(success_line=state.prev, failure_line=state.ptr)
+                    info.update(success_line=state.prev)
                 subtasks_attempted = subtasks_complete + (not success)
                 info.update(
                     subtasks_complete=subtasks_complete,
@@ -201,15 +202,14 @@ class Env(gym.Env, ABC):
                 print("Reward", reward)
                 print("Cumulative", cumulative_reward)
                 print("Time remaining", self.time_remaining)
-                print("Impossible:", self.impossible)
                 print("Obs:")
                 print(RESET)
                 self.print_obs(state.obs)
 
             self._render = render
             obs = self.get_observation(obs=state.obs, active=state.ptr, lines=lines)
-
-            action = (yield obs, reward, term, info)
+            line_specific_info = {f"{k}_{len(lines)}": v for k, v in info.items()}
+            action = (yield obs, reward, term, dict(**info, **line_specific_info))
             if action.size == 1:
                 action = Action(upper=0, lower=action, delta=0, dg=0, ptr=0)
             actions.extend([int(a) for a in action])
@@ -220,9 +220,13 @@ class Env(gym.Env, ABC):
                 int(action.ptr),
             )
 
-            info = {}
+            info = dict(
+                use_failure_buf=state.use_failure_buf,
+                len_failure_buffer=len(self.failure_buffer),
+                success_ratio=self.success_count / self.i,
+            )
 
-            if action > self.num_subtasks:
+            if action == self.num_subtasks:
                 n += 1
                 no_op_limit = 200 if self.evaluating else self.no_op_limit
                 if self.no_op_limit is not None and self.no_op_limit < 0:

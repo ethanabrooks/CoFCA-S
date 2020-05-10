@@ -383,7 +383,7 @@ class LowerLevel(NNBase):
         self.register_buffer(
             "subtasks",
             torch.tensor(
-                [Env.preprocess_line(Subtask(s)) for s in subtasks()] + [[0, 0, 0, 0]]
+                [Env.preprocess_line(Subtask(s),) for s in subtasks()] + [[0, 0, 0, 0]]
             ),
         )
         (d, h, w) = obs_space.obs.shape
