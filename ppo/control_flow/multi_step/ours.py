@@ -296,7 +296,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
 
             # h = self.gru(obs, h)
             # embedded_lower = self.embed_lower(lt.clone())
-            embedded_lower = self.embed_lower(lt.flatten().long())
+            embedded_lower = self.embed_lower(L[t].flatten().long())
             self.print("L[t]", L[t])
             self.print("lines[R, p]", lines[t][R, p])
             conv2_input = torch.cat(
@@ -322,11 +322,11 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             w = P[p, R]
             d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
             dg = DG[t].unsqueeze(-1).float()
-            correct_action = self.linear(z).sigmoid()
+            # correct_action = self.linear(z).sigmoid()
 
             self.print("dg prob", d_gate.probs[:, 1])
             self.print("dg", dg)
-            d_dist = gate(dg * standing_on.view_as(dg), d_probs, ones * half)
+            d_dist = gate(dg, d_probs, ones * half)
             self.print("d_probs", d_probs[:, half:])
             self.sample_new(D[t], d_dist)
             # D[:] = float(input("D:")) + half
