@@ -25,7 +25,6 @@ class Recurrence(nn.Module):
         action_space,
         eval_lines,
         activation,
-        hidden_size,
         encoder_hidden_size,
         # gru_hidden_size,
         # num_layers,
@@ -43,7 +42,6 @@ class Recurrence(nn.Module):
         self.obs_spaces = observation_space
         self.action_size = action_space.nvec.size
         self.debug = debug
-        self.hidden_size = hidden_size
         self.encoder_hidden_size = encoder_hidden_size
         # self.gru_hidden_size = gru_hidden_size
         self.P_save_name = None
@@ -65,15 +63,6 @@ class Recurrence(nn.Module):
             bidirectional=True,
             batch_first=True,
         )
-        # self.gru = nn.GRUCell(self.gru_in_size, gru_hidden_size)
-
-        # layers = []
-        # in_size = gru_hidden_size + 1
-        # for _ in range(num_layers):
-        #     layers.extend([init_(nn.Linear(in_size, hidden_size)), activation])
-        #     in_size = hidden_size
-        # self.zeta2 = nn.Sequential(*layers)
-        # self.upsilon = init_(nn.Linear(hidden_size, self.ne))
 
         layers = []
         in_size = (2 if self.no_scan else 1) * encoder_hidden_size
@@ -82,8 +71,6 @@ class Recurrence(nn.Module):
             in_size = encoder_hidden_size
         out_size = self.ne * 2 * self.train_lines if self.no_scan else self.ne
         self.beta = nn.Sequential(*layers, init_(nn.Linear(in_size, out_size)))
-        # self.critic = init_(nn.Linear(hidden_size, 1))
-        # self.actor = Categorical(hidden_size, n_a)
         self.state_sizes = RecurrentState(
             a=1, a_probs=n_a, d=1, d_probs=2 * self.train_lines, u=self.ne, p=1, v=1
         )

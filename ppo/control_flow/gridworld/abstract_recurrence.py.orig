@@ -9,18 +9,13 @@ from ppo.utils import init_
 
 class Recurrence:
     def __init__(
-        self,
-        conv_hidden_size,
-        encoder_hidden_size,
-        num_conv_layers,
-        kernel_size,
-        stride,
+        self, conv_hidden_size, m_hidden_size, num_conv_layers, kernel_size, stride,
     ):
         self.conv_hidden_size = conv_hidden_size
         d, h, _ = self.obs_spaces.obs.shape
 
         def generate_convolutions(h):
-            in_size = d + encoder_hidden_size + self.obs_spaces.inventory.n
+            in_size = d + m_hidden_size + self.obs_spaces.inventory.n
             for _ in range(num_conv_layers):
                 kernel = min(h, kernel_size)
                 padding = (kernel // 2) % stride
