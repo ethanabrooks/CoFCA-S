@@ -127,6 +127,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         self.last_hidden = [h for h in hiddens if h > 0][-1]
         self.critic = init_(nn.Linear(self.last_hidden, 1))
         self.d_gate = Categorical(self.last_hidden, 2)
+        self.linear = nn.Linear(self.last_hidden, 1)
         self.upsilon = init_(nn.Linear(self.last_hidden, self.ne))
         state_sizes = self.state_sizes._asdict()
         with lower_level_config.open() as f:
@@ -321,6 +322,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             w = P[p, R]
             d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
             dg = DG[t].unsqueeze(-1).float()
+            correct_action = self.linear(conv2_output).sigmoid()
             dg = dg * correct_action.view_as(dg)
 
             self.print("dg prob", d_gate.probs[:, 1])
