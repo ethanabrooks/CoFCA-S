@@ -1,21 +1,18 @@
-import gc
 import json
 from collections import namedtuple
 
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from gym import spaces
 
 import ppo.control_flow.multi_step.abstract_recurrence as abstract_recurrence
 import ppo.control_flow.recurrence as recurrence
 from ppo.agent import Agent
-from ppo.layers import Flatten
 from ppo.control_flow.env import Action
-from ppo.control_flow.lstm import LSTMCell
 from ppo.control_flow.multi_step.env import Obs
 from ppo.distributions import FixedCategorical, Categorical
+from ppo.layers import Flatten
 from ppo.utils import init_
 
 RecurrentState = namedtuple(
@@ -41,15 +38,9 @@ def conv_output_dimension(h, padding, kernel, stride, dilation=1):
 class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
     def __init__(
         self,
-        conv_hidden_size,
-        conv2_hidden_size,
-        kernel_size2,
-        stride2,
-        conv3_hidden_size,
-        kernel_size3,
-        stride3,
-        kernel_size,
-        stride,
+        hiddens,
+        kernels,
+        strides,
         m_hidden_size,
         gate_coef,
         observation_space,
@@ -60,87 +51,80 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         **kwargs,
     ):
         self.gate_coef = gate_coef
-        self.conv_hidden_size = conv_hidden_size
+        (hidden0, kernel0, stride0), *conv_params = zip(hiddens, kernels, strides)
+        self.conv_hidden_size = hidden0
         observation_space = Obs(**observation_space.spaces)
-        d, h, w = observation_space.obs.shape
-        conv_h = conv_output_dimension(
-            h=h,
-            padding=optimal_padding(kernel_size, stride),
-            kernel=kernel_size,
-            stride=stride,
-        )
-        kernel_size2 = min(conv_h, kernel_size2)
-        conv2_h = conv_output_dimension(
-            h=conv_h,
-            padding=optimal_padding(kernel_size2, stride2),
-            kernel=kernel_size2,
-            stride=stride2,
-        )
-        kernel_size3 = min(conv2_h, kernel_size3)
-        conv3_h = conv_output_dimension(
-            h=conv_h,
-            padding=optimal_padding(kernel_size3, stride3),
-            kernel=kernel_size3,
-            stride=stride3,
-        )
-        # pool_output = int((conv_output - gate_pool_kernel_size) / gate_pool_stride + 1)
-
-        conv2_output = conv3_h ** 2 * conv3_hidden_size
 
         recurrence.Recurrence.__init__(
             self,
             observation_space=observation_space,
             action_space=action_space,
-            hidden_size=conv2_output,
             encoder_hidden_size=m_hidden_size,
             **kwargs,
         )
         abstract_recurrence.Recurrence.__init__(
             self,
-            conv_hidden_size=conv_hidden_size,
-            kernel_size=kernel_size,
-            stride=stride,
-            encoder_hidden_size=m_hidden_size,
+            conv_hidden_size=hidden0,
+            kernel_size=kernel0,
+            stride=stride0,
+            m_hidden_size=m_hidden_size,
             num_conv_layers=1,
         )
 
-        self.conv3_hidden_size = conv3_hidden_size
+        def generate_convolutions(d, h, w):
+            in_size = d + embed_lower_hidden_size
+
+            for hidden, kernel, stride in conv_params:
+                if hidden <= 0:
+                    break
+                kernel1 = min(h, kernel)
+                kernel2 = min(w, kernel)
+                padding = (kernel // 2) % stride
+                if h > 1 or w > 1:
+                    yield (
+                        nn.Conv2d(
+                            in_channels=in_size,
+                            out_channels=hidden,
+                            kernel_size=(kernel1, kernel2),
+                            stride=stride,
+                            padding=padding,
+                        )
+                    )
+                    h = conv_output_dimension(
+                        h, padding=padding, kernel=kernel, stride=stride
+                    )
+                    w = conv_output_dimension(
+                        w, padding=padding, kernel=kernel, stride=stride
+                    )
+                else:
+                    yield Flatten()
+                    yield nn.Linear(in_size, hidden)
+                yield nn.ReLU()
+                in_size = hidden
+
+        _, H, W, = self.obs_spaces.obs.shape
+        kernel0 = min(H, kernel0)
+        padding0 = optimal_padding(kernel0, stride0)
+
         self.conv2 = nn.Sequential(
-            *(
-                [
-                    nn.Conv2d(
-                        in_channels=conv_hidden_size + embed_lower_hidden_size,
-                        out_channels=conv2_hidden_size,
-                        kernel_size=kernel_size2,
-                        stride=stride2,
-                        padding=optimal_padding(kernel_size2, stride2),
-                    )
-                ]
-                if conv_h > 1
-                else [Flatten(), nn.Linear(conv_hidden_size, conv2_hidden_size)]
-            ),
-            nn.ReLU(),
-            *(
-                [
-                    nn.Conv2d(
-                        in_channels=conv2_hidden_size,
-                        out_channels=conv3_hidden_size,
-                        kernel_size=kernel_size3,
-                        stride=stride3,
-                        padding=optimal_padding(kernel_size3, stride3),
-                    )
-                ]
-                if conv2_h > 1
-                else [Flatten(), nn.Linear(conv2_hidden_size, conv3_hidden_size)]
-            ),
+            *generate_convolutions(
+                hidden0,
+                h=conv_output_dimension(
+                    H, padding=padding0, kernel=kernel0, stride=stride0
+                ),
+                w=conv_output_dimension(
+                    W, padding=padding0, kernel=kernel0, stride=stride0
+                ),
+            )
         )
         self.embed_lower = nn.Embedding(
             self.action_space_nvec.lower + 1, embed_lower_hidden_size
         )
-        self.actor = Categorical(conv_hidden_size + m_hidden_size, self.n_a)
-        self.critic = init_(nn.Linear(conv3_hidden_size, 1))
-        self.d_gate = Categorical(conv3_hidden_size, 2)
-        self.upsilon = init_(nn.Linear(conv3_hidden_size, self.ne))
+        self.actor = Categorical(hidden0 + m_hidden_size, self.n_a)
+        self.last_hidden = [h for h in hiddens if h > 0][-1]
+        self.critic = init_(nn.Linear(self.last_hidden, 1))
+        self.d_gate = Categorical(self.last_hidden, 2)
+        self.upsilon = init_(nn.Linear(self.last_hidden, self.ne))
         state_sizes = self.state_sizes._asdict()
         with lower_level_config.open() as f:
             lower_level_params = json.load(f)
@@ -322,7 +306,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             conv2_output = self.conv2(conv2_input)
             # then put M back in gru
             # then put A back in gru
-            z = conv2_output.view(N, self.conv3_hidden_size, -1).sum(-1)
+            z = conv2_output.view(N, self.last_hidden, -1).sum(-1)
             d_gate = self.d_gate(z)
             self.sample_new(DG[t], d_gate)
             # (hy_, cy_), gru_gate = self.gru2(M[R, p], (hy, cy))

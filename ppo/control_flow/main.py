@@ -143,15 +143,9 @@ def control_flow_args():
     parsers.agent.add_argument("--num-edges", type=int, required=True)
     parsers.agent.add_argument("--gate-coef", type=float, required=True)
     parsers.agent.add_argument("--no-op-coef", type=float, required=True)
-    parsers.agent.add_argument("--conv-hidden-size", type=int, required=True)
-    parsers.agent.add_argument("--kernel-size", type=int, required=True)
-    parsers.agent.add_argument("--stride", type=int, required=True)
-    parsers.agent.add_argument("--conv2-hidden-size", type=int, required=True)
-    parsers.agent.add_argument("--kernel-size2", type=int, required=True)
-    parsers.agent.add_argument("--stride2", type=int, required=True)
-    parsers.agent.add_argument("--conv3-hidden-size", type=int, required=True)
-    parsers.agent.add_argument("--kernel-size3", type=int, required=True)
-    parsers.agent.add_argument("--stride3", type=int, required=True)
+    parsers.agent.add_argument("--hiddens", nargs="+", type=int, required=True)
+    parsers.agent.add_argument("--kernels", nargs="+", type=int, required=True)
+    parsers.agent.add_argument("--strides", nargs="+", type=int, required=True)
     return parser
 
 
