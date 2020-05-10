@@ -289,13 +289,13 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             fuzz = (1 - standing_on).long() * torch.randint(
                 2, size=(len(standing_on),), device=rnn_hxs.device
             )
-            # lt = (fuzz * (be - 1) + (1 - fuzz) * L[t]).long()
+            lt = (fuzz * (be - 1) + (1 - fuzz) * L[t]).long()
             # self.print("fuzz", fuzz, lt)
             # correct_action = ((be - 1) == lt).float()
 
             # h = self.gru(obs, h)
             # embedded_lower = self.embed_lower(lt.clone())
-            embedded_lower = self.embed_lower(correct_action.flatten().long())
+            embedded_lower = self.embed_lower(lt.flatten().long())
             self.print("L[t]", L[t])
             self.print("lines[R, p]", lines[t][R, p])
             conv2_input = torch.cat(
