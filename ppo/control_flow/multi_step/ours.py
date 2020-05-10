@@ -16,7 +16,7 @@ from ppo.layers import Flatten
 from ppo.utils import init_
 
 RecurrentState = namedtuple(
-    "RecurrentState", "a l d u dg p v lh l_probs a_probs d_probs dg_probs P"
+    "RecurrentState", "a l d u dg true_dg p v lh l_probs a_probs d_probs dg_probs P"
 )
 
 ParsedInput = namedtuple("ParsedInput", "obs actions")
@@ -137,6 +137,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             **state_sizes,
             dg_probs=2,
             dg=1,
+            true_dg=1,
             l=1,
             l_probs=ll_action_space.n,
             lh=lower_level_params["hidden_size"],
@@ -286,7 +287,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             self.print("be", be)
             self.print("L[t]", L[t])
             self.print("correct_action", correct_action)
-            # dg = standing_on * correct_action + not_subtask
+            true_dg = standing_on * correct_action + not_subtask
             fuzz = (1 - standing_on).long() * torch.randint(
                 2, size=(len(standing_on),), device=rnn_hxs.device
             )
@@ -353,5 +354,6 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 dg_probs=d_gate.probs,
                 l_probs=ll_output.dist.probs,
                 dg=dg,
+                true_dg=true_dg,
                 P=P.transpose(0, 1),
             )

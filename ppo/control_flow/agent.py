@@ -31,9 +31,11 @@ class Agent(ppo.agent.Agent, NNBase):
         baseline,
         action_space,
         lower_level,
+        dg_coef,
         **network_args,
     ):
         nn.Module.__init__(self)
+        self.dg_coef = dg_coef
         self.lower_level_type = lower_level
         self.no_op_coef = no_op_coef
         self.entropy_coef = entropy_coef
@@ -115,7 +117,7 @@ class Agent(ppo.agent.Agent, NNBase):
             ll_type = self.lower_level_type
             if ll_type == "train-alone":
                 probs = Action(
-                    upper=None, lower=hx.l_probs, delta=None, dg=None, ptr=None,
+                    upper=None, lower=hx.l_probs, delta=None, dg=None, ptr=None
                 )
             elif ll_type == "train-with-upper":
                 probs = Action(
@@ -144,6 +146,9 @@ class Agent(ppo.agent.Agent, NNBase):
         )
         entropy = sum([dist.entropy() for dist in dists if dist is not None]).mean()
         aux_loss = -self.entropy_coef * entropy
+        aux_loss += self.dg_coef * F.binary_cross_entropy(
+            hx.dg_probs[:, 1:], hx.true_dg.detach()
+        )
         if probs.upper is not None:
             aux_loss += self.no_op_coef * hx.a_probs[:, -1].mean()
         if probs.dg is not None:
