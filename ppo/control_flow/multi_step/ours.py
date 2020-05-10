@@ -285,16 +285,17 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             self.print("be", be)
             self.print("L[t]", L[t])
             self.print("correct_action", correct_action)
-            dg = standing_on * correct_action + not_subtask
+            # dg = standing_on * correct_action + not_subtask
             fuzz = (1 - standing_on).long() * torch.randint(
-                2, size=(len(dg),), device=rnn_hxs.device
+                2, size=(len(standing_on),), device=rnn_hxs.device
             )
-            lt = (fuzz * (be - 1) + (1 - fuzz) * L[t]).long()
+            # lt = (fuzz * (be - 1) + (1 - fuzz) * L[t]).long()
             # self.print("fuzz", fuzz, lt)
             # correct_action = ((be - 1) == lt).float()
 
             # h = self.gru(obs, h)
-            embedded_lower = self.embed_lower(lt.clone())
+            # embedded_lower = self.embed_lower(lt.clone())
+            embedded_lower = self.embed_lower(correct_action.flatten().long())
             self.print("L[t]", L[t])
             self.print("lines[R, p]", lines[t][R, p])
             conv2_input = torch.cat(
@@ -320,6 +321,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             w = P[p, R]
             d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
             dg = DG[t].unsqueeze(-1).float()
+            dg = dg * correct_action.view_as(dg)
 
             self.print("dg prob", d_gate.probs[:, 1])
             self.print("dg", dg)
