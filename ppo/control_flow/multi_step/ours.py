@@ -30,6 +30,14 @@ def gate(g, new, old):
     return FixedCategorical(probs=g * new + (1 - g) * old)
 
 
+def optimal_padding(kernel, stride):
+    return (kernel // 2) % stride
+
+
+def conv_output_dimension(h, padding, kernel, stride, dilation=1):
+    return int(1 + (h + 2 * padding - dilation * (kernel - 1) - 1) / stride)
+
+
 class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
     def __init__(
         self,
@@ -130,8 +138,33 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
 
         self.gru2 = LSTMCell(self.encoder_hidden_size, self.gru_hidden_size)
         self.d_gate = Categorical(encoder_hidden_size + hidden2 + hidden1, 2)
-        self.linear1 = nn.Linear(6 * 6, hidden1)
+        kernel = min(h, gate_conv_kernel_size)
+        padding = optimal_padding(kernel, 2)
+
+        self.linear1 = nn.Linear(
+            gate_conv_hidden_size
+            * conv_output_dimension(h, padding=padding, kernel=kernel, stride=2) ** 2,
+            hidden1,
+        )
         self.linear2 = nn.Linear(encoder_hidden_size + gate_hidden_size, hidden2)
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(
+                in_channels=1,
+                out_channels=gate_conv_hidden_size,
+                kernel_size=kernel,
+                padding=padding,
+                stride=2,
+            ),
+        )
+        self.conv2 = nn.Sequential(
+            nn.Conv2d(
+                in_channels=1,
+                out_channels=gate_conv_hidden_size,
+                kernel_size=kernel,
+                padding=padding,
+                stride=2,
+            ),
+        )
         state_sizes = self.state_sizes._asdict()
         with lower_level_config.open() as f:
             lower_level_params = json.load(f)
@@ -317,7 +350,15 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             # then put M back in gru
             # then put A back in gru
             h1 = self.linear1(
-                torch.cat([channel.view(N, -1) * agent_channel.view(N, -1)], dim=-1)
+                torch.cat(
+                    [
+                        (
+                            self.conv1(channel.unsqueeze(1))
+                            * self.conv2(agent_channel.unsqueeze(1))
+                        ).view(N, -1)
+                    ],
+                    dim=-1,
+                )
             ).relu()
             h2 = self.linear2(torch.cat([M[R, p], embedded_lower], dim=-1)).relu()
             d_gate = self.d_gate(torch.cat([h1, h2, M[R, p],], dim=-1,))
