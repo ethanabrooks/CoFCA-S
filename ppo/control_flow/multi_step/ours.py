@@ -81,7 +81,9 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             stride=stride,
         )
         self.embed_lower = nn.Embedding(
-            self.action_space_nvec.lower + 1, gate_hidden_size
+            self.action_space_nvec.lower + 1,
+            encoder_hidden_size
+            # gate_hidden_size
         )
         self.zeta2 = init_(
             nn.Linear(
@@ -304,19 +306,28 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             ).view(N, -1)
             if not self.concat_gate:
                 m = self.project_m(m)
-            zeta2_input = (
-                torch.cat([m, gate_conv_output, embedded_lower], dim=-1)
-                if self.concat_gate
-                else (m * gate_conv_output * embedded_lower)
-            )
-            z2 = F.relu(self.zeta2(zeta2_input))
+            # zeta2_input = (
+            # torch.cat([m, gate_conv_output, embedded_lower], dim=-1)
+            # if self.concat_gate
+            # else (m * gate_conv_output * embedded_lower)
+            # )
+            # z2 = F.relu(self.zeta2(zeta2_input))
             # then put M back in gru
             # then put A back in gru
             h1 = self.linear1(
                 torch.cat([channel.view(N, -1) * agent_channel.view(N, -1)], dim=-1)
             )
             d_gate = self.d_gate(
-                torch.cat([h1, correct_action.view(N, -1), M[R, p]], dim=-1,)
+                torch.cat(
+                    [
+                        h1,
+                        F.cosine_similarity(M[R, p], embedded_lower, dim=-1).view(
+                            N, -1
+                        ),
+                        M[R, p],
+                    ],
+                    dim=-1,
+                )
             )
             self.sample_new(DG[t], d_gate)
             # (hy_, cy_), gru_gate = self.gru2(M[R, p], (hy, cy))
