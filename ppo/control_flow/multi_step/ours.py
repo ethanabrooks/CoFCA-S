@@ -34,6 +34,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
     def __init__(
         self,
         hidden1,
+        hidden2,
         hidden_size,
         conv_hidden_size,
         gate_pool_stride,
@@ -82,8 +83,8 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         )
         self.embed_lower = nn.Embedding(
             self.action_space_nvec.lower + 1,
-            encoder_hidden_size
-            # gate_hidden_size
+            # encoder_hidden_size
+            gate_hidden_size,
         )
         self.zeta2 = init_(
             nn.Linear(
@@ -128,8 +129,9 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         )
 
         self.gru2 = LSTMCell(self.encoder_hidden_size, self.gru_hidden_size)
-        self.d_gate = Categorical(1 + encoder_hidden_size + hidden1, 2)
+        self.d_gate = Categorical(encoder_hidden_size + hidden2 + hidden1, 2)
         self.linear1 = nn.Linear(6 * 6, hidden1)
+        self.linear2 = nn.Linear(encoder_hidden_size + gate_hidden_size, hidden2)
         state_sizes = self.state_sizes._asdict()
         with lower_level_config.open() as f:
             lower_level_params = json.load(f)
@@ -306,29 +308,19 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             ).view(N, -1)
             if not self.concat_gate:
                 m = self.project_m(m)
-            # zeta2_input = (
-            # torch.cat([m, gate_conv_output, embedded_lower], dim=-1)
-            # if self.concat_gate
-            # else (m * gate_conv_output * embedded_lower)
-            # )
-            # z2 = F.relu(self.zeta2(zeta2_input))
+            zeta2_input = (
+                torch.cat([m, gate_conv_output, embedded_lower], dim=-1)
+                if self.concat_gate
+                else (m * gate_conv_output * embedded_lower)
+            )
+            z2 = F.relu(self.zeta2(zeta2_input))
             # then put M back in gru
             # then put A back in gru
             h1 = self.linear1(
                 torch.cat([channel.view(N, -1) * agent_channel.view(N, -1)], dim=-1)
-            )
-            d_gate = self.d_gate(
-                torch.cat(
-                    [
-                        h1,
-                        F.cosine_similarity(M[R, p], embedded_lower, dim=-1).view(
-                            N, -1
-                        ),
-                        M[R, p],
-                    ],
-                    dim=-1,
-                )
-            )
+            ).relu()
+            h2 = self.linear2(torch.cat([M[R, p], embedded_lower], dim=-1)).relu()
+            d_gate = self.d_gate(torch.cat([h1, h2, M[R, p],], dim=-1,))
             self.sample_new(DG[t], d_gate)
             # (hy_, cy_), gru_gate = self.gru2(M[R, p], (hy, cy))
             # first put obs back in gru2
