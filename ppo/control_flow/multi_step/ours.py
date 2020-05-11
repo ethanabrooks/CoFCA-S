@@ -125,7 +125,8 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         )
 
         self.gru2 = LSTMCell(self.encoder_hidden_size, self.gru_hidden_size)
-        self.d_gate = Categorical(2 + 6 * 6, 2)
+        self.d_gate = Categorical(2 + 2 * 6 * 6, 2)
+        self.linear1 = nn.Linear(2 * 6 * 6, hidden_size)
         state_sizes = self.state_sizes._asdict()
         with lower_level_config.open() as f:
             lower_level_params = json.load(f)
@@ -313,7 +314,8 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             d_gate = self.d_gate(
                 torch.cat(
                     [
-                        (channel * agent_channel).view(N, -1),
+                        channel.view(N, -1),
+                        agent_channel.view(N, -1),
                         correct_action.view(N, -1),
                         not_subtask.view(N, -1),
                     ],
