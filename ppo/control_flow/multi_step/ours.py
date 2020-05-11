@@ -35,12 +35,15 @@ def conv_output_dimension(h, padding, kernel, stride, dilation=1):
     return int(1 + (h + 2 * padding - dilation * (kernel - 1) - 1) / stride)
 
 
+ConvParams = namedtuple("ConvParams", "hidden kernel stride")
+
+
 class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
     def __init__(
         self,
-        hiddens,
-        kernels,
-        strides,
+        conv1,
+        conv2,
+        conv3,
         m_hidden_size,
         gate_coef,
         observation_space,
@@ -51,8 +54,10 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         **kwargs,
     ):
         self.gate_coef = gate_coef
-        (hidden0, kernel0, stride0), *conv_params = zip(hiddens, kernels, strides)
-        self.conv_hidden_size = hidden0
+        conv1 = ConvParams(*conv1)
+        conv2 = ConvParams(*conv2)
+        conv3 = ConvParams(*conv3)
+        self.conv_hidden_size = conv1.hidden
         observation_space = Obs(**observation_space.spaces)
 
         recurrence.Recurrence.__init__(
@@ -62,69 +67,87 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             encoder_hidden_size=m_hidden_size,
             **kwargs,
         )
-        abstract_recurrence.Recurrence.__init__(
-            self,
-            conv_hidden_size=hidden0,
-            kernel_size=kernel0,
-            stride=stride0,
-            m_hidden_size=m_hidden_size,
-            num_conv_layers=1,
+        abstract_recurrence.Recurrence.__init__(self,)
+
+        # def generate_convolutions(d, h, w):
+        #     in_size = d + embed_lower_hidden_size
+        #
+        #     for hidden, kernel, stride in conv_params:
+        #         if hidden <= 0:
+        #             break
+        #         kernel1 = min(h, kernel)
+        #         kernel2 = min(w, kernel)
+        #         stride1 = min(kernel1, stride)
+        #         stride2 = min(kernel2, stride)
+        #         padding1 = optimal_padding(kernel1, stride1)
+        #         padding2 = optimal_padding(kernel2, stride2)
+        #         if h > 1 or w > 1:
+        #             yield (
+        #                 nn.Conv2d(
+        #                     in_channels=in_size,
+        #                     out_channels=hidden,
+        #                     kernel_size=(kernel1, kernel2),
+        #                     stride=(stride1, stride2),
+        #                     padding=(padding1, padding2),
+        #                 )
+        #             )
+        #             h = conv_output_dimension(
+        #                 h, padding=padding1, kernel=kernel1, stride=stride1
+        #             )
+        #             w = conv_output_dimension(
+        #                 w, padding=padding2, kernel=kernel2, stride=stride2
+        #             )
+        #         else:
+        #             yield Flatten()
+        #             yield nn.Linear(in_size, hidden)
+        #         yield nn.ReLU()
+        #         in_size = hidden
+
+        d, H, W, = self.obs_spaces.obs.shape
+        kernel1 = min(H, conv1.kernel)
+        stride1 = min(kernel1, conv1.stride)
+        padding1 = optimal_padding(kernel1, stride1)
+        self.conv1 = nn.Conv2d(
+            in_channels=d + self.obs_spaces.inventory.n,
+            out_channels=conv1.hidden,
+            kernel_size=kernel1,
+            stride=stride1,
+            padding=padding1,
         )
-
-        def generate_convolutions(d, h, w):
-            in_size = d + embed_lower_hidden_size
-
-            for hidden, kernel, stride in conv_params:
-                if hidden <= 0:
-                    break
-                kernel1 = min(h, kernel)
-                kernel2 = min(w, kernel)
-                stride1 = min(kernel1, stride)
-                stride2 = min(kernel2, stride)
-                padding1 = optimal_padding(kernel1, stride1)
-                padding2 = optimal_padding(kernel2, stride2)
-                if h > 1 or w > 1:
-                    yield (
-                        nn.Conv2d(
-                            in_channels=in_size,
-                            out_channels=hidden,
-                            kernel_size=(kernel1, kernel2),
-                            stride=(stride1, stride2),
-                            padding=(padding1, padding2),
-                        )
-                    )
-                    h = conv_output_dimension(
-                        h, padding=padding1, kernel=kernel1, stride=stride1
-                    )
-                    w = conv_output_dimension(
-                        w, padding=padding2, kernel=kernel2, stride=stride2
-                    )
-                else:
-                    yield Flatten()
-                    yield nn.Linear(in_size, hidden)
-                yield nn.ReLU()
-                in_size = hidden
-
-        _, H, W, = self.obs_spaces.obs.shape
-        kernel0 = min(H, kernel0)
-        padding0 = optimal_padding(kernel0, stride0)
-
-        self.conv2 = nn.Sequential(
-            *generate_convolutions(
-                hidden0,
-                h=conv_output_dimension(
-                    H, padding=padding0, kernel=kernel0, stride=stride0
-                ),
-                w=conv_output_dimension(
-                    W, padding=padding0, kernel=kernel0, stride=stride0
-                ),
-            )
+        # dim1 = conv_output_dimension(
+        #     H, padding=padding1, kernel=kernel1, stride=stride1
+        # )
+        kernel2 = min(H, conv2.kernel)
+        stride2 = min(kernel2, conv2.stride)
+        padding2 = optimal_padding(kernel2, stride2)
+        self.conv2 = nn.Conv2d(
+            in_channels=conv1.hidden * m_hidden_size,
+            out_channels=conv2.hidden,
+            kernel_size=kernel2,
+            stride=stride2,
+            padding=padding2,
+        )
+        # dim2 = conv_output_dimension(
+        #     dim1, padding=padding2, kernel=kernel2, stride=stride2
+        # )
+        kernel3 = min(H, conv3.kernel)
+        stride3 = min(kernel3, conv3.stride)
+        padding3 = optimal_padding(kernel3, stride3)
+        self.conv3 = nn.Conv2d(
+            in_channels=conv2.hidden * embed_lower_hidden_size,
+            out_channels=conv3.hidden,
+            kernel_size=kernel3,
+            stride=stride3,
+            padding=padding3,
+        )
+        dim3 = conv_output_dimension(
+            H, padding=padding3, kernel=kernel3, stride=stride3
         )
         self.embed_lower = nn.Embedding(
             self.action_space_nvec.lower + 1, embed_lower_hidden_size
         )
-        self.actor = Categorical(hidden0 + m_hidden_size, self.n_a)
-        self.last_hidden = [h for h in hiddens if h > 0][-1]
+        self.actor = Categorical(conv1.hidden + m_hidden_size, self.n_a)
+        self.last_hidden = conv3.hidden
         self.critic = init_(nn.Linear(self.last_hidden, 1))
         self.d_gate = Categorical(self.last_hidden, 2)
         self.linear = nn.Linear(self.last_hidden, 1)
@@ -240,14 +263,14 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             conv_input = torch.cat(
                 [
                     obs,
-                    M[R, p].view(N, -1, 1, 1).expand(-1, -1, *obs.shape[-2:]),
+                    # M[R, p].view(N, -1, 1, 1).expand(-1, -1, *obs.shape[-2:]),
                     state.inventory[t]
                     .view(N, -1, 1, 1)
                     .expand(-1, -1, *obs.shape[-2:]),
                 ],
                 dim=1,
             )
-            conv_output = self.conv(conv_input).relu()
+            conv_output = self.conv1(conv_input).relu()
             a_dist = self.actor(
                 torch.cat(
                     [conv_output.view(N, self.conv_hidden_size, -1).sum(-1), M[R, p]],
@@ -297,22 +320,22 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
 
             # h = self.gru(obs, h)
             # embedded_lower = self.embed_lower(lt.clone())
-            embedded_lower = self.embed_lower(lt.flatten().long())
+            embedded_lower = self.embed_lower(L[t].flatten().long())
             self.print("L[t]", L[t])
             self.print("lines[R, p]", lines[t][R, p])
-            conv2_input = torch.cat(
-                [
-                    conv_output,
-                    embedded_lower.view(N, -1, 1, 1).expand(
-                        -1, -1, *conv_output.shape[-2:]
-                    ),
-                ],
-                dim=1,
+            conv2_input = conv_output.unsqueeze(1) * M[R, p].view(N, -1, 1, 1, 1)
+            conv2_output = self.conv2(
+                conv2_input.view(N, self.conv2.in_channels, *conv_output.shape[-2:])
+            ).relu()
+            conv3_input = conv2_output.unsqueeze(1) * embedded_lower.view(
+                N, -1, 1, 1, 1
             )
-            conv2_output = self.conv2(conv2_input)
+            conv3_output = self.conv3(
+                conv3_input.view(N, self.conv3.in_channels, *conv2_output.shape[-2:])
+            ).relu()
             # then put M back in gru
             # then put A back in gru
-            z = conv2_output.view(N, self.last_hidden, -1).sum(-1)
+            z = conv3_output.view(N, self.last_hidden, -1).sum(-1)
             d_gate = self.d_gate(z)
             self.sample_new(DG[t], d_gate)
             # (hy_, cy_), gru_gate = self.gru2(M[R, p], (hy, cy))

@@ -144,9 +144,9 @@ def control_flow_args():
     parsers.agent.add_argument("--gate-coef", type=float, required=True)
     parsers.agent.add_argument("--dg-coef", type=float, required=True)
     parsers.agent.add_argument("--no-op-coef", type=float, required=True)
-    parsers.agent.add_argument("--hiddens", nargs="+", type=int, required=True)
-    parsers.agent.add_argument("--kernels", nargs="+", type=int, required=True)
-    parsers.agent.add_argument("--strides", nargs="+", type=int, required=True)
+    parsers.agent.add_argument("--conv1", nargs=3, type=int, required=True)
+    parsers.agent.add_argument("--conv2", nargs=3, type=int, required=True)
+    parsers.agent.add_argument("--conv3", nargs=3, type=int, required=True)
     return parser
 
 
