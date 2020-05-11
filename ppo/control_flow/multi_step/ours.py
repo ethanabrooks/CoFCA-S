@@ -67,7 +67,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             encoder_hidden_size=m_hidden_size,
             **kwargs,
         )
-        abstract_recurrence.Recurrence.__init__(self,)
+        abstract_recurrence.Recurrence.__init__(self)
 
         # def generate_convolutions(d, h, w):
         #     in_size = d + embed_lower_hidden_size
@@ -320,7 +320,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
 
             # h = self.gru(obs, h)
             # embedded_lower = self.embed_lower(lt.clone())
-            embedded_lower = self.embed_lower(L[t].flatten().long())
+            embedded_lower = self.embed_lower(lt.flatten().long())
             self.print("L[t]", L[t])
             self.print("lines[R, p]", lines[t][R, p])
             conv2_input = conv_output.unsqueeze(1) * M[R, p].view(N, -1, 1, 1, 1)
