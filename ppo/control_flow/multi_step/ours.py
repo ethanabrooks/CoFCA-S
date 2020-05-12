@@ -363,7 +363,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 N, self.conv_hidden_size, -1, self.kernel_size, self.kernel_size
             )
             padding = optimal_padding(self.kernel_size, self.stride)
-            h1 = obs * torch.cat(
+            h1 = torch.cat(
                 [
                     F.conv2d(
                         input=o.unsqueeze(0),
@@ -377,7 +377,10 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 dim=0,
             )
             h2 = self.linear2(torch.cat([M[R, p], embedded_lower], dim=-1)).relu()
-            d_gate = self.d_gate(torch.cat([h1.view(N, -1), h2, M[R, p]], dim=-1))
+            # TODO: can h2 be eliminated by concatenating embedded_lower to each channel of obs?
+            d_gate = self.d_gate(
+                torch.cat([h1.view(N, -1), h2, M[R, p]], dim=-1)
+            )  # TODO: take out M[R, p] here
             self.sample_new(DG[t], d_gate)
             # (hy_, cy_), gru_gate = self.gru2(M[R, p], (hy, cy))
             # first put obs back in gru2
