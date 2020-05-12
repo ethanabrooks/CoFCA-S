@@ -342,7 +342,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             correct_action = ((be - 1) == lt).float()
 
             # h = self.gru(obs, h)
-            embedded_lower = self.embed_lower(lt.clone())
+            embedded_lower = self.embed_lower(L[t].clone())
             self.print("L[t]", L[t])
             self.print("lines[R, p]", lines[t][R, p])
             # gate_obs = self.gate_conv(obs)
