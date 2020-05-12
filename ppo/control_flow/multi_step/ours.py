@@ -145,21 +145,14 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             kernel=kernel_size,
             stride=stride,
         )
-        output_dim2 = conv_output_dimension(
-            h=output_dim,
-            padding=optimal_padding(kernel_size, stride),
-            kernel=kernel_size,
-            stride=stride,
-        )
         self.d_gate = Categorical(
-            self.encoder_hidden_size + hidden2 + conv_hidden_size * output_dim2 ** 2, 2
+            self.encoder_hidden_size + hidden2 + conv_hidden_size * output_dim ** 2, 2
         )
         kernel = min(h, gate_conv_kernel_size)
         padding = optimal_padding(kernel, 2)
 
         self.linear1 = nn.Linear(
-            self.encoder_hidden_size,
-            conv_hidden_size * kernel_size ** 2 * conv_hidden_size,
+            self.encoder_hidden_size, d * kernel_size ** 2 * conv_hidden_size
         )
 
         self.conv_bias = nn.Parameter(torch.zeros(conv_hidden_size))
@@ -370,7 +363,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 N, self.conv_hidden_size, -1, self.kernel_size, self.kernel_size
             )
             padding = optimal_padding(self.kernel_size, self.stride)
-            h1 = torch.cat(
+            h1 = obs * torch.cat(
                 [
                     F.conv2d(
                         input=o.unsqueeze(0),
@@ -379,7 +372,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                         stride=self.stride,
                         padding=padding,
                     )
-                    for o, k in zip(obs.relu().unbind(0), conv_kernel.unbind(0))
+                    for o, k in zip(state.obs[t].unbind(0), conv_kernel.unbind(0))
                 ],
                 dim=0,
             )
