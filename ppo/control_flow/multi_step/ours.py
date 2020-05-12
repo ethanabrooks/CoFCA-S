@@ -363,7 +363,14 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 N, self.conv_hidden_size, -1, self.kernel_size, self.kernel_size
             )
             padding = optimal_padding(self.kernel_size, self.stride)
-            h1 = obs * torch.cat(
+            conv = self.conv[0]
+            h1 = F.conv2d(
+                input=state.obs[t],
+                weight=conv.weight,
+                bias=conv.bias,
+                stride=conv.stride,
+                padding=conv.padding,
+            ) * torch.cat(
                 [
                     F.conv2d(
                         input=o.unsqueeze(0),
