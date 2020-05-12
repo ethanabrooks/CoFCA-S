@@ -146,14 +146,13 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             stride=stride,
         )
         self.d_gate = Categorical(
-            self.encoder_hidden_size + conv_hidden_size * output_dim ** 2, 2
+            self.encoder_hidden_size + hidden2 + conv_hidden_size * output_dim ** 2, 2
         )
         kernel = min(h, gate_conv_kernel_size)
         padding = optimal_padding(kernel, 2)
 
         self.linear1 = nn.Linear(
-            self.encoder_hidden_size,
-            (d + gate_hidden_size) * kernel_size ** 2 * conv_hidden_size,
+            self.encoder_hidden_size, d * kernel_size ** 2 * conv_hidden_size
         )
 
         self.conv_bias = nn.Parameter(torch.zeros(conv_hidden_size))
@@ -364,16 +363,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 N, self.conv_hidden_size, -1, self.kernel_size, self.kernel_size
             )
             padding = optimal_padding(self.kernel_size, self.stride)
-            cat = torch.cat(
-                [
-                    state.obs[t],
-                    embedded_lower.view(N, -1, 1, 1).expand(
-                        -1, -1, *state.obs[t].shape[-2:]
-                    ),
-                ],
-                dim=1,
-            )
-            h1 = torch.cat(
+            h1 = obs * torch.cat(
                 [
                     F.conv2d(
                         input=o.unsqueeze(0),
@@ -382,14 +372,12 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                         stride=self.stride,
                         padding=padding,
                     )
-                    for o, k in zip(cat.unbind(0), conv_kernel.unbind(0))
+                    for o, k in zip(state.obs[t].unbind(0), conv_kernel.unbind(0))
                 ],
                 dim=0,
             )
-            # TODO: can h2 be eliminated by concatenating embedded_lower to each channel of obs?
-            d_gate = self.d_gate(
-                torch.cat([h1.view(N, -1), M[R, p]], dim=-1)
-            )  # TODO: take out M[R, p] here
+            h2 = self.linear2(torch.cat([M[R, p], embedded_lower], dim=-1)).relu()
+            d_gate = self.d_gate(torch.cat([h1.view(N, -1), h2, M[R, p]], dim=-1))
             self.sample_new(DG[t], d_gate)
             # (hy_, cy_), gru_gate = self.gru2(M[R, p], (hy, cy))
             # first put obs back in gru2
