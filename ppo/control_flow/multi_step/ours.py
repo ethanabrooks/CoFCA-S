@@ -379,7 +379,13 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             h2 = self.linear2(torch.cat([M[R, p], embedded_lower], dim=-1)).relu()
             d_gate = self.d_gate(
                 torch.cat(
-                    [(F.softplus(obs) * F.softplus(h1)).view(N, -1), h2, M[R, p]],
+                    [
+                        torch.exp(F.softplus(obs).log() + F.softplus(h1).log()).view(
+                            N, -1
+                        ),
+                        h2,
+                        M[R, p],
+                    ],
                     dim=-1,
                 )
             )
