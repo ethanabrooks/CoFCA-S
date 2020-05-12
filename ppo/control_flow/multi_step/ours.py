@@ -378,7 +378,10 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             )
             h2 = self.linear2(torch.cat([M[R, p], embedded_lower], dim=-1)).relu()
             d_gate = self.d_gate(
-                torch.cat([(obs * h1).view(N, -1), h2, M[R, p]], dim=-1)
+                torch.cat(
+                    [(F.softplus(obs) * F.softplus(h1)).view(N, -1), h2, M[R, p]],
+                    dim=-1,
+                )
             )
             self.sample_new(DG[t], d_gate)
             # (hy_, cy_), gru_gate = self.gru2(M[R, p], (hy, cy))
