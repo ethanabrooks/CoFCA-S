@@ -137,7 +137,7 @@ def control_flow_args():
     parsers.agent.add_argument("--no-scan", action="store_true")
     parsers.agent.add_argument("--no-roll", action="store_true")
     parsers.agent.add_argument("--baseline")
-    parsers.agent.add_argument("--hidden3", type=int, required=True)
+    parsers.agent.add_argument("--hidden1", type=int, required=True)
     parsers.agent.add_argument("--hidden2", type=int, required=True)
     parsers.agent.add_argument("--conv-hidden-size", type=int, required=True)
     parsers.agent.add_argument("--gru-hidden-size", type=int, required=True)
