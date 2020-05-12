@@ -142,7 +142,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         padding = optimal_padding(kernel, 2)
 
         self.linear1 = nn.Linear(
-            gate_conv_hidden_size
+            conv_hidden_size
             * conv_output_dimension(h, padding=padding, kernel=kernel, stride=2) ** 2,
             hidden1,
         )
@@ -150,11 +150,11 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         self.conv1 = nn.Sequential(
             nn.Conv2d(
                 in_channels=1,
-                out_channels=gate_conv_hidden_size,
+                out_channels=conv_hidden_size,
                 kernel_size=kernel,
                 padding=padding,
                 stride=2,
-            ),
+            )
         )
         self.conv2 = nn.Sequential(
             nn.Conv2d(
@@ -163,7 +163,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 kernel_size=kernel,
                 padding=padding,
                 stride=2,
-            ),
+            )
         )
         state_sizes = self.state_sizes._asdict()
         with lower_level_config.open() as f:
@@ -351,17 +351,11 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             # then put A back in gru
             h1 = self.linear1(
                 torch.cat(
-                    [
-                        (
-                            self.conv1(channel.unsqueeze(1))
-                            * self.conv2(agent_channel.unsqueeze(1))
-                        ).view(N, -1)
-                    ],
-                    dim=-1,
+                    [(self.conv1(channel.unsqueeze(1)) * obs).view(N, -1)], dim=-1
                 )
             ).relu()
             h2 = self.linear2(torch.cat([M[R, p], embedded_lower], dim=-1)).relu()
-            d_gate = self.d_gate(torch.cat([h1, h2, M[R, p],], dim=-1,))
+            d_gate = self.d_gate(torch.cat([h1, h2, M[R, p]], dim=-1))
             self.sample_new(DG[t], d_gate)
             # (hy_, cy_), gru_gate = self.gru2(M[R, p], (hy, cy))
             # first put obs back in gru2
