@@ -115,7 +115,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         self.gate_conv = nn.Sequential(
             nn.MaxPool2d(kernel_size=gate_pool_kernel_size, stride=gate_pool_stride),
             nn.Conv2d(
-                in_channels=conv_hidden_size,
+                in_channels=self.conv_hidden_size,
                 out_channels=gate_conv_hidden_size
                 if self.concat_gate
                 else gate_hidden_size,
@@ -131,7 +131,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         )
         self.zeta = init_(
             nn.Linear(
-                conv_hidden_size + self.encoder_hidden_size + inventory_hidden_size
+                self.conv_hidden_size + self.encoder_hidden_size + inventory_hidden_size
                 if concat
                 else hidden_size,
                 hidden_size,
@@ -145,22 +145,38 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             kernel=kernel_size,
             stride=stride,
         )
+        output_dim2 = conv_output_dimension(
+            h=output_dim,
+            padding=optimal_padding(kernel_size, stride),
+            kernel=kernel_size,
+            stride=stride,
+        )
+        output_dim3 = conv_output_dimension(
+            h=output_dim2,
+            padding=optimal_padding(kernel_size, stride),
+            kernel=kernel_size,
+            stride=stride,
+        )
         self.d_gate = Categorical(
-            self.encoder_hidden_size + hidden2 + conv_hidden_size * output_dim ** 2, 2
+            self.encoder_hidden_size
+            + hidden2
+            + self.conv_hidden_size * output_dim3 ** 2,
+            2,
         )
         kernel = min(h, gate_conv_kernel_size)
         padding = optimal_padding(kernel, 2)
 
         self.linear1 = nn.Linear(
-            self.encoder_hidden_size, d * kernel_size ** 2 * conv_hidden_size
+            self.encoder_hidden_size,
+            self.conv_hidden_size * kernel_size ** 2 * self.conv_hidden_size,
         )
 
-        self.conv_bias = nn.Parameter(torch.zeros(conv_hidden_size))
+        self.conv_bias = nn.Parameter(torch.zeros(self.conv_hidden_size))
         self.linear2 = nn.Linear(self.encoder_hidden_size + gate_hidden_size, hidden2)
         self.conv1 = nn.Sequential(
             nn.Conv2d(
                 in_channels=1,
-                out_channels=conv_hidden_size,
+                out_channels=self.conv_hidden_size,
                 kernel_size=kernel,
                 padding=padding,
                 stride=2,
@@ -363,7 +379,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 N, self.conv_hidden_size, -1, self.kernel_size, self.kernel_size
             )
             padding = optimal_padding(self.kernel_size, self.stride)
-            h1 = obs * torch.cat(
+            h1 = torch.cat(
                 [
                     F.conv2d(
                         input=o.unsqueeze(0),
@@ -372,7 +388,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                         stride=self.stride,
                         padding=padding,
                     )
-                    for o, k in zip(state.obs[t].unbind(0), conv_kernel.unbind(0))
+                    for o, k in zip(obs.relu().unbind(0), conv_kernel.unbind(0))
                 ],
                 dim=0,
             )
