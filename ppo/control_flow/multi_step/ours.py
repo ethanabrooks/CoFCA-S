@@ -15,7 +15,6 @@ from ppo.control_flow.env import Action
 from ppo.control_flow.lstm import LSTMCell
 from ppo.control_flow.multi_step.env import Obs
 from ppo.distributions import FixedCategorical, Categorical
-from ppo.layers import Flatten
 from ppo.utils import init_
 
 RecurrentState = namedtuple(
@@ -42,7 +41,7 @@ def conv_output_dimension(h, padding, kernel, stride, dilation=1):
 class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
     def __init__(
         self,
-        hidden3,
+        hidden1,
         hidden2,
         hidden_size,
         conv_hidden_size,
@@ -146,19 +145,18 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             kernel=kernel_size,
             stride=stride,
         )
-        self.d_gate = Categorical(self.encoder_hidden_size + hidden2 + hidden3, 2)
+        self.d_gate = Categorical(
+            self.encoder_hidden_size + hidden2 + conv_hidden_size * output_dim ** 2, 2
+        )
         kernel = min(h, gate_conv_kernel_size)
         padding = optimal_padding(kernel, 2)
 
         self.linear1 = nn.Linear(
             self.encoder_hidden_size, d * kernel_size ** 2 * conv_hidden_size
         )
+
         self.conv_bias = nn.Parameter(torch.zeros(conv_hidden_size))
         self.linear2 = nn.Linear(self.encoder_hidden_size + gate_hidden_size, hidden2)
-        self.linear3 = nn.Sequential(
-            Flatten(), nn.Linear(conv_hidden_size * output_dim ** 2, hidden3)
-        )
-
         self.conv1 = nn.Sequential(
             nn.Conv2d(
                 in_channels=1,
@@ -379,9 +377,17 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 dim=0,
             )
             h2 = self.linear2(torch.cat([M[R, p], embedded_lower], dim=-1)).relu()
-            h3 = self.linear3(F.softplus(obs).log() + F.softplus(h1).log())
             d_gate = self.d_gate(
-                torch.cat([torch.exp(h3).view(N, -1), h2, M[R, p],], dim=-1,)
+                torch.cat(
+                    [
+                        torch.exp(
+                            torch.log(F.softplus(obs)) + torch.log(F.softplus(h1))
+                        ).view(N, -1),
+                        h2,
+                        M[R, p],
+                    ],
+                    dim=-1,
+                )
             )
             self.sample_new(DG[t], d_gate)
             # (hy_, cy_), gru_gate = self.gru2(M[R, p], (hy, cy))
