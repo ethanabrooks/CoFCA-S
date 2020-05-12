@@ -71,6 +71,8 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         if not concat:
             conv_hidden_size = hidden_size
         self.conv_hidden_size = conv_hidden_size
+        self.kernel_size = kernel_size
+        self.stride = stride
         observation_space = Obs(**observation_space.spaces)
         recurrence.Recurrence.__init__(
             self,
@@ -137,16 +139,24 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         )
 
         self.gru2 = LSTMCell(self.encoder_hidden_size, self.gru_hidden_size)
-        self.d_gate = Categorical(encoder_hidden_size + hidden2 + hidden1, 2)
+        output_dim = conv_output_dimension(
+            h=h,
+            padding=optimal_padding(kernel_size, stride),
+            kernel=kernel_size,
+            stride=stride,
+        )
+        self.d_gate = Categorical(
+            self.encoder_hidden_size + hidden2 + conv_hidden_size * output_dim ** 2, 2
+        )
         kernel = min(h, gate_conv_kernel_size)
         padding = optimal_padding(kernel, 2)
 
         self.linear1 = nn.Linear(
-            conv_hidden_size
-            * conv_output_dimension(h, padding=padding, kernel=kernel, stride=2) ** 2,
-            hidden1,
+            self.encoder_hidden_size, d * kernel_size ** 2 * conv_hidden_size
         )
-        self.linear2 = nn.Linear(encoder_hidden_size + gate_hidden_size, hidden2)
+
+        self.conv_bias = nn.Parameter(torch.zeros(conv_hidden_size))
+        self.linear2 = nn.Linear(self.encoder_hidden_size + gate_hidden_size, hidden2)
         self.conv1 = nn.Sequential(
             nn.Conv2d(
                 in_channels=1,
@@ -156,15 +166,15 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 stride=2,
             )
         )
-        self.conv2 = nn.Sequential(
-            nn.Conv2d(
-                in_channels=1,
-                out_channels=gate_conv_hidden_size,
-                kernel_size=kernel,
-                padding=padding,
-                stride=2,
-            )
-        )
+        # self.conv2 = nn.Sequential(
+        #     nn.Conv2d(
+        #         in_channels=1,
+        #         out_channels=gate_conv_hidden_size,
+        #         kernel_size=kernel,
+        #         padding=padding,
+        #         stride=2,
+        #     )
+        # )
         state_sizes = self.state_sizes._asdict()
         with lower_level_config.open() as f:
             lower_level_params = json.load(f)
@@ -335,27 +345,39 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             embedded_lower = self.embed_lower(lt.clone())
             self.print("L[t]", L[t])
             self.print("lines[R, p]", lines[t][R, p])
-            gate_obs = self.gate_conv(obs)
-            gate_conv_output = F.max_pool2d(
-                gate_obs, kernel_size=gate_obs.size(-1)
-            ).view(N, -1)
-            if not self.concat_gate:
-                m = self.project_m(m)
-            zeta2_input = (
-                torch.cat([m, gate_conv_output, embedded_lower], dim=-1)
-                if self.concat_gate
-                else (m * gate_conv_output * embedded_lower)
-            )
-            z2 = F.relu(self.zeta2(zeta2_input))
+            # gate_obs = self.gate_conv(obs)
+            # gate_conv_output = F.max_pool2d(
+            #     gate_obs, kernel_size=gate_obs.size(-1)
+            # ).view(N, -1)
+            # if not self.concat_gate:
+            #     m = self.project_m(m)
+            # zeta2_input = (
+            #     torch.cat([m, gate_conv_output, embedded_lower], dim=-1)
+            #     if self.concat_gate
+            #     else (m * gate_conv_output * embedded_lower)
+            # )
+            # z2 = F.relu(self.zeta2(zeta2_input))
             # then put M back in gru
             # then put A back in gru
-            h1 = self.linear1(
-                torch.cat(
-                    [(self.conv1(channel.unsqueeze(1)) * obs).view(N, -1)], dim=-1
-                )
-            ).relu()
+            conv_kernel = self.linear1(M[R, p]).view(
+                N, self.conv_hidden_size, -1, self.kernel_size, self.kernel_size
+            )
+            padding = optimal_padding(self.kernel_size, self.stride)
+            h1 = obs * torch.cat(
+                [
+                    F.conv2d(
+                        input=o.unsqueeze(0),
+                        weight=k,
+                        bias=self.conv_bias,
+                        stride=self.stride,
+                        padding=padding,
+                    )
+                    for o, k in zip(state.obs[t].unbind(0), conv_kernel.unbind(0))
+                ],
+                dim=0,
+            )
             h2 = self.linear2(torch.cat([M[R, p], embedded_lower], dim=-1)).relu()
-            d_gate = self.d_gate(torch.cat([h1, h2, M[R, p]], dim=-1))
+            d_gate = self.d_gate(torch.cat([h1.view(N, -1), h2, M[R, p]], dim=-1))
             self.sample_new(DG[t], d_gate)
             # (hy_, cy_), gru_gate = self.gru2(M[R, p], (hy, cy))
             # first put obs back in gru2
