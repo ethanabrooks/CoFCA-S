@@ -50,6 +50,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         gate_conv_kernel_size,
         gate_conv_hidden_size,
         gate_coef,
+        gate_stride,
         observation_space,
         lower_level_load_path,
         num_conv_layers,
@@ -68,6 +69,9 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         self.conv_hidden_size = conv_hidden_size
         self.kernel_size = kernel_size
         self.stride = stride
+        self.gate_hidden_size = gate_hidden_size
+        self.gate_kernel_size = gate_conv_kernel_size
+        self.gate_stride = gate_stride
         observation_space = Obs(**observation_space.spaces)
         recurrence.Recurrence.__init__(
             self,
@@ -129,21 +133,21 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         )
         output_dim2 = conv_output_dimension(
             h=output_dim,
-            padding=optimal_padding(kernel_size, stride),
-            kernel=kernel_size,
-            stride=stride,
+            padding=optimal_padding(gate_conv_kernel_size, gate_stride),
+            kernel=gate_conv_kernel_size,
+            stride=gate_stride,
         )
         self.d_gate = Categorical(
-            self.encoder_hidden_size + hidden2 + conv_hidden_size * output_dim2 ** 2, 2
+            self.encoder_hidden_size + hidden2 + gate_hidden_size * output_dim2 ** 2, 2
         )
         kernel = min(h, gate_conv_kernel_size)
         padding = optimal_padding(kernel, 2)
 
         self.linear1 = nn.Linear(
             self.encoder_hidden_size,
-            conv_hidden_size * kernel_size ** 2 * conv_hidden_size,
+            conv_hidden_size * gate_conv_kernel_size ** 2 * gate_hidden_size,
         )
-        self.conv_bias = nn.Parameter(torch.zeros(conv_hidden_size))
+        self.conv_bias = nn.Parameter(torch.zeros(gate_hidden_size))
         self.linear2 = nn.Linear(self.encoder_hidden_size + gate_hidden_size, hidden2)
         self.linear3 = nn.Sequential(
             Flatten(), nn.Linear(conv_hidden_size * output_dim2 ** 2, hidden3)
@@ -327,7 +331,11 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             self.print("L[t]", L[t])
             self.print("lines[R, p]", lines[t][R, p])
             conv_kernel = self.linear1(M[R, p]).view(
-                N, self.conv_hidden_size, -1, self.kernel_size, self.kernel_size
+                N,
+                self.gate_hidden_size,
+                self.conv_hidden_size,
+                self.gate_kernel_size,
+                self.gate_kernel_size,
             )
             padding = optimal_padding(self.kernel_size, self.stride)
             h1 = torch.cat(
