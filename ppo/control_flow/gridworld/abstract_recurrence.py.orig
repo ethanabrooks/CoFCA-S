@@ -33,7 +33,7 @@ class Recurrence:
                 yield conv
                 yield nn.ReLU()
 
-        self.conv = nn.Sequential(*generate_convolutions(h))
+        # self.conv = nn.Sequential(*generate_convolutions(h))
         ones = torch.ones(1, dtype=torch.long)
         self.register_buffer("ones", ones)
         line_nvec = torch.tensor(self.obs_spaces.lines.nvec[0, :-1])

@@ -14,7 +14,7 @@ class Recurrence(ppo.control_flow.recurrence.Recurrence):
 
     @property
     def gru_in_size(self):
-        return 1 + 2 * self.encoder_hidden_size + self.hidden_size
+        return 1 + 2 * self.task_embed_size + self.hidden_size
 
     @staticmethod
     def eval_lines_space(n_eval_lines, train_lines_space):
