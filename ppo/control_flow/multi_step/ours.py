@@ -11,10 +11,8 @@ import ppo.control_flow.multi_step.abstract_recurrence as abstract_recurrence
 import ppo.control_flow.recurrence as recurrence
 from ppo.agent import Agent
 from ppo.control_flow.env import Action
-from ppo.control_flow.lstm import LSTMCell
 from ppo.control_flow.multi_step.env import Obs
 from ppo.distributions import FixedCategorical, Categorical
-from ppo.layers import Flatten
 from ppo.utils import init_
 
 RecurrentState = namedtuple(
@@ -40,20 +38,16 @@ def conv_output_dimension(h, padding, kernel, stride, dilation=1):
 class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
     def __init__(
         self,
-        hidden3,
         hidden2,
         hidden_size,
         conv_hidden_size,
-        gate_pool_stride,
-        gate_pool_kernel_size,
         gate_hidden_size,
         gate_conv_kernel_size,
-        gate_conv_hidden_size,
         gate_coef,
         gate_stride,
         observation_space,
         lower_level_load_path,
-        num_conv_layers,
+        lower_embed_size,
         kernel_size,
         stride,
         concat,
@@ -63,9 +57,9 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         **kwargs,
     ):
         self.concat = concat
-        self.gate_coef = gate_coef
         if not concat:
             conv_hidden_size = hidden_size
+        self.gate_coef = gate_coef
         self.conv_hidden_size = conv_hidden_size
         self.kernel_size = kernel_size
         self.stride = stride
@@ -91,23 +85,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             in_channels=d, out_channels=conv_hidden_size, kernel_size=self.kernel_size
         )
         self.embed_lower = nn.Embedding(
-            self.action_space_nvec.lower + 1, gate_hidden_size,
-        )
-        d, h, w = observation_space.obs.shape
-        pool_input = int((h - kernel_size) / stride + 1)
-        pool_output = int((pool_input - gate_pool_kernel_size) / gate_pool_stride + 1)
-        gate_conv_hidden_size = gate_hidden_size
-        self.project_m = nn.Sequential(
-            init_(nn.Linear(self.task_embed_size, gate_hidden_size)), nn.ReLU()
-        )
-        self.gate_conv = nn.Sequential(
-            nn.MaxPool2d(kernel_size=gate_pool_kernel_size, stride=gate_pool_stride),
-            nn.Conv2d(
-                in_channels=conv_hidden_size,
-                out_channels=gate_hidden_size,
-                kernel_size=min(pool_output, gate_conv_kernel_size),
-                stride=2,
-            ),
+            self.action_space_nvec.lower + 1, lower_embed_size,
         )
         inventory_size = self.obs_spaces.inventory.n
         inventory_hidden_size = gate_hidden_size if concat else hidden_size
@@ -122,7 +100,6 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 hidden_size,
             )
         )
-
         output_dim = conv_output_dimension(
             h=h,
             padding=optimal_padding(kernel_size, stride),
@@ -138,37 +115,12 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         self.d_gate = Categorical(
             self.task_embed_size + hidden2 + gate_hidden_size * output_dim2 ** 2, 2
         )
-        kernel = min(h, gate_conv_kernel_size)
-        padding = optimal_padding(kernel, 2)
-
         self.linear1 = nn.Linear(
             self.task_embed_size,
             conv_hidden_size * gate_conv_kernel_size ** 2 * gate_hidden_size,
         )
         self.conv_bias = nn.Parameter(torch.zeros(gate_hidden_size))
-        self.linear2 = nn.Linear(self.task_embed_size + gate_hidden_size, hidden2)
-        self.linear3 = nn.Sequential(
-            Flatten(), nn.Linear(conv_hidden_size * output_dim2 ** 2, hidden3)
-        )
-
-        self.conv1 = nn.Sequential(
-            nn.Conv2d(
-                in_channels=1,
-                out_channels=conv_hidden_size,
-                kernel_size=kernel,
-                padding=padding,
-                stride=2,
-            )
-        )
-        # self.conv2 = nn.Sequential(
-        #     nn.Conv2d(
-        #         in_channels=1,
-        #         out_channels=gate_conv_hidden_size,
-        #         kernel_size=kernel,
-        #         padding=padding,
-        #         stride=2,
-        #     )
-        # )
+        self.linear2 = nn.Linear(self.task_embed_size + lower_embed_size, hidden2)
         state_sizes = self.state_sizes._asdict()
         with lower_level_config.open() as f:
             lower_level_params = json.load(f)
@@ -235,9 +187,6 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
 
     def inner_loop(self, raw_inputs, rnn_hxs):
         T, N, dim = raw_inputs.shape
-        # raw_inputs, actions = torch.split(
-        #     raw_inputs.detach(), [dim - self.action_size, self.action_size], dim=2
-        # )
         inputs = self.parse_input(raw_inputs)
 
         # parse non-action inputs
@@ -283,14 +232,9 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             z = F.relu(self.zeta(zeta_input))
             a_dist = self.actor(z)
             self.sample_new(A[t], a_dist)
-            a = A[t]
             self.print("a_probs", a_dist.probs)
             # line_type, be, it, _ = lines[t][R, hx.p.long().flatten()].unbind(-1)
             # a = 3 * (it - 1) + (be - 1)
-            # print("*******")
-            # print(be, it)
-            # print(A[t])
-            # print("*******")
 
             ll_output = self.lower_level(
                 Obs(**{k: v[t] for k, v in state._asdict().items()}),
@@ -322,8 +266,8 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             )
             lt = (fuzz * (be - 1) + (1 - fuzz) * L[t]).long()
             self.print("fuzz", fuzz, lt)
-            dg = dg.view(N, 1)
-            correct_action = ((be - 1) == lt).float()
+            # dg = dg.view(N, 1)
+            # correct_action = ((be - 1) == lt).float()
 
             embedded_lower = self.embed_lower(lt.clone())
             self.print("L[t]", L[t])
@@ -350,7 +294,6 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 dim=0,
             )
             h2 = self.linear2(torch.cat([M[R, p], embedded_lower], dim=-1)).relu()
-            # h3 = self.linear3(h1.view(N, -1).relu()).relu()
             d_gate = self.d_gate(
                 torch.cat([h1.view(N, -1).relu(), h2, M[R, p]], dim=-1)
             )
@@ -374,8 +317,6 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             # A[:] = float(input("A:"))
             # except ValueError:
             # pass
-            # hy = dg * hy_ + (1 - dg) * hy
-            # cy = dg * cy_ + (1 - dg) * cy
             yield RecurrentState(
                 a=A[t],
                 l=L[t],
