@@ -85,7 +85,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             in_channels=d, out_channels=conv_hidden_size, kernel_size=self.kernel_size
         )
         self.embed_lower = nn.Embedding(
-            self.action_space_nvec.lower + 1, lower_embed_size,
+            self.action_space_nvec.lower + 1, lower_embed_size
         )
         inventory_size = self.obs_spaces.inventory.n
         inventory_hidden_size = gate_hidden_size if concat else hidden_size
@@ -220,7 +220,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
 
         for t in range(T):
             self.print("p", p)
-            obs = self.conv(state.obs[t])
+            obs = self.conv(state.obs[t]).relu()
             m = M[R, p]
             obs_conv_output = F.avg_pool2d(obs, kernel_size=obs.shape[-2:]).view(N, -1)
             inventory = self.embed_inventory(state.inventory[t])
