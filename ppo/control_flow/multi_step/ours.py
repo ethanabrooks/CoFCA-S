@@ -98,7 +98,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         pool_output = int((pool_input - gate_pool_kernel_size) / gate_pool_stride + 1)
         gate_conv_hidden_size = gate_hidden_size
         self.project_m = nn.Sequential(
-            init_(nn.Linear(self.encoder_hidden_size, gate_hidden_size)), nn.ReLU()
+            init_(nn.Linear(self.task_embed_size, gate_hidden_size)), nn.ReLU()
         )
         self.gate_conv = nn.Sequential(
             nn.MaxPool2d(kernel_size=gate_pool_kernel_size, stride=gate_pool_stride),
@@ -116,7 +116,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         )
         self.zeta = init_(
             nn.Linear(
-                conv_hidden_size + self.encoder_hidden_size + inventory_hidden_size
+                conv_hidden_size + self.task_embed_size + inventory_hidden_size
                 if concat
                 else hidden_size,
                 hidden_size,
@@ -136,17 +136,17 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             stride=gate_stride,
         )
         self.d_gate = Categorical(
-            self.encoder_hidden_size + hidden2 + gate_hidden_size * output_dim2 ** 2, 2
+            self.task_embed_size + hidden2 + gate_hidden_size * output_dim2 ** 2, 2
         )
         kernel = min(h, gate_conv_kernel_size)
         padding = optimal_padding(kernel, 2)
 
         self.linear1 = nn.Linear(
-            self.encoder_hidden_size,
+            self.task_embed_size,
             conv_hidden_size * gate_conv_kernel_size ** 2 * gate_hidden_size,
         )
         self.conv_bias = nn.Parameter(torch.zeros(gate_hidden_size))
-        self.linear2 = nn.Linear(self.encoder_hidden_size + gate_hidden_size, hidden2)
+        self.linear2 = nn.Linear(self.task_embed_size + gate_hidden_size, hidden2)
         self.linear3 = nn.Sequential(
             Flatten(), nn.Linear(conv_hidden_size * output_dim2 ** 2, hidden3)
         )
@@ -248,7 +248,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         # build memory
         nl = len(self.obs_spaces.lines.nvec)
         M = self.embed_task(self.preprocess_embed(N, T, state)).view(
-            N, -1, self.encoder_hidden_size
+            N, -1, self.task_embed_size
         )
 
         P = self.build_P(M, N, rnn_hxs.device, nl)

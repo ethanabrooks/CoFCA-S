@@ -43,7 +43,7 @@ class Recurrence(nn.Module):
         self.action_size = action_space.nvec.size
         self.debug = debug
         self.hidden_size = hidden_size
-        self.encoder_hidden_size = encoder_hidden_size
+        self.task_embed_size = encoder_hidden_size
         self.P_save_name = None
 
         self.obs_sections = self.get_obs_sections(self.obs_spaces)
@@ -92,7 +92,7 @@ class Recurrence(nn.Module):
 
     @property
     def gru_in_size(self):
-        return self.encoder_hidden_size + self.ne
+        return self.task_embed_size + self.ne
 
     @staticmethod
     def get_obs_sections(obs_spaces):
@@ -174,7 +174,7 @@ class Recurrence(nn.Module):
             H = H.transpose(0, 1).reshape(nl, N, -1)
             P = self.beta(H).view(nl, N, -1, self.ne).softmax(2)
         else:
-            G = G.view(nl, N, nl, 2, self.encoder_hidden_size)
+            G = G.view(nl, N, nl, 2, self.task_embed_size)
             B = bb = self.beta(G).sigmoid()
             # arange = torch.zeros(6).float()
             # arange[0] = 1
@@ -200,7 +200,7 @@ class Recurrence(nn.Module):
     def build_memory(self, N, T, inputs):
         lines = inputs.lines.view(T, N, self.obs_sections.lines).long()[0]
         return self.embed_task(lines.view(-1)).view(
-            *lines.shape, self.encoder_hidden_size
+            *lines.shape, self.task_embed_size
         )  # n_batch, n_lines, hidden_size
 
     @staticmethod
