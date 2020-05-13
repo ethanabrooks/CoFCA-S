@@ -136,6 +136,7 @@ def control_flow_args():
     parsers.agent.add_argument("--debug", action="store_true")
     parsers.agent.add_argument("--no-scan", action="store_true")
     parsers.agent.add_argument("--no-roll", action="store_true")
+    parsers.agent.add_argument("--fuzz", action="store_true")
     parsers.agent.add_argument("--baseline")
     parsers.agent.add_argument("--hidden2", type=int, required=True)
     parsers.agent.add_argument("--conv-hidden-size", type=int, required=True)
