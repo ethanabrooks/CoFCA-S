@@ -220,14 +220,13 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
 
         for t in range(T):
             self.print("p", p)
-            obs = self.conv(state.obs[t]).relu()
-            m = M[R, p]
-            obs_conv_output = F.avg_pool2d(obs, kernel_size=obs.shape[-2:]).view(N, -1)
+            conv_output = self.conv(state.obs[t]).relu()
+            obs_conv_output = conv_output.sum(-1).sum(-1).view(N, -1)
             inventory = self.embed_inventory(state.inventory[t])
             zeta_input = (
-                torch.cat([m, obs_conv_output, inventory], dim=-1)
+                torch.cat([M[R, p], obs_conv_output, inventory], dim=-1)
                 if self.concat
-                else (m * obs_conv_output * inventory)
+                else (M[R, p] * obs_conv_output * inventory)
             )
             z = F.relu(self.zeta(zeta_input))
             a_dist = self.actor(z)
@@ -289,7 +288,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                         stride=self.stride,
                         padding=padding,
                     )
-                    for o, k in zip(obs.unbind(0), conv_kernel.unbind(0))
+                    for o, k in zip(conv_output.unbind(0), conv_kernel.unbind(0))
                 ],
                 dim=0,
             )
@@ -324,11 +323,11 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 v=self.critic(z),
                 u=u,
                 p=p,
-                a_probs=a_dist.probs,
                 d=D[t],
+                dg=dg,
+                a_probs=a_dist.probs,
                 d_probs=d_dist.probs,
                 dg_probs=d_gate.probs,
                 l_probs=ll_output.dist.probs,
-                dg=dg,
                 P=P.transpose(0, 1),
             )
