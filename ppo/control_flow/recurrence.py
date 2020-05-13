@@ -11,7 +11,7 @@ from ppo.control_flow.env import Obs, Action
 from ppo.distributions import Categorical, FixedCategorical
 from ppo.utils import init_
 
-RecurrentState = namedtuple("RecurrentState", "a d u p v h a_probs d_probs")
+RecurrentState = namedtuple("RecurrentState", "a d u p v a_probs d_probs")
 
 
 def get_obs_sections(obs_spaces):
@@ -26,8 +26,8 @@ class Recurrence(nn.Module):
         eval_lines,
         activation,
         hidden_size,
-        encoder_hidden_size,
-        gru_hidden_size,
+        task_embed_size,
+        # gru_hidden_size,
         num_layers,
         num_edges,
         num_encoding_layers,
@@ -44,8 +44,8 @@ class Recurrence(nn.Module):
         self.action_size = action_space.nvec.size
         self.debug = debug
         self.hidden_size = hidden_size
-        self.encoder_hidden_size = encoder_hidden_size
-        self.gru_hidden_size = gru_hidden_size
+        self.task_embed_size = task_embed_size
+        # self.gru_hidden_size = gru_hidden_size
         self.P_save_name = None
 
         self.obs_sections = self.get_obs_sections(self.obs_spaces)
@@ -58,29 +58,26 @@ class Recurrence(nn.Module):
         n_a = self.action_space_nvec.upper
         n_p = self.action_space_nvec.delta
         self.n_a = n_a
-        self.embed_task = self.build_embed_task(encoder_hidden_size)
+        self.embed_task = self.build_embed_task(task_embed_size)
         self.embed_upper = nn.Embedding(n_a, hidden_size)
         self.task_encoder = nn.GRU(
-            encoder_hidden_size,
-            encoder_hidden_size,
-            bidirectional=True,
-            batch_first=True,
+            task_embed_size, task_embed_size, bidirectional=True, batch_first=True
         )
-        self.gru = nn.GRUCell(self.gru_in_size, gru_hidden_size)
+        # self.gru = nn.GRUCell(self.gru_in_size, gru_hidden_size)
 
-        layers = []
-        in_size = gru_hidden_size + 1
-        for _ in range(num_layers):
-            layers.extend([init_(nn.Linear(in_size, hidden_size)), activation])
-            in_size = hidden_size
-        self.zeta2 = nn.Sequential(*layers)
+        # layers = []
+        # in_size = gru_hidden_size + 1
+        # for _ in range(num_layers):
+        # layers.extend([init_(nn.Linear(in_size, hidden_size)), activation])
+        # in_size = hidden_size
+        # self.zeta2 = nn.Sequential(*layers)
         self.upsilon = init_(nn.Linear(hidden_size, self.ne))
 
         layers = []
-        in_size = (2 if self.no_scan else 1) * encoder_hidden_size
+        in_size = (2 if self.no_scan else 1) * task_embed_size
         for _ in range(num_encoding_layers - 1):
-            layers.extend([init_(nn.Linear(in_size, encoder_hidden_size)), activation])
-            in_size = encoder_hidden_size
+            layers.extend([init_(nn.Linear(in_size, task_embed_size)), activation])
+            in_size = task_embed_size
         out_size = self.ne * 2 * self.train_lines if self.no_scan else self.ne
         self.beta = nn.Sequential(*layers, init_(nn.Linear(in_size, out_size)))
         self.critic = init_(nn.Linear(hidden_size, 1))
@@ -93,7 +90,7 @@ class Recurrence(nn.Module):
             u=self.ne,
             p=1,
             v=1,
-            h=gru_hidden_size,
+            # h=gru_hidden_size,
         )
 
     def build_embed_task(self, hidden_size):
@@ -101,7 +98,7 @@ class Recurrence(nn.Module):
 
     @property
     def gru_in_size(self):
-        return self.encoder_hidden_size + self.ne
+        return self.task_embed_size + self.ne
 
     @staticmethod
     def get_obs_sections(obs_spaces):
@@ -183,7 +180,7 @@ class Recurrence(nn.Module):
             H = H.transpose(0, 1).reshape(nl, N, -1)
             P = self.beta(H).view(nl, N, -1, self.ne).softmax(2)
         else:
-            G = G.view(nl, N, nl, 2, self.encoder_hidden_size)
+            G = G.view(nl, N, nl, 2, self.task_embed_size)
             B = bb = self.beta(G).sigmoid()
             # arange = torch.zeros(6).float()
             # arange[0] = 1
@@ -209,7 +206,7 @@ class Recurrence(nn.Module):
     def build_memory(self, N, T, inputs):
         lines = inputs.lines.view(T, N, self.obs_sections.lines).long()[0]
         return self.embed_task(lines.view(-1)).view(
-            *lines.shape, self.encoder_hidden_size
+            *lines.shape, self.task_embed_size
         )  # n_batch, n_lines, hidden_size
 
     @staticmethod
