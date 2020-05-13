@@ -156,7 +156,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             self.encoder_hidden_size, d * kernel_size ** 2 * conv_hidden_size
         )
         self.conv_bias = nn.Parameter(torch.zeros(conv_hidden_size))
-        self.linear2 = nn.Linear(self.encoder_hidden_size + gate_hidden_size, hidden2)
+        self.linear2 = nn.Bilinear(self.encoder_hidden_size, gate_hidden_size, hidden2)
         self.linear3 = nn.Sequential(
             Flatten(), nn.Linear(conv_hidden_size * output_dim ** 2, hidden3)
         )
@@ -380,7 +380,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 ],
                 dim=0,
             )
-            h2 = self.linear2(torch.cat([M[R, p], embedded_lower], dim=-1)).relu()
+            h2 = self.linear2(M[R, p], embedded_lower).relu()
             # h3 = self.linear3(h1.view(N, -1).relu()).relu()
             d_gate = self.d_gate(
                 torch.cat([h1.view(N, -1).relu(), h2, M[R, p]], dim=-1)
