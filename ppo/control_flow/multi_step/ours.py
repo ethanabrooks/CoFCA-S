@@ -85,12 +85,12 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         )
         if concat:
             conv_hidden_size = hidden_size
-        abstract_recurrence.Recurrence.__init__(
-            self,
-            conv_hidden_size=conv_hidden_size,
-            num_conv_layers=num_conv_layers,
-            kernel_size=kernel_size,
-            stride=stride,
+        self.conv_hidden_size = conv_hidden_size
+        abstract_recurrence.Recurrence.__init__(self)
+        d, h, w = observation_space.obs.shape
+        self.kernel_size = min(d, kernel_size)
+        self.conv = nn.Conv2d(
+            in_channels=d, out_channels=conv_hidden_size, kernel_size=self.kernel_size
         )
         self.embed_lower = nn.Embedding(
             self.action_space_nvec.lower + 1,
