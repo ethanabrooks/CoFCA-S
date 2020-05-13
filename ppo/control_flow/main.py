@@ -148,7 +148,6 @@ def control_flow_args():
     parsers.agent.add_argument("--gate-coef", type=float, required=True)
     parsers.agent.add_argument("--no-op-coef", type=float, required=True)
     parsers.agent.add_argument("--gate-conv-kernel-size", type=int, required=True)
-    parsers.agent.add_argument("--concat", action="store_true")
     parsers.agent.add_argument("--kernel-size", type=int, required=True)
     parsers.agent.add_argument("--stride", type=int, required=True)
     return parser

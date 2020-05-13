@@ -50,15 +50,11 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         lower_embed_size,
         kernel_size,
         stride,
-        concat,
         action_space,
         lower_level_config,
         task_embed_size,
         **kwargs,
     ):
-        self.concat = concat
-        if not concat:
-            conv_hidden_size = hidden_size
         self.gate_coef = gate_coef
         self.conv_hidden_size = conv_hidden_size
         self.kernel_size = kernel_size
@@ -70,13 +66,11 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         recurrence.Recurrence.__init__(
             self,
             hidden_size=hidden_size,
-            task_embed_size=task_embed_size if concat else hidden_size,
+            task_embed_size=task_embed_size,
             observation_space=observation_space,
             action_space=action_space,
             **kwargs,
         )
-        if concat:
-            conv_hidden_size = hidden_size
         self.conv_hidden_size = conv_hidden_size
         abstract_recurrence.Recurrence.__init__(self)
         d, h, w = observation_space.obs.shape
@@ -93,15 +87,13 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             self.action_space_nvec.lower + 1, lower_embed_size
         )
         inventory_size = self.obs_spaces.inventory.n
-        inventory_hidden_size = gate_hidden_size if concat else hidden_size
+        inventory_hidden_size = gate_hidden_size
         self.embed_inventory = nn.Sequential(
             init_(nn.Linear(inventory_size, inventory_hidden_size)), nn.ReLU()
         )
         self.zeta = init_(
             nn.Linear(
-                conv_hidden_size + self.task_embed_size + inventory_hidden_size
-                if concat
-                else hidden_size,
+                conv_hidden_size + self.task_embed_size + inventory_hidden_size,
                 hidden_size,
             )
         )
@@ -226,11 +218,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             conv_output = self.conv(state.obs[t]).relu()
             obs_conv_output = conv_output.sum(-1).sum(-1).view(N, -1)
             inventory = self.embed_inventory(state.inventory[t])
-            zeta_input = (
-                torch.cat([M[R, p], obs_conv_output, inventory], dim=-1)
-                if self.concat
-                else (M[R, p] * obs_conv_output * inventory)
-            )
+            zeta_input = torch.cat([M[R, p], obs_conv_output, inventory], dim=-1)
             z = F.relu(self.zeta(zeta_input))
             a_dist = self.actor(z)
             self.sample_new(A[t], a_dist)
