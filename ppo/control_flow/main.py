@@ -152,7 +152,6 @@ def control_flow_args():
     parsers.agent.add_argument("--gate-conv-kernel-size", type=int, required=True)
     parsers.agent.add_argument("--gate-conv-hidden-size", type=int, required=True)
     parsers.agent.add_argument("--concat", action="store_true")
-    parsers.agent.add_argument("--concat-gate", action="store_true")
     parsers.agent.add_argument("--kernel-size", type=int, required=True)
     parsers.agent.add_argument("--stride", type=int, required=True)
     return parser

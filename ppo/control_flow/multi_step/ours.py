@@ -59,10 +59,8 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         action_space,
         lower_level_config,
         encoder_hidden_size,
-        concat_gate,
         **kwargs,
     ):
-        self.concat_gate = concat_gate
         self.concat = concat
         self.gate_coef = gate_coef
         if not concat:
@@ -93,29 +91,18 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             # encoder_hidden_size
             gate_hidden_size,
         )
-        self.zeta2 = init_(
-            nn.Linear(
-                self.encoder_hidden_size + gate_conv_hidden_size + gate_hidden_size
-                if concat_gate
-                else gate_hidden_size,
-                gate_hidden_size,
-            )
-        )
         d, h, w = observation_space.obs.shape
         pool_input = int((h - kernel_size) / stride + 1)
         pool_output = int((pool_input - gate_pool_kernel_size) / gate_pool_stride + 1)
-        if not concat_gate:
-            gate_conv_hidden_size = gate_hidden_size
-            self.project_m = nn.Sequential(
-                init_(nn.Linear(self.encoder_hidden_size, gate_hidden_size)), nn.ReLU()
-            )
+        gate_conv_hidden_size = gate_hidden_size
+        self.project_m = nn.Sequential(
+            init_(nn.Linear(self.encoder_hidden_size, gate_hidden_size)), nn.ReLU()
+        )
         self.gate_conv = nn.Sequential(
             nn.MaxPool2d(kernel_size=gate_pool_kernel_size, stride=gate_pool_stride),
             nn.Conv2d(
                 in_channels=conv_hidden_size,
-                out_channels=gate_conv_hidden_size
-                if self.concat_gate
-                else gate_hidden_size,
+                out_channels=gate_hidden_size,
                 kernel_size=min(pool_output, gate_conv_kernel_size),
                 stride=2,
             ),
@@ -339,18 +326,6 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             embedded_lower = self.embed_lower(lt.clone())
             self.print("L[t]", L[t])
             self.print("lines[R, p]", lines[t][R, p])
-            # gate_obs = self.gate_conv(obs)
-            # gate_conv_output = F.max_pool2d(
-            #     gate_obs, kernel_size=gate_obs.size(-1)
-            # ).view(N, -1)
-            # if not self.concat_gate:
-            #     m = self.project_m(m)
-            # zeta2_input = (
-            #     torch.cat([m, gate_conv_output, embedded_lower], dim=-1)
-            #     if self.concat_gate
-            #     else (m * gate_conv_output * embedded_lower)
-            # )
-            # z2 = F.relu(self.zeta2(zeta2_input))
             conv_kernel = self.linear1(M[R, p]).view(
                 N, self.conv_hidden_size, -1, self.kernel_size, self.kernel_size
             )
