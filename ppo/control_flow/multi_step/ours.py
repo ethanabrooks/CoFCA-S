@@ -76,12 +76,14 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         d, h, w = observation_space.obs.shape
         self.kernel_size = min(d, kernel_size)
         padding = optimal_padding(kernel_size, stride)
-        self.conv = nn.Conv2d(
-            in_channels=d,
-            out_channels=conv_hidden_size,
-            kernel_size=self.kernel_size,
-            stride=stride,
-            padding=padding,
+        self.conv = init_(
+            nn.Conv2d(
+                in_channels=d,
+                out_channels=conv_hidden_size,
+                kernel_size=self.kernel_size,
+                stride=stride,
+                padding=padding,
+            )
         )
         self.embed_lower = nn.Embedding(
             self.action_space_nvec.lower + 1, lower_embed_size
@@ -107,9 +109,10 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             kernel=self.gate_kernel_size,
             stride=self.gate_stride,
         )
-        self.d_gate = Categorical(
-            self.task_embed_size + hidden2 + gate_hidden_size * output_dim2 ** 2, 2
-        )
+        size_h1 = gate_hidden_size * output_dim2 ** 2
+        self.d_gate = Categorical(self.task_embed_size + hidden2 + size_h1, 2)
+        self.critic = init_(nn.Linear(size_h1, 1))
+        self.upsilon = init_(nn.Linear(size_h1, self.ne))
         self.linear1 = nn.Linear(
             self.task_embed_size,
             conv_hidden_size * gate_conv_kernel_size ** 2 * gate_hidden_size,
@@ -269,25 +272,27 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 self.gate_kernel_size,
                 self.gate_kernel_size,
             )
-            h1 = torch.cat(
-                [
-                    F.conv2d(
-                        input=o.unsqueeze(0),
-                        weight=k,
-                        bias=self.conv_bias,
-                        stride=self.gate_stride,
-                        padding=self.gate_padding,
-                    )
-                    for o, k in zip(conv_output.unbind(0), conv_kernel.unbind(0))
-                ],
-                dim=0,
+            h1 = (
+                torch.cat(
+                    [
+                        F.conv2d(
+                            input=o.unsqueeze(0),
+                            weight=k,
+                            bias=self.conv_bias,
+                            stride=self.gate_stride,
+                            padding=self.gate_padding,
+                        )
+                        for o, k in zip(conv_output.unbind(0), conv_kernel.unbind(0))
+                    ],
+                    dim=0,
+                )
+                .view(N, -1)
+                .relu()
             )
             h2 = self.linear2(torch.cat([M[R, p], embedded_lower], dim=-1)).relu()
-            d_gate = self.d_gate(
-                torch.cat([h1.view(N, -1).relu(), h2, M[R, p]], dim=-1)
-            )
+            d_gate = self.d_gate(torch.cat([h1, h2, M[R, p]], dim=-1))
             self.sample_new(DG[t], d_gate)
-            u = self.upsilon(z).softmax(dim=-1)
+            u = self.upsilon(h1).softmax(dim=-1)
             self.print("u", u)
             w = P[p, R]
             d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
@@ -310,7 +315,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 a=A[t],
                 l=L[t],
                 lh=hx.lh,
-                v=self.critic(z),
+                v=self.critic(h1),
                 u=u,
                 p=p,
                 d=D[t],
