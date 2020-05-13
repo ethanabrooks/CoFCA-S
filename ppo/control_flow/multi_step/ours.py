@@ -59,7 +59,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         concat,
         action_space,
         lower_level_config,
-        encoder_hidden_size,
+        task_embed_size,
         **kwargs,
     ):
         self.concat = concat
@@ -76,7 +76,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         recurrence.Recurrence.__init__(
             self,
             hidden_size=hidden_size,
-            encoder_hidden_size=encoder_hidden_size if concat else hidden_size,
+            encoder_hidden_size=task_embed_size if concat else hidden_size,
             observation_space=observation_space,
             action_space=action_space,
             **kwargs,
@@ -91,9 +91,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             in_channels=d, out_channels=conv_hidden_size, kernel_size=self.kernel_size
         )
         self.embed_lower = nn.Embedding(
-            self.action_space_nvec.lower + 1,
-            # encoder_hidden_size
-            gate_hidden_size,
+            self.action_space_nvec.lower + 1, gate_hidden_size,
         )
         d, h, w = observation_space.obs.shape
         pool_input = int((h - kernel_size) / stride + 1)
