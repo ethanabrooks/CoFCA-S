@@ -146,7 +146,9 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             kernel=kernel_size,
             stride=stride,
         )
-        self.d_gate = Categorical(self.encoder_hidden_size + hidden2 + hidden3, 2)
+        self.d_gate = Categorical(
+            self.encoder_hidden_size + hidden2 + conv_hidden_size * output_dim ** 2, 2
+        )
         kernel = min(h, gate_conv_kernel_size)
         padding = optimal_padding(kernel, 2)
 
@@ -379,8 +381,10 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 dim=0,
             )
             h2 = self.linear2(torch.cat([M[R, p], embedded_lower], dim=-1)).relu()
-            h3 = self.linear3(h1.view(N, -1).relu()).relu()
-            d_gate = self.d_gate(torch.cat([h3, h2, M[R, p]], dim=-1))
+            # h3 = self.linear3(h1.view(N, -1).relu()).relu()
+            d_gate = self.d_gate(
+                torch.cat([h1.view(N, -1).relu(), h2, M[R, p]], dim=-1)
+            )
             self.sample_new(DG[t], d_gate)
             # (hy_, cy_), gru_gate = self.gru2(M[R, p], (hy, cy))
             # first put obs back in gru2
