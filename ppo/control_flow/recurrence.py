@@ -11,7 +11,7 @@ from ppo.control_flow.env import Obs, Action
 from ppo.distributions import Categorical, FixedCategorical
 from ppo.utils import init_
 
-RecurrentState = namedtuple("RecurrentState", "a d u p v h a_probs d_probs")
+RecurrentState = namedtuple("RecurrentState", "a d u p v a_probs d_probs")
 
 
 def get_obs_sections(obs_spaces):
@@ -27,7 +27,6 @@ class Recurrence(nn.Module):
         activation,
         hidden_size,
         encoder_hidden_size,
-        gru_hidden_size,
         num_layers,
         num_edges,
         num_encoding_layers,
@@ -45,7 +44,6 @@ class Recurrence(nn.Module):
         self.debug = debug
         self.hidden_size = hidden_size
         self.encoder_hidden_size = encoder_hidden_size
-        self.gru_hidden_size = gru_hidden_size
         self.P_save_name = None
 
         self.obs_sections = self.get_obs_sections(self.obs_spaces)
@@ -66,14 +64,14 @@ class Recurrence(nn.Module):
             bidirectional=True,
             batch_first=True,
         )
-        self.gru = nn.GRUCell(self.gru_in_size, gru_hidden_size)
+        # self.gru = nn.GRUCell(self.gru_in_size, gru_hidden_size)
 
-        layers = []
-        in_size = gru_hidden_size + 1
-        for _ in range(num_layers):
-            layers.extend([init_(nn.Linear(in_size, hidden_size)), activation])
-            in_size = hidden_size
-        self.zeta2 = nn.Sequential(*layers)
+        # layers = []
+        # in_size = gru_hidden_size + 1
+        # for _ in range(num_layers):
+        # layers.extend([init_(nn.Linear(in_size, hidden_size)), activation])
+        # in_size = hidden_size
+        # self.zeta2 = nn.Sequential(*layers)
         self.upsilon = init_(nn.Linear(hidden_size, self.ne))
 
         layers = []
@@ -86,14 +84,7 @@ class Recurrence(nn.Module):
         self.critic = init_(nn.Linear(hidden_size, 1))
         self.actor = Categorical(hidden_size, n_a)
         self.state_sizes = RecurrentState(
-            a=1,
-            a_probs=n_a,
-            d=1,
-            d_probs=2 * self.train_lines,
-            u=self.ne,
-            p=1,
-            v=1,
-            h=gru_hidden_size,
+            a=1, a_probs=n_a, d=1, d_probs=2 * self.train_lines, u=self.ne, p=1, v=1
         )
 
     def build_embed_task(self, hidden_size):
@@ -268,7 +259,6 @@ class Recurrence(nn.Module):
                 a=A[t],
                 u=u,
                 v=self.critic(z),
-                h=h,
                 p=p,
                 a_probs=a_dist.probs,
                 d=d,

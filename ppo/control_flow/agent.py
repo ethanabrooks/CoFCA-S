@@ -115,7 +115,7 @@ class Agent(ppo.agent.Agent, NNBase):
             ll_type = self.lower_level_type
             if ll_type == "train-alone":
                 probs = Action(
-                    upper=None, lower=hx.l_probs, delta=None, dg=None, ptr=None,
+                    upper=None, lower=hx.l_probs, delta=None, dg=None, ptr=None
                 )
             elif ll_type == "train-with-upper":
                 probs = Action(
@@ -148,10 +148,6 @@ class Agent(ppo.agent.Agent, NNBase):
             aux_loss += self.no_op_coef * hx.a_probs[:, -1].mean()
         if probs.dg is not None:
             aux_loss += rm.gate_coef * hx.dg_probs[:, 1].mean()
-        try:
-            aux_loss += (rm.gru_gate_coef * hx.gru_gate).mean()
-        except AttributeError:
-            pass
 
         nlines = len(rm.obs_spaces.lines.nvec)
         P = hx.P.reshape(-1, N, nlines, 2 * nlines, rm.ne)
