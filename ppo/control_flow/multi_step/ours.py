@@ -81,8 +81,13 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         abstract_recurrence.Recurrence.__init__(self)
         d, h, w = observation_space.obs.shape
         self.kernel_size = min(d, kernel_size)
+        padding = optimal_padding(kernel_size, stride)
         self.conv = nn.Conv2d(
-            in_channels=d, out_channels=conv_hidden_size, kernel_size=self.kernel_size
+            in_channels=d,
+            out_channels=conv_hidden_size,
+            kernel_size=self.kernel_size,
+            stride=stride,
+            padding=padding,
         )
         self.embed_lower = nn.Embedding(
             self.action_space_nvec.lower + 1, lower_embed_size
@@ -101,16 +106,14 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             )
         )
         output_dim = conv_output_dimension(
-            h=h,
-            padding=optimal_padding(kernel_size, stride),
-            kernel=kernel_size,
-            stride=stride,
+            h=h, padding=padding, kernel=kernel_size, stride=stride
         )
+        self.gate_padding = optimal_padding(gate_conv_kernel_size, gate_stride)
         output_dim2 = conv_output_dimension(
             h=output_dim,
-            padding=optimal_padding(gate_conv_kernel_size, gate_stride),
-            kernel=gate_conv_kernel_size,
-            stride=gate_stride,
+            padding=self.gate_padding,
+            kernel=self.gate_kernel_size,
+            stride=self.gate_stride,
         )
         self.d_gate = Categorical(
             self.task_embed_size + hidden2 + gate_hidden_size * output_dim2 ** 2, 2
@@ -278,15 +281,14 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 self.gate_kernel_size,
                 self.gate_kernel_size,
             )
-            padding = optimal_padding(self.kernel_size, self.stride)
             h1 = torch.cat(
                 [
                     F.conv2d(
                         input=o.unsqueeze(0),
                         weight=k,
                         bias=self.conv_bias,
-                        stride=self.stride,
-                        padding=padding,
+                        stride=self.gate_stride,
+                        padding=self.gate_padding,
                     )
                     for o, k in zip(conv_output.unbind(0), conv_kernel.unbind(0))
                 ],
