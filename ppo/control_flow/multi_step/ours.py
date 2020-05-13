@@ -1,4 +1,3 @@
-import gc
 import json
 from collections import namedtuple
 
@@ -124,7 +123,6 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 stride=2,
             ),
         )
-        gc.collect()
         inventory_size = self.obs_spaces.inventory.n
         inventory_hidden_size = gate_hidden_size if concat else hidden_size
         self.embed_inventory = nn.Sequential(
