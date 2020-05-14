@@ -89,7 +89,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             self.action_space_nvec.lower + 1, lower_embed_size
         )
         inventory_size = self.obs_spaces.inventory.n
-        inventory_hidden_size = gate_hidden_size if concat else hidden_size
+        inventory_hidden_size = gate_hidden_size
         self.embed_inventory = nn.Sequential(
             init_(nn.Linear(inventory_size, inventory_hidden_size)), nn.ReLU()
         )
