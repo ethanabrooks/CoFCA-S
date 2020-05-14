@@ -109,9 +109,10 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             kernel=self.gate_kernel_size,
             stride=self.gate_stride,
         )
-        h1_size = gate_hidden_size * output_dim2 ** 2
-        self.d_gate = Categorical(self.task_embed_size + hidden2 + h1_size, 2)
-        self.gate_critic = init_(nn.Linear(self.task_embed_size + hidden2 + h1_size, 1))
+        z2_size = self.task_embed_size + hidden2 + gate_hidden_size * output_dim2 ** 2
+        self.d_gate = Categorical(z2_size, 2)
+        self.gate_critic = init_(nn.Linear(z2_size, 1))
+        self.upsilon = init_(nn.Linear(z2_size, self.ne))
         self.linear1 = init_(
             nn.Linear(
                 self.task_embed_size,
@@ -299,7 +300,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             z2 = torch.cat([h1, h2, M[R, p]], dim=-1)
             d_gate = self.d_gate(z2)
             self.sample_new(DG[t], d_gate)
-            u = self.upsilon(z).softmax(dim=-1)
+            u = self.upsilon(z2).softmax(dim=-1)
             self.print("u", u)
             w = P[p, R]
             d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
