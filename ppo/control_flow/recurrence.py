@@ -25,9 +25,9 @@ class Recurrence(nn.Module):
         action_space,
         eval_lines,
         activation,
-        encoder_hidden_size,
-        # gru_hidden_size,
-        # num_layers,
+        hidden_size,
+        task_embed_size,
+        num_layers,
         num_edges,
         num_encoding_layers,
         debug,
@@ -42,8 +42,8 @@ class Recurrence(nn.Module):
         self.obs_spaces = observation_space
         self.action_size = action_space.nvec.size
         self.debug = debug
-        self.encoder_hidden_size = encoder_hidden_size
-        # self.gru_hidden_size = gru_hidden_size
+        self.hidden_size = hidden_size
+        self.task_embed_size = task_embed_size
         self.P_save_name = None
 
         self.obs_sections = self.get_obs_sections(self.obs_spaces)
@@ -56,10 +56,20 @@ class Recurrence(nn.Module):
         n_a = self.action_space_nvec.upper
         n_p = self.action_space_nvec.delta
         self.n_a = n_a
-        self.embed_task = self.build_embed_task(encoder_hidden_size)
+        self.embed_task = self.build_embed_task(task_embed_size)
+        self.embed_upper = nn.Embedding(n_a, hidden_size)
         self.task_encoder = nn.GRU(
-            task_embed_size, task_embed_size, bidirectional=True, batch_first=True
+            task_embed_size, task_embed_size, bidirectional=True, batch_first=True,
         )
+        # self.gru = nn.GRUCell(self.gru_in_size, gru_hidden_size)
+
+        # layers = []
+        # in_size = gru_hidden_size + 1
+        # for _ in range(num_layers):
+        # layers.extend([init_(nn.Linear(in_size, hidden_size)), activation])
+        # in_size = hidden_size
+        # self.zeta2 = nn.Sequential(*layers)
+        self.upsilon = init_(nn.Linear(hidden_size, self.ne))
 
         layers = []
         in_size = (2 if self.no_scan else 1) * task_embed_size

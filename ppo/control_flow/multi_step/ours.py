@@ -12,7 +12,6 @@ from ppo.agent import Agent
 from ppo.control_flow.env import Action
 from ppo.control_flow.multi_step.env import Obs
 from ppo.distributions import FixedCategorical, Categorical
-from ppo.layers import Flatten
 from ppo.utils import init_
 
 RecurrentState = namedtuple(
@@ -38,103 +37,55 @@ def conv_output_dimension(h, padding, kernel, stride, dilation=1):
 class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
     def __init__(
         self,
-        action_space,
-        concat,
+        hidden2,
+        hidden_size,
         conv_hidden_size,
+        gate_hidden_size,
+        gate_conv_kernel_size,
         gate_coef,
+        gate_stride,
         observation_space,
         lower_level_load_path,
+        lower_embed_size,
+        kernel_size,
+        stride,
+        concat,
         action_space,
         lower_level_config,
-        embed_lower_hidden_size,
+        task_embed_size,
         **kwargs,
     ):
+        self.concat = concat
+        if not concat:
+            conv_hidden_size = hidden_size
         self.gate_coef = gate_coef
-        self.gate_hidden_size = gate_hidden_size
-        self.gate_kernel_size = gate_kernel_size
-        self.gate_stride = gate_stride
         self.conv_hidden_size = conv_hidden_size
         self.stride = stride
+        self.gate_hidden_size = gate_hidden_size
+        self.gate_kernel_size = gate_conv_kernel_size
+        self.gate_stride = gate_stride
         observation_space = Obs(**observation_space.spaces)
 
         recurrence.Recurrence.__init__(
             self,
+            hidden_size=hidden_size,
+            task_embed_size=task_embed_size if concat else hidden_size,
             observation_space=observation_space,
             action_space=action_space,
             encoder_hidden_size=m_hidden_size,
             **kwargs,
         )
-        abstract_recurrence.Recurrence.__init__(
-            self,
-            conv_hidden_size=conv_hidden_size,
-            num_conv_layers=num_conv_layers,
-            kernel_size=kernel_size,
-            stride=stride,
+        if concat:
+            conv_hidden_size = hidden_size
+        self.conv_hidden_size = conv_hidden_size
+        abstract_recurrence.Recurrence.__init__(self)
+        d, h, w = observation_space.obs.shape
+        self.kernel_size = min(d, kernel_size)
+        self.conv = nn.Conv2d(
+            in_channels=d, out_channels=conv_hidden_size, kernel_size=self.kernel_size
         )
         self.embed_lower = nn.Embedding(
-            self.action_space_nvec.lower + 1,
-            # encoder_hidden_size
-            gate_hidden_size,
-        )
-
-        def generate_convolutions(d, h, w):
-            in_size = d + embed_lower_hidden_size
-
-            for hidden, kernel, stride in conv_params:
-                if hidden <= 0:
-                    break
-                kernel1 = min(h, kernel)
-                kernel2 = min(w, kernel)
-                stride1 = min(kernel1, stride)
-                stride2 = min(kernel2, stride)
-                padding1 = optimal_padding(kernel1, stride1)
-                padding2 = optimal_padding(kernel2, stride2)
-                if h > 1 or w > 1:
-                    yield (
-                        nn.Conv2d(
-                            in_channels=in_size,
-                            out_channels=hidden,
-                            kernel_size=(kernel1, kernel2),
-                            stride=(stride1, stride2),
-                            padding=(padding1, padding2),
-                        )
-                    )
-                    h = conv_output_dimension(
-                        h, padding=padding1, kernel=kernel1, stride=stride1
-                    )
-                    w = conv_output_dimension(
-                        w, padding=padding2, kernel=kernel2, stride=stride2
-                    )
-                else:
-                    yield Flatten()
-                    yield nn.Linear(in_size, hidden)
-                yield nn.ReLU()
-                in_size = hidden
-
-        _, H, W, = self.obs_spaces.obs.shape
-        kernel0 = min(H, kernel0)
-        padding0 = optimal_padding(kernel0, stride0)
-
-        self.conv2 = nn.Sequential(
-            *generate_convolutions(
-                hidden0,
-                h=conv_output_dimension(
-                    H, padding=padding0, kernel=kernel0, stride=stride0
-                ),
-                w=conv_output_dimension(
-                    W, padding=padding0, kernel=kernel0, stride=stride0
-                ),
-            )
-        self.gate_conv = nn.Sequential(
-            nn.MaxPool2d(kernel_size=gate_pool_kernel_size, stride=gate_pool_stride),
-            nn.Conv2d(
-                in_channels=self.conv_hidden_size,
-                out_channels=gate_conv_hidden_size
-                if self.concat_gate
-                else gate_hidden_size,
-                kernel_size=min(pool_output, gate_conv_kernel_size),
-                stride=2,
-            ),
+            self.action_space_nvec.lower + 1, lower_embed_size
         )
         inventory_size = self.obs_spaces.inventory.n
         self.embed_inventory = nn.Sequential(
@@ -142,13 +93,12 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         )
         self.zeta = init_(
             nn.Linear(
-                self.conv_hidden_size + self.encoder_hidden_size + inventory_hidden_size
+                conv_hidden_size + self.task_embed_size + inventory_hidden_size
                 if concat
                 else hidden_size,
                 hidden_size,
             )
         )
-
         output_dim = conv_output_dimension(
             h=h,
             padding=optimal_padding(gate_kernel_size, gate_stride),
@@ -167,30 +117,21 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             kernel=kernel_size,
             stride=stride,
         )
+        output_dim2 = conv_output_dimension(
+            h=output_dim,
+            padding=optimal_padding(gate_conv_kernel_size, gate_stride),
+            kernel=gate_conv_kernel_size,
+            stride=gate_stride,
+        )
         self.d_gate = Categorical(
-            self.encoder_hidden_size
-            + hidden2
-            + self.conv_hidden_size * output_dim3 ** 2,
-            2,
+            self.task_embed_size + hidden2 + gate_hidden_size * output_dim2 ** 2, 2
         )
         self.linear1 = nn.Linear(
-            self.encoder_hidden_size,
-            self.conv_hidden_size * kernel_size ** 2 * self.conv_hidden_size,
+            self.task_embed_size,
+            conv_hidden_size * gate_conv_kernel_size ** 2 * gate_hidden_size,
         )
-
-        self.conv_bias = nn.Parameter(torch.zeros(self.conv_hidden_size))
-        self.linear2 = nn.Linear(self.encoder_hidden_size + gate_hidden_size, hidden2)
-        self.conv1 = nn.Sequential(
-            nn.Conv2d(
-                in_channels=1,
-                out_channels=self.conv_hidden_size,
-                kernel_size=kernel,
-                padding=padding,
-                stride=2,
-            )
-        )
-        self.linear2 = nn.Linear(self.task_embed_size + lower_embed_size, hidden2)
         self.conv_bias = nn.Parameter(torch.zeros(gate_hidden_size))
+        self.linear2 = nn.Linear(self.task_embed_size + lower_embed_size, hidden2)
         state_sizes = self.state_sizes._asdict()
         with lower_level_config.open() as f:
             lower_level_params = json.load(f)
@@ -216,10 +157,6 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             state_dict = torch.load(lower_level_load_path, map_location="cpu")
             self.lower_level.load_state_dict(state_dict["agent"])
             print(f"Loaded lower_level from {lower_level_load_path}.")
-
-    @property
-    def gru_in_size(self):
-        return self.task_embed_size
 
     def get_obs_sections(self, obs_spaces):
         try:
@@ -261,9 +198,6 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
 
     def inner_loop(self, raw_inputs, rnn_hxs):
         T, N, dim = raw_inputs.shape
-        # raw_inputs, actions = torch.split(
-        #     raw_inputs.detach(), [dim - self.action_size, self.action_size], dim=2
-        # )
         inputs = self.parse_input(raw_inputs)
 
         # parse non-action inputs
@@ -296,21 +230,18 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
 
         for t in range(T):
             self.print("p", p)
-            conv_output = self.conv(state.obs[t]).sum(-1).sum(-1)
+            conv_output = self.conv(state.obs[t]).relu()
+            obs_conv_output = conv_output.sum(-1).sum(-1).view(N, -1)
             inventory = self.embed_inventory(state.inventory[t])
             zeta_input = (
-                torch.cat([m, obs_conv_output, inventory], dim=-1)
+                torch.cat([M[R, p], obs_conv_output, inventory], dim=-1)
                 if self.concat
-                else (m * obs_conv_output * inventory)
+                else (M[R, p] * obs_conv_output * inventory)
             )
             self.sample_new(A[t], a_dist)
             self.print("a_probs", a_dist.probs)
             # line_type, be, it, _ = lines[t][R, hx.p.long().flatten()].unbind(-1)
             # a = 3 * (it - 1) + (be - 1)
-            # print("*******")
-            # print(be, it)
-            # print(A[t])
-            # print("*******")
 
             ll_output = self.lower_level(
                 Obs(**{k: v[t] for k, v in state._asdict().items()}),
@@ -323,38 +254,35 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 assert torch.all(L[0] < 0)
                 L[t] = ll_output.action.flatten()
 
-            # ac, be, it, _ = lines[t][R, p].long().unbind(-1)  # N, 2
-            # sell = (be == 2).long()
-            # channel_index = 3 * sell + (it - 1) * (1 - sell)
-            # channel = state.obs[t][R, channel_index]
-            # agent_channel = state.obs[t][R, -1]
-            # self.print("channel", channel)
-            # self.print("agent_channel", agent_channel)
-            # not_subtask = (ac != 0).float().flatten()
-            # standing_on = (channel * agent_channel).view(N, -1).sum(-1)
-            # correct_action = ((be - 1) == L[t]).float()
-            # self.print("be", be)
-            # self.print("L[t]", L[t])
-            # self.print("correct_action", correct_action)
-            # dg = standing_on * correct_action + not_subtask
-            # fuzz = (1 - dg).long() * torch.randint(
-            #     2, size=(len(dg),), device=rnn_hxs.device
-            # )
-            # lt = (fuzz * (be - 1) + (1 - fuzz) * L[t]).long()
-            # self.print("fuzz", fuzz, lt)
+            ac, be, it, _ = lines[t][R, p].long().unbind(-1)  # N, 2
+            sell = (be == 2).long()
+            channel_index = 3 * sell + (it - 1) * (1 - sell)
+            channel = state.obs[t][R, channel_index]
+            agent_channel = state.obs[t][R, -1]
+            self.print("channel", channel)
+            self.print("agent_channel", agent_channel)
+            not_subtask = (ac != 0).float().flatten()
+            standing_on = (channel * agent_channel).view(N, -1).sum(-1)
+            correct_action = ((be - 1) == L[t]).float()
+            self.print("be", be)
+            self.print("L[t]", L[t])
+            self.print("correct_action", correct_action)
+            dg = standing_on * correct_action + not_subtask
+            fuzz = (1 - dg).long() * torch.randint(
+                2, size=(len(dg),), device=rnn_hxs.device
+            )
+            lt = (fuzz * (be - 1) + (1 - fuzz) * L[t]).long()
+            self.print("fuzz", fuzz, lt)
             # dg = dg.view(N, 1)
             # correct_action = ((be - 1) == lt).float()
 
-            # h = self.gru(obs, h)
-            embedded_lower = self.embed_lower(L[t].clone())
+            embedded_lower = self.embed_lower(lt.clone())
             self.print("L[t]", L[t])
             self.print("lines[R, p]", lines[t][R, p])
-            # then put M back in gru
-            # then put A back in gru
             conv_kernel = self.linear1(M[R, p]).view(
                 N,
                 self.gate_hidden_size,
-                -1,
+                self.conv_hidden_size,
                 self.gate_kernel_size,
                 self.gate_kernel_size,
             )
@@ -368,18 +296,15 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                         stride=self.gate_stride,
                         padding=padding,
                     )
-                    for o, k in zip(obs.relu().unbind(0), conv_kernel.unbind(0))
+                    for o, k in zip(conv_output.unbind(0), conv_kernel.unbind(0))
                 ],
                 dim=0,
-            ).relu()
-            h2 = self.linear2(
-                torch.cat([M[R, p], embedded_lower], dim=-1)
-            ).relu()  # TODO: use bilinear here?
+            )
+            h2 = self.linear2(torch.cat([M[R, p], embedded_lower], dim=-1)).relu()
             d_gate = self.d_gate(
                 torch.cat([h1.view(N, -1), h2, M[R, p]], dim=-1)
             )  # TODO: remove M[R, p] here?
             self.sample_new(DG[t], d_gate)
-
             u = self.upsilon(z).softmax(dim=-1)
             # TODO: feed h1 instead of z?
             self.print("u", u)
@@ -402,8 +327,6 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             # A[:] = float(input("A:"))
             # except ValueError:
             # pass
-            # hy = dg * hy_ + (1 - dg) * hy
-            # cy = dg * cy_ + (1 - dg) * cy
             yield RecurrentState(
                 a=A[t],
                 l=L[t],
@@ -411,11 +334,11 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 v=self.critic(z),
                 u=u,
                 p=p,
-                a_probs=a_dist.probs,
                 d=D[t],
+                dg=dg,
+                a_probs=a_dist.probs,
                 d_probs=d_dist.probs,
                 dg_probs=d_gate.probs,
                 l_probs=ll_output.dist.probs,
-                dg=dg,
                 P=P.transpose(0, 1),
             )
