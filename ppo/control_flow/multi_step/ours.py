@@ -222,11 +222,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             conv_output = self.conv(state.obs[t]).relu()
             obs_conv_output = conv_output.sum(-1).sum(-1).view(N, -1)
             inventory = self.embed_inventory(state.inventory[t])
-            zeta_input = (
-                torch.cat([M[R, p], obs_conv_output, inventory], dim=-1)
-                if self.concat
-                else (M[R, p] * obs_conv_output * inventory)
-            )
+            zeta_input = torch.cat([M[R, p], obs_conv_output, inventory], dim=-1)
             z = F.relu(self.zeta(zeta_input))
             a_dist = self.actor(z)
             self.sample_new(A[t], a_dist)
