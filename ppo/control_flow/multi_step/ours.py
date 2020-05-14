@@ -60,7 +60,6 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         self.use_gate_critic = gate_critic
         self.fuzz = fuzz
         self.gate_coef = gate_coef
-        self.conv_hidden_size = conv_hidden_size
         self.kernel_size = kernel_size
         self.stride = stride
         self.gate_hidden_size = gate_hidden_size
