@@ -71,7 +71,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         recurrence.Recurrence.__init__(
             self,
             hidden_size=hidden_size,
-            task_embed_size=task_embed_size if concat else hidden_size,
+            task_embed_size=task_embed_size,
             observation_space=observation_space,
             action_space=action_space,
             **kwargs,
