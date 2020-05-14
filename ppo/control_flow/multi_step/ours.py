@@ -75,6 +75,8 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             action_space=action_space,
             **kwargs,
         )
+        if True:
+            conv_hidden_size = hidden_size
         self.conv_hidden_size = conv_hidden_size
         abstract_recurrence.Recurrence.__init__(self)
         d, h, w = observation_space.obs.shape
