@@ -89,7 +89,7 @@ class Env(gym.Env, ABC):
                 yield Subtask(i)
             for i in range(1, max_loops + 1):
                 yield Loop(i)
-            for line_type in self.line_types:
+            for line_type in self.control_flow_types:
                 if line_type not in (Subtask, Loop):
                     yield line_type(0)
 
