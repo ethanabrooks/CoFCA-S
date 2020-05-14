@@ -95,9 +95,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         )
         self.zeta = init_(
             nn.Linear(
-                conv_hidden_size + self.task_embed_size + inventory_hidden_size
-                if concat
-                else hidden_size,
+                conv_hidden_size + self.task_embed_size + inventory_hidden_size,
                 hidden_size,
             )
         )
