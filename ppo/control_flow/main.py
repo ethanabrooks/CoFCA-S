@@ -136,6 +136,8 @@ def control_flow_args():
     parsers.agent.add_argument("--debug", action="store_true")
     parsers.agent.add_argument("--no-scan", action="store_true")
     parsers.agent.add_argument("--no-roll", action="store_true")
+    parsers.agent.add_argument("--fuzz", action="store_true")
+    parsers.agent.add_argument("--gate-critic", action="store_true")
     parsers.agent.add_argument("--baseline")
     parsers.agent.add_argument("--hidden2", type=int, required=True)
     parsers.agent.add_argument("--conv-hidden-size", type=int, required=True)
@@ -148,7 +150,6 @@ def control_flow_args():
     parsers.agent.add_argument("--gate-coef", type=float, required=True)
     parsers.agent.add_argument("--no-op-coef", type=float, required=True)
     parsers.agent.add_argument("--gate-conv-kernel-size", type=int, required=True)
-    parsers.agent.add_argument("--concat", action="store_true")
     parsers.agent.add_argument("--kernel-size", type=int, required=True)
     parsers.agent.add_argument("--stride", type=int, required=True)
     return parser

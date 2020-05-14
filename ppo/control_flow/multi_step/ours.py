@@ -41,6 +41,8 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         hidden2,
         hidden_size,
         conv_hidden_size,
+        fuzz,
+        gate_critic,
         gate_hidden_size,
         gate_conv_kernel_size,
         gate_coef,
@@ -50,15 +52,14 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         lower_embed_size,
         kernel_size,
         stride,
-        concat,
         action_space,
         lower_level_config,
         task_embed_size,
         **kwargs,
     ):
-        self.concat = concat
-        if not concat:
-            conv_hidden_size = hidden_size
+        self.concat = concat = True
+        self.use_gate_critic = gate_critic
+        self.fuzz = fuzz
         self.gate_coef = gate_coef
         self.conv_hidden_size = conv_hidden_size
         self.kernel_size = kernel_size
