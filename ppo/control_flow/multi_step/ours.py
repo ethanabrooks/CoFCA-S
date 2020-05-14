@@ -57,7 +57,6 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         task_embed_size,
         **kwargs,
     ):
-        self.concat = concat = True
         self.use_gate_critic = gate_critic
         self.fuzz = fuzz
         self.gate_coef = gate_coef
