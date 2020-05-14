@@ -42,6 +42,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         hidden_size,
         conv_hidden_size,
         fuzz,
+        gate_critic,
         gate_hidden_size,
         gate_conv_kernel_size,
         gate_coef,
@@ -56,6 +57,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         task_embed_size,
         **kwargs,
     ):
+        self.use_gate_critic = gate_critic
         self.fuzz = fuzz
         self.gate_coef = gate_coef
         self.conv_hidden_size = conv_hidden_size
@@ -109,19 +111,15 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             kernel=self.gate_kernel_size,
             stride=self.gate_stride,
         )
-        h1_size = gate_hidden_size * output_dim2 ** 2
-        self.d_gate = Categorical(self.task_embed_size + hidden2 + h1_size, 2)
-        self.gate_critic = init_(nn.Linear(self.task_embed_size + hidden2 + h1_size, 1))
-        self.linear1 = init_(
-            nn.Linear(
-                self.task_embed_size,
-                conv_hidden_size * gate_conv_kernel_size ** 2 * gate_hidden_size,
-            )
+        z2_size = self.task_embed_size + hidden2 + gate_hidden_size * output_dim2 ** 2
+        self.d_gate = Categorical(z2_size, 2)
+        self.gate_critic = init_(nn.Linear(z2_size, 1))
+        self.linear1 = nn.Linear(
+            self.task_embed_size,
+            conv_hidden_size * gate_conv_kernel_size ** 2 * gate_hidden_size,
         )
         self.conv_bias = nn.Parameter(torch.zeros(gate_hidden_size))
-        self.linear2 = init_(
-            nn.Linear(self.task_embed_size + lower_embed_size, hidden2)
-        )
+        self.linear2 = nn.Linear(self.task_embed_size + lower_embed_size, hidden2)
         state_sizes = self.state_sizes._asdict()
         with lower_level_config.open() as f:
             lower_level_params = json.load(f)
@@ -318,11 +316,14 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             # A[:] = float(input("A:"))
             # except ValueError:
             # pass
+            v = self.critic(z)
+            if self.use_gate_critic:
+                v = v + self.gate_critic(z2)
             yield RecurrentState(
                 a=A[t],
                 l=L[t],
                 lh=hx.lh,
-                v=self.critic(z) + self.gate_critic(z2),
+                v=v,
                 u=u,
                 p=p,
                 d=D[t],
