@@ -1,3 +1,4 @@
+import inspect
 from pathlib import Path
 
 import numpy as np
@@ -8,7 +9,7 @@ import ppo.agent
 import ppo.control_flow.agent
 import ppo.control_flow.env
 import ppo.control_flow.multi_step.env
-import ppo.control_flow.multi_step.minimal
+import ppo.control_flow.multi_step.minimal_gru
 import ppo.control_flow.multi_step.one_line
 from ppo import control_flow
 from ppo.arguments import build_parser
@@ -37,14 +38,16 @@ def main(
                     **agent_args,
                 )
             agent_args.update(log_dir=log_dir)
-            if baseline == "simple" or one_line:
-                del agent_args["no_scan"]
-                del agent_args["no_roll"]
-                del agent_args["num_encoding_layers"]
-                del agent_args["num_edges"]
-                del agent_args["gate_coef"]
-                del agent_args["no_op_coef"]
-                return ppo.control_flow.multi_step.minimal.Agent(
+            if baseline == "minimal-gru" or one_line:
+                agent_args = {
+                    k: v
+                    for k, v in agent_args.items()
+                    if k
+                    in inspect.getfullargspec(
+                        ppo.control_flow.multi_step.minimal_gru.Agent.__init__
+                    ).args
+                }
+                return ppo.control_flow.multi_step.minimal_gru.Agent(
                     observation_space=obs_space,
                     action_space=envs.action_space,
                     **agent_args,
@@ -138,7 +141,9 @@ def control_flow_args():
     parsers.agent.add_argument("--no-roll", action="store_true")
     parsers.agent.add_argument("--fuzz", action="store_true")
     parsers.agent.add_argument("--gate-critic", action="store_true")
-    parsers.agent.add_argument("--baseline")
+    parsers.agent.add_argument(
+        "--baseline", choices=["minimal-gru", "oh-et-al", "no-pointer"]
+    )
     parsers.agent.add_argument("--hidden2", type=int, required=True)
     parsers.agent.add_argument("--conv-hidden-size", type=int, required=True)
     parsers.agent.add_argument("--task-embed-size", type=int, required=True)

@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from gym import spaces
 from torch import nn as nn
 
-from ppo.control_flow.env import Obs, Action
+from ppo.control_flow.env import Action
 from ppo.distributions import Categorical, FixedCategorical
 from ppo.utils import init_
 
@@ -61,7 +61,7 @@ class Recurrence(nn.Module):
         self.task_encoder = nn.GRU(
             task_embed_size, task_embed_size, bidirectional=True, batch_first=True,
         )
-        # self.gru = nn.GRUCell(self.gru_in_size, gru_hidden_size)
+        # self.minimal_gru.py = nn.GRUCell(self.gru_in_size, gru_hidden_size)
 
         # layers = []
         # in_size = gru_hidden_size + 1
@@ -72,7 +72,7 @@ class Recurrence(nn.Module):
         self.upsilon = init_(nn.Linear(hidden_size, self.ne))
 
         layers = []
-        in_size = (2 if self.no_scan else 1) * task_embed_size
+        in_size = (2 if self.no_roll or self.no_scan else 1) * task_embed_size
         for _ in range(num_encoding_layers - 1):
             layers.extend([init_(nn.Linear(in_size, task_embed_size)), activation])
             in_size = task_embed_size
@@ -162,16 +162,33 @@ class Recurrence(nn.Module):
             print(*args, **kwargs)
 
     def build_P(self, M, N, device, nl):
-        rolled = []
-        for i in range(nl):
-            rolled.append(M if self.no_roll else torch.roll(M, shifts=-i, dims=1))
-        rolled = torch.cat(rolled, dim=0)
-        G, H = self.task_encoder(rolled)
         if self.no_scan:
+            if self.no_roll:
+                H, _ = self.task_encoder(M)
+            else:
+                rolled = torch.cat(
+                    [torch.roll(M, shifts=-i, dims=1) for i in range(nl)], dim=0
+                )
+                _, H = self.task_encoder(rolled)
             H = H.transpose(0, 1).reshape(nl, N, -1)
             P = self.beta(H).view(nl, N, -1, self.ne).softmax(2)
+            return P
         else:
-            G = G.view(nl, N, nl, 2, self.task_embed_size)
+            if self.no_roll:
+                G, _ = self.task_encoder(M)
+                G = torch.cat(
+                    [
+                        G.unsqueeze(1).expand(-1, nl, -1, -1),
+                        G.unsqueeze(2).expand(-1, -1, nl, -1),
+                    ],
+                    dim=-1,
+                ).transpose(0, 1)
+            else:
+                rolled = torch.cat(
+                    [torch.roll(M, shifts=-i, dims=1) for i in range(nl)], dim=0
+                )
+                G, _ = self.task_encoder(rolled)
+            G = G.view(nl, N, nl, 2, -1)
             B = bb = self.beta(G).sigmoid()
             # arange = torch.zeros(6).float()
             # arange[0] = 1
@@ -192,7 +209,7 @@ class Recurrence(nn.Module):
             P = P.view(nl, N, nl, 2, self.ne)
             f, b = torch.unbind(P, dim=3)
             P = torch.cat([b.flip(2), f], dim=2)
-        return P
+            return P
 
     def build_memory(self, N, T, inputs):
         lines = inputs.lines.view(T, N, self.obs_sections.lines).long()[0]
