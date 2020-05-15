@@ -276,7 +276,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                         input=o.unsqueeze(0),
                         weight=k,
                         bias=self.conv_bias,
-                        stride=self.stride,
+                        stride=self.gate_stride,
                         padding=padding,
                     )
                     for o, k in zip(conv_output.unbind(0), conv_kernel.unbind(0))
