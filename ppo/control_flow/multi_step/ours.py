@@ -80,7 +80,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         abstract_recurrence.Recurrence.__init__(self)
         d, h, w = observation_space.obs.shape
         self.kernel_size = min(d, kernel_size)
-        padding = optimal_padding(h, kernel_size, stride)
+        padding = optimal_padding(h, kernel_size, stride) + 1
         self.conv = nn.Conv2d(
             in_channels=d,
             out_channels=conv_hidden_size,
