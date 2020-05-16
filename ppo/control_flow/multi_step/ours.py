@@ -27,8 +27,9 @@ def gate(g, new, old):
     return FixedCategorical(probs=g * new + (1 - g) * old)
 
 
-def optimal_padding(kernel, stride):
-    return (kernel // 2) % stride
+def optimal_padding(h, kernel, stride):
+    n = np.ceil((h - kernel) / stride + 1)
+    return int(np.ceil((stride * (n - 1) + kernel - h) / 2))
 
 
 def conv_output_dimension(h, padding, kernel, stride, dilation=1):
@@ -79,7 +80,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         abstract_recurrence.Recurrence.__init__(self)
         d, h, w = observation_space.obs.shape
         self.kernel_size = min(d, kernel_size)
-        padding = optimal_padding(kernel_size, stride)
+        padding = optimal_padding(h, kernel_size, stride)
         self.conv = nn.Conv2d(
             in_channels=d,
             out_channels=conv_hidden_size,
@@ -104,7 +105,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         output_dim = conv_output_dimension(
             h=h, padding=padding, kernel=kernel_size, stride=stride
         )
-        self.gate_padding = optimal_padding(gate_conv_kernel_size, gate_stride)
+        self.gate_padding = optimal_padding(h, gate_conv_kernel_size, gate_stride)
         output_dim2 = conv_output_dimension(
             h=output_dim,
             padding=self.gate_padding,
