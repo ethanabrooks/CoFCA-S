@@ -84,7 +84,7 @@ def main(
         def process_infos(self, episode_counter, done, infos, **act_log):
             if lower_level != "train-alone":
                 P = act_log.pop("P")
-                P = P.transpose(0, 1)[done]
+                P = P[done]
                 if P.size(0) > 0:
                     P = P.cpu().numpy()
                     episode_counter["P"] += np.split(P, P.shape[0])
@@ -140,11 +140,10 @@ def control_flow_args():
     parsers.agent.add_argument("--no-scan", action="store_true")
     parsers.agent.add_argument("--no-roll", action="store_true")
     parsers.agent.add_argument("--olsk", action="store_true")
+    parsers.agent.add_argument("--transformer", action="store_true")
     parsers.agent.add_argument("--fuzz", action="store_true")
     parsers.agent.add_argument("--gate-critic", action="store_true")
-    parsers.agent.add_argument(
-        "--baseline", choices=["minimal-gru", "oh-et-al", "no-pointer"]
-    )
+    parsers.agent.add_argument("--baseline", choices=["minimal-gru", "no-pointer"])
     parsers.agent.add_argument("--hidden2", type=int, required=True)
     parsers.agent.add_argument("--conv-hidden-size", type=int, required=True)
     parsers.agent.add_argument("--task-embed-size", type=int, required=True)

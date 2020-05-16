@@ -1,24 +1,17 @@
 import torch
 import torch.jit
-from gym import spaces
 from gym.spaces import Box
 from torch import nn as nn
 from torch.nn import functional as F
-from ppo.control_flow.multi_step.env import Obs
 
 import ppo.agent
-from ppo.agent import AgentValues, NNBase
-from ppo.control_flow.env import Action
-
-from ppo.control_flow.recurrence import RecurrentState
-import ppo.control_flow.recurrence
 import ppo.control_flow.multi_step.abstract_recurrence
 import ppo.control_flow.multi_step.no_pointer
-import ppo.control_flow.multi_step.oh_et_al
 import ppo.control_flow.multi_step.ours
-from ppo.control_flow.multi_step.ours import gate
 import ppo.control_flow.no_pointer
-import ppo.control_flow.oh_et_al
+import ppo.control_flow.recurrence
+from ppo.agent import AgentValues, NNBase
+from ppo.control_flow.env import Action
 from ppo.distributions import FixedCategorical
 
 
@@ -85,10 +78,7 @@ class Agent(ppo.agent.Agent, NNBase):
         hx = rm.parse_hidden(all_hxs)
         t = type(rm)
         pad = torch.zeros_like(hx.a)
-        if t in (
-            ppo.control_flow.oh_et_al.Recurrence,
-            ppo.control_flow.no_pointer.Recurrence,
-        ):
+        if t is ppo.control_flow.no_pointer.Recurrence:
             X = [hx.a, pad, hx.p]
             probs = [hx.a_probs]
         elif t is ppo.control_flow.recurrence.Recurrence:
@@ -96,9 +86,6 @@ class Agent(ppo.agent.Agent, NNBase):
             probs = [hx.a_probs, hx.d_probs]
         elif t is ppo.control_flow.multi_step.no_pointer.Recurrence:
             X = [hx.a, pad, pad, pad, pad]
-            probs = [hx.a_probs]
-        elif t is ppo.control_flow.multi_step.oh_et_al.Recurrence:
-            X = [hx.a, pad, pad, pad, hx.p]
             probs = [hx.a_probs]
         elif t is ppo.control_flow.multi_step.ours.Recurrence:
             X = Action(upper=hx.a, lower=hx.l, delta=hx.d, dg=hx.dg, ptr=hx.p)
@@ -139,8 +126,7 @@ class Agent(ppo.agent.Agent, NNBase):
         if probs.dg is not None:
             aux_loss += rm.gate_coef * hx.dg_probs[:, 1].mean()
 
-        nlines = len(rm.obs_spaces.lines.nvec)
-        P = hx.P.reshape(-1, N, nlines, 2 * nlines, rm.ne)
+        P = hx.P.reshape(N, *rm.P_shape(neg=True))
         rnn_hxs = torch.cat(
             hx._replace(P=torch.tensor([], device=hx.P.device), l=X.lower), dim=-1
         )

@@ -137,7 +137,6 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             l=1,
             l_probs=ll_action_space.n,
             lh=lower_level_params["hidden_size"],
-            P=self.ne * 2 * self.train_lines ** 2,
         )
         self.lower_level = Agent(
             obs_spaces=observation_space,
@@ -204,14 +203,13 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         M = self.embed_task(self.preprocess_embed(N, T, state)).view(
             N, -1, self.task_embed_size
         )
-
-        P = self.build_P(M, N, rnn_hxs.device, nl)
-
-        half = P.size(2) // 2 if self.no_scan else nl
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
         for _x in hx:
             _x.squeeze_(0)
+
+        P = self.build_P(M, N, rnn_hxs.device, nl)
+        half = P.size(2) // 2 if self.no_scan else nl
 
         p = hx.p.long().squeeze(-1)
         hx.a[new_episode] = self.n_a - 1
@@ -331,6 +329,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             v = self.critic(z)
             if self.use_gate_critic:
                 v = v + self.gate_critic(z2)
+            P.view(N, *self.P_shape(neg=True))
             yield RecurrentState(
                 a=A[t],
                 l=L[t],

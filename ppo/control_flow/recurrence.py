@@ -8,10 +8,11 @@ from gym import spaces
 from torch import nn as nn
 
 from ppo.control_flow.env import Action
+from ppo.control_flow.multi_step.transformer import TransformerModel
 from ppo.distributions import Categorical, FixedCategorical
 from ppo.utils import init_
 
-RecurrentState = namedtuple("RecurrentState", "a d u p v a_probs d_probs")
+RecurrentState = namedtuple("RecurrentState", "a d u p v a_probs d_probs P")
 
 
 def get_obs_sections(obs_spaces):
@@ -33,9 +34,11 @@ class Recurrence(nn.Module):
         debug,
         no_scan,
         no_roll,
+        transformer,
         log_dir,
     ):
         super().__init__()
+        self.transformer = transformer
         self.log_dir = log_dir
         self.no_roll = no_roll
         self.no_scan = no_scan
@@ -44,10 +47,9 @@ class Recurrence(nn.Module):
         self.debug = debug
         self.hidden_size = hidden_size
         self.task_embed_size = task_embed_size
-        self.P_save_name = None
 
         self.obs_sections = self.get_obs_sections(self.obs_spaces)
-        self.eval_lines = eval_lines
+        self.eval_lines = max(eval_lines)
         self.train_lines = len(self.obs_spaces.lines.nvec)
 
         # networks
@@ -58,8 +60,16 @@ class Recurrence(nn.Module):
         self.n_a = n_a
         self.embed_task = self.build_embed_task(task_embed_size)
         self.embed_upper = nn.Embedding(n_a, hidden_size)
-        self.task_encoder = nn.GRU(
-            task_embed_size, task_embed_size, bidirectional=True, batch_first=True
+        self.task_encoder = (
+            TransformerModel(
+                ntoken=self.ne * self.d_space(),
+                ninp=task_embed_size,
+                nhid=task_embed_size,
+            )
+            if transformer
+            else nn.GRU(
+                task_embed_size, task_embed_size, bidirectional=True, batch_first=True
+            )
         )
         # self.minimal_gru.py = nn.GRUCell(self.gru_in_size, gru_hidden_size)
 
@@ -70,13 +80,12 @@ class Recurrence(nn.Module):
         # in_size = hidden_size
         # self.zeta2 = nn.Sequential(*layers)
         self.upsilon = init_(nn.Linear(hidden_size, self.ne))
-
         layers = []
         in_size = (2 if self.no_roll or self.no_scan else 1) * task_embed_size
         for _ in range(num_encoding_layers - 1):
             layers.extend([init_(nn.Linear(in_size, task_embed_size)), activation])
             in_size = task_embed_size
-        out_size = self.ne * 2 * self.train_lines if self.no_scan else self.ne
+        out_size = self.ne * self.d_space() if self.no_scan else self.ne
         self.beta = nn.Sequential(*layers, init_(nn.Linear(in_size, out_size)))
         self.critic = init_(nn.Linear(hidden_size, 1))
         self.actor = Categorical(hidden_size, n_a)
@@ -84,11 +93,28 @@ class Recurrence(nn.Module):
             a=1,
             a_probs=n_a,
             d=1,
-            d_probs=3 if self.olsk else 2 * self.train_lines,
+            d_probs=(self.d_space()),
             u=self.ne,
             p=1,
             v=1,
+            P=(self.P_shape().prod()),
         )
+
+    def P_shape(self, neg=False):
+        lines = (
+            self.obs_spaces["lines"]
+            if isinstance(self.obs_spaces, dict)
+            else self.obs_spaces.lines
+        )
+        return np.array([len(lines.nvec), self.d_space(), self.ne])
+
+    def d_space(self):
+        if self.olsk:
+            return 3
+        elif self.transformer or self.no_scan:
+            return 2 * self.eval_lines
+        else:
+            return 2 * self.train_lines
 
     def build_embed_task(self, hidden_size):
         return nn.Embedding(self.obs_spaces.lines.nvec[0], hidden_size)
@@ -108,9 +134,7 @@ class Recurrence(nn.Module):
         obs_sections = self.obs_sections
         state_sizes = self.state_sizes
         self.set_obs_space(eval_obs_space)
-        self.P_save_name = "eval_P.torch"
         yield self
-        self.P_save_name = "P.torch"
         self.obs_spaces = obs_spaces
         self.obs_sections = obs_sections
         self.state_sizes = state_sizes
@@ -122,8 +146,7 @@ class Recurrence(nn.Module):
         # noinspection PyProtectedMember
         if not self.no_scan:
             self.state_sizes = self.state_sizes._replace(
-                d_probs=3 if self.olsk else 2 * self.train_lines,
-                P=self.ne * 2 * self.train_lines ** 2,
+                d_probs=self.d_space(), P=self.P_shape().prod()
             )
 
     @staticmethod
@@ -179,6 +202,9 @@ class Recurrence(nn.Module):
                 _, H = self.task_encoder(rolled)
             H = H.transpose(0, 1).reshape(nl, N, -1)
             P = self.beta(H).view(nl, N, -1, self.ne).softmax(2)
+            return P
+        elif self.transformer:
+            P = self.task_encoder(M.transpose(0, 1)).view(nl, N, -1, self.ne).softmax(2)
             return P
         else:
             if self.no_roll:
