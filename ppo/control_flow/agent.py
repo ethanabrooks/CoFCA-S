@@ -52,16 +52,6 @@ class Agent(ppo.agent.Agent, NNBase):
                 action_space=action_space,
                 **network_args,
             )
-        elif baseline == "oh-et-al":
-            self.recurrent_module = (
-                ppo.control_flow.multi_step.oh_et_al.Recurrence
-                if self.multi_step
-                else ppo.control_flow.oh_et_al.Recurrence
-            )(
-                observation_space=observation_space,
-                action_space=action_space,
-                **network_args,
-            )
         elif self.multi_step:
             assert baseline is None
             self.recurrent_module = ppo.control_flow.multi_step.ours.Recurrence(

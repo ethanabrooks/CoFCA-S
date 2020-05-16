@@ -59,7 +59,7 @@ class Recurrence(nn.Module):
         self.embed_task = self.build_embed_task(task_embed_size)
         self.embed_upper = nn.Embedding(n_a, hidden_size)
         self.task_encoder = nn.GRU(
-            task_embed_size, task_embed_size, bidirectional=True, batch_first=True,
+            task_embed_size, task_embed_size, bidirectional=True, batch_first=True
         )
         # self.minimal_gru.py = nn.GRUCell(self.gru_in_size, gru_hidden_size)
 
@@ -81,7 +81,13 @@ class Recurrence(nn.Module):
         self.critic = init_(nn.Linear(hidden_size, 1))
         self.actor = Categorical(hidden_size, n_a)
         self.state_sizes = RecurrentState(
-            a=1, a_probs=n_a, d=1, d_probs=2 * self.train_lines, u=self.ne, p=1, v=1
+            a=1,
+            a_probs=n_a,
+            d=1,
+            d_probs=3 if self.olsk else 2 * self.train_lines,
+            u=self.ne,
+            p=1,
+            v=1,
         )
 
     def build_embed_task(self, hidden_size):
@@ -116,7 +122,8 @@ class Recurrence(nn.Module):
         # noinspection PyProtectedMember
         if not self.no_scan:
             self.state_sizes = self.state_sizes._replace(
-                d_probs=2 * self.train_lines, P=self.ne * 2 * self.train_lines ** 2
+                d_probs=3 if self.olsk else 2 * self.train_lines,
+                P=self.ne * 2 * self.train_lines ** 2,
             )
 
     @staticmethod

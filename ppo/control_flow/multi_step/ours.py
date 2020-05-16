@@ -55,8 +55,11 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         action_space,
         lower_level_config,
         task_embed_size,
+        olsk,
+        num_edges,
         **kwargs,
     ):
+        self.olsk = olsk
         self.use_gate_critic = gate_critic
         self.fuzz = fuzz
         self.gate_coef = gate_coef
@@ -73,6 +76,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             task_embed_size=task_embed_size,
             observation_space=observation_space,
             action_space=action_space,
+            num_edges=3 if olsk else num_edges,
             **kwargs,
         )
         self.conv_hidden_size = conv_hidden_size
@@ -297,19 +301,25 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             z2 = torch.cat([h1, h2, M[R, p]], dim=-1)
             d_gate = self.d_gate(z2)
             self.sample_new(DG[t], d_gate)
-            u = self.upsilon(z).softmax(dim=-1)
-            self.print("u", u)
-            w = P[p, R]
-            d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
             dg = DG[t].unsqueeze(-1).float()
+            u = self.upsilon(z).softmax(dim=-1)
+            if self.olsk:
+                d_dist = gate(dg, u, ones)
+                self.sample_new(D[t], d_dist)
+                delta = D[t].clone() - 1
+            else:
+                self.print("u", u)
+                w = P[p, R]
+                d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
 
-            self.print("dg prob", d_gate.probs[:, 1])
-            self.print("dg", dg)
-            d_dist = gate(dg, d_probs, ones * half)
-            self.print("d_probs", d_probs[:, half:])
-            self.sample_new(D[t], d_dist)
-            # D[:] = float(input("D:")) + half
-            p = p + D[t].clone() - half
+                self.print("dg prob", d_gate.probs[:, 1])
+                self.print("dg", dg)
+                d_dist = gate(dg, d_probs, ones * half)
+                self.print("d_probs", d_probs[:, half:])
+                self.sample_new(D[t], d_dist)
+                # D[:] = float(input("D:")) + half
+                delta = D[t].clone() - half
+            p = p + delta
             p = torch.clamp(p, min=0, max=M.size(1) - 1)
 
             # try:
