@@ -114,7 +114,8 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         )
         z2_size = self.task_embed_size + hidden2 + gate_hidden_size * output_dim2 ** 2
         self.d_gate = Categorical(z2_size, 2)
-        self.gate_critic = init_(nn.Linear(z2_size, 1))
+        if self.use_gate_critic:
+            self.gate_critic = init_(nn.Linear(z2_size, 1))
         self.linear1 = nn.Linear(
             self.task_embed_size,
             conv_hidden_size * gate_conv_kernel_size ** 2 * gate_hidden_size,
