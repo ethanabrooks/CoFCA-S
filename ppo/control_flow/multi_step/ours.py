@@ -98,11 +98,13 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         self.embed_inventory = nn.Sequential(
             init_(nn.Linear(inventory_size, inventory_hidden_size)), nn.ReLU()
         )
+        m_size = (
+            2 * self.task_embed_size + hidden_size
+            if self.no_pointer
+            else self.task_embed_size
+        )
         self.zeta = init_(
-            nn.Linear(
-                conv_hidden_size + self.task_embed_size + inventory_hidden_size,
-                hidden_size,
-            )
+            nn.Linear(conv_hidden_size + m_size + inventory_hidden_size, hidden_size,)
         )
         output_dim = conv_output_dimension(
             h=h, padding=padding, kernel=kernel_size, stride=stride
@@ -114,16 +116,15 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             kernel=self.gate_kernel_size,
             stride=self.gate_stride,
         )
-        z2_size = self.task_embed_size + hidden2 + gate_hidden_size * output_dim2 ** 2
+        z2_size = m_size + hidden2 + gate_hidden_size * output_dim2 ** 2
         self.d_gate = Categorical(z2_size, 2)
         if self.use_gate_critic:
             self.gate_critic = init_(nn.Linear(z2_size, 1))
         self.linear1 = nn.Linear(
-            self.task_embed_size,
-            conv_hidden_size * gate_conv_kernel_size ** 2 * gate_hidden_size,
+            m_size, conv_hidden_size * gate_conv_kernel_size ** 2 * gate_hidden_size,
         )
         self.conv_bias = nn.Parameter(torch.zeros(gate_hidden_size))
-        self.linear2 = nn.Linear(self.task_embed_size + lower_embed_size, hidden2)
+        self.linear2 = nn.Linear(m_size + lower_embed_size, hidden2)
         state_sizes = self.state_sizes._asdict()
         with lower_level_config.open() as f:
             lower_level_params = json.load(f)
@@ -226,7 +227,8 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             conv_output = self.conv(state.obs[t]).relu()
             obs_conv_output = conv_output.sum(-1).sum(-1).view(N, -1)
             inventory = self.embed_inventory(state.inventory[t])
-            zeta_input = torch.cat([M[R, p], obs_conv_output, inventory], dim=-1)
+            m = torch.cat([P, h], dim=-1) if self.no_pointer else M[R, p]
+            zeta_input = torch.cat([m, obs_conv_output, inventory], dim=-1)
             z = F.relu(self.zeta(zeta_input))
             a_dist = self.actor(z)
             self.sample_new(A[t], a_dist)
@@ -273,14 +275,14 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             embedded_lower = self.embed_lower(lt.clone())
             self.print("L[t]", L[t])
             self.print("lines[R, p]", lines[t][R, p])
-            conv_kernel = self.linear1(M[R, p]).view(
+            conv_kernel = self.linear1(m).view(
                 N,
                 self.gate_hidden_size,
                 self.conv_hidden_size,
                 self.gate_kernel_size,
                 self.gate_kernel_size,
             )
-            h2 = self.linear2(torch.cat([M[R, p], embedded_lower], dim=-1)).relu()
+            h2 = self.linear2(torch.cat([m, embedded_lower], dim=-1)).relu()
             h1 = (
                 torch.cat(
                     [
@@ -298,11 +300,11 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 .view(N, -1)
                 .relu()
             )
-            z2 = torch.cat([h1, h2, M[R, p]], dim=-1)
+            z2 = torch.cat([h1, h2, m], dim=-1)
             d_gate = self.d_gate(z2)
             self.sample_new(DG[t], d_gate)
             dg = DG[t].unsqueeze(-1).float()
-            if self.olsk:
+            if self.olsk or self.no_pointer:
                 h = self.upsilon(z, h)
                 u = self.beta(h).softmax(dim=-1)
                 d_dist = gate(dg, u, ones)

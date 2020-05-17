@@ -25,7 +25,7 @@ def main(
         lower_level = "pre-trained"
 
     class _Train(Train):
-        def build_agent(self, envs, baseline=None, debug=False, **agent_args):
+        def build_agent(self, envs, debug=False, **agent_args):
             obs_space = envs.observation_space
             ll_action_space = spaces.Discrete(
                 ppo.control_flow.env.Action(*envs.action_space.nvec).lower
@@ -38,27 +38,12 @@ def main(
                     **agent_args,
                 )
             agent_args.update(log_dir=log_dir)
-            if baseline == "minimal-gru" or one_line:
-                agent_args = {
-                    k: v
-                    for k, v in agent_args.items()
-                    if k
-                    in inspect.getfullargspec(
-                        ppo.control_flow.multi_step.minimal_gru.Agent.__init__
-                    ).args
-                }
-                return ppo.control_flow.multi_step.minimal_gru.Agent(
-                    observation_space=obs_space,
-                    action_space=envs.action_space,
-                    **agent_args,
-                )
             del agent_args["recurrent"]
             return ppo.control_flow.agent.Agent(
                 observation_space=obs_space,
                 action_space=envs.action_space,
                 eval_lines=eval_lines,
                 debug=debug,
-                baseline=baseline,
                 lower_level=lower_level,
                 lower_level_load_path=lower_level_load_path,
                 **agent_args,
@@ -139,11 +124,11 @@ def control_flow_args():
     parsers.agent.add_argument("--debug", action="store_true")
     parsers.agent.add_argument("--no-scan", action="store_true")
     parsers.agent.add_argument("--no-roll", action="store_true")
+    parsers.agent.add_argument("--no-pointer", action="store_true")
     parsers.agent.add_argument("--olsk", action="store_true")
     parsers.agent.add_argument("--transformer", action="store_true")
     parsers.agent.add_argument("--fuzz", action="store_true")
     parsers.agent.add_argument("--gate-critic", action="store_true")
-    parsers.agent.add_argument("--baseline", choices=["minimal-gru", "no-pointer"])
     parsers.agent.add_argument("--hidden2", type=int, required=True)
     parsers.agent.add_argument("--conv-hidden-size", type=int, required=True)
     parsers.agent.add_argument("--task-embed-size", type=int, required=True)

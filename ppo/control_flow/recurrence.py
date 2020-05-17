@@ -34,14 +34,16 @@ class Recurrence(nn.Module):
         debug,
         no_scan,
         no_roll,
+        no_pointer,
         transformer,
         olsk,
         log_dir,
     ):
+        super().__init__()
         if olsk:
             num_edges = 3
-        super().__init__()
         self.olsk = olsk
+        self.no_pointer = no_pointer
         self.transformer = transformer
         self.log_dir = log_dir
         self.no_roll = no_roll
@@ -60,7 +62,6 @@ class Recurrence(nn.Module):
         self.ne = num_edges
         self.action_space_nvec = Action(*map(int, action_space.nvec))
         n_a = self.action_space_nvec.upper
-        n_p = self.action_space_nvec.delta
         self.n_a = n_a
         self.embed_task = self.build_embed_task(task_embed_size)
         self.embed_upper = nn.Embedding(n_a, hidden_size)
@@ -87,6 +88,9 @@ class Recurrence(nn.Module):
             assert self.ne == 3
             self.upsilon = nn.GRUCell(hidden_size, hidden_size)
             self.beta = init_(nn.Linear(hidden_size, self.ne))
+        elif self.no_pointer:
+            self.upsilon = nn.GRUCell(hidden_size, hidden_size)
+            self.beta = init_(nn.Linear(hidden_size, self.d_space()))
         else:
             self.upsilon = init_(nn.Linear(hidden_size, self.ne))
             layers = []
@@ -115,7 +119,7 @@ class Recurrence(nn.Module):
             if isinstance(self.obs_spaces, dict)
             else self.obs_spaces.lines
         )
-        if self.olsk:
+        if self.olsk or self.no_pointer:
             return np.zeros(1, dtype=int)
         else:
             return np.array([len(lines.nvec), self.d_space(), self.ne])
@@ -123,7 +127,7 @@ class Recurrence(nn.Module):
     def d_space(self):
         if self.olsk:
             return 3
-        elif self.transformer or self.no_scan:
+        elif self.transformer or self.no_scan or self.no_pointer:
             return 2 * self.eval_lines
         else:
             return 2 * self.train_lines
@@ -203,6 +207,9 @@ class Recurrence(nn.Module):
             print(*args, **kwargs)
 
     def build_P(self, M, N, device, nl):
+        if self.no_pointer:
+            _, G = self.task_encoder(M)
+            return G.transpose(0, 1).reshape(N, -1)
         if self.no_scan:
             if self.no_roll:
                 H, _ = self.task_encoder(M)

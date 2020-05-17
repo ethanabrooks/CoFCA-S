@@ -6,7 +6,6 @@ from torch.nn import functional as F
 
 import ppo.agent
 import ppo.control_flow.multi_step.abstract_recurrence
-import ppo.control_flow.multi_step.no_pointer
 import ppo.control_flow.multi_step.ours
 import ppo.control_flow.no_pointer
 import ppo.control_flow.recurrence
@@ -21,7 +20,6 @@ class Agent(ppo.agent.Agent, NNBase):
         entropy_coef,
         observation_space,
         no_op_coef,
-        baseline,
         action_space,
         lower_level,
         **network_args,
@@ -34,19 +32,7 @@ class Agent(ppo.agent.Agent, NNBase):
         if not self.multi_step:
             del network_args["conv_hidden_size"]
             del network_args["gate_coef"]
-        if baseline == "no-pointer":
-            del network_args["gate_coef"]
-            self.recurrent_module = (
-                ppo.control_flow.multi_step.no_pointer.Recurrence
-                if self.multi_step
-                else ppo.control_flow.no_pointer.Recurrence
-            )(
-                observation_space=observation_space,
-                action_space=action_space,
-                **network_args,
-            )
         elif self.multi_step:
-            assert baseline is None
             self.recurrent_module = ppo.control_flow.multi_step.ours.Recurrence(
                 observation_space=observation_space,
                 action_space=action_space,
@@ -77,16 +63,9 @@ class Agent(ppo.agent.Agent, NNBase):
         rm = self.recurrent_module
         hx = rm.parse_hidden(all_hxs)
         t = type(rm)
-        pad = torch.zeros_like(hx.a)
-        if t is ppo.control_flow.no_pointer.Recurrence:
-            X = [hx.a, pad, hx.p]
-            probs = [hx.a_probs]
-        elif t is ppo.control_flow.recurrence.Recurrence:
+        if t is ppo.control_flow.recurrence.Recurrence:
             X = [hx.a, hx.d, hx.p]
             probs = [hx.a_probs, hx.d_probs]
-        elif t is ppo.control_flow.multi_step.no_pointer.Recurrence:
-            X = [hx.a, pad, pad, pad, pad]
-            probs = [hx.a_probs]
         elif t is ppo.control_flow.multi_step.ours.Recurrence:
             X = Action(upper=hx.a, lower=hx.l, delta=hx.d, dg=hx.dg, ptr=hx.p)
             ll_type = self.lower_level_type
@@ -106,7 +85,7 @@ class Agent(ppo.agent.Agent, NNBase):
                 probs = Action(
                     upper=hx.a_probs,
                     lower=None,
-                    delta=hx.d_probs,
+                    delta=None if rm.no_pointer else hx.d_probs,
                     dg=hx.dg_probs,
                     ptr=None,
                 )
