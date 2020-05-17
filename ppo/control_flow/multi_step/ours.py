@@ -104,7 +104,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             else self.task_embed_size
         )
         self.zeta = init_(
-            nn.Linear(conv_hidden_size + m_size + inventory_hidden_size, hidden_size,)
+            nn.Linear(conv_hidden_size + m_size + inventory_hidden_size, hidden_size)
         )
         output_dim = conv_output_dimension(
             h=h, padding=padding, kernel=kernel_size, stride=stride
@@ -121,7 +121,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         if self.use_gate_critic:
             self.gate_critic = init_(nn.Linear(z2_size, 1))
         self.linear1 = nn.Linear(
-            m_size, conv_hidden_size * gate_conv_kernel_size ** 2 * gate_hidden_size,
+            m_size, conv_hidden_size * gate_conv_kernel_size ** 2 * gate_hidden_size
         )
         self.conv_bias = nn.Parameter(torch.zeros(gate_hidden_size))
         self.linear2 = nn.Linear(m_size + lower_embed_size, hidden2)
@@ -310,7 +310,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 d_dist = gate(dg, u, ones)
                 self.sample_new(D[t], d_dist)
                 delta = D[t].clone() - 1
-                P = hx.P
+                P = hx.P.transpose(0, 1)
             else:
                 u = self.upsilon(z).softmax(dim=-1)
                 self.print("u", u)
@@ -325,7 +325,6 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 # D[:] = float(input("D:")) + half
                 delta = D[t].clone() - half
                 P.view(N, *self.P_shape())
-                P = P.transpose(0, 1)
             p = p + delta
             p = torch.clamp(p, min=0, max=M.size(1) - 1)
 
@@ -349,5 +348,5 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 d_probs=d_dist.probs,
                 dg_probs=d_gate.probs,
                 l_probs=ll_output.dist.probs,
-                P=P,
+                P=P.transpose(0, 1),
             )
