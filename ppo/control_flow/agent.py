@@ -126,7 +126,7 @@ class Agent(ppo.agent.Agent, NNBase):
         if probs.dg is not None:
             aux_loss += rm.gate_coef * hx.dg_probs[:, 1].mean()
 
-        P = hx.P.reshape(N, *rm.P_shape(neg=True))
+        P = hx.P.reshape(N, *rm.P_shape())
         rnn_hxs = torch.cat(
             hx._replace(P=torch.tensor([], device=hx.P.device), l=X.lower), dim=-1
         )
