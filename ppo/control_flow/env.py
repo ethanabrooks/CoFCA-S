@@ -431,7 +431,7 @@ def build_parser(
     p.add_argument("--single-control-flow-type", action="store_true")
     p.add_argument("--max-nesting-depth", type=int, default=1)
     p.add_argument("--subtasks-only", action="store_true")
-    p.add_argument("--break-on-fail", action="store_true")
+    p.add_argument("--no-break-on-fail", dest="break_on_fail", action="store_false")
     p.add_argument(
         "--time-to-waste",
         type=int,
