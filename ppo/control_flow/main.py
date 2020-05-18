@@ -46,6 +46,7 @@ def main(
                 )
             agent_args.update(log_dir=log_dir)
             del agent_args["recurrent"]
+            del agent_args["num_conv_layers"]
             return ppo.control_flow.agent.Agent(
                 observation_space=obs_space,
                 action_space=envs.action_space,
@@ -144,6 +145,7 @@ def control_flow_args():
     parsers.agent.add_argument("--gate-hidden-size", type=int, required=True)
     parsers.agent.add_argument("--gate-stride", type=int, required=True)
     parsers.agent.add_argument("--num-encoding-layers", type=int, required=True)
+    parsers.agent.add_argument("--num-conv-layers", type=int, required=True)
     parsers.agent.add_argument("--num-edges", type=int, required=True)
     parsers.agent.add_argument("--gate-coef", type=float, required=True)
     parsers.agent.add_argument("--no-op-coef", type=float, required=True)
