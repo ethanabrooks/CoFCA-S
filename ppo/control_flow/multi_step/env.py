@@ -231,6 +231,7 @@ class Env(ppo.control_flow.env.Env):
         l = next(line_iterator)
         loops = 0
         whiles = 0
+        inventory = Counter()
         counts = Counter()
         for o in objects:
             counts[o] += 1
@@ -248,9 +249,14 @@ class Env(ppo.control_flow.env.Env):
                     if counts[required_resource] <= 0:
                         return False
                 if behavior in self.sell:
-                    counts[resource] -= 1
+                    if inventory[resource] == 0:
+                        # collect from environment
+                        counts[resource] -= 1
+                        inventory[resource] += 1
+                    inventory[resource] -= 1
                 elif behavior == self.mine:
                     counts[resource] -= 1
+                    inventory[resource] += 1
             elif type(line) is Loop:
                 loops += 1
             elif type(line) is While:
