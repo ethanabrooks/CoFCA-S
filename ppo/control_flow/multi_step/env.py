@@ -244,8 +244,8 @@ class Env(ppo.control_flow.env.Env):
                     required = {resource}
                 else:
                     required = {resource}
-                for resource in required:
-                    if counts[resource] <= 0:
+                for required_resource in required:
+                    if counts[required_resource] <= 0:
                         return False
                 if behavior in self.sell:
                     counts[resource] -= 1
@@ -478,6 +478,7 @@ class Env(ppo.control_flow.env.Env):
                 )
             )
             feasible = self.feasible(object_list, lines)
+
             if feasible:
                 use_water = (
                     self.use_water
