@@ -306,15 +306,14 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             d_gate = self.d_gate(z2)
             self.sample_new(DG[t], d_gate)
             dg = DG[t].unsqueeze(-1).float()
+            h = self.upsilon(z, h)
+            u = self.linear3(h).softmax(dim=-1)
             if self.olsk or self.no_pointer:
-                h = self.upsilon(z, h)
-                u = self.beta(h).softmax(dim=-1)
                 d_dist = gate(dg, u, ones)
                 self.sample_new(D[t], d_dist)
                 delta = D[t].clone() - 1
                 P = hx.P.transpose(0, 1)
             else:
-                u = self.upsilon(z).softmax(dim=-1)
                 self.print("u", u)
                 w = P[p, R]
                 d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
