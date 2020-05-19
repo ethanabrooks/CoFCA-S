@@ -98,10 +98,12 @@ class Env(ppo.control_flow.env.Env):
         max_while_loops,
         use_water,
         max_failure_sample_prob,
+        one_condition,
         failure_buffer_size,
         world_size=6,
         **kwargs,
     ):
+        self.one_condition = one_condition
         self.max_failure_sample_prob = max_failure_sample_prob
         self.failure_buffer = deque(maxlen=failure_buffer_size)
         self.max_world_resamples = max_world_resamples
@@ -212,18 +214,23 @@ class Env(ppo.control_flow.env.Env):
 
         return world
 
-    @staticmethod
-    def evaluate_line(line, counts, condition_evaluations, loops):
+    def evaluate_line(self, line, counts, condition_evaluations, loops):
         if line is None:
             return None
         elif type(line) is Loop:
             return loops > 0
-        if type(line) is Subtask:
-            return 1
-        else:
-            evaluation = counts[Env.iron] > counts[Env.gold]
-            if type(line) in (If, While):
-                condition_evaluations += [evaluation]
+        elif type(line) in (If, While):
+            if self.one_condition:
+                evaluation = counts[Env.iron] > counts[Env.gold]
+            elif line.id == Env.iron:
+                evaluation = counts[Env.iron] > counts[Env.gold]
+            elif line.id == Env.gold:
+                evaluation = counts[Env.gold] > counts[Env.wood]
+            elif line.id == Env.wood:
+                evaluation = counts[Env.wood] > counts[Env.iron]
+            else:
+                raise RuntimeError
+            condition_evaluations += [evaluation]
             return evaluation
 
     def feasible(self, objects, lines):
@@ -622,6 +629,7 @@ def build_parser(
         "--no-temporal-extension", dest="temporal_extension", action="store_false"
     )
     p.add_argument("--no-water", dest="use_water", action="store_false")
+    p.add_argument("--1condition", dest="one_condition", action="store_true")
     p.add_argument("--max-failure-sample-prob", type=float, required=True)
     p.add_argument("--failure-buffer-size", type=int, required=True)
     p.add_argument(
