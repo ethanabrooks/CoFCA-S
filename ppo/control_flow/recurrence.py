@@ -55,7 +55,7 @@ class Recurrence(nn.Module):
         self.task_embed_size = task_embed_size
 
         self.obs_sections = self.get_obs_sections(self.obs_spaces)
-        self.eval_lines = max(eval_lines)
+        self.eval_lines = eval_lines
         self.train_lines = len(self.obs_spaces.lines.nvec)
 
         # networks

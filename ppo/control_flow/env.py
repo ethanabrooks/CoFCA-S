@@ -30,6 +30,8 @@ Action = namedtuple("Action", "upper lower delta dg ptr")
 class Env(gym.Env, ABC):
     def __init__(
         self,
+        min_eval_lines,
+        max_eval_lines,
         min_lines,
         max_lines,
         flip_prob,
@@ -46,10 +48,11 @@ class Env(gym.Env, ABC):
         lower_level,
         control_flow_types,
         seed=0,
-        eval_lines=None,
         evaluating=False,
     ):
         super().__init__()
+        self.min_eval_lines = min_eval_lines
+        self.max_eval_lines = max_eval_lines
         self.lower_level = lower_level
         if Subtask not in control_flow_types:
             control_flow_types.append(Subtask)
@@ -69,11 +72,10 @@ class Env(gym.Env, ABC):
         self.success_count = 0
 
         self.loops = None
-        self.eval_lines = eval_lines
         self.min_lines = min_lines
         self.max_lines = max_lines
         if evaluating:
-            self.n_lines = max(eval_lines)
+            self.n_lines = max_eval_lines
         else:
             self.n_lines = max_lines
         self.n_lines += 1
@@ -161,9 +163,12 @@ class Env(gym.Env, ABC):
                     success=success,
                 )
                 if success:
-                    info.update(success_line=len(lines))
+                    info.update(success_line=len(lines), success_fraction=1)
                 else:
-                    info.update(success_line=state.prev)
+                    info.update(
+                        success_line=state.prev,
+                        success_fraction=state.prev / len(lines),
+                    )
                 subtasks_attempted = subtasks_complete + (not success)
                 info.update(
                     subtasks_complete=subtasks_complete,
@@ -210,7 +215,9 @@ class Env(gym.Env, ABC):
 
             self._render = render
             obs = self.get_observation(obs=state.obs, active=state.ptr, lines=lines)
-            line_specific_info = {f"{k}_{len(lines)}": v for k, v in info.items()}
+            line_specific_info = {
+                f"{k}_{10 * (len(lines) // 10)}": v for k, v in info.items()
+            }
             action = (yield obs, reward, term, dict(**info, **line_specific_info))
             if action.size == 1:
                 action = Action(upper=0, lower=action, delta=0, dg=0, ptr=0)

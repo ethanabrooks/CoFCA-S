@@ -21,7 +21,8 @@ NAMES = ["instruction", "actions", "program_counter", "evaluations"]
 def main(
     log_dir,
     seed,
-    eval_lines,
+    min_eval_lines,
+    max_eval_lines,
     one_line,
     lower_level,
     lower_level_load_path,
@@ -50,7 +51,7 @@ def main(
             return ppo.control_flow.agent.Agent(
                 observation_space=obs_space,
                 action_space=envs.action_space,
-                eval_lines=eval_lines,
+                eval_lines=max_eval_lines,
                 debug=render and debug,
                 lower_level=lower_level,
                 lower_level_load_path=lower_level_load_path,
@@ -61,7 +62,13 @@ def main(
         def make_env(
             seed, rank, evaluation, env_id, add_timestep, gridworld, **env_args
         ):
-            args = dict(**env_args, eval_lines=eval_lines, seed=seed + rank, rank=rank)
+            args = dict(
+                **env_args,
+                min_eval_lines=min_eval_lines,
+                max_eval_lines=max_eval_lines,
+                seed=seed + rank,
+                rank=rank,
+            )
             args["lower_level"] = lower_level
             args["break_on_fail"] = args["break_on_fail"] and render
             del args["time_limit"]
@@ -120,7 +127,8 @@ def control_flow_args():
     parser = parsers.main
     parser.add_argument("--no-tqdm", dest="use_tqdm", action="store_false")
     parser.add_argument("--eval-steps", type=int)
-    parser.add_argument("--eval-lines", type=int, nargs="*")
+    parser.add_argument("--min-eval-lines", type=int, required=True)
+    parser.add_argument("--max-eval-lines", type=int, required=True)
     parser.add_argument("--no-eval", action="store_true")
     parser.add_argument("--one-line", action="store_true")
     parser.add_argument(
