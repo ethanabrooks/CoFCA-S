@@ -96,12 +96,27 @@ def main(
             super().process_infos(episode_counter, done, infos, **act_log)
 
         def log_result(self, result: dict):
-            if "subtasks_attempted" in result:
-                subtasks_attempted = sum(result["subtasks_attempted"])
-                if subtasks_attempted > 0:
-                    result["success"] = (
-                        sum(result["subtasks_complete"]) / subtasks_attempted
-                    )
+            def aggregate_logging(_suffix):
+                try:
+                    yield "line_success_rate", sum(
+                        result[f"success_line{_suffix}"]
+                    ) / sum(result[f"len_lines{_suffix}"])
+                    if "subtasks_attempted" in result:
+                        subtasks_attempted = sum(result[f"subtasks_attempted{_suffix}"])
+                        if subtasks_attempted > 0:
+                            yield "attempted_subtask_success_rate", (
+                                sum(result[f"subtasks_complete{_suffix}"])
+                                / subtasks_attempted
+                            )
+                except KeyError:
+                    pass
+
+            for k, v in aggregate_logging(""):
+                result[k] = v
+            for i in range(max_eval_lines):
+                for k, v in aggregate_logging(f"_{i}"):
+                    result[k] = v
+
             if lower_level != "train-alone":
                 names = NAMES + ["P"]
                 for name in names + ["eval_" + n for n in names]:
