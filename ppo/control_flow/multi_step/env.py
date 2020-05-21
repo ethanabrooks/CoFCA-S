@@ -416,6 +416,8 @@ class Env(ppo.control_flow.env.Env):
                     lower_level_action = self.lower_level_actions[lower_level_index]
                 self.time_remaining -= 1
                 tgt_interaction, tgt_obj = lines[ptr].id
+                if tgt_obj not in objects.values():
+                    term = True
 
                 if type(lower_level_action) is str:
                     standing_on = objects.get(tuple(agent_pos), None)
