@@ -82,7 +82,14 @@ def generate_lengths(
                 # yield from measure_length(instruction, start, stop)
                 for length in measure_length(instruction, start, stop):
                     if length is not None:
-                        yield success, L(start).name, L(stop).name, i, length
+                        yield (
+                            success,
+                            len(instruction),
+                            L(start).name,
+                            L(stop).name,
+                            i,
+                            length,
+                        )
 
         # yield name, list(iterator())
 
@@ -99,7 +106,9 @@ def main(
     success_paths = list(Path(root, path).glob("**/" + success_filename))
     with out.open("w") as f:
         writer = csv.writer(f)
-        writer.writerow(["success", "start", "end", "episode", "length"])
+        writer.writerow(
+            ["success", "instruction length", "start", "end", "episode", "block length"]
+        )
         for row in generate_lengths(
             instruction_paths=instruction_paths,
             success_paths=success_paths,

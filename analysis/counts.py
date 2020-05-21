@@ -66,7 +66,7 @@ def generate_counts(
             continue
         assert len(instructions) == len(successes)
         for instruction, success in zip(instructions.values(), successes):
-            yield [success] + [
+            yield [success, len(instruction)] + [
                 count(instruction, line_type) for line_type in line_types
             ]
 
@@ -101,7 +101,7 @@ def main(
     success_paths = list(Path(root, path).glob("**/" + success_filename))
     with out.open("w") as f:
         writer = csv.writer(f)
-        header = ["success"] + [L(l).name for l in line_types]
+        header = ["success", "instruction length"] + [L(l).name for l in line_types]
         writer.writerow(header)
         print(header)
         for row in generate_counts(
