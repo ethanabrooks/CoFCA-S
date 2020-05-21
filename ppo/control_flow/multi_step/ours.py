@@ -232,16 +232,17 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             z = F.relu(self.zeta(zeta_input))
             a_dist = self.actor(z)
             self.sample_new(A[t], a_dist)
+            a = A[t]
             self.print("a_probs", a_dist.probs)
-            # line_type, be, it, _ = lines[t][R, hx.p.long().flatten()].unbind(-1)
-            # a = 3 * (it - 1) + (be - 1)
+            line_type, be, it, _ = lines[t][R, hx.p.long().flatten()].unbind(-1)
+            a = 3 * (it - 1) + (be - 1)
 
             ll_output = self.lower_level(
                 Obs(**{k: v[t] for k, v in state._asdict().items()}),
                 hx.lh,
                 masks=None,
                 action=None,
-                upper=A[t],
+                upper=a,
             )
             if torch.any(L[0] < 0):
                 assert torch.all(L[0] < 0)
