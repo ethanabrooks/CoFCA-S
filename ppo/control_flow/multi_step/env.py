@@ -262,8 +262,8 @@ class Env(ppo.control_flow.env.Env):
                     required = {resource}
                 else:
                     required = {resource}
-                for required_resource in required:
-                    if counts[required_resource] <= 0:
+                for r in required:
+                    if counts[r] <= (1 if r == self.wood else 0):
                         return False
                 if behavior in self.sell:
                     if inventory[resource] == 0:
