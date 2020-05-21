@@ -188,9 +188,9 @@ class Env(ppo.control_flow.env.Env):
             elif line.id == Env.iron:
                 evaluation = "counts[iron] > counts[gold]"
             elif line.id == Env.gold:
-                evaluation = "counts[gold] > counts[wood]"
+                evaluation = "counts[gold] > counts[merchant]"
             elif line.id == Env.wood:
-                evaluation = "counts[wood] > counts[iron]"
+                evaluation = "counts[merchant] > counts[iron]"
             return f"{line} {evaluation}"
         return line
 
@@ -235,9 +235,9 @@ class Env(ppo.control_flow.env.Env):
             elif line.id == Env.iron:
                 evaluation = counts[Env.iron] > counts[Env.gold]
             elif line.id == Env.gold:
-                evaluation = counts[Env.gold] > counts[Env.wood]
+                evaluation = counts[Env.gold] > counts[Env.merchant]
             elif line.id == Env.wood:
-                evaluation = counts[Env.wood] > counts[Env.iron]
+                evaluation = counts[Env.merchant] > counts[Env.iron]
             else:
                 raise RuntimeError
             condition_evaluations += [evaluation]
