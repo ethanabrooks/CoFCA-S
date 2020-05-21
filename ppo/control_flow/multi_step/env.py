@@ -321,6 +321,7 @@ class Env(ppo.control_flow.env.Env):
                         legal_lines=self.control_flow_types,
                     )
                 )
+                line_types = [If, Subtask, Else, Subtask, EndIf]
                 lines = list(self.assign_line_ids(line_types))
                 assert self.max_nesting_depth == 1
                 result = self.populate_world(lines)
@@ -503,6 +504,14 @@ class Env(ppo.control_flow.env.Env):
                 self.random.choice(
                     self.items + [self.merchant], size=num_random_objects
                 )
+            )
+            count_iron = count_gold = (
+                object_list.count(Env.iron) + object_list.count(Env.gold)
+            ) // 2
+            object_list = (
+                [o for o in object_list if o not in (Env.iron, Env.gold)]
+                + [Env.iron] * count_iron
+                + [Env.gold] * count_gold
             )
             feasible = self.feasible(object_list, lines)
 
