@@ -182,6 +182,16 @@ class Env(ppo.control_flow.env.Env):
         line = super().line_str(line)
         if type(line) is Subtask:
             return f"{line} {self.subtasks.index(line.id)}"
+        elif type(line) in (If, While):
+            if self.one_condition:
+                evaluation = "counts[iron] > counts[gold]"
+            elif line.id == Env.iron:
+                evaluation = "counts[iron] > counts[gold]"
+            elif line.id == Env.gold:
+                evaluation = "counts[gold] > counts[wood]"
+            elif line.id == Env.wood:
+                evaluation = "counts[wood] > counts[iron]"
+            return f"{line} {evaluation}"
         return line
 
     @staticmethod
