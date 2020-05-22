@@ -161,6 +161,8 @@ class Env(ppo.control_flow.env.Env):
         obs = obs.transpose(1, 2, 0).astype(int)
         grid_size = 3  # obs.astype(int).sum(-1).max()  # max objects per grid
         chars = [" "] + [o for (o, *_) in self.world_contents]
+        print(self.i)
+        print(inventory)
         for i, row in enumerate(obs):
             colors = []
             string = []
@@ -175,8 +177,6 @@ class Env(ppo.control_flow.env.Env):
                 string.append("|")
             print(*[c for p in zip(colors, string) for c in p], sep="")
             print("-" * len(string))
-        for i, c in zip(self.items, inventory):
-            print(i, c)
 
     def line_str(self, line):
         line = super().line_str(line)
@@ -188,9 +188,9 @@ class Env(ppo.control_flow.env.Env):
             elif line.id == Env.iron:
                 evaluation = "counts[iron] > counts[gold]"
             elif line.id == Env.gold:
-                evaluation = "counts[gold] > counts[wood]"
+                evaluation = "counts[gold] > counts[merchant]"
             elif line.id == Env.wood:
-                evaluation = "counts[wood] > counts[iron]"
+                evaluation = "counts[merchant] > counts[iron]"
             return f"{line} {evaluation}"
         return line
 
@@ -420,7 +420,9 @@ class Env(ppo.control_flow.env.Env):
                     lower_level_action = self.lower_level_actions[lower_level_index]
                 self.time_remaining -= 1
                 tgt_interaction, tgt_obj = lines[ptr].id
-                if tgt_obj not in objects.values():
+                if tgt_obj not in objects.values() and (
+                    tgt_interaction != Env.sell or inventory[tgt_obj] == 0
+                ):
                     term = True
 
                 if type(lower_level_action) is str:
