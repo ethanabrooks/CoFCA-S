@@ -307,6 +307,15 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             d_gate = self.d_gate(z2)
             self.sample_new(DG[t], d_gate)
             dg = DG[t].unsqueeze(-1).float()
+
+            _, _, it, _ = lines[t][R, p].long().unbind(-1)  # N, 2
+            sell = (be == 2).long()
+            index1 = it - 1
+            index2 = 1 + ((it - 3) % 3)
+            channel1 = state.obs[t][R, index1].sum(-1).sum(-1)
+            channel2 = state.obs[t][R, index2].sum(-1).sum(-1)
+            z = (channel1 > channel2).unsqueeze(-1).float()
+
             if self.olsk or self.no_pointer:
                 h = self.upsilon(z, h)
                 u = self.beta(h).softmax(dim=-1)
