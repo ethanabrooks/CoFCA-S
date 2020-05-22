@@ -358,11 +358,14 @@ class Env(ppo.control_flow.env.Env):
                             if self.whiles > self.max_while_loops:
                                 return None
                         counts = self.count_objects(objects)
-                        l = line_iterator.send(
-                            self.evaluate_line(
-                                lines[l], counts, condition_evaluations, self.loops
-                            )
+                        e = self.evaluate_line(
+                            lines[l], counts, condition_evaluations, self.loops
                         )
+                        # if e:
+                            # import ipdb
+
+                            # ipdb.set_trace()
+                        l = line_iterator.send(e)
                         if self.loops == 0:
                             self.loops = None
                     if l is None or type(lines[l]) is Subtask:
