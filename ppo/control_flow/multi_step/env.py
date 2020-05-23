@@ -98,10 +98,14 @@ class Env(ppo.control_flow.env.Env):
         max_while_loops,
         use_water,
         max_failure_sample_prob,
+        one_condition,
         failure_buffer_size,
+        reject_while_prob,
         world_size=6,
         **kwargs,
     ):
+        self.reject_while_prob = reject_while_prob
+        self.one_condition = one_condition
         self.max_failure_sample_prob = max_failure_sample_prob
         self.failure_buffer = deque(maxlen=failure_buffer_size)
         self.max_world_resamples = max_world_resamples
@@ -231,6 +235,7 @@ class Env(ppo.control_flow.env.Env):
         l = next(line_iterator)
         loops = 0
         whiles = 0
+        inventory = Counter()
         counts = Counter()
         for o in objects:
             counts[o] += 1
@@ -244,16 +249,31 @@ class Env(ppo.control_flow.env.Env):
                     required = {resource}
                 else:
                     required = {resource}
-                for resource in required:
-                    if counts[resource] <= 0:
+                for r in required:
+                    if counts[r] <= (1 if r == self.wood else 0):
                         return False
                 if behavior in self.sell:
-                    counts[resource] -= 1
+                    if inventory[resource] == 0:
+                        # collect from environment
+                        counts[resource] -= 1
+                        inventory[resource] += 1
+                    inventory[resource] -= 1
                 elif behavior == self.mine:
                     counts[resource] -= 1
+                    inventory[resource] += 1
             elif type(line) is Loop:
                 loops += 1
             elif type(line) is While:
+                if all(
+                    (
+                        whiles == 0,  # first loop
+                        not self.evaluate_line(
+                            line, counts, [], loops
+                        ),  # evaluates false
+                        self.random.random() < self.reject_while_prob,
+                    )
+                ):
+                    return False
                 whiles += 1
                 if whiles > self.max_while_loops:
                     return False
@@ -481,6 +501,7 @@ class Env(ppo.control_flow.env.Env):
                 )
             )
             feasible = self.feasible(object_list, lines)
+
             if feasible:
                 use_water = (
                     self.use_water
@@ -618,8 +639,10 @@ def build_parser(
         "--no-temporal-extension", dest="temporal_extension", action="store_false"
     )
     p.add_argument("--no-water", dest="use_water", action="store_false")
+    p.add_argument("--1condition", dest="one_condition", action="store_true")
     p.add_argument("--max-failure-sample-prob", type=float, required=True)
     p.add_argument("--failure-buffer-size", type=int, required=True)
+    p.add_argument("--reject-while-prob", type=float, required=True)
     p.add_argument(
         "--max-world-resamples",
         type=int,
