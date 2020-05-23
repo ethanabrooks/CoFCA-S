@@ -100,9 +100,11 @@ class Env(ppo.control_flow.env.Env):
         max_failure_sample_prob,
         one_condition,
         failure_buffer_size,
+        prob_while_task,
         world_size=6,
         **kwargs,
     ):
+        self.prob_while_task = prob_while_task
         self.one_condition = one_condition
         self.max_failure_sample_prob = max_failure_sample_prob
         self.failure_buffer = deque(maxlen=failure_buffer_size)
@@ -321,10 +323,15 @@ class Env(ppo.control_flow.env.Env):
                         legal_lines=self.control_flow_types,
                     )
                 )
-                line_types = [While, Subtask, EndWhile, Subtask]
+                if self.evaluating or (self.random.random() < self.prob_while_task):
+                    line_types = [While, Subtask, EndWhile, Subtask]
+                else:
+                    line_types = [Subtask]
                 lines = list(self.assign_line_ids(line_types))
                 assert self.max_nesting_depth == 1
-                result = self.populate_world(lines)
+                result = self.populate_world(
+                    lines, passing=self.random.random() < 1 / 2
+                )
                 if result is not None:
                     _agent_pos, objects = result
                     break
@@ -497,7 +504,7 @@ class Env(ppo.control_flow.env.Env):
 
         return state_generator(_agent_pos), lines
 
-    def populate_world(self, lines):
+    def populate_world(self, lines, passing):
         feasible = False
         use_water = False
         max_random_objects = 0
@@ -511,6 +518,10 @@ class Env(ppo.control_flow.env.Env):
                 )
             )
             feasible = self.feasible(object_list, lines)
+            if type(lines[0]) is While:
+                counts = Counter(object_list)
+                is_passing = self.evaluate_line(lines[0], counts, [], 0)
+                feasible = feasible and (is_passing == passing)
 
             if feasible:
                 use_water = (
@@ -592,7 +603,8 @@ class Env(ppo.control_flow.env.Env):
 
     def assign_line_ids(self, line_types):
         behaviors = self.random.choice(self.behaviors, size=len(line_types))
-        items = self.random.choice([self.gold, self.iron], size=len(line_types))
+        item_choices = [self.gold, self.iron]  # TODO
+        items = self.random.choice(item_choices, size=len(line_types))
         while_obj = None
         available = [x for x in self.items]
         lines = []
@@ -652,6 +664,7 @@ def build_parser(
     p.add_argument("--1condition", dest="one_condition", action="store_true")
     p.add_argument("--max-failure-sample-prob", type=float, required=True)
     p.add_argument("--failure-buffer-size", type=int, required=True)
+    p.add_argument("--prob-while-task", type=float, required=True)
     p.add_argument(
         "--max-world-resamples",
         type=int,
