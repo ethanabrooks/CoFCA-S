@@ -163,6 +163,8 @@ class Env(ppo.control_flow.env.Env):
         obs = obs.transpose(1, 2, 0).astype(int)
         grid_size = 3  # obs.astype(int).sum(-1).max()  # max objects per grid
         chars = [" "] + [o for (o, *_) in self.world_contents]
+        print(self.i)
+        print(inventory)
         for i, row in enumerate(obs):
             colors = []
             string = []
@@ -177,13 +179,21 @@ class Env(ppo.control_flow.env.Env):
                 string.append("|")
             print(*[c for p in zip(colors, string) for c in p], sep="")
             print("-" * len(string))
-        for i, c in zip(self.items, inventory):
-            print(i, c)
 
     def line_str(self, line):
         line = super().line_str(line)
         if type(line) is Subtask:
             return f"{line} {self.subtasks.index(line.id)}"
+        elif type(line) in (If, While):
+            if self.one_condition:
+                evaluation = "counts[iron] > counts[gold]"
+            elif line.id == Env.iron:
+                evaluation = "counts[iron] > counts[gold]"
+            elif line.id == Env.gold:
+                evaluation = "counts[gold] > counts[merchant]"
+            elif line.id == Env.wood:
+                evaluation = "counts[merchant] > counts[iron]"
+            return f"{line} {evaluation}"
         return line
 
     @staticmethod
