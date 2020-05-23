@@ -100,9 +100,11 @@ class Env(ppo.control_flow.env.Env):
         max_failure_sample_prob,
         one_condition,
         failure_buffer_size,
+        reject_while_prob,
         world_size=6,
         **kwargs,
     ):
+        self.reject_while_prob = reject_while_prob
         self.one_condition = one_condition
         self.max_failure_sample_prob = max_failure_sample_prob
         self.failure_buffer = deque(maxlen=failure_buffer_size)
@@ -277,6 +279,16 @@ class Env(ppo.control_flow.env.Env):
             elif type(line) is Loop:
                 loops += 1
             elif type(line) is While:
+                if all(
+                    (
+                        whiles == 0,  # first loop
+                        not self.evaluate_line(
+                            line, counts, [], loops
+                        ),  # evaluates false
+                        self.random.random() < self.reject_while_prob,
+                    )
+                ):
+                    return False
                 whiles += 1
                 if whiles > self.max_while_loops:
                     return False
@@ -649,6 +661,7 @@ def build_parser(
     p.add_argument("--1condition", dest="one_condition", action="store_true")
     p.add_argument("--max-failure-sample-prob", type=float, required=True)
     p.add_argument("--failure-buffer-size", type=int, required=True)
+    p.add_argument("--reject-while-prob", type=float, required=True)
     p.add_argument(
         "--max-world-resamples",
         type=int,
