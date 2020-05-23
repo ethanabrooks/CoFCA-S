@@ -23,7 +23,9 @@ from ppo.control_flow.lines import (
 
 Obs = namedtuple("Obs", "active lines obs")
 Last = namedtuple("Last", "action active reward terminal selected")
-State = namedtuple("State", "obs prev ptr term subtask_complete use_failure_buf")
+State = namedtuple(
+    "State", "obs prev ptr term subtask_complete use_failure_buf condition_evaluations"
+)
 Action = namedtuple("Action", "upper lower delta dg ptr")
 
 
@@ -129,6 +131,7 @@ class Env(gym.Env, ABC):
         state = next(state_iterator)
         actions = []
         program_counter = []
+        condition_evaluations = []
 
         subtasks_complete = 0
         agent_ptr = 0
@@ -163,9 +166,12 @@ class Env(gym.Env, ABC):
                     success=success,
                 )
                 if success:
-                    info.update(success_line=len(lines))
+                    info.update(success_line=len(lines), success_fraction=1)
                 else:
-                    info.update(success_line=state.prev)
+                    info.update(
+                        success_line=state.prev,
+                        success_fraction=state.prev / len(lines),
+                    )
                 subtasks_attempted = subtasks_complete + (not success)
                 info.update(
                     subtasks_complete=subtasks_complete,
@@ -175,6 +181,7 @@ class Env(gym.Env, ABC):
             info.update(
                 regret=1 if term and not success else 0,
                 subtask_complete=state.subtask_complete,
+                condition_evaluations=state.condition_evaluations,
             )
 
             def render():
@@ -212,7 +219,9 @@ class Env(gym.Env, ABC):
 
             self._render = render
             obs = self.get_observation(obs=state.obs, active=state.ptr, lines=lines)
-            line_specific_info = {f"{k}_{len(lines)}": v for k, v in info.items()}
+            line_specific_info = {
+                f"{k}_{10 * (len(lines) // 10)}": v for k, v in info.items()
+            }
             action = (yield obs, reward, term, dict(**info, **line_specific_info))
             if action.size == 1:
                 action = Action(upper=0, lower=action, delta=0, dg=0, ptr=0)

@@ -99,6 +99,12 @@ def main(
                     result["success"] = (
                         sum(result["subtasks_complete"]) / subtasks_attempted
                     )
+            try:
+                result["condition_evaluations"] = sum(
+                    result["condition_evaluations"]
+                ) / len(result["condition_evaluations"])
+            except (KeyError, ZeroDivisionError):
+                pass
             if lower_level != "train-alone":
                 names = NAMES + ["P"]
                 for name in names + ["eval_" + n for n in names]:
