@@ -127,9 +127,6 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         )
         self.conv_bias = nn.Parameter(torch.zeros(gate_hidden_size))
         self.linear2 = nn.Linear(m_size + lower_embed_size, hidden2)
-        self.linear3 = nn.Linear(
-            m_size, conv_hidden_size * gate_conv_kernel_size ** 2 * gate_hidden_size
-        )
         state_sizes = self.state_sizes._asdict()
         with lower_level_config.open() as f:
             lower_level_params = json.load(f)
@@ -320,41 +317,16 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             # channel1 = state.obs[t][R, index1].sum(-1).sum(-1)
             # channel2 = state.obs[t][R, index2].sum(-1).sum(-1)
             # z = (channel1 > channel2).unsqueeze(-1).float()
-            conv_kernel2 = self.linear1(m).view(
-                N,
-                self.gate_hidden_size,
-                self.conv_hidden_size,
-                self.gate_kernel_size,
-                self.gate_kernel_size,
-            )
-            h2 = self.linear3(m).relu()
-            z = (
-                torch.cat(
-                    [
-                        F.conv2d(
-                            input=o.unsqueeze(0),
-                            weight=k,
-                            bias=self.conv_bias,
-                            stride=self.gate_stride,
-                            padding=self.gate_padding,
-                        )
-                        for o, k in zip(conv_output.unbind(0), conv_kernel2.unbind(0))
-                    ],
-                    dim=0,
-                )
-                .view(N, -1)
-                .relu()
-            )
 
             if self.olsk or self.no_pointer:
-                h = self.upsilon(z, h)
+                h = self.upsilon(h1, h)
                 u = self.beta(h).softmax(dim=-1)
                 d_dist = gate(dg, u, ones)
                 self.sample_new(D[t], d_dist)
                 delta = D[t].clone() - 1
                 P = hx.P.transpose(0, 1)
             else:
-                u = self.upsilon(z).softmax(dim=-1)
+                u = self.upsilon(h1).softmax(dim=-1)
                 self.print("u", u)
                 w = P[p, R]
                 d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
@@ -375,7 +347,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             # A[:] = float(input("A:"))
             # except ValueError:
             # pass
-            v = self.critic(z)
+            v = self.critic(h1)
             if self.use_gate_critic:
                 v = v + self.gate_critic(z2)
             yield RecurrentState(
