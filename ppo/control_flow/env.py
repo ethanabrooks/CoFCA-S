@@ -23,7 +23,9 @@ from ppo.control_flow.lines import (
 
 Obs = namedtuple("Obs", "active lines obs")
 Last = namedtuple("Last", "action active reward terminal selected")
-State = namedtuple("State", "obs prev ptr term subtask_complete use_failure_buf")
+State = namedtuple(
+    "State", "obs prev ptr term subtask_complete use_failure_buf condition_evaluations"
+)
 Action = namedtuple("Action", "upper lower delta dg ptr")
 
 
@@ -129,6 +131,7 @@ class Env(gym.Env, ABC):
         state = next(state_iterator)
         actions = []
         program_counter = []
+        condition_evaluations = []
 
         subtasks_complete = 0
         agent_ptr = 0
@@ -178,6 +181,7 @@ class Env(gym.Env, ABC):
             info.update(
                 regret=1 if term and not success else 0,
                 subtask_complete=state.subtask_complete,
+                condition_evaluations=state.condition_evaluations,
             )
 
             def render():
