@@ -98,10 +98,12 @@ class Env(ppo.control_flow.env.Env):
         max_while_loops,
         use_water,
         max_failure_sample_prob,
+        one_condition,
         failure_buffer_size,
         world_size=6,
         **kwargs,
     ):
+        self.one_condition = one_condition
         self.max_failure_sample_prob = max_failure_sample_prob
         self.failure_buffer = deque(maxlen=failure_buffer_size)
         self.max_world_resamples = max_world_resamples
@@ -159,6 +161,8 @@ class Env(ppo.control_flow.env.Env):
         obs = obs.transpose(1, 2, 0).astype(int)
         grid_size = 3  # obs.astype(int).sum(-1).max()  # max objects per grid
         chars = [" "] + [o for (o, *_) in self.world_contents]
+        print(self.i)
+        print(inventory)
         for i, row in enumerate(obs):
             colors = []
             string = []
@@ -173,13 +177,21 @@ class Env(ppo.control_flow.env.Env):
                 string.append("|")
             print(*[c for p in zip(colors, string) for c in p], sep="")
             print("-" * len(string))
-        for i, c in zip(self.items, inventory):
-            print(i, c)
 
     def line_str(self, line):
         line = super().line_str(line)
         if type(line) is Subtask:
             return f"{line} {self.subtasks.index(line.id)}"
+        elif type(line) in (If, While):
+            if self.one_condition:
+                evaluation = "counts[iron] > counts[gold]"
+            elif line.id == Env.iron:
+                evaluation = "counts[iron] > counts[gold]"
+            elif line.id == Env.gold:
+                evaluation = "counts[gold] > counts[merchant]"
+            elif line.id == Env.wood:
+                evaluation = "counts[merchant] > counts[iron]"
+            return f"{line} {evaluation}"
         return line
 
     @staticmethod
@@ -212,18 +224,23 @@ class Env(ppo.control_flow.env.Env):
 
         return world
 
-    @staticmethod
-    def evaluate_line(line, counts, condition_evaluations, loops):
+    def evaluate_line(self, line, counts, condition_evaluations, loops):
         if line is None:
             return None
         elif type(line) is Loop:
             return loops > 0
-        if type(line) is Subtask:
-            return 1
-        else:
-            evaluation = counts[Env.iron] > counts[Env.gold]
-            if type(line) in (If, While):
-                condition_evaluations += [evaluation]
+        elif type(line) in (If, While):
+            if self.one_condition:
+                evaluation = counts[Env.iron] > counts[Env.gold]
+            elif line.id == Env.iron:
+                evaluation = counts[Env.iron] > counts[Env.gold]
+            elif line.id == Env.gold:
+                evaluation = counts[Env.gold] > counts[Env.merchant]
+            elif line.id == Env.wood:
+                evaluation = counts[Env.merchant] > counts[Env.iron]
+            else:
+                raise RuntimeError
+            condition_evaluations += [evaluation]
             return evaluation
 
     def feasible(self, objects, lines):
@@ -231,6 +248,7 @@ class Env(ppo.control_flow.env.Env):
         l = next(line_iterator)
         loops = 0
         whiles = 0
+        inventory = Counter()
         counts = Counter()
         for o in objects:
             counts[o] += 1
@@ -244,13 +262,18 @@ class Env(ppo.control_flow.env.Env):
                     required = {resource}
                 else:
                     required = {resource}
-                for resource in required:
-                    if counts[resource] <= 0:
+                for r in required:
+                    if counts[r] <= (1 if r == self.wood else 0):
                         return False
                 if behavior in self.sell:
-                    counts[resource] -= 1
+                    if inventory[resource] == 0:
+                        # collect from environment
+                        counts[resource] -= 1
+                        inventory[resource] += 1
+                    inventory[resource] -= 1
                 elif behavior == self.mine:
                     counts[resource] -= 1
+                    inventory[resource] += 1
             elif type(line) is Loop:
                 loops += 1
             elif type(line) is While:
@@ -284,7 +307,9 @@ class Env(ppo.control_flow.env.Env):
         else:
             while True:
                 n_lines = (
-                    self.random.choice(self.eval_lines)
+                    self.random.random_integers(
+                        self.min_eval_lines, self.max_eval_lines
+                    )
                     if self.evaluating
                     else self.random.random_integers(self.min_lines, self.max_lines)
                 )
@@ -296,6 +321,7 @@ class Env(ppo.control_flow.env.Env):
                         legal_lines=self.control_flow_types,
                     )
                 )
+                line_types = [While, Subtask, EndWhile, Subtask]
                 lines = list(self.assign_line_ids(line_types))
                 assert self.max_nesting_depth == 1
                 result = self.populate_world(lines)
@@ -332,11 +358,14 @@ class Env(ppo.control_flow.env.Env):
                             if self.whiles > self.max_while_loops:
                                 return None
                         counts = self.count_objects(objects)
-                        l = line_iterator.send(
-                            self.evaluate_line(
-                                lines[l], counts, condition_evaluations, self.loops
-                            )
+                        e = self.evaluate_line(
+                            lines[l], counts, condition_evaluations, self.loops
                         )
+                        # if e:
+                        # import ipdb
+
+                        # ipdb.set_trace()
+                        l = line_iterator.send(e)
                         if self.loops == 0:
                             self.loops = None
                     if l is None or type(lines[l]) is Subtask:
@@ -391,6 +420,10 @@ class Env(ppo.control_flow.env.Env):
                     lower_level_action = self.lower_level_actions[lower_level_index]
                 self.time_remaining -= 1
                 tgt_interaction, tgt_obj = lines[ptr].id
+                if tgt_obj not in objects.values() and (
+                    tgt_interaction != Env.sell or inventory[tgt_obj] == 0
+                ):
+                    term = True
 
                 if type(lower_level_action) is str:
                     standing_on = objects.get(tuple(agent_pos), None)
@@ -478,6 +511,7 @@ class Env(ppo.control_flow.env.Env):
                 )
             )
             feasible = self.feasible(object_list, lines)
+
             if feasible:
                 use_water = (
                     self.use_water
@@ -615,6 +649,7 @@ def build_parser(
         "--no-temporal-extension", dest="temporal_extension", action="store_false"
     )
     p.add_argument("--no-water", dest="use_water", action="store_false")
+    p.add_argument("--1condition", dest="one_condition", action="store_true")
     p.add_argument("--max-failure-sample-prob", type=float, required=True)
     p.add_argument("--failure-buffer-size", type=int, required=True)
     p.add_argument(

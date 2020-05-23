@@ -1,16 +1,9 @@
-#! /usr/bin/env python
-import json
+#! /usr/bin/env python3
 import random
-import argparse
 
 
-p = argparse.ArgumentParser()
-p.add_argument("num", type=int)
-p.add_argument("name")
-args = p.parse_args()
-
-config_map = {
-    f"{args.name}{i}": f"""\
+print(
+    f"""\
 --gridworld \
 --control-flow-types Subtask \
 --conv-hidden-size={random.choice([128, 256])} \
@@ -55,8 +48,4 @@ config_map = {
 --time-to-waste=0 \
 --world-size=6 \
 """
-    for i in range(args.num)
-}
-
-with open("/tmp/config_map.json", "w") as f:
-    json.dump(config_map, f)
+)

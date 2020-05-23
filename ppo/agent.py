@@ -294,22 +294,20 @@ class LowerLevel(NNBase):
         num_conv_layers,
         kernel_size,
         stride,
-        concat,
         activation=nn.ReLU(),
         **_,
     ):
-        self.concat = concat
         if type(obs_space) is spaces.Dict:
             obs_space = Obs(**obs_space.spaces)
         assert num_layers > 0
-        H = (3 if concat else 1) * hidden_size
+        H = hidden_size
         super().__init__(
             recurrent=recurrent, recurrent_input_size=H, hidden_size=hidden_size
         )
         self.register_buffer(
             "subtasks",
             torch.tensor(
-                [Env.preprocess_line(Subtask(s),) for s in subtasks()] + [[0, 0, 0, 0]]
+                [Env.preprocess_line(Subtask(s)) for s in subtasks()] + [[0, 0, 0, 0]]
             ),
         )
         (d, h, w) = obs_space.obs.shape
@@ -393,10 +391,7 @@ class LowerLevel(NNBase):
         lines_embed = self.line_embed(line.long() + self.offset)
         obs_embed = self.conv_projection(self.conv(obs))
         inventory_embed = self.inventory_embed(inputs.inventory)
-        if self.concat:
-            x = torch.cat([lines_embed, obs_embed, inventory_embed], dim=-1)
-        else:
-            x = lines_embed * obs_embed * inventory_embed
+        x = lines_embed * obs_embed * inventory_embed
 
         if self.is_recurrent:
             x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)

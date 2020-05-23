@@ -1,3 +1,4 @@
+import inspect
 from pathlib import Path
 
 import numpy as np
@@ -8,7 +9,7 @@ import ppo.agent
 import ppo.control_flow.agent
 import ppo.control_flow.env
 import ppo.control_flow.multi_step.env
-import ppo.control_flow.multi_step.minimal
+import ppo.control_flow.multi_step.minimal_gru
 import ppo.control_flow.multi_step.one_line
 from ppo import control_flow
 from ppo.arguments import build_parser
@@ -18,13 +19,21 @@ NAMES = ["instruction", "actions", "program_counter", "evaluations"]
 
 
 def main(
-    log_dir, seed, eval_lines, one_line, lower_level, lower_level_load_path, **kwargs
+    log_dir,
+    seed,
+    min_eval_lines,
+    max_eval_lines,
+    one_line,
+    lower_level,
+    lower_level_load_path,
+    render,
+    **kwargs,
 ):
     if lower_level_load_path:
         lower_level = "pre-trained"
 
     class _Train(Train):
-        def build_agent(self, envs, baseline=None, debug=False, **agent_args):
+        def build_agent(self, envs, debug=False, **agent_args):
             obs_space = envs.observation_space
             ll_action_space = spaces.Discrete(
                 ppo.control_flow.env.Action(*envs.action_space.nvec).lower
@@ -37,25 +46,13 @@ def main(
                     **agent_args,
                 )
             agent_args.update(log_dir=log_dir)
-            if baseline == "simple" or one_line:
-                del agent_args["no_scan"]
-                del agent_args["no_roll"]
-                del agent_args["num_encoding_layers"]
-                del agent_args["num_edges"]
-                del agent_args["gate_coef"]
-                del agent_args["no_op_coef"]
-                return ppo.control_flow.multi_step.minimal.Agent(
-                    observation_space=obs_space,
-                    action_space=envs.action_space,
-                    **agent_args,
-                )
             del agent_args["recurrent"]
+            del agent_args["num_conv_layers"]
             return ppo.control_flow.agent.Agent(
                 observation_space=obs_space,
                 action_space=envs.action_space,
-                eval_lines=eval_lines,
-                debug=debug,
-                baseline=baseline,
+                eval_lines=max_eval_lines,
+                debug=render and debug,
                 lower_level=lower_level,
                 lower_level_load_path=lower_level_load_path,
                 **agent_args,
@@ -65,8 +62,15 @@ def main(
         def make_env(
             seed, rank, evaluation, env_id, add_timestep, gridworld, **env_args
         ):
-            args = dict(**env_args, eval_lines=eval_lines, seed=seed + rank, rank=rank)
+            args = dict(
+                **env_args,
+                min_eval_lines=min_eval_lines,
+                max_eval_lines=max_eval_lines,
+                seed=seed + rank,
+                rank=rank,
+            )
             args["lower_level"] = lower_level
+            args["break_on_fail"] = args["break_on_fail"] and render
             del args["time_limit"]
             if one_line:
                 return control_flow.multi_step.one_line.Env(**args)
@@ -81,7 +85,7 @@ def main(
         def process_infos(self, episode_counter, done, infos, **act_log):
             if lower_level != "train-alone":
                 P = act_log.pop("P")
-                P = P.transpose(0, 1)[done]
+                P = P[done]
                 if P.size(0) > 0:
                     P = P.cpu().numpy()
                     episode_counter["P"] += np.split(P, P.shape[0])
@@ -115,7 +119,7 @@ def main(
 
             super().log_result(result)
 
-    _Train(**kwargs, seed=seed, log_dir=log_dir, time_limit=None).run()
+    _Train(**kwargs, seed=seed, log_dir=log_dir, render=render, time_limit=None).run()
 
 
 def control_flow_args():
@@ -123,7 +127,8 @@ def control_flow_args():
     parser = parsers.main
     parser.add_argument("--no-tqdm", dest="use_tqdm", action="store_false")
     parser.add_argument("--eval-steps", type=int)
-    parser.add_argument("--eval-lines", type=int, nargs="*")
+    parser.add_argument("--min-eval-lines", type=int, required=True)
+    parser.add_argument("--max-eval-lines", type=int, required=True)
     parser.add_argument("--no-eval", action="store_true")
     parser.add_argument("--one-line", action="store_true")
     parser.add_argument(
@@ -133,12 +138,14 @@ def control_flow_args():
     parsers.env.add_argument("--gridworld", action="store_true")
     ppo.control_flow.multi_step.env.build_parser(parsers.env)
     parsers.agent.add_argument("--lower-level-config", type=Path)
-    parsers.agent.add_argument("--debug", action="store_true")
+    parsers.agent.add_argument("--no-debug", dest="debug", action="store_false")
     parsers.agent.add_argument("--no-scan", action="store_true")
     parsers.agent.add_argument("--no-roll", action="store_true")
+    parsers.agent.add_argument("--no-pointer", action="store_true")
+    parsers.agent.add_argument("--olsk", action="store_true")
+    parsers.agent.add_argument("--transformer", action="store_true")
     parsers.agent.add_argument("--fuzz", action="store_true")
     parsers.agent.add_argument("--gate-critic", action="store_true")
-    parsers.agent.add_argument("--baseline")
     parsers.agent.add_argument("--hidden2", type=int, required=True)
     parsers.agent.add_argument("--conv-hidden-size", type=int, required=True)
     parsers.agent.add_argument("--task-embed-size", type=int, required=True)
@@ -146,6 +153,7 @@ def control_flow_args():
     parsers.agent.add_argument("--gate-hidden-size", type=int, required=True)
     parsers.agent.add_argument("--gate-stride", type=int, required=True)
     parsers.agent.add_argument("--num-encoding-layers", type=int, required=True)
+    parsers.agent.add_argument("--num-conv-layers", type=int, required=True)
     parsers.agent.add_argument("--num-edges", type=int, required=True)
     parsers.agent.add_argument("--gate-coef", type=float, required=True)
     parsers.agent.add_argument("--no-op-coef", type=float, required=True)
