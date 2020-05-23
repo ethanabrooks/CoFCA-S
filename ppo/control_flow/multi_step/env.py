@@ -216,18 +216,23 @@ class Env(ppo.control_flow.env.Env):
 
         return world
 
-    @staticmethod
-    def evaluate_line(line, counts, condition_evaluations, loops):
+    def evaluate_line(self, line, counts, condition_evaluations, loops):
         if line is None:
             return None
         elif type(line) is Loop:
             return loops > 0
-        if type(line) is Subtask:
-            return 1
-        else:
-            evaluation = counts[Env.iron] > counts[Env.gold]
-            if type(line) in (If, While):
-                condition_evaluations += [evaluation]
+        elif type(line) in (If, While):
+            if self.one_condition:
+                evaluation = counts[Env.iron] > counts[Env.gold]
+            elif line.id == Env.iron:
+                evaluation = counts[Env.iron] > counts[Env.gold]
+            elif line.id == Env.gold:
+                evaluation = counts[Env.gold] > counts[Env.merchant]
+            elif line.id == Env.wood:
+                evaluation = counts[Env.merchant] > counts[Env.iron]
+            else:
+                raise RuntimeError
+            condition_evaluations += [evaluation]
             return evaluation
 
     def feasible(self, objects, lines):
