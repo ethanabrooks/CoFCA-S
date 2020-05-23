@@ -102,10 +102,12 @@ def main(
                     result["success"] = (
                         sum(result["subtasks_complete"]) / subtasks_attempted
                     )
-            if "condition_evaluations" in result:
+            try:
                 result["condition_evaluations"] = sum(
                     result["condition_evaluations"]
                 ) / len(result["condition_evaluations"])
+            except (KeyError, ZeroDivisionError):
+                pass
             if lower_level != "train-alone":
                 names = NAMES + ["P"]
                 for name in names + ["eval_" + n for n in names]:
@@ -150,7 +152,7 @@ def control_flow_args():
     parsers.agent.add_argument("--transformer", action="store_true")
     parsers.agent.add_argument("--fuzz", action="store_true")
     parsers.agent.add_argument(
-        "--critic-type", choices=["base", "combined", "multi-layer"], required=True,
+        "--critic-type", choices=["base", "combined", "multi-layer"], required=True
     )
     parsers.agent.add_argument("--hidden2", type=int, required=True)
     parsers.agent.add_argument("--conv-hidden-size", type=int, required=True)
