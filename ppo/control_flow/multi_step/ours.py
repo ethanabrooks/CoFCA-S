@@ -43,7 +43,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         hidden_size,
         conv_hidden_size,
         fuzz,
-        gate_critic,
+        critic_type,
         gate_hidden_size,
         gate_conv_kernel_size,
         gate_coef,
@@ -59,7 +59,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         num_edges,
         **kwargs,
     ):
-        self.use_gate_critic = gate_critic
+        self.critic_type = critic_type
         self.fuzz = fuzz
         self.gate_coef = gate_coef
         self.conv_hidden_size = conv_hidden_size
@@ -118,13 +118,23 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         )
         z2_size = m_size + hidden2 + gate_hidden_size * output_dim2 ** 2
         self.d_gate = Categorical(z2_size, 2)
-        if self.use_gate_critic:
-            self.gate_critic = init_(nn.Linear(z2_size, 1))
         self.linear1 = nn.Linear(
             m_size, conv_hidden_size * gate_conv_kernel_size ** 2 * gate_hidden_size
         )
         self.conv_bias = nn.Parameter(torch.zeros(gate_hidden_size))
         self.linear2 = nn.Linear(m_size + lower_embed_size, hidden2)
+        if self.critic_type == "z":
+            self.critic = init_(nn.Linear(hidden_size, 1))
+        elif self.critic_type == "h1":
+            self.critic = init_(nn.Linear(gate_hidden_size * output_dim2 ** 2, 1))
+        elif self.critic_type == "combined":
+            self.critic = init_(nn.Linear(hidden_size + z2_size, 1))
+        elif self.critic_type == "multi-layer":
+            self.critic = nn.Sequential(
+                init_(nn.Linear(hidden_size + z2_size, hidden_size)),
+                nn.ReLU(),
+                init_(nn.Linear(hidden_size, 1)),
+            )
         state_sizes = self.state_sizes._asdict()
         with lower_level_config.open() as f:
             lower_level_params = json.load(f)
@@ -332,9 +342,12 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             # A[:] = float(input("A:"))
             # except ValueError:
             # pass
-            v = self.critic(z)
-            if self.use_gate_critic:
-                v = v + self.gate_critic(z2)
+            if self.critic_type == "z":
+                v = self.critic(z)
+            elif self.critic_type == "h1":
+                v = self.critic(h1.view(N, -1))
+            else:
+                v = self.critic(torch.cat([z2, z], dim=-1))
             yield RecurrentState(
                 a=A[t],
                 l=L[t],
