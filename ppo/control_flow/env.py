@@ -30,6 +30,8 @@ Action = namedtuple("Action", "upper lower delta dg ptr")
 class Env(gym.Env, ABC):
     def __init__(
         self,
+        min_eval_lines,
+        max_eval_lines,
         min_lines,
         max_lines,
         flip_prob,
@@ -46,10 +48,11 @@ class Env(gym.Env, ABC):
         lower_level,
         control_flow_types,
         seed=0,
-        eval_lines=None,
         evaluating=False,
     ):
         super().__init__()
+        self.min_eval_lines = min_eval_lines
+        self.max_eval_lines = max_eval_lines
         self.lower_level = lower_level
         if Subtask not in control_flow_types:
             control_flow_types.append(Subtask)
@@ -69,11 +72,10 @@ class Env(gym.Env, ABC):
         self.success_count = 0
 
         self.loops = None
-        self.eval_lines = eval_lines
         self.min_lines = min_lines
         self.max_lines = max_lines
         if evaluating:
-            self.n_lines = max(eval_lines)
+            self.n_lines = max_eval_lines
         else:
             self.n_lines = max_lines
         self.n_lines += 1
