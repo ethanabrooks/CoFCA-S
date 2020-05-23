@@ -391,6 +391,7 @@ class Env(ppo.control_flow.env.Env):
                     term=term,
                     subtask_complete=subtask_complete,
                     use_failure_buf=use_failure_buf,
+                    condition_evaluations=condition_evaluations,
                 )
                 subtask_complete = False
                 # for i, a in enumerate(self.lower_level_actions):
