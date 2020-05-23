@@ -1,8 +1,8 @@
 {
   "hidden_size": 128,
   "kernel_size": 3,
-  "num_conv_layers": 2,
-  "stride": 2,
+  "num_conv_layers": 1,
+  "stride": 1,
   "recurrent": false,
   "concat": false
 }
