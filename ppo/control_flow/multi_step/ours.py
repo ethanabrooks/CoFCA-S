@@ -238,9 +238,9 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             a_dist = self.actor(z)
             self.sample_new(A[t], a_dist)
             a = A[t]
-            self.print("a_probs", a_dist.probs)
-            line_type, be, it, _ = lines[t][R, hx.p.long().flatten()].unbind(-1)
-            a = 3 * (it - 1) + (be - 1)
+            # self.print("a_probs", a_dist.probs)
+            # line_type, be, it, _ = lines[t][R, hx.p.long().flatten()].unbind(-1)
+            # a = 3 * (it - 1) + (be - 1)
 
             ll_output = self.lower_level(
                 Obs(**{k: v[t] for k, v in state._asdict().items()}),
@@ -313,13 +313,13 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             self.sample_new(DG[t], d_gate)
             dg = DG[t].unsqueeze(-1).float()
 
-            _, _, it, _ = lines[t][R, p].long().unbind(-1)  # N, 2
-            sell = (be == 2).long()
-            index1 = it - 1
-            index2 = 1 + ((it - 3) % 3)
-            channel1 = state.obs[t][R, index1].sum(-1).sum(-1)
-            channel2 = state.obs[t][R, index2].sum(-1).sum(-1)
-            z = (channel1 > channel2).unsqueeze(-1).float()
+            # _, _, it, _ = lines[t][R, p].long().unbind(-1)  # N, 2
+            # sell = (be == 2).long()
+            # index1 = it - 1
+            # index2 = 1 + ((it - 3) % 3)
+            # channel1 = state.obs[t][R, index1].sum(-1).sum(-1)
+            # channel2 = state.obs[t][R, index2].sum(-1).sum(-1)
+            # z = (channel1 > channel2).unsqueeze(-1).float()
             conv_kernel2 = self.linear1(m).view(
                 N,
                 self.gate_hidden_size,
