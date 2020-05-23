@@ -601,7 +601,7 @@ class Env(ppo.control_flow.env.Env):
 
     def assign_line_ids(self, line_types):
         behaviors = self.random.choice(self.behaviors, size=len(line_types))
-        items = self.random.choice([self.gold, self.iron], size=len(line_types))
+        items = self.random.choice(self.items, size=len(line_types))
         while_obj = None
         available = [x for x in self.items]
         lines = []
