@@ -47,6 +47,7 @@ def main(
                 )
             agent_args.update(log_dir=log_dir)
             del agent_args["recurrent"]
+            del agent_args["num_conv_layers"]
             return ppo.control_flow.agent.Agent(
                 observation_space=obs_space,
                 action_space=envs.action_space,
@@ -143,7 +144,7 @@ def control_flow_args():
     parsers.env.add_argument("--gridworld", action="store_true")
     ppo.control_flow.multi_step.env.build_parser(parsers.env)
     parsers.agent.add_argument("--lower-level-config", type=Path)
-    parsers.agent.add_argument("--debug", action="store_true")
+    parsers.agent.add_argument("--no-debug", dest="debug", action="store_false")
     parsers.agent.add_argument("--no-scan", action="store_true")
     parsers.agent.add_argument("--no-roll", action="store_true")
     parsers.agent.add_argument("--no-pointer", action="store_true")
@@ -158,6 +159,7 @@ def control_flow_args():
     parsers.agent.add_argument("--gate-hidden-size", type=int, required=True)
     parsers.agent.add_argument("--gate-stride", type=int, required=True)
     parsers.agent.add_argument("--num-encoding-layers", type=int, required=True)
+    parsers.agent.add_argument("--num-conv-layers", type=int, required=True)
     parsers.agent.add_argument("--num-edges", type=int, required=True)
     parsers.agent.add_argument("--gate-coef", type=float, required=True)
     parsers.agent.add_argument("--no-op-coef", type=float, required=True)
