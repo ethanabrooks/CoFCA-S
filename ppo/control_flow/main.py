@@ -26,6 +26,7 @@ def main(
     one_line,
     lower_level,
     lower_level_load_path,
+    render,
     **kwargs,
 ):
     if lower_level_load_path:
@@ -50,7 +51,7 @@ def main(
                 observation_space=obs_space,
                 action_space=envs.action_space,
                 eval_lines=max_eval_lines,
-                debug=debug,
+                debug=render and debug,
                 lower_level=lower_level,
                 lower_level_load_path=lower_level_load_path,
                 **agent_args,
@@ -68,6 +69,7 @@ def main(
                 rank=rank,
             )
             args["lower_level"] = lower_level
+            args["break_on_fail"] = args["break_on_fail"] and render
             del args["time_limit"]
             if one_line:
                 return control_flow.multi_step.one_line.Env(**args)
@@ -122,7 +124,7 @@ def main(
 
             super().log_result(result)
 
-    _Train(**kwargs, seed=seed, log_dir=log_dir, time_limit=None).run()
+    _Train(**kwargs, seed=seed, log_dir=log_dir, render=render, time_limit=None).run()
 
 
 def control_flow_args():
