@@ -125,8 +125,8 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         self.linear2 = nn.Linear(m_size + lower_embed_size, hidden2)
         if self.critic_type == "z":
             self.critic = init_(nn.Linear(hidden_size, 1))
-        elif self.critic_type == "h1":
-            self.critic = init_(nn.Linear(gate_hidden_size * output_dim2 ** 2, 1))
+        elif self.critic_type == "z3":
+            self.critic = init_(nn.Linear(gate_hidden_size, 1))
         elif self.critic_type == "combined":
             self.critic = init_(nn.Linear(hidden_size + z2_size, 1))
         elif self.critic_type == "multi-layer":
@@ -296,27 +296,33 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 self.gate_kernel_size,
             )
             h2 = self.linear2(torch.cat([m, embedded_lower], dim=-1)).relu()
-            h1 = (
-                torch.cat(
-                    [
-                        F.conv2d(
-                            input=o.unsqueeze(0),
-                            weight=k,
-                            bias=self.conv_bias,
-                            stride=self.gate_stride,
-                            padding=self.gate_padding,
-                        )
-                        for o, k in zip(conv_output.unbind(0), conv_kernel.unbind(0))
-                    ],
-                    dim=0,
-                )
-                .view(N, -1)
-                .relu()
-            )
-            z2 = torch.cat([h1, h2, m], dim=-1)
+            h1 = torch.cat(
+                [
+                    F.conv2d(
+                        input=o.unsqueeze(0),
+                        weight=k,
+                        bias=self.conv_bias,
+                        stride=self.gate_stride,
+                        padding=self.gate_padding,
+                    )
+                    for o, k in zip(conv_output.unbind(0), conv_kernel.unbind(0))
+                ],
+                dim=0,
+            ).relu()
+            z2 = torch.cat([h1.view(N, -1), h2, m], dim=-1)
             d_gate = self.d_gate(z2)
             self.sample_new(DG[t], d_gate)
             dg = DG[t].unsqueeze(-1).float()
+
+            # _, _, it, _ = lines[t][R, p].long().unbind(-1)  # N, 2
+            # sell = (be == 2).long()
+            # index1 = it - 1
+            # index2 = 1 + ((it - 3) % 3)
+            # channel1 = state.obs[t][R, index1].sum(-1).sum(-1)
+            # channel2 = state.obs[t][R, index2].sum(-1).sum(-1)
+            # z = (channel1 > channel2).unsqueeze(-1).float()
+
+            z3 = h1.sum(-1).sum(-1)
             if self.olsk or self.no_pointer:
                 h = self.upsilon(z, h)
                 u = self.beta(h).softmax(dim=-1)
@@ -347,8 +353,8 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             # pass
             if self.critic_type == "z":
                 v = self.critic(z)
-            elif self.critic_type == "h1":
-                v = self.critic(h1.view(N, -1))
+            elif self.critic_type == "z3":
+                v = self.critic(z3)
             else:
                 v = self.critic(torch.cat([z2, z], dim=-1))
             yield RecurrentState(
