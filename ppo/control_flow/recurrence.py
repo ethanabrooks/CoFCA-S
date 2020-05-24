@@ -89,10 +89,10 @@ class Recurrence(nn.Module):
             self.upsilon = nn.GRUCell(hidden_size, hidden_size)
             self.beta = init_(nn.Linear(hidden_size, self.ne))
         elif self.no_pointer:
-            self.upsilon = nn.GRUCell(1, hidden_size)
+            self.upsilon = nn.GRUCell(hidden_size, hidden_size)
             self.beta = init_(nn.Linear(hidden_size, self.d_space()))
         else:
-            self.upsilon = init_(nn.Linear(1, self.ne))
+            self.upsilon = init_(nn.Linear(hidden_size, self.ne))
             layers = []
             in_size = (2 if self.no_roll or self.no_scan else 1) * task_embed_size
             for _ in range(num_encoding_layers - 1):
@@ -100,7 +100,7 @@ class Recurrence(nn.Module):
                 in_size = task_embed_size
             out_size = self.ne * self.d_space() if self.no_scan else self.ne
             self.beta = nn.Sequential(*layers, init_(nn.Linear(in_size, out_size)))
-        self.critic = init_(nn.Linear(1, 1))
+        self.critic = init_(nn.Linear(hidden_size, 1))
         self.actor = Categorical(hidden_size, n_a)
         self.state_sizes = RecurrentState(
             a=1,
