@@ -242,7 +242,8 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             z = F.relu(self.zeta(zeta_input))
             a_dist = self.actor(z)
             self.sample_new(A[t], a_dist)
-            self.print("a_probs", a_dist.probs)
+            a = A[t]
+            # self.print("a_probs", a_dist.probs)
             # line_type, be, it, _ = lines[t][R, hx.p.long().flatten()].unbind(-1)
             # a = 3 * (it - 1) + (be - 1)
 
@@ -251,7 +252,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 hx.lh,
                 masks=None,
                 action=None,
-                upper=A[t],
+                upper=a,
             )
             if torch.any(L[0] < 0):
                 assert torch.all(L[0] < 0)
@@ -265,18 +266,20 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 agent_channel = state.obs[t][R, -1]
                 # self.print("channel", channel)
                 # self.print("agent_channel", agent_channel)
-                # not_subtask = (ac != 0).float().flatten()
+                is_subtask = (ac == 0).flatten()
                 standing_on = (channel * agent_channel).view(N, -1).sum(-1)
                 # correct_action = ((be - 1) == L[t]).float()
                 # self.print("be", be)
                 # self.print("L[t]", L[t])
                 # self.print("correct_action", correct_action)
                 # dg = standing_on * correct_action + not_subtask
-                fuzz = (1 - standing_on).long() * torch.randint(
-                    2, size=(len(standing_on),), device=rnn_hxs.device
+                fuzz = (
+                    is_subtask.long()
+                    * (1 - standing_on).long()
+                    * torch.randint(2, size=(len(standing_on),), device=rnn_hxs.device)
                 )
                 lt = (fuzz * (be - 1) + (1 - fuzz) * L[t]).long()
-                # self.print("fuzz", fuzz, lt)
+                self.print("fuzz", fuzz, lt)
                 # dg = dg.view(N, 1)
                 # correct_action = ((be - 1) == lt).float()
             else:
