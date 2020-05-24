@@ -27,6 +27,7 @@ class Recurrence(nn.Module):
         eval_lines,
         activation,
         hidden_size,
+        gate_hidden_size,
         task_embed_size,
         num_layers,
         num_edges,
@@ -86,13 +87,13 @@ class Recurrence(nn.Module):
         # self.zeta2 = nn.Sequential(*layers)
         if self.olsk:
             assert self.ne == 3
-            self.upsilon = nn.GRUCell(hidden_size, hidden_size)
+            self.upsilon = nn.GRUCell(gate_hidden_size, hidden_size)
             self.beta = init_(nn.Linear(hidden_size, self.ne))
         elif self.no_pointer:
-            self.upsilon = nn.GRUCell(hidden_size, hidden_size)
+            self.upsilon = nn.GRUCell(gate_hidden_size, hidden_size)
             self.beta = init_(nn.Linear(hidden_size, self.d_space()))
         else:
-            self.upsilon = init_(nn.Linear(hidden_size, self.ne))
+            self.upsilon = init_(nn.Linear(gate_hidden_size, self.ne))
             layers = []
             in_size = (2 if self.no_roll or self.no_scan else 1) * task_embed_size
             for _ in range(num_encoding_layers - 1):
