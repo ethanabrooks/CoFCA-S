@@ -126,6 +126,8 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         self.linear2 = nn.Linear(m_size + lower_embed_size, hidden2)
         if self.critic_type == "z":
             self.critic = init_(nn.Linear(hidden_size, 1))
+        elif self.critic_type == "h1":
+            self.critic = init_(nn.Linear(gate_hidden_size * output_dim2 ** 2, 1))
         elif self.critic_type == "z3":
             self.critic = init_(nn.Linear(gate_hidden_size, 1))
         elif self.critic_type == "combined":
@@ -355,6 +357,8 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             # pass
             if self.critic_type == "z":
                 v = self.critic(z)
+            elif self.critic_type == "h1":
+                v = self.critic(h1.view(N, -1))
             elif self.critic_type == "z3":
                 v = self.critic(z3)
             else:
