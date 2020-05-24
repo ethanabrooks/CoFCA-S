@@ -149,11 +149,13 @@ class Recurrence(nn.Module):
         obs_spaces = self.obs_spaces
         obs_sections = self.obs_sections
         state_sizes = self.state_sizes
+        train_lines = self.train_lines
         self.set_obs_space(eval_obs_space)
         yield self
         self.obs_spaces = obs_spaces
         self.obs_sections = obs_sections
         self.state_sizes = state_sizes
+        self.train_lines = train_lines
 
     def set_obs_space(self, obs_space):
         self.obs_spaces = obs_space.spaces
