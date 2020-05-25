@@ -226,7 +226,7 @@ class Env(gym.Env, ABC):
                 action = Action(upper=0, lower=action, delta=0, dg=0, ptr=0)
             actions.extend([int(a) for a in action])
             action = Action(*action)
-            action, lower_level_action, agent_ptr, = (
+            action, lower_level_action, agent_ptr = (
                 int(action.upper),
                 int(action.lower),
                 int(action.ptr),

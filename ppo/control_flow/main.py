@@ -99,7 +99,7 @@ def main(
             if "subtasks_attempted" in result:
                 subtasks_attempted = sum(result["subtasks_attempted"])
                 if subtasks_attempted > 0:
-                    result["success"] = (
+                    result["subtask_success"] = (
                         sum(result["subtasks_complete"]) / subtasks_attempted
                     )
             try:
