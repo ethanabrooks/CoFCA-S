@@ -129,6 +129,13 @@ class TrainBase(abc.ABC):
         self.counter = Counter()
 
         self.i = 0
+
+        load_path = Path(
+            "/home/ethanbro/tmux-script/checkpoints",
+            self.run_id.replace("neurips/long-jump/", ""),
+            "checkpoint.pt",
+        )
+        load_path = str(load_path)
         if load_path:
             self._restore(load_path)
 
@@ -262,7 +269,8 @@ class TrainBase(abc.ABC):
         iterator = range(num_steps)
         if use_tqdm:
             iterator = tqdm(iterator, desc="evaluating")
-        for _ in iterator:
+        episodes_complete = 0
+        while episodes_complete < envs.num_envs:
             with torch.no_grad():
                 act = self.agent(
                     inputs=obs, rnn_hxs=rnn_hxs, masks=masks
@@ -270,6 +278,8 @@ class TrainBase(abc.ABC):
 
             # Observe reward and next obs
             obs, reward, done, infos = envs.step(act.action)
+            episodes_complete += done.sum()
+
             self.process_infos(episode_counter, done, infos, **act.log)
 
             # track rewards
@@ -454,6 +464,7 @@ class Train(TrainBase):
             for result in self.make_train_iterator():
                 if self.writer is not None:
                     self.log_result(result)
+                    exit()
 
                 if self.log_dir and self.i % self.save_interval == 0:
                     self._save(str(self.log_dir))

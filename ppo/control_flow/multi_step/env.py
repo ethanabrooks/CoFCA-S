@@ -120,7 +120,7 @@ class Env(ppo.control_flow.env.Env):
         self.subtasks = list(subtasks())
         num_subtasks = len(self.subtasks)
         super().__init__(num_subtasks=num_subtasks, **kwargs)
-        self.long_jump = long_jump and self.evaluating
+        self.long_jump = self.evaluating
         self.world_size = world_size
         self.world_shape = (len(self.world_contents), self.world_size, self.world_size)
 

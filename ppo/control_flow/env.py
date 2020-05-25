@@ -170,7 +170,7 @@ class Env(gym.Env, ABC):
                     info.update(success_line=len(lines), progress=1)
                 else:
                     info.update(
-                        success_line=state.prev, progress=state.prev / len(lines),
+                        success_line=state.prev, progress=state.prev / len(lines)
                     )
                 subtasks_attempted = subtasks_complete + (not success)
                 info.update(
@@ -219,9 +219,7 @@ class Env(gym.Env, ABC):
 
             self._render = render
             obs = self.get_observation(obs=state.obs, active=state.ptr, lines=lines)
-            line_specific_info = {
-                f"{k}_{10 * (len(lines) // 10)}": v for k, v in info.items()
-            }
+            line_specific_info = {f"{k}_{len(lines)}": v for k, v in info.items()}
             action = (yield obs, reward, term, dict(**info, **line_specific_info))
             if action.size == 1:
                 action = Action(upper=0, lower=action, delta=0, dg=0, ptr=0)
