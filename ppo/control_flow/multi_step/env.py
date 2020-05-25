@@ -342,13 +342,34 @@ class Env(ppo.control_flow.env.Env):
                         EndIf if use_if else EndWhile,
                         Subtask,
                     ]
+                elif self.single_control_flow_type and self.evaluating:
+                    while True:
+                        line_types = list(
+                            Line.generate_types(
+                                n_lines,
+                                remaining_depth=self.max_nesting_depth,
+                                random=self.random,
+                                legal_lines=self.control_flow_types,
+                            )
+                        )
+                        if (
+                            Else in line_types
+                            and While in line_types
+                            and line_types.count(If) > line_types.count(Else)
+                        ):
+                            break
                 else:
+                    legal_lines = (
+                        [self.random.choice(self.control_flow_types), Subtask]
+                        if (self.single_control_flow_type and not self.evaluating)
+                        else self.control_flow_types
+                    )
                     line_types = list(
                         Line.generate_types(
                             n_lines,
                             remaining_depth=self.max_nesting_depth,
                             random=self.random,
-                            legal_lines=self.control_flow_types,
+                            legal_lines=legal_lines,
                         )
                     )
                 lines = list(self.assign_line_ids(line_types))

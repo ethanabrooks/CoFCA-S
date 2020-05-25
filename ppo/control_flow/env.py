@@ -65,7 +65,7 @@ class Env(gym.Env, ABC):
         self.subtasks_only = subtasks_only
         self.no_op_limit = no_op_limit
         self._eval_condition_size = eval_condition_size
-        self._single_control_flow_type = single_control_flow_type
+        self.single_control_flow_type = single_control_flow_type
         self.max_nesting_depth = max_nesting_depth
         self.num_subtasks = num_subtasks
         self.time_to_waste = time_to_waste
@@ -253,10 +253,6 @@ class Env(gym.Env, ABC):
     @property
     def eval_condition_size(self):
         return self._eval_condition_size and self.evaluating
-
-    @property
-    def single_control_flow_type(self):
-        return self._single_control_flow_type and not self.evaluating
 
     def choose_line_types(self):
         if self.evaluating:
