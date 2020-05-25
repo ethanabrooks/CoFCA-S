@@ -343,6 +343,7 @@ class Env(ppo.control_flow.env.Env):
                         Subtask,
                     ]
                 elif self.single_control_flow_type and self.evaluating:
+                    assert n_lines > 10
                     while True:
                         line_types = list(
                             Line.generate_types(
