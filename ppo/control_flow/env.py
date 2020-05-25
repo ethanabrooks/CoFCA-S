@@ -166,11 +166,10 @@ class Env(gym.Env, ABC):
                     success=success,
                 )
                 if success:
-                    info.update(success_line=len(lines), success_fraction=1)
+                    info.update(success_line=len(lines), progress=1)
                 else:
                     info.update(
-                        success_line=state.prev,
-                        success_fraction=state.prev / len(lines),
+                        success_line=state.prev, progress=state.prev / len(lines),
                     )
                 subtasks_attempted = subtasks_complete + (not success)
                 info.update(
@@ -236,7 +235,7 @@ class Env(gym.Env, ABC):
             info = dict(
                 use_failure_buf=state.use_failure_buf,
                 len_failure_buffer=len(self.failure_buffer),
-                success_ratio=self.success_count / self.i,
+                successes_per_episode=self.success_count / self.i,
             )
 
             if action == self.num_subtasks:
