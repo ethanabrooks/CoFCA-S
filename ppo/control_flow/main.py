@@ -141,6 +141,7 @@ def control_flow_args():
     parser.add_argument("--max-eval-lines", type=int, required=True)
     parser.add_argument("--no-eval", action="store_true")
     parser.add_argument("--one-line", action="store_true")
+    parser.add_argument("--save-separate", action="store_true")
     parser.add_argument(
         "--lower-level", choices=["train-alone", "train-with-upper", "hardcoded"]
     )

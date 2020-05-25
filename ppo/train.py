@@ -403,7 +403,9 @@ class TrainBase(abc.ABC):
         # if isinstance(self.envs.venv, VecNormalize):
         #     modules.update(vec_normalize=self.envs.venv)
         state_dict = {name: module.state_dict() for name, module in modules.items()}
-        save_path = Path(checkpoint_dir, "checkpoint.pt")
+        save_path = Path(
+            checkpoint_dir, f"{self.i if self.save_separate else 'checkpoint'}.pt"
+        )
         torch.save(dict(step=self.i, **state_dict), save_path)
         print(f"Saved parameters to {save_path}")
         return str(save_path)
@@ -431,8 +433,10 @@ class Train(TrainBase):
         save_interval: int,
         num_processes: int,
         num_steps: int,
+        save_separate: bool,
         **kwargs,
     ):
+        self.save_separate = save_separate
         self.num_steps = num_steps
         self.num_processes = num_processes
         self.run_id = run_id
@@ -451,11 +455,7 @@ class Train(TrainBase):
                 if self.writer is not None:
                     self.log_result(result)
 
-                if (
-                    self.log_dir
-                    and self.save_interval
-                    and (time.time() - self.last_save >= self.save_interval)
-                ):
+                if self.log_dir and self.i % self.save_interval == 0:
                     self._save(str(self.log_dir))
                     self.last_save = time.time()
 
