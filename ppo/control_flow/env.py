@@ -164,6 +164,7 @@ class Env(gym.Env, ABC):
                     actions=actions,
                     program_counter=program_counter,
                     success=success,
+                    cumulative_reward=cumulative_reward,
                 )
                 if success:
                     info.update(success_line=len(lines), progress=1)

@@ -83,6 +83,10 @@ def main(
                 return control_flow.multi_step.env.Env(**args)
 
         def process_infos(self, episode_counter, done, infos, **act_log):
+            for d in infos:
+                for k, v in d.items():
+                    if k.startswith("cumulative_reward"):
+                        episode_counter[k].append(v)
             if lower_level != "train-alone":
                 P = act_log.pop("P")
                 P = P[done]
