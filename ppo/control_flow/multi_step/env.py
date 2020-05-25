@@ -101,6 +101,7 @@ class Env(ppo.control_flow.env.Env):
         one_condition,
         failure_buffer_size,
         reject_while_prob,
+        long_jump,
         world_size=6,
         **kwargs,
     ):
@@ -119,6 +120,7 @@ class Env(ppo.control_flow.env.Env):
         self.subtasks = list(subtasks())
         num_subtasks = len(self.subtasks)
         super().__init__(num_subtasks=num_subtasks, **kwargs)
+        self.long_jump = long_jump and self.evaluating
         self.world_size = world_size
         self.world_shape = (len(self.world_contents), self.world_size, self.world_size)
 
@@ -293,6 +295,9 @@ class Env(ppo.control_flow.env.Env):
                 if whiles > self.max_while_loops:
                     return False
             evaluation = self.evaluate_line(line, counts, [], loops)
+            if evaluation is True and self.long_jump:
+                assert self.evaluating
+                return False
             l = line_iterator.send(evaluation)
         return True
 
@@ -325,14 +330,27 @@ class Env(ppo.control_flow.env.Env):
                     if self.evaluating
                     else self.random.random_integers(self.min_lines, self.max_lines)
                 )
-                line_types = list(
-                    Line.generate_types(
-                        n_lines,
-                        remaining_depth=self.max_nesting_depth,
-                        random=self.random,
-                        legal_lines=self.control_flow_types,
+                if self.long_jump:
+                    assert self.evaluating
+                    len_jump = self.random.randint(
+                        self.min_eval_lines - 3, self.max_eval_lines - 3
                     )
-                )
+                    use_if = self.random.random() < 0.5
+                    line_types = [
+                        If if use_if else While,
+                        *(Subtask for _ in range(len_jump)),
+                        EndIf if use_if else EndWhile,
+                        Subtask,
+                    ]
+                else:
+                    line_types = list(
+                        Line.generate_types(
+                            n_lines,
+                            remaining_depth=self.max_nesting_depth,
+                            random=self.random,
+                            legal_lines=self.control_flow_types,
+                        )
+                    )
                 lines = list(self.assign_line_ids(line_types))
                 assert self.max_nesting_depth == 1
                 result = self.populate_world(lines)
@@ -659,6 +677,7 @@ def build_parser(
     )
     p.add_argument("--no-water", dest="use_water", action="store_false")
     p.add_argument("--1condition", dest="one_condition", action="store_true")
+    p.add_argument("--long-jump", action="store_true")
     p.add_argument("--max-failure-sample-prob", type=float, required=True)
     p.add_argument("--failure-buffer-size", type=int, required=True)
     p.add_argument("--reject-while-prob", type=float, required=True)
