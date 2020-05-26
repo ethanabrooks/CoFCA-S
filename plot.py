@@ -43,7 +43,7 @@ def main(
         )
 
     def get_tags():
-        pattern = re.compile(r".*cumulative_reward_([0-9]*)")
+        pattern = re.compile(r"eval_cumulative_reward_([0-9]*)")
         for name, path in zip(names, paths):
             path = Path(base_dir, path)
             if not path.exists():

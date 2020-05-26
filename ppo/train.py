@@ -203,10 +203,14 @@ class TrainBase(abc.ABC):
             eval_result = {f"eval_{k}": v for k, v in eval_result.items()}
         else:
             eval_result = {}
+        tick = time.time()
+        yield dict(tick=tick, fps=0, **eval_result)
+        import sys
+
+        sys.exit()
         # self.envs.train()
         obs = self.envs.reset()
         self.rollouts.obs[0].copy_(obs)
-        tick = time.time()
         log_progress = None
 
         if eval_interval:
@@ -234,8 +238,6 @@ class TrainBase(abc.ABC):
             total_num_steps = log_interval * num_processes * num_steps
             fps = total_num_steps / (time.time() - tick)
             tick = time.time()
-            yield dict(tick=tick, fps=fps, **epoch_counter, **eval_result)
-            exit()
 
             with torch.no_grad():
                 next_value = self.agent.get_value(
@@ -274,6 +276,7 @@ class TrainBase(abc.ABC):
         iterator = range(num_steps)
         if use_tqdm:
             iterator = tqdm(iterator, desc="evaluating")
+        pbar = tqdm(total=50)
         episodes_complete = 0
         while True:
             with torch.no_grad():
@@ -286,7 +289,9 @@ class TrainBase(abc.ABC):
             episodes_complete += done.sum()
 
             self.process_infos(episode_counter, done, infos, **act.log)
-            if min([info["i"] for info in infos]) > 50:
+            i = min([info["i"] for info in infos])
+            pbar.update(i - pbar.n)
+            if i > 50:
                 break
 
             # track rewards

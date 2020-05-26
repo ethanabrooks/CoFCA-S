@@ -152,6 +152,10 @@ class Env(gym.Env, ABC):
             else:
                 reward = int(success)
             cumulative_reward += reward
+            if cumulative_reward > 1:
+                import ipdb
+
+                ipdb.set_trace()
             subtasks_complete += state.subtask_complete
             if term:
                 if not success and self.break_on_fail:
@@ -222,6 +226,10 @@ class Env(gym.Env, ABC):
             obs = self.get_observation(obs=state.obs, active=state.ptr, lines=lines)
             line_specific_info = {f"{k}_{len(lines)}": v for k, v in info.items()}
             action = (yield obs, reward, term, dict(**info, **line_specific_info))
+            if term:
+                import ipdb
+
+                ipdb.set_trace()
             if action.size == 1:
                 action = Action(upper=0, lower=action, delta=0, dg=0, ptr=0)
             actions.extend([int(a) for a in action])
