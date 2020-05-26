@@ -270,7 +270,7 @@ class TrainBase(abc.ABC):
         if use_tqdm:
             iterator = tqdm(iterator, desc="evaluating")
         episodes_complete = 0
-        while episodes_complete < envs.num_envs:
+        while True:
             with torch.no_grad():
                 act = self.agent(
                     inputs=obs, rnn_hxs=rnn_hxs, masks=masks
@@ -281,6 +281,8 @@ class TrainBase(abc.ABC):
             episodes_complete += done.sum()
 
             self.process_infos(episode_counter, done, infos, **act.log)
+            if min([info["i"] for info in infos]) > 50:
+                break
 
             # track rewards
             counter["reward"] += reward.numpy()

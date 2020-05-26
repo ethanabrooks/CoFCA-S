@@ -182,6 +182,7 @@ class Env(gym.Env, ABC):
                 regret=1 if term and not success else 0,
                 subtask_complete=state.subtask_complete,
                 condition_evaluations=state.condition_evaluations,
+                i=self.i,
             )
 
             def render():
