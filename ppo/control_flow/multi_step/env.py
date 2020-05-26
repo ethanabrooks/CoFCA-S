@@ -332,7 +332,7 @@ class Env(ppo.control_flow.env.Env):
                 )
                 if self.long_jump:
                     assert self.evaluating
-                    len_jump = self.i
+                    len_jump = min(self.i, self.max_eval_lines - 3)
                     use_if = self.random.random() < 0.5
                     line_types = [
                         If if use_if else While,
