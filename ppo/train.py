@@ -231,6 +231,11 @@ class TrainBase(abc.ABC):
                 rollouts=self.rollouts,
                 envs=self.envs,
             )
+            total_num_steps = log_interval * num_processes * num_steps
+            fps = total_num_steps / (time.time() - tick)
+            tick = time.time()
+            yield dict(tick=tick, fps=fps, **epoch_counter, **eval_result)
+            exit()
 
             with torch.no_grad():
                 next_value = self.agent.get_value(
