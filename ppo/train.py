@@ -131,7 +131,7 @@ class TrainBase(abc.ABC):
         self.i = 0
 
         load_path = Path(
-            "/home/ethanbro/tmux-script/checkpoints",
+            "/home/ethanbro/checkpoints",
             self.run_id.replace("neurips/long-jump/", ""),
             "checkpoint.pt",
         )
