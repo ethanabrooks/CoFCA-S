@@ -95,8 +95,11 @@ class Agent(ppo.agent.Agent, NNBase):
             raise RuntimeError
 
         dists = [(p if p is None else FixedCategorical(p)) for p in probs]
-        action_log_probs = sum(
-            dist.log_probs(x) for dist, x in zip(dists, X) if dist is not None
+        action_log_probs = Action(
+            *[
+                dist.log_probs(x) if dist is not None else None
+                for dist, x in zip(dists, X)
+            ]
         )
         entropy = sum([dist.entropy() for dist in dists if dist is not None]).mean()
         aux_loss = -self.entropy_coef * entropy
@@ -111,9 +114,13 @@ class Agent(ppo.agent.Agent, NNBase):
         )
         action = torch.cat(X, dim=-1)
         return AgentValues(
-            value=hx.v,
+            value=hx.va,
+            value2=hx.vd,
+            value3=hx.vdg,
             action=action,
-            action_log_probs=action_log_probs,
+            action_log_probs=action_log_probs.upper,
+            action_log_probs2=action_log_probs.delta,
+            action_log_probs3=action_log_probs.dg,
             aux_loss=aux_loss,
             dist=None,
             rnn_hxs=rnn_hxs,
@@ -131,4 +138,5 @@ class Agent(ppo.agent.Agent, NNBase):
         all_hxs, last_hx = self._forward_gru(
             inputs.view(inputs.size(0), -1), rnn_hxs, masks
         )
-        return self.recurrent_module.parse_hidden(last_hx).v
+        hx = self.recurrent_module.parse_hidden(last_hx)
+        return hx.va, hx.vd, hx.vdg

@@ -40,20 +40,28 @@ class PPO:
         self.reward_function = None
 
     def update(self, rollouts: RolloutStorage):
-        advantages = rollouts.returns[:-1] - rollouts.value_preds[:-1]
-        if advantages.numel() > 1:
-            advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-5)
+        def get_advantages(value_preds):
+            a = rollouts.returns[:-1] - value_preds[:-1]
+            if a.numel() > 1:
+                return (a - a.mean()) / (a.std() + 1e-5)
+            return a
+
+        advantages = (
+            get_advantages(rollouts.value_preds),
+            get_advantages(rollouts.value_preds2),
+            get_advantages(rollouts.value_preds3),
+        )
 
         logger = collections.Counter()
 
         for e in range(self.ppo_epoch):
             if self.agent.is_recurrent:
                 data_generator = rollouts.recurrent_generator(
-                    advantages, self.num_mini_batch
+                    *advantages, self.num_mini_batch
                 )
             else:
                 data_generator = rollouts.feed_forward_generator(
-                    advantages, self.num_mini_batch
+                    *advantages, self.num_mini_batch
                 )
 
             sample: Batch
@@ -65,37 +73,62 @@ class PPO:
                     masks=sample.masks,
                     action=sample.actions,
                 )
-                values = act.value
-                action_log_probs = act.action_log_probs
                 loss = act.aux_loss
                 # log_values = act.log
                 # logger.update(**log_values)
 
                 if not self.aux_loss_only:
-                    ratio = torch.exp(action_log_probs - sample.old_action_log_probs)
-                    surr1 = ratio * sample.adv
-                    surr2 = (
-                        torch.clamp(ratio, 1.0 - self.clip_param, 1.0 + self.clip_param)
-                        * sample.adv
-                    )
-                    action_loss = -torch.min(surr1, surr2).mean()
-                    logger.update(action_loss=action_loss)
-                    loss += action_loss
 
-                if self.use_clipped_value_loss:
+                    def get_action_loss(log_probs, old_log_probs, adv):
+                        ratio = torch.exp(log_probs - old_log_probs)
+                        surr1 = ratio * adv
+                        surr2 = (
+                            torch.clamp(
+                                ratio, 1.0 - self.clip_param, 1.0 + self.clip_param
+                            )
+                            * adv
+                        )
+                        return -torch.min(surr1, surr2).mean()
 
-                    value_pred_clipped = sample.value_preds + (
-                        values - sample.value_preds
-                    ).clamp(-self.clip_param, self.clip_param)
-                    value_losses = (values - sample.ret).pow(2)
-                    value_losses_clipped = (value_pred_clipped - sample.ret).pow(2)
-                    value_loss = (
-                        0.5 * torch.max(value_losses, value_losses_clipped).mean()
-                    )
-                else:
-                    value_loss = 0.5 * F.mse_loss(sample.ret, values)
-                logger.update(value_loss=value_loss)
-                loss += self.value_loss_coef * value_loss
+                    for lp, olp, a in [
+                        (act.action_log_probs, sample.old_action_log_probs, sample.adv),
+                        (
+                            act.action_log_probs2,
+                            sample.old_action_log_probs2,
+                            sample.adv2,
+                        ),
+                        (
+                            act.action_log_probs3,
+                            sample.old_action_log_probs3,
+                            sample.adv3,
+                        ),
+                    ]:
+                        action_loss = get_action_loss(lp, olp, a)
+                        logger.update(action_loss=action_loss)
+                        loss += action_loss
+
+                def get_value_loss(values, value_preds):
+                    if self.use_clipped_value_loss:
+
+                        value_pred_clipped = value_preds + (values - value_preds).clamp(
+                            -self.clip_param, self.clip_param
+                        )
+                        value_losses = (values - sample.ret).pow(2)
+                        value_losses_clipped = (value_pred_clipped - sample.ret).pow(2)
+                        return (
+                            0.5 * torch.max(value_losses, value_losses_clipped).mean()
+                        )
+                    else:
+                        return 0.5 * F.mse_loss(sample.ret, values)
+
+                for v, vp in [
+                    (act.value, sample.value_preds),
+                    (act.value2, sample.value_preds2),
+                    (act.value3, sample.value_preds3),
+                ]:
+                    value_loss = get_value_loss(v, vp)
+                    logger.update(value_loss=value_loss)
+                    loss += self.value_loss_coef * value_loss
 
                 self.optimizer.zero_grad()
                 loss.backward()

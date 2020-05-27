@@ -232,9 +232,17 @@ class TrainBase(abc.ABC):
                     self.rollouts.obs[-1],
                     self.rollouts.recurrent_hidden_states[-1],
                     self.rollouts.masks[-1],
-                ).detach()
+                )
 
-            self.rollouts.compute_returns(next_value=next_value)
+            for vp, v in zip(
+                [
+                    self.rollouts.value_preds,
+                    self.rollouts.value_preds2,
+                    self.rollouts.value_preds3,
+                ],
+                [x.detach() for x in next_value],
+            ):
+                self.rollouts.compute_returns(vp, v)
             train_results = self.ppo.update(self.rollouts)
             self.rollouts.after_update()
             if log_progress is not None:
@@ -298,7 +306,11 @@ class TrainBase(abc.ABC):
                     recurrent_hidden_states=act.rnn_hxs,
                     actions=act.action,
                     action_log_probs=act.action_log_probs,
+                    action_log_probs2=act.action_log_probs2,
+                    action_log_probs3=act.action_log_probs3,
                     values=act.value,
+                    values2=act.value2,
+                    values3=act.value3,
                     rewards=reward,
                     masks=masks,
                 )
