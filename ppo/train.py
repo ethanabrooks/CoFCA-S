@@ -21,6 +21,7 @@ from common.atari_wrappers import wrap_deepmind
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from ppo.agent import Agent, AgentValues
+from ppo.control_flow.hdfstore import HDF5Store
 from ppo.storage import RolloutStorage
 from ppo.update import PPO
 from ppo.utils import k_scalar_pairs, get_n_gpu, get_random_gpu
@@ -445,8 +446,7 @@ class Train(TrainBase):
         self.log_dir = log_dir
         if log_dir:
             self.writer = SummaryWriter(logdir=str(log_dir))
-            db = dataset.connect(f"sqlite:///{Path(log_dir, 'db')}")
-            self.table = db["table"]
+            self.table = HDF5Store(datapath=str(Path(log_dir, "table")))
         else:
             self.writer = None
             self.table = None

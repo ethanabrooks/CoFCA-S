@@ -100,14 +100,9 @@ def main(
             super().process_infos(episode_counter, done, infos, **act_log)
 
         def log_result(self, result: dict):
-            keys = ["instruction_len", "progress", "rewards"]
-            if not len({len(result[k]) for k in keys}) == 1:
-                import ipdb
-
-                ipdb.set_trace()
-            values = list(zip(*(iter(result[k]) for k in keys)))
-            self.table.insert_many(dict(zip(keys, v)) for v in values)
-
+            keys = ["progress", "rewards", "instruction_len"]
+            values = np.array(list(zip(*(iter(result[k]) for k in keys))))
+            self.table.append(values)
             if "subtasks_attempted" in result:
                 subtasks_attempted = sum(result["subtasks_attempted"])
                 if subtasks_attempted > 0:
