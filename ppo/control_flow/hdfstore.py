@@ -26,7 +26,7 @@ class HDF5Store:
         self,
         datapath,
         dataset="table",
-        dim=3,
+        dim=4,
         dtype=np.float32,
         compression="gzip",
         chunk_len=1,
