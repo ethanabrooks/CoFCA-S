@@ -344,7 +344,7 @@ class Env(ppo.control_flow.env.Env):
                         Subtask,
                     ]
                 elif self.single_control_flow_type and self.evaluating:
-                    assert n_lines > 10
+                    assert n_lines >= 6
                     while True:
                         line_types = list(
                             Line.generate_types(
@@ -354,11 +354,12 @@ class Env(ppo.control_flow.env.Env):
                                 legal_lines=self.control_flow_types,
                             )
                         )
-                        if (
-                            Else in line_types
-                            and While in line_types
-                            and line_types.count(If) > line_types.count(Else)
-                        ):
+                        criteria = [
+                            Else in line_types,  # Else
+                            While in line_types,  # While
+                            line_types.count(If) > line_types.count(Else),  # If
+                        ]
+                        if sum(criteria) >= 2:
                             break
                 else:
                     legal_lines = (
