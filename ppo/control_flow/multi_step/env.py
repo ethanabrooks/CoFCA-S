@@ -287,6 +287,7 @@ class Env(ppo.control_flow.env.Env):
                         not self.evaluate_line(
                             line, counts, [], loops
                         ),  # evaluates false
+                        not self.evaluating,
                         self.random.random() < self.reject_while_prob,
                     )
                 ):
