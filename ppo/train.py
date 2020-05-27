@@ -9,6 +9,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Dict
 
+import dataset
 import gym
 import numpy as np
 import torch
@@ -444,8 +445,11 @@ class Train(TrainBase):
         self.log_dir = log_dir
         if log_dir:
             self.writer = SummaryWriter(logdir=str(log_dir))
+            db = dataset.connect(f"sqlite:///{Path(log_dir, 'db')}")
+            self.table = db["table"]
         else:
             self.writer = None
+            self.table = None
         self.setup(**kwargs, num_processes=num_processes, num_steps=num_steps)
         self.last_save = time.time()  # dummy save
 

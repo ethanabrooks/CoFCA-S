@@ -165,6 +165,7 @@ class Env(gym.Env, ABC):
                     program_counter=program_counter,
                     success=success,
                     cumulative_reward=cumulative_reward,
+                    instruction_len=len(lines),
                 )
                 if success:
                     info.update(success_line=len(lines), progress=1)
@@ -219,10 +220,7 @@ class Env(gym.Env, ABC):
 
             self._render = render
             obs = self.get_observation(obs=state.obs, active=state.ptr, lines=lines)
-            line_specific_info = {
-                f"{k}_{10 * (len(lines) // 10)}": v for k, v in info.items()
-            }
-            action = (yield obs, reward, term, dict(**info, **line_specific_info))
+            action = (yield obs, reward, term, dict(**info))
             if action.size == 1:
                 action = Action(upper=0, lower=action, delta=0, dg=0, ptr=0)
             actions.extend([int(a) for a in action])
