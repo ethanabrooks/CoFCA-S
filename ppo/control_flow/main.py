@@ -100,9 +100,10 @@ def main(
             super().process_infos(episode_counter, done, infos, **act_log)
 
         def log_result(self, result: dict):
-            total_num_steps = (self.i + 1) * self.num_processes * self.num_steps
-            keys = ["steps", "progress", "rewards", "instruction_len"]
+            keys = ["progress", "rewards", "instruction_len"]
             values = np.array(list(zip(*(iter(result[k]) for k in keys))))
+            total_num_steps = (self.i + 1) * self.num_processes * self.num_steps
+            values = np.pad(values, (1, 0), "constant", constant_values=total_num_steps)
             self.table.append(values)
             if "subtasks_attempted" in result:
                 subtasks_attempted = sum(result["subtasks_attempted"])
