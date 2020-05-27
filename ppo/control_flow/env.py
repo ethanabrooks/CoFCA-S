@@ -220,7 +220,10 @@ class Env(gym.Env, ABC):
 
             self._render = render
             obs = self.get_observation(obs=state.obs, active=state.ptr, lines=lines)
-            action = (yield obs, reward, term, dict(**info))
+            line_specific_info = {
+                f"{k}_{10 * (len(lines) // 10)}": v for k, v in info.items()
+            }
+            action = (yield obs, reward, term, dict(**info, **line_specific_info))
             if action.size == 1:
                 action = Action(upper=0, lower=action, delta=0, dg=0, ptr=0)
             actions.extend([int(a) for a in action])
