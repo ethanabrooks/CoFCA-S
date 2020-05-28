@@ -93,7 +93,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         output_dim = conv_output_dimension(
             h=h, padding=padding, kernel=kernel_size, stride=stride
         )
-        h1_size = self.conv_hidden_size * output_dim ** 2
+        h1_size = self.conv_hidden_size
         zeta1_input_size = m_size + h1_size + inventory_hidden_size
         self.zeta1 = init_(nn.Linear(zeta1_input_size, hidden_size))
         z2_size = zeta1_input_size + lower_embed_size
@@ -240,7 +240,8 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                     dim=0,
                 )
                 .relu()
-                .view(N, -1)
+                .sum(-1)
+                .sum(-1)
             )
             inventory = self.embed_inventory(state.inventory[t])
             zeta1_input = torch.cat([m, h1, inventory], dim=-1)
