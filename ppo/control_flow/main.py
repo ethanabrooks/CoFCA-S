@@ -163,23 +163,14 @@ def control_flow_args():
     parsers.agent.add_argument("--olsk", action="store_true")
     parsers.agent.add_argument("--transformer", action="store_true")
     parsers.agent.add_argument("--fuzz", action="store_true")
-    parsers.agent.add_argument(
-        "--critic-type",
-        choices=["z", "z3", "h1", "combined", "multi-layer"],
-        required=True,
-    )
-    parsers.agent.add_argument("--hidden2", type=int, required=True)
     parsers.agent.add_argument("--conv-hidden-size", type=int, required=True)
     parsers.agent.add_argument("--task-embed-size", type=int, required=True)
     parsers.agent.add_argument("--lower-embed-size", type=int, required=True)
-    parsers.agent.add_argument("--gate-hidden-size", type=int, required=True)
-    parsers.agent.add_argument("--gate-stride", type=int, required=True)
-    parsers.agent.add_argument("--num-encoding-layers", type=int, required=True)
+    parsers.agent.add_argument("--inventory-hidden-size", type=int, required=True)
     parsers.agent.add_argument("--num-conv-layers", type=int, required=True)
     parsers.agent.add_argument("--num-edges", type=int, required=True)
     parsers.agent.add_argument("--gate-coef", type=float, required=True)
     parsers.agent.add_argument("--no-op-coef", type=float, required=True)
-    parsers.agent.add_argument("--gate-conv-kernel-size", type=int, required=True)
     parsers.agent.add_argument("--kernel-size", type=int, required=True)
     parsers.agent.add_argument("--stride", type=int, required=True)
     return parser
