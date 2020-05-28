@@ -50,6 +50,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         kernel_size,
         stride,
         action_space,
+        sum_pool,
         lower_level_config,
         task_embed_size,
         num_edges,
@@ -57,6 +58,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         num_layers,
         **kwargs,
     ):
+        self.sum_pool = sum_pool
         self.fuzz = fuzz
         self.gate_coef = gate_coef
         self.conv_hidden_size = conv_hidden_size
@@ -94,6 +96,9 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             h=h, padding=padding, kernel=kernel_size, stride=stride
         )
         h1_size = self.conv_hidden_size
+        if not sum_pool:
+            h1_size *= output_dim ** 2
+
         zeta1_input_size = m_size + h1_size + inventory_hidden_size
         self.zeta1 = init_(nn.Linear(zeta1_input_size, hidden_size))
         z2_size = zeta1_input_size + lower_embed_size
@@ -110,7 +115,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             out_size = self.ne * self.d_space() if self.no_scan else self.ne
             self.beta = nn.Sequential(init_(nn.Linear(in_size, out_size)))
         self.d_gate = Categorical(z2_size, 2)
-        self.linear1 = nn.Linear(m_size, conv_hidden_size * kernel_size ** 2 * d)
+        self.kernel_net = nn.Linear(m_size, conv_hidden_size * kernel_size ** 2 * d)
         self.conv_bias = nn.Parameter(torch.zeros(conv_hidden_size))
         self.critic_a = init_(nn.Linear(hidden_size, 1))
         self.critic_d = init_(nn.Linear(z2_size, 1))
@@ -218,31 +223,30 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         for t in range(T):
             self.print("p", p)
             m = torch.cat([P, h], dim=-1) if self.no_pointer else M[R, p]
-            conv_kernel = self.linear1(m).view(
+            conv_kernel = self.kernel_net(m).view(
                 N,
                 self.conv_hidden_size,
                 self.obs_dim,
                 self.kernel_size,
                 self.kernel_size,
             )
-            h1 = (
-                torch.cat(
-                    [
-                        F.conv2d(
-                            input=o.unsqueeze(0),
-                            weight=k,
-                            bias=self.conv_bias,
-                            stride=self.stride,
-                            padding=self.padding,
-                        )
-                        for o, k in zip(state.obs[t].unbind(0), conv_kernel.unbind(0))
-                    ],
-                    dim=0,
-                )
-                .relu()
-                .sum(-1)
-                .sum(-1)
-            )
+            h1 = torch.cat(
+                [
+                    F.conv2d(
+                        input=o.unsqueeze(0),
+                        weight=k,
+                        bias=self.conv_bias,
+                        stride=self.stride,
+                        padding=self.padding,
+                    )
+                    for o, k in zip(state.obs[t].unbind(0), conv_kernel.unbind(0))
+                ],
+                dim=0,
+            ).relu()
+            if self.sum_pool:
+                h1 = h1.sum(-1).sum(-1)
+            else:
+                h1 = h1.view(N, -1)
             inventory = self.embed_inventory(state.inventory[t])
             zeta1_input = torch.cat([m, h1, inventory], dim=-1)
             z1 = F.relu(self.zeta1(zeta1_input))
