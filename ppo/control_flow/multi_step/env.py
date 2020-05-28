@@ -363,7 +363,12 @@ class Env(ppo.control_flow.env.Env):
                             break
                 else:
                     legal_lines = (
-                        [self.random.choice(self.control_flow_types), Subtask]
+                        [
+                            self.random.choice(
+                                list(set(self.control_flow_types) - {Subtask})
+                            ),
+                            Subtask,
+                        ]
                         if (self.single_control_flow_type and not self.evaluating)
                         else self.control_flow_types
                     )
