@@ -76,7 +76,8 @@ def main(
         "jump"
     )
     sns.lineplot(x="jump", y="reward", hue="run", data=data)
-    plt.legend(data["run"].unique(), bbox_to_anchor=(1.05, 1), loc=2)
+    plt.legend(data["run"].unique(), bbox_to_anchor=(1.05, 0), loc="lower left")
+    plt.tight_layout()
     # plt.axes().ticklabel_format(style="sci", scilimits=(0, 0), axis="x")
     plt.savefig(**kwargs, bbox_inches="tight")
 
