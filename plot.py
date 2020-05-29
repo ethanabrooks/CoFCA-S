@@ -72,10 +72,8 @@ def main(
                         break
 
     print("Plotting...")
-    data = pd.DataFrame(get_tags(), columns=["jump", "reward", "run"]).sort_values(
-        "jump"
-    )
-    sns.lineplot(x="jump", y="reward", hue="run", data=data)
+    data = pd.DataFrame(get_tags(), columns=["block size", "reward", "run"])
+    sns.lineplot(x="block size", y="reward", hue="run", data=data)
     plt.legend(data["run"].unique(), bbox_to_anchor=(1.05, 0), loc="lower left")
     plt.tight_layout()
     # plt.axes().ticklabel_format(style="sci", scilimits=(0, 0), axis="x")
