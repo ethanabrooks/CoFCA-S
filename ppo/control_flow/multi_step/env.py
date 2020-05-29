@@ -331,7 +331,7 @@ class Env(ppo.control_flow.env.Env):
                         random=self.random,
                         legal_lines=legal_lines,
                     )
-                ) + [Subtask for _ in range(self.i)]
+                ) + [Subtask for _ in range(min(self.i, self.max_eval_lines - 10))]
                 lines = list(self.assign_line_ids(line_types))
                 assert self.max_nesting_depth == 1
                 result = self.populate_world(lines)
