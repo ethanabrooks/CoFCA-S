@@ -37,7 +37,6 @@ def build_parser():
         help="sets flags for determinism when using CUDA (potentially slow!)",
     )
     parser.add_argument("--render", action="store_true")
-    parser.add_argument("--render-eval", action="store_true")
     parser.add_argument(
         "--num-processes",
         type=int,
@@ -58,9 +57,6 @@ def build_parser():
         type=int,
         default=100,
         help="save interval, one save per n updates",
-    )
-    parser.add_argument(
-        "--eval-interval", type=int, help="eval interval, one eval per n updates"
     )
     parser.add_argument("--load-path", type=Path)
     parser.add_argument("--log-dir", type=Path, help="directory to save agent logs")

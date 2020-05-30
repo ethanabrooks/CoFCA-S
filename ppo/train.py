@@ -30,6 +30,28 @@ from ppo.wrappers import AddTimestep, TransposeImage, VecPyTorch, VecPyTorchFram
 
 # noinspection PyAttributeOutsideInit
 class Train(abc.ABC):
+    def __init__(
+        self,
+        run_id,
+        log_dir: Path,
+        save_interval: int,
+        num_processes: int,
+        num_steps: int,
+        **kwargs,
+    ):
+        self.num_steps = num_steps
+        self.num_processes = num_processes
+        self.run_id = run_id
+        self.save_interval = save_interval
+        self.log_dir = log_dir
+        if log_dir:
+            self.writer = SummaryWriter(logdir=str(log_dir))
+        else:
+            self.writer = None
+        self.setup(**kwargs, num_processes=num_processes, num_steps=num_steps)
+        self.last_save = time.time()  # dummy save
+        self.device = "cpu"
+
     def setup(
         self,
         num_steps,
@@ -41,13 +63,11 @@ class Train(abc.ABC):
         gamma,
         normalize,
         log_interval,
-        eval_interval,
         use_gae,
         tau,
         ppo_args,
         agent_args,
         render,
-        render_eval,
         load_path,
         synchronous,
         num_batch,
@@ -76,9 +96,10 @@ class Train(abc.ABC):
             torch.backends.cudnn.deterministic = True
         torch.set_num_threads(1)
 
-        self.device = "cpu"
         if cuda:
             self.device = self.get_device()
+        else:
+            self.device = "cpu"
         # print("Using device", self.device)
 
         self.envs = self.make_vec_envs(
@@ -119,7 +140,7 @@ class Train(abc.ABC):
         if load_path:
             self._restore(load_path)
 
-        self.make_train_iterator = lambda: self.train_generator(
+        self.train_iterator = self.train_generator(
             num_steps=num_steps,
             num_processes=num_processes,
             time_limit=time_limit,
@@ -127,14 +148,6 @@ class Train(abc.ABC):
             use_tqdm=use_tqdm,
             success_reward=success_reward,
         )
-        self.train_iterator = self.make_train_iterator()
-
-    def _train(self):
-        try:
-            return next(self.train_iterator)
-        except StopIteration:
-            self.train_iterator = self.make_train_iterator()
-            return self._train()
 
     def train_generator(
         self,
@@ -186,6 +199,22 @@ class Train(abc.ABC):
                 yield dict(
                     k_scalar_pairs(tick=tick, fps=fps, **epoch_counter, **train_results)
                 )
+
+    def run(self):
+        for _ in itertools.count():
+            for result in self.train_iterator:
+                if self.writer is not None:
+                    total_num_steps = (self.i + 1) * self.num_processes * self.num_steps
+                    for k, v in k_scalar_pairs(**result):
+                        self.writer.add_scalar(k, v, total_num_steps)
+
+                if (
+                    self.log_dir
+                    and self.save_interval
+                    and (time.time() - self.last_save >= self.save_interval)
+                ):
+                    self._save(str(self.log_dir))
+                    self.last_save = time.time()
 
     def run_epoch(
         self, obs, rnn_hxs, masks, num_steps, counter, success_reward, use_tqdm
@@ -323,6 +352,15 @@ class Train(abc.ABC):
 
         return envs
 
+    def get_device(self):
+        match = re.search("\d+$", self.run_id) if self.run_id else None
+        if match:
+            device_num = int(match.group()) % get_n_gpu()
+        else:
+            device_num = get_random_gpu()
+
+        return torch.device("cuda", device_num)
+
     def _save(self, checkpoint_dir):
         modules = dict(
             optimizer=self.ppo.optimizer, agent=self.agent
@@ -344,7 +382,3 @@ class Train(abc.ABC):
         # if isinstance(self.envs.venv, VecNormalize):
         #     self.envs.venv.load_state_dict(state_dict["vec_normalize"])
         print(f"Loaded parameters from {load_path}.")
-
-    @abc.abstractmethod
-    def get_device(self):
-        raise NotImplementedError
