@@ -91,15 +91,16 @@ class WaterMaze(gym.Env):
             on_platform = (
                 np.linalg.norm(position - platform_center) < self.platform_size
             )
+            time_out = t == self.time_limit
             if exploring:
-                reward = 0
-                term = False
+                reward = time_out * -self.time_limit
+                term = time_out
                 if on_platform:
                     exploring = False
                     position = self.random.random(2)
             else:
                 reward = on_platform - 1
-                term = on_platform or t == self.time_limit
+                term = on_platform or time_out
             if term:
                 info.update(time=t, success=on_platform)
             obs = tuple(
