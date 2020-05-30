@@ -7,7 +7,7 @@ from pathlib import Path
 from rl_utils import hierarchical_parse_args
 import torch.nn as nn
 
-Parsers = namedtuple("Parser", "main agent ppo env")
+Parsers = namedtuple("Parser", "main agent ppo env rollouts")
 
 ACTIVATIONS = dict(
     selu=nn.SELU(), prelu=nn.PReLU(), leaky=nn.LeakyReLU(), relu=nn.ReLU()
@@ -16,20 +16,10 @@ ACTIVATIONS = dict(
 
 def build_parser():
     parser = argparse.ArgumentParser(
-        description="RL", formatter_class=argparse.ArgumentDefaultsHelpFormatter
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
     parser.add_argument("--run-id", help=" ")
-    parser.add_argument(
-        "--gamma", type=float, default=0.99, help="discount factor for rewards"
-    )
-    parser.add_argument("--normalize", action="store_true")
-    parser.add_argument(
-        "--use-gae",
-        action="store_true",
-        default=False,
-        help="use generalized advantage estimation",
-    )
-    parser.add_argument("--tau", type=float, default=0.95, help="gae parameter")
+    # parser.add_argument("--normalize", action="store_true")
     parser.add_argument("--seed", type=int, default=0, help="random seed")
     parser.add_argument(
         "--cuda-deterministic",
@@ -63,11 +53,20 @@ def build_parser():
     parser.add_argument(
         "--no-cuda", dest="cuda", action="store_false", help="enables CUDA training"
     )
-    parser.add_argument("--synchronous", action="store_true")
-    parser.add_argument(
-        "--num-batch", type=int, help="number of batches for ppo", required=True
+    parser.add_argument("--no-tqdm", dest="use_tqdm", action="store_false")
+    rollouts_parser = parser.add_argument_group("rollouts_args")
+    rollouts_parser.add_argument(
+        "--use-gae",
+        action="store_true",
+        default=False,
+        help="use generalized advantage estimation",
     )
-    parser.add_argument("--success-reward", type=float)
+    rollouts_parser.add_argument(
+        "--tau", type=float, default=0.95, help="gae parameter"
+    )
+    rollouts_parser.add_argument(
+        "--gamma", type=float, default=0.99, help="discount factor for rewards"
+    )
 
     agent_parser = parser.add_argument_group("agent_args")
     agent_parser.add_argument("--recurrent", action="store_true")
@@ -81,6 +80,9 @@ def build_parser():
     )
 
     ppo_parser = parser.add_argument_group("ppo_args")
+    ppo_parser.add_argument(
+        "--num-batch", type=int, help="number of batches for ppo", required=True
+    )
     ppo_parser.add_argument(
         "--clip-param", type=float, default=0.2, help="ppo clip parameter"
     )
@@ -110,5 +112,12 @@ def build_parser():
         default=False,
         help="add timestep to observations",
     )
+    env_parser.add_argument("--synchronous", action="store_true")
 
-    return Parsers(main=parser, env=env_parser, ppo=ppo_parser, agent=agent_parser)
+    return Parsers(
+        main=parser,
+        env=env_parser,
+        ppo=ppo_parser,
+        agent=agent_parser,
+        rollouts=rollouts_parser,
+    )
