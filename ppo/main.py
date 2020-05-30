@@ -60,7 +60,7 @@ def main(log_dir, seed, **kwargs):
                         self.last_save = time.time()
 
         def get_device(self):
-            match = re.search("\d+$", self.run_id)
+            match = re.search("\d+$", self.run_id) if self.run_id else None
             if match:
                 device_num = int(match.group()) % get_n_gpu()
             else:
