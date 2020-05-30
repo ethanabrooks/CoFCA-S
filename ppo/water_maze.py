@@ -28,11 +28,10 @@ class WaterMaze(gym.Env):
         self.iterator = None
         self._render = None
         self.observation_space = gym.spaces.Box(
-            low=np.array([0, 0, 0, 0, -1]), high=np.array([1, 1, 1, 1, 0])
+            low=np.array([0, 0, 0, 0, 0, -1]), high=np.array([1, 1, 1, 1, 1, 0])
         )
-        self.action_space = gym.spaces.Box(
-            -movement_size * np.ones(3), movement_size * np.ones(3)
-        )
+        a = np.array([movement_size, movement_size, 1])
+        self.action_space = gym.spaces.Box(-a, a)
 
     @staticmethod
     def draw_points(*points, array, value, **kwargs):
@@ -53,6 +52,7 @@ class WaterMaze(gym.Env):
         position = self.random.random(2)
         positions = [position]
         info = {}
+        exploring = True
         for t in itertools.count():
 
             def render():
@@ -68,10 +68,7 @@ class WaterMaze(gym.Env):
                     radius=scale(self.platform_size),
                 )
                 self.draw_points(
-                    *[scale(p) for p in positions],
-                    value=1,
-                    array=array,
-                    radius=scale(0.05),
+                    *map(scale, positions), value=1, array=array, radius=scale(0.05),
                 )
                 self.draw_points(
                     scale(position), value=2, array=array, radius=scale(0.1),
@@ -94,8 +91,15 @@ class WaterMaze(gym.Env):
             on_platform = (
                 np.linalg.norm(position - platform_center) < self.platform_size
             )
-            reward = on_platform - 1
-            term = on_platform or t == self.time_limit
+            if exploring:
+                reward = 0
+                term = False
+                if on_platform:
+                    exploring = False
+                    position = self.random.random(2)
+            else:
+                reward = on_platform - 1
+                term = on_platform or t == self.time_limit
             if term:
                 info.update(time=t, success=on_platform)
             obs = tuple(
@@ -103,6 +107,7 @@ class WaterMaze(gym.Env):
                     *position,
                     *(platform_center if self.show_platform else [0, 0]),
                     reward,
+                    exploring,
                 )
             )
             *movement, done_exploring = (
