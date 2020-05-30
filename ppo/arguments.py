@@ -15,6 +15,7 @@ ACTIVATIONS = dict(
 
 
 def build_parser():
+    # noinspection PyTypeChecker
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )

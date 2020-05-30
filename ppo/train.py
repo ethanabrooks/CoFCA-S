@@ -137,6 +137,7 @@ class Train(abc.ABC):
                     for k, v in counter.items():
                         if v:
                             yield k, np.mean(v)
+                    yield from train_results.items()
                     new_steps = global_step - compute_global_step(prev_epoch)
                     fps = new_steps / (time.time() - tick)
                     yield "fps", fps
