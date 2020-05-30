@@ -143,7 +143,7 @@ class WaterMaze(gym.Env):
     def add_arguments(parser):
         parser.add_argument("--platform-size", default=0.1)
         parser.add_argument("--render-size", default=50)
-        parser.add_argument("--movement-size", default=0.1)
+        parser.add_argument("--movement-size", default=0.1, type=float)
         parser.add_argument("--show-platform", action="store_true")
 
 
