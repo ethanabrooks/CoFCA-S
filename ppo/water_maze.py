@@ -1,3 +1,4 @@
+import itertools
 import sys
 import time
 
@@ -10,15 +11,18 @@ from gym.utils import seeding
 
 class WaterMaze(gym.Env):
     def __init__(
-        self, time_limit, platform_size, world_size, render_size=100, seed=0,
+        self, time_limit, platform_size, render_size=100, seed=0,
     ):
         self.render_size = render_size
         self.platform_size = platform_size
         self.time_limit = time_limit
         self.random, self.seed = seeding.np_random(seed)
-        self.world_size = world_size
         self.iterator = None
         self._render = None
+        self.observation_space = gym.spaces.Box(
+            low=np.array([0, 0, -1]), high=np.array([1, 1, 0])
+        )
+        self.action_space = gym.spaces.Box(-np.ones(3), np.ones(3))
 
     @staticmethod
     def draw_points(*points, array, value, **kwargs):
@@ -34,16 +38,11 @@ class WaterMaze(gym.Env):
             array[rr, cc] = value
         return array
 
-    def world_array(self, position):
-        scaled_position = position * self.world_size
-        array = np.zeros((self.world_size, self.world_size))
-        return self.draw_points(scaled_position, value=1, array=array, radius=1)
-
     def generator(self):
         platform_center = self.random.random(2)
         position = self.random.random(2)
         info = {}
-        for t in range(self.time_limit):
+        for t in itertools.count():
 
             def render():
                 array = np.zeros((self.render_size, self.render_size))
@@ -62,8 +61,8 @@ class WaterMaze(gym.Env):
                 )
                 i = 15
                 for row in array:
-                    for x in row:
-                        j = int(round((x + 1) / 2 * i))
+                    for cell in row:
+                        j = int(round((cell + 1) / 2 * i))
                         code = str(i * 16 + j)
                         sys.stdout.write(u"\u001b[48;5;" + code + "m  ")
                     print(u"\u001b[0m")
@@ -78,8 +77,8 @@ class WaterMaze(gym.Env):
             term = on_platform
             if term:
                 info.update(time=t)
-            movement = (
-                yield (self.world_array(position), reward),
+            *movement, done_exploring = yield (
+                tuple((*position, reward)),
                 reward,
                 term,
                 info,
@@ -92,12 +91,16 @@ class WaterMaze(gym.Env):
 
     def reset(self):
         self.iterator = self.generator()
-        return next(self.iterator)
+        s, _, _, _ = next(self.iterator)
+        return s
 
     def render(self, mode="human", pause=True):
         self._render()
         if pause:
             input()
+
+    def train(self):
+        pass
 
     def interact(self):
         actions = dict(w=(-0.1, 0), s=(0.1, 0), a=(0, -0.1), d=(0, 0.1))
@@ -107,10 +110,6 @@ class WaterMaze(gym.Env):
             action = None
             while action not in actions:
                 action = input("act:")
-                if action == "p":
-                    import ipdb
-
-                    ipdb.set_trace()
 
             s, r, t, i = self.step(actions[action])
             print("reward", r)
@@ -123,9 +122,7 @@ class WaterMaze(gym.Env):
 
     @staticmethod
     def add_arguments(parser):
-        parser.add_argument("--time-limit", default=100)
         parser.add_argument("--platform-size", default=0.1)
-        parser.add_argument("--world-size", default=100)
         parser.add_argument("--render-size", default=50)
 
 
@@ -134,4 +131,5 @@ if __name__ == "__main__":
 
     PARSER = argparse.ArgumentParser()
     WaterMaze.add_arguments(PARSER)
+    PARSER.add_argument("--time-limit", default=100)
     WaterMaze(**vars(PARSER.parse_args())).interact()

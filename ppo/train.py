@@ -1,25 +1,30 @@
 import abc
 import functools
 import itertools
+import os
+import re
 import sys
 import time
-from collections import Counter
+from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Dict
 
+import dataset
 import gym
 import numpy as np
 import torch
 from gym.wrappers import TimeLimit
+from tensorboardX import SummaryWriter
 from tqdm import tqdm
 
 from common.atari_wrappers import wrap_deepmind
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from ppo.agent import Agent, AgentValues
+from ppo.control_flow.hdfstore import HDF5Store
 from ppo.storage import RolloutStorage
 from ppo.update import PPO
-from ppo.utils import k_scalar_pairs
+from ppo.utils import k_scalar_pairs, get_n_gpu, get_random_gpu
 from ppo.wrappers import AddTimestep, TransposeImage, VecPyTorch, VecPyTorchFrameStack
 
 
@@ -50,9 +55,13 @@ class Train(abc.ABC):
         success_reward,
         use_tqdm,
     ):
-        if render_eval and not render:
-            eval_interval = 1
-        if render or render_eval:
+        # Properly restrict pytorch to not consume extra resources.
+        #  - https://github.com/pytorch/pytorch/issues/975
+        #  - https://github.com/ray-project/ray/issues/3609
+        torch.set_num_threads(1)
+        os.environ["OMP_NUM_THREADS"] = "1"
+
+        if render:
             ppo_args.update(ppo_epoch=0)
             num_processes = 1
             cuda = False
@@ -115,7 +124,6 @@ class Train(abc.ABC):
             num_processes=num_processes,
             time_limit=time_limit,
             log_interval=log_interval,
-            eval_interval=eval_interval,
             use_tqdm=use_tqdm,
             success_reward=success_reward,
         )
@@ -134,50 +142,16 @@ class Train(abc.ABC):
         num_processes,
         time_limit,
         log_interval,
-        eval_interval,
         success_reward,
         use_tqdm,
     ):
-        if eval_interval:
-            # vec_norm = get_vec_normalize(eval_envs)
-            # if vec_norm is not None:
-            #     vec_norm.eval()
-            #     vec_norm.ob_rms = get_vec_normalize(envs).ob_rms
-            self.envs.evaluate()
-            eval_recurrent_hidden_states = torch.zeros(
-                num_processes,
-                self.agent.recurrent_hidden_state_size,
-                device=self.device,
-            )
-            eval_masks = torch.zeros(num_processes, 1, device=self.device)
-            eval_counter = Counter()
-            eval_result = self.run_epoch(
-                obs=self.envs.reset(),
-                rnn_hxs=eval_recurrent_hidden_states,
-                masks=eval_masks,
-                num_steps=time_limit,
-                # max(num_steps, time_limit) if time_limit else num_steps,
-                counter=eval_counter,
-                success_reward=success_reward,
-                use_tqdm=use_tqdm,
-            )
-            eval_result = {f"eval_{k}": v for k, v in eval_result.items()}
-        else:
-            eval_result = {}
         self.envs.train()
         obs = self.envs.reset()
         self.rollouts.obs[0].copy_(obs)
         tick = time.time()
         log_progress = None
 
-        if eval_interval:
-            eval_iterator = range(self.i % eval_interval, eval_interval)
-            if use_tqdm:
-                eval_iterator = tqdm(eval_iterator, desc="next eval")
-        else:
-            eval_iterator = itertools.count(self.i)
-
-        for _ in eval_iterator:
+        for _ in itertools.count(self.i):
             if self.i % log_interval == 0 and use_tqdm:
                 log_progress = tqdm(total=log_interval, desc="next log")
             self.i += 1
@@ -211,11 +185,7 @@ class Train(abc.ABC):
                 tick = time.time()
                 yield dict(
                     k_scalar_pairs(
-                        tick=tick,
-                        fps=fps,
-                        **epoch_counter,
-                        **train_results,
-                        **eval_result,
+                        tick=tick, fps=fps, **epoch_counter, **train_results,
                     )
                 )
 
@@ -227,7 +197,7 @@ class Train(abc.ABC):
         iterator = range(num_steps)
         if use_tqdm:
             iterator = tqdm(iterator, desc="evaluating")
-        for step in iterator:
+        for _ in iterator:
             with torch.no_grad():
                 act = self.agent(
                     inputs=obs, rnn_hxs=rnn_hxs, masks=masks
@@ -248,10 +218,6 @@ class Train(abc.ABC):
             if success_reward is not None:
                 # noinspection PyTypeChecker
                 episode_counter["success"] += list(episode_rewards >= success_reward)
-                # if np.any(episode_rewards < self.success_reward):
-                #     import ipdb
-                #
-                #     ipdb.set_trace()
 
             episode_counter["time_steps"] += list(counter["time_step"][done])
             counter["reward"][done] = 0
@@ -366,7 +332,9 @@ class Train(abc.ABC):
         # if isinstance(self.envs.venv, VecNormalize):
         #     modules.update(vec_normalize=self.envs.venv)
         state_dict = {name: module.state_dict() for name, module in modules.items()}
-        save_path = Path(checkpoint_dir, "checkpoint.pt")
+        save_path = Path(
+            checkpoint_dir, f"{self.i if self.save_separate else 'checkpoint'}.pt"
+        )
         torch.save(dict(step=self.i, **state_dict), save_path)
         print(f"Saved parameters to {save_path}")
         return str(save_path)
