@@ -126,31 +126,33 @@ class Train(abc.ABC):
             if log_progress is not None:
                 log_progress.update()
 
-            if epoch % log_interval == 0:
+            def at_interval(interval):
+                return epoch % interval == interval - 1
+
+            if at_interval(log_interval):
 
                 def compute_global_step(e):
                     return (e + 1) * num_processes * num_steps
 
                 global_step = compute_global_step(epoch)
+                new_steps = global_step - compute_global_step(prev_epoch)
+                fps = new_steps / (time.time() - tick)
+                prev_epoch = epoch
+                tick = time.time()
 
                 def tag_value_pairs():
                     for k, v in counter.items():
                         if v:
                             yield k, np.mean(v)
                     yield from train_results.items()
-                    new_steps = global_step - compute_global_step(prev_epoch)
-                    fps = new_steps / (time.time() - tick)
                     yield "fps", fps
-
-                prev_epoch = epoch
-                tick = time.time()
 
                 if writer is not None:
                     for k, v in tag_value_pairs():
                         writer.add_scalar(k, v, global_step)
 
-                if log_dir and epoch % save_interval == 0:
-                    self.save(checkpoint_dir=log_dir, epoch=epoch)
+            if log_dir and at_interval(save_interval):
+                self.save(checkpoint_dir=log_dir, epoch=epoch)
 
     def run_epoch(self, num_steps, use_tqdm):
         obs = self.rollouts.obs[0]
