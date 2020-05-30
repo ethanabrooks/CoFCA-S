@@ -112,8 +112,18 @@ class Train(abc.ABC):
         else:
             start = 0
 
-        prev_epoch = 0
-        tick = time.time()
+        def delta_iterator(old):
+            new = yield
+            while True:
+                delta = new - old
+                old = new
+                new = yield delta
+
+        tick_delta = delta_iterator(time.time())
+        step_delta = delta_iterator(0)
+        next(tick_delta)
+        next(step_delta)
+
         for epoch in itertools.count(start):
             if epoch % log_interval == 0 and use_tqdm:
                 log_progress = tqdm(total=log_interval, desc="next log")
@@ -130,22 +140,16 @@ class Train(abc.ABC):
                 return epoch % interval == interval - 1
 
             if at_interval(log_interval):
-
-                def compute_global_step(e):
-                    return (e + 1) * num_processes * num_steps
-
-                global_step = compute_global_step(epoch)
-                new_steps = global_step - compute_global_step(prev_epoch)
-                fps = new_steps / (time.time() - tick)
-                prev_epoch = epoch
-                tick = time.time()
+                global_step = epoch * num_processes * num_steps
+                new_steps = step_delta.send(global_step)
+                time_elapsed = tick_delta.send(time.time())
 
                 def tag_value_pairs():
                     for k, v in counter.items():
                         if v:
                             yield k, np.mean(v)
                     yield from train_results.items()
-                    yield "fps", fps
+                    yield "fps", new_steps / time_elapsed
 
                 if writer is not None:
                     for k, v in tag_value_pairs():
