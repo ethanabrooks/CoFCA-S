@@ -144,15 +144,17 @@ class Train(abc.ABC):
                 new_steps = step_delta.send(global_step)
                 time_elapsed = tick_delta.send(time.time())
 
-                def tag_value_pairs():
-                    for k, v in counter.items():
+                def tag_value_pairs(time_steps, **_counter):
+                    # noinspection PyShadowingNames
+                    for k, v in _counter.items():
                         if v:
                             yield k, np.mean(v)
                     yield from train_results.items()
+                    yield "time_steps", np.sum(time_steps)
                     yield "fps", new_steps / time_elapsed
 
                 if writer is not None:
-                    for k, v in tag_value_pairs():
+                    for k, v in tag_value_pairs(**counter):
                         writer.add_scalar(k, v, global_step)
 
             if log_dir and at_interval(save_interval):
@@ -182,7 +184,7 @@ class Train(abc.ABC):
                     yield k, [v]
 
             counter["reward"] += reward.numpy()
-            counter["time_step"] += done.astype(int)
+            counter["time_steps"] += done.astype(int)
             for k, v in counter.items():
                 yield k, list(v[done])
                 v[done] = 0
