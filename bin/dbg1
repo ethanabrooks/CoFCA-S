@@ -1,6 +1,4 @@
 #!/usr/bin/env zsh
-cd "$HOME/ppo/bin/"
-cmd=$(./wtf.zsh "$@" | ./remove-log.zsh | ./single-process.zsh)
-cd -
+cmd="$(${0:a:h}/wtf.zsh "$@" | ${0:a:h}/remove-log.zsh | ${0:a:h}/single-process.zsh)"
 echo "\n$cmd"
 eval "$cmd"
