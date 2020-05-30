@@ -11,10 +11,17 @@ from gym.utils import seeding
 
 class WaterMaze(gym.Env):
     def __init__(
-        self, time_limit, platform_size, show_platform, render_size=100, seed=0,
+        self,
+        time_limit,
+        platform_size,
+        show_platform,
+        movement_size,
+        render_size=100,
+        seed=0,
     ):
         self.show_platform = show_platform
         self.render_size = render_size
+        self.movement_size = movement_size
         self.platform_size = platform_size
         self.time_limit = time_limit
         self.random, self.seed = seeding.np_random(seed)
@@ -23,7 +30,9 @@ class WaterMaze(gym.Env):
         self.observation_space = gym.spaces.Box(
             low=np.array([0, 0, 0, 0, -1]), high=np.array([1, 1, 1, 1, 0])
         )
-        self.action_space = gym.spaces.Box(-np.ones(3), np.ones(3))
+        self.action_space = gym.spaces.Box(
+            -movement_size * np.ones(3), movement_size * np.ones(3)
+        )
 
     @staticmethod
     def draw_points(*points, array, value, **kwargs):
@@ -91,7 +100,9 @@ class WaterMaze(gym.Env):
                 term,
                 info,
             )
-            position += np.array(movement)
+            movement = np.array(movement)
+            movement *= self.movement_size / np.linalg.norm(movement)
+            position += movement
             position = np.clip(position, 0, 1)
 
     def step(self, action):
@@ -132,6 +143,7 @@ class WaterMaze(gym.Env):
     def add_arguments(parser):
         parser.add_argument("--platform-size", default=0.1)
         parser.add_argument("--render-size", default=50)
+        parser.add_argument("--movement-size", default=0.1)
         parser.add_argument("--show-platform", action="store_true")
 
 
