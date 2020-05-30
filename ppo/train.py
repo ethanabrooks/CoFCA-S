@@ -184,9 +184,7 @@ class Train(abc.ABC):
                 fps = total_num_steps / (time.time() - tick)
                 tick = time.time()
                 yield dict(
-                    k_scalar_pairs(
-                        tick=tick, fps=fps, **epoch_counter, **train_results,
-                    )
+                    k_scalar_pairs(tick=tick, fps=fps, **epoch_counter, **train_results)
                 )
 
     def run_epoch(
@@ -332,9 +330,7 @@ class Train(abc.ABC):
         # if isinstance(self.envs.venv, VecNormalize):
         #     modules.update(vec_normalize=self.envs.venv)
         state_dict = {name: module.state_dict() for name, module in modules.items()}
-        save_path = Path(
-            checkpoint_dir, f"{self.i if self.save_separate else 'checkpoint'}.pt"
-        )
+        save_path = Path(checkpoint_dir, f"checkpoint.pt")
         torch.save(dict(step=self.i, **state_dict), save_path)
         print(f"Saved parameters to {save_path}")
         return str(save_path)
