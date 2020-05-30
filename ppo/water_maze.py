@@ -51,6 +51,7 @@ class WaterMaze(gym.Env):
     def generator(self):
         platform_center = self.random.random(2)
         position = self.random.random(2)
+        positions = [position]
         info = {}
         for t in itertools.count():
 
@@ -61,21 +62,31 @@ class WaterMaze(gym.Env):
                     return x * self.render_size
 
                 self.draw_points(
-                    scale(position), value=1, array=array, radius=scale(0.1),
-                )
-                self.draw_points(
                     scale(platform_center),
                     value=-1,
                     array=array,
                     radius=scale(self.platform_size),
                 )
+                self.draw_points(
+                    *[scale(p) for p in positions],
+                    value=1,
+                    array=array,
+                    radius=scale(0.05),
+                )
+                self.draw_points(
+                    scale(position), value=2, array=array, radius=scale(0.1),
+                )
                 i = 15
                 for row in array:
                     for cell in row:
-                        j = int(round((cell + 1) / 2 * i))
+                        j = int(
+                            round(
+                                (cell + array.min()) / (array.max() - array.min()) * i
+                            )
+                        )
                         code = str(i * 16 + j)
-                        sys.stdout.write(u"\u001b[48;5;" + code + "m  ")
-                    print(u"\u001b[0m")
+                        sys.stdout.write("\u001b[48;5;" + code + "m  ")
+                    print("\u001b[0m")
                 print("position:", position)
 
             self._render = render
@@ -104,6 +115,7 @@ class WaterMaze(gym.Env):
             movement *= self.movement_size / np.linalg.norm(movement)
             position += movement
             position = np.clip(position, 0, 1)
+            positions.append(position)
 
     def step(self, action):
         return self.iterator.send(action)
@@ -141,8 +153,8 @@ class WaterMaze(gym.Env):
 
     @staticmethod
     def add_arguments(parser):
-        parser.add_argument("--platform-size", default=0.1)
-        parser.add_argument("--render-size", default=50)
+        parser.add_argument("--platform-size", default=0.1, type=float)
+        parser.add_argument("--render-size", default=100)
         parser.add_argument("--movement-size", default=0.1, type=float)
         parser.add_argument("--show-platform", action="store_true")
 
