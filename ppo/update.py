@@ -29,7 +29,7 @@ class PPO:
 
         self.clip_param = clip_param
         self.ppo_epoch = ppo_epoch
-        self.num_mini_batch = num_batch
+        self.num_batch = num_batch
 
         self.value_loss_coef = value_loss_coef
 
@@ -49,11 +49,11 @@ class PPO:
         for e in range(self.ppo_epoch):
             if self.agent.is_recurrent:
                 data_generator = rollouts.recurrent_generator(
-                    advantages, self.num_mini_batch
+                    advantages, self.num_batch
                 )
             else:
                 data_generator = rollouts.feed_forward_generator(
-                    advantages, self.num_mini_batch
+                    advantages, self.num_batch
                 )
 
             sample: Batch

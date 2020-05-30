@@ -173,12 +173,11 @@ class Train(abc.ABC):
                 for k, v in d.items():
                     yield k, [v]
 
-            counter["cumulative_reward"] += reward.numpy()
+            counter["reward"] += reward.numpy()
             counter["time_step"] += done.astype(int)
             for k, v in counter.items():
                 yield k, list(v[done])
                 v[done] = 0
-            yield "reward", list(reward.numpy())
 
             # If done then clean the history of observations.
             masks = torch.tensor(
