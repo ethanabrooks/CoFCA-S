@@ -135,7 +135,8 @@ class Train(abc.ABC):
 
                 def tag_value_pairs():
                     for k, v in counter.items():
-                        yield k, np.mean(v)
+                        if v:
+                            yield k, np.mean(v)
                     new_steps = global_step - compute_global_step(prev_epoch)
                     fps = new_steps / (time.time() - tick)
                     yield "fps", fps
