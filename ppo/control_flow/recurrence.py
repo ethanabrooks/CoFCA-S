@@ -25,13 +25,9 @@ class Recurrence(nn.Module):
         observation_space,
         action_space,
         eval_lines,
-        activation,
         hidden_size,
-        gate_hidden_size,
         task_embed_size,
-        num_layers,
         num_edges,
-        num_encoding_layers,
         debug,
         no_scan,
         no_roll,
@@ -85,22 +81,6 @@ class Recurrence(nn.Module):
         # layers.extend([init_(nn.Linear(in_size, hidden_size)), activation])
         # in_size = hidden_size
         # self.zeta2 = nn.Sequential(*layers)
-        if self.olsk:
-            assert self.ne == 3
-            self.upsilon = nn.GRUCell(gate_hidden_size, hidden_size)
-            self.beta = init_(nn.Linear(hidden_size, self.ne))
-        elif self.no_pointer:
-            self.upsilon = nn.GRUCell(gate_hidden_size, hidden_size)
-            self.beta = init_(nn.Linear(hidden_size, self.d_space()))
-        else:
-            self.upsilon = init_(nn.Linear(gate_hidden_size, self.ne))
-            layers = []
-            in_size = (2 if self.no_roll or self.no_scan else 1) * task_embed_size
-            for _ in range(num_encoding_layers - 1):
-                layers.extend([init_(nn.Linear(in_size, task_embed_size)), activation])
-                in_size = task_embed_size
-            out_size = self.ne * self.d_space() if self.no_scan else self.ne
-            self.beta = nn.Sequential(*layers, init_(nn.Linear(in_size, out_size)))
         self.critic = init_(nn.Linear(hidden_size, 1))
         self.actor = Categorical(hidden_size, n_a)
         self.state_sizes = RecurrentState(
