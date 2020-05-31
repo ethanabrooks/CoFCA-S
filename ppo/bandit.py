@@ -41,8 +41,8 @@ class Bandit(gym.Env):
 
             self._render = render
 
-            obs = (reward, action, exploring)
             reward = self.random.normal(statistics[action], self.std)
+            obs = (reward, action, exploring)
             term = t == self.time_limit
 
             # infos
