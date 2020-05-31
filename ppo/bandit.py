@@ -28,16 +28,17 @@ class Bandit(gym.Env):
         reward = -1
         action = -1
         for t in itertools.count():
+            exploring = t < self.explore_limit
 
             def render():
                 for i, stat in enumerate(statistics):
                     print(i, stat)
                 print("action:", action)
                 print("reward", reward)
+                print("exploring", exploring)
 
             self._render = render
 
-            exploring = t < self.explore_limit
             obs = (reward, action, exploring)
             reward = self.random.normal(statistics[action], self.std)
             term = t == self.time_limit
