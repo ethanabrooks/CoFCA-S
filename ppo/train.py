@@ -458,7 +458,7 @@ class Train(TrainBase):
         self.log_dir = log_dir
         if log_dir:
             self.writer = SummaryWriter(logdir=str(log_dir))
-            self.table = HDF5Store(datapath=str(Path(log_dir, "table")))
+            self.table = HDF5Store(datapath=str(Path(log_dir, "data.hdf5")))
         else:
             self.writer = None
             self.table = None
