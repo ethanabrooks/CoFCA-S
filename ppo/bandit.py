@@ -28,7 +28,6 @@ class Bandit(gym.Env):
         reward = -1
         action = -1
         for t in itertools.count():
-            exploring = t < self.explore_limit
 
             def render():
                 for i, stat in enumerate(statistics):
@@ -38,10 +37,13 @@ class Bandit(gym.Env):
 
             self._render = render
 
+            exploring = t < self.explore_limit
             obs = (reward, action, exploring)
             reward = self.random.normal(statistics[action], self.std)
-            term = t < self.time_limit
-            info = dict(regret=best - reward)
+            term = t == self.time_limit
+            info = {}
+            if not exploring:
+                info.update(regret=best - reward)
             action = yield obs, 0 if exploring else reward, term, info
 
     def step(self, action):
