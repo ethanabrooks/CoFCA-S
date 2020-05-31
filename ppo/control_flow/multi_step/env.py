@@ -105,6 +105,7 @@ class Env(ppo.control_flow.env.Env):
         world_size=6,
         **kwargs,
     ):
+        self.counts = None
         self.reject_while_prob = reject_while_prob
         self.one_condition = one_condition
         self.max_failure_sample_prob = max_failure_sample_prob
@@ -188,13 +189,13 @@ class Env(ppo.control_flow.env.Env):
             return f"{line} {self.subtasks.index(line.id)}"
         elif type(line) in (If, While):
             if self.one_condition:
-                evaluation = "counts[iron] > counts[gold]"
+                evaluation = f"counts[iron] ({self.counts[self.iron]}) > counts[gold] ({self.counts[self.gold]})"
             elif line.id == Env.iron:
-                evaluation = "counts[iron] > counts[gold]"
+                evaluation = f"counts[iron] ({self.counts[self.iron]}) > counts[gold] ({self.counts[self.gold]})"
             elif line.id == Env.gold:
-                evaluation = "counts[gold] > counts[merchant]"
+                evaluation = f"counts[gold] ({self.counts[self.gold]}) > counts[merchant] ({self.counts[self.merchant]})"
             elif line.id == Env.wood:
-                evaluation = "counts[merchant] > counts[iron]"
+                evaluation = f"counts[merchant] ({self.counts[self.merchant]}) > counts[iron] ({self.counts[self.iron]})"
             return f"{line} {evaluation}"
         return line
 
@@ -415,7 +416,7 @@ class Env(ppo.control_flow.env.Env):
                             self.whiles += 1
                             if self.whiles > self.max_while_loops:
                                 return None
-                        counts = self.count_objects(objects)
+                        self.counts = counts = self.count_objects(objects)
                         l = line_iterator.send(
                             self.evaluate_line(
                                 lines[l], counts, condition_evaluations, self.loops

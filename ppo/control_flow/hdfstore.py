@@ -25,7 +25,7 @@ class HDF5Store:
     def __init__(
         self,
         datapath,
-        dataset="table",
+        dataset="dataset",
         dim=4,
         dtype=np.float32,
         compression="gzip",
