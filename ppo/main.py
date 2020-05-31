@@ -1,9 +1,7 @@
-from ppo.bandit import Bandit
-from rl_utils import hierarchical_parse_args
-
 from ppo.arguments import build_parser
+from ppo.bandit import Bandit
 from ppo.train import Train
-from ppo.water_maze import WaterMaze
+from rl_utils import hierarchical_parse_args
 
 ENV = Bandit
 
