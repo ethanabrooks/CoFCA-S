@@ -23,7 +23,8 @@ class Bandit(gym.Env):
         self.action_space = gym.spaces.Discrete(n)
 
     def generator(self):
-        statistics = self.random.choice(2, size=self.n, replace=False)
+        statistics = np.zeros(self.n)
+        statistics[int(self.random.randint(self.n))] = 1
         best = statistics.max()
         reward = -1
         action = -1
@@ -43,7 +44,7 @@ class Bandit(gym.Env):
 
             reward = self.random.normal(statistics[action], self.std)
             obs = (reward, action, exploring)
-            term = t == self.time_limit
+            term = t >= self.time_limit - 1
 
             # infos
             info = {}
