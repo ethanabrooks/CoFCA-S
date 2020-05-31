@@ -107,8 +107,9 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             self.upsilon = nn.GRUCell(hidden_size, hidden_size)
             self.beta = init_(nn.Linear(hidden_size, self.ne))
         elif self.no_pointer:
-            self.upsilon = nn.GRUCell(hidden_size, hidden_size)
+            self.upsilon = nn.GRUCell(z2_size, hidden_size)
             self.beta = init_(nn.Linear(hidden_size, self.d_space()))
+            self.critic = init_(nn.Linear(hidden_size, 1))
         else:
             self.upsilon = init_(nn.Linear(z2_size, self.ne))
             in_size = (2 if self.no_roll or self.no_scan else 1) * task_embed_size
@@ -335,14 +336,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             # A[:] = float(input("A:"))
             # except ValueError:
             # pass
-            if self.critic_type == "z":
-                v = self.critic(z)
-            elif self.critic_type == "h1":
-                v = self.critic(h1.view(N, -1))
-            elif self.critic_type == "z3":
-                v = self.critic(z3)
-            else:
-                v = self.critic(torch.cat([z2, z], dim=-1))
+            v = self.critic(h)
             yield RecurrentState(
                 a=A[t],
                 l=L[t],
