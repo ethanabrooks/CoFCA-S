@@ -27,7 +27,8 @@ class Bandit(gym.Env):
         for t in itertools.count():
 
             def render():
-                print("statistics:", statistics)
+                for i, stat in enumerate(statistics):
+                    print(i, stat)
                 print("action:", a)
                 print("reward", r)
 
