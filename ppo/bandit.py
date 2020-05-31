@@ -34,6 +34,15 @@ class Bandit(gym.Env):
         for t in itertools.count():
             exploring = t <= self.explore_limit
 
+            if action >= 0:
+                reward = (
+                    self.random.normal(statistics[action], self.std)
+                    if exploring
+                    else statistics[action]
+                )
+                cumulative_rewards[action] += reward
+                choices[action] += 1
+
             def render():
                 for i, stat in enumerate(statistics):
                     print(i, stat)
@@ -55,14 +64,6 @@ class Bandit(gym.Env):
                 )
 
             action = yield obs, 0 if exploring else reward, term, info
-            reward = (
-                self.random.normal(statistics[action], self.std)
-                if exploring
-                else statistics[action]
-            )
-
-            cumulative_rewards[action] += reward
-            choices[action] += 1
 
     def step(self, action):
         return self.iterator.send(action)
