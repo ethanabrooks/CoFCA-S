@@ -46,12 +46,6 @@ class Bandit(gym.Env):
             obs = (reward, action, exploring)
             term = t >= self.time_limit
 
-            action = yield obs, 0 if exploring else reward, term, info
-            reward = self.random.normal(statistics[action], self.std)
-
-            # infos
-            cumulative_rewards[action] += reward
-            choices[action] += 1
             if not exploring:
                 known_statistics = cumulative_rewards / t
                 info = dict(
@@ -59,6 +53,12 @@ class Bandit(gym.Env):
                     choose_best=action == statistics.argmax(),
                     choose_best_known=action == known_statistics.argmax(),
                 )
+
+            action = yield obs, 0 if exploring else reward, term, info
+            reward = self.random.normal(statistics[action], self.std)
+
+            cumulative_rewards[action] += reward
+            choices[action] += 1
 
     def step(self, action):
         return self.iterator.send(action)
