@@ -7,8 +7,9 @@ from gym.utils import seeding
 
 class Bandit(gym.Env):
     def __init__(
-        self, n: int, time_limit: int, seed=0,
+        self, n: int, time_limit: int, std: float, seed=0,
     ):
+        self.std = std
         self.n = n
         self.time_limit = time_limit
         self.random, self.seed = seeding.np_random(seed)
@@ -20,8 +21,8 @@ class Bandit(gym.Env):
         self.action_space = gym.spaces.Discrete(n)
 
     def generator(self):
-        statistics = self.random.random((self.n, 2))
-        best = statistics[:, 0].max()
+        statistics = self.random.random(self.n)
+        best = statistics.max()
         r = -1
         a = -1
         for t in itertools.count():
@@ -34,7 +35,7 @@ class Bandit(gym.Env):
 
             self._render = render
 
-            r = self.random.normal(*statistics[a])
+            r = self.random.normal(statistics[a], self.std)
             i = dict(regret=best - r)
             o = (r, a)
             a = yield o, r, t == self.time_limit, i
@@ -54,8 +55,9 @@ class Bandit(gym.Env):
 
     @staticmethod
     def add_arguments(parser):
-        parser.add_argument("--n", default=10, type=int)
-        parser.add_argument("--time-limit", default=100, type=int)
+        parser.add_argument("--n", type=int)
+        parser.add_argument("--time-limit", type=int)
+        parser.add_argument("--std", type=float)
 
 
 if __name__ == "__main__":
