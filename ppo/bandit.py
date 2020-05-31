@@ -27,6 +27,8 @@ class Bandit(gym.Env):
         best = statistics.max()
         reward = -1
         action = -1
+        cumulative_rewards = np.zeros(self.n)
+        choices = np.zeros(self.n)
         for t in itertools.count():
             exploring = t < self.explore_limit
 
@@ -42,9 +44,19 @@ class Bandit(gym.Env):
             obs = (reward, action, exploring)
             reward = self.random.normal(statistics[action], self.std)
             term = t == self.time_limit
+
+            # infos
             info = {}
+            cumulative_rewards[action] += reward
+            choices[action] += 1
             if not exploring:
-                info.update(regret=best - reward)
+                known_statistics = cumulative_rewards / t
+                info.update(
+                    regret=best - reward,
+                    choose_best=action == statistics.argmax(),
+                    choose_best_known=action == known_statistics.argmax(),
+                )
+
             action = yield obs, 0 if exploring else reward, term, info
 
     def step(self, action):
