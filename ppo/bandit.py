@@ -23,7 +23,7 @@ class Bandit(gym.Env):
         self.action_space = gym.spaces.Discrete(n)
 
     def generator(self):
-        statistics = self.random.random(self.n)
+        statistics = self.random.choice(2, size=self.n)
         best = statistics.max()
         reward = -1
         action = -1
