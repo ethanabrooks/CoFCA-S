@@ -55,7 +55,11 @@ class Bandit(gym.Env):
                 )
 
             action = yield obs, 0 if exploring else reward, term, info
-            reward = self.random.normal(statistics[action], self.std)
+            reward = (
+                self.random.normal(statistics[action], self.std)
+                if exploring
+                else statistics[action]
+            )
 
             cumulative_rewards[action] += reward
             choices[action] += 1
