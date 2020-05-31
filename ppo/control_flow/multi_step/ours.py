@@ -104,10 +104,10 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         z2_size = zeta1_input_size + lower_embed_size
         if self.olsk:
             assert self.ne == 3
-            self.upsilon = nn.GRUCell(hidden_size, hidden_size)
+            self.upsilon = nn.GRUCell(z2_size, hidden_size)
             self.beta = init_(nn.Linear(hidden_size, self.ne))
         elif self.no_pointer:
-            self.upsilon = nn.GRUCell(hidden_size, hidden_size)
+            self.upsilon = nn.GRUCell(z2_size, hidden_size)
             self.beta = init_(nn.Linear(hidden_size, self.d_space()))
         else:
             self.upsilon = init_(nn.Linear(z2_size, self.ne))
