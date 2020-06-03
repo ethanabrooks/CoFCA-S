@@ -229,11 +229,11 @@ class Recurrence(nn.Module):
             return P
         else:
             if self.no_roll:
-                # G, _ = self.task_encoder(M)
+                G, _ = self.task_encoder(M)
                 G = torch.cat(
                     [
-                        M.unsqueeze(1).expand(-1, nl, -1, -1),
-                        M.unsqueeze(2).expand(-1, -1, nl, -1),
+                        G.unsqueeze(1).expand(-1, nl, -1, -1),
+                        G.unsqueeze(2).expand(-1, -1, nl, -1),
                     ],
                     dim=-1,
                 ).transpose(0, 1)
