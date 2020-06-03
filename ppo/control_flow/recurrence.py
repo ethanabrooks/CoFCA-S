@@ -74,7 +74,10 @@ class Recurrence(nn.Module):
             )
             if transformer
             else nn.GRU(
-                task_embed_size, task_embed_size, bidirectional=True, batch_first=True
+                task_embed_size * (2 if self.no_roll else 1),
+                task_embed_size,
+                bidirectional=True,
+                batch_first=True,
             )
         )
         # self.minimal_gru.py = nn.GRUCell(self.gru_in_size, gru_hidden_size)
@@ -95,7 +98,7 @@ class Recurrence(nn.Module):
         else:
             self.upsilon = init_(nn.Linear(gate_hidden_size, self.ne))
             layers = []
-            in_size = (2 if self.no_roll or self.no_scan else 1) * task_embed_size
+            in_size = (2 if self.no_scan else 1) * task_embed_size
             for _ in range(num_encoding_layers - 1):
                 layers.extend([init_(nn.Linear(in_size, task_embed_size)), activation])
                 in_size = task_embed_size
@@ -229,14 +232,18 @@ class Recurrence(nn.Module):
             return P
         else:
             if self.no_roll:
-                G, _ = self.task_encoder(M)
-                G = torch.cat(
-                    [
-                        G.unsqueeze(1).expand(-1, nl, -1, -1),
-                        G.unsqueeze(2).expand(-1, -1, nl, -1),
-                    ],
-                    dim=-1,
-                ).transpose(0, 1)
+                G = (
+                    torch.cat(
+                        [
+                            M.unsqueeze(1).expand(-1, nl, -1, -1),
+                            M.unsqueeze(2).expand(-1, -1, nl, -1),
+                        ],
+                        dim=-1,
+                    )
+                    # .transpose(0, 1)
+                    .view(N * nl, nl, -1)
+                )
+                G, _ = self.task_encoder(G)
             else:
                 rolled = torch.cat(
                     [torch.roll(M, shifts=-i, dims=1) for i in range(nl)], dim=0
