@@ -95,7 +95,7 @@ class Recurrence(nn.Module):
         else:
             self.upsilon = init_(nn.Linear(gate_hidden_size, self.ne))
             layers = []
-            in_size = task_embed_size
+            in_size = (2 if self.no_roll or self.no_scan else 1) * task_embed_size
             for _ in range(num_encoding_layers - 1):
                 layers.extend([init_(nn.Linear(in_size, task_embed_size)), activation])
                 in_size = task_embed_size
@@ -230,7 +230,13 @@ class Recurrence(nn.Module):
         else:
             if self.no_roll:
                 G, _ = self.task_encoder(M)
-                G = G.unsqueeze(0).expand(nl, -1, -1, -1)
+                G = torch.cat(
+                    [
+                        G.unsqueeze(1).expand(-1, nl, -1, -1),
+                        G.unsqueeze(2).expand(-1, -1, nl, -1),
+                    ],
+                    dim=-1,
+                ).transpose(0, 1)
             else:
                 rolled = torch.cat(
                     [torch.roll(M, shifts=-i, dims=1) for i in range(nl)], dim=0
