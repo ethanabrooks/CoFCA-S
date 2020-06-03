@@ -95,7 +95,7 @@ class Recurrence(nn.Module):
         else:
             self.upsilon = init_(nn.Linear(gate_hidden_size, self.ne))
             layers = []
-            in_size = (2 if self.no_scan else 1) * task_embed_size
+            in_size = (2 if self.no_roll or self.no_scan else 1) * task_embed_size
             for _ in range(num_encoding_layers - 1):
                 layers.extend([init_(nn.Linear(in_size, task_embed_size)), activation])
                 in_size = task_embed_size
