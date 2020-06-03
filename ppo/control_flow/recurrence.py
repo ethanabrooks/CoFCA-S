@@ -240,8 +240,8 @@ class Recurrence(nn.Module):
                         ],
                         dim=-1,
                     )
-                    # .transpose(0, 1)
-                    .view(N * nl, nl, -1)
+                    .transpose(0, 1)
+                    .reshape(N * nl, nl, -1)
                 )
                 G, _ = self.task_encoder(G)
             else:
