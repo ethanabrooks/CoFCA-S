@@ -23,6 +23,7 @@ def cli():
     parser.add_argument("--base-dir", default=".runs/logdir", type=Path)
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--limit", type=int)
+    parser.add_argument("--font-size", type=int)
     parser.add_argument("--fname", type=str, default="plot")
     parser.add_argument("--quality", type=int)
     parser.add_argument("--dpi", type=int, default=256)
@@ -31,6 +32,7 @@ def cli():
 
 def main(
     names: List[str],
+    font_size: int,
     paths: List[Path],
     base_dir: Path,
     limit: Optional[int],
@@ -73,8 +75,14 @@ def main(
 
     print("Plotting...")
     data = pd.DataFrame(get_tags(), columns=["block size", "reward", "run"])
-    sns.lineplot(x="block size", y="reward", hue="run", data=data)
-    plt.legend(data["run"].unique(), bbox_to_anchor=(1.05, 0), loc="lower left")
+    ax = sns.lineplot(x="block size", y="reward", hue="run", data=data)
+    plt.legend(fontsize=font_size)
+    ax.set_xlabel("block size", fontsize=font_size)
+    ax.set_ylabel("success rate", fontsize=font_size)
+    ax.axes.get_xaxis().get_label().set_visible(False)
+    ax.tick_params(labelsize=font_size)
+    handles, labels = ax.get_legend_handles_labels()
+    ax.legend(handles=handles[1:], labels=labels[1:], fontsize=font_size)
     plt.tight_layout()
     # plt.axes().ticklabel_format(style="sci", scilimits=(0, 0), axis="x")
     plt.savefig(**kwargs, bbox_inches="tight")
