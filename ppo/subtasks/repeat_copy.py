@@ -32,14 +32,14 @@ class RepeatCopy(Env):
 
         def sequence():
             for s in seq:
-                yield 0, s
+                yield 0, s, s
             for _ in seq:
-                yield 1, 0
+                yield 1, 0, s
 
         def sigmoid(x):
             return 1 / (1 + np.exp(-x))
 
-        for s1, s2 in sequence():
+        for s1, s2, s3 in sequence():
             obs = np.array([s1, s2])
             obs = np.concatenate([h, obs], axis=-1) if self.use_cell else obs
             assert self.observation_space.contains(obs)
@@ -51,16 +51,19 @@ class RepeatCopy(Env):
                 c = f * c + i * g
                 h = o * 1 / (1 + np.exp(-c))
 
+            r = s1 * -np.abs(s3 - a.item())
+
             def render():
                 print(seq)
                 if self.use_cell:
                     print("i", i)
                     print("f", f)
                     print("o", o)
+                print("ob", obs)
                 print("a", a)
+                print("r", r)
 
             self._render = render
-            r = -np.abs(s2 - a.item())
         yield (0, 1), r, True, {}
 
     def step(self, action):
@@ -72,7 +75,8 @@ class RepeatCopy(Env):
         return s
 
     def render(self, mode="human", pause=True):
-        self._render()
+        if self._render is not None:
+            self._render()
         if pause:
             input()
 
