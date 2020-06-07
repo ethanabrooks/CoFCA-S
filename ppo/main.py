@@ -1,9 +1,10 @@
-from ppo.arguments import build_parser
-from ppo.bandit import Bandit
-from ppo.train import Train
 from rl_utils import hierarchical_parse_args
 
-ENV = Bandit
+from ppo.arguments import build_parser
+from ppo.subtasks.repeat_copy import RepeatCopy
+from ppo.train import Train
+
+ENV = RepeatCopy
 
 
 def main(log_dir, seed, **kwargs):
