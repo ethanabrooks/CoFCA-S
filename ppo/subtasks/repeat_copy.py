@@ -16,10 +16,21 @@ class RepeatCopy(Env):
     def generator(self):
         sequence = self.random.random(self.n)
         r = 0
+
+        def render():
+            print(sequence)
+
+        self._render = render
         for s in sequence:
             ______ = yield (s, 0), r, False, {}
         for s in sequence:
             a = yield (0, 1), r, False, {}
+
+            def render():
+                print(sequence)
+                print(s, a)
+
+            self._render = render
             r = -np.abs(s - a)
         yield (0, 1), r, True, {}
 
