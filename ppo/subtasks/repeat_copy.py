@@ -5,18 +5,17 @@ from gym.utils import seeding
 
 
 class RepeatCopy(Env):
-    def __init__(
-        self, n: int, h: int, seed=0,
-    ):
-        self.h = h
+    def __init__(self, n: int, cell_size: int, seed=0):
+        self.h = h = cell_size
         self.n = n
         self.random, self.seed = seeding.np_random(seed)
         self.iterator = None
         self._render = None
-        self.observation_space = gym.spaces.Box(low=np.zeros(2), high=np.ones(2))
+        self.observation_space = gym.spaces.Box(
+            low=np.zeros(h + 2), high=np.ones(h + 2)
+        )
         self.action_space = gym.spaces.Box(
-            low=np.array(([0] * 3 * h) + [-1] * h + 1),
-            high=np.array(([1] * 3 * h) + [1] * h + 1),
+            low=-np.ones(4 * h + 1), high=np.ones(4 * h + 1)
         )
 
     def generator(self):
@@ -31,8 +30,16 @@ class RepeatCopy(Env):
             for _ in seq:
                 yield 1, 0
 
-        for s in sequence():
-            i, f, o, g, a = yield (h, *s), r, False, {}
+        def sigmoid(x):
+            return 1 / (1 + np.exp(-x))
+
+        for s1, s2 in sequence():
+            obs = np.concatenate([h, np.array([s1, s2])], axis=-1)
+            assert self.observation_space.contains(obs)
+            action = yield obs, r, False, {}
+            i, f, o, g, a = np.split(action, [self.h * i for i in range(1, 5)])
+            i, f, o = map(sigmoid, [i, f, o])
+            g = np.tanh(g)
 
             def render():
                 print(seq)
@@ -43,8 +50,8 @@ class RepeatCopy(Env):
 
             self._render = render
             c = f * c + i * g
-            h = o * np.sigmoid(c)
-            r = -np.abs(s - a)
+            h = o * 1 / (1 + np.exp(-c))
+            r = -np.abs(s2 - a.item())
         yield (0, 1), r, True, {}
 
     def step(self, action):
@@ -62,5 +69,5 @@ class RepeatCopy(Env):
 
     @staticmethod
     def add_arguments(parser):
-        parser.add_argument("-n", type=int)
-        parser.add_argument("-h", type=int)
+        parser.add_argument("--n", type=int, required=True)
+        parser.add_argument("--cell-size", type=int, required=True)
