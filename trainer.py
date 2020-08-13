@@ -29,9 +29,8 @@ EpochOutputs = namedtuple("EpochOutputs", "obs reward done infos act masks")
 class Trainer(abc.ABC):
     def __init__(
         self,
-        run_id,
         save_interval: int,
-        num_steps,
+        train_steps,
         eval_steps,
         num_processes,
         seed,
@@ -90,7 +89,7 @@ class Trainer(abc.ABC):
                 else SubprocVecEnv(env_fns)
             )
 
-        def run_epoch(obs, rnn_hxs, masks, envs):
+        def run_epoch(obs, rnn_hxs, masks, envs, num_steps):
             episode_counter = defaultdict(list)
             for _ in range(num_steps):
                 with torch.no_grad():
@@ -141,7 +140,7 @@ class Trainer(abc.ABC):
         train_envs.to(device)
         self.agent = agent = self.build_agent(envs=train_envs, **agent_args)
         rollouts = RolloutStorage(
-            num_steps=num_steps,
+            num_steps=train_steps,
             num_processes=num_processes,
             obs_space=train_envs.observation_space,
             action_space=train_envs.action_space,
@@ -153,10 +152,8 @@ class Trainer(abc.ABC):
 
         # copy to device
         if cuda:
-            tick = time.time()
             agent.to(device)
             rollouts.to(device)
-            print("Values copied to GPU in", time.time() - tick, "seconds")
 
         ppo = PPO(agent=agent, num_batch=num_batch, **ppo_args)
 
@@ -182,6 +179,7 @@ class Trainer(abc.ABC):
                 rnn_hxs=rollouts.recurrent_hidden_states[0],
                 masks=rollouts.masks[0],
                 envs=train_envs,
+                num_steps=train_steps,
             ):
                 train_counter.update(reward=epoch_output.reward, done=epoch_output.done)
                 rollouts.insert(
@@ -226,6 +224,7 @@ class Trainer(abc.ABC):
                         rnn_hxs=eval_recurrent_hidden_states,
                         masks=eval_masks,
                         envs=eval_envs,
+                        num_steps=eval_envs,
                     ):
                         eval_counter.update(
                             reward=epoch_output.reward, done=epoch_output.done
@@ -238,21 +237,15 @@ class Trainer(abc.ABC):
                 )
 
             if i % log_interval == 0:
-                total_num_steps = log_interval * num_processes * num_steps
-                fps = total_num_steps / (time.time() - tick)
-                tick = time.time()
                 result = dict(
-                    tick=tick,
-                    fps=fps,
                     rewards=train_counter.episode_rewards,
                     time_steps=train_counter.episode_time_steps,
                     **eval_counter,
                     **train_results,
                 )
-                total_num_steps = (i + 1) * num_processes * num_steps
                 for k, v in k_scalar_pairs(**result):
                     if self.writer:
-                        self.writer.add_scalar(k, v, total_num_steps)
+                        self.writer.add_scalar(k, v, i)
                 train_counter.reset()
 
             if use_tune and save_interval and i % save_interval == 0:

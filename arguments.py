@@ -14,7 +14,6 @@ ACTIVATIONS = dict(
 
 
 def add_arguments(parser):
-    parser.add_argument("--run-id", help=" ")
     parser.add_argument(
         "--gamma", type=float, default=0.99, help="discount factor for rewards"
     )
@@ -41,7 +40,7 @@ def add_arguments(parser):
         required=True,
     )
     parser.add_argument(
-        "--num-steps", type=int, help="number of forward steps in A2C", required=True
+        "--train-steps", type=int, help="number of forward steps in A2C", required=True
     )
     parser.add_argument(
         "--num-epochs", type=int, help="number of updates to perform", required=True
