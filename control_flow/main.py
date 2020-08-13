@@ -12,7 +12,7 @@ import control_flow.multi_step.minimal_gru
 import control_flow.multi_step.one_line
 import control_flow
 from arguments import add_arguments
-from train import Train
+from trainer import Train
 
 NAMES = ["instruction", "actions", "program_counter", "evaluations"]
 

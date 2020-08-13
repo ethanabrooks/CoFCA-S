@@ -3,7 +3,7 @@ import torch.nn.functional as F
 from torch import nn as nn
 
 import control_flow.multi_step.abstract_recurrence as abstract_recurrence
-from agent import AgentOutputs, MLPBase
+from agent import AgentOutputs, MLP
 from control_flow import Obs
 from control_flow import optimal_padding
 from control_flow import get_obs_sections
@@ -56,7 +56,7 @@ class Agent(nn.Module, abstract_recurrence.Recurrence):
 
         self.dist = Categorical(hidden_size, n_a)
         network_args.update(recurrent=True, activation=nn.ReLU())
-        self.recurrent_module = MLPBase(
+        self.recurrent_module = MLP(
             num_inputs=conv_hidden_size + self.train_lines * hidden_size,
             hidden_size=hidden_size,
             num_layers=num_layers + 1,

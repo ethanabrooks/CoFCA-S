@@ -15,7 +15,7 @@ from layers import Flatten
 from utils import init, init_normc_, init_
 
 AgentOutputs = namedtuple(
-    "AgentValues", "value action action_log_probs aux_loss rnn_hxs log dist"
+    "AgentValues", "value action action_log_probs aux_loss rnn_hxs log dist",
 )
 
 
@@ -40,14 +40,14 @@ class Agent(nn.Module):
                 **network_args,
             )
         elif len(obs_spaces) == 3:
-            self.network = CNNBase(
+            self.network = CNN(
                 *obs_spaces,
                 recurrent=recurrent,
                 hidden_size=hidden_size,
                 **network_args,
             )
         elif len(obs_spaces) == 1:
-            self.network = MLPBase(
+            self.network = MLP(
                 obs_spaces[0],
                 recurrent=recurrent,
                 hidden_size=hidden_size,
@@ -60,7 +60,7 @@ class Agent(nn.Module):
             num_outputs = action_space.n
             self.dist = Categorical(self.network.output_size, num_outputs)
         elif isinstance(action_space, Box):
-            num_outputs = action_space.shape[0]
+            num_outputs = int(np.prod(action_space.shape))
             self.dist = DiagGaussian(self.network.output_size, num_outputs)
         else:
             raise NotImplementedError
@@ -109,9 +109,9 @@ class Agent(nn.Module):
         return value
 
 
-class NNBase(nn.Module):
+class NN(nn.Module):
     def __init__(self, recurrent: bool, recurrent_input_size, hidden_size):
-        super(NNBase, self).__init__()
+        super(NN, self).__init__()
 
         self._hidden_size = hidden_size
         self._recurrent = recurrent
@@ -198,9 +198,9 @@ class NNBase(nn.Module):
         return x, hxs
 
 
-class CNNBase(NNBase):
+class CNN(NN):
     def __init__(self, d, h, w, activation, hidden_size, num_layers, recurrent=False):
-        super(CNNBase, self).__init__(recurrent, hidden_size, hidden_size)
+        super(CNN, self).__init__(recurrent, hidden_size, hidden_size)
 
         self.main = nn.Sequential(
             init_(nn.Conv2d(d, hidden_size, kernel_size=1)),
@@ -238,10 +238,10 @@ class CNNBase(NNBase):
         return self.critic_linear(x), x, rnn_hxs
 
 
-class MLPBase(NNBase):
+class MLP(NN):
     def __init__(self, num_inputs, hidden_size, num_layers, recurrent, activation):
         assert num_layers > 0
-        super(MLPBase, self).__init__(recurrent, num_inputs, hidden_size)
+        super(MLP, self).__init__(recurrent, num_inputs, hidden_size)
 
         if recurrent:
             num_inputs = hidden_size
@@ -285,7 +285,7 @@ class MLPBase(NNBase):
         return self.critic_linear(hidden_critic), hidden_actor, rnn_hxs
 
 
-class LowerLevel(NNBase):
+class LowerLevel(NN):
     def __init__(
         self,
         hidden_size,

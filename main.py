@@ -2,7 +2,7 @@ import argparse
 
 from common.vec_env.util import hierarchical_parse_args
 from arguments import add_arguments
-from train import Train
+from trainer import Train
 
 if __name__ == "__main__":
     PARSER = argparse.ArgumentParser()

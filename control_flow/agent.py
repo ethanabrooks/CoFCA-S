@@ -9,12 +9,12 @@ import control_flow.multi_step.abstract_recurrence
 import control_flow.multi_step.ours
 import control_flow.no_pointer
 import control_flow.recurrence
-from agent import AgentOutputs, NNBase
+from agent import AgentOutputs, NN
 from control_flow import Action
 from distributions import FixedCategorical
 
 
-class Agent(agent.Agent, NNBase):
+class Agent(agent.Agent, NN):
     def __init__(
         self,
         entropy_coef,
