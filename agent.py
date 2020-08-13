@@ -33,21 +33,21 @@ class Agent(nn.Module):
         super(Agent, self).__init__()
         self.entropy_coef = entropy_coef
         if lower_level:
-            self.recurrent_module = LowerLevel(
+            self.network = LowerLevel(
                 obs_space=obs_spaces,
                 recurrent=recurrent,
                 hidden_size=hidden_size,
                 **network_args,
             )
         elif len(obs_spaces) == 3:
-            self.recurrent_module = CNNBase(
+            self.network = CNNBase(
                 *obs_spaces,
                 recurrent=recurrent,
                 hidden_size=hidden_size,
                 **network_args,
             )
         elif len(obs_spaces) == 1:
-            self.recurrent_module = MLPBase(
+            self.network = MLPBase(
                 obs_spaces[0],
                 recurrent=recurrent,
                 hidden_size=hidden_size,
@@ -58,27 +58,27 @@ class Agent(nn.Module):
 
         if isinstance(action_space, Discrete):
             num_outputs = action_space.n
-            self.dist = Categorical(self.recurrent_module.output_size, num_outputs)
+            self.dist = Categorical(self.network.output_size, num_outputs)
         elif isinstance(action_space, Box):
             num_outputs = action_space.shape[0]
-            self.dist = DiagGaussian(self.recurrent_module.output_size, num_outputs)
+            self.dist = DiagGaussian(self.network.output_size, num_outputs)
         else:
             raise NotImplementedError
         self.continuous = isinstance(action_space, Box)
 
     @property
     def is_recurrent(self):
-        return self.recurrent_module.is_recurrent
+        return self.network.is_recurrent
 
     @property
     def recurrent_hidden_state_size(self):
         """Size of rnn_hx."""
-        return self.recurrent_module.recurrent_hidden_state_size
+        return self.network.recurrent_hidden_state_size
 
     def forward(
         self, inputs, rnn_hxs, masks, deterministic=False, action=None, **kwargs
     ):
-        value, actor_features, rnn_hxs = self.recurrent_module(
+        value, actor_features, rnn_hxs = self.network(
             inputs, rnn_hxs, masks, **kwargs
         )
 
@@ -105,7 +105,7 @@ class Agent(nn.Module):
         )
 
     def get_value(self, inputs, rnn_hxs, masks):
-        value, _, _ = self.recurrent_module(inputs, rnn_hxs, masks)
+        value, _, _ = self.network(inputs, rnn_hxs, masks)
         return value
 
 

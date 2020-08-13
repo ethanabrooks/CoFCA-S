@@ -167,7 +167,7 @@ class TrainBase(abc.ABC):
             eval_counter = Counter()
             envs = self.make_eval_envs()
             envs.to(self.device)
-            with self.agent.recurrent_module.evaluating(envs.observation_space):
+            with self.agent.network.evaluating(envs.observation_space):
                 eval_recurrent_hidden_states = torch.zeros(
                     num_processes,
                     self.agent.recurrent_hidden_state_size,
