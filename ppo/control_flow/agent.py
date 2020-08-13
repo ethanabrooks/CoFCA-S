@@ -7,7 +7,6 @@ from torch.nn import functional as F
 import ppo.agent
 import ppo.control_flow.multi_step.abstract_recurrence
 import ppo.control_flow.multi_step.ours
-import ppo.control_flow.no_pointer
 import ppo.control_flow.recurrence
 from ppo.agent import AgentValues, NNBase
 from env import Action
