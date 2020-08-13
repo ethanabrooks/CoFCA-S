@@ -1,6 +1,6 @@
 import functools
 from abc import ABC
-from collections import defaultdict, namedtuple
+from collections import defaultdict, namedtuple, OrderedDict
 from typing import List, Tuple, Iterator
 import numpy as np
 from gym.utils import seeding
@@ -397,7 +397,7 @@ class Env(gym.Env, ABC):
         #
         #     ipdb.set_trace()
         #     self.observation_space.contains(obs)
-        return obs
+        return OrderedDict(obs)
 
     @staticmethod
     def print_obs(obs):
