@@ -25,33 +25,29 @@ from wrappers import VecPyTorch
 EpochOutputs = namedtuple("EpochOutputs", "obs reward done infos act masks")
 
 
-# noinspection PyAttributeOutsideInit
 class Trainer(abc.ABC):
     def __init__(
         self,
+        agent_args: dict,
+        cuda: bool,
+        cuda_deterministic: bool,
+        env_id: str,
+        eval_interval: int,
+        eval_steps: int,
+        load_path: Path,
+        log_interval: int,
+        normalize: float,
+        num_batch: int,
+        num_epochs: int,
+        num_processes: int,
+        ppo_args: dict,
+        render: bool,
+        render_eval: bool,
+        rollouts_args: dict,
         save_interval: int,
-        train_steps,
-        eval_steps,
-        num_processes,
-        seed,
-        cuda_deterministic,
-        cuda,
-        gamma,
-        normalize,
-        log_interval,
-        eval_interval,
-        use_gae,
-        tau,
-        ppo_args,
-        agent_args,
-        render,
-        render_eval,
-        load_path,
-        synchronous,
-        num_batch,
-        num_epochs,
-        env_args,
-        success_reward,
+        seed: int,
+        synchronous: bool,
+        train_steps: int,
         use_tune=False,
         log_dir: Path = "dumb",
         no_eval=False,
@@ -78,7 +74,7 @@ class Trainer(abc.ABC):
         def make_vec_envs(evaluation):
             def env_thunk(rank):
                 return self.make_env(
-                    seed=seed, rank=rank, evaluation=evaluation, **env_args
+                    seed=seed, rank=rank, evaluation=evaluation, env_id=env_id
                 )
 
             env_fns = [lambda: env_thunk(i) for i in range(num_processes)]
@@ -145,9 +141,7 @@ class Trainer(abc.ABC):
             obs_space=train_envs.observation_space,
             action_space=train_envs.action_space,
             recurrent_hidden_state_size=agent.recurrent_hidden_state_size,
-            use_gae=use_gae,
-            gamma=gamma,
-            tau=tau,
+            **rollouts_args,
         )
 
         # copy to device
@@ -169,9 +163,7 @@ class Trainer(abc.ABC):
 
         train_counter = EpochCounter()
 
-        obs = train_envs.reset()
-        rollouts.obs[0].copy_(obs)
-        tick = time.time()
+        rollouts.obs[0].copy_(train_envs.reset())
 
         for i in range(start, num_epochs):
             for epoch_output in run_epoch(
@@ -224,7 +216,7 @@ class Trainer(abc.ABC):
                         rnn_hxs=eval_recurrent_hidden_states,
                         masks=eval_masks,
                         envs=eval_envs,
-                        num_steps=eval_envs,
+                        num_steps=eval_steps,
                     ):
                         eval_counter.update(
                             reward=epoch_output.reward, done=epoch_output.done
