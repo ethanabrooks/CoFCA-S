@@ -9,7 +9,6 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Dict
 
-import dataset
 import gym
 import numpy as np
 import torch
