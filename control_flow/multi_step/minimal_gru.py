@@ -3,7 +3,7 @@ import torch.nn.functional as F
 from torch import nn as nn
 
 import control_flow.multi_step.abstract_recurrence as abstract_recurrence
-from agent import AgentValues, MLPBase
+from agent import AgentOutputs, MLPBase
 from control_flow import Obs
 from control_flow import optimal_padding
 from control_flow import get_obs_sections
@@ -104,7 +104,7 @@ class Agent(nn.Module, abstract_recurrence.Recurrence):
         action_log_probs = dist.log_probs(action)
         entropy = dist.entropy().mean()
         action = F.pad(action, [0, self.action_size - 1])
-        return AgentValues(
+        return AgentOutputs(
             value=value,
             action=action,
             action_log_probs=action_log_probs,

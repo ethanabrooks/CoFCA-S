@@ -1,4 +1,5 @@
 from collections import namedtuple
+import numpy as np
 import torch.nn.functional as F
 from gym import spaces
 
@@ -13,7 +14,7 @@ from distributions import Categorical, DiagGaussian
 from layers import Flatten
 from utils import init, init_normc_, init_
 
-AgentValues = namedtuple(
+AgentOutputs = namedtuple(
     "AgentValues", "value action action_log_probs aux_loss rnn_hxs log dist"
 )
 
@@ -93,7 +94,7 @@ class Agent(nn.Module):
 
         action_log_probs = dist.log_probs(action)
         entropy = dist.entropy().mean()
-        return AgentValues(
+        return AgentOutputs(
             value=value,
             action=action,
             action_log_probs=action_log_probs,

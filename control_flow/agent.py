@@ -9,7 +9,7 @@ import control_flow.multi_step.abstract_recurrence
 import control_flow.multi_step.ours
 import control_flow.no_pointer
 import control_flow.recurrence
-from agent import AgentValues, NNBase
+from agent import AgentOutputs, NNBase
 from control_flow import Action
 from distributions import FixedCategorical
 
@@ -110,7 +110,7 @@ class Agent(agent.Agent, NNBase):
             hx._replace(P=torch.tensor([], device=hx.P.device), l=X.lower), dim=-1
         )
         action = torch.cat(X, dim=-1)
-        return AgentValues(
+        return AgentOutputs(
             value=hx.v,
             action=action,
             action_log_probs=action_log_probs,

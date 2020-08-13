@@ -7,8 +7,6 @@ RUN pip install \
         "opencv-python==4.1.0.25" \
         "psutil==5.7.0" \
         "requests==2.22.0"
-VOLUME ["/ppo"]
-VOLUME ["/rl-utils"]
 WORKDIR /ppo
 COPY entrypoint.sh /entrypoint.sh
 

@@ -18,7 +18,7 @@ from tensorboardX import SummaryWriter
 from common.atari_wrappers import wrap_deepmind
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
-from agent import Agent, AgentValues
+from agent import Agent, AgentOutputs
 from control_flow.hdfstore import HDF5Store
 from rollouts import RolloutStorage
 from ppo import PPO
@@ -251,7 +251,7 @@ class TrainBase(abc.ABC):
             with torch.no_grad():
                 act = self.agent(
                     inputs=obs, rnn_hxs=rnn_hxs, masks=masks
-                )  # type: AgentValues
+                )  # type: AgentOutputs
 
             # Observe reward and next obs
             obs, reward, done, infos = envs.step(act.action)
