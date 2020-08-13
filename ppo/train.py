@@ -7,15 +7,14 @@ import sys
 import time
 from collections import Counter, defaultdict
 from pathlib import Path
+from pprint import pprint
 from typing import Dict
 
-import dataset
 import gym
 import numpy as np
 import torch
 from gym.wrappers import TimeLimit
 from tensorboardX import SummaryWriter
-from tqdm import tqdm
 
 from common.atari_wrappers import wrap_deepmind
 from common.vec_env.dummy_vec_env import DummyVecEnv
@@ -38,12 +37,10 @@ class TrainBase(abc.ABC):
         seed,
         cuda_deterministic,
         cuda,
-        time_limit,
         gamma,
         normalize,
         log_interval,
         eval_interval,
-        no_eval,
         use_gae,
         tau,
         ppo_args,
@@ -55,7 +52,7 @@ class TrainBase(abc.ABC):
         num_batch,
         env_args,
         success_reward,
-        use_tqdm,
+            no_eval=False,
     ):
         # Properly restrict pytorch to not consume extra resources.
         #  - https://github.com/pytorch/pytorch/issues/975
@@ -93,7 +90,6 @@ class TrainBase(abc.ABC):
             synchronous=True if render else synchronous,
             evaluation=False,
             num_processes=num_processes,
-            time_limit=time_limit,
         )
         self.make_eval_envs = functools.partial(
             self.make_vec_envs,
@@ -104,7 +100,6 @@ class TrainBase(abc.ABC):
             synchronous=True if render else synchronous,
             evaluation=True,
             num_processes=num_processes,
-            time_limit=time_limit,
         )
 
         self.envs.to(self.device)
@@ -141,7 +136,6 @@ class TrainBase(abc.ABC):
             log_interval=log_interval,
             eval_interval=eval_interval,
             no_eval=no_eval,
-            use_tqdm=use_tqdm,
             success_reward=success_reward,
         )
         self.train_iterator = self.make_train_iterator()
@@ -162,7 +156,6 @@ class TrainBase(abc.ABC):
         eval_interval,
         no_eval,
         success_reward,
-        use_tqdm,
     ):
         if eval_interval and not no_eval:
             # vec_norm = get_vec_normalize(eval_envs)
@@ -187,10 +180,8 @@ class TrainBase(abc.ABC):
                     rnn_hxs=eval_recurrent_hidden_states,
                     masks=eval_masks,
                     num_steps=eval_steps,
-                    # max(num_steps, time_limit) if time_limit else num_steps,
                     counter=eval_counter,
                     success_reward=success_reward,
-                    use_tqdm=use_tqdm,
                     rollouts=None,
                     envs=envs,
                 )
@@ -206,14 +197,10 @@ class TrainBase(abc.ABC):
 
         if eval_interval:
             eval_iterator = range(self.i % eval_interval, eval_interval)
-            if use_tqdm:
-                eval_iterator = tqdm(eval_iterator, desc="next eval")
         else:
             eval_iterator = itertools.count(self.i)
 
         for _ in eval_iterator:
-            if self.i % log_interval == 0 and use_tqdm:
-                log_progress = tqdm(total=log_interval, desc="next log")
             self.i += 1
             epoch_counter = self.run_epoch(
                 obs=self.rollouts.obs[0],
@@ -222,10 +209,10 @@ class TrainBase(abc.ABC):
                 num_steps=num_steps,
                 counter=self.counter,
                 success_reward=success_reward,
-                use_tqdm=False,
                 rollouts=self.rollouts,
                 envs=self.envs,
             )
+            pprint(epoch_counter)
 
             with torch.no_grad():
                 next_value = self.agent.get_value(
@@ -255,15 +242,12 @@ class TrainBase(abc.ABC):
         num_steps,
         counter,
         success_reward,
-        use_tqdm,
         rollouts,
         envs,
     ):
         # noinspection PyTypeChecker
         episode_counter = defaultdict(list)
         iterator = range(num_steps)
-        if use_tqdm:
-            iterator = tqdm(iterator, desc="evaluating")
         for _ in iterator:
             with torch.no_grad():
                 act = self.agent(
@@ -318,7 +302,7 @@ class TrainBase(abc.ABC):
         return Agent(envs.observation_space.shape, envs.action_space, **agent_args)
 
     @staticmethod
-    def make_env(env_id, seed, rank, add_timestep, time_limit, evaluation):
+    def make_env(env_id, seed, rank, add_timestep, evaluation):
         env = gym.make(env_id)
         is_atari = hasattr(gym.envs, "atari") and isinstance(
             env.unwrapped, gym.envs.atari.atari_env.AtariEnv
@@ -341,8 +325,6 @@ class TrainBase(abc.ABC):
         if len(obs_shape) == 3 and obs_shape[2] in [1, 3]:
             env = TransposeImage(env)
 
-        if time_limit is not None:
-            env = TimeLimit(env, max_episode_steps=time_limit)
 
         return env
 
@@ -356,7 +338,6 @@ class TrainBase(abc.ABC):
         add_timestep,
         seed,
         evaluation,
-        time_limit,
         num_frame_stack=None,
         **env_args,
     ):
@@ -368,8 +349,6 @@ class TrainBase(abc.ABC):
                 add_timestep=add_timestep,
                 seed=seed,
                 evaluation=evaluation,
-                time_limit=time_limit,
-                evaluating=evaluation,
                 **env_args,
             )
             for i in range(num_processes)
@@ -406,7 +385,7 @@ class TrainBase(abc.ABC):
         #     modules.update(vec_normalize=self.envs.venv)
         state_dict = {name: module.state_dict() for name, module in modules.items()}
         save_path = Path(
-            checkpoint_dir, f"{self.i if self.save_separate else 'checkpoint'}.pt"
+            checkpoint_dir, f"checkpoint.pt"
         )
         torch.save(dict(step=self.i, **state_dict), save_path)
         print(f"Saved parameters to {save_path}")
@@ -435,10 +414,8 @@ class Train(TrainBase):
         save_interval: int,
         num_processes: int,
         num_steps: int,
-        save_separate: bool,
         **kwargs,
     ):
-        self.save_separate = save_separate
         self.num_steps = num_steps
         self.num_processes = num_processes
         self.run_id = run_id

@@ -26,7 +26,7 @@ class Agent(nn.Module):
         recurrent,
         hidden_size,
         entropy_coef,
-        lower_level,
+        lower_level=False,
         **network_args,
     ):
         super(Agent, self).__init__()

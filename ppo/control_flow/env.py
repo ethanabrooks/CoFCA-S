@@ -3,9 +3,11 @@ from abc import ABC
 from collections import defaultdict, namedtuple
 from typing import List, Tuple, Iterator
 import numpy as np
+import gym
 from gym.utils import seeding
 from gym.vector.utils import spaces
-from rl_utils import hierarchical_parse_args, gym
+
+from common.vec_env.util import hierarchical_parse_args
 from ppo import keyboard_control
 from ppo.utils import RED, RESET, GREEN
 from ppo.control_flow.lines import (

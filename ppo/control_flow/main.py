@@ -12,7 +12,7 @@ import ppo.control_flow.multi_step.env
 import ppo.control_flow.multi_step.minimal_gru
 import ppo.control_flow.multi_step.one_line
 from ppo import control_flow
-from ppo.arguments import build_parser
+from ppo.arguments import add_arguments
 from ppo.train import Train
 
 NAMES = ["instruction", "actions", "program_counter", "evaluations"]
@@ -136,7 +136,7 @@ def main(
 
 
 def control_flow_args():
-    parsers = build_parser()
+    parsers = add_arguments()
     parser = parsers.main
     parser.add_argument("--no-tqdm", dest="use_tqdm", action="store_false")
     parser.add_argument("--eval-steps", type=int)

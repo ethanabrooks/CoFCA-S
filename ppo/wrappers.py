@@ -6,7 +6,6 @@ import torch
 
 from common.vec_env import VecEnvWrapper
 from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
-from rl_utils import onehot
 
 
 # Can be used to test recurrent policies for Reacher-v2
@@ -160,23 +159,6 @@ class VecPyTorchFrameStack(VecEnvWrapper):
         self.venv.to(device)
 
 
-class OneHotWrapper(gym.Wrapper):
-    def wrap_observation(self, obs, observation_space=None):
-        if observation_space is None:
-            observation_space = self.observation_space
-        if isinstance(observation_space, spaces.Discrete):
-            return onehot(obs, observation_space.n)
-        if isinstance(observation_space, spaces.MultiDiscrete):
-            assert observation_space.contains(obs)
-
-            def one_hots():
-                nvec = observation_space.nvec
-                for o, n in zip(
-                    obs.reshape(len(obs), -1).T, nvec.reshape(len(nvec), -1).T
-                ):
-                    yield onehot(o, n)
-
-            return np.concatenate(list(one_hots()), axis=-1)
 
 
 def get_vec_normalize(venv):

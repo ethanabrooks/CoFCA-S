@@ -6,9 +6,9 @@ from typing import Iterator, List, Tuple
 
 import numpy as np
 from gym import spaces
-from rl_utils import hierarchical_parse_args
 
 import ppo.control_flow.env
+from common.vec_env.util import hierarchical_parse_args
 from ppo.control_flow.env import State
 from ppo.control_flow.lines import (
     Subtask,

@@ -4,7 +4,6 @@ import argparse
 from collections import namedtuple
 from pathlib import Path
 
-from rl_utils import hierarchical_parse_args
 import torch.nn as nn
 
 Parsers = namedtuple("Parser", "main agent ppo env")
@@ -14,10 +13,7 @@ ACTIVATIONS = dict(
 )
 
 
-def build_parser():
-    parser = argparse.ArgumentParser(
-        description="RL", formatter_class=argparse.ArgumentDefaultsHelpFormatter
-    )
+def add_arguments(parser):
     parser.add_argument("--run-id", help=" ")
     parser.add_argument(
         "--gamma", type=float, default=0.99, help="discount factor for rewards"
@@ -61,6 +57,9 @@ def build_parser():
     )
     parser.add_argument(
         "--eval-interval", type=int, help="eval interval, one eval per n updates"
+    )
+    parser.add_argument(
+        "--eval-steps", type=int, help="number of steps for evaluation"
     )
     parser.add_argument("--load-path", type=Path)
     parser.add_argument("--log-dir", type=Path, help="directory to save agent logs")
