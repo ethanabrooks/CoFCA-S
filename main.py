@@ -5,9 +5,9 @@ from pathlib import Path
 
 from torch import nn as nn
 
-from common.vec_env.util import hierarchical_parse_args
 from configs import configs
 from trainer import Trainer
+from utils import hierarchical_parse_args
 
 ACTIVATIONS = dict(
     selu=nn.SELU(), prelu=nn.PReLU(), leaky=nn.LeakyReLU(), relu=nn.ReLU()

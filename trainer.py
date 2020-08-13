@@ -16,10 +16,9 @@ from tensorboardX import SummaryWriter
 from networks import Agent, AgentOutputs
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
-from common.vec_env.util import set_seeds
 from ppo import PPO
 from rollouts import RolloutStorage
-from utils import k_scalar_pairs
+from utils import set_seeds
 from wrappers import VecPyTorch
 
 EpochOutputs = namedtuple("EpochOutputs", "obs reward done infos act masks")
