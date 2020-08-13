@@ -1,153 +1,66 @@
 import abc
+import functools
+import itertools
+import os
+import re
 import sys
-from collections import defaultdict, namedtuple
+import time
+from collections import Counter, defaultdict
 from pathlib import Path
-from pprint import pprint
 from typing import Dict
 
 import gym
 import numpy as np
-import ray
 import torch
-from ray import tune
-from ray.tune.suggest.hyperopt import HyperOptSearch
+from gym.wrappers import TimeLimit
 from tensorboardX import SummaryWriter
+from tqdm import tqdm
 
-from networks import Agent, AgentOutputs
+from common.atari_wrappers import wrap_deepmind
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
-from ppo import PPO
+from networks import Agent, AgentOutputs
+from hdfstore import HDF5Store
 from rollouts import RolloutStorage
-from utils import set_seeds
-from wrappers import VecPyTorch
+from ppo import PPO
+from utils import k_scalar_pairs, get_n_gpu, get_random_gpu
+from wrappers import AddTimestep, TransposeImage, VecPyTorch, VecPyTorchFrameStack
 
-EpochOutputs = namedtuple("EpochOutputs", "obs reward done infos act masks")
 
-
-class Trainer(tune.Trainable):
-    def __init__(self, *args, **kwargs):
-        self.iterator = None
-        self.agent = None
-        self.ppo = None
-        self.i = None
-        self.device = None
-        super().__init__(*args, **kwargs)
-
-    def _setup(self, config):
-        self.iterator = self.gen(**config)
-
-    def _train(self):
-        return next(self.iterator)
-
-    def _save(self, tmp_checkpoint_dir):
-        modules = dict(
-            optimizer=self.ppo.optimizer, agent=self.agent
-        )  # type: Dict[str, torch.nn.Module]
-        # if isinstance(self.envs.venv, VecNormalize):
-        #     modules.update(vec_normalize=self.envs.venv)
-        state_dict = {name: module.state_dict() for name, module in modules.items()}
-        save_path = Path(tmp_checkpoint_dir, f"checkpoint.pt")
-        torch.save(dict(step=self.i, **state_dict), save_path)
-        print(f"Saved parameters to {save_path}")
-
-    def _restore(self, checkpoint):
-        state_dict = torch.load(checkpoint, map_location=self.device)
-        self.agent.load_state_dict(state_dict["agent"])
-        self.ppo.optimizer.load_state_dict(state_dict["optimizer"])
-        start = state_dict.get("step", -1) + 1
-        # if isinstance(self.envs.venv, VecNormalize):
-        #     self.envs.venv.load_state_dict(state_dict["vec_normalize"])
-        print(f"Loaded parameters from {checkpoint}.")
-
-    def loop(self):
-        yield from self.iterator
-
-    def gen(
+# noinspection PyAttributeOutsideInit
+class TrainBase(abc.ABC):
+    def setup(
         self,
-        agent_args: dict,
-        cuda: bool,
-        cuda_deterministic: bool,
-        env_id: str,
-        log_interval: int,
-        normalize: float,
-        num_batch: int,
-        num_epochs: int,
-        num_processes: int,
-        ppo_args: dict,
-        render: bool,
-        render_eval: bool,
-        rollouts_args: dict,
-        seed: int,
-        synchronous: bool,
-        train_steps: int,
-        eval_interval: int = None,
-        eval_steps: int = None,
-        no_eval=False,
+        num_steps,
+        eval_steps,
+        num_processes,
+        seed,
+        cuda_deterministic,
+        cuda,
+        time_limit,
+        gamma,
+        normalize,
+        log_interval,
+        eval_interval,
+        no_eval,
+        use_gae,
+        tau,
+        ppo_args,
+        agent_args,
+        render,
+        render_eval,
+        load_path,
+        synchronous,
+        num_batch,
+        env_args,
+        success_reward,
+        use_tqdm,
     ):
-        class EpochCounter:
-            def __init__(self):
-                self.episode_rewards = []
-                self.episode_time_steps = []
-                self.rewards = np.zeros(num_processes)
-                self.time_steps = np.zeros(num_processes)
-
-            def update(self, reward, done):
-                self.rewards += reward.numpy()
-                self.time_steps += np.ones_like(done)
-                self.episode_rewards += list(self.rewards[done])
-                self.episode_time_steps += list(self.time_steps[done])
-                self.rewards[done] = 0
-                self.time_steps[done] = 0
-
-            def reset(self):
-                self.episode_rewards = []
-                self.episode_time_steps = []
-
-            def items(self, prefix=""):
-                if self.episode_rewards:
-                    yield prefix + "rewards", np.mean(self.episode_rewards)
-                if self.episode_time_steps:
-                    yield prefix + "time_steps", np.mean(self.episode_time_steps)
-
-        def make_vec_envs(evaluation):
-            def env_thunk(rank):
-                return self.make_env(
-                    seed=seed, rank=rank, evaluation=evaluation, env_id=env_id
-                )
-
-            env_fns = [lambda: env_thunk(i) for i in range(num_processes)]
-            use_dummy = len(env_fns) == 1 or sys.platform == "darwin" or synchronous
-            return VecPyTorch(
-                DummyVecEnv(env_fns, render=render)
-                if use_dummy
-                else SubprocVecEnv(env_fns)
-            )
-
-        def run_epoch(obs, rnn_hxs, masks, envs, num_steps):
-            episode_counter = defaultdict(list)
-            for _ in range(num_steps):
-                with torch.no_grad():
-                    act = self.agent(
-                        inputs=obs, rnn_hxs=rnn_hxs, masks=masks
-                    )  # type: AgentOutputs
-
-                # Observe reward and next obs
-                obs, reward, done, infos = envs.step(act.action)
-                self.process_infos(episode_counter, done, infos, **act.log)
-
-                # If done then clean the history of observations.
-                masks = torch.tensor(
-                    1 - done, dtype=torch.float32, device=obs.device
-                ).unsqueeze(1)
-                yield EpochOutputs(
-                    obs=obs, reward=reward, done=done, infos=infos, act=act, masks=masks
-                )
-
-                rnn_hxs = act.rnn_hxs
-
-        if not torch.cuda.is_available():
-            cuda = False
-        set_seeds(cuda=cuda, cuda_deterministic=cuda_deterministic, seed=seed)
+        # Properly restrict pytorch to not consume extra resources.
+        #  - https://github.com/pytorch/pytorch/issues/975
+        #  - https://github.com/ray-project/ray/issues/3609
+        torch.set_num_threads(1)
+        os.environ["OMP_NUM_THREADS"] = "1"
 
         if render_eval and not render:
             eval_interval = 1
@@ -156,97 +69,240 @@ class Trainer(tune.Trainable):
             num_processes = 1
             cuda = False
 
-        self.device = device = torch.device("cuda" if cuda else "cpu")
+        # reproducibility
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        np.random.seed(seed)
+        cuda &= torch.cuda.is_available()
+        if cuda and cuda_deterministic:
+            torch.backends.cudnn.benchmark = False
+            torch.backends.cudnn.deterministic = True
+        torch.set_num_threads(1)
 
-        train_envs = make_vec_envs(evaluation=False)
+        self.device = "cpu"
+        if cuda:
+            self.device = self.get_device()
+        print("Using device", self.device)
 
-        train_envs.to(device)
-        self.agent = agent = self.build_agent(envs=train_envs, **agent_args)
-        rollouts = RolloutStorage(
-            num_steps=train_steps,
+        self.envs = self.make_vec_envs(
+            **env_args,
+            seed=seed,
+            gamma=(gamma if normalize else None),
+            render=render,
+            synchronous=True if render else synchronous,
+            evaluation=False,
             num_processes=num_processes,
-            obs_space=train_envs.observation_space,
-            action_space=train_envs.action_space,
-            recurrent_hidden_state_size=agent.recurrent_hidden_state_size,
-            **rollouts_args,
+            time_limit=time_limit,
+        )
+        self.make_eval_envs = functools.partial(
+            self.make_vec_envs,
+            **env_args,
+            seed=seed,
+            gamma=(gamma if normalize else None),
+            render=render,
+            synchronous=True if render else synchronous,
+            evaluation=True,
+            num_processes=num_processes,
+            time_limit=time_limit,
+        )
+
+        self.envs.to(self.device)
+        self.agent = self.build_agent(envs=self.envs, **agent_args)
+        self.rollouts = RolloutStorage(
+            num_steps=num_steps,
+            num_processes=num_processes,
+            obs_space=self.envs.observation_space,
+            action_space=self.envs.action_space,
+            recurrent_hidden_state_size=self.agent.recurrent_hidden_state_size,
+            use_gae=use_gae,
+            gamma=gamma,
+            tau=tau,
         )
 
         # copy to device
         if cuda:
-            agent.to(device)
-            rollouts.to(device)
+            tick = time.time()
+            self.agent.to(self.device)
+            self.rollouts.to(self.device)
+            print("Values copied to GPU in", time.time() - tick, "seconds")
 
-        self.ppo = ppo = PPO(agent=agent, num_batch=num_batch, **ppo_args)
+        self.ppo = PPO(agent=self.agent, num_batch=num_batch, **ppo_args)
+        self.counter = Counter()
 
-        start = 0
-        train_counter = EpochCounter()
-        rollouts.obs[0].copy_(train_envs.reset())
+        self.i = 0
+        if load_path:
+            self._restore(load_path)
 
-        for i in range(start, num_epochs):
-            self.i = i
-            for epoch_output in run_epoch(
-                obs=rollouts.obs[0],
-                rnn_hxs=rollouts.recurrent_hidden_states[0],
-                masks=rollouts.masks[0],
-                envs=train_envs,
-                num_steps=train_steps,
-            ):
-                train_counter.update(reward=epoch_output.reward, done=epoch_output.done)
-                rollouts.insert(
-                    obs=epoch_output.obs,
-                    recurrent_hidden_states=epoch_output.act.rnn_hxs,
-                    actions=epoch_output.act.action,
-                    action_log_probs=epoch_output.act.action_log_probs,
-                    values=epoch_output.act.value,
-                    rewards=epoch_output.reward,
-                    masks=epoch_output.masks,
+        self.make_train_iterator = lambda: self.train_generator(
+            num_steps=num_steps,
+            num_processes=num_processes,
+            eval_steps=eval_steps,
+            log_interval=log_interval,
+            eval_interval=eval_interval,
+            no_eval=no_eval,
+            use_tqdm=use_tqdm,
+            success_reward=success_reward,
+        )
+        self.train_iterator = self.make_train_iterator()
+
+    def _train(self):
+        try:
+            return next(self.train_iterator)
+        except StopIteration:
+            self.train_iterator = self.make_train_iterator()
+            return self._train()
+
+    def train_generator(
+        self,
+        num_steps,
+        num_processes,
+        eval_steps,
+        log_interval,
+        eval_interval,
+        no_eval,
+        success_reward,
+        use_tqdm,
+    ):
+        if eval_interval and not no_eval:
+            # vec_norm = get_vec_normalize(eval_envs)
+            # if vec_norm is not None:
+            #     vec_norm.eval()
+            #     vec_norm.ob_rms = get_vec_normalize(envs).ob_rms
+
+            # self.envs.evaluate()
+            eval_masks = torch.zeros(num_processes, 1, device=self.device)
+            eval_counter = Counter()
+            envs = self.make_eval_envs()
+            envs.to(self.device)
+            with self.agent.recurrent_module.evaluating(envs.observation_space):
+                eval_recurrent_hidden_states = torch.zeros(
+                    num_processes,
+                    self.agent.recurrent_hidden_state_size,
+                    device=self.device,
                 )
+
+                eval_result = self.run_epoch(
+                    obs=envs.reset(),
+                    rnn_hxs=eval_recurrent_hidden_states,
+                    masks=eval_masks,
+                    num_steps=eval_steps,
+                    # max(num_steps, time_limit) if time_limit else num_steps,
+                    counter=eval_counter,
+                    success_reward=success_reward,
+                    use_tqdm=use_tqdm,
+                    rollouts=None,
+                    envs=envs,
+                )
+            envs.close()
+            eval_result = {f"eval_{k}": v for k, v in eval_result.items()}
+        else:
+            eval_result = {}
+        # self.envs.train()
+        obs = self.envs.reset()
+        self.rollouts.obs[0].copy_(obs)
+        tick = time.time()
+        log_progress = None
+
+        if eval_interval:
+            eval_iterator = range(self.i % eval_interval, eval_interval)
+            if use_tqdm:
+                eval_iterator = tqdm(eval_iterator, desc="next eval")
+        else:
+            eval_iterator = itertools.count(self.i)
+
+        for _ in eval_iterator:
+            if self.i % log_interval == 0 and use_tqdm:
+                log_progress = tqdm(total=log_interval, desc="next log")
+            self.i += 1
+            epoch_counter = self.run_epoch(
+                obs=self.rollouts.obs[0],
+                rnn_hxs=self.rollouts.recurrent_hidden_states[0],
+                masks=self.rollouts.masks[0],
+                num_steps=num_steps,
+                counter=self.counter,
+                success_reward=success_reward,
+                use_tqdm=False,
+                rollouts=self.rollouts,
+                envs=self.envs,
+            )
 
             with torch.no_grad():
-                next_value = agent.get_value(
-                    rollouts.obs[-1],
-                    rollouts.recurrent_hidden_states[-1],
-                    rollouts.masks[-1],
-                ).detach()
-
-            rollouts.compute_returns(next_value=next_value)
-            train_results = ppo.update(rollouts)
-            rollouts.after_update()
-
-            eval_counter = EpochCounter()
-            if eval_interval and eval_steps and not no_eval and i % eval_interval == 0:
-                # vec_norm = get_vec_normalize(eval_envs)
-                # if vec_norm is not None:
-                #     vec_norm.eval()
-                #     vec_norm.ob_rms = get_vec_normalize(envs).ob_rms
-
-                # self.envs.evaluate()
-                eval_masks = torch.zeros(num_processes, 1, device=device)
-                eval_envs = make_vec_envs(evaluation=True)
-                eval_envs.to(device)
-                with agent.network.evaluating(eval_envs.observation_space):
-                    eval_recurrent_hidden_states = torch.zeros(
-                        num_processes, agent.recurrent_hidden_state_size, device=device
-                    )
-                    for epoch_output in run_epoch(
-                        obs=eval_envs.reset(),
-                        rnn_hxs=eval_recurrent_hidden_states,
-                        masks=eval_masks,
-                        envs=eval_envs,
-                        num_steps=eval_steps,
-                    ):
-                        eval_counter.update(
-                            reward=epoch_output.reward, done=epoch_output.done
-                        )
-
-                eval_envs.close()
-            if i % log_interval == 0:
-                yield dict(
-                    **train_results,
-                    **dict(train_counter.items()),
-                    **dict(eval_counter.items(prefix="eval_")),
+                next_value = self.agent.get_value(
+                    self.rollouts.obs[-1],
+                    self.rollouts.recurrent_hidden_states[-1],
+                    self.rollouts.masks[-1],
                 )
-                train_counter.reset()
+
+            self.rollouts.compute_returns(next_value.detach())
+            train_results = self.ppo.update(self.rollouts)
+            self.rollouts.after_update()
+            if log_progress is not None:
+                log_progress.update()
+            if self.i % log_interval == 0:
+                total_num_steps = log_interval * num_processes * num_steps
+                fps = total_num_steps / (time.time() - tick)
+                tick = time.time()
+                yield dict(
+                    tick=tick, fps=fps, **epoch_counter, **train_results, **eval_result
+                )
+
+    def run_epoch(
+        self,
+        obs,
+        rnn_hxs,
+        masks,
+        num_steps,
+        counter,
+        success_reward,
+        use_tqdm,
+        rollouts,
+        envs,
+    ):
+        # noinspection PyTypeChecker
+        episode_counter = defaultdict(list)
+        iterator = range(num_steps)
+        if use_tqdm:
+            iterator = tqdm(iterator, desc="evaluating")
+        for _ in iterator:
+            with torch.no_grad():
+                act = self.agent(
+                    inputs=obs, rnn_hxs=rnn_hxs, masks=masks
+                )  # type: AgentOutputs
+
+            # Observe reward and next obs
+            obs, reward, done, infos = envs.step(act.action)
+            self.process_infos(episode_counter, done, infos, **act.log)
+
+            # track rewards
+            counter["reward"] += reward.numpy()
+            counter["time_step"] += np.ones_like(done)
+            episode_rewards = counter["reward"][done]
+            episode_counter["rewards"] += list(episode_rewards)
+            if success_reward is not None:
+                # noinspection PyTypeChecker
+                episode_counter["success"] += list(episode_rewards >= success_reward)
+
+            episode_counter["time_steps"] += list(counter["time_step"][done])
+            counter["reward"][done] = 0
+            counter["time_step"][done] = 0
+
+            # If done then clean the history of observations.
+            masks = torch.tensor(
+                1 - done, dtype=torch.float32, device=obs.device
+            ).unsqueeze(1)
+            rnn_hxs = act.rnn_hxs
+            if rollouts is not None:
+                rollouts.insert(
+                    obs=obs,
+                    recurrent_hidden_states=act.rnn_hxs,
+                    actions=act.action,
+                    action_log_probs=act.action_log_probs,
+                    values=act.value,
+                    rewards=reward,
+                    masks=masks,
+                )
+
+        return dict(episode_counter)
 
     @staticmethod
     def process_infos(episode_counter, done, infos, **act_log):
@@ -261,55 +317,161 @@ class Trainer(tune.Trainable):
         return Agent(envs.observation_space.shape, envs.action_space, **agent_args)
 
     @staticmethod
-    def make_env(env_id, seed, rank, evaluation):
+    def make_env(env_id, seed, rank, add_timestep, time_limit, evaluation):
         env = gym.make(env_id)
+        is_atari = hasattr(gym.envs, "atari") and isinstance(
+            env.unwrapped, gym.envs.atari.atari_env.AtariEnv
+        )
         env.seed(seed + rank)
+        obs_shape = env.observation_space.shape
+        if add_timestep and len(obs_shape) == 1 and str(env).find("TimeLimit") > -1:
+            env = AddTimestep(env)
+        if is_atari and len(env.observation_space.shape) == 3:
+            env = wrap_deepmind(env)
+
+        # elif len(env.observation_space.shape) == 3:
+        #     raise NotImplementedError(
+        #         "CNN models work only for atari,\n"
+        #         "please use a custom wrapper for a custom pixel input env.\n"
+        #         "See wrap_deepmind for an example.")
+
+        # If the input has shape (W,H,3), wrap for PyTorch convolutions
+        obs_shape = env.observation_space.shape
+        if len(obs_shape) == 3 and obs_shape[2] in [1, 3]:
+            env = TransposeImage(env)
+
+        if time_limit is not None:
+            env = TimeLimit(env, max_episode_steps=time_limit)
+
         return env
 
-    @classmethod
-    def main(
-        cls,
-        gpus_per_trial,
-        cpus_per_trial,
-        log_dir,
-        num_samples,
-        name,
-        config,
+    def make_vec_envs(
+        self,
+        num_processes,
+        gamma,
+        render,
+        synchronous,
+        env_id,
+        add_timestep,
+        seed,
+        evaluation,
+        time_limit,
+        num_frame_stack=None,
+        **env_args,
+    ):
+        envs = [
+            functools.partial(  # thunk
+                self.make_env,
+                rank=i,
+                env_id=env_id,
+                add_timestep=add_timestep,
+                seed=seed,
+                evaluation=evaluation,
+                time_limit=time_limit,
+                evaluating=evaluation,
+                **env_args,
+            )
+            for i in range(num_processes)
+        ]
+
+        if len(envs) == 1 or sys.platform == "darwin" or synchronous:
+            envs = DummyVecEnv(envs, render=render)
+        else:
+            envs = SubprocVecEnv(envs)
+
+        # if (
+        # envs.observation_space.shape
+        # and len(envs.observation_space.shape) == 1
+        # ):
+        # if gamma is None:
+        # envs = VecNormalize(envs, ret=False)
+        # else:
+        # envs = VecNormalize(envs, gamma=gamma)
+
+        envs = VecPyTorch(envs)
+
+        if num_frame_stack is not None:
+            envs = VecPyTorchFrameStack(envs, num_frame_stack)
+        # elif len(envs.observation_space.shape) == 3:
+        #     envs = VecPyTorchFrameStack(envs, 4, device)
+
+        return envs
+
+    def _save(self, checkpoint_dir):
+        modules = dict(
+            optimizer=self.ppo.optimizer, agent=self.agent
+        )  # type: Dict[str, torch.nn.Module]
+        # if isinstance(self.envs.venv, VecNormalize):
+        #     modules.update(vec_normalize=self.envs.venv)
+        state_dict = {name: module.state_dict() for name, module in modules.items()}
+        save_path = Path(
+            checkpoint_dir, f"{self.i if self.save_separate else 'checkpoint'}.pt"
+        )
+        torch.save(dict(step=self.i, **state_dict), save_path)
+        print(f"Saved parameters to {save_path}")
+        return str(save_path)
+
+    def _restore(self, checkpoint):
+        load_path = checkpoint
+        state_dict = torch.load(load_path, map_location=self.device)
+        self.agent.load_state_dict(state_dict["agent"])
+        self.ppo.optimizer.load_state_dict(state_dict["optimizer"])
+        self.i = state_dict.get("step", -1) + 1
+        # if isinstance(self.envs.venv, VecNormalize):
+        #     self.envs.venv.load_state_dict(state_dict["vec_normalize"])
+        print(f"Loaded parameters from {load_path}.")
+
+    @abc.abstractmethod
+    def get_device(self):
+        raise NotImplementedError
+
+
+class Train(TrainBase):
+    def __init__(
+        self,
+        run_id,
+        log_dir: Path,
+        save_interval: int,
+        num_processes: int,
+        num_steps: int,
+        save_separate: bool,
         **kwargs,
     ):
-        if config is None:
-            config = dict()
-        for k, v in kwargs.items():
-            if v is not None:
-                config[k] = v
-
+        self.save_separate = save_separate
+        self.num_steps = num_steps
+        self.num_processes = num_processes
+        self.run_id = run_id
+        self.save_interval = save_interval
+        self.log_dir = log_dir
         if log_dir:
-            print("Not using tune, because log_dir was specified")
-            writer = SummaryWriter(logdir=str(log_dir))
-            for i, report in enumerate(cls(config).loop()):
-                pprint(report)
-                for k, v in report.items():
-                    writer.add_scalar(k, v, i)
+            self.writer = SummaryWriter(logdir=str(log_dir))
+            self.table = HDF5Store(datapath=str(Path(log_dir, "data.hdf5")))
         else:
-            local_mode = num_samples is None
-            ray.init(dashboard_host="127.0.0.1", local_mode=local_mode)
-            metric = "final_reward"
+            self.writer = None
+            self.table = None
+        self.setup(**kwargs, num_processes=num_processes, num_steps=num_steps)
+        self.last_save = time.time()  # dummy save
 
-            resources_per_trial = dict(gpu=gpus_per_trial, cpu=cpus_per_trial)
-            kwargs = dict()
+    def run(self):
+        for _ in itertools.count():
+            for result in self.make_train_iterator():
+                if self.writer is not None:
+                    self.log_result(result)
 
-            if local_mode:
-                print("Using local mode because num_samples is None")
-            else:
-                kwargs = dict(
-                    search_alg=HyperOptSearch(config, metric=metric),
-                    num_samples=num_samples,
-                )
+                if self.log_dir and self.i % self.save_interval == 0:
+                    self._save(str(self.log_dir))
+                    self.last_save = time.time()
 
-            tune.run(
-                cls,
-                name=name,
-                config=config,
-                resources_per_trial=resources_per_trial,
-                **kwargs,
-            )
+    def log_result(self, result):
+        total_num_steps = (self.i + 1) * self.num_processes * self.num_steps
+        for k, v in k_scalar_pairs(**result):
+            self.writer.add_scalar(k, v, total_num_steps)
+
+    def get_device(self):
+        match = re.search("\d+$", self.run_id)
+        if match:
+            device_num = int(match.group()) % get_n_gpu()
+        else:
+            device_num = get_random_gpu()
+
+        return torch.device("cuda", device_num)

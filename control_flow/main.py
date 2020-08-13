@@ -8,7 +8,7 @@ import control_flow.agent
 import env
 import multi_step.env
 from arguments import build_parser
-from train import Train
+from trainer import Train
 
 NAMES = ["instruction", "actions", "program_counter", "evaluations"]
 
