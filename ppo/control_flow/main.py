@@ -8,7 +8,6 @@ import ppo.agent
 import ppo.control_flow.agent
 import env
 import ppo.control_flow.multi_step.env
-import ppo.control_flow.multi_step.one_line
 from ppo import control_flow
 from arguments import build_parser
 from train import Train
@@ -68,9 +67,7 @@ def main(
             args["lower_level"] = lower_level
             args["break_on_fail"] = args["break_on_fail"] and render
             del args["time_limit"]
-            if one_line:
-                return control_flow.multi_step.one_line.Env(**args)
-            elif not gridworld:
+            if not gridworld:
                 del args["max_while_objects"]
                 del args["num_excluded_objects"]
                 del args["temporal_extension"]

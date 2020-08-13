@@ -8,7 +8,7 @@ from gym import spaces
 from torch import nn as nn
 
 from env import Action
-from ppo.control_flow.multi_step.transformer import TransformerModel
+from transformer import TransformerModel
 from distributions import Categorical, FixedCategorical
 from utils import init_
 
