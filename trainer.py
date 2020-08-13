@@ -1,11 +1,8 @@
 import abc
-import functools
 import itertools
-import os
-import re
 import sys
 import time
-from collections import Counter, defaultdict
+from collections import defaultdict, deque, namedtuple
 from pathlib import Path
 from pprint import pprint
 from typing import Dict
@@ -16,16 +13,16 @@ import torch
 from ray import tune
 from tensorboardX import SummaryWriter
 
-from common.atari_wrappers import wrap_deepmind
+from agent import Agent, AgentOutputs
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
-from agent import Agent, AgentOutputs
 from common.vec_env.util import set_seeds
-from control_flow.hdfstore import HDF5Store
-from rollouts import RolloutStorage
 from ppo import PPO
-from utils import k_scalar_pairs, get_n_gpu, get_random_gpu
-from wrappers import AddTimestep, TransposeImage, VecPyTorch, VecPyTorchFrameStack
+from rollouts import RolloutStorage
+from utils import k_scalar_pairs
+from wrappers import VecPyTorch
+
+EpochOutputs = namedtuple("EpochOutputs", "obs reward done infos act masks")
 
 
 # noinspection PyAttributeOutsideInit
@@ -131,13 +128,26 @@ class Trainer(abc.ABC):
             else:
                 pprint(kwargs)
 
-        counter = Counter()
+        class EpochCounter:
+            def __init__(self):
+                self.episode_rewards = []
+                self.episode_time_steps = []
+                self.rewards = np.zeros(num_processes)
+                self.time_steps = np.zeros(num_processes)
+
+            def update(self, reward, done):
+                self.rewards += reward.numpy()
+                self.time_steps += np.ones_like(done)
+                self.episode_rewards += list(self.rewards[done])
+                self.episode_time_steps += list(self.time_steps[done])
+                self.rewards[done] = 0
+                self.time_steps[done] = 0
+
+        train_counter = EpochCounter()
 
         def run_epoch(obs, rnn_hxs, masks, envs):
-            # noinspection PyTypeChecker
             episode_counter = defaultdict(list)
-            iterator = range(num_steps)
-            for _ in iterator:
+            for _ in range(num_steps):
                 with torch.no_grad():
                     act = self.agent(
                         inputs=obs, rnn_hxs=rnn_hxs, masks=masks
@@ -147,40 +157,18 @@ class Trainer(abc.ABC):
                 obs, reward, done, infos = envs.step(act.action)
                 self.process_infos(episode_counter, done, infos, **act.log)
 
-                # track rewards
-                counter["reward"] += reward.numpy()
-                counter["time_step"] += np.ones_like(done)
-                episode_rewards = counter["reward"][done]
-                episode_counter["rewards"] += list(episode_rewards)
-                if success_reward is not None:
-                    # noinspection PyTypeChecker
-                    episode_counter["success"] += list(
-                        episode_rewards >= success_reward
-                    )
-
-                episode_counter["time_steps"] += list(counter["time_step"][done])
-                counter["reward"][done] = 0
-                counter["time_step"][done] = 0
-
                 # If done then clean the history of observations.
                 masks = torch.tensor(
                     1 - done, dtype=torch.float32, device=obs.device
                 ).unsqueeze(1)
-                rnn_hxs = act.rnn_hxs
-                if rollouts is not None:
-                    rollouts.insert(
-                        obs=obs,
-                        recurrent_hidden_states=act.rnn_hxs,
-                        actions=act.action,
-                        action_log_probs=act.action_log_probs,
-                        values=act.value,
-                        rewards=reward,
-                        masks=masks,
-                    )
+                yield EpochOutputs(
+                    obs=obs, reward=reward, done=done, infos=infos, act=act, masks=masks
+                )
 
-            return dict(episode_counter)
+                rnn_hxs = act.rnn_hxs
 
         for _ in itertools.count():
+            eval_counter = {}
             if eval_interval and not no_eval:
                 # vec_norm = get_vec_normalize(eval_envs)
                 # if vec_norm is not None:
@@ -189,37 +177,53 @@ class Trainer(abc.ABC):
 
                 # self.envs.evaluate()
                 eval_masks = torch.zeros(num_processes, 1, device=device)
-                eval_counter = Counter()
                 eval_envs = make_vec_envs(evaluation=True)
                 eval_envs.to(device)
                 with agent.network.evaluating(eval_envs.observation_space):
                     eval_recurrent_hidden_states = torch.zeros(
                         num_processes, agent.recurrent_hidden_state_size, device=device
                     )
-
-                    eval_result = run_epoch(
+                    eval_counter = EpochCounter()
+                    for epoch_output in run_epoch(
                         obs=eval_envs.reset(),
                         rnn_hxs=eval_recurrent_hidden_states,
                         masks=eval_masks,
                         envs=eval_envs,
-                    )
+                    ):
+                        eval_counter.update(
+                            reward=epoch_output.reward, done=epoch_output.done
+                        )
+
                 eval_envs.close()
-                eval_result = {f"eval_{k}": v for k, v in eval_result.items()}
-            else:
-                eval_result = {}
+                eval_counter = dict(
+                    eval_rewards=eval_counter.episode_rewards,
+                    eval_time_steps=eval_counter.episode_time_steps,
+                )
             # self.envs.train()
             obs = train_envs.reset()
             rollouts.obs[0].copy_(obs)
             tick = time.time()
-            log_progress = None
 
+            train_counter = EpochCounter()
             for i in itertools.count():
-                epoch_counter = run_epoch(
+                for epoch_output in run_epoch(
                     obs=rollouts.obs[0],
                     rnn_hxs=rollouts.recurrent_hidden_states[0],
                     masks=rollouts.masks[0],
                     envs=train_envs,
-                )
+                ):
+                    train_counter.update(
+                        reward=epoch_output.reward, done=epoch_output.done
+                    )
+                    rollouts.insert(
+                        obs=epoch_output.obs,
+                        recurrent_hidden_states=epoch_output.act.rnn_hxs,
+                        actions=epoch_output.act.action,
+                        action_log_probs=epoch_output.act.action_log_probs,
+                        values=epoch_output.act.value,
+                        rewards=epoch_output.reward,
+                        masks=epoch_output.masks,
+                    )
 
                 with torch.no_grad():
                     next_value = agent.get_value(
@@ -238,14 +242,16 @@ class Trainer(abc.ABC):
                     result = dict(
                         tick=tick,
                         fps=fps,
-                        **epoch_counter,
+                        rewards=train_counter.episode_rewards,
+                        time_steps=train_counter.episode_time_steps,
+                        **eval_counter,
                         **train_results,
-                        **eval_result,
                     )
                     total_num_steps = (i + 1) * num_processes * num_steps
                     for k, v in k_scalar_pairs(**result):
                         if self.writer:
                             self.writer.add_scalar(k, v, total_num_steps)
+                    train_counter = EpochCounter()
 
     @staticmethod
     def process_infos(episode_counter, done, infos, **act_log):
