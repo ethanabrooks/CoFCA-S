@@ -9,6 +9,7 @@ import gym
 import gym.spaces
 import numpy as np
 from typing import List
+import torch
 
 
 def hierarchical_parse_args(parser: argparse.ArgumentParser, include_positional=False):
@@ -116,3 +117,13 @@ def obs_to_dict(obs):
     if isinstance(obs, dict):
         return obs
     return {None: obs}
+
+def set_seeds(cuda, cuda_deterministic, seed):
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    np.random.seed(seed)
+    cuda &= torch.cuda.is_available()
+    if cuda and cuda_deterministic:
+        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.deterministic = True
+    torch.set_num_threads(1)

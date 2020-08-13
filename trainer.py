@@ -19,6 +19,7 @@ from common.atari_wrappers import wrap_deepmind
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from agent import Agent, AgentOutputs
+from common.vec_env.util import set_seeds
 from control_flow.hdfstore import HDF5Store
 from rollouts import RolloutStorage
 from ppo import PPO
@@ -56,23 +57,9 @@ class Train(abc.ABC):
         success_reward,
         no_eval=False,
     ):
-        self.num_steps = num_steps
-        self.num_processes = num_processes
-        self.run_id = run_id
-        self.save_interval = save_interval
-        self.log_dir = log_dir
-        if log_dir:
-            self.writer = SummaryWriter(logdir=str(log_dir))
-            self.table = HDF5Store(datapath=str(Path(log_dir, "table")))
-        else:
-            self.writer = None
-            self.table = None
-
-        # Properly restrict pytorch to not consume extra resources.
-        #  - https://github.com/pytorch/pytorch/issues/975
-        #  - https://github.com/ray-project/ray/issues/3609
-        torch.set_num_threads(1)
-        os.environ["OMP_NUM_THREADS"] = "1"
+        if not torch.cuda.is_available():
+            cuda = False
+        set_seeds(cuda=cuda, cuda_deterministic=cuda_deterministic, seed=seed)
 
         if render_eval and not render:
             eval_interval = 1
@@ -80,16 +67,6 @@ class Train(abc.ABC):
             ppo_args.update(ppo_epoch=0)
             num_processes = 1
             cuda = False
-
-        # reproducibility
-        torch.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
-        np.random.seed(seed)
-        cuda &= torch.cuda.is_available()
-        if cuda and cuda_deterministic:
-            torch.backends.cudnn.benchmark = False
-            torch.backends.cudnn.deterministic = True
-        torch.set_num_threads(1)
 
         self.device = "cpu"
         if cuda:
