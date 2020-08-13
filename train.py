@@ -82,7 +82,7 @@ class TrainBase(abc.ABC):
         self.device = "cpu"
         if cuda:
             self.device = self.get_device()
-        # print("Using device", self.device)
+        print("Using device", self.device)
 
         self.envs = self.make_vec_envs(
             **env_args,
