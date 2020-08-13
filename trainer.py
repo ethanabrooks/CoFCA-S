@@ -143,6 +143,10 @@ class Trainer(abc.ABC):
                 self.rewards[done] = 0
                 self.time_steps[done] = 0
 
+            def reset(self):
+                self.episode_rewards = []
+                self.episode_time_steps = []
+
         train_counter = EpochCounter()
 
         def run_epoch(obs, rnn_hxs, masks, envs):
@@ -204,7 +208,6 @@ class Trainer(abc.ABC):
             rollouts.obs[0].copy_(obs)
             tick = time.time()
 
-            train_counter = EpochCounter()
             for i in itertools.count():
                 for epoch_output in run_epoch(
                     obs=rollouts.obs[0],
@@ -251,7 +254,7 @@ class Trainer(abc.ABC):
                     for k, v in k_scalar_pairs(**result):
                         if self.writer:
                             self.writer.add_scalar(k, v, total_num_steps)
-                    train_counter = EpochCounter()
+                    train_counter.reset()
 
     @staticmethod
     def process_infos(episode_counter, done, infos, **act_log):
