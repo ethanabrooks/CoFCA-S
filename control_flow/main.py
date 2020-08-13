@@ -11,7 +11,7 @@ import control_flow.multi_step.env
 import control_flow.multi_step.minimal_gru
 import control_flow.multi_step.one_line
 import control_flow
-from arguments import add_arguments
+from main import add_arguments
 from trainer import Trainer
 
 NAMES = ["instruction", "actions", "program_counter", "evaluations"]

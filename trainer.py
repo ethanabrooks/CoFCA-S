@@ -7,8 +7,10 @@ from typing import Dict
 
 import gym
 import numpy as np
+import ray
 import torch
 from ray import tune
+from ray.tune.suggest import HyperOptSearch
 from tensorboardX import SummaryWriter
 
 from agent import Agent, AgentOutputs
@@ -23,16 +25,50 @@ from wrappers import VecPyTorch
 EpochOutputs = namedtuple("EpochOutputs", "obs reward done infos act masks")
 
 
-class Trainer(abc.ABC):
-    def train(
+class Trainer(tune.Trainable):
+    def __init__(self, config):
+        self.iterator = None
+        self.agent = None
+        self.ppo = None
+        self.i = None
+        self.device = None
+        super().__init__(config)
+
+    def _setup(self, config):
+        self.iterator = self.gen(**config)
+
+    def _train(self):
+        return next(self.iterator)
+
+    def _save(self, tmp_checkpoint_dir):
+        modules = dict(
+            optimizer=self.ppo.optimizer, agent=self.agent
+        )  # type: Dict[str, torch.nn.Module]
+        # if isinstance(self.envs.venv, VecNormalize):
+        #     modules.update(vec_normalize=self.envs.venv)
+        state_dict = {name: module.state_dict() for name, module in modules.items()}
+        save_path = Path(tmp_checkpoint_dir, f"checkpoint.pt")
+        torch.save(dict(step=self.i, **state_dict), save_path)
+        print(f"Saved parameters to {save_path}")
+
+    def _restore(self, checkpoint):
+        state_dict = torch.load(checkpoint, map_location=self.device)
+        self.agent.load_state_dict(state_dict["agent"])
+        self.ppo.optimizer.load_state_dict(state_dict["optimizer"])
+        start = state_dict.get("step", -1) + 1
+        # if isinstance(self.envs.venv, VecNormalize):
+        #     self.envs.venv.load_state_dict(state_dict["vec_normalize"])
+        print(f"Loaded parameters from {checkpoint}.")
+
+    def loop(self):
+        yield from self.iterator
+
+    def gen(
         self,
         agent_args: dict,
         cuda: bool,
         cuda_deterministic: bool,
         env_id: str,
-        eval_interval: int,
-        eval_steps: int,
-        load_path: Path,
         log_interval: int,
         normalize: float,
         num_batch: int,
@@ -42,12 +78,11 @@ class Trainer(abc.ABC):
         render: bool,
         render_eval: bool,
         rollouts_args: dict,
-        save_interval: int,
         seed: int,
         synchronous: bool,
         train_steps: int,
-        use_tune=False,
-        log_dir: Path = "dumb",
+        eval_interval: int = None,
+        eval_steps: int = None,
         no_eval=False,
     ):
         class EpochCounter:
@@ -68,6 +103,12 @@ class Trainer(abc.ABC):
             def reset(self):
                 self.episode_rewards = []
                 self.episode_time_steps = []
+
+            def items(self, prefix=""):
+                if self.episode_rewards:
+                    yield prefix + "rewards", np.mean(self.episode_rewards)
+                if self.episode_time_steps:
+                    yield prefix + "time_steps", np.mean(self.episode_time_steps)
 
         def make_vec_envs(evaluation):
             def env_thunk(rank):
@@ -105,20 +146,9 @@ class Trainer(abc.ABC):
 
                 rnn_hxs = act.rnn_hxs
 
-        def report(**kwargs):
-            if use_tune:
-                tune.report(**kwargs)
-            else:
-                pprint(kwargs)
-
         if not torch.cuda.is_available():
             cuda = False
         set_seeds(cuda=cuda, cuda_deterministic=cuda_deterministic, seed=seed)
-
-        if log_dir:
-            self.writer = SummaryWriter(logdir=str(log_dir))
-        else:
-            self.writer = None
 
         if render_eval and not render:
             eval_interval = 1
@@ -127,7 +157,7 @@ class Trainer(abc.ABC):
             num_processes = 1
             cuda = False
 
-        device = torch.device("cuda" if cuda else "cpu")
+        self.device = device = torch.device("cuda" if cuda else "cpu")
 
         train_envs = make_vec_envs(evaluation=False)
 
@@ -147,23 +177,14 @@ class Trainer(abc.ABC):
             agent.to(device)
             rollouts.to(device)
 
-        ppo = PPO(agent=agent, num_batch=num_batch, **ppo_args)
+        self.ppo = ppo = PPO(agent=agent, num_batch=num_batch, **ppo_args)
 
         start = 0
-        if load_path:
-            state_dict = torch.load(load_path, map_location=device)
-            agent.load_state_dict(state_dict["agent"])
-            ppo.optimizer.load_state_dict(state_dict["optimizer"])
-            start = state_dict.get("step", -1) + 1
-            # if isinstance(self.envs.venv, VecNormalize):
-            #     self.envs.venv.load_state_dict(state_dict["vec_normalize"])
-            print(f"Loaded parameters from {load_path}.")
-
         train_counter = EpochCounter()
-
         rollouts.obs[0].copy_(train_envs.reset())
 
         for i in range(start, num_epochs):
+            self.i = i
             for epoch_output in run_epoch(
                 obs=rollouts.obs[0],
                 rnn_hxs=rollouts.recurrent_hidden_states[0],
@@ -193,8 +214,8 @@ class Trainer(abc.ABC):
             train_results = ppo.update(rollouts)
             rollouts.after_update()
 
-            eval_counter = dict()
-            if eval_interval and not no_eval and i % eval_interval == 0:
+            eval_counter = EpochCounter()
+            if eval_interval and eval_steps and not no_eval and i % eval_interval == 0:
                 # vec_norm = get_vec_normalize(eval_envs)
                 # if vec_norm is not None:
                 #     vec_norm.eval()
@@ -208,7 +229,6 @@ class Trainer(abc.ABC):
                     eval_recurrent_hidden_states = torch.zeros(
                         num_processes, agent.recurrent_hidden_state_size, device=device
                     )
-                    eval_counter = EpochCounter()
                     for epoch_output in run_epoch(
                         obs=eval_envs.reset(),
                         rnn_hxs=eval_recurrent_hidden_states,
@@ -221,36 +241,13 @@ class Trainer(abc.ABC):
                         )
 
                 eval_envs.close()
-                eval_counter = dict(
-                    eval_rewards=eval_counter.episode_rewards,
-                    eval_time_steps=eval_counter.episode_time_steps,
-                )
-
             if i % log_interval == 0:
-                result = dict(
-                    rewards=train_counter.episode_rewards,
-                    time_steps=train_counter.episode_time_steps,
-                    **eval_counter,
+                yield dict(
                     **train_results,
+                    **dict(train_counter.items()),
+                    **dict(eval_counter.items(prefix="eval_")),
                 )
-                for k, v in k_scalar_pairs(**result):
-                    if self.writer:
-                        self.writer.add_scalar(k, v, i)
                 train_counter.reset()
-
-            if use_tune and save_interval and i % save_interval == 0:
-                modules = dict(
-                    optimizer=ppo.optimizer, agent=agent
-                )  # type: Dict[str, torch.nn.Module]
-                # if isinstance(self.envs.venv, VecNormalize):
-                #     modules.update(vec_normalize=self.envs.venv)
-                state_dict = {
-                    name: module.state_dict() for name, module in modules.items()
-                }
-                with tune.checkpoint_dir(i) as checkpoint_dir:
-                    save_path = Path(checkpoint_dir, f"checkpoint.pt")
-                    torch.save(dict(step=i, **state_dict), save_path)
-                    print(f"Saved parameters to {save_path}")
 
     @staticmethod
     def process_infos(episode_counter, done, infos, **act_log):
@@ -269,3 +266,50 @@ class Trainer(abc.ABC):
         env = gym.make(env_id)
         env.seed(seed + rank)
         return env
+
+    @classmethod
+    def main(
+        cls,
+        log_dir=None,
+        num_samples=None,
+        name=None,
+        config=None,
+        gpus_per_trial=None,
+        cpus_per_trial=None,
+        **kwargs,
+    ):
+        if config is None:
+            config = dict()
+        for k, v in kwargs.items():
+            if v is not None:
+                config[k] = v
+
+        if log_dir:
+            print("Not using tune, because log_dir was specified")
+            writer = SummaryWriter(logdir=str(log_dir))
+            for i, report in enumerate(cls(config).loop()):
+                pprint(report)
+                for k, v in report.items():
+                    writer.add_scalar(k, v, i)
+        else:
+            local_mode = num_samples is None
+            ray.init(dashboard_host="127.0.0.1", local_mode=local_mode)
+            metric = "final_reward"
+
+            resources_per_trial = {"gpu": gpus_per_trial, "cpu": cpus_per_trial}
+            kwargs = dict()
+
+            if local_mode:
+                print("Using local mode because num_samples is None")
+            else:
+                kwargs = dict(
+                    search_alg=HyperOptSearch(config, metric=metric),
+                    num_samples=num_samples,
+                )
+            tune.run(
+                cls,
+                name=name,
+                config=config,
+                resources_per_trial=resources_per_trial,
+                **kwargs,
+            )
