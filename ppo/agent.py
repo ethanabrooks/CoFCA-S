@@ -33,29 +33,9 @@ class Agent(nn.Module):
     ):
         super(Agent, self).__init__()
         self.entropy_coef = entropy_coef
-        if lower_level:
-            self.recurrent_module = LowerLevel(
-                obs_space=obs_spaces,
-                recurrent=recurrent,
-                hidden_size=hidden_size,
-                **network_args,
-            )
-        elif len(obs_spaces) == 3:
-            self.recurrent_module = CNNBase(
-                *obs_spaces,
-                recurrent=recurrent,
-                hidden_size=hidden_size,
-                **network_args,
-            )
-        elif len(obs_spaces) == 1:
-            self.recurrent_module = MLPBase(
-                obs_spaces[0],
-                recurrent=recurrent,
-                hidden_size=hidden_size,
-                **network_args,
-            )
-        else:
-            raise NotImplementedError
+        self.recurrent_module = self.build_recurrent_module(
+            hidden_size, lower_level, network_args, obs_spaces, recurrent
+        )
 
         if isinstance(action_space, Discrete):
             num_outputs = action_space.n
@@ -66,6 +46,33 @@ class Agent(nn.Module):
         else:
             raise NotImplementedError
         self.continuous = isinstance(action_space, Box)
+
+    def build_recurrent_module(
+        self, hidden_size, lower_level, network_args, obs_spaces, recurrent
+    ):
+        if lower_level:
+            return LowerLevel(
+                obs_space=obs_spaces,
+                recurrent=recurrent,
+                hidden_size=hidden_size,
+                **network_args,
+            )
+        elif len(obs_spaces) == 3:
+            return CNNBase(
+                *obs_spaces,
+                recurrent=recurrent,
+                hidden_size=hidden_size,
+                **network_args,
+            )
+        elif len(obs_spaces) == 1:
+            return MLPBase(
+                obs_spaces[0],
+                recurrent=recurrent,
+                hidden_size=hidden_size,
+                **network_args,
+            )
+        else:
+            raise NotImplementedError
 
     @property
     def is_recurrent(self):
