@@ -93,7 +93,7 @@ class Trainer(abc.ABC):
         make_eval_envs = lambda: make_vec_envs(evaluation=True)
 
         envs.to(device)
-        agent = self.build_agent(envs=envs, **agent_args)
+        self.agent = agent = self.build_agent(envs=envs, **agent_args)
         rollouts = RolloutStorage(
             num_steps=num_steps,
             num_processes=num_processes,
@@ -114,8 +114,6 @@ class Trainer(abc.ABC):
 
         ppo = PPO(agent=agent, num_batch=num_batch, **ppo_args)
         counter = Counter()
-
-        self.i = 0
 
         last_save = time.time()  # dummy save
         for _ in itertools.count():
@@ -155,13 +153,7 @@ class Trainer(abc.ABC):
             tick = time.time()
             log_progress = None
 
-            if eval_interval:
-                eval_iterator = range(self.i % eval_interval, eval_interval)
-            else:
-                eval_iterator = itertools.count(self.i)
-
-            for _ in eval_iterator:
-                self.i += 1
+            for i in itertools.count():
                 epoch_counter = self.run_epoch(
                     obs=rollouts.obs[0],
                     rnn_hxs=rollouts.recurrent_hidden_states[0],
@@ -183,7 +175,7 @@ class Trainer(abc.ABC):
                 rollouts.compute_returns(next_value=next_value)
                 train_results = ppo.update(rollouts)
                 rollouts.after_update()
-                if self.i % log_interval == 0:
+                if i % log_interval == 0:
                     total_num_steps = log_interval * num_processes * num_steps
                     fps = total_num_steps / (time.time() - tick)
                     tick = time.time()
@@ -194,7 +186,7 @@ class Trainer(abc.ABC):
                         **train_results,
                         **eval_result,
                     )
-                    total_num_steps = (self.i + 1) * num_processes * num_steps
+                    total_num_steps = (i + 1) * num_processes * num_steps
                     for k, v in k_scalar_pairs(**result):
                         if self.writer:
                             self.writer.add_scalar(k, v, total_num_steps)
