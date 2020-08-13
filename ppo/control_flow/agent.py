@@ -5,7 +5,7 @@ from torch import nn as nn
 from torch.nn import functional as F
 
 import ppo.agent
-import ppo.control_flow.multi_step.ours
+import ours
 import recurrence
 from ppo.agent import AgentValues, NNBase
 from env import Action
@@ -31,7 +31,7 @@ class Agent(ppo.agent.Agent, NNBase):
             del network_args["conv_hidden_size"]
             del network_args["gate_coef"]
         elif self.multi_step:
-            self.recurrent_module = ppo.control_flow.multi_step.ours.Recurrence(
+            self.recurrent_module = ours.Recurrence(
                 observation_space=observation_space,
                 action_space=action_space,
                 **network_args,
@@ -64,7 +64,7 @@ class Agent(ppo.agent.Agent, NNBase):
         if t is recurrence.Recurrence:
             X = [hx.a, hx.d, hx.p]
             probs = [hx.a_probs, hx.d_probs]
-        elif t is ppo.control_flow.multi_step.ours.Recurrence:
+        elif t is ours.Recurrence:
             X = Action(upper=hx.a, lower=hx.l, delta=hx.d, dg=hx.dg, ptr=hx.p)
             ll_type = self.lower_level_type
             if ll_type == "train-alone":
