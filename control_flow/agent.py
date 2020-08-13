@@ -7,7 +7,7 @@ from torch.nn import functional as F
 import networks
 import ours
 import recurrence
-from networks import AgentValues, NNBase
+from networks import AgentOutputs, NNBase
 from env import Action
 from distributions import FixedCategorical
 
@@ -111,7 +111,7 @@ class Agent(networks.Agent, NNBase):
             hx._replace(P=torch.tensor([], device=hx.P.device), l=X.lower), dim=-1
         )
         action = torch.cat(X, dim=-1)
-        return AgentValues(
+        return AgentOutputs(
             value=hx.va,
             value2=hx.vd,
             value3=hx.vdg,

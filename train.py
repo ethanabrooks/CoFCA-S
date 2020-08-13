@@ -19,10 +19,10 @@ from tqdm import tqdm
 from common.atari_wrappers import wrap_deepmind
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
-from networks import Agent, AgentValues
+from networks import Agent, AgentOutputs
 from hdfstore import HDF5Store
-from storage import RolloutStorage
-from update import PPO
+from rollouts import RolloutStorage
+from ppo import PPO
 from utils import k_scalar_pairs, get_n_gpu, get_random_gpu
 from wrappers import AddTimestep, TransposeImage, VecPyTorch, VecPyTorchFrameStack
 
@@ -275,7 +275,7 @@ class TrainBase(abc.ABC):
             with torch.no_grad():
                 act = self.agent(
                     inputs=obs, rnn_hxs=rnn_hxs, masks=masks
-                )  # type: AgentValues
+                )  # type: AgentOutputs
 
             # Observe reward and next obs
             obs, reward, done, infos = envs.step(act.action)
