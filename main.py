@@ -7,4 +7,4 @@ from trainer import Trainer
 if __name__ == "__main__":
     PARSER = argparse.ArgumentParser()
     add_arguments(PARSER)
-    Trainer(**hierarchical_parse_args(PARSER)).run()
+    Trainer().train(**hierarchical_parse_args(PARSER))

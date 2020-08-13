@@ -1,8 +1,6 @@
 import abc
-import itertools
 import sys
-import time
-from collections import defaultdict, deque, namedtuple
+from collections import defaultdict, namedtuple
 from pathlib import Path
 from pprint import pprint
 from typing import Dict
@@ -26,7 +24,7 @@ EpochOutputs = namedtuple("EpochOutputs", "obs reward done infos act masks")
 
 
 class Trainer(abc.ABC):
-    def __init__(
+    def train(
         self,
         agent_args: dict,
         cuda: bool,
