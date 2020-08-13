@@ -44,6 +44,9 @@ def add_arguments(parser):
         "--num-steps", type=int, help="number of forward steps in A2C", required=True
     )
     parser.add_argument(
+        "--num-epochs", type=int, help="number of updates to perform", required=True
+    )
+    parser.add_argument(
         "--log-interval",
         type=int,
         default=10,
