@@ -8,7 +8,7 @@ from ppo import agent
 from ppo.agent import NNBase
 from lines import Subtask
 from ppo.control_flow.multi_step.env import Obs, Env, subtasks
-from ppo.control_flow.recurrence import get_obs_sections
+from recurrence import get_obs_sections
 from utils import init_, init, init_normc_
 
 

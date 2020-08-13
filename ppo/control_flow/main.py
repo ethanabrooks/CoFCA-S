@@ -8,7 +8,6 @@ import ppo.agent
 import ppo.control_flow.agent
 import env
 import ppo.control_flow.multi_step.env
-import ppo.control_flow.multi_step.minimal_gru
 import ppo.control_flow.multi_step.one_line
 from ppo import control_flow
 from arguments import build_parser

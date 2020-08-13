@@ -7,8 +7,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from gym import spaces
 
-import ppo.control_flow.multi_step.abstract_recurrence as abstract_recurrence
-import ppo.control_flow.recurrence as recurrence
+import abstract_recurrence as abstract_recurrence
+import recurrence as recurrence
 from lower_level import Agent
 from env import Action
 from ppo.control_flow.multi_step.env import Obs

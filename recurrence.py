@@ -73,7 +73,6 @@ class Recurrence(nn.Module):
                 task_embed_size, task_embed_size, bidirectional=True, batch_first=True
             )
         )
-        # self.minimal_gru.py = nn.GRUCell(self.gru_in_size, gru_hidden_size)
 
         # layers = []
         # in_size = gru_hidden_size + 1
