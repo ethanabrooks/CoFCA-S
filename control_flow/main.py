@@ -4,10 +4,9 @@ import numpy as np
 from gym import spaces
 from rl_utils import hierarchical_parse_args
 
-import ppo.agent
 import control_flow.agent
 import env
-import ppo.multi_step.env
+import multi_step.env
 from arguments import build_parser
 from train import Train
 
@@ -72,7 +71,7 @@ def main(
                 del args["temporal_extension"]
                 return env.Env(**args)
             else:
-                return ppo.multi_step.env.Env(**args)
+                return multi_step.env.Env(**args)
 
         def process_infos(self, episode_counter, done, infos, **act_log):
             for d in infos:
@@ -146,7 +145,7 @@ def control_flow_args():
     )
     parser.add_argument("--lower-level-load-path")
     parsers.env.add_argument("--gridworld", action="store_true")
-    ppo.multi_step.env.build_parser(parsers.env)
+    multi_step.env.build_parser(parsers.env)
     parsers.agent.add_argument("--lower-level-config", type=Path)
     parsers.agent.add_argument("--no-debug", dest="debug", action="store_false")
     parsers.agent.add_argument("--no-scan", action="store_true")
