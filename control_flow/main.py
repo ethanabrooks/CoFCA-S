@@ -1,19 +1,18 @@
-import inspect
 from pathlib import Path
 
 import numpy as np
 from gym import spaces
 from rl_utils import hierarchical_parse_args
 
-import ppo.agent
-import ppo.control_flow.agent
-import ppo.control_flow.env
-import ppo.control_flow.multi_step.env
-import ppo.control_flow.multi_step.minimal_gru
-import ppo.control_flow.multi_step.one_line
-from ppo import control_flow
-from ppo.arguments import add_arguments
-from ppo.train import Train
+import agent
+import control_flow.agent
+import control_flow.env
+import control_flow.multi_step.env
+import control_flow.multi_step.minimal_gru
+import control_flow.multi_step.one_line
+import control_flow
+from arguments import add_arguments
+from train import Train
 
 NAMES = ["instruction", "actions", "program_counter", "evaluations"]
 
@@ -36,10 +35,10 @@ def main(
         def build_agent(self, envs, debug=False, **agent_args):
             obs_space = envs.observation_space
             ll_action_space = spaces.Discrete(
-                ppo.control_flow.env.Action(*envs.action_space.nvec).lower
+                control_flow.env.Action(*envs.action_space.nvec).lower
             )
             if lower_level == "train-alone":
-                return ppo.agent.Agent(
+                return agent.Agent(
                     lower_level=True,
                     obs_spaces=obs_space,
                     action_space=ll_action_space,
@@ -48,7 +47,7 @@ def main(
             agent_args.update(log_dir=log_dir)
             del agent_args["recurrent"]
             del agent_args["num_conv_layers"]
-            return ppo.control_flow.agent.Agent(
+            return control_flow.agent.Agent(
                 observation_space=obs_space,
                 action_space=envs.action_space,
                 eval_lines=max_eval_lines,
@@ -150,7 +149,7 @@ def control_flow_args():
     )
     parser.add_argument("--lower-level-load-path")
     parsers.env.add_argument("--gridworld", action="store_true")
-    ppo.control_flow.multi_step.env.build_parser(parsers.env)
+    control_flow.multi_step.env.build_parser(parsers.env)
     parsers.agent.add_argument("--lower-level-config", type=Path)
     parsers.agent.add_argument("--no-debug", dest="debug", action="store_false")
     parsers.agent.add_argument("--no-scan", action="store_true")

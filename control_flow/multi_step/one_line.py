@@ -1,14 +1,14 @@
 from collections import defaultdict
 
-from gym.spaces import Discrete, MultiDiscrete
+from gym.spaces import MultiDiscrete
 
-import ppo.control_flow.multi_step.env
-from ppo.control_flow.env import State
-from ppo.control_flow.lines import If, While
+import control_flow.multi_step.env
+from control_flow import State
+from control_flow.lines import If, While
 import numpy as np
 
 
-class Env(ppo.control_flow.multi_step.env.Env):
+class Env(control_flow.multi_step.env.Env):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.line = None

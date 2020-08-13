@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
-from ppo.storage import Batch, RolloutStorage
+from storage import Batch, RolloutStorage
 
 
 class PPO:

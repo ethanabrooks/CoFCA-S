@@ -6,9 +6,9 @@ import os
 import torch
 
 # first party
-from ppo.train import make_vec_envs
-from ppo.utils import get_render_func
-from ppo.wrappers import get_vec_normalize
+from train import make_vec_envs
+from utils import get_render_func
+from wrappers import get_vec_normalize
 
 parser = argparse.ArgumentParser(description="RL")
 parser.add_argument("--seed", type=int, default=1, help="random seed (default: 1)")

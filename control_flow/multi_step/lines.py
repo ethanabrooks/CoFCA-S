@@ -1,12 +1,7 @@
-import functools
-from enum import Enum
-from typing import List, Type, Generator, Tuple
-
 # noinspection PyShadowingBuiltins
-from numpy.random.mtrand import RandomState
 
 
-import ppo.control_flow.lines as single_step
+import control_flow.lines as single_step
 
 
 class Line(single_step.Line):

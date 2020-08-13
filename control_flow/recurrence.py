@@ -7,10 +7,10 @@ import torch.nn.functional as F
 from gym import spaces
 from torch import nn as nn
 
-from ppo.control_flow.env import Action
-from ppo.control_flow.multi_step.transformer import TransformerModel
-from ppo.distributions import Categorical, FixedCategorical
-from ppo.utils import init_
+from control_flow.env import Action
+from control_flow.multi_step.transformer import TransformerModel
+from distributions import Categorical, FixedCategorical
+from utils import init_
 
 RecurrentState = namedtuple("RecurrentState", "a d h p v a_probs d_probs P")
 

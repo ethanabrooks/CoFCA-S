@@ -7,13 +7,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 from gym import spaces
 
-import ppo.control_flow.multi_step.abstract_recurrence as abstract_recurrence
-import ppo.control_flow.recurrence as recurrence
-from ppo.agent import Agent
-from ppo.control_flow.env import Action
-from ppo.control_flow.multi_step.env import Obs
-from ppo.distributions import FixedCategorical, Categorical
-from ppo.utils import init_
+import control_flow.multi_step.abstract_recurrence as abstract_recurrence
+import control_flow.recurrence as recurrence
+from agent import Agent
+from control_flow import Action
+from control_flow import Obs
+from distributions import FixedCategorical, Categorical
+from utils import init_
 
 RecurrentState = namedtuple(
     "RecurrentState", "a l d h dg p v lh l_probs a_probs d_probs dg_probs P"

@@ -1,6 +1,5 @@
 from __future__ import print_function
 
-import numpy as np
 import argparse
 import csv
 import itertools
@@ -17,11 +16,11 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 import torch.nn as nn
 
-from ppo.control_flow.lines import If
-from ppo.control_flow.multi_step.env import Env
-from ppo.layers import Flatten
-from ppo.utils import init_
-import ppo.control_flow.multi_step.env
+from control_flow.lines import If
+from control_flow import Env
+from layers import Flatten
+from utils import init_
+import control_flow.multi_step.env
 
 MAX_LAYERS = 3
 
@@ -253,7 +252,7 @@ def cli():
     parser.add_argument("--log-dir", default="/tmp/mnist", metavar="N", help="")
     parser.add_argument("--run-id", default="", metavar="N", help="")
     env_parser = parser.add_argument_group("env_args")
-    ppo.control_flow.multi_step.env.build_parser(
+    control_flow.multi_step.env.build_parser(
         env_parser,
         default_max_while_loops=1,
         default_max_world_resamples=0,

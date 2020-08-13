@@ -4,9 +4,6 @@ import torch.nn.functional as F
 from gym import spaces
 from torch import nn as nn
 
-from ppo.control_flow.multi_step.env import Obs
-from ppo.utils import init_
-
 
 class Recurrence:
     def __init__(self):

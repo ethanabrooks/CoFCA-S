@@ -8,9 +8,9 @@ from gym.utils import seeding
 from gym.vector.utils import spaces
 
 from common.vec_env.util import hierarchical_parse_args
-from ppo import keyboard_control
-from ppo.utils import RED, RESET, GREEN
-from ppo.control_flow.lines import (
+import keyboard_control
+from utils import RED, RESET, GREEN
+from control_flow.lines import (
     If,
     Else,
     EndIf,

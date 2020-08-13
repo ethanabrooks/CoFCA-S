@@ -4,11 +4,11 @@ import torch.nn.functional as F
 from gym import spaces
 from torch import nn as nn
 
-import ppo.control_flow.recurrence
-from ppo.control_flow.recurrence import RecurrentState
+import control_flow.recurrence
+from control_flow import RecurrentState
 
 
-class Recurrence(ppo.control_flow.recurrence.Recurrence):
+class Recurrence(control_flow.recurrence.Recurrence):
     def build_embed_task(self, hidden_size):
         return nn.Embedding(self.obs_spaces.lines.nvec[0], hidden_size)
 

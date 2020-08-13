@@ -2,13 +2,13 @@ import torch
 import torch.nn.functional as F
 from torch import nn as nn
 
-import ppo.control_flow.multi_step.abstract_recurrence as abstract_recurrence
-from ppo.agent import AgentValues, MLPBase
-from ppo.control_flow.multi_step.env import Obs
-from ppo.control_flow.multi_step.ours import optimal_padding
-from ppo.control_flow.recurrence import get_obs_sections
-from ppo.distributions import Categorical
-from ppo.utils import init_
+import control_flow.multi_step.abstract_recurrence as abstract_recurrence
+from agent import AgentValues, MLPBase
+from control_flow import Obs
+from control_flow import optimal_padding
+from control_flow import get_obs_sections
+from distributions import Categorical
+from utils import init_
 
 
 class Agent(nn.Module, abstract_recurrence.Recurrence):

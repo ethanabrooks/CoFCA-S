@@ -4,17 +4,17 @@ from gym.spaces import Box
 from torch import nn as nn
 from torch.nn import functional as F
 
-import ppo.agent
-import ppo.control_flow.multi_step.abstract_recurrence
-import ppo.control_flow.multi_step.ours
-import ppo.control_flow.no_pointer
-import ppo.control_flow.recurrence
-from ppo.agent import AgentValues, NNBase
-from ppo.control_flow.env import Action
-from ppo.distributions import FixedCategorical
+import agent
+import control_flow.multi_step.abstract_recurrence
+import control_flow.multi_step.ours
+import control_flow.no_pointer
+import control_flow.recurrence
+from agent import AgentValues, NNBase
+from control_flow import Action
+from distributions import FixedCategorical
 
 
-class Agent(ppo.agent.Agent, NNBase):
+class Agent(agent.Agent, NNBase):
     def __init__(
         self,
         entropy_coef,
@@ -33,13 +33,13 @@ class Agent(ppo.agent.Agent, NNBase):
             del network_args["conv_hidden_size"]
             del network_args["gate_coef"]
         elif self.multi_step:
-            self.recurrent_module = ppo.control_flow.multi_step.ours.Recurrence(
+            self.recurrent_module = control_flow.multi_step.ours.Recurrence(
                 observation_space=observation_space,
                 action_space=action_space,
                 **network_args,
             )
         else:
-            self.recurrent_module = ppo.control_flow.recurrence.Recurrence(
+            self.recurrent_module = control_flow.recurrence.Recurrence(
                 observation_space=observation_space,
                 action_space=action_space,
                 **network_args,
@@ -63,10 +63,10 @@ class Agent(ppo.agent.Agent, NNBase):
         rm = self.recurrent_module
         hx = rm.parse_hidden(all_hxs)
         t = type(rm)
-        if t is ppo.control_flow.recurrence.Recurrence:
+        if t is control_flow.recurrence.Recurrence:
             X = [hx.a, hx.d, hx.p]
             probs = [hx.a_probs, hx.d_probs]
-        elif t is ppo.control_flow.multi_step.ours.Recurrence:
+        elif t is control_flow.multi_step.ours.Recurrence:
             X = Action(upper=hx.a, lower=hx.l, delta=hx.d, dg=hx.dg, ptr=hx.p)
             ll_type = self.lower_level_type
             if ll_type == "train-alone":

@@ -6,12 +6,12 @@ from gym.spaces import Box, Discrete
 import torch
 import torch.nn as nn
 
-from ppo.control_flow.multi_step.env import Obs, subtasks, Env
-from ppo.control_flow.lines import Subtask
-from ppo.control_flow.recurrence import get_obs_sections
-from ppo.distributions import Categorical, DiagGaussian
-from ppo.layers import Flatten
-from ppo.utils import init, init_normc_, init_
+from control_flow.lines import Subtask
+from control_flow.multi_step.env import Env, subtasks, Obs
+from control_flow.recurrence import get_obs_sections
+from distributions import Categorical, DiagGaussian
+from layers import Flatten
+from utils import init, init_normc_, init_
 
 AgentValues = namedtuple(
     "AgentValues", "value action action_log_probs aux_loss rnn_hxs log dist"

@@ -19,13 +19,13 @@ from torch.utils.data import DataLoader, IterableDataset
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-import ppo.control_flow.multi_step.env
-from ppo.agent import Agent
-from ppo.control_flow.env import Action
-from ppo.control_flow.multi_step.env import Env
-from ppo.control_flow.multi_step.env import Obs
-from ppo.layers import Flatten
-from ppo.utils import init_
+import control_flow.multi_step.env
+from agent import Agent
+from control_flow import Action
+from control_flow import Env
+from control_flow import Obs
+from layers import Flatten
+from utils import init_
 from typing import Optional
 
 MAX_LAYERS = 3
@@ -370,7 +370,7 @@ def cli():
     dataset_parser = parser.add_argument_group("dataset_args")
     dataset_parser.add_argument("--lower-level-config", type=Path, required=True)
     dataset_parser.add_argument("--lower-level-load-path", type=Path, required=True)
-    ppo.control_flow.multi_step.env.build_parser(
+    control_flow.multi_step.env.build_parser(
         dataset_parser,
         default_max_while_loops=2,
         default_max_world_resamples=0,
