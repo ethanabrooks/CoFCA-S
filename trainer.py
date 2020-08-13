@@ -90,7 +90,6 @@ class Trainer(abc.ABC):
             )
 
         train_envs = make_vec_envs(evaluation=False)
-        make_eval_envs = lambda: make_vec_envs(evaluation=True)
 
         train_envs.to(device)
         self.agent = agent = self.build_agent(envs=train_envs, **agent_args)
@@ -115,6 +114,53 @@ class Trainer(abc.ABC):
         ppo = PPO(agent=agent, num_batch=num_batch, **ppo_args)
         counter = Counter()
 
+        def run_epoch(obs, rnn_hxs, masks, envs):
+            # noinspection PyTypeChecker
+            episode_counter = defaultdict(list)
+            iterator = range(num_steps)
+            for _ in iterator:
+                with torch.no_grad():
+                    act = self.agent(
+                        inputs=obs, rnn_hxs=rnn_hxs, masks=masks
+                    )  # type: AgentOutputs
+
+                # Observe reward and next obs
+                obs, reward, done, infos = envs.step(act.action)
+                self.process_infos(episode_counter, done, infos, **act.log)
+
+                # track rewards
+                counter["reward"] += reward.numpy()
+                counter["time_step"] += np.ones_like(done)
+                episode_rewards = counter["reward"][done]
+                episode_counter["rewards"] += list(episode_rewards)
+                if success_reward is not None:
+                    # noinspection PyTypeChecker
+                    episode_counter["success"] += list(
+                        episode_rewards >= success_reward
+                    )
+
+                episode_counter["time_steps"] += list(counter["time_step"][done])
+                counter["reward"][done] = 0
+                counter["time_step"][done] = 0
+
+                # If done then clean the history of observations.
+                masks = torch.tensor(
+                    1 - done, dtype=torch.float32, device=obs.device
+                ).unsqueeze(1)
+                rnn_hxs = act.rnn_hxs
+                if rollouts is not None:
+                    rollouts.insert(
+                        obs=obs,
+                        recurrent_hidden_states=act.rnn_hxs,
+                        actions=act.action,
+                        action_log_probs=act.action_log_probs,
+                        values=act.value,
+                        rewards=reward,
+                        masks=masks,
+                    )
+
+            return dict(episode_counter)
+
         last_save = time.time()  # dummy save
         for _ in itertools.count():
             if eval_interval and not no_eval:
@@ -126,21 +172,17 @@ class Trainer(abc.ABC):
                 # self.envs.evaluate()
                 eval_masks = torch.zeros(num_processes, 1, device=device)
                 eval_counter = Counter()
-                eval_envs = make_eval_envs()
+                eval_envs = make_vec_envs(evaluation=True)
                 eval_envs.to(device)
                 with agent.network.evaluating(eval_envs.observation_space):
                     eval_recurrent_hidden_states = torch.zeros(
                         num_processes, agent.recurrent_hidden_state_size, device=device
                     )
 
-                    eval_result = self.run_epoch(
+                    eval_result = run_epoch(
                         obs=eval_envs.reset(),
                         rnn_hxs=eval_recurrent_hidden_states,
                         masks=eval_masks,
-                        num_steps=eval_steps,
-                        counter=eval_counter,
-                        success_reward=success_reward,
-                        rollouts=None,
                         envs=eval_envs,
                     )
                 eval_envs.close()
@@ -154,14 +196,10 @@ class Trainer(abc.ABC):
             log_progress = None
 
             for i in itertools.count():
-                epoch_counter = self.run_epoch(
+                epoch_counter = run_epoch(
                     obs=rollouts.obs[0],
                     rnn_hxs=rollouts.recurrent_hidden_states[0],
                     masks=rollouts.masks[0],
-                    num_steps=num_steps,
-                    counter=counter,
-                    success_reward=success_reward,
-                    rollouts=rollouts,
                     envs=train_envs,
                 )
 
@@ -199,53 +237,6 @@ class Trainer(abc.ABC):
             device_num = get_random_gpu()
 
         return torch.device("cuda", device_num)
-
-    def run_epoch(
-        self, obs, rnn_hxs, masks, num_steps, counter, success_reward, rollouts, envs
-    ):
-        # noinspection PyTypeChecker
-        episode_counter = defaultdict(list)
-        iterator = range(num_steps)
-        for _ in iterator:
-            with torch.no_grad():
-                act = self.agent(
-                    inputs=obs, rnn_hxs=rnn_hxs, masks=masks
-                )  # type: AgentOutputs
-
-            # Observe reward and next obs
-            obs, reward, done, infos = envs.step(act.action)
-            self.process_infos(episode_counter, done, infos, **act.log)
-
-            # track rewards
-            counter["reward"] += reward.numpy()
-            counter["time_step"] += np.ones_like(done)
-            episode_rewards = counter["reward"][done]
-            episode_counter["rewards"] += list(episode_rewards)
-            if success_reward is not None:
-                # noinspection PyTypeChecker
-                episode_counter["success"] += list(episode_rewards >= success_reward)
-
-            episode_counter["time_steps"] += list(counter["time_step"][done])
-            counter["reward"][done] = 0
-            counter["time_step"][done] = 0
-
-            # If done then clean the history of observations.
-            masks = torch.tensor(
-                1 - done, dtype=torch.float32, device=obs.device
-            ).unsqueeze(1)
-            rnn_hxs = act.rnn_hxs
-            if rollouts is not None:
-                rollouts.insert(
-                    obs=obs,
-                    recurrent_hidden_states=act.rnn_hxs,
-                    actions=act.action,
-                    action_log_probs=act.action_log_probs,
-                    values=act.value,
-                    rewards=reward,
-                    masks=masks,
-                )
-
-        return dict(episode_counter)
 
     @staticmethod
     def process_infos(episode_counter, done, infos, **act_log):
@@ -285,55 +276,6 @@ class Trainer(abc.ABC):
 
         return env
 
-    def make_vec_envs(
-        self,
-        num_processes,
-        gamma,
-        render,
-        synchronous,
-        env_id,
-        add_timestep,
-        seed,
-        evaluation,
-        num_frame_stack=None,
-        **env_args,
-    ):
-        envs = [
-            functools.partial(  # thunk
-                self.make_env,
-                rank=i,
-                env_id=env_id,
-                add_timestep=add_timestep,
-                seed=seed,
-                evaluation=evaluation,
-                **env_args,
-            )
-            for i in range(num_processes)
-        ]
-
-        if len(envs) == 1 or sys.platform == "darwin" or synchronous:
-            envs = DummyVecEnv(envs, render=render)
-        else:
-            envs = SubprocVecEnv(envs)
-
-        # if (
-        # envs.observation_space.shape
-        # and len(envs.observation_space.shape) == 1
-        # ):
-        # if gamma is None:
-        # envs = VecNormalize(envs, ret=False)
-        # else:
-        # envs = VecNormalize(envs, gamma=gamma)
-
-        envs = VecPyTorch(envs)
-
-        if num_frame_stack is not None:
-            envs = VecPyTorchFrameStack(envs, num_frame_stack)
-        # elif len(envs.observation_space.shape) == 3:
-        #     envs = VecPyTorchFrameStack(envs, 4, device)
-
-        return envs
-
     def _save(self, checkpoint_dir):
         modules = dict(
             optimizer=self.ppo.optimizer, agent=self.agent
@@ -355,6 +297,3 @@ class Trainer(abc.ABC):
         # if isinstance(self.envs.venv, VecNormalize):
         #     self.envs.venv.load_state_dict(state_dict["vec_normalize"])
         print(f"Loaded parameters from {load_path}.")
-
-    def get_device(self):
-        return torch.device("cuda" if self.cuda else "cpu")
