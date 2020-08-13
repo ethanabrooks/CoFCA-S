@@ -2,10 +2,9 @@ from collections import namedtuple
 
 import gym
 import numpy as np
-from gym import spaces
 
 from common.vec_env.util import space_shape
-from ppo.utils import RED, RESET
+from utils import RED, RESET
 
 Actions = namedtuple("Actions", "a cr cg g z l")
 

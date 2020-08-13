@@ -6,8 +6,8 @@ import torch.nn.functional as F
 from torch import nn as nn
 
 from ppo.control_flow.env import Obs
-from ppo.distributions import Categorical, FixedCategorical
-from ppo.utils import init_
+from distributions import Categorical
+from utils import init_
 
 RecurrentState = namedtuple("RecurrentState", "a v h a_probs")
 

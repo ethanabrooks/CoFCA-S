@@ -9,9 +9,9 @@ import torch.nn as nn
 from ppo.control_flow.multi_step.env import Obs, subtasks, Env
 from ppo.control_flow.lines import Subtask
 from ppo.control_flow.recurrence import get_obs_sections
-from ppo.distributions import Categorical, DiagGaussian
-from ppo.layers import Flatten
-from ppo.utils import init, init_normc_, init_
+from distributions import Categorical, DiagGaussian
+from layers import Flatten
+from utils import init, init_normc_, init_
 
 AgentValues = namedtuple(
     "AgentValues",

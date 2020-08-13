@@ -7,8 +7,8 @@ from ppo.agent import AgentValues, MLPBase
 from ppo.control_flow.multi_step.env import Obs
 from ppo.control_flow.multi_step.ours import optimal_padding
 from ppo.control_flow.recurrence import get_obs_sections
-from ppo.distributions import Categorical
-from ppo.utils import init_
+from distributions import Categorical
+from utils import init_
 
 
 class Agent(nn.Module, abstract_recurrence.Recurrence):

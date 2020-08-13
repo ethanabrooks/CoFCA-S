@@ -11,7 +11,7 @@ import ppo.control_flow.no_pointer
 import ppo.control_flow.recurrence
 from ppo.agent import AgentValues, NNBase
 from ppo.control_flow.env import Action
-from ppo.distributions import FixedCategorical
+from distributions import FixedCategorical
 
 
 class Agent(ppo.agent.Agent, NNBase):

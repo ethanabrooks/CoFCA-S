@@ -6,8 +6,8 @@ import numpy as np
 from gym.utils import seeding
 from gym.vector.utils import spaces
 from rl_utils import hierarchical_parse_args, gym
-from ppo import keyboard_control
-from ppo.utils import RED, RESET, GREEN
+import keyboard_control
+from utils import RED, RESET, GREEN
 from ppo.control_flow.lines import (
     If,
     Else,
@@ -171,7 +171,7 @@ class Env(gym.Env, ABC):
                     info.update(success_line=len(lines), progress=1)
                 else:
                     info.update(
-                        success_line=state.prev, progress=state.prev / len(lines),
+                        success_line=state.prev, progress=state.prev / len(lines)
                     )
                 subtasks_attempted = subtasks_complete + (not success)
                 info.update(

@@ -24,8 +24,8 @@ from ppo.agent import Agent
 from ppo.control_flow.env import Action
 from ppo.control_flow.multi_step.env import Env
 from ppo.control_flow.multi_step.env import Obs
-from ppo.layers import Flatten
-from ppo.utils import init_
+from layers import Flatten
+from utils import init_
 from typing import Optional
 
 MAX_LAYERS = 3

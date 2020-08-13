@@ -1,6 +1,5 @@
 from __future__ import print_function
 
-import numpy as np
 import argparse
 import csv
 import itertools
@@ -19,8 +18,8 @@ import torch.nn as nn
 
 from ppo.control_flow.lines import If
 from ppo.control_flow.multi_step.env import Env
-from ppo.layers import Flatten
-from ppo.utils import init_
+from layers import Flatten
+from utils import init_
 import ppo.control_flow.multi_step.env
 
 MAX_LAYERS = 3

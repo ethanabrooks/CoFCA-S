@@ -12,8 +12,8 @@ import ppo.control_flow.recurrence as recurrence
 from ppo.agent import Agent
 from ppo.control_flow.env import Action
 from ppo.control_flow.multi_step.env import Obs
-from ppo.distributions import FixedCategorical, Categorical
-from ppo.utils import init_
+from distributions import FixedCategorical, Categorical
+from utils import init_
 
 RecurrentState = namedtuple(
     "RecurrentState", "a l d h dg p va vd vdg lh l_probs a_probs d_probs dg_probs P"

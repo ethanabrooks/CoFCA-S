@@ -21,10 +21,10 @@ from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from ppo.agent import Agent, AgentValues
 from ppo.control_flow.hdfstore import HDF5Store
-from ppo.storage import RolloutStorage
-from ppo.update import PPO
-from ppo.utils import k_scalar_pairs, get_n_gpu, get_random_gpu
-from ppo.wrappers import AddTimestep, TransposeImage, VecPyTorch, VecPyTorchFrameStack
+from storage import RolloutStorage
+from update import PPO
+from utils import k_scalar_pairs, get_n_gpu, get_random_gpu
+from wrappers import AddTimestep, TransposeImage, VecPyTorch, VecPyTorchFrameStack
 
 
 # noinspection PyAttributeOutsideInit

@@ -1,4 +1,3 @@
-import inspect
 from pathlib import Path
 
 import numpy as np
@@ -12,8 +11,8 @@ import ppo.control_flow.multi_step.env
 import ppo.control_flow.multi_step.minimal_gru
 import ppo.control_flow.multi_step.one_line
 from ppo import control_flow
-from ppo.arguments import build_parser
-from ppo.train import Train
+from arguments import build_parser
+from train import Train
 
 NAMES = ["instruction", "actions", "program_counter", "evaluations"]
 
