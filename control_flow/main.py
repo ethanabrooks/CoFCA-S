@@ -5,7 +5,7 @@ from gym import spaces
 from rl_utils import hierarchical_parse_args
 
 import ppo.agent
-import ppo.control_flow.agent
+import control_flow.agent
 import env
 import ppo.multi_step.env
 from arguments import build_parser
@@ -42,7 +42,7 @@ def main(
             agent_args.update(log_dir=log_dir)
             del agent_args["recurrent"]
             del agent_args["num_conv_layers"]
-            return ppo.control_flow.agent.Agent(
+            return control_flow.agent.Agent(
                 observation_space=obs_space,
                 action_space=envs.action_space,
                 eval_lines=max_eval_lines,
