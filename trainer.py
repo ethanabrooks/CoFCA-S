@@ -27,9 +27,12 @@ from wrappers import AddTimestep, TransposeImage, VecPyTorch, VecPyTorchFrameSta
 
 
 # noinspection PyAttributeOutsideInit
-class TrainBase(abc.ABC):
-    def setup(
+class Train(abc.ABC):
+    def __init__(
         self,
+        run_id,
+        log_dir: Path,
+        save_interval: int,
         num_steps,
         eval_steps,
         num_processes,
@@ -51,8 +54,20 @@ class TrainBase(abc.ABC):
         num_batch,
         env_args,
         success_reward,
-            no_eval=False,
+        no_eval=False,
     ):
+        self.num_steps = num_steps
+        self.num_processes = num_processes
+        self.run_id = run_id
+        self.save_interval = save_interval
+        self.log_dir = log_dir
+        if log_dir:
+            self.writer = SummaryWriter(logdir=str(log_dir))
+            self.table = HDF5Store(datapath=str(Path(log_dir, "table")))
+        else:
+            self.writer = None
+            self.table = None
+
         # Properly restrict pytorch to not consume extra resources.
         #  - https://github.com/pytorch/pytorch/issues/975
         #  - https://github.com/ray-project/ray/issues/3609
@@ -78,6 +93,7 @@ class TrainBase(abc.ABC):
 
         self.device = "cpu"
         if cuda:
+            self.cuda = True
             self.device = self.get_device()
         # print("Using device", self.device)
 
@@ -138,6 +154,31 @@ class TrainBase(abc.ABC):
             success_reward=success_reward,
         )
         self.train_iterator = self.make_train_iterator()
+        self.last_save = time.time()  # dummy save
+
+    def run(self):
+        for _ in itertools.count():
+            for result in self.make_train_iterator():
+                if self.writer is not None:
+                    self.log_result(result)
+
+                if self.log_dir and self.i % self.save_interval == 0:
+                    self._save(str(self.log_dir))
+                    self.last_save = time.time()
+
+    def log_result(self, result):
+        total_num_steps = (self.i + 1) * self.num_processes * self.num_steps
+        for k, v in k_scalar_pairs(**result):
+            self.writer.add_scalar(k, v, total_num_steps)
+
+    def get_device(self):
+        match = re.search("\d+$", self.run_id)
+        if match:
+            device_num = int(match.group()) % get_n_gpu()
+        else:
+            device_num = get_random_gpu()
+
+        return torch.device("cuda", device_num)
 
     def _train(self):
         try:
@@ -211,7 +252,6 @@ class TrainBase(abc.ABC):
                 rollouts=self.rollouts,
                 envs=self.envs,
             )
-            pprint(epoch_counter)
 
             with torch.no_grad():
                 next_value = self.agent.get_value(
@@ -234,15 +274,7 @@ class TrainBase(abc.ABC):
                 )
 
     def run_epoch(
-        self,
-        obs,
-        rnn_hxs,
-        masks,
-        num_steps,
-        counter,
-        success_reward,
-        rollouts,
-        envs,
+        self, obs, rnn_hxs, masks, num_steps, counter, success_reward, rollouts, envs
     ):
         # noinspection PyTypeChecker
         episode_counter = defaultdict(list)
@@ -324,7 +356,6 @@ class TrainBase(abc.ABC):
         if len(obs_shape) == 3 and obs_shape[2] in [1, 3]:
             env = TransposeImage(env)
 
-
         return env
 
     def make_vec_envs(
@@ -383,9 +414,7 @@ class TrainBase(abc.ABC):
         # if isinstance(self.envs.venv, VecNormalize):
         #     modules.update(vec_normalize=self.envs.venv)
         state_dict = {name: module.state_dict() for name, module in modules.items()}
-        save_path = Path(
-            checkpoint_dir, f"checkpoint.pt"
-        )
+        save_path = Path(checkpoint_dir, f"checkpoint.pt")
         torch.save(dict(step=self.i, **state_dict), save_path)
         print(f"Saved parameters to {save_path}")
         return str(save_path)
@@ -400,55 +429,8 @@ class TrainBase(abc.ABC):
         #     self.envs.venv.load_state_dict(state_dict["vec_normalize"])
         print(f"Loaded parameters from {load_path}.")
 
-    @abc.abstractmethod
     def get_device(self):
-        raise NotImplementedError
+        return torch.device("cuda" if self.cuda else "cpu")
 
 
-class Train(TrainBase):
-    def __init__(
-        self,
-        run_id,
-        log_dir: Path,
-        save_interval: int,
-        num_processes: int,
-        num_steps: int,
-        **kwargs,
-    ):
-        self.num_steps = num_steps
-        self.num_processes = num_processes
-        self.run_id = run_id
-        self.save_interval = save_interval
-        self.log_dir = log_dir
-        if log_dir:
-            self.writer = SummaryWriter(logdir=str(log_dir))
-            self.table = HDF5Store(datapath=str(Path(log_dir, "table")))
-        else:
-            self.writer = None
-            self.table = None
-        self.setup(**kwargs, num_processes=num_processes, num_steps=num_steps)
-        self.last_save = time.time()  # dummy save
 
-    def run(self):
-        for _ in itertools.count():
-            for result in self.make_train_iterator():
-                if self.writer is not None:
-                    self.log_result(result)
-
-                if self.log_dir and self.i % self.save_interval == 0:
-                    self._save(str(self.log_dir))
-                    self.last_save = time.time()
-
-    def log_result(self, result):
-        total_num_steps = (self.i + 1) * self.num_processes * self.num_steps
-        for k, v in k_scalar_pairs(**result):
-            self.writer.add_scalar(k, v, total_num_steps)
-
-    def get_device(self):
-        match = re.search("\d+$", self.run_id)
-        if match:
-            device_num = int(match.group()) % get_n_gpu()
-        else:
-            device_num = get_random_gpu()
-
-        return torch.device("cuda", device_num)
