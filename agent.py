@@ -15,7 +15,7 @@ from layers import Flatten
 from utils import init, init_normc_, init_
 
 AgentOutputs = namedtuple(
-    "AgentValues", "value action action_log_probs aux_loss rnn_hxs log dist",
+    "AgentValues", "value action action_log_probs aux_loss rnn_hxs log dist"
 )
 
 
@@ -78,9 +78,7 @@ class Agent(nn.Module):
     def forward(
         self, inputs, rnn_hxs, masks, deterministic=False, action=None, **kwargs
     ):
-        value, actor_features, rnn_hxs = self.network(
-            inputs, rnn_hxs, masks, **kwargs
-        )
+        value, actor_features, rnn_hxs = self.network(inputs, rnn_hxs, masks, **kwargs)
 
         dist = self.dist(actor_features)
 

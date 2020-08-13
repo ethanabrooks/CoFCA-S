@@ -118,6 +118,7 @@ def obs_to_dict(obs):
         return obs
     return {None: obs}
 
+
 def set_seeds(cuda, cuda_deterministic, seed):
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)

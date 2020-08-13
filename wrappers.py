@@ -159,8 +159,6 @@ class VecPyTorchFrameStack(VecEnvWrapper):
         self.venv.to(device)
 
 
-
-
 def get_vec_normalize(venv):
     if isinstance(venv, VecNormalize):
         return venv
