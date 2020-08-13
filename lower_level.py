@@ -4,8 +4,8 @@ from torch import nn as nn
 from torch.nn import functional as F
 
 from layers import Flatten
-from ppo import agent
-from ppo.agent import NNBase
+from foo import agent
+from foo.agent import NNBase
 from lines import Subtask
 from multi_step.env import Obs, Env, subtasks
 from recurrence import get_obs_sections

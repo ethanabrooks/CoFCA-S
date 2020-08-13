@@ -19,7 +19,7 @@ from tqdm import tqdm
 from common.atari_wrappers import wrap_deepmind
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
-from ppo.agent import Agent, AgentValues
+from foo.agent import Agent, AgentValues
 from hdfstore import HDF5Store
 from storage import RolloutStorage
 from update import PPO

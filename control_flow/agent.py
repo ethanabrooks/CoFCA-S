@@ -4,15 +4,15 @@ from gym.spaces import Box
 from torch import nn as nn
 from torch.nn import functional as F
 
-import ppo.agent
+import foo.agent
 import ours
 import recurrence
-from ppo.agent import AgentValues, NNBase
+from foo.agent import AgentValues, NNBase
 from env import Action
 from distributions import FixedCategorical
 
 
-class Agent(ppo.agent.Agent, NNBase):
+class Agent(foo.agent.Agent, NNBase):
     def __init__(
         self,
         entropy_coef,
