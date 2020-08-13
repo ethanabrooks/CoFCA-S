@@ -32,7 +32,6 @@ class Trainer(abc.ABC):
     def __init__(
         self,
         run_id,
-        log_dir: Path,
         save_interval: int,
         num_steps,
         eval_steps,
@@ -55,6 +54,7 @@ class Trainer(abc.ABC):
         num_batch,
         env_args,
         success_reward,
+        log_dir: Path = "dumb",
         no_eval=False,
     ):
         if not torch.cuda.is_available():
@@ -68,10 +68,8 @@ class Trainer(abc.ABC):
         self.log_dir = log_dir
         if log_dir:
             self.writer = SummaryWriter(logdir=str(log_dir))
-            self.table = HDF5Store(datapath=str(Path(log_dir, "table")))
         else:
             self.writer = None
-            self.table = None
 
         if render_eval and not render:
             eval_interval = 1
@@ -130,32 +128,93 @@ class Trainer(abc.ABC):
         if load_path:
             self._restore(load_path)
 
-        self.make_train_iterator = lambda: self.train_generator(
-            num_steps=num_steps,
-            num_processes=num_processes,
-            eval_steps=eval_steps,
-            log_interval=log_interval,
-            eval_interval=eval_interval,
-            no_eval=no_eval,
-            success_reward=success_reward,
-        )
-        self.train_iterator = self.make_train_iterator()
         self.last_save = time.time()  # dummy save
-
-    def run(self):
         for _ in itertools.count():
-            for result in self.make_train_iterator():
-                if self.writer is not None:
-                    self.log_result(result)
+            if eval_interval and not no_eval:
+                # vec_norm = get_vec_normalize(eval_envs)
+                # if vec_norm is not None:
+                #     vec_norm.eval()
+                #     vec_norm.ob_rms = get_vec_normalize(envs).ob_rms
 
-                if self.log_dir and self.i % self.save_interval == 0:
-                    self._save(str(self.log_dir))
-                    self.last_save = time.time()
+                # self.envs.evaluate()
+                eval_masks = torch.zeros(num_processes, 1, device=self.device)
+                eval_counter = Counter()
+                envs = self.make_eval_envs()
+                envs.to(self.device)
+                with self.agent.network.evaluating(envs.observation_space):
+                    eval_recurrent_hidden_states = torch.zeros(
+                        num_processes,
+                        self.agent.recurrent_hidden_state_size,
+                        device=self.device,
+                    )
+
+                    eval_result = self.run_epoch(
+                        obs=envs.reset(),
+                        rnn_hxs=eval_recurrent_hidden_states,
+                        masks=eval_masks,
+                        num_steps=eval_steps,
+                        counter=eval_counter,
+                        success_reward=success_reward,
+                        rollouts=None,
+                        envs=envs,
+                    )
+                envs.close()
+                eval_result = {f"eval_{k}": v for k, v in eval_result.items()}
+            else:
+                eval_result = {}
+            # self.envs.train()
+            obs = self.envs.reset()
+            self.rollouts.obs[0].copy_(obs)
+            tick = time.time()
+            log_progress = None
+
+            if eval_interval:
+                eval_iterator = range(self.i % eval_interval, eval_interval)
+            else:
+                eval_iterator = itertools.count(self.i)
+
+            for _ in eval_iterator:
+                self.i += 1
+                epoch_counter = self.run_epoch(
+                    obs=self.rollouts.obs[0],
+                    rnn_hxs=self.rollouts.recurrent_hidden_states[0],
+                    masks=self.rollouts.masks[0],
+                    num_steps=num_steps,
+                    counter=self.counter,
+                    success_reward=success_reward,
+                    rollouts=self.rollouts,
+                    envs=self.envs,
+                )
+
+                with torch.no_grad():
+                    next_value = self.agent.get_value(
+                        self.rollouts.obs[-1],
+                        self.rollouts.recurrent_hidden_states[-1],
+                        self.rollouts.masks[-1],
+                    ).detach()
+
+                self.rollouts.compute_returns(next_value=next_value)
+                train_results = self.ppo.update(self.rollouts)
+                self.rollouts.after_update()
+                if self.i % log_interval == 0:
+                    total_num_steps = log_interval * num_processes * num_steps
+                    fps = total_num_steps / (time.time() - tick)
+                    tick = time.time()
+                    self.log_result(
+                        dict(
+                            tick=tick,
+                            fps=fps,
+                            **epoch_counter,
+                            **train_results,
+                            **eval_result,
+                        )
+                    )
 
     def log_result(self, result):
         total_num_steps = (self.i + 1) * self.num_processes * self.num_steps
         for k, v in k_scalar_pairs(**result):
-            self.writer.add_scalar(k, v, total_num_steps)
+            if self.writer:
+                self.writer.add_scalar(k, v, total_num_steps)
 
     def get_device(self):
         match = re.search("\d+$", self.run_id)
@@ -165,99 +224,6 @@ class Trainer(abc.ABC):
             device_num = get_random_gpu()
 
         return torch.device("cuda", device_num)
-
-    def _train(self):
-        try:
-            return next(self.train_iterator)
-        except StopIteration:
-            self.train_iterator = self.make_train_iterator()
-            return self._train()
-
-    def train_generator(
-        self,
-        num_steps,
-        num_processes,
-        eval_steps,
-        log_interval,
-        eval_interval,
-        no_eval,
-        success_reward,
-    ):
-        if eval_interval and not no_eval:
-            # vec_norm = get_vec_normalize(eval_envs)
-            # if vec_norm is not None:
-            #     vec_norm.eval()
-            #     vec_norm.ob_rms = get_vec_normalize(envs).ob_rms
-
-            # self.envs.evaluate()
-            eval_masks = torch.zeros(num_processes, 1, device=self.device)
-            eval_counter = Counter()
-            envs = self.make_eval_envs()
-            envs.to(self.device)
-            with self.agent.network.evaluating(envs.observation_space):
-                eval_recurrent_hidden_states = torch.zeros(
-                    num_processes,
-                    self.agent.recurrent_hidden_state_size,
-                    device=self.device,
-                )
-
-                eval_result = self.run_epoch(
-                    obs=envs.reset(),
-                    rnn_hxs=eval_recurrent_hidden_states,
-                    masks=eval_masks,
-                    num_steps=eval_steps,
-                    counter=eval_counter,
-                    success_reward=success_reward,
-                    rollouts=None,
-                    envs=envs,
-                )
-            envs.close()
-            eval_result = {f"eval_{k}": v for k, v in eval_result.items()}
-        else:
-            eval_result = {}
-        # self.envs.train()
-        obs = self.envs.reset()
-        self.rollouts.obs[0].copy_(obs)
-        tick = time.time()
-        log_progress = None
-
-        if eval_interval:
-            eval_iterator = range(self.i % eval_interval, eval_interval)
-        else:
-            eval_iterator = itertools.count(self.i)
-
-        for _ in eval_iterator:
-            self.i += 1
-            epoch_counter = self.run_epoch(
-                obs=self.rollouts.obs[0],
-                rnn_hxs=self.rollouts.recurrent_hidden_states[0],
-                masks=self.rollouts.masks[0],
-                num_steps=num_steps,
-                counter=self.counter,
-                success_reward=success_reward,
-                rollouts=self.rollouts,
-                envs=self.envs,
-            )
-
-            with torch.no_grad():
-                next_value = self.agent.get_value(
-                    self.rollouts.obs[-1],
-                    self.rollouts.recurrent_hidden_states[-1],
-                    self.rollouts.masks[-1],
-                ).detach()
-
-            self.rollouts.compute_returns(next_value=next_value)
-            train_results = self.ppo.update(self.rollouts)
-            self.rollouts.after_update()
-            if log_progress is not None:
-                log_progress.update()
-            if self.i % log_interval == 0:
-                total_num_steps = log_interval * num_processes * num_steps
-                fps = total_num_steps / (time.time() - tick)
-                tick = time.time()
-                yield dict(
-                    tick=tick, fps=fps, **epoch_counter, **train_results, **eval_result
-                )
 
     def run_epoch(
         self, obs, rnn_hxs, masks, num_steps, counter, success_reward, rollouts, envs
