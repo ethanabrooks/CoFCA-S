@@ -89,16 +89,16 @@ class Trainer(abc.ABC):
                 else SubprocVecEnv(env_fns)
             )
 
-        envs = make_vec_envs(evaluation=False)
+        train_envs = make_vec_envs(evaluation=False)
         make_eval_envs = lambda: make_vec_envs(evaluation=True)
 
-        envs.to(device)
-        self.agent = agent = self.build_agent(envs=envs, **agent_args)
+        train_envs.to(device)
+        self.agent = agent = self.build_agent(envs=train_envs, **agent_args)
         rollouts = RolloutStorage(
             num_steps=num_steps,
             num_processes=num_processes,
-            obs_space=envs.observation_space,
-            action_space=envs.action_space,
+            obs_space=train_envs.observation_space,
+            action_space=train_envs.action_space,
             recurrent_hidden_state_size=agent.recurrent_hidden_state_size,
             use_gae=use_gae,
             gamma=gamma,
@@ -126,29 +126,29 @@ class Trainer(abc.ABC):
                 # self.envs.evaluate()
                 eval_masks = torch.zeros(num_processes, 1, device=device)
                 eval_counter = Counter()
-                envs = make_eval_envs()
-                envs.to(device)
-                with agent.network.evaluating(envs.observation_space):
+                eval_envs = make_eval_envs()
+                eval_envs.to(device)
+                with agent.network.evaluating(eval_envs.observation_space):
                     eval_recurrent_hidden_states = torch.zeros(
                         num_processes, agent.recurrent_hidden_state_size, device=device
                     )
 
                     eval_result = self.run_epoch(
-                        obs=envs.reset(),
+                        obs=eval_envs.reset(),
                         rnn_hxs=eval_recurrent_hidden_states,
                         masks=eval_masks,
                         num_steps=eval_steps,
                         counter=eval_counter,
                         success_reward=success_reward,
                         rollouts=None,
-                        envs=envs,
+                        envs=eval_envs,
                     )
-                envs.close()
+                eval_envs.close()
                 eval_result = {f"eval_{k}": v for k, v in eval_result.items()}
             else:
                 eval_result = {}
             # self.envs.train()
-            obs = envs.reset()
+            obs = train_envs.reset()
             rollouts.obs[0].copy_(obs)
             tick = time.time()
             log_progress = None
@@ -162,7 +162,7 @@ class Trainer(abc.ABC):
                     counter=counter,
                     success_reward=success_reward,
                     rollouts=rollouts,
-                    envs=envs,
+                    envs=train_envs,
                 )
 
                 with torch.no_grad():
