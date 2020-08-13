@@ -28,7 +28,7 @@ from wrappers import AddTimestep, TransposeImage, VecPyTorch, VecPyTorchFrameSta
 
 
 # noinspection PyAttributeOutsideInit
-class Train(abc.ABC):
+class Trainer(abc.ABC):
     def __init__(
         self,
         run_id,

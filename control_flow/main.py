@@ -12,7 +12,7 @@ import control_flow.multi_step.minimal_gru
 import control_flow.multi_step.one_line
 import control_flow
 from arguments import add_arguments
-from trainer import Train
+from trainer import Trainer
 
 NAMES = ["instruction", "actions", "program_counter", "evaluations"]
 
@@ -31,7 +31,7 @@ def main(
     if lower_level_load_path:
         lower_level = "pre-trained"
 
-    class _Train(Train):
+    class _Train(Trainer):
         def build_agent(self, envs, debug=False, **agent_args):
             obs_space = envs.observation_space
             ll_action_space = spaces.Discrete(
