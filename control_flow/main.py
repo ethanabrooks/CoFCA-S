@@ -79,11 +79,6 @@ def main(
                     if k.startswith("cumulative_reward"):
                         episode_counter[k].append(v)
             if lower_level != "train-alone":
-                P = act_log.pop("P")
-                P = P[done]
-                if P.size(0) > 0:
-                    P = P.cpu().numpy()
-                    episode_counter["P"] += np.split(P, P.shape[0])
                 for d in infos:
                     for name in NAMES:
                         if name in d:

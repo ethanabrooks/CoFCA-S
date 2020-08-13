@@ -16,7 +16,7 @@ from distributions import FixedCategorical, Categorical
 from utils import init_
 
 RecurrentState = namedtuple(
-    "RecurrentState", "a l d h dg p v lh l_probs a_probs d_probs dg_probs P"
+    "RecurrentState", "a l d h dg p v lh l_probs a_probs d_probs dg_probs"
 )
 
 ParsedInput = namedtuple("ParsedInput", "obs actions")
@@ -170,7 +170,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         return hx, hx[-1:]
 
     def parse_hidden(self, hx: torch.Tensor) -> RecurrentState:
-        state_sizes = self.state_sizes._replace(P=0)
+        state_sizes = self.state_sizes
         if hx.size(-1) == sum(self.state_sizes):
             state_sizes = self.state_sizes
         return RecurrentState(*torch.split(hx, state_sizes, dim=-1))
@@ -351,5 +351,4 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 d_probs=d_dist.probs,
                 dg_probs=d_gate.probs,
                 l_probs=ll_output.dist.probs,
-                P=hx.P if (self.olsk or self.no_pointer) else P.transpose(0, 1),
             )

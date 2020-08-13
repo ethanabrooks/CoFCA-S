@@ -12,7 +12,7 @@ from transformer import TransformerModel
 from distributions import Categorical, FixedCategorical
 from utils import init_
 
-RecurrentState = namedtuple("RecurrentState", "a d h p v a_probs d_probs P")
+RecurrentState = namedtuple("RecurrentState", "a d h p v a_probs d_probs")
 
 
 def get_obs_sections(obs_spaces):
@@ -83,14 +83,7 @@ class Recurrence(nn.Module):
         self.critic = init_(nn.Linear(hidden_size, 1))
         self.actor = Categorical(hidden_size, n_a)
         self.state_sizes = RecurrentState(
-            a=1,
-            a_probs=n_a,
-            d=1,
-            d_probs=(self.d_space()),
-            h=hidden_size,
-            p=1,
-            v=1,
-            P=(self.P_shape().prod()),
+            a=1, a_probs=n_a, d=1, d_probs=(self.d_space()), h=hidden_size, p=1, v=1
         )
 
     def P_shape(self):
@@ -142,9 +135,7 @@ class Recurrence(nn.Module):
         self.obs_sections = self.get_obs_sections(self.obs_spaces)
         self.train_lines = len(self.obs_spaces["lines"].nvec)
         # noinspection PyProtectedMember
-        self.state_sizes = self.state_sizes._replace(
-            d_probs=self.d_space(), P=self.P_shape().prod()
-        )
+        self.state_sizes = self.state_sizes._replace(d_probs=self.d_space())
 
     @staticmethod
     def get_lines_space(n_eval_lines, train_lines_space):
