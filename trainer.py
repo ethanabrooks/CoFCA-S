@@ -89,17 +89,17 @@ class Trainer(abc.ABC):
                 else SubprocVecEnv(env_fns)
             )
 
-        self.envs = make_vec_envs(evaluation=False)
-        self.make_eval_envs = lambda: make_vec_envs(evaluation=True)
+        envs = make_vec_envs(evaluation=False)
+        make_eval_envs = lambda: make_vec_envs(evaluation=True)
 
-        self.envs.to(device)
-        self.agent = self.build_agent(envs=self.envs, **agent_args)
-        self.rollouts = RolloutStorage(
+        envs.to(device)
+        agent = self.build_agent(envs=envs, **agent_args)
+        rollouts = RolloutStorage(
             num_steps=num_steps,
             num_processes=num_processes,
-            obs_space=self.envs.observation_space,
-            action_space=self.envs.action_space,
-            recurrent_hidden_state_size=self.agent.recurrent_hidden_state_size,
+            obs_space=envs.observation_space,
+            action_space=envs.action_space,
+            recurrent_hidden_state_size=agent.recurrent_hidden_state_size,
             use_gae=use_gae,
             gamma=gamma,
             tau=tau,
@@ -108,18 +108,16 @@ class Trainer(abc.ABC):
         # copy to device
         if cuda:
             tick = time.time()
-            self.agent.to(device)
-            self.rollouts.to(device)
+            agent.to(device)
+            rollouts.to(device)
             print("Values copied to GPU in", time.time() - tick, "seconds")
 
-        self.ppo = PPO(agent=self.agent, num_batch=num_batch, **ppo_args)
-        self.counter = Counter()
+        ppo = PPO(agent=agent, num_batch=num_batch, **ppo_args)
+        counter = Counter()
 
         self.i = 0
-        if load_path:
-            self._restore(load_path)
 
-        self.last_save = time.time()  # dummy save
+        last_save = time.time()  # dummy save
         for _ in itertools.count():
             if eval_interval and not no_eval:
                 # vec_norm = get_vec_normalize(eval_envs)
@@ -130,13 +128,11 @@ class Trainer(abc.ABC):
                 # self.envs.evaluate()
                 eval_masks = torch.zeros(num_processes, 1, device=device)
                 eval_counter = Counter()
-                envs = self.make_eval_envs()
+                envs = make_eval_envs()
                 envs.to(device)
-                with self.agent.network.evaluating(envs.observation_space):
+                with agent.network.evaluating(envs.observation_space):
                     eval_recurrent_hidden_states = torch.zeros(
-                        num_processes,
-                        self.agent.recurrent_hidden_state_size,
-                        device=device,
+                        num_processes, agent.recurrent_hidden_state_size, device=device
                     )
 
                     eval_result = self.run_epoch(
@@ -154,8 +150,8 @@ class Trainer(abc.ABC):
             else:
                 eval_result = {}
             # self.envs.train()
-            obs = self.envs.reset()
-            self.rollouts.obs[0].copy_(obs)
+            obs = envs.reset()
+            rollouts.obs[0].copy_(obs)
             tick = time.time()
             log_progress = None
 
@@ -167,26 +163,26 @@ class Trainer(abc.ABC):
             for _ in eval_iterator:
                 self.i += 1
                 epoch_counter = self.run_epoch(
-                    obs=self.rollouts.obs[0],
-                    rnn_hxs=self.rollouts.recurrent_hidden_states[0],
-                    masks=self.rollouts.masks[0],
+                    obs=rollouts.obs[0],
+                    rnn_hxs=rollouts.recurrent_hidden_states[0],
+                    masks=rollouts.masks[0],
                     num_steps=num_steps,
-                    counter=self.counter,
+                    counter=counter,
                     success_reward=success_reward,
-                    rollouts=self.rollouts,
-                    envs=self.envs,
+                    rollouts=rollouts,
+                    envs=envs,
                 )
 
                 with torch.no_grad():
-                    next_value = self.agent.get_value(
-                        self.rollouts.obs[-1],
-                        self.rollouts.recurrent_hidden_states[-1],
-                        self.rollouts.masks[-1],
+                    next_value = agent.get_value(
+                        rollouts.obs[-1],
+                        rollouts.recurrent_hidden_states[-1],
+                        rollouts.masks[-1],
                     ).detach()
 
-                self.rollouts.compute_returns(next_value=next_value)
-                train_results = self.ppo.update(self.rollouts)
-                self.rollouts.after_update()
+                rollouts.compute_returns(next_value=next_value)
+                train_results = ppo.update(rollouts)
+                rollouts.after_update()
                 if self.i % log_interval == 0:
                     total_num_steps = log_interval * num_processes * num_steps
                     fps = total_num_steps / (time.time() - tick)
