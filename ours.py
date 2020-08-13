@@ -16,7 +16,7 @@ from distributions import FixedCategorical, Categorical
 from utils import init_
 
 RecurrentState = namedtuple(
-    "RecurrentState", "a l d h dg p va vd vdg lh l_probs a_probs d_probs dg_probs P"
+    "RecurrentState", "a l d h dg p v lh l_probs a_probs d_probs dg_probs P"
 )
 
 ParsedInput = namedtuple("ParsedInput", "obs actions")
@@ -126,9 +126,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         del state_sizes["v"]
         self.state_sizes = RecurrentState(
             **state_sizes,
-            va=1,
-            vd=1,
-            vdg=1,
+            v=1,
             dg_probs=2,
             dg=1,
             l=1,
@@ -342,11 +340,9 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             vd = self.critic_d(z2)
             yield RecurrentState(
                 a=A[t],
-                l=L[t],
+                l=L[t].detach(),
                 lh=hx.lh,
-                va=self.critic_a(z1),
-                vd=vd,
-                vdg=vd,
+                v=self.critic_a(z1),
                 h=h,
                 p=p,
                 d=D[t],

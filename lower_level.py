@@ -13,9 +13,7 @@ from utils import init_, init, init_normc_
 
 
 class Agent(networks.Agent):
-    def build_recurrent_module(
-        self, hidden_size, lower_level, network_args, obs_spaces, recurrent
-    ):
+    def build_recurrent_module(self, hidden_size, network_args, obs_spaces, recurrent):
         return LowerLevel(
             obs_space=obs_spaces,
             recurrent=recurrent,

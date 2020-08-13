@@ -9,9 +9,7 @@ from layers import Flatten
 from utils import init, init_normc_, init_
 
 AgentOutputs = namedtuple(
-    "AgentValues",
-    "value value2 value3 action action_log_probs action_log_probs2 action_log_probs3 aux_loss rnn_hxs "
-    "log dist",
+    "AgentValues", "value action action_log_probs aux_loss rnn_hxs " "log dist"
 )
 
 
@@ -89,12 +87,8 @@ class Agent(nn.Module):
         entropy = dist.entropy().mean()
         return AgentOutputs(
             value=value,
-            value2=value,
-            value3=value,
             action=action,
             action_log_probs=action_log_probs,
-            action_log_probs2=action_log_probs,
-            action_log_probs3=action_log_probs,
             aux_loss=-self.entropy_coef * entropy,
             dist=dist,
             rnn_hxs=rnn_hxs,
