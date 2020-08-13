@@ -6,7 +6,7 @@ from torch.nn import functional as F
 from layers import Flatten
 from ppo import agent
 from ppo.agent import NNBase
-from ppo.control_flow.lines import Subtask
+from lines import Subtask
 from ppo.control_flow.multi_step.env import Obs, Env, subtasks
 from ppo.control_flow.recurrence import get_obs_sections
 from utils import init_, init, init_normc_

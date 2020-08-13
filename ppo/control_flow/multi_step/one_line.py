@@ -1,10 +1,10 @@
 from collections import defaultdict
 
-from gym.spaces import Discrete, MultiDiscrete
+from gym.spaces import MultiDiscrete
 
 import ppo.control_flow.multi_step.env
-from ppo.control_flow.env import State
-from ppo.control_flow.lines import If, While
+from env import State
+from lines import If, While
 import numpy as np
 
 

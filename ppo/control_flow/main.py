@@ -6,7 +6,7 @@ from rl_utils import hierarchical_parse_args
 
 import ppo.agent
 import ppo.control_flow.agent
-import ppo.control_flow.env
+import env
 import ppo.control_flow.multi_step.env
 import ppo.control_flow.multi_step.minimal_gru
 import ppo.control_flow.multi_step.one_line
@@ -34,9 +34,7 @@ def main(
     class _Train(Train):
         def build_agent(self, envs, debug=False, **agent_args):
             obs_space = envs.observation_space
-            ll_action_space = spaces.Discrete(
-                ppo.control_flow.env.Action(*envs.action_space.nvec).lower
-            )
+            ll_action_space = spaces.Discrete(env.Action(*envs.action_space.nvec).lower)
             if lower_level == "train-alone":
                 return lower_level.Agent(
                     lower_level=True,
@@ -77,7 +75,7 @@ def main(
                 del args["max_while_objects"]
                 del args["num_excluded_objects"]
                 del args["temporal_extension"]
-                return control_flow.env.Env(**args)
+                return env.Env(**args)
             else:
                 return control_flow.multi_step.env.Env(**args)
 

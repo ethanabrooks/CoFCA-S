@@ -10,7 +10,7 @@ import ppo.control_flow.multi_step.ours
 import ppo.control_flow.no_pointer
 import ppo.control_flow.recurrence
 from ppo.agent import AgentValues, NNBase
-from ppo.control_flow.env import Action
+from env import Action
 from distributions import FixedCategorical
 
 

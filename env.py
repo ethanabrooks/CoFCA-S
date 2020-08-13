@@ -8,7 +8,7 @@ from gym.vector.utils import spaces
 from rl_utils import hierarchical_parse_args, gym
 import keyboard_control
 from utils import RED, RESET, GREEN
-from ppo.control_flow.lines import (
+from lines import (
     If,
     Else,
     EndIf,

@@ -8,9 +8,9 @@ import numpy as np
 from gym import spaces
 from rl_utils import hierarchical_parse_args
 
-import ppo.control_flow.env
-from ppo.control_flow.env import State
-from ppo.control_flow.lines import (
+import env
+from env import State
+from lines import (
     Subtask,
     Padding,
     Line,
@@ -62,7 +62,7 @@ def subtasks():
             yield interaction, obj
 
 
-class Env(ppo.control_flow.env.Env):
+class Env(env.Env):
     wood = "wood"
     gold = "gold"
     iron = "iron"
@@ -134,7 +134,7 @@ class Env(ppo.control_flow.env.Env):
         self.lower_level_actions = list(lower_level_actions())
         self.action_space = spaces.MultiDiscrete(
             np.array(
-                ppo.control_flow.env.Action(
+                env.Action(
                     upper=num_subtasks + 1,
                     delta=2 * self.n_lines,
                     dg=2,
@@ -701,7 +701,7 @@ class Env(ppo.control_flow.env.Env):
 def build_parser(
     p, default_max_world_resamples=None, default_max_while_loops=None, **kwargs
 ):
-    ppo.control_flow.env.build_parser(p, **kwargs)
+    env.build_parser(p, **kwargs)
     p.add_argument(
         "--no-temporal-extension", dest="temporal_extension", action="store_false"
     )
@@ -735,6 +735,4 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     build_parser(parser)
     parser.add_argument("--seed", default=0, type=int)
-    ppo.control_flow.env.main(
-        Env(rank=0, lower_level="train-alone", **hierarchical_parse_args(parser))
-    )
+    env.main(Env(rank=0, lower_level="train-alone", **hierarchical_parse_args(parser)))

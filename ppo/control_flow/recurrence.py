@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from gym import spaces
 from torch import nn as nn
 
-from ppo.control_flow.env import Action
+from env import Action
 from ppo.control_flow.multi_step.transformer import TransformerModel
 from distributions import Categorical, FixedCategorical
 from utils import init_

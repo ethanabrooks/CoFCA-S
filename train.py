@@ -20,7 +20,7 @@ from common.atari_wrappers import wrap_deepmind
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from ppo.agent import Agent, AgentValues
-from ppo.control_flow.hdfstore import HDF5Store
+from hdfstore import HDF5Store
 from storage import RolloutStorage
 from update import PPO
 from utils import k_scalar_pairs, get_n_gpu, get_random_gpu

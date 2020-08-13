@@ -21,7 +21,7 @@ from tqdm import tqdm
 
 import ppo.control_flow.multi_step.env
 from ppo.agent import Agent
-from ppo.control_flow.env import Action
+from env import Action
 from ppo.control_flow.multi_step.env import Env
 from ppo.control_flow.multi_step.env import Obs
 from layers import Flatten

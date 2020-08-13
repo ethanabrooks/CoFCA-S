@@ -16,7 +16,7 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 import torch.nn as nn
 
-from ppo.control_flow.lines import If
+from lines import If
 from ppo.control_flow.multi_step.env import Env
 from layers import Flatten
 from utils import init_
