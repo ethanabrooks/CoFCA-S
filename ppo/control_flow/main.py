@@ -38,7 +38,7 @@ def main(
                 ppo.control_flow.env.Action(*envs.action_space.nvec).lower
             )
             if lower_level == "train-alone":
-                return ppo.agent.Agent(
+                return lower_level.Agent(
                     lower_level=True,
                     obs_spaces=obs_space,
                     action_space=ll_action_space,

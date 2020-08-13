@@ -9,7 +9,7 @@ from gym import spaces
 
 import ppo.control_flow.multi_step.abstract_recurrence as abstract_recurrence
 import ppo.control_flow.recurrence as recurrence
-from ppo.agent import Agent
+from lower_level import Agent
 from ppo.control_flow.env import Action
 from ppo.control_flow.multi_step.env import Obs
 from distributions import FixedCategorical, Categorical
