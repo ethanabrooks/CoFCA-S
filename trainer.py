@@ -61,11 +61,6 @@ class Trainer(abc.ABC):
             cuda = False
         set_seeds(cuda=cuda, cuda_deterministic=cuda_deterministic, seed=seed)
 
-        self.num_steps = num_steps
-        self.num_processes = num_processes
-        self.run_id = run_id
-        self.save_interval = save_interval
-        self.log_dir = log_dir
         if log_dir:
             self.writer = SummaryWriter(logdir=str(log_dir))
         else:
@@ -78,11 +73,7 @@ class Trainer(abc.ABC):
             num_processes = 1
             cuda = False
 
-        self.device = "cpu"
-        if cuda:
-            self.cuda = True
-            self.device = self.get_device()
-        # print("Using device", self.device)
+        device = torch.device("cuda" if cuda else "cpu")
 
         def make_vec_envs(evaluation):
             def env_thunk(rank):
@@ -101,7 +92,7 @@ class Trainer(abc.ABC):
         self.envs = make_vec_envs(evaluation=False)
         self.make_eval_envs = lambda: make_vec_envs(evaluation=True)
 
-        self.envs.to(self.device)
+        self.envs.to(device)
         self.agent = self.build_agent(envs=self.envs, **agent_args)
         self.rollouts = RolloutStorage(
             num_steps=num_steps,
@@ -117,8 +108,8 @@ class Trainer(abc.ABC):
         # copy to device
         if cuda:
             tick = time.time()
-            self.agent.to(self.device)
-            self.rollouts.to(self.device)
+            self.agent.to(device)
+            self.rollouts.to(device)
             print("Values copied to GPU in", time.time() - tick, "seconds")
 
         self.ppo = PPO(agent=self.agent, num_batch=num_batch, **ppo_args)
@@ -137,15 +128,15 @@ class Trainer(abc.ABC):
                 #     vec_norm.ob_rms = get_vec_normalize(envs).ob_rms
 
                 # self.envs.evaluate()
-                eval_masks = torch.zeros(num_processes, 1, device=self.device)
+                eval_masks = torch.zeros(num_processes, 1, device=device)
                 eval_counter = Counter()
                 envs = self.make_eval_envs()
-                envs.to(self.device)
+                envs.to(device)
                 with self.agent.network.evaluating(envs.observation_space):
                     eval_recurrent_hidden_states = torch.zeros(
                         num_processes,
                         self.agent.recurrent_hidden_state_size,
-                        device=self.device,
+                        device=device,
                     )
 
                     eval_result = self.run_epoch(
@@ -200,21 +191,17 @@ class Trainer(abc.ABC):
                     total_num_steps = log_interval * num_processes * num_steps
                     fps = total_num_steps / (time.time() - tick)
                     tick = time.time()
-                    self.log_result(
-                        dict(
-                            tick=tick,
-                            fps=fps,
-                            **epoch_counter,
-                            **train_results,
-                            **eval_result,
-                        )
+                    result = dict(
+                        tick=tick,
+                        fps=fps,
+                        **epoch_counter,
+                        **train_results,
+                        **eval_result,
                     )
-
-    def log_result(self, result):
-        total_num_steps = (self.i + 1) * self.num_processes * self.num_steps
-        for k, v in k_scalar_pairs(**result):
-            if self.writer:
-                self.writer.add_scalar(k, v, total_num_steps)
+                    total_num_steps = (self.i + 1) * num_processes * num_steps
+                    for k, v in k_scalar_pairs(**result):
+                        if self.writer:
+                            self.writer.add_scalar(k, v, total_num_steps)
 
     def get_device(self):
         match = re.search("\d+$", self.run_id)
