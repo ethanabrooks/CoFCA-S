@@ -4,15 +4,15 @@ from torch import nn as nn
 from torch.nn import functional as F
 
 from layers import Flatten
-from foo import agent
-from foo.agent import NNBase
+import networks
+from networks import NNBase
 from lines import Subtask
 from multi_step.env import Obs, Env, subtasks
 from recurrence import get_obs_sections
 from utils import init_, init, init_normc_
 
 
-class Agent(agent.Agent):
+class Agent(networks.Agent):
     def build_recurrent_module(
         self, hidden_size, lower_level, network_args, obs_spaces, recurrent
     ):
