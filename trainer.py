@@ -13,6 +13,7 @@ from typing import Dict
 import gym
 import numpy as np
 import torch
+from ray import tune
 from tensorboardX import SummaryWriter
 
 from common.atari_wrappers import wrap_deepmind
@@ -54,6 +55,7 @@ class Trainer(abc.ABC):
         num_batch,
         env_args,
         success_reward,
+        use_tune=False,
         log_dir: Path = "dumb",
         no_eval=False,
     ):
@@ -112,6 +114,23 @@ class Trainer(abc.ABC):
             print("Values copied to GPU in", time.time() - tick, "seconds")
 
         ppo = PPO(agent=agent, num_batch=num_batch, **ppo_args)
+
+        start = 0
+        if load_path:
+            state_dict = torch.load(load_path, map_location=device)
+            agent.load_state_dict(state_dict["agent"])
+            ppo.optimizer.load_state_dict(state_dict["optimizer"])
+            start = state_dict.get("step", -1) + 1
+            # if isinstance(self.envs.venv, VecNormalize):
+            #     self.envs.venv.load_state_dict(state_dict["vec_normalize"])
+            print(f"Loaded parameters from {load_path}.")
+
+        def report(**kwargs):
+            if use_tune:
+                tune.report(**kwargs)
+            else:
+                pprint(kwargs)
+
         counter = Counter()
 
         def run_epoch(obs, rnn_hxs, masks, envs):
