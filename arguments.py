@@ -105,11 +105,11 @@ def add_arguments(parser):
         default="PongNoFrameskip-v4",
         help="environment to train on",
     )
-    env_parser.add_argument(
-        "--add-timestep",
-        action="store_true",
-        default=False,
-        help="add timestep to observations",
-    )
+    # env_parser.add_argument(
+    # "--add-timestep",
+    # action="store_true",
+    # default=False,
+    # help="add timestep to observations",
+    # )
 
     return Parsers(main=parser, env=env_parser, ppo=ppo_parser, agent=agent_parser)

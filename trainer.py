@@ -180,7 +180,6 @@ class Trainer(abc.ABC):
 
             return dict(episode_counter)
 
-        last_save = time.time()  # dummy save
         for _ in itertools.count():
             if eval_interval and not no_eval:
                 # vec_norm = get_vec_normalize(eval_envs)
@@ -248,15 +247,6 @@ class Trainer(abc.ABC):
                         if self.writer:
                             self.writer.add_scalar(k, v, total_num_steps)
 
-    def get_device(self):
-        match = re.search("\d+$", self.run_id)
-        if match:
-            device_num = int(match.group()) % get_n_gpu()
-        else:
-            device_num = get_random_gpu()
-
-        return torch.device("cuda", device_num)
-
     @staticmethod
     def process_infos(episode_counter, done, infos, **act_log):
         for d in infos:
@@ -270,29 +260,9 @@ class Trainer(abc.ABC):
         return Agent(envs.observation_space.shape, envs.action_space, **agent_args)
 
     @staticmethod
-    def make_env(env_id, seed, rank, add_timestep, evaluation):
+    def make_env(env_id, seed, rank, evaluation):
         env = gym.make(env_id)
-        is_atari = hasattr(gym.envs, "atari") and isinstance(
-            env.unwrapped, gym.envs.atari.atari_env.AtariEnv
-        )
         env.seed(seed + rank)
-        obs_shape = env.observation_space.shape
-        if add_timestep and len(obs_shape) == 1 and str(env).find("TimeLimit") > -1:
-            env = AddTimestep(env)
-        if is_atari and len(env.observation_space.shape) == 3:
-            env = wrap_deepmind(env)
-
-        # elif len(env.observation_space.shape) == 3:
-        #     raise NotImplementedError(
-        #         "CNN models work only for atari,\n"
-        #         "please use a custom wrapper for a custom pixel input env.\n"
-        #         "See wrap_deepmind for an example.")
-
-        # If the input has shape (W,H,3), wrap for PyTorch convolutions
-        obs_shape = env.observation_space.shape
-        if len(obs_shape) == 3 and obs_shape[2] in [1, 3]:
-            env = TransposeImage(env)
-
         return env
 
     def _save(self, checkpoint_dir):
