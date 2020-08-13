@@ -61,6 +61,18 @@ class Train(abc.ABC):
             cuda = False
         set_seeds(cuda=cuda, cuda_deterministic=cuda_deterministic, seed=seed)
 
+        self.num_steps = num_steps
+        self.num_processes = num_processes
+        self.run_id = run_id
+        self.save_interval = save_interval
+        self.log_dir = log_dir
+        if log_dir:
+            self.writer = SummaryWriter(logdir=str(log_dir))
+            self.table = HDF5Store(datapath=str(Path(log_dir, "table")))
+        else:
+            self.writer = None
+            self.table = None
+
         if render_eval and not render:
             eval_interval = 1
         if render or render_eval:
@@ -74,25 +86,22 @@ class Train(abc.ABC):
             self.device = self.get_device()
         # print("Using device", self.device)
 
-        self.envs = self.make_vec_envs(
-            **env_args,
-            seed=seed,
-            gamma=(gamma if normalize else None),
-            render=render,
-            synchronous=True if render else synchronous,
-            evaluation=False,
-            num_processes=num_processes,
-        )
-        self.make_eval_envs = functools.partial(
-            self.make_vec_envs,
-            **env_args,
-            seed=seed,
-            gamma=(gamma if normalize else None),
-            render=render,
-            synchronous=True if render else synchronous,
-            evaluation=True,
-            num_processes=num_processes,
-        )
+        def make_vec_envs(evaluation):
+            def env_thunk(rank):
+                return self.make_env(
+                    seed=seed, rank=rank, evaluation=evaluation, **env_args
+                )
+
+            env_fns = [lambda: env_thunk(i) for i in range(num_processes)]
+            use_dummy = len(env_fns) == 1 or sys.platform == "darwin" or synchronous
+            return VecPyTorch(
+                DummyVecEnv(env_fns, render=render)
+                if use_dummy
+                else SubprocVecEnv(env_fns)
+            )
+
+        self.envs = make_vec_envs(evaluation=False)
+        self.make_eval_envs = lambda: make_vec_envs(evaluation=True)
 
         self.envs.to(self.device)
         self.agent = self.build_agent(envs=self.envs, **agent_args)
@@ -408,6 +417,3 @@ class Train(abc.ABC):
 
     def get_device(self):
         return torch.device("cuda" if self.cuda else "cpu")
-
-
-
