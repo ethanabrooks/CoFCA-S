@@ -10,7 +10,7 @@ import numpy as np
 import ray
 import torch
 from ray import tune
-from ray.tune.suggest import HyperOptSearch
+from ray.tune.suggest.hyperopt import HyperOptSearch
 from tensorboardX import SummaryWriter
 
 from agent import Agent, AgentOutputs
@@ -26,13 +26,13 @@ EpochOutputs = namedtuple("EpochOutputs", "obs reward done infos act masks")
 
 
 class Trainer(tune.Trainable):
-    def __init__(self, config):
+    def __init__(self, *args, **kwargs):
         self.iterator = None
         self.agent = None
         self.ppo = None
         self.i = None
         self.device = None
-        super().__init__(config)
+        super().__init__(*args, **kwargs)
 
     def _setup(self, config):
         self.iterator = self.gen(**config)
@@ -270,12 +270,12 @@ class Trainer(tune.Trainable):
     @classmethod
     def main(
         cls,
-        log_dir=None,
-        num_samples=None,
-        name=None,
-        config=None,
-        gpus_per_trial=None,
-        cpus_per_trial=None,
+        gpus_per_trial,
+        cpus_per_trial,
+        log_dir,
+        num_samples,
+        name,
+        config,
         **kwargs,
     ):
         if config is None:
@@ -296,7 +296,7 @@ class Trainer(tune.Trainable):
             ray.init(dashboard_host="127.0.0.1", local_mode=local_mode)
             metric = "final_reward"
 
-            resources_per_trial = {"gpu": gpus_per_trial, "cpu": cpus_per_trial}
+            resources_per_trial = dict(gpu=gpus_per_trial, cpu=cpus_per_trial)
             kwargs = dict()
 
             if local_mode:
@@ -306,6 +306,7 @@ class Trainer(tune.Trainable):
                     search_alg=HyperOptSearch(config, metric=metric),
                     num_samples=num_samples,
                 )
+
             tune.run(
                 cls,
                 name=name,

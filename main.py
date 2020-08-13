@@ -1,10 +1,12 @@
 import argparse
+import json
 from collections import namedtuple
 from pathlib import Path
 
 from torch import nn as nn
 
 from common.vec_env.util import hierarchical_parse_args
+from configs import configs
 from trainer import Trainer
 
 ACTIVATIONS = dict(
@@ -13,7 +15,18 @@ ACTIVATIONS = dict(
 Parsers = namedtuple("Parser", "main agent ppo rollouts")
 
 
+def get_config(name):
+    if name is None:
+        return {}
+    path = Path("configs", name).with_suffix(".json")
+    if path.exists():
+        with path.open() as f:
+            return json.load(f)
+    return configs[name]
+
+
 def add_arguments(parser):
+    parser.add_argument("--config", type=get_config)
     parser.add_argument(
         "--cuda-deterministic",
         action="store_true",
@@ -29,7 +42,10 @@ def add_arguments(parser):
         default=10,
         help="log interval, one log per n updates",
     )
+    parser.add_argument("--name")
     parser.add_argument("--normalize", action="store_true")
+    parser.add_argument("--gpus-per-trial", "-g", type=int, default=1)
+    parser.add_argument("--cpus-per-trial", "-c", type=int, default=6)
     parser.add_argument(
         "--num-epochs", type=int, help="number of updates to perform", required=True
     )
@@ -38,6 +54,13 @@ def add_arguments(parser):
         type=int,
         help="how many training CPU processes to use",
         required=True,
+    )
+    parser.add_argument(
+        "--num-samples",
+        "-n",
+        type=int,
+        help="Number of times to sample from the hyperparameter space. See tune docs for details: "
+        "https://docs.ray.io/en/latest/tune/api_docs/execution.html?highlight=run#ray.tune.run",
     )
     parser.add_argument("--render", action="store_true")
     parser.add_argument("--render-eval", action="store_true")
