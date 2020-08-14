@@ -217,13 +217,6 @@ class TrainBase(tune.Trainable):
         )
         self.train_iterator = self.make_train_iterator()
 
-    def _train(self):
-        try:
-            return next(self.train_iterator)
-        except StopIteration:
-            self.train_iterator = self.make_train_iterator()
-            return self._train()
-
     def train_generator(
         self, num_steps, num_processes, eval_steps, log_interval, eval_interval, no_eval
     ):
@@ -263,12 +256,7 @@ class TrainBase(tune.Trainable):
         self.rollouts.obs[0].copy_(obs)
         log_progress = None
 
-        if eval_interval:
-            eval_iterator = range(self.i % eval_interval, eval_interval)
-        else:
-            eval_iterator = itertools.count(self.i)
-
-        for _ in eval_iterator:
+        for _ in range(self.i % eval_interval, eval_interval):
             self.i += 1
             epoch_counter = self.run_epoch(
                 obs=self.rollouts.obs[0],
