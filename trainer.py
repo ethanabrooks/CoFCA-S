@@ -218,6 +218,9 @@ class Trainer(tune.Trainable):
         )
         self.train_iterator = self.make_train_iterator()
 
+        for _ in itertools.count():
+            yield from self.make_train_iterator()
+
     def train_generator(
         self, num_steps, num_processes, eval_steps, log_interval, eval_interval, no_eval
     ):
@@ -448,12 +451,11 @@ class Trainer(tune.Trainable):
         if log_dir:
             print("Not using tune, because log_dir was specified")
             writer = SummaryWriter(logdir=str(log_dir))
-            for _ in itertools.count():
-                trainer = cls(config)
-                for i, result in enumerate(trainer.make_train_iterator()):
-                    if writer is not None:
-                        for k, v in k_scalar_pairs(**result):
-                            writer.add_scalar(k, v, i)
+            trainer = cls(config)
+            for i, result in enumerate(trainer.loop()):
+                if writer is not None:
+                    for k, v in k_scalar_pairs(**result):
+                        writer.add_scalar(k, v, i)
             # for i, report in enumerate(cls(config).loop()):
             #     pprint(report)
             #     for k, v in report.items():
