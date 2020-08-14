@@ -1,30 +1,30 @@
-from argparse import ArgumentParser
 from pathlib import Path
+from argparse import ArgumentParser
 
 import numpy as np
 from gym import spaces
 from rl_utils import hierarchical_parse_args
 
-import control_flow.agent
-import env
 import multi_step.env
+import networks
+import control_flow.agent
+import control_flow
+from env import Action
 from main import add_arguments
 from trainer import Trainer
 
-NAMES = ["instruction", "actions", "program_counter", "evaluations"]
-
 
 def main(
-    log_dir,
-    seed,
-    min_eval_lines,
-    max_eval_lines,
-    one_line,
-    gridworld,
+    env_args,
     env_id,
+    gridworld,
+    log_dir,
     lower_level,
     lower_level_load_path,
+    max_eval_lines,
+    min_eval_lines,
     render,
+    seed,
     **kwargs,
 ):
     if lower_level_load_path:
@@ -33,9 +33,9 @@ def main(
     class _Trainer(Trainer):
         def build_agent(self, envs, debug=False, **agent_args):
             obs_space = envs.observation_space
-            ll_action_space = spaces.Discrete(env.Action(*envs.action_space.nvec).lower)
+            ll_action_space = spaces.Discrete(Action(*envs.action_space.nvec).lower)
             if lower_level == "train-alone":
-                return lower_level.Agent(
+                return networks.Agent(
                     lower_level=True,
                     obs_spaces=obs_space,
                     action_space=ll_action_space,
@@ -55,7 +55,7 @@ def main(
             )
 
         @staticmethod
-        def make_env(seed, rank, evaluation, **env_args):
+        def make_env(seed, rank, evaluation, env_id=None):
             args = dict(
                 **env_args,
                 min_eval_lines=min_eval_lines,
@@ -65,12 +65,11 @@ def main(
             )
             args["lower_level"] = lower_level
             args["break_on_fail"] = args["break_on_fail"] and render
-            del args["time_limit"]
             if not gridworld:
                 del args["max_while_objects"]
                 del args["num_excluded_objects"]
                 del args["temporal_extension"]
-                return env.Env(**args)
+                return multi_step.env.Env(**args)
             else:
                 return multi_step.env.Env(**args)
 
@@ -79,20 +78,11 @@ def main(
                 for k, v in d.items():
                     if k.startswith("cumulative_reward"):
                         episode_counter[k].append(v)
-            if lower_level != "train-alone":
-                for d in infos:
-                    for name in NAMES:
-                        if name in d:
-                            episode_counter[name].append(d.pop(name))
             super().process_infos(episode_counter, done, infos, **act_log)
 
-        def log_result(self, result: dict):
+        def _log_result(self, result: dict):
             keys = ["progress", "rewards", "instruction_len"]
-            values = np.array(list(zip(*(iter(result["eval_" + k]) for k in keys))))
-            total_num_steps = (self.i + 1) * self.num_processes * self.num_steps
-            values = np.pad(
-                values, ((0, 0), (1, 0)), "constant", constant_values=total_num_steps
-            )
+            values = np.array(list(zip(*(iter(result[k]) for k in keys))))
             self.table.append(values)
             if "subtasks_attempted" in result:
                 subtasks_attempted = sum(result["subtasks_attempted"])
@@ -107,7 +97,6 @@ def main(
             except (KeyError, ZeroDivisionError):
                 pass
             if lower_level != "train-alone":
-                names = NAMES + ["P"]
                 for name in names + ["eval_" + n for n in names]:
                     if name in result:
                         arrays = [x for x in result.pop(name) if x is not None]
@@ -123,18 +112,15 @@ def main(
 
             super().log_result(result)
 
-    _Trainer(**kwargs, seed=seed, log_dir=log_dir, render=render, time_limit=None).run()
+    _Trainer(**kwargs, seed=seed, log_dir=log_dir, render=render).run()
 
 
 def control_flow_args(parser):
     parsers = add_arguments(parser)
     parser = parsers.main
-    parser.add_argument("--no-tqdm", dest="use_tqdm", action="store_false")
     parser.add_argument("--min-eval-lines", type=int, required=True)
     parser.add_argument("--max-eval-lines", type=int, required=True)
     parser.add_argument("--no-eval", action="store_true")
-    parser.add_argument("--one-line", action="store_true")
-    parser.add_argument("--save-separate", action="store_true")
     parser.add_argument(
         "--lower-level", choices=["train-alone", "train-with-upper", "hardcoded"]
     )
