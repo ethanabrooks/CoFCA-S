@@ -29,7 +29,7 @@ from wrappers import VecPyTorch
 EpochOutputs = namedtuple("EpochOutputs", "obs reward done infos act masks")
 
 
-class TrainBase(tune.Trainable):
+class Trainer(tune.Trainable):
     def __init__(self, *args, **kwargs):
         self.iterator = None
         self.agent = None
@@ -416,16 +416,6 @@ class TrainBase(tune.Trainable):
         # if isinstance(self.envs.venv, VecNormalize):
         #     self.envs.venv.load_state_dict(state_dict["vec_normalize"])
         print(f"Loaded parameters from {load_path}.")
-
-    @abc.abstractmethod
-    def get_device(self):
-        raise NotImplementedError
-
-
-class Trainer(TrainBase):
-    def log_result(self, result):
-        for k, v in k_scalar_pairs(**result):
-            self.writer.add_scalar(k, v, total_num_steps)
 
     def get_device(self):
         match = re.search("\d+$", self.name)
