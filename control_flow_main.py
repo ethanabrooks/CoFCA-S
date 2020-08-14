@@ -8,8 +8,8 @@ from rl_utils import hierarchical_parse_args
 import control_flow.agent
 import env
 import multi_step.env
-from arguments import add_arguments
-from trainer import Train
+from main import add_arguments
+from trainer import Trainer
 
 NAMES = ["instruction", "actions", "program_counter", "evaluations"]
 
@@ -30,7 +30,7 @@ def main(
     if lower_level_load_path:
         lower_level = "pre-trained"
 
-    class _Train(Train):
+    class _Trainer(Trainer):
         def build_agent(self, envs, debug=False, **agent_args):
             obs_space = envs.observation_space
             ll_action_space = spaces.Discrete(env.Action(*envs.action_space.nvec).lower)
@@ -123,7 +123,7 @@ def main(
 
             super().log_result(result)
 
-    _Train(**kwargs, seed=seed, log_dir=log_dir, render=render, time_limit=None).run()
+    _Trainer(**kwargs, seed=seed, log_dir=log_dir, render=render, time_limit=None).run()
 
 
 def control_flow_args(parser):

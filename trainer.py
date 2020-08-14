@@ -403,7 +403,7 @@ class TrainBase(abc.ABC):
         raise NotImplementedError
 
 
-class Train(TrainBase):
+class Trainer(TrainBase):
     def __init__(
         self,
         name,

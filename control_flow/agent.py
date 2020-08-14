@@ -45,8 +45,7 @@ class Agent(networks.Agent, NNBase):
 
     @property
     def recurrent_hidden_state_size(self):
-        state_sizes = self.recurrent_module.state_sizes
-        return sum(state_sizes)
+        return sum(self.recurrent_module.state_sizes)
 
     @property
     def is_recurrent(self):
