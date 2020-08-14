@@ -99,6 +99,67 @@ class TrainBase(tune.Trainable):
         torch.set_num_threads(1)
         os.environ["OMP_NUM_THREADS"] = "1"
 
+        class EpochCounter:
+            def __init__(self):
+                self.episode_rewards = []
+                self.episode_time_steps = []
+                self.rewards = np.zeros(num_processes)
+                self.time_steps = np.zeros(num_processes)
+
+            def update(self, reward, done):
+                self.rewards += reward.numpy()
+                self.time_steps += np.ones_like(done)
+                self.episode_rewards += list(self.rewards[done])
+                self.episode_time_steps += list(self.time_steps[done])
+                self.rewards[done] = 0
+                self.time_steps[done] = 0
+
+            def reset(self):
+                self.episode_rewards = []
+                self.episode_time_steps = []
+
+            def items(self, prefix=""):
+                if self.episode_rewards:
+                    yield prefix + "rewards", np.mean(self.episode_rewards)
+                if self.episode_time_steps:
+                    yield prefix + "time_steps", np.mean(self.episode_time_steps)
+
+        def make_vec_envs(evaluation):
+            def env_thunk(rank):
+                return self.make_env(
+                    seed=seed, rank=rank, evaluation=evaluation, env_id=env_id
+                )
+
+            env_fns = [lambda: env_thunk(i) for i in range(num_processes)]
+            use_dummy = len(env_fns) == 1 or sys.platform == "darwin" or synchronous
+            return VecPyTorch(
+                DummyVecEnv(env_fns, render=render)
+                if use_dummy
+                else SubprocVecEnv(env_fns)
+            )
+
+        def run_epoch(obs, rnn_hxs, masks, envs, num_steps):
+            episode_counter = defaultdict(list)
+            for _ in range(num_steps):
+                with torch.no_grad():
+                    act = self.agent(
+                        inputs=obs, rnn_hxs=rnn_hxs, masks=masks
+                    )  # type: AgentOutputs
+
+                # Observe reward and next obs
+                obs, reward, done, infos = envs.step(act.action)
+                self.process_infos(episode_counter, done, infos, **act.log)
+
+                # If done then clean the history of observations.
+                masks = torch.tensor(
+                    1 - done, dtype=torch.float32, device=obs.device
+                ).unsqueeze(1)
+                yield EpochOutputs(
+                    obs=obs, reward=reward, done=done, infos=infos, act=act, masks=masks
+                )
+
+                rnn_hxs = act.rnn_hxs
+
         if render_eval and not render:
             eval_interval = 1
         if render or render_eval:
