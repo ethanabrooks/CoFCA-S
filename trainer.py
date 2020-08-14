@@ -69,11 +69,6 @@ class TrainBase(tune.Trainable):
 
     def gen(
         self,
-        config,
-        cpus_per_trial,
-        gpus_per_trial,
-        num_epochs,
-        num_samples,
         train_steps,
         eval_steps,
         num_processes,
@@ -81,6 +76,7 @@ class TrainBase(tune.Trainable):
         cuda_deterministic,
         cuda,
         normalize,
+        num_epochs,
         log_interval,
         eval_interval,
         no_eval,
@@ -89,7 +85,6 @@ class TrainBase(tune.Trainable):
         render,
         render_eval,
         rollouts_args,
-        load_path,
         synchronous,
         num_batch,
     ):
@@ -211,8 +206,6 @@ class TrainBase(tune.Trainable):
         self.counter = Counter()
 
         self.i = 0
-        if load_path:
-            self._restore(load_path)
 
         self.make_train_iterator = lambda: self.train_generator(
             num_steps=train_steps,
@@ -497,10 +490,15 @@ class Trainer(TrainBase):
         if log_dir:
             print("Not using tune, because log_dir was specified")
             writer = SummaryWriter(logdir=str(log_dir))
-            for i, report in enumerate(cls(config).loop()):
-                pprint(report)
-                for k, v in report.items():
-                    writer.add_scalar(k, v, i)
+            for _ in itertools.count():
+                trainer = cls(**config, name=name, log_dir=log_dir)
+                for result in trainer.make_train_iterator():
+                    if writer is not None:
+                        trainer.log_result(result)
+            # for i, report in enumerate(cls(config).loop()):
+            #     pprint(report)
+            #     for k, v in report.items():
+            #         writer.add_scalar(k, v, i)
         else:
             local_mode = num_samples is None
             ray.init(dashboard_host="127.0.0.1", local_mode=local_mode)
