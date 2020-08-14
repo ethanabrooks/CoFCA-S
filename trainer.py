@@ -423,28 +423,7 @@ class TrainBase(tune.Trainable):
 
 
 class Trainer(TrainBase):
-    def __init__(
-        self, name, log_dir: Path, num_processes: int, train_steps: int, **kwargs
-    ):
-        self.num_steps = train_steps
-        self.num_processes = num_processes
-        self.name = name
-        self.log_dir = log_dir
-        if log_dir:
-            self.writer = SummaryWriter(logdir=str(log_dir))
-        else:
-            self.writer = None
-        kwargs.update(num_processes=num_processes, train_steps=train_steps)
-        self.setup(kwargs)
-
-    def run(self):
-        for _ in itertools.count():
-            for result in self.make_train_iterator():
-                if self.writer is not None:
-                    self.log_result(result)
-
     def log_result(self, result):
-        total_num_steps = (self.i + 1) * self.num_processes * self.num_steps
         for k, v in k_scalar_pairs(**result):
             self.writer.add_scalar(k, v, total_num_steps)
 
@@ -479,10 +458,11 @@ class Trainer(TrainBase):
             print("Not using tune, because log_dir was specified")
             writer = SummaryWriter(logdir=str(log_dir))
             for _ in itertools.count():
-                trainer = cls(**config, name=name, log_dir=log_dir)
-                for result in trainer.make_train_iterator():
+                trainer = cls(config)
+                for i, result in enumerate(trainer.make_train_iterator()):
                     if writer is not None:
-                        trainer.log_result(result)
+                        for k, v in k_scalar_pairs(**result):
+                            writer.add_scalar(k, v, i)
             # for i, report in enumerate(cls(config).loop()):
             #     pprint(report)
             #     for k, v in report.items():
