@@ -475,3 +475,52 @@ class Trainer(TrainBase):
             device_num = get_random_gpu()
 
         return torch.device("cuda", device_num)
+
+    @classmethod
+    def main(
+        cls,
+        gpus_per_trial,
+        cpus_per_trial,
+        log_dir,
+        num_samples,
+        name,
+        config,
+        **kwargs,
+    ):
+        cls.name = name
+        if config is None:
+            config = dict()
+        for k, v in kwargs.items():
+            if v is not None:
+                config[k] = v
+
+        if log_dir:
+            print("Not using tune, because log_dir was specified")
+            writer = SummaryWriter(logdir=str(log_dir))
+            for i, report in enumerate(cls(config).loop()):
+                pprint(report)
+                for k, v in report.items():
+                    writer.add_scalar(k, v, i)
+        else:
+            local_mode = num_samples is None
+            ray.init(dashboard_host="127.0.0.1", local_mode=local_mode)
+            metric = "final_reward"
+
+            resources_per_trial = dict(gpu=gpus_per_trial, cpu=cpus_per_trial)
+            kwargs = dict()
+
+            if local_mode:
+                print("Using local mode because num_samples is None")
+            else:
+                kwargs = dict(
+                    search_alg=HyperOptSearch(config, metric=metric),
+                    num_samples=num_samples,
+                )
+
+            tune.run(
+                cls,
+                name=name,
+                config=config,
+                resources_per_trial=resources_per_trial,
+                **kwargs,
+            )
