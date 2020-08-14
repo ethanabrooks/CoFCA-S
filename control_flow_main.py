@@ -112,7 +112,9 @@ def main(
 
             super().log_result(result)
 
-    _Trainer.main(**kwargs, seed=seed, log_dir=log_dir, render=render)
+    _Trainer.main(
+        **kwargs, seed=seed, log_dir=log_dir, render=render, env_id="control-flow"
+    )
 
 
 def control_flow_args(parser):
