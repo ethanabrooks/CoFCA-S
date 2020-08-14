@@ -31,29 +31,31 @@ from wrappers import AddTimestep, TransposeImage, VecPyTorch, VecPyTorchFrameSta
 class TrainBase(abc.ABC):
     def setup(
         self,
-        num_steps,
+        config,
+        cpus_per_trial,
+        gpus_per_trial,
+        num_epochs,
+        num_samples,
+        train_steps,
         eval_steps,
         num_processes,
         seed,
         cuda_deterministic,
         cuda,
         time_limit,
-        gamma,
         normalize,
         log_interval,
         eval_interval,
         no_eval,
-        use_gae,
-        tau,
         ppo_args,
         agent_args,
         render,
         render_eval,
+        rollouts_args,
         load_path,
         synchronous,
         num_batch,
         env_args,
-        success_reward,
         use_tqdm,
     ):
         # Properly restrict pytorch to not consume extra resources.
@@ -87,7 +89,6 @@ class TrainBase(abc.ABC):
         self.envs = self.make_vec_envs(
             **env_args,
             seed=seed,
-            gamma=(gamma if normalize else None),
             render=render,
             synchronous=True if render else synchronous,
             evaluation=False,
@@ -98,7 +99,6 @@ class TrainBase(abc.ABC):
             self.make_vec_envs,
             **env_args,
             seed=seed,
-            gamma=(gamma if normalize else None),
             render=render,
             synchronous=True if render else synchronous,
             evaluation=True,
@@ -109,14 +109,12 @@ class TrainBase(abc.ABC):
         self.envs.to(self.device)
         self.agent = self.build_agent(envs=self.envs, **agent_args)
         self.rollouts = RolloutStorage(
-            num_steps=num_steps,
+            num_steps=train_steps,
             num_processes=num_processes,
             obs_space=self.envs.observation_space,
             action_space=self.envs.action_space,
             recurrent_hidden_state_size=self.agent.recurrent_hidden_state_size,
-            use_gae=use_gae,
-            gamma=gamma,
-            tau=tau,
+            **rollouts_args,
         )
 
         # copy to device
@@ -134,14 +132,13 @@ class TrainBase(abc.ABC):
             self._restore(load_path)
 
         self.make_train_iterator = lambda: self.train_generator(
-            num_steps=num_steps,
+            num_steps=train_steps,
             num_processes=num_processes,
             eval_steps=eval_steps,
             log_interval=log_interval,
             eval_interval=eval_interval,
             no_eval=no_eval,
             use_tqdm=use_tqdm,
-            success_reward=success_reward,
         )
         self.train_iterator = self.make_train_iterator()
 
@@ -160,7 +157,6 @@ class TrainBase(abc.ABC):
         log_interval,
         eval_interval,
         no_eval,
-        success_reward,
         use_tqdm,
     ):
         if eval_interval and not no_eval:
@@ -188,7 +184,6 @@ class TrainBase(abc.ABC):
                     num_steps=eval_steps,
                     # max(num_steps, time_limit) if time_limit else num_steps,
                     counter=eval_counter,
-                    success_reward=success_reward,
                     use_tqdm=use_tqdm,
                     rollouts=None,
                     envs=envs,
@@ -220,7 +215,6 @@ class TrainBase(abc.ABC):
                 masks=self.rollouts.masks[0],
                 num_steps=num_steps,
                 counter=self.counter,
-                success_reward=success_reward,
                 use_tqdm=False,
                 rollouts=self.rollouts,
                 envs=self.envs,
@@ -247,16 +241,7 @@ class TrainBase(abc.ABC):
                 )
 
     def run_epoch(
-        self,
-        obs,
-        rnn_hxs,
-        masks,
-        num_steps,
-        counter,
-        success_reward,
-        use_tqdm,
-        rollouts,
-        envs,
+        self, obs, rnn_hxs, masks, num_steps, counter, use_tqdm, rollouts, envs
     ):
         # noinspection PyTypeChecker
         episode_counter = defaultdict(list)
@@ -278,9 +263,6 @@ class TrainBase(abc.ABC):
             counter["time_step"] += np.ones_like(done)
             episode_rewards = counter["reward"][done]
             episode_counter["rewards"] += list(episode_rewards)
-            if success_reward is not None:
-                # noinspection PyTypeChecker
-                episode_counter["success"] += list(episode_rewards >= success_reward)
 
             episode_counter["time_steps"] += list(counter["time_step"][done])
             counter["reward"][done] = 0
@@ -348,11 +330,8 @@ class TrainBase(abc.ABC):
     def make_vec_envs(
         self,
         num_processes,
-        gamma,
         render,
         synchronous,
-        env_id,
-        add_timestep,
         seed,
         evaluation,
         time_limit,
@@ -363,8 +342,6 @@ class TrainBase(abc.ABC):
             functools.partial(  # thunk
                 self.make_env,
                 rank=i,
-                env_id=env_id,
-                add_timestep=add_timestep,
                 seed=seed,
                 evaluation=evaluation,
                 time_limit=time_limit,
@@ -429,19 +406,17 @@ class TrainBase(abc.ABC):
 class Train(TrainBase):
     def __init__(
         self,
-        run_id,
+        name,
         log_dir: Path,
-        save_interval: int,
         num_processes: int,
-        num_steps: int,
+        train_steps: int,
         save_separate: bool,
         **kwargs,
     ):
         self.save_separate = save_separate
-        self.num_steps = num_steps
+        self.num_steps = train_steps
         self.num_processes = num_processes
-        self.run_id = run_id
-        self.save_interval = save_interval
+        self.name = name
         self.log_dir = log_dir
         if log_dir:
             self.writer = SummaryWriter(logdir=str(log_dir))
@@ -449,7 +424,7 @@ class Train(TrainBase):
         else:
             self.writer = None
             self.table = None
-        self.setup(**kwargs, num_processes=num_processes, num_steps=num_steps)
+        self.setup(**kwargs, num_processes=num_processes, train_steps=train_steps)
         self.last_save = time.time()  # dummy save
 
     def run(self):
@@ -458,17 +433,13 @@ class Train(TrainBase):
                 if self.writer is not None:
                     self.log_result(result)
 
-                if self.log_dir and self.i % self.save_interval == 0:
-                    self._save(str(self.log_dir))
-                    self.last_save = time.time()
-
     def log_result(self, result):
         total_num_steps = (self.i + 1) * self.num_processes * self.num_steps
         for k, v in k_scalar_pairs(**result):
             self.writer.add_scalar(k, v, total_num_steps)
 
     def get_device(self):
-        match = re.search("\d+$", self.run_id)
+        match = re.search("\d+$", self.name)
         if match:
             device_num = int(match.group()) % get_n_gpu()
         else:

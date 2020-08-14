@@ -1,3 +1,4 @@
+from argparse import ArgumentParser
 from pathlib import Path
 
 import numpy as np
@@ -7,7 +8,7 @@ from rl_utils import hierarchical_parse_args
 import control_flow.agent
 import env
 import multi_step.env
-from arguments import build_parser
+from arguments import add_arguments
 from trainer import Train
 
 NAMES = ["instruction", "actions", "program_counter", "evaluations"]
@@ -19,6 +20,8 @@ def main(
     min_eval_lines,
     max_eval_lines,
     one_line,
+    gridworld,
+    env_id,
     lower_level,
     lower_level_load_path,
     render,
@@ -52,9 +55,7 @@ def main(
             )
 
         @staticmethod
-        def make_env(
-            seed, rank, evaluation, env_id, add_timestep, gridworld, **env_args
-        ):
+        def make_env(seed, rank, evaluation, **env_args):
             args = dict(
                 **env_args,
                 min_eval_lines=min_eval_lines,
@@ -125,11 +126,10 @@ def main(
     _Train(**kwargs, seed=seed, log_dir=log_dir, render=render, time_limit=None).run()
 
 
-def control_flow_args():
-    parsers = build_parser()
+def control_flow_args(parser):
+    parsers = add_arguments(parser)
     parser = parsers.main
     parser.add_argument("--no-tqdm", dest="use_tqdm", action="store_false")
-    parser.add_argument("--eval-steps", type=int)
     parser.add_argument("--min-eval-lines", type=int, required=True)
     parser.add_argument("--max-eval-lines", type=int, required=True)
     parser.add_argument("--no-eval", action="store_true")
@@ -139,8 +139,8 @@ def control_flow_args():
         "--lower-level", choices=["train-alone", "train-with-upper", "hardcoded"]
     )
     parser.add_argument("--lower-level-load-path")
-    parsers.env.add_argument("--gridworld", action="store_true")
-    multi_step.env.build_parser(parsers.env)
+    parser.add_argument("--gridworld", action="store_true")
+    multi_step.env.build_parser(parser.add_argument_group("env_args"))
     parsers.agent.add_argument("--lower-level-config", type=Path)
     parsers.agent.add_argument("--no-debug", dest="debug", action="store_false")
     parsers.agent.add_argument("--no-scan", action="store_true")
@@ -164,4 +164,5 @@ def control_flow_args():
 
 
 if __name__ == "__main__":
-    main(**hierarchical_parse_args(control_flow_args()))
+    PARSER = ArgumentParser()
+    main(**hierarchical_parse_args(control_flow_args(PARSER)))

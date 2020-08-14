@@ -1,43 +1,36 @@
-# stdlib
-# third party
-import argparse
+import json
 from collections import namedtuple
 from pathlib import Path
 
-from rl_utils import hierarchical_parse_args
-import torch.nn as nn
+from torch import nn as nn
 
-Parsers = namedtuple("Parser", "main agent ppo env")
-
-ACTIVATIONS = dict(
-    selu=nn.SELU(), prelu=nn.PReLU(), leaky=nn.LeakyReLU(), relu=nn.ReLU()
-)
+from configs import configs
 
 
-def build_parser():
-    parser = argparse.ArgumentParser(
-        description="RL", formatter_class=argparse.ArgumentDefaultsHelpFormatter
-    )
-    parser.add_argument("--run-id", help=" ")
-    parser.add_argument(
-        "--gamma", type=float, default=0.99, help="discount factor for rewards"
-    )
-    parser.add_argument("--normalize", action="store_true")
-    parser.add_argument(
-        "--use-gae",
-        action="store_true",
-        default=False,
-        help="use generalized advantage estimation",
-    )
-    parser.add_argument("--tau", type=float, default=0.95, help="gae parameter")
-    parser.add_argument("--seed", type=int, default=0, help="random seed")
+def add_arguments(parser):
+    parser.add_argument("--config", type=get_config)
     parser.add_argument(
         "--cuda-deterministic",
         action="store_true",
         help="sets flags for determinism when using CUDA (potentially slow!)",
     )
-    parser.add_argument("--render", action="store_true")
-    parser.add_argument("--render-eval", action="store_true")
+    parser.add_argument(
+        "--eval-interval", type=int, help="eval interval, one eval per n updates"
+    )
+    parser.add_argument("--eval-steps", type=int, help="number of steps for evaluation")
+    parser.add_argument(
+        "--log-interval",
+        type=int,
+        default=10,
+        help="log interval, one log per n updates",
+    )
+    parser.add_argument("--name")
+    parser.add_argument("--normalize", action="store_true")
+    parser.add_argument("--gpus-per-trial", "-g", type=int, default=1)
+    parser.add_argument("--cpus-per-trial", "-c", type=int, default=6)
+    parser.add_argument(
+        "--num-epochs", type=int, help="number of updates to perform", required=True
+    )
     parser.add_argument(
         "--num-processes",
         type=int,
@@ -45,22 +38,23 @@ def build_parser():
         required=True,
     )
     parser.add_argument(
-        "--num-steps", type=int, help="number of forward steps in A2C", required=True
-    )
-    parser.add_argument(
-        "--log-interval",
+        "--num-samples",
+        "-n",
         type=int,
-        default=10,
-        help="log interval, one log per n updates",
+        help="Number of times to sample from the hyperparameter space. See tune docs for details: "
+        "https://docs.ray.io/en/latest/tune/api_docs/execution.html?highlight=run#ray.tune.run",
+    )
+    parser.add_argument("--render", action="store_true")
+    parser.add_argument("--render-eval", action="store_true")
+    parser.add_argument("--seed", type=int, default=0, help="random seed")
+    parser.add_argument(
+        "--train-steps", type=int, help="number of forward steps in A2C", required=True
     )
     parser.add_argument(
-        "--save-interval",
-        type=int,
-        default=100,
-        help="save interval, one save per n updates",
-    )
-    parser.add_argument(
-        "--eval-interval", type=int, help="eval interval, one eval per n updates"
+        "--env",
+        dest="env_id",
+        default="PongNoFrameskip-v4",
+        help="environment to train on",
     )
     parser.add_argument("--load-path", type=Path)
     parser.add_argument("--log-dir", type=Path, help="directory to save agent logs")
@@ -71,18 +65,18 @@ def build_parser():
     parser.add_argument(
         "--num-batch", type=int, help="number of batches for ppo", required=True
     )
-    parser.add_argument("--success-reward", type=float)
+    # parser.add_argument("--success-reward", type=float)
 
     agent_parser = parser.add_argument_group("agent_args")
-    agent_parser.add_argument("--recurrent", action="store_true")
-    agent_parser.add_argument("--hidden-size", type=int, required=True)
-    agent_parser.add_argument("--num-layers", type=int)
     agent_parser.add_argument(
         "--activation", type=lambda s: eval(f"nn.{s}"), default=nn.ReLU()
     )
     agent_parser.add_argument(
         "--entropy-coef", type=float, help="entropy term coefficient", required=True
     )
+    agent_parser.add_argument("--hidden-size", type=int, required=True)
+    agent_parser.add_argument("--num-layers", type=int)
+    agent_parser.add_argument("--recurrent", action="store_true")
 
     ppo_parser = parser.add_argument_group("ppo_args")
     ppo_parser.add_argument(
@@ -101,18 +95,36 @@ def build_parser():
     ppo_parser.add_argument(
         "--max-grad-norm", type=float, default=0.5, help="max norm of gradients"
     )
-    env_parser = parser.add_argument_group("env_args")
-    env_parser.add_argument(
-        "--env",
-        dest="env_id",
-        default="PongNoFrameskip-v4",
-        help="environment to train on",
+    rollouts_parser = parser.add_argument_group("rollouts_args")
+    rollouts_parser.add_argument(
+        "--gamma", type=float, default=0.99, help="discount factor for rewards"
     )
-    env_parser.add_argument(
-        "--add-timestep",
+    rollouts_parser.add_argument(
+        "--tau", type=float, default=0.95, help="gae parameter"
+    )
+    rollouts_parser.add_argument(
+        "--use-gae",
         action="store_true",
         default=False,
-        help="add timestep to observations",
+        help="use generalized advantage estimation",
     )
 
-    return Parsers(main=parser, env=env_parser, ppo=ppo_parser, agent=agent_parser)
+    return Parsers(
+        main=parser, rollouts=rollouts_parser, ppo=ppo_parser, agent=agent_parser
+    )
+
+
+ACTIVATIONS = dict(
+    selu=nn.SELU(), prelu=nn.PReLU(), leaky=nn.LeakyReLU(), relu=nn.ReLU()
+)
+Parsers = namedtuple("Parser", "main agent ppo rollouts")
+
+
+def get_config(name):
+    if name is None:
+        return {}
+    path = Path("configs", name).with_suffix(".json")
+    if path.exists():
+        with path.open() as f:
+            return json.load(f)
+    return configs[name]
