@@ -4,31 +4,70 @@ import itertools
 import os
 import re
 import sys
-import time
-from collections import Counter, defaultdict
+from collections import defaultdict, namedtuple, Counter
 from pathlib import Path
+from pprint import pprint
 from typing import Dict
 
 import gym
 import numpy as np
+import ray
 import torch
-from gym.wrappers import TimeLimit
+from ray import tune
+from ray.tune.suggest.hyperopt import HyperOptSearch
 from tensorboardX import SummaryWriter
 
-from common.atari_wrappers import wrap_deepmind
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
-from hdfstore import HDF5Store
+from common.vec_env.util import set_seeds
 from networks import Agent, AgentOutputs
 from ppo import PPO
 from rollouts import RolloutStorage
 from utils import k_scalar_pairs, get_n_gpu, get_random_gpu
-from wrappers import AddTimestep, TransposeImage, VecPyTorch, VecPyTorchFrameStack
+from wrappers import VecPyTorch
+
+EpochOutputs = namedtuple("EpochOutputs", "obs reward done infos act masks")
 
 
-# noinspection PyAttributeOutsideInit
-class TrainBase(abc.ABC):
-    def setup(
+class TrainBase(tune.Trainable):
+    def __init__(self, *args, **kwargs):
+        self.iterator = None
+        self.agent = None
+        self.ppo = None
+        self.i = None
+        self.device = None
+        super().__init__(*args, **kwargs)
+
+    def _setup(self, config):
+        self.iterator = self.gen(**config)
+
+    def _train(self):
+        return next(self.iterator)
+
+    def _save(self, tmp_checkpoint_dir):
+        modules = dict(
+            optimizer=self.ppo.optimizer, agent=self.agent
+        )  # type: Dict[str, torch.nn.Module]
+        # if isinstance(self.envs.venv, VecNormalize):
+        #     modules.update(vec_normalize=self.envs.venv)
+        state_dict = {name: module.state_dict() for name, module in modules.items()}
+        save_path = Path(tmp_checkpoint_dir, f"checkpoint.pt")
+        torch.save(dict(step=self.i, **state_dict), save_path)
+        print(f"Saved parameters to {save_path}")
+
+    def _restore(self, checkpoint):
+        state_dict = torch.load(checkpoint, map_location=self.device)
+        self.agent.load_state_dict(state_dict["agent"])
+        self.ppo.optimizer.load_state_dict(state_dict["optimizer"])
+        start = state_dict.get("step", -1) + 1
+        # if isinstance(self.envs.venv, VecNormalize):
+        #     self.envs.venv.load_state_dict(state_dict["vec_normalize"])
+        print(f"Loaded parameters from {checkpoint}.")
+
+    def loop(self):
+        yield from self.iterator
+
+    def gen(
         self,
         config,
         cpus_per_trial,
@@ -68,14 +107,7 @@ class TrainBase(abc.ABC):
             cuda = False
 
         # reproducibility
-        torch.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
-        np.random.seed(seed)
-        cuda &= torch.cuda.is_available()
-        if cuda and cuda_deterministic:
-            torch.backends.cudnn.benchmark = False
-            torch.backends.cudnn.deterministic = True
-        torch.set_num_threads(1)
+        set_seeds(cuda, cuda_deterministic, seed)
 
         self.device = "cpu"
         if cuda:
@@ -111,10 +143,8 @@ class TrainBase(abc.ABC):
 
         # copy to device
         if cuda:
-            tick = time.time()
             self.agent.to(self.device)
             self.rollouts.to(self.device)
-            print("Values copied to GPU in", time.time() - tick, "seconds")
 
         self.ppo = PPO(agent=self.agent, num_batch=num_batch, **ppo_args)
         self.counter = Counter()
@@ -177,7 +207,6 @@ class TrainBase(abc.ABC):
         # self.envs.train()
         obs = self.envs.reset()
         self.rollouts.obs[0].copy_(obs)
-        tick = time.time()
         log_progress = None
 
         if eval_interval:
@@ -210,12 +239,7 @@ class TrainBase(abc.ABC):
             if log_progress is not None:
                 log_progress.update()
             if self.i % log_interval == 0:
-                total_num_steps = log_interval * num_processes * num_steps
-                fps = total_num_steps / (time.time() - tick)
-                tick = time.time()
-                yield dict(
-                    tick=tick, fps=fps, **epoch_counter, **train_results, **eval_result
-                )
+                yield dict(**epoch_counter, **train_results, **eval_result)
 
     def run_epoch(self, obs, rnn_hxs, masks, num_steps, counter, rollouts, envs):
         # noinspection PyTypeChecker
@@ -279,10 +303,6 @@ class TrainBase(abc.ABC):
         )
         env.seed(seed + rank)
         obs_shape = env.observation_space.shape
-        if add_timestep and len(obs_shape) == 1 and str(env).find("TimeLimit") > -1:
-            env = AddTimestep(env)
-        if is_atari and len(env.observation_space.shape) == 3:
-            env = wrap_deepmind(env)
 
         # elif len(env.observation_space.shape) == 3:
         #     raise NotImplementedError(
@@ -292,8 +312,6 @@ class TrainBase(abc.ABC):
 
         # If the input has shape (W,H,3), wrap for PyTorch convolutions
         obs_shape = env.observation_space.shape
-        if len(obs_shape) == 3 and obs_shape[2] in [1, 3]:
-            env = TransposeImage(env)
 
         return env
 
@@ -330,8 +348,6 @@ class TrainBase(abc.ABC):
 
         envs = VecPyTorch(envs)
 
-        if num_frame_stack is not None:
-            envs = VecPyTorchFrameStack(envs, num_frame_stack)
         # elif len(envs.observation_space.shape) == 3:
         #     envs = VecPyTorchFrameStack(envs, 4, device)
 
@@ -374,12 +390,10 @@ class Trainer(TrainBase):
         self.log_dir = log_dir
         if log_dir:
             self.writer = SummaryWriter(logdir=str(log_dir))
-            self.table = HDF5Store(datapath=str(Path(log_dir, "data.hdf5")))
         else:
             self.writer = None
-            self.table = None
-        self.setup(**kwargs, num_processes=num_processes, train_steps=train_steps)
-        self.last_save = time.time()  # dummy save
+        kwargs.update(num_processes=num_processes, train_steps=train_steps)
+        self.setup(kwargs)
 
     def run(self):
         for _ in itertools.count():
