@@ -195,84 +195,69 @@ class Trainer(tune.Trainable):
 
         self.i = 0
 
-        self.make_train_iterator = lambda: self.train_generator(
-            num_steps=train_steps,
-            num_processes=num_processes,
-            eval_steps=eval_steps,
-            log_interval=log_interval,
-            eval_interval=eval_interval,
-            no_eval=no_eval,
-        )
-        self.train_iterator = self.make_train_iterator()
-
         for _ in itertools.count():
-            yield from self.make_train_iterator()
+            if eval_interval and not no_eval:
+                # vec_norm = get_vec_normalize(eval_envs)
+                # if vec_norm is not None:
+                #     vec_norm.eval()
+                #     vec_norm.ob_rms = get_vec_normalize(envs).ob_rms
 
-    def train_generator(
-        self, num_steps, num_processes, eval_steps, log_interval, eval_interval, no_eval
-    ):
-        if eval_interval and not no_eval:
-            # vec_norm = get_vec_normalize(eval_envs)
-            # if vec_norm is not None:
-            #     vec_norm.eval()
-            #     vec_norm.ob_rms = get_vec_normalize(envs).ob_rms
+                # self.envs.evaluate()
+                eval_masks = torch.zeros(num_processes, 1, device=self.device)
+                eval_counter = Counter()
+                envs = self.make_eval_envs()
+                envs.to(self.device)
+                with self.agent.recurrent_module.evaluating(envs.observation_space):
+                    eval_recurrent_hidden_states = torch.zeros(
+                        num_processes,
+                        self.agent.recurrent_hidden_state_size,
+                        device=self.device,
+                    )
 
-            # self.envs.evaluate()
-            eval_masks = torch.zeros(num_processes, 1, device=self.device)
-            eval_counter = Counter()
-            envs = self.make_eval_envs()
-            envs.to(self.device)
-            with self.agent.recurrent_module.evaluating(envs.observation_space):
-                eval_recurrent_hidden_states = torch.zeros(
-                    num_processes,
-                    self.agent.recurrent_hidden_state_size,
-                    device=self.device,
+                    eval_result = self.run_epoch(
+                        obs=envs.reset(),
+                        rnn_hxs=eval_recurrent_hidden_states,
+                        masks=eval_masks,
+                        num_steps=eval_steps,
+                        counter=eval_counter,
+                        rollouts=None,
+                        envs=envs,
+                    )
+                envs.close()
+                eval_result = {f"eval_{k}": v for k, v in eval_result.items()}
+            else:
+                eval_result = {}
+            # self.envs.train()
+            obs = self.envs.reset()
+            self.rollouts.obs[0].copy_(obs)
+            log_progress = None
+
+            for _ in range(self.i % eval_interval, eval_interval):
+                self.i += 1
+                epoch_counter = self.run_epoch(
+                    obs=self.rollouts.obs[0],
+                    rnn_hxs=self.rollouts.recurrent_hidden_states[0],
+                    masks=self.rollouts.masks[0],
+                    num_steps=train_steps,
+                    counter=self.counter,
+                    rollouts=self.rollouts,
+                    envs=self.envs,
                 )
 
-                eval_result = self.run_epoch(
-                    obs=envs.reset(),
-                    rnn_hxs=eval_recurrent_hidden_states,
-                    masks=eval_masks,
-                    num_steps=eval_steps,
-                    counter=eval_counter,
-                    rollouts=None,
-                    envs=envs,
-                )
-            envs.close()
-            eval_result = {f"eval_{k}": v for k, v in eval_result.items()}
-        else:
-            eval_result = {}
-        # self.envs.train()
-        obs = self.envs.reset()
-        self.rollouts.obs[0].copy_(obs)
-        log_progress = None
+                with torch.no_grad():
+                    next_value = self.agent.get_value(
+                        self.rollouts.obs[-1],
+                        self.rollouts.recurrent_hidden_states[-1],
+                        self.rollouts.masks[-1],
+                    )
 
-        for _ in range(self.i % eval_interval, eval_interval):
-            self.i += 1
-            epoch_counter = self.run_epoch(
-                obs=self.rollouts.obs[0],
-                rnn_hxs=self.rollouts.recurrent_hidden_states[0],
-                masks=self.rollouts.masks[0],
-                num_steps=num_steps,
-                counter=self.counter,
-                rollouts=self.rollouts,
-                envs=self.envs,
-            )
-
-            with torch.no_grad():
-                next_value = self.agent.get_value(
-                    self.rollouts.obs[-1],
-                    self.rollouts.recurrent_hidden_states[-1],
-                    self.rollouts.masks[-1],
-                )
-
-            self.rollouts.compute_returns(next_value.detach())
-            train_results = self.ppo.update(self.rollouts)
-            self.rollouts.after_update()
-            if log_progress is not None:
-                log_progress.update()
-            if self.i % log_interval == 0:
-                yield dict(**epoch_counter, **train_results, **eval_result)
+                self.rollouts.compute_returns(next_value.detach())
+                train_results = self.ppo.update(self.rollouts)
+                self.rollouts.after_update()
+                if log_progress is not None:
+                    log_progress.update()
+                if self.i % log_interval == 0:
+                    yield dict(**epoch_counter, **train_results, **eval_result)
 
     def run_epoch(self, obs, rnn_hxs, masks, num_steps, counter, rollouts, envs):
         # noinspection PyTypeChecker
