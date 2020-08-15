@@ -174,7 +174,7 @@ class Trainer(tune.Trainable):
         train_envs = make_vec_envs(evaluation=False)
         train_envs.to(self.device)
         agent = self.build_agent(envs=train_envs, **agent_args)
-        rollouts = self.rollouts = RolloutStorage(
+        rollouts = RolloutStorage(
             num_steps=train_steps,
             num_processes=num_processes,
             obs_space=train_envs.observation_space,
@@ -260,6 +260,7 @@ class Trainer(tune.Trainable):
                     **dict(train_counter.items()),
                     **dict(eval_counter.items(prefix="eval_")),
                 )
+                train_counter.reset()
 
     @staticmethod
     def process_infos(episode_counter, done, infos, **act_log):
