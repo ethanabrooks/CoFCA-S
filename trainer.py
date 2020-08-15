@@ -172,8 +172,6 @@ class Trainer(tune.Trainable):
         print("Using device", self.device)
 
         self.envs = make_vec_envs(evaluation=False)
-        self.make_eval_envs = lambda: make_vec_envs(evaluation=True)
-
         self.envs.to(self.device)
         self.agent = self.build_agent(envs=self.envs, **agent_args)
         self.rollouts = RolloutStorage(
@@ -205,7 +203,7 @@ class Trainer(tune.Trainable):
                 # self.envs.evaluate()
                 eval_masks = torch.zeros(num_processes, 1, device=self.device)
                 eval_counter = Counter()
-                envs = self.make_eval_envs()
+                envs = make_vec_envs(evaluation=True)
                 envs.to(self.device)
                 with self.agent.recurrent_module.evaluating(envs.observation_space):
                     eval_recurrent_hidden_states = torch.zeros(
