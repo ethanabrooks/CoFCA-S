@@ -195,8 +195,8 @@ class Trainer(tune.Trainable):
 
         self.i = 0
 
-        for _ in itertools.count():
-            if eval_interval and not no_eval:
+        for i in itertools.count():
+            if eval_interval and not no_eval and i % eval_interval == 0:
                 # vec_norm = get_vec_normalize(eval_envs)
                 # if vec_norm is not None:
                 #     vec_norm.eval()
@@ -232,32 +232,31 @@ class Trainer(tune.Trainable):
             self.rollouts.obs[0].copy_(obs)
             log_progress = None
 
-            for _ in range(self.i % eval_interval, eval_interval):
-                self.i += 1
-                epoch_counter = self.run_epoch(
-                    obs=self.rollouts.obs[0],
-                    rnn_hxs=self.rollouts.recurrent_hidden_states[0],
-                    masks=self.rollouts.masks[0],
-                    num_steps=train_steps,
-                    counter=self.counter,
-                    rollouts=self.rollouts,
-                    envs=self.envs,
+            self.i += 1
+            epoch_counter = self.run_epoch(
+                obs=self.rollouts.obs[0],
+                rnn_hxs=self.rollouts.recurrent_hidden_states[0],
+                masks=self.rollouts.masks[0],
+                num_steps=train_steps,
+                counter=self.counter,
+                rollouts=self.rollouts,
+                envs=self.envs,
+            )
+
+            with torch.no_grad():
+                next_value = self.agent.get_value(
+                    self.rollouts.obs[-1],
+                    self.rollouts.recurrent_hidden_states[-1],
+                    self.rollouts.masks[-1],
                 )
 
-                with torch.no_grad():
-                    next_value = self.agent.get_value(
-                        self.rollouts.obs[-1],
-                        self.rollouts.recurrent_hidden_states[-1],
-                        self.rollouts.masks[-1],
-                    )
-
-                self.rollouts.compute_returns(next_value.detach())
-                train_results = self.ppo.update(self.rollouts)
-                self.rollouts.after_update()
-                if log_progress is not None:
-                    log_progress.update()
-                if self.i % log_interval == 0:
-                    yield dict(**epoch_counter, **train_results, **eval_result)
+            self.rollouts.compute_returns(next_value.detach())
+            train_results = self.ppo.update(self.rollouts)
+            self.rollouts.after_update()
+            if log_progress is not None:
+                log_progress.update()
+            if self.i % log_interval == 0:
+                yield dict(**epoch_counter, **train_results, **eval_result)
 
     def run_epoch(self, obs, rnn_hxs, masks, num_steps, counter, rollouts, envs):
         # noinspection PyTypeChecker
