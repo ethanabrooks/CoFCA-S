@@ -138,7 +138,7 @@ class Trainer(tune.Trainable):
             episode_counter = defaultdict(list)
             for _ in range(num_steps):
                 with torch.no_grad():
-                    act = self.agent(
+                    act = agent(
                         inputs=obs, rnn_hxs=rnn_hxs, masks=masks
                     )  # type: AgentOutputs
 
@@ -171,30 +171,28 @@ class Trainer(tune.Trainable):
             self.device = self.get_device()
         print("Using device", self.device)
 
-        train_envs = self.envs = make_vec_envs(evaluation=False)
-        self.envs.to(self.device)
-        self.agent = self.build_agent(envs=self.envs, **agent_args)
+        train_envs = make_vec_envs(evaluation=False)
+        train_envs.to(self.device)
+        agent = self.build_agent(envs=train_envs, **agent_args)
         rollouts = self.rollouts = RolloutStorage(
             num_steps=train_steps,
             num_processes=num_processes,
-            obs_space=self.envs.observation_space,
-            action_space=self.envs.action_space,
-            recurrent_hidden_state_size=self.agent.recurrent_hidden_state_size,
+            obs_space=train_envs.observation_space,
+            action_space=train_envs.action_space,
+            recurrent_hidden_state_size=agent.recurrent_hidden_state_size,
             **rollouts_args,
         )
 
         # copy to device
         if cuda:
-            self.agent.to(self.device)
-            self.rollouts.to(self.device)
+            agent.to(self.device)
+            rollouts.to(self.device)
 
-        self.ppo = PPO(agent=self.agent, num_batch=num_batch, **ppo_args)
-        self.counter = Counter()
+        ppo = PPO(agent=agent, num_batch=num_batch, **ppo_args)
         train_counter = EpochCounter()
 
-        self.i = 0
-
         for i in itertools.count():
+            eval_counter = EpochCounter()
             if eval_interval and not no_eval and i % eval_interval == 0:
                 # vec_norm = get_vec_normalize(eval_envs)
                 # if vec_norm is not None:
@@ -203,15 +201,12 @@ class Trainer(tune.Trainable):
 
                 # self.envs.evaluate()
                 eval_masks = torch.zeros(num_processes, 1, device=self.device)
-                eval_counter = Counter()
                 eval_envs = make_vec_envs(evaluation=True)
                 eval_envs.to(self.device)
-                with self.agent.recurrent_module.evaluating(
-                    eval_envs.observation_space
-                ):
+                with agent.recurrent_module.evaluating(eval_envs.observation_space):
                     eval_recurrent_hidden_states = torch.zeros(
                         num_processes,
-                        self.agent.recurrent_hidden_state_size,
+                        agent.recurrent_hidden_state_size,
                         device=self.device,
                     )
 
@@ -226,15 +221,10 @@ class Trainer(tune.Trainable):
                             reward=epoch_output.reward, done=epoch_output.done
                         )
                 eval_envs.close()
-                eval_result = {f"eval_{k}": v for k, v in eval_result.items()}
-            else:
-                eval_result = {}
-            # self.envs.train()
-            obs = self.envs.reset()
-            self.rollouts.obs[0].copy_(obs)
-            log_progress = None
 
-            self.i = i
+            obs = train_envs.reset()
+            rollouts.obs[0].copy_(obs)
+
             for epoch_output in run_epoch(
                 obs=rollouts.obs[0],
                 rnn_hxs=rollouts.recurrent_hidden_states[0],
@@ -254,19 +244,21 @@ class Trainer(tune.Trainable):
                 )
 
             with torch.no_grad():
-                next_value = self.agent.get_value(
-                    self.rollouts.obs[-1],
-                    self.rollouts.recurrent_hidden_states[-1],
-                    self.rollouts.masks[-1],
+                next_value = agent.get_value(
+                    rollouts.obs[-1],
+                    rollouts.recurrent_hidden_states[-1],
+                    rollouts.masks[-1],
                 )
 
-            self.rollouts.compute_returns(next_value.detach())
-            train_results = self.ppo.update(self.rollouts)
-            self.rollouts.after_update()
+            rollouts.compute_returns(next_value.detach())
+            train_results = ppo.update(rollouts)
+            rollouts.after_update()
 
-            if self.i % log_interval == 0:
+            if i % log_interval == 0:
                 yield dict(
-                    **dict(train_counter.items()), **train_results, **eval_result
+                    **train_results,
+                    **dict(train_counter.items()),
+                    **dict(eval_counter.items(prefix="eval_")),
                 )
 
     @staticmethod
@@ -286,28 +278,6 @@ class Trainer(tune.Trainable):
         env = gym.make(env_id)
         env.seed(seed + rank)
         return env
-
-    def _save(self, checkpoint_dir):
-        modules = dict(
-            optimizer=self.ppo.optimizer, agent=self.agent
-        )  # type: Dict[str, torch.nn.Module]
-        # if isinstance(self.envs.venv, VecNormalize):
-        #     modules.update(vec_normalize=self.envs.venv)
-        state_dict = {name: module.state_dict() for name, module in modules.items()}
-        save_path = Path(checkpoint_dir, f"checkpoint.pt")
-        torch.save(dict(step=self.i, **state_dict), save_path)
-        print(f"Saved parameters to {save_path}")
-        return str(save_path)
-
-    def _restore(self, checkpoint):
-        load_path = checkpoint
-        state_dict = torch.load(load_path, map_location=self.device)
-        self.agent.load_state_dict(state_dict["agent"])
-        self.ppo.optimizer.load_state_dict(state_dict["optimizer"])
-        self.i = state_dict.get("step", -1) + 1
-        # if isinstance(self.envs.venv, VecNormalize):
-        #     self.envs.venv.load_state_dict(state_dict["vec_normalize"])
-        print(f"Loaded parameters from {load_path}.")
 
     def get_device(self):
         match = re.search("\d+$", self.name)
