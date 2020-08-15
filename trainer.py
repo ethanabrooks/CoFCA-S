@@ -166,9 +166,7 @@ class Trainer(tune.Trainable):
         # reproducibility
         set_seeds(cuda, cuda_deterministic, seed)
 
-        self.device = "cpu"
-        if cuda:
-            self.device = self.get_device()
+        self.device = self.get_device() if cuda else "cpu"
         print("Using device", self.device)
 
         train_envs = make_vec_envs(evaluation=False)
@@ -191,7 +189,7 @@ class Trainer(tune.Trainable):
         ppo = PPO(agent=agent, num_batch=num_batch, **ppo_args)
         train_counter = EpochCounter()
 
-        for i in itertools.count():
+        for i in range(num_epochs):
             eval_counter = EpochCounter()
             if eval_interval and not no_eval and i % eval_interval == 0:
                 # vec_norm = get_vec_normalize(eval_envs)
@@ -222,8 +220,7 @@ class Trainer(tune.Trainable):
                         )
                 eval_envs.close()
 
-            obs = train_envs.reset()
-            rollouts.obs[0].copy_(obs)
+            rollouts.obs[0].copy_(train_envs.reset())
 
             for epoch_output in run_epoch(
                 obs=rollouts.obs[0],
@@ -315,10 +312,6 @@ class Trainer(tune.Trainable):
                 if writer is not None:
                     for k, v in k_scalar_pairs(**result):
                         writer.add_scalar(k, v, i)
-            # for i, report in enumerate(cls(config).loop()):
-            #     pprint(report)
-            #     for k, v in report.items():
-            #         writer.add_scalar(k, v, i)
         else:
             local_mode = num_samples is None
             ray.init(dashboard_host="127.0.0.1", local_mode=local_mode)
