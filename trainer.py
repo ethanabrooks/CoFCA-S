@@ -171,10 +171,10 @@ class Trainer(tune.Trainable):
             self.device = self.get_device()
         print("Using device", self.device)
 
-        self.envs = make_vec_envs(evaluation=False)
+        train_envs = self.envs = make_vec_envs(evaluation=False)
         self.envs.to(self.device)
         self.agent = self.build_agent(envs=self.envs, **agent_args)
-        self.rollouts = RolloutStorage(
+        rollouts = self.rollouts = RolloutStorage(
             num_steps=train_steps,
             num_processes=num_processes,
             obs_space=self.envs.observation_space,
@@ -190,6 +190,7 @@ class Trainer(tune.Trainable):
 
         self.ppo = PPO(agent=self.agent, num_batch=num_batch, **ppo_args)
         self.counter = Counter()
+        train_counter = EpochCounter()
 
         self.i = 0
 
@@ -230,16 +231,24 @@ class Trainer(tune.Trainable):
             self.rollouts.obs[0].copy_(obs)
             log_progress = None
 
-            self.i += 1
-            epoch_counter = self.run_epoch(
-                obs=self.rollouts.obs[0],
-                rnn_hxs=self.rollouts.recurrent_hidden_states[0],
-                masks=self.rollouts.masks[0],
+            self.i = i
+            for epoch_output in run_epoch(
+                obs=rollouts.obs[0],
+                rnn_hxs=rollouts.recurrent_hidden_states[0],
+                masks=rollouts.masks[0],
+                envs=train_envs,
                 num_steps=train_steps,
-                counter=self.counter,
-                rollouts=self.rollouts,
-                envs=self.envs,
-            )
+            ):
+                train_counter.update(reward=epoch_output.reward, done=epoch_output.done)
+                rollouts.insert(
+                    obs=epoch_output.obs,
+                    recurrent_hidden_states=epoch_output.act.rnn_hxs,
+                    actions=epoch_output.act.action,
+                    action_log_probs=epoch_output.act.action_log_probs,
+                    values=epoch_output.act.value,
+                    rewards=epoch_output.reward,
+                    masks=epoch_output.masks,
+                )
 
             with torch.no_grad():
                 next_value = self.agent.get_value(
@@ -254,7 +263,9 @@ class Trainer(tune.Trainable):
             if log_progress is not None:
                 log_progress.update()
             if self.i % log_interval == 0:
-                yield dict(**epoch_counter, **train_results, **eval_result)
+                yield dict(
+                    **dict(train_counter.items()), **train_results, **eval_result
+                )
 
     def run_epoch(self, obs, rnn_hxs, masks, num_steps, counter, rollouts, envs):
         # noinspection PyTypeChecker
