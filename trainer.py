@@ -171,21 +171,8 @@ class Trainer(tune.Trainable):
             self.device = self.get_device()
         print("Using device", self.device)
 
-        self.envs = self.make_vec_envs(
-            seed=seed,
-            render=render,
-            synchronous=True if render else synchronous,
-            evaluation=False,
-            num_processes=num_processes,
-        )
-        self.make_eval_envs = functools.partial(
-            self.make_vec_envs,
-            seed=seed,
-            render=render,
-            synchronous=True if render else synchronous,
-            evaluation=True,
-            num_processes=num_processes,
-        )
+        self.envs = make_vec_envs(evaluation=False)
+        self.make_eval_envs = lambda: make_vec_envs(evaluation=True)
 
         self.envs.to(self.device)
         self.agent = self.build_agent(envs=self.envs, **agent_args)
@@ -342,62 +329,10 @@ class Trainer(tune.Trainable):
         return Agent(envs.observation_space.shape, envs.action_space, **agent_args)
 
     @staticmethod
-    def make_env(env_id, seed, rank, add_timestep, evaluation):
+    def make_env(env_id, seed, rank, evaluation):
         env = gym.make(env_id)
-        is_atari = hasattr(gym.envs, "atari") and isinstance(
-            env.unwrapped, gym.envs.atari.atari_env.AtariEnv
-        )
         env.seed(seed + rank)
-        obs_shape = env.observation_space.shape
-
-        # elif len(env.observation_space.shape) == 3:
-        #     raise NotImplementedError(
-        #         "CNN models work only for atari,\n"
-        #         "please use a custom wrapper for a custom pixel input env.\n"
-        #         "See wrap_deepmind for an example.")
-
-        # If the input has shape (W,H,3), wrap for PyTorch convolutions
-        obs_shape = env.observation_space.shape
-
         return env
-
-    def make_vec_envs(
-        self,
-        num_processes,
-        render,
-        synchronous,
-        seed,
-        evaluation,
-        num_frame_stack=None,
-        **env_args,
-    ):
-        envs = [
-            functools.partial(  # thunk
-                self.make_env, rank=i, seed=seed, evaluation=evaluation, **env_args
-            )
-            for i in range(num_processes)
-        ]
-
-        if len(envs) == 1 or sys.platform == "darwin" or synchronous:
-            envs = DummyVecEnv(envs, render=render)
-        else:
-            envs = SubprocVecEnv(envs)
-
-        # if (
-        # envs.observation_space.shape
-        # and len(envs.observation_space.shape) == 1
-        # ):
-        # if gamma is None:
-        # envs = VecNormalize(envs, ret=False)
-        # else:
-        # envs = VecNormalize(envs, gamma=gamma)
-
-        envs = VecPyTorch(envs)
-
-        # elif len(envs.observation_space.shape) == 3:
-        #     envs = VecPyTorchFrameStack(envs, 4, device)
-
-        return envs
 
     def _save(self, checkpoint_dir):
         modules = dict(
