@@ -11,7 +11,7 @@ from gym import spaces
 from distributions import FixedCategorical, Categorical
 from env import Action
 from lower_level import Agent, get_obs_sections
-from multi_step.env import Obs
+from env import Obs
 from transformer import TransformerModel
 from utils import init_
 

@@ -8,7 +8,7 @@ from layers import Flatten
 import networks
 from networks import NNBase
 from lines import Subtask
-from multi_step.env import Obs, Env, subtasks
+from env import Obs, Env, subtasks
 from utils import init_, init, init_normc_
 
 

@@ -5,10 +5,9 @@ import numpy as np
 from gym import spaces
 from rl_utils import hierarchical_parse_args
 
-import multi_step.env
+import env
 import networks
-import control_flow.agent
-import control_flow
+import control_flow_agent
 from env import Action
 from main import add_arguments
 from trainer import Trainer
@@ -44,7 +43,7 @@ def main(
             agent_args.update(log_dir=log_dir)
             del agent_args["recurrent"]
             del agent_args["num_conv_layers"]
-            return control_flow.agent.Agent(
+            return control_flow_agent.Agent(
                 observation_space=obs_space,
                 action_space=envs.action_space,
                 eval_lines=max_eval_lines,
@@ -69,9 +68,9 @@ def main(
                 del args["max_while_objects"]
                 del args["num_excluded_objects"]
                 del args["temporal_extension"]
-                return multi_step.env.Env(**args)
+                return env.Env(**args)
             else:
-                return multi_step.env.Env(**args)
+                return env.Env(**args)
 
         def process_infos(self, episode_counter, done, infos, **act_log):
             for d in infos:
@@ -128,7 +127,7 @@ def control_flow_args(parser):
     )
     parser.add_argument("--lower-level-load-path")
     parser.add_argument("--gridworld", action="store_true")
-    multi_step.env.build_parser(parser.add_argument_group("env_args"))
+    env.build_parser(parser.add_argument_group("env_args"))
     parsers.agent.add_argument("--lower-level-config", type=Path)
     parsers.agent.add_argument("--no-debug", dest="debug", action="store_false")
     parsers.agent.add_argument("--no-scan", action="store_true")
