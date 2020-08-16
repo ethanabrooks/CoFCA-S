@@ -206,14 +206,6 @@ class Recurrence(nn.Module):
             pass
         return get_obs_sections(obs_spaces)
 
-    def set_obs_space(self, obs_space):
-        self.obs_spaces = obs_space.spaces
-        self.obs_sections = self.get_obs_sections(self.obs_spaces)
-        self.train_lines = len(self.obs_spaces["lines"].nvec)
-        # noinspection PyProtectedMember
-        self.state_sizes = self.state_sizes._replace(d_probs=self.d_space())
-        self.obs_spaces = Obs(**self.obs_spaces)
-
     def pack(self, hxs):
         def pack():
             for name, size, hx in zip(
@@ -454,7 +446,12 @@ class Recurrence(nn.Module):
         obs_sections = self.obs_sections
         state_sizes = self.state_sizes
         train_lines = self.train_lines
-        self.set_obs_space(eval_obs_space)
+        self.obs_spaces = eval_obs_space.spaces
+        self.obs_sections = self.get_obs_sections(self.obs_spaces)
+        self.train_lines = len(self.obs_spaces["lines"].nvec)
+        # noinspection PyProtectedMember
+        self.state_sizes = self.state_sizes._replace(d_probs=self.d_space())
+        self.obs_spaces = Obs(**self.obs_spaces)
         yield self
         self.obs_spaces = obs_spaces
         self.obs_sections = obs_sections
