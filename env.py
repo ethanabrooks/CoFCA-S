@@ -42,7 +42,6 @@ LIGHTCYAN = "\033[96m"
 RESET = "\033[0m"
 
 Obs = namedtuple("Obs", "active lines obs inventory")
-
 Last = namedtuple("Last", "action active reward terminal selected")
 State = namedtuple(
     "State", "obs prev ptr term subtask_complete use_failure_buf condition_evaluations"
@@ -239,28 +238,6 @@ class Env(gym.Env):
             ),
             inventory=spaces.MultiBinary(len(self.items)),
         )
-
-    def print_obs(self, obs):
-        obs, inventory = obs
-        obs = obs.transpose(1, 2, 0).astype(int)
-        grid_size = 3  # obs.astype(int).sum(-1).max()  # max objects per grid
-        chars = [" "] + [o for (o, *_) in self.world_contents]
-        print(self.i)
-        print(inventory)
-        for i, row in enumerate(obs):
-            colors = []
-            string = []
-            for j, channel in enumerate(row):
-                int_ids = 1 + np.arange(channel.size)
-                number = channel * int_ids
-                crop = sorted(number, reverse=True)[:grid_size]
-                for x in crop:
-                    colors.append(self.colors[self.world_contents[x - 1]])
-                    string.append(chars[x])
-                colors.append(RESET)
-                string.append("|")
-            print(*[c for p in zip(colors, string) for c in p], sep="")
-            print("-" * len(string))
 
     def line_str(self, line):
         if type(line) is Subtask:
@@ -544,12 +521,16 @@ class Env(gym.Env):
                 interaction, resource = self.subtasks[subtask_id]
 
                 if self.lower_level == "hardcoded":
-                    lower_level_action = self.get_lower_level_action(
-                        interaction=interaction,
-                        resource=resource,
-                        agent_pos=agent_pos,
-                        objects=objects,
-                    )
+                    resource = objective(interaction, resource)
+                    if objects.get(tuple(agent_pos), None) == resource:
+                        lower_level_action = interaction
+                    else:
+                        nearest = get_nearest(
+                            _from=agent_pos, _to=resource, objects=objects
+                        )
+                        if nearest:
+                            n, d = nearest
+                            lower_level_action = n - agent_pos
                     # print("lower level action:", lower_level_action)
                 else:
                     lower_level_action = self.lower_level_actions[lower_level_index]
@@ -753,34 +734,6 @@ class Env(gym.Env):
                 lines += [line_type(0)]
         return lines
 
-    def get_observation(self, obs, active, lines):
-        obs, inventory = obs
-        padded = lines + [Padding(0)] * (self.n_lines - len(lines))
-        lines = [self.preprocess_line(p) for p in padded]
-        obs = Obs(
-            obs=obs,
-            lines=lines,
-            active=self.n_lines if active is None else active,
-            inventory=np.array([inventory[i] for i in self.items]),
-        )
-        # if not self.observation_space.contains(obs):
-        #     import ipdb
-        #
-        #     ipdb.set_trace()
-        #     self.observation_space.contains(obs)
-        return OrderedDict(obs._asdict())
-
-    @staticmethod
-    def get_lower_level_action(interaction, resource, agent_pos, objects):
-        resource = objective(interaction, resource)
-        if objects.get(tuple(agent_pos), None) == resource:
-            return interaction
-        else:
-            nearest = get_nearest(_from=agent_pos, _to=resource, objects=objects)
-            if nearest:
-                n, d = nearest
-                return n - agent_pos
-
     @property
     def line_types(self):
         return [If, Else, EndIf, While, EndWhile, EndLoop, Subtask, Padding, Loop]
@@ -802,7 +755,6 @@ class Env(gym.Env):
         state = next(state_iterator)
         actions = []
         program_counter = []
-        condition_evaluations = []
 
         subtasks_complete = 0
         agent_ptr = 0
@@ -870,9 +822,19 @@ class Env(gym.Env):
                     else:
                         pre = "  "
                     indent += line.depth_change[0]
-                    print(
-                        "{:2}{}{}{}".format(i, pre, " " * indent, self.line_str(line))
-                    )
+                    if type(line) is Subtask:
+                        line_str = f"{line} {self.subtasks.index(line.id)}"
+                    elif type(line) in (If, While):
+                        if self.one_condition:
+                            evaluation = f"counts[iron] ({self.counts[self.iron]}) > counts[gold] ({self.counts[self.gold]})"
+                        elif line.id == Env.iron:
+                            evaluation = f"counts[iron] ({self.counts[self.iron]}) > counts[gold] ({self.counts[self.gold]})"
+                        elif line.id == Env.gold:
+                            evaluation = f"counts[gold] ({self.counts[self.gold]}) > counts[merchant] ({self.counts[self.merchant]})"
+                        elif line.id == Env.wood:
+                            evaluation = f"counts[merchant] ({self.counts[self.merchant]}) > counts[iron] ({self.counts[self.iron]})"
+                        line_str = f"{line} {evaluation}"
+                    print("{:2}{}{}{}".format(i, pre, " " * indent, line_str))
                     indent += line.depth_change[1]
                 if action is not None and action < len(self.subtasks):
                     print("Selected:", self.subtasks[action], action)
@@ -887,10 +849,44 @@ class Env(gym.Env):
                 print("Time remaining", self.time_remaining)
                 print("Obs:")
                 print(RESET)
-                self.print_obs(state.obs)
+                obs, inventory = state.obs
+                obs = obs.transpose(1, 2, 0).astype(int)
+                grid_size = 3  # obs.astype(int).sum(-1).max()  # max objects per grid
+                chars = [" "] + [o for (o, *_) in self.world_contents]
+                print(self.i)
+                print(inventory)
+                for i, row in enumerate(obs):
+                    colors = []
+                    string = []
+                    for j, channel in enumerate(row):
+                        int_ids = 1 + np.arange(channel.size)
+                        number = channel * int_ids
+                        crop = sorted(number, reverse=True)[:grid_size]
+                        for x in crop:
+                            colors.append(self.colors[self.world_contents[x - 1]])
+                            string.append(chars[x])
+                        colors.append(RESET)
+                        string.append("|")
+                    print(*[c for p in zip(colors, string) for c in p], sep="")
+                    print("-" * len(string))
 
             self._render = render
-            obs = self.get_observation(obs=state.obs, active=state.ptr, lines=lines)
+            obs, inventory = state.obs
+            padded = lines + [Padding(0)] * (self.n_lines - len(lines))
+            preprocessed_lines = [self.preprocess_line(p) for p in padded]
+            obs = Obs(
+                obs=obs,
+                lines=preprocessed_lines,
+                active=self.n_lines if state.ptr is None else state.ptr,
+                inventory=np.array([inventory[i] for i in self.items]),
+            )
+            # if not self.observation_space.contains(obs):
+            #     import ipdb
+            #
+            #     ipdb.set_trace()
+            #     self.observation_space.contains(obs)
+            obs = OrderedDict(obs._asdict())
+
             line_specific_info = {
                 f"{k}_{10 * (len(lines) // 10)}": v for k, v in info.items()
             }
@@ -926,36 +922,15 @@ class Env(gym.Env):
     def eval_condition_size(self):
         return self._eval_condition_size and self.evaluating
 
-    def choose_line_types(self):
-        if self.evaluating:
-            assert self.eval_lines is not None
-            n_lines = self.eval_lines
-        else:
-            n_lines = self.random.random_integers(self.min_lines, self.max_lines)
-        if self.eval_condition_size:
-            line0 = self.random.choice([While, If])
-            edge_length = self.random.random_integers(
-                self.max_lines, self.eval_lines - 1
-            )
-            lines = [line0] + [Subtask] * (edge_length - 2)
-            lines += [EndWhile if line0 is While else EndIf, Subtask]
-        else:
-            line_types = self.control_flow_types
-            if self.single_control_flow_type:
-                line_types = [self.random.choice(self.control_flow_types), Subtask]
-            lines = list(
-                Line.generate_types(
-                    n_lines,
-                    remaining_depth=self.max_nesting_depth,
-                    random=self.random,
-                    legal_lines=line_types,
-                )
-            )
-        return lines
-
     def line_generator(self, lines):
         line_transitions = defaultdict(list)
-        for _from, _to in self.get_transitions(lines):
+
+        def get_transitions():
+            conditions = []
+            for i, line in enumerate(lines):
+                yield from line.transitions(i, conditions)
+
+        for _from, _to in get_transitions():
             line_transitions[_from].append(_to)
         i = 0
         if_evaluations = []
@@ -968,12 +943,6 @@ class Env(gym.Env):
             if type(lines[i]) is If:
                 if_evaluations.append(evaluation)
             i = line_transitions[i][evaluation]
-
-    @staticmethod
-    def get_transitions(lines):
-        conditions = []
-        for i, line in enumerate(lines):
-            yield from line.transitions(i, conditions)
 
     def seed(self, seed=None):
         assert self.seed == seed
