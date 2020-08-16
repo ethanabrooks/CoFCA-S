@@ -1,5 +1,6 @@
 import json
 from collections import namedtuple
+from contextlib import contextmanager
 
 import numpy as np
 import torch
@@ -13,6 +14,7 @@ from lower_level import Agent
 from env import Action
 from multi_step.env import Obs
 from distributions import FixedCategorical, Categorical
+from transformer import TransformerModel
 from utils import init_
 
 RecurrentState = namedtuple(
@@ -36,7 +38,7 @@ def conv_output_dimension(h, padding, kernel, stride, dilation=1):
     return int(1 + (h + 2 * padding - dilation * (kernel - 1) - 1) / stride)
 
 
-class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
+class Recurrence(nn.Module):
     def __init__(
         self,
         hidden_size,
@@ -56,8 +58,17 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         num_edges,
         activation,
         num_layers,
+        olsk,
+        no_pointer,
+        transformer,
+        log_dir,
+        no_roll,
+        no_scan,
+        debug,
+        eval_lines,
         **kwargs,
     ):
+        super().__init__()
         self.sum_pool = sum_pool
         self.fuzz = fuzz
         self.gate_coef = gate_coef
@@ -65,17 +76,58 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         self.kernel_size = kernel_size
         self.stride = stride
         observation_space = Obs(**observation_space.spaces)
-        recurrence.Recurrence.__init__(
-            self,
-            hidden_size=hidden_size,
-            task_embed_size=task_embed_size,
-            observation_space=observation_space,
-            action_space=action_space,
-            num_edges=num_edges,
-            **kwargs,
+        if olsk:
+            num_edges = 3
+        self.olsk = olsk
+        self.no_pointer = no_pointer
+        self.transformer = transformer
+        self.log_dir = log_dir
+        self.no_roll = no_roll
+        self.no_scan = no_scan
+        self.obs_spaces = observation_space
+        self.action_size = action_space.nvec.size
+        self.debug = debug
+        self.hidden_size = hidden_size
+        self.task_embed_size = task_embed_size
+
+        self.obs_sections = self.get_obs_sections(self.obs_spaces)
+        self.eval_lines = eval_lines
+        self.train_lines = len(self.obs_spaces.lines.nvec)
+
+        # networks
+        self.ne = num_edges
+        self.action_space_nvec = Action(*map(int, action_space.nvec))
+        n_a = self.action_space_nvec.upper
+        self.n_a = n_a
+        self.embed_task = self.build_embed_task(task_embed_size)
+        self.embed_upper = nn.Embedding(n_a, hidden_size)
+        self.task_encoder = (
+            TransformerModel(
+                ntoken=self.ne * self.d_space(),
+                ninp=task_embed_size,
+                nhid=task_embed_size,
+            )
+            if transformer
+            else nn.GRU(
+                task_embed_size, task_embed_size, bidirectional=True, batch_first=True
+            )
         )
+
+        # layers = []
+        # in_size = gru_hidden_size + 1
+        # for _ in range(num_layers):
+        # layers.extend([init_(nn.Linear(in_size, hidden_size)), activation])
+        # in_size = hidden_size
+        # self.zeta2 = nn.Sequential(*layers)
+        self.critic = init_(nn.Linear(hidden_size, 1))
+        self.actor = Categorical(hidden_size, n_a)
         self.conv_hidden_size = conv_hidden_size
-        abstract_recurrence.Recurrence.__init__(self)
+        d, h, _ = self.obs_spaces.obs.shape
+        ones = torch.ones(1, dtype=torch.long)
+        self.register_buffer("ones", ones)
+        line_nvec = torch.tensor(self.obs_spaces.lines.nvec[0, :-1])
+        offset = F.pad(line_nvec.cumsum(0), [1, 0])
+        self.register_buffer("offset", offset)
         d, h, w = observation_space.obs.shape
         self.obs_dim = d
         self.kernel_size = min(d, kernel_size)
@@ -119,13 +171,16 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         self.conv_bias = nn.Parameter(torch.zeros(conv_hidden_size))
         self.critic_a = init_(nn.Linear(hidden_size, 1))
         self.critic_d = init_(nn.Linear(z2_size, 1))
-        state_sizes = self.state_sizes._asdict()
         with lower_level_config.open() as f:
             lower_level_params = json.load(f)
         ll_action_space = spaces.Discrete(Action(*action_space.nvec).lower)
-        del state_sizes["v"]
         self.state_sizes = RecurrentState(
-            **state_sizes,
+            a=1,
+            a_probs=n_a,
+            d=1,
+            d_probs=(self.d_space()),
+            h=hidden_size,
+            p=1,
             v=1,
             dg_probs=2,
             dg=1,
@@ -151,10 +206,14 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             obs_spaces = Obs(**obs_spaces)
         except TypeError:
             pass
-        return super().get_obs_sections(obs_spaces)
+        return recurrence.get_obs_sections(obs_spaces)
 
     def set_obs_space(self, obs_space):
-        super().set_obs_space(obs_space)
+        self.obs_spaces = obs_space.spaces
+        self.obs_sections = self.get_obs_sections(self.obs_spaces)
+        self.train_lines = len(self.obs_spaces["lines"].nvec)
+        # noinspection PyProtectedMember
+        self.state_sizes = self.state_sizes._replace(d_probs=self.d_space())
         self.obs_spaces = Obs(**self.obs_spaces)
 
     def pack(self, hxs):
@@ -352,3 +411,147 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 dg_probs=d_gate.probs,
                 l_probs=ll_output.dist.probs,
             )
+
+    @property
+    def gru_in_size(self):
+        return self.hidden_size + self.conv_hidden_size + self.encoder_hidden_size
+
+    @staticmethod
+    def eval_lines_space(n_eval_lines, train_lines_space):
+        return spaces.MultiDiscrete(
+            np.repeat(train_lines_space.nvec[:1], repeats=n_eval_lines, axis=0)
+        )
+
+    def build_embed_task(self, hidden_size):
+        return nn.EmbeddingBag(self.obs_spaces.lines.nvec[0].sum(), hidden_size)
+
+    def preprocess_embed(self, N, T, inputs):
+        lines = inputs.lines.view(T, N, *self.obs_spaces.lines.shape)
+        lines = lines.long()[0, :, :] + self.offset
+        return lines.view(-1, self.obs_spaces.lines.nvec[0].size)
+
+    def P_shape(self):
+        lines = (
+            self.obs_spaces["lines"]
+            if isinstance(self.obs_spaces, dict)
+            else self.obs_spaces.lines
+        )
+        if self.olsk or self.no_pointer:
+            return np.zeros(1, dtype=int)
+        else:
+            return np.array([len(lines.nvec), self.d_space(), self.ne])
+
+    def d_space(self):
+        if self.olsk:
+            return 3
+        elif self.transformer or self.no_scan or self.no_pointer:
+            return 2 * self.eval_lines
+        else:
+            return 2 * self.train_lines
+
+    # noinspection PyProtectedMember
+    @contextmanager
+    def evaluating(self, eval_obs_space):
+        obs_spaces = self.obs_spaces
+        obs_sections = self.obs_sections
+        state_sizes = self.state_sizes
+        train_lines = self.train_lines
+        self.set_obs_space(eval_obs_space)
+        yield self
+        self.obs_spaces = obs_spaces
+        self.obs_sections = obs_sections
+        self.state_sizes = state_sizes
+        self.train_lines = train_lines
+
+    @staticmethod
+    def get_lines_space(n_eval_lines, train_lines_space):
+        return spaces.MultiDiscrete(
+            np.repeat(train_lines_space.nvec[:1], repeats=n_eval_lines, axis=0)
+        )
+
+    @staticmethod
+    def sample_new(x, dist):
+        new = x < 0
+        x[new] = dist.sample()[new].flatten()
+
+    def forward(self, inputs, hx):
+        return self.pack(self.inner_loop(inputs, rnn_hxs=hx))
+
+    def parse_obs(self, inputs: torch.Tensor):
+        return torch.split(inputs, self.obs_sections, dim=-1)
+
+    def print(self, *args, **kwargs):
+        args = [
+            torch.round(100 * a)
+            if type(a) is torch.Tensor and a.dtype == torch.float
+            else a
+            for a in args
+        ]
+        if self.debug:
+            print(*args, **kwargs)
+
+    def build_P(self, M, N, device, nl):
+        if self.no_pointer:
+            _, G = self.task_encoder(M)
+            return G.transpose(0, 1).reshape(N, -1)
+        if self.no_scan:
+            if self.no_roll:
+                H, _ = self.task_encoder(M)
+            else:
+                rolled = torch.cat(
+                    [torch.roll(M, shifts=-i, dims=1) for i in range(nl)], dim=0
+                )
+                _, H = self.task_encoder(rolled)
+            H = H.transpose(0, 1).reshape(nl, N, -1)
+            P = self.beta(H).view(nl, N, -1, self.ne).softmax(2)
+            return P
+        elif self.transformer:
+            P = self.task_encoder(M.transpose(0, 1)).view(nl, N, -1, self.ne).softmax(2)
+            return P
+        else:
+            if self.no_roll:
+                G, _ = self.task_encoder(M)
+                G = torch.cat(
+                    [
+                        G.unsqueeze(1).expand(-1, nl, -1, -1),
+                        G.unsqueeze(2).expand(-1, -1, nl, -1),
+                    ],
+                    dim=-1,
+                ).transpose(0, 1)
+            else:
+                rolled = torch.cat(
+                    [torch.roll(M, shifts=-i, dims=1) for i in range(nl)], dim=0
+                )
+                G, _ = self.task_encoder(rolled)
+            G = G.view(nl, N, nl, 2, -1)
+            B = bb = self.beta(G).sigmoid()
+            # arange = torch.zeros(6).float()
+            # arange[0] = 1
+            # arange[1] = 1
+            # B[:, :, :, 0] = 0  # arange.view(1, 1, -1, 1)
+            # B[:, :, :, 1] = 1
+            f, b = torch.unbind(B, dim=3)
+            B = torch.stack([f, b.flip(2)], dim=-2)
+            B = B.view(nl, N, 2 * nl, self.ne)
+            last = torch.zeros(nl, N, 2 * nl, self.ne, device=device)
+            last[:, :, -1] = 1
+            B = (1 - last).flip(2) * B  # this ensures the first B is 0
+            zero_last = (1 - last) * B
+            B = zero_last + last  # this ensures that the last B is 1
+            rolled = torch.roll(zero_last, shifts=1, dims=2)
+            C = torch.cumprod(1 - rolled, dim=2)
+            P = B * C
+            P = P.view(nl, N, nl, 2, self.ne)
+            f, b = torch.unbind(P, dim=3)
+            P = torch.cat([b.flip(2), f], dim=2)
+            return P
+
+    def build_memory(self, N, T, inputs):
+        lines = inputs.lines.view(T, N, self.obs_sections.lines).long()[0]
+        return self.embed_task(lines.view(-1)).view(
+            *lines.shape, self.task_embed_size
+        )  # n_batch, n_lines, hidden_size
+
+    @staticmethod
+    def preprocess_obs(obs):
+        return obs.unsqueeze(-1)
