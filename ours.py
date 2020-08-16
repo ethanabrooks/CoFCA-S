@@ -8,12 +8,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 from gym import spaces
 
-import abstract_recurrence as abstract_recurrence
-import recurrence as recurrence
-from lower_level import Agent
-from env import Action
-from multi_step.env import Obs
 from distributions import FixedCategorical, Categorical
+from env import Action
+from lower_level import Agent, get_obs_sections
+from multi_step.env import Obs
 from transformer import TransformerModel
 from utils import init_
 
@@ -206,7 +204,7 @@ class Recurrence(nn.Module):
             obs_spaces = Obs(**obs_spaces)
         except TypeError:
             pass
-        return recurrence.get_obs_sections(obs_spaces)
+        return get_obs_sections(obs_spaces)
 
     def set_obs_space(self, obs_space):
         self.obs_spaces = obs_space.spaces

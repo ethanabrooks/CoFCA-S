@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 from gym import spaces
 from torch import nn as nn
@@ -8,8 +9,11 @@ import networks
 from networks import NNBase
 from lines import Subtask
 from multi_step.env import Obs, Env, subtasks
-from recurrence import get_obs_sections
 from utils import init_, init, init_normc_
+
+
+def get_obs_sections(obs_spaces):
+    return [int(np.prod(s.shape)) for s in obs_spaces]
 
 
 class Agent(networks.Agent):

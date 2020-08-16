@@ -6,7 +6,6 @@ from torch.nn import functional as F
 
 import networks
 import ours
-import recurrence
 from networks import AgentOutputs, NNBase
 from env import Action
 from distributions import FixedCategorical
@@ -37,11 +36,7 @@ class Agent(networks.Agent, NNBase):
                 **network_args,
             )
         else:
-            self.recurrent_module = recurrence.Recurrence(
-                observation_space=observation_space,
-                action_space=action_space,
-                **network_args,
-            )
+            raise RuntimeError
 
     @property
     def recurrent_hidden_state_size(self):
@@ -59,10 +54,7 @@ class Agent(networks.Agent, NNBase):
         rm = self.recurrent_module
         hx = rm.parse_hidden(all_hxs)
         t = type(rm)
-        if t is recurrence.Recurrence:
-            X = [hx.a, hx.d, hx.p]
-            probs = [hx.a_probs, hx.d_probs]
-        elif t is ours.Recurrence:
+        if t is ours.Recurrence:
             X = Action(upper=hx.a, lower=hx.l, delta=hx.d, dg=hx.dg, ptr=hx.p)
             ll_type = self.lower_level_type
             if ll_type == "train-alone":
