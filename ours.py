@@ -207,16 +207,10 @@ class Recurrence(nn.Module):
         return get_obs_sections(obs_spaces)
 
     def pack(self, hxs):
-        def pack():
-            for name, size, hx in zip(
-                RecurrentState._fields, self.state_sizes, zip(*hxs)
-            ):
-                x = torch.stack(hx).float()
-                assert np.prod(x.shape[2:]) == size
-                yield x.view(*x.shape[:2], -1)
-
-        hx = torch.cat(list(pack()), dim=-1)
-        return hx, hx[-1:]
+        for name, size, hx in zip(RecurrentState._fields, self.state_sizes, zip(*hxs)):
+            x = torch.stack(hx).float()
+            assert np.prod(x.shape[2:]) == size
+            yield x.view(*x.shape[:2], -1)
 
     def parse_hidden(self, hx: torch.Tensor) -> RecurrentState:
         state_sizes = self.state_sizes
@@ -470,7 +464,18 @@ class Recurrence(nn.Module):
         x[new] = dist.sample()[new].flatten()
 
     def forward(self, inputs, hx):
-        return self.pack(self.inner_loop(inputs, rnn_hxs=hx))
+        hxs = self.inner_loop(inputs, rnn_hxs=hx)
+
+        def pack():
+            for name, size, hx in zip(
+                RecurrentState._fields, self.state_sizes, zip(*hxs)
+            ):
+                x = torch.stack(hx).float()
+                assert np.prod(x.shape[2:]) == size
+                yield x.view(*x.shape[:2], -1)
+
+        hx = torch.cat(list(pack()), dim=-1)
+        return hx, hx[-1:]
 
     def parse_obs(self, inputs: torch.Tensor):
         return torch.split(inputs, self.obs_sections, dim=-1)
