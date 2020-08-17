@@ -391,12 +391,6 @@ class Recurrence(nn.Module):
     def gru_in_size(self):
         return self.hidden_size + self.conv_hidden_size + self.encoder_hidden_size
 
-    @staticmethod
-    def eval_lines_space(n_eval_lines, train_lines_space):
-        return spaces.MultiDiscrete(
-            np.repeat(train_lines_space.nvec[:1], repeats=n_eval_lines, axis=0)
-        )
-
     def build_embed_task(self, hidden_size):
         return nn.EmbeddingBag(self.obs_spaces.lines.nvec[0].sum(), hidden_size)
 
