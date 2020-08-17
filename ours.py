@@ -96,7 +96,6 @@ class Recurrence(nn.Module):
         self.embed_task = nn.EmbeddingBag(
             self.obs_spaces.lines.nvec[0].sum(), task_embed_size
         )
-        self.embed_upper = nn.Embedding(n_a, hidden_size)
         self.task_encoder = (
             TransformerModel(
                 ntoken=self.ne * self.d_space(),
@@ -109,7 +108,6 @@ class Recurrence(nn.Module):
             )
         )
 
-        self.critic = init_(nn.Linear(hidden_size, 1))
         self.actor = Categorical(hidden_size, n_a)
         self.conv_hidden_size = conv_hidden_size
         d, h, _ = self.obs_spaces.obs.shape
@@ -134,12 +132,7 @@ class Recurrence(nn.Module):
             if self.no_pointer
             else self.task_embed_size
         )
-        output_dim = conv_output_dimension(
-            h=h, padding=padding, kernel=kernel_size, stride=stride
-        )
-        h1_size = self.conv_hidden_size
-
-        zeta1_input_size = m_size + h1_size + inventory_hidden_size
+        zeta1_input_size = m_size + self.conv_hidden_size + inventory_hidden_size
         self.zeta1 = init_(nn.Linear(zeta1_input_size, hidden_size))
         z2_size = zeta1_input_size + lower_embed_size
         if self.olsk:
@@ -157,8 +150,7 @@ class Recurrence(nn.Module):
         self.d_gate = Categorical(z2_size, 2)
         self.kernel_net = nn.Linear(m_size, conv_hidden_size * kernel_size ** 2 * d)
         self.conv_bias = nn.Parameter(torch.zeros(conv_hidden_size))
-        self.critic_a = init_(nn.Linear(hidden_size, 1))
-        self.critic_d = init_(nn.Linear(z2_size, 1))
+        self.critic = init_(nn.Linear(hidden_size, 1))
         with lower_level_config.open() as f:
             lower_level_params = json.load(f)
         ll_action_space = spaces.Discrete(Action(*action_space.nvec).lower)
@@ -414,7 +406,7 @@ class Recurrence(nn.Module):
                 a=A[t],
                 l=L[t].detach(),
                 lh=hx.lh,
-                v=self.critic_a(z1),
+                v=self.critic(z1),
                 h=h,
                 p=p,
                 d=D[t],
