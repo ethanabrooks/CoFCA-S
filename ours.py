@@ -217,7 +217,7 @@ class Recurrence(nn.Module):
         )
 
         # parse non-action inputs
-        state = Obs(*self.parse_obs(inputs.obs))
+        state = Obs(*torch.split(inputs.obs, self.obs_sections, dim=-1))
         state = state._replace(obs=state.obs.view(T, N, *self.obs_spaces.obs.shape))
         lines = state.lines.view(T, N, *self.obs_spaces.lines.shape)
 
@@ -464,9 +464,6 @@ class Recurrence(nn.Module):
 
         hx = torch.cat(list(pack()), dim=-1)
         return hx, hx[-1:]
-
-    def parse_obs(self, inputs: torch.Tensor):
-        return torch.split(inputs, self.obs_sections, dim=-1)
 
     def print(self, *args, **kwargs):
         args = [
