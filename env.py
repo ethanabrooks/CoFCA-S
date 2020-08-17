@@ -283,7 +283,7 @@ class Env(gym.Env):
 
         return world
 
-    def evaluate_line(self, line, counts, condition_evaluations, loops):
+    def evaluate_line(self, line, counts, loops):
         if line is None:
             return None
         elif type(line) is Loop:
@@ -299,7 +299,6 @@ class Env(gym.Env):
                 evaluation = counts[Env.merchant] > counts[Env.iron]
             else:
                 raise RuntimeError
-            condition_evaluations += [evaluation]
             return evaluation
 
     def feasible(self, objects, lines):
@@ -339,9 +338,7 @@ class Env(gym.Env):
                 if all(
                     (
                         whiles == 0,  # first loop
-                        not self.evaluate_line(
-                            line, counts, [], loops
-                        ),  # evaluates false
+                        not self.evaluate_line(line, counts, loops),  # evaluates false
                         not self.evaluating,
                         self.random.random() < self.reject_while_prob,
                     )
@@ -350,7 +347,7 @@ class Env(gym.Env):
                 whiles += 1
                 if whiles > self.max_while_loops:
                     return False
-            evaluation = self.evaluate_line(line, counts, [], loops)
+            evaluation = self.evaluate_line(line, counts, loops)
             if evaluation is True and self.long_jump:
                 assert self.evaluating
                 return False
@@ -394,9 +391,7 @@ class Env(gym.Env):
                             return None
                     self.counts = counts = self.count_objects(objects)
                     line = line_iterator.send(
-                        self.evaluate_line(
-                            lines[line], counts, condition_evaluations, self.loops
-                        )
+                        self.evaluate_line(lines[line], counts, self.loops)
                     )
                     if self.loops == 0:
                         self.loops = None
