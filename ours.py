@@ -206,18 +206,15 @@ class Recurrence(nn.Module):
             pass
         return get_obs_sections(obs_spaces)
 
-    def parse_input(self, x: torch.Tensor) -> ParsedInput:
-        return ParsedInput(
+    def inner_loop(self, raw_inputs, rnn_hxs):
+        T, N, dim = raw_inputs.shape
+        inputs = ParsedInput(
             *torch.split(
-                x,
+                raw_inputs,
                 ParsedInput(obs=sum(self.obs_sections), actions=self.action_size),
                 dim=-1,
             )
         )
-
-    def inner_loop(self, raw_inputs, rnn_hxs):
-        T, N, dim = raw_inputs.shape
-        inputs = self.parse_input(raw_inputs)
 
         # parse non-action inputs
         state = Obs(*self.parse_obs(inputs.obs))
