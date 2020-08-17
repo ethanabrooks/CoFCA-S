@@ -88,6 +88,7 @@ class Trainer(tune.Trainable):
         eval_interval: int = None,
         eval_steps: int = None,
         no_eval=False,
+        load_path=None,
     ):
         # Properly restrict pytorch to not consume extra resources.
         #  - https://github.com/pytorch/pytorch/issues/975
@@ -162,6 +163,8 @@ class Trainer(tune.Trainable):
             ppo_args.update(ppo_epoch=0)
             num_processes = 1
             cuda = False
+        if load_path:
+            self._restore(load_path)
 
         # reproducibility
         set_seeds(cuda, cuda_deterministic, seed)
