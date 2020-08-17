@@ -71,8 +71,6 @@ class Recurrence(nn.Module):
         self.kernel_size = kernel_size
         self.stride = stride
         observation_space = Obs(**observation_space.spaces)
-        if olsk:
-            num_edges = 3
         self.olsk = olsk
         self.no_pointer = no_pointer
         self.transformer = transformer
@@ -90,10 +88,11 @@ class Recurrence(nn.Module):
         self.train_lines = len(self.obs_spaces.lines.nvec)
 
         # networks
+        if olsk:
+            num_edges = 3
         self.ne = num_edges
         self.action_space_nvec = Action(*map(int, action_space.nvec))
-        n_a = self.action_space_nvec.upper
-        self.n_a = n_a
+        self.n_a = n_a = self.action_space_nvec.upper
         self.embed_task = nn.EmbeddingBag(
             self.obs_spaces.lines.nvec[0].sum(), task_embed_size
         )
@@ -110,21 +109,15 @@ class Recurrence(nn.Module):
             )
         )
 
-        # layers = []
-        # in_size = gru_hidden_size + 1
-        # for _ in range(num_layers):
-        # layers.extend([init_(nn.Linear(in_size, hidden_size)), activation])
-        # in_size = hidden_size
-        # self.zeta2 = nn.Sequential(*layers)
         self.critic = init_(nn.Linear(hidden_size, 1))
         self.actor = Categorical(hidden_size, n_a)
         self.conv_hidden_size = conv_hidden_size
         d, h, _ = self.obs_spaces.obs.shape
-        ones = torch.ones(1, dtype=torch.long)
-        self.register_buffer("ones", ones)
-        line_nvec = torch.tensor(self.obs_spaces.lines.nvec[0, :-1])
-        offset = F.pad(line_nvec.cumsum(0), [1, 0])
-        self.register_buffer("offset", offset)
+        self.register_buffer("ones", torch.ones(1, dtype=torch.long))
+        self.register_buffer(
+            "offset",
+            F.pad(torch.tensor(self.obs_spaces.lines.nvec[0, :-1]).cumsum(0), [1, 0]),
+        )
         d, h, w = observation_space.obs.shape
         self.obs_dim = d
         self.kernel_size = min(d, kernel_size)
@@ -132,9 +125,9 @@ class Recurrence(nn.Module):
         self.embed_lower = nn.Embedding(
             self.action_space_nvec.lower + 1, lower_embed_size
         )
-        inventory_size = self.obs_spaces.inventory.n
         self.embed_inventory = nn.Sequential(
-            init_(nn.Linear(inventory_size, inventory_hidden_size)), nn.ReLU()
+            init_(nn.Linear(self.obs_spaces.inventory.n, inventory_hidden_size)),
+            nn.ReLU(),
         )
         m_size = (
             2 * self.task_embed_size + hidden_size
@@ -226,11 +219,12 @@ class Recurrence(nn.Module):
 
         # build memory
         nl = len(self.obs_spaces.lines.nvec)
-        preprocess_embed = (
-            state.lines.view(T, N, *self.obs_spaces.lines.shape).long()[0, :, :]
-            + self.offset
-        ).view(-1, self.obs_spaces.lines.nvec[0].size)
-        M = self.embed_task(preprocess_embed).view(N, -1, self.task_embed_size)
+        M = self.embed_task(
+            (
+                state.lines.view(T, N, *self.obs_spaces.lines.shape).long()[0, :, :]
+                + self.offset
+            ).view(-1, self.obs_spaces.lines.nvec[0].size)
+        ).view(N, -1, self.task_embed_size)
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
         for _x in hx:
@@ -249,10 +243,8 @@ class Recurrence(nn.Module):
                 _, H = self.task_encoder(rolled)
             H = H.transpose(0, 1).reshape(nl, N, -1)
             P = self.beta(H).view(nl, N, -1, self.ne).softmax(2)
-            return P
         elif self.transformer:
             P = self.task_encoder(M.transpose(0, 1)).view(nl, N, -1, self.ne).softmax(2)
-            return P
         elif not self.olsk:
             if self.no_roll:
                 G, _ = self.task_encoder(M)
@@ -418,7 +410,6 @@ class Recurrence(nn.Module):
             # A[:] = float(input("A:"))
             # except ValueError:
             # pass
-            vd = self.critic_d(z2)
             yield RecurrentState(
                 a=A[t],
                 l=L[t].detach(),
