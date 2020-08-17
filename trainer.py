@@ -298,6 +298,7 @@ class Trainer(tune.Trainable):
         num_samples,
         name,
         config,
+        save_interval=None,
         **kwargs,
     ):
         cls.name = name
@@ -315,6 +316,12 @@ class Trainer(tune.Trainable):
                 if writer is not None:
                     for k, v in k_scalar_pairs(**result):
                         writer.add_scalar(k, v, i)
+                if (
+                    None not in (log_dir, save_interval)
+                    and (i + 1) % save_interval == 0
+                ):
+                    print("steps until save:", save_interval - i)
+                    trainer._save(Path(log_dir, "checkpoint.pt"))
         else:
             local_mode = num_samples is None
             ray.init(dashboard_host="127.0.0.1", local_mode=local_mode)

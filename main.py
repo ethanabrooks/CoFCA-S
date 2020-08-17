@@ -117,6 +117,7 @@ def add_arguments(parser):
     rollouts_parser.add_argument(
         "--gamma", type=float, default=0.99, help="discount factor for rewards"
     )
+    parser.add_argument("--save-interval", type=int, help="how often to save.")
     rollouts_parser.add_argument(
         "--tau", type=float, default=0.95, help="gae parameter"
     )
