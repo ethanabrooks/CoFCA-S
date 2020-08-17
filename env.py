@@ -2,7 +2,7 @@ import functools
 import itertools
 from collections import Counter, namedtuple, deque, OrderedDict, defaultdict
 from copy import deepcopy
-from typing import Iterator, List, Tuple
+from typing import Iterator, List, Tuple, Generator
 
 import gym
 import numpy as np
@@ -307,15 +307,15 @@ class Env(gym.Env):
 
     def feasible(self, objects, lines):
         line_iterator = self.line_generator(lines)
-        l = next(line_iterator)
+        line = next(line_iterator)
         loops = 0
         whiles = 0
         inventory = Counter()
         counts = Counter()
         for o in objects:
             counts[o] += 1
-        while l is not None:
-            line = lines[l]
+        while line is not None:
+            line = lines[line]
             if type(line) is Subtask:
                 behavior, resource = line.id
                 if behavior == self.sell:
@@ -357,7 +357,7 @@ class Env(gym.Env):
             if evaluation is True and self.long_jump:
                 assert self.evaluating
                 return False
-            l = line_iterator.send(evaluation)
+            line = line_iterator.send(evaluation)
         return True
 
     @staticmethod
@@ -445,7 +445,7 @@ class Env(gym.Env):
                     _agent_pos, objects = result
                     break
 
-        def state_generator(agent_pos) -> State:
+        def state_generator(agent_pos) -> Generator[State, Tuple[int, int], None]:
             initial_objects = deepcopy(objects)
             initial_agent_pos = deepcopy(agent_pos)
             line_iterator = self.line_generator(lines)
@@ -459,38 +459,38 @@ class Env(gym.Env):
             inventory = Counter()
             subtask_complete = False
 
-            def next_subtask(l):
+            def next_subtask(line):
                 while True:
-                    if l is None:
-                        l = line_iterator.send(None)
+                    if line is None:
+                        line = line_iterator.send(None)
                     else:
-                        if type(lines[l]) is Loop:
+                        if type(lines[line]) is Loop:
                             if self.loops is None:
-                                self.loops = lines[l].id
+                                self.loops = lines[line].id
                             else:
                                 self.loops -= 1
-                        elif type(lines[l]) is While:
+                        elif type(lines[line]) is While:
                             self.whiles += 1
                             if self.whiles > self.max_while_loops:
                                 return None
                         self.counts = counts = self.count_objects(objects)
-                        l = line_iterator.send(
+                        line = line_iterator.send(
                             self.evaluate_line(
-                                lines[l], counts, condition_evaluations, self.loops
+                                lines[line], counts, condition_evaluations, self.loops
                             )
                         )
                         if self.loops == 0:
                             self.loops = None
-                    if l is None or type(lines[l]) is Subtask:
+                    if line is None or type(lines[line]) is Subtask:
                         break
-                if l is not None:
-                    assert type(lines[l]) is Subtask
+                if line is not None:
+                    assert type(lines[line]) is Subtask
                     time_delta = 3 * self.world_size
                     if self.lower_level == "train-alone":
                         self.time_remaining = time_delta + self.time_to_waste
                     else:
                         self.time_remaining += time_delta
-                    return l
+                    return line
 
             prev, ptr = 0, next_subtask(None)
             term = False
@@ -501,7 +501,7 @@ class Env(gym.Env):
                         (lines, initial_objects, initial_agent_pos)
                     )
 
-                subtask_id, lower_level_index = yield State(
+                x = yield State(
                     obs=(self.world_array(objects, agent_pos), inventory),
                     prev=prev,
                     ptr=ptr,
@@ -510,6 +510,7 @@ class Env(gym.Env):
                     use_failure_buf=use_failure_buf,
                     condition_evaluations=condition_evaluations,
                 )
+                subtask_id, lower_level_index = x
                 subtask_complete = False
                 # for i, a in enumerate(self.lower_level_actions):
                 # print(i, a)
@@ -522,20 +523,7 @@ class Env(gym.Env):
                 # interaction, obj = lines[agent_ptr].id
                 interaction, resource = self.subtasks[subtask_id]
 
-                if self.lower_level == "hardcoded":
-                    resource = objective(interaction, resource)
-                    if objects.get(tuple(agent_pos), None) == resource:
-                        lower_level_action = interaction
-                    else:
-                        nearest = get_nearest(
-                            _from=agent_pos, _to=resource, objects=objects
-                        )
-                        if nearest:
-                            n, d = nearest
-                            lower_level_action = n - agent_pos
-                    # print("lower level action:", lower_level_action)
-                else:
-                    lower_level_action = self.lower_level_actions[lower_level_index]
+                lower_level_action = self.lower_level_actions[lower_level_index]
                 self.time_remaining -= 1
                 tgt_interaction, tgt_obj = lines[ptr].id
                 if tgt_obj not in objects.values() and (
@@ -648,6 +636,7 @@ class Env(gym.Env):
                 else [self.world_size - 1, self.world_size]
             )
         else:
+            vertical_water = False
             world_shape = (self.world_size, self.world_size)
         indexes = self.random.choice(
             np.prod(world_shape),
@@ -665,6 +654,7 @@ class Env(gym.Env):
         if len(object_list) == len(object_positions):
             wall_positions = wall_positions[:num_walls]
         positions = np.concatenate([object_positions, wall_positions])
+        water_index = 0
         if use_water:
             water_index = self.random.randint(1, self.world_size - 1)
             positions[positions[:, vertical_water] >= water_index] += np.array(
@@ -826,7 +816,7 @@ class Env(gym.Env):
                     indent += line.depth_change[0]
                     if type(line) is Subtask:
                         line_str = f"{line} {self.subtasks.index(line.id)}"
-                    elif type(line) in (If, While):
+                    if type(line) in (If, While):
                         if self.one_condition:
                             evaluation = f"counts[iron] ({self.counts[self.iron]}) > counts[gold] ({self.counts[self.gold]})"
                         elif line.id == Env.iron:
@@ -835,7 +825,11 @@ class Env(gym.Env):
                             evaluation = f"counts[gold] ({self.counts[self.gold]}) > counts[merchant] ({self.counts[self.merchant]})"
                         elif line.id == Env.wood:
                             evaluation = f"counts[merchant] ({self.counts[self.merchant]}) > counts[iron] ({self.counts[self.iron]})"
+                        else:
+                            raise RuntimeError
                         line_str = f"{line} {evaluation}"
+                    else:
+                        line_str = str(line)
                     print("{:2}{}{}{}".format(i, pre, " " * indent, line_str))
                     indent += line.depth_change[1]
                 if action is not None and action < len(self.subtasks):
@@ -851,13 +845,13 @@ class Env(gym.Env):
                 print("Time remaining", self.time_remaining)
                 print("Obs:")
                 print(RESET)
-                obs, inventory = state.obs
-                obs = obs.transpose(1, 2, 0).astype(int)
+                _obs, _inventory = state.obs
+                _obs = _obs.transpose(1, 2, 0).astype(int)
                 grid_size = 3  # obs.astype(int).sum(-1).max()  # max objects per grid
                 chars = [" "] + [o for (o, *_) in self.world_contents]
                 print(self.i)
-                print(inventory)
-                for i, row in enumerate(obs):
+                print(_inventory)
+                for i, row in enumerate(_obs):
                     colors = []
                     string = []
                     for j, channel in enumerate(row):
@@ -918,13 +912,15 @@ class Env(gym.Env):
                     term = True
             elif state.ptr is not None:
                 step += 1
+                # noinspection PyUnresolvedReferences
                 state = state_iterator.send((action, lower_level_action))
 
     @property
     def eval_condition_size(self):
         return self._eval_condition_size and self.evaluating
 
-    def line_generator(self, lines):
+    @staticmethod
+    def line_generator(lines):
         line_transitions = defaultdict(list)
 
         def get_transitions():

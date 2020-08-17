@@ -183,10 +183,12 @@ class Recurrence(nn.Module):
 
     def parse_hidden(self, hx: torch.Tensor) -> RecurrentState:
         state_sizes = self.state_sizes
+        # noinspection PyArgumentList
         if hx.size(-1) == sum(self.state_sizes):
             state_sizes = self.state_sizes
         return RecurrentState(*torch.split(hx, state_sizes, dim=-1))
 
+    # noinspection PyPep8Naming
     def inner_loop(self, raw_inputs, rnn_hxs):
         T, N, dim = raw_inputs.shape
         inputs = ParsedInput(
@@ -230,7 +232,7 @@ class Recurrence(nn.Module):
             P = self.beta(H).view(nl, N, -1, self.ne).softmax(2)
         elif self.transformer:
             P = self.task_encoder(M.transpose(0, 1)).view(nl, N, -1, self.ne).softmax(2)
-        elif not self.olsk:
+        else:
             if self.no_roll:
                 G, _ = self.task_encoder(M)
                 G = torch.cat(
@@ -246,7 +248,7 @@ class Recurrence(nn.Module):
                 )
                 G, _ = self.task_encoder(rolled)
             G = G.view(nl, N, nl, 2, -1)
-            B = bb = self.beta(G).sigmoid()
+            B = self.beta(G).sigmoid()
             # arange = torch.zeros(6).float()
             # arange[0] = 1
             # arange[1] = 1
@@ -266,6 +268,7 @@ class Recurrence(nn.Module):
             P = P.view(nl, N, nl, 2, self.ne)
             f, b = torch.unbind(P, dim=3)
             P = torch.cat([b.flip(2), f], dim=2)
+            # noinspection PyArgumentList
             half = P.size(2) // 2 if self.no_scan else nl
 
         p = hx.p.long().squeeze(-1)
