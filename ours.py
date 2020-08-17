@@ -206,6 +206,12 @@ class Recurrence(nn.Module):
             pass
         return get_obs_sections(obs_spaces)
 
+    def parse_hidden(self, hx: torch.Tensor) -> RecurrentState:
+        state_sizes = self.state_sizes
+        if hx.size(-1) == sum(self.state_sizes):
+            state_sizes = self.state_sizes
+        return RecurrentState(*torch.split(hx, state_sizes, dim=-1))
+
     def inner_loop(self, raw_inputs, rnn_hxs):
         T, N, dim = raw_inputs.shape
         inputs = ParsedInput(
@@ -227,10 +233,7 @@ class Recurrence(nn.Module):
             N, -1, self.task_embed_size
         )
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
-        state_sizes = self.state_sizes
-        if rnn_hxs.size(-1) == sum(self.state_sizes):
-            state_sizes = self.state_sizes
-        hx = RecurrentState(*torch.split(rnn_hxs, state_sizes, dim=-1))
+        hx = self.parse_hidden(rnn_hxs)
         for _x in hx:
             _x.squeeze_(0)
 
