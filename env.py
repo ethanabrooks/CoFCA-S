@@ -251,12 +251,14 @@ class Env(gym.Env):
                 evaluation = f"counts[gold] ({self.counts[self.gold]}) > counts[merchant] ({self.counts[self.merchant]})"
             elif line.id == Env.wood:
                 evaluation = f"counts[merchant] ({self.counts[self.merchant]}) > counts[iron] ({self.counts[self.iron]})"
+            else:
+                raise RuntimeError
             return f"{line} {evaluation}"
         return line
 
     @staticmethod
     @functools.lru_cache(maxsize=200)
-    def preprocess_line(line, **kwargs):
+    def preprocess_line(line):
         def item_index(item):
             if item == Env.water:
                 return len(Env.items)

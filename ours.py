@@ -83,7 +83,7 @@ class Recurrence(nn.Module):
         self.hidden_size = hidden_size
         self.task_embed_size = task_embed_size
 
-        self.obs_sections = self.get_obs_sections(self.obs_spaces)
+        self.obs_sections = get_obs_sections(self.obs_spaces)
         self.eval_lines = eval_lines
         self.train_lines = len(self.obs_spaces.lines.nvec)
 
@@ -180,13 +180,6 @@ class Recurrence(nn.Module):
             state_dict = torch.load(lower_level_load_path, map_location="cpu")
             self.lower_level.load_state_dict(state_dict["agent"])
             print(f"Loaded lower_level from {lower_level_load_path}.")
-
-    def get_obs_sections(self, obs_spaces):
-        try:
-            obs_spaces = Obs(**obs_spaces)
-        except TypeError:
-            pass
-        return get_obs_sections(obs_spaces)
 
     def parse_hidden(self, hx: torch.Tensor) -> RecurrentState:
         state_sizes = self.state_sizes
@@ -448,7 +441,7 @@ class Recurrence(nn.Module):
         state_sizes = self.state_sizes
         train_lines = self.train_lines
         self.obs_spaces = eval_obs_space.spaces
-        self.obs_sections = self.get_obs_sections(self.obs_spaces)
+        self.obs_sections = get_obs_sections(Obs(**self.obs_spaces))
         self.train_lines = len(self.obs_spaces["lines"].nvec)
         # noinspection PyProtectedMember
         self.state_sizes = self.state_sizes._replace(d_probs=self.d_space())
