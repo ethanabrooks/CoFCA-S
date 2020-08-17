@@ -466,8 +466,8 @@ class Recurrence(nn.Module):
         new = x < 0
         x[new] = dist.sample()[new].flatten()
 
-    def forward(self, inputs, hx):
-        hxs = self.inner_loop(inputs, rnn_hxs=hx)
+    def forward(self, inputs, rnn_hxs):
+        hxs = self.inner_loop(inputs, rnn_hxs)
 
         def pack():
             for name, size, hx in zip(
@@ -477,8 +477,8 @@ class Recurrence(nn.Module):
                 assert np.prod(x.shape[2:]) == size
                 yield x.view(*x.shape[:2], -1)
 
-        hx = torch.cat(list(pack()), dim=-1)
-        return hx, hx[-1:]
+        rnn_hxs = torch.cat(list(pack()), dim=-1)
+        return rnn_hxs, rnn_hxs[-1:]
 
     def print(self, *args, **kwargs):
         args = [
