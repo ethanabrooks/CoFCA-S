@@ -97,7 +97,9 @@ class Recurrence(nn.Module):
         self.action_space_nvec = Action(*map(int, action_space.nvec))
         n_a = self.action_space_nvec.upper
         self.n_a = n_a
-        self.embed_task = self.build_embed_task(task_embed_size)
+        self.embed_task = nn.EmbeddingBag(
+            self.obs_spaces.lines.nvec[0].sum(), task_embed_size
+        )
         self.embed_upper = nn.Embedding(n_a, hidden_size)
         self.task_encoder = (
             TransformerModel(
@@ -390,9 +392,6 @@ class Recurrence(nn.Module):
     @property
     def gru_in_size(self):
         return self.hidden_size + self.conv_hidden_size + self.encoder_hidden_size
-
-    def build_embed_task(self, hidden_size):
-        return nn.EmbeddingBag(self.obs_spaces.lines.nvec[0].sum(), hidden_size)
 
     def preprocess_embed(self, N, T, inputs):
         lines = inputs.lines.view(T, N, *self.obs_spaces.lines.shape)
