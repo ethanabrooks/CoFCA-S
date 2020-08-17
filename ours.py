@@ -50,7 +50,6 @@ class Recurrence(nn.Module):
         kernel_size,
         stride,
         action_space,
-        sum_pool,
         lower_level_config,
         task_embed_size,
         num_edges,
@@ -67,7 +66,6 @@ class Recurrence(nn.Module):
         **kwargs,
     ):
         super().__init__()
-        self.sum_pool = sum_pool
         self.fuzz = fuzz
         self.gate_coef = gate_coef
         self.conv_hidden_size = conv_hidden_size
@@ -148,8 +146,6 @@ class Recurrence(nn.Module):
             h=h, padding=padding, kernel=kernel_size, stride=stride
         )
         h1_size = self.conv_hidden_size
-        if not sum_pool:
-            h1_size *= output_dim ** 2
 
         zeta1_input_size = m_size + h1_size + inventory_hidden_size
         self.zeta1 = init_(nn.Linear(zeta1_input_size, hidden_size))
@@ -279,10 +275,7 @@ class Recurrence(nn.Module):
                 ],
                 dim=0,
             ).relu()
-            if self.sum_pool:
-                h1 = h1.sum(-1).sum(-1)
-            else:
-                h1 = h1.view(N, -1)
+            h1 = h1.sum(-1).sum(-1)
             inventory = self.embed_inventory(state.inventory[t])
             zeta1_input = torch.cat([m, h1, inventory], dim=-1)
             z1 = F.relu(self.zeta1(zeta1_input))

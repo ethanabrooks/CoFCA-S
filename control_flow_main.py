@@ -136,7 +136,6 @@ def control_flow_args(parser):
     parsers.agent.add_argument("--olsk", action="store_true")
     parsers.agent.add_argument("--transformer", action="store_true")
     parsers.agent.add_argument("--fuzz", action="store_true")
-    parsers.agent.add_argument("--sum-pool", action="store_true")
     parsers.agent.add_argument("--conv-hidden-size", type=int, required=True)
     parsers.agent.add_argument("--task-embed-size", type=int, required=True)
     parsers.agent.add_argument("--lower-embed-size", type=int, required=True)
