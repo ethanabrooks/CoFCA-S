@@ -231,9 +231,11 @@ class Recurrence(nn.Module):
 
         # build memory
         nl = len(self.obs_spaces.lines.nvec)
-        M = self.embed_task(self.preprocess_embed(N, T, state)).view(
-            N, -1, self.task_embed_size
-        )
+        preprocess_embed = (
+            state.lines.view(T, N, *self.obs_spaces.lines.shape).long()[0, :, :]
+            + self.offset
+        ).view(-1, self.obs_spaces.lines.nvec[0].size)
+        M = self.embed_task(preprocess_embed).view(N, -1, self.task_embed_size)
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
         for _x in hx:
@@ -393,11 +395,6 @@ class Recurrence(nn.Module):
     def gru_in_size(self):
         return self.hidden_size + self.conv_hidden_size + self.encoder_hidden_size
 
-    def preprocess_embed(self, N, T, inputs):
-        lines = inputs.lines.view(T, N, *self.obs_spaces.lines.shape)
-        lines = lines.long()[0, :, :] + self.offset
-        return lines.view(-1, self.obs_spaces.lines.nvec[0].size)
-
     def P_shape(self):
         lines = (
             self.obs_spaces["lines"]
@@ -526,13 +523,3 @@ class Recurrence(nn.Module):
             f, b = torch.unbind(P, dim=3)
             P = torch.cat([b.flip(2), f], dim=2)
             return P
-
-    def build_memory(self, N, T, inputs):
-        lines = inputs.lines.view(T, N, self.obs_sections.lines).long()[0]
-        return self.embed_task(lines.view(-1)).view(
-            *lines.shape, self.task_embed_size
-        )  # n_batch, n_lines, hidden_size
-
-    @staticmethod
-    def preprocess_obs(obs):
-        return obs.unsqueeze(-1)
