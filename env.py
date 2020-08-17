@@ -8,6 +8,7 @@ import numpy as np
 from gym import spaces
 from gym.utils import seeding
 from rl_utils import hierarchical_parse_args
+from typing import List, Tuple, Dict, Optional, Generator
 
 import keyboard_control
 from lines import (
@@ -22,6 +23,9 @@ from lines import (
     Loop,
     EndLoop,
 )
+
+Coord = Tuple[int, int]
+ObjectMap = Dict[Coord, str]
 
 BLACK = "\033[30m"
 RED = "\033[31m"
@@ -361,7 +365,35 @@ class Env(gym.Env):
             counts[o] += 1
         return counts
 
-    def state_generator(self, objects, agent_pos, lines):
+    def next_subtask(
+        self, line: Line, line_iterator: Generator, counts: Dict[str, int]
+    ):
+        while True:
+            if type(line) is Loop:
+                if self.loops is None:
+                    self.loops = line.id
+                else:
+                    self.loops -= 1
+            elif type(line) is While:
+                self.whiles += 1
+                if self.whiles > self.max_while_loops:
+                    return None
+            new_line = line_iterator.send(self.evaluate_line(line, counts, self.loops))
+            if self.loops == 0:
+                self.loops = None
+            if new_line is None:
+                return
+            if type(line) is Subtask:
+                time_delta = 3 * self.world_size
+                if self.lower_level == "train-alone":
+                    self.time_remaining = time_delta + self.time_to_waste
+                else:
+                    self.time_remaining += time_delta
+                return line
+
+    def state_generator(
+        self, objects: ObjectMap, agent_pos: Coord, lines: List[Line]
+    ) -> Generator[State, Tuple[int, int], None]:
         initial_objects = deepcopy(objects)
         initial_agent_pos = deepcopy(agent_pos)
         line_iterator = self.line_generator(lines)
