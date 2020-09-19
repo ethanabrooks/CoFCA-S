@@ -347,13 +347,13 @@ class Env(gym.Env):
             counts[o] += 1
         return counts
 
-    def subtask_generator(self, line_iterator, lines, objects):
+    def subtask_generator(self, line_iterator, lines, objects, counts):
         line = next(line_iterator)
         loops = None
         whiles = 0
         while True:
             if line is None:
-                yield None
+                counts = yield None
                 line = next(line_iterator)
             else:
                 if type(lines[line]) is Subtask:
@@ -363,7 +363,7 @@ class Env(gym.Env):
                         self.time_remaining = time_delta + self.time_to_waste
                     else:
                         self.time_remaining += time_delta
-                    yield line
+                    counts = yield line
                 if type(lines[line]) is Loop:
                     if loops is None:
                         loops = lines[line].id
@@ -372,8 +372,11 @@ class Env(gym.Env):
                 elif type(lines[line]) is While:
                     whiles += 1
                     if whiles > self.max_while_loops:
-                        yield None
-                self.counts = counts = self.count_objects(objects)
+                        counts = yield None
+
+                self.counts = self.count_objects(objects)
+                for k in counts:
+                    assert counts[k] == self.counts[k]
                 line = line_iterator.send(
                     self.evaluate_line(lines[line], counts, loops)
                 )
@@ -392,7 +395,9 @@ class Env(gym.Env):
             self.time_remaining = 200 if self.evaluating else self.time_to_waste
         inventory = Counter()
         subtask_complete = False
-        subtask_iterator = self.subtask_generator(line_iterator, lines, objects)
+        subtask_iterator = self.subtask_generator(
+            line_iterator, lines, objects, self.count_objects(objects)
+        )
 
         prev, ptr = 0, next(subtask_iterator)
         term = False
@@ -782,8 +787,6 @@ class Env(gym.Env):
                     else:
                         pre = "  "
                     indent += line.depth_change[0]
-                    if type(line) is Subtask:
-                        line_str = f"{line} {self.subtasks.index(line.id)}"
                     if type(line) in (If, While):
                         if self.one_condition:
                             evaluation = f"counts[iron] ({state.counts[self.iron]}) > counts[gold] ({state.counts[self.gold]})"
