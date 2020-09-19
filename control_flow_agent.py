@@ -69,7 +69,7 @@ class Agent(networks.Agent, NNBase):
                     dg=hx.dg_probs,
                     ptr=None,
                 )
-            elif ll_type in ["pre-trained", "hardcoded"]:
+            elif ll_type in ["pre-trained"]:
                 probs = Action(
                     upper=hx.a_probs,
                     lower=None,

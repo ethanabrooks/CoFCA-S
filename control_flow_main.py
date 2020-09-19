@@ -122,9 +122,7 @@ def control_flow_args(parser):
     parser.add_argument("--min-eval-lines", type=int, required=True)
     parser.add_argument("--max-eval-lines", type=int, required=True)
     parser.add_argument("--no-eval", action="store_true")
-    parser.add_argument(
-        "--lower-level", choices=["train-alone", "train-with-upper", "hardcoded"]
-    )
+    parser.add_argument("--lower-level", choices=["train-alone", "train-with-upper"])
     parser.add_argument("--lower-level-load-path")
     parser.add_argument("--gridworld", action="store_true")
     env.build_parser(parser.add_argument_group("env_args"))

@@ -430,10 +430,6 @@ class Env(gym.Env):
             # lower_level_index = int(input("go:"))
             # except ValueError:
             # pass
-            if self.lower_level == "train-alone":
-                interaction, resource = lines[ptr].id
-            # interaction, obj = lines[agent_ptr].id
-            interaction, resource = self.subtasks[subtask_id]
 
             lower_level_action = self.lower_level_actions[lower_level_index]
             time_remaining -= 1
@@ -462,9 +458,7 @@ class Env(gym.Env):
                             inventory[standing_on] = 1
                         del objects[tuple(agent_pos)]
                 elif lower_level_action == self.sell:
-                    done = done and (
-                        self.lower_level == "hardcoded" or inventory[tgt_obj] > 0
-                    )
+                    done = done and (inventory[tgt_obj] > 0)
                     if done:
                         inventory[tgt_obj] -= 1
                     elif self.sell in self.term_on:
@@ -489,11 +483,8 @@ class Env(gym.Env):
                     np.all(0 <= new_pos)
                     and np.all(new_pos < self.world_size)
                     and (
-                        self.lower_level == "hardcoded"
-                        or (
-                            moving_into != self.wall
-                            and (moving_into != self.water or inventory[self.wood] > 0)
-                        )
+                        moving_into != self.wall
+                        and (moving_into != self.water or inventory[self.wood] > 0)
                     )
                 ):
                     agent_pos = new_pos
