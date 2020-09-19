@@ -79,38 +79,6 @@ def main(
                         episode_counter[k].append(v)
             super().process_infos(episode_counter, done, infos, **act_log)
 
-        def _log_result(self, result: dict):
-            keys = ["progress", "rewards", "instruction_len"]
-            values = np.array(list(zip(*(iter(result[k]) for k in keys))))
-            self.table.append(values)
-            if "subtasks_attempted" in result:
-                subtasks_attempted = sum(result["subtasks_attempted"])
-                if subtasks_attempted > 0:
-                    result["subtask_success"] = (
-                        sum(result["subtasks_complete"]) / subtasks_attempted
-                    )
-            try:
-                result["condition_evaluations"] = sum(
-                    result["condition_evaluations"]
-                ) / len(result["condition_evaluations"])
-            except (KeyError, ZeroDivisionError):
-                pass
-            if lower_level != "train-alone":
-                for name in names + ["eval_" + n for n in names]:
-                    if name in result:
-                        arrays = [x for x in result.pop(name) if x is not None]
-                        if "P" not in name:
-                            arrays = [np.array(x, dtype=int) for x in arrays]
-
-                        np.savez(Path(self.log_dir, name), *arrays)
-
-                for prefix in ("eval_", ""):
-                    if prefix + "rewards" in result:
-                        success = result[prefix + "rewards"]
-                        np.save(Path(self.log_dir, prefix + "successes"), success)
-
-            super().log_result(result)
-
     _Trainer.main(
         **kwargs, seed=seed, log_dir=log_dir, render=render, env_id="control-flow"
     )
