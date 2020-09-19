@@ -287,10 +287,11 @@ class Env(gym.Env):
 
         return world
 
-    def evaluate_line(self, line, counts, loops):
+    def evaluate_line(self, line: Line, counts: Dict[str, int], loops: Optional[int]):
         if line is None:
             return None
         elif type(line) is Loop:
+            assert loops is not None
             return loops > 0
         elif type(line) in (If, While):
             if self.one_condition:
