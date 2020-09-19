@@ -396,7 +396,8 @@ class Env(gym.Env):
                 return line
 
     def subtask_generator(self, line_iterator, lines, objects):
-        def next_subtask(line):
+        def next_subtask():
+            line = None
             while True:
                 if line is None:
                     line = next(line_iterator)
@@ -427,9 +428,8 @@ class Env(gym.Env):
                     self.time_remaining += time_delta
                 return line
 
-        line = None
         while True:
-            line = yield next_subtask(line)
+            yield next_subtask()
 
     def state_generator(
         self, objects: ObjectMap, agent_pos: Coord, lines: List[Line]
