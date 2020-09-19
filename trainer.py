@@ -90,6 +90,8 @@ class Trainer(tune.Trainable):
         no_eval=False,
         load_path=None,
     ):
+        cuda = cuda and torch.cuda.is_available()
+
         # Properly restrict pytorch to not consume extra resources.
         #  - https://github.com/pytorch/pytorch/issues/975
         #  - https://github.com/ray-project/ray/issues/3609
