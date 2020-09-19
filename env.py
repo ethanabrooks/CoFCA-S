@@ -140,8 +140,6 @@ class Env(gym.Env):
         self.max_while_loops = max_while_loops
         self.term_on = term_on
         self.temporal_extension = temporal_extension
-        self.loops = None
-        self.whiles = None
         self.use_water = use_water
 
         self.subtasks = list(subtasks())
@@ -166,7 +164,6 @@ class Env(gym.Env):
         self.i = 0
         self.success_count = 0
 
-        self.loops = None
         self.min_lines = min_lines
         self.max_lines = max_lines
         if evaluating:
@@ -369,34 +366,10 @@ class Env(gym.Env):
             counts[o] += 1
         return counts
 
-    def next_subtask(
-        self, line: Line, line_iterator: Generator, counts: Dict[str, int]
-    ):
-        while True:
-            if type(line) is Loop:
-                if self.loops is None:
-                    self.loops = line.id
-                else:
-                    self.loops -= 1
-            elif type(line) is While:
-                self.whiles += 1
-                if self.whiles > self.max_while_loops:
-                    return None
-            new_line = line_iterator.send(self.evaluate_line(line, counts, self.loops))
-            if self.loops == 0:
-                self.loops = None
-            if new_line is None:
-                return
-            if type(line) is Subtask:
-                time_delta = 3 * self.world_size
-                if self.lower_level == "train-alone":
-                    self.time_remaining = time_delta + self.time_to_waste
-                else:
-                    self.time_remaining += time_delta
-                return line
-
     def subtask_generator(self, line_iterator, lines, objects):
         line = next(line_iterator)
+        loops = None
+        whiles = 0
         while True:
             if line is None:
                 yield None
@@ -412,20 +385,20 @@ class Env(gym.Env):
                 line = next(line_iterator)
             else:
                 if type(lines[line]) is Loop:
-                    if self.loops is None:
-                        self.loops = lines[line].id
+                    if loops is None:
+                        loops = lines[line].id
                     else:
-                        self.loops -= 1
+                        loops -= 1
                 elif type(lines[line]) is While:
-                    self.whiles += 1
-                    if self.whiles > self.max_while_loops:
+                    whiles += 1
+                    if whiles > self.max_while_loops:
                         yield None
                 self.counts = counts = self.count_objects(objects)
                 line = line_iterator.send(
-                    self.evaluate_line(lines[line], counts, self.loops)
+                    self.evaluate_line(lines[line], counts, loops)
                 )
-                if self.loops == 0:
-                    self.loops = None
+                if loops == 0:
+                    loops = None
 
     def state_generator(
         self, objects: ObjectMap, agent_pos: Coord, lines: List[Line]
@@ -437,8 +410,6 @@ class Env(gym.Env):
             self.time_remaining = 0
         else:
             self.time_remaining = 200 if self.evaluating else self.time_to_waste
-        self.loops = None
-        self.whiles = 0
         inventory = Counter()
         subtask_complete = False
         subtask_iterator = self.subtask_generator(line_iterator, lines, objects)
