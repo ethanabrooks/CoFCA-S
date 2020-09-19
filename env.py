@@ -387,18 +387,42 @@ class Env(gym.Env):
         initial_agent_pos = deepcopy(agent_pos)
         line_iterator = self.line_generator(lines)
         if self.lower_level == "train-alone":
-            self.time_remaining = 0
+            time_remaining = 0
         else:
-            self.time_remaining = 200 if self.evaluating else self.time_to_waste
+            time_remaining = 200 if self.evaluating else self.time_to_waste
+        self.time_remaining = time_remaining
         inventory = Counter()
         subtask_complete = False
         subtask_iterator = self.subtask_generator(
             line_iterator, lines, self.count_objects(objects)
         )
 
+        def update_time():
+            time_delta = 3 * self.world_size
+            return (
+                time_delta + self.time_to_waste
+                if self.lower_level == "train-alone"
+                else time_remaining + time_delta
+            )
+
+        if not self.time_remaining == time_remaining:
+            import ipdb
+
+            ipdb.set_trace()
         prev, ptr = 0, next(subtask_iterator)
+        if ptr is not None:
+            time_remaining = update_time()
+
+        if not self.time_remaining == time_remaining:
+            import ipdb
+
+            ipdb.set_trace()
         term = False
         while True:
+            if not self.time_remaining == time_remaining:
+                import ipdb
+
+                ipdb.set_trace()
             term |= not self.time_remaining
             if term and ptr is not None:
                 self.failure_buffer.append((lines, initial_objects, initial_agent_pos))
@@ -410,7 +434,7 @@ class Env(gym.Env):
                     ptr=ptr,
                     term=terminate,
                     subtask_complete=subtask_complete,
-                    time_remaining=self.time_remaining,
+                    time_remaining=time_remaining,
                     counts=self.count_objects(objects),
                     inventory=inventory,
                 )
@@ -430,6 +454,7 @@ class Env(gym.Env):
             interaction, resource = self.subtasks[subtask_id]
 
             lower_level_action = self.lower_level_actions[lower_level_index]
+            time_remaining -= 1
             self.time_remaining -= 1
             tgt_interaction, tgt_obj = lines[ptr].id
             if tgt_obj not in objects.values() and (
@@ -472,6 +497,12 @@ class Env(gym.Env):
                     term = True
                 if done:
                     prev, ptr = ptr, subtask_iterator.send(self.count_objects(objects))
+                    if ptr is not None:
+                        time_remaining = update_time()
+                    if not self.time_remaining == time_remaining:
+                        import ipdb
+
+                        ipdb.set_trace()
                     subtask_complete = True
 
             elif type(lower_level_action) is np.ndarray:
