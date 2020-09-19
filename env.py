@@ -238,23 +238,6 @@ class Env(gym.Env):
         )
         self.world_space = spaces.Box(low=0, high=self.world_size - 1, shape=[2])
 
-    def line_str(self, line):
-        if type(line) is Subtask:
-            return f"{line} {self.subtasks.index(line.id)}"
-        elif type(line) in (If, While):
-            if self.one_condition:
-                evaluation = f"counts[iron] ({self.counts[self.iron]}) > counts[gold] ({self.counts[self.gold]})"
-            elif line.id == Env.iron:
-                evaluation = f"counts[iron] ({self.counts[self.iron]}) > counts[gold] ({self.counts[self.gold]})"
-            elif line.id == Env.gold:
-                evaluation = f"counts[gold] ({self.counts[self.gold]}) > counts[merchant] ({self.counts[self.merchant]})"
-            elif line.id == Env.wood:
-                evaluation = f"counts[merchant] ({self.counts[self.merchant]}) > counts[iron] ({self.counts[self.iron]})"
-            else:
-                raise RuntimeError
-            return f"{line} {evaluation}"
-        return line
-
     @staticmethod
     @functools.lru_cache(maxsize=200)
     def preprocess_line(line):
