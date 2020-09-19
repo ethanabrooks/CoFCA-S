@@ -396,8 +396,18 @@ class Env(gym.Env):
                 return line
 
     def subtask_generator(self, line_iterator, lines, objects):
-        line = None
+        line = next(line_iterator)
         while True:
+            if line is None:
+                yield None
+            elif type(lines[line]) is Subtask:
+                assert type(lines[line]) is Subtask
+                time_delta = 3 * self.world_size
+                if self.lower_level == "train-alone":
+                    self.time_remaining = time_delta + self.time_to_waste
+                else:
+                    self.time_remaining += time_delta
+                yield line
             if line is None:
                 line = next(line_iterator)
             else:
@@ -416,16 +426,6 @@ class Env(gym.Env):
                 )
                 if self.loops == 0:
                     self.loops = None
-            if line is None:
-                yield None
-            elif type(lines[line]) is Subtask:
-                assert type(lines[line]) is Subtask
-                time_delta = 3 * self.world_size
-                if self.lower_level == "train-alone":
-                    self.time_remaining = time_delta + self.time_to_waste
-                else:
-                    self.time_remaining += time_delta
-                yield line
 
     def state_generator(
         self, objects: ObjectMap, agent_pos: Coord, lines: List[Line]
