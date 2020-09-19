@@ -347,7 +347,7 @@ class Env(gym.Env):
             counts[o] += 1
         return counts
 
-    def subtask_generator(self, line_iterator, lines, objects, counts):
+    def subtask_generator(self, line_iterator, lines, counts):
         line = next(line_iterator)
         loops = None
         whiles = 0
@@ -374,9 +374,6 @@ class Env(gym.Env):
                     if whiles > self.max_while_loops:
                         counts = yield None
 
-                self.counts = self.count_objects(objects)
-                for k in counts:
-                    assert counts[k] == self.counts[k]
                 line = line_iterator.send(
                     self.evaluate_line(lines[line], counts, loops)
                 )
@@ -396,7 +393,7 @@ class Env(gym.Env):
         inventory = Counter()
         subtask_complete = False
         subtask_iterator = self.subtask_generator(
-            line_iterator, lines, objects, self.count_objects(objects)
+            line_iterator, lines, self.count_objects(objects)
         )
 
         prev, ptr = 0, next(subtask_iterator)
