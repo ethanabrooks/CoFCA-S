@@ -374,15 +374,15 @@ class Env(gym.Env):
             if line is None:
                 yield None
                 line = next(line_iterator)
-            elif type(lines[line]) is Subtask:
-                assert type(lines[line]) is Subtask
-                time_delta = 3 * self.world_size
-                if self.lower_level == "train-alone":
-                    self.time_remaining = time_delta + self.time_to_waste
-                else:
-                    self.time_remaining += time_delta
-                yield line
-            if line is not None:
+            else:
+                if type(lines[line]) is Subtask:
+                    assert type(lines[line]) is Subtask
+                    time_delta = 3 * self.world_size
+                    if self.lower_level == "train-alone":
+                        self.time_remaining = time_delta + self.time_to_waste
+                    else:
+                        self.time_remaining += time_delta
+                    yield line
                 if type(lines[line]) is Loop:
                     if loops is None:
                         loops = lines[line].id
