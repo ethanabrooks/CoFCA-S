@@ -373,6 +373,7 @@ class Env(gym.Env):
         while True:
             if line is None:
                 yield None
+                line = next(line_iterator)
             elif type(lines[line]) is Subtask:
                 assert type(lines[line]) is Subtask
                 time_delta = 3 * self.world_size
@@ -381,9 +382,7 @@ class Env(gym.Env):
                 else:
                     self.time_remaining += time_delta
                 yield line
-            if line is None:
-                line = next(line_iterator)
-            else:
+            if line is not None:
                 if type(lines[line]) is Loop:
                     if loops is None:
                         loops = lines[line].id
