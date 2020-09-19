@@ -46,7 +46,9 @@ RESET = "\033[0m"
 
 Obs = namedtuple("Obs", "active lines obs inventory")
 Last = namedtuple("Last", "action active reward terminal selected")
-State = namedtuple("State", "obs prev ptr term subtask_complete condition_evaluations")
+State = namedtuple(
+    "State", "obs prev ptr term subtask_complete time_remaining counts inventory"
+)
 Action = namedtuple("Action", "upper lower delta dg ptr")
 
 
@@ -398,7 +400,6 @@ class Env(gym.Env):
         initial_objects = deepcopy(objects)
         initial_agent_pos = deepcopy(agent_pos)
         line_iterator = self.line_generator(lines)
-        condition_evaluations = []
         if self.lower_level == "train-alone":
             self.time_remaining = 0
         else:
@@ -452,7 +453,9 @@ class Env(gym.Env):
                 ptr=ptr,
                 term=term,
                 subtask_complete=subtask_complete,
-                condition_evaluations=condition_evaluations,
+                time_remaining=self.time_remaining,
+                counts=self.counts,
+                inventory=inventory,
             )
             subtask_id, lower_level_index = x
             subtask_complete = False
@@ -807,7 +810,6 @@ class Env(gym.Env):
             info.update(
                 regret=1 if term and not success else 0,
                 subtask_complete=state.subtask_complete,
-                condition_evaluations=state.condition_evaluations,
             )
 
             def render():
