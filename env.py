@@ -101,7 +101,6 @@ class Env(gym.Env):
     def __init__(
         self,
         num_subtasks,
-        temporal_extension,
         term_on,
         max_world_resamples,
         max_while_loops,
@@ -139,7 +138,6 @@ class Env(gym.Env):
         self.max_world_resamples = max_world_resamples
         self.max_while_loops = max_while_loops
         self.term_on = term_on
-        self.temporal_extension = temporal_extension
         self.use_water = use_water
 
         self.subtasks = list(subtasks())
@@ -488,12 +486,11 @@ class Env(gym.Env):
                 ):
                     term = True
                 if done:
-                    prev, ptr = ptr, next(subtask_iterator)
+                    prev, ptr = ptr, subtask_iterator.send(self.count_objects(objects))
                     subtask_complete = True
 
             elif type(lower_level_action) is np.ndarray:
-                if self.temporal_extension:
-                    lower_level_action = np.clip(lower_level_action, -1, 1)
+                lower_level_action = np.clip(lower_level_action, -1, 1)
                 new_pos = agent_pos + lower_level_action
                 moving_into = objects.get(tuple(new_pos), None)
                 if (
@@ -981,9 +978,6 @@ def build_parser(
         type=lambda s: dict(Subtask=Subtask, If=If, Else=Else, While=While, Loop=Loop)[
             s
         ],
-    )
-    p.add_argument(
-        "--no-temporal-extension", dest="temporal_extension", action="store_false"
     )
     p.add_argument("--no-water", dest="use_water", action="store_false")
     p.add_argument("--1condition", dest="one_condition", action="store_true")
