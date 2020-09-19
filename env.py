@@ -396,11 +396,10 @@ class Env(gym.Env):
                 return line
 
     def subtask_generator(self, line_iterator, lines, objects):
-
         def next_subtask(line):
             while True:
                 if line is None:
-                    line = line_iterator.send(None)
+                    line = next(line_iterator)
                 else:
                     if type(lines[line]) is Loop:
                         if self.loops is None:
@@ -430,7 +429,7 @@ class Env(gym.Env):
 
         line = None
         while True:
-            line, line_iterator, lines, objects = yield next_subtask(line)
+            line = yield next_subtask(line)
 
     def state_generator(
         self, objects: ObjectMap, agent_pos: Coord, lines: List[Line]
@@ -523,14 +522,7 @@ class Env(gym.Env):
                 ):
                     term = True
                 if done:
-                    prev, ptr = ptr, subtask_iterator.send(
-                        (
-                            None,
-                            line_iterator,
-                            lines,
-                            objects,
-                        )
-                    )
+                    prev, ptr = ptr, next(subtask_iterator)
                     subtask_complete = True
 
             elif type(lower_level_action) is np.ndarray:
