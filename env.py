@@ -417,16 +417,16 @@ class Env(gym.Env):
                     )
                     if self.loops == 0:
                         self.loops = None
-                if line is None or type(lines[line]) is Subtask:
-                    break
-            if line is not None:
-                assert type(lines[line]) is Subtask
-                time_delta = 3 * self.world_size
-                if self.lower_level == "train-alone":
-                    self.time_remaining = time_delta + self.time_to_waste
-                else:
-                    self.time_remaining += time_delta
-                return line
+                if line is None:
+                    return None
+                elif type(lines[line]) is Subtask:
+                    assert type(lines[line]) is Subtask
+                    time_delta = 3 * self.world_size
+                    if self.lower_level == "train-alone":
+                        self.time_remaining = time_delta + self.time_to_waste
+                    else:
+                        self.time_remaining += time_delta
+                    return line
 
         while True:
             yield next_subtask()
