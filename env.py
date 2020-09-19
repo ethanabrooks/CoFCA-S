@@ -426,6 +426,13 @@ class Env(gym.Env):
                 self.time_remaining += time_delta
             return line
 
+    def subtask_generator(self, line_iterator, lines, objects):
+        line = None
+        while True:
+            line, line_iterator, lines, objects = yield self._next_subtask(
+                line, line_iterator, lines, objects
+            )
+
     def state_generator(
         self, objects: ObjectMap, agent_pos: Coord, lines: List[Line]
     ) -> Generator[State, Tuple[int, int], None]:
@@ -440,10 +447,9 @@ class Env(gym.Env):
         self.whiles = 0
         inventory = Counter()
         subtask_complete = False
+        subtask_iterator = self.subtask_generator(line_iterator, lines, objects)
 
-        prev, ptr = 0, self._next_subtask(
-            line=None, line_iterator=line_iterator, lines=lines, objects=objects
-        )
+        prev, ptr = 0, next(subtask_iterator)
         term = False
         while True:
             term |= not self.time_remaining
@@ -518,11 +524,13 @@ class Env(gym.Env):
                 ):
                     term = True
                 if done:
-                    prev, ptr = ptr, self._next_subtask(
-                        line=None,
-                        line_iterator=line_iterator,
-                        lines=lines,
-                        objects=objects,
+                    prev, ptr = ptr, subtask_iterator.send(
+                        (
+                            None,
+                            line_iterator,
+                            lines,
+                            objects,
+                        )
                     )
                     subtask_complete = True
 
