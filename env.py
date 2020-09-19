@@ -451,13 +451,12 @@ class Env(gym.Env):
                 )
                 if lower_level_action == self.mine:
                     if tuple(agent_pos) in objects:
-                        if (
+                        good_mine = (
                             done
                             or (tgt_interaction == self.sell and standing_on == tgt_obj)
                             or standing_on == self.wood
-                        ):
-                            pass  # TODO
-                        elif self.mine in self.term_on:
+                        )
+                        if not good_mine and self.mine in self.term_on:
                             term = True
                         if standing_on in self.items and inventory[standing_on] == 0:
                             inventory[standing_on] = 1
