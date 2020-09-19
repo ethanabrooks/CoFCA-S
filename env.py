@@ -395,6 +395,37 @@ class Env(gym.Env):
                     self.time_remaining += time_delta
                 return line
 
+    def _next_subtask(self, line, line_iterator, lines, objects):
+        while True:
+            if line is None:
+                line = line_iterator.send(None)
+            else:
+                if type(lines[line]) is Loop:
+                    if self.loops is None:
+                        self.loops = lines[line].id
+                    else:
+                        self.loops -= 1
+                elif type(lines[line]) is While:
+                    self.whiles += 1
+                    if self.whiles > self.max_while_loops:
+                        return None
+                self.counts = counts = self.count_objects(objects)
+                line = line_iterator.send(
+                    self.evaluate_line(lines[line], counts, self.loops)
+                )
+                if self.loops == 0:
+                    self.loops = None
+            if line is None or type(lines[line]) is Subtask:
+                break
+        if line is not None:
+            assert type(lines[line]) is Subtask
+            time_delta = 3 * self.world_size
+            if self.lower_level == "train-alone":
+                self.time_remaining = time_delta + self.time_to_waste
+            else:
+                self.time_remaining += time_delta
+            return line
+
     def state_generator(
         self, objects: ObjectMap, agent_pos: Coord, lines: List[Line]
     ) -> Generator[State, Tuple[int, int], None]:
@@ -410,38 +441,9 @@ class Env(gym.Env):
         inventory = Counter()
         subtask_complete = False
 
-        def next_subtask(line):
-            while True:
-                if line is None:
-                    line = line_iterator.send(None)
-                else:
-                    if type(lines[line]) is Loop:
-                        if self.loops is None:
-                            self.loops = lines[line].id
-                        else:
-                            self.loops -= 1
-                    elif type(lines[line]) is While:
-                        self.whiles += 1
-                        if self.whiles > self.max_while_loops:
-                            return None
-                    self.counts = counts = self.count_objects(objects)
-                    line = line_iterator.send(
-                        self.evaluate_line(lines[line], counts, self.loops)
-                    )
-                    if self.loops == 0:
-                        self.loops = None
-                if line is None or type(lines[line]) is Subtask:
-                    break
-            if line is not None:
-                assert type(lines[line]) is Subtask
-                time_delta = 3 * self.world_size
-                if self.lower_level == "train-alone":
-                    self.time_remaining = time_delta + self.time_to_waste
-                else:
-                    self.time_remaining += time_delta
-                return line
-
-        prev, ptr = 0, next_subtask(None)
+        prev, ptr = 0, self._next_subtask(
+            line=None, line_iterator=line_iterator, lines=lines, objects=objects
+        )
         term = False
         while True:
             term |= not self.time_remaining
@@ -516,7 +518,12 @@ class Env(gym.Env):
                 ):
                     term = True
                 if done:
-                    prev, ptr = ptr, next_subtask(ptr)
+                    prev, ptr = ptr, self._next_subtask(
+                        line=None,
+                        line_iterator=line_iterator,
+                        lines=lines,
+                        objects=objects,
+                    )
                     subtask_complete = True
 
             elif type(lower_level_action) is np.ndarray:
