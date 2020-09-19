@@ -241,6 +241,7 @@ class Env(gym.Env):
             ),
             inventory=spaces.MultiBinary(len(self.items)),
         )
+        self.world_space = spaces.Box(low=0, high=self.world_size - 1, shape=[2])
 
     def line_str(self, line):
         if type(line) is Subtask:
@@ -447,17 +448,20 @@ class Env(gym.Env):
             if term and ptr is not None:
                 self.failure_buffer.append((lines, initial_objects, initial_agent_pos))
 
-            x = yield State(
-                obs=(self.world_array(objects, agent_pos), inventory),
-                prev=prev,
-                ptr=ptr,
-                term=term,
-                subtask_complete=subtask_complete,
-                time_remaining=self.time_remaining,
-                counts=self.counts,
-                inventory=inventory,
-            )
-            subtask_id, lower_level_index = x
+            def state(terminate):
+                return State(
+                    obs=self.world_array(objects, agent_pos),
+                    prev=prev,
+                    ptr=ptr,
+                    term=terminate,
+                    subtask_complete=subtask_complete,
+                    time_remaining=self.time_remaining,
+                    counts=self.count_objects(objects),
+                    inventory=inventory,
+                )
+
+            # noinspection PyTupleAssignmentBalance
+            subtask_id, lower_level_index = yield state(term)
             subtask_complete = False
             # for i, a in enumerate(self.lower_level_actions):
             # print(i, a)
@@ -830,13 +834,13 @@ class Env(gym.Env):
                         line_str = f"{line} {self.subtasks.index(line.id)}"
                     if type(line) in (If, While):
                         if self.one_condition:
-                            evaluation = f"counts[iron] ({self.counts[self.iron]}) > counts[gold] ({self.counts[self.gold]})"
+                            evaluation = f"counts[iron] ({state.counts[self.iron]}) > counts[gold] ({state.counts[self.gold]})"
                         elif line.id == Env.iron:
-                            evaluation = f"counts[iron] ({self.counts[self.iron]}) > counts[gold] ({self.counts[self.gold]})"
+                            evaluation = f"counts[iron] ({state.counts[self.iron]}) > counts[gold] ({state.counts[self.gold]})"
                         elif line.id == Env.gold:
-                            evaluation = f"counts[gold] ({self.counts[self.gold]}) > counts[merchant] ({self.counts[self.merchant]})"
+                            evaluation = f"counts[gold] ({state.counts[self.gold]}) > counts[merchant] ({state.counts[self.merchant]})"
                         elif line.id == Env.wood:
-                            evaluation = f"counts[merchant] ({self.counts[self.merchant]}) > counts[iron] ({self.counts[self.iron]})"
+                            evaluation = f"counts[merchant] ({state.counts[self.merchant]}) > counts[iron] ({state.counts[self.iron]})"
                         else:
                             raise RuntimeError
                         line_str = f"{line} {evaluation}"
@@ -854,7 +858,7 @@ class Env(gym.Env):
                     )
                 print("Reward", reward)
                 print("Cumulative", cumulative_reward)
-                print("Time remaining", self.time_remaining)
+                print("Time remaining", state.time_remaining)
                 print("Obs:")
                 print(RESET)
                 _obs, _inventory = state.obs
@@ -862,7 +866,7 @@ class Env(gym.Env):
                 grid_size = 3  # obs.astype(int).sum(-1).max()  # max objects per grid
                 chars = [" "] + [o for (o, *_) in self.world_contents]
                 print(self.i)
-                print(_inventory)
+                print(state.inventory)
                 for i, row in enumerate(_obs):
                     colors = []
                     string = []
@@ -879,14 +883,14 @@ class Env(gym.Env):
                     print("-" * len(string))
 
             self._render = render
-            obs, inventory = state.obs
+            obs = state.obs
             padded = lines + [Padding(0)] * (self.n_lines - len(lines))
             preprocessed_lines = [self.preprocess_line(p) for p in padded]
             obs = Obs(
                 obs=obs,
                 lines=preprocessed_lines,
                 active=self.n_lines if state.ptr is None else state.ptr,
-                inventory=np.array([inventory[i] for i in self.items]),
+                inventory=np.array([state.inventory[i] for i in self.items]),
             )
             # if not self.observation_space.contains(obs):
             #     import ipdb
@@ -1002,9 +1006,9 @@ def build_parser(
         "--control-flow-types",
         default=[],
         nargs="*",
-        type=lambda s: dict(
-            Subtask=Subtask, If=If, Else=Else, While=While, Loop=Loop
-        ).get(s),
+        type=lambda s: dict(Subtask=Subtask, If=If, Else=Else, While=While, Loop=Loop)[
+            s
+        ],
     )
     p.add_argument(
         "--no-temporal-extension", dest="temporal_extension", action="store_false"
