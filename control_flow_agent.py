@@ -25,18 +25,11 @@ class Agent(networks.Agent, NNBase):
         self.lower_level_type = lower_level
         self.no_op_coef = no_op_coef
         self.entropy_coef = entropy_coef
-        self.multi_step = type(observation_space.spaces["obs"]) is Box
-        if not self.multi_step:
-            del network_args["conv_hidden_size"]
-            del network_args["gate_coef"]
-        elif self.multi_step:
-            self.recurrent_module = ours.Recurrence(
-                observation_space=observation_space,
-                action_space=action_space,
-                **network_args,
-            )
-        else:
-            raise RuntimeError
+        self.recurrent_module = ours.Recurrence(
+            observation_space=observation_space,
+            action_space=action_space,
+            **network_args,
+        )
 
     @property
     def recurrent_hidden_state_size(self):
@@ -69,7 +62,7 @@ class Agent(networks.Agent, NNBase):
                     dg=hx.dg_probs,
                     ptr=None,
                 )
-            elif ll_type in ["pre-trained"]:
+            elif ll_type in ["pre-trained", None]:
                 probs = Action(
                     upper=hx.a_probs,
                     lower=None,

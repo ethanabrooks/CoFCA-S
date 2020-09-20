@@ -119,7 +119,7 @@ class Recurrence(nn.Module):
         d, h, w = observation_space.obs.shape
         self.obs_dim = d
         self.kernel_size = min(d, kernel_size)
-        self.padding = padding = optimal_padding(h, kernel_size, stride) + 1
+        self.padding = optimal_padding(h, kernel_size, stride) + 1
         self.embed_lower = nn.Embedding(
             self.action_space_nvec.lower + 1, lower_embed_size
         )
@@ -151,8 +151,18 @@ class Recurrence(nn.Module):
         self.kernel_net = nn.Linear(m_size, conv_hidden_size * kernel_size ** 2 * d)
         self.conv_bias = nn.Parameter(torch.zeros(conv_hidden_size))
         self.critic = init_(nn.Linear(hidden_size, 1))
-        with lower_level_config.open() as f:
-            lower_level_params = json.load(f)
+        if lower_level_load_path:
+            with lower_level_config.open() as f:
+                lower_level_params = json.load(f)
+        else:
+            lower_level_params = dict(
+                hidden_size=128,
+                kernel_size=1,
+                num_conv_layers=1,
+                stride=1,
+                recurrent=False,
+                concat=False,
+            )
         ll_action_space = spaces.Discrete(Action(*action_space.nvec).lower)
         self.state_sizes = RecurrentState(
             a=1,

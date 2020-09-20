@@ -12,20 +12,6 @@ from env import ObjectMap, Coord, Line, State, Action, Obs
 
 
 class Env(env.Env):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # noinspection PyProtectedMember
-        self.observation_space = spaces.Dict(
-            Obs(
-                active=spaces.Discrete(self.n_lines + 1),
-                inventory=spaces.MultiBinary(0),
-                lines=spaces.MultiDiscrete(
-                    np.array([len(self.possible_lines)] * self.n_lines)
-                ),
-                obs=spaces.Discrete(2),
-            )._asdict()
-        )
-
     def state_generator(
         self, objects: ObjectMap, agent_pos: Coord, lines: List[Line], **kwargs
     ) -> Generator[State, Tuple[int, int], None]:
@@ -116,7 +102,7 @@ class Env(env.Env):
             obs=obs,
             lines=preprocessed_lines,
             active=self.n_lines if state.ptr is None else state.ptr,
-            inventory=np.array([]),
+            inventory=np.array([0]),
         )
 
 

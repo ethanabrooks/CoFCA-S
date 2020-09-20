@@ -4,6 +4,7 @@ from pathlib import Path
 from gym import spaces
 
 import control_flow_agent
+import debug_env
 import env
 import networks
 from env import Action
@@ -15,7 +16,6 @@ from utils import hierarchical_parse_args
 def main(
     env_args,
     env_id,
-    gridworld,
     log_dir,
     lower_level,
     lower_level_load_path,
@@ -63,11 +63,9 @@ def main(
             )
             args["lower_level"] = lower_level
             args["break_on_fail"] = args["break_on_fail"] and render
-            if not gridworld:
-                del args["max_while_objects"]
-                del args["num_excluded_objects"]
-                del args["temporal_extension"]
-                return env.Env(**args)
+            if not lower_level:
+                args.update(world_size=1)
+                return debug_env.Env(**args)
             else:
                 return env.Env(**args)
 
@@ -91,7 +89,6 @@ def control_flow_args(parser):
     parser.add_argument("--no-eval", action="store_true")
     parser.add_argument("--lower-level", choices=["train-alone", "train-with-upper"])
     parser.add_argument("--lower-level-load-path")
-    parser.add_argument("--gridworld", action="store_true")
     env.build_parser(parser.add_argument_group("env_args"))
     parsers.agent.add_argument("--lower-level-config", type=Path)
     parsers.agent.add_argument("--no-debug", dest="debug", action="store_false")
