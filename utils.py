@@ -142,13 +142,22 @@ def trace(module_fn, in_size):
     return torch.jit.trace(module_fn(in_size), example_inputs=torch.rand(1, in_size))
 
 
-RED = "\033[1;31m"
-BLUE = "\033[1;34m"
-CYAN = "\033[1;36m"
-GREEN = "\033[0;32m"
-RESET = "\033[0;0m"
-BOLD = "\033[;1m"
-REVERSE = "\033[;7m"
+BLACK = "\033[30m"
+RED = "\033[31m"
+GREEN = "\033[32m"
+ORANGE = "\033[33m"
+BLUE = "\033[34m"
+PURPLE = "\033[35m"
+CYAN = "\033[36m"
+LIGHTGREY = "\033[37m"
+DARKGREY = "\033[90m"
+LIGHTRED = "\033[91m"
+LIGHTGREEN = "\033[92m"
+YELLOW = "\033[93m"
+LIGHTBLUE = "\033[94m"
+PINK = "\033[95m"
+LIGHTCYAN = "\033[96m"
+RESET = "\033[0m"
 
 
 def k_scalar_pairs(*args, **kwargs):

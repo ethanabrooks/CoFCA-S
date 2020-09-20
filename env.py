@@ -7,7 +7,16 @@ import gym
 import numpy as np
 from gym import spaces
 from gym.utils import seeding
-from utils import hierarchical_parse_args
+from utils import (
+    hierarchical_parse_args,
+    RESET,
+    GREEN,
+    RED,
+    YELLOW,
+    LIGHTGREY,
+    PINK,
+    BLUE,
+)
 from typing import List, Tuple, Dict, Optional, Generator
 
 import keyboard_control
@@ -26,23 +35,6 @@ from lines import (
 
 Coord = Tuple[int, int]
 ObjectMap = Dict[Coord, str]
-
-BLACK = "\033[30m"
-RED = "\033[31m"
-GREEN = "\033[32m"
-ORANGE = "\033[33m"
-BLUE = "\033[34m"
-PURPLE = "\033[35m"
-CYAN = "\033[36m"
-LIGHTGREY = "\033[37m"
-DARKGREY = "\033[90m"
-LIGHTRED = "\033[91m"
-LIGHTGREEN = "\033[92m"
-YELLOW = "\033[93m"
-LIGHTBLUE = "\033[94m"
-PINK = "\033[95m"
-LIGHTCYAN = "\033[96m"
-RESET = "\033[0m"
 
 Obs = namedtuple("Obs", "active lines obs inventory")
 Last = namedtuple("Last", "action active reward terminal selected")
@@ -319,18 +311,18 @@ class Env(gym.Env):
             counts[o] += 1
         return counts
 
-    def subtask_generator(self, line_iterator, lines, info):
+    def subtask_generator(self, line_iterator, lines, **kwargs):
         line = next(line_iterator)
         loops = None
         whiles = 0
         while True:
             if line is None:
-                info = yield None
+                kwargs = yield None
                 line = next(line_iterator)
             else:
                 if type(lines[line]) is Subtask:
                     assert type(lines[line]) is Subtask
-                    info = yield line
+                    kwargs = yield line
                 if type(lines[line]) is Loop:
                     if loops is None:
                         loops = lines[line].id
@@ -339,9 +331,11 @@ class Env(gym.Env):
                 elif type(lines[line]) is While:
                     whiles += 1
                     if whiles > self.max_while_loops:
-                        info = yield None
+                        kwargs = yield None
 
-                line = line_iterator.send(self.evaluate_line(lines[line], loops, info))
+                line = line_iterator.send(
+                    self.evaluate_line(lines[line], loops, **kwargs)
+                )
                 if loops == 0:
                     loops = None
 
@@ -358,7 +352,7 @@ class Env(gym.Env):
         inventory = Counter()
         subtask_complete = False
         subtask_iterator = self.subtask_generator(
-            line_iterator, lines, self.count_objects(objects)
+            line_iterator, lines, counts=self.count_objects(objects)
         )
 
         def update_time():
@@ -447,7 +441,9 @@ class Env(gym.Env):
                 ):
                     term = True
                 if done:
-                    prev, ptr = ptr, subtask_iterator.send(self.count_objects(objects))
+                    prev, ptr = ptr, subtask_iterator.send(
+                        dict(counts=self.count_objects(objects))
+                    )
                     if ptr is not None:
                         time_remaining = update_time()
                     subtask_complete = True
@@ -605,6 +601,88 @@ class Env(gym.Env):
     def step(self, action):
         return self.iterator.send(action)
 
+    def render_world(
+        self,
+        state,
+        action,
+        lower_level_action,
+        reward,
+        cumulative_reward,
+    ):
+
+        if action is not None and action < len(self.subtasks):
+            print("Selected:", self.subtasks[action], action)
+        print("Action:", action)
+        if lower_level_action is not None:
+            print(
+                "Lower Level Action:",
+                self.lower_level_actions[lower_level_action],
+            )
+        print("Reward", reward)
+        print("Cumulative", cumulative_reward)
+        print("Time remaining", state.time_remaining)
+        print("Obs:")
+        _obs, _inventory = state.obs
+        _obs = _obs.transpose(1, 2, 0).astype(int)
+        grid_size = 3  # obs.astype(int).sum(-1).max()  # max objects per grid
+        chars = [" "] + [o for (o, *_) in self.world_contents]
+        print(self.i)
+        print(state.inventory)
+        for i, row in enumerate(_obs):
+            colors = []
+            string = []
+            for j, channel in enumerate(row):
+                int_ids = 1 + np.arange(channel.size)
+                number = channel * int_ids
+                crop = sorted(number, reverse=True)[:grid_size]
+                for x in crop:
+                    colors.append(self.colors[self.world_contents[x - 1]])
+                    string.append(chars[x])
+                colors.append(RESET)
+                string.append("|")
+            print(*[c for p in zip(colors, string) for c in p], sep="")
+            print("-" * len(string))
+
+    def render_instruction(
+        self,
+        term,
+        success,
+        lines,
+        state,
+        agent_ptr,
+    ):
+
+        if term:
+            print(GREEN if success else RED)
+        indent = 0
+        for i, line in enumerate(lines):
+            if i == state.ptr and i == agent_ptr:
+                pre = "+ "
+            elif i == agent_ptr:
+                pre = "- "
+            elif i == state.ptr:
+                pre = "| "
+            else:
+                pre = "  "
+            indent += line.depth_change[0]
+            if type(line) in (If, While):
+                if self.one_condition:
+                    evaluation = f"counts[iron] ({state.counts[self.iron]}) > counts[gold] ({state.counts[self.gold]})"
+                elif line.id == Env.iron:
+                    evaluation = f"counts[iron] ({state.counts[self.iron]}) > counts[gold] ({state.counts[self.gold]})"
+                elif line.id == Env.gold:
+                    evaluation = f"counts[gold] ({state.counts[self.gold]}) > counts[merchant] ({state.counts[self.merchant]})"
+                elif line.id == Env.wood:
+                    evaluation = f"counts[merchant] ({state.counts[self.merchant]}) > counts[iron] ({state.counts[self.iron]})"
+                else:
+                    raise RuntimeError
+                line_str = f"{line} {evaluation}"
+            else:
+                line_str = str(line)
+            print("{:2}{}{}{}".format(i, pre, " " * indent, line_str))
+            indent += line.depth_change[1]
+        print(RESET)
+
     def generator(self):
         step = 0
         n = 0
@@ -670,6 +748,7 @@ class Env(gym.Env):
                         if (self.single_control_flow_type and not self.evaluating)
                         else self.control_flow_types
                     )
+
                     line_types = list(
                         Line.generate_types(
                             n_lines,
@@ -742,79 +821,26 @@ class Env(gym.Env):
             )
 
             def render():
-                if term:
-                    print(GREEN if success else RED)
-                indent = 0
-                for i, line in enumerate(lines):
-                    if i == state.ptr and i == agent_ptr:
-                        pre = "+ "
-                    elif i == agent_ptr:
-                        pre = "- "
-                    elif i == state.ptr:
-                        pre = "| "
-                    else:
-                        pre = "  "
-                    indent += line.depth_change[0]
-                    if type(line) in (If, While):
-                        if self.one_condition:
-                            evaluation = f"counts[iron] ({state.counts[self.iron]}) > counts[gold] ({state.counts[self.gold]})"
-                        elif line.id == Env.iron:
-                            evaluation = f"counts[iron] ({state.counts[self.iron]}) > counts[gold] ({state.counts[self.gold]})"
-                        elif line.id == Env.gold:
-                            evaluation = f"counts[gold] ({state.counts[self.gold]}) > counts[merchant] ({state.counts[self.merchant]})"
-                        elif line.id == Env.wood:
-                            evaluation = f"counts[merchant] ({state.counts[self.merchant]}) > counts[iron] ({state.counts[self.iron]})"
-                        else:
-                            raise RuntimeError
-                        line_str = f"{line} {evaluation}"
-                    else:
-                        line_str = str(line)
-                    print("{:2}{}{}{}".format(i, pre, " " * indent, line_str))
-                    indent += line.depth_change[1]
-                if action is not None and action < len(self.subtasks):
-                    print("Selected:", self.subtasks[action], action)
-                print("Action:", action)
-                if lower_level_action is not None:
-                    print(
-                        "Lower Level Action:",
-                        self.lower_level_actions[lower_level_action],
-                    )
-                print("Reward", reward)
-                print("Cumulative", cumulative_reward)
-                print("Time remaining", state.time_remaining)
-                print("Obs:")
-                print(RESET)
-                _obs, _inventory = state.obs
-                _obs = _obs.transpose(1, 2, 0).astype(int)
-                grid_size = 3  # obs.astype(int).sum(-1).max()  # max objects per grid
-                chars = [" "] + [o for (o, *_) in self.world_contents]
-                print(self.i)
-                print(state.inventory)
-                for i, row in enumerate(_obs):
-                    colors = []
-                    string = []
-                    for j, channel in enumerate(row):
-                        int_ids = 1 + np.arange(channel.size)
-                        number = channel * int_ids
-                        crop = sorted(number, reverse=True)[:grid_size]
-                        for x in crop:
-                            colors.append(self.colors[self.world_contents[x - 1]])
-                            string.append(chars[x])
-                        colors.append(RESET)
-                        string.append("|")
-                    print(*[c for p in zip(colors, string) for c in p], sep="")
-                    print("-" * len(string))
+                self.render_instruction(
+                    term=term,
+                    success=success,
+                    lines=lines,
+                    state=state,
+                    agent_ptr=agent_ptr,
+                )
+                self.render_world(
+                    state=state,
+                    action=action,
+                    lower_level_action=lower_level_action,
+                    reward=reward,
+                    cumulative_reward=cumulative_reward,
+                )
 
             self._render = render
             obs = state.obs
             padded = lines + [Padding(0)] * (self.n_lines - len(lines))
             preprocessed_lines = [self.preprocess_line(p) for p in padded]
-            obs = Obs(
-                obs=obs,
-                lines=preprocessed_lines,
-                active=self.n_lines if state.ptr is None else state.ptr,
-                inventory=np.array([state.inventory[i] for i in self.items]),
-            )
+            obs = self.get_observation(obs, preprocessed_lines, state)
             # if not self.observation_space.contains(obs):
             #     import ipdb
             #
@@ -853,6 +879,14 @@ class Env(gym.Env):
                 step += 1
                 # noinspection PyUnresolvedReferences
                 state = state_iterator.send((action, lower_level_action))
+
+    def get_observation(self, obs, preprocessed_lines, state):
+        return Obs(
+            obs=obs,
+            lines=preprocessed_lines,
+            active=self.n_lines if state.ptr is None else state.ptr,
+            inventory=np.array([state.inventory[i] for i in self.items]),
+        )
 
     @property
     def eval_condition_size(self):
@@ -981,7 +1015,9 @@ def main(env):
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser()
-    build_parser(parser)
-    parser.add_argument("--seed", default=0, type=int)
-    main(Env(rank=0, lower_level="train-alone", **hierarchical_parse_args(parser)))
+    PARSER = argparse.ArgumentParser()
+    PARSER.add_argument("--min-eval-lines", type=int, required=True)
+    PARSER.add_argument("--max-eval-lines", type=int, required=True)
+    build_parser(PARSER)
+    PARSER.add_argument("--seed", default=0, type=int)
+    main(Env(rank=0, lower_level="train-alone", **hierarchical_parse_args(PARSER)))

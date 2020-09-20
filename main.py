@@ -135,6 +135,8 @@ def add_arguments(parser):
 
 if __name__ == "__main__":
     PARSER = argparse.ArgumentParser()
+    PARSER.add_argument("--min-eval-lines", type=int, required=True)
+    PARSER.add_argument("--max-eval-lines", type=int, required=True)
     add_arguments(PARSER)
     args = hierarchical_parse_args(PARSER)
     Trainer.main(**args)
