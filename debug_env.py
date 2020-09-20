@@ -126,6 +126,6 @@ if __name__ == "__main__":
     PARSER = argparse.ArgumentParser()
     PARSER.add_argument("--min-eval-lines", type=int, required=True)
     PARSER.add_argument("--max-eval-lines", type=int, required=True)
-    env.build_parser(PARSER)
+    env.add_arguments(PARSER)
     PARSER.add_argument("--seed", default=0, type=int)
     main(Env(rank=0, lower_level=None, **hierarchical_parse_args(PARSER)))

@@ -46,14 +46,11 @@ def add_arguments(parser):
     parser.add_argument("--normalize", action="store_true")
     parser.add_argument("--gpus-per-trial", "-g", type=int, default=1)
     parser.add_argument("--cpus-per-trial", "-c", type=int, default=6)
-    parser.add_argument(
-        "--num-epochs", type=int, help="number of updates to perform", required=True
-    )
+    parser.add_argument("--num-iterations", type=int)
     parser.add_argument(
         "--num-processes",
         type=int,
         help="how many training CPU processes to use",
-        required=True,
     )
     parser.add_argument(
         "--num-samples",
@@ -66,7 +63,9 @@ def add_arguments(parser):
     parser.add_argument("--render-eval", action="store_true")
     parser.add_argument("--seed", type=int, default=0, help="random seed")
     parser.add_argument(
-        "--train-steps", type=int, help="number of forward steps in A2C", required=True
+        "--train-steps",
+        type=int,
+        help="number of forward steps in A2C",
     )
     parser.add_argument(
         "--env",
@@ -80,19 +79,24 @@ def add_arguments(parser):
         "--no-cuda", dest="cuda", action="store_false", help="enables CUDA training"
     )
     parser.add_argument("--synchronous", action="store_true")
-    parser.add_argument(
-        "--num-batch", type=int, help="number of batches for ppo", required=True
-    )
+    parser.add_argument("--num-batch", type=int, help="number of batches for ppo")
     # parser.add_argument("--success-reward", type=float)
 
     agent_parser = parser.add_argument_group("agent_args")
     agent_parser.add_argument(
-        "--activation", type=lambda s: eval(f"nn.{s}"), default=nn.ReLU()
+        "--activation",
+        type=lambda s: eval(f"nn.{s}"),
+        default=nn.ReLU(),
     )
     agent_parser.add_argument(
-        "--entropy-coef", type=float, help="entropy term coefficient", required=True
+        "--entropy-coef",
+        type=float,
+        help="entropy term coefficient",
     )
-    agent_parser.add_argument("--hidden-size", type=int, required=True)
+    agent_parser.add_argument(
+        "--hidden-size",
+        type=int,
+    )
     agent_parser.add_argument("--num-layers", type=int)
     agent_parser.add_argument("--recurrent", action="store_true")
 
@@ -100,13 +104,15 @@ def add_arguments(parser):
     ppo_parser.add_argument(
         "--clip-param", type=float, default=0.2, help="ppo clip parameter"
     )
-    ppo_parser.add_argument(
-        "--ppo-epoch", type=int, required=True, help="number of ppo epochs"
-    )
+    ppo_parser.add_argument("--ppo-epoch", type=int, help="number of ppo epochs")
     ppo_parser.add_argument(
         "--value-loss-coef", type=float, default=0.5, help="value loss coefficient"
     )
-    ppo_parser.add_argument("--learning-rate", type=float, help="", required=True)
+    ppo_parser.add_argument(
+        "--learning-rate",
+        type=float,
+        help="",
+    )
     ppo_parser.add_argument(
         "--eps", type=float, default=1e-5, help="RMSprop optimizer epsilon"
     )
@@ -135,8 +141,7 @@ def add_arguments(parser):
 
 if __name__ == "__main__":
     PARSER = argparse.ArgumentParser()
-    PARSER.add_argument("--min-eval-lines", type=int, required=True)
-    PARSER.add_argument("--max-eval-lines", type=int, required=True)
+    PARSER.add_argument("--min-eval-lines", type=int)
+    PARSER.add_argument("--max-eval-lines", type=int)
     add_arguments(PARSER)
-    args = hierarchical_parse_args(PARSER)
-    Trainer.main(**args)
+    Trainer.main(**vars(PARSER))
