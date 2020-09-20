@@ -1,16 +1,15 @@
-from pathlib import Path
 from argparse import ArgumentParser
+from pathlib import Path
 
-import numpy as np
 from gym import spaces
-from rl_utils import hierarchical_parse_args
 
+import control_flow_agent
 import env
 import networks
-import control_flow_agent
 from env import Action
 from main import add_arguments
 from trainer import Trainer
+from utils import hierarchical_parse_args
 
 
 def main(

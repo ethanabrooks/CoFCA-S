@@ -7,7 +7,7 @@ import gym
 import numpy as np
 from gym import spaces
 from gym.utils import seeding
-from rl_utils import hierarchical_parse_args
+from utils import hierarchical_parse_args
 from typing import List, Tuple, Dict, Optional, Generator
 
 import keyboard_control
@@ -52,13 +52,6 @@ State = namedtuple(
 Action = namedtuple("Action", "upper lower delta dg ptr")
 
 
-def get_nearest(_from, _to, objects):
-    items = [(np.array(p), o) for p, o in objects.items()]
-    candidates = [(p, np.max(np.abs(_from - p))) for p, o in items if o == _to]
-    if candidates:
-        return min(candidates, key=lambda c: c[1])
-
-
 def objective(interaction, obj):
     if interaction == Env.sell:
         return Env.merchant
@@ -100,7 +93,6 @@ class Env(gym.Env):
 
     def __init__(
         self,
-        num_subtasks,
         term_on,
         max_world_resamples,
         max_while_loops,
@@ -114,8 +106,6 @@ class Env(gym.Env):
         max_eval_lines,
         min_lines,
         max_lines,
-        flip_prob,
-        max_nesting_depth,
         eval_condition_size,
         single_control_flow_type,
         no_op_limit,
@@ -126,6 +116,7 @@ class Env(gym.Env):
         rank,
         lower_level,
         control_flow_types,
+        max_nesting_depth=1,
         seed=0,
         evaluating=False,
         world_size=6,
@@ -169,13 +160,9 @@ class Env(gym.Env):
             self.n_lines = max_lines
         self.n_lines += 1
         self.random, self.seed = seeding.np_random(seed)
-        self.flip_prob = flip_prob
         self.evaluating = evaluating
         self.iterator = None
         self._render = None
-        self.action_space = spaces.MultiDiscrete(
-            np.array([self.num_subtasks + 1, 2 * self.n_lines, self.n_lines])
-        )
 
         def possible_lines():
             for i in range(num_subtasks):
@@ -187,15 +174,6 @@ class Env(gym.Env):
                     yield line_type(0)
 
         self.possible_lines = list(possible_lines())
-        self.observation_space = spaces.Dict(
-            dict(
-                obs=spaces.Discrete(2),
-                lines=spaces.MultiDiscrete(
-                    np.array([len(self.possible_lines)] * self.n_lines)
-                ),
-                active=spaces.Discrete(self.n_lines + 1),
-            )
-        )
         self.long_jump = long_jump and self.evaluating
         self.world_size = world_size
         self.world_shape = (len(self.world_contents), self.world_size, self.world_size)
@@ -218,22 +196,25 @@ class Env(gym.Env):
                 )
             )
         )
-        self.observation_space.spaces.update(
-            obs=spaces.Box(low=0, high=1, shape=self.world_shape),
-            lines=spaces.MultiDiscrete(
-                np.array(
-                    [
+        self.observation_space = spaces.Dict(
+            Obs(
+                active=spaces.Discrete(self.n_lines + 1),
+                inventory=spaces.MultiBinary(len(self.items)),
+                lines=spaces.MultiDiscrete(
+                    np.array(
                         [
-                            len(Line.types),
-                            1 + len(self.behaviors),
-                            1 + len(self.items),
-                            1 + self.max_loops,
+                            [
+                                len(Line.types),
+                                1 + len(self.behaviors),
+                                1 + len(self.items),
+                                1 + self.max_loops,
+                            ]
                         ]
-                    ]
-                    * self.n_lines
-                )
-            ),
-            inventory=spaces.MultiBinary(len(self.items)),
+                        * self.n_lines
+                    )
+                ),
+                obs=spaces.Box(low=0, high=1, shape=self.world_shape),
+            )._asdict()
         )
         self.world_space = spaces.Box(low=0, high=self.world_size - 1, shape=[2])
 
@@ -259,15 +240,7 @@ class Env(gym.Env):
         else:
             raise RuntimeError()
 
-    def world_array(self, objects, agent_pos):
-        world = np.zeros(self.world_shape)
-        for p, o in list(objects.items()) + [(agent_pos, self.agent)]:
-            p = np.array(p)
-            world[tuple((self.world_contents.index(o), *p))] = 1
-
-        return world
-
-    def evaluate_line(self, line: Line, counts: Dict[str, int], loops: Optional[int]):
+    def evaluate_line(self, line: Line, loops: Optional[int], counts: Dict[str, int]):
         if line is None:
             return None
         elif type(line) is Loop:
@@ -286,7 +259,7 @@ class Env(gym.Env):
                 raise RuntimeError
             return evaluation
 
-    def feasible(self, objects, lines):
+    def feasible(self, objects, lines) -> bool:
         line_iterator = self.line_generator(lines)
         line = next(line_iterator)
         loops = 0
@@ -323,7 +296,7 @@ class Env(gym.Env):
                 if all(
                     (
                         whiles == 0,  # first loop
-                        not self.evaluate_line(line, counts, loops),  # evaluates false
+                        not self.evaluate_line(line, loops, counts),  # evaluates false
                         not self.evaluating,
                         self.random.random() < self.reject_while_prob,
                     )
@@ -332,7 +305,7 @@ class Env(gym.Env):
                 whiles += 1
                 if whiles > self.max_while_loops:
                     return False
-            evaluation = self.evaluate_line(line, counts, loops)
+            evaluation = self.evaluate_line(line, loops, counts)
             if evaluation is True and self.long_jump:
                 assert self.evaluating
                 return False
@@ -346,19 +319,18 @@ class Env(gym.Env):
             counts[o] += 1
         return counts
 
-    def subtask_generator(self, line_iterator, lines, counts):
+    def subtask_generator(self, line_iterator, lines, info):
         line = next(line_iterator)
         loops = None
         whiles = 0
         while True:
             if line is None:
-                counts = yield None
+                info = yield None
                 line = next(line_iterator)
             else:
                 if type(lines[line]) is Subtask:
                     assert type(lines[line]) is Subtask
-                    time_delta = 3 * self.world_size
-                    counts = yield line
+                    info = yield line
                 if type(lines[line]) is Loop:
                     if loops is None:
                         loops = lines[line].id
@@ -367,11 +339,9 @@ class Env(gym.Env):
                 elif type(lines[line]) is While:
                     whiles += 1
                     if whiles > self.max_while_loops:
-                        counts = yield None
+                        info = yield None
 
-                line = line_iterator.send(
-                    self.evaluate_line(lines[line], counts, loops)
-                )
+                line = line_iterator.send(self.evaluate_line(lines[line], loops, info))
                 if loops == 0:
                     loops = None
 
@@ -410,8 +380,14 @@ class Env(gym.Env):
                 self.failure_buffer.append((lines, initial_objects, initial_agent_pos))
 
             def state(terminate):
+
+                world = np.zeros(self.world_shape)
+                for p, o in list(objects.items()) + [(agent_pos, self.agent)]:
+                    p = np.array(p)
+                    world[tuple((self.world_contents.index(o), *p))] = 1
+
                 return State(
-                    obs=self.world_array(objects, agent_pos),
+                    obs=world,
                     prev=prev,
                     ptr=ptr,
                     term=terminate,
@@ -441,6 +417,7 @@ class Env(gym.Env):
 
             if type(lower_level_action) is str:
                 standing_on = objects.get(tuple(agent_pos), None)
+
                 done = (
                     lower_level_action == tgt_interaction
                     and standing_on == objective(*lines[ptr].id)
@@ -479,13 +456,9 @@ class Env(gym.Env):
                 lower_level_action = np.clip(lower_level_action, -1, 1)
                 new_pos = agent_pos + lower_level_action
                 moving_into = objects.get(tuple(new_pos), None)
-                if (
-                    np.all(0 <= new_pos)
-                    and np.all(new_pos < self.world_size)
-                    and (
-                        moving_into != self.wall
-                        and (moving_into != self.water or inventory[self.wood] > 0)
-                    )
+                if self.world_space.contains(new_pos) and (
+                    moving_into != self.wall
+                    and (moving_into != self.water or inventory[self.wood] > 0)
                 ):
                     agent_pos = new_pos
                     if moving_into == self.water:
@@ -495,7 +468,7 @@ class Env(gym.Env):
             else:
                 assert lower_level_action is None
 
-    def populate_world(self, lines):
+    def populate_world(self, lines) -> Optional[Tuple[Coord, ObjectMap]]:
         feasible = False
         use_water = False
         max_random_objects = 0
@@ -937,10 +910,8 @@ def build_parser(
         required=default_max_lines is None,
         default=default_max_lines,
     )
-    p.add_argument("--num-subtasks", type=int, default=12)
     p.add_argument("--max-loops", type=int, default=3)
     p.add_argument("--no-op-limit", type=int)
-    p.add_argument("--flip-prob", type=float, default=0.5)
     p.add_argument("--eval-condition-size", action="store_true")
     p.add_argument("--single-control-flow-type", action="store_true")
     p.add_argument("--max-nesting-depth", type=int, default=1)
@@ -989,7 +960,7 @@ def main(env):
     # print(i, l)
     actions = [x if type(x) is str else tuple(x) for x in env.lower_level_actions]
     mapping = dict(
-        w=(-1, 0), s=(1, 0), a=(0, -1), d=(0, 1), m=("mine"), l=("sell"), g=("goto")
+        w=(-1, 0), s=(1, 0), a=(0, -1), d=(0, 1), m="mine", l="sell", g="goto"
     )
     mapping2 = {}
     for k, v in mapping.items():
