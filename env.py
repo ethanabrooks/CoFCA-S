@@ -441,8 +441,9 @@ class Env(gym.Env):
                 ):
                     term = True
                 if done:
-                    prev, ptr = ptr, subtask_iterator.send(
-                        dict(counts=self.count_objects(objects))
+                    prev, ptr = (
+                        ptr,
+                        subtask_iterator.send(dict(counts=self.count_objects(objects))),
                     )
                     if ptr is not None:
                         time_remaining = update_time()
@@ -910,39 +911,17 @@ class Env(gym.Env):
             input("pause")
 
 
-def add_arguments(
-    p,
-    default_max_world_resamples=None,
-    default_max_while_loops=None,
-    default_min_lines=None,
-    default_max_lines=None,
-    default_time_to_waste=None,
-):
-    p.add_argument(
-        "--min-lines",
-        type=int,
-        required=default_min_lines is None,
-        default=default_min_lines,
-    )
-    p.add_argument(
-        "--max-lines",
-        type=int,
-        required=default_max_lines is None,
-        default=default_max_lines,
-    )
+def add_arguments(p):
+    p.add_argument("--min-lines", type=int)
+    p.add_argument("--max-lines", type=int)
     p.add_argument("--max-loops", type=int, default=3)
     p.add_argument("--no-op-limit", type=int)
     p.add_argument("--eval-condition-size", action="store_true")
     p.add_argument("--single-control-flow-type", action="store_true")
     p.add_argument("--max-nesting-depth", type=int, default=1)
     p.add_argument("--subtasks-only", action="store_true")
-    p.add_argument("--no-break-on-fail", dest="break_on_fail", action="store_false")
-    p.add_argument(
-        "--time-to-waste",
-        type=int,
-        required=default_time_to_waste is None,
-        default=default_time_to_waste,
-    )
+    p.add_argument("--break-on-fail", action="store_true")
+    p.add_argument("--time-to-waste", type=int)
     p.add_argument(
         "--control-flow-types",
         default=[],
@@ -954,25 +933,13 @@ def add_arguments(
     p.add_argument("--no-water", dest="use_water", action="store_false")
     p.add_argument("--1condition", dest="one_condition", action="store_true")
     p.add_argument("--long-jump", action="store_true")
-    p.add_argument("--max-failure-sample-prob", type=float, required=True)
-    p.add_argument("--failure-buffer-size", type=int, required=True)
-    p.add_argument("--reject-while-prob", type=float, required=True)
-    p.add_argument(
-        "--max-world-resamples",
-        type=int,
-        required=default_max_world_resamples is None,
-        default=default_max_world_resamples,
-    )
-    p.add_argument(
-        "--max-while-loops",
-        type=int,
-        required=default_max_while_loops is None,
-        default=default_max_while_loops,
-    )
-    p.add_argument("--world-size", type=int, required=True)
-    p.add_argument(
-        "--term-on", nargs="+", choices=[Env.sell, Env.mine, Env.goto], required=True
-    )
+    p.add_argument("--max-failure-sample-prob", type=float)
+    p.add_argument("--failure-buffer-size", type=int)
+    p.add_argument("--reject-while-prob", type=float)
+    p.add_argument("--max-world-resamples", type=int)
+    p.add_argument("--max-while-loops", type=int)
+    p.add_argument("--world-size", type=int)
+    p.add_argument("--term-on", nargs="+", choices=[Env.sell, Env.mine, Env.goto])
 
 
 def main(env):
@@ -1002,8 +969,8 @@ if __name__ == "__main__":
     import argparse
 
     PARSER = argparse.ArgumentParser()
-    PARSER.add_argument("--min-eval-lines", type=int, required=True)
-    PARSER.add_argument("--max-eval-lines", type=int, required=True)
+    PARSER.add_argument("--min-eval-lines", type=int)
+    PARSER.add_argument("--max-eval-lines", type=int)
     add_arguments(PARSER)
     PARSER.add_argument("--seed", default=0, type=int)
     main(Env(rank=0, lower_level="train-alone", **hierarchical_parse_args(PARSER)))

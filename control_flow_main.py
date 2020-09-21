@@ -72,12 +72,31 @@ def main(
             else:
                 return env.Env(**args)
 
-        def process_infos(self, episode_counter, done, infos, **act_log):
-            for d in infos:
-                for k, v in d.items():
-                    if k.startswith("cumulative_reward"):
-                        episode_counter[k].append(v)
-            super().process_infos(episode_counter, done, infos, **act_log)
+        def structure_config(self, config):
+            config = super().structure_config(config)
+            agent_args = config.pop("agent_args")
+            env_args = {}
+            other_args = {}
+            for k, v in config.items():
+                if k in ["seed"]:
+                    other_args[k] = v
+                elif k in inspect.signature(env.Env.__init__).parameters:
+                    env_args[k] = v
+                elif k in inspect.signature(ours.Recurrence.__init__).parameters:
+                    agent_args[k] = v
+                elif (
+                    k in inspect.signature(control_flow_agent.Agent.__init__).parameters
+                ):
+                    agent_args[k] = v
+                elif k in inspect.signature(LowerLevel.__init__).parameters:
+                    pass
+                else:
+                    other_args[k] = v
+            return dict(env_args=env_args, agent_args=agent_args, **other_args)
+
+        @classmethod
+        def build_epoch_counter(cls, num_processes):
+            return EpochCounter(num_processes)
 
     ControlFlowTrainer.main(
         **kwargs, seed=seed, log_dir=log_dir, render=render, env_id="control-flow"

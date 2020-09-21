@@ -46,9 +46,7 @@ def add_arguments(parser):
     parser.add_argument("--normalize", action="store_true")
     parser.add_argument("--gpus-per-trial", "-g", type=int, default=1)
     parser.add_argument("--cpus-per-trial", "-c", type=int, default=6)
-    parser.add_argument(
-        "--num-iterations", type=int, help="number of updates to perform", required=True
-    )
+    parser.add_argument("--num-iterations", type=int)
     parser.add_argument(
         "--num-processes",
         type=int,
