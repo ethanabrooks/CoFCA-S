@@ -54,9 +54,11 @@ class Recurrence(nn.Module):
         task_embed_size,
         num_edges,
         activation,
+        num_layers,
         olsk,
         no_pointer,
         transformer,
+        log_dir,
         no_roll,
         no_scan,
         debug,
@@ -72,6 +74,7 @@ class Recurrence(nn.Module):
         self.olsk = olsk
         self.no_pointer = no_pointer
         self.transformer = transformer
+        self.log_dir = log_dir
         self.no_roll = no_roll
         self.no_scan = no_scan
         self.obs_spaces = observation_space
