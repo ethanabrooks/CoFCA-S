@@ -72,7 +72,7 @@ class Trainer(tune.Trainable):
         log_interval: int,
         normalize: float,
         num_batch: int,
-        num_epochs: int,
+        num_iterations: int,
         num_processes: int,
         ppo_args: dict,
         render: bool,
@@ -190,7 +190,7 @@ class Trainer(tune.Trainable):
         ppo = PPO(agent=agent, num_batch=num_batch, **ppo_args)
         train_counter = EpochCounter()
 
-        for i in range(num_epochs):
+        for i in range(num_iterations):
             eval_counter = EpochCounter()
             if eval_interval and not no_eval and i % eval_interval == 0:
                 # vec_norm = get_vec_normalize(eval_envs)

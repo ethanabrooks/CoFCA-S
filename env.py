@@ -924,7 +924,7 @@ class Env(gym.Env):
             input("pause")
 
 
-def build_parser(
+def add_arguments(
     p,
     default_max_world_resamples=None,
     default_max_while_loops=None,
@@ -1018,6 +1018,6 @@ if __name__ == "__main__":
     PARSER = argparse.ArgumentParser()
     PARSER.add_argument("--min-eval-lines", type=int, required=True)
     PARSER.add_argument("--max-eval-lines", type=int, required=True)
-    build_parser(PARSER)
+    add_arguments(PARSER)
     PARSER.add_argument("--seed", default=0, type=int)
     main(Env(rank=0, lower_level="train-alone", **hierarchical_parse_args(PARSER)))

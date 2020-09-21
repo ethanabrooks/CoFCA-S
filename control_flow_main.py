@@ -93,7 +93,7 @@ def control_flow_args(parser):
     parser.add_argument("--no-eval", action="store_true")
     parser.add_argument("--lower-level", choices=["train-alone", "train-with-upper"])
     parser.add_argument("--lower-level-load-path")
-    env.build_parser(parser.add_argument_group("env_args"))
+    env.add_arguments(parser.add_argument_group("env_args"))
     parsers.agent.add_argument("--lower-level-config", type=Path)
     parsers.agent.add_argument("--no-debug", dest="debug", action="store_false")
     parsers.agent.add_argument("--no-scan", action="store_true")
