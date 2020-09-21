@@ -8,7 +8,10 @@ import control_flow_agent
 import debug_env
 import env
 import networks
+import ours
 from env import Action
+from epoch_counter import EpochCounter
+from lower_level import LowerLevel
 from main import add_arguments
 from trainer import Trainer
 from utils import hierarchical_parse_args
@@ -29,7 +32,7 @@ def main(
     if lower_level_load_path:
         lower_level = "pre-trained"
 
-    class _Trainer(Trainer):
+    class ControlFlowTrainer(Trainer):
         def build_agent(self, envs, debug=False, **agent_args):
             obs_space = envs.observation_space
             ll_action_space = spaces.Discrete(Action(*envs.action_space.nvec).lower)
@@ -77,7 +80,7 @@ def main(
                         episode_counter[k].append(v)
             super().process_infos(episode_counter, done, infos, **act_log)
 
-    _Trainer.main(
+    ControlFlowTrainer.main(
         **kwargs, seed=seed, log_dir=log_dir, render=render, env_id="control-flow"
     )
 
@@ -85,8 +88,8 @@ def main(
 def control_flow_args(parser):
     parsers = add_arguments(parser)
     parser = parsers.main
-    parser.add_argument("--min-eval-lines", type=int, required=True)
-    parser.add_argument("--max-eval-lines", type=int, required=True)
+    parser.add_argument("--min-eval-lines", type=int)
+    parser.add_argument("--max-eval-lines", type=int)
     parser.add_argument("--no-eval", action="store_true")
     parser.add_argument("--lower-level", choices=["train-alone", "train-with-upper"])
     parser.add_argument("--lower-level-load-path")
@@ -99,16 +102,16 @@ def control_flow_args(parser):
     parsers.agent.add_argument("--olsk", action="store_true")
     parsers.agent.add_argument("--transformer", action="store_true")
     parsers.agent.add_argument("--fuzz", action="store_true")
-    parsers.agent.add_argument("--conv-hidden-size", type=int, required=True)
-    parsers.agent.add_argument("--task-embed-size", type=int, required=True)
-    parsers.agent.add_argument("--lower-embed-size", type=int, required=True)
-    parsers.agent.add_argument("--inventory-hidden-size", type=int, required=True)
-    parsers.agent.add_argument("--num-conv-layers", type=int, required=True)
-    parsers.agent.add_argument("--num-edges", type=int, required=True)
-    parsers.agent.add_argument("--gate-coef", type=float, required=True)
-    parsers.agent.add_argument("--no-op-coef", type=float, required=True)
-    parsers.agent.add_argument("--kernel-size", type=int, required=True)
-    parsers.agent.add_argument("--stride", type=int, required=True)
+    parsers.agent.add_argument("--conv-hidden-size", type=int)
+    parsers.agent.add_argument("--task-embed-size", type=int)
+    parsers.agent.add_argument("--lower-embed-size", type=int)
+    parsers.agent.add_argument("--inventory-hidden-size", type=int)
+    parsers.agent.add_argument("--num-conv-layers", type=int)
+    parsers.agent.add_argument("--num-edges", type=int)
+    parsers.agent.add_argument("--gate-coef", type=float)
+    parsers.agent.add_argument("--no-op-coef", type=float)
+    parsers.agent.add_argument("--kernel-size", type=int)
+    parsers.agent.add_argument("--stride", type=int)
     return parser
 
 
