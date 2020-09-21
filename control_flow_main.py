@@ -1,3 +1,4 @@
+import inspect
 from argparse import ArgumentParser
 from pathlib import Path
 
@@ -7,7 +8,10 @@ import control_flow_agent
 import debug_env
 import env
 import networks
+import ours
 from env import Action
+from epoch_counter import EpochCounter
+from lower_level import LowerLevel
 from main import add_arguments
 from trainer import Trainer
 from utils import hierarchical_parse_args
@@ -40,6 +44,7 @@ def main(
                     **agent_args,
                 )
             del agent_args["recurrent"]
+            del agent_args["num_layers"]
             return control_flow_agent.Agent(
                 observation_space=obs_space,
                 action_space=envs.action_space,

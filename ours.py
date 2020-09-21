@@ -54,7 +54,6 @@ class Recurrence(nn.Module):
         task_embed_size,
         num_edges,
         activation,
-        num_layers,
         olsk,
         no_pointer,
         transformer,
