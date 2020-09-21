@@ -153,11 +153,11 @@ class Trainer(tune.Trainable):
 
         def make_vec_envs(evaluation):
             def env_thunk(rank):
-                return self.make_env(
-                    seed=seed, rank=rank, evaluation=evaluation, env_id=env_id
+                return lambda: self.make_env(
+                    seed=int(seed), rank=rank, evaluation=evaluation, env_id=env_id,
                 )
 
-            env_fns = [lambda: env_thunk(i) for i in range(num_processes)]
+            env_fns = [env_thunk(i) for i in range(num_processes)]
             use_dummy = len(env_fns) == 1 or sys.platform == "darwin" or synchronous
             return VecPyTorch(
                 DummyVecEnv(env_fns, render=render)
