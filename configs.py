@@ -70,8 +70,18 @@ search.update(
 
 debug_search = copy.deepcopy(search)
 debug_search.update(
-    kernel_size=1, stride=1, world_size=1,
+    kernel_size=1,
+    stride=1,
+    world_size=1,
 )
 del debug_search["lower_level_config"]
 del debug_search["lower_level_load_path"]
+debug_default = copy.deepcopy(default)
+debug_default.update(
+    kernel_size=1,
+    stride=1,
+    world_size=1,
+)
+del debug_default["lower_level_config"]
+del debug_default["lower_level_load_path"]
 configs = dict(search=search, debug_search=debug_search, default=default)
