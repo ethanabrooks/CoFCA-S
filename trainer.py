@@ -93,7 +93,8 @@ class Trainer(tune.Trainable):
         print(f"Loaded parameters from {checkpoint_path}.")
 
     def loop(self):
-        yield from self.iterator
+        while True:
+            yield self.step()
 
     def gen(
         self,
@@ -107,7 +108,6 @@ class Trainer(tune.Trainable):
         num_iterations: Optional[int],
         num_processes: int,
         ppo_args: dict,
-        render: bool,
         render_eval: bool,
         rollouts_args: dict,
         seed: int,
@@ -115,11 +115,10 @@ class Trainer(tune.Trainable):
         train_steps: int,
         eval_interval: int = None,
         eval_steps: int = None,
-        no_eval=False,
-        load_path=None,
+        no_eval: bool = False,
+        load_path: Path = None,
+        render: bool = False,
     ):
-        cuda = cuda and torch.cuda.is_available()
-
         # Properly restrict pytorch to not consume extra resources.
         #  - https://github.com/pytorch/pytorch/issues/975
         #  - https://github.com/ray-project/ray/issues/3609
@@ -154,7 +153,10 @@ class Trainer(tune.Trainable):
         def make_vec_envs(evaluation):
             def env_thunk(rank):
                 return lambda: self.make_env(
-                    seed=int(seed), rank=rank, evaluation=evaluation, env_id=env_id,
+                    seed=int(seed),
+                    rank=rank,
+                    evaluation=evaluation,
+                    env_id=env_id,
                 )
 
             env_fns = [env_thunk(i) for i in range(num_processes)]
@@ -193,8 +195,7 @@ class Trainer(tune.Trainable):
             ppo_args.update(ppo_epoch=0)
             num_processes = 1
             cuda = False
-        if load_path:
-            self._restore(load_path)
+        cuda &= torch.cuda.is_available()
 
         # reproducibility
         set_seeds(cuda, cuda_deterministic, seed)
@@ -326,7 +327,7 @@ class Trainer(tune.Trainable):
         if config is None:
             config = dict()
         for k, v in kwargs.items():
-            if v is not None:
+            if k not in config or v is not None:
                 config[k] = v
 
         if log_dir:
@@ -342,7 +343,7 @@ class Trainer(tune.Trainable):
                     and (i + 1) % save_interval == 0
                 ):
                     print("steps until save:", save_interval - i)
-                    trainer._save(Path(log_dir, "checkpoint.pt"))
+                    trainer.save_checkpoint(Path(log_dir, "checkpoint.pt"))
         else:
             local_mode = num_samples is None
             ray.init(dashboard_host="127.0.0.1", local_mode=local_mode)
