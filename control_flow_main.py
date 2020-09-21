@@ -73,7 +73,8 @@ def main(**kwargs):
                     agent_args[k] = v
                 if k in inspect.signature(self.gen).parameters:
                     gen_args[k] = v
-            return dict(env_args=env_args, agent_args=agent_args, **gen_args)
+            d = dict(env_args=env_args, agent_args=agent_args, **gen_args)
+            return d
 
     kwargs.update(env_id="control-flow")
     ControlFlowTrainer.main(**kwargs)

@@ -924,7 +924,6 @@ def add_arguments(p):
     p.add_argument("--time-to-waste", type=int)
     p.add_argument(
         "--control-flow-types",
-        default=[],
         nargs="*",
         type=lambda s: dict(Subtask=Subtask, If=If, Else=Else, While=While, Loop=Loop)[
             s
