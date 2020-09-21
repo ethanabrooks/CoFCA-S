@@ -6,7 +6,7 @@ from hyperopt import hp
 from lines import Subtask, If, Else, While
 
 default = dict(
-    control_flow_types=[Subtask, If, Else, While],
+    control_flow_types=[Subtask, If, While, Else],
     conv_hidden_size=64,
     entropy_coef=0.015,
     eval_interval=100,
