@@ -127,7 +127,6 @@ class Trainer(tune.Trainable):
         log_interval: int,
         normalize: float,
         num_batch: int,
-        num_iterations: Optional[int],
         num_processes: int,
         ppo_args: dict,
         render_eval: bool,
@@ -191,7 +190,6 @@ class Trainer(tune.Trainable):
             )
 
         def run_epoch(obs, rnn_hxs, masks, envs, num_steps):
-            episode_counter = defaultdict(list)
             for _ in range(num_steps):
                 with torch.no_grad():
                     act = agent(
@@ -230,6 +228,8 @@ class Trainer(tune.Trainable):
         try:
             train_envs.to(self.device)
             agent = self.build_agent(envs=train_envs, **agent_args)
+            if load_path:
+                self.load_checkpoint(load_path)
             rollouts = RolloutStorage(
                 num_steps=train_steps,
                 num_processes=num_processes,
@@ -247,7 +247,7 @@ class Trainer(tune.Trainable):
             ppo = PPO(agent=agent, num_batch=num_batch, **ppo_args)
             train_counter = EpochCounter()
 
-            for i in range(num_iterations):
+            for i in itertools.count():
                 eval_counter = EpochCounter()
                 if eval_interval and not no_eval and i % eval_interval == 0:
                     # vec_norm = get_vec_normalize(eval_envs)
@@ -345,6 +345,7 @@ class Trainer(tune.Trainable):
         gpus_per_trial,
         cpus_per_trial,
         log_dir,
+        num_iterations,
         num_samples,
         name,
         config,
@@ -363,6 +364,7 @@ class Trainer(tune.Trainable):
             writer = SummaryWriter(logdir=str(log_dir))
             trainer = cls(config)
             for i, result in enumerate(trainer.loop()):
+                pprint(result)
                 if writer is not None:
                     for k, v in k_scalar_pairs(**result):
                         writer.add_scalar(k, v, i)
@@ -375,18 +377,19 @@ class Trainer(tune.Trainable):
         else:
             local_mode = num_samples is None
             ray.init(dashboard_host="127.0.0.1", local_mode=local_mode)
-            metric = "final_reward"
 
             resources_per_trial = dict(gpu=gpus_per_trial, cpu=cpus_per_trial)
-            kwargs = dict()
 
             if local_mode:
                 print("Using local mode because num_samples is None")
+                kwargs = dict()
             else:
                 kwargs = dict(
-                    search_alg=HyperOptSearch(config, metric=metric),
+                    search_alg=HyperOptSearch(config, metric="eval_reward"),
                     num_samples=num_samples,
                 )
+            if num_iterations:
+                kwargs.update(stop=dict(training_iteration=num_iterations))
 
             tune.run(
                 cls,
