@@ -245,10 +245,10 @@ class Trainer(tune.Trainable):
                 rollouts.to(self.device)
 
             ppo = PPO(agent=agent, num_batch=num_batch, **ppo_args)
-            train_counter = EpochCounter()
+            train_means = MeanAggregator()
 
             for i in itertools.count():
-                eval_counter = EpochCounter()
+                eval_means = EvalMeanAggregator()
                 if eval_interval and not no_eval and i % eval_interval == 0:
                     # vec_norm = get_vec_normalize(eval_envs)
                     # if vec_norm is not None:
@@ -273,9 +273,9 @@ class Trainer(tune.Trainable):
                             envs=eval_envs,
                             num_steps=eval_steps,
                         ):
-                            eval_counter.update(
-                                reward=epoch_output.reward, done=epoch_output.done
-                            )
+                            eval_means.update(reward=epoch_output.reward.mean().item())
+                            for info in epoch_output.infos:
+                                eval_means.update(**info)
                     eval_envs.close()
 
                 rollouts.obs[0].copy_(train_envs.reset())
@@ -287,9 +287,9 @@ class Trainer(tune.Trainable):
                     envs=train_envs,
                     num_steps=train_steps,
                 ):
-                    train_counter.update(
-                        reward=epoch_output.reward, done=epoch_output.done
-                    )
+                    train_means.update(reward=epoch_output.reward.mean().item())
+                    for info in epoch_output.infos:
+                        train_means.update(**info)
                     rollouts.insert(
                         obs=epoch_output.obs,
                         recurrent_hidden_states=epoch_output.act.rnn_hxs,
@@ -314,10 +314,10 @@ class Trainer(tune.Trainable):
                 if i % log_interval == 0:
                     yield dict(
                         **train_results,
-                        **dict(train_counter.items()),
-                        **dict(eval_counter.items(prefix="eval_")),
+                        **dict(train_means.items()),
+                        **dict(eval_means.items()),
                     )
-                    train_counter.reset()
+                    train_means = MeanAggregator()
         finally:
             train_envs.close()
 
