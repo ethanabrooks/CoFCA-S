@@ -23,7 +23,7 @@ from networks import Agent, AgentOutputs, MLPBase
 from ppo import PPO
 from rollouts import RolloutStorage
 from utils import k_scalar_pairs, get_device
-from wrappers import VecPyTorch
+from wrappers import VecPyTorch, get_vec_normalize
 
 EpochOutputs = namedtuple("EpochOutputs", "obs reward done infos act masks")
 
@@ -66,27 +66,29 @@ class Trainer(tune.Trainable):
         agent_args = {}
         rollouts_args = {}
         ppo_args = {}
-        other_args = {}
+        gen_args = {}
         for k, v in config.items():
-            if k in ["train_steps", "num_processes", "num_batch"]:
-                other_args[k] = v
-            elif k in inspect.signature(self.build_agent).parameters:
+            if k in inspect.signature(self.build_agent).parameters:
                 agent_args[k] = v
-            elif k in inspect.signature(Agent.__init__).parameters:
+            if k in inspect.signature(Agent.__init__).parameters:
                 agent_args[k] = v
-            elif k in inspect.signature(MLPBase.__init__).parameters:
+            if k in inspect.signature(MLPBase.__init__).parameters:
                 agent_args[k] = v
-            elif k in inspect.signature(RolloutStorage.__init__).parameters:
+            if k in inspect.signature(RolloutStorage.__init__).parameters:
                 rollouts_args[k] = v
-            elif k in inspect.signature(PPO.__init__).parameters:
+            if k in inspect.signature(PPO.__init__).parameters:
                 ppo_args[k] = v
-            else:
-                other_args[k] = v
+            if k in inspect.signature(self.gen).parameters or k not in (
+                list(agent_args.keys())
+                + list(rollouts_args.keys())
+                + list(ppo_args.keys())
+            ):
+                gen_args[k] = v
         config = dict(
             agent_args=agent_args,
             rollouts_args=rollouts_args,
             ppo_args=ppo_args,
-            **other_args,
+            **gen_args,
         )
         return config
 
@@ -149,11 +151,7 @@ class Trainer(tune.Trainable):
         def make_vec_envs(evaluation):
             def env_thunk(rank):
                 return lambda: self.make_env(
-                    seed=int(seed),
-                    rank=rank,
-                    evaluation=evaluation,
-                    env_id=env_id,
-                    **env_args,
+                    rank=rank, evaluation=evaluation, **env_args
                 )
 
             env_fns = [env_thunk(i) for i in range(num_processes)]
@@ -207,7 +205,6 @@ class Trainer(tune.Trainable):
                 self.load_checkpoint(load_path)
             rollouts = RolloutStorage(
                 num_steps=train_steps,
-                num_processes=num_processes,
                 obs_space=train_envs.observation_space,
                 action_space=train_envs.action_space,
                 recurrent_hidden_state_size=agent.recurrent_hidden_state_size,
@@ -219,7 +216,7 @@ class Trainer(tune.Trainable):
                 agent.to(self.device)
                 rollouts.to(self.device)
 
-            ppo = PPO(agent=agent, num_batch=num_batch, **ppo_args)
+            ppo = PPO(agent=agent, **ppo_args)
             train_means = MeanAggregator()
 
             for i in itertools.count():

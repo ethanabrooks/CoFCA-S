@@ -33,7 +33,6 @@ default = dict(
     no_op_limit=30,
     num_batch=1,
     num_edges=2,
-    num_iterations=99999,
     num_processes=150,
     ppo_epoch=2,
     reject_while_prob=0.6,
@@ -70,9 +69,7 @@ search.update(
 
 debug_search = copy.deepcopy(search)
 debug_search.update(
-    kernel_size=1,
-    stride=1,
-    world_size=1,
+    kernel_size=1, stride=1, world_size=1,
 )
 del debug_search["lower_level_config"]
 del debug_search["lower_level_load_path"]
