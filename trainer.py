@@ -1,7 +1,10 @@
+import inspect
+import math
 import os
 import sys
 from collections import namedtuple, defaultdict
 from pathlib import Path
+from pprint import pprint
 from typing import Dict, Optional
 
 import gym
@@ -15,11 +18,13 @@ import numpy as np
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from common.vec_env.util import set_seeds
-from networks import Agent, AgentOutputs
+from epoch_counter import EpochCounter
+from networks import Agent, AgentOutputs, MLPBase
 from ppo import PPO
 from rollouts import RolloutStorage
 from utils import k_scalar_pairs, get_device
 from wrappers import VecPyTorch
+import itertools
 
 EpochOutputs = namedtuple("EpochOutputs", "obs reward done infos act masks")
 
@@ -36,7 +41,35 @@ class Trainer(tune.Trainable):
     def setup(self, config):
         self.iterator = self.gen(**config)
 
-    def _train(self):
+    def structure_config(self, config):
+        agent_args = {}
+        rollouts_args = {}
+        ppo_args = {}
+        other_args = {}
+        for k, v in config.items():
+            if k in ["train_steps", "num_processes", "num_batch"]:
+                other_args[k] = v
+            elif k in inspect.signature(self.build_agent).parameters:
+                agent_args[k] = v
+            elif k in inspect.signature(Agent.__init__).parameters:
+                agent_args[k] = v
+            elif k in inspect.signature(MLPBase.__init__).parameters:
+                agent_args[k] = v
+            elif k in inspect.signature(RolloutStorage.__init__).parameters:
+                rollouts_args[k] = v
+            elif k in inspect.signature(PPO.__init__).parameters:
+                ppo_args[k] = v
+            else:
+                other_args[k] = v
+        config = dict(
+            agent_args=agent_args,
+            rollouts_args=rollouts_args,
+            ppo_args=ppo_args,
+            **other_args,
+        )
+        return config
+
+    def step(self):
         return next(self.iterator)
 
     def save_checkpoint(self, tmp_checkpoint_dir):
