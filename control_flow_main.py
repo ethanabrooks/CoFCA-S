@@ -17,7 +17,9 @@ from trainer import Trainer
 
 def main(**kwargs):
     class ControlFlowTrainer(Trainer):
-        def build_agent(self, envs, lower_level, debug=False, **agent_args):
+        def build_agent(
+            self, envs, lower_level="train-alone", debug=False, **agent_args
+        ):
             obs_space = envs.observation_space
             ll_action_space = spaces.Discrete(Action(*envs.action_space.nvec).lower)
             if lower_level == "train-alone":
@@ -45,8 +47,8 @@ def main(**kwargs):
                 return debug_env.Env(**kwargs)
             return env.Env(**kwargs)
 
-        def structure_config(self, config):
-            config = super().structure_config(config)
+        def structure_config(self, **config):
+            config = super().structure_config(**config)
             agent_args = config.pop("agent_args")
             env_args = {}
             gen_args = {}

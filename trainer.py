@@ -59,10 +59,10 @@ class Trainer(tune.Trainable):
         super().__init__(*args, **kwargs)
 
     def setup(self, config):
-        config = self.structure_config(config)
+        config = self.structure_config(**config)
         self.iterator = self.gen(**config)
 
-    def structure_config(self, config):
+    def structure_config(self, **config):
         agent_args = {}
         rollouts_args = {}
         ppo_args = {}
