@@ -1,7 +1,9 @@
+import itertools
 import inspect
 import math
 import os
 import sys
+from abc import ABC
 from collections import namedtuple, defaultdict
 from pathlib import Path
 from pprint import pprint
@@ -27,6 +29,27 @@ from wrappers import VecPyTorch
 import itertools
 
 EpochOutputs = namedtuple("EpochOutputs", "obs reward done infos act masks")
+
+
+class Aggregator(ABC):
+    def __init__(self):
+        self.values = defaultdict(list)
+
+    def update(self, **values):
+        for k, v in values.items():
+            self.values[k].append(v)
+
+
+class MeanAggregator(Aggregator):
+    def items(self):
+        for k, v in self.values.items():
+            yield k, np.mean(v)
+
+
+class EvalMeanAggregator(MeanAggregator):
+    def items(self):
+        for k, v in super().items():
+            yield "eval_" + k, v
 
 
 class Trainer(tune.Trainable):
